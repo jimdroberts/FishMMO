@@ -768,9 +768,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Enforce per-connection cooldown
-			DateTime nowUtc = DateTime.UtcNow;
-			if (runtimeData.NextAllowedRequestUtc.TryGetValue(conn.ClientId, out DateTime nextAllowed) &&
-				nowUtc < nextAllowed)
+			double now = MonotonicClock.NowSeconds;
+			if (runtimeData.NextAllowedRequestSeconds.TryGetValue(conn.ClientId, out double nextAllowed) &&
+				now < nextAllowed)
 			{
 				return false;
 			}
@@ -788,7 +788,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedRequestUtc[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(RequestCooldownMilliseconds);
+				runtimeData.NextAllowedRequestSeconds[conn.ClientId] = MonotonicClock.NowSeconds + RequestCooldownMilliseconds / 1000.0;
 			}
 		}
 
@@ -815,9 +815,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return false;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
-			if (runtimeData.NextAllowedListRequestUtc.TryGetValue(conn.ClientId, out DateTime nextAllowed) &&
-				nowUtc < nextAllowed)
+			double now = MonotonicClock.NowSeconds;
+			if (runtimeData.NextAllowedListRequestSeconds.TryGetValue(conn.ClientId, out double nextAllowed) &&
+				now < nextAllowed)
 			{
 				return false;
 			}
@@ -835,7 +835,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightListRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedListRequestUtc[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(RequestCooldownMilliseconds);
+				runtimeData.NextAllowedListRequestSeconds[conn.ClientId] = MonotonicClock.NowSeconds + RequestCooldownMilliseconds / 1000.0;
 			}
 		}
 
@@ -847,11 +847,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server.DataContainerRegistry.TryGet<CharacterSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedRequestUtc.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedRequestSeconds.TryRemove(conn.ClientId, out _);
 
 				// The list gate is per-connection too, so it leaks the same way if not released.
 				runtimeData.InFlightListRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedListRequestUtc.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedListRequestSeconds.TryRemove(conn.ClientId, out _);
 			}
 		}
 

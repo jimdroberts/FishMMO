@@ -14,6 +14,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		ICountByKeyAction<long>,
 		IPersistAction<CharacterPetAttributeData, long>,
 		IPersistManyAction<CharacterPetAttributeData>,
+		IPersistManyOwnedAction<CharacterPetAttributeData>,
 		IDeleteByKeyVersionedAction<long>,
 		IFetchCollectionByKeyAction<long, CharacterPetAttributeData>
 	{

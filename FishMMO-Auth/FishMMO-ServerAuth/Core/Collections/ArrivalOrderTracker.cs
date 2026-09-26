@@ -7,6 +7,13 @@ namespace FishMMO.Auth.Core.Collections
 	/// Queue/index tracker that preserves first-seen ordering with O(1) add/remove by key.
 	/// Useful for TTL sweeps that should process oldest entries first.
 	/// </summary>
+	/// <remarks>
+	/// First-seen times are monotonic seconds (a <c>MonotonicClock.NowSeconds</c> reading), never
+	/// <c>DateTime.UtcNow</c>: the account manager's backstop sweep ages entries by them, and on the
+	/// wall clock a step forward purged every connection mid-sign-in at once while a step back held
+	/// abandoned ones for the size of the step. A caller that only wants the order (the login queue)
+	/// passes <c>default</c> and ignores the value.
+	/// </remarks>
 	/// <typeparam name="TKey">Tracked key type.</typeparam>
 	public sealed class ArrivalOrderTracker<TKey>
 	{
@@ -54,8 +61,8 @@ namespace FishMMO.Auth.Core.Collections
 		/// Adds a key only if it is not already tracked.
 		/// </summary>
 		/// <param name="key">The key to track.</param>
-		/// <param name="firstSeenUtc">The UTC timestamp to record as first-seen.</param>
-		public void TrackIfMissing(TKey key, DateTime firstSeenUtc)
+		/// <param name="firstSeenSeconds">The monotonic time, in seconds, to record as first-seen.</param>
+		public void TrackIfMissing(TKey key, double firstSeenSeconds)
 		{
 			lock (gate)
 			{
@@ -64,7 +71,7 @@ namespace FishMMO.Auth.Core.Collections
 					return;
 				}
 
-				nodes[key] = queue.AddLast(new ArrivalEntry<TKey>(key, firstSeenUtc));
+				nodes[key] = queue.AddLast(new ArrivalEntry<TKey>(key, firstSeenSeconds));
 			}
 		}
 
@@ -95,9 +102,9 @@ namespace FishMMO.Auth.Core.Collections
 		/// Gets the oldest tracked key without removing it.
 		/// </summary>
 		/// <param name="key">The oldest key, if one exists.</param>
-		/// <param name="firstSeenUtc">The first-seen UTC timestamp of the oldest key.</param>
+		/// <param name="firstSeenSeconds">The first-seen monotonic time of the oldest key.</param>
 		/// <returns><c>true</c> if a key was found; otherwise, <c>false</c>.</returns>
-		public bool TryPeekOldest(out TKey key, out DateTime firstSeenUtc)
+		public bool TryPeekOldest(out TKey key, out double firstSeenSeconds)
 		{
 			lock (gate)
 			{
@@ -105,12 +112,12 @@ namespace FishMMO.Auth.Core.Collections
 				if (head == null)
 				{
 					key = default!;
-					firstSeenUtc = default;
+					firstSeenSeconds = default;
 					return false;
 				}
 
 				key = head.Value.Key;
-				firstSeenUtc = head.Value.FirstSeenUtc;
+				firstSeenSeconds = head.Value.FirstSeenSeconds;
 				return true;
 			}
 		}
@@ -119,9 +126,9 @@ namespace FishMMO.Auth.Core.Collections
 		/// Removes and returns the oldest tracked key.
 		/// </summary>
 		/// <param name="key">The removed key, if one existed.</param>
-		/// <param name="firstSeenUtc">The first-seen UTC timestamp of the removed key.</param>
+		/// <param name="firstSeenSeconds">The first-seen monotonic time of the removed key.</param>
 		/// <returns><c>true</c> if a key was removed; otherwise, <c>false</c>.</returns>
-		public bool PopOldest(out TKey key, out DateTime firstSeenUtc)
+		public bool PopOldest(out TKey key, out double firstSeenSeconds)
 		{
 			lock (gate)
 			{
@@ -129,12 +136,12 @@ namespace FishMMO.Auth.Core.Collections
 				if (head == null)
 				{
 					key = default!;
-					firstSeenUtc = default;
+					firstSeenSeconds = default;
 					return false;
 				}
 
 				key = head.Value.Key;
-				firstSeenUtc = head.Value.FirstSeenUtc;
+				firstSeenSeconds = head.Value.FirstSeenSeconds;
 				queue.RemoveFirst();
 				nodes.Remove(key);
 				return true;
@@ -179,21 +186,21 @@ namespace FishMMO.Auth.Core.Collections
 
 		/// <summary>
 		/// Invokes <paramref name="action"/> for each tracked key in FIFO order.
-		/// The callback receives the key, its first-seen UTC timestamp, and its
+		/// The callback receives the key, its first-seen monotonic time, and its
 		/// 1-based position.  All work is done under the internal lock so the
 		/// callback should be fast and must not call back into the tracker.
 		/// Returns the total number of entries processed.
 		/// </summary>
-		/// <param name="action">Callback invoked for each entry: (key, firstSeenUtc, position).</param>
+		/// <param name="action">Callback invoked for each entry: (key, firstSeenSeconds, position).</param>
 		/// <returns>The total number of entries iterated.</returns>
-		public int ForEachInOrder(Action<TKey, DateTime, int> action)
+		public int ForEachInOrder(Action<TKey, double, int> action)
 		{
 			lock (gate)
 			{
 				int pos = 1;
 				for (var node = queue.First; node != null; node = node.Next, pos++)
 				{
-					action(node.Value.Key, node.Value.FirstSeenUtc, pos);
+					action(node.Value.Key, node.Value.FirstSeenSeconds, pos);
 				}
 				return pos - 1;
 			}
@@ -202,12 +209,12 @@ namespace FishMMO.Auth.Core.Collections
 		private readonly struct ArrivalEntry<T>
 		{
 			public readonly T Key;
-			public readonly DateTime FirstSeenUtc;
+			public readonly double FirstSeenSeconds;
 
-			public ArrivalEntry(T key, DateTime firstSeenUtc)
+			public ArrivalEntry(T key, double firstSeenSeconds)
 			{
 				Key = key;
-				FirstSeenUtc = firstSeenUtc;
+				FirstSeenSeconds = firstSeenSeconds;
 			}
 		}
 	}

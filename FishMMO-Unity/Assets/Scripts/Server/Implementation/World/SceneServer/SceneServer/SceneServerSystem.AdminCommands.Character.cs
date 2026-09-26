@@ -254,6 +254,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* The same pre-check as the currency commands (ChangeCurrency): the write quotes the session
+			 * claim this server holds for the target, so without one the character is leaving or being
+			 * evicted and the value could never be stored. Refuse before it moves, rather than change
+			 * it in memory and log an error when the gated write is refused. */
+			if (!TryCaptureSessionClaim(target.ID, out _))
+			{
+				Reply(character, $"{target.CharacterName}'s session is not held by this server any more; nothing changed.");
+				return;
+			}
+
 			int before = attribute.Value;
 			attribute.SetValue(value);
 			if (resource != null)
@@ -266,7 +276,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Administrator '{character.Account}' set '{target.CharacterName}' (id {target.ID}) {template.Name} from {before} to {value}.");
 
 			Reply(character, $"{target.CharacterName} {template.Name}: base {before} to {value}, final {attribute.FinalValue}." +
-				(queued ? string.Empty : " The persistence queue was full, so the save ran outside it; it is written all the same."));
+				(queued ? string.Empty : " The persistence queue is saturated, so the save waits its turn behind the backlog; it is still written, but may land late."));
 		}
 
 		/// <summary>Resolves the damage controller of a target, answering the caller when it has none.</summary>

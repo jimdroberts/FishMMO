@@ -42,7 +42,7 @@ The system's own C# is split across partial classes of `InteractableSystem`, one
 
 The implementation uses a split execution model:
 - **Main thread:** request validation, ingress guard checks, trigger execution, dialogue session management, debounce sweep, and network broadcasts.
-- **Async worker:** database reads/writes for inventory persistence, ability persistence, mail operations, dungeon finder scene assignment, and known-ability persistence via `TryEnqueueAsyncWork`.
+- **Async worker:** database reads/writes for known-ability purchases, merchant currency writes, mail operations, dungeon finder scene assignment, the group finder and arena queues, and waypoint pages, via `TryEnqueueAsyncWork` (or `EnqueuePersistence` for writes that must not be dropped). Item grants and crafted abilities are written by `CharacterInventorySystem` and `AbilitySystem`, which this system hands them to.
 - **Main-thread queue:** marshaling async completion actions back to Unity/FishNet-safe context via `IInteractableSystemMainThreadQueueData`.
 
 All interaction entry points share a single per-connection `IngressGuard` with a configurable global cooldown, ensuring only one interaction can be in-flight per connection at a time. Stale debounce entries are periodically swept with bounded cleanup.
@@ -88,8 +88,8 @@ All interaction entry points share a single per-connection `IngressGuard` with a
 - Teleporter interaction supporting direct transform teleport or named destination teleport
 - Banker interaction opening bank UI with last-interactable tracking
 - Achievement integration on interactable components via optional `AchievementTemplate` fields, incremented by trigger actions
-- Async inventory persistence with fallback direct-persistence path when async worker rejects work
-- Known-ability and crafted-ability persistence via async worker with fail-closed semantics on enqueue rejection
+- Item grants and inventory writes delegated to `CharacterInventorySystem` (`TryGrantItem`, `PersistInventoryChanges`); with no inventory system registered a grant is refused rather than persisted without its id
+- Known-ability purchases persisted through the async worker, and crafted abilities granted through `AbilitySystem.TryGrantAbility`; both fail closed and are claim-gated: the row quotes the session claim captured with the request and lands only while that claim is held, and with no claim nothing is learned or charged
 - Per-system main-thread queue isolation with configurable drain cap per frame
 - Graceful failure semantics: invalid requests fail closed with no mutation; validation enforced before persistence; async failures logged without blocking main thread
 
@@ -114,7 +114,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
    - `InteractableSystemRuntimeData` → `IInteractableSystemRuntimeData`
    - `InteractableSystemMainThreadQueueData` → `IInteractableSystemMainThreadQueueData`
    - `AsyncWorkerData` (shared async work queue)
-5. On initialize, `InteractableSystem` registers twenty-five broadcast handlers (see [Broadcast Handlers](#broadcast-handlers)), subscribes to `IDialogueInteractable.OnServerDialogueRequested`, adds the `/closedungeon` and `/closeinstance` chat commands, hooks `ICharacterSystem.OnAfterLoadCharacter` / `OnDisconnect` for the dialogue choice cache and the group finder rows, then calls `InitializeGroupFinder()` (which chains `InitializeArena()` → `InitializeArenaMatches()`) and `InitializeWaypoints()`, and clamps inspector parameters.
+5. On initialize, `InteractableSystem` registers twenty-four broadcast handlers (see [Broadcast Handlers](#broadcast-handlers)), subscribes to `IDialogueInteractable.OnServerDialogueRequested`, adds the `/closedungeon` and `/closeinstance` chat commands, hooks `ICharacterSystem.OnAfterLoadCharacter` / `OnDisconnect` for the dialogue choice cache and the group finder rows, then calls `InitializeGroupFinder()` (which chains `InitializeArena()` → `InitializeArenaMatches()`) and `InitializeWaypoints()`, and clamps inspector parameters.
 6. On deinitialize, it drains the remaining main-thread queue, clears ingress guard state, unregisters all broadcast handlers, unsubscribes dialogue events, and clears dialogue session/choice caches.
 7. Clients send the appropriate broadcast to trigger interactions; the server validates, processes, optionally persists to database, and replies with result broadcasts.
 
@@ -137,7 +137,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `requireNearbyWaypointForTravel` | bool | true | Game rule (issue #253): a player may fast travel only while standing near a waypoint they have discovered in the same scene instance. Off allows travel from anywhere. Installed as `WaypointTravelPolicy.Server` and sent to each owner in the waypoint payload. Never applies to `TeleportToWaypointAction` |
 | `waypointTravelOriginRange` | float | 10 | How near, in metres, to a discovered waypoint the player must be. Clamped to [1, 500] |
 | `groupFinderPumpIntervalSeconds` | float | 2.0 | How often this server pumps the shared queue on behalf of its own waiters |
-| `groupFinderStalePulseSeconds` | float | 30.0 | How long a queue row may go without a heartbeat before it is stale |
+| `groupFinderStalePulseSeconds` | float | 30.0 | How long a queue row may go without a heartbeat before it is stale. Passed as an age: the database stamps every heartbeat and judges staleness against its own clock, because the row being judged was usually pulsed by another scene server |
 | `groupFinderTransferGraceSeconds` | float | 60.0 | Grace for a matched character being handed between scene servers |
 | `groupFinderBackfillRetrySeconds` | float | 10.0 | Delay before retrying a failed late-join backfill |
 | `groupFinderStaleSweepIntervalSeconds` | float | 30.0 | How often stale queue rows are swept |
@@ -191,7 +191,7 @@ general interaction guard governed by `interactionDebounceMilliseconds`.
 | Thread | Work |
 |---|---|
 | Main thread | Request validation, ingress guards, handler dispatch, dialogue session management, debounce sweep, main-thread queue drain, broadcast dispatch |
-| Async worker | Database reads/writes: inventory, ability and known-ability persistence, dungeon finder scene assignment and party-instance checks, mail fetch/send/delete/claim, the group finder queue pump (heartbeat, read back, form, backfill, stale sweep), arena queue rows, match formation and result writes, arena profile/history lookups, and waypoint page merges |
+| Async worker | Database reads/writes: known-ability and merchant attribute persistence, dungeon finder scene assignment and party-instance checks, mail fetch/send/delete/claim, the group finder queue pump (heartbeat and read-back in one statement that also returns matched rows' party membership, one waiting count across every key, a lock-free read of arena backfill openings, then form, late-join, backfill and stale sweep), arena queue rows, match formation and result writes, arena profile/history lookups, and waypoint page merges |
 
 ## Usage Examples
 
@@ -279,8 +279,8 @@ non-positive amount by design) are all skipped.
 4. Confirms character knows the base ability, doesn't already have a crafted version, and hasn't reached `maxAbilityCount`.
 5. Validates event list: rejects duplicates, unknown events, unowned events, and oversized payloads (`maxAbilityCraftEvents`).
 6. Sums total price (base + events), checks currency.
-7. Calls `LearnAbility` → creates `Ability`, enqueues `PersistAbilityAsync`, learns on controller.
-8. Deducts cost, broadcasts `AbilityAddBroadcast`, increments achievement.
+7. Hands the grant to `AbilitySystem.TryGrantAbility`, which captures the character's session claim (none → refused) and persists the row under it. The ingress guard goes with the grant and is released when its write lands.
+8. Once the row exists and the crafter is still resident, the charge settles (`CharacterCurrency.TrySpend`, skipped at price 0; a refused charge revokes the row), the ability is learned with the id the database assigned and announced (`AbilityAddBroadcast`, and `AbilityLearnedObserverBroadcast` to observers), then come the ledger record, the success answer (`AbilityCraftResultBroadcast`) and the crafter's achievement. A crafter who left before settlement has the row revoked; a grant that never lands costs nothing.
 
 ### Dialogue Session
 
@@ -498,7 +498,7 @@ list is empty is interactable but inert — see [Operational Checks](#operationa
 - Dialogue sessions are bounded; excess sessions are rejected with a warning.
 - Mailbox input length is capped to prevent oversized payloads.
 - World item pickup uses `ConcurrentDictionary` to prevent item duplication.
-- Async enqueue failures are handled explicitly: inventory persistence falls back to direct async path; ability/known-ability persistence fails closed (no learn mutation on rejection).
+- Async enqueue failures are handled explicitly: known-ability and crafted-ability grants fail closed (no learn mutation, no charge on rejection); writes that must not be dropped go through `EnqueuePersistence`, which the worker admits even past its backpressure threshold.
 - Main-thread completion paths revalidate runtime state before mutating or broadcasting.
 - Ingress guards are always released in `finally` blocks (synchronous or async-owned).
 
@@ -513,8 +513,8 @@ list is empty is interactable but inert — see [Operational Checks](#operationa
 | Merchant item purchase | Send `MerchantPurchaseBroadcast` with `MerchantTabType.Item`; confirm `InventorySetMultipleItemsBroadcast` reply and currency deduction |
 | Merchant ability purchase | Send `MerchantPurchaseBroadcast` with `MerchantTabType.Ability`; confirm `KnownAbilityAddBroadcast` reply |
 | Merchant event purchase | Send `MerchantPurchaseBroadcast` with `MerchantTabType.AbilityEvent`; confirm `KnownAbilityEventAddBroadcast` reply |
-| Merchant invalid tab index | Send purchase with out-of-bounds index; confirm request is silently rejected |
-| Insufficient currency | Send purchase with insufficient currency; confirm request is silently rejected |
+| Merchant invalid tab index | Send purchase with out-of-bounds index; confirm it is refused with a `MerchantPurchaseResultBroadcast` naming `InvalidEntry` |
+| Insufficient currency | Send purchase with insufficient currency; confirm it is refused with a `MerchantPurchaseResultBroadcast` naming `InsufficientFunds` |
 | Ability craft | Send `AbilityCraftBroadcast` with valid base + events; confirm `AbilityAddBroadcast` reply |
 | Duplicate craft events | Send `AbilityCraftBroadcast` with duplicate event IDs; confirm request is rejected |
 | Unknown craft event | Send `AbilityCraftBroadcast` with an event the character doesn't know; confirm rejection |
@@ -555,8 +555,8 @@ list is empty is interactable but inert — see [Operational Checks](#operationa
 | Out-of-range interaction | Send interaction from beyond range; confirm request is rejected |
 | Cross-scene interaction | Send interaction for object in different scene; confirm request is rejected |
 | Main-thread queue drain | Confirm queued async results are dispatched on the main thread within `maxMainThreadActionsPerFrame` per frame |
-| Async backpressure | Saturate async worker queue; confirm new work is rejected with a logged warning and fallback paths execute |
-| Inventory persistence fallback | Reject async inventory persist; confirm fallback direct-persistence executes with warning |
+| Async backpressure | Saturate async worker queue; confirm `TryEnqueueAsyncWork` requests are refused with a logged warning, while `EnqueuePersistence` writes are still admitted behind the backlog with a counted overflow line |
+| Inventory system absent | Unregister `ICharacterInventorySystem`; confirm an item grant is refused with an error rather than persisted |
 | Deinitialize cleanup | Trigger deinitialize; confirm broadcast handlers unregistered, handlers cleared, dialogue sessions cleared, and main-thread queue drained |
 
 ## Flow Diagram
@@ -584,8 +584,8 @@ OnServerInteractableBroadcastReceived(conn, msg, channel)
 ├─ 4. ValidateSceneObject(msg.InteractableID, characterSceneHandle)
 │      ├── Existence check in SceneObject.Objects
 │      └── Same-scene handle check
-├─ 5. GetComponent<IInteractable>() + CanInteract(character)
-├─ 6. Resolve interactable.GetType() → lookup in InteractableHandlers
+├─ 5. InteractableResolver.Resolve(sceneObject)
+├─ 6. CanInteract(character) + TryConsumeInteractRateLimit(character)
 └─ 7. ILootableCorpse -> OpenCorpseLoot, then interactable.ExecuteOnInteract(...)
        │
        └── (Trigger actions: broadcast, state change, achievement, etc.)
@@ -608,13 +608,13 @@ OnServerMerchantPurchaseBroadcastReceived(conn, msg, channel)
        │
        ├─ Ability:
        │    └── LearnAbilityTemplate → validate not known + currency
-       │         ├── TryEnqueueAsyncWork → PersistKnownAbilityAsync
+       │         ├── Capture session claim (none → Unavailable), TryEnqueueAsyncWork → PersistKnownAbilityAsync
        │         ├── LearnBaseAbilities on controller
        │         └── Broadcast KnownAbilityAddBroadcast
        │
        └─ AbilityEvent:
             └── LearnAbilityEvent → validate not known + currency
-                 ├── TryEnqueueAsyncWork → PersistKnownAbilityAsync
+                 ├── Capture session claim (none → Unavailable), TryEnqueueAsyncWork → PersistKnownAbilityAsync
                  ├── LearnAbilityEvents on controller
                  └── Broadcast KnownAbilityEventAddBroadcast
 ```
@@ -630,14 +630,15 @@ OnServerAbilityCraftBroadcastReceived(conn, msg, channel)
 ├─ 4. Validate: knows base, doesn't have crafted, under maxAbilityCount
 ├─ 5. Validate events: cap check, no duplicates, all known
 ├─ 6. Sum price (base + events), check currency
-└─ 7. LearnAbility(abilityController, template, events)
+└─ 7. AbilitySystem.TryGrantAbility(character, template, events, settle, releaseGuard, ...)
        │
-       ├── Create Ability(template, events)
-       ├── TryEnqueueAsyncWork → PersistAbilityAsync
-       ├── abilityController.LearnAbility(newAbility)
-       ├── Deduct currency
-       ├── Broadcast AbilityAddBroadcast
-       └── Increment achievement
+       ├── Capture the session claim (none → refused, guard released)
+       ├── Persist the row under the claim (async worker, character's lane)
+       └── Main thread, once the row exists:
+            ├── Crafter gone → revoke the row
+            ├── settle: TrySpend the price (refused → revoke the row)
+            ├── abilityController.LearnAbility (database id) + AbilityAddBroadcast
+            └── onGranted: ledger record, AbilityCraftResultBroadcast, achievement
 ```
 
 ### Dialogue Flow

@@ -61,7 +61,32 @@ typedef struct wt_client_s {
      * client creation.  Used to rate-limit queue-full warnings without
      * a global counter that bleeds across connections. */
     atomic_int              dgram_drop_count;
+
+    /* ── Application-thread handoff of the connection handle ──────
+     * Calls from the application side use the connection handle while the
+     * connection's QUIC worker may be delivering SHUTDOWN_COMPLETE, whose
+     * handler used to close it at once:
+     *  - wt_client_get_connection_stats: a connection-level GetParam is
+     *    queued to the worker and blocks until the worker answers;
+     *  - wt_client_send_datagram / _stream: DatagramSend is given the
+     *    connection handle (and the stream manager's sends run in the same
+     *    window); a close between the send's checks and the call left it
+     *    using a freed connection.
+     *
+     * app_conn is the handle such a call may use; app_state packs the number
+     * of calls in flight (WT_CLIENT_APP_USERS) with a RETIRED bit.  A call
+     * enters only while RETIRED is clear.  SHUTDOWN_COMPLETE sets RETIRED and
+     * closes the handle itself only when no call is in flight; otherwise the
+     * last call to leave closes it.  Both sides act on the one word, so its
+     * modification order decides who closes, exactly once.  This is the
+     * client's counterpart of the server's per-connection app_state gate.
+     * app_conn MUST be accessed via atomic_ptr_load/store/exchange. */
+    HQUIC                   app_conn;
+    atomic_int              app_state;
 } wt_client_s;
+
+#define WT_CLIENT_APP_RETIRED  0x40000000
+#define WT_CLIENT_APP_USERS    0x3FFFFFFF
 
 /* ── Internal API ──────────────────────────────────────────── */
 
@@ -83,6 +108,8 @@ int32_t wt_client_send_datagram_impl(
 
 bool wt_client_is_connected_impl(wt_client_s* client);
 int32_t wt_client_get_mtu_impl(wt_client_s* client);
+int32_t wt_client_get_connection_stats_impl(
+    wt_client_s* client, wt_connection_stats_t* stats);
 
 #ifdef __cplusplus
 }

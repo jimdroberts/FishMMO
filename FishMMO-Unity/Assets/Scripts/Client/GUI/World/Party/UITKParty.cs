@@ -1020,8 +1020,17 @@ namespace FishMMO.Client
 							model.Buffs.Add(entry.Buffs[b]);
 						}
 					}
+
+					/* The countdown's starting point moves only with the array. Each entry carries the
+					 * seconds remaining AT SEND TIME, so the clock they are measured from is the
+					 * moment they arrived. This used to be stamped on every payload, arrays or not —
+					 * which re-based the old remaining seconds to "now" and snapped every timed icon
+					 * back once a second, and forced the server to re-send every timed buff every
+					 * pump to paper over it. The server now sends an array only when the set, a
+					 * stack count or an expiry changes (a refresh), and the icons count down here in
+					 * between. */
+					model.BuffsReceivedTime = now;
 				}
-				model.BuffsReceivedTime = now;
 
 				ApplyModelToRow(model);
 			}
@@ -1492,8 +1501,9 @@ namespace FishMMO.Client
 			 * removed, so the tooltip it opened would be left on screen with nothing to close it.
 			 *
 			 * The signature is template ID and stack count in order, which is exactly what
-			 * decides what an icon LOOKS like. Durations are not part of it because they change on
-			 * every payload by definition; they are written straight onto the icons below. */
+			 * decides what an icon LOOKS like. Durations are not part of it because they change
+			 * whenever an array arrives — a refresh moves them without changing the set — so they
+			 * are written straight onto the icons below. */
 			if (TryRefreshIconClocks(row, model))
 			{
 				return;
@@ -2013,7 +2023,7 @@ namespace FishMMO.Client
 				{
 					if (UIManager.TryGetTK("UIChat", out UITKChat uiChat))
 					{
-						uiChat.SetInputText($"/tell {displayName} ");
+						uiChat.SetInputText(ChatTellAddress.FormatCommand(displayName));
 					}
 				}
 				));

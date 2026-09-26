@@ -11,6 +11,7 @@
 - [Installation / Build](#installation--build)
 - [Quick Start Guides](#quick-start-guides)
 - [Configuration](#configuration)
+- [Login Queue](#login-queue)
 - [Usage Examples](#usage-examples)
 - [Operational Checks](#operational-checks)
 - [Flow Diagram](#flow-diagram)
@@ -43,6 +44,9 @@ On shutdown the system performs an orderly cleanup: it zeros the in-memory signi
 - **Authenticator configuration** — Injects the HMAC key and login-server ID into the `ServerAuthenticator` so it can issue signed authentication tokens.
 - **Periodic heartbeat** — Schedules `OnPeriodicPulse` through `IPeriodicUpdateSystem` at a configurable cadence (default 5 s).
 - **Async heartbeat dispatch** — Heartbeat database calls are enqueued to `AsyncWorkerData` via `TryEnqueueAsyncWork`, keeping the main thread free.
+- **One heartbeat in flight** — `ILoginServerRuntimeData.TryBeginPulse` gates the pulse; the gate is released when the pulse finishes (or at once if it could not be queued). While the database is stalled a pulse can outlast the interval, and each new one used to start regardless, piling identical writes onto a database that was not keeping up; a skipped pulse is covered by the one still running.
+- **Signing-key rotation** — When the active key has been in use for `signingKeyRotationHours` (default 24), the next pulse rotates it on the async worker, guarded against re-entry. The key's age is measured on `MonotonicClock`, so a stepped host clock neither rotates early nor postpones rotation. The previous key is kept for verifying tokens already issued.
+- **Bandwidth recording** — Starts a `ServerBandwidthRecorder` once initialised (one row per minute to `server_bandwidth_minute`, for the Control Panel) and stops it last on deinitialise, after deregistration has had the shutdown budget.
 - **Graceful shutdown** — Zeros the in-memory signing key with `CryptographicOperations.ZeroMemory`, deletes the signing-key DB row, deregisters the login-server DB row, and resets runtime data.
 - **Non-blocking initialization** — Startup database work is awaited, never blocked on. Shutdown cleanup, which runs in `OnDeinitialize` where Unity cannot yield, uses `UnitySyncOverAsync` for a bounded, cancellable wait.
 - **Structured error logging** — Every failure path logs contextual error/warning messages through `FishMMO.Logging.Log`.
@@ -72,7 +76,7 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 1. Configure `ServerName` in the server configuration file (e.g., `"LoginServer-Dev"`).
 2. Ensure the address provider returns a valid IP and port for the login server.
 3. Verify the database is reachable and `ILoginServerService` / `ILoginServerSigningKeyService` are registered.
-4. Start the server — `LoginServerSystem.InitializeOnce()` will register in the DB, generate the HMAC key, and begin heartbeating.
+4. Start the server — `LoginServerSystem.InitializeOnceAsync()` will register in the DB, generate the HMAC key, and begin heartbeating.
 5. Confirm initialization by checking the debug log for: `Initialized (ServerID=<id>, Address=<addr>:<port>, PulseRate=5s)`.
 
 ### Verifying Heartbeat
@@ -86,6 +90,7 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 | Field | Type | Default | Source | Purpose |
 |-------|------|---------|--------|---------|
 | `pulseRate` | `float` | `5.0f` | `[SerializeField]` on `LoginServerSystem` | Interval in seconds between database heartbeat pulses |
+| `signingKeyRotationHours` | `float` | `24.0f` | `[SerializeField]` on `LoginServerSystem` | Age at which the active token-signing key is rotated; `0` disables rotation |
 | `ServerName` | `string` | — | Server configuration (`IServerConfiguration`) | Display name registered in the database for this login server |
 | Server address / port | `ServerAddress` | — | `IServerAddressProvider` | Public network endpoint registered in the database |
 
@@ -96,6 +101,18 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 | Inspector Field | Type | Default | Description |
 |-----------------|------|---------|-------------|
 | `Pulse Rate` | `float` | `5.0` | How often (in seconds) the server sends a heartbeat to the database |
+
+## Login Queue
+
+`LoginQueueSystem` (`LoginServer/LoginQueueSystem.cs`, one folder up) is the login server's admission queue, and it is listed in `LoginServer.unity`'s behaviours beside this system. It engages only when a completed handshake would push the authenticator past its pending cap (`AuthMaxPendingConnections`; unset, the SRP verify and proof channel capacities added, 500 + 500 = 1,000). `ServerAuthenticator.OnHandshakeDeferred` looks the system up in the behaviour registry and hands it the connection; without the system, or with the queue full, the handshake is answered `ServerBusy` and dropped.
+
+- **Held on the live connection.** A queued client stays connected at the QUIC layer, unauthenticated. The handshake-timeout sweep leaves it alone while it is queued and for 15 s after it is admitted (`IsAwaitingAdmission`).
+- **Told its place.** Every `LoginQueueUpdateRateSeconds` (default 2 s) each queued client gets a `LoginQueuePositionBroadcast` with its position, the queue's length and an estimate (position ÷ admission rate). Positions go Unreliable; admission (`0`) and cancellation (`-1`) go Reliable.
+- **Admitted at a rate.** `LoginQueueAdmissionRatePerSecond` (default 50) accrues as credit, capped at one second's worth while clients wait, so several can be admitted in one frame and the rate holds at any frame rate. Dead entries are skipped without spending credit. An admitted client is sent `0` and re-handshakes on the same connection (`OnRehandshakeRequired`, which keeps its credentials).
+- **Not sent to the back twice.** A client admitted in the last 15 s whose re-handshake still finds the cap full is re-admitted at once instead of queued again.
+- **Bounded.** At most `LoginQueueMaxSize` (default 500) wait at once, each for at most `LoginQueueTimeoutSeconds` (default 300), timed on the monotonic clock from the first time that client was queued, so a re-queue does not restart it. A timed-out client is sent `-1` and disconnected without discarding that notice.
+
+The client shows the wait on its queue panel; see [Client Connection → Waiting is not disconnecting](../../../../Client/Connection/README.md#waiting-is-not-disconnecting).
 
 ## Usage Examples
 
@@ -133,7 +150,8 @@ The asset menu path is defined by:
 | Heartbeat active | Monitor login-server table timestamp | Updates every ~5 s (or configured `PulseRate`) |
 | Graceful shutdown — key zeroed | Breakpoint or log after `OnDeinitialize` | `TokenSigningKey` is null, memory zeroed |
 | Graceful shutdown — DB cleanup | Query login-server and signing-key tables after stop | Both rows deleted |
-| Initialization timeout | Block DB access and start server | Log error after 30 s: `"Login server DB registration timed out"` |
+| Registration failure | Block DB access and start server | `Server` logs `"Behaviour initialization failed on attempt N/5: ..."` and `"Retrying behaviour initialization in ..."`; after the last attempt the process exits rather than idling unbound |
+| One pulse at a time | Stall the database longer than `PulseRate` | No second pulse starts until the first finishes; heartbeats resume at the normal rate afterwards |
 | Pulse failure logging | Simulate DB error during heartbeat | Warning: `"Pulse failed: <error>"` |
 
 ## Flow Diagram
@@ -171,16 +189,19 @@ flowchart LR
 │  │ 9. await UpsertAsync(serverId, wrappedHmacKey, ct)            │ │
 │  │ 10. Configure ServerAuthenticator (TokenSigningKey, ID)       │ │
 │  │ 11. Register periodic callback (PulseRate, OnPeriodicPulse)   │ │
+│  │ 12. ServerBandwidthRecorder.TryStart(Server, Login)           │ │
 │  └────────────────────────────────────────────────────────────────┘ │
 │                              │                                      │
 │                              ▼                                      │
 │  OnPeriodicPulse(deltaTime)  ── every PulseRate seconds ──         │
 │  ┌────────────────────────────────────────────────────────────────┐ │
 │  │ Guard: Initialized && Server != null && State == Started      │ │
-│  │ Read serverId from ILoginServerRuntimeData                    │ │
-│  │ TryEnqueueAsyncWork → PulseAsync(serverId)                   │ │
+│  │ TryBeginPulse() — skip if a pulse is still in flight          │ │
+│  │ TryEnqueueAsyncWork → PulseAsync(runtimeData)                 │ │
 │  │   └─► ILoginServerService.PulseAsync(serverId)               │ │
 │  │       └─► Updates liveness timestamp in DB                   │ │
+│  │   finally: EndPulse()                                         │ │
+│  │ Key older than signingKeyRotationHours → RotateSigningKeyAsync│ │
 │  └────────────────────────────────────────────────────────────────┘ │
 │                              │                                      │
 │                              ▼                                      │
@@ -192,6 +213,7 @@ flowchart LR
 │  │ 4. Delete signing-key row from DB [5s timeout]                │ │
 │  │ 5. Delete login-server row from DB [5s timeout]               │ │
 │  │ 6. Reset ILoginServerRuntimeData.ID = 0                      │ │
+│  │ 7. Stop the bandwidth recorder (bounded final sample)         │ │
 │  └────────────────────────────────────────────────────────────────┘ │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
@@ -213,7 +235,7 @@ LoginServer/
 ```
 Server/Core/LoginServer/LoginServer/
 ├── ILoginServerSystem.cs        # Interface: IServerBehaviour marker for login server system
-└── ILoginServerRuntimeData.cs   # Interface: exposes long ID { get; set; }
+└── ILoginServerRuntimeData.cs   # Interface: long ID { get; set; }, TryBeginPulse / EndPulse
 
 Server/Core/RuntimeData/
 └── IAsyncWorkerData.cs          # Async worker queue for off-thread DB operations
@@ -244,7 +266,7 @@ RuntimeDataContainer
 
 | Container | Responsibility |
 |-----------|----------------|
-| `LoginServerRuntimeData` | Holds the persistent runtime login-server ID assigned by the database |
+| `LoginServerRuntimeData` | Holds the persistent runtime login-server ID assigned by the database, and the pulse in-flight gate |
 | `AsyncWorkerData` | Executes heartbeat pulse tasks without blocking main/update threads |
 
 ### Threading Model

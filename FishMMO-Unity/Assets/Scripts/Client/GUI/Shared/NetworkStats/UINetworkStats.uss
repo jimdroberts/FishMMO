@@ -1,0 +1,282 @@
+/*
+    UINetworkStats.uss
+    Layout for the network statistics overlay. Colours come from FishMMO-Theme.uss tokens.
+
+    A readout, not a window: a translucent box in the bottom-right corner, dense enough to sit
+    over the world without covering it. Sized against the 1200-unit reference width; about 296
+    wide and 250 tall with the graph, so at 21:9 (a 506-unit panel) it clears the minimap's
+    244-unit frame in the top-right corner. It is draggable by its header, and a dragged
+    position wins over this default.
+
+    Bottom-right, because the world HUD's other corners are taken: the minimap owns the
+    top-right, the target and party frames the top-left, the chat log the bottom-left, and the
+    hotkey strip ends at x 924 (906 plus its 18-unit pager).
+*/
+
+.netstats-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.netstats-panel {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 296px;
+    flex-direction: column;
+    padding: 4px 7px 6px 7px;
+    background-color: var(--scrim-80);
+    border-width: 1px;
+    border-color: var(--abyss-400);
+    border-top-color: var(--brand-border);
+    border-radius: 3px;
+}
+
+/*
+    Unity's default runtime theme gives every Label padding 1,4,2,4 and margin 2,4,4,2: eleven
+    units of box around each line, which would more than double this table's height. Zeroed
+    once here for every label in the overlay.
+*/
+.netstats-panel Label {
+    margin: 0;
+    padding: 0;
+}
+
+/*
+    The rule above outranks a bare class (a class and a type beat a class), so it also zeroed the
+    badge's left margin and every value ran into its badge. Restored here with a selector that
+    outranks it; the badge spacer is not a Label and keeps its own margin.
+*/
+.netstats-panel Label.netstats-badge {
+    margin-left: 8px;
+}
+
+/* ── Header (drag handle) ─────────────────────────────────── */
+
+.netstats-header {
+    flex-direction: row;
+    align-items: center;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.netstats-title {
+    flex-grow: 1;
+    color: var(--brand-300);
+    font-size: 9px;
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    -unity-text-align: middle-left;
+}
+
+.netstats-backend {
+    color: var(--abyss-300);
+    font-size: 8px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    -unity-text-align: middle-right;
+}
+
+/* ── Headline ─────────────────────────────────────────────── */
+
+.netstats-headline {
+    flex-direction: row;
+    align-items: center;
+    height: 18px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.netstats-arrow {
+    font-size: 9px;
+    width: 10px;
+    -unity-text-align: middle-left;
+}
+
+/* The arrows double as the graph's legend: each takes its line's colour. */
+.netstats-arrow--down,
+.netstats-caption--down,
+.netstats-series--down {
+    color: var(--brand-300);
+}
+
+.netstats-arrow--up,
+.netstats-caption--up,
+.netstats-series--up {
+    color: var(--teal);
+}
+
+.netstats-headline__value {
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    min-width: 76px;
+}
+
+.netstats-spacer {
+    flex-grow: 1;
+}
+
+/* ── Graph ────────────────────────────────────────────────── */
+
+.netstats-graph {
+    height: 26px;
+    margin-top: 2px;
+    margin-bottom: 3px;
+    flex-shrink: 0;
+    background-color: var(--abyss-850);
+    border-width: 1px;
+    border-color: var(--abyss-600);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.netstats-series {
+    position: absolute;
+    left: 1px;
+    top: 2px;
+    right: 1px;
+    bottom: 1px;
+}
+
+/* The value at the top of the graph, so a line's height means a number. */
+.netstats-graph__scale {
+    position: absolute;
+    left: 3px;
+    top: 1px;
+    color: var(--abyss-300);
+    font-size: 7px;
+}
+
+/* ── Table ────────────────────────────────────────────────── */
+
+.netstats-row {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.netstats-row--captions {
+    margin-top: 0;
+}
+
+/*
+    Column budget: the panel's 296 less 2 of border and 14 of padding leaves 280. A row spends
+    60 on the name, 76 on each value cell and 60 on the badge (52 plus 8 of margin): 272. The
+    first render had 72-unit cells, and a bold "6.10 kB/s" overran its cell into the badge. Every
+    column is flex-shrink 0, so a wider column must come out of another one, or the badge is
+    clipped off the right edge rather than wrapping.
+*/
+.netstats-name {
+    width: 60px;
+    flex-shrink: 0;
+    color: var(--abyss-200);
+    font-size: 10px;
+    -unity-text-align: upper-left;
+}
+
+.netstats-cell {
+    width: 76px;
+    flex-shrink: 0;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.netstats-caption {
+    width: 76px;
+    flex-shrink: 0;
+    font-size: 8px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    -unity-text-align: middle-right;
+}
+
+/* No monospace face ships, so figures line up by their right edge. */
+.netstats-value {
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    white-space: nowrap;
+}
+
+.netstats-total {
+    color: var(--abyss-300);
+    font-size: 8px;
+    -unity-text-align: middle-right;
+    white-space: nowrap;
+}
+
+.netstats-rule {
+    height: 1px;
+    margin-top: 3px;
+    margin-bottom: 1px;
+    background-color: var(--abyss-400);
+    flex-shrink: 0;
+}
+
+.netstats-link {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+/* ── Badges ───────────────────────────────────────────────── */
+
+/*
+    One per row: how that row's figures were obtained. The word and the colour both carry it,
+    so the badge still reads in a theme where two of the colours are close.
+*/
+.netstats-badge {
+    width: 52px;
+    height: 12px;
+    margin-left: 8px;
+    flex-shrink: 0;
+    font-size: 7px;
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+    -unity-text-align: middle-center;
+    border-width: 1px;
+    border-radius: 2px;
+    color: var(--abyss-200);
+    border-color: var(--abyss-400);
+    background-color: var(--abyss-700);
+}
+
+.netstats-badge-spacer {
+    width: 52px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.netstats-badge--measured {
+    color: var(--teal);
+    border-color: var(--teal-mid);
+    background-color: var(--teal-lo);
+}
+
+.netstats-badge--estimated {
+    color: var(--warn);
+    border-color: var(--warn);
+    background-color: var(--abyss-700);
+}
+
+.netstats-badge--browser {
+    color: var(--brand-300);
+    border-color: var(--brand-border);
+    background-color: var(--brand-lo);
+}
+
+.netstats-badge--unavailable {
+    color: var(--abyss-300);
+    border-color: var(--abyss-400);
+    background-color: var(--clear);
+}
+
+.netstats-badge--pending {
+    color: var(--abyss-300);
+    border-color: var(--abyss-500);
+    background-color: var(--clear);
+}

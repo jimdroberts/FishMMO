@@ -1052,10 +1052,11 @@ namespace FishMMO.Client
 		{
 			try
 			{
-				/* Close the wait dialog here as well as on the queue's own position 0.
+				/* Close the wait display here as well as on the queue's own position 0.
 				 * That message is the tidy signal, but it is one message: this is the event
-				 * that actually ends the wait, and leaving the dialog up over the scene
+				 * that actually ends the wait, and leaving the display up over the scene
 				 * transition would block the world behind a stale "queue position" box. */
+				DismissWorldQueueDisplay();
 				HideQueueDialog();
 
 				if (IsConnectionReady())
@@ -1222,9 +1223,11 @@ namespace FishMMO.Client
 		/// Shows, or live-updates, the shared queue-wait dialog.
 		/// </summary>
 		/// <remarks>
-		/// Both queues in the connection pipeline — the LoginServer's admission queue and the
-		/// WorldServer's scene-routing queue — present through this one control so they cannot
-		/// drift apart, and so a client cannot end up showing two competing wait dialogs.
+		/// The fallback for a client whose scenes lack <see cref="UITKWorldQueueDisplay"/>, which
+		/// otherwise shows both queues. Both queues in the connection pipeline — the LoginServer's
+		/// admission queue and the WorldServer's scene-routing queue — fall back through this one
+		/// control so they cannot drift apart, and so a client cannot end up showing two competing
+		/// wait dialogs.
 		/// <see cref="UITKDialogBox.Open"/> is a no-op while the box is already visible, which is
 		/// why an update has to go through <see cref="UITKDialogBox.SetText"/> instead.
 		/// <para>
@@ -1301,17 +1304,62 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Handles a <see cref="LoginQueuePositionBroadcast"/> from the LoginServer,
-		/// displaying the current queue position to the user.  Position &gt; 0 shows
-		/// a waiting dialog; position 0 means the client has been admitted and should
-		/// retry the handshake; position -1 means the queue entry was cancelled.
+		/// Handles a <see cref="LoginQueuePositionBroadcast"/> from the LoginServer: position
+		/// &gt; 0 shows the wait on <see cref="UITKWorldQueueDisplay"/>; position 0 means the client
+		/// has been admitted and should retry the handshake; position -1 means the queue entry was
+		/// cancelled.
 		/// </summary>
+		/// <remarks>
+		/// The login queue used to be a line of text in the shared dialog box, a
+		/// <see cref="UITKPanelLayer.Modal"/> panel that anything at the System layer — the loading
+		/// overlay among them — draws over. It now shares the world queue's panel, above the
+		/// overlay, with its own wording (<see cref="WorldQueuePresentation"/>, <see cref="QueueKind.Login"/>)
+		/// and the same Leave queue. The dialog remains the fallback for scenes without the panel.
+		/// </remarks>
 		private void OnLoginQueuePosition(LoginQueuePositionBroadcast msg, Channel ch)
 		{
+			if (!UIManager.TryGetTK(UITKWorldQueueDisplay.PanelName, out UITKWorldQueueDisplay display))
+			{
+				OnLoginQueuePositionWithoutDisplay(msg);
+				return;
+			}
+
+			if (msg.QueuePosition > 0)
+			{
+				display.ShowLoginWaiting(msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds);
+				return;
+			}
+
+			if (msg.QueuePosition == 0)
+			{
+				// Admitted: the wait is over and the handshake goes again on this connection.
+				display.Dismiss();
+				RetryLoginHandshakeAfterAdmission();
+				return;
+			}
+
+			// -1: timed out, or the login server is going away. It closes the connection itself.
+			QuitToLogin();
+
+			/* Explain it, and only after the teardown. QuitToLogin drives every panel through
+			 * its quit-to-login handler, which would take the explanation down with everything
+			 * else — so a message opened before it is swallowed and the player is returned to the
+			 * login screen with no idea why their wait ended. */
+			display.ShowLoginWaitEnded();
+		}
+
+		/// <summary>
+		/// The login queue's feedback before it moved to <see cref="UITKWorldQueueDisplay"/>: the
+		/// shared dialog box. Only for a client whose scenes lack the panel.
+		/// </summary>
+		private void OnLoginQueuePositionWithoutDisplay(LoginQueuePositionBroadcast msg)
+		{
+			WarnQueueDisplayMissing();
+
 			if (msg.QueuePosition > 0)
 			{
 				ShowQueueDialog(
-					FormatQueueText("Waiting to log in.", msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
+					FormatQueueText(WorldQueuePresentation.LoginHeadline, msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
 					// The player chose to leave the queue.
 					onLeave: () => QuitToLogin());
 				return;
@@ -1321,36 +1369,40 @@ namespace FishMMO.Client
 
 			if (msg.QueuePosition == 0)
 			{
-				// Admitted from queue — retry the handshake on the existing connection.
-
-				/* async void local function captures Unity's SynchronizationContext
-				 * so the continuation after await runs on the main thread.
-				 * ContinueWith would run on the ThreadPool, making Log.Error
-				 * and any future Unity API calls unsafe. */
-				async void RetryWithFaultHandling()
-				{
-					try
-					{
-						if (loginAuthenticator != null)
-							await loginAuthenticator.RetryHandshakeAsync();
-					}
-					catch (Exception ex)
-					{
-						_ = Log.Error("Client", $"RetryHandshakeAsync failed: {ex.Message}");
-					}
-				}
-				RetryWithFaultHandling();
+				RetryLoginHandshakeAfterAdmission();
 				return;
 			}
 
 			// position -1 = cancelled (timeout / shutdown)
 			QuitToLogin();
 
-			/* Explain it, and only after the teardown. QuitToLogin drives every panel through
-			 * its quit-to-login handler, which closes the dialog box along with everything else
-			 * — so a message opened before it is swallowed and the player is returned to the
-			 * login screen with no idea why their wait ended. */
-			ShowInfoDialog("The login queue timed out. Please try again.");
+			// After the teardown, for the reason given in OnLoginQueuePosition.
+			ShowInfoDialog(WorldQueuePresentation.LoginEndedHeadline + "\nPlease try again.");
+		}
+
+		/// <summary>
+		/// Re-sends the handshake on the existing connection once the login queue has admitted
+		/// this client.
+		/// </summary>
+		private void RetryLoginHandshakeAfterAdmission()
+		{
+			/* async void local function captures Unity's SynchronizationContext
+			 * so the continuation after await runs on the main thread.
+			 * ContinueWith would run on the ThreadPool, making Log.Error
+			 * and any future Unity API calls unsafe. */
+			async void RetryWithFaultHandling()
+			{
+				try
+				{
+					if (loginAuthenticator != null)
+						await loginAuthenticator.RetryHandshakeAsync();
+				}
+				catch (Exception ex)
+				{
+					_ = Log.Error("Client", $"RetryHandshakeAsync failed: {ex}");
+				}
+			}
+			RetryWithFaultHandling();
 		}
 
 		/// <summary>
@@ -1358,26 +1410,68 @@ namespace FishMMO.Client
 		/// is waiting for somewhere to put this client.
 		/// </summary>
 		/// <remarks>
-		/// The World → Scene hop is the only leg of the connection pipeline that could stall for
-		/// a long time with nothing on screen but a loading overlay: no capacity in any instance
-		/// of the target scene, an instance still loading on a scene server, or a combat-logout
-		/// body that only one specific instance can hand back. All three are legitimate waits
-		/// and all three were completely silent, which is indistinguishable from a hang. This is
-		/// the same feedback the login queue gives, one hop later.
+		/// The World → Scene hop is the only leg of the connection pipeline that can stall for a
+		/// long time: no capacity in any instance of the target scene, an instance still loading
+		/// on a scene server, or a combat-logout body that only one specific instance can hand
+		/// back. The world server places players strictly in arrival order and only as many as
+		/// there are free slots, so a full zone is a real wait, and <see cref="UITKWorldQueueDisplay"/>
+		/// is what shows it — above the loading overlay, which every return through the world
+		/// server after a zone change has up.
 		/// <para>
-		/// Position 0 arrives immediately before <c>WorldSceneConnectBroadcast</c> and just
-		/// closes the dialog; -1 means the server gave up, and is terminal — the connection is
-		/// already closing, so retrying in place would only re-enter the same queue.
+		/// This method keeps the connection decisions and hands the presentation to the panel.
+		/// Position 0 arrives immediately before <c>WorldSceneConnectBroadcast</c> and only takes
+		/// the panel down. -1 means the world server gave up and is closing the connection: the
+		/// connection manager would otherwise treat that close as a drop and redial on its own
+		/// after the backoff, re-entering a stalled queue behind a "reconnecting" overlay the
+		/// player never asked for. It is stopped instead, and the panel asks — queue again
+		/// (<see cref="RejoinWorldQueue"/>, which keeps the place for a while) or return to the
+		/// login screen.
 		/// </para>
 		/// </remarks>
 		private void OnWorldSceneQueuePosition(WorldSceneQueuePositionBroadcast msg, Channel ch)
 		{
+			if (!UIManager.TryGetTK(UITKWorldQueueDisplay.PanelName, out UITKWorldQueueDisplay display))
+			{
+				OnWorldSceneQueuePositionWithoutDisplay(msg);
+				return;
+			}
+
+			if (msg.QueuePosition > 0)
+			{
+				display.ShowWaiting(msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds, msg.Reason);
+				return;
+			}
+
+			if (msg.QueuePosition == 0)
+			{
+				// Routed. The scene connect broadcast is right behind this one.
+				display.Dismiss();
+				return;
+			}
+
+			// -1: the world server abandoned the wait and is closing the connection.
+			Connection?.ForceDisconnect();
+			display.ShowWaitEnded(msg.Reason);
+		}
+
+		/// <summary>
+		/// The queue feedback this client gave before <see cref="UITKWorldQueueDisplay"/>: the
+		/// shared dialog box, and a return to the login screen when the wait ends.
+		/// </summary>
+		/// <remarks>
+		/// Only for a client whose scenes lack the panel. It is a scene-authoring fault, so it is
+		/// logged once; the player still gets told what is happening rather than nothing.
+		/// </remarks>
+		private void OnWorldSceneQueuePositionWithoutDisplay(WorldSceneQueuePositionBroadcast msg)
+		{
+			WarnQueueDisplayMissing();
+
 			if (msg.QueuePosition > 0)
 			{
 				ShowQueueDialog(
-					FormatQueueText(DescribeWorldSceneQueueReason(msg.Reason), msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
-					// The player chose not to keep waiting for a world slot.
-					onLeave: () => QuitToLogin());
+					FormatQueueText(WorldQueuePresentation.Headline(msg.Reason), msg.QueuePosition, msg.TotalQueued, msg.EstimatedWaitSeconds),
+					// The player chose not to keep waiting for a world slot, and gives up their place.
+					onLeave: () => LeaveWorldQueue());
 				return;
 			}
 
@@ -1385,38 +1479,102 @@ namespace FishMMO.Client
 
 			if (msg.QueuePosition == 0)
 			{
-				// Routed. The scene connect broadcast is right behind this one.
 				return;
 			}
 
-			// position -1 = the world server abandoned the wait and is closing the connection.
 			QuitToLogin();
+			ShowInfoDialog(WorldQueuePresentation.EndedHeadline(msg.Reason) + "\nPlease try again.");
+		}
 
-			ShowInfoDialog("The world server could not find room for your character. Please try again.");
+		/// <summary>True once the missing-panel fallback has been reported.</summary>
+		private bool warnedWorldQueueDisplayMissing;
+
+		/// <summary>
+		/// Reports, once, that the queue panel is missing and the shared dialog is standing in.
+		/// It is a scene-authoring fault; the player is still told what is happening.
+		/// </summary>
+		private void WarnQueueDisplayMissing()
+		{
+			if (!this.warnedWorldQueueDisplayMissing)
+			{
+				this.warnedWorldQueueDisplayMissing = true;
+				Log.Warning("Client", $"No '{UITKWorldQueueDisplay.PanelName}' panel is registered; showing the login and world queues in the shared dialog instead. Add the panel to ClientPreboot.");
+			}
 		}
 
 		/// <summary>
-		/// Turns a <see cref="WorldSceneQueueReason"/> into a line the player can act on.
+		/// Leaves the world server's scene-routing queue on purpose and returns to the login
+		/// screen, giving up the place in line.
 		/// </summary>
 		/// <remarks>
-		/// The three waits look identical from the outside but mean very different things — one
-		/// is the world being full, one is a zone starting up, and one is the player's own body
-		/// still standing in a fight they disconnected from. Only the last of those is
-		/// self-inflicted, and a player who is not told about it has no way to understand why
-		/// they are waiting when the world is visibly not busy.
+		/// The world server holds a queued account's place for a short grace window when its wait
+		/// ends without the player's say (a dropped connection, a purge), so that coming back
+		/// resumes it. A deliberate leave looks exactly like a drop from the server's side, so it
+		/// is announced with a <see cref="WorldSceneQueueLeaveBroadcast"/> first. The broadcast is
+		/// written before <see cref="QuitToLogin"/>, whose disconnect waits for the outgoing bundle
+		/// to flush precisely so that what was written on the way out is sent.
 		/// </remarks>
-		private static string DescribeWorldSceneQueueReason(WorldSceneQueueReason reason)
+		public void LeaveWorldQueue()
 		{
-			switch (reason)
+			if (IsConnectionReady())
 			{
-				case WorldSceneQueueReason.SceneLoading:
-					return "Preparing your zone.";
-				case WorldSceneQueueReason.CombatLogoutBody:
-					return "Your character is still in combat where you left it.\nWaiting for it to become available.";
-				case WorldSceneQueueReason.Capacity:
-				default:
-					return "Waiting for space in the world.";
+				try
+				{
+					Broadcast(new WorldSceneQueueLeaveBroadcast(), Channel.Reliable);
+				}
+				catch (Exception ex)
+				{
+					// The place is then held for the grace window and forgotten: the worst case.
+					Log.Warning("Client", $"Could not tell the world server this client is leaving the queue: {ex}");
+				}
 			}
+
+			QuitToLogin();
+		}
+
+		/// <summary>Takes the world queue display down, if it is up.</summary>
+		private static void DismissWorldQueueDisplay()
+		{
+			if (UIManager.TryGetTK(UITKWorldQueueDisplay.PanelName, out UITKWorldQueueDisplay display))
+			{
+				display.Dismiss();
+			}
+		}
+
+		/// <summary>
+		/// Whether <see cref="RejoinWorldQueue"/> can run now: the connection the world server
+		/// closed has finished closing.
+		/// </summary>
+		/// <remarks>
+		/// Reconnecting while that close is still in flight lets it land on the new attempt's
+		/// teardown flag and abort the attempt without a word, so the button that calls it waits
+		/// for this instead.
+		/// </remarks>
+		public bool CanRejoinWorldQueue => Connection != null && Connection.ClientState == LocalConnectionState.Stopped;
+
+		/// <summary>
+		/// Connects to the world server this client was last routed through again, to queue for
+		/// a place after the previous wait ended without one.
+		/// </summary>
+		/// <remarks>
+		/// The session is still held — the token was not revoked when the wait ended — so this is
+		/// the ordinary world reconnect, with the reconnect display and the loading overlay
+		/// showing it. It keeps the place in line: the world server holds an account's place for a
+		/// grace window after a wait it ended (about a minute by default), and the same account
+		/// rejoining the same scene's queue inside it resumes the place. Later than that, it
+		/// queues from the back. A client with no world server to return to ends up on the login
+		/// screen, through the reconnect loop's own failure path.
+		/// </remarks>
+		/// <returns>False when the old connection has not finished closing; nothing was started.</returns>
+		public bool RejoinWorldQueue()
+		{
+			if (!CanRejoinWorldQueue)
+			{
+				return false;
+			}
+
+			Connection.TryReconnect();
+			return true;
 		}
 
 		// ── Disconnect feedback ─────────────────────────────────────────

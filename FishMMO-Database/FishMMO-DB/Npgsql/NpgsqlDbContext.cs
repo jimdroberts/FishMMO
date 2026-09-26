@@ -99,6 +99,18 @@ namespace FishMMO.Database.Npgsql
 		/// </remarks>
 		public DbSet<DaemonAppEventEntity> DaemonAppEvents { get; set; }
 
+		/// <summary>
+		/// What each server process sent and received, per minute, as its own transport measured
+		/// it. Written by the servers; see <see cref="ServerBandwidthMinuteEntity"/>.
+		/// </summary>
+		public DbSet<ServerBandwidthMinuteEntity> ServerBandwidthMinutes { get; set; }
+
+		/// <summary>
+		/// The minutes rolled up per server and hour by the Control Panel, kept 13 months. See
+		/// <see cref="ServerBandwidthHourEntity"/>.
+		/// </summary>
+		public DbSet<ServerBandwidthHourEntity> ServerBandwidthHours { get; set; }
+
 		/// <summary>Two-factor recovery codes.</summary>
 		public DbSet<TwoFactorRecoveryCodeEntity> TwoFactorRecoveryCodes { get; set; }
 

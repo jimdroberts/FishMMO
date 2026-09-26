@@ -35,6 +35,19 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void RemoveGuildCharacterTracker(long guildID, long characterID);
 
 		/// <summary>
+		/// Tells the guild system that a character's client was just sent its guild's roster or
+		/// rank list by some path other than the guild update pump. Main thread only.
+		/// </summary>
+		/// <param name="characterID">The character whose client was sent it.</param>
+		/// <remarks>
+		/// The pump records what each client holds and sends later changes as deltas against that
+		/// record. A roster or ladder sent from elsewhere — the login snapshot — may be older or
+		/// newer than the record, so the record is dropped and the pump's next delivery to this
+		/// character goes out whole.
+		/// </remarks>
+		void ForgetGuildDeliveryBaselines(long characterID);
+
+		/// <summary>
 		/// Called by the Character system when a character connects; used to update guild trackers and persist state.
 		/// </summary>
 		/// <param name="conn">Opaque connection object (engine-specific implementations should accept their connection type).</param>

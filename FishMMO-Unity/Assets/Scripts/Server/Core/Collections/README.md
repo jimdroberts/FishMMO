@@ -27,13 +27,15 @@ The five collections are:
 
 | Class | Purpose |
 |---|---|
-| `ExpiringKeyTracker<TKey>` | Debounce / rate-limit windows keyed by `TKey` with bounded expiry sweeps |
-| `LastSeenCacheTracker<TKey, TValue>` | Key-value cache where entries expire by inactivity (last-seen); reads extend lifetime |
+| `ExpiringKeyTracker<TKey>` | Debounce / rate-limit windows keyed by `TKey` with bounded expiry sweeps. Takes "now" from the caller: a `DateTime`, or a `MonotonicClock.NowSeconds` reading through the `double` overloads. One tracker is driven by one clock |
+| `LastSeenCacheTracker<TKey, TValue>` | Key-value cache where entries expire by inactivity (last-seen); reads extend lifetime. Like `ExpiringKeyTracker`, "now" is a `DateTime` or a `MonotonicClock.NowSeconds` reading through the `double` overloads (`MonotonicInstant` carries the reading); the authenticators' real-IP caches use the monotonic ones. One cache is driven by one clock |
 | `TimedCache<TKey, TValue>` | Write-through TTL cache where entries expire after a fixed duration from storage; reads do **not** extend lifetime |
 | `SingleFlightCache<TKey, TValue>` | Fixed-TTL cache of **asynchronous reads**: callers arriving while a read is in flight share it, a completed read is served until its TTL (counted from when it started), and a failed read is never cached |
 | `InstanceCapacityHeap` | Max-heap of scene-instance handles ordered by remaining capacity for O(log N) routing |
 
-> **Note:** `ArrivalOrderTracker<TKey>` (oldest-first stale-entry processing for unauthenticated SRP/encryption sweeps) used to live here but has been moved to the engine-independent `FishMMO-Auth.dll` shared library under `FishMMO.Auth.Core.Collections`. Server systems that need it should reference it from there.
+`MonotonicInstant` (internal) is the helper behind the monotonic overloads: it carries a `MonotonicClock.NowSeconds` reading in a `DateTime`, so the two `DateTime`-backed trackers need no second implementation. The result is not a calendar instant and means nothing outside the tracker that stored it.
+
+> **Note:** `ArrivalOrderTracker<TKey>` (oldest-first stale-entry processing for unauthenticated SRP/encryption sweeps) used to live here but has been moved to the engine-independent `FishMMO-ServerAuth.dll` library under `FishMMO.Auth.Core.Collections`. Server systems that need it should reference it from there.
 
 ## Supported Platforms
 
@@ -111,7 +113,8 @@ int removed = cache.SweepExpired(DateTime.UtcNow, TimeSpan.FromSeconds(60), maxS
 ```csharp
 var cache = new TimedCache<string, List<SceneData>>();
 
-// Store a value (timestamped at DateTime.UtcNow internally)
+// Store a value (stamped with MonotonicClock.NowSeconds internally — a TTL is a duration,
+// so a stepped host clock must not keep entries alive or expire them all at once)
 cache.Set("worldKey", sceneDataList);
 
 // Retrieve only if stored within the last 30 seconds (reads do NOT extend lifetime)
@@ -123,8 +126,8 @@ if (cache.TryGet("worldKey", TimeSpan.FromSeconds(30), out var data))
 // Explicitly invalidate a single entry
 cache.Invalidate("worldKey");
 
-// Bounded sweep in an update loop
-int removed = cache.SweepExpired(DateTime.UtcNow, TimeSpan.FromSeconds(30), maxScan: 64, maxRemove: 16);
+// Bounded sweep in an update loop (reads the same monotonic clock itself)
+int removed = cache.SweepExpired(TimeSpan.FromSeconds(30), maxScan: 64, maxRemove: 16);
 ```
 
 ### Shared Asynchronous Reads with SingleFlightCache
@@ -152,22 +155,22 @@ Use it instead of `TimedCache` when many callers want the same value at once and
 
 ### Oldest-First Tracking with ArrivalOrderTracker
 
-> Moved to `FishMMO-Auth.dll` under `FishMMO.Auth.Core.Collections`. The API is identical; only the namespace has changed. Add `using FishMMO.Auth.Core.Collections;` and reference `FishMMO-Auth.dll` from your assembly.
+> Moved to `FishMMO-ServerAuth.dll` under `FishMMO.Auth.Core.Collections`. Add `using FishMMO.Auth.Core.Collections;` and reference `FishMMO-ServerAuth.dll` from your assembly. First-seen times are monotonic seconds (a `double`), not `DateTime`: the account manager's backstop sweep ages entries by them, and a stepped wall clock aged every entry at once.
 
 ```csharp
 var tracker = new ArrivalOrderTracker<NetworkConnection>();
 
-// Track a new connection (no-op if already tracked)
-tracker.TrackIfMissing(conn, DateTime.UtcNow);
+// Track a new connection (no-op if already tracked); the time is a monotonic reading in seconds
+tracker.TrackIfMissing(conn, MonotonicClock.NowSeconds);
 
 // Peek at the oldest tracked entry
-if (tracker.TryPeekOldest(out var key, out DateTime firstSeen))
+if (tracker.TryPeekOldest(out var key, out double firstSeenSeconds))
 {
-    // key is the oldest connection, firstSeen is when it was added
+    // key is the oldest connection, firstSeenSeconds is when it was added
 }
 
 // Pop and remove the oldest entry
-if (tracker.PopOldest(out var oldestKey, out DateTime seen))
+if (tracker.PopOldest(out var oldestKey, out double seenSeconds))
 {
     // Process the oldest stale connection
 }
@@ -207,21 +210,29 @@ These collections are configured at construction time or per-call through method
 
 ## Usage Examples
 
-### ServerAuthenticator
+### BaseServerAuthenticator
 
-- `ExpiringKeyTracker<string>` — kick, account, and IP debounce maps to prevent repeated authentication attempts.
-- `LastSeenCacheTracker<int, string>` — connection-to-IP address cache that refreshes on each packet.
+- `ExpiringKeyTracker<string>` / `ExpiringKeyTracker<int>` — handshake, token-revoke (per key and global) and token-mint rate limiters, all on the monotonic overloads.
+- `LastSeenCacheTracker<int, string>` — connection-to-real-IP cache, refreshed while the connection is active (monotonic).
+- `LastSeenCacheTracker<string, int>` — redeemed connection tokens, kept on the wall clock on purpose: it is replay protection for a token whose own expiry is a wall-clock time.
+
+The kick, account and IP debounces of the SRP login path live in `SrpAuthenticatorCore`, which uses the `FishMMO-ServerAuth.dll` copies of these trackers.
 
 ### WorldSceneSystem
 
 - `ExpiringKeyTracker<string>` — instance-lookup debounce to avoid redundant database queries.
-- `TimedCache<string, List<SceneData>>` — caches available scene-instance query results with a fixed TTL.
-- `TimedCache<long, (string, ushort)>` — caches scene-server address lookups.
+- `TimedCache<string, IReadOnlyList<SceneData>>` — caches available scene-instance query results with a fixed TTL.
+- `TimedCache<long, ushort>` — caches scene-server address lookups.
+- `InstanceCapacityHeap` — orders a scene's instances by remaining capacity while a routing pass places players.
 
 ### SceneChannelSystem
 
-- `TimedCache<string, List<SceneData>>` — caches available scene-instance query results.
-- `TimedCache<long, (string, ushort)>` — caches scene-server address lookups.
+- `TimedCache<string, IReadOnlyList<SceneData>>` — caches available scene-instance query results.
+- `TimedCache<long, ushort>` — caches scene-server address lookups.
+
+### ServerSelectSystem
+
+- `SingleFlightCache<byte, WorldServerDetails[]>` — the world-server list, one shared read per `serverListCacheSeconds` (2 s by default) for every client asking; driven by the monotonic clock through the cache's clock seam.
 
 ### LeaderboardSystem
 
@@ -230,7 +241,7 @@ These collections are configured at construction time or per-call through method
 
 ### AccountManager
 
-- `ArrivalOrderTracker<NetworkConnection>` *(now in `FishMMO-Auth.dll` — `FishMMO.Auth.Core.Collections`)* — tracks unauthenticated SRP/encryption handshake connections for oldest-first stale-state sweeps. The `AccountManager<TConnection>` base class in FishMMO-Auth owns the tracker; FishMMO-Unity does not need to reference it directly.
+- `ArrivalOrderTracker<NetworkConnection>` *(now in `FishMMO-ServerAuth.dll` — `FishMMO.Auth.Core.Collections`)* — tracks unauthenticated SRP/encryption handshake connections for oldest-first stale-state sweeps. The `AccountManager<TConnection>` base class in FishMMO-Auth owns the tracker; FishMMO-Unity does not need to reference it directly.
 
 ## Operational Checks
 
@@ -287,7 +298,7 @@ flowchart LR
 │  │  Stale-     │◄────────────┐                                   │
 │  │  Connection │   ┌─────────┴───────────────────────────────┐  │
 │  │  Sweep      │   │  ArrivalOrderTracker<TKey>              │  │
-│  └────────────┘   │  (in FishMMO-Auth.dll —                  │  │
+│  └────────────┘   │  (in FishMMO-ServerAuth.dll —            │  │
 │                    │   FishMMO.Auth.Core.Collections)         │  │
 │                    └─────────────────────────────────────────┘  │
 │                                                                  │
@@ -311,12 +322,13 @@ Assets/Scripts/Server/Core/Collections/
 ├── ExpiringKeyTracker.cs         # Debounce / rate-limit expiry tracker
 ├── InstanceCapacityHeap.cs       # Max-heap for capacity-based instance routing
 ├── LastSeenCacheTracker.cs       # Last-seen TTL cache (reads extend lifetime)
+├── MonotonicInstant.cs           # Internal: a MonotonicClock reading carried in a DateTime
 ├── SingleFlightCache.cs          # Fixed-TTL cache of async reads; concurrent callers share one read
 ├── TimedCache.cs                 # Fixed-TTL write-through cache (reads do not extend)
 └── README.md                     # This file
 ```
 
-> `ArrivalOrderTracker.cs` was previously in this folder but has been moved to `FishMMO-Auth.dll` (`FishMMO.Auth.Core.Collections`) so it can be shared with the engine-independent authentication core. No replacement file lives here.
+> `ArrivalOrderTracker.cs` was previously in this folder but has been moved to `FishMMO-ServerAuth.dll` (`FishMMO.Auth.Core.Collections`) so it can be shared with the engine-independent authentication core. No replacement file lives here.
 
 ### Class Relationships
 
@@ -349,7 +361,7 @@ Assets/Scripts/Server/Core/Collections/
 └──────────────────────┘
 ```
 
-All tracker classes share the same internal pattern: a `Dictionary` for O(1) key lookup paired with a `LinkedList` for ordered expiry traversal, protected by a `lock` gate. `InstanceCapacityHeap` is a value-type (`struct`) using an array-backed binary max-heap without locking. `ArrivalOrderTracker<TKey>` follows the same dictionary + linked-list pattern but now lives in `FishMMO-Auth.dll` (`FishMMO.Auth.Core.Collections`).
+All tracker classes share the same internal pattern: a `Dictionary` for O(1) key lookup paired with a `LinkedList` for ordered expiry traversal, protected by a `lock` gate. `InstanceCapacityHeap` is a value-type (`struct`) using an array-backed binary max-heap without locking. `ArrivalOrderTracker<TKey>` follows the same dictionary + linked-list pattern but now lives in `FishMMO-ServerAuth.dll` (`FishMMO.Auth.Core.Collections`).
 
 ## License
 

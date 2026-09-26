@@ -202,8 +202,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (cooldownController.IsOnCooldown(ability.ID, currentTick))
 				return null;
 
-			EventData activationCheckData = null;
-			if (!ability.MeetsActivationConditions(self, ref activationCheckData))
+			// The controller's reusable condition context, rather than a fresh one per entry tried.
+			if (!ability.MeetsActivationConditions(self, ref controller.ActivationCheckData))
 				return null;
 
 			return ability;

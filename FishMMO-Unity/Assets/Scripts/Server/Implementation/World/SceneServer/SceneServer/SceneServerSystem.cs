@@ -54,6 +54,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private const int dbShutdownTimeoutMs = 5_000;
 
+		/// <summary>Writes this process's bandwidth to the database once a minute. Null until initialised.</summary>
+		private ServerBandwidthRecorder bandwidthRecorder;
+
 		/// <summary>
 		/// Maximum pending scene load age in seconds before failing and removing the request.
 		/// </summary>
@@ -340,7 +343,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Unity's SynchronizationContext (blocking on it here would deadlock startup) and
 			// bounds the wait so an unreachable database fails initialization instead of hanging.
 			// Capture Unity API values on the main thread before dispatching.
-			string serverName = name;
+			/* Registered under the configured ServerName, as the login and world servers are. This used
+			 * to be the behaviour asset's own name ("SceneServerSystem"), the same on every scene server:
+			 * scene_servers upserts ON CONFLICT (name), so every scene server shared one row and one ID,
+			 * and each one's startup DeleteBySceneServerAsync(id) below wiped the scenes the others were
+			 * hosting. It also never matched the name the health monitor pulses against. */
+			if (!Server.Configuration.TryGetString("ServerName", out string serverName) || string.IsNullOrWhiteSpace(serverName))
+			{
+				_ = Log.Error("SceneServerSystem", "Failed to initialize: ServerName not configured");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
 			string serverAddress = server.Address;
 			ushort serverPort = server.Port;
 			int characterCount = characterMappingData.ConnectionCharacters.Count;
@@ -382,7 +394,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pendingSceneSweepMaxRemovals = Mathf.Max(1, pendingSceneSweepMaxRemovals);
 			maxScenesLoadedPerPulse = Mathf.Max(1, maxScenesLoadedPerPulse);
 			runtimeData.EndPulse();
-			runtimeData.NextPendingSceneSweepUtc = DateTime.UtcNow;
+			runtimeData.NextPendingSceneSweepAt = MonotonicClock.NowSeconds;
+
+			// Bandwidth statistics for the Control Panel. See ServerBandwidthRecorder.
+			bandwidthRecorder = ServerBandwidthRecorder.TryStart(Server, ServerType.Scene);
 
 			_ = Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -469,6 +484,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				runtimeState.EndPulse();
 			}
+
+			// Last, so the scene cleanup has the shutdown budget first: a bounded final bandwidth sample.
+			bandwidthRecorder?.Stop();
+			bandwidthRecorder = null;
 		}
 
 		/// <summary>
@@ -631,8 +650,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			SweepExpiredPendingScenes(mappingData);
 
-			// Fire-and-forget async DB operations — check early so reusable
-			// buffers below are never cleared while a prior pulse is still reading them.
+			/* The local sweep runs on every pulse, whatever the database is doing.
+			 *
+			 * It used to sit behind TryBeginPulse, which is released only when the previous pulse's
+			 * database round trips complete. During a database stall — minutes, at a 30s command
+			 * timeout per query — expired instances stayed open, idle scenes stayed loaded, and the
+			 * closing warnings were skipped, so an instance could close with nobody told. None of
+			 * the sweep needs the gate: the buffers it fills are main-thread only, and the async
+			 * pulse is handed copies of what it needs. Only that dispatch is gated, below. */
+			SweepSceneInstances(mappingData, runtimeData);
+
+			// Fire-and-forget async DB operations. One in flight at a time; a pulse that finds the
+			// previous one still running skips its heartbeat and tries again next time.
 			if (!runtimeData.TryBeginPulse())
 			{
 				return;
@@ -647,14 +676,52 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterCount += lingerCharacterSystem.LingeringCharacterCount;
 			}
 
-			// Collect scene pulse data on the main thread before async work.
-			// Reuse runtime-data buffers to avoid per-pulse GC allocations (P9 fix).
-			// Safe: TryBeginPulse above guarantees no concurrent pulse reads these buffers.
+			// Snapshot pulse data before passing to async — the reusable buffer is main-thread only
+			// and is refilled by the next pulse's sweep whether or not this one has finished.
+			var pulseSnapshot = new List<(long SceneID, int CharacterCount)>(runtimeData.ScenePulseDataBuffer);
+
+			/* The worlds this server currently hosts scenes for.
+			 *
+			 * A scene server is not owned by one world — DequeueAsync hands out whichever pending
+			 * row is oldest, whatever world it belongs to — so a world-wide shutdown has to be
+			 * looked up per world, and only for the worlds actually represented here. Collected
+			 * on the main thread alongside everything else the pulse needs. */
+			var hostedWorldIDs = new List<long>(mappingData.WorldScenes != null ? mappingData.WorldScenes.Count : 0);
+			if (mappingData.WorldScenes != null)
+			{
+				foreach (long hostedWorldID in mappingData.WorldScenes.Keys)
+				{
+					hostedWorldIDs.Add(hostedWorldID);
+				}
+			}
+
+			if (!TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, pulseSnapshot, maxScenesLoadedPerPulse, hostedWorldIDs), runtimeData.ID))
+			{
+				runtimeData.EndPulse();
+			}
+		}
+
+		/// <summary>
+		/// The local half of the pulse: closes instances past their lifetime cap, warns the ones
+		/// approaching it, unloads scenes idle past their timeout, and fills
+		/// <see cref="ISceneServerRuntimeData.ScenePulseDataBuffer"/> with the population of every
+		/// scene that stays.
+		/// </summary>
+		/// <remarks>
+		/// Main thread only, and no database work of its own: the row deletes for the scenes it
+		/// closes go out as one statement at the end.
+		/// </remarks>
+		private void SweepSceneInstances(ISceneInstanceMappingData mappingData, ISceneServerRuntimeData runtimeData)
+		{
+			// Collect scene pulse data on the main thread. Reuses runtime-data buffers to avoid
+			// per-pulse GC allocations (P9 fix); they are only ever touched from here.
 			runtimeData.ScenePulseDataBuffer.Clear();
 			runtimeData.ScenesToUnloadBuffer.Clear();
 
 			// Instances past their lifetime cap this pulse. See the use site below.
 			List<long> expiredInstances = null;
+
+			double now = MonotonicClock.NowSeconds;
 
 			if (mappingData.WorldScenes != null)
 			{
@@ -686,7 +753,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							 * row for as long as they cared to, and — now that a party may hold only
 							 * one instance — locked itself out of every other dungeon while they
 							 * did. This bounds the instance itself rather than its idleness. */
-							if (IsInstanceExpired(sceneDetails))
+							if (IsInstanceExpired(sceneDetails, now))
 							{
 								/* Kept apart from the stale list rather than folded into it. The two
 								 * are different events — an instance that ran out of time with people
@@ -697,12 +764,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 								continue;
 							}
 
-							WarnInstanceOfPendingExpiry(sceneDetails);
+							WarnInstanceOfPendingExpiry(sceneDetails, now);
 
 							if (sceneDetails.StalePulse)
 							{
-								double timeSinceLastExit = DateTime.UtcNow.Subtract(sceneDetails.LastExit).TotalMinutes;
-
 								int staleSceneTimeoutMinutes = ResolveStaleTimeoutMinutes(sceneDetails.SceneType);
 
 								/* An instance everybody CHOSE to leave is finished, and the idle
@@ -721,7 +786,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									staleSceneTimeoutMinutes = 0;
 								}
 
-								if (timeSinceLastExit < staleSceneTimeoutMinutes)
+								if (!SceneInstanceLifetime.IsIdleExpired(now, sceneDetails.LastExitAt, staleSceneTimeoutMinutes * 60.0))
 								{
 									Log.Debug("SceneServerSystem", $"{sceneDetails.Name}:{sceneDetails.WorldServerID}{sceneDetails.Handle}:{sceneDetails.CharacterCount} Stale Pulse");
 									runtimeData.ScenePulseDataBuffer.Add((sceneDetails.SceneID, sceneDetails.CharacterCount));
@@ -741,45 +806,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
+			if (runtimeData.ScenesToUnloadBuffer.Count < 1 && expiredInstances == null)
+			{
+				return;
+			}
+
 			/* Unload on the main thread. Everything goes through CloseInstance rather than
 			 * UnloadScene: a stale scene is empty by definition, but an expired instance is not, and
 			 * destroying a scene with people standing in it is what CloseInstance exists to
-			 * prevent. */
+			 * prevent.
+			 *
+			 * The row deletes are collected and written as one statement rather than one queued
+			 * write per scene. */
+			var closedRows = new List<long>(runtimeData.ScenesToUnloadBuffer.Count + (expiredInstances?.Count ?? 0));
 			for (int i = 0; i < runtimeData.ScenesToUnloadBuffer.Count; i++)
 			{
-				CloseInstance(runtimeData.ScenesToUnloadBuffer[i], "empty for longer than the idle timeout");
+				CloseInstance(runtimeData.ScenesToUnloadBuffer[i], "empty for longer than the idle timeout", closedRows);
 			}
 
 			if (expiredInstances != null)
 			{
 				for (int i = 0; i < expiredInstances.Count; i++)
 				{
-					CloseInstance(expiredInstances[i], "instance lifetime reached");
+					CloseInstance(expiredInstances[i], "instance lifetime reached", closedRows);
 				}
 			}
 
-			// Snapshot pulse data before passing to async — avoids fragile shared-buffer pattern
-			// where a future refactor could clear the reusable buffer while async is still reading it.
-			var pulseSnapshot = new List<(long SceneID, int CharacterCount)>(runtimeData.ScenePulseDataBuffer);
-
-			/* The worlds this server currently hosts scenes for.
-			 *
-			 * A scene server is not owned by one world — DequeueAsync hands out whichever pending
-			 * row is oldest, whatever world it belongs to — so a world-wide shutdown has to be
-			 * looked up per world, and only for the worlds actually represented here. Collected
-			 * on the main thread alongside everything else the pulse needs. */
-			var hostedWorldIDs = new List<long>(mappingData.WorldScenes != null ? mappingData.WorldScenes.Count : 0);
-			if (mappingData.WorldScenes != null)
+			if (closedRows.Count > 0)
 			{
-				foreach (long hostedWorldID in mappingData.WorldScenes.Keys)
-				{
-					hostedWorldIDs.Add(hostedWorldID);
-				}
-			}
-
-			if (!TryEnqueueAsyncWork(() => PeriodicPulseAsync(runtimeData.ID, characterCount, pulseSnapshot, maxScenesLoadedPerPulse, hostedWorldIDs), runtimeData.ID))
-			{
-				runtimeData.EndPulse();
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. Keyed by the first
+				 * row: nothing written about these rows afterwards needs ordering against a delete. */
+				EnqueuePersistence(() => DeleteScenesAsync(closedRows), closedRows[0]);
 			}
 		}
 
@@ -963,60 +1021,62 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// closing one would evict everybody in a zone — and their idleness is already bounded by
 		/// the stale sweep.
 		/// </remarks>
-		private bool IsInstanceExpired(ISceneInstanceDetails details)
+		/// <param name="details">The instance.</param>
+		/// <param name="now">The current <see cref="MonotonicClock"/> reading.</param>
+		private bool IsInstanceExpired(ISceneInstanceDetails details, double now)
 		{
 			if (details == null || details.SceneType == SceneType.OpenWorld)
 			{
 				return false;
 			}
 
-			// A row with no creation time recorded cannot be aged; treat it as young rather than
-			// closing an instance on the strength of a default value.
-			if (details.CreatedUtc == default)
-			{
-				return false;
-			}
-
-			return (DateTime.UtcNow - details.CreatedUtc).TotalMinutes >= ResolveInstanceLifetimeMinutes(details);
+			return SceneInstanceLifetime.IsExpired(now, details.CreatedAt, ResolveInstanceLifetimeMinutes(details) * 60.0);
 		}
 
 		/// <inheritdoc/>
-		public bool TryGetInstanceExpiry(long sceneID, out DateTime expiresUtc)
+		public bool TryGetInstanceRemainingSeconds(long sceneID, out double remainingSeconds)
 		{
-			expiresUtc = default;
+			remainingSeconds = 0.0;
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
 				!mappingData.SceneInstanceByID.TryGetValue(sceneID, out ISceneInstanceDetails details) ||
-				details.SceneType == SceneType.OpenWorld ||
-				details.CreatedUtc == default)
+				details.SceneType == SceneType.OpenWorld)
 			{
 				return false;
 			}
 
-			expiresUtc = details.CreatedUtc.AddMinutes(ResolveInstanceLifetimeMinutes(details));
+			double remaining = SceneInstanceLifetime.RemainingSeconds(
+				MonotonicClock.NowSeconds, details.CreatedAt, ResolveInstanceLifetimeMinutes(details) * 60.0);
+			if (double.IsNaN(remaining))
+			{
+				return false;
+			}
+
+			remainingSeconds = remaining;
 			return true;
 		}
 
 		/// <summary>
 		/// Tells an instance's occupants how long it has left, once per mark crossed.
 		/// </summary>
-		private void WarnInstanceOfPendingExpiry(ISceneInstanceDetails details)
+		/// <param name="details">The instance.</param>
+		/// <param name="now">The current <see cref="MonotonicClock"/> reading.</param>
+		private void WarnInstanceOfPendingExpiry(ISceneInstanceDetails details, double now)
 		{
 			if (details == null ||
 				details.SceneType == SceneType.OpenWorld ||
-				details.CreatedUtc == default ||
 				details.CharacterCount < 1)
 			{
 				return;
 			}
 
-			double remaining = (ResolveInstanceLifetimeMinutes(details) * 60.0) -
-							   (DateTime.UtcNow - details.CreatedUtc).TotalSeconds;
+			double remaining = SceneInstanceLifetime.RemainingSeconds(
+				now, details.CreatedAt, ResolveInstanceLifetimeMinutes(details) * 60.0);
 
 			/* Nothing to say yet, which is where an instance spends nearly all of its life. Checked
 			 * before the bookkeeping below so the common case is one subtraction and a comparison
 			 * rather than a dictionary lookup per instance per pulse. */
-			if (remaining <= 0.0 || remaining > InstanceExpiryWarnSeconds[0])
+			if (!(remaining > 0.0) || remaining > InstanceExpiryWarnSeconds[0])
 			{
 				return;
 			}
@@ -1026,17 +1086,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				announcedInstanceExpiry[details.SceneID] = announced = new HashSet<int>();
 			}
 
-			for (int i = 0; i < InstanceExpiryWarnSeconds.Length; ++i)
+			int announceSeconds = SceneInstanceLifetime.ResolveExpiryWarning(remaining, InstanceExpiryWarnSeconds, announced);
+			if (announceSeconds > 0)
 			{
-				int mark = InstanceExpiryWarnSeconds[i];
-				if (remaining > mark || !announced.Add(mark))
-				{
-					continue;
-				}
-
 				BroadcastToInstance(details,
-					$"This dungeon closes in {DescribeDuration(mark)}.");
-				return;
+					$"This dungeon closes in {DescribeDuration(announceSeconds)}.");
 			}
 		}
 
@@ -1055,6 +1109,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="reason">Why it is closing, for diagnostics.</param>
 		public void CloseInstance(long sceneID, string reason)
 		{
+			CloseInstance(sceneID, reason, null);
+		}
+
+		/// <summary>
+		/// <see cref="CloseInstance(long, string)"/>, optionally leaving the row delete to the caller.
+		/// </summary>
+		/// <param name="sceneID">Scene row of the instance to close.</param>
+		/// <param name="reason">Why it is closing, for diagnostics.</param>
+		/// <param name="deferredRowDeletes">
+		/// When not null, the scene row is added here for the caller to delete with the others it
+		/// closes, instead of being deleted on its own. See <see cref="UnloadScene(long, List{long})"/>.
+		/// </param>
+		private void CloseInstance(long sceneID, string reason, List<long> deferredRowDeletes)
+		{
 			announcedInstanceExpiry.Remove(sceneID);
 
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
@@ -1062,7 +1130,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterSystem.ReturnInstanceOccupantsToWorld(sceneID, reason);
 			}
 
-			UnloadScene(sceneID);
+			UnloadScene(sceneID, deferredRowDeletes);
 		}
 
 		/// <summary>
@@ -1123,14 +1191,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextPendingSceneSweepUtc)
+			// Monotonic: a duration measured on the wall clock fails every pending load at once
+			// when the clock is stepped forward, and stops the sweep when it is stepped back.
+			double now = MonotonicClock.NowSeconds;
+			if (now < runtimeData.NextPendingSceneSweepAt)
 			{
 				return;
 			}
 
-			runtimeData.NextPendingSceneSweepUtc = nowUtc.AddSeconds(pendingSceneSweepIntervalSeconds);
-			DateTime staleBeforeUtc = nowUtc.AddSeconds(-pendingSceneTimeoutSeconds);
+			runtimeData.NextPendingSceneSweepAt = now + pendingSceneSweepIntervalSeconds;
+			double staleBefore = now - pendingSceneTimeoutSeconds;
 
 			runtimeData.ExpiredSceneIdsBuffer.Clear();
 			int removed = 0;
@@ -1143,11 +1213,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					break;
 				}
 
-				if (kvp.Value.EnqueuedUtc <= staleBeforeUtc)
+				if (kvp.Value.EnqueuedAt <= staleBefore)
 				{
 					runtimeData.ExpiredSceneIdsBuffer.Add(kvp.Key);
 					removed++;
 				}
+			}
+
+			if (runtimeData.ExpiredSceneIdsBuffer.Count < 1)
+			{
+				return;
 			}
 
 			for (int i = 0; i < runtimeData.ExpiredSceneIdsBuffer.Count; ++i)
@@ -1156,10 +1231,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				mappingData.PendingScenes.Remove(sceneId);
 
 				Log.Warning("SceneServerSystem", $"Pending scene request timed out and was failed: SceneID={sceneId}");
-				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
-				 * saturated pool must not be unbounded work on the frame thread. */
-				EnqueuePersistence(() => UpdateSceneStatusAsync(sceneId, SceneStatus.Failed), sceneId);
 			}
+
+			/* One statement for the whole sweep rather than a queued write per row. Copied: the
+			 * buffer is reused by the next sweep, which may run before this write does.
+			 *
+			 * EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+			 * saturated pool must not be unbounded work on the frame thread. Keyed by the first
+			 * row. A row failed here is never made ready afterwards — SceneManager_OnLoadEnd refuses
+			 * a load whose request is gone — so there is no later write to these rows it could
+			 * overtake. */
+			var failed = new List<long>(runtimeData.ExpiredSceneIdsBuffer);
+			EnqueuePersistence(() => UpdateSceneStatusesAsync(failed, SceneStatus.Failed), failed[0]);
 		}
 
 		/// <summary>
@@ -1239,7 +1322,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				for (int s = 0; s < dequeueBudget; s++)
 				{
-					DatabaseResult<SceneData> dequeueResult = await sceneService.DequeueAsync();
+					/* Claimed in this server's name, so a retry after a lost reply returns the row the
+					 * first attempt took instead of taking a second, and a restart of this server
+					 * (DeleteBySceneServerAsync) cleans up any load it had claimed but not finished.
+					 * See ISceneService.DequeueAsync. */
+					DatabaseResult<(SceneData Scene, double AgeSeconds)> dequeueResult = await sceneService.DequeueAsync(serverID);
 					if (!dequeueResult.IsSuccess)
 					{
 						// NotFound is an empty queue, the ordinary end of this loop. Anything else is a fault.
@@ -1250,11 +1337,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						break;
 					}
 
-					SceneData pending = dequeueResult.Data;
+					SceneData pending = dequeueResult.Data.Scene;
+
+					/* Where the row's creation falls on this process's monotonic clock, fixed the
+					 * moment the database's answer arrives. The age was measured by the database
+					 * against the clock that stamped the row, so this is the only place the row's
+					 * creation time enters this process, and no host clock is involved in it. See
+					 * ISceneInstanceDetails.CreatedAt. */
+					double rowCreatedAt = SceneInstanceLifetime.CreatedAt(MonotonicClock.NowSeconds, dequeueResult.Data.AgeSeconds);
 					if (!TryEnqueueMainThread(() =>
 					{
 						Log.Debug("SceneServerSystem", $"Scene Server System: Dequeued Pending Scene Load request World:{pending.WorldServerID} Scene:{pending.SceneName}");
-						ProcessSceneLoadRequest(pending);
+						ProcessSceneLoadRequest(pending, rowCreatedAt);
 					}))
 					{
 						/* The dequeue already moved the row to Loading under this server, so a request
@@ -1285,8 +1379,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Processes a single scene load request from the database, pre-caching and loading the scene.
 		/// </summary>
-		/// <param name="sceneEntity">Scene entity to process.</param>
-		private void ProcessSceneLoadRequest(SceneData sceneData)
+		/// <param name="sceneData">Scene row to load.</param>
+		/// <param name="rowCreatedAt">When the row was created, on <see cref="MonotonicClock"/>.</param>
+		private void ProcessSceneLoadRequest(SceneData sceneData, double rowCreatedAt)
 		{
 			if (WorldSceneDetailsCache == null ||
 				!WorldSceneDetailsCache.Scenes.Contains(sceneData.SceneName))
@@ -1358,7 +1453,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Guard against duplicate load requests for the same scene ID.
 			// TryAdd is atomic — prevents a race if two queued callbacks both try
 			// to load the same scene before the first insert is visible.
-			if (!mappingData.PendingScenes.TryAdd(sceneData.ID, new PendingSceneInfo(sceneData, DateTime.UtcNow)))
+			if (!mappingData.PendingScenes.TryAdd(sceneData.ID, new PendingSceneInfo(sceneData, MonotonicClock.NowSeconds, rowCreatedAt)))
 			{
 				Log.Warning("SceneServerSystem", $"Duplicate scene load request ignored: SceneID={sceneData.ID} Scene={sceneData.SceneName}");
 				return;
@@ -1479,7 +1574,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Scene scene = args.LoadedScenes[0];
 
 				// Process the scene by adding it to the world dictionary mappings.
-				ProcessScene(scene, sceneType, sceneData.WorldServerID, sceneData.ID, sceneData.TimeCreated, sceneData.CharacterID, sceneData.PartyID, sceneData.Difficulty, sceneData.IsPrivate);
+				ProcessScene(scene, sceneType, sceneData.WorldServerID, sceneData.ID, pendingInfo.RowCreatedAt, sceneData.CharacterID, sceneData.PartyID, sceneData.Difficulty, sceneData.IsPrivate);
 
 				// Capture Scene.name on the main thread. TryEnqueueAsyncWork runs its lambda
 				// on an AsyncWorkerData thread-pool worker, and Unity's Scene.name getter is
@@ -1654,7 +1749,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="scene">The loaded Unity scene.</param>
 		/// <param name="sceneType">Type of the scene.</param>
 		/// <param name="worldServerID">World server ID.</param>
-		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID, long sceneID, DateTime rowCreatedUtc, long ownerCharacterID, long partyID, int difficulty, bool isPrivate)
+		private void ProcessScene(Scene scene, SceneType sceneType, long worldServerID, long sceneID, double rowCreatedAt, long ownerCharacterID, long partyID, int difficulty, bool isPrivate)
 		{
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
@@ -1694,10 +1789,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					SceneType = sceneType,
 					Handle = scene.handle,
 					CharacterCount = 0,
-					LastExit = DateTime.UtcNow,
+					LastExitAt = MonotonicClock.NowSeconds,
 					// The row's creation time, not now: the lifetime cap has to count the queue and
-					// the load as part of this instance's life. See ISceneInstanceDetails.CreatedUtc.
-					CreatedUtc = rowCreatedUtc,
+					// the load as part of this instance's life. See ISceneInstanceDetails.CreatedAt.
+					CreatedAt = rowCreatedAt,
 					// Whose instance this is. See ISceneInstanceDetails.OwnerCharacterID.
 					OwnerCharacterID = ownerCharacterID,
 
@@ -1929,9 +2024,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Unloads a scene by handle and removes its details from the database and server.
 		/// </summary>
-		/// <param name="handle">Scene handle to unload.</param>
+		/// <param name="sceneID">Scene row to unload.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public void UnloadScene(long sceneID)
+		{
+			UnloadScene(sceneID, null);
+		}
+
+		/// <summary>
+		/// <see cref="UnloadScene(long)"/>, optionally leaving the row delete to the caller.
+		/// </summary>
+		/// <param name="sceneID">Scene row to unload.</param>
+		/// <param name="deferredRowDeletes">
+		/// When not null, the row is added here instead of being deleted on its own, and the caller
+		/// deletes everything it collected in one statement. The pulse's sweep does this for every
+		/// scene it closes.
+		/// </param>
+		private void UnloadScene(long sceneID, List<long> deferredRowDeletes)
 		{
 			if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData))
 			{
@@ -1950,9 +2059,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Remove the scene details from the database immediately upon an Unload request
 			// to prevent new clients from connecting to it.
-			/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
-			 * saturated pool must not be unbounded work on the frame thread. */
-			EnqueuePersistence(() => DeleteSceneAsync(sceneID), sceneID);
+			if (deferredRowDeletes != null)
+			{
+				deferredRowDeletes.Add(sceneID);
+			}
+			else
+			{
+				/* EnqueuePersistence, not a main-thread fire-and-forget fallback: relief for a
+				 * saturated pool must not be unbounded work on the frame thread. */
+				EnqueuePersistence(() => DeleteSceneAsync(sceneID), sceneID);
+			}
 
 			SceneUnloadData sud = new SceneUnloadData()
 			{
@@ -1991,6 +2107,59 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("SceneServerSystem", $"Error deleting scene (SceneID={sceneID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Deletes several scene rows in one statement. See <see cref="SweepSceneInstances"/>.
+		/// </summary>
+		/// <param name="sceneIDs">Scene rows to delete.</param>
+		private async Task DeleteScenesAsync(List<long> sceneIDs)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
+				{
+					return;
+				}
+				DatabaseResult<int> result = await sceneService.DeleteManyAsync(sceneIDs);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("SceneServerSystem", $"DeleteScenesAsync DB error ({sceneIDs.Count} scene(s), first SceneID={sceneIDs[0]}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("SceneServerSystem", $"Error deleting {sceneIDs.Count} scene(s): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Sets the status of several scene rows in one statement. See
+		/// <see cref="SweepExpiredPendingScenes"/>.
+		/// </summary>
+		/// <param name="sceneIDs">Scene rows to update.</param>
+		/// <param name="status">Status value to apply.</param>
+		private async Task UpdateSceneStatusesAsync(List<long> sceneIDs, SceneStatus status)
+		{
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ISceneService>(out var sceneService))
+				{
+					return;
+				}
+				// Cast from FishMMO.Shared.SceneStatus to FishMMO.Database.Data.Enums.SceneStatus (same int values)
+				DatabaseResult<int> result = await sceneService.UpdateStatusManyAsync(sceneIDs, (FishMMO.Database.Data.Enums.SceneStatus)(int)status);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("SceneServerSystem", $"UpdateSceneStatusesAsync DB error ({sceneIDs.Count} scene(s), first SceneID={sceneIDs[0]}): {result.ErrorCode} - {result.ErrorMessage}");
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("SceneServerSystem", $"Error updating {sceneIDs.Count} scene status(es): {ex}");
 			}
 		}
 	}

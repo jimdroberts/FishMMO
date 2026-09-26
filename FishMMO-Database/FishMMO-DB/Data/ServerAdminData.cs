@@ -19,6 +19,14 @@ namespace FishMMO.Database.Data
 	/// the caller is given the age and the threshold and makes the call. A boolean baked into
 	/// the row would be a judgement frozen at read time.
 	/// </para>
+	/// <para>
+	/// <b>The ages are measured by the database, never by the reader.</b>
+	/// <see cref="PulseAgeSeconds"/> and <see cref="ShutdownInSeconds"/> are computed inside the
+	/// statement that read the row, against the clock that stamped <see cref="LastPulse"/>. The
+	/// panel used to subtract the stamps from its own <c>DateTime.UtcNow</c>, so a panel host
+	/// running a minute fast marked every healthy server stale and one running slow hid a dead
+	/// one, which is the only thing the board's staleness exists to show.
+	/// </para>
 	/// </remarks>
 	public sealed class ServerAdminData
 	{
@@ -51,6 +59,23 @@ namespace FishMMO.Database.Data
 
 		/// <summary>When it is due to shut down, or null.</summary>
 		public DateTime? ShutdownAtUtc { get; set; }
+
+		/// <summary>
+		/// Seconds since <see cref="LastPulse"/>, measured by the database clock at the read. Never
+		/// negative.
+		/// </summary>
+		public double PulseAgeSeconds { get; set; }
+
+		/// <summary>
+		/// Seconds until <see cref="ShutdownAtUtc"/>, measured by the database clock at the read;
+		/// zero or negative once the deadline has passed. Null exactly when no shutdown is
+		/// scheduled.
+		/// </summary>
+		/// <remarks>
+		/// Not clamped: a deadline that has passed while the row still carries it means the
+		/// server has not acted on it, and the board says so rather than showing zero.
+		/// </remarks>
+		public double? ShutdownInSeconds { get; set; }
 	}
 
 	/// <summary>Every server the shard knows about, in one read.</summary>

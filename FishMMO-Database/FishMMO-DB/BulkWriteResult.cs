@@ -28,6 +28,14 @@ namespace FishMMO.Database
 	/// length of the list the caller passed in would attribute both causes to whichever the caller
 	/// happened to assume.
 	/// </para>
+	/// <para>
+	/// <see cref="Unowned"/> is the part of <see cref="Filtered"/> an ownership-gated write refused
+	/// because the writer no longer holds that character's session claim (see
+	/// <c>CharacterWriteGate</c>). It is counted inside <see cref="Filtered"/> on purpose: a refused
+	/// row never reached the database, so every caller that clears its dirty marks only when nothing
+	/// was filtered keeps them without having to know the gate exists. It is broken out only so the
+	/// log can say why.
+	/// </para>
 	/// </remarks>
 	public readonly struct BulkWriteResult
 	{
@@ -55,6 +63,12 @@ namespace FishMMO.Database
 		/// </summary>
 		public int Superseded => Attempted - Applied;
 
+		/// <summary>
+		/// Of the <see cref="Filtered"/> rows, those refused because the writer does not hold the
+		/// session claim of the character they belong to. Never attempted, like every filtered row.
+		/// </summary>
+		public int Unowned { get; }
+
 		/// <summary>True when every supplied row was written.</summary>
 		public bool IsComplete => Applied == Supplied;
 
@@ -68,10 +82,23 @@ namespace FishMMO.Database
 		/// <param name="attempted">Rows the statement tried.</param>
 		/// <param name="applied">Rows written.</param>
 		public BulkWriteResult(int supplied, int attempted, int applied)
+			: this(supplied, attempted, applied, 0)
+		{
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="BulkWriteResult"/> struct.
+		/// </summary>
+		/// <param name="supplied">Rows the caller handed over.</param>
+		/// <param name="attempted">Rows the statement tried.</param>
+		/// <param name="applied">Rows written.</param>
+		/// <param name="unowned">Rows refused because the writer does not hold their character's claim; part of the filtered count.</param>
+		public BulkWriteResult(int supplied, int attempted, int applied, int unowned)
 		{
 			Supplied = supplied;
 			Attempted = attempted;
 			Applied = applied;
+			Unowned = unowned;
 		}
 
 		/// <summary>
@@ -85,7 +112,8 @@ namespace FishMMO.Database
 			return new BulkWriteResult(
 				left.Supplied + right.Supplied,
 				left.Attempted + right.Attempted,
-				left.Applied + right.Applied);
+				left.Applied + right.Applied,
+				left.Unowned + right.Unowned);
 		}
 
 		/// <summary>
@@ -97,6 +125,10 @@ namespace FishMMO.Database
 			if (IsComplete)
 			{
 				return $"{Applied}/{Supplied} written";
+			}
+			if (Unowned > 0)
+			{
+				return $"{Applied}/{Supplied} written ({Filtered} filtered, {Unowned} of them unowned, {Superseded} superseded)";
 			}
 			return $"{Applied}/{Supplied} written ({Filtered} filtered, {Superseded} superseded)";
 		}

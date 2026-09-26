@@ -2,6 +2,7 @@ using FishNet.Connection;
 using System;
 using System.Collections.Generic;
 using FishMMO.Database.Data.Enums;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -49,7 +50,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Most accounts the report throttle remembers before it starts again.</summary>
 		private const int MaxReportThrottleEntries = 4096;
 
-		/// <summary>When each account may next file a report from the panel, in UTC ticks.</summary>
+		/// <summary>
+		/// When each account may next file a report from the panel, in
+		/// <see cref="MonotonicClock.NowTicks"/>: a throttle is a local duration.
+		/// </summary>
 		private readonly Dictionary<string, long> reportPlayerNextTicks =
 			new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
@@ -154,7 +158,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			string account = character.Account ?? string.Empty;
-			long now = DateTime.UtcNow.Ticks;
+			long now = MonotonicClock.NowTicks;
 			if (reportPlayerNextTicks.TryGetValue(account, out long next) && next > now)
 			{
 				long seconds = Math.Max(1, (long)Math.Ceiling(TimeSpan.FromTicks(next - now).TotalSeconds));

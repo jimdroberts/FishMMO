@@ -26,11 +26,19 @@ namespace FishMMO.Shared
 	/// amount.
 	/// </para>
 	/// <para>
-	/// <b>Why there is no server-sent rejection.</b> The server cannot tell a client "that hit did
-	/// not land", because it never knew the client predicted one — it simply resolves its own
-	/// simulation and reports what happened. Absence is the only signal available, so a prediction
-	/// that goes unconfirmed for <see cref="ConfirmationWindowSeconds"/> is treated as rejected.
-	/// That costs no bandwidth and needs no new message.
+	/// <b>Why absence is the general rejection signal.</b> The server cannot tell a client "that
+	/// hit did not land", because it never knew the client predicted one — it simply resolves its
+	/// own simulation and reports what happened. So a prediction that goes unconfirmed for
+	/// <see cref="ConfirmationWindowSeconds"/> is treated as rejected. That costs no bandwidth and
+	/// needs no new message.
+	/// </para>
+	/// <para>
+	/// <b>The one exception is a hit the target turned away.</b> An evading NPC or an immortal
+	/// one refuses the hit on the server, and the server reports THAT
+	/// (<see cref="CombatEventKind.Evade"/>, <see cref="CombatEventKind.Immune"/>) — not because it
+	/// knows about the prediction, but because what happened is worth saying. <see cref="TryRefuse"/>
+	/// settles the matching predictions at once, as refused, so the display can turn the number
+	/// into the reason instead of greying it out a second later with no explanation.
 	/// </para>
 	/// <para>
 	/// Pure bookkeeping with no Unity or rendering dependency, so the policy is unit tested. The
@@ -99,6 +107,14 @@ namespace FishMMO.Shared
 		/// that turned out WRONG. A session's worth of correct hits leaked one entry each.
 		/// </summary>
 		public static event Action<long> OnPredictionConfirmed;
+
+		/// <summary>
+		/// Raised when the server reported that the hit a prediction stands for was REFUSED by its
+		/// target — the second argument is <see cref="CombatEventKind.Evade"/> or
+		/// <see cref="CombatEventKind.Immune"/>. The display should replace the number with the
+		/// reason; like a confirmation, this releases the handle.
+		/// </summary>
+		public static event Action<long, CombatEventKind> OnPredictionRefused;
 
 		/// <summary>Predicted entries still waiting on the server.</summary>
 		public static int PendingCount => pending.Count;
@@ -192,16 +208,58 @@ namespace FishMMO.Shared
 		/// <returns>True when this report was already drawn as a prediction.</returns>
 		public static bool TryConfirm(ICharacter source, ICharacter target, Kind kind, int occurrences = 1, DamageAttributeTemplate damageAttribute = null)
 		{
-			if (source == null || target == null || pending.Count == 0)
+			return Settle(source, target, kind, occurrences, damageAttribute, refusal: false, reason: CombatEventKind.Damage) > 0;
+		}
+
+		/// <summary>
+		/// Settles the pending predictions a REFUSAL report stands for: the hits the target turned
+		/// away, <see cref="CombatEventKind.Evade"/> or <see cref="CombatEventKind.Immune"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Paired exactly as <see cref="TryConfirm"/> pairs — source, target, damage type, oldest
+		/// first, up to <paramref name="occurrences"/> — against DAMAGE predictions only: a heal is
+		/// never refused. Each match raises <see cref="OnPredictionRefused"/> instead of
+		/// <see cref="OnPredictionConfirmed"/>, so the number already on screen can become the reason.
+		/// </para>
+		/// <para>
+		/// As with a confirmation, the caller draws the report itself only when this returns false —
+		/// nothing was predicted, which is the normal case for an immortal target: the caster's own
+		/// copy of the flag refused the hit locally and drew nothing, so the word is new.
+		/// </para>
+		/// </remarks>
+		/// <param name="source">The attacker named by the report. A report with none matches nothing.</param>
+		/// <param name="target">The character that refused the hits.</param>
+		/// <param name="reason">The refusal kind; anything that is not a refusal matches nothing.</param>
+		/// <param name="occurrences">How many hits the report says were refused. Values below one are treated as one.</param>
+		/// <param name="damageAttribute">The refused hits' damage type; null for typeless damage.</param>
+		/// <returns>True when at least one prediction was settled as refused.</returns>
+		public static bool TryRefuse(ICharacter source, ICharacter target, CombatEventKind reason, int occurrences = 1, DamageAttributeTemplate damageAttribute = null)
+		{
+			if (!reason.IsRefusal())
 			{
 				return false;
+			}
+			return Settle(source, target, Kind.Damage, occurrences, damageAttribute, refusal: true, reason: reason) > 0;
+		}
+
+		/// <summary>
+		/// The pairing both <see cref="TryConfirm"/> and <see cref="TryRefuse"/> use: removes up to
+		/// <paramref name="occurrences"/> matching predictions, oldest first, and announces each.
+		/// </summary>
+		/// <returns>How many predictions were settled.</returns>
+		private static int Settle(ICharacter source, ICharacter target, Kind kind, int occurrences, DamageAttributeTemplate damageAttribute, bool refusal, CombatEventKind reason)
+		{
+			if (source == null || target == null || pending.Count == 0)
+			{
+				return 0;
 			}
 
 			int targetObjectId = ResolveObjectId(target);
 			int sourceObjectId = ResolveObjectId(source);
 			if (targetObjectId == 0 || sourceObjectId == 0)
 			{
-				return false;
+				return 0;
 			}
 
 			/* Settle up to `occurrences` predictions, oldest first.
@@ -219,7 +277,7 @@ namespace FishMMO.Shared
 			 */
 			int damageTypeId = damageAttribute != null ? damageAttribute.ID : 0;
 			int remaining = occurrences < 1 ? 1 : occurrences;
-			bool confirmedAny = false;
+			int settled = 0;
 
 			for (int i = 0; i < pending.Count && remaining > 0; )
 			{
@@ -230,15 +288,22 @@ namespace FishMMO.Shared
 				{
 					long id = pending[i].Id;
 					pending.RemoveAt(i);
-					OnPredictionConfirmed?.Invoke(id);
-					confirmedAny = true;
+					if (refusal)
+					{
+						OnPredictionRefused?.Invoke(id, reason);
+					}
+					else
+					{
+						OnPredictionConfirmed?.Invoke(id);
+					}
+					++settled;
 					--remaining;
 					// Do not advance i: RemoveAt shifted the next candidate into this slot.
 					continue;
 				}
 				++i;
 			}
-			return confirmedAny;
+			return settled;
 		}
 
 		/// <summary>

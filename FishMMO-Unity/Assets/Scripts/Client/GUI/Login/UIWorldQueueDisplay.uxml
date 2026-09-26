@@ -1,0 +1,53 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../FishMMO-Theme.uss" />
+    <Style src="UIWorldQueueDisplay.uss" />
+    <!--
+        The login server's admission queue and the world server's scene-routing queue: shown while
+        the client waits for a turn to connect or for a place in the world, and when that wait ends
+        without one. Driven entirely from UITKWorldQueueDisplay; the texts below are placeholders
+        the panel overwrites before it is ever shown, the note included.
+    -->
+    <ui:VisualElement name="world-queue-root" class="world-queue-screen">
+        <ui:VisualElement name="world-queue-panel" class="fish-panel fish-panel--alert world-queue-panel">
+
+            <ui:VisualElement name="panel-header" class="fish-panel__header world-queue-header">
+                <ui:VisualElement name="world-queue-lamp" class="fish-panel__icon world-queue-header__icon" />
+                <ui:Label name="world-queue-title" text="ENTERING THE WORLD" class="fish-panel__title world-queue-title" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="world-queue-body" class="world-queue-body">
+                <ui:Label name="world-queue-headline" text="" class="fish-label world-queue-headline" />
+                <ui:Label name="world-queue-detail" text="" class="fish-label fish-label--secondary world-queue-detail" />
+
+                <!-- Position, estimate and elapsed time. Collapsed once the wait has ended. -->
+                <ui:VisualElement name="world-queue-stats" class="fish-well world-queue-stats">
+                    <ui:VisualElement class="world-queue-stat">
+                        <ui:Label text="POSITION" class="fish-label--caption world-queue-stat__caption" />
+                        <ui:Label name="world-queue-position" text="" class="fish-label world-queue-stat__value" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="world-queue-stat">
+                        <ui:Label text="ESTIMATED WAIT" class="fish-label--caption world-queue-stat__caption" />
+                        <ui:Label name="world-queue-estimate" text="" class="fish-label world-queue-stat__value" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="world-queue-stat">
+                        <ui:Label text="WAITING" class="fish-label--caption world-queue-stat__caption" />
+                        <ui:Label name="world-queue-elapsed" text="" class="fish-label world-queue-stat__value" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- How much of the line that was ahead has cleared. -->
+                <ui:VisualElement name="world-queue-progress" class="fish-bar world-queue-progress">
+                    <ui:VisualElement name="world-queue-progress-fill" class="fish-bar__fill world-queue-progress__fill" />
+                </ui:VisualElement>
+
+                <ui:Label name="world-queue-note" text="Leaving the queue returns you to the login screen." class="fish-label fish-label--muted world-queue-note" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="panel-footer" class="fish-panel__footer world-queue-footer">
+                <ui:Button name="world-queue-leave-btn" text="Leave queue" class="fish-button world-queue-button" />
+                <ui:Button name="world-queue-retry-btn" text="Try again" class="fish-button fish-button--primary world-queue-button" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

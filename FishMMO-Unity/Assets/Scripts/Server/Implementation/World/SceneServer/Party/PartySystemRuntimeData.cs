@@ -16,13 +16,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Tracks pending party invitations using a last-seen queue for O(1) touch and bounded TTL sweep.
 		/// </summary>
+		/// <remarks>
+		/// This tracker and <see cref="inviteCooldowns"/> run on <see cref="MonotonicClock"/>, through
+		/// their monotonic overloads: an invitation's TTL and a cooldown are local durations. So do the
+		/// mutation claims and the absence observations below. Only the processed-update record is
+		/// on the wall clock, because it holds the update rows' database timestamps.
+		/// </remarks>
 		private LastSeenCacheTracker<long, PendingPartyInvitation> pendingInvitations;
 
 		/// <summary>
 		/// Tracks the last invitation each (inviter, target) pair produced, for the per-target
-		/// invite cooldown.
+		/// invite cooldown, as <see cref="MonotonicClock"/> seconds.
 		/// </summary>
-		private LastSeenCacheTracker<(long inviter, long target), DateTime> inviteCooldowns;
+		private LastSeenCacheTracker<(long inviter, long target), double> inviteCooldowns;
 
 		/// <summary>
 		/// Characters whose party membership row is currently being deleted.
@@ -61,18 +67,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <summary>The member observed absent. A different holder restarts the clock.</summary>
 			public readonly long LeaderCharacterID;
 
-			/// <summary>When the absence was first observed (UTC).</summary>
-			public readonly DateTime FirstSeenUtc;
+			/// <summary>When the absence was first observed, in <see cref="MonotonicClock"/> seconds.</summary>
+			public readonly double FirstSeenAt;
 
 			/// <summary>
 			/// Initializes an observation.
 			/// </summary>
 			/// <param name="leaderCharacterID">The member observed absent.</param>
-			/// <param name="firstSeenUtc">When it was first observed.</param>
-			public LeaderAbsence(long leaderCharacterID, DateTime firstSeenUtc)
+			/// <param name="firstSeenAt">When it was first observed.</param>
+			public LeaderAbsence(long leaderCharacterID, double firstSeenAt)
 			{
 				LeaderCharacterID = leaderCharacterID;
-				FirstSeenUtc = firstSeenUtc;
+				FirstSeenAt = firstSeenAt;
 			}
 		}
 
@@ -110,18 +116,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			/// <summary>Identity handed to the claimant, and required to release.</summary>
 			public readonly long Token;
-			/// <summary>When the claim was granted (UTC).</summary>
-			public readonly DateTime GrantedUtc;
+			/// <summary>When the claim was granted, in <see cref="MonotonicClock"/> seconds.</summary>
+			public readonly double GrantedAt;
 
 			/// <summary>
 			/// Initializes a claim.
 			/// </summary>
 			/// <param name="token">The claim's identity.</param>
-			/// <param name="grantedUtc">When it was granted.</param>
-			public PartyMutationClaim(long token, DateTime grantedUtc)
+			/// <param name="grantedAt">When it was granted.</param>
+			public PartyMutationClaim(long token, double grantedAt)
 			{
 				Token = token;
-				GrantedUtc = grantedUtc;
+				GrantedAt = grantedAt;
 			}
 		}
 
@@ -148,7 +154,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <inheritdoc/>
-		public DateTime NextInvitationSweepUtc { get; set; }
+		public double NextInvitationSweepAt { get; set; }
 
 		/// <inheritdoc/>
 		public IngressGuard IngressGuard { get; private set; }
@@ -159,7 +165,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			pendingInvitations = new LastSeenCacheTracker<long, PendingPartyInvitation>();
-			inviteCooldowns = new LastSeenCacheTracker<(long inviter, long target), DateTime>();
+			inviteCooldowns = new LastSeenCacheTracker<(long inviter, long target), double>();
 			membershipRemovalsInFlight.Clear();
 			lock (partyMutationGate)
 			{
@@ -171,7 +177,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			LastFetchTime = DateTime.UtcNow;
 			Interlocked.Exchange(ref updatePumpInFlight, 0);
-			NextInvitationSweepUtc = DateTime.UtcNow;
+			NextInvitationSweepAt = MonotonicClock.NowSeconds;
 			IngressGuard = new IngressGuard();
 			return ServerComponentInitializationStatus.Initialized;
 		}
@@ -194,14 +200,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			LastFetchTime = DateTime.UtcNow;
 			Interlocked.Exchange(ref updatePumpInFlight, 0);
-			NextInvitationSweepUtc = DateTime.UtcNow;
+			NextInvitationSweepAt = MonotonicClock.NowSeconds;
 			IngressGuard?.Clear();
 		}
 
 		/// <inheritdoc/>
 		/// <remarks>
 		/// The TTL the accept path enforces is measured against
-		/// <see cref="PendingPartyInvitation.IssuedUtc"/>, which a reader cannot move. The touch
+		/// <see cref="PendingPartyInvitation.IssuedAt"/>, which a reader cannot move. The touch
 		/// performed here only moves the SWEEP's clock.
 		/// </remarks>
 		public bool TryGetPendingInvitation(long targetCharacterID, out PendingPartyInvitation invitation)
@@ -212,7 +218,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			return pendingInvitations.TryGetAndTouch(targetCharacterID, DateTime.UtcNow, out invitation);
+			return pendingInvitations.TryGetAndTouch(targetCharacterID, MonotonicClock.NowSeconds, out invitation);
 		}
 
 		/// <inheritdoc/>
@@ -223,17 +229,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			if (pendingInvitations.TryGetAndTouch(targetCharacterID, invitation.IssuedUtc, out _))
+			if (pendingInvitations.TryGetAndTouch(targetCharacterID, invitation.IssuedAt, out _))
 			{
 				return false;
 			}
 
-			pendingInvitations.Upsert(targetCharacterID, invitation, invitation.IssuedUtc);
+			pendingInvitations.Upsert(targetCharacterID, invitation, invitation.IssuedAt);
 			return true;
 		}
 
 		/// <inheritdoc/>
-		public bool TryBeginInviteCooldown(long inviterCharacterID, long targetCharacterID, TimeSpan cooldown, DateTime nowUtc)
+		public bool TryBeginInviteCooldown(long inviterCharacterID, long targetCharacterID, TimeSpan cooldown, double now)
 		{
 			if (inviteCooldowns == null)
 			{
@@ -242,25 +248,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			(long inviter, long target) key = (inviterCharacterID, targetCharacterID);
 
-			if (inviteCooldowns.TryGetAndTouch(key, nowUtc, out DateTime lastUtc) &&
-				nowUtc - lastUtc < cooldown)
+			if (inviteCooldowns.TryGetAndTouch(key, now, out double last) &&
+				now - last < cooldown.TotalSeconds)
 			{
 				return false;
 			}
 
-			inviteCooldowns.Upsert(key, nowUtc, nowUtc);
+			inviteCooldowns.Upsert(key, now, now);
 			return true;
 		}
 
 		/// <inheritdoc/>
-		public int SweepInviteCooldowns(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove)
+		public int SweepInviteCooldowns(double now, TimeSpan ttl, int maxScan, int maxRemove)
 		{
 			if (inviteCooldowns == null)
 			{
 				return 0;
 			}
 
-			return inviteCooldowns.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+			return inviteCooldowns.SweepExpired(now, ttl, maxScan, maxRemove);
 		}
 
 		/// <inheritdoc/>
@@ -289,14 +295,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <inheritdoc/>
-		public int SweepExpiredInvitations(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove)
+		public int SweepExpiredInvitations(double now, TimeSpan ttl, int maxScan, int maxRemove)
 		{
 			if (pendingInvitations == null)
 			{
 				return 0;
 			}
 
-			return pendingInvitations.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+			return pendingInvitations.SweepExpired(now, ttl, maxScan, maxRemove);
 		}
 
 		/// <summary>
@@ -318,18 +324,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			lock (partyMutationGate)
 			{
 				if (partyMutations.TryGetValue(partyID, out PartyMutationClaim existing) &&
-					nowUtc - existing.GrantedUtc < PartyMutationTtl)
+					now - existing.GrantedAt < PartyMutationTtl.TotalSeconds)
 				{
 					return false;
 				}
 
 				token = ++nextPartyMutationToken;
-				partyMutations[partyID] = new PartyMutationClaim(token, nowUtc);
+				partyMutations[partyID] = new PartyMutationClaim(token, now);
 				return true;
 			}
 		}
@@ -358,9 +364,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 
 		/// <inheritdoc/>
-		public bool TryConfirmLeaderAbsent(long partyID, long leaderCharacterID, DateTime nowUtc, TimeSpan grace, out DateTime dueUtc)
+		public bool TryConfirmLeaderAbsent(long partyID, long leaderCharacterID, double now, TimeSpan grace, out double due)
 		{
-			dueUtc = nowUtc;
+			due = now;
 
 			if (partyID <= 0 || leaderCharacterID <= 0)
 			{
@@ -375,15 +381,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					/* First sighting, or the rank has moved since the last one. Either way the
 					 * clock starts now — an observation of one member's absence says nothing about
 					 * another's. */
-					leaderAbsences[partyID] = new LeaderAbsence(leaderCharacterID, nowUtc);
-					dueUtc = nowUtc + grace;
+					leaderAbsences[partyID] = new LeaderAbsence(leaderCharacterID, now);
+					due = now + grace.TotalSeconds;
 					return false;
 				}
 
-				DateTime confirmedUtc = absence.FirstSeenUtc + grace;
-				if (nowUtc < confirmedUtc)
+				double confirmedAt = absence.FirstSeenAt + grace.TotalSeconds;
+				if (now < confirmedAt)
 				{
-					dueUtc = confirmedUtc;
+					due = confirmedAt;
 					return false;
 				}
 
@@ -412,7 +418,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <inheritdoc/>
-		public int SweepLeaderAbsences(DateTime nowUtc, TimeSpan ttl)
+		public int SweepLeaderAbsences(double now, TimeSpan ttl)
 		{
 			if (ttl <= TimeSpan.Zero)
 			{
@@ -429,7 +435,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				leaderAbsenceSweepBuffer.Clear();
 				foreach (KeyValuePair<long, LeaderAbsence> entry in leaderAbsences)
 				{
-					if (nowUtc - entry.Value.FirstSeenUtc > ttl)
+					if (now - entry.Value.FirstSeenAt > ttl.TotalSeconds)
 					{
 						leaderAbsenceSweepBuffer.Add(entry.Key);
 					}

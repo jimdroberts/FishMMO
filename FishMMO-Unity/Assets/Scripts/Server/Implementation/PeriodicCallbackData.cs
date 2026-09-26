@@ -18,6 +18,17 @@ namespace FishMMO.Server.Implementation
 		public float TimeRemaining;
 
 		/// <summary>
+		/// Real time in seconds since the callback last ran (or was registered). Passed to the
+		/// callback, then reset.
+		/// </summary>
+		public float Elapsed;
+
+		/// <summary>
+		/// Fault log, created the first time the callback throws.
+		/// </summary>
+		public FishMMO.Server.Core.RepeatingFaultLog Faults;
+
+		/// <summary>
 		/// The callback to invoke when the interval elapses.
 		/// </summary>
 		public Action<float> Callback;

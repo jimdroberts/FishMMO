@@ -96,6 +96,43 @@ namespace FishMMO.UnitTests.AI
 		}
 
 		[Test]
+		public void ToDefinition_CopiesThePackAndEachEntrysRole()
+		{
+			/* A pack is authored on the spawner (tactic, focus, ring) and on its entries (roles); the
+			 * server only ever sees the baked copy. Copied, not shared, like the settings above. */
+			ObjectSpawner spawner = NewAuthoringSpawner("Wolves");
+			spawner.Pack = new FishMMO.Server.Implementation.World.SceneServer.AI.NPCPackSettings
+			{
+				Enabled = true,
+				Tactic = FishMMO.Server.Implementation.World.SceneServer.AI.PackTactic.Kite,
+				FocusTargeting = false,
+				TacticOrbitRadius = 7f,
+				KiteRotationSpeed = 45f,
+			};
+			spawner.Spawnables = new List<SpawnableSettings>
+			{
+				new NPCSpawnableSettings { PackRole = FishMMO.Server.Implementation.World.SceneServer.AI.NPCGroupRole.Tank },
+			};
+
+			SpawnerDefinition definition = SpawnTableBaker.ToDefinition(spawner, _ => -1);
+
+			Assert.AreNotSame(spawner.Pack, definition.Pack, "the table must not change when the scene is edited");
+			Assert.IsTrue(definition.Pack.Enabled);
+			Assert.AreEqual(FishMMO.Server.Implementation.World.SceneServer.AI.PackTactic.Kite, definition.Pack.Tactic);
+			Assert.IsFalse(definition.Pack.FocusTargeting);
+			Assert.AreEqual(7f, definition.Pack.TacticOrbitRadius);
+			Assert.AreEqual(45f, definition.Pack.KiteRotationSpeed);
+			Assert.AreEqual(FishMMO.Server.Implementation.World.SceneServer.AI.NPCGroupRole.Tank,
+				((NPCSpawnableSettings)definition.Spawnables[0]).PackRole);
+
+			spawner.Pack.Enabled = false;
+			Assert.IsTrue(definition.Pack.Enabled);
+
+			// A spawner that says nothing about packs bakes one that is off, and runs as it always did.
+			Assert.IsFalse(SpawnTableBaker.ToDefinition(NewAuthoringSpawner("Plain"), _ => -1).Pack.Enabled);
+		}
+
+		[Test]
 		public void ToDefinition_KeepsEmptyEntriesSoIndicesMatchTheScene()
 		{
 			ObjectSpawner spawner = NewAuthoringSpawner("Camp");
@@ -282,6 +319,8 @@ namespace FishMMO.UnitTests.AI
 						Assert.That(Vector3.Distance(expected.Position, baked.Position), Is.LessThan(0.001f), where);
 						Assert.AreEqual(expected.MaxSpawnCount, baked.MaxSpawnCount, where);
 						Assert.AreEqual(expected.InitialSpawnCount, baked.InitialSpawnCount, where);
+						Assert.AreEqual(expected.Pack.Enabled, baked.Pack != null && baked.Pack.Enabled, $"{where}: pack");
+						Assert.AreEqual(expected.Pack.Tactic, baked.Pack != null ? baked.Pack.Tactic : default, $"{where}: pack tactic");
 						Assert.AreEqual(expected.Spawnables.Count, baked.Spawnables.Count, where);
 						for (int s = 0; s < expected.Spawnables.Count; ++s)
 						{

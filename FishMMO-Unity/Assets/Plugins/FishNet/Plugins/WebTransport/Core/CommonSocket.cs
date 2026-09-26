@@ -72,7 +72,21 @@ namespace FishNet.Transporting.WebTransport
 			}
 			// transport is guaranteed non-null after this guard
 
+			LocalConnectionState previous = this.connectionState;
 			this.connectionState = connectionState;
+
+			/* Every client state change passes through here, whichever of the many stop paths
+			 * caused it, so this is the one place a session's start and end can be counted
+			 * exactly. A server's own listening state is not a session; its remote clients are
+			 * counted by ServerSocket as they join and leave its connection set. */
+			if (!asServer)
+			{
+				if (connectionState == LocalConnectionState.Started)
+					TransportTrafficCounters.OnClientSessionStarted();
+				else if (previous == LocalConnectionState.Started)
+					TransportTrafficCounters.OnClientSessionEnded();
+			}
+
 			if (asServer)
 				transport.HandleServerConnectionState(new ServerConnectionStateArgs(connectionState, transport.Index));
 			else

@@ -1963,7 +1963,10 @@ namespace FishMMO.Client
 				else if (cmd.Equals(ChatHelper.TARGET_OFFLINE) &&
 						 ErrorCodes.TryGetValue(ChatHelper.TARGET_OFFLINE, out string offlineMsg))
 				{
-					ChatHelper.GetWordAndTrimmed(trimmed, out string targetName);
+					/* Everything after the code is the name. Names may hold spaces, and dropping the
+					 * name's first word, as this did, reported "of Arnor is offline" for a whisper to
+					 * "Aragorn of Arnor" (see ChatTellAddress). */
+					string targetName = trimmed?.Trim();
 					if (!string.IsNullOrWhiteSpace(targetName))
 					{
 						AddSenderMessage(msg.Channel, msg.SenderID, targetName + offlineMsg);

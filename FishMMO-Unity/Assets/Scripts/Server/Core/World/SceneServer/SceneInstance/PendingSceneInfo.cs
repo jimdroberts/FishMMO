@@ -4,7 +4,7 @@ using FishMMO.Database.Data;
 namespace FishMMO.Server.Core.World.SceneServer
 {
 	/// <summary>
-	/// Combines a pending scene load request with its enqueue timestamp,
+	/// Combines a pending scene load request with its enqueue time,
 	/// eliminating the need for separate synchronized dictionaries.
 	/// Previously PendingScenes (SceneData) and PendingSceneEnqueueUtcBySceneId (DateTime)
 	/// were tracked in two separate maps, creating a dual-map sync risk.
@@ -17,19 +17,28 @@ namespace FishMMO.Server.Core.World.SceneServer
 		public readonly SceneData SceneData;
 
 		/// <summary>
-		/// UTC timestamp when this request was enqueued, used for TTL expiration.
+		/// When this request was taken on, in seconds on <see cref="MonotonicClock"/>. Bounds how
+		/// long the load may take.
 		/// </summary>
-		public readonly DateTime EnqueuedUtc;
+		public readonly double EnqueuedAt;
 
 		/// <summary>
-		/// Initializes a new pending scene info with the given scene data and enqueue timestamp.
+		/// When the scene row was created, in seconds on <see cref="MonotonicClock"/>. Carried to
+		/// the loaded instance as <see cref="ISceneInstanceDetails.CreatedAt"/>.
+		/// </summary>
+		public readonly double RowCreatedAt;
+
+		/// <summary>
+		/// Initializes a new pending scene info.
 		/// </summary>
 		/// <param name="sceneData">The database scene data for this pending load request.</param>
-		/// <param name="enqueuedUtc">UTC timestamp when this request was enqueued.</param>
-		public PendingSceneInfo(SceneData sceneData, DateTime enqueuedUtc)
+		/// <param name="enqueuedAt">Monotonic time at which this request was taken on.</param>
+		/// <param name="rowCreatedAt">Monotonic time at which the scene row was created.</param>
+		public PendingSceneInfo(SceneData sceneData, double enqueuedAt, double rowCreatedAt)
 		{
 			SceneData = sceneData;
-			EnqueuedUtc = enqueuedUtc;
+			EnqueuedAt = enqueuedAt;
+			RowCreatedAt = rowCreatedAt;
 		}
 	}
 }

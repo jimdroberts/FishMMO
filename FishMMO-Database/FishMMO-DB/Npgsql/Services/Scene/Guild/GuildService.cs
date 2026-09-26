@@ -82,6 +82,54 @@ namespace FishMMO.Database.Npgsql.Services
 			return result;
 		}
 
+		/// <summary>
+		/// Most guild names one <see cref="FetchNamesAsync"/> call resolves. Matches the naming
+		/// request's own cap; this is the second bound, so a caller that forgets the first cannot
+		/// turn a name lookup into an unbounded query.
+		/// </summary>
+		private const int MaxNameLookupIds = 128;
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyDictionary<long, string>>> FetchNamesAsync(IReadOnlyList<long> guildIds, CancellationToken cancellationToken = default)
+		{
+			var ids = new List<long>();
+			var seen = new HashSet<long>();
+			if (guildIds != null)
+			{
+				for (int i = 0; i < guildIds.Count && ids.Count < MaxNameLookupIds; ++i)
+				{
+					long guildId = guildIds[i];
+					if (guildId > 0 && seen.Add(guildId))
+					{
+						ids.Add(guildId);
+					}
+				}
+			}
+
+			if (ids.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyDictionary<long, string>>.Success(new Dictionary<long, string>());
+			}
+
+			return await ExecuteReadAsync<IReadOnlyDictionary<long, string>>(async context =>
+			{
+				// One round trip: WHERE id = ANY(@ids), projected to the two columns it needs.
+				var rows = await context.Guilds
+					.AsNoTracking()
+					.Where(g => ids.Contains(g.ID))
+					.Select(g => new { g.ID, g.Name })
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var names = new Dictionary<long, string>(rows.Count);
+				foreach (var row in rows)
+				{
+					names[row.ID] = row.Name;
+				}
+				return names;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyCollection<long>>> FetchExistingIdsAsync(IReadOnlyCollection<long> guildIds, CancellationToken cancellationToken = default)
 		{

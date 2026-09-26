@@ -140,7 +140,99 @@ namespace FishNet.Transporting.WebTransport.Native
 		/// new export would otherwise crash with <see cref="EntryPointNotFoundException"/> at the first
 		/// call; <see cref="EnsureInitialized"/> compares this first and names the rebuild instead.
 		/// </summary>
-		public const int ExpectedAbiVersion = 3;
+		public const int ExpectedAbiVersion = 4;
+
+		// ── Statistics structs (match webtransport_api.h) ──────────
+		/* Sequential mirrors of wt_global_counters_t / wt_connection_stats_t. The native side
+		 * static_asserts their sizes (160 and 152 bytes) and a unit test pins Marshal.SizeOf to
+		 * the same numbers, so a field added on one side only fails a build or a test instead of
+		 * silently shifting every field after it. Fields are only ever appended, with
+		 * WT_ABI_VERSION bumped. */
+
+		/// <summary>Managed mirror of <c>wt_global_counters_t</c>: msquic's process-wide counters.</summary>
+		[StructLayout(LayoutKind.Sequential)]
+		public struct WtGlobalCounters
+		{
+			/// <summary>Native size of the struct, and the version this managed side understands.</summary>
+			public const int NativeSize = 160;
+			public const uint CurrentVersion = 1;
+
+			/// <summary>In: this struct's size. Out: bytes the library wrote.</summary>
+			public uint StructSize;
+			/// <summary>Out: the layout version the library wrote.</summary>
+			public uint Version;
+
+			public ulong UdpSendDatagrams;
+			public ulong UdpRecvDatagrams;
+			public ulong UdpSendBytes;
+			public ulong UdpRecvBytes;
+			public ulong AppSendBytes;
+			public ulong AppRecvBytes;
+
+			public ulong ConnCreated;
+			public ulong ConnActive;
+			public ulong ConnConnected;
+			public ulong ConnHandshakeFail;
+			public ulong ConnAppReject;
+			public ulong ConnLoadReject;
+			public ulong ConnNoAlpn;
+			public ulong ConnProtocolErrors;
+
+			public ulong PktsSuspectedLost;
+			public ulong PktsDropped;
+			public ulong PktsDecryptionFail;
+			public ulong StatelessRetrySent;
+			public ulong StatelessResetSent;
+		}
+
+		/// <summary>Managed mirror of <c>wt_connection_stats_t</c>: one connection's QUIC statistics.</summary>
+		[StructLayout(LayoutKind.Sequential)]
+		public struct WtConnectionStats
+		{
+			/// <summary>Native size of the struct, and the version this managed side understands.</summary>
+			public const int NativeSize = 152;
+			public const uint CurrentVersion = 1;
+
+			/// <summary><see cref="Flags"/>: <see cref="CongestionWindow"/> is valid.</summary>
+			public const uint HasCongestionWindow = 0x01;
+			/// <summary><see cref="Flags"/>: <see cref="RttVarianceUs"/> is valid.</summary>
+			public const uint HasRttVariance = 0x02;
+			/// <summary><see cref="Flags"/>: the path is ECN capable.</summary>
+			public const uint EcnCapable = 0x04;
+			/// <summary><see cref="Flags"/>: TLS resumption succeeded.</summary>
+			public const uint Resumed = 0x08;
+
+			/// <summary>In: this struct's size. Out: bytes the library wrote.</summary>
+			public uint StructSize;
+			/// <summary>Out: the layout version the library wrote.</summary>
+			public uint Version;
+
+			public uint Flags;
+			public uint RttUs;
+			public uint MinRttUs;
+			public uint MaxRttUs;
+			public uint RttVarianceUs;
+			public uint PathMtu;
+			public uint CongestionWindow;
+			public uint CongestionEvents;
+			public uint PersistentCongestionEvents;
+			public uint KeyUpdates;
+
+			public ulong SendPackets;
+			public ulong SendBytes;
+			public ulong SendStreamBytes;
+			/// <summary>msquic's SendRetransmittablePackets: packets that COULD be retransmitted, not packets that were.</summary>
+			public ulong SendAckElicitingPackets;
+			public ulong SendSuspectedLostPackets;
+			public ulong SendSpuriousLostPackets;
+			public ulong RecvPackets;
+			public ulong RecvBytes;
+			public ulong RecvStreamBytes;
+			public ulong RecvReorderedPackets;
+			public ulong RecvDroppedPackets;
+			public ulong RecvDuplicatePackets;
+			public ulong RecvDecryptionFailures;
+		}
 
 		/// <summary>The build step that produces the native library for the running platform.</summary>
 		public static string RebuildHint
@@ -304,6 +396,9 @@ namespace FishNet.Transporting.WebTransport.Native
 			UnityEngine.Debug.Log(
 				$"[WebTransport] Native library {Marshal.PtrToStringUTF8(wt_version())} initialised " +
 				$"(ABI {abi}, msquic TLS provider: {TlsProvider})");
+			/* Baseline msquic's counters now: after a domain reload the library is still loaded and
+			 * still counting, and the managed totals have just restarted from zero. */
+			TransportTraffic.OnNativeInitialized();
 #endif
 			initialized = true;
 			IsLibraryDeinitialized = false; // reset for re-init after Deinitialize()
@@ -335,6 +430,9 @@ namespace FishNet.Transporting.WebTransport.Native
 			// any P/Invoke from a finalizer would be a use-after-free. Setting the flag
 			// first guarantees that every finalizer observes the shutdown regardless
 			// of when it runs.
+			//
+			// msquic's counters die with the library: fold them into the process totals first.
+			TransportTraffic.OnNativeDeinitializing();
 			IsLibraryDeinitialized = true;
 			wt_deinit();
 #endif
@@ -590,6 +688,24 @@ namespace FishNet.Transporting.WebTransport.Native
 			}
 		}
 
+		/// <summary>
+		/// Copies msquic's process-wide counters. Set <see cref="WtGlobalCounters.StructSize"/> first.
+		/// Never blocks. Returns 0, or <see cref="WTError.InvalidState"/> before <see cref="wt_init"/>.
+		/// Safe from any thread. Read through <see cref="TransportTraffic.Capture"/>, which also carries
+		/// the totals across a deinitialise.
+		/// </summary>
+		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
+		public static extern int wt_get_global_counters(ref WtGlobalCounters counters);
+
+		/// <summary>
+		/// Copies the client connection's QUIC statistics. Set <see cref="WtConnectionStats.StructSize"/>
+		/// first. BLOCKS until the connection's worker answers; call from the thread that polls the
+		/// client, at most about once a second. Returns 0, or <see cref="WTError.InvalidState"/> when
+		/// there is no connection.
+		/// </summary>
+		[DllImport(LIB, CallingConvention = CallingConvention.Cdecl)]
+		public static extern int wt_client_get_connection_stats(SafeClientHandle client, ref WtConnectionStats stats);
+
 #else  // UNITY_WEBGL && !UNITY_EDITOR — stub implementations
 
 		public static SafeServerHandle wt_server_create(
@@ -631,6 +747,10 @@ namespace FishNet.Transporting.WebTransport.Native
 		public static int wt_abi_version() => ExpectedAbiVersion;
 		public static IntPtr wt_tls_provider() => IntPtr.Zero;
 		public static string TlsProvider => "browser";
+		/* No msquic in a browser: the QUIC layer comes from getStats() or the estimate model
+		 * (TransportTraffic.CaptureBrowser), never from these. */
+		public static int wt_get_global_counters(ref WtGlobalCounters counters) => (int)WTError.InvalidState;
+		public static int wt_client_get_connection_stats(SafeClientHandle client, ref WtConnectionStats stats) => (int)WTError.InvalidState;
 #endif
 	}
 }

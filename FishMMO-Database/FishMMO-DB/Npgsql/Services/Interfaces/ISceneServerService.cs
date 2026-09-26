@@ -61,19 +61,20 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Updates the last pulse timestamp, character count, and lock state for a scene server (heartbeat).
+		/// Updates the last pulse timestamp and character count for a scene server (heartbeat), and
+		/// reads its operator control state back in the same statement.
 		/// </summary>
 		/// <param name="serverId">Server ID.</param>
 		/// <param name="characterCount">Current character count.</param>
-		/// <param name="locked">Whether server is locked.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult"/> indicating success or containing a <see cref="DatabaseException"/> on failure.
-		/// Returns <see cref="DatabaseEntityNotFoundException"/> if server doesn't exist.
+		/// The row's <see cref="ServerControlState"/>: its lock, and any scheduled shutdown with the
+		/// seconds left before it as the database clock measured them
+		/// (<see cref="ServerControlState.ShutdownInSeconds"/>). NotFound when the row is gone.
 		/// </returns>
 		/// <remarks>
-		/// Uses ExecuteSqlRawAsync with execution strategy wrapping to ensure transient database
-		/// failures are automatically retried. Updates timestamp to current UTC time along with character count and lock state.
+		/// Transient failures are retried by the execution wrapper. The pulse writes neither
+		/// control column: the row is the authority for both, and the server adopts what it reads.
 		/// </remarks>
 		Task<DatabaseResult<ServerControlState>> PulseAsync(long serverId, int characterCount, CancellationToken cancellationToken = default);
 
@@ -98,8 +99,27 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="shutdownAtUtc">Absolute UTC stop time, or <c>null</c> to cancel.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>Success, or NotFound when the row is gone.</returns>
-		/// <remarks>Scheduling also locks the server; cancelling does not unlock it.</remarks>
+		/// <remarks>
+		/// Scheduling also locks the server; cancelling does not unlock it. For an absolute instant
+		/// the caller already holds; a delay belongs on <see cref="SetShutdownInAsync"/>, for the
+		/// reason given on <see cref="IWorldServerService.SetShutdownAsync"/>.
+		/// </remarks>
 		Task<DatabaseResult> SetShutdownAsync(long serverId, DateTime? shutdownAtUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Schedules this scene server's shutdown a number of seconds from now by the database
+		/// clock, and locks it.
+		/// </summary>
+		/// <param name="serverId">Scene server row to update.</param>
+		/// <param name="seconds">Delay in seconds. Zero means now; negative is refused.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The UTC deadline written, or NotFound when the row is gone.</returns>
+		/// <remarks>
+		/// The deadline is taken from the database clock inside the writing statement, so the
+		/// delay asked for is the delay that elapses. See
+		/// <see cref="IWorldServerService.SetShutdownInAsync"/>, including what a retry does.
+		/// </remarks>
+		Task<DatabaseResult<DateTime>> SetShutdownInAsync(long serverId, int seconds, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes a scene server registration.
@@ -123,6 +143,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="maxBatchSize">Maximum number of IDs per database round-trip (500–1000).</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A list of SceneServerData for each found server.</returns>
+		/// <remarks>
+		/// Each row carries <see cref="SceneServerData.PulseAgeSeconds"/>, measured by the database
+		/// clock as it was read, which is what a caller must judge liveness by. So does
+		/// <c>FetchAsync</c>.
+		/// </remarks>
 		Task<DatabaseResult<IReadOnlyList<SceneServerData>>> FetchSceneServersByIDsAsync(List<long> serverIds, int maxBatchSize = 500, CancellationToken cancellationToken = default);
 	}
 }

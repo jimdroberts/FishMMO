@@ -12,6 +12,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </remarks>
 	public interface ICharacterAttributeService :
 		IPersistManyAction<CharacterAttributeData>,
+		IPersistManyOwnedAction<CharacterAttributeData>,
 		IDeleteByKeyVersionedAction<long>,
 		IFetchCollectionByKeyAction<long, CharacterAttributeData>
 	{

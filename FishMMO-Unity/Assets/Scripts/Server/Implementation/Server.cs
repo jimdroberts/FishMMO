@@ -127,6 +127,19 @@ namespace FishMMO.Server.Implementation
 		private readonly List<ServerBehaviour> behaviourSnapshot = new List<ServerBehaviour>();
 
 		/// <summary>
+		/// Fault logs for behaviours whose update has thrown, created on first failure. Empty while
+		/// every behaviour is healthy, so the per-frame path pays only a Count read.
+		/// </summary>
+		private readonly Dictionary<ServerBehaviour, RepeatingFaultLog> behaviourFaults = new Dictionary<ServerBehaviour, RepeatingFaultLog>();
+
+		/// <summary>
+		/// Picks each periodic callback's first-run phase, so callbacks registered on the same frame
+		/// do not fire on the same frame forever after. System.Random rather than UnityEngine.Random,
+		/// so registration never advances the global stream anything else draws from.
+		/// </summary>
+		private readonly System.Random periodicPhaseRandom = new System.Random();
+
+		/// <summary>
 		/// Cached server-initialized log callback for login server initialization.
 		/// </summary>
 		private static readonly Action loginServerInitializedLogHandler = () => Log.Debug("Server", "LoginServer initialized.");
@@ -649,12 +662,33 @@ namespace FishMMO.Server.Implementation
 				this.behaviourSnapshot.Add(this.serverBehaviors[i]);
 			}
 
+			/* Each behaviour is isolated. Without this, one OnLateUpdate that throws skips every
+			 * behaviour after it in the list and all of this frame's periodic callbacks (saves,
+			 * pumps), and a throw that repeats does so every frame. The fault log keeps a repeating
+			 * throw to one full trace plus a periodic count. */
 			for (int i = 0; i < behaviourSnapshot.Count; i++)
 			{
 				var behaviour = behaviourSnapshot[i];
-				if (behaviour != null && behaviour.Initialized)
+				if (behaviour == null || !behaviour.Initialized)
+				{
+					continue;
+				}
+				try
 				{
 					behaviour.OnLateUpdate(deltaTime);
+					if (behaviourFaults.Count > 0 && behaviourFaults.TryGetValue(behaviour, out RepeatingFaultLog healed))
+					{
+						healed.ReportSuccess();
+					}
+				}
+				catch (Exception ex)
+				{
+					if (!behaviourFaults.TryGetValue(behaviour, out RepeatingFaultLog faults))
+					{
+						faults = new RepeatingFaultLog("Server", $"{behaviour.GetType().Name}.OnLateUpdate");
+						behaviourFaults[behaviour] = faults;
+					}
+					faults.Report(ex, Time.realtimeSinceStartupAsDouble);
 				}
 			}
 		}
@@ -678,6 +712,7 @@ namespace FishMMO.Server.Implementation
 			{
 				var data = kvp.Value;
 				data.TimeRemaining -= deltaTime;
+				data.Elapsed += deltaTime;
 
 				if (data.TimeRemaining <= 0f)
 				{
@@ -685,19 +720,45 @@ namespace FishMMO.Server.Implementation
 				}
 			}
 
-				for (int i = 0; i < this.readyCallbacks.Count; i++)
+			for (int i = 0; i < this.readyCallbacks.Count; i++)
+			{
+				var data = this.readyCallbacks[i];
+
+				/* The callback receives the time that really passed since its last run, not the
+				 * nominal interval, so anything that integrates it stays right through a hitch. The
+				 * overshoot is carried into the next period rather than dropped, so a 1 s timer on a
+				 * 60 fps loop does not run ~1-2% slow. One run per frame at most: after a hitch
+				 * longer than a whole interval the phase restarts instead of firing a burst to catch
+				 * up, and the elapsed time passed in covers the gap. */
+				float elapsed = data.Elapsed;
+				data.Elapsed = 0f;
+				data.TimeRemaining += data.Interval;
+				if (data.TimeRemaining <= 0f)
 				{
-					var data = this.readyCallbacks[i];
+					data.TimeRemaining = data.Interval;
+				}
+
 				try
 				{
-					data.Callback?.Invoke(data.Interval);
+					data.Callback?.Invoke(elapsed);
+					data.Faults?.ReportSuccess();
 				}
 				catch (Exception ex)
 				{
-					Log.Error("Server", $"Error invoking periodic callback {data.CallbackName}: {ex.Message}");
+					data.Faults ??= new RepeatingFaultLog("Server", $"Periodic callback {data.CallbackName}");
+					data.Faults.Report(ex, Time.realtimeSinceStartupAsDouble);
 				}
-				data.TimeRemaining = data.Interval;
 			}
+		}
+
+		/// <summary>
+		/// A first-run delay in (0, interval], so periodic work registered on the same frame (the
+		/// 30 s save, the 60 s item snapshot, the 5 s and 10 s sweeps) spreads across the interval
+		/// instead of landing on one frame every time.
+		/// </summary>
+		private float RandomInitialPhase(float interval)
+		{
+			return interval * (float)(1.0 - this.periodicPhaseRandom.NextDouble());
 		}
 
 		/// <summary>
@@ -1053,6 +1114,7 @@ namespace FishMMO.Server.Implementation
 			}
 
 			var entry = new PeriodicCallbackData(interval, callback);
+			entry.TimeRemaining = RandomInitialPhase(interval);
 			periodicCallbacks[callback] = entry;
 			Log.Debug("Server", $"Registered periodic callback: {entry.CallbackName} (interval: {interval}s)");
 		}

@@ -72,13 +72,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="lastFetch">Timestamp to compare against.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the list of guild update data on success,
+		/// A <see cref="DatabaseResult{T}"/> containing the guild update rows and the database clock the read began at,
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
 		/// Filters by both timestamp and guild ID list.
 		/// </remarks>
-		Task<DatabaseResult<List<GuildUpdateData>>> FetchAsync(
+		Task<DatabaseResult<UpdatePumpRead<GuildUpdateData>>> FetchAsync(
 			List<long> guildIds,
 			DateTime lastFetch,
 			CancellationToken cancellationToken = default);

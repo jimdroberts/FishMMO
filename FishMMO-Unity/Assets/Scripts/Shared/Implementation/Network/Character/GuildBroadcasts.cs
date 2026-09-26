@@ -135,6 +135,35 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
+	/// Changes to a guild roster since the last roster or delta this client was sent.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Every member login, logout and zone change moves the guild's update row, and every scene
+	/// server hosting a member used to answer by re-sending the WHOLE roster to each of its local
+	/// members: a hundred rows to say that one member changed zone. A scene server now keeps the
+	/// roster it last delivered and sends only the rows that differ. A client is sent a delta only
+	/// once that server has sent it a full <see cref="GuildAddMultipleBroadcast"/> for this guild,
+	/// in the same officer-note audience; otherwise it is sent the full roster, and so it is when
+	/// more than half the roster changed at once.
+	/// </para>
+	/// <para>
+	/// The rows are full rows in the recipient's projection — <see cref="GuildAddEntry.OfficerNote"/>
+	/// is empty unless the recipient's rank may read officer notes, exactly as in the full roster —
+	/// and the client applies each one as an upsert.
+	/// </para>
+	/// </remarks>
+	public struct GuildRosterDeltaBroadcast : IBroadcast
+	{
+		/// <summary>The guild every row belongs to. A client not in this guild ignores the message.</summary>
+		public long GuildID;
+		/// <summary>Rows added or changed since the recipient's last roster or delta.</summary>
+		public GuildAddEntry[] Upserts;
+		/// <summary>Character IDs no longer in the guild.</summary>
+		public long[] Removals;
+	}
+
+	/// <summary>
 	/// Broadcast for a member leaving a guild.
 	/// No additional data required.
 	/// </summary>

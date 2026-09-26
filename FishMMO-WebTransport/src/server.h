@@ -44,10 +44,14 @@ typedef struct {
      * without a lock. */
     wt_session_t*           pending_shutdown_session;  // Raw pointer typed for C ABI compatibility. Access ONLY via atomic_ptr_load/atomic_ptr_store.
 
-    /* HTTP/3 handshake session. Created on CONNECTED, freed when
-     * the WebTransport session is established (on_h3_session_ready).
+    /* HTTP/3 handshake session. Created on CONNECTED and freed by the
+     * connection's teardown (server_conn_teardown), which runs after
+     * SHUTDOWN_COMPLETE — on the QUIC worker, or on the application thread
+     * when an application-thread call held the gate below at that moment.
      * If h3_session is non-NULL and handshake_complete is false,
-     * incoming streams are routed through HTTP/3 protocol detection. */
+     * incoming streams are routed through HTTP/3 protocol detection.
+     * Access ONLY via atomic_ptr_load/store/exchange; on the application
+     * thread, only while inside the connection's gate (app_state). */
     h3_session_t*           h3_session;
 
     /* Per-connection datagram drop counter.  Reset to 0 by calloc at
@@ -108,7 +112,41 @@ typedef struct {
      * with atomic_exchange by whichever path finishes first:
      * on_h3_session_ready or slot release. */
     atomic_int              half_open_counted;
+
+    /* ── Application-thread gate ─────────────────────────────────
+     * Calls on the application thread — wt_server_poll's H3 handshake
+     * sweep and deferred SETTINGS bootstrap, wt_server_send_stream /
+     * _datagram, wt_server_disconnect — use state that this connection's
+     * QUIC worker tears down after SHUTDOWN_COMPLETE: the h3_session it
+     * frees, the connection handle it closes, the session's stream handles
+     * it closes, and the slot it hands back for reuse.  No check made
+     * before the use can make that safe — the worker can run the whole
+     * teardown between the check and the use.  (wt_server_poll reading
+     * h3_session while the worker freed it was an ASan-confirmed
+     * heap-use-after-free.)
+     *
+     * app_state packs the number of application-thread calls inside the
+     * gate (WT_CONN_APP_USERS) with a CLOSED bit — the same single-word
+     * handoff as the client's stats_state.  A call enters only while CLOSED
+     * is clear, and loads the state above only once inside.
+     * SHUTDOWN_COMPLETE parks the connection handle in app_deferred_conn
+     * and sets CLOSED: if no call is inside at that moment it runs the
+     * teardown itself, as it always did; otherwise it returns at once and
+     * the last call to leave the gate runs the teardown, on the
+     * application thread.  The worker never waits, and exactly one side
+     * tears down: both act on the one word, so its modification order
+     * decides.  The slot stays in_use until the teardown has run, so it
+     * cannot be recycled under a call that is still inside.
+     *
+     * CLOSED is also the state of a free slot; server_listener_cb opens
+     * the gate when it claims the slot for a new connection.
+     * app_deferred_conn MUST be accessed via atomic_ptr_*. */
+    atomic_int              app_state;
+    HQUIC                   app_deferred_conn;
 } wt_server_conn_t;
+
+#define WT_CONN_APP_CLOSED  0x40000000
+#define WT_CONN_APP_USERS   0x3FFFFFFF
 
 /* ── Runtime-configurable limits ────────────────────────────────
  * Populated with defaults in wt_server_alloc_impl; overridden by

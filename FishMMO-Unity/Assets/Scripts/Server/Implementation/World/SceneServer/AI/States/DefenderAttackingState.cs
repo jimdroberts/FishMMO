@@ -64,6 +64,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		private HashSet<int> tauntTemplateSet;
 
 		/// <summary>
+		/// <see cref="IsTaunt"/> as a delegate, built once per asset. Passing the method group
+		/// directly allocated a delegate on every pick: under C# 9 an instance method group is a
+		/// fresh delegate at each use.
+		/// </summary>
+		[System.NonSerialized]
+		private System.Func<Ability, bool> isTauntFilter;
+
+		/// <summary>
 		/// Seeds tank-appropriate defaults when the asset is first created or reset.
 		/// </summary>
 		private void Reset()
@@ -127,7 +135,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * leads with it whether or not anyone listed it on this asset; one whose spellbook
 			 * contains none simply gets null here and falls through, at the cost of a single
 			 * filtered pass over an ability list that is a handful of entries long. */
-			Ability taunt = controller.PickScoredAbility(controller.GetSqrDistanceToTarget(), IsTaunt, 0f);
+			isTauntFilter ??= IsTaunt;
+			Ability taunt = controller.PickScoredAbility(controller.GetSqrDistanceToTarget(), isTauntFilter, 0f);
 			if (taunt != null)
 			{
 				return taunt;
@@ -164,7 +173,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 		/// <summary>
 		/// Resolves who this defender is protecting: a pet protects its owner, a grouped NPC
-		/// protects the group's most wounded member.
+		/// protects the group's most wounded member — and nobody while the whole pack is at full
+		/// health (<see cref="NPCGroup.LowestHealthMember"/> is null then), so it fights instead.
 		/// </summary>
 		/// <param name="controller">The AI controller.</param>
 		/// <returns>The protected character's transform, or null when there is nobody to protect.</returns>

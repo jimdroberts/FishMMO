@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FishMMO.Database;
@@ -20,9 +21,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// releases or loses a plot from anywhere else.
 	///
 	/// <para>Closing that gap is what <c>plot_updates</c> has existed for since the data model
-	/// landed: every write marks its plot changed, and this polls for the marks. The same shape
-	/// guilds use, for the same reason — the server that made the change is not the one that has to
-	/// show it.</para>
+	/// landed: every write that changes what a copy shows — owner, state, structures, guest list —
+	/// marks its plot changed, and this polls for the marks. The same shape guilds use, for the
+	/// same reason — the server that made the change is not the one that has to show it. Tax
+	/// writes do not mark: nothing applied here reads tax state.</para>
 	/// </remarks>
 	public partial class HousingSystem
 	{
@@ -42,29 +44,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Seconds until the next poll.
 		/// </summary>
+		/// <remarks>
+		/// Starts at a random point in the interval (<see cref="RandomiseSweepPhases"/>), so the
+		/// cluster's scene servers do not all poll in the same second.
+		/// </remarks>
 		private float plotSyncCountdown;
 
 		/// <summary>
-		/// Where polling starts for a world that has not completed a poll yet.
-		/// </summary>
-		private DateTime lastPlotSyncUtc = DateTime.UtcNow;
-
-		/// <summary>
-		/// The moment each world's last complete poll covered up to. Main thread only.
+		/// How far before the last poll's database time the next one starts reading, in seconds.
 		/// </summary>
 		/// <remarks>
-		/// <para>Rewound by one interval on every poll rather than read as exactly then. Server
-		/// clocks differ by a little, and a write stamped a moment behind this server's clock would
-		/// fall in the gap between two polls and be missed for good. Overlapping the windows re-reads
-		/// a few rows instead, which costs a comparison and is idempotent.</para>
-		///
+		/// For marks stamped before a poll and committed after it (see <see cref="PlotSyncWindow"/>).
+		/// Clock skew no longer needs covering — every time in the window is the database's — so this
+		/// is sized for a commit that lags its statement, not for servers that disagree about the
+		/// time. Re-reading the few plots inside it costs a lookup by ID each.
+		/// </remarks>
+		private const float PlotSyncCommitMarginSeconds = 10f;
+
+		/// <summary>
+		/// The database time each world's last complete poll was taken at. Main thread only.
+		/// </summary>
+		/// <remarks>
 		/// <para>Moved on only once a poll has read and applied everything it found. It used to move
 		/// the moment a poll was sent, so a poll that then failed in the database took its window
-		/// with it: the overlap absorbed one failure, and two in a row lost every change in between
-		/// — a sale, a finished house, a revoked key — for as long as this server kept the scene
-		/// loaded. Per world, because each world's poll succeeds or fails on its own.</para>
+		/// with it. Per world, because each world's poll succeeds or fails on its own.</para>
+		///
+		/// <para>Absent for a world that has not completed a poll since its window last restarted,
+		/// which makes the next poll read every mark (<see cref="PlotSyncWindow.Since"/>).</para>
 		/// </remarks>
 		private readonly Dictionary<long, DateTime> plotSyncWatermarkUtc = new Dictionary<long, DateTime>();
+
+		/// <summary>
+		/// How many times each world's window has restarted. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Bumped when one of the world's scenes is resolved (<see cref="RestartPlotSyncWindow"/>).
+		/// A poll carries the epoch it was sent under and may only move the watermark if it is still
+		/// current — see <see cref="PlotSyncWindow.ShouldAdvance"/>.
+		/// </remarks>
+		private readonly Dictionary<long, int> plotSyncEpochs = new Dictionary<long, int>();
+
+		/// <summary>
+		/// Worlds with a poll on the worker right now.
+		/// </summary>
+		/// <remarks>
+		/// Added on the main thread when a poll is sent and removed by the poll itself however it
+		/// ends, so it is concurrent. A poll slower than the interval used to be joined by the next,
+		/// both reading the same window.
+		/// </remarks>
+		private readonly ConcurrentDictionary<long, byte> plotSyncInFlight = new ConcurrentDictionary<long, byte>();
 
 		/// <summary>
 		/// Polls for plots changed elsewhere, on its interval.
@@ -89,60 +117,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime pollStartUtc = DateTime.UtcNow;
-			TimeSpan overlap = TimeSpan.FromSeconds(Mathf.Max(1f, plotSyncIntervalSeconds));
+			TimeSpan margin = TimeSpan.FromSeconds(PlotSyncCommitMarginSeconds);
 
 			foreach (KeyValuePair<long, HashSet<int>> pair in scenesByWorld)
 			{
 				long worldServerID = pair.Key;
-				List<int> handles = new List<int>(pair.Value);
-				DateTime since = (plotSyncWatermarkUtc.TryGetValue(worldServerID, out DateTime watermark) ? watermark : lastPlotSyncUtc) - overlap;
-
-				/* What to watch and which scenes to read are gathered here, on the main thread. The
-				 * registry and the scene mapping are main-thread state, and the poll runs on the
-				 * worker. */
-				List<long> watched = CollectWatchedPlotIDs(handles);
-				List<string> sceneNames = CollectSceneNames(handles);
-
-				if (!TryEnqueueAsyncWork(() => SyncPlotsAsync(worldServerID, handles, watched, sceneNames, since, pollStartUtc)))
+				if (!plotSyncInFlight.TryAdd(worldServerID, 0))
 				{
+					// The last poll of this world is still out; it moves the window when it lands.
+					continue;
+				}
+
+				List<int> handles = new List<int>(pair.Value);
+				bool hasWatermark = plotSyncWatermarkUtc.TryGetValue(worldServerID, out DateTime watermark);
+				DateTime since = PlotSyncWindow.Since(hasWatermark, watermark, margin);
+				int epoch = plotSyncEpochs.TryGetValue(worldServerID, out int currentEpoch) ? currentEpoch : 0;
+
+				/* What to watch is gathered here, on the main thread: the registry is main-thread
+				 * state, and the poll runs on the worker. */
+				List<long> watched = CollectWatchedPlotIDs(handles);
+
+				if (!TryEnqueueAsyncWork(() => SyncPlotsAsync(worldServerID, handles, watched, since, epoch)))
+				{
+					plotSyncInFlight.TryRemove(worldServerID, out _);
 					Log.Warning("HousingSystem", $"Could not enqueue the plot sync for world {worldServerID}.");
 				}
 			}
 		}
 
 		/// <summary>
-		/// The distinct scene names behind a set of loaded scene handles. Main thread only.
+		/// Starts a world's sync window over, so the next poll reads every mark. Main thread only.
 		/// </summary>
-		private List<string> CollectSceneNames(List<int> sceneHandles)
+		/// <remarks>
+		/// Called when one of the world's scenes has just been resolved. The resolve read those plots
+		/// at a moment the running window knows nothing about, and a change landing between that read
+		/// and the window's start would otherwise never be seen by this copy of the scene.
+		/// </remarks>
+		private void RestartPlotSyncWindow(long worldServerID)
 		{
-			List<string> names = new List<string>();
-
-			foreach (int sceneHandle in sceneHandles)
-			{
-				if (TryResolveWorld(sceneHandle, out _, out string sceneName) && !names.Contains(sceneName))
-				{
-					names.Add(sceneName);
-				}
-			}
-
-			return names;
+			plotSyncWatermarkUtc.Remove(worldServerID);
+			plotSyncEpochs[worldServerID] = (plotSyncEpochs.TryGetValue(worldServerID, out int epoch) ? epoch : 0) + 1;
 		}
 
 		/// <summary>
 		/// Records that a world's poll read and applied everything it found. Callable from the worker.
 		/// </summary>
 		/// <remarks>
-		/// Only ever moved forward, so a slow poll finishing after a later one cannot rewind it.
 		/// Failing to record it costs the next poll a wider window, not a missed change.
 		/// </remarks>
-		private void CompletePlotSync(long worldServerID, DateTime pollStartUtc)
+		private void CompletePlotSync(long worldServerID, DateTime pollAsOfUtc, int pollEpoch)
 		{
 			TryEnqueueHousingMainThread(() =>
 			{
-				if (!plotSyncWatermarkUtc.TryGetValue(worldServerID, out DateTime watermark) || watermark < pollStartUtc)
+				int currentEpoch = plotSyncEpochs.TryGetValue(worldServerID, out int epoch) ? epoch : 0;
+				bool hasWatermark = plotSyncWatermarkUtc.TryGetValue(worldServerID, out DateTime watermark);
+				if (PlotSyncWindow.ShouldAdvance(pollEpoch, currentEpoch, hasWatermark, watermark, pollAsOfUtc))
 				{
-					plotSyncWatermarkUtc[worldServerID] = pollStartUtc;
+					plotSyncWatermarkUtc[worldServerID] = pollAsOfUtc;
 				}
 			});
 		}
@@ -176,110 +207,103 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Re-reads the plots this server is showing that have changed since the last poll.
 		/// </summary>
 		/// <remarks>
-		/// Asks the update table which plots moved before reading any of them. The alternative —
-		/// re-fetching every plot on every poll — would be a full scan of a scene's land every few
-		/// seconds to discover that nothing had happened, which is what the update table exists to
-		/// avoid.
+		/// Asks the update table which plots moved, then reads exactly those. It used to read back
+		/// every plot of every scene the world had loaded to find the changed few — a full re-read
+		/// of a district for one sale, twice, since the overlapping windows see each change twice.
 		/// </remarks>
 		/// <param name="worldServerID">The world being polled.</param>
 		/// <param name="sceneHandles">This server's loaded copies of that world's scenes.</param>
 		/// <param name="watched">The plots those copies show, gathered on the main thread.</param>
-		/// <param name="sceneNames">The scenes behind those copies, gathered on the main thread.</param>
-		/// <param name="since">Where this poll's window starts.</param>
-		/// <param name="pollStartUtc">Where the next window starts, if this poll completes.</param>
-		private async Task SyncPlotsAsync(long worldServerID, List<int> sceneHandles, List<long> watched, List<string> sceneNames, DateTime since, DateTime pollStartUtc)
+		/// <param name="since">Where this poll's window starts, on the database clock.</param>
+		/// <param name="epoch">The world's window epoch when this poll was sent.</param>
+		private async Task SyncPlotsAsync(long worldServerID, List<int> sceneHandles, List<long> watched, DateTime since, int epoch)
 		{
-			if (!TryGetDbService(out IPlotUpdateService plotUpdateService) ||
-				!TryGetDbService(out IPlotService plotService))
+			try
 			{
-				Log.Error("HousingSystem", $"Plot sync for world {worldServerID} skipped: a plot service is unavailable.");
-				return;
-			}
+				if (!TryGetDbService(out IPlotUpdateService plotUpdateService) ||
+					!TryGetDbService(out IPlotService plotService))
+				{
+					Log.Error("HousingSystem", $"Plot sync for world {worldServerID} skipped: a plot service is unavailable.");
+					return;
+				}
 
-			if (watched.Count < 1)
-			{
-				CompletePlotSync(worldServerID, pollStartUtc);
-				return;
-			}
+				DatabaseResult<PlotUpdatePollData> poll = await plotUpdateService.FetchAsync(watched, since);
+				if (!poll.IsSuccess)
+				{
+					Log.Error("HousingSystem", $"Plot sync for world {worldServerID} failed; the next poll re-reads this window: [{poll.ErrorCode}] {poll.ErrorMessage}");
+					return;
+				}
 
-			DatabaseResult<List<PlotUpdateData>> updates = await plotUpdateService.FetchAsync(watched, since);
-			if (!updates.IsSuccess || updates.Data == null)
-			{
-				Log.Error("HousingSystem", $"Plot sync for world {worldServerID} failed; the next poll re-reads this window: [{updates.ErrorCode}] {updates.ErrorMessage}");
-				return;
-			}
-			if (updates.Data.Count < 1)
-			{
-				CompletePlotSync(worldServerID, pollStartUtc);
-				return;
-			}
+				DateTime asOfUtc = poll.Data.AsOfUtc;
+				List<PlotUpdateData> updates = poll.Data.Updates;
+				if (updates == null || updates.Count < 1)
+				{
+					CompletePlotSync(worldServerID, asOfUtc, epoch);
+					return;
+				}
 
-			HashSet<long> changed = new HashSet<long>();
-			foreach (PlotUpdateData update in updates.Data)
-			{
-				changed.Add(update.PlotID);
-			}
+				HashSet<long> changed = new HashSet<long>();
+				foreach (PlotUpdateData update in updates)
+				{
+					changed.Add(update.PlotID);
+				}
 
-			/* Read back by scene rather than by plot. The scenes this server shows are already known,
-			 * a scene's plots come in one query, and the alternative is a query per changed plot —
-			 * which is worst exactly when a lot has changed at once. */
-			Dictionary<long, PlotData> refreshed = new Dictionary<long, PlotData>();
-
-			/* Whether everything this poll found was read and applied. Anything short of that leaves
-			 * the window where it was, so the next poll reads it again rather than never. */
-			bool complete = true;
-
-			foreach (string sceneName in sceneNames)
-			{
-				DatabaseResult<List<PlotData>> plots = await plotService.FetchBySceneAsync(worldServerID, sceneName);
+				DatabaseResult<List<PlotData>> plots = await plotService.FetchByIdsAsync(changed);
 				if (!plots.IsSuccess || plots.Data == null)
 				{
-					Log.Warning("HousingSystem", $"Plot sync could not read '{sceneName}' in world {worldServerID}; the next poll re-reads it: [{plots.ErrorCode}] {plots.ErrorMessage}");
-					complete = false;
-					continue;
+					Log.Warning("HousingSystem", $"Plot sync could not read {changed.Count} changed plot(s) in world {worldServerID}; the next poll re-reads them: [{plots.ErrorCode}] {plots.ErrorMessage}");
+					return;
 				}
 
+				Dictionary<long, PlotData> refreshed = new Dictionary<long, PlotData>(plots.Data.Count);
 				foreach (PlotData plot in plots.Data)
 				{
-					if (changed.Contains(plot.ID))
-					{
-						refreshed[plot.ID] = plot;
-					}
+					refreshed[plot.ID] = plot;
 				}
-			}
 
-			if (refreshed.Count < 1)
-			{
+				if (refreshed.Count < 1)
+				{
+					CompletePlotSync(worldServerID, asOfUtc, epoch);
+					return;
+				}
+
+				/* Whether everything this poll found was read and applied. Anything short of that
+				 * leaves the window where it was, so the next poll reads it again rather than never. */
+				bool complete = true;
+
+				/* Access is re-read for the changed plots too. A grant or a revocation on another
+				 * channel marks its plot changed exactly as a sale does, and a copy that refreshed
+				 * ownership but kept a stale guest list would keep admitting somebody the owner locked
+				 * out — the one failure in this file that a player can be standing inside while it
+				 * happens.
+				 *
+				 * A read that fails comes back null, and the copies keep the lists they have (see
+				 * ApplyChangedPlots) until the next poll reads them again. */
+				List<PlotData> changedPlots = new List<PlotData>(refreshed.Values);
+				Dictionary<long, Dictionary<long, PlotPermission>> grantsByPlot = await FetchAccessGrantsAsync(changedPlots);
+				if (grantsByPlot == null)
+				{
+					complete = false;
+				}
+
+				if (!TryEnqueueHousingMainThread(() => ApplyChangedPlots(sceneHandles, refreshed, grantsByPlot)))
+				{
+					Log.Warning("HousingSystem", $"Could not apply {refreshed.Count} changed plot(s) for world {worldServerID}; the next poll re-reads them.");
+					complete = false;
+				}
+
 				if (complete)
 				{
-					CompletePlotSync(worldServerID, pollStartUtc);
+					CompletePlotSync(worldServerID, asOfUtc, epoch);
 				}
-				return;
 			}
-
-			/* Access is re-read for the changed plots too. A grant or a revocation on another channel
-			 * marks its plot changed exactly as a sale does, and a copy that refreshed ownership but
-			 * kept a stale guest list would keep admitting somebody the owner locked out — the one
-			 * failure in this file that a player can be standing inside while it happens.
-			 *
-			 * A read that fails comes back null, and the copies keep the lists they have (see
-			 * ApplyChangedPlots) until the next poll reads them again. */
-			List<PlotData> changedPlots = new List<PlotData>(refreshed.Values);
-			Dictionary<long, Dictionary<long, PlotPermission>> grantsByPlot = await FetchAccessGrantsAsync(changedPlots);
-			if (grantsByPlot == null)
+			catch (Exception ex)
 			{
-				complete = false;
+				Log.Error("HousingSystem", $"Plot sync for world {worldServerID} threw; the next poll re-reads this window: {ex}");
 			}
-
-			if (!TryEnqueueHousingMainThread(() => ApplyChangedPlots(sceneHandles, refreshed, grantsByPlot)))
+			finally
 			{
-				Log.Warning("HousingSystem", $"Could not apply {refreshed.Count} changed plot(s) for world {worldServerID}; the next poll re-reads them.");
-				complete = false;
-			}
-
-			if (complete)
-			{
-				CompletePlotSync(worldServerID, pollStartUtc);
+				plotSyncInFlight.TryRemove(worldServerID, out _);
 			}
 		}
 
@@ -322,6 +346,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Dictionary<long, Dictionary<long, PlotPermission>> grantsByPlot)
 		{
 			int applied = 0;
+			List<PlotFoundation> toClear = null;
 
 			foreach (int sceneHandle in sceneHandles)
 			{
@@ -393,9 +418,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					/* Anybody the change has just barred goes out now. A plot that became a building
 					 * site, or was reclaimed, or whose owner revoked a key on another channel, may
-					 * have people standing in it here. */
-					EvictTrespassers(foundation);
+					 * have people standing in it here. Gathered and put out together below, so each
+					 * scene's occupants are read once however many of its plots changed. An empty
+					 * lot bars nobody, so it is not worth reading anybody for. */
+					if (foundation.State != PlotState.Empty)
+					{
+						(toClear ??= new List<PlotFoundation>()).Add(foundation);
+					}
 				}
+			}
+
+			if (toClear != null)
+			{
+				EvictTrespassersFrom(toClear);
 			}
 
 			if (applied > 0)

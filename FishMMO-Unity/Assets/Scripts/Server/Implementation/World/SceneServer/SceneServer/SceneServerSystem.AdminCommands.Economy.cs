@@ -161,6 +161,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* The write quotes the session claim this server holds for the target, captured before the
+			 * balance moves. A resident character always holds one; without it the character is not
+			 * ours to change — it is leaving or being evicted — so nothing is changed and the operator
+			 * is told, rather than being told of a balance that could never be stored. */
+			if (!TryCaptureSessionClaim(target.ID, out _))
+			{
+				Reply(character, $"{target.CharacterName}'s session is not held by this server any more; nothing changed.");
+				return;
+			}
+
 			currency.SetValue((int)after);
 			bool queued = TryPersistOperatorAttribute(target, currencyTemplate.ID, currency, 0f);
 
@@ -171,7 +181,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Administrator '{character.Account}' changed '{target.CharacterName}' (id {target.ID}) {currencyTemplate.Name} from {before} to {after}.");
 
 			Reply(character, $"{target.CharacterName}: {before} to {after} {currencyTemplate.Name}." +
-				(queued ? string.Empty : " The persistence queue was full, so the save ran outside it; it is written all the same."));
+				(queued ? string.Empty : " The persistence queue is saturated, so the save waits its turn behind the backlog; it is still written, but may land late."));
 			if (target.ID != character.ID)
 			{
 				Reply(target, $"Staff adjusted your {currencyTemplate.Name}.");
@@ -311,18 +321,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Queues one attribute row for persistence after an operator changed it.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// <c>Version++</c> AND <c>MarkPersistPending</c>, together, as the merchant and guild paths
 		/// do. The periodic save clears an attribute's dirty flag only when its confirmation quotes
 		/// the version it stamped; a bump without the mark moves the attribute past a version an
 		/// in-flight save is waiting on, and it stays dirty for the rest of the session.
+		/// </para>
+		/// <para>
+		/// Ownership-gated: the row quotes the session claim this server holds for the character,
+		/// captured here — in the command's own frame, which is the moment the value changed — and
+		/// lands only while that claim is still held. A refusal means the target's session moved to
+		/// another server (or ended) after the command ran; the adjustment is then lost with the
+		/// character's eviction, and the log says so. A command that changes the value first asks for
+		/// the claim itself, so it can refuse before anything moves (see <c>ChangeCurrency</c>); a
+		/// resident target always holds one, so the no-claim branch below is a backstop.
+		/// </para>
 		/// </remarks>
 		/// <returns>
-		/// True when the write went through the persistence queue; false when the queue was full and
-		/// it ran directly instead (<c>EnqueuePersistence</c>'s fallback). It is written either way —
-		/// the replies used to tell the operator it would wait for the next periodic save (issue #267).
+		/// True when the write was admitted within the persistence queue's threshold; false when it
+		/// was admitted over it, behind the backlog, or (the worker not running, i.e. teardown) went
+		/// to <c>EnqueuePersistence</c>'s bounded fallback. It is written either way — the replies
+		/// used to tell the operator it would wait for the next periodic save (issue #267).
 		/// </returns>
 		private bool TryPersistOperatorAttribute(IPlayerCharacter character, int templateID, CharacterAttribute attribute, float currentValue)
 		{
+			if (!TryCaptureSessionClaim(character.ID, out CharacterSessionLeaseData claim))
+			{
+				Log.Error("SceneServerSystem",
+					$"Operator attribute save for CharID={character.ID} (template {templateID}) was not written: this server holds no session claim for the character.");
+				// Not a queue problem, so the caller's "the queue is saturated" line would mislead.
+				return true;
+			}
+
 			attribute.Version++;
 			attribute.MarkPersistPending(attribute.Version);
 
@@ -348,8 +378,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					await BulkWriteReporting.ReportAsync("SceneServerSystem", "Operator attribute save",
-						await attributeService.PersistAsync(dtos), $"CharID={characterID}");
+					DatabaseResult<BulkWriteResult> result = await attributeService.PersistOwnedAsync(dtos, ClaimsOf(claim));
+					await BulkWriteReporting.ReportAsync("SceneServerSystem", "Operator attribute save", result, $"CharID={characterID}");
+					if (IsClaimRefusal(result) || (result.IsSuccess && result.Data.Unowned > 0))
+					{
+						await Log.Error("SceneServerSystem",
+							$"Operator attribute save for CharID={characterID} (template {templateID}) was refused: this server no longer holds the character's session. The adjustment is lost with the character.");
+					}
 				}
 				catch (Exception ex)
 				{

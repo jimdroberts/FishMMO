@@ -65,29 +65,77 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Fetches paginated chat messages excluding local messages for the specified scene server.
+		/// Persists one line bridged in from Discord, as a <see cref="ChatChannel.Discord"/> row the
+		/// scene servers relay to every player in <paramref name="worldServerId"/>.
 		/// </summary>
-		/// <param name="lastFetch">Timestamp to compare messages against.</param>
-		/// <param name="lastPosition">Last message ID fetched (for pagination).</param>
-		/// <param name="amount">Maximum number of messages to fetch.</param>
-		/// <param name="sceneServerId">Scene server ID to filter out local messages.</param>
+		/// <param name="worldServerId">World the Discord channel is bridged to.</param>
+		/// <param name="sceneServerId">Scene server the Discord channel is bridged to.</param>
+		/// <param name="authorName">The Discord author's (already sanitised) display name, for the audit columns.</param>
+		/// <param name="message">The line as players will see it.</param>
+		/// <param name="serverReceivedTime">When the bridge received it, UTC.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>
+		/// <remarks>
+		/// Through the same INSERT as every other chat row so it is stamped by the same clock: the
+		/// bridge used to stamp <c>time_created</c> from its own host's clock, and the scene servers
+		/// page the table by that column.
+		/// </remarks>
+		Task<DatabaseResult> PersistBridgedAsync(
+			long worldServerId,
+			long sceneServerId,
+			string authorName,
+			string message,
+			DateTime serverReceivedTime,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Reads the chat rows one scene server should relay: new, relevant to someone it hosts,
+		/// and not its own echo.
+		/// </summary>
+		/// <param name="query">Where to start, what to skip, and what this server hosts.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the list of chat message data on success,
-		/// or a <see cref="DatabaseException"/> on failure.
+		/// The rows in <c>(time_created, id)</c> order, the database clock at the start of the read,
+		/// and whether the read caught up.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ with AsNoTracking for optimal read performance and automatically benefits
-		/// from the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Filters out local channel messages (Tell, Guild, Party, World, Trade) from the specified scene server.
-		/// Returns empty list for invalid amount.
+		/// <para>
+		/// This replaces a strict <c>(time_created, id)</c> cursor that lost rows for good whenever
+		/// two writers committed out of stamp order, and read one 20-row page of the whole shard's
+		/// chat per call however far behind it was (hot-path audit H5, H6).
+		/// </para>
+		/// <para>
+		/// The caller reads from a start held <see cref="ChatService.PumpCommitWindowSeconds"/>
+		/// behind what it has settled, and passes the IDs it has already handled in that window
+		/// as <see cref="ChatPumpQuery.ExcludeIds"/>. Pages are read while they come back full, up to
+		/// <see cref="ChatPumpQuery.MaxPages"/>, so a backlog is worked through instead of growing.
+		/// </para>
 		/// </remarks>
-		Task<DatabaseResult<List<ChatData>>> FetchAsync(
-			DateTime lastFetch,
-			long lastPosition,
-			int amount,
-			long sceneServerId,
-			CancellationToken cancellationToken = default);
+		Task<DatabaseResult<ChatPumpPage>> FetchPumpAsync(ChatPumpQuery query, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Reads the chat rows the Discord relay has not handled yet: every game row, never a row
+		/// bridged in from Discord.
+		/// </summary>
+		/// <param name="query">Where to start and what to skip.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// The rows in <c>(time_created, id)</c> order, the database clock at the start of the read,
+		/// and whether the read caught up.
+		/// </returns>
+		/// <remarks>
+		/// <para>
+		/// The same window as <see cref="FetchPumpAsync"/>, read by a <see cref="ChatReadWindow"/>.
+		/// The relay used to page by <c>id &gt; last id seen</c>, and IDs are taken at the INSERT,
+		/// not at the commit: a row that committed after a higher ID had been read was skipped for
+		/// good. It also read everything past that ID in one unbounded query (hot-path audit H5).
+		/// </para>
+		/// <para>
+		/// A query with no <see cref="ChatRelayQuery.FromUtc"/> starts at the database's "now", so a
+		/// relay that starts does not republish history.
+		/// </para>
+		/// </remarks>
+		Task<DatabaseResult<ChatPumpPage>> FetchRelayAsync(ChatRelayQuery query, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Searches persisted chat for an operator, newest message first.
@@ -101,7 +149,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <remarks>
 		/// <para>
 		/// This is the read behind a harassment or abuse report, so it is separate from
-		/// <see cref="FetchAsync"/> in every respect: that one is a cursor the scene servers pull
+		/// <see cref="FetchPumpAsync"/> in every respect: that one is a window the scene servers pull
 		/// forward and it deliberately hides a server's own echo, while this one hides nothing and
 		/// orders backwards from now.
 		/// </para>
@@ -129,7 +177,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </remarks>
 		/// <param name="messages">List of chat messages to persist. Each tuple contains:
 		/// (characterId, characterName, accountName, worldServerId, sceneServerId, channel, message, serverReceivedTime).</param>
-		/// <param name="maxBatchSize">Messages per INSERT round trip inside the transaction (clamped to 500–2500).
+		/// <param name="maxBatchSize">Messages per INSERT statement inside the transaction (clamped to 500–2500).
 		/// It does not change atomicity.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>A <see cref="DatabaseResult"/> indicating success or failure.</returns>

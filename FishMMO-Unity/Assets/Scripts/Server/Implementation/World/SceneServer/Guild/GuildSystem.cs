@@ -53,6 +53,169 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private float updatePumpRate = 1.0f;
 
 		/// <summary>
+		/// Seconds of clock skew tolerated when advancing the guild update watermark.
+		/// </summary>
+		/// <remarks>
+		/// The guild update rows are stamped by the DATABASE clock
+		/// (<c>GuildUpdateService.PersistAsync</c>) and the pump's mark by this server's, so the
+		/// mark trails this server's "now" by this much: an update stamped up to this far ahead is
+		/// still caught. Updates inside the window are fetched again on later passes and skipped by
+		/// the processed-update record, so the allowance costs a cheap re-fetch, not a re-send. The
+		/// same model, and the same default, as the party pump's.
+		/// </remarks>
+		[Tooltip("Seconds of skew between this server's clock and the database's tolerated when advancing the guild update watermark")]
+		[SerializeField]
+		private float guildUpdateClockSkewAllowanceSeconds = 5.0f;
+
+		/// <summary>
+		/// Seconds between checks that every guild with members on this server still exists.
+		/// </summary>
+		/// <remarks>
+		/// A disbanded guild leaves no update row behind — the row is deleted with the guild — so the
+		/// update pump never hears of it, and this sweep is how a guild disbanded on ANOTHER scene
+		/// server is taken from its members here: within this many seconds. The pump used to ask
+		/// after every tracked guild on every pass, once a second, to learn that a handful of times a
+		/// day. A disband on THIS server clears its local members at once and needs no sweep.
+		/// </remarks>
+		[Tooltip("Seconds between checks that every guild with members on this server still exists; a guild disbanded on another server is noticed within this long")]
+		[SerializeField]
+		private float guildExistenceSweepSeconds = 30.0f;
+
+		/// <summary>
+		/// Non-zero while an existence sweep is in flight. See <see cref="OnPeriodicGuildExistenceSweep"/>.
+		/// </summary>
+		private int guildExistenceSweepInFlight;
+
+		/// <summary>
+		/// Failures of the existence sweep. Touched only by the one sweep in flight, which the
+		/// in-flight flag serialises.
+		/// </summary>
+		private readonly RepeatingFaultLog guildExistenceSweepFaults = new RepeatingFaultLog("GuildSystem", "Guild existence sweep");
+
+		/// <summary>
+		/// Seconds between sweeps of the guild pump's processed-update record.
+		/// </summary>
+		private const float ProcessedGuildUpdateSweepIntervalSeconds = 30.0f;
+
+		/// <summary>
+		/// When the processed-update record is next swept, in <see cref="MonotonicClock"/> seconds.
+		/// </summary>
+		/// <remarks>
+		/// The schedule is a local duration. The sweep itself ages the records on the wall clock,
+		/// because they are the update rows' database timestamps; see
+		/// <see cref="UpdatePumpWatermark.ProcessedRecordLifetime"/>.
+		/// </remarks>
+		private double nextProcessedGuildUpdateSweepAt;
+
+		/// <summary>
+		/// How long an unread guild update stays worth re-reading, and how long its processed record is kept.
+		/// </summary>
+		/// <summary>The database's clock as the update pump last read it.</summary>
+		private readonly UpdatePumpWatermark.DatabaseClock guildDatabaseClock = new UpdatePumpWatermark.DatabaseClock();
+
+		private TimeSpan GuildUpdateRetryHorizon => UpdatePumpWatermark.RetryHorizon(guildUpdateClockSkewAllowanceSeconds);
+
+		/// <summary>
+		/// The recipients of one copy of a guild delivery: their connections, for the multicast, and
+		/// their character IDs, for the baselines recorded once it has gone.
+		/// </summary>
+		/// <remarks>
+		/// Scratch, main-thread only, and emptied after every guild. The multicast reads the set and
+		/// never keeps it, so one audience can carry every guild's delivery in turn.
+		/// </remarks>
+		private sealed class GuildAudience
+		{
+			public readonly HashSet<NetworkConnection> Connections = new HashSet<NetworkConnection>();
+			public readonly List<long> CharacterIDs = new List<long>();
+
+			public int Count => Connections.Count;
+
+			public void Add(NetworkConnection connection, long characterID)
+			{
+				if (Connections.Add(connection))
+				{
+					CharacterIDs.Add(characterID);
+				}
+			}
+
+			public void AddAll(GuildAudience other)
+			{
+				foreach (NetworkConnection connection in other.Connections)
+				{
+					Connections.Add(connection);
+				}
+				CharacterIDs.AddRange(other.CharacterIDs);
+			}
+
+			public void Clear()
+			{
+				Connections.Clear();
+				CharacterIDs.Clear();
+			}
+		}
+
+		/// <summary>Members sent the whole roster WITHOUT officer notes: they have no baseline in that audience.</summary>
+		private readonly GuildAudience guildPublicFullAudience = new GuildAudience();
+
+		/// <summary>Members sent the delta WITHOUT officer notes.</summary>
+		private readonly GuildAudience guildPublicDeltaAudience = new GuildAudience();
+
+		/// <summary>Members sent the whole roster WITH officer notes.</summary>
+		private readonly GuildAudience guildOfficerFullAudience = new GuildAudience();
+
+		/// <summary>Members sent the delta WITH officer notes.</summary>
+		private readonly GuildAudience guildOfficerDeltaAudience = new GuildAudience();
+
+		/// <summary>
+		/// Members owed a rank list, keyed by their own rank order.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="GuildRankListBroadcast"/> carries the viewer's own rank and permission mask, so
+		/// it is identical only for members holding the same rank: one multicast per rank that has a
+		/// local member owed one, rather than one message per member.
+		/// </remarks>
+		private readonly Dictionary<byte, GuildAudience> guildRankListAudiences = new Dictionary<byte, GuildAudience>();
+
+		/// <summary>Spare audiences returned by <see cref="guildRankListAudiences"/> between guilds.</summary>
+		private readonly Stack<GuildAudience> guildAudiencePool = new Stack<GuildAudience>();
+
+		/// <summary>Scratch output of <see cref="GuildRosterDelta.Diff"/>: indices of changed rows.</summary>
+		private readonly List<int> guildDeltaChangedIndices = new List<int>();
+
+		/// <summary>Scratch output of <see cref="GuildRosterDelta.Diff"/>: removed character IDs.</summary>
+		private readonly List<long> guildDeltaRemovedIDs = new List<long>();
+
+		/// <summary>
+		/// What each local member's client holds of its guild's roster and ladder. Main-thread only.
+		/// </summary>
+		private readonly GuildRecipientBaselines guildRecipientBaselines = new GuildRecipientBaselines();
+
+		/// <summary>A guild's rank ladder as last delivered, and the generation that identifies it.</summary>
+		private readonly struct DeliveredLadder
+		{
+			public readonly GuildRankEntry[] Entries;
+			public readonly long Generation;
+
+			public DeliveredLadder(GuildRankEntry[] entries, long generation)
+			{
+				Entries = entries;
+				Generation = generation;
+			}
+		}
+
+		/// <summary>
+		/// The ladder last delivered for each guild tracked here. Dropped with the guild's roster.
+		/// </summary>
+		private readonly Dictionary<long, DeliveredLadder> guildDeliveredLadders = new Dictionary<long, DeliveredLadder>();
+
+		/// <summary>
+		/// Source of ladder generations. Shared by every guild and never reset while running, so a
+		/// generation recorded for a guild that was dropped and later tracked again can never match
+		/// the new one.
+		/// </summary>
+		private long guildLadderGenerationCounter;
+
+		/// <summary>
 		/// Currency attribute a character pays to found a guild. Issue #186.
 		/// </summary>
 		/// <remarks>
@@ -347,9 +510,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 
 			// Periodic callbacks
+			guildExistenceSweepSeconds = Mathf.Max(1.0f, guildExistenceSweepSeconds);
+			Interlocked.Exchange(ref guildExistenceSweepInFlight, 0);
+
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(UpdatePumpRate, OnPeriodicUpdate);
+				periodicSystem.RegisterPeriodicCallback(guildExistenceSweepSeconds, OnPeriodicGuildExistenceSweep);
 			}
 
 			if (!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
@@ -370,8 +537,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
 			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
+			guildUpdateClockSkewAllowanceSeconds = Mathf.Max(0.0f, guildUpdateClockSkewAllowanceSeconds);
 			runtimeData.EndUpdatePump();
-			runtimeData.NextInvitationSweepUtc = DateTime.UtcNow;
+			runtimeData.NextInvitationSweepAt = MonotonicClock.NowSeconds;
+
+			/* Instance state on a ScriptableObject survives between editor play sessions when domain
+			 * reload is off, and the recipient sets hold connections: emptied here so a previous
+			 * session's connections are never multicast to. */
+			nextProcessedGuildUpdateSweepAt = double.NegativeInfinity;
+			ReleaseGuildAudiences();
+			guildAudiencePool.Clear();
+			guildRecipientBaselines.Clear();
+			guildDeliveredLadders.Clear();
 
 			Log.Debug("GuildSystem", $"Initialized (MaxGuildSize={MaxGuildSize}, UpdatePumpRate={UpdatePumpRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
@@ -430,6 +607,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicUpdate);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicGuildExistenceSweep);
 			}
 		}
 
@@ -505,16 +683,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextInvitationSweepUtc)
+			double now = MonotonicClock.NowSeconds;
+			if (now < runtimeData.NextInvitationSweepAt)
 			{
 				return;
 			}
 
-			runtimeData.NextInvitationSweepUtc = nowUtc.AddSeconds(invitationSweepIntervalSeconds);
+			runtimeData.NextInvitationSweepAt = now + invitationSweepIntervalSeconds;
 
 			runtimeData.SweepExpiredInvitations(
-				nowUtc,
+				now,
 				TimeSpan.FromSeconds(invitationTtlSeconds),
 				invitationSweepMaxScan,
 				invitationSweepMaxRemove);
@@ -523,13 +701,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * the same bounded sweep the invitations get. Their TTL is the cooldown itself: once
 			 * it has elapsed the entry can no longer refuse anything. */
 			runtimeData.SweepInviteCooldowns(
-				nowUtc,
+				now,
 				TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
 				invitationSweepMaxScan,
 				invitationSweepMaxRemove);
 
 			runtimeData.SweepApplicationCooldowns(
-				nowUtc,
+				now,
 				TimeSpan.FromSeconds(applicationCooldownSeconds),
 				invitationSweepMaxScan,
 				invitationSweepMaxRemove);
@@ -555,7 +733,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			return runtimeData.TryBeginApplicationCooldown(
 				characterID,
 				TimeSpan.FromSeconds(applicationCooldownSeconds),
-				DateTime.UtcNow);
+				MonotonicClock.NowSeconds);
 		}
 
 		/// <summary>
@@ -572,6 +750,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!Server.DataContainerRegistry.TryGet<IGuildSystemRuntimeData>(out var runtimeData))
 			{
 				return;
+			}
+
+			/* Independent of whether a pump is in flight: the record only has to outlive the window
+			 * in which its update can still be re-fetched (UpdatePumpWatermark.ProcessedRecordLifetime),
+			 * and past that it is memory held for a guild that has stopped changing. */
+			double now = MonotonicClock.NowSeconds;
+			if (now >= nextProcessedGuildUpdateSweepAt)
+			{
+				nextProcessedGuildUpdateSweepAt = now + ProcessedGuildUpdateSweepIntervalSeconds;
+				// The records are database stamps: aged on the database's clock as the pump last read it.
+				if (guildDatabaseClock.TryNow(out DateTime databaseNowUtc))
+				{
+					runtimeData.SweepProcessedGuildUpdates(databaseNowUtc, UpdatePumpWatermark.ProcessedRecordLifetime(guildUpdateClockSkewAllowanceSeconds));
+				}
 			}
 
 			if (!runtimeData.TryBeginUpdatePump())
@@ -602,37 +794,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>Asynchronous fetch-and-process task.</returns>
 		/// <remarks>
 		/// <para>
-		/// <b>The high-water mark comes from the rows, not from this server's clock.</b> It used to
-		/// be <c>DateTime.UtcNow</c>, taken on the main thread after every roster and ladder read
-		/// below had come back and the marshal had been drained. Any update written during that
-		/// window — two round trips per updated guild, plus the queue — carried a timestamp older
-		/// than the mark and was never fetched at all: a kick made on another scene server simply
-		/// never arrived, and the kicked member kept a live guild ID, and guild chat, until they
-		/// relogged. The rows already say how far this pass actually read, so the mark is the
-		/// newest <see cref="GuildUpdateData.LastUpdate"/> that was processed, one tick past it so
-		/// the same row is not re-read and re-broadcast every second.
+		/// <b>The same watermark model as the party pump</b> — see <see cref="UpdatePumpWatermark"/>
+		/// for the rule itself. The mark is stamped from this server's clock BEFORE the query, less a
+		/// skew allowance (the rows are stamped by the database's clock); it is held back for an
+		/// update whose snapshot could not be read, but only within a retry horizon; and every update
+		/// delivered is recorded, so the passes that fetch it again inside the window skip it rather
+		/// than re-reading and re-broadcasting the guild.
 		/// </para>
 		/// <para>
-		/// <b>It never passes this server's clock as it stood when the query was sent.</b> The
-		/// timestamps come from the database's clock (<c>GuildUpdateService.PersistAsync</c>; they
-		/// used to come from each writer's own, issue #267), and this server's clock can disagree
-		/// with it. Capped there, a row stamped ahead of this server's "now" is merely read again
-		/// until the clocks agree, which costs a re-send, not a lost update.
+		/// This pump used to hold its mark at an unread update's timestamp with no horizon and no
+		/// record of what it had delivered. A guild whose read failed every time pinned the mark for
+		/// good, and every guild updated after it was re-read — two serial queries each — and its
+		/// whole roster re-broadcast to every local member, every second, for as long as the server
+		/// ran. Its mark was also capped at the fetch start with no allowance, so a database clock
+		/// running ahead of this server's re-sent each update several times.
 		/// </para>
 		/// <para>
-		/// <b>A guild whose snapshot could not be read holds the mark.</b> Its roster or ladder
-		/// fetch failing used to drop it from the pass while the mark moved on regardless, which
-		/// lost the update exactly as above. Now the mark stops at that guild's timestamp, so the
-		/// next pass reads it again — at the cost of re-sending, once, any guild updated after it.
+		/// <b>The snapshot is read in bulk</b>: one roster query and one ladder query for every
+		/// changed guild, instead of two per guild in series. A bulk read has no per-guild failure
+		/// — it fails because the database did — so a failed one holds every guild in the pass, each
+		/// within its own horizon. Seeding a ladder for a guild that has none is the one per-guild
+		/// step left, and its failure holds that guild alone.
+		/// </para>
+		/// <para>
+		/// A guild enters the delivery only with BOTH its roster and its ladder: a roster sent
+		/// without a ladder would have to carry SOME permission mask, and the only one available is
+		/// None, which used to strip every local member's cached permissions and blank their panel.
 		/// </para>
 		/// </remarks>
 		private async Task FetchAndProcessGuildUpdatesAsync(List<long> guildIds, DateTime lastFetch)
 		{
 			try
 			{
-				/* The rank service is required, not optional. A roster sent without a ladder has to
-				 * be sent with SOME permission mask, and the only one available is None — which
-				 * used to strip every local member's cached permissions and blank their panel. */
 				if (!TryGetDbService(out IGuildUpdateService guildUpdateService) ||
 					!TryGetDbService(out ICharacterGuildService charGuildService) ||
 					!TryGetDbService(out IGuildRankService rankService))
@@ -645,144 +838,203 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				// Async DB fetch. The clock is read BEFORE the query: see the remarks on the mark's ceiling.
-				DateTime fetchStartUtc = DateTime.UtcNow;
-				DatabaseResult<List<GuildUpdateData>> fetchResult = await guildUpdateService.FetchAsync(guildIds, lastFetch);
+				/* The mark is the database's own clock, read by the fetch before the rows, so no host
+				 * clock is compared with the rows' stamps; see UpdatePumpWatermark.FetchStarted and
+				 * PartySystem's pump. guildUpdateClockSkewAllowanceSeconds is now a commit window. */
+				DatabaseResult<UpdatePumpRead<GuildUpdateData>> fetchResult = await guildUpdateService.FetchAsync(guildIds, lastFetch);
 				if (!fetchResult.IsSuccess)
 				{
+					// The mark stays where it was, so nothing is skipped: the next pass asks again.
 					await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync update fetch failed ({guildIds.Count} guilds since {lastFetch:O}): {fetchResult.ErrorCode} - {fetchResult.ErrorMessage}");
 					return;
 				}
 
-				/* A disbanded guild has no update row to find: the row goes with the guild. So the
-				 * guilds this server holds members of are looked up as well, and any that is gone is
-				 * cleared here. Without this, members of a guild disbanded on another server kept it
-				 * until they logged out (issue #267). A failed lookup clears nothing — a guild must
-				 * never be taken from its members on the strength of a read that did not happen. */
-				if (TryGetDbService(out IGuildService guildService))
-				{
-					DatabaseResult<IReadOnlyCollection<long>> existing = await guildService.FetchExistingIdsAsync(guildIds);
-					if (!existing.IsSuccess)
-					{
-						await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync could not check which guilds still exist: {existing.ErrorCode} - {existing.ErrorMessage}");
-					}
-					else
-					{
-						var present = new HashSet<long>(existing.Data);
-						List<long> vanished = null;
-						foreach (long guildID in guildIds)
-						{
-							if (!present.Contains(guildID))
-							{
-								(vanished ??= new List<long>()).Add(guildID);
-							}
-						}
-						if (vanished != null)
-						{
-							TryEnqueueMainThread(() =>
-							{
-								foreach (long guildID in vanished)
-								{
-									ClearLocalGuildMembers(guildID);
-								}
-							});
-						}
-					}
-				}
+				guildDatabaseClock.Observe(fetchResult.Data.ReadStartedUtc);
+				DateTime fetchStartedUtc = UpdatePumpWatermark.FetchStarted(fetchResult.Data.ReadStartedUtc, guildUpdateClockSkewAllowanceSeconds);
+				TimeSpan retryHorizon = GuildUpdateRetryHorizon;
+				DateTime retryHorizonUtc = fetchStartedUtc - retryHorizon;
 
-				if (fetchResult.Data == null || fetchResult.Data.Count < 1)
+				/* No existence read here for the guilds that did not change. A disbanded guild has no
+				 * update row to find — the row goes with the guild — so it is noticed by the slower
+				 * existence sweep (OnPeriodicGuildExistenceSweep), not by asking after every tracked
+				 * guild on every pass. The guilds this pass DID read are checked below, and only
+				 * those whose roster came back empty, which is what a deleted guild reads as. */
+
+				if (fetchResult.Data.Updates == null || fetchResult.Data.Updates.Count < 1)
 				{
 					return;
 				}
 
-				List<GuildUpdateData> updates = fetchResult.Data;
+				Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData dedupeData);
 
-				// For each unique guild that was updated, fetch the current members
-				HashSet<long> updatedGuilds = new HashSet<long>();
-				// Collect per-guild member data
-				Dictionary<long, IReadOnlyList<CharacterGuildData>> guildMembersMap = new Dictionary<long, IReadOnlyList<CharacterGuildData>>();
-				/* Per-guild rank ladders, fetched here on the async path so the main-thread block
-				 * below can decide who may see an officer note WITHOUT a database call and
-				 * WITHOUT trusting the rank cached on the character. The membership rows and the
-				 * ladder are read in the same pass, so the filter is applied against the same
-				 * snapshot the roster itself was built from. A guild enters the pass only with
-				 * BOTH: half a snapshot is not something the main-thread block can act on. */
-				Dictionary<long, IReadOnlyList<GuildRankData>> guildLaddersMap = new Dictionary<long, IReadOnlyList<GuildRankData>>();
-
-				// See the remarks: how far this pass read, and the earliest update it could not.
-				DateTime newestProcessed = DateTime.MinValue;
-				DateTime oldestUnread = DateTime.MaxValue;
-
-				foreach (GuildUpdateData update in updates)
+				/* The newest not-yet-processed update per guild. The table holds one row per guild,
+				 * so a guild appears at most once; the newest is kept regardless, because that is
+				 * the stamp the processed record has to reach. */
+				Dictionary<long, DateTime> pending = new Dictionary<long, DateTime>();
+				foreach (GuildUpdateData update in fetchResult.Data.Updates)
 				{
-					if (updatedGuilds.Contains(update.GuildID))
+					if (dedupeData != null && dedupeData.HasProcessedGuildUpdate(update.GuildID, update.LastUpdate))
 					{
 						continue;
 					}
-					updatedGuilds.Add(update.GuildID);
 
-					DatabaseResult<IReadOnlyList<CharacterGuildData>> membersResult = await charGuildService.FetchManyAsync(update.GuildID);
-					if (!membersResult.IsSuccess || membersResult.Data == null)
+					if (!pending.TryGetValue(update.GuildID, out DateTime known) || update.LastUpdate > known)
 					{
-						await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync roster fetch failed (GuildID={update.GuildID}); held for the next pass: {membersResult.ErrorCode} - {membersResult.ErrorMessage}");
-						if (update.LastUpdate < oldestUnread)
+						pending[update.GuildID] = update.LastUpdate;
+					}
+				}
+
+				DateTime watermarkUtc = fetchStartedUtc;
+
+				Dictionary<long, IReadOnlyList<CharacterGuildData>> guildMembersMap = new Dictionary<long, IReadOnlyList<CharacterGuildData>>(pending.Count);
+				Dictionary<long, IReadOnlyList<GuildRankData>> guildLaddersMap = new Dictionary<long, IReadOnlyList<GuildRankData>>(pending.Count);
+				Dictionary<long, DateTime> processedUpdateStamps = new Dictionary<long, DateTime>(pending.Count);
+
+				if (pending.Count > 0)
+				{
+					long[] pendingIDs = new long[pending.Count];
+					pending.Keys.CopyTo(pendingIDs, 0);
+
+					/* One roster query and one ladder query for every changed guild. The ladder is
+					 * read in the same pass as the rows so the officer-note filter and the cached
+					 * standings below are decided against the snapshot the roster was built from,
+					 * without a database call and without trusting the rank cached on a character. */
+					IReadOnlyDictionary<long, IReadOnlyList<CharacterGuildData>> rosters = null;
+					IReadOnlyDictionary<long, IReadOnlyList<GuildRankData>> ladders = null;
+
+					DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterGuildData>>> rosterResult = await charGuildService.FetchManyAsync(pendingIDs);
+					if (!rosterResult.IsSuccess || rosterResult.Data == null)
+					{
+						await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync roster read failed for {pendingIDs.Length} guild(s); each is held for the next pass within {retryHorizon.TotalSeconds:0}s: {rosterResult.ErrorCode} - {rosterResult.ErrorMessage}");
+					}
+					else
+					{
+						DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<GuildRankData>>> ladderResult = await rankService.FetchManyAsync(pendingIDs);
+						if (!ladderResult.IsSuccess || ladderResult.Data == null)
 						{
-							oldestUnread = update.LastUpdate;
+							await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync ladder read failed for {pendingIDs.Length} guild(s); each is held for the next pass within {retryHorizon.TotalSeconds:0}s: {ladderResult.ErrorCode} - {ladderResult.ErrorMessage}");
 						}
-						continue;
-					}
-
-					// FetchOrSeedLadderAsync logs its own failures.
-					IReadOnlyList<GuildRankData> ladder = await FetchOrSeedLadderAsync(update.GuildID, rankService);
-					if (ladder == null)
-					{
-						if (update.LastUpdate < oldestUnread)
+						else
 						{
-							oldestUnread = update.LastUpdate;
+							rosters = rosterResult.Data;
+							ladders = ladderResult.Data;
 						}
-						continue;
 					}
 
-					guildMembersMap[update.GuildID] = membersResult.Data;
-					guildLaddersMap[update.GuildID] = ladder;
-					if (update.LastUpdate > newestProcessed)
+					/* A guild whose roster came back EMPTY has either lost its last member or been
+					 * deleted since its update was fetched: the bulk read answers "no rows" for both.
+					 * Those alone are asked about — a roster with rows proves the guild existed when it
+					 * was read — and asked BEFORE the empty ladder below would be re-seeded for a guild
+					 * that is gone. A deleted guild is cleared here and its update needs nothing more:
+					 * its row went with it. A check that could not be made holds the guild for the next
+					 * pass, like any other read that failed; a guild is never taken from its members on
+					 * the strength of a read that did not happen. */
+					HashSet<long> vanishedGuilds = null;
+					HashSet<long> existenceUnknown = null;
+					if (rosters != null)
 					{
-						newestProcessed = update.LastUpdate;
-					}
-				}
+						List<long> emptyRosters = null;
+						foreach (long guildID in pendingIDs)
+						{
+							if (rosters.TryGetValue(guildID, out IReadOnlyList<CharacterGuildData> read) && read != null && read.Count == 0)
+							{
+								(emptyRosters ??= new List<long>()).Add(guildID);
+							}
+						}
 
-				DateTime nextFetch = lastFetch;
-				if (newestProcessed > DateTime.MinValue)
-				{
-					nextFetch = DateTime.SpecifyKind(newestProcessed.AddTicks(1), DateTimeKind.Utc);
-				}
-				if (fetchStartUtc < nextFetch)
-				{
-					nextFetch = fetchStartUtc;
-				}
-				if (oldestUnread < nextFetch)
-				{
-					nextFetch = DateTime.SpecifyKind(oldestUnread, DateTimeKind.Utc);
+						if (emptyRosters != null)
+						{
+							vanishedGuilds = await FetchVanishedGuildsAsync(emptyRosters);
+							if (vanishedGuilds == null)
+							{
+								existenceUnknown = new HashSet<long>(emptyRosters);
+							}
+							else if (vanishedGuilds.Count > 0)
+							{
+								HashSet<long> cleared = vanishedGuilds;
+								TryEnqueueMainThread(() =>
+								{
+									foreach (long guildID in cleared)
+									{
+										ClearLocalGuildMembers(guildID);
+									}
+								});
+							}
+						}
+					}
+
+					foreach (KeyValuePair<long, DateTime> entry in pending)
+					{
+						long guildID = entry.Key;
+						IReadOnlyList<CharacterGuildData> roster = null;
+						IReadOnlyList<GuildRankData> ladder = null;
+
+						if (vanishedGuilds != null && vanishedGuilds.Contains(guildID))
+						{
+							// Gone, and cleared above. Nothing to deliver, and nothing to hold the mark for.
+							continue;
+						}
+
+						if (rosters != null &&
+							(existenceUnknown == null || !existenceUnknown.Contains(guildID)) &&
+							rosters.TryGetValue(guildID, out roster) &&
+							ladders.TryGetValue(guildID, out ladder) &&
+							ladder != null &&
+							ladder.Count == 0)
+						{
+							/* A guild from before ranks were rows: the first read of it grows the
+							 * seeded ladder. Per guild, and only ever once per such guild; its
+							 * failure is logged there and holds this guild alone. */
+							ladder = await FetchOrSeedLadderAsync(guildID, rankService);
+						}
+
+						bool read = roster != null && ladder != null &&
+									(existenceUnknown == null || !existenceUnknown.Contains(guildID));
+						UpdatePumpWatermark.Outcome outcome = UpdatePumpWatermark.Classify(read, entry.Value, retryHorizonUtc);
+						watermarkUtc = UpdatePumpWatermark.Hold(watermarkUtc, outcome, entry.Value);
+
+						switch (outcome)
+						{
+							case UpdatePumpWatermark.Outcome.Processed:
+								guildMembersMap[guildID] = roster;
+								guildLaddersMap[guildID] = ladder;
+								processedUpdateStamps[guildID] = entry.Value;
+								break;
+							case UpdatePumpWatermark.Outcome.GiveUp:
+								await Log.Error("GuildSystem", $"Guild update pump has been unable to read guild {guildID} for longer than {retryHorizon.TotalSeconds:0}s; giving up on the update of {entry.Value:O}. Its members on this server keep the roster they had until the guild next changes.");
+								break;
+						}
+					}
 				}
 
 				if (guildMembersMap.Count == 0)
 				{
-					// Nothing was read, so the mark has not moved and there is nothing to send.
+					/* Nothing to deliver — every update in the fetch was already processed, or none
+					 * could be read — but the mark still moves. Left where it was, it would freeze
+					 * the first time a pass found nothing new, and every later pass would re-fetch
+					 * the same rows for as long as nothing else changed. Everything before the mark
+					 * has been handled, and anything held is at or after it. */
+					TryEnqueueMainThread(() =>
+					{
+						if (Server?.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData watermarkData) == true)
+						{
+							watermarkData.LastFetchTime = watermarkUtc;
+						}
+					});
 					return;
 				}
 
 				// Marshal all main-thread state changes + broadcasts
-				TryEnqueueMainThread(() =>
+				bool enqueued = TryEnqueueMainThread(() =>
 				{
 					if (Server == null)
 					{
 						return;
 					}
 
-					// Advance the mark to what this pass actually read — see the remarks.
 					if (Server.DataContainerRegistry.TryGet(out IGuildSystemRuntimeData rtData))
 					{
-						rtData.LastFetchTime = nextFetch;
+						rtData.LastFetchTime = watermarkUtc;
 					}
 
 					if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mapData))
@@ -792,104 +1044,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					foreach (var kvp in guildMembersMap)
 					{
-						long guildID = kvp.Key;
-						IReadOnlyList<CharacterGuildData> dbMembers = kvp.Value;
-
-						var currentMemberIDs = new HashSet<long>(dbMembers.Count);
-						for (int i = 0; i < dbMembers.Count; i++)
-						{
-							currentMemberIDs.Add(dbMembers[i].CharacterID);
-						}
-
-						// Check if we have previously cached the guild member list
-						if (mapData.GuildMemberTracker.TryGetValue(guildID, out var previousMembers))
-						{
-							// Compute the difference: members that are in previousMembers but not in currentMemberIDs
-							var difference = new List<long>();
-							foreach (long prevID in previousMembers)
-							{
-								if (!currentMemberIDs.Contains(prevID))
-								{
-									difference.Add(prevID);
-								}
-							}
-
-							foreach (long memberID in difference)
-							{
-								// Tell the member connection to leave their guild immediately
-								if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var guildCharacterMappingData) &&
-									guildCharacterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
-									character != null)
-								{
-									ClearGuildStanding(character, guildID);
-								}
-							}
-						}
-						// Cache the guild member IDs
-						mapData.GuildMemberTracker[guildID] = currentMemberIDs;
-
 						// Always present: a guild enters guildMembersMap only together with its ladder.
-						IReadOnlyList<GuildRankData> ladder = guildLaddersMap[guildID];
-
-						/* Two projections of the same roster. The officer note is a column a
-						 * client either may read or may never receive — hiding it in the panel
-						 * would leave it in the packet — so the message is built twice and the
-						 * recipient's own rank decides which copy they get. */
-						GuildAddMultipleBroadcast publicRoster = BuildRoster(guildID, dbMembers, includeOfficerNotes: false);
-						GuildAddMultipleBroadcast officerRoster = BuildRoster(guildID, dbMembers, includeOfficerNotes: true);
-
-						byte guildLeaderRankOrder = 0;
-						if (ladder != null)
-						{
-							for (int i = 0; i < ladder.Count; ++i)
-							{
-								if (ladder[i].RankOrder > guildLeaderRankOrder)
-								{
-									guildLeaderRankOrder = ladder[i].RankOrder;
-								}
-							}
-						}
-
-						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
-						{
-							// Tell all of the local guild members to update their guild member lists
-							foreach (CharacterGuildData member in dbMembers)
-							{
-								if (characterMappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-								{
-									if (!character.TryGet(out IGuildController guildController) ||
-										guildController.ID < 1)
-									{
-										continue;
-									}
-
-									/* Refresh the server-side cache of this member's standing from
-									 * the row that was just read. The cache is only ever a
-									 * pre-filter — every operation re-resolves before deciding —
-									 * but a rank change made on another scene server reaches this
-									 * one through the pump, and leaving the cache stale would
-									 * leave the player's own panel offering actions the server
-									 * will refuse. */
-									GuildPermissions memberPermissions = PermissionsForOrder(ladder, member.Rank);
-									guildController.RankOrder = member.Rank;
-									guildController.Permissions = memberPermissions;
-									guildController.LeaderRankOrder = guildLeaderRankOrder;
-
-									bool mayReadOfficerNotes = (memberPermissions & GuildPermissions.ViewOfficerNotes) == GuildPermissions.ViewOfficerNotes;
-									Server.NetworkWrapper.Broadcast(character.Owner, mayReadOfficerNotes ? officerRoster : publicRoster, true, Channel.Reliable);
-
-									Server.NetworkWrapper.Broadcast(character.Owner, new GuildRankListBroadcast()
-									{
-										Ranks = BuildRankEntries(ladder),
-										ViewerRankOrder = member.Rank,
-										ViewerPermissions = (long)memberPermissions,
-										LeaderRankOrder = guildLeaderRankOrder,
-									}, true, Channel.Reliable);
-								}
-							}
-						}
+						ApplyGuildSnapshot(kvp.Key, kvp.Value, guildLaddersMap[kvp.Key], mapData);
 					}
 				});
+
+				/* Recorded only once the delivery is actually queued. Recording at the read would
+				 * drop the update outright whenever the main-thread queue was full: every later pass
+				 * would skip it and the change it carried would never reach anybody. Unrecorded, the
+				 * next pass simply picks it up again. */
+				if (enqueued && dedupeData != null)
+				{
+					foreach (KeyValuePair<long, DateTime> stamp in processedUpdateStamps)
+					{
+						dedupeData.MarkGuildUpdateProcessed(stamp.Key, stamp.Value);
+					}
+				}
 			}
 			catch (Exception ex)
 			{
@@ -902,6 +1072,465 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					runtimeData.EndUpdatePump();
 				}
 			}
+		}
+
+		/// <summary>
+		/// Periodic callback that checks every guild with members on this server still exists.
+		/// </summary>
+		/// <param name="deltaTime">Elapsed seconds (unused).</param>
+		/// <remarks>
+		/// Separate from the update pump, on its own slower period: the pump learns of every change
+		/// that leaves an update row, and a disband is the one that does not. Its own in-flight flag
+		/// rather than the pump's, so a slow pump pass never postpones it and it never postpones one.
+		/// </remarks>
+		private void OnPeriodicGuildExistenceSweep(float deltaTime)
+		{
+			if (!Initialized || Server == null || Server.ServerState != ConnectionState.Started)
+			{
+				return;
+			}
+
+			// Snapshot main-thread-only Dictionary keys before going async.
+			if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
+				mappingData.GuildCharacterTracker.Count == 0)
+			{
+				return;
+			}
+
+			if (Interlocked.CompareExchange(ref guildExistenceSweepInFlight, 1, 0) != 0)
+			{
+				return;
+			}
+
+			List<long> guildIds = new List<long>(mappingData.GuildCharacterTracker.Keys);
+			if (!TryEnqueueAsyncWork(() => SweepVanishedGuildsAsync(guildIds)))
+			{
+				Interlocked.Exchange(ref guildExistenceSweepInFlight, 0);
+			}
+		}
+
+		/// <summary>
+		/// Asks which of the tracked guilds still exist and clears the local members of any that do not.
+		/// </summary>
+		/// <param name="guildIds">The guilds this server held members of when the sweep started.</param>
+		/// <returns>Asynchronous sweep task.</returns>
+		/// <remarks>
+		/// Without it, members of a guild disbanded on another server kept it until they logged out
+		/// (issue #267). A failed read clears nothing: a guild must never be taken from its members on
+		/// the strength of a read that did not happen. The next sweep asks again.
+		/// </remarks>
+		private async Task SweepVanishedGuildsAsync(List<long> guildIds)
+		{
+			try
+			{
+				if (Server == null || Server.ServerState != ConnectionState.Started ||
+					!TryGetDbService(out IGuildService guildService))
+				{
+					return;
+				}
+
+				DatabaseResult<IReadOnlyCollection<long>> existing = await guildService.FetchExistingIdsAsync(guildIds);
+				if (!existing.IsSuccess || existing.Data == null)
+				{
+					guildExistenceSweepFaults.Report(new InvalidOperationException($"could not check which of {guildIds.Count} guild(s) still exist: [{existing.ErrorCode}] {existing.ErrorMessage}"), MonotonicClock.NowSeconds);
+					return;
+				}
+				guildExistenceSweepFaults.ReportSuccess();
+
+				HashSet<long> vanished = VanishedGuilds(guildIds, existing.Data);
+				if (vanished.Count > 0)
+				{
+					TryEnqueueMainThread(() =>
+					{
+						foreach (long guildID in vanished)
+						{
+							ClearLocalGuildMembers(guildID);
+						}
+					});
+				}
+			}
+			catch (Exception ex)
+			{
+				guildExistenceSweepFaults.Report(ex, MonotonicClock.NowSeconds);
+			}
+			finally
+			{
+				Interlocked.Exchange(ref guildExistenceSweepInFlight, 0);
+			}
+		}
+
+		/// <summary>
+		/// Reads which of some guilds no longer exist, for the update pump.
+		/// </summary>
+		/// <param name="guildIds">The guilds to ask about.</param>
+		/// <returns>The ones that are gone, or null when the read failed (logged here).</returns>
+		private async Task<HashSet<long>> FetchVanishedGuildsAsync(IReadOnlyCollection<long> guildIds)
+		{
+			if (!TryGetDbService(out IGuildService guildService))
+			{
+				return null;
+			}
+
+			DatabaseResult<IReadOnlyCollection<long>> existing = await guildService.FetchExistingIdsAsync(guildIds);
+			if (!existing.IsSuccess || existing.Data == null)
+			{
+				await Log.Warning("GuildSystem", $"FetchAndProcessGuildUpdatesAsync could not check whether {guildIds.Count} guild(s) with an empty roster still exist; each is held for the next pass: {existing.ErrorCode} - {existing.ErrorMessage}");
+				return null;
+			}
+
+			return VanishedGuilds(guildIds, existing.Data);
+		}
+
+		/// <summary>
+		/// The guilds asked about that an existence read did not return.
+		/// </summary>
+		/// <param name="asked">The guilds asked about.</param>
+		/// <param name="present">The ones the read found.</param>
+		/// <returns>The rest: never null.</returns>
+		internal static HashSet<long> VanishedGuilds(IEnumerable<long> asked, IEnumerable<long> present)
+		{
+			HashSet<long> found = present as HashSet<long> ?? new HashSet<long>(present ?? Array.Empty<long>());
+			HashSet<long> vanished = new HashSet<long>();
+			if (asked != null)
+			{
+				foreach (long guildID in asked)
+				{
+					if (guildID > 0 && !found.Contains(guildID))
+					{
+						vanished.Add(guildID);
+					}
+				}
+			}
+			return vanished;
+		}
+
+		/// <summary>
+		/// Applies one guild's freshly read snapshot on this server and delivers it. Main thread only.
+		/// </summary>
+		/// <param name="guildID">The guild.</param>
+		/// <param name="dbMembers">The guild's membership rows, as read.</param>
+		/// <param name="ladder">The guild's rank ladder, read in the same pass.</param>
+		/// <param name="mapData">Guild membership tracking for this server.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>Only what changed is sent.</b> The snapshot is compared with the roster this server
+		/// last delivered (<see cref="IGuildCharacterMappingData.GuildMemberTracker"/>), and each
+		/// local member lands in one of four roster audiences — the public or officer-note copy,
+		/// whole or delta — and at most one rank-list audience:
+		/// </para>
+		/// <list type="bullet">
+		/// <item>a member whose client already holds this guild's roster from this server, in the
+		/// same officer-note audience, is sent a <see cref="GuildRosterDeltaBroadcast"/> of the rows
+		/// that changed for that audience — nothing, when nothing did; the whole roster when more
+		/// than half did (<see cref="GuildRosterDelta.Choose"/>);</item>
+		/// <item>anybody else is sent the whole roster, and recorded as holding it;</item>
+		/// <item>the rank list goes only to a member whose client does not hold the current ladder
+		/// generation at their current rank — so a member changing zone costs one row, not a
+		/// roster and a ladder for everybody.</item>
+		/// </list>
+		/// <para>
+		/// Every copy is one multicast, serialised once, and each recipient still receives its
+		/// roster or delta before its rank list. It used to be a whole roster and a whole rank list,
+		/// serialised separately, for every local member on every change to anybody in the guild.
+		/// </para>
+		/// </remarks>
+		private void ApplyGuildSnapshot(long guildID, IReadOnlyList<CharacterGuildData> dbMembers, IReadOnlyList<GuildRankData> ladder, IGuildCharacterMappingData mapData)
+		{
+			Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData);
+
+			// The roster as it now stands, in the full projection: what the next pass diffs against.
+			GuildAddEntry[] currentRows = new GuildAddEntry[dbMembers.Count];
+			var currentByID = new Dictionary<long, GuildAddEntry>(dbMembers.Count);
+			for (int i = 0; i < dbMembers.Count; i++)
+			{
+				currentRows[i] = BuildRosterEntry(dbMembers[i], includeOfficerNote: true);
+				currentByID[currentRows[i].CharacterID] = currentRows[i];
+			}
+
+			mapData.GuildMemberTracker.TryGetValue(guildID, out Dictionary<long, GuildAddEntry> previousRows);
+
+			// Members in the previous snapshot and not in this one have left, been kicked, or moved.
+			if (previousRows != null)
+			{
+				List<long> departed = null;
+				foreach (long prevID in previousRows.Keys)
+				{
+					if (!currentByID.ContainsKey(prevID))
+					{
+						(departed ??= new List<long>()).Add(prevID);
+					}
+				}
+
+				if (departed != null)
+				{
+					foreach (long memberID in departed)
+					{
+						/* Untracked as well as cleared. This used to clear the standing and leave
+						 * the character in the local tracker: once cleared, their disconnect finds
+						 * no guild and never removes them, so a guild whose last local member was
+						 * evicted here stayed tracked — and polled by this pump — for the life of
+						 * the server. A character absent from a guild's roster is not a local
+						 * member of it, whatever state their controller is in. */
+						RemoveGuildCharacterTracker(guildID, memberID);
+
+						if (characterMappingData != null &&
+							characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
+							character != null)
+						{
+							ClearGuildStanding(character, guildID);
+						}
+					}
+				}
+			}
+
+			/* The evictions above can take this server's last local member of the guild with
+			 * them, and RemoveGuildCharacterTracker drops the delivered roster and ladder together
+			 * for exactly that case. A guild no longer tracked here has nobody here to deliver to,
+			 * and re-storing its roster would leave a baseline behind for a guild nothing pumps. */
+			if (!mapData.GuildCharacterTracker.ContainsKey(guildID))
+			{
+				ForgetDeliveredGuild(mapData, guildID);
+				return;
+			}
+
+			mapData.GuildMemberTracker[guildID] = currentByID;
+
+			if (characterMappingData == null)
+			{
+				return;
+			}
+
+			byte leaderRankOrder = LeaderRankOrderOf(ladder);
+			long ladderGeneration = AdvanceDeliveredLadder(guildID, ladder, out GuildRankEntry[] rankEntries);
+
+			ReleaseGuildAudiences();
+			try
+			{
+				foreach (CharacterGuildData member in dbMembers)
+				{
+					if (!characterMappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character) ||
+						character == null)
+					{
+						continue;
+					}
+
+					/* Only a character whose controller names THIS guild is refreshed or told. The
+					 * test used to be "is in any guild at all", which answers yes for somebody who
+					 * has since moved to a DIFFERENT guild: a snapshot read several awaits ago would
+					 * then overwrite their standing with this guild's and send them this guild's
+					 * roster, which the client adopts. Every way a character enters a guild sets the
+					 * controller itself, so a disagreement here is a stale or in-flight state that
+					 * its own path settles — the same rule the party pump applies. */
+					if (!character.TryGet(out IGuildController guildController) ||
+						guildController.ID != guildID)
+					{
+						continue;
+					}
+
+					/* Refresh the server-side cache of this member's standing from the row that was
+					 * just read. The cache is only ever a pre-filter — every operation re-resolves
+					 * before deciding — but a rank change made on another scene server reaches this
+					 * one through the pump, and leaving the cache stale would leave the player's own
+					 * panel offering actions the server will refuse. */
+					GuildPermissions memberPermissions = PermissionsForOrder(ladder, member.Rank);
+					guildController.RankOrder = member.Rank;
+					guildController.Permissions = memberPermissions;
+					guildController.LeaderRankOrder = leaderRankOrder;
+
+					NetworkConnection owner = character.Owner;
+					if (owner == null || !owner.IsActive)
+					{
+						continue;
+					}
+
+					/* The officer note is a column a client either may read or never receives —
+					 * hiding it in the panel would leave it in the packet — so the recipient's own
+					 * rank decides which copy they are in the audience for, and a baseline held in
+					 * the other copy is no baseline for this one. */
+					bool officerAudience = (memberPermissions & GuildPermissions.ViewOfficerNotes) == GuildPermissions.ViewOfficerNotes;
+					bool holdsRoster = previousRows != null &&
+									   guildRecipientBaselines.HasRoster(member.CharacterID, guildID, officerAudience);
+
+					GuildAudience rosterAudience = officerAudience
+						? (holdsRoster ? guildOfficerDeltaAudience : guildOfficerFullAudience)
+						: (holdsRoster ? guildPublicDeltaAudience : guildPublicFullAudience);
+					rosterAudience.Add(owner, member.CharacterID);
+
+					if (!guildRecipientBaselines.HasLadder(member.CharacterID, guildID, ladderGeneration, member.Rank))
+					{
+						RankListAudience(member.Rank).Add(owner, member.CharacterID);
+					}
+				}
+
+				DeliverRosterCopy(guildID, currentRows, previousRows, officerAudience: false, guildPublicFullAudience, guildPublicDeltaAudience);
+				DeliverRosterCopy(guildID, currentRows, previousRows, officerAudience: true, guildOfficerFullAudience, guildOfficerDeltaAudience);
+
+				// The ladder's wire array is built once per guild and shared by every copy.
+				DeliverRankListAudiences(guildID, ladder, rankEntries, ladderGeneration, leaderRankOrder);
+			}
+			finally
+			{
+				ReleaseGuildAudiences();
+			}
+		}
+
+		/// <summary>
+		/// Sends the rank list to every rank audience gathered for one guild, one multicast per rank,
+		/// and records each recipient as holding that ladder generation at that rank. Main thread only.
+		/// </summary>
+		/// <param name="guildID">The guild.</param>
+		/// <param name="ladder">The ladder the lists describe.</param>
+		/// <param name="rankEntries">Its wire array, shared by every copy.</param>
+		/// <param name="generation">Its generation (<see cref="AdvanceDeliveredLadder"/>).</param>
+		/// <param name="leaderRankOrder">The leader's seat on it.</param>
+		/// <remarks>
+		/// <see cref="GuildRankListBroadcast"/> carries the viewer's own rank and mask, so it is the
+		/// same message for everybody holding one rank and a different one for each rank. Used by the
+		/// update pump's delivery and by the publish that follows a ladder edit, so the two record
+		/// what they sent in exactly the same way.
+		/// </remarks>
+		private void DeliverRankListAudiences(long guildID, IReadOnlyList<GuildRankData> ladder, GuildRankEntry[] rankEntries, long generation, byte leaderRankOrder)
+		{
+			foreach (KeyValuePair<byte, GuildAudience> audience in guildRankListAudiences)
+			{
+				if (audience.Value.Count < 1)
+				{
+					continue;
+				}
+
+				Server.NetworkWrapper.Broadcast(audience.Value.Connections, new GuildRankListBroadcast()
+				{
+					Ranks = rankEntries,
+					ViewerRankOrder = audience.Key,
+					ViewerPermissions = (long)PermissionsForOrder(ladder, audience.Key),
+					LeaderRankOrder = leaderRankOrder,
+				}, true, Channel.Reliable);
+
+				for (int i = 0; i < audience.Value.CharacterIDs.Count; ++i)
+				{
+					guildRecipientBaselines.MarkLadder(audience.Value.CharacterIDs[i], guildID, generation, audience.Key);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Delivers one officer-note audience's copy of a guild's roster change. Main thread only.
+		/// </summary>
+		/// <param name="guildID">The guild.</param>
+		/// <param name="currentRows">The roster as it now stands, in the full projection.</param>
+		/// <param name="previousRows">The roster as last delivered, or null when none was.</param>
+		/// <param name="officerAudience">Which copy: with officer notes, or without.</param>
+		/// <param name="full">Members with no baseline in this copy: sent the whole roster.</param>
+		/// <param name="delta">Members holding this copy: sent what changed.</param>
+		private void DeliverRosterCopy(long guildID, GuildAddEntry[] currentRows, Dictionary<long, GuildAddEntry> previousRows, bool officerAudience, GuildAudience full, GuildAudience delta)
+		{
+			if (delta.Count > 0)
+			{
+				GuildRosterDelta.Diff(previousRows, currentRows, officerAudience, guildDeltaChangedIndices, guildDeltaRemovedIDs);
+
+				switch (GuildRosterDelta.Choose(true, guildDeltaChangedIndices.Count, guildDeltaRemovedIDs.Count, currentRows.Length))
+				{
+					case GuildRosterDelta.Delivery.Full:
+						// Most of the roster moved; they are sent it whole, alongside the members who never had it.
+						full.AddAll(delta);
+						break;
+
+					case GuildRosterDelta.Delivery.Delta:
+						GuildAddEntry[] upserts = new GuildAddEntry[guildDeltaChangedIndices.Count];
+						for (int i = 0; i < upserts.Length; ++i)
+						{
+							upserts[i] = ProjectRosterEntry(currentRows[guildDeltaChangedIndices[i]], officerAudience);
+						}
+
+						Server.NetworkWrapper.Broadcast(delta.Connections, new GuildRosterDeltaBroadcast()
+						{
+							GuildID = guildID,
+							Upserts = upserts,
+							Removals = guildDeltaRemovedIDs.ToArray(),
+						}, true, Channel.Reliable);
+						break;
+				}
+			}
+
+			if (full.Count > 0)
+			{
+				Server.NetworkWrapper.Broadcast(full.Connections, ProjectRoster(guildID, currentRows, officerAudience), true, Channel.Reliable);
+
+				for (int i = 0; i < full.CharacterIDs.Count; ++i)
+				{
+					guildRecipientBaselines.MarkRoster(full.CharacterIDs[i], guildID, officerAudience);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Records a freshly read ladder as delivered, returning the generation that identifies it.
+		/// </summary>
+		/// <param name="guildID">The guild.</param>
+		/// <param name="ladder">The ladder as read.</param>
+		/// <param name="entries">The ladder's wire array — the one already recorded when unchanged.</param>
+		/// <returns>The ladder's generation: unchanged while the ladder is, new whenever it moves.</returns>
+		private long AdvanceDeliveredLadder(long guildID, IReadOnlyList<GuildRankData> ladder, out GuildRankEntry[] entries)
+		{
+			entries = BuildRankEntries(ladder);
+
+			if (guildDeliveredLadders.TryGetValue(guildID, out DeliveredLadder delivered) &&
+				GuildRosterDelta.SameLadder(delivered.Entries, entries))
+			{
+				entries = delivered.Entries;
+				return delivered.Generation;
+			}
+
+			long generation = ++guildLadderGenerationCounter;
+			guildDeliveredLadders[guildID] = new DeliveredLadder(entries, generation);
+			return generation;
+		}
+
+		/// <summary>
+		/// Drops everything this server recorded as delivered for a guild. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// For a guild no longer tracked here. Recipients' baselines naming it were forgotten as
+		/// each member left the tracker, so nothing can be sent a delta against what is dropped.
+		/// </remarks>
+		private void ForgetDeliveredGuild(IGuildCharacterMappingData mapData, long guildID)
+		{
+			mapData.GuildMemberTracker.Remove(guildID);
+			guildDeliveredLadders.Remove(guildID);
+		}
+
+		/// <summary>
+		/// The rank-list audience for one rank, taken from the pool on first use this guild.
+		/// </summary>
+		private GuildAudience RankListAudience(byte rankOrder)
+		{
+			if (!guildRankListAudiences.TryGetValue(rankOrder, out GuildAudience audience))
+			{
+				audience = guildAudiencePool.Count > 0 ? guildAudiencePool.Pop() : new GuildAudience();
+				guildRankListAudiences.Add(rankOrder, audience);
+			}
+			return audience;
+		}
+
+		/// <summary>
+		/// Empties the guild delivery's scratch audiences, returning the per-rank ones to the pool.
+		/// </summary>
+		private void ReleaseGuildAudiences()
+		{
+			guildPublicFullAudience.Clear();
+			guildPublicDeltaAudience.Clear();
+			guildOfficerFullAudience.Clear();
+			guildOfficerDeltaAudience.Clear();
+
+			foreach (KeyValuePair<byte, GuildAudience> audience in guildRankListAudiences)
+			{
+				audience.Value.Clear();
+				guildAudiencePool.Push(audience.Value);
+			}
+			guildRankListAudiences.Clear();
+
+			guildDeltaChangedIndices.Clear();
+			guildDeltaRemovedIDs.Clear();
 		}
 
 		/// <summary>
@@ -928,6 +1557,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				characterIDs.Add(characterID);
 			}
+
+			/* Connecting or joining: whatever this client holds of a guild roster or ladder was not
+			 * sent by this server's pump for this membership, so the next delivery sends it whole
+			 * rather than as a delta against a baseline the client does not have. */
+			guildRecipientBaselines.Forget(characterID);
+		}
+
+		/// <inheritdoc/>
+		public void ForgetGuildDeliveryBaselines(long characterID)
+		{
+			guildRecipientBaselines.Forget(characterID);
 		}
 
 		/// <summary>
@@ -953,9 +1593,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (characterIDs.Count < 1)
 				{
 					mappingData.GuildCharacterTracker.Remove(guildID);
-					mappingData.GuildMemberTracker.Remove(guildID);
+					ForgetDeliveredGuild(mappingData, guildID);
 				}
 			}
+
+			/* Leaving, kicked, evicted or disconnecting: the client drops this guild's roster and
+			 * ladder (or is gone), so nothing recorded as delivered to it for this guild still
+			 * holds. Only this guild's: a character who has already moved on holds the next one. */
+			guildRecipientBaselines.Forget(characterID, guildID);
 		}
 
 		/// <summary>
@@ -1013,6 +1658,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* Before the guild tests below can return early: the client is gone, and whatever it
+			 * was sent went with it. A baseline left behind would have this character's next session
+			 * on this server sent deltas against a roster its new client never received. */
+			guildRecipientBaselines.Forget(character.ID);
+
 			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return;
@@ -1042,7 +1692,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long characterID = character.ID;
 			long guildID = guildController.ID;
 
-			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, "Offline"), characterID);
+			EnqueuePersistence(() => PersistGuildMemberAsync(characterID, guildID, GuildRosterDelta.OfflineLocation), characterID);
 		}
 
 		/// <summary>
@@ -1117,7 +1767,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * player would only ever see the text if somebody edited it while they were
 				 * logged in, which is precisely why the columns sat unused. Skipped when the
 				 * member is going Offline: there is nobody left to render it. */
-				if (!string.Equals(location, "Offline", StringComparison.OrdinalIgnoreCase))
+				if (!GuildRosterDelta.IsOffline(location))
 				{
 					await PublishGuildInfoAsync(guildID, characterID);
 				}
@@ -1272,6 +1922,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// save is waiting on, and the attribute would stay dirty — and be rewritten on every
 		/// pass — for the rest of the session. See <c>CharacterInventorySystem.BuildAttributeDataList</c>.
 		/// </para>
+		/// <para>
+		/// Ownership-gated: the row quotes the session claim held for the character now, and lands
+		/// only while it is still held. With no claim nothing is queued and false is returned, which
+		/// <see cref="CharacterCurrency.TrySpend"/> answers with a refund and the create with
+		/// <c>Failed</c> — a character this server does not hold is not one it may charge.
+		/// </para>
 		/// </remarks>
 		/// <returns>True when the write was queued. False means nothing was queued and the caller must not rely on it.</returns>
 		private bool TryPersistCreationFeeCurrency(IPlayerCharacter character)
@@ -1281,6 +1937,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				!character.TryGet(out ICharacterAttributeController attributeController) ||
 				!attributeController.TryGetAttribute(guildCreationFeeCurrency, out CharacterAttribute currency))
 			{
+				return false;
+			}
+
+			if (!TryCaptureSessionClaim(character.ID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("GuildSystem", $"TryPersistCreationFeeCurrency: this server holds no session claim for CharID={character.ID}; nothing was queued.");
 				return false;
 			}
 
@@ -1299,13 +1961,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					currentValue: 0.0f),
 			};
 
-			return EnqueuePersistence(() => PersistCreationFeeCurrencyToDbAsync(dtos, characterID), characterID);
+			return EnqueuePersistence(() => PersistCreationFeeCurrencyToDbAsync(dtos, characterID, claim), characterID);
 		}
 
 		/// <summary>
 		/// Writes the fee currency's attribute row. Worker thread.
 		/// </summary>
-		private async Task PersistCreationFeeCurrencyToDbAsync(List<CharacterAttributeData> dtos, long characterID)
+		private async Task PersistCreationFeeCurrencyToDbAsync(List<CharacterAttributeData> dtos, long characterID, CharacterSessionLeaseData claim)
 		{
 			try
 			{
@@ -1316,7 +1978,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				await BulkWriteReporting.ReportAsync("GuildSystem", "Guild creation fee save",
-					await attributeService.PersistAsync(dtos), $"CharID={characterID}");
+					await attributeService.PersistOwnedAsync(dtos, ClaimsOf(claim)), $"CharID={characterID}");
 			}
 			catch (Exception ex)
 			{
@@ -1429,7 +2091,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}, characterID))
 			{
-				Log.Warning("GuildSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
+				Log.Warning("GuildSystem", $"Currency ledger: the persistence queue is saturated; the record for CharID={characterID} is still written, but late (behind the backlog, or through the teardown fallback).");
 			}
 		}
 
@@ -1776,7 +2438,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					DateTime nowUtc = DateTime.UtcNow;
+					double now = MonotonicClock.NowSeconds;
 
 					/* Per (inviter, target), not per connection. Recorded before the pending slot
 					 * is taken so a target who declines instantly still cannot be re-invited
@@ -1787,13 +2449,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							inviterCharacterID,
 							targetCharacterID,
 							TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
-							nowUtc))
+							now))
 					{
 						SendGuildResult(conn, GuildResultType.InviteOnCooldown);
 						return;
 					}
 
-					PendingGuildInvitation invitation = new PendingGuildInvitation(guildID, inviterCharacterID, nowUtc);
+					PendingGuildInvitation invitation = new PendingGuildInvitation(guildID, inviterCharacterID, now);
 
 					// if the target doesn't already have a pending invite
 					if (!runtimeData.TryAddPendingInvitation(targetCharacterID, invitation))
@@ -1949,7 +2611,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * The sweep is bounded and periodic, so an invitation can outlive its TTL by up
 				 * to a sweep interval — and reading the entry refreshes the queue's clock, which
 				 * pushed the sweep further away every time the entry was looked at. */
-				if (DateTime.UtcNow - invitation.IssuedUtc > TimeSpan.FromSeconds(invitationTtlSeconds))
+				if (MonotonicClock.NowSeconds - invitation.IssuedAt > invitationTtlSeconds)
 				{
 					runtimeData.RemovePendingInvitation(guildController.Character.ID);
 					SendGuildResult(conn, GuildResultType.InvitationExpired);
@@ -3200,39 +3862,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					MessageOfTheDay = guild.MessageOfTheDay ?? string.Empty,
 				};
 
-				TryEnqueueMainThread(() =>
-				{
-					if (Server == null ||
-						!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
-					{
-						return;
-					}
-
-					if (onlyCharacterID > 0)
-					{
-						if (characterMappingData.CharactersByID.TryGetValue(onlyCharacterID, out IPlayerCharacter single) &&
-							single?.Owner != null)
-						{
-							Server.NetworkWrapper.Broadcast(single.Owner, broadcast, true, Channel.Reliable);
-						}
-						return;
-					}
-
-					if (!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
-						!mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs))
-					{
-						return;
-					}
-
-					foreach (long memberID in memberIDs)
-					{
-						if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
-							member?.Owner != null)
-						{
-							Server.NetworkWrapper.Broadcast(member.Owner, broadcast, true, Channel.Reliable);
-						}
-					}
-				});
+				// One multicast to the local roster, or the one named member; see BroadcastToGuildMembers.
+				BroadcastToGuildMembers(guildID, broadcast, onlyCharacterID);
 			}
 			catch (Exception ex)
 			{
@@ -3544,7 +4175,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// The guild is gone, so its land goes back to the world — see ReleaseGuildPlotsAsync.
 				await ReleaseGuildPlotsAsync(guildID);
 
-				// Every other server learns of this through its update pump, which notices the guild is gone.
+				// Every other server learns of this through its existence sweep (OnPeriodicGuildExistenceSweep).
 				TryEnqueueMainThread(() => ClearLocalGuildMembers(guildID));
 			}
 			catch (Exception ex)
@@ -3557,8 +4188,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Takes every local member of a guild that no longer exists out of it. Main thread only.
 		/// </summary>
 		/// <remarks>
-		/// For a disband done here, and for one done on another server and noticed by the update
-		/// pump. The same clear in both, so a member of a guild disbanded elsewhere is left in
+		/// For a disband done here, and for one done on another server and noticed by the existence
+		/// sweep, or by the update pump when a guild it was reading turns out to be gone. The same clear in both, so a member of a guild disbanded elsewhere is left in
 		/// exactly the state a local disband leaves them in.
 		/// </remarks>
 		private void ClearLocalGuildMembers(long guildID)
@@ -3583,7 +4214,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			mappingData.GuildCharacterTracker.Remove(guildID);
-			mappingData.GuildMemberTracker.Remove(guildID);
+			ForgetDeliveredGuild(mappingData, guildID);
 		}
 
 		/// <summary>
@@ -3607,6 +4238,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			guildController.RankOrder = 0;
 			guildController.Permissions = GuildPermissions.None;
 			guildController.LeaderRankOrder = 0;
+
+			// The leave below clears the client's roster and ladder; nothing delivered for this guild still holds.
+			guildRecipientBaselines.Forget(member.ID, guildID);
 
 			if (member.Owner != null)
 			{

@@ -47,11 +47,16 @@ namespace FishMMO.Server.Core.LoginServer
 		/// <summary>
 		/// Per-connection IP cache used by account-creation ingress validation.
 		/// </summary>
+		/// <remarks>
+		/// Timed on <c>MonotonicClock.NowSeconds</c> (the tracker's monotonic overloads) by every
+		/// reader and writer, the authenticators included. One cache, one clock.
+		/// </remarks>
 		LastSeenCacheTracker<int, string> ConnectionIpCache { get; }
 
 		/// <summary>
 		/// Per-connection encryption-data cache used by account-creation ingress validation.
 		/// </summary>
+		/// <remarks>Timed on <c>MonotonicClock.NowSeconds</c>, like <see cref="ConnectionIpCache"/>.</remarks>
 		LastSeenCacheTracker<int, ConnectionEncryptionData> ConnectionEncryptionCache { get; }
 	}
 }

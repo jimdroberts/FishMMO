@@ -89,6 +89,44 @@ namespace FishMMO.Server.Core.Collections
 		}
 
 		/// <summary>
+		/// <see cref="TryGetAndTouch(TKey, DateTime, out TValue)"/> for a cache timed on
+		/// <see cref="MonotonicClock"/>.
+		/// </summary>
+		/// <param name="key">The cache key to look up.</param>
+		/// <param name="nowSeconds">Current <see cref="MonotonicClock.NowSeconds"/> reading.</param>
+		/// <param name="value">The cached value if found; otherwise, <c>default</c>.</param>
+		/// <returns><c>true</c> if the key was found; otherwise, <c>false</c>.</returns>
+		/// <remarks>
+		/// A TTL is a duration. On <c>DateTime.UtcNow</c> a host clock stepped back kept every entry
+		/// fresh for the size of the step and one stepped forward expired the whole cache, and the
+		/// head-first sweep assumes last-seen stamps arrive in order, which a stepped clock breaks.
+		/// One cache, one clock: see <see cref="MonotonicInstant"/>.
+		/// </remarks>
+		public bool TryGetAndTouch(TKey key, double nowSeconds, out TValue value) =>
+			TryGetAndTouch(key, MonotonicInstant.From(nowSeconds), out value);
+
+		/// <summary>
+		/// <see cref="Upsert(TKey, TValue, DateTime)"/> for a cache timed on <see cref="MonotonicClock"/>.
+		/// </summary>
+		/// <param name="key">The cache key.</param>
+		/// <param name="value">The value to store.</param>
+		/// <param name="nowSeconds">Current <see cref="MonotonicClock.NowSeconds"/> reading.</param>
+		public void Upsert(TKey key, TValue value, double nowSeconds) =>
+			Upsert(key, value, MonotonicInstant.From(nowSeconds));
+
+		/// <summary>
+		/// <see cref="SweepExpired(DateTime, TimeSpan, int, int)"/> for a cache timed on
+		/// <see cref="MonotonicClock"/>.
+		/// </summary>
+		/// <param name="nowSeconds">Current <see cref="MonotonicClock.NowSeconds"/> reading.</param>
+		/// <param name="ttl">Maximum age before an entry is swept.</param>
+		/// <param name="maxScan">Maximum number of entries to inspect per sweep.</param>
+		/// <param name="maxRemove">Maximum number of entries to remove per sweep.</param>
+		/// <returns>Number of entries removed.</returns>
+		public int SweepExpired(double nowSeconds, TimeSpan ttl, int maxScan, int maxRemove) =>
+			SweepExpired(MonotonicInstant.From(nowSeconds), ttl, maxScan, maxRemove);
+
+		/// <summary>
 		/// Removes a cached key if present.
 		/// </summary>
 		public void Remove(TKey key)

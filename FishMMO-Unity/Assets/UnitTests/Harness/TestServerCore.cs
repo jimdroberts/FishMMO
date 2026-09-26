@@ -73,6 +73,36 @@ namespace FishMMO.UnitTests.Harness
 		public int AuthResultBroadcastCount { get; private set; }
 
 		/// <summary>
+		/// Seconds added to the core's monotonic clock, so a test can move time past a two-factor
+		/// window without waiting for it. Only ever raise it: the core's clock must not run backwards.
+		/// </summary>
+		public double ClockOffsetSeconds { get; set; }
+
+		/// <inheritdoc/>
+		protected override double NowSeconds => base.NowSeconds + ClockOffsetSeconds;
+
+		/// <summary>Runs while a two-factor code is being checked, before its answer: a test can close the connection here.</summary>
+		public Action? DuringTwoFactorCheck;
+
+		/// <summary>Runs while the proof path checks whether the account is online, before any token is minted.</summary>
+		public Action? DuringOnlineCheck;
+
+		/// <summary>Runs while an issued token's hash is being recorded, after the last check before minting.</summary>
+		public Action? DuringTokenPersist;
+
+		/// <summary>How many times the core reported a connection authenticated.</summary>
+		public int AuthenticatedCount { get; private set; }
+
+		/// <summary>Number of <see cref="BroadcastSrpSuccess"/> calls that reached the client or its interceptor.</summary>
+		public int SrpSuccessBroadcastCount { get; private set; }
+
+		/// <summary>
+		/// Makes the modelled connection inactive the way a closing transport does, before the host
+		/// has reported it stopped (<see cref="BaseAuthenticatorCore{TConnection}.HandleConnectionStopped"/>).
+		/// </summary>
+		public void CloseConnectionQuietly() => disconnected = true;
+
+		/// <summary>
 		/// Optional hook invoked before the encrypted server proof (M2) is forwarded to the
 		/// client in <see cref="BroadcastSrpSuccess"/>. Return a mutated copy to simulate a
 		/// MITM tampering with M2; return <c>null</c> to drop the message entirely.
@@ -117,7 +147,14 @@ namespace FishMMO.UnitTests.Harness
 
 		#region SrpAuthenticatorCore<int> abstracts
 
-		protected override void OnAuthenticationResult(int conn, bool authenticated) { /* test hook — captured via TCS in harness */ }
+		protected override void OnAuthenticationResult(int conn, bool authenticated)
+		{
+			// Otherwise captured via the client's TCS; counted so a test can see nothing was reported.
+			if (authenticated)
+			{
+				AuthenticatedCount++;
+			}
+		}
 
 		protected override bool IsConnectionActive(int conn) => !disconnected;
 
@@ -201,6 +238,7 @@ namespace FishMMO.UnitTests.Harness
 		protected override void BroadcastSrpSuccess(int conn, byte[] encryptedServerProof, ClientAuthenticationResult result, byte[]? encryptedToken)
 		{
 			_ = AuthTestTrace.Log("Server", "BroadcastSrpSuccess", $"conn={conn} result={result} proof={AuthTestTrace.Hex(encryptedServerProof)} token={AuthTestTrace.Hex(encryptedToken)}");
+			SrpSuccessBroadcastCount++;
 			byte[]? outProof = SrpSuccessInterceptor is null ? encryptedServerProof : SrpSuccessInterceptor(encryptedServerProof);
 			if (outProof is null)
 			{
@@ -253,7 +291,11 @@ namespace FishMMO.UnitTests.Harness
 			return Task.FromResult(true);
 		}
 
-		protected override Task<bool> CheckIsOnlineAsync(string username) => Task.FromResult(store.IsOnline(username));
+		protected override Task<bool> CheckIsOnlineAsync(string username)
+		{
+			DuringOnlineCheck?.Invoke();
+			return Task.FromResult(store.IsOnline(username));
+		}
 
 		protected override Task<bool> CheckHasPendingKickAsync(string username) => Task.FromResult(store.HasPendingKick(username));
 
@@ -265,6 +307,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override Task<bool> PersistTokenHashAsync(string username, string tokenHash, int expirationMinutes)
 		{
+			DuringTokenPersist?.Invoke();
 			if (FailTokenPersist)
 			{
 				return Task.FromResult(false);
@@ -275,6 +318,7 @@ namespace FishMMO.UnitTests.Harness
 
 		protected override Task<TwoFactorVerifyOutcome> VerifyTotpCodeAsync(string username, string totpCode, byte[] totpMasterKey)
 		{
+			DuringTwoFactorCheck?.Invoke();
 			if (FailTwoFactorCheck) return Task.FromResult(TwoFactorVerifyOutcome.ServerError);
 			string? secret = store.GetTotpSecret(username);
 			if (string.IsNullOrEmpty(secret)) return Task.FromResult(TwoFactorVerifyOutcome.Invalid);

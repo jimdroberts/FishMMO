@@ -15,15 +15,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public ConcurrentDictionary<int, byte> InFlightRequests { get; private set; }
 
 		/// <summary>
-		/// Per-connection time-based cooldown to prevent sequential create spam after in-flight release.
+		/// Per-connection time-based cooldown to prevent sequential create spam after in-flight
+		/// release, as <see cref="MonotonicClock"/> seconds: a local duration.
 		/// </summary>
-		public ConcurrentDictionary<int, DateTime> NextAllowedCreateUtcByClientId { get; private set; }
+		public ConcurrentDictionary<int, double> NextAllowedCreateSecondsByClientId { get; private set; }
 
 		/// <inheritdoc/>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			InFlightRequests = new ConcurrentDictionary<int, byte>();
-			NextAllowedCreateUtcByClientId = new ConcurrentDictionary<int, DateTime>();
+			NextAllowedCreateSecondsByClientId = new ConcurrentDictionary<int, double>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -31,7 +32,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public override void Clear()
 		{
 			InFlightRequests?.Clear();
-			NextAllowedCreateUtcByClientId?.Clear();
+			NextAllowedCreateSecondsByClientId?.Clear();
 		}
 
 		/// <inheritdoc/>
@@ -39,7 +40,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			Clear();
 			InFlightRequests = null;
-			NextAllowedCreateUtcByClientId = null;
+			NextAllowedCreateSecondsByClientId = null;
 		}
 	}
 }

@@ -13,9 +13,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	/// navigation and state management. One instance per NPC — plain C# class.
 	/// </para>
 	/// <para>
-	/// <b>Event-driven combat entry:</b> When the threat table transitions from empty
-	/// to non-empty (first damage received), the <see cref="OnCombatInitiated"/> callback
-	/// is invoked for immediate combat entry without waiting for the next physics sweep.
+	/// <b>Event-driven combat entry:</b> every hit this NPC takes is reported through
+	/// <see cref="OnHitRecorded"/>, and the brain decides from its own state whether that hit
+	/// starts a fight (<see cref="AIController.OnThreatReceived"/>). It used to fire only when the
+	/// table went from empty to non-empty, and nothing but a kill ever emptied it: a fight that
+	/// ended any other way — the target out of reach, zoned, leashed away — left entries behind,
+	/// so every later hit from beyond the detection radius was recorded and ignored, and each one
+	/// refreshed the entry that kept it from ever going stale. Deciding per hit from the brain's
+	/// state has no edge to consume.
 	/// </para>
 	/// <para>
 	/// <b>Replay safety:</b> Event handlers are guarded to ignore damage/heal/kill events
@@ -40,9 +45,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public float TargetReevaluationTimer;
 
 		/// <summary>
-		/// Callback invoked when the threat table transitions from empty to non-empty.
+		/// Invoked with the attacker after every hit this NPC's table records.
 		/// </summary>
-		public System.Action<ICharacter> OnCombatInitiated;
+		/// <remarks>
+		/// Every hit, not the first: whether a hit starts a fight is a question about the NPC's
+		/// state (already fighting, leashing home, immortal, a passive pet), which only the brain
+		/// can answer. See the class remarks for what the old empty-to-non-empty edge got wrong.
+		/// </remarks>
+		public System.Action<ICharacter> OnHitRecorded;
 
 		/// <summary>
 		/// Creates a new aggression state with a threat table at the default weights, and subscribes
@@ -60,6 +70,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * directly. Per-NPC subscriptions turned every single hit in the scene into one
 			 * delegate call per NPC alive, of which at most one was relevant. */
 			AggressionDispatcher.Register(character, this);
+
+			/* The table reports its own additions and removals, so the dispatcher's reverse index
+			 * (character -> the NPCs tracking it) cannot drift from what the tables hold. Heal and
+			 * kill events are routed through that index. */
+			Controller.EntryAdded = characterId => AggressionDispatcher.TrackCharacter(characterId, this);
+			Controller.EntryRemoved = characterId => AggressionDispatcher.UntrackCharacter(characterId, this);
 		}
 
 		/// <summary>
@@ -118,9 +134,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		public void Destroy()
 		{
-			AggressionDispatcher.Unregister(character);
-
+			// Emptied first, so the table's remove hook takes this state out of the reverse index.
 			Controller?.Clear();
+
+			AggressionDispatcher.Unregister(character);
 		}
 
 		/// <summary>
@@ -170,11 +187,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			if (!IsSpawnedAndAuthoritative()) return;
 
-			bool wasEmpty = Controller == null || !Controller.HasAggression;
 			Controller?.RecordDamage(attacker.ID, amount);
 
-			if (wasEmpty)
-				OnCombatInitiated?.Invoke(attacker);
+			/* Every hit. The brain filters on its own state with a couple of field reads, which is
+			 * all a hit on an NPC that is already fighting costs. */
+			OnHitRecorded?.Invoke(attacker);
 		}
 
 		/// <summary>
@@ -207,13 +224,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			/* Only drop threat for someone this NPC was actually tracking.
 			 *
-			 * This is a global event: it fires for every death anywhere in the scene. The previous
-			 * AddPoints call ran through GetOrCreate, so each unrelated kill inserted a fresh
-			 * zero-point entry into this NPC's threat table. Two things then broke: HasAggression
-			 * became true for an NPC that had never been touched, which changed how PickTarget
-			 * behaves; and the empty-to-non-empty edge in OnCharacterDamaged had already been
-			 * consumed, so the *real* first hit no longer fired OnCombatInitiated and the NPC did
-			 * not enter combat until its next physics sweep. */
+			 * The dispatcher only asks NPCs its reverse index says track the victim, but the rule
+			 * belongs here too. The previous AddPoints call ran through GetOrCreate, so each
+			 * unrelated kill inserted a fresh zero-point entry into this NPC's threat table:
+			 * HasAggression became true for an NPC that had never been touched, which changed how
+			 * PickTarget behaves. */
 			Controller.RemoveEntry(victim.ID);
 		}
 

@@ -488,4 +488,27 @@ namespace FishMMO.Shared
 		/// </summary>
 		public WorldSceneQueueReason Reason;
 	}
+
+	/// <summary>
+	/// Sent by a client to the WorldServer when the player chooses to leave the scene-routing
+	/// queue, immediately before it closes the connection.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The WorldServer keeps a queued account's place in line for a short grace window when its
+	/// wait ends without the player's say — the connection dropped, or the server purged a wait
+	/// whose line had stalled — so a reconnect or a "Try again" resumes the place instead of
+	/// starting at the back. From the server's side, a player who chose to leave looks exactly
+	/// like a dropped connection, and this message is the only thing that tells them apart: a
+	/// player who left gives the place up.
+	/// </para>
+	/// <para>
+	/// Best effort by nature: it rides the same flush the token revocation does on the way out,
+	/// and if it is lost the place is held for the grace window and then forgotten, which is the
+	/// worst case. Authenticated connections only.
+	/// </para>
+	/// </remarks>
+	public struct WorldSceneQueueLeaveBroadcast : IBroadcast
+	{
+	}
 }

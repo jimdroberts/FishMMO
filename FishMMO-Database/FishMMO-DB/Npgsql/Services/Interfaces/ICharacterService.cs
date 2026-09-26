@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -428,6 +428,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// rather than retrying — the current owner's state is authoritative, and replaying a
 		/// stale snapshot over it would destroy exactly the progress this refuses to overwrite.
 		/// </para>
+		/// <para>
+		/// When <see cref="CharacterData.Buffs"/> is not null, the character's stored buffs are
+		/// replaced by that set in the same transaction, and only when the row itself is written.
+		/// The same holds for <c>PersistAsync</c> and for each row of <see cref="PersistManyAsync"/>.
+		/// </para>
 		/// </remarks>
 		/// <param name="characterData">Snapshot to persist. Its <c>Version</c> must exceed the stored version.</param>
 		/// <param name="ownership">The claim this server holds, as returned by <see cref="TryClaimAsync"/>.</param>
@@ -438,6 +443,36 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// already stored; <see cref="DatabaseErrorCodes.NotFound"/> when the row is gone.
 		/// </returns>
 		Task<DatabaseResult> PersistOwnedAsync(CharacterData characterData, CharacterSessionLeaseData ownership, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Persists many character rows in one transaction, each with the checks
+		/// <see cref="PersistOwnedAsync"/> (or, for a request with no claim, the plain version-gated
+		/// save) would make, and reports an outcome per row.
+		/// </summary>
+		/// <remarks>
+		/// One row's outcome never decides another's: a lost claim, a stale version or a deleted row
+		/// is reported for that row and the rest are written. Callers keep a list to a few hundred
+		/// rows, because the row locks are held until the commit.
+		/// </remarks>
+		/// <param name="requests">The rows to write, each with the claim that authorises it or none.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// One outcome per request, in no particular order. A failed result means the statement
+		/// failed and nothing is known to have been written.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyList<CharacterPersistResult>>> PersistManyAsync(IReadOnlyList<CharacterPersistRequest> requests, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Releases many sessions (Online → Offline) in one transaction, each only while it is still
+		/// held under the supplied server and token — <see cref="ReleaseAsync"/> for a batch.
+		/// </summary>
+		/// <param name="leases">The claims to hand back. Invalid entries are skipped.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// The ids actually released. A claim absent from the result was not this caller's to release
+		/// (already released, or claimed away after a lease lapse), which is nothing to retry.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyList<long>>> ReleaseManyAsync(IReadOnlyList<CharacterSessionLeaseData> leases, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Returns the subset of <paramref name="leases"/> whose sessions the database no longer
@@ -501,6 +536,38 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// Execution strategy wrapping ensures transient database failures are automatically retried.
 		/// </remarks>
 		Task<DatabaseResult> UpdateSceneAsync(long characterId, long worldServerId, string sceneName, long sceneHandle, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Writes the routing information of many characters at once: <see cref="UpdateSceneAsync"/>
+		/// for a batch.
+		/// </summary>
+		/// <param name="worldServerId">The world server every character in the batch is being routed through.</param>
+		/// <param name="binds">Each character's scene name and scene handle. A character named twice takes its last entry.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// The ids of the characters whose rows were written. A character with no live row (missing
+		/// or deleted) is absent, which is the per-row NotFound of <see cref="UpdateSceneAsync"/>.
+		/// A failed result wrote nothing the caller may rely on.
+		/// </returns>
+		/// <remarks>
+		/// For the world server's routing pass, which binds every character it places before
+		/// telling the client where to go. After a world server restart every character's
+		/// world_server_id is stale, so every one of them needs the write, and one round trip each
+		/// held the whole routing cycle for seconds.
+		/// </remarks>
+		Task<DatabaseResult<IReadOnlyList<long>>> UpdateSceneBatchAsync(long worldServerId, IReadOnlyList<(long CharacterId, string SceneName, long SceneHandle)> binds, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches an account's selected character together with its staff lock, from one read.
+		/// </summary>
+		/// <param name="accountName">The account name.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>The character and its lock, or null when the account has no selected character.</returns>
+		/// <remarks>
+		/// What <see cref="FetchByAccountAsync(string, bool?, CancellationToken)"/> followed by
+		/// <see cref="FetchLockAsync"/> answers, without reading the same row twice.
+		/// </remarks>
+		Task<DatabaseResult<(CharacterData Character, CharacterLockState Lock)?>> FetchSelectedWithLockAsync(string accountName, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Retrieves the selected character for each of the specified accounts in batches.

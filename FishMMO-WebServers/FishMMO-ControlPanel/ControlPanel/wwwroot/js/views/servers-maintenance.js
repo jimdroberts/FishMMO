@@ -81,7 +81,8 @@ async function renderList(host, ctx) {
 	 * reads are audited, but a background poll is marked and not recorded. */
 	async function read(source = api) {
 		const [windows, servers] = await Promise.all([source.listMaintenance(), source.getServerBoard()]);
-		payload = windows;
+		const readAt = Date.now();
+		payload = { ...windows, operations: (windows?.operations ?? []).map((o) => anchorDeadline(o, readAt)) };
 		board = servers;
 		refreshError = null;
 		paint();
@@ -320,7 +321,8 @@ async function renderOperation(host, ctx, id) {
 	let refreshError = null;
 
 	async function read(source = api) {
-		operation = await source.getMaintenance(id);
+		const reply = await source.getMaintenance(id);
+		operation = anchorDeadline(reply, Date.now());
 		refreshError = null;
 		paint();
 	}
@@ -574,18 +576,36 @@ function deadlineCell(ui, operation) {
 		return `<span class="faint">${ui.esc(ui.dateTime(operation.deadlineUtc))}</span>`;
 	}
 	return `<div>${ui.esc(ui.dateTime(operation.deadlineUtc))}</div>
-		<div class="cell-sub">${countdownSpan(operation.deadlineUtc)}</div>`;
+		<div class="cell-sub">${countdownSpan(operation)}</div>`;
 }
 
 function deadlineCountdown(ui, operation) {
-	return operation.active ? ` <span class="faint">·</span> ${countdownSpan(operation.deadlineUtc)}` : '';
+	return operation.active ? ` <span class="faint">·</span> ${countdownSpan(operation)}` : '';
+}
+
+/*
+ * Pins a window's deadline to this browser's clock at the moment its reply arrived: the read
+ * instant plus `secondsUntilDeadline`, which the database measured against the clock the
+ * deadline was planned on and every server counts down against. The countdown used to be
+ * `Date.parse(deadlineUtc) - Date.now()` — this browser's clock against the database's — so a
+ * laptop two minutes slow showed two minutes left on servers that had already stopped. As on
+ * the server board, only the reply's own transit separates the two now. A payload without the
+ * field falls back to the stamp, so an older API still counts down.
+ */
+function anchorDeadline(operation, readAt) {
+	if (!operation) return operation;
+	const seconds = operation.secondsUntilDeadline;
+	const deadlineAt = typeof seconds === 'number' && Number.isFinite(seconds)
+		? readAt + seconds * 1000
+		: Date.parse(operation.deadlineUtc);
+	return { ...operation, deadlineAt };
 }
 
 /* The countdown element. Its text is rewritten every second by tickCountdowns and never
  * contains anything but digits and units, so nothing operator-supplied passes through it. */
-function countdownSpan(deadlineUtc) {
-	const at = Date.parse(deadlineUtc);
-	return Number.isFinite(at) ? `<span class="tnum" data-countdown="${at}"></span>` : '';
+function countdownSpan(operation) {
+	const at = Number(operation?.deadlineAt);
+	return Number.isFinite(at) ? `<span class="tnum" data-countdown="${Math.round(at)}"></span>` : '';
 }
 
 function tickCountdowns(host) {
@@ -615,7 +635,12 @@ function pulseCell(ui, target) {
 	if (target.observedLastPulseUtc == null) {
 		return '<span class="faint">—</span>';
 	}
-	const text = ui.esc(ui.ago(target.observedLastPulseUtc));
+	/* The age the database measured, as the not-pulsing badge is decided on — not this
+	 * browser's clock against a stamp the database wrote. See anchorDeadline. */
+	const age = Number.isFinite(target.observedPulseAgeSeconds)
+		? `${ui.duration(target.observedPulseAgeSeconds)} ago`
+		: ui.ago(target.observedLastPulseUtc);
+	const text = `<span title="${ui.esc(ui.dateTime(target.observedLastPulseUtc))}">${ui.esc(age)}</span>`;
 	return target.observedStale
 		? `${text}<div class="cell-sub"><span class="badge badge-danger">not pulsing</span></div>`
 		: text;

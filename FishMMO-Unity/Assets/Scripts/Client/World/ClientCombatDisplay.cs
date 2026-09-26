@@ -97,6 +97,7 @@ namespace FishMMO.Client
 			PredictedCombatEvents.OnPredicted += OnPredictedCombatEvent;
 			PredictedCombatEvents.OnPredictionRejected += OnPredictionRejected;
 			PredictedCombatEvents.OnPredictionConfirmed += OnPredictionConfirmed;
+			PredictedCombatEvents.OnPredictionRefused += OnPredictionRefused;
 
 			CharacterDamageController.OnCombatEventReceived += OnCombatEvent;
 			ICharacterDamageController.OnKilled += OnKilled;
@@ -114,6 +115,7 @@ namespace FishMMO.Client
 			PredictedCombatEvents.OnPredicted -= OnPredictedCombatEvent;
 			PredictedCombatEvents.OnPredictionRejected -= OnPredictionRejected;
 			PredictedCombatEvents.OnPredictionConfirmed -= OnPredictionConfirmed;
+			PredictedCombatEvents.OnPredictionRefused -= OnPredictionRefused;
 			PredictedCombatEvents.Clear();
 			predictedLabels.Clear();
 
@@ -254,6 +256,19 @@ namespace FishMMO.Client
 		/// <summary>Colour a rejected number fades to: readable, obviously not a real hit.</summary>
 		private static readonly Color RejectedColor = new Color(0.55f, 0.55f, 0.55f, 0.75f);
 
+		/// <summary>
+		/// Colour of a refusal word ("Evade", "Immune"): brighter than a rejected number, because
+		/// this is the server saying exactly what happened rather than a guess from silence, and
+		/// neutral, because nothing was dealt.
+		/// </summary>
+		private static readonly Color RefusedColor = new Color(0.9f, 0.9f, 0.9f, 1f);
+
+		/// <summary>Word drawn for a hit an evading NPC turned away.</summary>
+		private const string EvadeText = "Evade";
+
+		/// <summary>Word drawn for a hit an immortal character turned away.</summary>
+		private const string ImmuneText = "Immune";
+
 		/// <summary>How long a server-reported number stays on screen.</summary>
 		private const float ReportedLabelPersistSeconds = 1.0f;
 
@@ -291,6 +306,20 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void OnCombatEvent(ICharacter source, ICharacter target, int amount, DamageAttributeTemplate dmg, CombatEventKind kind, int occurrences)
 		{
+			/* A refusal settles this client's predictions of the refused hits as REFUSED — each
+			 * predicted number turns into the word — and draws the word itself only when nothing
+			 * was predicted: an immortal target, which the caster's own copy of the flag refused
+			 * locally, so no number was ever drawn. The server sends a refusal to the attacker
+			 * alone, so this is always this client's own hit. */
+			if (kind.IsRefusal())
+			{
+				if (!PredictedCombatEvents.TryRefuse(source, target, kind, occurrences, dmg))
+				{
+					OnRefused(target, kind);
+				}
+				return;
+			}
+
 			/* Periodic reports never touch the prediction pairing: this client predicts DIRECT
 			 * hits and heals, never DoT/HoT ticks (those run server-side on the victim's buff
 			 * controller), so a periodic report has nothing to settle — pairing it would consume
@@ -385,6 +414,47 @@ namespace FishMMO.Client
 					predicted.Label.SetColor(RejectedColor);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Turns a predicted number into the reason the server refused its hit.
+		/// </summary>
+		/// <remarks>
+		/// Re-texted in place rather than greyed out and joined by a second label: the number was
+		/// never true, and one label that now says "Evade" is what happened. Lease-guarded exactly as
+		/// the rejection recolor is — a label whose lease moved on is somebody else's number now.
+		/// </remarks>
+		private void OnPredictionRefused(long id, CombatEventKind reason)
+		{
+			if (predictedLabels.TryGetValue(id, out PredictedLabel predicted))
+			{
+				predictedLabels.Remove(id);
+				if (predicted.Label != null &&
+					!predicted.Label.IsPooled &&
+					predicted.Label.Lease == predicted.Lease)
+				{
+					predicted.Label.SetText(RefusalText(reason));
+					predicted.Label.SetColor(RefusedColor);
+				}
+			}
+		}
+
+		/// <summary>The word a refusal is drawn as.</summary>
+		private static string RefusalText(CombatEventKind reason)
+		{
+			return reason == CombatEventKind.Immune ? ImmuneText : EvadeText;
+		}
+
+		/// <summary>Draws a refusal nothing on screen stood for yet.</summary>
+		/// <remarks>Behind the damage-number toggle: it is this client's own hit's result.</remarks>
+		private UITKWorldLabel OnRefused(ICharacter target, CombatEventKind reason)
+		{
+			EnsureConfig();
+			if (target == null || !showDamage) return null;
+			var pos = target.Transform.position;
+			pos.y += GetDisplayHeight(target);
+			int fx = 0; fx.EnableBit(LabelEffect.FloatUp); fx.EnableBit(LabelEffect.FadeOut);
+			return UITKLabelMaker.Display3D(RefusalText(reason), pos, RefusedColor, 0.5f, ReportedLabelPersistSeconds, false, fx);
 		}
 
 		/// <summary>Ages out predictions the server never confirmed. Driven by the client loop.</summary>

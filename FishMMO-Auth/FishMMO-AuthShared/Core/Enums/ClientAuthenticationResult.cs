@@ -145,5 +145,26 @@ namespace FishMMO.Auth.Core
 		/// rules. The client validates the same rules first, so this is normally unreachable.
 		/// </summary>
 		AccountDetailsInvalid = 26,
+		/// <summary>
+		/// The two-factor step of this sign-in has ended without signing in, and the server is closing
+		/// the connection: the prompt went unanswered for the server's window, or the code just sent
+		/// was wrong and was the last attempt one sign-in allows. The client must go back to the
+		/// sign-in form; signing in again starts a fresh prompt.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// One value for both endings, and the client tells them apart without a timer of its own. The
+		/// server only lets a prompt's window run out while no code from it is being checked, so an
+		/// expiry that arrives unasked is the window, and one that answers a code the client sent is the
+		/// attempt limit. A code sent in the very last moment of a window can cross the expiry on the
+		/// wire and read as the attempt limit; the answer to both is the same, sign in again.
+		/// </para>
+		/// <para>
+		/// Not <see cref="TwoFactorLocked"/>, which is an account-wide lock with a wait. Before this
+		/// value existed the server closed the connection without a word in both cases. A client that
+		/// predates it treats it as an unrecognised result.
+		/// </para>
+		/// </remarks>
+		TwoFactorExpired = 27,
 	}
 }

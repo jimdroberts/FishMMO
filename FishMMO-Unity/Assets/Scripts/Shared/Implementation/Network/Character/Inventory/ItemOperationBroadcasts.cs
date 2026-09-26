@@ -62,9 +62,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// TREAT THIS AS "OUTCOME UNKNOWN", NOT AS "DID NOT HAPPEN". <c>EnqueuePersistence</c> never
-		/// discards work — a false return means it ran on the thread-pool fallback instead of the
-		/// worker — so the server-side mutation has in fact been committed and written. What is
-		/// missing is only the acknowledgement. A client that reverts its optimistic change on this
+		/// discards work — a false return means it was admitted over the worker's backpressure
+		/// threshold and waits behind the backlog — so the server-side mutation has in fact been
+		/// committed and its write will run. What is missing is only the acknowledgement. A client that reverts its optimistic change on this
 		/// reason will disagree with the server until the next login; it should request a full
 		/// container refresh instead. Paired with <c>ServerBusyBroadcast</c>.
 		/// </remarks>

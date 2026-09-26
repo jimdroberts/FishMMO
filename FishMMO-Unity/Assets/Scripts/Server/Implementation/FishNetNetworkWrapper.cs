@@ -520,5 +520,41 @@ namespace FishMMO.Server.Implementation
 			}
 			conn.Broadcast(broadcast, requireAuthentication, channel);
 		}
+
+		/// <inheritdoc/>
+		public void Broadcast<T>(HashSet<NetworkConnection> connections, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
+		{
+			if (connections == null || connections.Count == 0 || NetworkManager == null)
+			{
+				return;
+			}
+			// FishNet serialises once and sends the same segment to every connection; an inactive
+			// connection in the set is skipped by the transport with a warning, not a throw.
+			NetworkManager.ServerManager.Broadcast(connections, broadcast, requireAuthentication, channel);
+		}
+
+		/// <inheritdoc/>
+		public bool BroadcastToScene<T>(UnityEngine.SceneManagement.Scene scene, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast
+		{
+			if (!TryGetSceneConnections(scene, out HashSet<NetworkConnection> connections))
+			{
+				return false;
+			}
+			NetworkManager.ServerManager.Broadcast(connections, broadcast, requireAuthentication, channel);
+			return true;
+		}
+
+		/// <inheritdoc/>
+		public bool TryGetSceneConnections(UnityEngine.SceneManagement.Scene scene, out HashSet<NetworkConnection> connections)
+		{
+			connections = null;
+			if (!scene.IsValid() || NetworkManager == null || NetworkManager.SceneManager == null)
+			{
+				return false;
+			}
+			return NetworkManager.SceneManager.SceneConnections.TryGetValue(scene, out connections) &&
+				   connections != null &&
+				   connections.Count > 0;
+		}
 	}
 }

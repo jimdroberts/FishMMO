@@ -51,6 +51,12 @@ namespace FishMMO.ControlPanel.Controllers
 		private const int StaleAfterSeconds = 45;
 
 		/// <summary>
+		/// Whether a daemon whose last heartbeat is this many seconds old, by the database clock,
+		/// is shown as stale: strictly past <see cref="StaleAfterSeconds"/>.
+		/// </summary>
+		private static bool IsHeartbeatStale(double heartbeatAgeSeconds) => heartbeatAgeSeconds > StaleAfterSeconds;
+
+		/// <summary>
 		/// How long a queued command stays executable.
 		/// </summary>
 		/// <remarks>
@@ -82,7 +88,10 @@ namespace FishMMO.ControlPanel.Controllers
 				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The daemon hosts could not be read." });
 			}
 
-			DateTime now = DateTime.UtcNow;
+			/* The ages are the database's, measured against the clock that stamped the heartbeat
+			 * (DaemonService). This used to be this process's DateTime.UtcNow minus a stamp the
+			 * daemon's own host had written, so the gap between two machines' clocks — not the
+			 * daemon — decided whether a host was shown as silent. */
 			return Ok(new
 			{
 				staleAfterSeconds = StaleAfterSeconds,
@@ -95,8 +104,8 @@ namespace FishMMO.ControlPanel.Controllers
 					processorCount = h.ProcessorCount,
 					startedUtc = h.StartedUtc,
 					lastHeartbeatUtc = h.LastHeartbeatUtc,
-					heartbeatAgeSeconds = Math.Round((now - h.LastHeartbeatUtc).TotalSeconds, 1),
-					stale = (now - h.LastHeartbeatUtc).TotalSeconds > StaleAfterSeconds,
+					heartbeatAgeSeconds = Math.Round(h.HeartbeatAgeSeconds, 1),
+					stale = IsHeartbeatStale(h.HeartbeatAgeSeconds),
 					apps = h.Apps.Select(a => new
 					{
 						id = a.ID,
@@ -108,6 +117,7 @@ namespace FishMMO.ControlPanel.Controllers
 						maxRestartAttempts = a.MaxRestartAttempts,
 						monitoredPort = a.MonitoredPort,
 						lastReportedUtc = a.LastReportedUtc,
+						reportAgeSeconds = Math.Round(a.ReportAgeSeconds, 1),
 					}),
 				}),
 			});

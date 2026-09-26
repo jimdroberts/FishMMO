@@ -138,6 +138,19 @@ namespace FishMMO.UnitTests.Harness
 		}
 
 		/// <summary>
+		/// Starts an SRP login without waiting for its result, for a test whose connection is closed
+		/// part-way and so will never be answered.
+		/// </summary>
+		/// <param name="username">Account username.</param>
+		/// <param name="password">Account password.</param>
+		public void BeginLogin(string username, string password)
+		{
+			ResetForNextAttempt();
+			SetLoginCredentials(username, password, register: false);
+			OnConnected();
+		}
+
+		/// <summary>
 		/// Stages a token then drives the full token auth flow and awaits the result.
 		/// </summary>
 		/// <param name="token">Token identifier returned by <see cref="InMemoryAccountStore"/> issue methods.</param>

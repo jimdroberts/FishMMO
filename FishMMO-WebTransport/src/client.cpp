@@ -15,6 +15,16 @@ static QUIC_STATUS QUIC_API client_conn_cb(HQUIC conn, void* ctx,
 static void on_client_dgram_drain(void* ctx, wt_connection_id_t conn_id,
                                    const uint8_t* data, int32_t length);
 
+/* ── Connection-handle handoff (see app_conn in client.h) ───── */
+enum {
+    WT_APP_RETIRE_OWNED,     /* caller set RETIRED, no call in flight: caller closes */
+    WT_APP_RETIRE_DEFERRED,  /* caller set RETIRED, a call is in flight: it closes */
+    WT_APP_RETIRE_ALREADY    /* someone else retired it first: they close */
+};
+static int  client_app_retire(wt_client_s* cli);
+static bool client_app_enter(wt_client_s* cli);
+static void client_app_exit(wt_client_s* cli);
+
 /* ═══════════════════════════════════════════════════════════════
  * INTERNAL API
  * ═══════════════════════════════════════════════════════════════ */
@@ -34,6 +44,8 @@ wt_client_s* wt_client_alloc_impl(
     atomic_init(&cli->state, WT_CLIENT_STOPPED);
     atomic_init(&cli->connected, false);
     atomic_init(&cli->pending_shutdowns, 0);
+    /* No connection yet: statistics reads and sends are refused until connect. */
+    atomic_init(&cli->app_state, WT_CLIENT_APP_RETIRED);
 
     wt_datagram_queue_init(&cli->dgram_queue);
     return cli;
@@ -73,9 +85,28 @@ void wt_client_free_impl(wt_client_s* client)
              * spin-wait completes before the timeout. */
             HQUIC qc = (HQUIC)atomic_ptr_load(&client->quic_conn);
             if (qc) {
-                MsQuic->ConnectionClose(qc);
+                /* Retire the statistics slot first: whoever retires it owns
+                 * the close, so a SHUTDOWN_COMPLETE racing this one sees
+                 * AppCloseInProgress / ALREADY and leaves the handle alone. */
+                if (client_app_retire(client) == WT_APP_RETIRE_OWNED)
+                    MsQuic->ConnectionClose(qc);
                 atomic_ptr_store(&client->quic_conn, NULL);
             }
+        }
+
+        /* SHUTDOWN_COMPLETE hands the session to the next wt_client_poll
+         * (pending_shutdown_session).  A client destroyed without polling
+         * again after its disconnect never had that poll, and its session
+         * and stream manager leaked (LeakSanitizer: every session of a
+         * connect/disconnect/destroy cycle).  This is the application
+         * thread, which owns session shutdown, and the callback that stashed
+         * it has finished — unless the wait above timed out, in which case
+         * a late callback may still be running and the session is left. */
+        if (retries >= 0) {
+            wt_session_t* s = (wt_session_t*)atomic_ptr_exchange(
+                &client->pending_shutdown_session, NULL);
+            if (s)
+                wt_session_shutdown(s);
         }
 
         /* Close handles deferred from SHUTDOWN_COMPLETE callback.
@@ -94,13 +125,26 @@ void wt_client_free_impl(wt_client_s* client)
         return;
     }
 
-    /* Never connected — clean up inline. Handle closure order: conn first. */
+    /* Never connected, or already shut down without a disconnect call (the
+     * server closed it: pending_shutdowns was never raised) — clean up
+     * inline. Handle closure order: conn first. */
     {
         HQUIC qconn = (HQUIC)atomic_ptr_load(&client->quic_conn);
         if (qconn) {
-            MsQuic->ConnectionClose(qconn);
+            /* See the force-close path above: retire, then close. */
+            if (client_app_retire(client) == WT_APP_RETIRE_OWNED)
+                MsQuic->ConnectionClose(qconn);
             atomic_ptr_store(&client->quic_conn, NULL);
         }
+    }
+    /* The server-closed case left its session for a poll that will not
+     * come (see the drain in the path above); ConnectionClose above may
+     * also have delivered SHUTDOWN_COMPLETE inline and stashed one. */
+    {
+        wt_session_t* s = (wt_session_t*)atomic_ptr_exchange(
+            &client->pending_shutdown_session, NULL);
+        if (s)
+            wt_session_shutdown(s);
     }
     if (client->session_config) {
         MsQuic->ConfigurationClose(client->session_config);
@@ -234,6 +278,12 @@ int32_t wt_client_connect_impl(
         return WT_ERR_UNKNOWN;
     }
 
+    /* Statistics reads and sends may use this handle from now until its
+     * shutdown completes.  Handle first, then open the slot, so a call that
+     * enters always finds it. */
+    atomic_ptr_store(&client->app_conn, (HQUIC)atomic_ptr_load(&client->quic_conn));
+    atomic_store(&client->app_state, 0);
+
     /* ── Start connection ──
      * Use the address (IP or hostname) for the connection target.
      * server_name is only used for TLS SNI. msquic ConnectionStart
@@ -246,6 +296,7 @@ int32_t wt_client_connect_impl(
                                       client->address, port);
     if (QUIC_FAILED(status)) {
         WT_LOG_ERROR("ConnectionStart: 0x%x", status);
+        client_app_retire(client);  /* this thread is the only reader: always OWNED */
         MsQuic->ConnectionClose((HQUIC)atomic_ptr_load(&client->quic_conn));
         MsQuic->ConfigurationClose(client->session_config);
         MsQuic->RegistrationClose(client->registration);
@@ -315,22 +366,23 @@ int32_t wt_client_send_stream_impl(
     if (!client || !data || length <= 0)
         return WT_ERR_SEND_FAILED;
 
+    /* Inside the handle gate SHUTDOWN_COMPLETE cannot close the connection
+     * under this send (see app_conn in client.h). */
+    if (!client_app_enter(client))
+        return WT_ERR_INVALID_STATE;
+    int32_t result = WT_ERR_INVALID_STATE;
     wt_session_t* session = (wt_session_t*)atomic_ptr_load(&client->session);
-    if (!session || !wt_session_acquire(session))
-        return WT_ERR_INVALID_STATE;
-
-    /* Re-check state AFTER acquiring — SHUTDOWN_COMPLETE may have
-     * nulled session and set connected=false between our load and acquire.
-     * If session ptr changed, our acquire is on a potentially stale
-     * (but still alive) session — release and bail. */
-    if (atomic_ptr_load(&client->session) != session ||
-        !atomic_load(&client->connected)) {
+    if (session && wt_session_acquire(session)) {
+        /* Re-check state AFTER acquiring — SHUTDOWN_COMPLETE may have
+         * nulled session and set connected=false between our load and acquire.
+         * If session ptr changed, our acquire is on a potentially stale
+         * (but still alive) session — release and bail. */
+        if (atomic_ptr_load(&client->session) == session &&
+            atomic_load(&client->connected))
+            result = wt_session_send_stream(session, data, length);
         wt_session_release(session);
-        return WT_ERR_INVALID_STATE;
     }
-
-    int32_t result = wt_session_send_stream(session, data, length);
-    wt_session_release(session);
+    client_app_exit(client);
     return result;
 }
 
@@ -340,18 +392,19 @@ int32_t wt_client_send_datagram_impl(
     if (!client || !data || length <= 0)
         return WT_ERR_SEND_FAILED;
 
+    /* Inside the handle gate SHUTDOWN_COMPLETE cannot ConnectionClose the
+     * handle DatagramSend is given (see app_conn in client.h). */
+    if (!client_app_enter(client))
+        return WT_ERR_INVALID_STATE;
+    int32_t result = WT_ERR_INVALID_STATE;
     wt_session_t* session = (wt_session_t*)atomic_ptr_load(&client->session);
-    if (!session || !wt_session_acquire(session))
-        return WT_ERR_INVALID_STATE;
-
-    if (atomic_ptr_load(&client->session) != session ||
-        !atomic_load(&client->connected)) {
+    if (session && wt_session_acquire(session)) {
+        if (atomic_ptr_load(&client->session) == session &&
+            atomic_load(&client->connected))
+            result = wt_session_send_datagram(session, data, length);
         wt_session_release(session);
-        return WT_ERR_INVALID_STATE;
     }
-
-    int32_t result = wt_session_send_datagram(session, data, length);
-    wt_session_release(session);
+    client_app_exit(client);
     return result;
 }
 
@@ -367,13 +420,141 @@ int32_t wt_client_get_mtu_impl(wt_client_s* client)
      * Subtracting QUIC long-header overhead (~60 bytes for initial,
      * ~20 bytes for 1-RTT) gives ~1140 usable for datagrams.
      *
-     * MsQuic performs Path MTU Discovery (PMTUD) automatically, but
-     * the negotiated MTU is internal.  A future enhancement could
-     * expose QUIC_PARAM_CONN_STATISTICS.Pmtu from MsQuic's private
-     * connection struct, but 1200 is the safe, always-works value
-     * that avoids IP fragmentation across all paths. */
+     * MsQuic performs Path MTU Discovery (PMTUD) automatically; the
+     * discovered value is reported as path_mtu by
+     * wt_client_get_connection_stats.  This function keeps returning
+     * 1200, the safe, always-works value that avoids IP fragmentation
+     * across all paths, because a sender sized to the discovered MTU
+     * would break the moment the path shrank again. */
     (void)client;
     return WT_DEFAULT_MTU;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * CONNECTION STATISTICS
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* Enter a call that uses the connection handle (statistics read or send).
+ * Refused once the slot is retired, so no call can start on a handle whose
+ * close has been claimed. */
+static bool client_app_enter(wt_client_s* cli)
+{
+    int s = atomic_load(&cli->app_state);
+    for (;;) {
+        if (s & WT_CLIENT_APP_RETIRED)
+            return false;
+        /* On failure s is refreshed with the current value. */
+        if (atomic_compare_exchange_strong(&cli->app_state, &s, s + 1))
+            return true;
+    }
+}
+
+/* Leave such a call.  The last call out of a slot retired while it was in
+ * flight inherits the close SHUTDOWN_COMPLETE deferred to it. */
+static void client_app_exit(wt_client_s* cli)
+{
+    int prev = atomic_fetch_sub(&cli->app_state, 1);
+    if ((prev & WT_CLIENT_APP_RETIRED) &&
+        (prev & WT_CLIENT_APP_USERS) == 1) {
+        HQUIC conn = (HQUIC)atomic_ptr_exchange(&cli->app_conn, NULL);
+        if (conn)
+            MsQuic->ConnectionClose(conn);
+    }
+}
+
+/* Claim the close of the connection handle.  Exactly one caller sees the
+ * RETIRED bit go from clear to set; if no call is in flight at that moment
+ * it owns the close, otherwise the last call does. */
+static int client_app_retire(wt_client_s* cli)
+{
+    int s = atomic_load(&cli->app_state);
+    for (;;) {
+        if (s & WT_CLIENT_APP_RETIRED)
+            return WT_APP_RETIRE_ALREADY;
+        if (atomic_compare_exchange_strong(&cli->app_state, &s,
+                                           s | WT_CLIENT_APP_RETIRED))
+            break;
+    }
+    if ((s & WT_CLIENT_APP_USERS) != 0)
+        return WT_APP_RETIRE_DEFERRED;
+    atomic_ptr_store(&cli->app_conn, NULL);
+    return WT_APP_RETIRE_OWNED;
+}
+
+int32_t wt_client_get_connection_stats_impl(
+    wt_client_s* client, wt_connection_stats_t* stats)
+{
+    if (!client || !stats || stats->struct_size < WT_STATS_HEADER_SIZE)
+        return WT_ERR_UNKNOWN;
+
+    if (!client_app_enter(client))
+        return WT_ERR_INVALID_STATE;
+
+    QUIC_STATISTICS_V2 st;
+    memset(&st, 0, sizeof(st));
+    uint32_t len = (uint32_t)sizeof(st);
+    QUIC_STATUS status = QUIC_STATUS_INVALID_STATE;
+    HQUIC conn = (HQUIC)atomic_ptr_load(&client->app_conn);
+    if (conn) {
+        /* Queued to the connection's worker; HIGH_PRIORITY puts it ahead of
+         * that worker's backlog so the wait stays short under load. */
+        status = MsQuic->GetParam(conn,
+                                  QUIC_PARAM_CONN_STATISTICS_V2 | QUIC_PARAM_HIGH_PRIORITY,
+                                  &len, &st);
+    }
+    client_app_exit(client);
+
+    if (!conn)
+        return WT_ERR_INVALID_STATE;
+    if (QUIC_FAILED(status)) {
+        WT_LOG_WARN("GetParam(CONN_STATISTICS_V2) failed: 0x%x", status);
+        return WT_ERR_UNKNOWN;
+    }
+
+    wt_connection_stats_t full;
+    memset(&full, 0, sizeof(full));
+    full.version = WT_CONNECTION_STATS_VERSION;
+
+    /* msquic fills only the fields its own build knows and reports how many
+     * bytes that was; anything past it stays zero and its flag stays clear. */
+    if (len >= QUIC_STATISTICS_V2_SIZE_2)
+        full.flags |= WT_CONN_STATS_HAS_CWND;
+    if (len >= QUIC_STATISTICS_V2_SIZE_4)
+        full.flags |= WT_CONN_STATS_HAS_RTT_VARIANCE;
+    if (st.EcnCapable)
+        full.flags |= WT_CONN_STATS_ECN_CAPABLE;
+    if (st.ResumptionSucceeded)
+        full.flags |= WT_CONN_STATS_RESUMED;
+
+    full.rtt_us                       = st.Rtt;
+    full.min_rtt_us                   = st.MinRtt;
+    full.max_rtt_us                   = st.MaxRtt;
+    full.rtt_variance_us              = st.RttVariance;
+    full.path_mtu                     = st.SendPathMtu;
+    full.congestion_window            = st.SendCongestionWindow;
+    full.congestion_events            = st.SendCongestionCount;
+    full.persistent_congestion_events = st.SendPersistentCongestionCount;
+    full.key_updates                  = st.KeyUpdateCount;
+
+    full.send_packets                 = st.SendTotalPackets;
+    full.send_bytes                   = st.SendTotalBytes;
+    full.send_stream_bytes            = st.SendTotalStreamBytes;
+    full.send_ack_eliciting_packets   = st.SendRetransmittablePackets;
+    full.send_suspected_lost_packets  = st.SendSuspectedLostPackets;
+    full.send_spurious_lost_packets   = st.SendSpuriousLostPackets;
+    full.recv_packets                 = st.RecvTotalPackets;
+    full.recv_bytes                   = st.RecvTotalBytes;
+    full.recv_stream_bytes            = st.RecvTotalStreamBytes;
+    full.recv_reordered_packets       = st.RecvReorderedPackets;
+    full.recv_dropped_packets         = st.RecvDroppedPackets;
+    full.recv_duplicate_packets       = st.RecvDuplicatePackets;
+    full.recv_decryption_failures     = st.RecvDecryptionFailures;
+
+    uint32_t n = stats->struct_size < (uint32_t)sizeof(full)
+                     ? stats->struct_size : (uint32_t)sizeof(full);
+    full.struct_size = n;
+    memcpy(stats, &full, n);
+    return WT_OK;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -491,7 +672,26 @@ client_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         }
 
         atomic_ptr_store(&cli->quic_conn, NULL);
-        MsQuic->ConnectionClose(conn);
+
+        /* Close the handle — unless the application thread is already
+         * closing it (AppCloseInProgress: free_impl or a failed connect
+         * called ConnectionClose, which delivers this event inline), or a
+         * call is still using it: a wt_client_get_connection_stats read
+         * waiting on this worker for its answer, or a send between its
+         * checks and DatagramSend.  Closing under either would free the
+         * connection it is about to use; that call closes the handle
+         * itself when it leaves (client_app_exit). */
+        switch (client_app_retire(cli)) {
+        case WT_APP_RETIRE_OWNED:
+            if (!event->SHUTDOWN_COMPLETE.AppCloseInProgress)
+                MsQuic->ConnectionClose(conn);
+            break;
+        case WT_APP_RETIRE_DEFERRED:
+            WT_LOG_INFO("Client connection close deferred to an in-flight application call");
+            break;
+        default:
+            break;
+        }
 
         /* Clean up any incomplete HTTP/3 handshake */
         if (cli->h3_session) {

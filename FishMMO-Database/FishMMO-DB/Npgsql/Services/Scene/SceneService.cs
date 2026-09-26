@@ -90,6 +90,78 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 		}
 
+		/// <summary>
+		/// The database server's clock as a UTC <c>timestamp without time zone</c>, the type of
+		/// every scene time column.
+		/// </summary>
+		/// <remarks>
+		/// A scene row is written by one process and aged by others. The dungeon finder on one
+		/// scene server queues it, a different scene server loads it and bounds its lifetime, and
+		/// the world server reaps it if it never becomes ready. Each enqueue used to stamp
+		/// <c>time_created</c> with its own host's <c>DateTime.UtcNow</c>, so every age taken from
+		/// the row was really the difference between two hosts' clocks, and a host running
+		/// minutes fast closed instances minutes early. The database is the one clock every one
+		/// of those processes already shares. Rows are stamped with it here and aged against it
+		/// in SQL (<see cref="SceneAgeSecondsSql"/>), so no host clock takes part at all.
+		/// <para>
+		/// <c>clock_timestamp()</c> rather than <c>CURRENT_TIMESTAMP</c>: the latter is the start
+		/// of the enclosing transaction, not the moment of the statement.
+		/// </para>
+		/// </remarks>
+		private const string DatabaseUtcNowSql = "(clock_timestamp() AT TIME ZONE 'UTC')";
+
+		/// <summary>
+		/// A scene row's age in seconds by the database clock, as <c>double precision</c>. Expects
+		/// the scene table to be reachable as <c>s</c>.
+		/// </summary>
+		private const string SceneAgeSecondsSql = "EXTRACT(EPOCH FROM (" + DatabaseUtcNowSql + " - s.time_created))::double precision";
+
+		/// <summary>
+		/// The scene columns <see cref="ReadSceneRow"/> maps, in its order, qualified by the alias
+		/// <c>s</c>.
+		/// </summary>
+		private const string SceneRowColumnsSql =
+			"s.id, s.world_server_id, s.scene_server_id, s.scene_name, s.scene_handle, s.scene_status, s.scene_type, " +
+			"s.character_id, s.character_count, s.time_created, s.party_id, s.difficulty, s.is_private";
+
+		/// <summary>Number of columns in <see cref="SceneRowColumnsSql"/>.</summary>
+		private const int SceneRowColumnCount = 13;
+
+		/// <summary>
+		/// Maps one row laid out as <see cref="SceneRowColumnsSql"/>, starting at ordinal 0.
+		/// </summary>
+		private static SceneData ReadSceneRow(System.Data.Common.DbDataReader reader)
+		{
+			return new SceneData(
+				id: reader.GetInt64(0),
+				worldServerID: reader.GetInt64(1),
+				sceneServerID: reader.GetInt64(2),
+				sceneName: reader.GetString(3),
+				sceneHandle: reader.GetInt32(4),
+				sceneStatus: reader.GetInt32(5),
+				sceneType: reader.GetInt32(6),
+				characterID: reader.GetInt64(7),
+				characterCount: reader.GetInt32(8),
+				timeCreated: DateTime.SpecifyKind(reader.GetDateTime(9), DateTimeKind.Utc),
+				partyID: reader.GetInt64(10),
+				difficulty: reader.GetInt32(11),
+				isPrivate: reader.GetBoolean(12));
+		}
+
+		/// <summary>
+		/// Reads the age column that follows <see cref="SceneRowColumnsSql"/>, clamped at zero.
+		/// </summary>
+		/// <remarks>
+		/// Negative only for a row stamped by a host clock ahead of the database, which rows
+		/// written before <see cref="DatabaseUtcNowSql"/> may be. "Created in the future" is not an
+		/// age anything downstream can use; zero is the honest reading of it.
+		/// </remarks>
+		private static double ReadSceneAge(System.Data.Common.DbDataReader reader)
+		{
+			double age = reader.IsDBNull(SceneRowColumnCount) ? 0.0 : reader.GetDouble(SceneRowColumnCount);
+			return age > 0.0 ? age : 0.0;
+		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> EnqueueIfUnderOutstandingLimitAsync(
 			long worldServerId,
@@ -119,14 +191,15 @@ namespace FishMMO.Database.Npgsql.Services
 				/* One statement, so the "how many are already coming?" count and the insert
 				 * cannot be interleaved by a second caller. scene_server_id and scene_handle are
 				 * written as 0 because no scene server owns the row yet — DequeueAsync hands it
-				 * to one, and SetReadyAsync stamps both. */
+				 * to one and stamps the claim, and SetReadyAsync writes the real handle.
+				 * time_created is the database's clock; see DatabaseUtcNowSql. */
 				var sql = $@"WITH mine AS (
-						SELECT id FROM {TableName} WHERE request_key = {{7}}
+						SELECT id FROM {TableName} WHERE request_key = {{4}}
 					),
 					ins AS (
 						INSERT INTO {TableName}
 							(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, request_key)
-						SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, 0, 0, {{4}}, {{7}}
+						SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, 0, 0, {DatabaseUtcNowSql}, {{4}}
 						WHERE NOT EXISTS (SELECT 1 FROM mine)
 						AND (
 							SELECT COUNT(*) FROM {TableName}
@@ -148,10 +221,9 @@ namespace FishMMO.Database.Npgsql.Services
 						sceneName,
 						(int)SceneStatus.Pending,
 						(int)sceneType,
-						DateTime.UtcNow,
+						requestKey,
 						(int)SceneStatus.Loading,
 						maxOutstanding,
-						requestKey,
 					},
 					reader => reader.GetInt64(0),
 					cancellationToken).ConfigureAwait(false);
@@ -232,15 +304,17 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				/* One statement, so no other member of the party can insert between the existence
 				 * check and this insert. scene_server_id and scene_handle are written as 0 because
-				 * no scene server owns the row yet — DequeueAsync hands it to one, and SetReadyAsync
-				 * stamps both. */
+				 * no scene server owns the row yet — DequeueAsync hands it to one and stamps the
+				 * claim, and SetReadyAsync writes the real handle. time_created is the database's
+				 * clock; see DatabaseUtcNowSql. */
 
-				/* Fixed parameter offsets. {0}..{10} are the row values and the blocking statuses;
-				 * the variable-length member id list starts at {11}. Held as named locals rather
-				 * than interpolated arithmetic because `{{expr}}` inside an interpolated verbatim
-				 * string is an escaped literal brace, not a value — a mistake this method has
-				 * already made once. */
+				/* Fixed parameter offsets. {0}..{10} are the row values, the request key ({5}) and
+				 * the blocking statuses; the variable-length member id list starts at {11}. Held as
+				 * named locals rather than interpolated arithmetic because `{{expr}}` inside an
+				 * interpolated verbatim string is an escaped literal brace, not a value — a mistake
+				 * this method has already made once. */
 				const int FirstBlockingIndex = 11;
+				const int KeyIndex = 5;
 
 				var ids = new System.Text.StringBuilder();
 				for (int i = 0; i < blocking.Count; ++i)
@@ -300,21 +374,18 @@ namespace FishMMO.Database.Npgsql.Services
 						)";
 				}
 
-				// The request key rides last, after the two trailing parameters below.
-				int keyIndex = FirstBlockingIndex + blocking.Count + 2;
-
 				string sql;
 				if (heldClauses.Count == 0)
 				{
 					// Nothing to guard against — an ungrouped insert with no requester id. The
 					// same statement without the held-instance NOT EXISTS.
 					sql = $@"WITH mine AS (
-							SELECT id FROM {TableName} WHERE request_key = {{{keyIndex}}}
+							SELECT id FROM {TableName} WHERE request_key = {{{KeyIndex}}}
 						),
 						ins AS (
 							INSERT INTO {TableName}
 								(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private, request_key)
-							SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}}, {{{keyIndex}}}
+							SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {DatabaseUtcNowSql}, {{6}}, {{7}}, {{8}}, {{{KeyIndex}}}
 							WHERE NOT EXISTS (SELECT 1 FROM mine)
 							RETURNING id
 						)
@@ -323,12 +394,12 @@ namespace FishMMO.Database.Npgsql.Services
 				else
 				{
 					sql = $@"WITH mine AS (
-							SELECT id FROM {TableName} WHERE request_key = {{{keyIndex}}}
+							SELECT id FROM {TableName} WHERE request_key = {{{KeyIndex}}}
 						),
 						ins AS (
 							INSERT INTO {TableName}
 								(world_server_id, scene_server_id, scene_name, scene_handle, scene_status, scene_type, character_id, character_count, time_created, party_id, difficulty, is_private, request_key)
-							SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {{5}}, {{6}}, {{7}}, {{8}}, {{{keyIndex}}}
+							SELECT {{0}}, 0, {{1}}, 0, {{2}}, {{3}}, {{4}}, 0, {DatabaseUtcNowSql}, {{6}}, {{7}}, {{8}}, {{{KeyIndex}}}
 							WHERE NOT EXISTS (SELECT 1 FROM mine)
 							AND NOT EXISTS (
 								SELECT 1 FROM {TableName}
@@ -344,9 +415,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				// Two trailing parameters after the member ids: the live-match status ceiling, and
 				// the arena scene type, so an arena instance held by a member blocks a dungeon too.
-				// Then the request key.
-				var parameters = new object[keyIndex + 1];
-				parameters[keyIndex] = requestKey;
+				var parameters = new object[FirstBlockingIndex + blocking.Count + 2];
 				parameters[FirstBlockingIndex + blocking.Count] = (int)ArenaMatchStatus.Ended;
 				parameters[FirstBlockingIndex + blocking.Count + 1] = ArenaSceneType;
 				parameters[0] = worldServerId;
@@ -354,7 +423,7 @@ namespace FishMMO.Database.Npgsql.Services
 				parameters[2] = (int)SceneStatus.Pending;
 				parameters[3] = (int)sceneType;
 				parameters[4] = characterId;
-				parameters[5] = DateTime.UtcNow;
+				parameters[KeyIndex] = requestKey;
 				parameters[6] = owningPartyId;
 				parameters[7] = difficulty;
 				parameters[8] = isPrivate;
@@ -378,70 +447,120 @@ namespace FishMMO.Database.Npgsql.Services
 			return result;
 		}
 
-		/// <inheritdoc/>
-		public async Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default)
+		/// <summary>
+		/// Last value handed out by <see cref="NextClaimToken"/>. Starts at a random point so two
+		/// incarnations of one scene server do not issue the same run of tokens.
+		/// </summary>
+		private static int claimTokenSequence = new Random().Next();
+
+		/// <summary>
+		/// A dequeue claim token: negative, and distinct from every other token this process has
+		/// issued for the next 2^31 claims.
+		/// </summary>
+		/// <remarks>
+		/// Written into <c>scene_handle</c> by <see cref="DequeueAsync"/>, where it identifies one call
+		/// among the loads the same scene server has in flight. Negative so it can never be read as a
+		/// real handle; distinct rather than random so two in-flight claims of one server cannot
+		/// share one. Tokens from a previous incarnation of the server do not matter: that server
+		/// deletes its own rows when it starts (<see cref="DeleteBySceneServerAsync"/>).
+		/// </remarks>
+		private static int NextClaimToken()
 		{
+			int n = Interlocked.Increment(ref claimTokenSequence) & int.MaxValue;
+			return -1 - n;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<(SceneData Scene, double AgeSeconds)>> DequeueAsync(long sceneServerId, CancellationToken cancellationToken = default)
+		{
+			if (sceneServerId <= 0)
+			{
+				return DatabaseResult<(SceneData Scene, double AgeSeconds)>.Failure(DatabaseErrorCodes.ValidationError, "Invalid scene server ID.");
+			}
+
+			/* Taken once, outside the retried delegate: it is what lets a retry recognise the row its
+			 * first attempt claimed. See ISceneService.DequeueAsync. */
+			int claimToken = NextClaimToken();
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				var sql = $@"WITH scene_to_update AS (
+				/* The age rides back with the row, measured by the database clock that stamped it.
+				 * The scene server that takes this row bounds the instance's lifetime from its
+				 * creation, and it can only do that honestly from an age neither host clock took
+				 * part in. See DatabaseUtcNowSql.
+				 *
+				 * The party, difficulty and privacy are carried through the dequeue, not looked up
+				 * afterwards. The scene server that dequeues a row is the one that will host the
+				 * instance, and the difficulty is what tells it which ruleset to apply — a second
+				 * round trip to fetch it would leave a window in which the scene exists with no
+				 * rules. */
+				/* The claim is recorded on the row, and a retry looks for it first.
+				 *
+				 * A dequeue used to be a bare status flip. A retry after a reply lost past the commit
+				 * could not tell its own committed claim from anybody else's Loading row, so it took
+				 * the next pending row as well, and the first sat in Loading — owned by nobody, since
+				 * scene_server_id was still 0 — until the world server's age sweep reaped it five
+				 * minutes later, with every player waiting on it waiting that long.
+				 *
+				 * "mine" is the row this call already claimed, found by claimant and token; only when
+				 * there is none is a pending row taken. One statement, so the look and the claim
+				 * cannot be separated by another caller. "mine" reads the committed row as it is;
+				 * the claim's own values come back through RETURNING, because a statement's outer
+				 * SELECT does not see what its own UPDATE wrote. */
+				var sql = $@"WITH mine AS (
+						SELECT {SceneRowColumnsSql}, {SceneAgeSecondsSql}
+						FROM {TableName} AS s
+						WHERE s.scene_server_id = {{2}}
+							AND s.scene_handle = {{3}}
+							AND s.scene_status = {{1}}
+						LIMIT 1
+					),
+					scene_to_update AS (
 						SELECT id FROM {TableName}
 						WHERE scene_status = {{0}}
+							AND NOT EXISTS (SELECT 1 FROM mine)
 						ORDER BY time_created, id
 						FOR UPDATE SKIP LOCKED
 						LIMIT 1
-						)
-						UPDATE {TableName}
-						SET scene_status = {{1}}
+					),
+					claimed AS (
+						UPDATE {TableName} AS s
+						SET scene_status = {{1}},
+							scene_server_id = {{2}},
+							scene_handle = {{3}}
 						FROM scene_to_update
-						WHERE {TableName}.id = scene_to_update.id
-						RETURNING {TableName}.id, {TableName}.world_server_id, {TableName}.scene_server_id, {TableName}.scene_name, {TableName}.scene_handle, {TableName}.scene_status, {TableName}.scene_type, {TableName}.character_id, {TableName}.character_count, {TableName}.time_created, {TableName}.party_id, {TableName}.difficulty, {TableName}.is_private";
+						WHERE s.id = scene_to_update.id
+						RETURNING {SceneRowColumnsSql}, {SceneAgeSecondsSql}
+					)
+					SELECT * FROM mine
+					UNION ALL
+					SELECT * FROM claimed";
 
 				var pendingStatus = (int)SceneStatus.Pending;
 				var loadingStatus = (int)SceneStatus.Loading;
 
-				var entity = await ExecuteReturningOrDefaultAsync(
+				return await ExecuteReturningOrDefaultAsync<(SceneData Scene, double AgeSeconds)?>(
 					dbContext,
 					sql,
-					new object[] { pendingStatus, loadingStatus },
-					reader => new SceneEntity
-					{
-						ID = reader.GetInt64(0),
-						WorldServerID = reader.GetInt64(1),
-						SceneServerID = reader.GetInt64(2),
-						SceneName = reader.GetString(3),
-						SceneHandle = reader.GetInt32(4),
-						SceneStatus = reader.GetInt32(5),
-						SceneType = reader.GetInt32(6),
-						CharacterID = reader.GetInt64(7),
-						CharacterCount = reader.GetInt32(8),
-						TimeCreated = reader.GetDateTime(9),
-						/* Carried through the dequeue, not looked up afterwards. The scene server
-						 * that dequeues a row is the one that will host the instance, and the
-						 * difficulty is what tells it which ruleset to apply — a second round trip
-						 * to fetch it would leave a window in which the scene exists with no rules. */
-						PartyID = reader.GetInt64(10),
-						Difficulty = reader.GetInt32(11),
-						IsPrivate = reader.GetBoolean(12),
-					},
+					new object[] { pendingStatus, loadingStatus, sceneServerId, claimToken },
+					reader => (ReadSceneRow(reader), ReadSceneAge(reader)),
 					cancellationToken).ConfigureAwait(false);
-
-				return entity != null ? (SceneData?)MapEntityToDto(entity) : null;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			// Convert null result to business logic failure (not an exception case)
 			if (result.IsSuccess && result.Data == null)
 			{
-				return DatabaseResult<SceneData>.Failure(DatabaseErrorCodes.NotFound, "No pending scenes available.");
+				return DatabaseResult<(SceneData Scene, double AgeSeconds)>.Failure(DatabaseErrorCodes.NotFound, "No pending scenes available.");
 			}
 
 			// If failed, propagate the failure
 			if (!result.IsSuccess)
 			{
-				return DatabaseResult<SceneData>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				return DatabaseResult<(SceneData Scene, double AgeSeconds)>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 			}
 
 			// Success with data (checked for null above)
-			return DatabaseResult<SceneData>.Success(result.Data!.Value);
+			return DatabaseResult<(SceneData Scene, double AgeSeconds)>.Success(result.Data!.Value);
 		}
 
 		/// <inheritdoc/>
@@ -469,6 +588,72 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <summary>
+		/// Upper bound on the scene ids one batched statement names.
+		/// </summary>
+		/// <remarks>
+		/// Every caller already passes a bounded set (a pulse's closures, one sweep's expiries, one
+		/// routing batch's instances); this is the second bound, so a future caller that forgets the
+		/// first cannot turn one call into an unbounded statement.
+		/// </remarks>
+		private const int MaxSceneIdsPerStatement = 4096;
+
+		/// <summary>
+		/// The distinct positive ids in <paramref name="sceneIds"/>, ascending, capped at
+		/// <see cref="MaxSceneIdsPerStatement"/>.
+		/// </summary>
+		/// <remarks>
+		/// Ascending so that every batched statement over scene rows takes its row locks in the same
+		/// order, which is what keeps two of them from deadlocking on an overlapping set.
+		/// </remarks>
+		private static long[] ToSceneIdArray(IEnumerable<long> sceneIds)
+		{
+			if (sceneIds == null)
+			{
+				return Array.Empty<long>();
+			}
+
+			var ids = new SortedSet<long>();
+			foreach (long id in sceneIds)
+			{
+				if (id > 0)
+				{
+					ids.Add(id);
+					if (ids.Count >= MaxSceneIdsPerStatement)
+					{
+						break;
+					}
+				}
+			}
+
+			var array = new long[ids.Count];
+			ids.CopyTo(array);
+			return array;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> UpdateStatusManyAsync(IReadOnlyCollection<long> sceneIds, SceneStatus status, CancellationToken cancellationToken = default)
+		{
+			long[] ids = ToSceneIdArray(sceneIds);
+			if (ids.Length == 0)
+			{
+				return DatabaseResult<int>.Success(0);
+			}
+
+			// Absolute, so a retry after a reply lost past the commit writes the same thing again.
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"UPDATE {TableName}
+					SET scene_status = {{0}}
+					WHERE id = ANY({{1}}::bigint[])";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { (int)status, ids },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -591,6 +776,26 @@ namespace FishMMO.Database.Npgsql.Services
 				await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
 					new object[] { sceneId },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> DeleteManyAsync(IReadOnlyCollection<long> sceneIds, CancellationToken cancellationToken = default)
+		{
+			long[] ids = ToSceneIdArray(sceneIds);
+			if (ids.Length == 0)
+			{
+				return DatabaseResult<int>.Success(0);
+			}
+
+			// Idempotent for the same reason as DeleteAsync: a row already gone is the outcome asked for.
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				var sql = $@"DELETE FROM {TableName} WHERE id = ANY({{0}}::bigint[])";
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { ids },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
@@ -861,6 +1066,32 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<(SceneData Scene, double AgeSeconds)>>> FetchWithAgesAsync(
+			IReadOnlyCollection<long> sceneIds,
+			CancellationToken cancellationToken = default)
+		{
+			long[] ids = ToSceneIdArray(sceneIds);
+			if (ids.Length == 0)
+			{
+				return DatabaseResult<IReadOnlyList<(SceneData Scene, double AgeSeconds)>>.Success(Array.Empty<(SceneData, double)>());
+			}
+
+			return await ExecuteReadAsync<IReadOnlyList<(SceneData Scene, double AgeSeconds)>>(async dbContext =>
+			{
+				var sql = $@"SELECT {SceneRowColumnsSql}, {SceneAgeSecondsSql}
+					FROM {TableName} AS s
+					WHERE s.id = ANY({{0}}::bigint[])";
+
+				return await ReadRowsAsync(
+					dbContext,
+					sql,
+					new object[] { ids },
+					reader => (ReadSceneRow(reader), ReadSceneAge(reader)),
+					cancellationToken).ConfigureAwait(false);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult<IReadOnlyList<SceneData>>> FetchAvailableAsync(
 			long worldServerId,
 			string sceneName,
@@ -898,6 +1129,31 @@ namespace FishMMO.Database.Npgsql.Services
 				return data;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<int>> SumCharacterCountAsync(long worldServerId, CancellationToken cancellationToken = default)
+		{
+			if (worldServerId <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Invalid world server ID.");
+			}
+
+			// The same rows FetchManyAsync returns, summed where they are rather than shipped here.
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				var sql = $@"SELECT COALESCE(SUM(character_count), 0)::bigint
+					FROM {TableName}
+					WHERE world_server_id = {{0}} AND scene_status = {{1}}";
+
+				long total = await ExecuteScalarLongAsync(
+					dbContext,
+					sql,
+					new object[] { worldServerId, (int)SceneStatus.Ready },
+					cancellationToken).ConfigureAwait(false);
+
+				return total > int.MaxValue ? int.MaxValue : (int)Math.Max(0L, total);
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -959,7 +1215,7 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> DeleteStaleUnreadyAsync(
 			long worldServerId,
-			DateTime olderThanUtc,
+			double minAgeSeconds,
 			int maxRows = 256,
 			CancellationToken cancellationToken = default)
 		{
@@ -977,15 +1233,23 @@ namespace FishMMO.Database.Npgsql.Services
 				maxRows = 4096;
 			}
 
+			if (!(minAgeSeconds > 0.0))
+			{
+				minAgeSeconds = 0.0;
+			}
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
-				// SKIP LOCKED so a row a scene server is concurrently dequeuing is left to it
-				// rather than deleted out from under an in-flight load.
+				/* SKIP LOCKED so a row a scene server is concurrently dequeuing is left to it
+				 * rather than deleted out from under an in-flight load.
+				 *
+				 * The cutoff is taken from the database clock that stamped time_created, not passed
+				 * in from the caller's host. See DatabaseUtcNowSql. */
 				var sql = $@"WITH stale AS (
 						SELECT id FROM {TableName}
 						WHERE world_server_id = {{0}}
 							AND scene_status <> {{1}}
-							AND time_created < {{2}}
+							AND time_created < {DatabaseUtcNowSql} - make_interval(secs => {{2}})
 						ORDER BY time_created, id
 						FOR UPDATE SKIP LOCKED
 						LIMIT {{3}}
@@ -996,7 +1260,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { worldServerId, (int)SceneStatus.Ready, olderThanUtc, maxRows },
+					new object[] { worldServerId, (int)SceneStatus.Ready, minAgeSeconds, maxRows },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
@@ -1005,13 +1269,21 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<int>> DeleteByStaleSceneServersAsync(
 			long worldServerId,
-			DateTime pulseOlderThanUtc,
+			double pulseStaleSeconds,
 			int maxRows = 256,
 			CancellationToken cancellationToken = default)
 		{
 			if (worldServerId <= 0)
 			{
 				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "Invalid world server ID.");
+			}
+
+			/* Refused rather than clamped. A window of zero (or a NaN, which compares false with
+			 * everything) calls every scene server dead, and this statement would then delete every
+			 * scene row the world owns, live instances and their players included. */
+			if (!(pulseStaleSeconds > 0.0))
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "The pulse staleness window must be positive.");
 			}
 
 			if (maxRows < 1)
@@ -1027,7 +1299,11 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				/* NOT EXISTS covers both halves of "the host is gone": a scene server that
 				 * deregistered (no row) and one that crashed (row present, pulse stopped). A
-				 * plain join against scene_servers would silently keep the first case. */
+				 * plain join against scene_servers would silently keep the first case.
+				 *
+				 * The cutoff is the database clock minus the window, the same clock that stamped
+				 * last_pulse. It used to be an instant computed on the world server's host, so the
+				 * sweep's idea of "stale" moved with that host's clock. */
 				var sql = $@"WITH orphaned AS (
 						SELECT s.id FROM {TableName} AS s
 						WHERE s.world_server_id = {{0}}
@@ -1035,7 +1311,7 @@ namespace FishMMO.Database.Npgsql.Services
 							AND NOT EXISTS (
 								SELECT 1 FROM scene_servers AS ss
 								WHERE ss.id = s.scene_server_id
-									AND ss.last_pulse >= {{1}}
+									AND ss.last_pulse >= {DatabaseUtcNowSql} - make_interval(secs => {{1}})
 							)
 						ORDER BY s.id
 						FOR UPDATE SKIP LOCKED
@@ -1047,7 +1323,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { worldServerId, pulseOlderThanUtc, maxRows },
+					new object[] { worldServerId, pulseStaleSeconds, maxRows },
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;

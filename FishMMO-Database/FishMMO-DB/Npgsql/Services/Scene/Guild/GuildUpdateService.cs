@@ -104,16 +104,18 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<List<GuildUpdateData>>> FetchAsync(
+		public async Task<DatabaseResult<UpdatePumpRead<GuildUpdateData>>> FetchAsync(
 			List<long> guildIds,
 			DateTime lastFetch,
 			CancellationToken cancellationToken = default)
 		{
 			if (guildIds == null || guildIds.Count == 0)
-				return DatabaseResult<List<GuildUpdateData>>.Success(new List<GuildUpdateData>());
+				return DatabaseResult<UpdatePumpRead<GuildUpdateData>>.Success(new UpdatePumpRead<GuildUpdateData>(new List<GuildUpdateData>(), DateTime.MinValue));
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
+				// The database's clock, read before the rows: the caller's next mark (see UpdatePumpRead).
+				DateTime readStartedUtc = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 				var guildIdArray = guildIds.Distinct().ToArray();
 				var sql = $@"SELECT * FROM {TableName}
 					WHERE last_update >= {{0}}
@@ -125,7 +127,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				return updates.Select(MapEntityToDto).ToList();
+				return new UpdatePumpRead<GuildUpdateData>(updates.Select(MapEntityToDto).ToList(), readStartedUtc);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;

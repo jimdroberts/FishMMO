@@ -1,18 +1,20 @@
 # FishMMO Control Panel
 
-> **Status (2026-09-11): everything the sidebar offers is real.** Sign-in, registration,
+> **Status (2026-09-26): every route the sidebar offers is built.** Sign-in, registration,
 > two-factor enrolment, self-service, the operator character surface, account search and
-> moderation, the audit log, chat log search, the support ticket system, the server board
-> with lock and shutdown control, and the dashboard all run against PostgreSQL and are
-> verified end to end. **There is no fake login and no way to opt into one**, and no operator
-> surface serves fabricated data in any build.
+> moderation, the audit log, chat log search, the support ticket system, guilds and parties,
+> the server board with lock and shutdown control, sequenced maintenance windows, scene
+> instances, per-server bandwidth, the daemon control plane (start, stop and restart through a
+> database command queue, plus the supervisor's own history), platform health, secrets and
+> queues, and the dashboard all run against PostgreSQL. **There is no fake login and no way to
+> opt into one**, and no operator surface serves fabricated data in any build: the design mock
+> and its fixtures were deleted, and `?mock=1` does nothing.
 >
-> The daemon control plane, maintenance sequencing, the platform views and the guilds and
-> social views are **not built** — and neither is start, stop or restart, which cannot be a
-> database row because a stopped process polls nothing. They are marked `built: false` in
-> `wwwroot/js/routes.js`, kept out of the sidebar, and say so plainly if reached directly
-> — they do not error and they do not invent numbers. A control panel showing a reassuring
-> green where there is simply nothing is its worst failure mode.
+> `built: false` in `wwwroot/js/routes.js` marks a route whose backend does not exist; no route
+> carries it today. Such a route is kept out of the sidebar and says so plainly if reached
+> directly — it does not error and it does not invent numbers. A control panel showing a
+> reassuring green where there is simply nothing is its worst failure mode. Arena history and
+> housing plots have no operator surface, and `js/api.js` deliberately has no method for them.
 >
 > **Every Game Master and Admin action is recorded** in `admin_audit_log`, in the panel and
 > in the game alike. On the HTTP side an action filter records every privileged write
@@ -22,8 +24,8 @@
 > **Staff reads are recorded too, except automatic refreshes** (2026-09-14). The first load of
 > a page and every refresh somebody asked for — Refresh, a filter, a page, the re-read after an
 > action — write a `view.<controller>.<action>` row. A page re-reading itself on a timer (the
-> server board, maintenance, daemon hosts, platform health and queues, the character editor's
-> kick-and-wait) sends `X-Panel-Refresh: auto` through `api.auto.*` in `js/api.js`, and a GET or
+> server board, maintenance, bandwidth, daemon hosts, platform health and queues, the character
+> editor's kick-and-wait) sends `X-Panel-Refresh: auto` through `api.auto.*` in `js/api.js`, and a GET or
 > HEAD carrying it is not recorded. The header is trusted for reads only: a write is recorded
 > whatever it carries, and a **refused** request is recorded even when marked, a refused poll
 > being a probe. The in-game staff console follows the same rule with `AutoRefresh` on its roster
@@ -42,10 +44,9 @@ inventory, the schema additions and the phase plan live in
 ## Table of Contents
 
 - [Not a news CMS](#not-a-news-cms)
-- [Run the design mock](#run-the-design-mock)
+- [Run it locally](#run-it-locally)
 - [Project structure](#project-structure)
-- [The mock and how to remove it](#the-mock-and-how-to-remove-it)
-- [What the mock demonstrates](#what-the-mock-demonstrates)
+- [Design decisions the panel enforces](#design-decisions-the-panel-enforces)
 - [SRP](#srp)
 - [Account security (issue #252)](#account-security-issue-252)
 - [Design system](#design-system)
@@ -61,7 +62,13 @@ The launcher's news panel is fetched from `Constants.Configuration.LauncherHtmlU
 at build time from `GeneratedHostConfig.LauncherHtmlUrl` (CI substitutes it from
 `FISHMMO_ROOT_DOMAIN`). Nothing in this project serves it.
 
-## Run the design mock
+## Run it locally
+
+`run-local.sh` is the supported way: it checks that the database credentials will resolve,
+publishes, and serves the publish on `http://localhost:8100` (`--port`, `--env Production`,
+`--check`, `--no-build`; `--migrate` applies pending migrations to the database it points at,
+and `--grant-admin NAME` makes an existing account an Admin). It serves a publish rather than
+`bin/` because the web assets are mapped back to the source tree only in Development. By hand:
 
 ```fish
 cd FishMMO-WebServers/FishMMO-ControlPanel
@@ -72,7 +79,7 @@ dotnet run --project ControlPanel
 
 Kestrel binds loopback on the port from `WebServer:HttpPort` (8100 by default). There is no
 HTTPS redirect: TLS terminates at NGINX in a real deployment, and redirecting would break
-opening the mock locally.
+opening the panel locally.
 
 `Properties/launchSettings.json` sets `ASPNETCORE_ENVIRONMENT=Development` for `dotnet run`.
 Without it the host starts in Production, loads `appsettings.Production.json` — whose
@@ -86,14 +93,6 @@ dotnet ControlPanel/bin/Release/net8.0/FishMMO-ControlPanel.dll
 
 `FISHMMO_ENVIRONMENT` also works and is what the systemd unit sets, matching the other web
 hosts.
-
-The mock is plain static files with no build step, so .NET is not actually required to look
-at it:
-
-```bash
-cd FishMMO-WebServers/FishMMO-ControlPanel/ControlPanel/wwwroot
-python3 -m http.server 8100
-```
 
 ### Signing in
 
@@ -110,17 +109,12 @@ locally, and only those are sent, exactly as the game client does. Even field va
 is performed locally against rules the server publishes, so that no endpoint ever has a
 reason to receive a password.
 
-### Fabricated data for design work
+### No fixture mode
 
-The dashboards that have no server-side read model yet can be filled with fixtures:
-
-```
-http://localhost:8100/?mock=1
-```
-
-That flag affects **data only**. Authentication, registration and verification always go
-to the real backend, whatever it is set to; there is no build of this panel that will
-accept an invented credential.
+There is none, and there must not be one reachable from a query parameter: a panel that can be
+made to show invented numbers will one day show them to somebody who believes them. Every view
+reads through `js/api.js`, and `js/api.js` has a method only for a route a controller serves —
+one that answered in development and 404ed in production would be worse than a missing method.
 
 ## Project structure
 
@@ -128,77 +122,56 @@ accept an invented credential.
 FishMMO-ControlPanel/
 ├── FishMMO-ControlPanel.slnx
 ├── README.md
+├── run-local.sh                 # preflight, publish and serve on localhost
 └── ControlPanel/
     ├── ControlPanel.csproj      # net8.0 web SDK; assembly FishMMO-ControlPanel;
     │                            # copies appsettings from FishMMO-Setup
-    ├── Program.cs               # Host builder, Kestrel, static files, SPA fallback
-    ├── Controllers/
-    │   ├── AccountController.cs # api/Account — player self-service (stubs)
-    │   └── AdminController.cs   # api/Admin   — operator actions (stubs)
+    ├── Program.cs               # Host builder, Kestrel, policies, services, static files, SPA fallback
+    ├── Auth/                    # Panel sessions, policies (Support / Operator / *StepUp)
+    ├── Controllers/             # One per surface: Auth, Account, MyTickets, Support*, Admin*,
+    │                            #   Servers, Maintenance, ServerBandwidth, Daemon, Platform*,
+    │                            #   Dashboard; ModerationGuards and DatabaseReplies helpers
+    ├── Services/                # Registration, SRP and two-factor, self-service, password reset,
+    │                            #   the audit writer and filter, email/SMS drains, the maintenance
+    │                            #   advance and the bandwidth rollup (background services)
     └── wwwroot/                 # The single-page app
         ├── index.html
         ├── css/                 # tokens, base, layout, components
         ├── srp-selftest.html    # verifies js/srp.js against the server's vectors
-        ├── js/
-        │   ├── api.js           # THE SEAM — mock or real HTTP
-        │   ├── app.js           # shell, router, session, step-up
-        │   ├── routes.js        # navigation map + access levels
-        │   ├── srp.js           # SRP-6a client, byte-compatible with the LoginServer
-        │   ├── srp-vectors.json # known answers generated from the .NET library
-        │   ├── ui.js            # escaping, formatting, components, modals
-        │   └── views/           # one module per page, lazily imported
-        └── mock/                # DELETE ME — fixtures, mock API, mock SRP server
+        ├── qr-selftest.html     # verifies the enrolment QR encoder
+        └── js/
+            ├── api.js           # THE SEAM — every HTTP call goes through it
+            ├── app.js           # shell, router, session, step-up
+            ├── routes.js        # navigation map + access levels
+            ├── srp.js           # SRP-6a client, byte-compatible with the LoginServer
+            ├── srp-vectors.json # known answers generated from the .NET library
+            ├── qr.js            # QR encoder for the one-time enrolment handover
+            ├── register.js, reset-password.js
+            ├── ui.js            # escaping, formatting, components, modals
+            └── views/           # one module per page, lazily imported
 ```
 
 No bundler, no framework, no npm. Every file is served as authored, which keeps the design
-reviewable and the diff readable. If a framework is wanted later, `js/api.js` is the only
+reviewable and the diff readable. No view builds a URL or calls `fetch`; every call goes
+through the `api` object in `js/api.js`, so if a framework is wanted later that is the only
 file it has to keep.
 
-## The mock and how to remove it
+## Design decisions the panel enforces
 
-The mock is severable in two steps by construction:
-
-1. **Delete `ControlPanel/wwwroot/mock/`.**
-2. In `ControlPanel/wwwroot/js/api.js`, delete the `USE_MOCK` constant and the selection
-   block at the bottom, replacing them with `export const api = httpApi;`.
-
-That is the whole cutover. It works because of three rules the mock follows:
-
-- **No view imports anything from `mock/`.** Views import `api.js` and `ui.js`, nothing else.
-- **Authentication is never in the mock at all.** `api.js` keeps an `ALWAYS_REAL` list that
-  is copied over the mock last, so nothing in `mock/` can shadow a sign-in method.
-- **No view builds a URL or calls `fetch`.** Every call goes through the `api` object.
-- **`mock/` imports nothing from outside itself.** It has no dependency on the app.
-
-`js/api.js` already contains the real HTTP backend — `httpApi` — with one method per route
-from the design's route table, each a single line. Turning the mock off swaps which object
-`api` points at; the views cannot tell the difference.
-
-The fixture shapes deliberately mirror the DTOs the design names (`AccountSummaryData`,
-`CharacterSummaryData`, `WorldServerData`, `SceneServerData`, `daemon_apps`,
-`admin_audit_log`), so views should not need edits when real responses replace them.
-
-Fixtures are generated from a fixed seed, so the mock looks the same on every reload and
-screenshots stay comparable between design iterations.
-
-## What the mock demonstrates
-
-The mock is not wallpaper. It encodes the design decisions that are easy to get wrong, so
-they can be argued about before they are implemented:
+The decisions that are easy to get wrong, and where to see each one:
 
 | Behaviour | Where to see it |
 |---|---|
 | **A live character cannot be edited.** Its state lives in the owning scene server's memory and would overwrite the row on the next save, so the editor refuses and offers "kick and wait" instead | Administration → Character editor, pick a character shown *in world* |
-| **A maintenance window is one operation, not eight buttons.** Lock, schedule, drain, pin the process, confirm the exit, hold the window, release, unlock — because scheduling a shutdown alone ends with the supervisor restarting the server you just drained | Servers → Maintenance |
-| **A pinned process stays stopped.** Operator intent is distinct from failure, and the supervisor has no such notion today | Daemon → Hosts and processes, the ⋯ menu |
+| **A maintenance window is one operation, not a row of buttons.** It locks every server picked, gives their players a drain, then stops them; each step is rows in the database, so it survives the panel restarting mid-drain | Servers → Maintenance |
+| **A process an operator stopped stays stopped.** The supervisor tracks the intent itself, does not restart or health-check it, and reports it as stopped by an operator rather than as a fault, until an operator starts or restarts it | Daemon → Hosts and processes |
 | **Cancelling a shutdown leaves the server locked.** Reopening is a separate decision | Servers → Board, on a server that is shutting down |
-| **Currency has no direct-write path.** Every adjustment writes a ledger entry with a reason | Administration → Character editor → Currency |
 | **Destructive actions need the target's name typed and a reason.** The reason lands in the audit log | Any red button |
 | **Step-up.** Destructive actions demand a fresh authenticator code, and the action is retried after it rather than lost | Any red button, five minutes after signing in |
 | **Denied attempts are audited too** | Administration → Audit log, filter by Denied |
-| **Secrets are write-only.** Name, fingerprint and rotation date; never a value | Platform → Secrets |
-| **Promotion to Admin is refused.** It is done by the installer or `psql` | Support → Accounts → an account → Change access level |
-| **Nobody may act on their own account with an elevated policy** | Sign in as `operator` and open your own account |
+| **Secrets are an inventory, never a value**, and there is no rotation here | Platform → Secrets |
+| **Nobody may act on their own account, or on a peer or superior**, and nobody may grant a level at or above their own | Support → Accounts → an account |
+| **Bandwidth figures say how they were obtained.** Game data and UDP payload are measured by each server's transport; the bytes on the wire are an estimate, drawn and labelled as one; a window with no rows says "no data", never 0 | Servers → Bandwidth |
 | **The password never leaves the browser.** The sign-in runs a real SRP exchange; only a public ephemeral and a proof are sent | Sign in with a wrong password — it fails on the proof, not on a comparison |
 | **The challenge endpoint is not a username oracle.** An account that does not exist gets a plausible salt and ephemeral, and fails identically | Sign in as a name that does not exist |
 
@@ -223,13 +196,8 @@ only the proof is rejected, on every single login.
 
 Open **`/srp-selftest.html`** to check the implementation against
 `js/srp-vectors.json`, which holds known answers generated from the .NET library. It runs
-25 checks, needs no build step and no dependencies, and must be served over
+21 checks, needs no build step and no dependencies, and must be served over
 `http://localhost` or HTTPS — `crypto.subtle` does not exist on `file://`.
-
-Four of those checks cover `mock/srp-server.js`, the server half the mock ships so the
-sign-in screen can run a real exchange with no backend. Without them the mock could be
-validating the client against the wrong thing. They skip themselves once `mock/` is
-deleted.
 
 Regenerate the vectors only if the server's SRP configuration changes. A diff in that file
 means the wire protocol moved and every stored verifier is invalid.
@@ -562,52 +530,61 @@ The writes apply `ModerationGuards.Check`: not one's own account, not a peer or 
 | POST | `email/{id}/retry` | OperatorStepUp | `platform.email-retry` | Release the claim on a claimed or failed email. Reason required. Sends nothing; attempts and error kept |
 | GET | `sms?state=&search=&page=&pageSize=` | Operator | `view.platformqueues.smsqueue` | SMS queue page, the same shape. `recipientPhone` masked to the last four digits; `search` is an account substring or a whole number. Never the body |
 | POST | `sms/{id}/retry` | OperatorStepUp | `platform.sms-retry` | Release the claim on a claimed or failed SMS. Reason required. The audit row names the account, never the number |
-| GET | `group-finder?status=&page=&pageSize=` | Operator | `view.platformqueues.groupfinderqueue` | Group finder rows with heartbeat staleness. Read-only |
+| GET | `group-finder?status=&page=&pageSize=` | Operator | `view.platformqueues.groupfinderqueue` | Group finder rows with heartbeat staleness. Read-only. The wait and the heartbeat age are measured by the database clock in the reading statement (it stamped both), never by the panel host's |
 
 There is no purge or delete for any queue. Retry only ever puts a message back in line.
 
-### `api/Admin` — operator actions
+### `api/support/accounts` and `api/admin/accounts` — moderation
 
-| Method | Route | Purpose |
-|---|---|---|
-| GET | `accounts/search?query=` | Find accounts by username or email |
-| POST | `accounts/{username}/ban` | Set access level to `Banned`, revoke tokens, disconnect |
-| POST | `accounts/{username}/unban` | Restore access level to `Player` |
-| POST | `accounts/{username}/access-level` | Set an arbitrary `AccessLevel` |
-| POST | `accounts/{username}/revoke-tokens` | Force re-authentication everywhere |
-| POST | `accounts/{username}/reset-2fa` | Clear the TOTP secret and recovery codes |
-| POST | `accounts/{username}/force-password-reset` | Admin-set password, revoking tokens |
+| Method | Route | Policy | Audit action | Purpose |
+|---|---|---|---|---|
+| GET | `api/support/accounts?query=&accessLevel=&includeBanned=&page=&pageSize=` | Support | `view.supportaccounts.search` | Account search |
+| GET | `api/support/accounts/{username}/history` | Support | `view.supportaccounts.history` | The account's standing and moderation history |
+| POST | `api/support/accounts/{username}/kick` | Support | `account.kick` | Disconnect the account from the game |
+| POST | `api/support/accounts/{username}/ban` | SupportStepUp | `account.ban` | One transaction: access level `Banned`, game tokens and panel sessions revoked, a kick request |
+| POST | `api/support/accounts/{username}/unban` | SupportStepUp | `account.unban` | Restore `Player` — never the previous level, and never the revoked tokens |
+| POST | `api/support/accounts/{username}/revoke-tokens` | SupportStepUp | `account.revoke-tokens` | Force re-authentication everywhere |
+| POST | `api/support/accounts/{username}/reset-2fa` | SupportStepUp | `account.reset-2fa` | Clear the TOTP secret and recovery codes |
+| POST | `api/admin/accounts/{username}/access-level` | OperatorStepUp | `account.access-level` | Set an access level: not one's own account, not an account at or above one's own, and not a level at or above one's own — the rules the in-game `/admin access` command applies |
 
-Every handler body is a `TODO` stub returning a canned response. Input validation is real
-and delegated to `FishMMO.Shared.Authentication` so the rules cannot drift from the ones
-the LoginServer enforces.
+There is deliberately **no password reset and no account deletion**: an operator who can set a
+password can sign in as the player, which is what SRP exists to prevent, and deleting an account
+would take its audit history with it. Every write applies `ModerationGuards` and requires a reason.
 
-The full route table the finished panel needs — roughly 90 routes across `api/auth`,
-`api/account`, `api/characters`, `api/support`, `api/admin`, `api/servers`, `api/daemon`
-and `api/platform` — is in the design document, and `js/api.js` already names every one.
+### `api/servers/bandwidth` — per-server traffic
+
+| Method | Route | Policy | Audit action | Purpose |
+|---|---|---|---|---|
+| GET | `?range=hour\|day\|month&kind=login\|world\|scene&name=` | Operator | `view.serverbandwidth.get` | Per-server and per-tier figures and one chart: the last hour (1-minute points), 24 hours (5-minute) or 30 days (1-hour), for every server, one tier, or one server |
+
+Each game server files its transport counters once a minute into `server_bandwidth_minute`
+(`ServerBandwidthRecorder` in the Unity server). `ServerBandwidthRollupService`, a background
+service in this panel, rolls minutes into `server_bandwidth_hour` every five minutes (the first
+pass after startup is a catch-up), and enforces retention: minutes for 14 days, hours for 13
+months. Every hour row is recomputed and SET, never added to, and a pass takes a transaction-level
+advisory lock, so two panels, or a pass run twice, change nothing. The page re-reads once a minute
+through `api.auto`, which the audit log does not record.
 
 ## Implementation status
 
 | Area | State |
 |---|---|
-| Design mock, all 19 views | **Done** |
+| Every route in `routes.js` | **Built** against PostgreSQL; `built: false` marks nothing |
 | Design tokens, light and dark, responsive to 400px | **Done** |
-| Route surface and request DTOs | Done (from the scaffold) |
-| Input validation | Done — via `FishMMO.Shared.Authentication` |
+| Input validation | Done — via `FishMMO.Shared.Authentication` and the published account rules |
 | Static hosting and SPA fallback | **Done** |
 | Swagger / OpenAPI | Done (Development only) |
 | Configuration layering | Done |
 | NGINX vhost, systemd unit, installer entry | **Done** |
-| Database service registration | **Done** |
 | Browser-side SRP | **Done** — proven byte-compatible, pinned by `srp-selftest.html` |
-| SRP login (challenge + proof) | **Done** — verified against PostgreSQL |
-| Registration matching the in-game flow | **Done** — verified against PostgreSQL |
-| Email verification | **Done** — code, expiry and queued message |
-| Two-factor and recovery codes | **Done** — shares the game's TOTP master key |
+| SRP login, registration, verification, two-factor | **Done** — verified against PostgreSQL |
 | Panel session store (`web_sessions`) | **Done** |
 | Authorization policies and a fallback deny | **Done** |
-| Support, server, daemon and platform read models | **Not started** — fabricated behind `?mock=1` |
-| AppHealthMonitor control plane | **Not started** — it has no network interface today |
+| Audit log of every privileged write and staff read | **Done** |
+| Daemon control plane (start / stop / restart) | **Done** — a database command queue the AppHealthMonitor polls |
+| Server bandwidth (per-server traffic, hour rollup, retention) | **Done** |
+| Arena history, housing plots | **Not started** — no operator surface |
+| Password reset by staff, account deletion | **Not built, deliberately** (see moderation above) |
 
 Authorization now fails closed. `Program.cs` registers a fallback policy requiring an
 authenticated administrator with two-factor satisfied, so a route that carries no policy
@@ -615,7 +592,8 @@ attribute is **denied** rather than permitted — the defect the old CMS scaffol
 with, where `UseAuthorization` ran with nothing to enforce and every administrative route
 was anonymous.
 
-The routes that remain stubs under `api/Admin` are therefore unreachable rather than open.
+The stub `AdminController` the old scaffold shipped (ban, unban and the rest answering success
+with no database write) is deleted; those actions are the real routes above.
 
 ## License
 

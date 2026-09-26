@@ -792,7 +792,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* Offline, or on another server. "Offline" is the same label the disconnect
 				 * persist writes, so the roster renders them as offline rather than as standing
 				 * in a zone called "". */
-				sceneName = "Offline";
+				sceneName = GuildRosterDelta.OfflineLocation;
 			}
 
 			return await JoinGuildAsync(applicantConn, applicantID, guildID, sceneName, fromInvitation: false);
@@ -933,6 +933,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="guildID">The guild.</param>
 		/// <param name="broadcast">The message.</param>
 		/// <param name="onlyCharacterID">Optional single recipient.</param>
+		/// <remarks>
+		/// The whole-guild case is one multicast, serialised once. It used to be serialised again
+		/// for every local member, which for a hundred-member guild is a hundred encodings of one
+		/// notice edit.
+		/// </remarks>
 		private void BroadcastToGuildMembers<T>(long guildID, T broadcast, long onlyCharacterID = 0)
 			where T : struct, FishNet.Broadcast.IBroadcast
 		{
@@ -960,15 +965,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				foreach (long memberID in memberIDs)
+				guildBroadcastRecipients.Clear();
+				try
 				{
-					if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
-						member?.Owner != null)
+					foreach (long memberID in memberIDs)
 					{
-						Server.NetworkWrapper.Broadcast(member.Owner, broadcast, true, Channel.Reliable);
+						if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
+							member?.Owner != null &&
+							member.Owner.IsActive)
+						{
+							guildBroadcastRecipients.Add(member.Owner);
+						}
 					}
+
+					if (guildBroadcastRecipients.Count > 0)
+					{
+						Server.NetworkWrapper.Broadcast(guildBroadcastRecipients, broadcast, true, Channel.Reliable);
+					}
+				}
+				finally
+				{
+					guildBroadcastRecipients.Clear();
 				}
 			});
 		}
+
+		/// <summary>
+		/// Scratch recipient set for <see cref="BroadcastToGuildMembers{T}"/>. Main-thread only; the
+		/// multicast reads it and never keeps it.
+		/// </summary>
+		private readonly HashSet<NetworkConnection> guildBroadcastRecipients = new HashSet<NetworkConnection>();
 	}
 }

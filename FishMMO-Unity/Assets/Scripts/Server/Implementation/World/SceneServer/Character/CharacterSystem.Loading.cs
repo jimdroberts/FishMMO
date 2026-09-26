@@ -37,24 +37,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// opening multiple connections.
 		/// Entries are removed when the connection disconnects via OnRemoteConnectionStopped.
 		/// </summary>
-		private readonly ConcurrentDictionary<string, DateTime> authCallbackLastTimeByAccount =
-			new ConcurrentDictionary<string, DateTime>();
+		/// <remarks>
+		/// Every cooldown and deadline in this file is a local duration and is kept in
+		/// <see cref="MonotonicClock"/> seconds. On the wall clock a host stepped back held each
+		/// cooldown for the size of the step, and one stepped forward fired every handshake and
+		/// residency watchdog at once, disconnecting every client still loading.
+		/// </remarks>
+		private readonly ConcurrentDictionary<string, double> authCallbackLastTimeByAccount =
+			new ConcurrentDictionary<string, double>();
 
 		/// <summary>
 		/// Tracks the last scene-unload broadcast time per connection ClientId for rate limiting.
 		/// Scene unload is per-connection, not per-account; a separate dictionary from
 		/// authCallbackLastTimeByAccount.
 		/// </summary>
-		private readonly ConcurrentDictionary<int, DateTime> sceneUnloadLastTimeByClientId =
-			new ConcurrentDictionary<int, DateTime>();
+		private readonly ConcurrentDictionary<int, double> sceneUnloadLastTimeByClientId =
+			new ConcurrentDictionary<int, double>();
 
 		/// <summary>
 		/// Tracks the last validated-scene broadcast time per connection ClientId for rate limiting.
 		/// Prevents a malicious client from spamming <see cref="OnClientValidatedSceneBroadcastReceived"/>,
 		/// which triggers expensive character-spawn and mapping operations.
 		/// </summary>
-		private readonly ConcurrentDictionary<int, DateTime> validatedSceneLastTimeByClientId =
-			new ConcurrentDictionary<int, DateTime>();
+		private readonly ConcurrentDictionary<int, double> validatedSceneLastTimeByClientId =
+			new ConcurrentDictionary<int, double>();
 
 		/// <summary>
 		/// Minimum seconds between validated-scene broadcasts per connection.
@@ -74,8 +80,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// was lost) held its character Online, and therefore unloadable on any server, for as
 		/// long as it kept the transport open. This bounds that window.
 		/// </remarks>
-		private readonly ConcurrentDictionary<int, DateTime> sceneLoadDeadlines =
-			new ConcurrentDictionary<int, DateTime>();
+		private readonly ConcurrentDictionary<int, double> sceneLoadDeadlines =
+			new ConcurrentDictionary<int, double>();
 
 		/// <summary>How long a client has to finish the scene handshake before it is disconnected.</summary>
 		private static readonly TimeSpan SceneLoadHandshakeTimeout = TimeSpan.FromSeconds(90);
@@ -99,11 +105,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			foreach (var kvp in sceneLoadDeadlines)
 			{
-				if (nowUtc < kvp.Value)
+				if (now < kvp.Value)
 				{
 					continue;
 				}
@@ -155,8 +161,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// own reconnect loop, which returns through the world server and is routed again.
 		/// </para>
 		/// </remarks>
-		private readonly ConcurrentDictionary<int, DateTime> characterResidencyDeadlines =
-			new ConcurrentDictionary<int, DateTime>();
+		private readonly ConcurrentDictionary<int, double> characterResidencyDeadlines =
+			new ConcurrentDictionary<int, double>();
 
 		/// <summary>
 		/// How long an authenticated connection may go without a character before it is treated
@@ -191,7 +197,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			foreach (var kvp in characterResidencyDeadlines)
 			{
@@ -216,7 +222,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				if (nowUtc < kvp.Value)
+				if (now < kvp.Value)
 				{
 					continue;
 				}
@@ -239,7 +245,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="authenticated">True if authentication succeeded.</param>
 		private void Authenticator_OnClientAuthenticationResult(NetworkConnection conn, bool authenticated)
 		{
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			// Arm the residency backstop before any branch below can return. Every early exit
 			// here is supposed to disconnect, but the ones that deliver that disconnect through
@@ -247,7 +253,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// when this watchdog has to be the thing that ends the connection.
 			if (conn != null && conn.IsActive)
 			{
-				characterResidencyDeadlines[conn.ClientId] = nowUtc + CharacterResidencyTimeout;
+				characterResidencyDeadlines[conn.ClientId] = now + CharacterResidencyTimeout.TotalSeconds;
 			}
 
 			// Resolve account name first so the rate limit can be applied per-account.
@@ -263,15 +269,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool wasCoolingDown = false;
 			authCallbackLastTimeByAccount.AddOrUpdate(
 				accountName,
-				nowUtc,
+				now,
 				(_, lastTime) =>
 				{
-					if ((nowUtc - lastTime).TotalSeconds < AuthCallbackCooldownSeconds)
+					if (now - lastTime < AuthCallbackCooldownSeconds)
 					{
 						wasCoolingDown = true;
 						return lastTime; // Don't update timestamp if cooling down.
 					}
-					return nowUtc;
+					return now;
 				});
 			if (wasCoolingDown)
 			{
@@ -515,14 +521,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// scene loading. It runs outside the UoW because it may have to retry, and
 				// retrying inside an open transaction would hold that transaction for the whole
 				// backoff.
-				DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(accountName, selected: true);
+				/* The selected character and its staff lock in one read: the row already carries the
+				 * lock columns, and reading it twice (FetchByAccountAsync, then FetchLockAsync) cost a
+				 * second round trip on every load for the same row. */
+				DatabaseResult<(CharacterData Character, CharacterLockState Lock)?> fetchResult =
+					await characterService.FetchSelectedWithLockAsync(accountName);
 				if (!fetchResult.IsSuccess)
 				{
-					/* The read failed, which says nothing about whether the account has a character.
-					 * It used to be folded into "no selected character" — logged at Debug with no
-					 * cause, and answered TERMINALLY, so a database hiccup at login told the client to
-					 * abandon its reconnect loop. A failed read is a server error the next attempt may
-					 * not have. */
+					/* The read failed, which says nothing about whether the account has a character —
+					 * or whether it is locked. It used to be folded into "no selected character" —
+					 * logged at Debug with no cause, and answered TERMINALLY, so a database hiccup at
+					 * login told the client to abandon its reconnect loop. A failed read is a server
+					 * error the next attempt may not have. The lock still fails closed: this attempt
+					 * is refused, the character is not. */
 					await Log.Warning("CharacterSystem",
 						$"LoadCharacterAsync: could not read the selected character for account {accountName}: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}");
 					await ReleaseHeldSessionAsync();
@@ -549,46 +560,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				charData = fetchResult.Data.Value;
+				charData = fetchResult.Data.Value.Character;
 				long characterID = charData.ID;
 
 				/* A staff lock keeps the character out of the world. Character select refuses a locked
 				 * character, but this load can be reached without passing select again: a kicked client
 				 * reconnecting with the token it already holds, or a lock placed between the selection and
-				 * this load. So the load checks too, before the claim, and fails closed — a lock that a
-				 * database hiccup waves through is not a lock. */
-				DatabaseResult<CharacterLockState> lockResult = await characterService.FetchLockAsync(characterID);
-				if (!lockResult.IsSuccess || lockResult.Data.IsLocked(DateTime.UtcNow))
+				 * this load. So the load checks too, before the claim. The lock arrived with the row, so
+				 * one that is set here was actually read, and the refusal is terminal. */
+				CharacterLockState lockState = fetchResult.Data.Value.Lock;
+				if (lockState.IsLocked(DateTime.UtcNow))
 				{
-					if (!lockResult.IsSuccess)
-					{
-						await Log.Error("CharacterSystem",
-							$"FetchLockAsync failed for character {characterID}: [{lockResult.ErrorCode}] {lockResult.ErrorMessage}. Refusing the load (fail-closed).");
-					}
-					else
-					{
-						await Log.Info("CharacterSystem",
-							$"Character {characterID} ('{charData.Name}') is locked by staff until {lockResult.Data.LockedUntil:u}; refusing the load.");
-					}
-
-					/* Closed either way, but only a lock that was actually READ is terminal. A lock
-					 * that could not be read refuses this attempt and leaves the client's reconnect
-					 * loop running: the next attempt may read it, and the character may not be
-					 * locked at all. */
-					bool lockRead = lockResult.IsSuccess;
+					await Log.Info("CharacterSystem",
+						$"Character {characterID} ('{charData.Name}') is locked by staff until {lockState.LockedUntil:u}; refusing the load.");
 					await ReleaseHeldSessionAsync();
 					TryEnqueueMainThread(() =>
 					{
 						if (conn != null && conn.IsActive)
 						{
-							if (lockRead)
-							{
-								DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
-							}
-							else
-							{
-								DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
-							}
+							DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable, terminal: true);
 						}
 					});
 					return;
@@ -1329,7 +1319,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return null;
 			}
 
-			return (DateTime.UtcNow - result.Data.LastPulse) < SceneServerPulseStaleAfter;
+			/* The pulse's age as the database measured it when it read the row: last_pulse is
+			 * stamped by the database's clock, so comparing it with this host's clock made a host
+			 * running a minute fast call every live server dead. */
+			return result.Data.PulseAgeSeconds < SceneServerPulseStaleAfter.TotalSeconds;
 		}
 
 		/// <summary>
@@ -1784,10 +1777,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				uint loadCurrentTick = Server.NetworkWrapper.NetworkManager.TimeManager.LocalTick;
 				foreach (CharacterBuffData buff in buffData)
 				{
+					/* A row for a permanent buff predates the rule that leaves them out of the save
+					 * (IsPersistedBuff). Restored, it would come back as a buff that expires on its
+					 * first tick; skipped, the exposure system applies the real one from the weather
+					 * the character is standing in, and the next save deletes the row. A template this
+					 * server cannot resolve is restored as before. */
+					BaseBuffTemplate buffTemplate = BaseBuffTemplate.Get<BaseBuffTemplate>(buff.TemplateID);
+					if (buffTemplate != null && !IsPersistedBuff(buffTemplate))
+					{
+						continue;
+					}
+
 					uint expiryTick = loadCurrentTick + (uint)Math.Max(1.0, Math.Ceiling(buff.RemainingTime / loadTickDelta));
 					uint nextTickTick = loadCurrentTick + (uint)Math.Max(1.0, Math.Ceiling(buff.TickTime / loadTickDelta));
+					// No per-buff version to restore: the set is written whole with the character row,
+					// under the row's version. See CharacterSystem.CaptureBuffSet.
 					Buff newBuff = new Buff(buff.TemplateID, expiryTick, nextTickTick, loadTickDelta, buff.Stacks, buff.TickCount);
-					newBuff.Version = buff.Version;
 					buffController.Apply(newBuff);
 				}
 			}
@@ -1875,7 +1880,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// will handle cleanup via the SessionTokens dictionary.
 				mappingData.SessionTokens[charData.ID] = new CharacterSessionInfo(sessionToken, serverID);
 				mappingData.WaitingSceneLoadCharacters.Add(conn, character);
-				sceneLoadDeadlines[conn.ClientId] = DateTime.UtcNow + SceneLoadHandshakeTimeout;
+				sceneLoadDeadlines[conn.ClientId] = MonotonicClock.NowSeconds + SceneLoadHandshakeTimeout.TotalSeconds;
 
 				// The client has usually acknowledged its start scenes long before this load
 				// finished — that acknowledgement is never repeated, so this is the point at
@@ -2036,9 +2041,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * Same ordering rule as OnClientScenesUnloadedBroadcastReceived below. */
 			if (mappingData.WaitingSceneLoadCharacters.TryGetValue(conn, out IPlayerCharacter character))
 			{
-				DateTime now2 = DateTime.UtcNow;
-				if (validatedSceneLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastValidated) &&
-					(now2 - lastValidated).TotalSeconds < ValidatedSceneBroadcastCooldownSeconds)
+				double now2 = MonotonicClock.NowSeconds;
+				if (validatedSceneLastTimeByClientId.TryGetValue(conn.ClientId, out double lastValidated) &&
+					now2 - lastValidated < ValidatedSceneBroadcastCooldownSeconds)
 				{
 					return;
 				}
@@ -2206,13 +2211,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// No character: the connection has nothing left to do here and must be sent back to
 			// the world server. Rate-limit only this branch, and only to avoid repeating the
 			// disconnect for a client that keeps talking while the disconnect settles.
-			DateTime nowUtc = DateTime.UtcNow;
-			if (sceneUnloadLastTimeByClientId.TryGetValue(conn.ClientId, out DateTime lastUnload) &&
-				(nowUtc - lastUnload).TotalSeconds < 5.0)
+			double now = MonotonicClock.NowSeconds;
+			if (sceneUnloadLastTimeByClientId.TryGetValue(conn.ClientId, out double lastUnload) &&
+				now - lastUnload < 5.0)
 			{
 				return;
 			}
-			sceneUnloadLastTimeByClientId[conn.ClientId] = nowUtc;
+			sceneUnloadLastTimeByClientId[conn.ClientId] = now;
 
 			//Log.Debug($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
 

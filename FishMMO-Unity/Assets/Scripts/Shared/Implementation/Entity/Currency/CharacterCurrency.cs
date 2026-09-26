@@ -31,6 +31,12 @@ namespace FishMMO.Shared
 		/// plus every modifier in force — so testing one while writing the other lets a buff be
 		/// spent as though it were money and drives the balance negative by exactly the size of
 		/// the buff.
+		/// <para>
+		/// The balance includes any credit a settling trade is still holding
+		/// (<see cref="CharacterAttribute.HeldValue"/>). That is right for everything this is used for
+		/// beyond spending — the headroom left in an <c>int</c>, what a report shows — and
+		/// <see cref="TrySpend"/> is where the hold is enforced.
+		/// </para>
 		/// </remarks>
 		/// <param name="character">The character to read.</param>
 		/// <param name="template">The currency attribute template.</param>
@@ -53,6 +59,24 @@ namespace FishMMO.Shared
 
 			balance = currency.Value;
 			return true;
+		}
+
+		/// <summary>
+		/// What of a currency attribute's balance may be spent: the base value less any credit a
+		/// settling transaction is holding. Never negative. Pure.
+		/// </summary>
+		/// <remarks>
+		/// A held credit is in the value so that every save carries it, and out of reach so that a
+		/// refused transaction can always take it back exactly; see
+		/// <see cref="CharacterAttribute.HeldValue"/>.
+		/// </remarks>
+		/// <param name="value">The attribute's base value.</param>
+		/// <param name="held">Its held credit.</param>
+		/// <returns>The spendable amount.</returns>
+		public static long Spendable(int value, int held)
+		{
+			long spendable = (long)value - Math.Max(0, held);
+			return spendable > 0 ? spendable : 0;
 		}
 
 		/// <summary>
@@ -137,7 +161,12 @@ namespace FishMMO.Shared
 			}
 
 			int price = (int)Math.Min(amount, int.MaxValue);
-			if (currency.Value < price)
+			/* Against what is spendable, not the whole balance: a credit a settling trade is holding
+			 * must still be there if that trade is refused. The hold lasts only while the trade's
+			 * transaction is in flight, so a spend that needs it is refused for those milliseconds and
+			 * nothing else. CanAfford deliberately does not subtract it — callers use it to tell "too
+			 * poor" from "could not be done now", and a hold is the second. */
+			if (Spendable(currency.Value, currency.HeldValue) < price)
 			{
 				return false;
 			}

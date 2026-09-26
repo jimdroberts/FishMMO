@@ -93,6 +93,11 @@ builder.Services.AddScoped<IUnitOfWorkService, UnitOfWorkService>();
  * it starts — the deadline is on each server's own row — but the retry of any write the start
  * did not manage, and every status after it, happen only when something reads. */
 builder.Services.AddHostedService<MaintenanceAdvanceService>();
+/* Server bandwidth: the page's read, and the rollup of the servers' minute rows into hours plus
+ * the retention of both tables. Nothing else prunes on a schedule, so without this the minute
+ * table grows forever and the 30-day figures have no hours to read. */
+builder.Services.AddScoped<IServerBandwidthReportService, ServerBandwidthReportService>();
+builder.Services.AddHostedService<ServerBandwidthRollupService>();
 
 /* Outbound mail. Account creation still happens on the LoginServer too, and both it and this
  * panel ENQUEUE — but only this process drains the queue and sends. Doing it here keeps

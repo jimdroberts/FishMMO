@@ -1,4 +1,3 @@
-using System;
 using FishMMO.Server.Core;
 using UnityEngine;
 
@@ -60,9 +59,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		}
 
 		/// <inheritdoc />
+		/// <remarks>
+		/// The time comes from the scheduler's own monotonic clock, never the wall clock: a
+		/// respawn deadline is a duration, and the host's clock being set must not move it.
+		/// </remarks>
 		protected override void OnUpdate(float deltaTime)
 		{
-			Host?.Tick(DateTime.UtcNow, Time.time);
+			SpawnerHost host = Host;
+			if (host != null)
+			{
+				host.Tick(host.Scheduler.Now);
+			}
 		}
 	}
 }

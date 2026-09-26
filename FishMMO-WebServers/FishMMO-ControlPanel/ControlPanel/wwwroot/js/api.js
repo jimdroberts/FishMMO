@@ -245,6 +245,11 @@ export const api = {
 	 * 204 here would write the row and then show the operator no acknowledgement at all. */
 	getServerBoard: () => request('GET', '/servers'),
 	getScenes: (opts) => request('GET', `/servers/scenes${q(opts)}`),
+	/* What every server process sent and received, from the rows each writes once a minute.
+	 * `range` is hour, day or month (30 days); `kind` and `name` scope the chart to a tier or one
+	 * server. Measured and estimated figures arrive under different names — the wire figures end
+	 * in `Estimated` — and a window with no rows is null, which the page prints as "no data". */
+	getServerBandwidth: (opts) => request('GET', `/servers/bandwidth${q(opts)}`),
 	/* No retireScene. Deleting a scene row does not tell the scene server holding it to stop,
 	 * and anyone inside the instance would be left there; draining it means shutting the
 	 * scene server down. See the note on the Scene instances page. */

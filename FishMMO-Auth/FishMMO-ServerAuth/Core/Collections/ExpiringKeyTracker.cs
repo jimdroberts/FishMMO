@@ -7,11 +7,27 @@ namespace FishMMO.Auth.Core.Collections
 	/// Queue/index tracker for expiring keyed entries.
 	/// Uses head-first sweeps to avoid full dictionary enumeration under heavy load.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Time is monotonic seconds</b> — a <c>MonotonicClock.NowSeconds</c> reading from the
+	/// authenticator's clock, never <c>DateTime.UtcNow</c>. A debounce is a duration, and on the
+	/// host's wall clock a step backwards held every recently seen key inside its window for the
+	/// size of the step (an account refused for two seconds was refused for an hour), while a step
+	/// forward opened every window at once. The tracker only compares the readings it is given
+	/// with one another, so the clock's origin does not matter.
+	/// </para>
+	/// <para>
+	/// There is deliberately no <see cref="DateTime"/> overload. The game server's copy of this
+	/// class still carries one for callers outside authentication, and one tracker driven through
+	/// both compared unrelated numbers; this copy's callers are all in the authenticator and all on
+	/// the one clock, so the choice cannot be made wrongly here.
+	/// </para>
+	/// </remarks>
 	/// <typeparam name="TKey">Tracker key type.</typeparam>
 	public sealed class ExpiringKeyTracker<TKey>
 	{
 		private readonly object gate = new object();
-		private readonly Dictionary<TKey, DateTime> nextAllowedUtc;
+		private readonly Dictionary<TKey, double> nextAllowedSeconds;
 		private readonly LinkedList<ExpiryQueueNode> expiryQueue = new LinkedList<ExpiryQueueNode>();
 		private readonly Dictionary<TKey, LinkedListNode<ExpiryQueueNode>> queueNodes;
 
@@ -20,9 +36,9 @@ namespace FishMMO.Auth.Core.Collections
 		/// </summary>
 		public ExpiringKeyTracker(IEqualityComparer<TKey>? comparer = null)
 		{
-			nextAllowedUtc = comparer == null
-				? new Dictionary<TKey, DateTime>()
-				: new Dictionary<TKey, DateTime>(comparer);
+			nextAllowedSeconds = comparer == null
+				? new Dictionary<TKey, double>()
+				: new Dictionary<TKey, double>(comparer);
 
 			queueNodes = comparer == null
 				? new Dictionary<TKey, LinkedListNode<ExpiryQueueNode>>()
@@ -38,7 +54,7 @@ namespace FishMMO.Auth.Core.Collections
 			{
 				lock (gate)
 				{
-					return nextAllowedUtc.Count;
+					return nextAllowedSeconds.Count;
 				}
 			}
 		}
@@ -50,7 +66,7 @@ namespace FishMMO.Auth.Core.Collections
 		{
 			lock (gate)
 			{
-				nextAllowedUtc.Clear();
+				nextAllowedSeconds.Clear();
 				expiryQueue.Clear();
 				queueNodes.Clear();
 			}
@@ -60,10 +76,10 @@ namespace FishMMO.Auth.Core.Collections
 		/// Attempts to begin a debounce/rate-limit window for a key.
 		/// </summary>
 		/// <param name="key">Tracker key.</param>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="nowSeconds">Current monotonic time in seconds.</param>
 		/// <param name="duration">Window duration.</param>
 		/// <returns><c>true</c> if allowed now; otherwise <c>false</c>.</returns>
-		public bool TryBegin(TKey key, DateTime nowUtc, TimeSpan duration)
+		public bool TryBegin(TKey key, double nowSeconds, TimeSpan duration)
 		{
 			if (duration <= TimeSpan.Zero)
 			{
@@ -72,20 +88,20 @@ namespace FishMMO.Auth.Core.Collections
 
 			lock (gate)
 			{
-				if (nextAllowedUtc.TryGetValue(key, out DateTime nextAllowed) && nextAllowed > nowUtc)
+				if (nextAllowedSeconds.TryGetValue(key, out double nextAllowed) && nextAllowed > nowSeconds)
 				{
 					return false;
 				}
 
-				DateTime expiresUtc = nowUtc.Add(duration);
-				nextAllowedUtc[key] = expiresUtc;
+				double expiresSeconds = nowSeconds + duration.TotalSeconds;
+				nextAllowedSeconds[key] = expiresSeconds;
 
-				if (queueNodes.TryGetValue(key, out LinkedListNode<ExpiryQueueNode> existingNode))
+				if (queueNodes.TryGetValue(key, out LinkedListNode<ExpiryQueueNode>? existingNode))
 				{
 					expiryQueue.Remove(existingNode);
 				}
 
-				queueNodes[key] = expiryQueue.AddLast(new ExpiryQueueNode(key, expiresUtc));
+				queueNodes[key] = expiryQueue.AddLast(new ExpiryQueueNode(key, expiresSeconds));
 				return true;
 			}
 		}
@@ -93,11 +109,11 @@ namespace FishMMO.Auth.Core.Collections
 		/// <summary>
 		/// Sweeps expired keys with bounded scan and removal limits.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="nowSeconds">Current monotonic time in seconds.</param>
 		/// <param name="maxScan">Maximum queue nodes to inspect this sweep.</param>
 		/// <param name="maxRemove">Maximum keys to remove this sweep.</param>
 		/// <returns>Number of entries removed.</returns>
-		public int SweepExpired(DateTime nowUtc, int maxScan, int maxRemove)
+		public int SweepExpired(double nowSeconds, int maxScan, int maxRemove)
 		{
 			if (maxScan <= 0 || maxRemove <= 0)
 			{
@@ -111,7 +127,7 @@ namespace FishMMO.Auth.Core.Collections
 
 				while (scanned < maxScan && removed < maxRemove)
 				{
-					LinkedListNode<ExpiryQueueNode> head = expiryQueue.First;
+					LinkedListNode<ExpiryQueueNode>? head = expiryQueue.First;
 					if (head == null)
 					{
 						break;
@@ -120,26 +136,26 @@ namespace FishMMO.Auth.Core.Collections
 					scanned++;
 					ExpiryQueueNode queued = head.Value;
 
-					if (!nextAllowedUtc.TryGetValue(queued.Key, out DateTime currentExpiry))
+					if (!nextAllowedSeconds.TryGetValue(queued.Key, out double currentExpiry))
 					{
 						expiryQueue.RemoveFirst();
 						queueNodes.Remove(queued.Key);
 						continue;
 					}
 
-					if (currentExpiry != queued.ExpiresUtc)
+					if (currentExpiry != queued.ExpiresSeconds)
 					{
 						// Stale queued node after refresh.
 						expiryQueue.RemoveFirst();
 						continue;
 					}
 
-					if (currentExpiry > nowUtc)
+					if (currentExpiry > nowSeconds)
 					{
 						break;
 					}
 
-					nextAllowedUtc.Remove(queued.Key);
+					nextAllowedSeconds.Remove(queued.Key);
 					queueNodes.Remove(queued.Key);
 					expiryQueue.RemoveFirst();
 					removed++;
@@ -152,12 +168,12 @@ namespace FishMMO.Auth.Core.Collections
 		private readonly struct ExpiryQueueNode
 		{
 			public readonly TKey Key;
-			public readonly DateTime ExpiresUtc;
+			public readonly double ExpiresSeconds;
 
-			public ExpiryQueueNode(TKey key, DateTime expiresUtc)
+			public ExpiryQueueNode(TKey key, double expiresSeconds)
 			{
 				Key = key;
-				ExpiresUtc = expiresUtc;
+				ExpiresSeconds = expiresSeconds;
 			}
 		}
 	}

@@ -26,13 +26,13 @@ namespace FishMMO.Auth.Implementation
 	{
 		#region Constants
 
-		/// <summary>Default number of concurrent SRP verify worker tasks. Configurable via .cfg SrpVerifyWorkers.</summary>
+		/// <summary>Default number of concurrent SRP verify worker tasks. Configurable via .cfg AuthSrpVerifyWorkerCount.</summary>
 		public int VerifyWorkerCount { get; set; } = 2;
-		/// <summary>Default number of concurrent SRP proof worker tasks. Configurable via .cfg SrpProofWorkers.</summary>
+		/// <summary>Default number of concurrent SRP proof worker tasks. Configurable via .cfg AuthSrpProofWorkerCount.</summary>
 		public int ProofWorkerCount { get; set; } = 2;
-		/// <summary>Default maximum pending SRP verify requests in the bounded channel. Configurable via .cfg SrpVerifyChannelCapacity.</summary>
+		/// <summary>Default maximum pending SRP verify requests in the bounded channel. Configurable via .cfg AuthSrpVerifyChannelCapacity.</summary>
 		public int VerifyChannelCapacity { get; set; } = 500;
-		/// <summary>Default maximum pending SRP proof requests in the bounded channel. Configurable via .cfg SrpProofChannelCapacity.</summary>
+		/// <summary>Default maximum pending SRP proof requests in the bounded channel. Configurable via .cfg AuthSrpProofChannelCapacity.</summary>
 		public int ProofChannelCapacity { get; set; } = 500;
 
 		/// <summary>Maximum unauthenticated connection entries scanned per account manager sweep.</summary>
@@ -58,7 +58,7 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Seconds before a cached connection-IP mapping expires from the last-seen cache.</summary>
 		private const float ConnectionIpCacheTtlSeconds = 300f;
 
-		/// <summary>Default maximum number of TOTP code verifications running concurrently. Configurable via .cfg SrpMaxConcurrentTotp.</summary>
+		/// <summary>Default maximum number of TOTP code verifications running concurrently. Configurable via .cfg AuthMaxConcurrentTotpVerifications.</summary>
 		public int MaxConcurrentTotpVerifications { get; set; } = 4;
 		/// <summary>Maximum total TOTP attempts allowed per pending state before the connection is dropped.</summary>
 		private const int MaxTotpAttempts = 5;
@@ -66,8 +66,8 @@ namespace FishMMO.Auth.Implementation
 		private const int MaxTotpFailuresPerUsername = 15;
 		/// <summary>Duration of the per-username TOTP lockout after <see cref="MaxTotpFailuresPerUsername"/> failures.</summary>
 		private static readonly TimeSpan TotpUsernameLockoutDuration = TimeSpan.FromMinutes(5);
-		/// <summary>Maximum entries scanned per TOTP username-failure sweep pass.</summary>
-		private const int TotpUsernameFailureSweepMaxScan = 64;
+		/// <summary>Maximum closed windows removed per TOTP username-failure sweep pass.</summary>
+		private const int TotpUsernameFailureSweepMaxRemovals = 256;
 		/// <summary>Maximum entries retained in the TOTP username-failure tracker.</summary>
 		private const int MaxTotpUsernameFailureEntries = 10_000;
 
@@ -85,8 +85,8 @@ namespace FishMMO.Auth.Implementation
 		protected virtual int MaxLoginFailuresPerUsername => 10;
 		/// <summary>Duration of the per-username login lockout after <see cref="MaxLoginFailuresPerUsername"/> failures.</summary>
 		private static readonly TimeSpan LoginUsernameLockoutDuration = TimeSpan.FromMinutes(15);
-		/// <summary>Maximum entries scanned per login username-failure sweep pass.</summary>
-		private const int LoginUsernameFailureSweepMaxScan = 64;
+		/// <summary>Maximum closed windows removed per login username-failure sweep pass.</summary>
+		private const int LoginUsernameFailureSweepMaxRemovals = 256;
 		/// <summary>Maximum entries retained in the login username-failure tracker.</summary>
 		private const int MaxLoginUsernameFailureEntries = 10_000;
 
@@ -99,16 +99,21 @@ namespace FishMMO.Auth.Implementation
 		/// <summary>Bounded channel for SRP proof requests; decouples network receipt from async processing.</summary>
 		private Channel<SrpProofRequest<TConnection>>? proofChannel;
 
+		/* The three debounces and the IP cache below are timed on the core's monotonic clock
+		 * (NowSeconds), never the host's wall clock. Each is a duration, and on DateTime.UtcNow a
+		 * clock stepped back held every key inside its window for the size of the step — an account
+		 * refused for two seconds was refused for an hour — while a step forward opened them all. */
+
 		/// <summary>Debounce tracker preventing duplicate or rapid kick requests for the same account.</summary>
-		private readonly ExpiringKeyTracker<string> kickRequestNextAllowedUtcByAccount =
+		private readonly ExpiringKeyTracker<string> kickRequestDebounceByAccount =
 			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>Per-IP rate limiter applied at the SRP verify gate to cap authentication attempts.</summary>
-		private readonly ExpiringKeyTracker<string> ipAuthNextAllowedUtc =
+		private readonly ExpiringKeyTracker<string> ipAuthDebounce =
 			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>Per-identifier debounce tracker for account existence/verify lookups.</summary>
-		private readonly ExpiringKeyTracker<string> accountVerifyNextAllowedUtc =
+		private readonly ExpiringKeyTracker<string> accountVerifyDebounce =
 			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>Short-lived cache mapping client ID to resolved IP string, avoiding repeated reverse-DNS/normalization calls.</summary>
@@ -157,9 +162,12 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		private readonly ConcurrentDictionary<int, UnverifiedWork> unverifiedWorkByClientId = new ConcurrentDictionary<int, UnverifiedWork>();
 
-		/// <summary>Tracks per-username TOTP failure counts and first-failure timestamps for lockout enforcement.</summary>
-		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> totpUsernameFailures
-			= new ConcurrentDictionary<string, (int Count, DateTime FirstFailure)>(StringComparer.OrdinalIgnoreCase);
+		/// <summary>
+		/// Per-username TOTP failures inside <see cref="TotpUsernameLockoutDuration"/> of the first,
+		/// for lockout enforcement.
+		/// </summary>
+		private readonly FixedWindowCounter<string> totpUsernameFailures =
+			new FixedWindowCounter<string>(TotpUsernameLockoutDuration, StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Tracks per-username SRP proof failure counts and first-failure timestamps for
@@ -181,8 +189,8 @@ namespace FishMMO.Auth.Implementation
 		/// that design exists to close, as a timing difference on the eleventh attempt.
 		/// </para>
 		/// </remarks>
-		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> loginUsernameFailures
-			= new ConcurrentDictionary<string, (int Count, DateTime FirstFailure)>(StringComparer.OrdinalIgnoreCase);
+		private readonly FixedWindowCounter<string> loginUsernameFailures =
+			new FixedWindowCounter<string>(LoginUsernameLockoutDuration, StringComparer.OrdinalIgnoreCase);
 
 		#endregion
 
@@ -235,6 +243,10 @@ namespace FishMMO.Auth.Implementation
 			: base(accountManager)
 		{
 			srpAccountManager = accountManager ?? throw new ArgumentNullException(nameof(accountManager));
+			// The login server's own default: what its verify and proof channels hold between them,
+			// where the login queue starts serving players better than admission does. The host
+			// recomputes it from the configured channels when AuthMaxPendingConnections is not set.
+			MaxPendingAuthConnections = PendingAuthRules.DefaultLoginPendingCap(VerifyChannelCapacity, ProofChannelCapacity);
 		}
 
 		#endregion
@@ -248,8 +260,8 @@ namespace FishMMO.Auth.Implementation
 			// misconfiguration from breaking the auth pipeline.
 			VerifyWorkerCount = Math.Max(1, Math.Min(VerifyWorkerCount, 64));
 			ProofWorkerCount = Math.Max(1, Math.Min(ProofWorkerCount, 64));
-			VerifyChannelCapacity = Math.Max(1, Math.Min(VerifyChannelCapacity, 10000));
-			ProofChannelCapacity = Math.Max(1, Math.Min(ProofChannelCapacity, 10000));
+			VerifyChannelCapacity = PendingAuthRules.ClampSrpChannelCapacity(VerifyChannelCapacity);
+			ProofChannelCapacity = PendingAuthRules.ClampSrpChannelCapacity(ProofChannelCapacity);
 			MaxConcurrentTotpVerifications = Math.Max(1, Math.Min(MaxConcurrentTotpVerifications, 32));
 
 			fakeSaltKey = CryptoHelper.GenerateKey(CryptoHelper.HmacSha512KeyLength);
@@ -387,9 +399,9 @@ namespace FishMMO.Auth.Implementation
 			loginUsernameFailures.Clear();
 			totpSemaphore?.Dispose();
 			totpSemaphore = null;
-			kickRequestNextAllowedUtcByAccount.Clear();
-			ipAuthNextAllowedUtc.Clear();
-			accountVerifyNextAllowedUtc.Clear();
+			kickRequestDebounceByAccount.Clear();
+			ipAuthDebounce.Clear();
+			accountVerifyDebounce.Clear();
 			connectionIpCache.Clear();
 		}
 
@@ -418,86 +430,33 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>
-		/// Sweeps expired per-username TOTP failure entries to prevent unbounded dictionary growth.
+		/// Sweeps closed per-username TOTP failure windows to keep the tracker bounded.
 		/// </summary>
 		/// <remarks>
-		/// <para><b>Sweep coverage limitation:</b></para>
-		/// This method scans at most <see cref="TotpUsernameFailureSweepMaxScan"/> (64) entries per invocation
-		/// and removes at most that many expired entries. Under sustained brute-force attack against many
-		/// distinct usernames, new entries can arrive faster than the sweep removes them, until the
-		/// <see cref="MaxTotpUsernameFailureEntries"/> (10,000) cap is reached — at which point
-		/// <see cref="TrackTotpUsernameFailure"/> starts rejecting new entries, removing the rate-limiter's
-		/// lockout protection for additional usernames until the next sweep frees capacity.
-		/// <para/>
-		/// <para><b>Mitigating factors:</b></para>
-		/// <list type="bullet">
-		///   <item><description>
-		///   Per-IP debounce (<see cref="IpAuthAttemptDebounceSeconds"/> = 1 s) limits each attacker IP
-		///   to one SRP verify attempt per second, which bounds the rate at which new TOTP failure entries
-		///   can be created.
-		///   </description></item>
-		///   <item><description>
-		///   The per-username lockout at <see cref="MaxTotpFailuresPerUsername"/> (15) failures stops repeated
-		///   attempts against the same targeted account, limiting the per-username contribution to the tracker.
-		///   </description></item>
-		///   <item><description>
-		///   Each sweep invocation is called from <see cref="OnAuthSweep"/> which runs periodically; increasing
-		///   the sweep frequency or <see cref="TotpUsernameFailureSweepMaxScan"/> reduces the gap. The current
-		///   constants are tuned to keep per-tick CPU cost negligible even on constrained hosts.
-		///   </description></item>
-		/// </list>
-		/// <para/>
-		/// <para>
-		/// If a deployment experiences sustained distributed attacks across many distinct usernames,
-		/// raise <see cref="TotpUsernameFailureSweepMaxScan"/> or <see cref="MaxTotpUsernameFailureEntries"/>
-		/// to increase sweep throughput and capacity.
-		/// </para>
+		/// Head-first over windows in the order they opened, so every closed window is reached,
+		/// oldest first, and a pass with nothing closed costs one lock. The sweep this replaced
+		/// enumerated the first 64 entries of a dictionary on every pass; enumeration always
+		/// starts in the same place, so under a distributed attack the entries behind the first
+		/// 64 live ones were never removed, the tracker filled to
+		/// <see cref="MaxTotpUsernameFailureEntries"/>, and every username after that went
+		/// untracked — the lockout switched itself off exactly when it was needed. Closed windows
+		/// never count toward a lockout whether or not the sweep has reached them yet, so the
+		/// sweep only reclaims memory.
 		/// </remarks>
 		private void SweepExpiredTotpUsernameFailures()
 		{
-			DateTime now = DateTime.UtcNow;
-			int scanned = 0;
-			foreach (var kvp in totpUsernameFailures)
-			{
-				if (++scanned > TotpUsernameFailureSweepMaxScan)
-					break;
-				if (now - kvp.Value.FirstFailure > TotpUsernameLockoutDuration)
-				{
-					totpUsernameFailures.TryRemove(kvp.Key, out _);
-				}
-			}
+			totpUsernameFailures.SweepExpired(NowSeconds, TotpUsernameFailureSweepMaxRemovals);
 		}
 
 		/// <summary>
-		/// Evicts expired entries from <see cref="loginUsernameFailures"/>.
+		/// Sweeps closed per-username login failure windows; see
+		/// <see cref="SweepExpiredTotpUsernameFailures"/>.
 		/// </summary>
-		/// <remarks>
-		/// Bounded exactly like <see cref="SweepExpiredTotpUsernameFailures"/>, and subject to the
-		/// same caveat: under a sustained attack spread across many distinct usernames, entries can
-		/// arrive faster than they are swept until <see cref="MaxLoginUsernameFailureEntries"/> is
-		/// reached, at which point new usernames stop being tracked until the sweep frees capacity.
-		/// The per-IP debounce bounds the arrival rate, and an attacker who spends that capacity on
-		/// ten thousand throwaway usernames is not making progress against any of them.
-		/// </remarks>
 		private void SweepExpiredLoginUsernameFailures()
 		{
-			DateTime now = DateTime.UtcNow;
-			int scanned = 0;
-			foreach (var kvp in loginUsernameFailures)
-			{
-				if (++scanned > LoginUsernameFailureSweepMaxScan)
-					break;
-				if (now - kvp.Value.FirstFailure > LoginUsernameLockoutDuration)
-				{
-					loginUsernameFailures.TryRemove(kvp.Key, out _);
-				}
-			}
+			loginUsernameFailures.SweepExpired(NowSeconds, LoginUsernameFailureSweepMaxRemovals);
 		}
 
-		/// <summary>
-		/// Sweeps the kick-request debounce and auth rate-limit trackers.
-		/// Call from the hosting environment's per-tick update alongside <see cref="BaseAuthenticatorCore{TConnection}.Tick"/>.
-		/// </summary>
 		/// <inheritdoc/>
 		public override bool IsWorkerIdle =>
 			(verifyChannel?.Reader.Completion.IsCompleted ?? true) &&
@@ -509,10 +468,10 @@ namespace FishMMO.Auth.Implementation
 		/// </summary>
 		public void TickRateLimits()
 		{
-			DateTime now = DateTime.UtcNow;
-			kickRequestNextAllowedUtcByAccount.SweepExpired(now, AuthRateLimitCleanupMaxScanPerMap, AuthRateLimitCleanupMaxRemovePerMap);
-			ipAuthNextAllowedUtc.SweepExpired(now, AuthRateLimitCleanupMaxScanPerMap, AuthRateLimitCleanupMaxRemovePerMap);
-			accountVerifyNextAllowedUtc.SweepExpired(now, AuthRateLimitCleanupMaxScanPerMap, AuthRateLimitCleanupMaxRemovePerMap);
+			double now = NowSeconds;
+			kickRequestDebounceByAccount.SweepExpired(now, AuthRateLimitCleanupMaxScanPerMap, AuthRateLimitCleanupMaxRemovePerMap);
+			ipAuthDebounce.SweepExpired(now, AuthRateLimitCleanupMaxScanPerMap, AuthRateLimitCleanupMaxRemovePerMap);
+			accountVerifyDebounce.SweepExpired(now, AuthRateLimitCleanupMaxScanPerMap, AuthRateLimitCleanupMaxRemovePerMap);
 			connectionIpCache.SweepExpired(now, TimeSpan.FromSeconds(ConnectionIpCacheTtlSeconds), AuthRateLimitCleanupMaxScanPerMap, AuthRateLimitCleanupMaxRemovePerMap);
 		}
 
@@ -658,7 +617,10 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			RefreshAuthTtl(conn);
+			/* No TTL refresh here: the connection is on its two-factor window, which only a code
+			 * that is actually checked may restart (ResumeAuthentication, below). A refresh at this
+			 * point would also have let a message the semaphore turns away buy time without
+			 * spending an attempt. */
 
 			if (encryptedCode == null || encryptedCode.Length > CryptoHelper.MaxSrpPayloadBytes)
 			{
@@ -669,19 +631,19 @@ namespace FishMMO.Auth.Implementation
 
 			// Per-username lockout check
 			string? userKey = pendingState.Username?.ToLowerInvariant();
-			if (userKey != null && totpUsernameFailures.TryGetValue(userKey, out var failInfo))
+			// A closed window reads as zero, so the lockout clears itself on time whether or not
+			// the periodic sweep has reached the entry yet.
+			double lockoutNow = NowSeconds;
+			if (userKey != null && totpUsernameFailures.GetCount(userKey, lockoutNow) >= MaxTotpFailuresPerUsername)
 			{
-				if (DateTime.UtcNow - failInfo.FirstFailure > TotpUsernameLockoutDuration)
-				{
-					totpUsernameFailures.TryRemove(userKey, out _);
-				}
-				else if (failInfo.Count >= MaxTotpFailuresPerUsername)
-				{
-					totpPendingStates.TryRemove(clientId, out _);
-					EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
-					PurgeConnectionAuthState(conn, disconnect: false);
-					return;
-				}
+				/* Named, like the database lock: the password is already proven on this
+				 * connection, so saying the step is locked tells nobody anything they could not
+				 * learn by being the account's owner. It used to close the connection without a
+				 * word, which the client could only report as a dropped connection. */
+				totpPendingStates.TryRemove(clientId, out _);
+				RejectAndPurge(conn, ClientAuthenticationResult.TwoFactorLocked,
+					RetryAfterSecondsFrom(totpUsernameFailures.SecondsUntilClose(userKey, lockoutNow)));
+				return;
 			}
 
 			var sem = totpSemaphore;
@@ -693,6 +655,7 @@ namespace FishMMO.Auth.Implementation
 			}
 			if (!sem.Wait(TimeSpan.Zero))
 			{
+				// Not counted, so the prompt's window runs on unchanged.
 				BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true);
 				return;
 			}
@@ -702,12 +665,18 @@ namespace FishMMO.Auth.Implementation
 			int attempts = Interlocked.Increment(ref pendingState.Attempts);
 			if (attempts > MaxTotpAttempts)
 			{
+				/* Reachable only by a code sent while the last allowed one was still being
+				 * checked; RepromptOrDrop ends the sign-in once that one is answered. This code is
+				 * past the limit, and its answer says so rather than closing the connection mutely. */
 				sem.Release();
 				totpPendingStates.TryRemove(clientId, out _);
-				EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
-				PurgeConnectionAuthState(conn, disconnect: false);
+				RejectAndPurge(conn, ClientAuthenticationResult.TwoFactorExpired);
 				return;
 			}
+
+			// A counted code is being checked: machine work again, bounded by the progress TTL until
+			// the answer comes back — success, or a re-prompt with a fresh window.
+			ResumeAuthentication(conn);
 
 			_ = Task.Run(async () =>
 			{
@@ -1284,6 +1253,13 @@ namespace FishMMO.Auth.Implementation
 							return;
 						}
 
+						// No prompt for a connection that closed while its password was being checked.
+						if (!IsConnectionActive(conn))
+						{
+							AbandonSignIn(conn);
+							return;
+						}
+
 						totpPendingStates[GetConnectionClientId(conn)] = new TotpPendingState
 						{
 							Connection = conn,
@@ -1296,6 +1272,11 @@ namespace FishMMO.Auth.Implementation
 							Attempts = 0,
 						};
 
+						/* From here the server waits on a person, not on itself. The progress TTL
+						 * that bounded everything above is for a stalled exchange; left in charge it
+						 * dropped a player fifteen seconds after the prompt, often before they had the
+						 * authenticator app open. The prompt gets TwoFactorWindowSeconds instead. */
+						BeginAwaitingTwoFactor(conn);
 						EnqueueMainThread(conn, () => BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorRequired, reliable: true));
 						return;
 					}
@@ -1303,46 +1284,50 @@ namespace FishMMO.Auth.Implementation
 
 				bool authenticated = result == ClientAuthenticationResult.LoginSuccess;
 
-				byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof!, request.EncryptionData);
-
-				byte[]? encryptedToken = null;
-				if (authenticated && IsConnectionActive(conn))
+				/* The proof, the lockout reads, the online check and admission all awaited the
+				 * database, and the connection may have closed meanwhile. Nothing is issued for a
+				 * connection that has gone: no token is minted (its hash would be written for nobody)
+				 * and no result is reported. CompleteSignIn checks again on the main thread, where
+				 * the answer is final. */
+				if (!IsConnectionActive(conn))
 				{
-					encryptedToken = await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username!, accessLevel, ResolveClientRealIp(conn));
-					if (encryptedToken == null)
-					{
-						/* A login with no usable token is not a login. This used to broadcast
-						 * LoginSuccess with a null token — or with a token whose hash had not been
-						 * recorded, which every world server's revocation check treats as revoked —
-						 * so the player reached server select and was bounced back at the world with
-						 * TokenRevoked. ServerBusy says to try again now (issue #267). */
-						await Log.Warning(LogPrefix, $"Login for '{username}' refused: no auth token could be issued (signing key unavailable, or its hash could not be recorded).");
-						RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
-						return;
-					}
+					AbandonSignIn(conn);
+					return;
 				}
 
-				EnqueueMainThread(conn, () =>
+				byte[] encryptedServerProof = SrpService.EncryptServerProof(serverProof!, request.EncryptionData);
+
+				if (!authenticated)
 				{
-					if (IsConnectionActive(conn))
+					EnqueueMainThread(conn, () =>
 					{
-						BroadcastSrpSuccess(conn, encryptedServerProof, result, encryptedToken);
-					}
-
-					OnAuthenticationResult(conn, authenticated);
-
-					if (authenticated)
-					{
-						if (AccountManager.TryAdvanceAuthState(conn, AuthState.SrpSuccess, AuthState.Authenticated))
+						if (!IsConnectionActive(conn))
 						{
-							srpAccountManager.ClearSrpState(conn);
+							AbandonSignIn(conn);
+							return;
 						}
-					}
-					else
-					{
+
+						BroadcastSrpSuccess(conn, encryptedServerProof, result, null);
+						OnAuthenticationResult(conn, false);
 						AccountManager.RemoveConnectionAccount(conn);
-					}
-				});
+					});
+					return;
+				}
+
+				byte[]? encryptedToken = await GenerateEncryptedAuthTokenAsync(request.EncryptionData, username!, accessLevel, ResolveClientRealIp(conn));
+				if (encryptedToken == null)
+				{
+					/* A login with no usable token is not a login. This used to broadcast
+					 * LoginSuccess with a null token — or with a token whose hash had not been
+					 * recorded, which every world server's revocation check treats as revoked —
+					 * so the player reached server select and was bounced back at the world with
+					 * TokenRevoked. ServerBusy says to try again now (issue #267). */
+					await Log.Warning(LogPrefix, $"Login for '{username}' refused: no auth token could be issued (signing key unavailable, or its hash could not be recorded).");
+					RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
+					return;
+				}
+
+				EnqueueMainThread(conn, () => CompleteSignIn(conn, encryptedServerProof, encryptedToken));
 			}
 			catch (Exception ex)
 			{
@@ -1370,7 +1355,7 @@ namespace FishMMO.Auth.Implementation
 			// the TOTP Task.Run was scheduled.
 			if (!IsConnectionActive(conn))
 			{
-				totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
+				AbandonSignIn(conn);
 				return;
 			}
 
@@ -1405,16 +1390,7 @@ namespace FishMMO.Auth.Implementation
 					return;
 				}
 
-				if (pendingState.Attempts > MaxTotpAttempts)
-				{
-					totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
-					EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
-					PurgeConnectionAuthState(conn, disconnect: false);
-				}
-				else
-				{
-					EnqueueMainThread(conn, () => BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true));
-				}
+				RepromptOrDrop(conn, pendingState, ClientAuthenticationResult.TwoFactorInvalid);
 				return;
 			}
 
@@ -1429,16 +1405,7 @@ namespace FishMMO.Auth.Implementation
 				 * so retrying through a database blip could lock the account (issue #267). Nothing is
 				 * counted here. The attempt itself was already counted when the message arrived, so
 				 * retries stay bounded by MaxTotpAttempts; the pending state stays for the retry. */
-				if (pendingState.Attempts > MaxTotpAttempts)
-				{
-					totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
-					EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
-					PurgeConnectionAuthState(conn, disconnect: false);
-				}
-				else
-				{
-					EnqueueMainThread(conn, () => BroadcastAuthResult(conn, ClientAuthenticationResult.ServerBusy, reliable: true));
-				}
+				RepromptOrDrop(conn, pendingState, ClientAuthenticationResult.ServerBusy);
 				return;
 			}
 
@@ -1450,16 +1417,7 @@ namespace FishMMO.Auth.Implementation
 					return;
 				}
 
-				if (pendingState.Attempts > MaxTotpAttempts)
-				{
-					totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
-					EnqueueMainThread(conn, () => DisconnectConnection(conn, graceful: false));
-					PurgeConnectionAuthState(conn, disconnect: false);
-				}
-				else
-				{
-					EnqueueMainThread(conn, () => BroadcastAuthResult(conn, ClientAuthenticationResult.TwoFactorInvalid, reliable: true));
-				}
+				RepromptOrDrop(conn, pendingState, ClientAuthenticationResult.TwoFactorInvalid);
 				return;
 			}
 
@@ -1469,34 +1427,86 @@ namespace FishMMO.Auth.Implementation
 			totpEnabledByClientId.TryRemove(GetConnectionClientId(conn), out _);
 			verifyCodeExpiryByClientId.TryRemove(GetConnectionClientId(conn), out _);
 
-			byte[] encryptedServerProof = SrpService.EncryptServerProof(pendingState.ServerProof!, pendingState.EncryptionData);
-			byte[]? encryptedToken = null;
-			if (IsConnectionActive(conn))
+			/* As on the proof path: the code's check awaited the database, and nothing is issued
+			 * for a connection that closed meanwhile. The right code still cleared the failure
+			 * count above; that is the owner's, whatever became of this connection. */
+			if (!IsConnectionActive(conn))
 			{
-				encryptedToken = await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, pendingState.Username!, pendingState.AccessLevel, ResolveClientRealIp(conn));
-				if (encryptedToken == null)
-				{
-					// As in the SRP proof path: a login with no usable token is refused, not "succeeded".
-					await Log.Warning(LogPrefix, $"Login for '{pendingState.Username}' refused after 2FA: no auth token could be issued (signing key unavailable, or its hash could not be recorded).");
-					RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
-					return;
-				}
+				AbandonSignIn(conn);
+				return;
 			}
 
-			EnqueueMainThread(conn, () =>
+			byte[] encryptedServerProof = SrpService.EncryptServerProof(pendingState.ServerProof!, pendingState.EncryptionData);
+			byte[]? encryptedToken = await GenerateEncryptedAuthTokenAsync(pendingState.EncryptionData, pendingState.Username!, pendingState.AccessLevel, ResolveClientRealIp(conn));
+			if (encryptedToken == null)
 			{
-				if (IsConnectionActive(conn))
-				{
-					BroadcastSrpSuccess(conn, encryptedServerProof, ClientAuthenticationResult.LoginSuccess, encryptedToken);
-				}
+				// As in the SRP proof path: a login with no usable token is refused, not "succeeded".
+				await Log.Warning(LogPrefix, $"Login for '{pendingState.Username}' refused after 2FA: no auth token could be issued (signing key unavailable, or its hash could not be recorded).");
+				RejectAndPurge(conn, ClientAuthenticationResult.ServerBusy);
+				return;
+			}
 
-				OnAuthenticationResult(conn, authenticated: true);
+			EnqueueMainThread(conn, () => CompleteSignIn(conn, encryptedServerProof, encryptedToken));
+		}
 
-				if (AccountManager.TryAdvanceAuthState(conn, AuthState.SrpSuccess, AuthState.Authenticated))
-				{
-					srpAccountManager.ClearSrpState(conn);
-				}
-			});
+		/// <summary>
+		/// Finishes a sign-in on the main thread: delivers the server proof and the token, reports the
+		/// connection authenticated, and advances its state to Authenticated — or, for a connection
+		/// that can no longer receive them, does none of it and purges its sign-in state.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The one place both success paths (the SRP proof, and a correct two-factor code) complete, and
+		/// the only one where the answer about the connection is final: it runs where the transport
+		/// runs, so a connection that is active here is active when the result goes out. Both paths
+		/// used to report success unconditionally — they skipped the broadcast for a connection that
+		/// had gone, but still called OnAuthenticationResult(conn, true), so the host marked a dead
+		/// connection authenticated and ran its post-sign-in work for nobody.
+		/// </para>
+		/// <para>
+		/// The state machine moves first and the result is reported only when it did. A connection
+		/// that is active but no longer in SrpSuccess had its sign-in purged by a refusal on another
+		/// path (a code past the attempt limit arriving alongside the right one) whose disconnect is
+		/// still queued; it is closed here rather than authenticated.
+		/// </para>
+		/// </remarks>
+		/// <param name="conn">The connection.</param>
+		/// <param name="encryptedServerProof">The server proof, encrypted for the connection.</param>
+		/// <param name="encryptedToken">The auth token, encrypted for the connection.</param>
+		private void CompleteSignIn(TConnection conn, byte[] encryptedServerProof, byte[] encryptedToken)
+		{
+			if (!IsConnectionActive(conn))
+			{
+				AbandonSignIn(conn);
+				return;
+			}
+
+			if (!AccountManager.TryAdvanceAuthState(conn, AuthState.SrpSuccess, AuthState.Authenticated))
+			{
+				_ = Log.Warning(LogPrefix, $"Sign-in for conn {GetConnectionClientId(conn)} was not completed: its sign-in state was ended on another path first. Disconnecting.");
+				PurgeConnectionAuthState(conn, disconnect: true);
+				return;
+			}
+
+			BroadcastSrpSuccess(conn, encryptedServerProof, ClientAuthenticationResult.LoginSuccess, encryptedToken);
+			OnAuthenticationResult(conn, authenticated: true);
+			srpAccountManager.ClearSrpState(conn);
+		}
+
+		/// <summary>
+		/// Drops a sign-in whose connection closed while the server was checking it: purges its state
+		/// and issues nothing.
+		/// </summary>
+		/// <remarks>
+		/// Nothing is sent either — there is nobody to send it to. A token minted in the instant
+		/// between the last check and the connection closing has its hash recorded and is then
+		/// discarded unsent; nobody holds it, and it expires with its lifetime.
+		/// </remarks>
+		/// <param name="conn">The connection that closed.</param>
+		private void AbandonSignIn(TConnection conn)
+		{
+			_ = Log.Debug(LogPrefix, $"Sign-in for conn {GetConnectionClientId(conn)} abandoned: the connection closed while it was being checked.");
+			PurgeConnectionAuthState(conn, disconnect: false);
 		}
 
 		#endregion
@@ -1511,7 +1521,7 @@ namespace FishMMO.Auth.Implementation
 		private bool TryBeginIpAuthAttempt(string ip)
 		{
 			if (string.IsNullOrEmpty(ip)) return true;
-			return ipAuthNextAllowedUtc.TryBegin(ip, DateTime.UtcNow, TimeSpan.FromSeconds(IpAuthAttemptDebounceSeconds));
+			return ipAuthDebounce.TryBegin(ip, NowSeconds, TimeSpan.FromSeconds(IpAuthAttemptDebounceSeconds));
 		}
 
 		/// <summary>
@@ -1523,8 +1533,8 @@ namespace FishMMO.Auth.Implementation
 		private bool TryBeginAccountVerifyAttempt(string username)
 		{
 			if (string.IsNullOrEmpty(username)) return true;
-			if (accountVerifyNextAllowedUtc.Count >= MaxAccountVerifyDebounceEntries) return false;
-			return accountVerifyNextAllowedUtc.TryBegin(username, DateTime.UtcNow, TimeSpan.FromSeconds(AccountVerifyDebounceSeconds));
+			if (accountVerifyDebounce.Count >= MaxAccountVerifyDebounceEntries) return false;
+			return accountVerifyDebounce.TryBegin(username, NowSeconds, TimeSpan.FromSeconds(AccountVerifyDebounceSeconds));
 		}
 
 		/// <summary>
@@ -1536,7 +1546,7 @@ namespace FishMMO.Auth.Implementation
 		private bool TryBeginKickRequest(string username)
 		{
 			if (string.IsNullOrEmpty(username)) return false;
-			return kickRequestNextAllowedUtcByAccount.TryBegin(username, DateTime.UtcNow, TimeSpan.FromSeconds(KickRequestDebounceSeconds));
+			return kickRequestDebounceByAccount.TryBegin(username, NowSeconds, TimeSpan.FromSeconds(KickRequestDebounceSeconds));
 		}
 
 		/// <summary>
@@ -1548,33 +1558,35 @@ namespace FishMMO.Auth.Implementation
 		private string ResolveAndCacheIp(TConnection conn)
 		{
 			int clientId = GetConnectionClientId(conn);
-			if (connectionIpCache.TryGetAndTouch(clientId, DateTime.UtcNow, out string cached))
+			double now = NowSeconds;
+			if (connectionIpCache.TryGetAndTouch(clientId, now, out string cached))
 				return cached;
 			string ip = HandshakeService.NormalizeIp(GetConnectionAddress(conn));
-			connectionIpCache.Upsert(clientId, ip, DateTime.UtcNow);
+			connectionIpCache.Upsert(clientId, ip, now);
 			return ip;
 		}
 
 		/// <summary>
 		/// Records a TOTP failure for the given username toward the per-username lockout threshold.
 		/// </summary>
+		/// <remarks>
+		/// At <see cref="MaxTotpUsernameFailureEntries"/> a username with no open window is not
+		/// tracked, but one already being counted always is: refusing those too (as this once did)
+		/// let an attacker who filled the tracker stop the lockout that was already closing on
+		/// the account they were targeting.
+		/// </remarks>
 		/// <param name="username">Account name that failed TOTP verification.</param>
 		private void TrackTotpUsernameFailure(string? username)
 		{
 			if (string.IsNullOrEmpty(username)) return;
-			string key = username.ToLowerInvariant();
-			if (totpUsernameFailures.Count >= MaxTotpUsernameFailureEntries) return;
-			totpUsernameFailures.AddOrUpdate(
-				key,
-				_ => (1, DateTime.UtcNow),
-				(_, prev) => (prev.Count + 1, prev.FirstFailure));
+			totpUsernameFailures.Increment(username!.ToLowerInvariant(), NowSeconds, MaxTotpUsernameFailureEntries);
 		}
 
 		/// <summary>
 		/// Whether the supplied username is currently locked out for password guessing.
 		/// </summary>
 		/// <remarks>
-		/// Self-expiring: an entry whose window has elapsed is removed on the way past, so a
+		/// Self-expiring: a closed window reads as zero and is removed on the way past, so a
 		/// lockout always clears itself even if the periodic sweep has not reached that key yet.
 		/// </remarks>
 		/// <param name="username">The username the client supplied.</param>
@@ -1584,16 +1596,7 @@ namespace FishMMO.Auth.Implementation
 			int threshold = MaxLoginFailuresPerUsername;
 			if (threshold <= 0 || string.IsNullOrEmpty(username)) return false;
 
-			string key = username!.ToLowerInvariant();
-			if (!loginUsernameFailures.TryGetValue(key, out var failInfo)) return false;
-
-			if (DateTime.UtcNow - failInfo.FirstFailure > LoginUsernameLockoutDuration)
-			{
-				loginUsernameFailures.TryRemove(key, out _);
-				return false;
-			}
-
-			return failInfo.Count >= threshold;
+			return loginUsernameFailures.GetCount(username!.ToLowerInvariant(), NowSeconds) >= threshold;
 		}
 
 		/// <summary>
@@ -1603,13 +1606,9 @@ namespace FishMMO.Auth.Implementation
 		private void TrackLoginUsernameFailure(string? username)
 		{
 			if (MaxLoginFailuresPerUsername <= 0 || string.IsNullOrEmpty(username)) return;
-			string key = username!.ToLowerInvariant();
-			if (loginUsernameFailures.Count >= MaxLoginUsernameFailureEntries &&
-				!loginUsernameFailures.ContainsKey(key)) return;
-			loginUsernameFailures.AddOrUpdate(
-				key,
-				_ => (1, DateTime.UtcNow),
-				(_, prev) => (prev.Count + 1, prev.FirstFailure));
+			// At capacity a username with no open window is not tracked; one already being
+			// counted always is, so a lockout under way keeps closing.
+			loginUsernameFailures.Increment(username!.ToLowerInvariant(), NowSeconds, MaxLoginUsernameFailureEntries);
 		}
 
 		/// <summary>
@@ -1623,7 +1622,7 @@ namespace FishMMO.Auth.Implementation
 		private void ClearLoginUsernameFailures(string? username)
 		{
 			if (string.IsNullOrEmpty(username)) return;
-			loginUsernameFailures.TryRemove(username!.ToLowerInvariant(), out _);
+			loginUsernameFailures.Remove(username!.ToLowerInvariant());
 		}
 
 		/// <summary>
@@ -1718,10 +1717,14 @@ namespace FishMMO.Auth.Implementation
 		}
 
 		/// <summary>Whole seconds until <paramref name="untilUtc"/>, at least 1.</summary>
-		private static int RetryAfterSecondsUntil(DateTime untilUtc)
+		private static int RetryAfterSecondsUntil(DateTime untilUtc) =>
+			RetryAfterSecondsFrom((untilUtc - DateTime.UtcNow).TotalSeconds);
+
+		/// <summary>A remaining wait in seconds as the whole seconds a client is told, at least 1.</summary>
+		private static int RetryAfterSecondsFrom(double remainingSeconds)
 		{
-			double seconds = Math.Ceiling((untilUtc - DateTime.UtcNow).TotalSeconds);
-			if (seconds < 1d) return 1;
+			double seconds = Math.Ceiling(remainingSeconds);
+			if (!(seconds >= 1d)) return 1;
 			return seconds > int.MaxValue ? int.MaxValue : (int)seconds;
 		}
 
@@ -1741,6 +1744,59 @@ namespace FishMMO.Auth.Implementation
 			RejectAndPurge(conn, ClientAuthenticationResult.TwoFactorLocked, RetryAfterSecondsUntil(lockedUntil.Value));
 			return true;
 		}
+
+		/// <summary>
+		/// Answers a counted two-factor attempt that did not sign the player in: asks again with
+		/// <paramref name="reprompt"/>, or ends the sign-in once it has used its attempts.
+		/// </summary>
+		/// <remarks>
+		/// A re-prompt is a new prompt on the player's screen, so it gets a full
+		/// <see cref="BaseAuthenticatorCore{TConnection}.TwoFactorWindowSeconds"/> — started before
+		/// the answer goes out, so the window never begins after the player has seen it. The attempt
+		/// was counted when the code arrived, so the number of windows one sign-in can have is
+		/// bounded by <see cref="MaxTotpAttempts"/>.
+		/// </remarks>
+		/// <param name="conn">The connection.</param>
+		/// <param name="pendingState">Its two-factor state.</param>
+		/// <param name="reprompt">The answer that asks for another code: TwoFactorInvalid, or ServerBusy when the code could not be checked.</param>
+		private void RepromptOrDrop(TConnection conn, TotpPendingState pendingState, ClientAuthenticationResult reprompt)
+		{
+			/* The attempt that just failed was counted on arrival, so at MaxTotpAttempts it was the
+			 * last one allowed. Asking again then (the check was ">") put a sixth prompt on the
+			 * player's screen whose code would be refused unread on arrival and the connection
+			 * dropped without a word. End the sign-in here instead, with an answer the client can
+			 * only read as the end: see FinalTwoFactorAnswer. */
+			if (pendingState.Attempts >= MaxTotpAttempts)
+			{
+				totpPendingStates.TryRemove(GetConnectionClientId(conn), out _);
+				RejectAndPurge(conn, FinalTwoFactorAnswer(reprompt));
+				return;
+			}
+
+			BeginAwaitingTwoFactor(conn);
+			EnqueueMainThread(conn, () => BroadcastAuthResult(conn, reprompt, reliable: true));
+		}
+
+		/// <summary>
+		/// What a sign-in's last allowed two-factor attempt is answered with, given the answer that
+		/// would otherwise have asked for another code.
+		/// </summary>
+		/// <remarks>
+		/// <list type="bullet">
+		/// <item><description>A wrong code, <c>TwoFactorInvalid</c>: <c>TwoFactorExpired</c>. The client
+		/// re-opens the prompt on TwoFactorInvalid, so sending it as the final answer put up a prompt for
+		/// a code that could never be sent, and the connection then closed under it.
+		/// TwoFactorExpired answering a code the client sent is how it knows the attempts ran out,
+		/// rather than the window.</description></item>
+		/// <item><description>A code that could not be checked, <c>ServerBusy</c>: <c>ServerBusy</c>. The
+		/// code may have been right, so "no attempts left" would misstate it; the fault is the server's
+		/// and the client already ends the sign-in on ServerBusy and says to try again.</description></item>
+		/// </list>
+		/// </remarks>
+		/// <param name="reprompt">The answer that would have asked for another code.</param>
+		/// <returns>The final answer.</returns>
+		private static ClientAuthenticationResult FinalTwoFactorAnswer(ClientAuthenticationResult reprompt) =>
+			reprompt == ClientAuthenticationResult.TwoFactorInvalid ? ClientAuthenticationResult.TwoFactorExpired : reprompt;
 
 		/* The hook wrappers. A hook that throws must not take the worker down or leave a connection
 		 * half-processed, so each is caught here and given the answer that keeps the sign-in path

@@ -86,7 +86,7 @@ FishMMO is a complete multiplayer online game framework consisting of:
 | **FishMMO-Patcher** | Client-side updater that applies versioned patch files |
 | **FishMMO-Setup** | Configuration templates — nginx.conf, server .cfg files, appsettings.json |
 | **FishMMO-DiscordBot** | Discord bot bridging in-game chat with a Discord guild |
-| **FishMMO-ControlPanel** | ASP.NET Core 8.0 operator and player-services dashboard, under `FishMMO-WebServers/` — accounts, characters, server monitoring and control. Ships an interactive design mock; **every API handler is still a TODO stub** |
+| **FishMMO-ControlPanel** | ASP.NET Core 8.0 operator and player-services dashboard, under `FishMMO-WebServers/` — accounts, characters, moderation, support, server monitoring and control, maintenance, bandwidth and the daemon control plane, all against PostgreSQL |
 
 The server architecture uses three server types:
 
@@ -377,7 +377,7 @@ The full template maps to:
 > - `FishMMO-WebServers/IPFetchASP.NET` — login server discovery API
 > - `FishMMO-WebServers/PatcherASP.NET` — patch delivery server
 > - `FishMMO-WebServers/WebGLServerASP.NET` — WebGL static file server
-> - `FishMMO-WebServers/FishMMO-ControlPanel` — operator dashboard (scaffold + design mock)
+> - `FishMMO-WebServers/FishMMO-ControlPanel` — operator and player-services dashboard
 > - `FishMMO-AppHealthMonitor` — server health monitor daemon
 > - `FishMMO-DiscordBot` — Discord chat bridge bot
 
@@ -882,16 +882,18 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 | `AutoVerifyAccounts` | LoginServer only — skip email verification at account creation and at login (Development builds only, never in Production) | `true` (Dev) / `false` (Prod) |
 | `AllowedOrigins` | LoginServer only — comma-separated CORS origins permitted for WebGL clients | `https://play.fishmmo.com` |
 | `Smtp:Host` / `Smtp:Port` / `Smtp:Username` / `Smtp:Password` / `Smtp:FromAddress` / `Smtp:FromName` / `Smtp:UseSsl` | LoginServer only — verification-email relay. Port 465 = implicit TLS (`UseSsl=true`); port 587 = STARTTLS (`UseSsl=false`) | Prod: `localhost` / `465` / — / — / `noreply@fishmmo.com` / `FishMMO` / `true`; Dev ships `587` / `false` |
+| `AuthMaxPendingConnections` | Connections allowed to be mid-authentication at once. On the LoginServer a handshake past it joins the login queue, so this is the queue's threshold; unset there, it is `AuthSrpVerifyChannelCapacity + AuthSrpProofChannelCapacity`. A player at the two-factor prompt does not count against it; the whole pending set, prompts included, is held to ten times the cap instead. Commented out in the templates | `1000` Login (500 + 500) / `10000` World, Scene |
+| `AuthTwoFactorWindowSeconds` | LoginServer only — seconds a player has to answer each two-factor prompt before the connection is dropped. Clamped 30–600. Not in the templates | `120` |
 | `LoginQueueUpdateRateSeconds` | LoginServer only — how often queued clients receive position updates | `2.0` |
 | `LoginQueueMaxSize` | LoginServer only — queue capacity; excess clients are rejected outright | `500` |
-| `LoginQueueAdmissionRatePerSecond` | LoginServer only — admission rate from the queue | `5.0` |
+| `LoginQueueAdmissionRatePerSecond` | LoginServer only — admission rate from the queue | `50.0` |
 | `LoginQueueTimeoutSeconds` | LoginServer only — maximum wait before a queued client is timed out | `300` |
 
 **Format:** Simple `key=value` per line. Lines starting with `#` or `;` are comments. The SMTP settings can be overridden via `FISHMMO_SMTP_HOST`, `FISHMMO_SMTP_PORT`, `FISHMMO_SMTP_USERNAME`, `FISHMMO_SMTP_PASSWORD`, `FISHMMO_SMTP_FROM_ADDRESS`, `FISHMMO_SMTP_FROM_NAME`, and `FISHMMO_SMTP_USE_SSL`.
 
 > **IPv6 is not supported at the native QUIC layer.** The `EnableIPv6` and `IPv6Address` keys appear commented out in the templates and are reserved for future implementation — IPv6 clients must reach the servers through an IPv6-enabled NGINX L4 proxy.
 
-> The Production login-queue defaults (`500` / `5.0` / `300`) are conservative, sized for roughly 500 concurrent players. The template's own tuning note suggests `1000–8000`, `10–20/s`, and `120–600s` for a launch-scale deployment.
+> The Production login-queue defaults (`500` / `50.0` / `300`) are conservative, sized for roughly 500 concurrent players. The template's own tuning note suggests a queue of `1000–8000` and a timeout of `120–600s` for a launch-scale deployment, and raising the admission rate only alongside more SRP proof workers: 50/s sits under what the proof stage completes on the default two workers (near 100/s), so the queue drains into the pipeline without refilling the cap.
 
 > **Certificate paths are required on every game server.** `CertificatePath` and `PrivateKeyPath` must point to valid PEM files on each server. NGINX cannot terminate QUIC TLS — it only forwards raw UDP. If certificates are missing, the server will fail to start or clients will be unable to connect. See [TLS Certificate Setup for Game Servers](#tls-certificate-setup-for-game-servers).
 
@@ -1001,7 +1003,7 @@ FishMMO-Setup/
 │   ├── .env.example                          # Template for FISHMMO_* environment variables
 │   ├── appsettings.json                      # Unity server Npgsql (dev)
 │   ├── appsettings.AppHealthMonitor.json      # Process supervisor config
-│   ├── appsettings.DiscordBot.json           # Discord token + Npgsql
+│   ├── appsettings.DiscordBot.json           # Discord bot (guild, relay, Npgsql; token is env-only)
 │   ├── appsettings.IpFetchServer.json        # IP-fetch web server base
 │   ├── appsettings.IpFetchServer.Development.json  # Dev overrides (DB connection string)
 │   ├── appsettings.Patcher.json              # Patch delivery web server
@@ -1016,7 +1018,7 @@ FishMMO-Setup/
 │   ├── README.md                             # Production deployment notes
 │   ├── appsettings.json                      # Unity server Npgsql
 │   ├── appsettings.AppHealthMonitor.json      # Process supervisor config
-│   ├── appsettings.DiscordBot.json           # Discord token + Npgsql
+│   ├── appsettings.DiscordBot.json           # Discord bot (guild, relay, Npgsql; token is env-only)
 │   ├── appsettings.IpFetchServer.Production.json  # Prod overrides (empty — must set env vars)
 │   ├── appsettings.Patcher.json              # Patch delivery web server
 │   ├── appsettings.WebGLServer.json          # Static asset web server
@@ -1093,13 +1095,14 @@ All game servers load the KEK from the database at startup via `IDeploymentSecre
 
 #### Auth Protocol Constants
 
-The authentication library has several compile-time security constants (in `BaseAuthenticatorCore` and `SrpAuthenticatorCore`, under `FishMMO-Auth/FishMMO-ServerAuth/Implementation/Auth/`):
+The authentication library's security limits (in `BaseAuthenticatorCore` and `SrpAuthenticatorCore`, under `FishMMO-Auth/FishMMO-ServerAuth/Implementation/Auth/`, with the pending-authentication timing rules in `Core/PendingAuthRules.cs`). All are compile-time constants except the two the host sets from configuration, `MaxPendingAuthConnections` and `TwoFactorWindowSeconds`:
 
 | Constant | Default | Declared In | Description |
 |---|---|---|---|
-| `AuthStaleTtlSeconds` | 15 | `BaseAuthenticatorCore` | Stale-auth sweep interval |
-| `AuthHardDeadlineSeconds` | 60 | `BaseAuthenticatorCore` | Hard authentication deadline |
-| `MaxPendingAuthConnections` | 10,000 | `BaseAuthenticatorCore` | Concurrent pending auth cap |
+| `AuthStaleTtlSeconds` | 15 | `BaseAuthenticatorCore` (`PendingAuthRules.ProgressTtlSeconds`) | Seconds an authenticating connection may go without progress before it is purged. Machine work only; the two-factor prompt has its own window |
+| `AuthHardDeadlineSeconds` | 60 | `BaseAuthenticatorCore` (`PendingAuthRules.AuthenticatingCapSeconds`) | Seconds into one authenticating phase after which progress no longer extends it, so a stall mid-SRP is dropped within cap + TTL |
+| `TwoFactorWindowSeconds` | 120 (30–600) | `BaseAuthenticatorCore` | Seconds a player has to answer each two-factor prompt; every prompt gets the whole window. Configurable as `AuthTwoFactorWindowSeconds` |
+| `MaxPendingAuthConnections` | 1,000 Login / 10,000 World, Scene | `BaseAuthenticatorCore` | Concurrent pending auth cap, configurable as `AuthMaxPendingConnections`; on the Login Server the login queue threshold, derived from the SRP channel capacities when unset. Two-factor prompts do not count against it |
 | `HandshakeIpWindowSeconds` | 2 | `BaseAuthenticatorCore` | Sliding window for the per-IP handshake limiter |
 | `HandshakeIpBurstLimit` | 8 | `BaseAuthenticatorCore` | Phase-2 handshake completions allowed from one IP per window — sustains 4/sec/IP while tolerating a NAT burst |
 | `MaxGlobalHandshakesPerSecond` | 500 | `BaseAuthenticatorCore` | Global X25519 handshake cap per 1-second window |
@@ -1564,6 +1567,9 @@ columns are the **authority** for a server's lifecycle state. Servers never writ
 own: each one reads its own row back on every pulse (~5s) and adopts what it finds. Anything that
 can write those rows therefore controls the servers — the in-game commands below, the Control Panel, or plain
 `psql` — exactly as `kick_requests` already works for accounts.
+A scheduled shutdown is counted down from the seconds remaining that the database reports on
+that read, on each server's monotonic clock, never by comparing the stored instant with the
+host's wall clock — so a host whose clock is wrong neither stops early nor misses a warning.
 
 **Locking drains, it does not evict.** A locked server keeps the players it has and stops
 receiving new ones: a locked world refuses logins, and a locked scene server is skipped by the
@@ -1706,7 +1712,7 @@ Control Panel).
 
 ## FishMMO-AppHealthMonitor
 
-The AppHealthMonitor is a daemon that monitors, auto-restarts, and health-checks your server processes. It performs **process liveness checks, TCP/UDP/WebSocket port probes, CPU and memory threshold monitoring, exponential-backoff restarts, and circuit breaker protection**.
+The AppHealthMonitor is a daemon that monitors, auto-restarts, and health-checks your server processes. It performs **process liveness checks, a database pulse check for the game servers, TCP/UDP port probes for anything else, CPU and memory threshold monitoring, exponential-backoff restarts, and circuit breaker protection**. With database credentials it also joins the control plane: it reports what it supervises and carries out the start, stop and restart commands an operator queues for its host from the Control Panel.
 
 ### Build
 
@@ -1717,7 +1723,7 @@ dotnet build -c Release
 
 ### Configure appsettings.json
 
-Place `appsettings.json` in the AppHealthMonitor's working directory:
+Place `appsettings.json` in the AppHealthMonitor's working directory, or start from the shipped templates in `FishMMO-Setup/{Development,Production}/appsettings.AppHealthMonitor.json`:
 
 ```json
 {
@@ -1726,9 +1732,12 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
     {
       "Name": "LoginServer",
       "ApplicationExePath": "/path/to/GameServer",
-      "MonitoredPort": 7770,
-      "PortTypes": ["TCP", "UDP"],
       "LaunchArguments": "LOGIN",
+      "MonitoredPort": 0,
+      "PortTypes": ["DatabasePulse"],
+      "PulseTier": "login",
+      "PulseServerName": "LoginServer",
+      "PulseStaleSeconds": 90,
       "CheckIntervalSeconds": 30,
       "LaunchDelaySeconds": 2,
       "InitialHealthCheckDelaySeconds": 30,
@@ -1742,9 +1751,12 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
     {
       "Name": "WorldServer",
       "ApplicationExePath": "/path/to/GameServer",
-      "MonitoredPort": 7780,
-      "PortTypes": ["TCP", "UDP"],
       "LaunchArguments": "WORLD",
+      "MonitoredPort": 0,
+      "PortTypes": ["DatabasePulse"],
+      "PulseTier": "world",
+      "PulseServerName": "WorldServer",
+      "PulseStaleSeconds": 90,
       "CheckIntervalSeconds": 30,
       "LaunchDelaySeconds": 2,
       "InitialHealthCheckDelaySeconds": 30,
@@ -1758,9 +1770,12 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
     {
       "Name": "SceneServer",
       "ApplicationExePath": "/path/to/GameServer",
-      "MonitoredPort": 7790,
-      "PortTypes": ["TCP", "UDP"],
       "LaunchArguments": "SCENE",
+      "MonitoredPort": 0,
+      "PortTypes": ["DatabasePulse"],
+      "PulseTier": "scene",
+      "PulseServerName": "SceneServer",
+      "PulseStaleSeconds": 90,
       "CheckIntervalSeconds": 30,
       "LaunchDelaySeconds": 2,
       "InitialHealthCheckDelaySeconds": 30,
@@ -1774,9 +1789,9 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
     {
       "Name": "IPFetch Server",
       "ApplicationExePath": "/path/to/IpFetchServer",
+      "LaunchArguments": "",
       "MonitoredPort": 0,
       "PortTypes": [],
-      "LaunchArguments": "",
       "CheckIntervalSeconds": 30,
       "LaunchDelaySeconds": 2,
       "InitialHealthCheckDelaySeconds": 30,
@@ -1791,14 +1806,19 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
 }
 ```
 
+> **Do not port-probe a game server.** WebTransport is QUIC over UDP, so there is no TCP listener on a game port: a `TCP` check fails against a healthy server, and because every configured check must pass, the monitor restarts healthy servers until it gives up. A `UDP` check cannot compensate — it succeeds when the local send completes and never waits for a reply, so it reports a dead server healthy — and QUIC answers only a valid Initial packet, so it cannot be probed without a handshake. The game servers are checked with `DatabasePulse` instead: the age of the server's own pulse row, as the database measures it. The pulse check **fails open** — an unreadable database or a server not registered yet reports healthy — because otherwise a database outage would make every pulse look stale at once and every daemon would restart every server together.
+
 | Key | Description |
 |---|---|
 | `Headless` | `true` for production (auto-starts monitoring, no interactive console). `false` for development. |
 | `Name` | Friendly name shown in logs and `status` command. |
 | `ApplicationExePath` | Absolute or relative path to the executable. |
 | `LaunchArguments` | Server type selector: `LOGIN`, `WORLD`, `SCENE`, or empty for web services. |
-| `MonitoredPort` | Must match the port in the corresponding `.cfg` file. `0` = process-only monitoring. |
-| `PortTypes` | Health check protocol(s): `TCP`, `UDP`, `WebSocket`. |
+| `MonitoredPort` | Port for a `TCP`/`UDP` probe. `0` = no port probe (the game servers use the pulse instead). |
+| `PortTypes` | Health checks, every one of which must pass: any of `TCP`, `UDP`, `DatabasePulse`. Empty = process-only monitoring. |
+| `PulseTier` | With `DatabasePulse`: `login`, `world` or `scene`, the server table to read. |
+| `PulseServerName` | With `DatabasePulse`: the name the server registers under (its own `ServerName` setting); defaults to `Name`. Matched by name, not address or port. |
+| `PulseStaleSeconds` | With `DatabasePulse`: pulse age, as the database measures it, above which the server counts as down. Default `90` (three missed 30 s beats). |
 | `CheckIntervalSeconds` | Probe interval (minimum 5). |
 | `InitialHealthCheckDelaySeconds` | Delay before first probe after launch (minimum 1). |
 | `PostLaunchSettleDelaySeconds` | Pause after launch/restart before resuming probes. |
@@ -1809,14 +1829,13 @@ Place `appsettings.json` in the AppHealthMonitor's working directory:
 | `CpuThresholdPercent` | CPU usage above this percentage counts as a resource failure. Production templates use `80`. |
 | `MemoryThresholdMB` | Memory usage above this counts as a resource failure. Production templates use `1024` for game servers, `512` for web services. |
 | `ResourceCheckFailureThreshold` | Consecutive CPU/memory breaches before the process is restarted. Production templates use `2`. |
-| `HealthCheckHost` | Host the port probe connects to. `127.0.0.1` for loopback-bound servers. |
-| `PortCheckTimeoutMs` | TCP/UDP probe timeout. Production templates use `2000`. |
-| `WebSocketCheckTimeoutMs` | WebSocket probe timeout. Production templates use `5000`. |
+| `HealthCheckHost` | Host a port probe connects to. `127.0.0.1` for loopback-bound servers. |
+| `PortCheckTimeoutMs` | TCP/UDP probe timeout. A pulse read gets the larger of this and 5 s, since it is a database round trip. Production templates use `2000`. |
 | `GracefulShutdownTimeoutSeconds` | Time allowed for a graceful stop before escalating. |
 | `ForceKillTimeoutSeconds` | Time allowed for the forced kill to take effect. |
-| `LaunchDelaySeconds` | Delay before launching the process. |
+| `LaunchDelaySeconds` | Delay before launching the next process in the list. |
 
-> The example above is trimmed for readability. The shipped templates in `FishMMO-Setup/{Development,Production}/appsettings.AppHealthMonitor.json` also set `CpuThresholdPercent`, `MemoryThresholdMB`, `ResourceCheckFailureThreshold`, `HealthCheckHost`, `PortCheckTimeoutMs`, `WebSocketCheckTimeoutMs`, and `ForceKillTimeoutSeconds` — start from those rather than from this snippet. The Production template sets `"Headless": true` and paths under `/opt/fishmmo/`.
+> The example above is trimmed for readability. The shipped templates also set `CpuThresholdPercent`, `MemoryThresholdMB`, `ResourceCheckFailureThreshold`, `HealthCheckHost`, `PortCheckTimeoutMs` and `ForceKillTimeoutSeconds` — start from those rather than from this snippet. The Production template sets `"Headless": true` and paths under `/opt/fishmmo/`. See [FishMMO-AppHealthMonitor/README.md](FishMMO-AppHealthMonitor/README.md) for the pulse check and the control plane.
 
 ### Console Commands (Headless = false)
 
@@ -1879,34 +1898,37 @@ cd FishMMO-DiscordBot
 dotnet build FishMMO-DiscordBot.sln -c Release
 ```
 
-Create `appsettings.json` in the output directory:
+The build copies the templates into the output directory as `appsettings.json` (Development)
+and `appsettings.Production.json`; an `appsettings.json` in the working directory overrides them:
 
 ```json
 {
   "Discord": {
-    "Token": "",
     "DefaultGuildId": 0
   },
-  "ConnectionStrings": {
-    "Npgsql": "Host=localhost;Port=5432;Database=fishmmo;Username=;Password=;"
+  "Npgsql": {
+    "Host": "127.0.0.1",
+    "Port": "5432",
+    "Database": "fishmmo",
+    "Schema": "public"
   },
   "ChatPollingIntervalSeconds": 5,
-  "BridgeMessageMaxLength": 2000,
+  "BridgeMessageMaxLength": 128,
   "RateLimiting": {
-    "MaxMessagesPerWindow": 10,
-    "WindowSeconds": 60
+    "MaxMessagesPerWindow": 5,
+    "WindowSeconds": 10
   }
 }
 ```
 
 | Key | Description |
 |---|---|
-| `Discord:Token` | Bot token. **Set via the `Discord__Token` environment variable** — an empty token fails at startup, and the token must never be committed. |
-| `Discord:DefaultGuildId` | Discord guild snowflake. `0` disables it; dynamic channel creation from game chat needs a real ID. |
-| `ConnectionStrings:Npgsql` | PostgreSQL connection. Set via `ConnectionStrings__Npgsql` in production. |
+| `FISHMMO_DISCORD_TOKEN` (environment) | Bot token. **Environment only** — there is no config key for it, the bot refuses to connect without it, and it must never be committed. |
+| `Discord:DefaultGuildId` | Discord guild snowflake. `0` disables it; dynamic channel creation from game chat and verification DMs need a real ID. |
+| `Npgsql` | Non-sensitive database settings, read by FishMMO-DB's `NpgsqlDbConfiguration` as every FishMMO process reads them; `FISHMMO_DB_HOST` / `FISHMMO_DB_PORT` / `FISHMMO_DB_NAME` override them. The credentials come only from `FISHMMO_DB_USERNAME` / `FISHMMO_DB_PASSWORD` or `/etc/fishmmo/db-secrets.env`. |
 | `ChatPollingIntervalSeconds` | How often the bot polls the game chat tables (default `5`). |
-| `BridgeMessageMaxLength` | Maximum bridged message length (default `2000`, Discord's limit). |
-| `RateLimiting:MaxMessagesPerWindow` / `WindowSeconds` | Per-window message cap (defaults `10` per `60` seconds). |
+| `BridgeMessageMaxLength` | Maximum bridged message length (default `128`, the game's `ChatBroadcast.MaxTextLength`; clients discard anything longer). |
+| `RateLimiting:MaxMessagesPerWindow` / `WindowSeconds` | Per-window message cap (defaults `5` per `10` seconds). |
 
 The templates live at `FishMMO-Setup/{Development,Production}/appsettings.DiscordBot.json`.
 
@@ -1926,26 +1948,27 @@ lifecycle control gated on `AccessLevel`.
 
 > **This is not a news CMS.** The launcher's news panel is fetched from `Constants.Configuration.LauncherHtmlUrl`, baked at build time from `GeneratedHostConfig.LauncherHtmlUrl` (CI substitutes `FISHMMO_ROOT_DOMAIN`). Nothing in this project serves it.
 
-> **Status: design mock — do not deploy.** The full interface exists and is clickable, but it
-> runs entirely on in-browser fixtures: the login is fake, and no request reaches a database.
-> The eleven API routes inherited from the old CMS scaffold are still `TODO` stubs with **no
-> authorization at all** on `api/Admin`, so keep the host off any network until the real
-> phases land. See [CONTROL_PANEL_DESIGN.md](CONTROL_PANEL_DESIGN.md) for the full design and
-> the phase plan.
+> **Status: every page the sidebar offers is built against PostgreSQL.** Sign-in (browser-side
+> SRP and mandatory two-factor above Player), registration, self-service, character and account
+> administration and moderation, the audit log, chat log search, support tickets, guilds and
+> parties, the server board with lock and shutdown control, maintenance windows, scene
+> instances, per-server bandwidth, the daemon control plane (start, stop and restart through a
+> database command queue the AppHealthMonitor polls), and platform health, secrets and queues.
+> There is no fake login and no fixture mode: the design mock was deleted. Authorization fails
+> closed, and every privileged write and staff read is recorded in `admin_audit_log`. See
+> [CONTROL_PANEL_DESIGN.md](CONTROL_PANEL_DESIGN.md) for the design.
 
 ```bash
 cd FishMMO-WebServers/FishMMO-ControlPanel
+./run-local.sh            # preflight, publish, and serve on http://localhost:8100
+# or by hand:
 dotnet build FishMMO-ControlPanel.slnx -c Release
 dotnet run --project ControlPanel
-# then browse http://localhost:8100/
 ```
-
-The design mock can also be opened without .NET at all — serve
-`FishMMO-WebServers/FishMMO-ControlPanel/ControlPanel/wwwroot/` with any static file server.
 
 Configuration is layered: the build copies `FishMMO-Setup/Development/appsettings.ControlPanel.json` (and the Production variant) into the output directory, then `./appsettings.json` and `./appsettings.{Environment}.json` in the working directory override it. Edit the templates under `FishMMO-Setup/`, not the copies in `bin/`. Swagger UI is served at `/swagger` in the Development environment only.
 
-See [FishMMO-WebServers/FishMMO-ControlPanel/README.md](FishMMO-WebServers/FishMMO-ControlPanel/README.md) for the endpoint table, the mock's data seam, and implementation status.
+See [FishMMO-WebServers/FishMMO-ControlPanel/README.md](FishMMO-WebServers/FishMMO-ControlPanel/README.md) for running it, the endpoint tables, the design decisions it enforces, and implementation status.
 
 ---
 
@@ -2510,7 +2533,7 @@ flowchart TB
         IPFetch["IPFetch Server<br/>:8080<br/><i>Login server discovery</i>"]
         Patcher["Patcher Server<br/>:8090<br/><i>Patch delivery</i>"]
         WebGL["WebGL Server<br/>:8000<br/><i>Static file serving</i>"]
-        Panel["Control Panel<br/>:8100<br/><i>Admin dashboard + account API<br/>(design mock — stubs only)</i>"]
+        Panel["Control Panel<br/>:8100<br/><i>Admin dashboard + account API</i>"]
     end
 
     subgraph GameServers["Game Servers (GameServer executable)"]

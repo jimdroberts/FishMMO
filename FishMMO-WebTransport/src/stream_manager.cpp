@@ -807,6 +807,15 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
         }
     }
 
+    /* The handles are shut down inside the same streams_lock section that
+     * finds them.  A stream's own SHUTDOWN_COMPLETE (worker) takes this lock
+     * to clear its slot before it StreamCloses the handle, so no handle
+     * taken here can be closed until the lock is released.  This used to
+     * collect under the lock and shut down after it: a SHUTDOWN_COMPLETE in
+     * between closed a handle this loop then passed to StreamShutdown.
+     * StreamShutdown from the application thread only queues work for the
+     * worker, so holding the lock across it cannot deadlock; on a worker
+     * (the conn_dead callers) no MsQuic call is made at all. */
     sm_lock(mgr);
     for (int i = 0; i < WT_MAX_STREAMS; i++) {
         if (!mgr->streams[i].in_use)
@@ -828,6 +837,17 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
     }
     if (conn_dead) {
         atomic_store(&mgr->active_streams, 0);
+    } else {
+        for (int i = 0; i < pending_count; i++) {
+            if (!pending[i])
+                continue;
+            /* Graceful only — never ABORT|IMMEDIATE after peer close races. */
+            MsQuic->StreamShutdown(
+                pending[i],
+                QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL,
+                0);
+            /* SHUTDOWN_COMPLETE (stream_cb) owns StreamClose + sctx free. */
+        }
     }
     sm_unlock(mgr);
 
@@ -843,19 +863,6 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
         /* Fire done callback so session free is not stuck waiting. */
         if (mgr->on_all_streams_done)
             mgr->on_all_streams_done(mgr->done_ctx);
-        free(pending);
-        return;
-    }
-
-    for (int i = 0; i < pending_count; i++) {
-        if (!pending[i])
-            continue;
-        /* Graceful only — never ABORT|IMMEDIATE after peer close races. */
-        MsQuic->StreamShutdown(
-            pending[i],
-            QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL,
-            0);
-        /* SHUTDOWN_COMPLETE (stream_cb) owns StreamClose + sctx free. */
     }
     free(pending);
 }
@@ -880,6 +887,8 @@ static void sm_mark_send_closed(
 
 /**
  * Send on an already-started stream (peer-initiated preferred path on server).
+ * Caller holds streams_lock, taken before @p quic_stream was read from its
+ * slot — that is what keeps the handle open (see wt_stream_manager_send).
  *
  * No WEBTRANSPORT_STREAM header: that appears once, when the stream is
  * opened, and this stream is already open. The message still carries its
@@ -985,6 +994,21 @@ int32_t wt_stream_manager_send(
      *   INVALID_STATE and can AV inside msquic. If none available, open a
      *   new client-initiated stream (fallback below).
      */
+    /* ── Handle lifetime ────────────────────────────────────────
+     * A stream's handle is closed on the connection's worker — by its own
+     * SHUTDOWN_COMPLETE in stream_cb, or by wt_stream_manager_close_streams
+     * — and every closer first removes the handle from its slot under
+     * streams_lock, then calls StreamClose.  So a handle taken from a slot
+     * stays open for as long as streams_lock is held.  The send below keeps
+     * the lock from picking the handle until StreamSend has returned; it
+     * used to unlock in between, and a SHUTDOWN_COMPLETE landing in that
+     * gap closed the handle this thread then passed to StreamSend.
+     *
+     * Holding the lock across StreamSend is safe: sends run on the
+     * application thread, where StreamSend only queues work for the worker
+     * and never waits for it, and stream_cb's use of the lock is brief and
+     * never waits on the application thread.  The lock is recursive, so the
+     * send path's own bookkeeping (sm_mark_send_closed) may retake it. */
     {
         HQUIC reuse = NULL;
         wt_stream_id_t reuse_id = 0;
@@ -1013,11 +1037,13 @@ int32_t wt_stream_manager_send(
                 break;
             }
         }
+
+        int32_t r = WT_ERR_SEND_FAILED;
+        if (reuse)
+            r = sm_send_on_open_stream(mgr, reuse, reuse_id, data, length);
         sm_unlock(mgr);
 
         if (reuse) {
-            int32_t r = sm_send_on_open_stream(
-                mgr, reuse, reuse_id, data, length);
             if (r == WT_OK)
                 return WT_OK;
             WT_LOG_WARN(
@@ -1162,13 +1188,15 @@ int32_t wt_stream_manager_send(
                      status, (unsigned long long)stream_id);
         sctx->pending_send = NULL;
         sm_send_req_free(req, "stream_start_failed");
-        MsQuic->StreamClose(quic_stream);
+        /* Same rule as every other closer: out of the slot first, then
+         * StreamClose (see "Handle lifetime" above). */
         sm_lock(mgr);
         mgr->streams[slot].in_use = false;
         mgr->streams[slot].quic_stream = NULL;
         mgr->streams[slot].id = 0;
         atomic_fetch_sub(&mgr->active_streams, 1);
         sm_unlock(mgr);
+        MsQuic->StreamClose(quic_stream);
         free(sctx);
         return WT_ERR_SEND_FAILED;
     }
@@ -1202,9 +1230,28 @@ void wt_stream_manager_accept_stream(
     wt_stream_manager_accept_stream_prefill(mgr, quic_stream, NULL, 0);
 }
 
-void wt_stream_manager_accept_stream_prefill(
+/* Register a peer stream with this manager and run its prefilled bytes
+ * through the framing path.  Shared by the two ways a stream is handed over:
+ *
+ *  - set_handler = true (wt_stream_manager_accept_stream_prefill): the
+ *    stream's msquic handler is switched to stream_cb.  Caller is on the
+ *    connection's QUIC worker, inside a callback of the same connection, so
+ *    msquic cannot deliver an event for the stream while the handler (two
+ *    fields msquic reads without synchronisation) is being switched, nor
+ *    race the prefill below with a RECEIVE.
+ *
+ *  - set_handler = false (wt_stream_manager_adopt_stream): the handler is
+ *    left as it is; its owner forwards every later event to the returned
+ *    context through wt_stream_manager_stream_event, and must not forward
+ *    any until this has returned.  Used from the application thread, where
+ *    switching the handler of a live stream is not safe.  On failure the
+ *    handle is left to its current handler (which still receives the
+ *    stream's SHUTDOWN_COMPLETE and closes it) — this only aborts it.
+ *
+ * Returns the stream's context, or NULL when it could not be registered. */
+static stream_ctx_t* sm_attach_peer_stream(
     wt_stream_manager_t* mgr, HQUIC quic_stream,
-    const uint8_t* data, uint32_t length)
+    const uint8_t* data, uint32_t length, bool set_handler)
 {
     /* Find and reserve a free slot under lock — concurrent with send
      * on the application thread. */
@@ -1217,8 +1264,9 @@ void wt_stream_manager_accept_stream_prefill(
         sm_unlock(mgr);
         MsQuic->StreamShutdown(quic_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-        MsQuic->StreamClose(quic_stream);  /* no sctx, so no callback to do this */
-        return;
+        if (set_handler)
+            MsQuic->StreamClose(quic_stream);  /* no sctx, so no callback to do this */
+        return NULL;
     }
 
     /* Reserve the slot immediately, unlock before alloc + MsQuic calls. */
@@ -1266,8 +1314,9 @@ void wt_stream_manager_accept_stream_prefill(
         sm_unlock(mgr);
         MsQuic->StreamShutdown(quic_stream,
                                 QUIC_STREAM_SHUTDOWN_FLAG_GRACEFUL, 0);
-        MsQuic->StreamClose(quic_stream);  /* no sctx, so no callback to do this */
-        return;
+        if (set_handler)
+            MsQuic->StreamClose(quic_stream);  /* no sctx, so no callback to do this */
+        return NULL;
     }
     sctx->mgr = mgr;
     sctx->stream_id = stream_id;
@@ -1299,14 +1348,14 @@ void wt_stream_manager_accept_stream_prefill(
     /* SetCallbackHandler outside lock — safe because the slot is already
      * registered above. If SHUTDOWN_COMPLETE fires synchronously it will
      * find the slot via stream_id and clean up correctly. */
-    MsQuic->SetCallbackHandler(quic_stream,
-                                (void*)(uintptr_t)k_stream_handler, sctx);
+    if (set_handler)
+        MsQuic->SetCallbackHandler(quic_stream,
+                                    (void*)(uintptr_t)k_stream_handler, sctx);
 
     /* Run the replayed bytes through the same strip + framing path as live
-     * data. Safe to do after SetCallbackHandler: this runs on the
-     * connection's QUIC worker thread (the caller is inside an h3 stream
-     * callback), so msquic cannot deliver a concurrent RECEIVE for this
-     * stream and race the buffer. */
+     * data.  Nothing else touches this context yet: with set_handler the
+     * caller is on the stream's own worker (no concurrent RECEIVE); without
+     * it, no event is forwarded to the context until this returns. */
     if (sctx->recv_offset > 0) {
         if (!sctx->header_checked) {
             if (mgr->use_wt_stream_header) {
@@ -1315,12 +1364,12 @@ void wt_stream_manager_accept_stream_prefill(
                     sctx->recv_buf, sctx->recv_offset,
                     mgr->wt_session_id, &incomplete, &mismatch);
                 if (incomplete)
-                    return;  /* keep buffered; finish on the next RECEIVE */
+                    return sctx;  /* keep buffered; finish on the next RECEIVE */
                 if (mismatch) {
                     sctx->framing_error = true;
                     MsQuic->StreamShutdown(quic_stream,
                                             QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-                    return;
+                    return sctx;
                 }
                 if (skip > 0) {
                     size_t remaining = sctx->recv_offset - skip;
@@ -1341,4 +1390,25 @@ void wt_stream_manager_accept_stream_prefill(
                                     QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         }
     }
+    return sctx;
+}
+
+void wt_stream_manager_accept_stream_prefill(
+    wt_stream_manager_t* mgr, HQUIC quic_stream,
+    const uint8_t* data, uint32_t length)
+{
+    (void)sm_attach_peer_stream(mgr, quic_stream, data, length, true);
+}
+
+void* wt_stream_manager_adopt_stream(
+    wt_stream_manager_t* mgr, HQUIC quic_stream,
+    const uint8_t* data, uint32_t length)
+{
+    return sm_attach_peer_stream(mgr, quic_stream, data, length, false);
+}
+
+QUIC_STATUS wt_stream_manager_stream_event(
+    void* stream_ctx, HQUIC stream, QUIC_STREAM_EVENT* event)
+{
+    return stream_cb(stream, stream_ctx, event);
 }

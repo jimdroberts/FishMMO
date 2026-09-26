@@ -429,6 +429,13 @@ namespace AppHealthMonitor
 		/// <returns>True when the database was reachable; otherwise, false.</returns>
 		private async Task<bool> PollCommandsAsync(CancellationToken token)
 		{
+			/* The anchor every claimed command's expiry is counted from, on the monotonic clock and
+			 * taken BEFORE the claim is sent. The database measures each command's time left inside
+			 * the claim, somewhere between this instant and the reply, so anchoring here can only
+			 * overstate the time elapsed: the error is always toward refusing. See
+			 * DaemonCommandExpiry for why this host's wall clock is not used. */
+			long claimSentAt = Stopwatch.GetTimestamp();
+
 			// hostName is this machine's own name. A daemon never asks for, and never receives,
 			// another host's work.
 			var claim = await daemonService.ClaimCommandsAsync(hostName, instanceId, MaxCommandsPerPoll, token);
@@ -454,7 +461,7 @@ namespace AppHealthMonitor
 
 				try
 				{
-					(succeeded, outcome) = await ExecuteCommandAsync(command, token);
+					(succeeded, outcome) = await ExecuteCommandAsync(command, claimSentAt, token);
 				}
 				catch (Exception ex)
 				{
@@ -484,9 +491,13 @@ namespace AppHealthMonitor
 		/// or a shell.
 		/// </remarks>
 		/// <param name="command">The claimed command.</param>
+		/// <param name="claimSentAt">
+		/// <see cref="Stopwatch.GetTimestamp"/> taken just before the claim that returned
+		/// <paramref name="command"/> was sent.
+		/// </param>
 		/// <param name="token">The daemon-wide shutdown token.</param>
 		/// <returns>Whether it succeeded, and the sentence to record.</returns>
-		private async Task<(bool Succeeded, string Outcome)> ExecuteCommandAsync(DaemonCommandData command, CancellationToken token)
+		private async Task<(bool Succeeded, string Outcome)> ExecuteCommandAsync(DaemonCommandData command, long claimSentAt, CancellationToken token)
 		{
 			Log.Warning(LogSource,
 				$"Command {command.ID}: {command.Verb} '{command.AppName}' on '{command.HostName}' requested by '{command.RequestedBy}' — {command.Reason}");
@@ -499,11 +510,14 @@ namespace AppHealthMonitor
 			}
 
 			// 2. Expiry. ClaimCommandsAsync never returns an expired command; this covers the time
-			//    spent between the claim and this line, because a restart nobody is waiting for any
-			//    more is worse than one that never happened.
-			if (command.ExpiresUtc <= DateTime.UtcNow)
+			//    spent between the claim and this line — an earlier command in the same batch may
+			//    have taken a minute — because a restart nobody is waiting for any more is worse
+			//    than one that never happened. The seconds the database measured as left at the
+			//    claim, counted down on the monotonic clock: ExpiresUtc is the database's stamp, and
+			//    comparing it with this host's wall clock refused everything on a host running fast.
+			if (DaemonCommandExpiry.IsExpired(command.ExpiresInSeconds, Stopwatch.GetElapsedTime(claimSentAt)))
 			{
-				return Refuse(command, $"Refused: the command expired at {command.ExpiresUtc:u} before it could be executed. Nothing was done.");
+				return Refuse(command, $"Refused: the command expired at {command.ExpiresUtc:u} (database time) before it could be executed. Nothing was done.");
 			}
 
 			// 3. The name must be one this daemon already supervises, from its own configuration

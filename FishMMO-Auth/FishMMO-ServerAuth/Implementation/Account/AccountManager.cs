@@ -283,7 +283,9 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
-			unauthenticatedTracker.TrackIfMissing(connection, DateTime.UtcNow);
+			// Monotonic: the backstop sweep ages this entry, and a wall-clock step would age every
+			// one at once. See ArrivalOrderTracker.
+			unauthenticatedTracker.TrackIfMissing(connection, MonotonicClock.NowSeconds);
 		}
 
 		/// <summary>

@@ -234,6 +234,28 @@ void wt_stream_manager_accept_stream_prefill(
     wt_stream_manager_t* mgr, HQUIC quic_stream,
     const uint8_t* data, uint32_t length);
 
+/**
+ * Register a peer stream WITHOUT switching its msquic handler — for a caller
+ * that is not on the connection's worker (the application thread's native
+ * rescue), where switching a live stream's handler races msquic's own reads
+ * of it.  The prefill is processed as by wt_stream_manager_accept_stream_prefill.
+ * The stream's current handler must forward every later event to the
+ * returned context with wt_stream_manager_stream_event, and must not forward
+ * any before this returns.
+ *
+ * @return the stream's context, or NULL if it could not be registered (the
+ *         stream is then aborted; its handler still owns and closes it).
+ */
+WT_HIDDEN void* wt_stream_manager_adopt_stream(
+    wt_stream_manager_t* mgr, HQUIC quic_stream,
+    const uint8_t* data, uint32_t length);
+
+/** Deliver one msquic stream event to a context from
+ *  wt_stream_manager_adopt_stream, exactly as if stream_cb were the stream's
+ *  handler.  The event may free the context (SHUTDOWN_COMPLETE). */
+WT_HIDDEN QUIC_STATUS wt_stream_manager_stream_event(
+    void* stream_ctx, HQUIC stream, QUIC_STREAM_EVENT* event);
+
 #ifdef __cplusplus
 }
 #endif

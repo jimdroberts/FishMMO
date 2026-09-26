@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using FishMMO.Database.Data;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
@@ -102,6 +103,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return next;
 				}
 			}
+		}
+
+		/// <inheritdoc />
+		public List<CharacterHotkeyData> BuildRows(long characterID, IReadOnlyList<HotkeyData> hotkeys)
+		{
+			int count = hotkeys != null ? hotkeys.Count : 0;
+			List<CharacterHotkeyData> rows = new List<CharacterHotkeyData>(count);
+			for (int i = 0; i < count; ++i)
+			{
+				HotkeyData hotkey = hotkeys[i];
+				rows.Add(new CharacterHotkeyData(
+					id: 0,
+					version: NextHotkeyVersion(),
+					characterID: characterID,
+					type: hotkey.Type,
+					slot: hotkey.Slot,
+					referenceID: hotkey.ReferenceID));
+			}
+			return rows;
+		}
+
+		/// <inheritdoc />
+		public List<CharacterHotkeyData> TakeDepartingBar(long characterID, IReadOnlyList<HotkeyData> liveBar)
+		{
+			pendingWrites.Remove(characterID);
+			if (characterID <= 0 || liveBar == null || liveBar.Count == 0)
+			{
+				return null;
+			}
+			return BuildRows(characterID, liveBar);
 		}
 
 		/// <summary>

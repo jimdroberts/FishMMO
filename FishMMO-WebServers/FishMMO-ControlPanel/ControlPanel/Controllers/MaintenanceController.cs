@@ -73,13 +73,12 @@ namespace FishMMO.ControlPanel.Controllers
 					new { error = "The maintenance windows could not be read." });
 			}
 
-			DateTime now = DateTime.UtcNow;
 			return Ok(new
 			{
 				staleAfterSeconds = MaintenanceService.StaleAfterSeconds,
 				maxDrainSeconds = MaintenanceService.MaxDrainSeconds,
 				maxTargets = MaintenanceService.MaxTargets,
-				operations = result.Data.Select(o => Project(o, now)),
+				operations = result.Data.Select(Project),
 			});
 		}
 
@@ -97,7 +96,7 @@ namespace FishMMO.ControlPanel.Controllers
 						new { error = "That maintenance window could not be read." });
 			}
 
-			return Ok(Project(result.Data, DateTime.UtcNow));
+			return Ok(Project(result.Data));
 		}
 
 		/// <summary>
@@ -177,7 +176,6 @@ namespace FishMMO.ControlPanel.Controllers
 				"Maintenance window {Id} ('{Name}') started by '{Actor}' over {Targets} server(s), deadline {Deadline:O}. Reason: {Reason}",
 				operation.ID, operation.Name, User.Identity?.Name, operation.Targets.Count, operation.DeadlineUtc, request.Reason);
 
-			DateTime now = DateTime.UtcNow;
 			var written = operation.Targets.Where(t => t.ShutdownWrittenUtc != null).ToList();
 			var unwritten = operation.Targets.Where(t => t.ShutdownWrittenUtc == null).ToList();
 
@@ -200,7 +198,7 @@ namespace FishMMO.ControlPanel.Controllers
 
 			return Ok(new
 			{
-				operation = Project(operation, now),
+				operation = Project(operation),
 				message = $"{written.Count} server(s) locked, and their shutdown written for " +
 					$"{operation.DeadlineUtc:HH:mm:ss} UTC. Each one acts on both once it reads its row. " +
 					"Cancelling later clears the deadline but leaves them LOCKED.",
@@ -259,7 +257,7 @@ namespace FishMMO.ControlPanel.Controllers
 
 			return Ok(new
 			{
-				operation = Project(operation, DateTime.UtcNow),
+				operation = Project(operation),
 				message,
 				stillLocked,
 			});
@@ -269,10 +267,19 @@ namespace FishMMO.ControlPanel.Controllers
 		/// One window, as the browser needs it.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Identical between the listing and the single fetch on purpose: the list shows live
 		/// progress, so it needs the same per-target detail, and one shape means one renderer.
+		/// </para>
+		/// <para>
+		/// <b>No clock of this process is read here.</b> The time to the deadline and each pulse's
+		/// age come from the service, measured by the database clock that planned the deadline and
+		/// stamped the pulses. They used to be this host's <c>DateTime.UtcNow</c> minus those
+		/// stamps, so a panel a minute fast flagged every pulsing target as not pulsing and counted
+		/// a minute off every countdown, whatever the servers themselves were doing.
+		/// </para>
 		/// </remarks>
-		private static object Project(MaintenanceOperationData operation, DateTime now) => new
+		private static object Project(MaintenanceOperationData operation) => new
 		{
 			id = operation.ID,
 			name = operation.Name,
@@ -285,7 +292,7 @@ namespace FishMMO.ControlPanel.Controllers
 			drainSeconds = operation.DrainSeconds,
 			startedUtc = operation.StartedUtc,
 			deadlineUtc = operation.DeadlineUtc,
-			secondsUntilDeadline = Math.Round((operation.DeadlineUtc - now).TotalSeconds, 1),
+			secondsUntilDeadline = Math.Round(operation.SecondsUntilDeadline, 1),
 			completedUtc = operation.CompletedUtc,
 			cancelledBy = operation.CancelledBy,
 			cancelledUtc = operation.CancelledUtc,
@@ -330,11 +337,11 @@ namespace FishMMO.ControlPanel.Controllers
 				observedShutdownUtc = t.ObservedShutdownUtc,
 				observedLastPulseUtc = t.ObservedLastPulseUtc,
 				observedRegistered = t.ObservedRegistered,
-				observedPulseAgeSeconds = t.ObservedLastPulseUtc.HasValue
-					? (double?)Math.Round((now - t.ObservedLastPulseUtc.Value).TotalSeconds, 1)
+				observedPulseAgeSeconds = t.ObservedPulseAgeSeconds.HasValue
+					? (double?)Math.Round(t.ObservedPulseAgeSeconds.Value, 1)
 					: null,
-				observedStale = t.ObservedLastPulseUtc.HasValue &&
-					(now - t.ObservedLastPulseUtc.Value).TotalSeconds > MaintenanceService.StaleAfterSeconds,
+				observedStale = t.ObservedPulseAgeSeconds.HasValue &&
+					MaintenanceService.IsSilent(t.ObservedPulseAgeSeconds.Value),
 				note = t.Note,
 			}),
 		};

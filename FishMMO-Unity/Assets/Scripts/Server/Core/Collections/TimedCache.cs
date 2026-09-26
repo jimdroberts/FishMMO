@@ -10,6 +10,12 @@ namespace FishMMO.Server.Core.Collections
 	/// <para>
 	/// Supports bounded head-first <see cref="SweepExpired"/> for memory management.
 	/// </para>
+	/// <para>
+	/// Ages are measured on <see cref="MonotonicClock"/>, not the host's wall clock. A TTL is a
+	/// duration, and on <c>DateTime.UtcNow</c> a clock stepped back an hour kept every entry
+	/// "fresh" for that hour: the world server's available-scene cache served the same instance
+	/// list, populations and all, long after the instances had filled or gone.
+	/// </para>
 	/// </summary>
 	/// <typeparam name="TKey">Cache key type.</typeparam>
 	/// <typeparam name="TValue">Cache value type.</typeparam>
@@ -48,7 +54,7 @@ namespace FishMMO.Server.Core.Collections
 			lock (gate)
 			{
 				if (entries.TryGetValue(key, out CacheEntry entry) &&
-					(DateTime.UtcNow - entry.StoredAtUtc) < ttl)
+					MonotonicClock.NowSeconds - entry.StoredAt < ttl.TotalSeconds)
 				{
 					value = entry.Value;
 					return true;
@@ -59,13 +65,13 @@ namespace FishMMO.Server.Core.Collections
 		}
 
 		/// <summary>
-		/// Stores or overwrites a value with the current UTC timestamp.
+		/// Stores or overwrites a value, stamped with the current <see cref="MonotonicClock"/> reading.
 		/// </summary>
 		/// <param name="key">Cache key.</param>
 		/// <param name="value">Value to cache.</param>
 		public void Set(TKey key, TValue value)
 		{
-			DateTime now = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			lock (gate)
 			{
 				entries[key] = new CacheEntry(value, now);
@@ -111,17 +117,24 @@ namespace FishMMO.Server.Core.Collections
 		/// <summary>
 		/// Sweeps entries older than the specified TTL using bounded head-first traversal.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
 		/// <param name="ttl">Entries older than this duration are eligible for removal.</param>
 		/// <param name="maxScan">Maximum queue nodes to inspect this sweep.</param>
 		/// <param name="maxRemove">Maximum entries to remove this sweep.</param>
 		/// <returns>Number of entries removed.</returns>
-		public int SweepExpired(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove)
+		/// <remarks>
+		/// Reads the clock itself rather than taking a "now": the entries were stamped by
+		/// <see cref="Set"/> on <see cref="MonotonicClock"/>, and a caller-supplied instant from any
+		/// other clock would compare two unrelated numbers.
+		/// </remarks>
+		public int SweepExpired(TimeSpan ttl, int maxScan, int maxRemove)
 		{
 			if (ttl <= TimeSpan.Zero || maxScan <= 0 || maxRemove <= 0)
 			{
 				return 0;
 			}
+
+			double now = MonotonicClock.NowSeconds;
+			double ttlSeconds = ttl.TotalSeconds;
 
 			lock (gate)
 			{
@@ -141,7 +154,7 @@ namespace FishMMO.Server.Core.Collections
 
 					// If the entry was re-Set with a newer timestamp, the queue node is stale — discard it.
 					if (entries.TryGetValue(queued.Key, out CacheEntry entry) &&
-						entry.StoredAtUtc != queued.StoredAtUtc)
+						entry.StoredAt != queued.StoredAt)
 					{
 						queue.RemoveFirst();
 						nodes.Remove(queued.Key);
@@ -149,7 +162,7 @@ namespace FishMMO.Server.Core.Collections
 					}
 
 					// Oldest non-stale entry is still fresh — stop.
-					if (entries.ContainsKey(queued.Key) && (nowUtc - entry.StoredAtUtc) < ttl)
+					if (entries.ContainsKey(queued.Key) && now - entry.StoredAt < ttlSeconds)
 					{
 						break;
 					}
@@ -167,24 +180,26 @@ namespace FishMMO.Server.Core.Collections
 		private readonly struct QueueNode
 		{
 			public readonly TKey Key;
-			public readonly DateTime StoredAtUtc;
+			/// <summary>When the entry was stored, on <see cref="MonotonicClock"/>.</summary>
+			public readonly double StoredAt;
 
-			public QueueNode(TKey key, DateTime storedAtUtc)
+			public QueueNode(TKey key, double storedAt)
 			{
 				Key = key;
-				StoredAtUtc = storedAtUtc;
+				StoredAt = storedAt;
 			}
 		}
 
 		private readonly struct CacheEntry
 		{
 			public readonly TValue Value;
-			public readonly DateTime StoredAtUtc;
+			/// <summary>When the entry was stored, on <see cref="MonotonicClock"/>.</summary>
+			public readonly double StoredAt;
 
-			public CacheEntry(TValue value, DateTime storedAtUtc)
+			public CacheEntry(TValue value, double storedAt)
 			{
 				Value = value;
-				StoredAtUtc = storedAtUtc;
+				StoredAt = storedAt;
 			}
 		}
 	}

@@ -16,20 +16,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	public partial class ChatSystem
 	{
 		/// <summary>
-		/// Handles tell (private) chat messages. Queries the target character asynchronously from the database,
-		/// marshals Broadcasts to the main thread, and persists the message on success.
-		/// Returns false to suppress the synchronous DB save — the async path handles persistence.
+		/// Handles tell (private) chat messages. A target on this server is delivered to at once; a
+		/// live whisper to anybody else is looked up in the database, to tell the sender whether it
+		/// was relayed or the target is offline, and persisted so the target's own server delivers it.
+		/// Returns false to suppress the caller's DB save — persistence is handled here.
 		/// </summary>
 		/// <param name="sender">Player character sending the message.</param>
 		/// <param name="msg">Chat broadcast message.</param>
 		/// <returns>False — persistence is handled inside the async path.</returns>
 		public bool OnTellChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			// get the target
-			string targetName = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
-			if (string.IsNullOrWhiteSpace(targetName))
+			/* The target is one word, or a name in double quotes: character names may hold spaces,
+			 * and the first word of "Aragorn of Arnor" is somebody else. The same rule reads a live
+			 * line and a pumped row, since the row is written in the same form (see ChatTellAddress).
+			 * No target, an unclosed quote or nothing to say is dropped, as a tell with no body
+			 * always was. */
+			if (!ChatTellAddress.TryParse(msg.Text, out string targetName, out string trimmed))
 			{
-				// no target in the tell message
 				return false;
 			}
 
@@ -69,6 +72,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (sender != null && !sender.IsFlagged(CharacterFlags.IsLoaded))
 				return false;
 
+			/* A target on THIS server is resolved from the server's own map, on the main thread.
+			 *
+			 * Both paths used to look the target up by name in the database first: the live line
+			 * on the sender's server, and the pumped copy on every other scene server, each only to
+			 * learn whether the target was one of its own players (hot-path audit M17). Whether a
+			 * character is here is a question this server answers exactly and for free. */
+			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
+				mappingData.CharactersByLowerCaseName.TryGetValue(targetName.ToLowerInvariant(), out IPlayerCharacter localTarget) &&
+				localTarget != null)
+			{
+				DeliverLocalTell(sender, msg, localTarget, targetName, trimmed);
+				return false;
+			}
+
+			/* A pumped whisper for somebody who is not here is somebody else's to deliver. The pump
+			 * only asks for tells to this server's own players, so this is the rare target who left
+			 * between the read and now — and a database lookup could not have found them here either. */
+			if (sender == null)
+			{
+				return false;
+			}
+
 			if (Server?.Database?.ServiceRegistry == null)
 			{
 				return false;
@@ -88,6 +113,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			bool persist = sender != null;
 			EnqueuePersistence(() => OnTellChatAsync(senderConn, senderID, channel, targetName, trimmed, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
 			return false; // suppress synchronous save — async path handles it
+		}
+
+		/// <summary>
+		/// Delivers a whisper whose target is on this scene server, synchronously: the sender's
+		/// relay confirmation, the target's copy, and — for a live line — the row that is the audit
+		/// record of it. Main thread only.
+		/// </summary>
+		/// <param name="sender">The sender, or null for a pumped line (already persisted, no sender to answer).</param>
+		/// <param name="msg">The whisper as received.</param>
+		/// <param name="target">The target, resident here.</param>
+		/// <param name="targetName">The target name as the sender typed it (normalised); persisted as its address, see <see cref="ChatTellAddress"/>.</param>
+		/// <param name="trimmed">The whisper body.</param>
+		private void DeliverLocalTell(IPlayerCharacter sender, ChatBroadcast msg, IPlayerCharacter target, string targetName, string trimmed)
+		{
+			if (sender != null)
+			{
+				// The name short-circuit above catches this too; an ID is the one that cannot be spelled two ways.
+				if (target.ID == sender.ID)
+				{
+					Server.NetworkWrapper.Broadcast(sender.Owner, new ChatBroadcast()
+					{
+						Channel = msg.Channel,
+						SenderID = msg.SenderID,
+						Text = ChatHelper.TELL_ERROR_MESSAGE_SELF + " ",
+					}, true, Channel.Reliable);
+					return;
+				}
+
+				Server.NetworkWrapper.Broadcast(sender.Owner, new ChatBroadcast()
+				{
+					Channel = msg.Channel,
+					SenderID = target.ID,
+					Text = ChatHelper.TELL_RELAYED + " " + trimmed,
+				}, true, Channel.Reliable);
+			}
+
+			Server.NetworkWrapper.Broadcast(target.Owner, new ChatBroadcast()
+			{
+				Channel = msg.Channel,
+				SenderID = msg.SenderID,
+				Text = trimmed,
+			}, true, Channel.Reliable);
+
+			// Only live player messages: a pumped line is already a row.
+			if (sender != null)
+			{
+				EnqueuePersist(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, ChatTellAddress.FormatLine(targetName, trimmed), msg.ReceivedUtcTicks);
+			}
 		}
 
 		/// <summary>
@@ -216,7 +289,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (persist)
 				{
 					// Enqueue for batch DB persistence instead of per-message async write.
-					EnqueuePersist(senderID, characterName, accountName, worldServerId, channel, targetName + " " + trimmed, receivedTicks);
+					/* Addressed as it was typed, quoted when the name has a space: the target's own
+					 * scene server finds the row by this address (ChatService.BuildPumpFilterSql). */
+					EnqueuePersist(senderID, characterName, accountName, worldServerId, channel, ChatTellAddress.FormatLine(targetName, trimmed), receivedTicks);
 				}
 			}
 			catch (Exception ex)

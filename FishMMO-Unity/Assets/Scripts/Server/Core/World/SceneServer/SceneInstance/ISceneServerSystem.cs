@@ -81,20 +81,26 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void CloseInstance(long sceneID, string reason);
 
 		/// <summary>
-		/// When an instance will close on its own, if it is time-bounded.
+		/// How long an instance has left before it closes on its own, if it is time-bounded.
 		/// </summary>
 		/// <remarks>
 		/// The lifetime cap is configuration this system owns, so the answer is derived here rather
 		/// than by making every caller read the key and repeat the arithmetic — which is how two
 		/// places end up disagreeing about when a dungeon ends.
+		/// <para>
+		/// A duration, not an instant. The deadline is kept on the monotonic clock, and this used to
+		/// hand it out re-expressed on the host's wall clock for the caller to subtract the wall
+		/// clock from again: two reads of a clock that can step, to recover a number this already
+		/// had.
+		/// </para>
 		/// </remarks>
 		/// <param name="sceneID">Scene row of the instance.</param>
-		/// <param name="expiresUtc">When it closes, if it does.</param>
+		/// <param name="remainingSeconds">Seconds until it closes; negative once it is overdue.</param>
 		/// <returns>
-		/// <c>false</c> for a scene this server does not host, an open-world scene, or one whose
-		/// creation time was never recorded — none of which have an expiry to report.
+		/// <c>false</c> for a scene this server does not host or an open-world scene, neither of
+		/// which has an expiry to report.
 		/// </returns>
-		bool TryGetInstanceExpiry(long sceneID, out DateTime expiresUtc);
+		bool TryGetInstanceRemainingSeconds(long sceneID, out double remainingSeconds);
 
 		/// <summary>
 		/// Adjusts the tracked character count for a scene instance.

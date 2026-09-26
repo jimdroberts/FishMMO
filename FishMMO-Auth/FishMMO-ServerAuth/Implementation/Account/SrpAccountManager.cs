@@ -98,13 +98,14 @@ namespace FishMMO.Auth.Implementation
 					return 0;
 				}
 
-				DateTime now = DateTime.UtcNow;
+				double now = MonotonicClock.NowSeconds;
+				double maxAgeSeconds = maxUnauthenticatedAge.TotalSeconds;
 				int scanned = 0;
 				int removed = 0;
 
 				while (scanned < maxScan && removed < maxRemovals)
 				{
-					if (!unauthenticatedTracker.TryPeekOldest(out TConnection connection, out DateTime firstSeenUtc))
+					if (!unauthenticatedTracker.TryPeekOldest(out TConnection connection, out double firstSeenSeconds))
 					{
 						break;
 					}
@@ -124,7 +125,7 @@ namespace FishMMO.Auth.Implementation
 						continue;
 					}
 
-					if ((now - firstSeenUtc) < maxUnauthenticatedAge)
+					if ((now - firstSeenSeconds) < maxAgeSeconds)
 					{
 						break;
 					}

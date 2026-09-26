@@ -133,16 +133,101 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<int>> BackfillTaxDueAsync(long worldServerID, DateTime firstDueUtc, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Fetches owned plots whose tax has fallen due.
+		/// Fetches one page of a world's owned plots whose tax has fallen due, in due order.
 		/// </summary>
 		/// <param name="worldServerID">The world whose land to sweep.</param>
 		/// <param name="asOfUtc">The moment to judge against.</param>
+		/// <param name="afterDueUtc">
+		/// The keyset cursor: the due date of the last plot of the previous page, or
+		/// <see cref="DateTime.MinValue"/> for the first page.
+		/// </param>
+		/// <param name="afterPlotID">The ID of the last plot of the previous page, or zero for the first page.</param>
 		/// <param name="limit">Most rows to return.</param>
 		/// <remarks>
 		/// Bounded, because a server that has been down over a billing period comes back to every
-		/// plot at once and an unbounded sweep would try to charge all of them in one pass.
+		/// plot at once and an unbounded read would load all of them.
+		///
+		/// <para>Paged by a keyset rather than from the head, because the plots a page could not
+		/// settle stay exactly where they were: a sweep that re-read from the head after each page
+		/// would read them again and never reach the plots behind them. Plots whose
+		/// <c>tax_next_attempt_utc</c> is still ahead of <paramref name="asOfUtc"/> are left out —
+		/// their owner is being billed by the server holding them.</para>
 		/// </remarks>
-		Task<DatabaseResult<List<PlotData>>> FetchTaxDueAsync(long worldServerID, DateTime asOfUtc, int limit, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<List<PlotData>>> FetchTaxDueAsync(long worldServerID, DateTime asOfUtc, DateTime afterDueUtc, long afterPlotID, int limit, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches the plots, in any world, whose tax has fallen due and whose owner is one of
+		/// <paramref name="characterIDs"/>.
+		/// </summary>
+		/// <param name="characterIDs">The characters the calling server holds.</param>
+		/// <param name="asOfUtc">The moment to judge against.</param>
+		/// <remarks>
+		/// The holding server's half of the sweep. A logged-in owner's balance lives in the memory of
+		/// the server holding them, so only that server may charge them — and that server may be
+		/// hosting nothing of the world their land is in. This asks by owner instead of by world,
+		/// so where the owner happens to be playing no longer decides whether they are billed.
+		///
+		/// <para>Ignores the deferral: it exists to keep other servers from re-reading a plot that
+		/// only this one can bill. At most one row per character, by the one-house index.</para>
+		/// </remarks>
+		Task<DatabaseResult<List<PlotData>>> FetchTaxDueForOwnersAsync(IReadOnlyCollection<long> characterIDs, DateTime asOfUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches plots by ID. IDs with no row are simply absent from the result.
+		/// </summary>
+		/// <remarks>
+		/// For the cross-channel sync, which knows exactly which plots changed and used to re-read
+		/// every plot of every scene to find them.
+		/// </remarks>
+		Task<DatabaseResult<List<PlotData>>> FetchByIdsAsync(IReadOnlyCollection<long> plotIDs, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Bills a batch of due plots to owners nobody is hosting, in one transaction.
+		/// </summary>
+		/// <param name="charges">
+		/// One entry per plot, as the sweep read and priced them: each carries its own amount and
+		/// next due date, because a bill covers every period that plot has fallen behind by. An
+		/// owner may appear only once.
+		/// </param>
+		/// <param name="currencyTemplateID">The attribute template tax is paid in.</param>
+		/// <param name="ownedElsewhereRetryUtc">
+		/// When a plot whose owner a server is holding may next be tried (stored as
+		/// <c>tax_next_attempt_utc</c>).
+		/// </param>
+		/// <param name="ledgerReason">The ledger reason recorded for each payment (<c>CurrencyMovementReason.LandTax</c>).</param>
+		/// <param name="ledgerState">The ledger state recorded for each payment (<c>CurrencyMovementState.Absorbed</c>).</param>
+		/// <returns>One result per distinct plot in <paramref name="charges"/>.</returns>
+		/// <remarks>
+		/// <para>The offline charge that used to be one transaction per plot — ownership assertion,
+		/// attribute read, advance, debit, lifted mark, each a round trip — as a handful of
+		/// set-based statements for the whole batch. The orderings it keeps are the ones the housing
+		/// README names: the bill is won before any money moves (a locked plot still holding the
+		/// date the sweep read), a missed-payment mark comes off in the same commit as the payment,
+		/// and an unpaid bill is marked in the commit that advanced it. A bill is paid in full or
+		/// not at all.</para>
+		///
+		/// <para>An owner is charged here only while no server holds their session, asserted under
+		/// the row lock for the whole transaction, because a held owner's balance is in that
+		/// server's memory and its next save would overwrite a debit made underneath it. A held
+		/// owner's plot is deferred instead (<see cref="PlotTaxChargeOutcome.OwnedElsewhere"/>); a
+		/// deleted or missing owner cannot pay and is marked like any other miss
+		/// (<see cref="PlotTaxChargeOutcome.OwnerGone"/>), so their land reaches the end of its
+		/// grace rather than staying owned forever.</para>
+		///
+		/// <para>Never waits on a lock: a character or plot another transaction holds is skipped for
+		/// this sweep. Safe to run from every scene server at once — a period produces one charge
+		/// however many servers sweep it — and a retry after a lost commit reply changes nothing.</para>
+		///
+		/// <para>Paid bills are recorded in the currency ledger inside the same commit. Nothing here
+		/// marks <c>plot_updates</c>: a charge changes nothing another channel draws.</para>
+		/// </remarks>
+		Task<DatabaseResult<List<PlotTaxChargeResult>>> ChargeTaxOfflineAsync(
+			IReadOnlyList<PlotTaxCharge> charges,
+			int currencyTemplateID,
+			DateTime ownedElsewhereRetryUtc,
+			int ledgerReason,
+			int ledgerState,
+			CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Moves a plot's tax date forward, if it still holds the date the caller charged against.

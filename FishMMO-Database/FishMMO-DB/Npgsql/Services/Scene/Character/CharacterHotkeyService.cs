@@ -132,7 +132,26 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterHotkeyData> hotkeys, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterHotkeyData> hotkeys, CancellationToken cancellationToken = default)
+			=> PersistBatchAsync(hotkeys, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<BulkWriteResult>> PersistOwnedAsync(IEnumerable<CharacterHotkeyData> hotkeys, IReadOnlyCollection<CharacterSessionLeaseData> claims, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaims(claims);
+			return invalid != null
+				? Task.FromResult(DatabaseResult<BulkWriteResult>.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: PersistBatchAsync(hotkeys, claims, cancellationToken);
+		}
+
+		/// <summary>
+		/// The batch write behind <see cref="PersistAsync(IEnumerable{CharacterHotkeyData}, CancellationToken)"/> and
+		/// <see cref="PersistOwnedAsync"/>.
+		/// </summary>
+		/// <param name="hotkeys">Rows to write.</param>
+		/// <param name="claims">The writer's claims, or null for the ungated write. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterHotkeyData> hotkeys, IReadOnlyCollection<CharacterSessionLeaseData>? claims, CancellationToken cancellationToken)
 		{
 			var hotkeyList = hotkeys?.ToList();
 			if (hotkeyList == null || hotkeyList.Count == 0)
@@ -159,24 +178,17 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = hotkeyList.Select(h => h.CharacterID).Distinct().ToArray();
-				var activeCharacterIds = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-					.Select(c => c.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+				/* The ownership gate, and the per-character existence check it subsumes: the rows of a
+				 * missing or deleted character, or — for an owned write — of one whose claim the writer
+				 * no longer holds, are left out and reported as Filtered rather than failing every other
+				 * character's rows with them. See CharacterWriteGate. */
+				CharacterWriteAdmission admission = await CharacterWriteGate.AdmitAsync(dbContext, characterIds, claims, cancellationToken).ConfigureAwait(false);
+				int unownedRows = admission.CountUnowned(hotkeyList, row => row.CharacterID);
 
-				if (activeCharacterIdSet.Count != characterIds.Length)
-				{
-					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
-					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
-				}
-
-				var activeHotkeys = hotkeyList.Where(h => activeCharacterIdSet.Contains(h.CharacterID)).ToList();
+				var activeHotkeys = hotkeyList.Where(h => admission.Admits(h.CharacterID)).ToList();
 				if (activeHotkeys.Count == 0)
 				{
-					return new BulkWriteResult(suppliedRows, 0, 0);
+					return new BulkWriteResult(suppliedRows, 0, 0, unownedRows);
 				}
 
 				var now = DateTime.UtcNow;
@@ -188,15 +200,22 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var sql = GetUpsertSql();
 
+				/* Stale rows are skipped and counted as superseded, as every sibling batch does, rather
+				 * than failing the batch. A batch can carry many characters' bars — the shutdown flush
+				 * writes every resident's in one statement — and one character whose stored bar is
+				 * newer (another server's clock ahead of this one's; hotkey versions are ticks) used to
+				 * take every other character's bar down with it. A caller that needs the whole bar still
+				 * sees a short write: Superseded makes it incomplete. */
 				int appliedRows = await ExecuteBulkUpsertAsync(
 					dbContext,
 					sql,
 					activeHotkeys.Count,
 					new object[] { characterIdArray, slotArray, versionArray, typeArray, referenceIdArray, now },
 					"One or more hotkeys were rejected due to a stale Version.",
-					cancellationToken).ConfigureAwait(false);
+					cancellationToken,
+					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
 
-				return new BulkWriteResult(suppliedRows, activeHotkeys.Count, appliedRows);
+				return new BulkWriteResult(suppliedRows, activeHotkeys.Count, appliedRows, unownedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

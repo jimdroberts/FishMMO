@@ -370,5 +370,145 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(ArenaFlagAction.None, ArenaRules.ResolveDroppedFlagTouch(flagTeam: 0, actorTeam: 1, actorCarriesFlag: true));
 			Assert.AreEqual(ArenaFlagAction.None, ArenaRules.ResolveDroppedFlagTouch(flagTeam: 0, actorTeam: -1, actorCarriesFlag: false));
 		}
+
+		// ── Tick clock ──────────────────────────────────────────────────────
+
+		[Test]
+		public void TickSecond_SampleOnAWholeSecond_IsThatSecond_WhicheverSideTheJitterFalls()
+		{
+			/* The defect: every phase begins inside the tick, so the tick samples its clock a
+			 * frame either side of a whole second. Rounded up, 5.001 read 6 and 4.999 read 5, and
+			 * the number the players heard depended on the frame. */
+			Assert.AreEqual(5, ArenaRules.ResolveTickSecond(5.016));
+			Assert.AreEqual(5, ArenaRules.ResolveTickSecond(5.0));
+			Assert.AreEqual(5, ArenaRules.ResolveTickSecond(4.984));
+		}
+
+		[Test]
+		public void TickSecond_RoundsToNearest_HalfDown_NeverNegative()
+		{
+			Assert.AreEqual(5, ArenaRules.ResolveTickSecond(5.49));
+			Assert.AreEqual(5, ArenaRules.ResolveTickSecond(4.51));
+			Assert.AreEqual(4, ArenaRules.ResolveTickSecond(4.5));
+			Assert.AreEqual(1, ArenaRules.ResolveTickSecond(0.51));
+			Assert.AreEqual(0, ArenaRules.ResolveTickSecond(0.5), "the phase ends on the tick nearest its end");
+			Assert.AreEqual(0, ArenaRules.ResolveTickSecond(0.0));
+			Assert.AreEqual(0, ArenaRules.ResolveTickSecond(-3.0));
+			Assert.AreEqual(0, ArenaRules.ResolveTickSecond(double.NaN));
+			Assert.AreEqual(int.MaxValue, ArenaRules.ResolveTickSecond(double.MaxValue), "an untimed phase does not overflow");
+		}
+
+		[Test]
+		public void CountdownSteps_FirstAnnouncement_IsTheCurrentSecond()
+		{
+			Assert.AreEqual(1, ArenaRules.ResolveCountdownSteps(-1, 10, out int highest));
+			Assert.AreEqual(10, highest);
+		}
+
+		[Test]
+		public void CountdownSteps_OrdinaryTick_AnnouncesOneSecond()
+		{
+			Assert.AreEqual(1, ArenaRules.ResolveCountdownSteps(7, 6, out int highest));
+			Assert.AreEqual(6, highest);
+		}
+
+		[Test]
+		public void CountdownSteps_LateTick_AnnouncesEverySecondItPassed_HighestFirst()
+		{
+			// Last announced 7, now 4: 6, 5 and 4 each carry their own cues and all must fire.
+			Assert.AreEqual(3, ArenaRules.ResolveCountdownSteps(7, 4, out int highest));
+			Assert.AreEqual(6, highest);
+		}
+
+		[Test]
+		public void CountdownSteps_PastTheEnd_StopsAtZero()
+		{
+			Assert.AreEqual(2, ArenaRules.ResolveCountdownSteps(2, -5, out int highest));
+			Assert.AreEqual(1, highest, "1 then 0, never below");
+		}
+
+		[Test]
+		public void CountdownSteps_ClockStillOrBackwards_AnnouncesNothing()
+		{
+			Assert.AreEqual(0, ArenaRules.ResolveCountdownSteps(5, 5, out _));
+			Assert.AreEqual(0, ArenaRules.ResolveCountdownSteps(5, 7, out _), "a wall clock stepped back must not repeat seconds");
+		}
+
+		[Test]
+		public void ThresholdCrossed_ExactSecondAndSteppedOver_BothCount()
+		{
+			Assert.IsTrue(ArenaRules.IsThresholdCrossed(31, 30, 30), "landed on it");
+			Assert.IsTrue(ArenaRules.IsThresholdCrossed(32, 29, 30), "a late tick stepped over it: the old exact-second test lost this one");
+		}
+
+		[Test]
+		public void ThresholdCrossed_NotYetOrAlreadyPassed_DoesNotCount()
+		{
+			Assert.IsFalse(ArenaRules.IsThresholdCrossed(33, 31, 30), "not reached yet");
+			Assert.IsFalse(ArenaRules.IsThresholdCrossed(30, 29, 30), "passed on an earlier tick");
+			Assert.IsFalse(ArenaRules.IsThresholdCrossed(30, 30, 30), "the clock did not move");
+		}
+
+		[Test]
+		public void ThresholdCrossed_AtTheStart_OnlyWarningsWithinTheMatchLength()
+		{
+			// GoLive starts the check one past the full clock (a 10 minute match: 601).
+			Assert.IsTrue(ArenaRules.IsThresholdCrossed(601, 599, 600), "a warning at the match's own length fires once");
+			Assert.IsFalse(ArenaRules.IsThresholdCrossed(601, 599, 900), "a warning longer than the match never fires");
+		}
+
+		// ── King of the Hill hold ───────────────────────────────────────────
+
+		[Test]
+		public void Hold_ScoresRealTime_NotTicks()
+		{
+			// A hitch that merged three one-second ticks still scores three seconds of hold.
+			double left = ArenaRules.AccrueHold(0.0, 3.0, 1, out int points);
+			Assert.AreEqual(3, points);
+			Assert.AreEqual(0.0, left, 1e-9);
+		}
+
+		[Test]
+		public void Hold_CarriesTheRemainder()
+		{
+			double left = ArenaRules.AccrueHold(0.4, 1.0, 1, out int points);
+			Assert.AreEqual(1, points);
+			Assert.AreEqual(0.4, left, 1e-9);
+
+			left = ArenaRules.AccrueHold(1.5, 1.0, 3, out points);
+			Assert.AreEqual(0, points, "2.5 of 3 seconds is no point yet");
+			Assert.AreEqual(2.5, left, 1e-9);
+		}
+
+		[Test]
+		public void Hold_ShortTick_ScoresNothingEarly()
+		{
+			// A point taken 0.3 s before a tick has held 0.3 s, not a whole second.
+			double left = ArenaRules.AccrueHold(0.0, 0.3, 1, out int points);
+			Assert.AreEqual(0, points);
+			Assert.AreEqual(0.3, left, 1e-9);
+		}
+
+		[Test]
+		public void Hold_NegativeElapsedAndBadRate_AreSafe()
+		{
+			double left = ArenaRules.AccrueHold(0.5, -10.0, 1, out int points);
+			Assert.AreEqual(0, points, "a wall clock stepped back takes nothing away");
+			Assert.AreEqual(0.5, left, 1e-9);
+
+			left = ArenaRules.AccrueHold(0.0, 2.0, 0, out points);
+			Assert.AreEqual(2, points, "a rate below 1 counts as 1");
+		}
+
+		// ── Team channel ────────────────────────────────────────────────────
+
+		[Test]
+		public void TeamChannel_PresentAndNotDropped_Only()
+		{
+			Assert.IsTrue(ArenaRules.IsOnTeamChannel(present: true, dropped: false));
+			Assert.IsFalse(ArenaRules.IsOnTeamChannel(present: false, dropped: false), "in the reconnect grace: on the roster, not in the scene");
+			Assert.IsFalse(ArenaRules.IsOnTeamChannel(present: true, dropped: true), "dropped seats are off the roster the registry publishes");
+			Assert.IsFalse(ArenaRules.IsOnTeamChannel(present: false, dropped: true));
+		}
 	}
 }

@@ -27,13 +27,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public LastSeenCacheTracker<string, byte> CharacterMissingByNameCache { get; private set; }
 
 		/// <inheritdoc/>
-		public void SweepAllCaches(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove)
+		public void SweepAllCaches(double now, TimeSpan ttl, int maxScan, int maxRemove)
 		{
-			CharacterNameByIdCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
-			GuildNameByIdCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
-			CharacterIdByNameCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
-			CharacterNameByNameCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
-			CharacterMissingByNameCache?.SweepExpired(nowUtc, ttl, maxScan, maxRemove);
+			CharacterNameByIdCache?.SweepExpired(now, ttl, maxScan, maxRemove);
+			GuildNameByIdCache?.SweepExpired(now, ttl, maxScan, maxRemove);
+			CharacterIdByNameCache?.SweepExpired(now, ttl, maxScan, maxRemove);
+			CharacterNameByNameCache?.SweepExpired(now, ttl, maxScan, maxRemove);
+			CharacterMissingByNameCache?.SweepExpired(now, ttl, maxScan, maxRemove);
 		}
 
 		/// <summary>

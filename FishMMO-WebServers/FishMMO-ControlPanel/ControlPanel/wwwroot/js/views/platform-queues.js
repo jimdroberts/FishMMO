@@ -289,7 +289,7 @@ export async function render(host, ctx) {
 					{
 						label: 'Queued',
 						align: 'right',
-						cell: (e) => `<span class="nowrap" title="${ui.esc(ui.dateTime(e.queuedUtc))}">${ui.ago(e.queuedUtc)}</span>`,
+						cell: (e) => queuedCell(ui, e),
 					},
 					{ label: 'Attempts', align: 'right', cell: (e) => `<span class="tnum">${ui.num(e.attempts ?? 0)}</span>` },
 					{ label: 'Last error', cell: (e) => errorCell(ui, e) },
@@ -364,7 +364,7 @@ export async function render(host, ctx) {
 					{
 						label: 'Queued',
 						align: 'right',
-						cell: (s) => `<span class="nowrap" title="${ui.esc(ui.dateTime(s.queuedUtc))}">${ui.ago(s.queuedUtc)}</span>`,
+						cell: (s) => queuedCell(ui, s),
 					},
 					{ label: 'Attempts', align: 'right', cell: (s) => `<span class="tnum">${ui.num(s.attempts ?? 0)}</span>` },
 					{ label: 'Last error', cell: (s) => errorCell(ui, s) },
@@ -651,6 +651,16 @@ function errorCell(ui, e) {
 	return `
 		<div class="small" style="max-width:34ch;overflow-wrap:anywhere" title="${ui.esc(e.lastError)}">${ui.esc(e.lastError)}</div>
 		${e.claimedBy ? `<div class="cell-sub">on ${ui.esc(e.claimedBy)}</div>` : ''}`;
+}
+
+/* How long a message has been queued, as the database measured it at the read — the clock
+ * that stamped it, and the one the headline age above is taken by. Not `ui.ago(queuedUtc)`,
+ * which is this browser's clock minus the database's stamp. The stamp stays in the tooltip. */
+function queuedCell(ui, m) {
+	const text = Number.isFinite(m.ageSeconds)
+		? `${ui.duration(m.ageSeconds)} ago`
+		: ui.ago(m.queuedUtc);
+	return `<span class="nowrap tnum" title="${ui.esc(ui.dateTime(m.queuedUtc))}">${ui.esc(text)}</span>`;
 }
 
 /* A heartbeat age, and whether it has stopped. A stale row is excluded from matching and

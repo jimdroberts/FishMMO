@@ -1,5 +1,4 @@
 using FishNet.Connection;
-using FishNet.Object;
 using FishNet.Transporting;
 using System.Collections.Generic;
 using UnityEngine;
@@ -42,27 +41,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				? sender.GameObject.scene
 				: default;
 
-			if (scene.IsValid() &&
-				Server.NetworkWrapper.NetworkManager != null &&
-				Server.NetworkWrapper.NetworkManager.SceneManager != null)
-			{
-				if (Server.NetworkWrapper.NetworkManager.SceneManager.SceneConnections.TryGetValue(scene, out HashSet<NetworkConnection> connections) &&
-					Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
-				{
-					// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the set.
-					// Manual loop avoids boxing the HashSet struct enumerator.
-					var buffer = chatData.ConnectionBroadcastBuffer;
-					buffer.Clear();
-					foreach (var conn in connections)
-					{
-						buffer.Add(conn);
-					}
-					for (int i = 0; i < buffer.Count; i++)
-					{
-						Server.NetworkWrapper.Broadcast(buffer[i], msg, true, Channel.Reliable);
-					}
-				}
-			}
+			/* One multicast over FishNet's own connection set for the scene: the line is
+			 * serialised once, not once per player in it (hot-path audit S1). */
+			Server.NetworkWrapper.BroadcastToScene(scene, msg, true, Channel.Reliable);
 			return false; // we return false here so the message is not written to the database
 		}
 
@@ -81,21 +62,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>False to prevent message from being written to the database.</returns>
 		public bool OnSayChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			if (sender != null && sender.Observers != null &&
-				Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
+			/* Multicast over the observer set itself, serialised once. The set is read and never
+			 * kept, and nothing the send does changes it. */
+			if (sender != null && sender.Observers != null && sender.Observers.Count > 0)
 			{
-				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the set.
-				// Manual loop avoids boxing the HashSet struct enumerator.
-				var buffer = chatData.ConnectionBroadcastBuffer;
-				buffer.Clear();
-				foreach (var conn in sender.Observers)
-				{
-					buffer.Add(conn);
-				}
-				for (int i = 0; i < buffer.Count; i++)
-				{
-					Server.NetworkWrapper.Broadcast(buffer[i], msg, true, Channel.Reliable);
-				}
+				Server.NetworkWrapper.Broadcast(sender.Observers, msg, true, Channel.Reliable);
 			}
 			return false; // we return false here so the message is not written to the database
 		}

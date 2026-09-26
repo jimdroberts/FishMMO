@@ -305,6 +305,24 @@
                 <ui:Label text="Sets the size of the message log and the text you type."
                           class="fish-hint options-hint" />
 
+                <!--
+                    The network statistics overlay: a readout of what the client sends and
+                    receives, layer by layer. Off by default; it lives in the persistent scene, so
+                    it works on the login and character screens too. The graph row is disabled
+                    while the overlay itself is off.
+                -->
+                <ui:Label text="NETWORK" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Network Statistics" class="fish-label options-row-label" />
+                    <ui:Toggle name="netstats-enabled-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Traffic Graph" class="fish-label options-row-label" />
+                    <ui:Toggle name="netstats-graph-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:Label text="Send and receive rates from the game's own data down to the bytes on the wire. Hover a row to see how it was measured."
+                          class="fish-hint options-hint" />
+
                 <ui:Label text="COLOURS" class="fish-attr-category options-section" />
                 <ui:VisualElement name="options-color-list" class="options-list" />
                 <ui:VisualElement class="options-row options-row--action">

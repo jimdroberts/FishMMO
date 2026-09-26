@@ -47,7 +47,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>DatabaseResult indicating success or failure with error details.</returns>
 		/// <remarks>
-		/// Success: Pulse timestamp updated.
+		/// Success: Pulse timestamp updated, stamped by the database clock (every reader measures
+		/// its age against that clock).
 		/// Failure cases:
 		/// - VALIDATION_ERROR: Invalid server ID (less than or equal to 0)
 		/// - ENTITY_NOT_FOUND: Server does not exist

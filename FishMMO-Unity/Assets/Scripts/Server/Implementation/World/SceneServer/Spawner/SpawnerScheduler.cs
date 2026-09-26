@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FishMMO.Server.Core;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 {
@@ -28,6 +29,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 	/// It used to be static with a hidden driver object of its own; an instance is what lets two
 	/// servers in one process (a simulation beside the real thing) keep their spawners apart.
 	/// </para>
+	/// <para>
+	/// <b>The clock.</b> Every deadline and check interval its spawners keep is in seconds on
+	/// <see cref="Now"/>, a monotonic clock. Respawn deadlines used to be <c>DateTime.UtcNow</c>,
+	/// so the host's wall clock being stepped — an NTP correction, a VM resumed — moved every
+	/// deadline at once: forward, and every camp in the world respawned on one frame; back, and
+	/// none did for as long as the step.
+	/// </para>
 	/// </remarks>
 	public sealed class SpawnerScheduler
 	{
@@ -35,6 +43,61 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// The index stored on a spawner that is not currently in <see cref="active"/>.
 		/// </summary>
 		public const int NotActive = -1;
+
+		/// <summary>
+		/// Default for <see cref="SpawnsPerFrame"/>.
+		/// </summary>
+		public const int DefaultSpawnsPerFrame = 8;
+
+		private readonly Func<double> clock;
+
+		private int spawnsPerFrame = DefaultSpawnsPerFrame;
+
+		/// <summary>
+		/// Creates a scheduler on the process's monotonic clock, <see cref="MonotonicClock"/>.
+		/// </summary>
+		public SpawnerScheduler() : this(null)
+		{
+		}
+
+		/// <summary>
+		/// Creates a scheduler on a clock of the caller's choosing.
+		/// </summary>
+		/// <param name="clock">Seconds, never decreasing. Null uses the process's monotonic clock.</param>
+		public SpawnerScheduler(Func<double> clock)
+		{
+			this.clock = clock ?? (() => MonotonicClock.NowSeconds);
+		}
+
+		/// <summary>
+		/// Now, in seconds, on the clock every deadline of this scheduler's spawners is measured on.
+		/// </summary>
+		public double Now => clock();
+
+		/// <summary>
+		/// Most objects all of this scheduler's spawners together spawn in one <see cref="Tick"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A spawner drains every due timer when it is visited, which is right for its refill rate
+		/// but puts a wiped camp's whole population — pooled retrieval, a ground cast, a NavMesh
+		/// warp and a network spawn each — on one frame, and a raid clearing several camps at once
+		/// on the same one. The budget spreads that over consecutive frames.
+		/// </para>
+		/// <para>
+		/// <b>It cannot starve anyone.</b> A spawner cut short by the budget keeps the sweep's
+		/// cursor and is first next frame, with its interval gate still open, so it carries on
+		/// where it stopped rather than waiting out another interval. The first spawner of every
+		/// frame therefore always has the whole budget, each such frame spends at least one of
+		/// that spawner's finite due timers, and the cursor moves on as soon as it has none left.
+		/// At least 1.
+		/// </para>
+		/// </remarks>
+		public int SpawnsPerFrame
+		{
+			get => spawnsPerFrame;
+			set => spawnsPerFrame = Math.Max(1, value);
+		}
 
 		/// <summary>
 		/// How many frames one full pass over the active list is spread across.
@@ -109,14 +172,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// that are merely waiting, which is most of them.
 		/// </para>
 		/// <para>
-		/// <see cref="UnityEngine.Time.time"/> is read once by the caller rather than by each
-		/// spawner. It is a native property, and crossing into the engine per active spawner per
-		/// frame cost more than everything else in this walk put together.
+		/// The clock is read once by the caller rather than by each spawner, so every spawner in
+		/// a sweep judges its deadlines against the same instant.
+		/// </para>
+		/// <para>
+		/// <b>Each spawner is isolated.</b> A pass that throws — a spawnable's <c>OnSpawned</c>, a
+		/// brain that cannot be prepared, a network spawn — is reported to that spawner's own
+		/// fault log and the sweep carries on. The spawner has already put its timer back and
+		/// rolled back the half-made object (see <see cref="SpawnerRuntime.SpawnObject"/>), so it
+		/// simply tries again at its next check. Before, the exception left the sweep, skipping
+		/// every spawner after it, and did so again at every check of the broken one.
+		/// </para>
+		/// <para>
+		/// Spawning stops for the frame once <see cref="SpawnsPerFrame"/> objects have been
+		/// spawned; see that property for why that cannot starve a spawner.
 		/// </para>
 		/// </remarks>
-		/// <param name="nowUtc">The current UTC time, for evaluating respawn deadlines.</param>
-		/// <param name="nowTime">The current <see cref="UnityEngine.Time.time"/>, for the interval gates.</param>
-		public void Tick(DateTime nowUtc, float nowTime)
+		/// <param name="now">The current time on <see cref="Now"/>'s clock.</param>
+		public void Tick(double now)
 		{
 			int count = active.Count;
 			if (count < 1)
@@ -126,9 +199,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 
 			// Round up, so a list shorter than the sweep still finishes inside one sweep.
 			int slice = (count + FramesPerSweep - 1) / FramesPerSweep;
+			int budget = spawnsPerFrame;
 
 			for (int visited = 0; visited < slice && active.Count > 0; ++visited)
 			{
+				if (budget <= 0)
+				{
+					// Spent. The cursor stays on the next spawner, which is first in line next frame.
+					break;
+				}
+
 				if (cursor >= active.Count)
 				{
 					cursor = 0;
@@ -136,7 +216,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 
 				SpawnerRuntime spawner = active[cursor];
 
-				spawner.RunScheduledRespawn(nowUtc, nowTime);
+				bool cutShort = false;
+				try
+				{
+					cutShort = spawner.RunScheduledRespawn(now, ref budget);
+					spawner.ReportPassSucceeded();
+				}
+				catch (Exception ex)
+				{
+					spawner.ReportPassFailed(ex, now);
+				}
 
 				/* The pass can change membership underneath the sweep: spawning fires callbacks
 				 * that can despawn, and a spawner's scene can be unloaded from one. Trusting the slot
@@ -147,6 +236,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				if (spawner.SchedulerIndex != cursor)
 				{
 					continue;
+				}
+
+				if (cutShort)
+				{
+					// The budget ran out mid-pass. Keep the cursor here so this spawner finishes first.
+					break;
 				}
 
 				if (spawner.HasRespawnWork())

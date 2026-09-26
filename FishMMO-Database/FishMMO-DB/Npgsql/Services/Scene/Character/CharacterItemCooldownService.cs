@@ -126,7 +126,26 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterItemCooldownData> cooldowns, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterItemCooldownData> cooldowns, CancellationToken cancellationToken = default)
+			=> PersistBatchAsync(cooldowns, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<BulkWriteResult>> PersistOwnedAsync(IEnumerable<CharacterItemCooldownData> cooldowns, IReadOnlyCollection<CharacterSessionLeaseData> claims, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaims(claims);
+			return invalid != null
+				? Task.FromResult(DatabaseResult<BulkWriteResult>.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: PersistBatchAsync(cooldowns, claims, cancellationToken);
+		}
+
+		/// <summary>
+		/// The batch write behind <see cref="PersistAsync(IEnumerable{CharacterItemCooldownData}, CancellationToken)"/> and
+		/// <see cref="PersistOwnedAsync"/>.
+		/// </summary>
+		/// <param name="cooldowns">Rows to write.</param>
+		/// <param name="claims">The writer's claims, or null for the ungated write. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterItemCooldownData> cooldowns, IReadOnlyCollection<CharacterSessionLeaseData>? claims, CancellationToken cancellationToken)
 		{
 			if (cooldowns == null || !cooldowns.Any())
 			{
@@ -153,24 +172,17 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var allCharacterIds = list.Select(c => c.CharacterID).Distinct().ToArray();
-				var activeCharacterIds = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => allCharacterIds.Contains(c.ID) && !c.Deleted)
-					.Select(c => c.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+				/* The ownership gate, and the per-character existence check it subsumes: the rows of a
+				 * missing or deleted character, or — for an owned write — of one whose claim the writer
+				 * no longer holds, are left out and reported as Filtered rather than failing every other
+				 * character's rows with them. See CharacterWriteGate. */
+				CharacterWriteAdmission admission = await CharacterWriteGate.AdmitAsync(dbContext, allCharacterIds, claims, cancellationToken).ConfigureAwait(false);
+				int unownedRows = admission.CountUnowned(list, row => row.CharacterID);
 
-				if (activeCharacterIdSet.Count != allCharacterIds.Length)
-				{
-					var missingCharacterId = allCharacterIds.First(id => !activeCharacterIdSet.Contains(id));
-					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
-				}
-
-				var activeCooldowns = list.Where(c => activeCharacterIdSet.Contains(c.CharacterID)).ToList();
+				var activeCooldowns = list.Where(c => admission.Admits(c.CharacterID)).ToList();
 				if (activeCooldowns.Count == 0)
 				{
-					return new BulkWriteResult(suppliedRows, 0, 0);
+					return new BulkWriteResult(suppliedRows, 0, 0, unownedRows);
 				}
 
 				var now = DateTime.UtcNow;
@@ -214,7 +226,7 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken,
 					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
 
-				return new BulkWriteResult(suppliedRows, activeCooldowns.Count, appliedRows);
+				return new BulkWriteResult(suppliedRows, activeCooldowns.Count, appliedRows, unownedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

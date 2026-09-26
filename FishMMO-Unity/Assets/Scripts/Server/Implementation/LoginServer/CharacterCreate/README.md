@@ -193,7 +193,7 @@ Equipment uses `ItemGenerator.Generate(1, template)` to produce a deterministic 
 | Character count at limit | Returns `TooMany` | Checked via `characterService.CountAsync` |
 | Duplicate character name | Returns `CharacterNameTaken` | Database `AlreadyExists` error code |
 | In-flight duplicate request | Returns `Error` | `InFlightRequests.TryAdd` fails |
-| Cooldown not elapsed | Returns `Error` | `NextAllowedCreateUtcByClientId` check |
+| Cooldown not elapsed | Returns `Error` | `NextAllowedCreateSecondsByClientId` check |
 | Async worker queue full | Returns `Error` | `TryEnqueueAsyncWork` returns false |
 | Unit of work commit failure | Returns `Error` | Transaction rolled back, no partial data |
 | Sub-entity persist failure | Returns `Error` | `BulkWriteReporting.RequireCompleteAsync` rejects a short write; transaction rolled back |
@@ -320,7 +320,7 @@ Mutable runtime state for the character creation system.
 | Property | Type | Purpose |
 |---|---|---|
 | `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent create operations |
-| `NextAllowedCreateUtcByClientId` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp; enforces `createRequestCooldownMilliseconds` gap between successive create attempts |
+| `NextAllowedCreateSecondsByClientId` | `ConcurrentDictionary<int, double>` | Per-connection post-release cooldown, in `MonotonicClock` seconds (a local duration, unmoved by host clock steps); enforces `createRequestCooldownMilliseconds` gap between successive create attempts |
 
 Thread safety: `ConcurrentDictionary` allows safe access from both network and worker threads.
 

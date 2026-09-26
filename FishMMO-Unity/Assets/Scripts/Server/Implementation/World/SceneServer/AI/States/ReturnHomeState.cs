@@ -8,12 +8,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	/// <summary>
 	/// AI State for returning the NPC to its home position. Handles healing and movement speed adjustments.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Two uses.</b> The leash sends a fighting NPC home through this state, and it is also one of
+	/// the calm movement states <see cref="AIController.TransitionToRandomMovementState"/> drifts
+	/// between. Only the first is an evade: while a leash that ended a fight has the NPC walking
+	/// home it takes no damage, threat, taunt, debuff or knockback
+	/// (<see cref="AIController.IsEvading"/>, <see cref="CharacterEvade"/>). The evade is
+	/// held by the controller, not by this shared asset, and ends by construction the moment this
+	/// state stops being the NPC's current state — there is nothing here to switch off.
+	/// </para>
+	/// <para>
+	/// <b>The heal belongs to the leash, too.</b> <see cref="CompleteHealOnReturn"/> is authored
+	/// here but applied by <see cref="AIController"/>'s leash check, which is the only thing that
+	/// knows a leash — not a calm pick — sent the NPC home. It used to be applied by
+	/// <see cref="Enter"/>, and since this state is also in the calm movement pool, a damaged NPC
+	/// that simply drifted home between fights was topped up to full on the way.
+	/// </para>
+	/// </remarks>
 	[CreateAssetMenu(fileName = "New AI ReturnHome State", menuName = "FishMMO/Character/NPC/AI/ReturnHome State", order = 0)]
 	public class ReturnHomeState : BaseAIState
 	{
 		/// <summary>
-		/// If true, the NPC will be fully healed upon returning home.
+		/// If true, the NPC is fully healed when a LEASH sends it home through this state. A calm
+		/// stroll home picked from the movement pool never heals. Applied by
+		/// <see cref="AIController"/> (see the class remarks).
 		/// </summary>
+		[Tooltip("Fully heal the NPC when a leash sends it home. A calm stroll home never heals.")]
 		public bool CompleteHealOnReturn = true;
 
 		/// <summary>
@@ -24,7 +45,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public float HomeArrivalRadius = 2.0f;
 
 		/// <summary>
-		/// Called when the state is entered. Sets the NPC's destination to home, increases speed, and heals if applicable.
+		/// Called when the state is entered. Sets the NPC's destination to home and increases speed.
+		/// Does not heal: see the class remarks.
 		/// </summary>
 		/// <param name="controller">The AI controller managing this NPC.</param>
 		public override void Enter(AIController controller)
@@ -49,29 +71,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				controller.SetRandomHomeDestination(HomeArrivalRadius);
 			}
 
-			// Heal the NPC if CompleteHealOnReturn is true and a damage controller is present.
-			if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
-			{
-				// Optionally, the NPC could be made immortal while returning home.
-				// characterDamageController.Immortal = true;
-				characterDamageController.CompleteHeal();
-			}
+			/* No heal here: whether to heal depends on WHY the NPC is going home, which only the
+			 * leash knows — see the class remarks and AIController.CheckLeash.
+			 *
+			 * No Immortal either: the evade lives on the controller (see the class remarks), because
+			 * Immortal belongs to the prefab, the corpse path and administrators, and borrowing it
+			 * would have to be undone on every way out of this state. */
 		}
 
 		/// <summary>
-		/// Called when the state is exited. Resets movement speed and optionally disables immortality.
+		/// Called when the state is exited. Resets movement speed.
 		/// </summary>
 		/// <param name="controller">The AI controller managing this NPC.</param>
 		public override void Exit(AIController controller)
 		{
 			// Reset agent speed to walk speed after returning home.
 			controller.Agent.speed = Constants.Character.WalkSpeed;
-
-			// Optionally, disable immortality when leaving this state (commented out).
-			/*if (controller.Character.TryGet(out ICharacterDamageController characterDamageController))
-			{
-				characterDamageController.Immortal = false;
-			}*/
 		}
 
 		/// <summary>
@@ -92,7 +107,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			switch (controller.GetMovementProgress(deltaTime, HomeArrivalRadius))
 			{
 				case AIMovementProgress.Arrived:
-					controller.TransitionToRandomMovementState();
+					// Home: the evade ends, the table is emptied, and the NPC idles again.
+					controller.CompleteReturnHome();
 					return;
 
 				case AIMovementProgress.Stuck:
@@ -108,7 +124,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					{
 						// Home is not on the NavMesh. Warping is the only way back.
 						controller.WarpTo(controller.Home);
-						controller.TransitionToRandomMovementState();
+						controller.CompleteReturnHome();
 					}
 					return;
 

@@ -233,6 +233,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			}
 
 			ReleaseNativeContext();
+			TransportTraffic.ClearConnectionStats(this);
+			this.nextConnectionStatsTicks = 0;
 #endif
 
 			GC.SuppressFinalize(this);
@@ -289,6 +291,8 @@ namespace FishNet.Transporting.WebTransport.Client
 			stopGuard = 0;
 			// Invalidate any native/JS callbacks still in flight from the previous hop.
 			System.Threading.Interlocked.Increment(ref sessionGeneration);
+			/* Per-session handshake diagnostics only. The traffic statistics are process-lifetime
+			 * totals in TransportTraffic, which a hop must never reset. */
 			System.Threading.Interlocked.Exchange(ref wireQueuedCount, 0);
 			System.Threading.Interlocked.Exchange(ref wireSentOkCount, 0);
 			System.Threading.Interlocked.Exchange(ref wireSentFailCount, 0);
@@ -545,6 +549,7 @@ namespace FishNet.Transporting.WebTransport.Client
 			if (clientHandle == null || clientHandle.IsInvalid)
 				return;
 			WebTransportNative.wt_client_poll(clientHandle, 0);
+			RefreshConnectionStatsIfWanted();
 #endif
 			while (incomingEvents.TryDequeue(out Action act))
 			{
@@ -552,6 +557,47 @@ namespace FishNet.Transporting.WebTransport.Client
 				try { act?.Invoke(); } catch (Exception e) { LogTransportError(e.ToString()); }
 			}
 		}
+
+#if !UNITY_WEBGL || UNITY_EDITOR
+		/// <summary>Stopwatch tick before which the connection statistics are not read again.</summary>
+		private long nextConnectionStatsTicks;
+
+		/// <summary>
+		/// Reads this connection's QUIC statistics into <see cref="TransportTraffic"/>, at most once a
+		/// second and only while a snapshot has been captured recently.
+		/// </summary>
+		/// <remarks>
+		/// The native read blocks until the connection's msquic worker answers, so it runs here — on
+		/// the thread that polls and later destroys this handle, which is the contract of
+		/// <c>wt_client_get_connection_stats</c> — rather than inside
+		/// <see cref="TransportTraffic.Capture"/>, which any thread may call. A read that meets the
+		/// connection's shutdown is safe: the library keeps the handle open until the read returns.
+		/// </remarks>
+		private void RefreshConnectionStatsIfWanted()
+		{
+			long now = System.Diagnostics.Stopwatch.GetTimestamp();
+			if (now < this.nextConnectionStatsTicks || !TransportTraffic.ConnectionStatsWanted(now))
+				return;
+			this.nextConnectionStatsTicks = now + System.Diagnostics.Stopwatch.Frequency;
+
+			var raw = new WebTransportNative.WtConnectionStats
+			{
+				StructSize = WebTransportNative.WtConnectionStats.NativeSize,
+			};
+			int result = WebTransportNative.wt_client_get_connection_stats(this.clientHandle, ref raw);
+			if (result == 0 && raw.StructSize >= WebTransportNative.WtConnectionStats.NativeSize)
+			{
+				TransportConnectionStats stats = TransportTrafficMath.FromNative(in raw, TransportTraffic.NowSeconds);
+				TransportTraffic.PublishConnectionStats(this, in stats);
+			}
+			else
+			{
+				/* InvalidState: not connected yet, or the connection has shut down. Withdraw the
+				 * last figures rather than leave a previous connection's RTT on screen. */
+				TransportTraffic.ClearConnectionStats(this);
+			}
+		}
+#endif
 
 		/// <summary>
 		/// Dequeues and sends outgoing packets.
@@ -604,12 +650,31 @@ namespace FishNet.Transporting.WebTransport.Client
 
 			base.Send(outgoing, channelId, segment, -1);
 			long q = System.Threading.Interlocked.Increment(ref wireQueuedCount);
-			if (q <= 12 || (q % 50) == 0)
-			{
-				UnityEngine.Debug.Log(
-					$"[FishWT] SendToServer QUEUED #{q} ch={channelId} len={segment.Count} " +
-					$"index={sessionIndex} target={lastConnectTarget}");
-			}
+			TraceHandshakePacket("SendToServer QUEUED", q, channelId, segment.Count, sessionIndex);
+		}
+
+		/// <summary>Packets per session <see cref="TraceHandshakePacket"/> logs: the handshake, and no more.</summary>
+		private const long HandshakeTracePackets = 12;
+
+		/// <summary>
+		/// Logs one of the first <see cref="HandshakeTracePackets"/> packets of a session, in the
+		/// editor and development builds only.
+		/// </summary>
+		/// <remarks>
+		/// These lines were added to chase a WebGL login whose first packets never reached the
+		/// server, and they still earn their place while a connection is coming up. They used to
+		/// log every 50th packet for the rest of the session as well, in every build: at gameplay
+		/// rates that was a Debug.Log a second or more into a release player's log for as long as
+		/// it stayed connected. The call and its arguments are compiled out of release builds.
+		/// </remarks>
+		[System.Diagnostics.Conditional("DEVELOPMENT_BUILD"), System.Diagnostics.Conditional("UNITY_EDITOR")]
+		private void TraceHandshakePacket(string stage, long ordinal, byte channel, int length, int sessionIndex)
+		{
+			if (ordinal > HandshakeTracePackets)
+				return;
+			UnityEngine.Debug.Log(
+				$"[FishWT] {stage} #{ordinal} ch={channel} len={length} " +
+				$"index={sessionIndex} target={lastConnectTarget}");
 		}
 
 		/// <summary>
@@ -674,13 +739,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				{
 					long n = System.Threading.Interlocked.Increment(ref wireSentOkCount);
 					System.Threading.Interlocked.Add(ref wireSentBytes, pkt.Length);
-					if (n <= 12 || (n % 50) == 0)
-					{
-						UnityEngine.Debug.Log(
-							$"[FishWT] WIRE SEND OK #{n} ch={pkt.Channel} len={pkt.Length} " +
-							$"index={webglIndex} url={webglConnectUrl} " +
-							"(bytes handed to browser WT; LoginServer should see app payload)");
-					}
+					TransportTrafficCounters.CountSent(pkt.Channel, pkt.Length);
+					TraceHandshakePacket("WIRE SEND OK (handed to browser WT)", n, pkt.Channel, pkt.Length, webglIndex);
 				}
 				else
 				{
@@ -699,11 +759,8 @@ namespace FishNet.Transporting.WebTransport.Client
 					{
 						long n = System.Threading.Interlocked.Increment(ref wireSentOkCount);
 						System.Threading.Interlocked.Add(ref wireSentBytes, pkt.Length);
-						if (n <= 12 || (n % 50) == 0)
-						{
-							UnityEngine.Debug.Log(
-								$"[FishWT] WIRE SEND OK #{n} ch={pkt.Channel} len={pkt.Length} native");
-						}
+						TransportTrafficCounters.CountSent(pkt.Channel, pkt.Length);
+						TraceHandshakePacket("WIRE SEND OK (native)", n, pkt.Channel, pkt.Length, -1);
 					}
 					else
 					{
@@ -799,6 +856,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				socket.LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
 				return;
 			}
+			// Counted on arrival: a message the queue then drops still crossed the wire.
+			TransportTrafficCounters.CountReceived(0, length);
 			// Backpressure: drop if event queue is saturated.
 			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
 			{
@@ -831,6 +890,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				socket.LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;
 			}
+			TransportTrafficCounters.CountReceived(1, length);
 			if (System.Threading.Interlocked.Increment(ref socket.incomingEventCount) > MaxIncomingEvents)
 			{
 				System.Threading.Interlocked.Decrement(ref socket.incomingEventCount);
@@ -1039,6 +1099,8 @@ namespace FishNet.Transporting.WebTransport.Client
 				LogTransportWarning($"[WebTransport Client] Invalid stream data length {length}. Dropping.");
 				return;
 			}
+			// Counted on arrival, on this worker thread: a message the queue then drops still crossed the wire.
+			TransportTrafficCounters.CountReceived(0, length);
 
 			int gen = sessionGeneration;
 
@@ -1100,6 +1162,7 @@ namespace FishNet.Transporting.WebTransport.Client
 				LogTransportWarning($"[WebTransport Client] Invalid datagram length {length}. Dropping.");
 				return;
 			}
+			TransportTrafficCounters.CountReceived(1, length);
 
 			int gen = sessionGeneration;
 

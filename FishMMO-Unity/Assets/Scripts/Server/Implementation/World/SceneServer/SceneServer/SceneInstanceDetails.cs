@@ -1,5 +1,6 @@
 using System;
 using FishMMO.Shared;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
@@ -38,16 +39,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Indicates whether the scene is stale (no characters present).
 		/// </summary>
 		public bool StalePulse => CharacterCount < 1;
-		/// <summary>
-		/// The time when the last character exited the scene.
-		/// </summary>
-		public DateTime LastExit { get; set; }
+		/// <inheritdoc />
+		public double LastExitAt { get; set; }
 
 		/// <inheritdoc />
 		public bool VacatedDeliberately { get; set; }
 
 		/// <inheritdoc />
-		public DateTime CreatedUtc { get; set; }
+		public double CreatedAt { get; set; }
 
 		/// <inheritdoc />
 		public long OwnerCharacterID { get; set; }
@@ -62,7 +61,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public bool IsPrivate { get; set; }
 
 		/// <summary>
-		/// Adds or subtracts from the character count, updating LastExit if the scene becomes empty.
+		/// Adds or subtracts from the character count, updating LastExitAt if the scene becomes empty.
 		/// </summary>
 		/// <param name="count">Amount to add or subtract from the character count.</param>
 		public void AddCharacterCount(int count)
@@ -70,7 +69,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterCount = Math.Max(0, CharacterCount + count);
 			if (CharacterCount < 1)
 			{
-				LastExit = DateTime.UtcNow;
+				LastExitAt = MonotonicClock.NowSeconds;
 				return;
 			}
 

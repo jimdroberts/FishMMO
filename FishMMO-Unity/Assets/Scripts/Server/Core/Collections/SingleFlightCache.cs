@@ -45,11 +45,16 @@ namespace FishMMO.Server.Core.Collections
 		/// <summary>
 		/// Initializes a new cache.
 		/// </summary>
-		/// <param name="utcNow">Clock; defaults to <see cref="DateTime.UtcNow"/>. Injected by tests.</param>
+		/// <param name="utcNow">
+		/// Clock; injected by tests. Defaults to <see cref="MonotonicClock"/>, carried in a
+		/// <see cref="DateTime"/> (<see cref="MonotonicInstant"/>): a TTL is a local duration, and on
+		/// the wall clock a host stepped back served one read for the size of the step. The cache
+		/// only ever subtracts its clock's readings from one another.
+		/// </param>
 		/// <param name="comparer">Optional key comparer.</param>
 		public SingleFlightCache(Func<DateTime> utcNow = null, IEqualityComparer<TKey> comparer = null)
 		{
-			this.utcNow = utcNow ?? (() => DateTime.UtcNow);
+			this.utcNow = utcNow ?? (() => MonotonicInstant.From(MonotonicClock.NowSeconds));
 			entries = comparer == null
 				? new Dictionary<TKey, Entry>()
 				: new Dictionary<TKey, Entry>(comparer);

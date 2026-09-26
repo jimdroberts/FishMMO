@@ -833,7 +833,7 @@ Prediction/
 │   ├── ModifierSource.cs                       # The attributed-modifier ledger key: (Kind, Id, Index)
 │   ├── CharacterDamageController.cs            # Damage / heal / kill pipeline
 │   ├── CombatEventCoalescer.cs                 # Merges one tick's hits sharing (source, kind, damage type) into one report
-│   ├── PredictedCombatEvents.cs                # Client-side predicted damage/heal labels, settled or greyed out by the server's report
+│   ├── PredictedCombatEvents.cs                # Client-side predicted damage/heal labels: settled by the server's report, re-texted by an Evade/Immune refusal, greyed out when no report comes
 │   ├── ObservedResourcePushScheduler.cs        # Decides when an observer resource push is due (in-combat vs out-of-combat interval)
 │   └── Template/                               # CharacterAttributeTemplate, formulas, damage/resistance
 ├── KCC/                                        # Kinematic Character Controller

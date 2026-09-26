@@ -20,6 +20,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// produce one winner and one no-op rather than a character in two groups.
 	/// </para>
 	/// <para>
+	/// <b>One clock.</b> Every heartbeat, queue time and match time is stamped by the database's
+	/// clock, and every staleness test is made against it in SQL; callers pass how OLD a
+	/// heartbeat may be, never a moment. The rows are written by one scene server and judged by
+	/// every other, so a moment computed from the caller's own clock compared two machines'
+	/// clocks: a server running 30 s behind had waiters nobody else counted, and at 60 s behind
+	/// its rows were swept from under it every sweep.
+	/// </para>
+	/// <para>
 	/// All methods return <see cref="DatabaseResult"/> or <see cref="DatabaseResult{T}"/>. Write
 	/// operations go through the <c>BaseService</c> execution wrappers for transient-failure
 	/// retry and exception mapping.
@@ -43,14 +51,14 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="sceneType">Kind of instance: the shared value cast in — 2 (Group) for a dungeon, 3 (PvP) for an arena.</param>
 		/// <param name="sceneName">Dungeon or arena scene they want to play.</param>
 		/// <param name="difficulty">Index into the template's list: a dungeon's difficulty or an arena's format.</param>
-		/// <param name="stalePulsedBeforeUtc">
+		/// <param name="staleAfter">
 		/// A matched row whose heartbeat is older than this is treated as abandoned and re-pointed
 		/// like a waiting one. Without this a character whose scene server died between the match
 		/// and the transfer could never queue again until the stale sweep happened to reach them.
 		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>The row's ID, or <c>0</c> when the character is already matched and nothing changed.</returns>
-		Task<DatabaseResult<long>> EnqueueAsync(long worldServerId, long characterId, SceneType sceneType, string sceneName, int difficulty, DateTime stalePulsedBeforeUtc, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<long>> EnqueueAsync(long worldServerId, long characterId, SceneType sceneType, string sceneName, int difficulty, TimeSpan staleAfter, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Queues a pre-made group together, all or none.
@@ -67,10 +75,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="difficulty">Format index into the template's list.</param>
 		/// <param name="groupId">Identity of the pre-made group; the party id.</param>
 		/// <param name="characterIds">Every member, including the one who pressed the button.</param>
-		/// <param name="stalePulsedBeforeUtc">Stale threshold, as for <see cref="EnqueueAsync"/>.</param>
+		/// <param name="staleAfter">Stale heartbeat age, as for <see cref="EnqueueAsync"/>.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>Rows written, equal to the member count on success. A StaleState failure, with nothing written, when a member is already matched elsewhere: the group queues together or not at all.</returns>
-		Task<DatabaseResult<int>> EnqueueGroupAsync(long worldServerId, SceneType sceneType, string sceneName, int difficulty, long groupId, IReadOnlyList<long> characterIds, DateTime stalePulsedBeforeUtc, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<int>> EnqueueGroupAsync(long worldServerId, SceneType sceneType, string sceneName, int difficulty, long groupId, IReadOnlyList<long> characterIds, TimeSpan staleAfter, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Removes a character's queue row.
@@ -104,32 +112,30 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<GroupFinderQueueData?>> DeleteReturningAsync(long characterId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Refreshes the heartbeat on the rows of characters connected to the calling scene server.
+		/// Refreshes the heartbeat on the rows of characters connected to the calling scene server,
+		/// and returns those rows as the refresh left them.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// A row whose heartbeat stops is excluded from matching by <see cref="TryFormGroupAsync"/>
 		/// and <see cref="CountWaitingAsync"/> and eventually removed by <see cref="DeleteStaleAsync"/>.
 		/// That is the only defence against a scene server dying with waiters on it: nothing else
 		/// would ever remove them, and a group formed around a character nobody can reach is a
 		/// party of four with an empty slot that never fills.
+		/// </para>
+		/// <para>
+		/// One statement, <c>UPDATE ... RETURNING</c>. The pump needs both the heartbeat and the
+		/// rows — which of its characters were matched, by itself or any other server, and which
+		/// were removed underneath it — and used to spend a round trip on each. A row matched into
+		/// a party also carries the character's membership, read in the same statement, because
+		/// the pump honours the match only while they are in that party and tells them the rank
+		/// they hold; that used to be one more round trip per matched row, in series.
+		/// </para>
 		/// </remarks>
 		/// <param name="characterIds">Characters to pulse; duplicates and non-positive ids are ignored.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>Rows updated.</returns>
-		Task<DatabaseResult<int>> PulseAsync(IReadOnlyList<long> characterIds, CancellationToken cancellationToken = default);
-
-		/// <summary>
-		/// Reads the queue rows of the given characters.
-		/// </summary>
-		/// <remarks>
-		/// The scene server's pump reads its own characters' rows once per interval to learn which
-		/// of them have been matched — by itself or by any other server — and which have been
-		/// removed underneath it.
-		/// </remarks>
-		/// <param name="characterIds">Characters to look up; duplicates and non-positive ids are ignored.</param>
-		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>The rows that exist. Characters with no row are simply absent.</returns>
-		Task<DatabaseResult<IReadOnlyList<GroupFinderQueueData>>> FetchByCharactersAsync(IReadOnlyList<long> characterIds, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<IReadOnlyList<GroupFinderPulseData>>> PulseAsync(IReadOnlyList<long> characterIds, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Counts the live waiters for one dungeon at one difficulty.
@@ -138,10 +144,24 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="sceneType">Kind of instance.</param>
 		/// <param name="sceneName">Scene.</param>
 		/// <param name="difficulty">Difficulty or format index.</param>
-		/// <param name="pulsedSinceUtc">Rows whose heartbeat is older than this are not counted.</param>
+		/// <param name="staleAfter">Rows whose heartbeat is older than this are not counted.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>How many are waiting.</returns>
-		Task<DatabaseResult<int>> CountWaitingAsync(long worldServerId, SceneType sceneType, string sceneName, int difficulty, DateTime pulsedSinceUtc, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<int>> CountWaitingAsync(long worldServerId, SceneType sceneType, string sceneName, int difficulty, TimeSpan staleAfter, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Counts the live waiters for several keys at once.
+		/// </summary>
+		/// <remarks>
+		/// The pump's count: one statement for every key its waiters are queued under, where it
+		/// used to run <see cref="CountWaitingAsync"/> once per key, in series.
+		/// </remarks>
+		/// <param name="worldServerId">World server to count on.</param>
+		/// <param name="keys">What to count. Repeated keys are counted once.</param>
+		/// <param name="staleAfter">Rows whose heartbeat is older than this are not counted.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>One entry per distinct requested key, ALWAYS present: a key nobody waits under maps to 0.</returns>
+		Task<DatabaseResult<IReadOnlyDictionary<GroupFinderQueueKey, int>>> CountWaitingAsync(long worldServerId, IReadOnlyList<GroupFinderQueueKey> keys, TimeSpan staleAfter, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Forms a group from the longest-waiting eligible players, creating their party and
@@ -176,7 +196,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="sceneName">Dungeon scene to open.</param>
 		/// <param name="difficulty">Difficulty to open it at.</param>
 		/// <param name="groupSize">Exactly how many players to take. Nothing forms with fewer.</param>
-		/// <param name="pulsedSinceUtc">Waiters whose heartbeat is older than this are not eligible.</param>
+		/// <param name="staleAfter">Waiters whose heartbeat is older than this are not eligible.</param>
 		/// <param name="sceneType">Scene type to record on the instance row.</param>
 		/// <param name="leaderRank">Party rank value to write for the leader.</param>
 		/// <param name="memberRank">Party rank value to write for everybody else.</param>
@@ -191,7 +211,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			string sceneName,
 			int difficulty,
 			int groupSize,
-			DateTime pulsedSinceUtc,
+			TimeSpan staleAfter,
 			SceneType sceneType,
 			byte leaderRank,
 			byte memberRank,
@@ -225,7 +245,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="templateId">Arena template ID recorded on the match.</param>
 		/// <param name="teamCount">Teams to fill.</param>
 		/// <param name="teamSize">Seats per team.</param>
-		/// <param name="pulsedSinceUtc">Waiters whose heartbeat is older than this are not eligible.</param>
+		/// <param name="staleAfter">Waiters whose heartbeat is older than this are not eligible.</param>
 		/// <param name="maxCandidates">How many waiters to lock and consider. Clamped to a sane range.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>The match, or a result whose <see cref="ArenaMatchFormedData.Formed"/> is false when no full match could be composed.</returns>
@@ -236,7 +256,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			int templateId,
 			int teamCount,
 			int teamSize,
-			DateTime pulsedSinceUtc,
+			TimeSpan staleAfter,
 			int maxCandidates = 128,
 			ArenaRatingSource ratingSource = default,
 			ArenaComposeOptions composeOptions = default,
@@ -256,8 +276,23 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			long worldServerId,
 			string sceneName,
 			int format,
-			DateTime pulsedSinceUtc,
+			TimeSpan staleAfter,
 			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// The arenas and formats that have a seat to backfill right now: a live match with an
+		/// open backfill window, a ready instance, and a team short of its size.
+		/// </summary>
+		/// <remarks>
+		/// A plain read, no locks: the pump's check before <see cref="TryBackfillArenaSeatAsync"/>,
+		/// whose transaction locks and scans, and which used to run for every arena key with
+		/// local waiters on every pump whether or not any window was open. A key this reports is
+		/// only a candidate; the transaction re-decides everything under its lock.
+		/// </remarks>
+		/// <param name="worldServerId">World server to look on.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The arena keys (scene type PvP, scene name, format) with an opening, each once.</returns>
+		Task<DatabaseResult<IReadOnlyList<GroupFinderQueueKey>>> FetchBackfillOpeningsAsync(long worldServerId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Marks one waiting character as matched into an existing instance, for the late-join
@@ -287,7 +322,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<bool>> ReleaseClaimAsync(long characterId, long instanceId, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Removes rows whose heartbeat stopped before <paramref name="pulsedBeforeUtc"/>.
+		/// Removes rows whose heartbeat is older than <paramref name="staleAfter"/>.
 		/// </summary>
 		/// <remarks>
 		/// Bounded per call so a large backlog drains across several sweeps rather than in one
@@ -295,10 +330,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// placed in a party it will never be transferred into, and the party system's own absent-
 		/// member handling takes it from there.
 		/// </remarks>
-		/// <param name="pulsedBeforeUtc">Rows whose heartbeat is older than this are eligible.</param>
+		/// <param name="staleAfter">Rows whose heartbeat is older than this are eligible.</param>
 		/// <param name="maxRows">Upper bound on rows removed in one call.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>Rows deleted.</returns>
-		Task<DatabaseResult<int>> DeleteStaleAsync(DateTime pulsedBeforeUtc, int maxRows = 256, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<int>> DeleteStaleAsync(TimeSpan staleAfter, int maxRows = 256, CancellationToken cancellationToken = default);
 	}
 }

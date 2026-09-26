@@ -73,6 +73,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// negative or beyond a day; a named server does not exist; or a named server is already
 		/// inside a live window, since two plans would fight over one deadline column.
 		/// </para>
+		/// <para>
+		/// Safe to retry after a lost commit: the plan carries a request key taken once per call,
+		/// and an attempt that finds its own key already written returns that window rather than
+		/// counting it as the live window its servers clash with.
+		/// </para>
 		/// </remarks>
 		Task<DatabaseResult<MaintenanceOperationData>> StartAsync(
 			string name,

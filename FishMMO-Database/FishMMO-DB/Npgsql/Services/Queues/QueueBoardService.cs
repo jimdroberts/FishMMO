@@ -48,8 +48,40 @@ namespace FishMMO.Database.Npgsql.Services
 		/// <summary>The value <c>group_finder_queue.status</c> holds for a matched row.</summary>
 		private const int GroupFinderMatched = (int)Data.Enums.GroupFinderQueueStatus.Matched;
 
+		/// <summary>
+		/// The database's UTC wall time, the clock that stamps the group finder's
+		/// <c>time_created</c> and <c>last_pulse</c>, and the email and SMS queues'
+		/// <c>created_at</c> (a column default: nothing inserts those rows with a value of its own).
+		/// </summary>
+		/// <remarks>
+		/// <c>now()</c> is the statement's start, so every age one statement computes is measured
+		/// against the same instant. <c>AT TIME ZONE 'UTC'</c> because the columns hold UTC without
+		/// a zone and the database's own zone is whatever it was installed with.
+		/// </remarks>
+		private const string DatabaseUtcNowSql = "(now() AT TIME ZONE 'UTC')";
+
 		public QueueBoardService(INpgsqlDbContextFactory dbContextFactory) : base(dbContextFactory)
 		{
+		}
+
+		/// <summary>
+		/// The database's UTC wall time, read as its own statement after a page's other reads.
+		/// </summary>
+		/// <remarks>
+		/// After them, so every stamp those reads saw was written before this instant: a row is
+		/// stamped at the start of the transaction that inserts it, which committed before the
+		/// read that saw it began. The email and SMS pages' ages are differences against this
+		/// instant, so both sides of each subtraction come from the database clock.
+		/// </remarks>
+		private static async Task<DateTime> ReadDatabaseUtcNowAsync(NpgsqlDbContext dbContext, CancellationToken cancellationToken)
+		{
+			var rows = await ReadRowsAsync(
+				dbContext,
+				$"SELECT {DatabaseUtcNowSql}",
+				Array.Empty<object>(),
+				reader => DateTime.SpecifyKind(reader.GetDateTime(0), DateTimeKind.Utc),
+				cancellationToken).ConfigureAwait(false);
+			return rows[0];
 		}
 
 		/// <inheritdoc/>
@@ -171,6 +203,13 @@ namespace FishMMO.Database.Npgsql.Services
 					row.State = ClassifyEmail(row.SentAt, row.ClaimedAt, row.LastError);
 				}
 
+				/* The instant every age on the page is measured against, by the clock that stamped
+				 * created_at. This was the panel's DateTime.UtcNow: a panel host running ten minutes
+				 * fast raised the "nothing is sending verification mail" alarm over a queue that
+				 * had drained in seconds, and one running slow kept it quiet through a real
+				 * outage — the one signal this page exists to give. */
+				DateTime readAt = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+
 				return new EmailQueuePage
 				{
 					Items = rows,
@@ -180,7 +219,7 @@ namespace FishMMO.Database.Npgsql.Services
 					Counts = counts,
 					OldestPendingCreatedAt = oldestPending,
 					OldestUnsentCreatedAt = oldestUnsent,
-					ReadAtUtc = DateTime.UtcNow,
+					ReadAtUtc = readAt,
 				};
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
@@ -420,6 +459,9 @@ namespace FishMMO.Database.Npgsql.Services
 					row.State = ClassifyEmail(row.SentAt, row.ClaimedAt, row.LastError);
 				}
 
+				// By the database clock, for the reason the email page's is.
+				DateTime readAt = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+
 				return new SmsQueuePage
 				{
 					Items = rows,
@@ -429,7 +471,7 @@ namespace FishMMO.Database.Npgsql.Services
 					Counts = counts,
 					OldestPendingCreatedAt = oldestPending,
 					OldestUnsentCreatedAt = oldestUnsent,
-					ReadAtUtc = DateTime.UtcNow,
+					ReadAtUtc = readAt,
 				};
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
@@ -557,39 +599,71 @@ namespace FishMMO.Database.Npgsql.Services
 
 				int total = await q.CountAsync(cancellationToken).ConfigureAwait(false);
 
-				/* Left joined to characters, not inner joined. The foreign key cascades on
+				/* Raw SQL so every age on the page is measured by the database clock.
+				 *
+				 * time_created and last_pulse are stamped by the database, and the panel used to
+				 * subtract them from its own DateTime.UtcNow: a panel host running a minute fast
+				 * showed every row of a healthy queue as stale, and one running slow hid a scene
+				 * server that had died with players queued on it, which is the one thing the
+				 * staleness column is for. Both ages are taken against one now() inside this
+				 * statement, so the rows on a page are also measured against the same instant.
+				 *
+				 * Left joined to characters, not inner joined. The foreign key cascades on
 				 * delete, so a queue row without a character should be impossible — which is
 				 * exactly why an inner join is the wrong shape here: it would answer an
 				 * impossible row by silently not listing it, and an operator counting rows
 				 * against the count above would see a discrepancy with no cause on screen. */
-				var rows = await (
-					from g in q
-					join c in dbContext.Characters.AsNoTracking() on g.CharacterID equals c.ID into joined
-					from c in joined.DefaultIfEmpty()
-					// Longest waiting first: the head of the queue is the question being asked.
-					orderby g.TimeCreated, g.ID
-					select new GroupFinderQueueAdminData
+				string queueTable = dbContext.GetTableName<GroupFinderQueueEntity>();
+				string characterTable = dbContext.GetTableName<CharacterEntity>();
+				var parameters = new List<object> { (page - 1) * pageSize, pageSize };
+				string statusFilter = string.Empty;
+				if (status.HasValue)
+				{
+					parameters.Add(status.Value);
+					statusFilter = "WHERE g.status = {2}";
+				}
+
+				var sql = $@"SELECT g.id, g.world_server_id, g.character_id, c.name, c.account,
+						g.scene_type, g.scene_name, g.difficulty, g.status, g.group_id, g.party_id, g.instance_id,
+						g.time_created, g.last_pulse, g.time_matched,
+						GREATEST(0.0, EXTRACT(EPOCH FROM ({DatabaseUtcNowSql} - g.time_created))::double precision),
+						GREATEST(0.0, EXTRACT(EPOCH FROM ({DatabaseUtcNowSql} - g.last_pulse))::double precision)
+					FROM {queueTable} AS g
+					LEFT JOIN {characterTable} AS c ON c.id = g.character_id
+					{statusFilter}
+					-- Longest waiting first: the head of the queue is the question being asked.
+					ORDER BY g.time_created, g.id
+					OFFSET {{0}} LIMIT {{1}}";
+
+				var rows = await ReadRowsAsync(
+					dbContext,
+					sql,
+					parameters.ToArray(),
+					reader => new GroupFinderQueueAdminData
 					{
-						ID = g.ID,
-						WorldServerID = g.WorldServerID,
-						CharacterID = g.CharacterID,
-						CharacterName = c == null ? null : c.Name,
-						AccountName = c == null ? null : c.Account,
-						SceneType = g.SceneType,
-						SceneName = g.SceneName,
-						Difficulty = g.Difficulty,
-						Status = g.Status,
-						GroupID = g.GroupID,
-						PartyID = g.PartyID,
-						InstanceID = g.InstanceID,
-						TimeCreated = g.TimeCreated,
-						LastPulse = g.LastPulse,
-						TimeMatched = g.TimeMatched,
-					})
-					.Skip((page - 1) * pageSize)
-					.Take(pageSize)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
+						ID = reader.GetInt64(0),
+						WorldServerID = reader.GetInt64(1),
+						CharacterID = reader.GetInt64(2),
+						CharacterName = reader.IsDBNull(3) ? null : reader.GetString(3),
+						AccountName = reader.IsDBNull(4) ? null : reader.GetString(4),
+						SceneType = reader.GetInt32(5),
+						SceneName = reader.GetString(6),
+						Difficulty = reader.GetInt32(7),
+						Status = reader.GetInt32(8),
+						GroupID = reader.GetInt64(9),
+						PartyID = reader.GetInt64(10),
+						InstanceID = reader.GetInt64(11),
+						TimeCreated = DateTime.SpecifyKind(reader.GetDateTime(12), DateTimeKind.Utc),
+						LastPulse = DateTime.SpecifyKind(reader.GetDateTime(13), DateTimeKind.Utc),
+						TimeMatched = reader.IsDBNull(14) ? (DateTime?)null : DateTime.SpecifyKind(reader.GetDateTime(14), DateTimeKind.Utc),
+						WaitSeconds = reader.IsDBNull(15) ? 0.0 : reader.GetDouble(15),
+						PulseAgeSeconds = reader.IsDBNull(16) ? 0.0 : reader.GetDouble(16),
+					},
+					cancellationToken).ConfigureAwait(false);
+
+				// The read instant by the same clock, for the page to show; the ages above do not
+				// depend on it.
+				DateTime readAt = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 
 				return new GroupFinderQueuePage
 				{
@@ -598,7 +672,7 @@ namespace FishMMO.Database.Npgsql.Services
 					PageSize = pageSize,
 					TotalCount = total,
 					Counts = counts,
-					ReadAtUtc = DateTime.UtcNow,
+					ReadAtUtc = readAt,
 				};
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}

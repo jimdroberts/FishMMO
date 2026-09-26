@@ -27,7 +27,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Periodic callback for saving all characters to the database.
 		/// </summary>
-		/// <param name="deltaTime">Delta time parameter (unused).</param>
+		/// <remarks>
+		/// <para>
+		/// <b>The save gate is released on every exit that does not hand it to the async save.</b>
+		/// It is taken before the capture loop, and the capture loop used to have no per-character
+		/// catch and no <c>finally</c>: one exception from one character — a destroyed transform, a
+		/// controller in a bad state — left the gate set, and every later pass returned at it. Saves
+		/// stopped for every resident until the process restarted, and after the first error nothing
+		/// was logged at all. Now a character that fails to capture is skipped and reported through
+		/// <see cref="periodicCaptureFaults"/>, and the gate is released in a <c>finally</c> unless
+		/// the save that owns it was enqueued.
+		/// </para>
+		/// </remarks>
+		/// <param name="deltaTime">Seconds since the last pass (unused).</param>
 		private void OnPeriodicSave(float deltaTime)
 		{
 			if (!Initialized || Server == null)
@@ -60,35 +72,106 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			// Snapshot character data on the main thread, pairing each with the claim this
-			// server holds for it so the write can prove ownership.
-			var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership)>(data.CharactersByID.Count);
-			var subEntities = new SubEntitySnapshot(data.CharactersByID.Count);
-			foreach (var character in data.CharactersByID.Values)
+			bool handedOff = false;
+			try
+			{
+				// Snapshot character data on the main thread, pairing each with the claim this
+				// server holds for it so the write can prove ownership.
+				var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership)>(data.CharactersByID.Count);
+				var subEntities = new SubEntitySnapshot(data.CharactersByID.Count);
+				double now = Time.realtimeSinceStartupAsDouble;
+				int failed = 0;
+				foreach (var character in data.CharactersByID.Values)
+				{
+					if (!TryCapturePeriodicSnapshot(data, character, characterDataList, subEntities, now))
+					{
+						++failed;
+					}
+				}
+
+				// Combat-logout bodies have no connection and so are absent from the map above.
+				failed += AppendLingeringCharacterSnapshots(data, characterDataList, subEntities, now);
+
+				if (failed == 0)
+				{
+					periodicCaptureFaults.ReportSuccess();
+				}
+
+				// Whatever was captured is written, whether or not every character captured.
+				EnqueueSubEntitySaves(subEntities);
+
+				if (characterDataList.Count == 0)
+				{
+					return;
+				}
+
+				if (EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList)))
+				{
+					handedOff = true;
+				}
+				else
+				{
+					Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
+				}
+			}
+			finally
+			{
+				// SaveAllCharactersAsync releases the gate when it finishes; nothing else will.
+				if (!handedOff)
+				{
+					runtimeData.EndSave();
+				}
+			}
+		}
+
+		/// <summary>
+		/// Failures of the periodic capture, one report for the whole pass: the first in full, then
+		/// counted summaries, then a recovery line. Main thread only.
+		/// </summary>
+		private readonly RepeatingFaultLog periodicCaptureFaults = new RepeatingFaultLog("CharacterSystem", "Periodic save capture");
+
+		/// <summary>
+		/// Captures one character's row and sub-entity rows for the periodic save. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// A character that throws is skipped, and only it: the row is captured first and is kept even
+		/// if a sub-entity table then fails, since every row captured is a valid snapshot of its own
+		/// table. The next pass tries the character again.
+		/// </remarks>
+		/// <returns>False when the capture threw.</returns>
+		private bool TryCapturePeriodicSnapshot(
+			ICharacterMappingData<NetworkConnection> data,
+			IPlayerCharacter character,
+			List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterDataList,
+			SubEntitySnapshot subEntities,
+			double now)
+		{
+			try
 			{
 				CharacterSessionInfo? ownership = data.SessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
 					? held
 					: (CharacterSessionInfo?)null;
 				characterDataList.Add((BuildCharacterData(character), ownership));
-				AppendSubEntities(character, subEntities);
+				AppendSubEntities(character, subEntities, ownership);
+				return true;
 			}
-
-			// Combat-logout bodies have no connection and so are absent from the map above.
-			AppendLingeringCharacterSnapshots(data, characterDataList, subEntities);
-
-			if (characterDataList.Count == 0)
+			catch (Exception ex)
 			{
-				runtimeData.EndSave();
-				return;
+				// Recorded by the exception, not the character, so one fault across many characters
+				// is one line and a count rather than a line each.
+				switch (periodicCaptureFaults.Record(ex, now, out int repeats))
+				{
+					case RepeatingFaultLog.Decision.LogFull:
+						Log.Error("CharacterSystem", $"Periodic save capture skipped character {character?.ID} this pass: {ex}");
+						break;
+					case RepeatingFaultLog.Decision.LogSummary:
+						Log.Error("CharacterSystem",
+							$"Periodic save capture skipped {repeats} more character(s) with the same exception " +
+							$"({periodicCaptureFaults.ConsecutiveFailures} in a row), most recently {character?.ID}: {ex.GetType().Name}: {ex.Message}");
+						break;
+				}
+				return false;
 			}
-
-			if (!EnqueueAsyncWork(() => SaveAllCharactersAsync(characterDataList)))
-			{
-				runtimeData.EndSave();
-				Log.Warning("CharacterSystem", "OnPeriodicSave: Failed to enqueue SaveAllCharactersAsync work item.");
-			}
-
-			EnqueueSubEntitySaves(subEntities);
 		}
 
 		/// <summary>
@@ -105,7 +188,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private sealed class SubEntitySnapshot
 		{
-			public readonly List<CharacterBuffData> Buffs;
+			/* No buffs. A character's buffs are one set that is written with its row — see
+			 * CaptureBuffSet and CharacterData.Buffs — so they travel in the CharacterData every one
+			 * of these save paths already carries, retry queue included. */
 			public readonly List<CharacterAttributeData> Attributes;
 			public readonly List<CharacterAbilityData> Abilities;
 			public readonly List<PetSnapshot> Pets;
@@ -114,13 +199,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly List<CharacterFactionData> Factions;
 			public readonly List<CharacterArchetypeData> Archetypes;
 			public readonly List<CharacterKnownAbilityData> KnownAbilities;
+			/// <summary>
+			/// A departing character's whole hotkey bar, or nothing. Captured only by the departure
+			/// paths (<see cref="AppendDepartureSubEntities"/>); a resident's changes are written by
+			/// the hotkey system's own pump. See <c>IHotkeySystemRuntimeData.TakeDepartingBar</c>.
+			/// </summary>
+			public readonly List<CharacterHotkeyData> Hotkeys;
 			/// <summary>Each character's knowledge version as captured, keyed by character. See MarkKnowledgePersisted.</summary>
 			public readonly Dictionary<long, long> KnowledgeVersions;
+			/// <summary>
+			/// The session claim each character's rows were captured under, keyed by character. Every
+			/// write of these rows quotes it, so a row lands only while that claim is still held — see
+			/// <c>CharacterWriteGate</c>. A character is captured only with its claim, so every row here
+			/// has one.
+			/// </summary>
+			public readonly Dictionary<long, CharacterSessionLeaseData> Claims;
 
 			public SubEntitySnapshot(int characterCount = 1)
 			{
 				int n = Math.Max(1, characterCount);
-				Buffs = new List<CharacterBuffData>(n * 4);
 				Attributes = new List<CharacterAttributeData>(n * 16);
 				Abilities = new List<CharacterAbilityData>(n * 8);
 				Pets = new List<PetSnapshot>(n);
@@ -129,18 +226,122 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Factions = new List<CharacterFactionData>(n * 8);
 				Archetypes = new List<CharacterArchetypeData>(n);
 				KnownAbilities = new List<CharacterKnownAbilityData>(n * 8);
+				Hotkeys = new List<CharacterHotkeyData>();
 				KnowledgeVersions = new Dictionary<long, long>(n);
+				Claims = new Dictionary<long, CharacterSessionLeaseData>(n);
+			}
+
+			/// <summary>
+			/// A copy of <see cref="Claims"/> for one write, so the write never enumerates a dictionary
+			/// that could change under it.
+			/// </summary>
+			public IReadOnlyCollection<CharacterSessionLeaseData> ClaimList()
+			{
+				return new List<CharacterSessionLeaseData>(Claims.Values);
+			}
+
+			/// <summary>
+			/// Appends every row of another character's snapshot, so a flush that speaks for many
+			/// characters writes each table once rather than once per character.
+			/// </summary>
+			/// <remarks>
+			/// <b>One claim per character, the first one recorded.</b> The claims are keyed by
+			/// character, so appending a character's rows captured under a DIFFERENT claim — an
+			/// older session's rows still queued for retry beside the current session's — would
+			/// write one session's rows under the other's claim, where an older session's higher
+			/// version could beat the newer one's rows. Those rows are left out instead; under their
+			/// own claim the gate would only refuse them. The shutdown flush appends resident
+			/// characters before the retry queue, so the current session wins.
+			/// </remarks>
+			/// <param name="other">The snapshot to take the rows of. Not modified.</param>
+			public void AddFrom(SubEntitySnapshot other)
+			{
+				if (other == null)
+				{
+					return;
+				}
+
+				HashSet<long> conflicting = null;
+				foreach (KeyValuePair<long, CharacterSessionLeaseData> claim in other.Claims)
+				{
+					if (Claims.TryGetValue(claim.Key, out CharacterSessionLeaseData held) &&
+						(held.OwnerServerID != claim.Value.OwnerServerID || held.OwnerToken != claim.Value.OwnerToken))
+					{
+						(conflicting ??= new HashSet<long>()).Add(claim.Key);
+						continue;
+					}
+					Claims[claim.Key] = claim.Value;
+				}
+
+				if (conflicting == null)
+				{
+					Attributes.AddRange(other.Attributes);
+					Abilities.AddRange(other.Abilities);
+					Pets.AddRange(other.Pets);
+					Achievements.AddRange(other.Achievements);
+					Waypoints.AddRange(other.Waypoints);
+					Factions.AddRange(other.Factions);
+					Archetypes.AddRange(other.Archetypes);
+					KnownAbilities.AddRange(other.KnownAbilities);
+					Hotkeys.AddRange(other.Hotkeys);
+				}
+				else
+				{
+					Attributes.AddRange(other.Attributes.Where(r => !conflicting.Contains(r.CharacterID)));
+					Abilities.AddRange(other.Abilities.Where(r => !conflicting.Contains(r.CharacterID)));
+					Pets.AddRange(other.Pets.Where(r => !conflicting.Contains(r.Pet.CharacterID)));
+					Achievements.AddRange(other.Achievements.Where(r => !conflicting.Contains(r.CharacterID)));
+					Waypoints.AddRange(other.Waypoints.Where(r => !conflicting.Contains(r.CharacterID)));
+					Factions.AddRange(other.Factions.Where(r => !conflicting.Contains(r.CharacterID)));
+					Archetypes.AddRange(other.Archetypes.Where(r => !conflicting.Contains(r.CharacterID)));
+					KnownAbilities.AddRange(other.KnownAbilities.Where(r => !conflicting.Contains(r.CharacterID)));
+					Hotkeys.AddRange(other.Hotkeys.Where(r => !conflicting.Contains(r.CharacterID)));
+				}
+
+				foreach (KeyValuePair<long, long> knowledge in other.KnowledgeVersions)
+				{
+					if (conflicting == null || !conflicting.Contains(knowledge.Key))
+					{
+						KnowledgeVersions[knowledge.Key] = knowledge.Value;
+					}
+				}
 			}
 		}
 
 		/// <summary>
-		/// Captures every dirty sub-entity row of one character. Main thread only; must run
-		/// after <see cref="BuildCharacterData"/> for the same character (the pet rows share its
-		/// version counter).
+		/// Captures every dirty sub-entity row of one character, with the claim they will be written
+		/// under. Main thread only; must run after <see cref="BuildCharacterData"/> for the same
+		/// character (the pet rows share its version counter).
 		/// </summary>
-		private void AppendSubEntities(IPlayerCharacter character, SubEntitySnapshot snapshot)
+		/// <remarks>
+		/// <para>
+		/// <b>No claim, no capture.</b> Every sub-entity write is ownership-gated
+		/// (<c>CharacterWriteGate</c>): a row lands only while the claim it quotes is still held, so
+		/// that a write captured by a session released a moment later cannot land over the next
+		/// owner's state, an offline debit or a trade's last settlement. A character this server
+		/// holds no claim for has nothing it may write, and capturing it anyway would bump its
+		/// versions and mark its rows pending for a write that is bound to be refused. Left alone,
+		/// its dirty marks stay set. Every resident, lingering or departing character holds one, so
+		/// this is an anomaly and says so.
+		/// </para>
+		/// <para>
+		/// The claim is passed rather than looked up because the departure paths take it out of
+		/// <c>SessionTokens</c> before they capture.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The character.</param>
+		/// <param name="snapshot">Destination for its rows.</param>
+		/// <param name="claim">The claim this server holds for it, or null when it holds none.</param>
+		private void AppendSubEntities(IPlayerCharacter character, SubEntitySnapshot snapshot, CharacterSessionInfo? claim)
 		{
-			AppendBuffData(character, snapshot.Buffs);
+			if (!claim.HasValue)
+			{
+				Log.Warning("CharacterSystem",
+					$"Character {character.ID} has no session claim on this server; its sub-entity rows were not captured and stay dirty.");
+				return;
+			}
+			snapshot.Claims[character.ID] = new CharacterSessionLeaseData(character.ID, claim.Value.ServerID, claim.Value.Token);
+
 			AppendAttributeData(character, snapshot.Attributes);
 			AppendAbilityData(character, snapshot.Abilities);
 			AppendPetData(character, snapshot.Pets);
@@ -149,6 +350,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendFactionData(character, snapshot.Factions);
 			AppendArchetypeData(character, snapshot.Archetypes);
 			AppendKnownAbilityData(character, snapshot.KnownAbilities, snapshot.KnowledgeVersions);
+		}
+
+		/// <summary>
+		/// <see cref="AppendSubEntities"/> for a character that is leaving this server's hands —
+		/// logging out, transferring, a combat-logout body ending or being reclaimed, the shutdown —
+		/// plus the rows only a departure writes. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The hotkey bar.</b> A resident's bar is written by the hotkey system's pump, a few
+		/// seconds after each change, under the claim it captures then. A departing character's
+		/// bar is written here instead, whole and from the live bar, inside the work that ends in
+		/// the release — the same move that folded the item flush into the save-and-release. It
+		/// used to be flushed from <c>OnDisconnect</c>, a write of its own that only the lane order
+		/// kept ahead of the release (not the unkeyed retry queue's, nor the shutdown flush's,
+		/// which runs after the hotkey system has already torn down). Every hotkey write is
+		/// ownership-gated now, so a write that lands after its release is refused and lost, not
+		/// merely late.
+		/// </para>
+		/// <para>
+		/// Only with a claim: <see cref="AppendSubEntities"/> records it first and captures nothing
+		/// without one, and the bar follows the same rule.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The departing character.</param>
+		/// <param name="snapshot">Destination for its rows.</param>
+		/// <param name="claim">The claim this server holds for it, or null when it holds none.</param>
+		private void AppendDepartureSubEntities(IPlayerCharacter character, SubEntitySnapshot snapshot, CharacterSessionInfo? claim)
+		{
+			AppendSubEntities(character, snapshot, claim);
+			if (!claim.HasValue ||
+				Server?.DataContainerRegistry == null ||
+				!Server.DataContainerRegistry.TryGet(out IHotkeySystemRuntimeData hotkeyData))
+			{
+				return;
+			}
+
+			List<CharacterHotkeyData> bar = hotkeyData.TakeDepartingBar(character.ID, character.Hotkeys);
+			if (bar != null)
+			{
+				snapshot.Hotkeys.AddRange(bar);
+			}
 		}
 
 		/// <summary>
@@ -178,35 +421,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void EnqueueSubEntitySaves(SubEntitySnapshot s)
 		{
-			if (s.Buffs.Count > 0) EnqueuePersistence(() => SaveBuffsAsync(s.Buffs));
+			// Every table quotes the claims its rows were captured under. See AppendSubEntities.
+			IReadOnlyCollection<CharacterSessionLeaseData> claims = s.ClaimList();
 			if (s.Attributes.Count > 0)
 			{
-				/* Keyed by character, like the abilities below, so a character's attribute rows queue
-				 * FIFO with its item batches — which write the same rows. Unkeyed, a periodic save
-				 * captured AFTER an equip or a trade could land BEFORE it, and its newer versions then
-				 * superseded the batch's attribute rows. The item layer rightly treats a short write as
-				 * a failure, so the equip or the trade was rolled back and reconciled for nothing but
-				 * lane order. One statement per character rather than one per pass is the price. */
-				foreach (var group in s.Attributes.GroupBy(a => a.CharacterID))
-				{
-					List<CharacterAttributeData> rows = group.ToList();
-					EnqueuePersistence(() => SaveAttributesAsync(rows), group.Key);
-				}
+				/* One statement for the whole pass. Regeneration and combat mark nearly every
+				 * resident's resources dirty, so this used to be one transaction per resident every
+				 * pass — BEGIN, SELECT, UNNEST upsert, COMMIT, each — in the same burst as the item
+				 * snapshot and the character save.
+				 *
+				 * It was keyed per character so a character's attribute rows would queue FIFO with its
+				 * item batches, which write the same rows: an unkeyed pass captured after an equip
+				 * could land before it, supersede the batch's attribute rows, and the item layer
+				 * treated that short write as a failure and rolled the equip back. The item layer now
+				 * counts a superseded attribute row as written (CharacterInventorySystem
+				 * .RequireAttemptedWrite) — the newer row was captured later from the same memory — so
+				 * lane order no longer matters. There is no exception left: a trade credits memory at its
+				 * apply (TradeCurrencySettlement), and AppendAttributeData leaves an attribute alone while
+				 * that trade is settling.
+				 *
+				 * The service leaves out the rows of a character whose row has gone, or whose claim
+				 * this server no longer holds (the ownership gate), rather than failing everyone's with
+				 * it; those count as Filtered, and SaveAttributesAsync then keeps every mark for this
+				 * pass, so nothing is cleared that was not written. */
+				EnqueuePersistence(() => SaveAttributesAsync(s.Attributes, claims));
 			}
 			if (s.Abilities.Count > 0)
 			{
 				foreach (var group in s.Abilities.GroupBy(a => a.CharacterID))
 				{
 					List<CharacterAbilityData> rows = group.ToList();
-					EnqueuePersistence(() => SaveAbilitiesAsync(rows), group.Key);
+					EnqueuePersistence(() => SaveAbilitiesAsync(rows, claims), group.Key);
 				}
 			}
-			if (s.Pets.Count > 0) EnqueuePersistence(() => SavePetsAsync(s.Pets));
-			if (s.Achievements.Count > 0) EnqueuePersistence(() => SaveAchievementsAsync(s.Achievements));
+			if (s.Pets.Count > 0) EnqueuePersistence(() => SavePetsAsync(s.Pets, claims));
+			if (s.Achievements.Count > 0) EnqueuePersistence(() => SaveAchievementsAsync(s.Achievements, claims));
 			if (s.Waypoints.Count > 0) EnqueuePersistence(() => SaveWaypointsAsync(s.Waypoints));
-			if (s.Factions.Count > 0) EnqueuePersistence(() => SaveFactionsAsync(s.Factions));
-			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes));
-			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions));
+			if (s.Factions.Count > 0) EnqueuePersistence(() => SaveFactionsAsync(s.Factions, claims));
+			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes, claims));
+			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims));
+			if (s.Hotkeys.Count > 0)
+			{
+				// Keyed like the abilities, behind any bar the hotkey pump queued for the character.
+				foreach (var group in s.Hotkeys.GroupBy(h => h.CharacterID))
+				{
+					List<CharacterHotkeyData> rows = group.ToList();
+					EnqueuePersistence(() => SaveHotkeysAsync(rows, claims), group.Key);
+				}
+			}
 		}
 
 		/// <summary>
@@ -223,17 +485,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <b>Transient failures are retried here, before the release, and nowhere else.</b> These
 		/// paths hand the character on: its dirty marks leave with the despawned object, so unlike
 		/// the periodic save there is no next pass to carry a failed table. Retrying after the
-		/// release is not an option either — these tables carry no ownership check, and the next
-		/// owner's versions restart from the rows it loaded, so a late write of ours could land
+		/// release is not an option either — every table is ownership-gated now, so a write that
+		/// quotes a released claim is refused, and that refusal is the point: the next owner's
+		/// versions restart from the rows it loaded, so a late write of ours would otherwise land
 		/// over state it has since changed. A bounded retry inside the claim is the only safe place.
 		/// </para>
 		/// </remarks>
 		/// <param name="s">The snapshot to write.</param>
 		/// <param name="characterID">The character it belongs to, for the log.</param>
-		private async Task SaveSubEntitiesSequentiallyAsync(SubEntitySnapshot s, long characterID)
+		/// <returns>
+		/// True when every table reached a final outcome — written, or refused for a reason another
+		/// attempt cannot change; false when at least one was given up on while still worth retrying.
+		/// </returns>
+		private async Task<bool> SaveSubEntitiesSequentiallyAsync(SubEntitySnapshot s, long characterID)
 		{
-			if (s.Attributes.Count > 0) await SaveWithRetryAsync(() => SaveAttributesAsync(s.Attributes), "attributes", characterID);
-			if (s.Buffs.Count > 0) await SaveWithRetryAsync(() => SaveBuffsAsync(s.Buffs), "buffs", characterID);
+			// Every table quotes the claims its rows were captured under. See AppendSubEntities.
+			IReadOnlyCollection<CharacterSessionLeaseData> claims = s.ClaimList();
+			bool done = true;
+			if (s.Attributes.Count > 0) done &= await SaveWithRetryAsync(() => SaveAttributesAsync(s.Attributes, claims), "attributes", characterID);
 			if (s.Abilities.Count > 0)
 			{
 				/* Grouped by owning character for the reason EnqueueSubEntitySaves gives: the ability
@@ -242,15 +511,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				foreach (var group in s.Abilities.GroupBy(a => a.CharacterID))
 				{
 					List<CharacterAbilityData> rows = group.ToList();
-					await SaveWithRetryAsync(() => SaveAbilitiesAsync(rows), "abilities", characterID);
+					done &= await SaveWithRetryAsync(() => SaveAbilitiesAsync(rows, claims), "abilities", characterID);
 				}
 			}
-			if (s.Pets.Count > 0) await SaveWithRetryAsync(() => SavePetsAsync(s.Pets), "pet", characterID);
-			if (s.Achievements.Count > 0) await SaveWithRetryAsync(() => SaveAchievementsAsync(s.Achievements), "achievements", characterID);
-			if (s.Waypoints.Count > 0) await SaveWithRetryAsync(() => SaveWaypointsAsync(s.Waypoints), "waypoints", characterID);
-			if (s.Factions.Count > 0) await SaveWithRetryAsync(() => SaveFactionsAsync(s.Factions), "factions", characterID);
-			if (s.Archetypes.Count > 0) await SaveWithRetryAsync(() => SaveArchetypesAsync(s.Archetypes), "archetype", characterID);
-			if (s.KnownAbilities.Count > 0) await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions), "known abilities", characterID);
+			if (s.Pets.Count > 0) done &= await SaveWithRetryAsync(() => SavePetsAsync(s.Pets, claims), "pet", characterID);
+			if (s.Achievements.Count > 0) done &= await SaveWithRetryAsync(() => SaveAchievementsAsync(s.Achievements, claims), "achievements", characterID);
+			if (s.Waypoints.Count > 0) done &= await SaveWithRetryAsync(() => SaveWaypointsAsync(s.Waypoints), "waypoints", characterID);
+			if (s.Factions.Count > 0) done &= await SaveWithRetryAsync(() => SaveFactionsAsync(s.Factions, claims), "factions", characterID);
+			if (s.Archetypes.Count > 0) done &= await SaveWithRetryAsync(() => SaveArchetypesAsync(s.Archetypes, claims), "archetype", characterID);
+			if (s.KnownAbilities.Count > 0) done &= await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims), "known abilities", characterID);
+			if (s.Hotkeys.Count > 0) done &= await SaveWithRetryAsync(() => SaveHotkeysAsync(s.Hotkeys, claims), "hotkey bar", characterID);
+			return done;
 		}
 
 		/// <summary>Attempts one sub-entity table gets on the hand-off paths before it is given up on.</summary>
@@ -265,13 +536,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="write">The write. Returns false only for a failure worth another attempt.</param>
 		/// <param name="what">The table, for the log.</param>
 		/// <param name="characterID">The character, for the log.</param>
-		private static async Task SaveWithRetryAsync(Func<Task<bool>> write, string what, long characterID)
+		/// <returns>True when the write reached a final outcome; false when it was given up on.</returns>
+		private static async Task<bool> SaveWithRetryAsync(Func<Task<bool>> write, string what, long characterID)
 		{
 			for (int attempt = 1; attempt <= MaxSubEntityWriteAttempts; ++attempt)
 			{
 				if (await write())
 				{
-					return;
+					return true;
 				}
 				if (attempt < MaxSubEntityWriteAttempts)
 				{
@@ -280,8 +552,59 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Each attempt has logged its own failure; this is the line that says what it cost.
+			// Zero is the shutdown flush, which writes each table once for every character.
+			string whose = characterID > 0 ? $"Character {characterID}" : "Shutdown flush";
 			await Log.Error("CharacterSystem",
-				$"Character {characterID}: the {what} write failed {MaxSubEntityWriteAttempts} times on hand-off and was given up; the changes since the last successful save are lost.");
+				$"{whose}: the {what} write failed {MaxSubEntityWriteAttempts} times on hand-off and was given up; the changes since the last successful save are lost.");
+			return false;
+		}
+
+		/// <summary>
+		/// Runs a departing character's item flush until its outcome is final or the bounded
+		/// attempts run out.
+		/// </summary>
+		/// <remarks>
+		/// Only <see cref="ItemWriteOutcome.Retry"/> is attempted again; everything else is final.
+		/// A <see cref="ItemWriteOutcome.Retry"/> that survives every attempt is returned as it is,
+		/// and the caller keeps the claim — see <see cref="SaveAndReleaseCharacterAsync"/>. Running the
+		/// flush again is safe: it is a snapshot, and a rerun either restates the same rows or is
+		/// refused as superseded by something written after it.
+		/// </remarks>
+		/// <param name="flush">The flush, as <c>CaptureDespawnFlush</c> returned it.</param>
+		/// <param name="characterID">The character, for the log.</param>
+		/// <param name="cancellationToken">Stops further attempts; an attempt already running finishes.</param>
+		/// <returns>The last attempt's outcome.</returns>
+		private static async Task<ItemWriteOutcome> RunItemFlushWithRetryAsync(Func<Task<ItemWriteOutcome>> flush, long characterID, CancellationToken cancellationToken = default)
+		{
+			ItemWriteOutcome outcome = ItemWriteOutcome.Retry;
+			for (int attempt = 1; attempt <= MaxSubEntityWriteAttempts; ++attempt)
+			{
+				outcome = await RunItemFlushOnceAsync(flush, characterID);
+				if (outcome != ItemWriteOutcome.Retry)
+				{
+					return outcome;
+				}
+				if (attempt < MaxSubEntityWriteAttempts)
+				{
+					await Task.Delay(SubEntityWriteRetryStepMs * attempt, cancellationToken);
+				}
+			}
+			return outcome;
+		}
+
+		/// <summary>One attempt of a departing character's item flush. Never throws.</summary>
+		private static async Task<ItemWriteOutcome> RunItemFlushOnceAsync(Func<Task<ItemWriteOutcome>> flush, long characterID)
+		{
+			try
+			{
+				return await flush();
+			}
+			catch (Exception ex)
+			{
+				// ApplyItemBatchAsync does not throw; this is for a flush that failed to start.
+				await Log.Error("CharacterSystem", $"The item flush for character {characterID} threw: {ex}");
+				return ItemWriteOutcome.Retry;
+			}
 		}
 
 		/// <summary>
@@ -311,7 +634,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Snapshot character data on the main thread
 			CharacterData charData = BuildCharacterData(character);
 			var subEntities = new SubEntitySnapshot();
-			AppendSubEntities(character, subEntities);
+			AppendDepartureSubEntities(character, subEntities, sessionInfo);
 
 			/* The item flush is captured here, on the main thread, while the containers are still
 			 * live — and it is AWAITED inside the save-and-release below, before the release.
@@ -323,7 +646,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * the load that had already read the rows. Everything the player did with items in
 			 * the last minute was at the mercy of that race. The lease is passed explicitly for
 			 * the same reason the caller took the token out of SessionTokens first. */
-			Func<Task> itemFlush = null;
+			Func<Task<ItemWriteOutcome>> itemFlush = null;
 			if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 			{
 				itemFlush = inventorySystem.CaptureDespawnFlush(character, sessionInfo);
@@ -353,13 +676,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, subEntities, sessionInfo, itemFlush), charData.ID))
 			{
 				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID} — queued for retry.");
-				/* The item flush travels WITH the pending release, not on a separate lane: the
-				 * retry runs it before it hands the claim back, so a destination server that
-				 * claims first cannot make the flush fail its ownership assertion. The
-				 * sub-entity rows go out independently; their version guards make a late
-				 * arrival harmless rather than lossy. */
-				EnqueueSubEntitySaves(subEntities);
-				QueuePendingFlush(charData.ID, charData, sessionInfo, itemFlush);
+				/* The item flush AND the sub-entity rows travel with the pending release, not on
+				 * separate lanes: the retry writes them before it hands the claim back. Both are
+				 * ownership-gated, so either one landing after the release would be refused — a
+				 * destination server that claims first must not be able to make them fail. The
+				 * sub-entity rows used to go out independently, when a late arrival was merely
+				 * version-guarded; now it would be refused and lost. */
+				QueuePendingFlush(charData.ID, charData, sessionInfo, itemFlush, subEntities);
 			}
 
 			// Immediately log out for now.. we could add a timeout later on..?
@@ -367,7 +690,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				DispatchCharacterEvent(OnDespawnCharacter, conn, character, nameof(OnDespawnCharacter));
 
-				ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
+				/* Pooled out of the world scene (PersistentPool), not in place. FishNet leaves a
+				 * despawned object wherever it was, so a character that left a dungeon was pooled
+				 * inside the instance scene — and the instance unloads when its last occupant leaves,
+				 * destroying what the pool still counted. FishNet skips a destroyed entry, so nothing
+				 * breaks, but every exit threw away a pooled character and the next login paid for a
+				 * fresh instantiate of the whole prefab. Every path that pools a once-spawned
+				 * character goes through the one rule. */
+				PersistentPool.Despawn(Server.NetworkWrapper.NetworkManager, character.NetworkObject);
 			}
 		}
 
@@ -375,6 +705,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Builds a CharacterData DTO from an IPlayerCharacter, capturing all fields on the main thread.
 		/// Increments character.Version for sequence-based optimistic concurrency.
 		/// </summary>
+		/// <remarks>
+		/// The buff set is captured here, with the row, because it is written with the row — see
+		/// <see cref="CaptureBuffSet"/>.
+		/// </remarks>
 		private CharacterData BuildCharacterData(IPlayerCharacter character)
 		{
 			character.Version++;
@@ -443,7 +777,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				flags: character.Flags & ~(1 << (int)CharacterFlags.IsInCombat) & ~(1 << (int)CharacterFlags.IsLoaded),
 				version: character.Version,
 				timeCreated: character.TimeCreated,
-				lastSaved: DateTime.UtcNow
+				lastSaved: DateTime.UtcNow,
+				buffs: CaptureBuffSet(character, character.Version)
 			);
 		}
 
@@ -506,7 +841,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						new CharacterSessionLeaseData(charData.ID, ownership.Value.ServerID, ownership.Value.Token))
 					: await characterService.PersistAsync(charData);
 
-				if (result.IsSuccess)
+				/* DUPLICATE_REPLAY is this very write, already stored: the service raises it when the row
+				 * holds exactly the version being written — a transaction retried after its commit reply
+				 * was lost, or a pending-flush retry of a save that did land. It used to fall through to
+				 * Retry below, so the retry queue re-sent a stored snapshot until it gave up. */
+				if (result.IsSuccess || result.ErrorCode == DatabaseErrorCodes.DuplicateReplay)
 				{
 					return CharacterSaveOutcome.Saved;
 				}
@@ -554,7 +893,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterData charData,
 			SubEntitySnapshot subEntities,
 			CharacterSessionInfo? sessionInfo,
-			Func<Task> itemFlush = null)
+			Func<Task<ItemWriteOutcome>> itemFlush = null)
 		{
 			// Save first — we must persist while still holding the session lock, and prove that
 			// ownership in the same statement so a lapsed lease cannot overwrite the new owner.
@@ -562,10 +901,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			/* The claim is gone: another server owns this character and has been authoritative
 			 * since it loaded. The row write was refused for that reason, and everything below
-			 * would be written over the owner's state regardless — the sub-entity tables carry no
-			 * ownership check of their own (OnDeinitialize skips them for the same reason). There
-			 * is nothing to release either: the token in the row is somebody else's. The eviction
-			 * has already been requested; stop here. */
+			 * would only be refused by its own ownership gate (the shutdown flush skips it for the
+			 * same reason), so the round trips are saved. There is nothing to release either: the
+			 * token in the row is somebody else's. The eviction has already been requested; stop
+			 * here. */
 			if (outcome == CharacterSaveOutcome.OwnershipLost)
 			{
 				return;
@@ -575,16 +914,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/* Items before the release, for the same reason as the sub-entities below. The flush
 			 * is a full snapshot of all three containers in one transaction, captured on the main
 			 * thread at despawn; it proves ownership with the lease we still hold. */
-			if (itemFlush != null)
+			ItemWriteOutcome itemOutcome = itemFlush != null
+				? await RunItemFlushWithRetryAsync(itemFlush, charData.ID)
+				: ItemWriteOutcome.Written;
+
+			if (itemOutcome == ItemWriteOutcome.NotOwned)
 			{
-				try
-				{
-					await itemFlush();
-				}
-				catch (Exception ex)
-				{
-					await Log.Error("CharacterSystem", $"SaveAndReleaseCharacterAsync: item flush failed for character {charData.ID}: {ex}");
-				}
+				// As for the row above: another server is authoritative, so nothing more is ours to
+				// write or to release.
+				return;
 			}
 
 			/* Sub-entities before the release, not alongside it. Everything the next owner is
@@ -596,8 +934,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await SaveSubEntitiesSequentiallyAsync(subEntities, charData.ID);
 			}
 
-			// Release regardless of whether the save landed. Holding the claim back because a
-			// write failed would strand the character far more visibly than losing one save:
+			/* A flush that has still not landed keeps the claim.
+			 *
+			 * It used to be released regardless, and a failed flush looked like a successful one: the
+			 * character's item rows were left as the last snapshot or incremental write had them, and
+			 * the repair the failure filed was dropped because the character was no longer resident.
+			 * Once the claim is back, the next owner loads those rows and a late flush of ours would
+			 * be refused by its ownership check — so the only place the flush can still be delivered
+			 * is here, before the release. The retry queue runs it again and releases once it lands;
+			 * the player waits a few seconds for the claim rather than losing up to a minute of item
+			 * changes. The row save above is handled as before: released regardless, and retried
+			 * after, because the row carries its own ownership gate and version guard. */
+			if (itemOutcome == ItemWriteOutcome.Retry && sessionInfo.HasValue)
+			{
+				await Log.Warning("CharacterSystem",
+					$"SaveAndReleaseCharacterAsync: the item flush for character {charData.ID} has not landed; keeping its claim and retrying before the release.");
+				QueuePendingFlush(charData.ID, saved ? (CharacterData?)null : charData, sessionInfo, itemFlush);
+				return;
+			}
+
+			// Release regardless of whether the row save landed. Holding the claim back because a
+			// row write failed would strand the character far more visibly than losing one save:
 			// the destination scene server could not claim it and would kick the player.
 			bool released = true;
 			if (sessionInfo.HasValue)
@@ -615,37 +972,73 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Rows per <see cref="ICharacterService.PersistManyAsync"/> call. One transaction each, so this
+		/// bounds how long a batch holds its row locks as well as how large one statement grows.
+		/// </summary>
+		private const int CharacterRowsPerBatch = 500;
+
+		/// <summary>
 		/// Saves all characters asynchronously with a processing guard to prevent overlapping saves.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Session leases are deliberately not touched here. They are refreshed on their own
 		/// timer by <see cref="OnPeriodicSessionLeaseRefresh"/> so that liveness of a claim
-		/// never depends on how long this sequential save walk takes.
+		/// never depends on how long this save takes.
+		/// </para>
+		/// <para>
+		/// <b>One statement per <see cref="CharacterRowsPerBatch"/> characters, not one transaction
+		/// each.</b> This used to await the single-row save for every resident in turn — three round
+		/// trips a character, in series — so 500 residents cost about 1,500 round trips a pass, and at
+		/// a few thousand the pass outlasted the save interval, the next pass was skipped at the gate,
+		/// and the effective interval doubled. The batched save makes exactly the checks the single-row
+		/// one does, per row, and says per row what happened; a lost claim, a stale row or a deleted
+		/// character is handled for that character alone.
+		/// </para>
+		/// <para>
+		/// <b>Every resident is still written every pass, idle or not, and on purpose.</b> The row is
+		/// not skipped when unchanged: the lease refresh rewrites each resident's row every
+		/// <c>sessionLeaseRefreshRate</c> seconds regardless, so a skip would save no tuple churn, and
+		/// the row has writers outside this server's memory (a rename, the world server's scene bind)
+		/// whose values the next save is expected to overwrite with the owner's.
+		/// </para>
 		/// </remarks>
 		private async Task SaveAllCharactersAsync(List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterDataList)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out _))
+					!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
 				{
 					return;
 				}
 
-				foreach (var entry in characterDataList)
+				for (int offset = 0; offset < characterDataList.Count; offset += CharacterRowsPerBatch)
 				{
+					int count = Math.Min(CharacterRowsPerBatch, characterDataList.Count - offset);
+					var requests = new List<CharacterPersistRequest>(count);
+					for (int i = offset; i < offset + count; ++i)
+					{
+						requests.Add(ToPersistRequest(characterDataList[i].Data, characterDataList[i].Ownership));
+					}
+
 					try
 					{
-						/* Routed through SaveCharacterAsync rather than calling the service
-						 * directly, so the periodic save gets the same ownership gate and the
-						 * same lost-claim eviction as every other write path. This loop was the
-						 * main corruption vector: a server whose lease had lapsed kept rewriting
-						 * characters another server owned, every save interval, indefinitely. */
-						await SaveCharacterAsync(entry.Data, entry.Ownership);
+						DatabaseResult<IReadOnlyList<CharacterPersistResult>> result = await characterService.PersistManyAsync(requests);
+						if (!result.IsSuccess)
+						{
+							/* Nothing to retry here: the next pass captures every resident again at a
+							 * newer version. Each row's own save paths (logout, despawn) are unaffected. */
+							await Log.Warning("CharacterSystem",
+								$"SaveAllCharactersAsync: batch of {count} character rows failed: {result.ErrorCode} - {result.ErrorMessage}");
+							continue;
+						}
+
+						await ReportBatchedSaveAsync(result.Data, "SaveAllCharactersAsync");
 					}
 					catch (Exception ex)
 					{
-						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for character {entry.Data.ID}: {ex}");
+						await Log.Error("CharacterSystem", $"SaveAllCharactersAsync failed for a batch of {count} character rows: {ex}");
 					}
 				}
 			}
@@ -655,6 +1048,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					runtimeData.EndSave();
 				}
+			}
+		}
+
+		/// <summary>The batched-save request for one captured row, gated on the claim when there is one.</summary>
+		private static CharacterPersistRequest ToPersistRequest(CharacterData data, CharacterSessionInfo? ownership)
+		{
+			return new CharacterPersistRequest(
+				data,
+				ownership.HasValue
+					? new CharacterSessionLeaseData(data.ID, ownership.Value.ServerID, ownership.Value.Token)
+					: (CharacterSessionLeaseData?)null);
+		}
+
+		/// <summary>
+		/// Acts on the per-row outcomes of a batched character save: evicts every character whose
+		/// claim is gone, and reports the rest the way the single-row save did.
+		/// </summary>
+		/// <param name="results">The outcomes.</param>
+		/// <param name="caller">For the log.</param>
+		private async Task ReportBatchedSaveAsync(IReadOnlyList<CharacterPersistResult> results, string caller)
+		{
+			int stale = 0;
+			int missing = 0;
+			int invalid = 0;
+			for (int i = 0; i < results.Count; ++i)
+			{
+				CharacterPersistResult row = results[i];
+				switch (row.Outcome)
+				{
+					case CharacterPersistOutcome.OwnershipLost:
+						/* The claim is gone: another server owns this character now and has been
+						 * authoritative since it loaded. Everything accumulated here since the last
+						 * successful save is unpersistable; say so, then evict so we stop simulating a
+						 * character we cannot save. */
+						await Log.Error("CharacterSystem",
+							$"{caller}: character {row.CharacterID} is no longer claimed by this server; discarding its unsaved snapshot and evicting it. " +
+							"This means the session lease lapsed while the character was still resident — " +
+							"check for database outages or async-worker saturation lasting over the lease duration.");
+						RequestEviction(row.CharacterID, "session claim lost");
+						break;
+					case CharacterPersistOutcome.Stale:
+						++stale;
+						break;
+					case CharacterPersistOutcome.NotFound:
+						++missing;
+						break;
+					case CharacterPersistOutcome.Invalid:
+						++invalid;
+						break;
+				}
+			}
+
+			if (stale + missing + invalid > 0)
+			{
+				// Stale is routine (a logout or despawn overtook the pass); the other two are not.
+				await Log.Warning("CharacterSystem",
+					$"{caller}: {results.Count} character rows — {stale} stale (a newer write is stored), {missing} not found or deleted, {invalid} malformed.");
 			}
 		}
 
@@ -686,7 +1136,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void ReleaseSessionSafely(long characterID, long serverID, Guid sessionToken)
 		{
 			var sessionInfo = new CharacterSessionInfo(sessionToken, serverID);
-			if (!EnqueueAsyncWork(() => ReleaseSessionWithRetryAsync(characterID, sessionInfo)))
+			/* Keyed on the character, so the release queues behind every write already on its lane
+			 * — each quotes this claim and would be refused once it is handed back. See
+			 * RunPendingFlushAsync. */
+			if (!EnqueueAsyncWork(() => ReleaseSessionWithRetryAsync(characterID, sessionInfo), characterID))
 			{
 				Log.Warning("CharacterSystem", $"Failed to enqueue session release for character {characterID} — queued for retry.");
 				QueuePendingFlush(characterID, null, sessionInfo);
@@ -707,22 +1160,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		#region Pending Flush Retry
 
 		/// <summary>
-		/// A save and/or session release that could not be completed on its first attempt.
+		/// A save, an item flush and/or a session release that could not be completed on its first
+		/// attempt.
 		/// </summary>
+		/// <remarks>
+		/// <b>Every field is read and written under <see cref="Gate"/>.</b> The entry is shared between
+		/// the thread that merges new work into it (<see cref="QueuePendingFlush"/>) and the worker
+		/// running an attempt (<see cref="RunPendingFlushAsync"/>), and it used to be mutated by the
+		/// first while the second was deciding whether it was finished. A merge that landed between
+		/// that decision and the removal was removed with the entry — typically a new session's
+		/// release, which then waited out its lease. See <see cref="Retired"/>.
+		/// </remarks>
 		private sealed class PendingCharacterFlush
 		{
+			/// <summary>Guards every field below.</summary>
+			public readonly object Gate = new object();
 			/// <summary>Character snapshot still to persist, or null when only a release is outstanding.</summary>
 			public CharacterData? CharacterData;
 			/// <summary>Session ownership still to release, or null when only a save is outstanding.</summary>
 			public CharacterSessionInfo? Session;
 			/// <summary>The despawn item flush, run before the release it belongs to. Null once it has landed.</summary>
-			public Func<Task> ItemFlush;
-			/// <summary>Earliest UTC time the next attempt may run.</summary>
-			public DateTime NextAttemptUtc;
+			public Func<Task<ItemWriteOutcome>> ItemFlush;
+			/// <summary>
+			/// Sub-entity rows still to write before the release they belong to, or null. Replaced,
+			/// never mutated, while queued: an attempt writes the instance it read.
+			/// </summary>
+			public SubEntitySnapshot SubEntities;
+			/// <summary>
+			/// Earliest time the next attempt may run, in <see cref="MonotonicClock"/> seconds. The
+			/// backoff is a local duration: on the wall clock a host stepped back held every pending
+			/// release for the size of the step, with each one's session claim still out.
+			/// </summary>
+			public double NextAttemptAt;
 			/// <summary>Attempts made so far, used for backoff and for giving up.</summary>
 			public int Attempts;
-			/// <summary>1 while an attempt is running; 0 when idle.</summary>
-			public int InFlight;
+			/// <summary>True while an attempt is running.</summary>
+			public bool InFlight;
+			/// <summary>
+			/// Set, under <see cref="Gate"/>, as the entry is removed from the map. A merge that finds
+			/// it set has lost the race with the removal and puts its work in a fresh entry instead.
+			/// </summary>
+			public bool Retired;
 		}
 
 		/// <summary>
@@ -742,6 +1220,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const float PendingFlushRetryIntervalSeconds = 3f;
 
 		/// <summary>
+		/// Removes <paramref name="pending"/> from the map if it is still the entry there, retiring it
+		/// so no later merge can land in it. Call under <c>pending.Gate</c>.
+		/// </summary>
+		private void RetirePendingFlushLocked(long characterID, PendingCharacterFlush pending)
+		{
+			pending.Retired = true;
+			// Value-matched: a fresh entry that has replaced this one must stay.
+			((ICollection<KeyValuePair<long, PendingCharacterFlush>>)pendingFlushes)
+				.Remove(new KeyValuePair<long, PendingCharacterFlush>(characterID, pending));
+		}
+
+		/// <summary>
 		/// Empties the pending-flush queue and returns its contents, for a final synchronous
 		/// flush during shutdown.
 		/// </summary>
@@ -750,12 +1240,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var drained = new List<KeyValuePair<long, PendingCharacterFlush>>(pendingFlushes.Count);
 			foreach (var kvp in pendingFlushes)
 			{
-				if (pendingFlushes.TryRemove(kvp.Key, out PendingCharacterFlush pending))
+				lock (kvp.Value.Gate)
 				{
-					drained.Add(new KeyValuePair<long, PendingCharacterFlush>(kvp.Key, pending));
+					if (kvp.Value.Retired)
+					{
+						continue;
+					}
+					RetirePendingFlushLocked(kvp.Key, kvp.Value);
 				}
+				drained.Add(kvp);
 			}
 			return drained;
+		}
+
+		/// <summary>
+		/// Drops any retry queued for a character, without running it. For a character whose claim
+		/// belongs to another server now.
+		/// </summary>
+		private void DropPendingFlush(long characterID)
+		{
+			if (pendingFlushes.TryGetValue(characterID, out PendingCharacterFlush pending))
+			{
+				lock (pending.Gate)
+				{
+					if (!pending.Retired)
+					{
+						RetirePendingFlushLocked(characterID, pending);
+					}
+				}
+			}
 		}
 
 		/// <summary>
@@ -766,48 +1279,109 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const int MaxPendingFlushAttempts = 12;
 
 		/// <summary>
-		/// Records a save and/or release for retry, merging with any entry already pending for
-		/// the same character.
+		/// Records a save, an item flush and/or a release for retry, merging with any entry already
+		/// pending for the same character.
 		/// </summary>
+		/// <remarks>
+		/// New work restarts the entry's attempt count: it is new, and should not inherit the few
+		/// attempts an older problem left it.
+		/// </remarks>
 		/// <param name="characterID">Character the work belongs to.</param>
 		/// <param name="charData">Character snapshot to persist, or null if only releasing.</param>
 		/// <param name="sessionInfo">Session ownership to release, or null if only saving.</param>
-		private void QueuePendingFlush(long characterID, CharacterData? charData, CharacterSessionInfo? sessionInfo, Func<Task> itemFlush = null)
+		/// <param name="itemFlush">The departure item flush to land before the release, or null.</param>
+		/// <param name="subEntities">
+		/// Sub-entity rows to land before the release, or null. Only meaningful with the claim they
+		/// were captured under still held, which is why they travel with the release.
+		/// </param>
+		private void QueuePendingFlush(long characterID, CharacterData? charData, CharacterSessionInfo? sessionInfo, Func<Task<ItemWriteOutcome>> itemFlush = null, SubEntitySnapshot subEntities = null)
 		{
-			if (characterID <= 0 || (charData == null && sessionInfo == null && itemFlush == null))
+			bool hasSubEntities = subEntities != null && subEntities.Claims.Count > 0;
+			if (characterID <= 0 || (charData == null && sessionInfo == null && itemFlush == null && !hasSubEntities))
 			{
 				return;
 			}
 
-			pendingFlushes.AddOrUpdate(
-				characterID,
-				_ => new PendingCharacterFlush
+			while (true)
+			{
+				PendingCharacterFlush entry = pendingFlushes.GetOrAdd(characterID, _ => new PendingCharacterFlush
 				{
-					CharacterData = charData,
-					Session = sessionInfo,
-					ItemFlush = itemFlush,
-					NextAttemptUtc = DateTime.UtcNow,
-					Attempts = 0,
-					InFlight = 0,
-				},
-				(_, existing) =>
+					NextAttemptAt = MonotonicClock.NowSeconds,
+				});
+
+				lock (entry.Gate)
 				{
+					if (entry.Retired)
+					{
+						// Removed while we waited for it; the next lookup finds or makes the live one.
+						continue;
+					}
+
 					// Keep the newest snapshot; keep whichever session token we have, since a
 					// character only ever holds one claim at a time.
-					if (charData.HasValue)
+					if (charData.HasValue &&
+						(!entry.CharacterData.HasValue || charData.Value.Version >= entry.CharacterData.Value.Version))
 					{
-						existing.CharacterData = charData;
+						entry.CharacterData = charData;
 					}
 					if (sessionInfo.HasValue)
 					{
-						existing.Session = sessionInfo;
+						entry.Session = sessionInfo;
 					}
 					if (itemFlush != null)
 					{
-						existing.ItemFlush = itemFlush;
+						entry.ItemFlush = itemFlush;
 					}
-					return existing;
-				});
+					if (hasSubEntities)
+					{
+						if (entry.SubEntities != null && SameClaims(entry.SubEntities, subEntities))
+						{
+							/* A new instance, never the queued one extended: an attempt may be writing
+							 * the instance it read, outside this lock. Rows the older instance carried
+							 * are written again, and a repeated row is superseded, not duplicated. */
+							var merged = new SubEntitySnapshot();
+							merged.AddFrom(entry.SubEntities);
+							merged.AddFrom(subEntities);
+							entry.SubEntities = merged;
+						}
+						else
+						{
+							/* Replaced, never merged across sessions. Rows queued under an older claim
+							 * are that session's, and a merged snapshot would write them under the new
+							 * claim — where a higher version captured by the old session could beat the
+							 * new session's rows. Under their own claim they would only be refused. */
+							if (entry.SubEntities != null)
+							{
+								Log.Warning("CharacterSystem",
+									$"Character {characterID}: sub-entity rows queued under an earlier session claim were dropped for a newer session's; the gate would have refused them.");
+							}
+							entry.SubEntities = subEntities;
+						}
+					}
+					entry.Attempts = 0;
+					entry.NextAttemptAt = MonotonicClock.NowSeconds;
+					return;
+				}
+			}
+		}
+
+		/// <summary>Whether two snapshots were captured under the same claims.</summary>
+		private static bool SameClaims(SubEntitySnapshot a, SubEntitySnapshot b)
+		{
+			if (a.Claims.Count != b.Claims.Count)
+			{
+				return false;
+			}
+			foreach (KeyValuePair<long, CharacterSessionLeaseData> claim in a.Claims)
+			{
+				if (!b.Claims.TryGetValue(claim.Key, out CharacterSessionLeaseData other) ||
+					other.OwnerServerID != claim.Value.OwnerServerID ||
+					other.OwnerToken != claim.Value.OwnerToken)
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/// <summary>
@@ -820,79 +1394,135 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			foreach (var kvp in pendingFlushes)
 			{
 				long characterID = kvp.Key;
 				PendingCharacterFlush pending = kvp.Value;
 
-				if (nowUtc < pending.NextAttemptUtc)
+				lock (pending.Gate)
 				{
-					continue;
+					if (pending.Retired || pending.InFlight || now < pending.NextAttemptAt)
+					{
+						continue;
+					}
+					pending.InFlight = true;
 				}
 
-				if (Interlocked.CompareExchange(ref pending.InFlight, 1, 0) != 0)
-				{
-					continue;
-				}
-
-				if (!EnqueueAsyncWork(() => RunPendingFlushAsync(characterID, pending)))
+				/* Keyed on the character. The release at the end of an attempt hands back the claim that
+				 * every write already queued on the character's lane quotes — a quest update, a grant,
+				 * a forget, a pet dismissal, a merchant's currency row — and each of those is
+				 * ownership-gated: landing after the release it is refused, not merely late. Unkeyed,
+				 * an attempt could run ahead of that lane whenever it was backed up, which is exactly
+				 * when a save-and-release gets here. On the lane it runs after them, as the
+				 * save-and-release it stands in for does. */
+				if (!EnqueueAsyncWork(() => RunPendingFlushAsync(characterID, pending), characterID))
 				{
 					// Still saturated; leave it queued and try again next pass.
-					Interlocked.Exchange(ref pending.InFlight, 0);
+					lock (pending.Gate)
+					{
+						pending.InFlight = false;
+					}
 				}
 			}
 		}
 
 		/// <summary>
-		/// Executes one retry of a pending save/release, rescheduling or dropping the entry
-		/// according to the outcome.
+		/// Executes one retry of a pending save, item flush and release, rescheduling or dropping the
+		/// entry according to the outcome.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The work is read from the entry under its lock, done without it, and then cleared from the
+		/// entry only where the entry still holds the same work: a merge that landed meanwhile is new
+		/// work and stays for the next attempt. The completion test and the removal happen together
+		/// under the same lock, so nothing can be merged into an entry that is on its way out.
+		/// </para>
+		/// <para>
+		/// <b>The release waits for the item flush.</b> The flush proves ownership with the lease this
+		/// server still holds; a release that landed first would let the destination claim and load
+		/// the character without the flush, and then refuse it. A flush that keeps failing therefore
+		/// keeps the claim until it lands or the attempts run out, after which the lease expires on
+		/// its own. One that fails for good (<see cref="ItemWriteOutcome.Rejected"/>) is abandoned,
+		/// with an error naming the loss, and the claim is released: holding it could not deliver it.
+		/// </para>
+		/// <para>
+		/// <b>So does it wait for the sub-entity rows</b>, for the same reason: they are ownership-gated
+		/// too, so once the claim is back they would be refused rather than merely arrive late. A table
+		/// still failing after its bounded attempts keeps the claim for the next pass.
+		/// </para>
+		/// </remarks>
 		private async Task RunPendingFlushAsync(long characterID, PendingCharacterFlush pending)
 		{
-			bool completed = false;
-			try
+			CharacterData? row;
+			CharacterSessionInfo? session;
+			Func<Task<ItemWriteOutcome>> flush;
+			SubEntitySnapshot subEntities;
+			lock (pending.Gate)
 			{
 				pending.Attempts++;
+				row = pending.CharacterData;
+				session = pending.Session;
+				flush = pending.ItemFlush;
+				subEntities = pending.SubEntities;
+			}
 
-				if (pending.CharacterData.HasValue)
+			bool rowDone = !row.HasValue;
+			bool flushDone = flush == null;
+			bool subEntitiesDone = subEntities == null;
+			bool releaseDone = !session.HasValue;
+			bool claimLost = false;
+
+			try
+			{
+				if (row.HasValue)
 				{
 					/* Gated on the claim when we still hold one. When we do not (the release
 					 * already landed and only the save is outstanding) the version guard is the
 					 * only protection available, and dropping the write entirely would lose the
 					 * state outright — so the ungated path stays for that case, as before. */
-					if (await SaveCharacterAsync(pending.CharacterData.Value, pending.Session))
-					{
-						pending.CharacterData = null;
-					}
+					CharacterSaveOutcome saved = await SaveCharacterOutcomeAsync(row.Value, session);
+					rowDone = saved != CharacterSaveOutcome.Retry;
+					claimLost = saved == CharacterSaveOutcome.OwnershipLost;
 				}
 
 				/* Items before the release, as on the normal path. The flush proves ownership
 				 * with the lease we still hold; a release that landed first would let the
 				 * destination claim and refuse it. */
-				if (pending.ItemFlush != null)
+				if (!claimLost && flush != null)
 				{
-					try
+					ItemWriteOutcome flushed = await RunItemFlushOnceAsync(flush, characterID);
+					flushDone = flushed != ItemWriteOutcome.Retry;
+					if (flushed == ItemWriteOutcome.NotOwned)
 					{
-						await pending.ItemFlush();
-						pending.ItemFlush = null;
+						claimLost = true;
 					}
-					catch (Exception ex)
+					else if (flushed == ItemWriteOutcome.Rejected)
 					{
-						await Log.Error("CharacterSystem", $"RunPendingFlushAsync: item flush failed for character {characterID}: {ex}");
+						await Log.Error("CharacterSystem",
+							$"RunPendingFlushAsync: the item flush for character {characterID} was refused for good; its item changes since the last snapshot are lost.");
 					}
 				}
 
-				if (pending.Session.HasValue)
+				/* The sub-entity rows, also before the release and for the same reason: each quotes the
+				 * claim it was captured under, so it lands only while that claim is held — and would be
+				 * refused, not merely late, after the release below. */
+				if (!claimLost && subEntities != null)
 				{
-					if (await ReleaseCharacterSessionAsync(characterID, pending.Session.Value.ServerID, pending.Session.Value.Token))
-					{
-						pending.Session = null;
-					}
+					subEntitiesDone = await SaveSubEntitiesSequentiallyAsync(subEntities, characterID);
 				}
 
-				completed = pending.CharacterData == null && pending.Session == null && pending.ItemFlush == null;
+				if (!claimLost && session.HasValue && flushDone && subEntitiesDone)
+				{
+					releaseDone = await ReleaseCharacterSessionAsync(characterID, session.Value.ServerID, session.Value.Token);
+				}
+
+				if (claimLost)
+				{
+					// Another server owns the character: nothing here is ours to write or release.
+					rowDone = flushDone = subEntitiesDone = releaseDone = true;
+				}
 			}
 			catch (Exception ex)
 			{
@@ -900,24 +1530,57 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			finally
 			{
-				if (completed)
+				bool gaveUp = false;
+				lock (pending.Gate)
 				{
-					pendingFlushes.TryRemove(characterID, out _);
+					// Clear only the work this attempt finished, and only if nothing newer replaced it.
+					if (rowDone && row.HasValue && pending.CharacterData.HasValue &&
+						pending.CharacterData.Value.Version == row.Value.Version)
+					{
+						pending.CharacterData = null;
+					}
+					if (flushDone && flush != null && ReferenceEquals(pending.ItemFlush, flush))
+					{
+						pending.ItemFlush = null;
+					}
+					if (subEntitiesDone && subEntities != null && ReferenceEquals(pending.SubEntities, subEntities))
+					{
+						pending.SubEntities = null;
+					}
+					if (releaseDone && session.HasValue && pending.Session.HasValue &&
+						pending.Session.Value.Token == session.Value.Token &&
+						pending.Session.Value.ServerID == session.Value.ServerID)
+					{
+						pending.Session = null;
+					}
+
+					bool completed = pending.CharacterData == null && pending.Session == null && pending.ItemFlush == null && pending.SubEntities == null;
+					if (completed)
+					{
+						RetirePendingFlushLocked(characterID, pending);
+					}
+					else if (pending.Attempts >= MaxPendingFlushAttempts)
+					{
+						RetirePendingFlushLocked(characterID, pending);
+						gaveUp = true;
+					}
+					else
+					{
+						// Linear backoff: fast enough that a normal scene transition is not held
+						// up, slow enough that a database outage is not hammered.
+						pending.NextAttemptAt = MonotonicClock.NowSeconds + Math.Min(3 * pending.Attempts, 30);
+					}
+					pending.InFlight = false;
 				}
-				else if (pending.Attempts >= MaxPendingFlushAttempts)
+
+				if (gaveUp)
 				{
-					pendingFlushes.TryRemove(characterID, out _);
 					_ = Log.Error("CharacterSystem",
-						$"Giving up on pending flush for character {characterID} after {pending.Attempts} attempts. " +
-						"Any unreleased session will free itself when its lease expires.");
+						$"Giving up on pending flush for character {characterID} after {MaxPendingFlushAttempts} attempts" +
+						(flush != null && !flushDone ? "; its item flush never landed and those item changes are lost" : string.Empty) +
+						(subEntities != null && !subEntitiesDone ? "; some of its sub-entity tables never landed and those changes are lost" : string.Empty) +
+						". Any unreleased session will free itself when its lease expires.");
 				}
-				else
-				{
-					// Linear backoff: fast enough that a normal scene transition is not held
-					// up, slow enough that a database outage is not hammered.
-					pending.NextAttemptUtc = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Min(3 * pending.Attempts, 30));
-				}
-				Interlocked.Exchange(ref pending.InFlight, 0);
 			}
 		}
 
@@ -976,7 +1639,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			evictionRequested.TryRemove(characterID, out _);
 
 			// The snapshot queued for retry belongs to a session we no longer own.
-			pendingFlushes.TryRemove(characterID, out _);
+			DropPendingFlush(characterID);
 
 			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 			{
@@ -1031,13 +1694,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				DispatchCharacterEvent(OnDespawnCharacter, owner, character, nameof(OnDespawnCharacter));
 
-				if (character.NetworkObject.IsSpawned)
-				{
-					ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-				}
-				else
+				// Out of the world scene, as every once-spawned character is pooled. See SaveAndDespawnCharacter.
+				if (!PersistentPool.Despawn(Server.NetworkWrapper.NetworkManager, character.NetworkObject))
 				{
 					Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
+					PersistentPool.Keep(Server.NetworkWrapper.NetworkManager, character.NetworkObject);
 				}
 			}
 
@@ -1054,14 +1715,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		#region Session Lease Refresh
 
 		/// <summary>
-		/// Extends the lease on every session this server currently holds, in one round trip.
+		/// Extends the lease on every session this server currently holds, in one statement per
+		/// 500 sessions.
 		/// </summary>
 		/// <remarks>
-		/// Runs on its own timer rather than inside the save loop. The save loop walks
-		/// characters sequentially with a database round trip each, so on a busy shard with a
-		/// slow database the characters near the end of the list could go longer than the lease
-		/// duration between refreshes and become claimable by another server while still
-		/// online. Refresh cost here is independent of how many characters are resident.
+		/// Runs on its own timer rather than inside the save loop, so a claim's liveness never
+		/// depends on how long a save pass takes. A pass stretched by a slow database or a
+		/// backed-up worker (or skipped at the save gate) would otherwise leave characters going
+		/// longer than the lease duration between refreshes, claimable by another server while
+		/// still online.
 		/// </remarks>
 		private void OnPeriodicSessionLeaseRefresh(float deltaTime)
 		{
@@ -1117,8 +1779,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * The count alone does not say which, and until it did, nothing could act on
 					 * it: this server kept simulating and saving characters it no longer owned,
 					 * overwriting the live owner's state on every periodic save. Resolve the
-					 * specific characters and evict them. The ownership-gated save in
-					 * SaveCharacterAsync is the hard guarantee; this is what makes the recovery
+					 * specific characters and evict them. The ownership-gated saves (PersistManyAsync,
+					 * SaveCharacterAsync) are the hard guarantee; this is what makes the recovery
 					 * prompt (one refresh interval) instead of waiting for a save to be refused. */
 					await Log.Warning("CharacterSystem",
 						$"Session lease refresh updated {result.Data} of {leases.Count} held sessions; " +
@@ -1201,28 +1863,67 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		#region Buff / Attribute / Ability Snapshot + Persistence
 
 		/// <summary>
-		/// Appends a snapshot of the character's active buffs (with deterministic tick→seconds conversion).
-		/// Main-thread only. Each appended DTO has its Version bumped on the runtime Buff for optimistic concurrency.
+		/// Captures the character's complete set of active buffs, converting absolute ticks into
+		/// remaining seconds. Main-thread only.
 		/// </summary>
-		private void AppendBuffData(IPlayerCharacter character, List<CharacterBuffData> buffs)
+		/// <remarks>
+		/// <para>
+		/// <b>A set, not a list of changes.</b> The result replaces whatever the database holds for
+		/// the character, in the same transaction as the character row and only when that row is
+		/// written (<see cref="CharacterData.Buffs"/>). An empty list is a real answer — "no buffs" —
+		/// and is what deletes the rows of buffs that expired, were dismissed or were stripped on
+		/// death. Buffs used to be upserted one row at a time and never deleted, and the load
+		/// restores every row it finds, so each of those came back at the next login.
+		/// </para>
+		/// <para>
+		/// Every row carries the character's snapshot version rather than a counter of its own. A
+		/// per-buff counter cannot order a set: a buff re-applied after it ended is a new instance
+		/// whose counter restarts, and an empty set has no row to carry one. The row version is the
+		/// ordering; see <c>CharacterBuffService.ReplaceSetsAsync</c>.
+		/// </para>
+		/// <para>
+		/// Remaining time is frozen while the character is offline, exactly as before: what is left
+		/// now is what is left at the next login.
+		/// </para>
+		/// <para>
+		/// Permanent buffs are left out, which deletes any rows they had: they are rebuilt from the
+		/// environment after the login. See <see cref="IsPersistedBuff"/>.
+		/// </para>
+		/// </remarks>
+		/// <param name="character">The character whose buffs to capture.</param>
+		/// <param name="version">The snapshot version the row is being written at.</param>
+		/// <returns>
+		/// The set, possibly empty; or null when it could not be read (no buff controller, no time
+		/// manager), which leaves the stored buffs untouched rather than deleting them on the strength
+		/// of a set nobody built.
+		/// </returns>
+		private List<CharacterBuffData> CaptureBuffSet(IPlayerCharacter character, long version)
 		{
-			if (!character.TryGet(out IBuffController buffController) || buffController.Buffs.Count == 0)
+			if (!character.TryGet(out IBuffController buffController))
 			{
-				return;
+				return null;
 			}
 
 			var timeManager = Server?.NetworkWrapper?.NetworkManager?.TimeManager;
 			if (timeManager == null)
 			{
-				return;
+				return null;
 			}
+
+			var buffs = new List<CharacterBuffData>(buffController.Buffs.Count);
+			if (buffController.Buffs.Count == 0)
+			{
+				return buffs;
+			}
+
 			float tickDelta = (float)timeManager.TickDelta;
 			uint currentTick = buffController.ResolveAuthoritativeTick(timeManager.LocalTick);
 
 			foreach (var kvp in buffController.Buffs)
 			{
 				Buff buff = kvp.Value;
-				if (buff == null || buff.Template == null)
+				// Permanent buffs are the environment's, not the character's. See IsPersistedBuff.
+				if (buff == null || !IsPersistedBuff(buff.Template))
 				{
 					continue;
 				}
@@ -1233,10 +1934,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				float remainingTime = remainingTicks > 0 ? remainingTicks * tickDelta : 0f;
 				float tickTime = nextTickTicks > 0 ? nextTickTicks * tickDelta : 0f;
 
-				buff.Version++;
 				buffs.Add(new CharacterBuffData(
 					id: 0,
-					version: buff.Version,
+					version: version,
 					characterID: character.ID,
 					templateID: buff.Template.ID,
 					remainingTime: remainingTime,
@@ -1245,6 +1945,34 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					tickCount: buff.TickCount
 				));
 			}
+			return buffs;
+		}
+
+		/// <summary>
+		/// Whether a buff is written to the database with its owner. Pure.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Permanent buffs are not.</b> They are the weather-exposure buffs, and they belong to the
+		/// environment rather than the character: <c>WeatherExposureController</c> (and a buff volume)
+		/// applies and removes them every tick from where the character is standing, so after a login
+		/// they come back on their own within a tick. A saved one could only come back wrong: a
+		/// permanent buff has no expiry (<c>ExpiryTick</c> is <c>UNSET_TICK</c>), so it was captured
+		/// with no time remaining and restored as a buff that expires on its first tick — an icon that
+		/// flickers, an apply and a remove, and an exposure system that briefly thinks it already has
+		/// the buff on.
+		/// </para>
+		/// <para>
+		/// Leaving them out of the set is also what deletes the rows saved before this rule: the set
+		/// replaces everything the database holds for the character (see <see cref="CaptureBuffSet"/>),
+		/// so the first save afterwards drops them. The load skips any it still finds until then.
+		/// </para>
+		/// </remarks>
+		/// <param name="template">The buff's template; null is never persisted.</param>
+		/// <returns>True when the buff is saved and restored with its owner.</returns>
+		public static bool IsPersistedBuff(BaseBuffTemplate template)
+		{
+			return template != null && !template.IsPermanent;
 		}
 
 		/// <summary>
@@ -1285,6 +2013,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * still refuses it if a row somehow exists. */
 				if (!attr.PersistenceDirty)
 					continue;
+				/* A trade has moved this value in memory and its transaction has not answered yet:
+				 * that transaction is the row's only writer until it does. Written here, the moved
+				 * value could land while the trade is still undecided, and a refusal would then leave
+				 * the database holding a payment or a credit for a trade that never happened — and for
+				 * a departing character there is no later save to put it right. Left dirty, so the
+				 * first pass after the outcome writes whatever memory then holds.
+				 * See CharacterAttribute.IsSettling and TradeCurrencySettlement. */
+				if (attr.IsSettling)
+					continue;
 				attr.Version++;
 				attr.MarkPersistPending(attr.Version);
 				attributes.Add(new CharacterAttributeData(
@@ -1299,7 +2036,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in attrController.ResourceAttributes)
 			{
 				var resAttr = kvp.Value;
-				if (!resAttr.PersistenceDirty)
+				// Settling: see above.
+				if (!resAttr.PersistenceDirty || resAttr.IsSettling)
 					continue;
 				resAttr.Version++;
 				resAttr.MarkPersistPending(resAttr.Version);
@@ -1454,13 +2192,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				currentHealth = health.CurrentValue;
 			}
 
+			/* A dead owner's pet is not out. Death dismisses the pet (PetSystem.DamageController_OnKilled),
+			 * and that handler runs AFTER this system's own kill handler, which subscribed first — so a
+			 * combat-logout body killed while its owner was away was finalised, captured here with its
+			 * pet still at its side, and despawned, all before the dismissal could run; the dismissal
+			 * then found no pet, and the row said the pet was out. The owner got a pet back at their
+			 * next login that death had taken from every connected player. Encoded here, where the row
+			 * is built, the rule holds whichever handler runs first. */
 			CharacterPetData petData = new CharacterPetData(
 				id: 0,
 				version: version,
 				characterID: character.ID,
 				templateID: templateID,
 				abilities: pet.PetAbilityIDs != null ? new List<int>(pet.PetAbilityIDs) : new List<int>(),
-				spawned: currentHealth > 0.0f);
+				spawned: IsPetOut(currentHealth, character.IsFlagged(CharacterFlags.IsDead)));
 
 			var attributeData = new List<CharacterPetAttributeData>(16);
 			AppendPetAttributeData(character.ID, version, petAttributeController, attributeData);
@@ -1469,6 +2214,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			AppendPetBuffData(character.ID, version, pet, buffData);
 
 			pets.Add(new PetSnapshot(petData, attributeData, buffData));
+		}
+
+		/// <summary>
+		/// Whether a captured pet row says the pet is out, restored at the owner's next login. Pure.
+		/// </summary>
+		/// <remarks>
+		/// A pet at zero health is dead and not out. A pet whose owner is dead is not out either:
+		/// death dismisses it — see the capture in <see cref="AppendPetData"/> for why the rule has to
+		/// be stated here as well as in the dismissal.
+		/// </remarks>
+		/// <param name="petHealth">The pet's current health.</param>
+		/// <param name="ownerDead">Whether the owner is dead.</param>
+		/// <returns>True when the pet should come back with its owner.</returns>
+		public static bool IsPetOut(float petHealth, bool ownerDead)
+		{
+			return petHealth > 0.0f && !ownerDead;
 		}
 
 		/// <summary>
@@ -1545,7 +2306,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in buffController.Buffs)
 			{
 				Buff buff = kvp.Value;
-				if (buff == null || buff.Template == null)
+				// A pet stands in the same weather its owner does. See IsPersistedBuff.
+				if (buff == null || !IsPersistedBuff(buff.Template))
 				{
 					continue;
 				}
@@ -1577,8 +2339,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// pet's health onto the wrong creature.
 		/// </remarks>
 		/// <param name="pets">Snapshots to write.</param>
+		/// <param name="claims">The claims the snapshots were captured under. See <see cref="AppendSubEntities"/>.</param>
 		/// <returns>False only when a write failed in a way worth another attempt.</returns>
-		private async Task<bool> SavePetsAsync(List<PetSnapshot> pets)
+		private async Task<bool> SavePetsAsync(List<PetSnapshot> pets, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
@@ -1597,8 +2360,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * of date for no benefit. */
 				if (Server.Database.ServiceRegistry.TryGet<ICharacterPetService>(out var petService))
 				{
+					/* The pet-row write also prunes the attribute and buff rows its pet can no longer
+					 * restore — see CharacterPetService.PruneUnrestorableRowsAsync — which is why it
+					 * stays first: it never deletes the rows written just after it. */
 					var petRows = pets.Select(p => p.Pet).ToList();
-					DatabaseResult<BulkWriteResult> result = await petService.PersistAsync(petRows);
+					DatabaseResult<BulkWriteResult> result = await petService.PersistOwnedAsync(petRows, claims);
 					done &= await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet save", result) || !result.IsTransient;
 				}
 
@@ -1607,7 +2373,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					var attributeRows = pets.SelectMany(p => p.Attributes).ToList();
 					if (attributeRows.Count > 0)
 					{
-						DatabaseResult<BulkWriteResult> result = await petAttributeService.PersistAsync(attributeRows);
+						DatabaseResult<BulkWriteResult> result = await petAttributeService.PersistOwnedAsync(attributeRows, claims);
 						done &= await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet attribute save", result) || !result.IsTransient;
 					}
 				}
@@ -1617,7 +2383,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					var buffRows = pets.SelectMany(p => p.Buffs).ToList();
 					if (buffRows.Count > 0)
 					{
-						DatabaseResult<BulkWriteResult> result = await petBuffService.PersistAsync(buffRows);
+						DatabaseResult<BulkWriteResult> result = await petBuffService.PersistOwnedAsync(buffRows, claims);
 						done &= await BulkWriteReporting.ReportAsync("CharacterSystem", "Pet buff save", result) || !result.IsTransient;
 					}
 				}
@@ -1632,25 +2398,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Persists a snapshot of buff state asynchronously.
+		/// Writes a departing character's hotkey bar under the claim it was captured with.
 		/// </summary>
+		/// <remarks>
+		/// No dirty marks to clear: the bar is written whole, from the live bar, and the character is
+		/// on its way out. A superseded row is a newer bar already stored — the hotkey pump's, taken
+		/// later — and is fine. See <see cref="AppendDepartureSubEntities"/>.
+		/// </remarks>
+		/// <param name="hotkeys">The rows, one per slot.</param>
+		/// <param name="claims">The claims the rows were captured under.</param>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveBuffsAsync(List<CharacterBuffData> buffs)
+		private async Task<bool> SaveHotkeysAsync(List<CharacterHotkeyData> hotkeys, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterBuffService>(out var buffService))
+					!Server.Database.ServiceRegistry.TryGet<ICharacterHotkeyService>(out var hotkeyService))
 				{
 					return true;
 				}
 
-				DatabaseResult<BulkWriteResult> result = await buffService.PersistAsync(buffs);
-				return await BulkWriteReporting.ReportAsync("CharacterSystem", "Buff save", result) || !result.IsTransient;
+				DatabaseResult<BulkWriteResult> result = await hotkeyService.PersistOwnedAsync(hotkeys, claims);
+				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Hotkey bar save", result);
+				return written || !result.IsTransient;
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("CharacterSystem", $"SaveBuffsAsync failed: {ex}");
+				await Log.Error("CharacterSystem", $"SaveHotkeysAsync failed: {ex}");
 				return false;
 			}
 		}
@@ -1658,8 +2432,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of attribute state asynchronously.
 		/// </summary>
+		/// <param name="attributes">The rows.</param>
+		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveAttributesAsync(List<CharacterAttributeData> attributes)
+		private async Task<bool> SaveAttributesAsync(List<CharacterAttributeData> attributes, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
@@ -1669,7 +2445,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return true;
 				}
 
-				DatabaseResult<BulkWriteResult> result = await attrService.PersistAsync(attributes);
+				DatabaseResult<BulkWriteResult> result = await attrService.PersistOwnedAsync(attributes, claims);
 				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Attribute save", result);
 
 				/* Only a write that landed clears the dirty marks, and it clears them back on the
@@ -1683,8 +2459,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * part — an unresolvable character or template, or a duplicate key it dropped —
 				 * and those rows never reached the database. Clearing them would retire a value
 				 * that was never stored. Superseded rows are the opposite and safe to clear: they
-				 * were refused because the database already holds something newer. */
-				if (written && result.Data.Filtered == 0)
+				 * were refused because the database already holds something newer.
+				 *
+				 * A row the ownership gate refused is one of the filtered ones (BulkWriteResult
+				 * .Unowned), and a batch it refused whole is a failure, so neither clears anything. */
+				if (BulkWriteReporting.MayClearDirtyMarks(result))
 				{
 					TryEnqueueMainThread(() => MarkAttributesPersisted(attributes));
 				}
@@ -1770,8 +2549,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of crafted ability state asynchronously.
 		/// </summary>
+		/// <param name="abilities">The rows.</param>
+		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveAbilitiesAsync(List<CharacterAbilityData> abilities)
+		private async Task<bool> SaveAbilitiesAsync(List<CharacterAbilityData> abilities, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
@@ -1781,7 +2562,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return true;
 				}
 
-				DatabaseResult<BulkWriteResult> result = await abilityService.PersistAsync(abilities);
+				DatabaseResult<BulkWriteResult> result = await abilityService.PersistOwnedAsync(abilities, claims);
 				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Ability save", result);
 
 				/* Only a write that landed clears the marks, and only on the main thread.
@@ -1793,7 +2574,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * them would retire a change that was never stored, and the periodic save has no
 				 * retry of its own to notice. Superseded rows are the opposite and safe to clear:
 				 * the database refused them because it already holds something newer. */
-				if (written && result.Data.Filtered == 0)
+				if (BulkWriteReporting.MayClearDirtyMarks(result))
 				{
 					TryEnqueueMainThread(() => MarkAbilitiesPersisted(abilities));
 				}
@@ -1818,9 +2599,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="abilities">The snapshot that was written.</param>
 		private void MarkAbilitiesPersisted(List<CharacterAbilityData> abilities)
 		{
-			if (abilities == null ||
-				Server?.DataContainerRegistry == null ||
-				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+			if (abilities == null)
 			{
 				return;
 			}
@@ -1829,8 +2608,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				CharacterAbilityData saved = abilities[i];
 
-				if (!data.CharactersByID.TryGetValue(saved.CharacterID, out IPlayerCharacter character) ||
-					character == null ||
+				/* Lingering bodies too, as every other mark does: one is saved every pass but is not
+				 * in CharactersByID, so its abilities stayed marked and were rewritten each pass. */
+				if (!TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) ||
 					!character.TryGet(out IAbilityController abilityController))
 				{
 					continue;
@@ -1888,8 +2668,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of achievement progress asynchronously.
 		/// </summary>
+		/// <param name="achievements">The rows.</param>
+		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveAchievementsAsync(List<CharacterAchievementData> achievements)
+		private async Task<bool> SaveAchievementsAsync(List<CharacterAchievementData> achievements, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
@@ -1899,11 +2681,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return true;
 				}
 
-				DatabaseResult<BulkWriteResult> result = await achievementService.PersistAsync(achievements);
+				DatabaseResult<BulkWriteResult> result = await achievementService.PersistOwnedAsync(achievements, claims);
 				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Achievement save", result);
 
 				// Same rule as abilities: filtered rows were never offered to the database.
-				if (written && result.Data.Filtered == 0)
+				if (BulkWriteReporting.MayClearDirtyMarks(result))
 				{
 					TryEnqueueMainThread(() => MarkAchievementsPersisted(achievements));
 				}
@@ -2030,8 +2812,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of faction standings asynchronously.
 		/// </summary>
+		/// <param name="factions">The rows.</param>
+		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveFactionsAsync(List<CharacterFactionData> factions)
+		private async Task<bool> SaveFactionsAsync(List<CharacterFactionData> factions, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
@@ -2041,10 +2825,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return true;
 				}
 
-				DatabaseResult<BulkWriteResult> result = await factionService.PersistAsync(factions);
+				DatabaseResult<BulkWriteResult> result = await factionService.PersistOwnedAsync(factions, claims);
 				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Faction save", result);
 
-				if (written && result.Data.Filtered == 0)
+				if (BulkWriteReporting.MayClearDirtyMarks(result))
 				{
 					TryEnqueueMainThread(() => MarkFactionsPersisted(factions));
 				}
@@ -2111,8 +2895,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a snapshot of ability knowledge asynchronously.
 		/// </summary>
+		/// <param name="knownAbilities">The rows.</param>
+		/// <param name="knowledgeVersions">Each character's knowledge version as captured.</param>
+		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveKnownAbilitiesAsync(List<CharacterKnownAbilityData> knownAbilities, Dictionary<long, long> knowledgeVersions)
+		private async Task<bool> SaveKnownAbilitiesAsync(List<CharacterKnownAbilityData> knownAbilities, Dictionary<long, long> knowledgeVersions, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
@@ -2122,13 +2909,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return true;
 				}
 
-				DatabaseResult<BulkWriteResult> result = await knownAbilityService.PersistAsync(knownAbilities);
+				DatabaseResult<BulkWriteResult> result = await knownAbilityService.PersistOwnedAsync(knownAbilities, claims);
 				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Known ability save", result);
 
 				/* Gated on Filtered == 0, like the faction and attribute marks: a row the service
 				 * declined to attempt was never stored, so the mark must stay and the next pass
 				 * writes it again. Superseded rows are the benign case and pass. */
-				if (written && result.Data.Filtered == 0)
+				if (BulkWriteReporting.MayClearDirtyMarks(result))
 				{
 					TryEnqueueMainThread(() => MarkKnowledgePersisted(knowledgeVersions));
 				}
@@ -2234,8 +3021,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists archetype rows asynchronously.
 		/// </summary>
+		/// <param name="archetypes">The rows.</param>
+		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
 		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveArchetypesAsync(List<CharacterArchetypeData> archetypes)
+		private async Task<bool> SaveArchetypesAsync(List<CharacterArchetypeData> archetypes, IReadOnlyCollection<CharacterSessionLeaseData> claims)
 		{
 			try
 			{
@@ -2245,10 +3034,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return true;
 				}
 
-				DatabaseResult<BulkWriteResult> result = await archetypeService.PersistAsync(archetypes);
+				DatabaseResult<BulkWriteResult> result = await archetypeService.PersistOwnedAsync(archetypes, claims);
 				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Archetype save", result);
 
-				if (written && result.Data.Filtered == 0)
+				if (BulkWriteReporting.MayClearDirtyMarks(result))
 				{
 					TryEnqueueMainThread(() => MarkArchetypesPersisted(archetypes));
 				}

@@ -262,10 +262,8 @@ namespace FishMMO.Shared
 		public long ChatMutedUntilTicks { get; set; }
 		/// <inheritdoc/>
 		public string ChatMuteReason { get; set; }
-		/// <summary>
-		/// The next UTC time the character can interact.
-		/// </summary>
-		public DateTime NextInteractTime { get; set; }
+		/// <inheritdoc />
+		public double NextInteractSeconds { get; set; }
 		/// <summary>
 		/// The list of hotkey data for the character.
 		/// </summary>
@@ -290,13 +288,15 @@ namespace FishMMO.Shared
 			KCCPlayer = gameObject.GetComponent<KCCPlayer>();
 			#endregion
 
-			// Initialize chat and interaction timers to current UTC time.
-			long nowTicks = DateTime.UtcNow.Ticks;
-			NextChatMessageTicks = nowTicks;
+			/* The chat rate fields start at zero, meaning "never": no gap pending, no refill yet.
+			 * Each side keeps them on its own clock — the server on its monotonic clock, the client
+			 * on the wall clock — so a starting value taken from either clock would be wrong for the
+			 * other: a wall-clock stamp read by the server's monotonic gate refused every line. */
+			NextChatMessageTicks = 0;
 			ChatTokens = 0;
 			IsChatTokensFull = true; // Filled to max; server overrides with actual capacity on first message.
-			ChatTokenLastRefillTicks = nowTicks;
-			NextInteractTime = DateTime.UtcNow;
+			ChatTokenLastRefillTicks = 0;
+			NextInteractSeconds = 0;
 		}
 
 		/// <summary>
@@ -496,15 +496,15 @@ namespace FishMMO.Shared
 
 			TeleporterName = "";
 			LastChatMessage = "";
-			long nowTicks = DateTime.UtcNow.Ticks;
-			NextChatMessageTicks = nowTicks;
+			// Zero is "never" on either side's clock; see OnAwake.
+			NextChatMessageTicks = 0;
 			ChatTokens = 0;
 			IsChatTokensFull = true;
-			ChatTokenLastRefillTicks = nowTicks;
+			ChatTokenLastRefillTicks = 0;
 			// A pooled character must not carry the last occupant's mute into its next spawn.
 			ChatMutedUntilTicks = 0;
 			ChatMuteReason = null;
-			NextInteractTime = DateTime.UtcNow;
+			NextInteractSeconds = 0;
 			InstanceSceneName = null;
 			InstanceSceneHandle = 0;
 			InstancePosition = Vector3.zero;

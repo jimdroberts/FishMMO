@@ -125,7 +125,26 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterKnownAbilityData> knownAbilities, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterKnownAbilityData> knownAbilities, CancellationToken cancellationToken = default)
+			=> PersistBatchAsync(knownAbilities, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<BulkWriteResult>> PersistOwnedAsync(IEnumerable<CharacterKnownAbilityData> knownAbilities, IReadOnlyCollection<CharacterSessionLeaseData> claims, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaims(claims);
+			return invalid != null
+				? Task.FromResult(DatabaseResult<BulkWriteResult>.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: PersistBatchAsync(knownAbilities, claims, cancellationToken);
+		}
+
+		/// <summary>
+		/// The batch write behind <see cref="PersistAsync(IEnumerable{CharacterKnownAbilityData}, CancellationToken)"/> and
+		/// <see cref="PersistOwnedAsync"/>.
+		/// </summary>
+		/// <param name="knownAbilities">Rows to write.</param>
+		/// <param name="claims">The writer's claims, or null for the ungated write. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterKnownAbilityData> knownAbilities, IReadOnlyCollection<CharacterSessionLeaseData>? claims, CancellationToken cancellationToken)
 		{
 			var abilityList = knownAbilities?.ToList();
 			if (abilityList == null || abilityList.Count == 0)
@@ -151,27 +170,20 @@ namespace FishMMO.Database.Npgsql.Services
 			var saveResult = await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = abilityList.Select(a => a.CharacterID).Distinct().ToArray();
-				var activeCharacterIds = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-					.Select(c => c.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-				if (activeCharacterIdSet.Count != characterIds.Length)
-				{
-					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
-					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
-				}
+				/* The ownership gate, and the per-character existence check it subsumes: the rows of a
+				 * missing or deleted character, or — for an owned write — of one whose claim the writer
+				 * no longer holds, are left out and reported as Filtered rather than failing every other
+				 * character's rows with them. See CharacterWriteGate. */
+				CharacterWriteAdmission admission = await CharacterWriteGate.AdmitAsync(dbContext, characterIds, claims, cancellationToken).ConfigureAwait(false);
+				int unownedRows = admission.CountUnowned(abilityList, row => row.CharacterID);
 
 				var activeAbilities = abilityList
 					// Template ids are signed hashes; only 0 means "no template". See PersistAsync.
-					.Where(a => a.TemplateID != 0 && activeCharacterIdSet.Contains(a.CharacterID))
+					.Where(a => a.TemplateID != 0 && admission.Admits(a.CharacterID))
 					.ToList();
 				if (activeAbilities.Count == 0)
 				{
-					return new BulkWriteResult(suppliedRows, 0, 0);
+					return new BulkWriteResult(suppliedRows, 0, 0, unownedRows);
 				}
 
 				var now = DateTime.UtcNow;
@@ -211,7 +223,7 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken,
 					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
 
-				return new BulkWriteResult(suppliedRows, activeAbilities.Count, appliedRows);
+				return new BulkWriteResult(suppliedRows, activeAbilities.Count, appliedRows, unownedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return saveResult;

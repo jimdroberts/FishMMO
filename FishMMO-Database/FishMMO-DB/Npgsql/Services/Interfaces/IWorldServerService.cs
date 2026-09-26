@@ -54,7 +54,11 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="serverId">Server ID to pulse.</param>
 		/// <param name="characterCount">Current character count on server.</param>
 		/// <param name="cancellationToken">Cancellation token for async operation.</param>
-		/// <returns>DatabaseResult indicating success or failure with detailed error information.</returns>
+		/// <returns>
+		/// The row's <see cref="ServerControlState"/>, read back by the same statement: its lock, and
+		/// any scheduled shutdown with the seconds left before it as the database clock measured
+		/// them (<see cref="ServerControlState.ShutdownInSeconds"/>).
+		/// </returns>
 		/// <remarks>
 		/// <para><b>Operation:</b> Uses ExecuteSqlRawAsync to UPDATE last_pulse and character_count.</para>
 		/// <para><b>Execution Strategy:</b> Wrapped with CreateExecutionStrategy().ExecuteAsync() for transient failure retry (ExecuteSqlRawAsync doesn't auto-retry).</para>
@@ -83,17 +87,53 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>Success, or NotFound when the row is gone.</returns>
 		/// <remarks>
+		/// <para>
 		/// Scheduling also locks the server, in the same statement. Cancelling does not unlock
 		/// it: halting a shutdown and reopening to players are separate decisions.
+		/// </para>
+		/// <para>
+		/// For a caller that already holds an absolute instant shared by several rows, such as a
+		/// maintenance window stopping every target at one deadline. A request phrased as "in N
+		/// seconds" belongs on <see cref="SetShutdownInAsync"/>: turning it into an instant here
+		/// means adding the seconds to the caller's own clock, which moves the deadline by that
+		/// clock's skew from the database the servers count down against.
+		/// </para>
 		/// </remarks>
 		Task<DatabaseResult> SetShutdownAsync(long serverId, DateTime? shutdownAtUtc, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Schedules this world server's shutdown a number of seconds from now by the database
+		/// clock, and locks it.
+		/// </summary>
+		/// <param name="serverId">World server row to update.</param>
+		/// <param name="seconds">Delay in seconds. Zero means now; negative is refused.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The UTC deadline written, or NotFound when the row is gone.</returns>
+		/// <remarks>
+		/// <para>
+		/// The deadline is the database's own time plus <paramref name="seconds"/>, taken inside
+		/// the statement that writes it. Every server counts a shutdown down against the database
+		/// clock (<see cref="ServerControlState.ShutdownInSeconds"/>), so the delay asked for is the
+		/// delay that elapses, whatever the requesting host's clock says. Locks in the same
+		/// statement, as <see cref="SetShutdownAsync"/> does.
+		/// </para>
+		/// <para>
+		/// A retry after a connection lost past the commit writes the deadline again from the
+		/// retry's own instant: later by the reconnect, never earlier, and the returned deadline is
+		/// the one the row holds.
+		/// </para>
+		/// </remarks>
+		Task<DatabaseResult<DateTime>> SetShutdownInAsync(long serverId, int seconds, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Reads a world server's lock and shutdown state without writing a pulse.
 		/// </summary>
 		/// <param name="serverId">World server row to read.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		/// <returns>The control state, or NotFound when the row is gone.</returns>
+		/// <returns>
+		/// The control state, with the time left before any scheduled shutdown measured by the
+		/// database clock, or NotFound when the row is gone.
+		/// </returns>
 		/// <remarks>
 		/// For scene servers, which host scenes on behalf of a world but do not pulse its row.
 		/// A world-wide shutdown has to reach them so they can warn their players and clear the

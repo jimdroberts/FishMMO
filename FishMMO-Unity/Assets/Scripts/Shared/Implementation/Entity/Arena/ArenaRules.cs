@@ -328,5 +328,118 @@ namespace FishMMO.Shared
 			}
 			return mine.Count > 0 ? mine : all;
 		}
+
+		/// <summary>
+		/// The whole second a phase clock shows when the one-second arena tick samples it.
+		/// </summary>
+		/// <param name="secondsRemaining">Real seconds until the phase ends; negative once past it.</param>
+		/// <returns>The second to announce, never below 0.</returns>
+		/// <remarks>
+		/// <para>
+		/// Rounded to the nearest second, not up. Every timed phase begins inside the tick, so the
+		/// tick samples each phase clock at whole seconds give or take a frame. Rounded up, every
+		/// sample sat on a step and the frame's jitter picked which side of it the number fell:
+		/// one second was announced twice and the next skipped, which silenced that second's
+		/// countdown cue, lost a time warning, and could start or end a match a second late.
+		/// Rounded to nearest, every step is half a tick away from every sample.
+		/// </para>
+		/// <para>
+		/// Half a second exactly rounds down, and 0 means the phase is over: the tick nearest a
+		/// phase's end ends it, not the first tick after it.
+		/// </para>
+		/// </remarks>
+		public static int ResolveTickSecond(double secondsRemaining)
+		{
+			if (double.IsNaN(secondsRemaining) || secondsRemaining <= 0.5)
+			{
+				return 0;
+			}
+			if (secondsRemaining >= int.MaxValue)
+			{
+				return int.MaxValue;
+			}
+			return (int)Math.Ceiling(secondsRemaining - 0.5);
+		}
+
+		/// <summary>
+		/// The countdown seconds a tick must announce: every one passed since the last
+		/// announcement, so a late tick, or a hitch that merged several, still announces each.
+		/// </summary>
+		/// <param name="lastAnnounced">The second announced last, or a negative value when none has been.</param>
+		/// <param name="current">The second the clock shows now (see <see cref="ResolveTickSecond"/>).</param>
+		/// <param name="highest">The first second to announce; the rest follow it downwards.</param>
+		/// <returns>How many seconds to announce, from <paramref name="highest"/> down; 0 when the clock has not moved.</returns>
+		/// <remarks>
+		/// Each second carries its own designer cues, so a skipped one is a cue that never plays.
+		/// Nothing is announced twice: a clock that stood still, or went backwards with the wall
+		/// clock, announces nothing.
+		/// </remarks>
+		public static int ResolveCountdownSteps(int lastAnnounced, int current, out int highest)
+		{
+			current = Math.Max(0, current);
+			if (lastAnnounced < 0)
+			{
+				highest = current;
+				return 1;
+			}
+			highest = lastAnnounced - 1;
+			return highest >= current ? highest - current + 1 : 0;
+		}
+
+		/// <summary>
+		/// Whether a clock that moved from one second to another passed a threshold on the way.
+		/// </summary>
+		/// <param name="previousSecond">The second the clock showed at the last check.</param>
+		/// <param name="currentSecond">The second it shows now.</param>
+		/// <param name="threshold">The second a warning is authored at.</param>
+		/// <remarks>
+		/// A threshold is passed once the clock is at or below it having been above it. Testing
+		/// for the exact second, as the time warnings used to, lost every warning whose second a
+		/// late tick stepped over.
+		/// </remarks>
+		public static bool IsThresholdCrossed(int previousSecond, int currentSecond, int threshold)
+		{
+			return threshold >= currentSecond && threshold < previousSecond;
+		}
+
+		/// <summary>
+		/// Adds held time to a control point and converts it to whole points.
+		/// </summary>
+		/// <param name="heldSeconds">Held time not yet scored.</param>
+		/// <param name="elapsedSeconds">Real time held since the last accrual. Negative counts as none.</param>
+		/// <param name="secondsPerPoint">Seconds held per point; below 1 counts as 1.</param>
+		/// <param name="points">Whole points earned.</param>
+		/// <returns>The held time left over, carried to the next accrual.</returns>
+		/// <remarks>
+		/// Scored on real time, not on ticks. The hold used to gain one second per tick, so a tick
+		/// that came late, or a hitch that merged several into one, took that time off the owning
+		/// team; and a point taken just before a tick was credited a whole second for a moment's
+		/// hold.
+		/// </remarks>
+		public static double AccrueHold(double heldSeconds, double elapsedSeconds, int secondsPerPoint, out int points)
+		{
+			int perPoint = Math.Max(1, secondsPerPoint);
+			double held = Math.Max(0.0, heldSeconds) + (elapsedSeconds > 0.0 ? elapsedSeconds : 0.0);
+			double whole = Math.Floor(held / perPoint);
+			points = whole >= int.MaxValue ? int.MaxValue : (int)whole;
+			return Math.Max(0.0, held - (double)points * perPoint);
+		}
+
+		/// <summary>
+		/// Whether a seat's player hears their team's channel: team chat, and anything else sent to
+		/// the team rather than to the arena.
+		/// </summary>
+		/// <param name="present">Standing in the arena's scene now.</param>
+		/// <param name="dropped">Dropped for never arriving; no longer part of the match.</param>
+		/// <remarks>
+		/// The same membership <see cref="ArenaTeamRegistry"/> publishes — every seat not dropped —
+		/// narrowed to the players who are actually there to receive it. A player inside their
+		/// reconnect grace is on the roster but not in the scene, so not on the channel until they
+		/// return.
+		/// </remarks>
+		public static bool IsOnTeamChannel(bool present, bool dropped)
+		{
+			return present && !dropped;
+		}
 	}
 }

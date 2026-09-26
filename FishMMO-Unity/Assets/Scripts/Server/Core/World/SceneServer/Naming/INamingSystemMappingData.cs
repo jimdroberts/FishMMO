@@ -37,6 +37,13 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Sweeps all five caches with identical TTL and scan parameters.
 		/// </summary>
-		void SweepAllCaches(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
+		/// <param name="now">
+		/// Current <see cref="MonotonicClock"/> reading. Every naming cache is timed on that clock,
+		/// through the trackers' monotonic overloads: a TTL is a local duration.
+		/// </param>
+		/// <param name="ttl">Entry time-to-live.</param>
+		/// <param name="maxScan">Maximum entries scanned per cache.</param>
+		/// <param name="maxRemove">Maximum entries removed per cache.</param>
+		void SweepAllCaches(double now, TimeSpan ttl, int maxScan, int maxRemove);
 	}
 }

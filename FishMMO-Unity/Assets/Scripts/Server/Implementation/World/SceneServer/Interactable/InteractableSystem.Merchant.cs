@@ -841,7 +841,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			long charID = character.ID;
 			int templateID = idSelector(template);
-			if (!TryEnqueueAsyncWork(() => PersistKnownAbilityAsync(charID, templateID), charID))
+
+			/* The row quotes the session claim the purchase was made under, captured now, and lands
+			 * only while it is still held. A resident character always holds one; without it the
+			 * character is not ours to change, so nothing is learned or charged. */
+			if (!TryCaptureSessionClaim(charID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("InteractableSystem", $"LearnAbilityGeneric: this server holds no session claim for CharID={charID}; the purchase of TemplateID={templateID} was refused.");
+				return MerchantPurchaseFailure.Unavailable;
+			}
+
+			if (!TryEnqueueAsyncWork(() => PersistKnownAbilityAsync(charID, templateID, claim), charID))
 			{
 				Log.Warning("InteractableSystem", $"LearnAbilityGeneric: Async worker rejected known-ability persist for CharID={charID}, TemplateID={templateID}.");
 				return MerchantPurchaseFailure.Unavailable;
@@ -898,9 +908,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
-		/// Persists a known ability or event to the database asynchronously.
+		/// Persists a known ability or event to the database asynchronously, under the claim the
+		/// purchase was made under.
 		/// </summary>
-		private async Task PersistKnownAbilityAsync(long characterID, int templateID)
+		private async Task PersistKnownAbilityAsync(long characterID, int templateID, CharacterSessionLeaseData claim)
 		{
 			try
 			{
@@ -913,11 +924,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				DatabaseResult result = await knownAbilityService.PersistAsync(characterID, templateID, 1);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("InteractableSystem", $"PersistKnownAbilityAsync DB error (CharID={characterID}, TemplateID={templateID}): {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				/* The batched owned write, with one row. A refusal (the claim is gone) is logged by the
+				 * report as a failure; the character, which this server no longer owns, is evicted by
+				 * the row save or the lease refresh, and what it learned here goes with it. Knowledge
+				 * rows are all written at version 1, so one already stored is superseded, not a
+				 * failed duplicate as the single-row write reported it. */
+				DatabaseResult<BulkWriteResult> result = await knownAbilityService.PersistOwnedAsync(
+					new[] { new CharacterKnownAbilityData(0, 1, characterID, templateID) },
+					ClaimsOf(claim));
+				await BulkWriteReporting.ReportAsync("InteractableSystem", "Known ability purchase save", result,
+					$"CharID={characterID}, TemplateID={templateID}");
 			}
 			catch (Exception ex)
 			{
@@ -1017,7 +1033,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 			}, characterID))
 			{
-				Log.Warning("InteractableSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
+				Log.Warning("InteractableSystem", $"Currency ledger: the persistence queue is saturated; the record for CharID={characterID} is still written, but late (behind the backlog, or through the teardown fallback).");
 			}
 		}
 
@@ -1026,6 +1042,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Called BEFORE in-memory deduction to ensure the DB reflects the change even if the
 		/// server crashes before the in-memory state is updated.
 		/// </summary>
+		/// <remarks>
+		/// The rows quote the session claim held for the character now, captured here, and land only
+		/// while it is still held (the service's <c>PersistOwnedAsync</c>). With no claim nothing is
+		/// queued and false is returned — the answer every caller already has for a persist that
+		/// could not be queued (<c>CharacterCurrency.TrySpend</c> refunds). A refused write clears no
+		/// dirty mark: this path clears none at all, so the periodic save carries the values again.
+		/// </remarks>
 		/// <returns>True if the persist was successfully enqueued, false otherwise.</returns>
 		private bool TryPersistMerchantAttributes(IPlayerCharacter character)
 		{
@@ -1036,6 +1059,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			long charID = character.ID;
+			if (!TryCaptureSessionClaim(charID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("InteractableSystem", $"TryPersistMerchantAttributes: this server holds no session claim for CharID={charID}; nothing was queued.");
+				return false;
+			}
 
 			var dtos = new List<CharacterAttributeData>();
 			/* Version++ AND MarkPersistPending, together — the pair is what makes the dirty flag
@@ -1069,13 +1097,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			return dtos.Count > 0 &&
-				EnqueuePersistence(() => PersistMerchantAttributesToDbAsync(dtos, charID), charID);
+				EnqueuePersistence(() => PersistMerchantAttributesToDbAsync(dtos, charID, claim), charID);
 		}
 
 		/// <summary>
 		/// Asynchronously persists attribute changes from merchant purchases to the database.
 		/// </summary>
-		private async System.Threading.Tasks.Task PersistMerchantAttributesToDbAsync(List<CharacterAttributeData> dtos, long charID)
+		private async System.Threading.Tasks.Task PersistMerchantAttributesToDbAsync(List<CharacterAttributeData> dtos, long charID, CharacterSessionLeaseData claim)
 		{
 			try
 			{
@@ -1087,7 +1115,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				await BulkWriteReporting.ReportAsync("InteractableSystem", "Merchant attribute save",
-					await service.PersistAsync(dtos), $"CharID={charID}");
+					await service.PersistOwnedAsync(dtos, ClaimsOf(claim)), $"CharID={charID}");
 			}
 			catch (System.Exception ex)
 			{

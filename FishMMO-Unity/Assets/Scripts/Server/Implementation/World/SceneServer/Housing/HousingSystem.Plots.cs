@@ -63,18 +63,54 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private readonly ConcurrentQueue<int> failedSceneResolves = new ConcurrentQueue<int>();
 
 		/// <summary>
-		/// When each scene handed back by <see cref="failedSceneResolves"/> may next be tried.
+		/// When each pending scene may next be tried, in <see cref="MonotonicClock"/> seconds.
 		/// </summary>
 		/// <remarks>
-		/// Pending scenes are otherwise retried every frame, which is right for a scene waiting on
-		/// its instance details and wrong for one waiting on a database that has just failed.
+		/// Every way of landing in <see cref="pendingScenes"/> sets one, so no pending scene is tried
+		/// on every frame. They used to be, for all but a database failure: a scene waiting on its
+		/// instance details copied the pending set and re-ran the resolve each frame, and a scene the
+		/// async worker had refused went straight back to pending and was refused again on the next
+		/// frame — two warnings a frame, per scene, at exactly the moment the worker was saturated.
+		/// <para>
+		/// A retry delay is a local duration. On the wall clock a host stepped back left every
+		/// pending scene's foundations unresolved for the size of the step.
+		/// </para>
 		/// </remarks>
-		private readonly Dictionary<int, DateTime> sceneResolveRetryAfterUtc = new Dictionary<int, DateTime>();
+		private readonly Dictionary<int, double> sceneResolveRetryAt = new Dictionary<int, double>();
 
 		/// <summary>
 		/// Seconds between attempts to resolve a scene whose last resolve failed in the database.
 		/// </summary>
 		private const float SceneResolveRetrySeconds = 30f;
+
+		/// <summary>
+		/// Seconds between attempts to resolve a scene whose registration the async worker refused.
+		/// </summary>
+		/// <remarks>
+		/// Shorter than the database backoff, because a full worker drains in seconds rather than
+		/// staying down, and every second the scene waits is a second its plots cannot be claimed.
+		/// </remarks>
+		private const float SceneResolveBusyRetrySeconds = 5f;
+
+		/// <summary>
+		/// Seconds between checks on a scene still waiting for its instance details.
+		/// </summary>
+		/// <remarks>
+		/// The details normally arrive within a frame or two of the scene loading, and nobody can
+		/// have walked up to a foundation in the scene before then, so a second's latency costs no
+		/// player anything — while a scene that never gets details (one loaded outside the instance
+		/// bookkeeping) no longer costs a resolve attempt every frame for as long as it stays loaded.
+		/// </remarks>
+		private const float SceneResolveWorldWaitSeconds = 1f;
+
+		/// <summary>
+		/// Pending scene handles copied out for one retry pass. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Reused rather than allocated per pass: a successful resolve removes its handle from the
+		/// set being walked, so the pass walks a copy.
+		/// </remarks>
+		private readonly List<int> pendingSceneBuffer = new List<int>();
 
 		/// <summary>
 		/// Maximum queued main-thread actions processed per frame.
@@ -227,8 +263,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			while (failedSceneResolves.TryDequeue(out int failedHandle))
 			{
 				resolvedScenes.Remove(failedHandle);
-				pendingScenes.Add(failedHandle);
-				sceneResolveRetryAfterUtc[failedHandle] = DateTime.UtcNow + TimeSpan.FromSeconds(SceneResolveRetrySeconds);
+				DeferSceneResolve(failedHandle, SceneResolveRetrySeconds);
 			}
 
 			if (pendingScenes.Count < 1)
@@ -237,28 +272,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Copied, because a successful resolve mutates the set being walked.
-			int[] handles = new int[pendingScenes.Count];
-			pendingScenes.CopyTo(handles);
+			pendingSceneBuffer.Clear();
+			pendingSceneBuffer.AddRange(pendingScenes);
 
-			DateTime now = DateTime.UtcNow;
-			foreach (int handle in handles)
+			double now = MonotonicClock.NowSeconds;
+			for (int i = 0; i < pendingSceneBuffer.Count; ++i)
 			{
+				int handle = pendingSceneBuffer[i];
+
 				/* A scene that has since unloaded takes its foundations with it, so it stops being
 				 * pending rather than being retried forever. */
 				if (PlotFoundation.Registry.ForScene(handle).Count < 1)
 				{
 					pendingScenes.Remove(handle);
-					sceneResolveRetryAfterUtc.Remove(handle);
+					sceneResolveRetryAt.Remove(handle);
 					continue;
 				}
 
-				if (sceneResolveRetryAfterUtc.TryGetValue(handle, out DateTime retryAfterUtc) && now < retryAfterUtc)
+				if (sceneResolveRetryAt.TryGetValue(handle, out double retryAt) && now < retryAt)
 				{
 					continue;
 				}
 
 				ResolveScene(handle);
 			}
+			pendingSceneBuffer.Clear();
+		}
+
+		/// <summary>
+		/// Puts a scene back in <see cref="pendingScenes"/>, not to be tried again for <paramref name="retrySeconds"/>.
+		/// </summary>
+		private void DeferSceneResolve(int sceneHandle, float retrySeconds)
+		{
+			pendingScenes.Add(sceneHandle);
+			sceneResolveRetryAt[sceneHandle] = MonotonicClock.NowSeconds + retrySeconds;
 		}
 
 		/// <summary>
@@ -314,7 +361,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			PlotFoundation.Registry.OnClaimRequested -= Registry_OnClaimRequested;
 			resolvedScenes.Clear();
 			pendingScenes.Clear();
-			sceneResolveRetryAfterUtc.Clear();
+			sceneResolveRetryAt.Clear();
 			while (failedSceneResolves.TryDequeue(out _))
 			{
 			}
@@ -352,7 +399,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* The scene server has not recorded this instance yet. Wait rather than guess: a
 				 * plot registered against the wrong world is land that belongs to the wrong
 				 * players. */
-				pendingScenes.Add(sceneHandle);
+				DeferSceneResolve(sceneHandle, SceneResolveWorldWaitSeconds);
 				return;
 			}
 
@@ -377,10 +424,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!TryEnqueueAsyncWork(() => ResolveSceneAsync(sceneHandle, worldServerID, sceneName, keys)))
 			{
 				/* Nothing registered, so nothing may be claimed here. Dropping the marker lets a
-				 * later attempt try again rather than leaving the land permanently unclaimable. */
+				 * later attempt try again rather than leaving the land permanently unclaimable —
+				 * but not on the next frame, into the same full worker, logging the refusal twice a
+				 * frame for as long as it stays full. */
 				resolvedScenes.Remove(sceneHandle);
-				pendingScenes.Add(sceneHandle);
-				Log.Warning("HousingSystem", $"Could not enqueue plot registration for scene '{sceneName}'.");
+				DeferSceneResolve(sceneHandle, SceneResolveBusyRetrySeconds);
+				Log.Warning("HousingSystem", $"Could not enqueue plot registration for scene '{sceneName}'; retrying in {SceneResolveBusyRetrySeconds:0}s.");
 			}
 		}
 
@@ -474,7 +523,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Unity objects may only be touched on the main thread.
-			if (!TryEnqueueHousingMainThread(() => ApplyResolvedPlots(sceneHandle, sceneName, plots.Data, grantsByPlot, structures)))
+			if (!TryEnqueueHousingMainThread(() => ApplyResolvedPlots(sceneHandle, worldServerID, sceneName, plots.Data, grantsByPlot, structures)))
 			{
 				Log.Warning("HousingSystem", $"Could not apply resolved plots for '{sceneName}'; retrying in {SceneResolveRetrySeconds:0}s.");
 				RetrySceneResolve(sceneHandle);
@@ -500,6 +549,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void ApplyResolvedPlots(
 			int sceneHandle,
+			long worldServerID,
 			string sceneName,
 			List<PlotData> plots,
 			Dictionary<long, Dictionary<long, PlotPermission>> grantsByPlot,
@@ -555,7 +605,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				++resolved;
 			}
 
-			sceneResolveRetryAfterUtc.Remove(sceneHandle);
+			sceneResolveRetryAt.Remove(sceneHandle);
+
+			/* This copy was stamped from a read the cross-channel window knows nothing about, so the
+			 * window starts over: the next poll of this world reads every mark, and a change that
+			 * landed between that read and the window's start is not lost to this channel. */
+			RestartPlotSyncWindow(worldServerID);
 
 			Log.Debug("HousingSystem", $"Resolved {resolved} plot(s) in '{sceneName}'.");
 		}
@@ -953,7 +1008,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}, characterID))
 			{
-				Log.Warning("HousingSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
+				Log.Warning("HousingSystem", $"Currency ledger: the persistence queue is saturated; the record for CharID={characterID} is still written, but late (behind the backlog, or through the teardown fallback).");
 			}
 		}
 
@@ -985,6 +1040,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Persists a character's attributes so a currency change survives a restart.
 		/// </summary>
+		/// <remarks>
+		/// The land purchase's and the online tax charge's persist step. Ownership-gated: the rows
+		/// quote the session claim held for the character now and land only while it is still held.
+		/// With no claim nothing is queued and false is returned, which
+		/// <see cref="CharacterCurrency.TrySpend"/> answers with a refund — the purchase is refused,
+		/// and the tax charge reports <c>Unreachable</c> and is tried again. (The offline tax debit,
+		/// <c>TryChargeWonPeriodFromRowAsync</c>, writes a row NO server holds, inside a unit of work
+		/// whose ownership assertion requires exactly that; it carries no claim by design.)
+		/// </remarks>
 		private bool TryPersistCurrency(IPlayerCharacter character)
 		{
 			if (character == null ||
@@ -995,6 +1059,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			long characterID = character.ID;
+			if (!TryCaptureSessionClaim(characterID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("HousingSystem", $"TryPersistCurrency: this server holds no session claim for CharID={characterID}; nothing was queued.");
+				return false;
+			}
+
 			List<CharacterAttributeData> dtos = new List<CharacterAttributeData>();
 
 			// Version++ AND MarkPersistPending, together — see InteractableSystem.Merchant.
@@ -1020,7 +1090,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				try
 				{
 					await BulkWriteReporting.ReportAsync("HousingSystem", "Housing currency save",
-						await attributeService.PersistAsync(dtos), $"CharID={characterID}");
+						await attributeService.PersistOwnedAsync(dtos, ClaimsOf(claim)), $"CharID={characterID}");
 				}
 				catch (Exception ex)
 				{

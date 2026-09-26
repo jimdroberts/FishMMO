@@ -57,7 +57,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - Two distinct sync paths, because state forwarding is off: the owner reconciles every tick, observers receive `CharacterAttributesBroadcast` / `CharacterResourcesBroadcast` on a change-driven scheduler
 - Replicate/Reconcile prediction support via `IPredictableController` (Order=95) and `CharacterAttributeResourceState` snapshots
 - Static events for damage, kill, and heal for cross-system integration
-- Immortality flag to prevent all damage and kill processing
+- Immortality flag to prevent all damage and kill processing; an evading NPC is refused damage the same way, and both refusals are reported to the attacker as `Immune` / `Evade`
 
 ### Security Features
 
@@ -149,6 +149,18 @@ The `Modifier` property returns the total: `FormulaModifier + ExternalModifier`.
 | Layer | Description |
 |-------|-------------|
 | `CurrentValue` | Depletable float representing current HP/MP/Stamina. Clamped between `0` and `FinalValue`. |
+
+#### Held credit (settlements)
+
+A server-side transaction that credits an attribute in the database before it has committed — a
+trade's currency legs (`TradeCurrencySettlement`) — opens a **settlement** on it
+(`BeginSettlement` → `CreditHeld` → `EndSettlement`). The credit goes into `Value` at once, so every
+other capture of the attribute carries it, but it is also counted in `HeldValue`, which
+`CharacterCurrency.TrySpend` will not spend: a refused transaction can then always take it back
+exactly. While `IsSettling`, the transaction is the attribute's only writer, and the character's
+own save paths leave it dirty until the outcome. `HeldValue` is server state only — never
+serialized, never persisted — and is cleared with the persistence state when a pooled character is
+reset, so a late close from a previous occupant's transaction is a no-op.
 
 ### The attributed-modifier ledger
 
@@ -313,11 +325,24 @@ one per hit and settled one per report.
 **`PredictedCombatEvents`** lets the caster's client draw its own number the moment its predicted
 projectile connects, instead of waiting half a round trip for the report. The amounts agree because
 damage variance is drawn from the ability object's `DeterministicRNG`. There is **no server-sent
-rejection** — the server never knew a client predicted anything — so absence is the only signal: a
+rejection** — the server never knew a client predicted anything — so absence is the general signal: a
 prediction unconfirmed for `ConfirmationWindowSeconds` (1.0 s, deliberately erring long) is treated
 as rejected. `TryConfirm` matches on source, target and kind rather than on the amount, so a bounded
 RNG divergence does not orphan a good number. It is pure bookkeeping with no rendering dependency;
-the display layer subscribes to `OnPredicted` / `OnPredictionConfirmed` / `OnPredictionRejected`.
+the display layer subscribes to `OnPredicted` / `OnPredictionConfirmed` / `OnPredictionRejected` /
+`OnPredictionRefused`.
+
+**Refused hits are the one thing the server does report.** When `Damage` turns a hit away because the
+target is evading (an NPC on a leash return, `INPCBrain.IsEvading`) or `Immortal`, it queues a
+`CombatEventKind.Evade` or `CombatEventKind.Immune` entry with a zero amount and the refused hit's
+damage type (`TryResolveRefusalReport`; a dead target reports nothing, and Evade wins over Immune).
+`CombatEventRules` classifies every kind in one place: a refusal moves no health, carries its damage
+type, and is delivered **only** to the connection that owns the attacker, reliably — bystanders get
+nothing. On the attacker's client `PredictedCombatEvents.TryRefuse` settles the matching predictions
+at once and raises `OnPredictionRefused`, and `ClientCombatDisplay` re-texts each predicted number to
+"Evade" or "Immune"; with nothing predicted (an immortal target refuses on the caster's own peer too)
+it draws the word itself. The two kinds were appended to the existing `Kind` byte, so the message
+layout did not change.
 
 **`ObservedResourcePushScheduler`** decides tick by tick whether a character's resources go out to
 its observers. The observer resource stream is unreliable and change-gated, so one lost packet
@@ -387,6 +412,7 @@ its negation, which is the failure the ledger exists to end.
 | Predicted combat number | Land a predicted hit whose report never arrives | `PredictedCombatEvents.Sweep` fires `OnPredictionRejected` after `ConfirmationWindowSeconds` (1.0 s) |
 | Reconciliation | Simulate prediction mismatch | `ApplyResourceState()` corrects client resource values |
 | Immortality flag | Set `Immortal = true`, apply damage | No health change, no `OnDamaged` event |
+| Refusal text | Hit an `Immortal` training dummy, or a leashing NPC on its way home | The attacker sees "Immune" / "Evade" over the target (a predicted number turns into the word); bystanders see nothing |
 
 ## Flow Diagram
 
@@ -482,8 +508,8 @@ the character sheet; negation is a property of what the character is currently d
 
 The `CharacterDamageController` handles:
 - **Damage**: Applies resistance modifiers, consumes health, fires `OnDamaged`, tracks achievements, triggers `Kill` if health reaches zero.
-- **Kill**: Adjusts faction, fires ECA kill triggers, cancels active ability, triggers death animation, fires `OnKilled`. Buff removal and pet despawning are handled by the server-side `OnKilled` subscriber. Re-entry is guarded by `CharacterFlags.IsDead`, which `Kill` does not set itself — the server's `OnKilled` subscriber does, which is why that subscriber sets the flag *before* it runs anything else (buff removal invokes each buff's removal effects, i.e. game logic).
-  `OnKilled` is dispatched per-subscriber with failures caught. Its subscribers include one `AggressionState` per aggressive NPC, registered at runtime; a plain multicast invoke would abandon the rest of the list at the first exception, and the list includes the handler that flags the death and notifies the client. `OnDamaged`/`OnHealed` are deliberately *not* isolated — `GetInvocationList` allocates per call, which is fine for a death and not for something raised on every hit.
+- **Kill**: Adjusts faction, fires ECA kill triggers, cancels active ability, triggers death animation, fires `OnKilled`. Buff removal and pet despawning are handled by the server-side `OnKilled` subscribers. Re-entry is guarded by `CharacterFlags.IsDead`, which `Kill` sets itself, for NPCs and players alike, before anything else runs: left to a subscriber (which set it for players only), the guard was always false for an NPC and a second `Kill` ran the whole death path again, loot roll included.
+  `OnKilled` is dispatched per-subscriber with failures caught. Its subscribers include the scene server's `CharacterSystem` (which notifies the client), the pet and arena systems, and the AI's `AggressionDispatcher` (one subscription for every NPC); a plain multicast invoke would abandon the rest of the list at the first exception. `OnDamaged`/`OnHealed` are deliberately *not* isolated — `GetInvocationList` allocates per call, which is fine for a death and not for something raised on every hit.
 - **Revive**: Resurrects a dead character via `ResourceInstance.Gain()`, fires `OnResurrected`, resets death animation, fires ECA resurrect triggers. **Clears `CharacterFlags.IsDead` itself**, before restoring health — see *The dead-state invariant* below.
 - **Heal**: Gains health, fires `OnHealed`, tracks achievements. No-op on dead characters.
 - **CompleteHeal**: Restores health to `FinalValue`. No-op on dead characters.
@@ -518,7 +544,7 @@ character.
 > anything tests while `IsDead` stayed set, producing exactly the unkillable-but-healable
 > state above. The schedule is advanced *before* the death check so a revived character
 > resumes on the normal beat rather than firing an immediate catch-up pulse.
-- **Immortal**: Flag that prevents all damage and kill processing.
+- **Immortal**: Flag that prevents all damage and kill processing. `Damage` refuses an evading NPC the same way (`CharacterEvade.RefusesHostileEffects`, an NPC walking home after a leash that ended a fight), and reports either refusal to the attacker; see *Combat reporting*.
 
 ### Regeneration Flow
 
@@ -575,6 +601,8 @@ Shared/Core/Entity/Prediction/CharacterAttribute/                               
 Shared/Implementation/Entity/Prediction/CharacterPredictionController.cs             # Drives OnReplicate / OnCreateReconcile / OnReconcile
 Shared/Implementation/Entity/Prediction/CharacterReconcileData.cs                    # Carries ResourceState + Attributes[] in the unified snapshot
 Shared/Implementation/Entity/Prediction/CharacterReconcileDataDeltaSerializer.cs     # Invokes the resource bitmask + AttributeReconcileEntry index-delta
+Shared/Implementation/Network/Character/CombatEventBroadcast.cs                      # CombatEventKind (Evade = 4, Immune = 5) and CombatEventRules (who a kind reaches, whether it moves health)
+Shared/Implementation/Entity/CharacterEvade.cs                                       # The evade gate Damage shares with the debuff and knockback paths
 ```
 
 ### Inheritance Hierarchies

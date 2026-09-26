@@ -60,16 +60,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const int GlobalPerConnectionRateMilliseconds = 15;
 
 		/// <summary>
-		/// Seconds between full item snapshots of every resident character.
+		/// Seconds in which every resident character is visited once for a full item snapshot,
+		/// taken only when its items differ from what the database last confirmed. See
+		/// <see cref="DriveItemSnapshotCycle"/>.
 		/// </summary>
 		[Header("Item Snapshot")]
-		[Tooltip("Seconds between full inventory/bank/equipment snapshots of every resident character")]
+		[Tooltip("Seconds in which every resident character is visited once, spread across the interval in 1 s slices. A visit writes a full inventory/bank/equipment snapshot only if the character's items differ from what the database last confirmed; unchanged characters are skipped.")]
 		[SerializeField] private float itemSnapshotIntervalSeconds = 60.0f;
 
 		/// <summary>
-		/// Seconds remaining until the next snapshot sweep.
+		/// Width of one slice of the snapshot interval. Every resident is visited once per interval,
+		/// in the slice its character id falls in. See <see cref="DriveItemSnapshotCycle"/>.
 		/// </summary>
-		private float itemSnapshotTimer;
+		private const float ItemSnapshotSliceSeconds = 1.0f;
+
+		/// <summary>Seconds accumulated towards the next slice of the snapshot cycle.</summary>
+		private float itemSnapshotSliceElapsed;
+
+		/// <summary>The slice of the snapshot cycle visited next.</summary>
+		private int nextItemSnapshotSlice;
+
+		/// <summary>
+		/// Most repair snapshots captured in one frame. Requests past it wait for the next frame,
+		/// so a burst of reconciles that all come due together — the end of a database outage —
+		/// is spread instead of captured on one frame.
+		/// </summary>
+		private const int MaxReconcileCapturesPerFrame = 16;
+
+		/// <summary>
+		/// How long a repair waits when the character already has a snapshot queued. That snapshot
+		/// may have been captured before the failure it is meant to repair, so the request is kept,
+		/// not dropped, and looked at again once it has had time to land.
+		/// </summary>
+		private static readonly TimeSpan ReconcileDeferral = TimeSpan.FromSeconds(1);
 
 		/// <summary>
 		/// Operation codes used by ingress guards.
@@ -165,11 +188,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// A snapshot is cheap relative to a save tick but it is not free, so refuse a pathological
 			// interval rather than letting a mis-set inspector field turn it into a per-frame sweep.
 			itemSnapshotIntervalSeconds = Mathf.Max(5.0f, itemSnapshotIntervalSeconds);
-			itemSnapshotTimer = itemSnapshotIntervalSeconds;
+			itemSnapshotSliceElapsed = 0.0f;
+			nextItemSnapshotSlice = 0;
 
-			// The logout snapshot has to run while the character is still resident, which is exactly
-			// what OnDespawnCharacter gives us: CharacterSystem raises it after it has captured its
-			// own save data but before the NetworkObject is despawned.
+			// Spawn hooks each character's equipment and consumable events; despawn unhooks them and
+			// forgets the character's write bookkeeping. The logout snapshot is not taken on despawn:
+			// CharacterSystem captures it through CaptureDespawnFlush while the character is still
+			// resident, and awaits it before the release.
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> characterSystem))
 			{
 				characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
@@ -248,13 +273,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				runtimeData.IngressGuard.Sweep(ingressSweepIntervalSeconds, ingressEntryTtlSeconds, ingressSweepMaxRemovals);
 			}
 
-			itemSnapshotTimer -= deltaTime;
-			if (itemSnapshotTimer <= 0.0f)
-			{
-				itemSnapshotTimer = itemSnapshotIntervalSeconds;
-				SnapshotAllResidentCharacterItems();
-				itemWriteJournal.PruneDeparted(DepartedWatermarkRetention);
-			}
+			DriveItemSnapshotCycle(deltaTime);
 
 			// A rolled-back item transaction leaves memory ahead of the database. The repair has to
 			// happen here rather than on the worker thread that discovered it, because capturing a
@@ -304,18 +323,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// When each departed character was forgotten. The despawn flush claims its sequence
 			/// AFTER ForgetCharacter and re-creates the watermarks, so a character that logs out
 			/// leaves an entry behind; the sweep removes those once no batch can still be queued.
+			/// In <see cref="MonotonicClock"/> seconds: how long a character has been gone is a local
+			/// duration.
 			/// </summary>
-			private readonly Dictionary<long, DateTime> departedUtc = new Dictionary<long, DateTime>();
-			private readonly HashSet<long> reconcileRequests = new HashSet<long>();
+			private readonly Dictionary<long, double> departedAt = new Dictionary<long, double>();
+
+			/// <summary>
+			/// Repair requests ordered by the time they come due (<see cref="MonotonicClock.NowTicks"/>),
+			/// then by character.
+			/// </summary>
+			/// <remarks>
+			/// A due-time queue rather than a set that is scanned. The scan used to walk every request
+			/// under the lock on every frame, including the ones still backing off, and during an
+			/// outage that is roughly every resident — sixty times a second, to capture nothing. Now a
+			/// frame looks at the head and stops at the first request that is not yet due.
+			/// <para>
+			/// The backoff is a local duration. On the wall clock a host stepped back held every
+			/// repair for the size of the step, and one stepped forward made every backing-off
+			/// request due at once.
+			/// </para>
+			/// </remarks>
+			private readonly SortedSet<(long DueTicks, long CharacterID)> reconcileQueue = new SortedSet<(long, long)>();
+
+			/// <summary>The due time each queued character holds in <see cref="reconcileQueue"/>.</summary>
+			private readonly Dictionary<long, long> reconcileDueTicks = new Dictionary<long, long>();
 
 			/// <summary>Consecutive reconcile requests per character since its last successful snapshot.</summary>
 			private readonly Dictionary<long, int> reconcileFailures = new Dictionary<long, int>();
 
-			/// <summary>Earliest time a character's next repair snapshot may be captured.</summary>
-			private readonly Dictionary<long, DateTime> reconcileNotBeforeUtc = new Dictionary<long, DateTime>();
-
 			/// <summary>Longest wait between repair attempts for one character.</summary>
 			private static readonly TimeSpan MaxReconcileBackoff = TimeSpan.FromSeconds(30);
+
+			/// <summary>
+			/// What the database was last confirmed to hold for each character's items, while nothing
+			/// written since could have changed it. See <see cref="RecordSnapshotConfirmed"/>.
+			/// </summary>
+			private readonly Dictionary<long, ConfirmedItemSnapshot> confirmedSnapshots = new Dictionary<long, ConfirmedItemSnapshot>();
+
+			/// <summary>
+			/// The sequence of the full snapshot queued for each character and not yet finished.
+			/// See <see cref="TryMarkSnapshotOutstanding"/>.
+			/// </summary>
+			private readonly Dictionary<long, long> outstandingSnapshots = new Dictionary<long, long>();
 
 			/// <summary>
 			/// Allocates the next capture sequence number. Main thread only, which is what makes the
@@ -339,10 +388,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// </summary>
 			/// <remarks>
 			/// <para>
-			/// THE ORDERING PROBLEM. <c>EnqueuePersistence</c> is FIFO per entity key, but only while
-			/// the bounded queue has room: when it is full the work runs on the thread pool instead,
-			/// deliberately, so that persistence is never dropped. That fallback is what breaks the
-			/// order, and it breaks it precisely when the server is busiest.
+			/// THE ORDERING PROBLEM. <c>EnqueuePersistence</c> is FIFO per entity key while the async
+			/// worker runs — work past its backpressure threshold is still admitted, in its entity's
+			/// order — but when the worker is not running (teardown) the work goes to a bounded
+			/// thread-pool fallback instead, deliberately, so that persistence is never dropped. That
+			/// fallback keeps no per-entity order.
 			/// </para>
 			/// <para>
 			/// The dangerous reordering is the one involving a snapshot, because a snapshot prunes and
@@ -441,7 +491,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					if (isSnapshot)
 					{
-						return !lastAppliedAny.TryGetValue(characterID, out long appliedAny) || appliedAny < sequence;
+						// Equal is this snapshot's own earlier claim; see TryClaimSequence.
+						return !lastAppliedAny.TryGetValue(characterID, out long appliedAny) || appliedAny <= sequence;
 					}
 					return !lastAppliedSnapshot.TryGetValue(characterID, out long appliedSnapshot) || appliedSnapshot < sequence;
 				}
@@ -473,6 +524,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// bounded by one reconcile, whereas the cost of claiming after the commit is a
 			/// resurrected item.
 			/// </para>
+			/// <para>
+			/// A SNAPSHOT MAY RE-CLAIM ITS OWN SEQUENCE. Sequences are issued once each, so a watermark
+			/// equal to a snapshot's sequence can only be that same batch's earlier claim — an attempt
+			/// that claimed and then failed. The departure flush is run again when that happens (the
+			/// claim cannot be handed back until it lands), and refusing the rerun as "superseded by
+			/// itself" is what made a failed flush unrepeatable. Nothing captured later can be
+			/// overwritten by it: a later write raises the watermark past the flush's sequence, and the
+			/// rerun is then refused as before.
+			/// </para>
+			/// <para>
+			/// Every successful claim retires the character's confirmed snapshot: from this moment the
+			/// database may hold something the record does not describe. A snapshot re-records it once
+			/// it commits; see <see cref="RecordSnapshotConfirmed"/>.
+			/// </para>
 			/// </remarks>
 			public bool TryClaimSequence(long characterID, long sequence, bool isSnapshot)
 			{
@@ -484,7 +549,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					if (isSnapshot)
 					{
-						if (lastAppliedAny.TryGetValue(characterID, out long appliedAny) && appliedAny >= sequence)
+						if (lastAppliedAny.TryGetValue(characterID, out long appliedAny) && appliedAny > sequence)
 						{
 							return false;
 						}
@@ -493,6 +558,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					{
 						return false;
 					}
+
+					confirmedSnapshots.Remove(characterID);
 
 					if (!lastAppliedAny.TryGetValue(characterID, out long currentAny) || currentAny < sequence)
 					{
@@ -513,8 +580,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// </summary>
 			/// <remarks>
 			/// <c>CharacterSystem.SaveAndDespawnCharacter</c> removes the token from
-			/// <c>SessionTokens</c> before it raises <c>OnDespawnCharacter</c>, so the logout flush has
-			/// nothing left to quote unless it was kept here first.
+			/// <c>SessionTokens</c> before it raises <c>OnDespawnCharacter</c>, so a batch captured
+			/// after that point has nothing left to quote unless it was kept here first. The logout
+			/// flush itself is handed its lease explicitly (<c>CaptureDespawnFlush</c>).
 			/// </remarks>
 			public void RememberLease(long characterID, CharacterSessionInfo info)
 			{
@@ -522,7 +590,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					lastKnownLease[characterID] = info;
 					// Resident again; its watermarks are live state, not leftovers.
-					departedUtc.Remove(characterID);
+					departedAt.Remove(characterID);
 				}
 			}
 
@@ -552,59 +620,219 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				lock (gate)
 				{
-					reconcileRequests.Add(characterID);
-
 					reconcileFailures.TryGetValue(characterID, out int failures);
 					failures = Math.Min(failures + 1, 16);
 					reconcileFailures[characterID] = failures;
 
 					double seconds = Math.Min(MaxReconcileBackoff.TotalSeconds, Math.Pow(2, failures - 1));
-					reconcileNotBeforeUtc[characterID] = DateTime.UtcNow.AddSeconds(seconds);
+					ScheduleReconcileLocked(characterID, MonotonicClock.NowTicks + TimeSpan.FromSeconds(seconds).Ticks);
+				}
+			}
+
+			/// <summary>
+			/// Puts a drained request back, unchanged in its backoff, to be looked at again after
+			/// <paramref name="delay"/>.
+			/// </summary>
+			/// <remarks>
+			/// For a request that came due while the character already had a snapshot queued. That
+			/// snapshot may have been captured before the failure it would be repairing, so dropping
+			/// the request would leave the failure unrepaired; capturing another alongside it is the
+			/// pile-up <see cref="TryMarkSnapshotOutstanding"/> exists to stop.
+			/// </remarks>
+			public void DeferReconcile(long characterID, TimeSpan delay)
+			{
+				lock (gate)
+				{
+					ScheduleReconcileLocked(characterID, MonotonicClock.NowTicks + delay.Ticks);
+				}
+			}
+
+			/// <summary>Queues (or re-times) one request. Call under <see cref="gate"/>.</summary>
+			private void ScheduleReconcileLocked(long characterID, long dueTicks)
+			{
+				if (reconcileDueTicks.TryGetValue(characterID, out long queuedTicks))
+				{
+					reconcileQueue.Remove((queuedTicks, characterID));
+				}
+				reconcileDueTicks[characterID] = dueTicks;
+				reconcileQueue.Add((dueTicks, characterID));
+			}
+
+			/// <summary>Removes one queued request, if there is one. Call under <see cref="gate"/>.</summary>
+			private void UnscheduleReconcileLocked(long characterID)
+			{
+				if (reconcileDueTicks.TryGetValue(characterID, out long queuedTicks))
+				{
+					reconcileQueue.Remove((queuedTicks, characterID));
+					reconcileDueTicks.Remove(characterID);
 				}
 			}
 
 			/// <summary>
 			/// Records that a snapshot for the character committed, ending its backoff.
 			/// </summary>
+			/// <remarks>
+			/// A request still queued is brought forward rather than dropped, as it always was: it may
+			/// report a failure captured after the snapshot that has just landed.
+			/// </remarks>
 			public void NoteSnapshotSucceeded(long characterID)
 			{
 				lock (gate)
 				{
 					reconcileFailures.Remove(characterID);
-					reconcileNotBeforeUtc.Remove(characterID);
+					if (reconcileDueTicks.ContainsKey(characterID))
+					{
+						ScheduleReconcileLocked(characterID, MonotonicClock.NowTicks);
+					}
 				}
 			}
 
 			/// <summary>
-			/// Takes the repair requests that are due. Requests still backing off stay queued.
+			/// Takes up to <paramref name="budget"/> repair requests that are due, earliest first.
+			/// Requests still backing off, and any past the budget, stay queued.
 			/// </summary>
-			public List<long> DrainReconcileRequests()
+			/// <param name="budget">Most requests to take.</param>
+			/// <returns>The requests taken, or null when none was due.</returns>
+			public List<long> DrainReconcileRequests(int budget)
 			{
 				lock (gate)
 				{
-					if (reconcileRequests.Count == 0)
+					if (reconcileQueue.Count == 0 || budget <= 0)
 					{
 						return null;
 					}
 
-					DateTime now = DateTime.UtcNow;
+					long nowTicks = MonotonicClock.NowTicks;
 					List<long> drained = null;
-					foreach (long characterID in reconcileRequests)
+					while (reconcileQueue.Count > 0 && (drained == null || drained.Count < budget))
 					{
-						if (reconcileNotBeforeUtc.TryGetValue(characterID, out DateTime notBefore) && now < notBefore)
+						(long dueTicks, long characterID) head = reconcileQueue.Min;
+						if (head.dueTicks > nowTicks)
 						{
-							continue;
+							break;
 						}
-						(drained ??= new List<long>()).Add(characterID);
-					}
-					if (drained != null)
-					{
-						foreach (long characterID in drained)
-						{
-							reconcileRequests.Remove(characterID);
-						}
+						reconcileQueue.Remove(head);
+						reconcileDueTicks.Remove(head.characterID);
+						(drained ??= new List<long>(Math.Min(budget, 16))).Add(head.characterID);
 					}
 					return drained;
+				}
+			}
+
+			/// <summary>Repair requests queued, due or not.</summary>
+			public int PendingReconcileCount
+			{
+				get
+				{
+					lock (gate)
+					{
+						return reconcileQueue.Count;
+					}
+				}
+			}
+
+			/// <summary>
+			/// Marks a full snapshot as queued for a character, unless one already is.
+			/// </summary>
+			/// <remarks>
+			/// <para>
+			/// <b>At most one full snapshot per character is ever waiting.</b> Snapshots used to be
+			/// captured on schedule whether or not the last one had run, so a database stall queued a
+			/// complete rewrite of every resident per interval — about 2,500 of them in five minutes at
+			/// 500 residents — and the worker's overflow then ran them all at once. A snapshot captured
+			/// later states everything an earlier one would, so while one is queued another adds
+			/// nothing; the character is simply looked at again on its next turn.
+			/// </para>
+			/// <para>
+			/// Keyed by the snapshot's sequence so a late finish cannot clear the mark of a newer one.
+			/// The departure flush is not counted: it is the character's last word and always runs.
+			/// </para>
+			/// </remarks>
+			/// <param name="characterID">The character.</param>
+			/// <param name="sequence">The snapshot's capture sequence.</param>
+			/// <returns>False when a snapshot is already queued.</returns>
+			public bool TryMarkSnapshotOutstanding(long characterID, long sequence)
+			{
+				lock (gate)
+				{
+					if (outstandingSnapshots.ContainsKey(characterID))
+					{
+						return false;
+					}
+					outstandingSnapshots[characterID] = sequence;
+					return true;
+				}
+			}
+
+			/// <summary>Whether a full snapshot is queued for the character and not yet finished.</summary>
+			public bool IsSnapshotOutstanding(long characterID)
+			{
+				lock (gate)
+				{
+					return outstandingSnapshots.ContainsKey(characterID);
+				}
+			}
+
+			/// <summary>Clears the mark <see cref="TryMarkSnapshotOutstanding"/> set, if it is still this snapshot's.</summary>
+			public void ClearSnapshotOutstanding(long characterID, long sequence)
+			{
+				lock (gate)
+				{
+					if (outstandingSnapshots.TryGetValue(characterID, out long held) && held == sequence)
+					{
+						outstandingSnapshots.Remove(characterID);
+					}
+				}
+			}
+
+			/// <summary>
+			/// Records what a committed snapshot wrote, as long as it is still the newest write that
+			/// has claimed for the character.
+			/// </summary>
+			/// <remarks>
+			/// <para>
+			/// The record is what lets the periodic pass skip a character whose containers have not
+			/// changed: a snapshot now would write exactly these rows again. It is only true while
+			/// nothing written since has changed the rows, which is why every claim retires it
+			/// (<see cref="TryClaimSequence"/>) and why it is recorded only when the watermark still
+			/// stands at this snapshot's own sequence. A later batch that claimed between this
+			/// snapshot's commit and this call has moved the watermark on, and the record is refused
+			/// rather than published over a database it no longer describes.
+			/// </para>
+			/// <para>
+			/// Every write of <c>character_item</c> for a resident character goes through the claim —
+			/// the incremental batches, the exchanges, the snapshots and the departure flush — so there
+			/// is no writer the record can be blind to.
+			/// </para>
+			/// </remarks>
+			/// <param name="characterID">The character.</param>
+			/// <param name="sequence">The snapshot's capture sequence.</param>
+			/// <param name="containers">The containers it spoke for.</param>
+			/// <param name="rows">The rows it wrote, with the identities the database issued.</param>
+			public void RecordSnapshotConfirmed(long characterID, long sequence, List<ItemContainerType> containers, List<CharacterItemData> rows)
+			{
+				if (containers == null || rows == null)
+				{
+					return;
+				}
+
+				lock (gate)
+				{
+					// A departed character has nothing left to compare against; see ForgetCharacter.
+					if (!departedAt.ContainsKey(characterID) &&
+						lastAppliedAny.TryGetValue(characterID, out long appliedAny) && appliedAny == sequence)
+					{
+						confirmedSnapshots[characterID] = new ConfirmedItemSnapshot(containers, rows);
+					}
+				}
+			}
+
+			/// <summary>The confirmed snapshot for a character, when there is one. See <see cref="RecordSnapshotConfirmed"/>.</summary>
+			public bool TryGetConfirmedSnapshot(long characterID, out ConfirmedItemSnapshot confirmed)
+			{
+				lock (gate)
+				{
+					return confirmedSnapshots.TryGetValue(characterID, out confirmed);
 				}
 			}
 
@@ -621,11 +849,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					lastAppliedAny.Remove(characterID);
 					lastAppliedSnapshot.Remove(characterID);
 					lastKnownLease.Remove(characterID);
-					reconcileRequests.Remove(characterID);
+					UnscheduleReconcileLocked(characterID);
 					reconcileFailures.Remove(characterID);
-					reconcileNotBeforeUtc.Remove(characterID);
+					confirmedSnapshots.Remove(characterID);
+					outstandingSnapshots.Remove(characterID);
 					pendingIdentities.Remove(characterID);
-					departedUtc[characterID] = DateTime.UtcNow;
+					departedAt[characterID] = MonotonicClock.NowSeconds;
 				}
 			}
 
@@ -853,13 +1082,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				lock (gate)
 				{
-					if (departedUtc.Count == 0)
+					if (departedAt.Count == 0)
 					{
 						return 0;
 					}
-					DateTime cutoff = DateTime.UtcNow - olderThan;
+					double cutoff = MonotonicClock.NowSeconds - olderThan.TotalSeconds;
 					List<long> expired = null;
-					foreach (var kvp in departedUtc)
+					foreach (var kvp in departedAt)
 					{
 						if (kvp.Value <= cutoff)
 						{
@@ -872,11 +1101,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					}
 					foreach (long characterID in expired)
 					{
-						departedUtc.Remove(characterID);
+						departedAt.Remove(characterID);
 						lastAppliedAny.Remove(characterID);
 						lastAppliedSnapshot.Remove(characterID);
 						// The despawn flush can record identities after ForgetCharacter, like the watermarks.
 						pendingIdentities.Remove(characterID);
+						confirmedSnapshots.Remove(characterID);
+						outstandingSnapshots.Remove(characterID);
 					}
 					return expired.Count;
 				}
@@ -892,11 +1123,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					lastAppliedAny.Clear();
 					lastAppliedSnapshot.Clear();
 					lastKnownLease.Clear();
-					reconcileRequests.Clear();
+					reconcileQueue.Clear();
+					reconcileDueTicks.Clear();
 					reconcileFailures.Clear();
-					reconcileNotBeforeUtc.Clear();
+					confirmedSnapshots.Clear();
+					outstandingSnapshots.Clear();
+					departedAt.Clear();
+					voided.Clear();
 					pendingIdentities.Clear();
 				}
+			}
+		}
+
+		/// <summary>
+		/// What a committed snapshot wrote for a character: the containers it spoke for and the rows
+		/// it stated for them. Immutable once published. See
+		/// <see cref="ItemWriteJournal.RecordSnapshotConfirmed"/>.
+		/// </summary>
+		private sealed class ConfirmedItemSnapshot
+		{
+			/// <summary>The containers the snapshot spoke for, in capture order.</summary>
+			public readonly List<ItemContainerType> Containers;
+
+			/// <summary>The rows it wrote, in capture order, with the identities the database issued.</summary>
+			public readonly List<CharacterItemData> Rows;
+
+			public ConfirmedItemSnapshot(List<ItemContainerType> containers, List<CharacterItemData> rows)
+			{
+				Containers = containers;
+				Rows = rows;
 			}
 		}
 
@@ -1022,6 +1277,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// shutdown deadline. The rows it writes are what the next load reads.
 			/// </remarks>
 			public bool IsDepartureFlush;
+
+			/// <summary>
+			/// True for a periodic or repair snapshot that holds the character's one queued-snapshot
+			/// mark. Cleared when the batch finishes, however it finishes.
+			/// See <see cref="ItemWriteJournal.TryMarkSnapshotOutstanding"/>.
+			/// </summary>
+			public bool TracksOutstandingSnapshot;
+
+			/// <summary>
+			/// For a snapshot, the rows the worker actually sent — the capture restated under any
+			/// identities already in flight. Set by the worker; read only by the worker after it.
+			/// </summary>
+			public List<CharacterItemData> WrittenRows;
 
 			public void AddLockedSlot(ItemContainerType container, int slot)
 			{
@@ -1173,8 +1441,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <remarks>
 		/// Falls back to the last triple seen because <c>CharacterSystem.SaveAndDespawnCharacter</c>
-		/// removes the token from <c>SessionTokens</c> before raising <c>OnDespawnCharacter</c>, and
-		/// the logout flush hangs off that event. An invalid (default) result is not fatal: the
+		/// removes the token from <c>SessionTokens</c> before raising <c>OnDespawnCharacter</c>; the
+		/// logout flush itself is handed its lease explicitly. An invalid (default) result is not fatal: the
 		/// ownership assertion still refuses to write over a session someone else holds, it simply
 		/// cannot additionally prove the write is ours.
 		/// </remarks>
@@ -1200,10 +1468,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Hands a completed batch to the async worker as a single unit of work.
 		/// </summary>
 		/// <returns>
-		/// <c>true</c> when the batch was enqueued normally. <c>false</c> means the bounded queue was
-		/// full and the work is running on the thread-pool fallback instead — it has NOT been
-		/// discarded, which is why the client is told <c>ServerBusy</c> ("outcome unknown") rather
-		/// than that the operation failed.
+		/// <c>true</c> when the batch was enqueued within the worker's threshold. <c>false</c> means it
+		/// was admitted over the threshold and waits behind the backlog (or, the worker not running,
+		/// went to the bounded fallback) — it has NOT been discarded, which is why the client is told
+		/// <c>ServerBusy</c> ("outcome unknown") rather than that the operation failed.
 		/// </returns>
 		private bool EnqueueItemBatch(ItemWriteBatch batch)
 		{
@@ -1556,7 +1824,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				await using IUnitOfWork unitOfWork = beginResult.Data;
 
 				// ── 1. Both row locks, ascending id ─────────────────────────────────────────
-				DatabaseResult firstOwnership = await ownershipService.AssertOwnershipAsync(run.FirstID, run.FirstLease, allowUnclaimed: true);
+				DatabaseResult firstOwnership = await ownershipService.AssertOwnershipAsync(run.FirstID, run.FirstLease, allowUnclaimed: AllowsUnclaimedItemWrite(run.FirstLease));
 				if (!firstOwnership.IsSuccess)
 				{
 					await unitOfWork.RollbackAsync();
@@ -1564,7 +1832,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await FinishExchangeAsync(run, committed: false, applied: false);
 					return;
 				}
-				DatabaseResult secondOwnership = await ownershipService.AssertOwnershipAsync(run.SecondID, run.SecondLease, allowUnclaimed: true);
+				DatabaseResult secondOwnership = await ownershipService.AssertOwnershipAsync(run.SecondID, run.SecondLease, allowUnclaimed: AllowsUnclaimedItemWrite(run.SecondLease));
 				if (!secondOwnership.IsSuccess)
 				{
 					await unitOfWork.RollbackAsync();
@@ -1717,8 +1985,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Sequences and versions are stamped here, which is the moment that separates "before
 		/// the trade" from "after it" for every other write. Items with no identity get the
 		/// same treatment as <see cref="TryPersistGrantedItems"/>: their slots stay locked until
-		/// the write-back names them. The currency attribute is written as memory PLUS the
-		/// credit the leg carries, because the credit is applied to memory only after the commit.
+		/// the write-back names them. The attribute sheet is written exactly as memory holds it:
+		/// the caller applied both payments and both credits before handing the legs back.
 		/// </remarks>
 		private ItemWriteBatch CaptureExchangeLeg(ExchangeRun run, ItemExchangeLeg leg)
 		{
@@ -1771,28 +2039,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (leg.PersistAttributes)
 			{
-				List<CharacterAttributeData> attributes = BuildAttributeDataList(character);
-				if (leg.CurrencyCredit > 0 && leg.CurrencyTemplateID != 0)
-				{
-					for (int i = 0; i < attributes.Count; ++i)
-					{
-						CharacterAttributeData row = attributes[i];
-						if (row.TemplateID != leg.CurrencyTemplateID)
-						{
-							continue;
-						}
-						long credited = Math.Min((long)row.Value + leg.CurrencyCredit, int.MaxValue);
-						attributes[i] = new CharacterAttributeData(
-							id: row.ID,
-							version: row.Version,
-							characterID: row.CharacterID,
-							templateID: row.TemplateID,
-							value: (int)credited,
-							currentValue: row.CurrentValue);
-						break;
-					}
-				}
-				batch.AddAttributeWrites(attributes);
+				batch.AddAttributeWrites(BuildAttributeDataList(character));
 			}
 
 			return batch;
@@ -1964,7 +2211,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Applies one batch inside a single database transaction. Worker thread.
 		/// </summary>
-		private async Task ApplyItemBatchAsync(ItemWriteBatch batch)
+		/// <remarks>
+		/// <para>
+		/// <b>Reports what happened.</b> This used to catch every failure itself and return a plain
+		/// task, which was fine for the incremental batches — a failure files a reconcile, and the
+		/// reconcile is the repair — and wrong for the departure flush. The flush is awaited before a
+		/// departing character's claim is handed back, and its caller could not tell a flush that
+		/// landed from one that did not, so it released either way; the reconcile the failure filed
+		/// was then dropped because the character was no longer resident. Every item change whose
+		/// incremental write had failed since the last snapshot — up to a minute of them — went with
+		/// it. The outcome is now returned, and the departure paths keep the claim and run the flush
+		/// again until it is no longer <see cref="ItemWriteOutcome.Retry"/>.
+		/// </para>
+		/// <para>
+		/// The repair behaviour is unchanged: a failure still files a reconcile, which does the
+		/// repair for a character that is still here and is a no-op for one that has left.
+		/// </para>
+		/// </remarks>
+		/// <returns>What became of the batch. Never throws.</returns>
+		private async Task<ItemWriteOutcome> ApplyItemBatchAsync(ItemWriteBatch batch)
 		{
 			try
 			{
@@ -1975,7 +2240,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Not written, and nothing else will write it: the reconcile snapshot is the repair.
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 					ReleaseBatchLocks(batch);
-					return;
+					return ItemWriteOutcome.Retry;
 				}
 
 				if (!registry.TryGet<IUnitOfWorkService>(out var unitOfWorkService) ||
@@ -1984,7 +2249,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Error("CharacterInventorySystem", "ApplyItemBatchAsync: Failed to resolve IUnitOfWorkService or ICharacterSessionOwnershipService");
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 					ReleaseBatchLocks(batch);
-					return;
+					return ItemWriteOutcome.Retry;
 				}
 
 				// Cheap pre-test only, so an already-superseded batch does not cost a transaction.
@@ -1993,7 +2258,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					await Log.Debug("CharacterInventorySystem", $"ApplyItemBatchAsync: skipped superseded {batch.Operation} (CharID={batch.CharacterID}, Seq={batch.Sequence}, Snapshot={batch.IsSnapshot})");
 					ReleaseBatchLocks(batch);
-					return;
+					return ItemWriteOutcome.Superseded;
 				}
 
 				DatabaseResult<IUnitOfWork> beginResult = await unitOfWorkService.BeginAsync();
@@ -2002,7 +2267,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: could not begin unit of work for {batch.Operation} (CharID={batch.CharacterID}): {beginResult.ErrorCode} - {beginResult.ErrorMessage}");
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 					ReleaseBatchLocks(batch);
-					return;
+					return ItemWriteOutcome.Retry;
 				}
 
 				await using IUnitOfWork unitOfWork = beginResult.Data;
@@ -2010,7 +2275,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Ownership first, and inside the transaction: it takes a row lock on the character
 				// that a competing claim must wait behind, so it is a guarantee for the whole
 				// transaction rather than an observation about the moment it ran.
-				DatabaseResult ownership = await ownershipService.AssertOwnershipAsync(batch.CharacterID, batch.Lease, allowUnclaimed: true);
+				DatabaseResult ownership = await ownershipService.AssertOwnershipAsync(batch.CharacterID, batch.Lease, allowUnclaimed: AllowsUnclaimedItemWrite(batch.Lease));
 				if (!ownership.IsSuccess)
 				{
 					await unitOfWork.RollbackAsync();
@@ -2020,7 +2285,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// guard exists to prevent. Our containers are the stale ones.
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: refused {batch.Operation} for character {batch.CharacterID}: {ownership.ErrorCode} - {ownership.ErrorMessage}");
 					ReleaseBatchLocks(batch);
-					return;
+					return ClassifyOwnershipRefusal(ownership);
 				}
 
 				// THE ORDERING DECISION, made here and nowhere else. The row lock taken above is what
@@ -2036,7 +2301,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// strictly more current than this one. No reconcile — there is nothing to repair.
 					await Log.Debug("CharacterInventorySystem", $"ApplyItemBatchAsync: skipped superseded {batch.Operation} (CharID={batch.CharacterID}, Seq={batch.Sequence}, Snapshot={batch.IsSnapshot})");
 					ReleaseBatchLocks(batch);
-					return;
+					return ItemWriteOutcome.Superseded;
 				}
 
 				DatabaseResult applied = await ApplyBatchStepsAsync(registry, batch);
@@ -2046,7 +2311,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Log.Warning("CharacterInventorySystem", $"ApplyItemBatchAsync: rolled back {batch.Operation} for character {batch.CharacterID}: {applied.ErrorCode} - {applied.ErrorMessage}");
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 					ReleaseBatchLocks(batch);
-					return;
+					return applied.IsTransient ? ItemWriteOutcome.Retry : ItemWriteOutcome.Rejected;
 				}
 
 				DatabaseResult commit = await unitOfWork.CommitAsync();
@@ -2057,7 +2322,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					itemWriteJournal.ForgetPendingIdentities(batch.CharacterID, batch.AssignedIdentities);
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 					ReleaseBatchLocks(batch);
-					return;
+					/* Retry whatever the error: a failed commit may even have landed (a lost reply), and
+					 * every batch that is ever run again — the departure flush — is a snapshot, which
+					 * restates the same rows and is safe to repeat. */
+					return ItemWriteOutcome.Retry;
 				}
 
 				if (unitOfWork.DisposeFault != null)
@@ -2069,6 +2337,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					// A landed snapshot is the repair; whatever was backing off is repaired.
 					itemWriteJournal.NoteSnapshotSucceeded(batch.CharacterID);
+
+					/* What the database now holds, for the periodic pass to compare against. The
+					 * departure flush records nothing: its character is leaving. */
+					if (!batch.IsDepartureFlush && batch.WrittenRows != null)
+					{
+						itemWriteJournal.RecordSnapshotConfirmed(
+							batch.CharacterID,
+							batch.Sequence,
+							batch.SnapshotContainers,
+							ItemSnapshotContent.WithIssuedIdentities(batch.WrittenRows, batch.AssignedIdentities));
+					}
 				}
 
 				/* Only after the commit. An identity written back from a transaction that then
@@ -2103,6 +2382,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						itemWriteJournal.RequestReconcile(characterID);
 					}
 				}
+
+				return ItemWriteOutcome.Written;
 			}
 			catch (Exception ex)
 			{
@@ -2111,7 +2392,65 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					itemWriteJournal.RequestReconcile(batch.CharacterID);
 				}
+				return ItemWriteOutcome.Retry;
 			}
+			finally
+			{
+				if (batch != null && batch.TracksOutstandingSnapshot)
+				{
+					itemWriteJournal.ClearSnapshotOutstanding(batch.CharacterID, batch.Sequence);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Says what an ownership refusal means for an item write.
+		/// </summary>
+		/// <remarks>
+		/// Forbidden is a claim that belongs to someone else (or a deleted character): final, and the
+		/// one outcome that must never be retried over the owner's state. A transient failure of the
+		/// assertion itself proved nothing either way and is worth another attempt. Anything else — a
+		/// missing character, a malformed triple — will fail the same way next time.
+		/// </remarks>
+		/// <param name="refusal">The failed assertion.</param>
+		/// <returns>The outcome to report.</returns>
+		/// <seealso cref="AllowsUnclaimedItemWrite"/>
+		public static ItemWriteOutcome ClassifyOwnershipRefusal(DatabaseResult refusal)
+		{
+			if (refusal.ErrorCode == DatabaseErrorCodes.Forbidden)
+			{
+				return ItemWriteOutcome.NotOwned;
+			}
+			return refusal.IsTransient ? ItemWriteOutcome.Retry : ItemWriteOutcome.Rejected;
+		}
+
+		/// <summary>
+		/// Whether an item write may land on a character whose row holds no claim at all. Pure.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Only a write that has no claim to quote.</b> Every assertion used to pass
+		/// <c>allowUnclaimed: true</c>, and a character this server has just released is exactly
+		/// that — Offline, owned by nobody — so a batch captured under the released claim and run a
+		/// moment late was accepted: it landed after the release, over the rows the next load reads
+		/// and over anything written to the offline character since. That made the item gate weaker
+		/// than the one every other character write now passes (<c>CharacterWriteGate</c>): a write
+		/// that carries a claim must find that claim, and one that finds the character released is
+		/// refused as <see cref="DatabaseErrorCodes.Forbidden"/>, reported as
+		/// <see cref="ItemWriteOutcome.NotOwned"/>, and not reconciled.
+		/// </para>
+		/// <para>
+		/// A batch with no triple at all (<see cref="ResolveSessionLease"/> found none, which a
+		/// resident character does not produce) keeps the old fallback: refused over a live claim by
+		/// anyone, accepted on an unclaimed row. It cannot prove anything either way, and refusing it
+		/// outright would lose the write of a resident whose claim bookkeeping had gone missing.
+		/// </para>
+		/// </remarks>
+		/// <param name="lease">The claim the write was captured under.</param>
+		/// <returns>True only when the write carries no usable claim.</returns>
+		public static bool AllowsUnclaimedItemWrite(CharacterSessionLeaseData lease)
+		{
+			return !lease.IsValid;
 		}
 
 		/// <summary>
@@ -2358,6 +2697,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private async Task<DatabaseResult> ApplyBatchStepsAsync(IDatabaseServiceRegistry registry, ItemWriteBatch batch)
 		{
+			/* A batch can be run more than once (a departure flush that failed is run again before its
+			 * claim is released), so nothing an earlier attempt produced may leak into this one. */
+			batch.AssignedIdentities = null;
+			batch.WrittenRows = null;
+
 			bool hasItemWork = batch.IsSnapshot
 				? batch.SnapshotContainers != null && batch.SnapshotContainers.Count > 0
 				: (batch.ItemDeletes != null && batch.ItemDeletes.Count > 0) ||
@@ -2382,6 +2726,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * identities an exchange recorded before its commit are visible. */
 					List<CharacterItemIdAssignment> carried = null;
 					List<CharacterItemData> rows = WithPendingIdentities(batch.CharacterID, batch.Sequence, batch.ItemWrites ?? EmptyItemWrites, ref carried);
+					batch.WrittenRows = rows;
 
 					/* The snapshot names the containers it read, so a character missing one of its
 					 * controllers leaves that container's rows alone rather than having them pruned
@@ -2502,8 +2847,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return DatabaseResult.Failure(DatabaseErrorCodes.InvalidConfiguration, "ICharacterAttributeService is not registered.");
 				}
-				DatabaseResult attributeResult = RequireCompleteWrite("attribute write", batch.CharacterID,
-					await attributeService.PersistAsync(batch.AttributeWrites));
+				/* Superseded attribute rows are not a failure here unless the batch carries a value
+				 * memory does not hold yet. The periodic attribute save is one statement for every
+				 * resident, so it no longer queues behind this character's item batches; a pass that
+				 * captured the sheet after this batch did, and landed first, holds a newer version of
+				 * the same rows. Treating that as a short write rolled back an equip or a trade for
+				 * nothing but lane order. Filtered rows were never attempted and still fail. */
+				/* No batch is exempt any more. An exchange leg used to write its currency row as memory
+				 * PLUS a credit memory did not hold yet, and had to insist that row land whole; the
+				 * trade now credits memory at the apply (TradeCurrencySettlement), so every batch's
+				 * attribute rows are what memory held at capture. */
+				DatabaseResult<BulkWriteResult> attributeWrite = await attributeService.PersistAsync(batch.AttributeWrites);
+				DatabaseResult attributeResult = RequireAttemptedWrite("attribute write", batch.CharacterID, attributeWrite);
 				if (!attributeResult.IsSuccess) return attributeResult;
 			}
 
@@ -2590,12 +2945,51 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Collapses a bulk write's outcome into a plain result, treating only rows the service
+		/// declined to attempt as a failure.
+		/// </summary>
+		/// <remarks>
+		/// For rows that are independent facts about the character rather than a slot layout — the
+		/// attribute sheet an item batch carries. A superseded row lost the version race to a newer
+		/// write of the same attribute, captured later from the same memory, so the database already
+		/// holds something at least as current. A filtered row was never offered to the database at
+		/// all (an unresolvable character, a key the batch named twice), and that is still a failure.
+		/// </remarks>
+		/// <param name="operation">What was being written, for the message.</param>
+		/// <param name="characterID">The owning character.</param>
+		/// <param name="result">The write's outcome.</param>
+		/// <returns>Success when every supplied row was attempted.</returns>
+		public static DatabaseResult RequireAttemptedWrite(string operation, long characterID, DatabaseResult<BulkWriteResult> result)
+		{
+			if (!result.IsSuccess)
+			{
+				return DatabaseResult.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
+
+			BulkWriteResult write = result.Data;
+			if (write.Filtered > 0)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.StaleState,
+					$"Character {characterID} {operation} left rows unattempted: {write}.",
+					isTransient: false);
+			}
+
+			return DatabaseResult.Success();
+		}
+
+		/// <summary>
 		/// Re-captures and re-writes every container of each character queued for repair. Main thread.
 		/// </summary>
+		/// <remarks>
+		/// At most <see cref="MaxReconcileCapturesPerFrame"/> a frame, earliest first; the rest wait
+		/// in the queue. When a database comes back, every backoff expires at roughly the same moment,
+		/// and capturing them all on one frame was a stall of its own.
+		/// </remarks>
 		private void DrainReconcileRequests()
 		{
-			List<long> pending = itemWriteJournal.DrainReconcileRequests();
-			if (pending == null)
+			List<long> due = itemWriteJournal.DrainReconcileRequests(MaxReconcileCapturesPerFrame);
+			if (due == null)
 			{
 				return;
 			}
@@ -2605,13 +2999,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			foreach (long characterID in pending)
+			foreach (long characterID in due)
 			{
 				// Connected or lingering: a combat-logout body has no connection but is still
 				// ours to repair, and its logout flush has not run yet.
 				if (TryGetResidentCharacter(mappingData, characterID, out IPlayerCharacter character))
 				{
-					SnapshotCharacterItems(character);
+					if (!SnapshotCharacterItems(character))
+					{
+						// A snapshot is already queued for this character. Look again once it has run.
+						itemWriteJournal.DeferReconcile(characterID, ReconcileDeferral);
+					}
 				}
 				// A character that is no longer resident needs no repair from us: its logout flush
 				// already ran, or another server owns it and will write its own truth.
@@ -2623,17 +3021,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		#region Item Snapshot
 
 		/// <summary>
-		/// Writes a full item snapshot for every character currently resident on this scene server.
+		/// Visits the slice of residents whose turn it is, snapshotting the ones whose items have
+		/// changed. Main thread, every frame.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// THE POINT OF THIS: until now the incremental per-slot writes issued by the broadcast
-		/// handlers below were the ONLY record of a character's items. Neither the periodic save nor
-		/// the logout save touched inventory, bank or equipment. So any incremental write that was
+		/// THE POINT OF THE SNAPSHOT: until it existed the incremental per-slot writes issued by the
+		/// broadcast handlers were the ONLY record of a character's items. Neither the periodic save
+		/// nor the logout save touched inventory, bank or equipment. So any incremental write that was
 		/// silently rejected — a stale version, a dropped async work item, a handler that returned
 		/// early — was not a glitch that the next save would paper over; it was permanent loss the
 		/// moment the player logged out. A snapshot on a timer downgrades every one of those failures
 		/// to something that survives at most one snapshot interval.
+		/// </para>
+		/// <para>
+		/// <b>Spread across the interval, and only for what changed.</b> It used to rewrite every
+		/// resident's items on one frame, every interval: each character one transaction that deleted
+		/// all of its item rows and inserted them again. At 500 residents holding about 150 items that
+		/// was roughly 75,000 deletes and as many inserts a minute, all queued at once alongside the
+		/// character save, filling the worker ahead of logins, zone transfers and trades. Now each
+		/// character has a slice of the interval, chosen by its id, and is visited once per interval
+		/// in that slice. A character whose containers still hold exactly what the database was last
+		/// confirmed to hold is skipped (<see cref="ItemSnapshotContent"/>); one that has changed, or
+		/// holds an item with no identity yet, is written as before. The backstop is intact: a write
+		/// some path forgot to make leaves the containers different from the confirmed record, so the
+		/// character is written at its next turn — at most one interval later, as before.
 		/// </para>
 		/// <para>
 		/// IT CANNOT BE A DUPE VECTOR. The snapshot is not additive: <c>SaveSnapshotAsync</c> prunes
@@ -2644,21 +3056,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// EquipmentController.Equip, not something the snapshot introduces.
 		/// </para>
 		/// <para>
-		/// INTERACTION WITH THE SLOT VERSIONING FIX: the snapshot's upsert is deliberately not
-		/// version-gated, because version gating is the mechanism that makes writes disappear and this
-		/// is the backstop for exactly that. Ordering against the incremental writes is preserved
-		/// because both are enqueued under the same per-character entity key, which the async worker
-		/// guarantees to process FIFO. The DTO builders bump <c>item.Version</c> as they always have,
-		/// so a later incremental write still beats the snapshot on the gated path.
-		/// </para>
-		/// <para>
 		/// ORDERING AGAINST INCREMENTAL WRITES. The snapshot's upsert is deliberately NOT
 		/// version-gated — gating is the mechanism that makes writes disappear, and this is the
 		/// backstop for exactly that — so a snapshot that lands out of order would happily undo a
 		/// newer incremental write. Two things stop it. Every batch carries a main-thread capture
 		/// sequence and <see cref="ItemWriteJournal.TryClaimSequence"/> refuses a snapshot once any
 		/// later-captured write has committed; and the whole snapshot (all three containers) is one
-		/// transaction, so the three tables can never describe different moments in time.
+		/// transaction, so the three tables can never describe different moments in time. The DTO
+		/// builders bump <c>item.Version</c> as they always have, so a later incremental write still
+		/// beats the snapshot on the gated path.
 		/// </para>
 		/// <para>
 		/// SESSION GUARD. A snapshot in flight during a scene-server handover can no longer land on
@@ -2667,33 +3073,93 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// inside the same transaction once the claim has moved.
 		/// </para>
 		/// </remarks>
-		private void SnapshotAllResidentCharacterItems()
+		/// <param name="deltaTime">Seconds since the last frame.</param>
+		private void DriveItemSnapshotCycle(float deltaTime)
 		{
 			if (!Initialized || Server == null)
 			{
 				return;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> mappingData))
+			int slices = ItemSnapshotSliceCount(itemSnapshotIntervalSeconds);
+			float sliceSeconds = itemSnapshotIntervalSeconds / slices;
+
+			itemSnapshotSliceElapsed += deltaTime;
+			int dueSlices = 0;
+			while (itemSnapshotSliceElapsed >= sliceSeconds && dueSlices < slices)
+			{
+				itemSnapshotSliceElapsed -= sliceSeconds;
+				++dueSlices;
+			}
+			// A hitch longer than a whole interval visits everyone once, not once per interval missed.
+			if (itemSnapshotSliceElapsed >= sliceSeconds)
+			{
+				itemSnapshotSliceElapsed = 0.0f;
+			}
+
+			if (dueSlices == 0 ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> mappingData))
 			{
 				return;
 			}
 
-			foreach (IPlayerCharacter character in mappingData.CharactersByID.Values)
+			for (int i = 0; i < dueSlices; ++i)
 			{
-				SnapshotCharacterItems(character);
-			}
+				int slice = nextItemSnapshotSlice;
+				nextItemSnapshotSlice = (nextItemSnapshotSlice + 1) % slices;
 
-			/* Combat-logout bodies are deliberately absent from CharactersByID but are still
-			 * resident, still hold their claim, and can still be looted of nothing — their
-			 * containers are unchanged — yet an item write that failed just before the
-			 * disconnect was never repaired for them. They are snapshotted like everyone else. */
-			lingeringScratch.Clear();
-			CollectLingeringCharacters(lingeringScratch);
-			for (int i = 0; i < lingeringScratch.Count; ++i)
-			{
-				SnapshotCharacterItems(lingeringScratch[i]);
+				foreach (IPlayerCharacter character in mappingData.CharactersByID.Values)
+				{
+					if (character != null && ItemSnapshotSliceOf(character.ID, slices) == slice)
+					{
+						SnapshotCharacterItemsIfChanged(character);
+					}
+				}
+
+				/* Combat-logout bodies are deliberately absent from CharactersByID but are still
+				 * resident and still hold their claim, and an item write that failed just before the
+				 * disconnect is theirs to repair like anyone's. They take their turn like everyone. */
+				lingeringScratch.Clear();
+				CollectLingeringCharacters(lingeringScratch);
+				for (int l = 0; l < lingeringScratch.Count; ++l)
+				{
+					if (ItemSnapshotSliceOf(lingeringScratch[l].ID, slices) == slice)
+					{
+						SnapshotCharacterItemsIfChanged(lingeringScratch[l]);
+					}
+				}
+
+				if (nextItemSnapshotSlice == 0)
+				{
+					// Once per full interval, as the sweep used to.
+					itemWriteJournal.PruneDeparted(DepartedWatermarkRetention);
+				}
 			}
+		}
+
+		/// <summary>How many slices one snapshot interval is cut into: one per <see cref="ItemSnapshotSliceSeconds"/>.</summary>
+		/// <param name="intervalSeconds">The snapshot interval.</param>
+		/// <returns>At least one.</returns>
+		public static int ItemSnapshotSliceCount(float intervalSeconds)
+		{
+			return Math.Max(1, (int)Math.Round(intervalSeconds / ItemSnapshotSliceSeconds));
+		}
+
+		/// <summary>
+		/// The slice of the interval a character's snapshot turn falls in. Stable for the character's
+		/// whole stay, so every resident is visited exactly once per interval.
+		/// </summary>
+		/// <param name="characterID">The character.</param>
+		/// <param name="slices">Slices in the interval.</param>
+		/// <returns>A slice in [0, <paramref name="slices"/>).</returns>
+		public static int ItemSnapshotSliceOf(long characterID, int slices)
+		{
+			if (slices <= 1)
+			{
+				return 0;
+			}
+			// Unsigned so a negative id cannot produce a negative slice.
+			return (int)((ulong)characterID % (ulong)slices);
 		}
 
 		/// <summary>How long a departed character's journal watermarks are kept before the sweep drops them.</summary>
@@ -2701,6 +3167,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>Scratch list for the lingering-body sweeps. Main thread only.</summary>
 		private readonly List<IPlayerCharacter> lingeringScratch = new List<IPlayerCharacter>();
+
+		/// <summary>Scratch rows for the periodic comparison. Main thread only.</summary>
+		private readonly List<CharacterItemData> currentRowsScratch = new List<CharacterItemData>(256);
+
+		/// <summary>Scratch container list for the periodic comparison. Main thread only.</summary>
+		private readonly List<ItemContainerType> currentContainersScratch = new List<ItemContainerType>(3);
 
 		/// <summary>Appends the character system's spawned combat-logout bodies. Main thread only.</summary>
 		private void CollectLingeringCharacters(List<IPlayerCharacter> results)
@@ -2735,20 +3207,115 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Captures and enqueues a full item snapshot for one character. Main thread only.
+		/// The periodic turn for one character: snapshot it unless nothing has changed since the
+		/// database last confirmed its items, or a snapshot of it is already queued. Main thread only.
 		/// </summary>
-		/// <param name="character">The character to snapshot.</param>
-		private void SnapshotCharacterItems(IPlayerCharacter character)
+		/// <param name="character">The character whose turn it is.</param>
+		private void SnapshotCharacterItemsIfChanged(IPlayerCharacter character)
 		{
-			ItemWriteBatch batch = CaptureSnapshotBatch(character, explicitLease: null);
-			if (batch != null)
+			if (character == null || character.ID <= 0)
 			{
-				EnqueueItemBatch(batch);
+				return;
+			}
+
+			// One queued snapshot at a time; a later one would say nothing the queued one does not.
+			if (itemWriteJournal.IsSnapshotOutstanding(character.ID))
+			{
+				return;
+			}
+
+			if (itemWriteJournal.TryGetConfirmedSnapshot(character.ID, out ConfirmedItemSnapshot confirmed))
+			{
+				currentRowsScratch.Clear();
+				currentContainersScratch.Clear();
+				AppendCurrentItemRows(character, currentContainersScratch, currentRowsScratch);
+				if (ItemSnapshotContent.Matches(confirmed.Containers, confirmed.Rows, currentContainersScratch, currentRowsScratch))
+				{
+					return;
+				}
+			}
+
+			SnapshotCharacterItems(character);
+		}
+
+		/// <summary>
+		/// The rows a snapshot of the character would write now, without capturing one: no version is
+		/// bumped and no slot is repaired. The same walk as <see cref="CaptureSnapshotBatch"/>, so the
+		/// two can be compared row for row. Main thread only.
+		/// </summary>
+		/// <param name="character">The character.</param>
+		/// <param name="containers">Receives the containers it has, in capture order.</param>
+		/// <param name="rows">Receives the rows, in capture order.</param>
+		private static void AppendCurrentItemRows(IPlayerCharacter character, List<ItemContainerType> containers, List<CharacterItemData> rows)
+		{
+			if (character.TryGet(out IInventoryController inventoryController))
+			{
+				containers.Add(ItemContainerType.Inventory);
+				AppendCurrentContainerRows(character.ID, inventoryController, ItemContainerType.Inventory, rows);
+			}
+			if (character.TryGet(out IBankController bankController))
+			{
+				containers.Add(ItemContainerType.Bank);
+				AppendCurrentContainerRows(character.ID, bankController, ItemContainerType.Bank, rows);
+			}
+			if (character.TryGet(out IEquipmentController equipmentController))
+			{
+				containers.Add(ItemContainerType.Equipment);
+				AppendCurrentContainerRows(character.ID, equipmentController, ItemContainerType.Equipment, rows);
 			}
 		}
 
+		/// <summary>One container's rows for <see cref="AppendCurrentItemRows"/>. The slot is the list position, as the snapshot writes it.</summary>
+		private static void AppendCurrentContainerRows(long characterID, IItemContainer container, ItemContainerType containerType, List<CharacterItemData> rows)
+		{
+			for (int i = 0; i < container.Items.Count; ++i)
+			{
+				Item item = container.Items[i];
+				if (item == null || item.Template == null)
+				{
+					continue;
+				}
+				rows.Add(new CharacterItemData(
+					id: item.ID,
+					version: item.Version,
+					characterID: characterID,
+					container: containerType,
+					templateID: item.Template.ID,
+					slot: i,
+					seed: item.IsGenerated ? item.Generator.Seed : 0,
+					amount: item.IsStackable ? item.Stackable.Amount : 1));
+			}
+		}
+
+		/// <summary>
+		/// Captures and enqueues a full item snapshot for one character. Main thread only.
+		/// </summary>
+		/// <param name="character">The character to snapshot.</param>
+		/// <returns>False when a snapshot of the character is already queued, so none was captured.</returns>
+		private bool SnapshotCharacterItems(IPlayerCharacter character)
+		{
+			if (character == null || character.ID <= 0 || itemWriteJournal.IsSnapshotOutstanding(character.ID))
+			{
+				return false;
+			}
+
+			ItemWriteBatch batch = CaptureSnapshotBatch(character, explicitLease: null);
+			if (batch == null || batch.IsEmpty)
+			{
+				// Nothing will be written, so nothing will ever clear a mark: none is set.
+				return true;
+			}
+
+			if (itemWriteJournal.TryMarkSnapshotOutstanding(character.ID, batch.Sequence))
+			{
+				batch.TracksOutstandingSnapshot = true;
+			}
+			EnqueueItemBatch(batch);
+			return true;
+		}
+
 		/// <inheritdoc />
-		public Func<Task> CaptureDespawnFlush(IPlayerCharacter character, CharacterSessionInfo? lease)
+		public Func<Task<ItemWriteOutcome>> CaptureDespawnFlush(IPlayerCharacter character, CharacterSessionInfo? lease)
 		{
 			CharacterSessionLeaseData? explicitLease = null;
 			if (lease.HasValue && character != null)

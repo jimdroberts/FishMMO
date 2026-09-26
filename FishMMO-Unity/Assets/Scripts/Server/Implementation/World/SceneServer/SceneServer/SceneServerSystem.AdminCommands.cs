@@ -466,7 +466,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime deadline = DateTime.UtcNow.AddSeconds(seconds);
 			string adminName = character.CharacterName;
 
 			RunOperatorAction(character, async () =>
@@ -476,11 +475,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return "The world server service is unavailable.";
 				}
 
-				DatabaseResult result = await worldServerService.SetShutdownAsync(worldServerID, deadline);
+				/* The delay goes to the database, which adds it to its own clock as it writes the
+				 * deadline. Every server counts the deadline down against that clock, so an
+				 * instant built here from this host's DateTime.UtcNow moved the shutdown by this
+				 * host's skew from the database: "shutdown 300" typed on a scene server two
+				 * minutes slow gave the world's players three minutes. */
+				DatabaseResult<DateTime> result = await worldServerService.SetShutdownInAsync(worldServerID, seconds);
 				if (!result.IsSuccess)
 				{
 					return $"Could not schedule the shutdown: {result.ErrorCode} - {result.ErrorMessage}";
 				}
+
+				DateTime deadline = result.Data;
 
 				await Log.Warning("SceneServerSystem",
 					$"Administrator '{adminName}' scheduled world server {worldServerID} to shut down at {deadline:u} ({seconds}s).");
@@ -565,7 +571,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime deadline = DateTime.UtcNow.AddSeconds(seconds);
 			string adminName = character.CharacterName;
 
 			RunOperatorAction(character, async () =>
@@ -575,11 +580,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return "The scene server service is unavailable.";
 				}
 
-				DatabaseResult result = await sceneServerService.SetShutdownAsync(sceneServerID, deadline);
+				// Timed by the database clock, as the world shutdown above is.
+				DatabaseResult<DateTime> result = await sceneServerService.SetShutdownInAsync(sceneServerID, seconds);
 				if (!result.IsSuccess)
 				{
 					return $"Could not schedule the shutdown: {result.ErrorCode} - {result.ErrorMessage}";
 				}
+
+				DateTime deadline = result.Data;
 
 				await Log.Warning("SceneServerSystem",
 					$"Administrator '{adminName}' scheduled scene server {sceneServerID} to shut down at {deadline:u} ({seconds}s).");
@@ -632,15 +640,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void ReportStatus(IPlayerCharacter character)
 		{
-			DateTime nowUtc = DateTime.UtcNow;
+			// The countdowns run on the monotonic clock from the database's measure. See ShutdownCountdown.
+			double now = FishMMO.Server.Core.MonotonicClock.NowSeconds;
 
 			long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData)
 				? runtimeData.ID
 				: 0;
 
 			Reply(character, $"Scene server {sceneServerID}: {(IsLockedNow() ? "LOCKED" : "open")}" +
-				(sceneControlState.HasShutdown
-					? $", shutting down in {sceneControlState.SecondsUntilShutdown(nowUtc):F0}s"
+				(sceneShutdownCountdown.IsScheduled
+					? $", shutting down in {sceneShutdownCountdown.SecondsRemaining(now):F0}s"
 					: ", no shutdown scheduled") + ".");
 
 			if (worldControlStates.Count == 0)
@@ -652,8 +661,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in worldControlStates)
 			{
 				Reply(character, $"World {kvp.Key}: {(kvp.Value.Locked ? "LOCKED" : "open")}" +
-					(kvp.Value.HasShutdown
-						? $", shutting down in {kvp.Value.SecondsUntilShutdown(nowUtc):F0}s"
+					(worldShutdownCountdowns.TryGetValue(kvp.Key, out var countdown) && countdown.IsScheduled
+						? $", shutting down in {countdown.SecondsRemaining(now):F0}s"
 						: ", no shutdown scheduled") + ".");
 			}
 		}

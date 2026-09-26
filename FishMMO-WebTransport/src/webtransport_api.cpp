@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <stddef.h>   /* offsetof in the layout checks */
 
 /* ── Global MsQuic API table ──────────────────────────────────
  * Initialised once by wt_init(). All msquic operations use this
@@ -415,4 +416,84 @@ WT_API void wt_client_set_alpn(WT_CLIENT client, const char* alpn)
         ((wt_client_s*)client)->alpn[WT_MAX_ALPN_LENGTH - 1] = '\0';
     }
     wt_api_exit();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * STATISTICS API
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* The managed mirrors (WtGlobalCounters / WtConnectionStats in
+ * WebTransportNative.cs) are sequential structs of the same fields; a unit
+ * test there pins Marshal.SizeOf to these same numbers.  Appending a field
+ * changes both, and WT_ABI_VERSION with them. */
+static_assert(sizeof(wt_global_counters_t) == 160,
+              "wt_global_counters_t layout changed: update WtGlobalCounters and bump WT_ABI_VERSION");
+static_assert(sizeof(wt_connection_stats_t) == 152,
+              "wt_connection_stats_t layout changed: update WtConnectionStats and bump WT_ABI_VERSION");
+static_assert(offsetof(wt_connection_stats_t, send_packets) == 48,
+              "wt_connection_stats_t: the uint64 block must start 8-byte aligned with no padding");
+
+WT_API int32_t wt_get_global_counters(wt_global_counters_t* counters)
+{
+    if (!counters || counters->struct_size < WT_STATS_HEADER_SIZE)
+        return WT_ERR_UNKNOWN;
+    if (!wt_api_enter())
+        return WT_ERR_INVALID_STATE;   /* quiet: callers poll this before init */
+
+    const QUIC_API_TABLE* api = (const QUIC_API_TABLE*)atomic_ptr_load(&MsQuic);
+    uint64_t perf[QUIC_PERF_COUNTER_MAX];
+    memset(perf, 0, sizeof(perf));
+    uint32_t len = (uint32_t)sizeof(perf);
+    /* A global parameter: answered inline on this thread, no lock taken. */
+    QUIC_STATUS status = api
+        ? api->GetParam(NULL, QUIC_PARAM_GLOBAL_PERF_COUNTERS, &len, perf)
+        : QUIC_STATUS_INVALID_STATE;
+    wt_api_exit();
+    if (QUIC_FAILED(status))
+        return WT_ERR_UNKNOWN;
+
+    /* msquic copies only the counters its build has; a runtime msquic older
+     * than the header leaves the tail zero rather than garbage. */
+    const uint32_t have = len / (uint32_t)sizeof(uint64_t);
+#define WT_PERF(index) ((uint32_t)(index) < have ? perf[(index)] : 0)
+
+    wt_global_counters_t full;
+    memset(&full, 0, sizeof(full));
+    full.version = WT_GLOBAL_COUNTERS_VERSION;
+    full.udp_send_datagrams   = WT_PERF(QUIC_PERF_COUNTER_UDP_SEND);
+    full.udp_recv_datagrams   = WT_PERF(QUIC_PERF_COUNTER_UDP_RECV);
+    full.udp_send_bytes       = WT_PERF(QUIC_PERF_COUNTER_UDP_SEND_BYTES);
+    full.udp_recv_bytes       = WT_PERF(QUIC_PERF_COUNTER_UDP_RECV_BYTES);
+    full.app_send_bytes       = WT_PERF(QUIC_PERF_COUNTER_APP_SEND_BYTES);
+    full.app_recv_bytes       = WT_PERF(QUIC_PERF_COUNTER_APP_RECV_BYTES);
+    full.conn_created         = WT_PERF(QUIC_PERF_COUNTER_CONN_CREATED);
+    full.conn_active          = WT_PERF(QUIC_PERF_COUNTER_CONN_ACTIVE);
+    full.conn_connected       = WT_PERF(QUIC_PERF_COUNTER_CONN_CONNECTED);
+    full.conn_handshake_fail  = WT_PERF(QUIC_PERF_COUNTER_CONN_HANDSHAKE_FAIL);
+    full.conn_app_reject      = WT_PERF(QUIC_PERF_COUNTER_CONN_APP_REJECT);
+    full.conn_load_reject     = WT_PERF(QUIC_PERF_COUNTER_CONN_LOAD_REJECT);
+    full.conn_no_alpn         = WT_PERF(QUIC_PERF_COUNTER_CONN_NO_ALPN);
+    full.conn_protocol_errors = WT_PERF(QUIC_PERF_COUNTER_CONN_PROTOCOL_ERRORS);
+    full.pkts_suspected_lost  = WT_PERF(QUIC_PERF_COUNTER_PKTS_SUSPECTED_LOST);
+    full.pkts_dropped         = WT_PERF(QUIC_PERF_COUNTER_PKTS_DROPPED);
+    full.pkts_decryption_fail = WT_PERF(QUIC_PERF_COUNTER_PKTS_DECRYPTION_FAIL);
+    full.stateless_retry_sent = WT_PERF(QUIC_PERF_COUNTER_SEND_STATELESS_RETRY);
+    full.stateless_reset_sent = WT_PERF(QUIC_PERF_COUNTER_SEND_STATELESS_RESET);
+#undef WT_PERF
+
+    uint32_t n = counters->struct_size < (uint32_t)sizeof(full)
+                     ? counters->struct_size : (uint32_t)sizeof(full);
+    full.struct_size = n;
+    memcpy(counters, &full, n);
+    return WT_OK;
+}
+
+WT_API int32_t wt_client_get_connection_stats(WT_CLIENT client,
+                                              wt_connection_stats_t* stats)
+{
+    if (!wt_api_enter())
+        return WT_ERR_INVALID_STATE;
+    int32_t result = wt_client_get_connection_stats_impl((wt_client_s*)client, stats);
+    wt_api_exit();
+    return result;
 }

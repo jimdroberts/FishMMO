@@ -220,12 +220,12 @@ namespace FishMMO.TestHarness
 				case InRangeCase:
 					// Stand next to the banker, clear the debounce, interact.
 					interactorTransform.position = near.Transform.position + new Vector3(0f, 0f, -1.5f);
-					interactor.NextInteractTime = System.DateTime.MinValue;
+					interactor.NextInteractSeconds = 0;
 					result = TryInteract(nearId, out refusedAt);
 					break;
 
 				case OutOfRangeCase:
-					interactor.NextInteractTime = System.DateTime.MinValue;
+					interactor.NextInteractSeconds = 0;
 					result = TryInteract(farId, out refusedAt);
 					break;
 
@@ -234,7 +234,7 @@ namespace FishMMO.TestHarness
 					 * the debounce is consumed by TryConsumeInteractRateLimit, deliberately after
 					 * CanInteract answers, so that asking the question does not spend the budget. */
 					interactorTransform.position = near.Transform.position + new Vector3(0f, 0f, -1.5f);
-					interactor.NextInteractTime = System.DateTime.MinValue;
+					interactor.NextInteractSeconds = 0;
 					bool first = TryInteract(nearId, out string firstRefusedAt);
 					result = TryInteract(nearId, out refusedAt);
 					if (!first)
@@ -247,13 +247,13 @@ namespace FishMMO.TestHarness
 				case CorpseCase:
 					// Corpse the far banker, then interact from point blank.
 					interactorTransform.position = far.Transform.position + new Vector3(0f, 0f, -1.5f);
-					interactor.NextInteractTime = System.DateTime.MinValue;
+					interactor.NextInteractSeconds = 0;
 					far.Despawn();
 					result = TryInteract(farId, out refusedAt);
 					break;
 
 				case UnknownIdCase:
-					interactor.NextInteractTime = System.DateTime.MinValue;
+					interactor.NextInteractSeconds = 0;
 					result = TryInteract(long.MaxValue);
 					break;
 
@@ -261,7 +261,7 @@ namespace FishMMO.TestHarness
 					// A character that cannot act: the gate that fronts every state-mutating
 					// handler, and the one whose refusal is invisible to the player.
 					interactorTransform.position = near.Transform.position + new Vector3(0f, 0f, -1.5f);
-					interactor.NextInteractTime = System.DateTime.MinValue;
+					interactor.NextInteractSeconds = 0;
 					interactor.DisableFlags(CharacterFlags.IsLoaded);
 					result = TryInteract(nearId, out refusedAt);
 					interactor.EnableFlags(CharacterFlags.IsLoaded);

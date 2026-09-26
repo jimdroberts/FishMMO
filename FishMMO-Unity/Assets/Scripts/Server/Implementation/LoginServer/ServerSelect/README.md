@@ -19,7 +19,7 @@
 
 ## Overview
 
-The Server Select system manages the world server list workflow on the login server. When an authenticated client sends a `RequestServerListBroadcast`, the system validates the connection, applies per-connection in-flight gating and cooldown checks, then offloads the database query onto `AsyncWorkerData` to keep the network handler non-blocking. Active world servers are fetched via `IWorldServerService.FetchActiveAsync` with an `idleTimeout` filter (default 60 seconds), mapped from `WorldServerData` rows into `WorldServerDetails` DTOs, and the `ServerListBroadcast` response is marshalled back to the main thread through a dedicated queue container (`ServerSelectSystemMainThreadQueueData`).
+The Server Select system manages the world server list workflow on the login server. When an authenticated client sends a `RequestServerListBroadcast`, the system validates the connection, applies per-connection in-flight gating and cooldown checks, then offloads the database query onto `AsyncWorkerData` to keep the network handler non-blocking. Active world servers are fetched via `IWorldServerService.FetchActiveAsync` with an `idleTimeout` filter (default 60 seconds), mapped from `WorldServerData` rows into `WorldServerDetails` DTOs, and the `ServerListBroadcast` response is marshalled back to the main thread through a dedicated queue container (`ServerSelectSystemMainThreadQueueData`). One read serves every client: the list sits in a `SingleFlightCache` for `serverListCacheSeconds` (2 s), requests that arrive while a read is running share it, and a failed read is never kept, so a login wave costs a read or two a second rather than one per request.
 
 Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) prevents frame spikes, while per-connection in-flight gating and a post-release cooldown (`serverListCooldownMilliseconds = 1000`) prevent concurrent and rapid sequential request spam.
 
@@ -45,10 +45,10 @@ Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) prevent
 
 All request flows guarantee a response to the client, even on failure, to prevent indefinite client hangs:
 
-- **World Server Service Unavailable:** An empty `ServerListBroadcast` is sent and a warning is logged.
-- **Database Fetch Failure:** An empty `ServerListBroadcast` is sent with the error message logged.
+- **World Server Service Unavailable:** An empty `ServerListBroadcast` is sent and a warning is logged (once per read, not once per request sharing it).
+- **Database Fetch Failure:** An empty `ServerListBroadcast` is sent with the error message logged (once per read). The failed read is not cached; the next request reads again.
 - **Async Enqueue Failure:** The in-flight gate is released immediately and a `ServerBusyBroadcast` is sent via `SendServerBusy`.
-- **Unexpected Exception:** Caught in the `ProcessServerListRequestAsync` catch block, logged, and the in-flight gate is released in the `finally` block.
+- **Unexpected Exception:** Caught in the `ProcessServerListRequestAsync` catch block, logged, answered with an empty `ServerListBroadcast` (a shared read that faults, faults for every request waiting on it), and the in-flight gate is released in the `finally` block.
 
 ### Authentication Check
 
@@ -68,9 +68,10 @@ Before processing any `RequestServerListBroadcast`, the system verifies the conn
 ## Features
 
 - **Active world server list** — async database fetch via `IWorldServerService.FetchActiveAsync`, filtered by configurable `idleTimeout` (default 60s)
+- **Shared server list** — `ServerSelectSystemRuntimeData.ServerList`, a `SingleFlightCache<byte, WorldServerDetails[]>` under one key: a completed read is served to every request for `serverListCacheSeconds` (default 2 s, counted from when the read started), concurrent requests share an in-flight read, and a failed read (`null`) is returned to the requests that shared it but never kept. It is timed on the monotonic clock through the cache's clock seam. Lapsed entries are swept on the worker path, so there is no per-frame sweep
 - **DTO mapping** — maps `WorldServerData` rows to `WorldServerDetails` (Name, Port, CharacterCount, Locked). The DTO carries no address and no pulse timestamp: every server is reached through the same host, and the pulse age is already spent server-side as the `idleTimeout` filter, so sending it would only invite the client to re-derive a decision the server has made.
 - **Per-connection in-flight gating** — `ConcurrentDictionary<int, byte>` prevents duplicate concurrent server-list requests per connection
-- **Post-release cooldown** — configurable `serverListCooldownMilliseconds` (default 1000ms) gap between successive requests enforced via `NextAllowedRequestUtcByClientId`
+- **Post-release cooldown** — configurable `serverListCooldownMilliseconds` (default 1000ms) gap between successive requests enforced via `NextAllowedRequestSecondsByClientId` (monotonic seconds)
 - **Bounded main-thread draining** — configurable `maxMainThreadResponsesPerFrame` to time-slice response dispatch and avoid frame spikes
 - **Authentication enforcement** — verifies connection ownership via `AccountManager.GetAccountNameByConnection` before processing; kicks unauthenticated connections
 - **Guaranteed client response** — on any failure (service unavailability, DB error, exception), an empty `ServerListBroadcast` is sent to prevent client hangs
@@ -123,19 +124,21 @@ This is an integrated module within the FishMMO server framework. No separate in
 | `maxMainThreadResponsesPerFrame` | `int` | `100` | Maximum queued main-thread response actions processed per frame. Clamped to minimum of 1 on initialization. |
 | `idleTimeout` | `float` | `60` | Idle timeout in seconds for world servers to be considered active. Servers whose last pulse exceeds this value are excluded. Minimum value of 1 enforced via `[Min(1f)]`. |
 | `serverListCooldownMilliseconds` | `int` | `1000` | Minimum interval in milliseconds between successive server-list requests from the same connection. Prevents sequential spam after each request completes. |
+| `serverListCacheSeconds` | `float` | `2` | Seconds one read of the world-server list is served to every client (`[Min(0f)]`). `0` still shares in-flight reads but serves no completed read to a later request. |
 
 ### Runtime Data: `ServerSelectSystemRuntimeData`
 
 | Property | Type | Purpose |
 |----------|------|---------|
 | `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent server-list requests |
-| `NextAllowedRequestUtcByClientId` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp; enforces `serverListCooldownMilliseconds` gap between successive requests |
+| `NextAllowedRequestSecondsByClientId` | `ConcurrentDictionary<int, double>` | Per-connection post-release cooldown, in `MonotonicClock` seconds; enforces `serverListCooldownMilliseconds` gap between successive requests |
+| `ServerList` | `SingleFlightCache<byte, WorldServerDetails[]>` | The shared world-server list read (one key), on the monotonic clock |
 
 **Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
 
 **Lifecycle:**
-- `InitializeOnce()` — creates empty `ConcurrentDictionary` instances.
-- `Clear()` — clears dictionary entries.
+- `InitializeOnce()` — creates empty `ConcurrentDictionary` instances and the list cache.
+- `Clear()` — clears dictionary entries and the list cache.
 - `OnDeinitialize()` — clears and nulls references.
 
 ### Runtime Data Dependencies
@@ -155,8 +158,9 @@ This is an integrated module within the FishMMO server framework. No separate in
 ```
 Client sends: RequestServerListBroadcast { }
 Server validates authentication, checks in-flight gate and cooldown
-Server enqueues async work → fetches active servers from DB (filtered by idleTimeout)
-Server maps WorldServerData rows to WorldServerDetails DTOs
+Server enqueues async work → shared list fresh (< 2 s)? serve it; a read running? join it;
+  otherwise fetch active servers from DB (filtered by idleTimeout)
+Server maps WorldServerData rows to WorldServerDetails DTOs (once per read)
 Server sends: ServerListBroadcast { Servers = [ { Name, Port, CharacterCount, Locked }, ... ] }
 ```
 
@@ -174,7 +178,7 @@ Server releases in-flight gate
 
 ```
 Client sends: RequestServerListBroadcast { }
-Server checks NextAllowedRequestUtcByClientId → cooldown not expired
+Server checks NextAllowedRequestSecondsByClientId → cooldown not expired
 Server sends: ServerListBroadcast { Servers = [] }    // answered, not dropped
 ```
 
@@ -203,6 +207,7 @@ Server kicks connection with KickReason.UnusualActivity
 | Failure responses | DB service unavailable or query failure | Client receives empty `ServerListBroadcast` (never hangs) |
 | Deinitialize drain | Shut down login server with pending responses | All queued responses dispatched before shutdown completes |
 | Locked server display | Lock a world server in the database | Server appears in list with `Locked = true` |
+| Shared read | Many clients request the list within 2 s | One `FetchActiveAsync` for all of them; a failed read is retried by the next request |
 
 ## Flow Diagram
 
@@ -227,7 +232,9 @@ Client                    LoginServer                        Database
   |                           |-- Check cooldown                |
   |                           |-- Acquire in-flight gate        |
   |                           |-- Enqueue async work            |
-  |                           |       |                         |
+  |                           |       |-- ServerList cache:     |
+  |                           |       |   fresh or in flight?   |
+  |                           |       |   share it, else read   |
   |                           |       |-- FetchActiveAsync ---->|
   |                           |       |   (idleTimeout filter)  |
   |                           |       |<-- WorldServerData[] ---|

@@ -104,16 +104,18 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<List<PartyUpdateData>>> FetchAsync(
+		public async Task<DatabaseResult<UpdatePumpRead<PartyUpdateData>>> FetchAsync(
 			List<long> partyIds,
 			DateTime lastFetch,
 			CancellationToken cancellationToken = default)
 		{
 			if (partyIds == null || partyIds.Count == 0)
-				return DatabaseResult<List<PartyUpdateData>>.Success(new List<PartyUpdateData>());
+				return DatabaseResult<UpdatePumpRead<PartyUpdateData>>.Success(new UpdatePumpRead<PartyUpdateData>(new List<PartyUpdateData>(), DateTime.MinValue));
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
+				// The database's clock, read before the rows: the caller's next mark (see UpdatePumpRead).
+				DateTime readStartedUtc = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 				var partyIdArray = partyIds.Distinct().ToArray();
 				var sql = $@"SELECT * FROM {TableName}
 					WHERE last_update >= {{0}}
@@ -125,7 +127,7 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				return updates.Select(MapEntityToDto).ToList();
+				return new UpdatePumpRead<PartyUpdateData>(updates.Select(MapEntityToDto).ToList(), readStartedUtc);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;

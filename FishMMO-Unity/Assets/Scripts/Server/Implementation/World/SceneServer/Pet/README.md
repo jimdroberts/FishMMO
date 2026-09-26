@@ -26,7 +26,7 @@ The design separates responsibilities across execution contexts:
 - **Async worker:** database fetch/persist operations dispatched through `IAsyncWorkerData`.
 - **Main-thread queue:** marshaling async completion actions back to Unity/FishNet-safe context via `PetSystemMainThreadQueueData`.
 
-Async work is queued to `IAsyncWorkerData` with `entityKey = characterID` for per-character ordering: reads through `TryEnqueueAsyncWork(...)`, and the one persistence write through `EnqueuePersistence(...)`, which falls back to the thread pool rather than dropping the write when the channel is full. If queueing a read fails (backpressure/missing dependency), the system logs warnings while keeping gameplay state intact. Broadcasts are only emitted after successful state transitions, ensuring clients never see stale or uncommitted data.
+Async work is queued to `IAsyncWorkerData` with `entityKey = characterID` for per-character ordering: reads through `TryEnqueueAsyncWork(...)`, and the one persistence write through `EnqueuePersistence(...)`, which the worker admits even past its backpressure threshold — the write waits behind the backlog, inside the worker's concurrency cap and its per-character order, rather than being dropped. Only when the worker is not running at all (teardown) does it run on a small bounded thread-pool fallback. If queueing a read fails (backpressure/missing dependency), the system logs warnings while keeping gameplay state intact. Broadcasts are only emitted after successful state transitions, ensuring clients never see stale or uncommitted data.
 
 ### Ownership
 
@@ -70,7 +70,9 @@ Movement orders are expressed as orders, not by writing the AI's combat target. 
 - Ability-driven pet summoning via `AbilityObject.OnPetSummon` with bounding-box randomization and ground sphere cast for spawn positioning
 - Automatic pet spawn on character login via async database load and main-thread marshaling, restoring version-matched attributes (`FetchPersistedPetAttributesAsync`) and buffs (`FetchPersistedPetBuffsAsync`) alongside the abilities
 - Live pet state is written by the character save, not from here: `CharacterSystem.AppendPetData` snapshots the pet row, its attributes and its buffs before the session claim is released, so a zone transfer cannot race a second unordered write. Character despawn therefore tears the pet down and writes nothing
-- Dismissal is the one thing this system persists: `PersistPetDismissed` → `SavePetDismissedAsync` records `spawned = false` for a release, an owner's death, or a pet's death, so a pet that died at noon is not waiting alive at the next login
+- Dismissal is the one thing this system persists: `PersistPetDismissed` → `SavePetDismissedAsync` records `spawned = false` for a release, an owner's death, or a pet's death, so a pet that died at noon is not waiting alive at the next login. The write is **ownership-gated**: it quotes the owner's session claim, captured from `SessionTokens` at the dismissal, and lands only while that claim is still held (`ICharacterPetService.PersistOwnedAsync`, `CharacterWriteGate`). Every dismissal runs while the owner is resident; one with no claim is not written, because the owner's own departure snapshot, taken before its release, already says what became of the pet
+- A dead owner's pet is never captured as out (`CharacterSystem.IsPetOut`). This system's kill handler runs after the character system's, which finalises a combat-logout body killed while its owner was away — so that body used to be saved with its pet still out, before the dismissal could run
+- Pets pool out of the world scene: every despawn (`DespawnPet`, and `Pet.Despawn` for a pet's own death) goes through `PersistentPool`, so an instance scene's unload no longer destroys pets the pool still counts
 - Pet AI initialization after the scene move and activation, so the NavMeshAgent is warped onto the mesh at its real spawn position rather than being driven while inactive
 - A pet's AI `Home` resolves to its owner's live position, so leashing, wandering and return-home all track the player without the pet system having to write anything
 - Faction data copying from owner to pet via `IFactionController.CopyFrom`
@@ -209,8 +211,9 @@ A **live** pet is not persisted from this system at all. `CharacterSystem.Append
 `PersistPetDismissed(owner, pet)` — the only write this system makes:
 - Runs `Pet.CaptureKnownAbilities()` first, so abilities granted at summon time from the `PetAbilityTemplate` are persisted rather than lost on the next log in.
 - Stamps the row with `++owner.Version`: the counter only has to increase, not be contiguous, and sharing the owner's stream keeps this write ordered against the character saves.
-- Skips the write and logs a warning if `templateID` is invalid (≤ 0) — the row then still lists the pet as out.
-- Hands `SavePetDismissedAsync` to `EnqueuePersistence`, keyed by `characterID`, which writes `CharacterPetData(..., spawned: false)` through `ICharacterPetService.PersistAsync`.
+- Skips the write and logs a warning if `templateID` is invalid (0) — the row then still lists the pet as out.
+- Captures the owner's session claim from `SessionTokens`; with none, the owner is not ours to write and nothing is.
+- Hands `SavePetDismissedAsync` to `EnqueuePersistence`, keyed by `characterID` — the lane the owner's save-and-release runs on, so the dismissal lands before the release — which writes `CharacterPetData(..., spawned: false)` through `ICharacterPetService.PersistOwnedAsync` under that claim. The one-row owned batch makes the same upsert, and the same prune of the rows the dismissed pet leaves unrestorable, as the single-row write did.
 
 `LoadAndSpawnPetAsync(...)`:
 - Fetches the currently spawned pet record via `ICharacterPetService.FetchSpawnedAsync`.
@@ -416,7 +419,7 @@ CharacterSystem_OnDespawnCharacter(conn, character)
 │
 ├─ 1. Validate character and IPetController
 ├─ 2. No live pet → just unsubscribe OnOwnerAttacked and return
-├─ 3. Despawn pet network object to pool (if spawned)
+├─ 3. DespawnPet: pet network object to the pool, out of the world scene (if spawned)
 └─ 4. Clear Pet.PetOwner / IPetController.Pet, unsubscribe OnOwnerAttacked
 ```
 
@@ -492,7 +495,8 @@ Error Handling
 ├─ DB/service lookup failures → abort async operation safely
 ├─ Queue rejection/unavailability → logged, work skipped
 ├─ Async exceptions → caught and logged with character context
-├─ Invalid templateID (≤ 0) → save skipped with warning
+├─ Invalid templateID (0; ids are signed hashes) → save skipped with warning
+├─ No session claim held for the owner → dismissal not written, with warning
 ├─ Pet row write failure → logged with character ID and version
 ├─ Pooled object missing Pet component → returned to pool, spawn aborted
 └─ Broadcasts → only emitted after successful state transitions

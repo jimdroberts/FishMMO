@@ -115,6 +115,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		private HashSet<int> healTemplateSet;
 
 		/// <summary>
+		/// <see cref="IsDamageAbility"/> and <see cref="IsHealAbility"/> as delegates, built once
+		/// per asset. Passing the method groups directly allocated a delegate on every pick: under
+		/// C# 9 an instance method group is a fresh delegate at each use.
+		/// </summary>
+		[System.NonSerialized]
+		private System.Func<Ability, bool> isDamageAbilityFilter;
+
+		/// <inheritdoc cref="isDamageAbilityFilter"/>
+		[System.NonSerialized]
+		private System.Func<Ability, bool> isHealAbilityFilter;
+
+		/// <summary>
 		/// Seeds healer-appropriate defaults when the asset is first created or reset.
 		/// </summary>
 		private void Reset()
@@ -229,9 +241,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <returns>The best damage ability, or null.</returns>
 		protected override Ability PickAbility(AIController controller)
 		{
+			isDamageAbilityFilter ??= IsDamageAbility;
 			return controller.PickBestAbility(
 				PreferredDistance > 0f ? PreferredDistance : float.MaxValue,
-				IsDamageAbility);
+				isDamageAbilityFilter);
 		}
 
 		/// <summary>
@@ -251,23 +264,56 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
+		/// Advances the ally-scan clock by the time this state update really covers, then runs the
+		/// shared attacking logic.
+		/// </summary>
+		/// <remarks>
+		/// The clock is advanced here, on every update, rather than where the scan is asked for,
+		/// because the scan is asked for only on updates whose attack cooldown has expired — a clock
+		/// advanced there would skip the time between. See <see cref="GetInjuredAlly"/>.
+		/// </remarks>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="deltaTime">Seconds this update covers.</param>
+		public override void UpdateState(AIController controller, float deltaTime)
+		{
+			controller.AllyScanTimer -= deltaTime;
+			base.UpdateState(controller, deltaTime);
+		}
+
+		/// <summary>
 		/// Returns the ally most in need of healing, rescanning only when the scan interval has
 		/// elapsed.
 		/// </summary>
 		/// <remarks>
-		/// The cached candidate is re-validated cheaply on every tick — it may have died, been
+		/// <para>
+		/// The cached candidate is re-validated cheaply on every call — it may have died, been
 		/// despawned, or walked out of range since the scan — so staleness costs a wasted heal at
-		/// worst, never a heal cast at a corpse.
+		/// worst, never a heal cast at a corpse. A candidate that no longer needs healing prompts
+		/// an immediate rescan: that happens once per heal landed, not once per call.
+		/// </para>
+		/// <para>
+		/// <b>"Nobody is injured" is cached too.</b> It is the common answer for a healer — a group
+		/// at full health — and it used to be thrown away, so the scan (an overlap and a component
+		/// lookup per ally) ran on every call whenever nobody needed a heal.
+		/// </para>
+		/// <para>
+		/// The clock is advanced by <see cref="UpdateState"/> with the state's real elapsed time. It
+		/// used to be advanced here by the brain-tick delta, inside a state that updates once a
+		/// second, so a 0.5 s interval held a cached target for about four seconds.
+		/// </para>
 		/// </remarks>
 		/// <param name="controller">The AI controller.</param>
 		/// <returns>The ally to heal, or null.</returns>
 		private ICharacter GetInjuredAlly(AIController controller)
 		{
-			controller.AllyScanTimer -= controller.LastAiDeltaTime;
-
 			if (controller.AllyScanTimer > 0f)
 			{
 				ICharacter cached = controller.CachedHealTarget;
+				if (cached == null)
+				{
+					// The last scan found nobody to heal; that answer stands until the next one.
+					return null;
+				}
 
 				if (AITargetSelection.IsValidTarget(cached) &&
 					AITargetSelection.GetHealthPercent(cached) < HealThreshold &&
@@ -388,7 +434,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		private Ability PickBestHealAbility(AIController controller, IAbilityController abilityController, ICharacter ally)
 		{
 			float sqrDist = (ally.Transform.position - controller.Character.Transform.position).sqrMagnitude;
-			return controller.PickScoredAbility(sqrDist, IsHealAbility, HEAL_ABILITY_JITTER);
+			isHealAbilityFilter ??= IsHealAbility;
+			return controller.PickScoredAbility(sqrDist, isHealAbilityFilter, HEAL_ABILITY_JITTER);
 		}
 
 		/// <summary>

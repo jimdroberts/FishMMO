@@ -151,6 +151,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (rewards == null || rewards.Count < 1) return;
 			if (!character.TryGet(out IAbilityController abilityController)) return;
 
+			/* Every row quotes the session claim the reward was earned under, captured here with it,
+			 * and lands only while that claim is still held (the service's PersistOwnedAsync). A
+			 * character with no claim here is not ours to write; the reward is still learned in
+			 * memory, and the character save — gated the same way — is what would carry it. */
+			bool claimed = TryCaptureSessionClaim(character.ID, out CharacterSessionLeaseData claim);
+			if (!claimed && knownAbilityService != null)
+			{
+				Log.Warning("AchievementSystem", $"This server holds no session claim for CharID={character.ID}; its ability rewards are learned in memory only.");
+			}
+
 			List<TBroadcast> broadcasts = new List<TBroadcast>();
 
 			foreach (var reward in rewards)
@@ -160,11 +170,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				learnFunc(abilityController, new List<TTemplate> { reward });
 
-				// Fire-and-forget async DB persist — game state already updated in-memory
-				if (knownAbilityService != null)
+				/* Fire-and-forget async DB persist — game state already updated in-memory. Keyed on the
+				 * character, so it queues on the lane its save-and-release runs on, ahead of the
+				 * release its claim would be refused after. */
+				if (knownAbilityService != null && claimed)
 				{
 					long characterId = character.ID;
-					EnqueuePersistence(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id));
+					EnqueuePersistence(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id, claim), characterId);
 				}
 
 				broadcasts.Add(singleBroadcastFactory(reward));
@@ -182,15 +194,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="service">The known ability service.</param>
 		/// <param name="characterId">The character ID.</param>
 		/// <param name="templateId">The ability template ID.</param>
-		private async Task PersistKnownAbilityAsync(ICharacterKnownAbilityService service, long characterId, int templateId)
+		/// <param name="claim">The session claim the reward was earned under.</param>
+		private async Task PersistKnownAbilityAsync(ICharacterKnownAbilityService service, long characterId, int templateId, CharacterSessionLeaseData claim)
 		{
 			try
 			{
-				DatabaseResult result = await service.PersistAsync(characterId, templateId, 1);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("AchievementSystem", $"PersistKnownAbilityAsync DB error (CharID={characterId}, TemplateID={templateId}): {result.ErrorCode} - {result.ErrorMessage}");
-				}
+				/* The batched owned write, with one row. Knowledge rows carry no per-entry version (every
+				 * one is written at 1), so a row already stored comes back superseded — benign — where
+				 * the single-row write reported it as a failed duplicate. */
+				DatabaseResult<BulkWriteResult> result = await service.PersistOwnedAsync(
+					new[] { new CharacterKnownAbilityData(0, 1, characterId, templateId) },
+					ClaimsOf(claim));
+				await BulkWriteReporting.ReportAsync("AchievementSystem", "Known ability reward save", result,
+					$"CharID={characterId}, TemplateID={templateId}");
 			}
 			catch (Exception ex)
 			{

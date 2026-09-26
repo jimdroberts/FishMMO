@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FishMMO.Logging;
+using FishMMO.Server.Core;
 using FishMMO.Server.Implementation.World.SceneServer.AI;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -12,6 +13,37 @@ using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 {
+	/// <summary>
+	/// What one attempt to spawn an object came to.
+	/// </summary>
+	/// <remarks>
+	/// Named rather than a bool because the callers need to tell "the slot is spent" from "the
+	/// object is still owed": see <see cref="SpawnerRuntime.ConsumesTimer"/>.
+	/// </remarks>
+	public enum SpawnOutcome
+	{
+		/// <summary>An object was spawned and is tracked.</summary>
+		Spawned,
+		/// <summary>
+		/// An object was spawned, but its prefab has no <see cref="ISpawnable"/>, so the spawner can
+		/// neither count it nor hear of its despawn.
+		/// </summary>
+		SpawnedUntracked,
+		/// <summary>The spawner is already at its maximum.</summary>
+		AtCapacity,
+		/// <summary>Unique spawnables are on and every entry is already alive.</summary>
+		NothingEligible,
+		/// <summary>
+		/// The chosen entry cannot be spawned as authored — empty, no network object, a prefab the
+		/// network manager does not know — or there is no network manager.
+		/// </summary>
+		Misconfigured,
+		/// <summary>The scene instance is not loaded.</summary>
+		SceneNotLoaded,
+		/// <summary>The pool produced nothing, or an exception interrupted the spawn and it was rolled back.</summary>
+		Failed,
+	}
+
 	/// <summary>
 	/// One running spawner: a baked <see cref="SpawnerDefinition"/> placed in one loaded instance
 	/// of its scene. Spawns and respawns networked objects, with pooling, conditions and timers.
@@ -54,6 +86,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		public int SchedulerIndex = SpawnerScheduler.NotActive;
 
 		/// <summary>
+		/// Test seam: stands in for the network half of a spawn, from the pooled retrieval through
+		/// the network spawn, and returns the object made or null.
+		/// </summary>
+		/// <remarks>
+		/// Null in production. A spawn that does not happen now keeps its timer (see
+		/// <see cref="ConsumesTimer"/>), so a runtime with no network manager can no longer stand in
+		/// for a successful one; tests that drive the bookkeeping of a spawn that works set this.
+		/// When set, the network manager and scene checks are skipped: they belong to the half it
+		/// replaces.
+		/// </remarks>
+		internal Func<SpawnableSettings, ISpawnable> NetworkSpawnOverride;
+
+		/// <summary>
 		/// The other spawners of the same scene instance, by table index, for conditions that
 		/// depend on them.
 		/// </summary>
@@ -69,20 +114,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// </summary>
 		/// <remarks>
 		/// The spawner's bookkeeping, not the object's: a spawned entity knows only its owner.
-		/// Read back on despawn for the respawn cadence, and by <see cref="UniqueSpawnables"/>
-		/// to tell which entries are already alive.
+		/// Read back on despawn for the respawn cadence, by <see cref="UniqueSpawnables"/> to tell
+		/// which entries are already alive, and by <see cref="Stop"/> to tell the pool which
+		/// prefabs' instances went with the scene.
 		/// </remarks>
 		private readonly Dictionary<long, SpawnableSettings> settingsBySpawned = new Dictionary<long, SpawnableSettings>();
 
 		/// <summary>
-		/// Pending respawn deadlines, one per object owed.
+		/// Pending respawn deadlines, one per object owed, in seconds on <see cref="Scheduler"/>'s
+		/// clock.
 		/// </summary>
-		private readonly List<DateTime> respawnTimers = new List<DateTime>();
+		private readonly List<double> respawnTimers = new List<double>();
 
 		/// <summary>
-		/// <see cref="Time.time"/> at which this spawner next polls for respawns.
+		/// When, on <see cref="Scheduler"/>'s clock, this spawner next polls for respawns.
 		/// </summary>
-		private float nextRespawnCheckTime;
+		private double nextRespawnCheckTime;
 
 		/// <summary>
 		/// Internal index for linear spawn selection.
@@ -100,9 +147,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		private bool isCacheDirty = true;
 
 		/// <summary>
+		/// Fault log for this spawner's respawn passes and start, created on the first failure.
+		/// </summary>
+		private RepeatingFaultLog faults;
+
+		/// <summary>
+		/// Spawn problems already logged, by outcome and entry, so each is logged once rather than
+		/// at every check that meets it again. Created on the first.
+		/// </summary>
+		private HashSet<int> reportedProblems;
+
+		/// <summary>
+		/// The pack this spawner's NPCs belong to while any of them stands, or null. See
+		/// <see cref="Pack"/>.
+		/// </summary>
+		private NPCGroup pack;
+
+		/// <summary>
 		/// True once <see cref="Start"/> has run and <see cref="Stop"/> has not.
 		/// </summary>
 		public bool Running { get; private set; }
+
+		/// <summary>
+		/// This spawner's current pack, or null when its pack is disabled or no member of it
+		/// stands.
+		/// </summary>
+		/// <remarks>
+		/// One pack per spawner at a time. Every NPC the spawner spawns joins it with its entry's
+		/// role (<see cref="JoinPack"/>); members leave on death, despawn and pool reset; and when
+		/// the last one leaves the pack is released, so the next spawn founds another. A respawn
+		/// while any member stands therefore rejoins the pack it left.
+		/// </remarks>
+		public NPCGroup Pack => pack != null && !pack.Released ? pack : null;
 
 		/// <summary>
 		/// The objects currently alive (or lying as corpses) that this spawner produced.
@@ -153,74 +229,189 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// </summary>
 		public void Start()
 		{
+			try
+			{
+				Populate();
+			}
+			finally
+			{
+				/* Enter the schedule whatever happened. A spawner that filled to its cap has no
+				 * timers and is deliberately not queued at all; one whose initial spawns failed
+				 * owes them as respawns and must be asked again. */
+				Scheduler.Refresh(this);
+			}
+		}
+
+		/// <summary>
+		/// Pre-warms the pool, spawns the initial population and queues every slot left unfilled
+		/// as a respawn, without entering the schedule.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="Start"/> is this plus the schedule. <see cref="SpawnerHost"/> calls it on its
+		/// own so it can spread a scene's starts over several frames and put the whole scene into
+		/// the schedule only once every spawner in it has its initial population — a respawn
+		/// condition that names a sibling must never see that sibling before it has started.
+		/// </remarks>
+		/// <returns>
+		/// The work done, for the host's start budget: one, plus the pooled instances the prewarm
+		/// created, plus the spawns attempted.
+		/// </returns>
+		internal int Populate()
+		{
 			if (Running)
 			{
-				return;
+				return 0;
 			}
 			Running = true;
 
 			List<SpawnableSettings> spawnables = Definition.Spawnables;
 			if (spawnables == null || spawnables.Count < 1)
 			{
-				return;
+				return 1;
 			}
+
+			double now = Scheduler.Now;
 
 			/* Spread the first check across the window rather than starting every spawner's
 			 * clock together. A scene that loads hundreds of spawners on one frame would
 			 * otherwise have them all poll on the same frame forever after. */
-			nextRespawnCheckTime = Time.time + UnityEngine.Random.Range(0.0f, Mathf.Max(0.0f, Definition.RespawnCheckIntervalMaximum));
+			nextRespawnCheckTime = now + UnityEngine.Random.Range(0.0f, Mathf.Max(0.0f, Definition.RespawnCheckIntervalMaximum));
 
-			PrewarmObjectPool();
+			int work = 1 + PrewarmObjectPool();
 
 			int initial = Mathf.Clamp(Definition.InitialSpawnCount, 0, Definition.MaxSpawnCount);
-			for (int i = 0; i < initial; ++i)
+			try
 			{
-				SpawnObject();
+				for (int i = 0; i < initial; ++i)
+				{
+					++work;
+					// An attempt that spawns nothing leaves its slot to the respawns queued below.
+					SpawnObject();
+				}
 			}
-			for (int i = spawned.Count; i < Definition.MaxSpawnCount; ++i)
+			finally
 			{
-				SpawnableSettings spawnableSettings = spawnables[GetSpawnIndex()];
+				/* Also when an initial spawn threw: the slots it and the ones after it would have
+				 * filled are owed as respawns, so the spawner comes back rather than standing
+				 * short for the life of the scene. */
+				QueueUnfilledSlots(now);
+			}
+			return work;
+		}
+
+		/// <summary>
+		/// Queues one respawn for every slot below the maximum that is neither alive nor already
+		/// owed.
+		/// </summary>
+		private void QueueUnfilledSlots(double now)
+		{
+			List<SpawnableSettings> spawnables = Definition.Spawnables;
+			for (int i = spawned.Count + respawnTimers.Count; i < Definition.MaxSpawnCount; ++i)
+			{
+				/* The entry is chosen only for its respawn delay; the respawn picks its own. An
+				 * empty entry used to skip the slot altogether, which left a spawner with a blank
+				 * in its list permanently below its maximum. Search on from it instead, as the
+				 * unique-spawnable search does, and only a list with nothing in it queues nothing. */
+				SpawnableSettings spawnableSettings = FirstAssignedFrom(GetSpawnIndex());
 				if (spawnableSettings == null)
 				{
-					continue;
+					return;
 				}
 
-				respawnTimers.Add(GetNextRespawnTime(spawnableSettings));
+				respawnTimers.Add(GetNextRespawnTime(now, spawnableSettings));
 			}
+		}
 
-			/* Enter the schedule. A spawner that filled to its cap above has no timers and is
-			 * deliberately not queued at all. */
-			Scheduler.Refresh(this);
+		/// <summary>
+		/// The first non-empty entry at or after <paramref name="index"/>, wrapping, or null.
+		/// </summary>
+		private SpawnableSettings FirstAssignedFrom(int index)
+		{
+			List<SpawnableSettings> spawnables = Definition.Spawnables;
+			for (int offset = 0; offset < spawnables.Count; ++offset)
+			{
+				SpawnableSettings candidate = spawnables[(index + offset) % spawnables.Count];
+				if (candidate != null)
+				{
+					return candidate;
+				}
+			}
+			return null;
 		}
 
 		/// <summary>
 		/// Stops the spawner: leaves the schedule and forgets its bookkeeping.
 		/// </summary>
 		/// <remarks>
-		/// Called when the scene instance unloads. The objects themselves go with the scene; their
-		/// owner reference is cleared so a pooled instance cannot hand itself back to a spawner that
-		/// no longer runs.
+		/// Called when the scene instance unloads. The objects themselves went with the scene:
+		/// their owner reference is cleared so a pooled instance cannot hand itself back to a
+		/// spawner that no longer runs, and <see cref="SpawnerPool"/> is told those instances no
+		/// longer exist, so the next scene to reserve the prefab makes them again at its load
+		/// rather than one at a time during play.
 		/// </remarks>
 		public void Stop()
 		{
 			Scheduler.Unregister(this);
 
-			foreach (ISpawnable spawnable in spawned.Values)
+			foreach (KeyValuePair<long, ISpawnable> pair in spawned)
 			{
+				ISpawnable spawnable = pair.Value;
 				if (spawnable != null && ReferenceEquals(spawnable.Spawner, this))
 				{
 					spawnable.Spawner = null;
 				}
+
+				if (settingsBySpawned.TryGetValue(pair.Key, out SpawnableSettings settings) &&
+					settings != null &&
+					settings.NetworkObject != null)
+				{
+					SpawnerPool.Forget(settings.NetworkObject, 1);
+				}
 			}
+
+			/* The pack ends with its spawner. Its members went with the scene, and their brains leave
+			 * it as they are destroyed; dissolving it here also covers a host shutting down with the
+			 * members still standing, and stops the pack being ticked for a spawner that is gone. */
+			pack?.Dissolve();
+			pack = null;
 
 			spawned.Clear();
 			settingsBySpawned.Clear();
 			respawnTimers.Clear();
-			nextRespawnCheckTime = 0f;
+			nextRespawnCheckTime = 0.0;
 			lastSpawnIndex = 0;
 			cachedTotalSpawnChance = 0f;
 			isCacheDirty = true;
 			Running = false;
+		}
+
+		/// <summary>
+		/// Adds a freshly spawned NPC's brain to this spawner's pack, founding the pack if none
+		/// stands. Does nothing when the pack is disabled.
+		/// </summary>
+		/// <remarks>
+		/// Called for every NPC the spawner spawns, after the network spawn: an attempt that is
+		/// rolled back before it never joins. The role is the entry's
+		/// <see cref="NPCSpawnableSettings.PackRole"/>; an entry of another kind joins with none.
+		/// </remarks>
+		/// <param name="brain">The spawned NPC's brain.</param>
+		/// <param name="settings">The entry it was spawned from.</param>
+		/// <returns>The pack it joined, or null.</returns>
+		internal NPCGroup JoinPack(AIController brain, SpawnableSettings settings)
+		{
+			NPCPackSettings packSettings = Definition.Pack;
+			if (brain == null || packSettings == null || !packSettings.Enabled)
+			{
+				return null;
+			}
+
+			if (pack == null || pack.Released)
+			{
+				pack = new NPCGroup(packSettings);
+			}
+
+			NPCGroupRole role = settings is NPCSpawnableSettings npcSettings ? npcSettings.PackRole : NPCGroupRole.None;
+			return pack.AddMember(brain, role) ? pack : null;
 		}
 
 		/// <summary>
@@ -232,14 +423,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <see cref="SpawnerPool"/> de-duplicates across spawners, so ten spawners sharing one
 		/// prefab reserve the largest single demand rather than ten times it.
 		/// </remarks>
-		private void PrewarmObjectPool()
+		/// <returns>The number of instances created.</returns>
+		private int PrewarmObjectPool()
 		{
 			if (!Definition.PrewarmPool || NetworkManager == null)
 			{
-				return;
+				return 0;
 			}
 
 			int perPrefab = Mathf.Max(1, Definition.MaxSpawnCount + Definition.PrewarmHeadroom);
+			int created = 0;
 
 			List<SpawnableSettings> spawnables = Definition.Spawnables;
 			for (int i = 0; i < spawnables.Count; ++i)
@@ -250,8 +443,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 					continue;
 				}
 
-				SpawnerPool.Reserve(NetworkManager, settings.NetworkObject, perPrefab);
+				created += SpawnerPool.Reserve(NetworkManager, settings.NetworkObject, perPrefab);
 			}
+			return created;
 		}
 
 		/// <inheritdoc />
@@ -280,18 +474,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 
 			// The spawnable is passed too: the settings can legitimately be missing when the object
 			// was adopted rather than spawned here, and the instance may still know its own cadence.
-			respawnTimers.Add(GetNextRespawnTime(settings, spawnable));
+			respawnTimers.Add(GetNextRespawnTime(Scheduler.Now, settings, spawnable));
 
 			spawnable.Spawner = null;
 
 			/* DespawnType.Pool returns the object to FishNet's pool rather than destroying it.
 			 * Combined with the pre-warm above, a map's network objects are instantiated once at
-			 * load and then recycled for the lifetime of the scene. */
-			NetworkObject networkObject = spawnable.NetworkObject;
-			if (networkObject != null && networkObject.IsSpawned && NetworkManager != null)
-			{
-				NetworkManager.ServerManager.Despawn(networkObject, DespawnType.Pool);
-			}
+			 * load and then recycled — and PersistentPool takes the pooled object out of this
+			 * world scene, so the scene's unload cannot destroy what the pool is holding. The
+			 * spawner-less fallbacks (NPC.ReturnToPool, Interactable.Despawn) pool the same way. */
+			PersistentPool.Despawn(NetworkManager, spawnable.NetworkObject);
 
 			/* The death is the event the whole schedule turns on. The timer just added may fall
 			 * before the wake already queued for this spawner, so the queued one is superseded
@@ -327,9 +519,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <summary>
 		/// Adds a respawn deadline directly. Test seam; see <see cref="Track"/>.
 		/// </summary>
-		internal void AddRespawnTimer(DateTime deadlineUtc)
+		/// <param name="deadline">When the respawn falls due, in seconds on <see cref="Scheduler"/>'s clock.</param>
+		internal void AddRespawnTimer(double deadline)
 		{
-			respawnTimers.Add(deadlineUtc);
+			respawnTimers.Add(deadline);
 		}
 
 		/// <summary>
@@ -340,17 +533,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// from the settings' fields, so a subclass can answer with its prefab's own cadence when
 		/// this spawner has not overridden it.
 		/// </remarks>
+		/// <param name="now">The current time on <see cref="Scheduler"/>'s clock.</param>
 		/// <param name="spawnableSettings">The settings for the object, or null.</param>
 		/// <param name="spawnable">The instance being despawned, when there is one.</param>
-		/// <returns>When the object should respawn.</returns>
-		private DateTime GetNextRespawnTime(SpawnableSettings spawnableSettings, ISpawnable spawnable = null)
+		/// <returns>When the object should respawn, on <see cref="Scheduler"/>'s clock.</returns>
+		private double GetNextRespawnTime(double now, SpawnableSettings spawnableSettings, ISpawnable spawnable = null)
 		{
 			if (!TryResolveRespawnRange(spawnableSettings, spawnable, out float minimum, out float maximum))
 			{
 				// Nothing knows a cadence for this object — it was adopted rather than spawned
 				// here and is not an NPC. The spawner's own initial respawn time is all that is
 				// left to go on.
-				return DateTime.UtcNow.Add(TimeSpan.FromSeconds(Definition.InitialRespawnTime));
+				return now + Definition.InitialRespawnTime;
 			}
 
 			/* When randomisation is off the MAXIMUM is the delay, which is what the
@@ -362,7 +556,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				? DeterministicRNG.Shared.Range(minimum, maximum)
 				: maximum;
 
-			return DateTime.UtcNow.Add(TimeSpan.FromSeconds(delay));
+			return now + delay;
 		}
 
 		/// <summary>
@@ -425,34 +619,42 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <remarks>
 		/// Called by <see cref="SpawnerScheduler"/> on every sweep that reaches this spawner while
 		/// it has work outstanding. The interval gate is still this spawner's own — the scheduler
-		/// decides who is asked, not how often each one polls.
+		/// decides who is asked, not how often each one polls. A pass the budget cut short leaves
+		/// the gate open, so the rest of it runs at the very next visit instead of an interval
+		/// later.
 		/// </remarks>
-		/// <param name="nowUtc">The time to evaluate respawn deadlines against.</param>
-		/// <param name="nowTime">The current <see cref="Time.time"/>, read once by the scheduler.</param>
-		internal void RunScheduledRespawn(DateTime nowUtc, float nowTime)
+		/// <param name="now">The current time on <see cref="Scheduler"/>'s clock, read once by the scheduler.</param>
+		/// <param name="budget">Spawns the scheduler can still afford this frame; reduced by each attempt.</param>
+		/// <returns>True when the budget ran out with due respawns left.</returns>
+		internal bool RunScheduledRespawn(double now, ref int budget)
 		{
-			if (nowTime < nextRespawnCheckTime)
+			if (now < nextRespawnCheckTime)
 			{
-				return;
+				return false;
 			}
 
-			ScheduleNextRespawnCheck(nowTime);
+			ScheduleNextRespawnCheck(now);
 
-			TryRespawn(nowUtc);
+			bool cutShort = TryRespawn(now, ref budget);
+			if (cutShort)
+			{
+				nextRespawnCheckTime = now;
+			}
+			return cutShort;
 		}
 
 		/// <summary>
 		/// Picks the next respawn check time, re-randomised each pass so spawners that happen to
 		/// align on one frame drift apart again instead of staying in lockstep.
 		/// </summary>
-		/// <param name="nowTime">The current <see cref="Time.time"/>.</param>
-		private void ScheduleNextRespawnCheck(float nowTime)
+		/// <param name="now">The current time on <see cref="Scheduler"/>'s clock.</param>
+		private void ScheduleNextRespawnCheck(double now)
 		{
 			// Tolerate an inverted or negative range rather than never polling.
 			float minimum = Mathf.Max(0.0f, Definition.RespawnCheckIntervalMinimum);
 			float maximum = Mathf.Max(minimum, Definition.RespawnCheckIntervalMaximum);
 
-			nextRespawnCheckTime = nowTime + UnityEngine.Random.Range(minimum, maximum);
+			nextRespawnCheckTime = now + UnityEngine.Random.Range(minimum, maximum);
 		}
 
 		/// <summary>
@@ -460,19 +662,59 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// </summary>
 		/// <remarks>
 		/// Public so anything holding a spawner can force an immediate attempt rather than waiting
-		/// for its scheduled wake.
+		/// for its scheduled wake. Not budgeted: the caller asked for it now.
 		/// </remarks>
 		public void TryRespawn()
 		{
-			TryRespawn(DateTime.UtcNow);
-
-			// A direct caller is outside the schedule, so the wake it just invalidated has to be
-			// replaced. The scheduler reschedules itself and does not reach this.
-			Scheduler.Refresh(this);
+			int unlimited = int.MaxValue;
+			try
+			{
+				TryRespawn(Scheduler.Now, ref unlimited);
+			}
+			finally
+			{
+				// A direct caller is outside the schedule, so the wake it just invalidated has to be
+				// replaced. The scheduler reschedules itself and does not reach this.
+				Scheduler.Refresh(this);
+			}
 		}
 
 		/// <summary>
-		/// Attempts to respawn every object whose timer has elapsed.
+		/// Whether a spawn attempt used up the respawn timer that asked for it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The rule is whether the object is still owed. It is not when one entered the world —
+		/// tracked or, for a prefab with no <see cref="ISpawnable"/>, not — or when there is no slot
+		/// for it (the cap, or every unique entry alive; a death queues a fresh timer). It is when
+		/// nothing entered the world for a reason that can pass: a misconfigured entry (a random
+		/// or weighted spawner picks again next time), an unloaded scene, or a spawn that failed
+		/// and was rolled back.
+		/// </para>
+		/// <para>
+		/// The timer used to be removed before the attempt whatever came of it, so every failure
+		/// left the spawner one short for the life of the scene — and a spawner with one bad entry
+		/// among good ones bled a slot each time it picked the bad one, until it was empty.
+		/// </para>
+		/// </remarks>
+		/// <param name="outcome">What the attempt came to.</param>
+		/// <returns>True when the timer is spent.</returns>
+		public static bool ConsumesTimer(SpawnOutcome outcome)
+		{
+			switch (outcome)
+			{
+				case SpawnOutcome.Spawned:
+				case SpawnOutcome.SpawnedUntracked:
+				case SpawnOutcome.AtCapacity:
+				case SpawnOutcome.NothingEligible:
+					return true;
+				default:
+					return false;
+			}
+		}
+
+		/// <summary>
+		/// Attempts to respawn every object whose timer has elapsed, within a budget.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -482,35 +724,44 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// due timers at once — a group wiped together.
 		/// </para>
 		/// <para>
-		/// Every due timer is then consumed, rather than one per call. A spawner is capable of
-		/// refilling as fast as its deadlines allow; stopping after the first meant the refill rate
-		/// was capped by however often this ran, which is a property of the tick and not something
-		/// anybody authored.
+		/// Every due timer is then consumed, rather than one per call, up to the budget. A spawner
+		/// is capable of refilling as fast as its deadlines allow; stopping after the first meant
+		/// the refill rate was capped by however often this ran, which is a property of the tick
+		/// and not something anybody authored. The budget only spreads a large refill over
+		/// consecutive frames (see <see cref="SpawnerScheduler.SpawnsPerFrame"/>).
+		/// </para>
+		/// <para>
+		/// An attempt that leaves the object owed (<see cref="ConsumesTimer"/>) puts its deadline
+		/// back and ends the pass, since whatever stopped it would stop the rest the same way; the
+		/// next check tries again. So does one that throws, before the exception leaves: the
+		/// scheduler reports it and carries on with the other spawners.
 		/// </para>
 		/// </remarks>
-		/// <param name="nowUtc">The time to evaluate deadlines against.</param>
-		internal void TryRespawn(DateTime nowUtc)
+		/// <param name="now">The time to evaluate deadlines against, on <see cref="Scheduler"/>'s clock.</param>
+		/// <param name="budget">Spawn attempts still affordable; reduced by one per attempt.</param>
+		/// <returns>True when the budget ran out with due timers left.</returns>
+		internal bool TryRespawn(double now, ref int budget)
 		{
 			List<SpawnableSettings> spawnables = Definition.Spawnables;
 			if (spawnables == null ||
 				spawnables.Count < 1 ||
 				respawnTimers.Count < 1)
 			{
-				return;
+				return false;
 			}
 
 			// Clear the timers if we reach our maximum spawn count.
 			if (spawned.Count >= Definition.MaxSpawnCount)
 			{
 				respawnTimers.Clear();
-				return;
+				return false;
 			}
 
 			// Nothing is due yet. Reached whenever a wake fires early, and on any direct call.
 			bool anyDue = false;
 			for (int i = 0; i < respawnTimers.Count; ++i)
 			{
-				if (nowUtc >= respawnTimers[i])
+				if (now >= respawnTimers[i])
 				{
 					anyDue = true;
 					break;
@@ -518,7 +769,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			}
 			if (!anyDue)
 			{
-				return;
+				return false;
 			}
 
 			/* A refusal consumes no timer, so this spawner still has work and stays in the active
@@ -526,31 +777,56 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			 * the boss guarding it dies. */
 			if (!EvaluateRespawnConditions())
 			{
-				return;
+				return false;
 			}
 
 			/* Iterate backwards. The body removes the entry it fires, and a forward loop that
 			 * removes mid-iteration skips the following element. */
 			for (int i = respawnTimers.Count - 1; i >= 0; --i)
 			{
-				if (nowUtc < respawnTimers[i])
+				if (now < respawnTimers[i])
 				{
 					continue;
 				}
 
+				if (budget <= 0)
+				{
+					return true;
+				}
+				--budget;
+
 				/* Remove the timer BEFORE spawning. SpawnObject clears the whole timer list when it
 				 * reaches MaxSpawnCount, and removing afterwards would index a list that had just
-				 * been emptied. */
+				 * been emptied. It goes back in below if the object is still owed. */
+				double deadline = respawnTimers[i];
 				respawnTimers.RemoveAt(i);
 
-				SpawnObject();
+				SpawnOutcome outcome = SpawnOutcome.Failed;
+				try
+				{
+					outcome = SpawnObject();
+				}
+				finally
+				{
+					if (!ConsumesTimer(outcome))
+					{
+						// Already due, so the next check tries it again.
+						respawnTimers.Add(deadline);
+					}
+				}
+
+				if (!ConsumesTimer(outcome))
+				{
+					return false;
+				}
 
 				// SpawnObject clears the list at the cap, which invalidates the loop index.
 				if (spawned.Count >= Definition.MaxSpawnCount)
 				{
-					return;
+					return false;
 				}
 			}
+			return false;
 		}
 
 		/// <summary>
@@ -752,12 +1028,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <summary>
 		/// Spawns a new object in the world using the selected spawnable settings and position logic.
 		/// </summary>
-		public void SpawnObject()
+		/// <remarks>
+		/// <para>
+		/// <b>Tracked or rolled back, never half-made.</b> Once an instance has come out of the
+		/// pool, everything after it — the settings' <c>OnSpawned</c>, the move into the scene, the
+		/// brain's preparation, the network spawn and the tracking — either completes or is undone
+		/// in a <c>finally</c>: the owner reference is cleared and the instance goes back to the
+		/// pool, despawned first if the network spawn had got that far. An exception used to leave
+		/// the instance in the world untracked, so it was never despawned or pooled, and the
+		/// spawner never counted it.
+		/// </para>
+		/// <para>
+		/// A problem that stops the attempt before that point — a misconfigured entry, an unloaded
+		/// scene — is logged once per spawner and entry, not at every check that meets it again.
+		/// </para>
+		/// </remarks>
+		/// <returns>What the attempt came to; see <see cref="ConsumesTimer"/> for what each means for the respawn that asked.</returns>
+		public SpawnOutcome SpawnObject()
 		{
 			List<SpawnableSettings> spawnables = Definition.Spawnables;
-			if (spawnables == null || spawnables.Count < 1 || NetworkManager == null)
+			if (spawnables == null || spawnables.Count < 1)
 			{
-				return;
+				return ReportOnce(SpawnOutcome.Misconfigured, -1, "it has no spawnables.");
 			}
 
 			/* Hard cap. TryRespawn checks this before calling, but Start and any external caller
@@ -765,12 +1057,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			 * into unbounded growth. */
 			if (spawned.Count >= Definition.MaxSpawnCount)
 			{
-				return;
+				return SpawnOutcome.AtCapacity;
 			}
 
-			if (!Scene.IsValid() || !Scene.isLoaded)
+			if (NetworkSpawnOverride == null)
 			{
-				return;
+				if (NetworkManager == null)
+				{
+					return ReportOnce(SpawnOutcome.Misconfigured, -1, "there is no network manager to spawn with.");
+				}
+				if (!Scene.IsValid() || !Scene.isLoaded)
+				{
+					return ReportOnce(SpawnOutcome.SceneNotLoaded, -1, "its scene is not loaded.");
+				}
 			}
 
 			int spawnIndex = GetSpawnIndex();
@@ -781,14 +1080,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			if (Definition.UniqueSpawnables &&
 				!TryResolveUniqueSpawnIndex(ref spawnIndex))
 			{
-				return;
+				return SpawnOutcome.NothingEligible;
 			}
 
 			SpawnableSettings spawnableSettings = spawnables[spawnIndex];
-			if (spawnableSettings == null ||
-				spawnableSettings.NetworkObject == null)
+			if (spawnableSettings == null)
 			{
-				return;
+				return ReportOnce(SpawnOutcome.Misconfigured, spawnIndex, $"spawnable {spawnIndex} is empty.");
+			}
+
+			if (NetworkSpawnOverride != null)
+			{
+				ISpawnable made = NetworkSpawnOverride(spawnableSettings);
+				if (made == null)
+				{
+					return SpawnOutcome.Failed;
+				}
+				Track(made, spawnableSettings);
+				// A stand-in that made a real NPC with a brain joins the pack as a spawned one does.
+				JoinPack(made is Component component ? component.GetComponent<AIController>() : null, spawnableSettings);
+				ClearTimersAtCapacity();
+				return SpawnOutcome.Spawned;
+			}
+
+			if (spawnableSettings.NetworkObject == null)
+			{
+				return ReportOnce(SpawnOutcome.Misconfigured, spawnIndex, $"spawnable {spawnIndex} has no network object.");
 			}
 
 			Vector3 spawnPosition = ResolveSpawnPosition(spawnableSettings);
@@ -796,70 +1113,209 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			NetworkObject prefab = NetworkManager.SpawnablePrefabs.GetObject(true, spawnableSettings.NetworkObject.PrefabId);
 			if (prefab == null)
 			{
-				return;
+				return ReportOnce(SpawnOutcome.Misconfigured, spawnIndex,
+					$"spawnable {spawnIndex}'s prefab {spawnableSettings.NetworkObject.name} (id {spawnableSettings.NetworkObject.PrefabId}) is not among the network manager's spawnable prefabs.");
 			}
 
 			// Instantiate the object using object pooling.
 			NetworkObject nob = NetworkManager.GetPooledInstantiated(spawnableSettings.NetworkObject.PrefabId, spawnableSettings.NetworkObject.SpawnableCollectionId, ObjectPoolRetrieveOption.MakeActive, null, spawnPosition, Definition.Rotation, null, true);
 			if (nob == null)
 			{
-				return;
+				return ReportOnce(SpawnOutcome.Failed, spawnIndex, $"the pool returned nothing for spawnable {spawnIndex}.");
 			}
 
-			// Delegate type-specific data injection to the settings subclass.
-			spawnableSettings.OnSpawned(nob, this);
-
-			// Move the spawned object to the correct scene.
-			SceneManager.MoveGameObjectToScene(nob.gameObject, Scene);
-
-			/* Prepare the brain after the scene move. Initialising warps the NavMeshAgent onto the
-			 * mesh at the spawn point, which is what a recycled NPC needs: it comes out of the pool
-			 * while the agent still believes it is standing wherever the previous occupant died. */
-			NPC npc = nob.GetComponent<NPC>();
-			if (npc != null)
+			ISpawnable nobSpawnable = null;
+			AIController brain = null;
+			bool completed = false;
+			try
 			{
-				if (AIBrainHost.TryGet(NetworkManager, out AIBrainHost brainHost))
+				// Delegate type-specific data injection to the settings subclass.
+				spawnableSettings.OnSpawned(nob, this);
+
+				// Move the spawned object to the correct scene.
+				SceneManager.MoveGameObjectToScene(nob.gameObject, Scene);
+
+				/* Prepare the brain after the scene move. Initialising warps the NavMeshAgent onto the
+				 * mesh at the spawn point, which is what a recycled NPC needs: it comes out of the pool
+				 * while the agent still believes it is standing wherever the previous occupant died. */
+				NPC npc = nob.GetComponent<NPC>();
+				if (npc != null)
 				{
-					NPCSpawnableSettings npcSettings = spawnableSettings as NPCSpawnableSettings;
-					brainHost.Prepare(npc, spawnPosition, npcSettings != null ? npcSettings.ArchetypeOverride : null);
+					if (AIBrainHost.TryGet(NetworkManager, out AIBrainHost brainHost))
+					{
+						NPCSpawnableSettings npcSettings = spawnableSettings as NPCSpawnableSettings;
+						brain = brainHost.Prepare(npc, spawnPosition, npcSettings != null ? npcSettings.ArchetypeOverride : null);
+					}
+					else
+					{
+						Log.Warning("SpawnerRuntime", $"No AI brain host is running; {Definition.Name} spawned {npc.gameObject.name} without a brain.");
+					}
 				}
-				else
+
+				// Set up the owner before the spawn, so the object's own start callbacks see it.
+				nobSpawnable = nob.GetComponent<ISpawnable>();
+				if (nobSpawnable != null)
 				{
-					Log.Warning("SpawnerRuntime", $"No AI brain host is running; {Definition.Name} spawned {npc.gameObject.name} without a brain.");
+					nobSpawnable.Spawner = this;
+				}
+
+				NetworkManager.ServerManager.Spawn(nob, null, Scene);
+
+				/* Tracked AFTER the spawn, because the key is the scene-object ID and that ID is
+				 * assigned in OnStartServer — which runs inside ServerManager.Spawn. Registering
+				 * beforehand filed every first-time instance under ID 0: repeated spawns overwrote one
+				 * another, so the count never approached MaxSpawnCount and the cap at the top of this
+				 * method never engaged, while Despawn looked up the real (negative) ID, missed, and
+				 * returned early — leaving the object spawned forever with no respawn queued. Pooled
+				 * instances keep their ID across a recycle, so only the first spawn of each instance was
+				 * affected, which is exactly the initial world population.
+				 *
+				 * Indexer, not Add. A pooled object keeps its scene-object ID across a recycle, so a
+				 * stale entry left by an object that was despawned some other way would make Add throw
+				 * and abort the spawn tick. */
+				if (nobSpawnable != null)
+				{
+					Track(nobSpawnable, spawnableSettings);
+				}
+
+				/* Into the pack last, once the NPC is really in the world: a spawn rolled back before
+				 * this point never joined, and one rolled back after it leaves again through the
+				 * despawn (AIController.ResetForPool). */
+				JoinPack(brain, spawnableSettings);
+				completed = true;
+			}
+			finally
+			{
+				if (!completed)
+				{
+					RollBackUnfinishedSpawn(nob, nobSpawnable);
 				}
 			}
 
-			// Set up the owner before the spawn, so the object's own start callbacks see it.
-			ISpawnable nobSpawnable = nob.GetComponent<ISpawnable>();
-			if (nobSpawnable != null)
+			ClearTimersAtCapacity();
+
+			if (nobSpawnable == null)
 			{
-				nobSpawnable.Spawner = this;
+				return ReportOnce(SpawnOutcome.SpawnedUntracked, spawnIndex,
+					$"spawnable {spawnIndex} ({spawnableSettings.NetworkObject.name}) has no ISpawnable component, so it was spawned but cannot be counted or report its despawn; the slot is spent.");
 			}
+			return SpawnOutcome.Spawned;
+		}
 
-			NetworkManager.ServerManager.Spawn(nob, null, Scene);
-
-			/* Tracked AFTER the spawn, because the key is the scene-object ID and that ID is
-			 * assigned in OnStartServer — which runs inside ServerManager.Spawn. Registering
-			 * beforehand filed every first-time instance under ID 0: repeated spawns overwrote one
-			 * another, so the count never approached MaxSpawnCount and the cap at the top of this
-			 * method never engaged, while Despawn looked up the real (negative) ID, missed, and
-			 * returned early — leaving the object spawned forever with no respawn queued. Pooled
-			 * instances keep their ID across a recycle, so only the first spawn of each instance was
-			 * affected, which is exactly the initial world population.
-			 *
-			 * Indexer, not Add. A pooled object keeps its scene-object ID across a recycle, so a
-			 * stale entry left by an object that was despawned some other way would make Add throw
-			 * and abort the spawn tick. */
-			if (nobSpawnable != null)
-			{
-				Track(nobSpawnable, spawnableSettings);
-			}
-
-			// If we've reached the maximum spawn count, clear respawn timers.
+		/// <summary>
+		/// At the cap, owed respawns are moot: drop them.
+		/// </summary>
+		private void ClearTimersAtCapacity()
+		{
 			if (spawned.Count >= Definition.MaxSpawnCount)
 			{
 				respawnTimers.Clear();
 			}
+		}
+
+		/// <summary>
+		/// Undoes a spawn that was interrupted after its instance came out of the pool.
+		/// </summary>
+		/// <remarks>
+		/// Runs in a <c>finally</c> while an exception is on its way out, so it must not throw one
+		/// of its own: that would replace the original, which is the one worth reading.
+		/// </remarks>
+		private void RollBackUnfinishedSpawn(NetworkObject nob, ISpawnable nobSpawnable)
+		{
+			try
+			{
+				if (nobSpawnable != null)
+				{
+					if (spawned.TryGetValue(nobSpawnable.ID, out ISpawnable tracked) && ReferenceEquals(tracked, nobSpawnable))
+					{
+						spawned.Remove(nobSpawnable.ID);
+						settingsBySpawned.Remove(nobSpawnable.ID);
+					}
+					if (ReferenceEquals(nobSpawnable.Spawner, this))
+					{
+						nobSpawnable.Spawner = null;
+					}
+				}
+
+				if (nob == null || NetworkManager == null)
+				{
+					return;
+				}
+
+				if (nob.IsSpawned)
+				{
+					// The despawn resets the brain and takes it out of its pack (NPC.OnServerDespawned).
+					NetworkManager.ServerManager.Despawn(nob, DespawnType.Pool);
+				}
+				else
+				{
+					/* Never spawned, so FishNet raises no despawn: the brain prepared for it would stay
+					 * on the host's tick, stepping an inactive pooled body. Retire it explicitly. */
+					AIBrainHost.RetireBrainOf(NetworkManager, nob);
+					NetworkManager.StorePooledInstantiated(nob, true);
+				}
+				PersistentPool.Keep(NetworkManager, nob);
+			}
+			catch (Exception ex)
+			{
+				Log.Error("SpawnerRuntime", $"Spawner '{Definition.Name}' in {SceneLabel()} could not roll back an interrupted spawn of {(nob != null ? nob.name : "an object")}: {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Logs a spawn problem the first time this spawner meets it for this entry, and returns
+		/// the outcome so a guard reads as one statement.
+		/// </summary>
+		/// <param name="outcome">The outcome being reported.</param>
+		/// <param name="entryIndex">The spawnable entry concerned, or -1 for the spawner as a whole.</param>
+		/// <param name="problem">What is wrong, as the end of a sentence.</param>
+		private SpawnOutcome ReportOnce(SpawnOutcome outcome, int entryIndex, string problem)
+		{
+			int key = ((int)outcome << 16) | (entryIndex & 0xFFFF);
+			reportedProblems ??= new HashSet<int>();
+			if (!reportedProblems.Add(key))
+			{
+				return outcome;
+			}
+
+			string consequence = ConsumesTimer(outcome)
+				? string.Empty
+				: " The respawn is kept and tried again at each check; this is logged once.";
+			string message = $"Spawner '{Definition.Name}' in {SceneLabel()} could not spawn: {problem}{consequence}";
+			if (outcome == SpawnOutcome.Misconfigured || outcome == SpawnOutcome.SpawnedUntracked)
+			{
+				Log.Error("SpawnerRuntime", message);
+			}
+			else
+			{
+				Log.Warning("SpawnerRuntime", message);
+			}
+			return outcome;
+		}
+
+		/// <summary>
+		/// Records a respawn pass or start that completed. Called by the scheduler and the host.
+		/// </summary>
+		internal void ReportPassSucceeded()
+		{
+			faults?.ReportSuccess();
+		}
+
+		/// <summary>
+		/// Records a respawn pass or start that threw. Called by the scheduler and the host, which
+		/// catch per spawner so one broken spawner cannot stop the rest.
+		/// </summary>
+		/// <param name="ex">The exception.</param>
+		/// <param name="now">The current time on <see cref="Scheduler"/>'s clock.</param>
+		internal void ReportPassFailed(Exception ex, double now)
+		{
+			faults ??= new RepeatingFaultLog("SpawnerRuntime", $"Spawner '{Definition.Name}' in {SceneLabel()}");
+			faults.Report(ex, now);
+		}
+
+		private string SceneLabel()
+		{
+			return Scene.IsValid() ? $"{Scene.name} (handle {Scene.handle})" : "no scene";
 		}
 
 		/// <summary>

@@ -11,10 +11,14 @@ namespace FishMMO.Server.Core.World.SceneServer
 	/// player was shown apart from the one that replaced it. Carrying the inviter and the issue
 	/// time lets the accept path prove the two are the same invitation.
 	///
-	/// <see cref="IssuedUtc"/> is stamped here rather than left to the cache's last-seen clock
+	/// <see cref="IssuedAt"/> is stamped here rather than left to the cache's last-seen clock
 	/// because reading the entry TOUCHES that clock: a client that polls, or simply an accept
 	/// arriving late, refreshed the very timestamp the expiry sweep was about to act on. The
 	/// stamped time is the one the TTL is measured against.
+	///
+	/// It is a <see cref="MonotonicClock"/> reading, not a calendar instant: the TTL is a local
+	/// duration, and on the wall clock a host stepped back kept every invitation acceptable for
+	/// the size of the step.
 	/// </remarks>
 	public readonly struct PendingGuildInvitation
 	{
@@ -24,20 +28,20 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>The character who sent the invitation.</summary>
 		public readonly long InviterCharacterID;
 
-		/// <summary>When the invitation was issued (UTC).</summary>
-		public readonly DateTime IssuedUtc;
+		/// <summary>When the invitation was issued, in <see cref="MonotonicClock"/> seconds.</summary>
+		public readonly double IssuedAt;
 
 		/// <summary>
 		/// Initializes a new pending guild invitation.
 		/// </summary>
 		/// <param name="guildID">The guild the target was invited to.</param>
 		/// <param name="inviterCharacterID">The character who sent the invitation.</param>
-		/// <param name="issuedUtc">When the invitation was issued (UTC).</param>
-		public PendingGuildInvitation(long guildID, long inviterCharacterID, DateTime issuedUtc)
+		/// <param name="issuedAt">When the invitation was issued, in <see cref="MonotonicClock"/> seconds.</param>
+		public PendingGuildInvitation(long guildID, long inviterCharacterID, double issuedAt)
 		{
 			GuildID = guildID;
 			InviterCharacterID = inviterCharacterID;
-			IssuedUtc = issuedUtc;
+			IssuedAt = issuedAt;
 		}
 	}
 
@@ -73,12 +77,12 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Sweeps expired invitations using bounded scan/remove limits.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <param name="ttl">Invitation time-to-live.</param>
 		/// <param name="maxScan">Maximum queue entries to scan.</param>
 		/// <param name="maxRemove">Maximum expired entries to remove.</param>
 		/// <returns>Number of removed invitations.</returns>
-		int SweepExpiredInvitations(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
+		int SweepExpiredInvitations(double now, TimeSpan ttl, int maxScan, int maxRemove);
 
 		/// <summary>
 		/// Records an invitation attempt against a specific target and reports whether it is
@@ -87,7 +91,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="inviterCharacterID">The character sending the invitation.</param>
 		/// <param name="targetCharacterID">The character being invited.</param>
 		/// <param name="cooldown">Minimum interval between invitations to the same target.</param>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <returns>True when the invitation may proceed; false while the cooldown is active.</returns>
 		/// <remarks>
 		/// The pending-invitation slot is NOT a rate limit: declining clears it immediately, so an
@@ -96,41 +100,41 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// hundred milliseconds and is per connection, not per target, so it caps the rate without
 		/// capping the harassment. This is the per-(inviter, target) limit that does.
 		/// </remarks>
-		bool TryBeginInviteCooldown(long inviterCharacterID, long targetCharacterID, TimeSpan cooldown, DateTime nowUtc);
+		bool TryBeginInviteCooldown(long inviterCharacterID, long targetCharacterID, TimeSpan cooldown, double now);
 
 		/// <summary>
 		/// Sweeps expired invite cooldown entries using bounded scan/remove limits.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <param name="ttl">Cooldown entry time-to-live.</param>
 		/// <param name="maxScan">Maximum queue entries to scan.</param>
 		/// <param name="maxRemove">Maximum expired entries to remove.</param>
 		/// <returns>Number of removed entries.</returns>
-		int SweepInviteCooldowns(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
+		int SweepInviteCooldowns(double now, TimeSpan ttl, int maxScan, int maxRemove);
 
 		/// <summary>
 		/// Begins the per-character guild application cooldown, if it is not already running.
 		/// </summary>
 		/// <param name="characterID">The applying character.</param>
 		/// <param name="cooldown">Minimum interval between applications.</param>
-		/// <param name="nowUtc">Current UTC time.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <returns>True when the application may proceed.</returns>
 		/// <remarks>
 		/// Keyed on the APPLICANT alone, not on (applicant, guild). The per-guild case is already
 		/// covered by the unique index on the application table; what is not covered, and what
 		/// this exists for, is one player applying to every guild in the directory in turn.
 		/// </remarks>
-		bool TryBeginApplicationCooldown(long characterID, TimeSpan cooldown, DateTime nowUtc);
+		bool TryBeginApplicationCooldown(long characterID, TimeSpan cooldown, double now);
 
 		/// <summary>
 		/// Removes expired application cooldown entries.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC time.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <param name="ttl">Entry lifetime.</param>
 		/// <param name="maxScan">Maximum entries scanned.</param>
 		/// <param name="maxRemove">Maximum entries removed.</param>
 		/// <returns>The number of entries removed.</returns>
-		int SweepApplicationCooldowns(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
+		int SweepApplicationCooldowns(double now, TimeSpan ttl, int maxScan, int maxRemove);
 
 		/// <summary>
 		/// Marks a character's guild membership as being removed.
@@ -165,6 +169,41 @@ namespace FishMMO.Server.Core.World.SceneServer
 		DateTime LastFetchTime { get; set; }
 
 		/// <summary>
+		/// Reports whether a guild update, or a later one for the same guild, has already been processed.
+		/// </summary>
+		/// <param name="guildID">The guild the update belongs to.</param>
+		/// <param name="lastUpdateUtc">The update row's timestamp.</param>
+		/// <returns>True when this update, or a later one, has already been delivered.</returns>
+		/// <remarks>
+		/// The guild pump's watermark trails real time by a skew allowance and is held back for
+		/// updates it could not read, so an update stays in the fetch window for several passes
+		/// after it was delivered. Without this record each of those passes re-read the roster and
+		/// ladder and re-broadcast the whole guild to every local member. Safe to call from a worker.
+		/// </remarks>
+		bool HasProcessedGuildUpdate(long guildID, DateTime lastUpdateUtc);
+
+		/// <summary>
+		/// Records a guild update as processed. Never moves a guild's record backwards.
+		/// </summary>
+		/// <param name="guildID">The guild the update belongs to.</param>
+		/// <param name="lastUpdateUtc">The update row's timestamp.</param>
+		void MarkGuildUpdateProcessed(long guildID, DateTime lastUpdateUtc);
+
+		/// <summary>
+		/// Drops processed-update records for guilds that have stopped changing.
+		/// </summary>
+		/// <param name="nowUtc">
+		/// This server's wall clock. The records are the update rows' own timestamps, stamped by the
+		/// database, so this is the pump's cross-clock comparison and not a local duration.
+		/// </param>
+		/// <param name="ttl">
+		/// Age past which a record is discarded. It must outlast the window in which its update can
+		/// still be fetched; the pump passes <c>UpdatePumpWatermark.ProcessedRecordLifetime</c>.
+		/// </param>
+		/// <returns>The number of records removed.</returns>
+		int SweepProcessedGuildUpdates(DateTime nowUtc, TimeSpan ttl);
+
+		/// <summary>
 		/// Atomically transitions the update pump from idle to in-flight.
 		/// Returns true if this call won the race; false if a pump is already in flight.
 		/// </summary>
@@ -176,9 +215,9 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void EndUpdatePump();
 
 		/// <summary>
-		/// Next scheduled UTC time for invitation cleanup.
+		/// When the next invitation cleanup is due, in <see cref="MonotonicClock"/> seconds.
 		/// </summary>
-		DateTime NextInvitationSweepUtc { get; set; }
+		double NextInvitationSweepAt { get; set; }
 
 		/// <summary>
 		/// Shared ingress guard for per-connection per-operation debounce and in-flight tracking.

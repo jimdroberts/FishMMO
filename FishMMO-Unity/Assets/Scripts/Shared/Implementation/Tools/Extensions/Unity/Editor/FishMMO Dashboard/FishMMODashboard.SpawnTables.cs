@@ -444,10 +444,13 @@ namespace FishMMO.Shared
 			AddConstantRow(foldout, "Prewarm Pool", spawner.PrewarmPool ? $"yes, +{spawner.PrewarmHeadroom} headroom" : "no");
 			AddConstantRow(foldout, "Any Of (OR)", DescribeConditions(spawner.OrConditions));
 			AddConstantRow(foldout, "All Of (AND)", DescribeConditions(spawner.TrueConditions));
+			AddConstantRow(foldout, "Pack", spawner.Pack != null && spawner.Pack.Enabled
+				? $"yes — {spawner.Pack.Tactic}, ring {F(spawner.Pack.TacticOrbitRadius)} m{(spawner.Pack.FocusTargeting ? ", focus follows the tank" : string.Empty)}"
+				: "no");
 
 			for (int i = 0; i < spawnables.Count; i++)
 			{
-				AddSpawnableRows(foldout, spawnables[i], i);
+				AddSpawnableRows(foldout, spawner, spawnables[i], i);
 			}
 
 			inspectorContent.Add(foldout);
@@ -456,7 +459,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The rows for one spawnable entry.
 		/// </summary>
-		private void AddSpawnableRows(VisualElement parent, SpawnableSettings settings, int index)
+		private void AddSpawnableRows(VisualElement parent, SpawnerDefinition spawner, SpawnableSettings settings, int index)
 		{
 			VisualElement section = CreateConstantsSection(settings == null
 				? $"Spawnable {index} — empty"
@@ -478,6 +481,10 @@ namespace FishMMO.Shared
 
 			if (settings is NPCSpawnableSettings npc)
 			{
+				if (spawner != null && spawner.Pack != null && spawner.Pack.Enabled)
+				{
+					AddConstantRow(section, "Pack Role", npc.PackRole.ToString());
+				}
 				AddOverrideRow(section, "Archetype", npc.ArchetypeOverride);
 				AddOverrideRow(section, "Loot Table", npc.LootTableOverride);
 				AddOverrideRow(section, "Faction", npc.FactionOverride);

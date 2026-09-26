@@ -96,8 +96,9 @@ typedef uint64_t wt_stream_id_t;
  *   1  original surface up to wt_server_set_allow_native_clients
  *   2  + wt_server_set_limits (2026-09-07)
  *   3  + wt_abi_version, wt_tls_provider, WT_ERR_TLS_BACKEND (2026-09-09)
+ *   4  + wt_get_global_counters, wt_client_get_connection_stats (2026-09-25)
  */
-#define WT_ABI_VERSION           3
+#define WT_ABI_VERSION           4
 
 /* ── Callback function pointer types ────────────────────────────
  * These are invoked from QUIC worker threads. Do not call Unity
@@ -521,6 +522,159 @@ WT_API int32_t wt_client_get_mtu(WT_CLIENT client);
  * @thread_safety Safe to call from any thread before wt_client_connect.
  */
 WT_API void wt_client_set_alpn(WT_CLIENT client, const char* alpn);
+
+/* ═══════════════════════════════════════════════════════════════
+ * STATISTICS API
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * Read-only views of what this process has put on the network.  Both copy
+ * msquic's figures into structs this library owns, so a change in msquic's
+ * own layout never reaches the ABI: a field is only ever appended here, with
+ * the struct's version and WT_ABI_VERSION bumped alongside it.
+ *
+ * Every struct opens with the same two fields.  The caller sets struct_size
+ * to sizeof() of the struct it was compiled against; the library writes at
+ * most that many bytes and then sets struct_size to the number it wrote and
+ * version to the layout it wrote.  A caller built against a shorter, older
+ * layout therefore still receives a correct prefix.
+ *
+ * Layers, from the application outwards (the transport README has the full
+ * table):
+ *   app   what the host handed this library, plus this library's framing
+ *         (reliable-message length prefixes, HTTP/3 stream and datagram
+ *         headers, the HTTP/3 control stream);
+ *   udp   the UDP payload: every QUIC packet with its header, AEAD tag,
+ *         padding, ACK-only packets, retransmissions and the handshake;
+ *   ip    NOT counted anywhere in user space.  Add 28 bytes per datagram
+ *         (IPv4 20 + UDP 8) to the udp figure for the IP-level total.
+ */
+
+#define WT_GLOBAL_COUNTERS_VERSION   1
+#define WT_CONNECTION_STATS_VERSION  1
+
+/* Bytes of the common struct_size + version header. */
+#define WT_STATS_HEADER_SIZE         8
+
+/**
+ * Process-wide counters (msquic QUIC_PARAM_GLOBAL_PERF_COUNTERS).
+ *
+ * They cover EVERY connection this process made or accepted, including
+ * handshakes that were refused or failed, stateless retries, version
+ * negotiation and retransmissions: the traffic a server pays for, not only
+ * the traffic its players asked for.  Cumulative from wt_init(); they reset
+ * only when the library is deinitialised and initialised again.  Fields
+ * marked "gauge" are current values, not totals.
+ */
+typedef struct wt_global_counters_s {
+    uint32_t struct_size;             /* in: caller's sizeof; out: bytes written */
+    uint32_t version;                 /* out: WT_GLOBAL_COUNTERS_VERSION */
+
+    uint64_t udp_send_datagrams;      /* datagrams, not send calls (GSO batches are unrolled);
+                                       * msquic 2.5.9 over-counts a flush sent in several
+                                       * batches (handshakes, some bursts) — the bytes are exact */
+    uint64_t udp_recv_datagrams;      /* every datagram the sockets received, dropped ones included */
+    uint64_t udp_send_bytes;          /* UDP payload bytes sent */
+    uint64_t udp_recv_bytes;          /* UDP payload bytes received */
+    uint64_t app_send_bytes;          /* stream + datagram bytes this library handed to msquic */
+    uint64_t app_recv_bytes;          /* stream + datagram bytes msquic delivered to this library */
+
+    uint64_t conn_created;            /* connections ever allocated, both roles */
+    uint64_t conn_active;             /* gauge: connections allocated now */
+    uint64_t conn_connected;          /* gauge: connections past the QUIC handshake now */
+    uint64_t conn_handshake_fail;     /* started, then freed before the handshake completed */
+    uint64_t conn_app_reject;         /* refused by this library's listener (limits, full) */
+    uint64_t conn_load_reject;        /* refused by msquic: workers overloaded */
+    uint64_t conn_no_alpn;            /* refused: no matching ALPN */
+    uint64_t conn_protocol_errors;    /* shut down with a QUIC protocol error */
+
+    uint64_t pkts_suspected_lost;     /* sent packets declared lost (spurious ones included) */
+    uint64_t pkts_dropped;            /* received packets dropped for any reason */
+    uint64_t pkts_decryption_fail;    /* received packets that failed to decrypt */
+    uint64_t stateless_retry_sent;
+    uint64_t stateless_reset_sent;
+} wt_global_counters_t;
+
+/* wt_connection_stats_t.flags */
+#define WT_CONN_STATS_HAS_CWND          0x01u  /* congestion_window is valid */
+#define WT_CONN_STATS_HAS_RTT_VARIANCE  0x02u  /* rtt_variance_us is valid */
+#define WT_CONN_STATS_ECN_CAPABLE       0x04u
+#define WT_CONN_STATS_RESUMED           0x08u  /* TLS resumption succeeded */
+
+/**
+ * One connection's statistics (msquic QUIC_STATISTICS_V2), cumulative for
+ * the life of that connection.
+ *
+ * msquic has no "retransmitted packets" counter: QUIC retransmits frames in
+ * new packets, so the closest figure is packets lost, which is
+ * send_suspected_lost_packets - send_spurious_lost_packets.
+ * send_ack_eliciting_packets is msquic's SendRetransmittablePackets: packets
+ * that COULD be retransmitted, not packets that were.
+ */
+typedef struct wt_connection_stats_s {
+    uint32_t struct_size;             /* in: caller's sizeof; out: bytes written */
+    uint32_t version;                 /* out: WT_CONNECTION_STATS_VERSION */
+
+    uint32_t flags;                   /* WT_CONN_STATS_* */
+    uint32_t rtt_us;                  /* smoothed round-trip time */
+    uint32_t min_rtt_us;
+    uint32_t max_rtt_us;
+    uint32_t rtt_variance_us;         /* with WT_CONN_STATS_HAS_RTT_VARIANCE */
+    uint32_t path_mtu;                /* current path MTU: the UDP payload budget per datagram */
+    uint32_t congestion_window;       /* bytes, with WT_CONN_STATS_HAS_CWND */
+    uint32_t congestion_events;
+    uint32_t persistent_congestion_events;
+    uint32_t key_updates;
+
+    uint64_t send_packets;            /* QUIC packets; coalesced ones count separately */
+    uint64_t send_bytes;              /* UDP payload bytes, retransmissions included */
+    uint64_t send_stream_bytes;       /* stream payload incl. retransmitted data; excludes DATAGRAM frames */
+    uint64_t send_ack_eliciting_packets;
+    uint64_t send_suspected_lost_packets;
+    uint64_t send_spurious_lost_packets;
+    uint64_t recv_packets;
+    uint64_t recv_bytes;              /* UDP payload bytes */
+    uint64_t recv_stream_bytes;
+    uint64_t recv_reordered_packets;
+    uint64_t recv_dropped_packets;    /* duplicates included */
+    uint64_t recv_duplicate_packets;
+    uint64_t recv_decryption_failures;
+} wt_connection_stats_t;
+
+/**
+ * Copy the process-wide counters into *counters (set counters->struct_size
+ * first).  Never blocks: msquic answers global parameters inline.
+ *
+ * @return WT_OK; WT_ERR_INVALID_STATE before wt_init() or after wt_deinit()
+ *         (*counters untouched); WT_ERR_UNKNOWN for a NULL pointer, a
+ *         struct_size below WT_STATS_HEADER_SIZE, or an msquic failure.
+ *
+ * @thread_safety Safe to call from any thread at any time.
+ */
+WT_API int32_t wt_get_global_counters(wt_global_counters_t* counters);
+
+/**
+ * Copy the statistics of the client's QUIC connection into *stats (set
+ * stats->struct_size first).  Available from wt_client_connect() until the
+ * connection's shutdown completes, the handshake included.
+ *
+ * BLOCKS until the connection's QUIC worker answers — normally microseconds,
+ * longer when that worker is busy.  Call it at most about once a second.
+ * Safe while the connection is shutting down: the library holds the
+ * connection handle open until the read returns, so a read never races the
+ * SHUTDOWN_COMPLETE close.
+ *
+ * @return WT_OK; WT_ERR_INVALID_STATE when there is no connection (never
+ *         connected, or already shut down) or before wt_init(); WT_ERR_UNKNOWN
+ *         for a NULL argument, a struct_size below WT_STATS_HEADER_SIZE, or an
+ *         msquic failure.
+ *
+ * @thread_safety MUST be called from the thread that calls wt_client_poll,
+ *                and never concurrently with wt_client_connect or
+ *                wt_client_destroy on the same handle.  NOT safe to call from
+ *                QUIC callbacks.
+ */
+WT_API int32_t wt_client_get_connection_stats(WT_CLIENT client,
+                                              wt_connection_stats_t* stats);
 
 /* ── Lifecycle ─────────────────────────────────────────────── */
 

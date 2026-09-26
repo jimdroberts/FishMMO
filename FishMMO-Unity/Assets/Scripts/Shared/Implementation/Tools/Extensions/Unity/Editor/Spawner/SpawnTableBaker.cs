@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 using FishNet.Object;
 using UnityEditor;
@@ -233,6 +234,8 @@ namespace FishMMO.Shared
 				RandomSpawnPosition = spawner.RandomSpawnPosition,
 				SphereRadius = spawner.SphereRadius,
 				BoundingBoxSize = spawner.BoundingBoxSize,
+				// A copy, like everything else here: the table must not change when the scene does.
+				Pack = spawner.Pack != null ? spawner.Pack.Clone() : new NPCPackSettings(),
 			};
 
 			/* Copies, never the scene's own instances. A [SerializeReference] object cannot be

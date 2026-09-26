@@ -10,6 +10,7 @@ using FishNet.Managing;
 using FishNet.Transporting;
 using FishMMO.Database;
 using FishMMO.Database.Data;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using System;
@@ -90,6 +91,95 @@ namespace FishMMO.Server.Implementation
 		private static readonly TimeSpan RenewalRetryBaseDelay = TimeSpan.FromSeconds(15);
 
 		/// <summary>
+		/// Largest fraction of <see cref="RenewalInterval"/> a successful renewal's next due time is
+		/// brought forward by, chosen at random per renewal.
+		/// </summary>
+		/// <remarks>
+		/// Without it a group of connections that authenticated together — every player rejoining
+		/// after a scene restart, say — renewed together, in the same sweep, every interval, for as
+		/// long as they stayed connected. Drawing a fresh offset each time spreads such a group a
+		/// little further apart every cycle. Only ever earlier, never later, so a renewal cannot
+		/// come due any closer to the expiry of the token it replaces than it did before.
+		/// </remarks>
+		private const double RenewalJitterFraction = 0.2;
+
+		/// <summary>
+		/// Fewest renewals one sweep may start, however few connections are tracked. The budget
+		/// grows with the connection count; see <see cref="RenewalStartBudget"/>.
+		/// </summary>
+		private const int MinRenewalStartsPerSweep = 32;
+
+		/// <summary>
+		/// How many times the steady-state renewal rate a sweep may start, so a backlog of
+		/// retries after a database outage drains instead of persisting.
+		/// </summary>
+		private const double RenewalStartHeadroom = 2.0;
+
+		/// <summary>
+		/// Fraction of a renewal's slack — the time between coming due and the old token
+		/// expiring — within which every tracked connection could be started if all of them came
+		/// due at once. The rest of the slack is left for the renewal itself and its retries.
+		/// </summary>
+		private const double RenewalDrainSlackFraction = 0.5;
+
+		/// <summary>
+		/// Seconds between a renewal coming due and the token it replaces expiring: the token
+		/// lifetime less <see cref="RenewalInterval"/>. Never below the 30 s the interval keeps back.
+		/// </summary>
+		private double RenewalSlackSeconds => Math.Max(30.0, EffectiveTokenLifetimeMinutes * 60.0 - RenewalInterval.TotalSeconds);
+
+		/// <summary>
+		/// Most sweep-started renewals allowed to be doing their database work at once. Each needs
+		/// a signing-key read (usually served from cache) and a token-hash write, so this is what
+		/// bounds renewal pressure on the connection pool when the database slows down and
+		/// renewals stop finishing within a sweep.
+		/// </summary>
+		/// <remarks>
+		/// A limit on work, not on starts: a started renewal waits for a slot asynchronously, still
+		/// holding its connection's in-flight guard, so the sweep never starts it twice and never
+		/// has to hold back on account of it. Capping starts by the number running instead would
+		/// have tied the whole server's renewal rate to how fast one sweep's worth completed.
+		/// </remarks>
+		private const int MaxConcurrentRenewals = 32;
+
+		/// <summary>How long a login server's current signing key is reused before it is read again.</summary>
+		private static readonly TimeSpan CurrentSigningKeyCacheDuration = TimeSpan.FromSeconds(30);
+
+		/// <summary>Slots for sweep-started renewals' database work; see <see cref="MaxConcurrentRenewals"/>.</summary>
+		private readonly SemaphoreSlim renewalWorkSlots = new SemaphoreSlim(MaxConcurrentRenewals, MaxConcurrentRenewals);
+
+		/// <summary>Source of renewal jitter. Guarded by itself: <see cref="System.Random"/> is not thread-safe.</summary>
+		private readonly System.Random renewalJitterRandom = new System.Random();
+
+		/// <summary>
+		/// A login server's current signing key as last read, shared by every renewal for that
+		/// login server until it is <see cref="CurrentSigningKeyCacheDuration"/> old.
+		/// </summary>
+		private sealed class CachedSigningKey
+		{
+			/// <summary>Unwrapped key material. Owned by the cache: handed out only as copies and zeroed when replaced.</summary>
+			public byte[] Key;
+			/// <summary>Database ID of the key, embedded in every token it signs.</summary>
+			public long KeyId;
+			/// <summary>When the read that produced it started (monotonic seconds); freshness counts from here.</summary>
+			public double ReadStartedSeconds;
+		}
+
+		/// <summary>Guards <see cref="currentSigningKeys"/> and <see cref="currentSigningKeyReads"/>.</summary>
+		private readonly object currentSigningKeyGate = new object();
+
+		/// <summary>Current signing key per login server ID. Guarded by <see cref="currentSigningKeyGate"/>.</summary>
+		private readonly System.Collections.Generic.Dictionary<long, CachedSigningKey> currentSigningKeys =
+			new System.Collections.Generic.Dictionary<long, CachedSigningKey>();
+
+		/// <summary>
+		/// The read in flight per login server ID, joined by every renewal that misses the cache
+		/// while it runs. Completes with whether it produced a key. Guarded by <see cref="currentSigningKeyGate"/>.
+		/// </summary>
+		private readonly System.Collections.Generic.Dictionary<long, Task<bool>> currentSigningKeyReads =
+			new System.Collections.Generic.Dictionary<long, Task<bool>>();
+
+		/// <summary>
 		/// Per-connection context needed to re-mint an auth token without a fresh
 		/// <see cref="TokenAuthBroadcast"/>. Keyed by ClientId.
 		/// </summary>
@@ -101,8 +191,14 @@ namespace FishMMO.Server.Implementation
 			public AccessLevel AccessLevel;
 			/// <summary>LoginServer that owns the signing key this token chain is bound to.</summary>
 			public long LoginServerId;
-			/// <summary>UTC time at which the next renewal attempt becomes due.</summary>
-			public DateTime NextAttemptUtc;
+			/// <summary>Monotonic time (seconds) at which the next renewal attempt becomes due.</summary>
+			/// <remarks>
+			/// The schedule is a local duration; on the wall clock a step
+			/// forward made every connection due in the same sweep — the lockstep burst the start
+			/// budget exists to spread — and a step back held renewals until the old tokens had
+			/// expired.
+			/// </remarks>
+			public double NextAttemptSeconds;
 			/// <summary>1 while a renewal is running for this connection; 0 when idle.</summary>
 			public int InFlight;
 			/// <summary>Failed attempts since the last success, used for retry backoff.</summary>
@@ -278,6 +374,18 @@ namespace FishMMO.Server.Implementation
 			{
 				core.TokenWorkerCount = Server.Configuration.GetInt("AuthTokenWorkerCount", 2);
 				core.TokenChannelCapacity = Server.Configuration.GetInt("AuthTokenChannelCapacity", 500);
+				// Same key as the login server's so the cap has one name everywhere. World and
+				// Scene servers have no login queue, so a handshake past it is refused.
+				//
+				// Their default stays at the core's 10,000, unlike the login server's 1,000. Here
+				// the cap is only a memory ceiling: pending token checks number about the
+				// handshake rate times how long a check takes, and with the global limit of 500
+				// handshakes a second and a check of a round trip and two lookups that is a few
+				// hundred; a stall is dropped by the 15 s progress TTL, which bounds it at 7,500.
+				// There is no queue to hand a refused handshake to, so a lower cap would only turn
+				// a burst of arrivals from the login server into refused handshakes.
+				core.MaxPendingAuthConnections = Server.Configuration.GetInt("AuthMaxPendingConnections",
+					BaseAuthenticatorCore<NetworkConnection>.DefaultMaxPendingAuthConnections);
 			}
 		}
 
@@ -293,6 +401,21 @@ namespace FishMMO.Server.Implementation
 			// Stop scheduling renewals before the worker cancellation token fires; any that are
 			// still running observe ShutdownToken and abort.
 			renewalStates.Clear();
+
+			// Zero every cached signing key. Renewals only ever hold copies, so nothing still
+			// running is reading these arrays.
+			lock (currentSigningKeyGate)
+			{
+				foreach (CachedSigningKey cached in currentSigningKeys.Values)
+				{
+					if (cached.Key != null)
+					{
+						CryptographicOperationsCompat.ZeroMemory(cached.Key);
+					}
+				}
+				currentSigningKeys.Clear();
+				currentSigningKeyReads.Clear();
+			}
 
 			// Runs on the main thread during teardown, so it must not wait on an in-flight KEK
 			// load. Take the gate only if it is free; zero the cached key either way. A load
@@ -360,14 +483,14 @@ namespace FishMMO.Server.Implementation
 				AccountName = accountName,
 				AccessLevel = accessLevel,
 				LoginServerId = loginServerId,
-				NextAttemptUtc = DateTime.UtcNow + RenewalInterval,
+				NextAttemptSeconds = MonotonicClock.NowSeconds + RenewalInterval.TotalSeconds,
 				InFlight = 1,
 				ConsecutiveFailures = 0,
 			};
 
 			renewalStates[conn.ClientId] = state;
 
-			return RunRenewalAsync(conn, state);
+			return RunRenewalAsync(conn, state, throttled: false);
 		}
 
 		#endregion
@@ -437,35 +560,160 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Fetches the latest signing key for renewal token issuance.
 		/// </summary>
+		/// <remarks>
+		/// Nothing here touches Unity or FishNet, so no continuation needs the main thread; see
+		/// <see cref="IssueRenewalTokenCoreAsync"/>.
+		/// </remarks>
 		private async Task<(byte[] Key, long KeyId)> FetchCurrentSigningKeyCoreAsync(long loginServerId)
 		{
 			if (Server.Database?.ServiceRegistry == null ||
 				!Server.Database.ServiceRegistry.TryGet<ILoginServerSigningKeyService>(out var svc))
 			{
-				await Log.Warning(LogPrefix, $"Signing key service unavailable for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Signing key service unavailable for LoginServer {loginServerId}.").ConfigureAwait(false);
 				return (null, 0);
 			}
 
-			var result = await svc.FetchByLoginServerIdAsync(loginServerId);
+			var result = await svc.FetchByLoginServerIdAsync(loginServerId).ConfigureAwait(false);
 			if (!result.IsSuccess)
 			{
-				await Log.Warning(LogPrefix, $"Current signing key fetch failed for LoginServer {loginServerId}: [{result.ErrorCode}] {result.ErrorMessage}");
+				await Log.Warning(LogPrefix, $"Current signing key fetch failed for LoginServer {loginServerId}: [{result.ErrorCode}] {result.ErrorMessage}").ConfigureAwait(false);
 				return (null, 0);
 			}
 			if (result.Data.HmacKey == null)
 			{
-				await Log.Warning(LogPrefix, $"Current signing key for LoginServer {loginServerId} has no key material.");
+				await Log.Warning(LogPrefix, $"Current signing key for LoginServer {loginServerId} has no key material.").ConfigureAwait(false);
 				return (null, 0);
 			}
 
 			byte[] unwrapped = await UnwrapSigningKeyInternalAsync(result.Data.HmacKey, loginServerId).ConfigureAwait(false);
 			if (unwrapped == null)
 			{
-				await Log.Warning(LogPrefix, $"Failed to unwrap current signing key for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Failed to unwrap current signing key for LoginServer {loginServerId}.").ConfigureAwait(false);
 				return (null, 0);
 			}
 
 			return (unwrapped, result.Data.ID);
+		}
+
+		/// <summary>
+		/// Returns a copy of <paramref name="loginServerId"/>'s current signing key, from the
+		/// cache when it is fresh and otherwise from one database read shared by every caller that
+		/// misses while it runs.
+		/// </summary>
+		/// <remarks>
+		/// Every renewal used to read the key itself, so a sweep that started a hundred renewals
+		/// for one login server made a hundred identical reads. The key changes when the login
+		/// server rotates it (daily by default) and the previous one stays valid for verification
+		/// through the rotation grace window, so signing with a key up to
+		/// <see cref="CurrentSigningKeyCacheDuration"/> old is safe. A failed read is never cached:
+		/// the next caller reads again.
+		/// <para>
+		/// The cache owns its arrays and zeroes one only when replacing it, under the lock that
+		/// every copy is taken under; callers own and zero their copies, as they did the arrays
+		/// the uncached read returned.
+		/// </para>
+		/// </remarks>
+		/// <returns>A key copy and its ID, or (null, 0) when the key could not be read.</returns>
+		private async Task<(byte[] Key, long KeyId)> GetCurrentSigningKeyAsync(long loginServerId)
+		{
+			TaskCompletionSource<bool> ownRead = null;
+			Task<bool> sharedRead;
+			lock (currentSigningKeyGate)
+			{
+				if (TryCopyFreshSigningKey(loginServerId, MonotonicClock.NowSeconds, out var cached))
+				{
+					return cached;
+				}
+				if (!currentSigningKeyReads.TryGetValue(loginServerId, out sharedRead))
+				{
+					ownRead = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+					sharedRead = ownRead.Task;
+					currentSigningKeyReads[loginServerId] = sharedRead;
+				}
+			}
+
+			bool produced = false;
+			if (ownRead != null)
+			{
+				// Started outside the lock: the read may complete synchronously, and it must not
+				// run its install step while this caller is still registering it.
+				double readStartedSeconds = MonotonicClock.NowSeconds;
+				try
+				{
+					(byte[] key, long keyId) = await FetchCurrentSigningKeyCoreAsync(loginServerId).ConfigureAwait(false);
+					lock (currentSigningKeyGate)
+					{
+						if (key != null && ShutdownToken.IsCancellationRequested)
+						{
+							// The cache was emptied and zeroed for shutdown while this read ran;
+							// installing the key now would leave it in memory unzeroed.
+							CryptographicOperationsCompat.ZeroMemory(key);
+						}
+						else if (key != null)
+						{
+							if (currentSigningKeys.TryGetValue(loginServerId, out CachedSigningKey previous) && previous.Key != null)
+							{
+								CryptographicOperationsCompat.ZeroMemory(previous.Key);
+							}
+							currentSigningKeys[loginServerId] = new CachedSigningKey
+							{
+								Key = key,
+								KeyId = keyId,
+								ReadStartedSeconds = readStartedSeconds,
+							};
+							produced = true;
+						}
+					}
+				}
+				finally
+				{
+					lock (currentSigningKeyGate)
+					{
+						currentSigningKeyReads.Remove(loginServerId);
+					}
+					ownRead.TrySetResult(produced);
+				}
+			}
+			else
+			{
+				produced = await sharedRead.ConfigureAwait(false);
+			}
+
+			// A read that failed answers everyone who waited on it with nothing, rather than with
+			// whatever older key the cache still holds: the caller retries, and a key is only
+			// ever used on the strength of a read that succeeded within the cache lifetime.
+			if (!produced)
+			{
+				return (null, 0);
+			}
+
+			lock (currentSigningKeyGate)
+			{
+				// Not re-judged against the clock: a read that took longer than the cache lifetime
+				// still answers the callers that were waiting for it.
+				if (currentSigningKeys.TryGetValue(loginServerId, out CachedSigningKey entry) && entry.Key != null)
+				{
+					return ((byte[])entry.Key.Clone(), entry.KeyId);
+				}
+			}
+			return (null, 0);
+		}
+
+		/// <summary>
+		/// Copies the cached key for <paramref name="loginServerId"/> when it is younger than
+		/// <see cref="CurrentSigningKeyCacheDuration"/>. Caller holds <see cref="currentSigningKeyGate"/>.
+		/// </summary>
+		private bool TryCopyFreshSigningKey(long loginServerId, double nowSeconds, out (byte[] Key, long KeyId) copy)
+		{
+			if (currentSigningKeys.TryGetValue(loginServerId, out CachedSigningKey entry) &&
+				entry.Key != null &&
+				nowSeconds - entry.ReadStartedSeconds < CurrentSigningKeyCacheDuration.TotalSeconds)
+			{
+				copy = ((byte[])entry.Key.Clone(), entry.KeyId);
+				return true;
+			}
+			copy = (null, 0);
+			return false;
 		}
 
 		/// <summary>
@@ -510,6 +758,15 @@ namespace FishMMO.Server.Implementation
 		/// <param name="loginServerId">Originating LoginServer ID (used to look up the HMAC signing key).</param>
 		/// <param name="ct">Cancellation token tied to server shutdown.</param>
 		/// <returns><c>true</c> when a new token was persisted and queued for delivery.</returns>
+		/// <remarks>
+		/// Every await here uses <c>ConfigureAwait(false)</c>. The first renewal already runs on a
+		/// token-auth worker, so nothing in this method may need the main thread: connection
+		/// state is only read (<c>IsActive</c>), the account manager, the real-IP cache and the
+		/// renewal map are all thread-safe, and the one FishNet call — the broadcast — is handed
+		/// to the main thread through <see cref="BaseServerAuthenticator.EnqueueMainThreadAction"/>.
+		/// Without it a renewal started by the sweep came back to the main thread after every
+		/// database round trip and built, hashed and encrypted its token there.
+		/// </remarks>
 		private async Task<bool> IssueRenewalTokenCoreAsync(NetworkConnection conn, TokenRenewalState expectedState, string accountName, AccessLevel accessLevel, long loginServerId, CancellationToken ct)
 		{
 			ct.ThrowIfCancellationRequested();
@@ -531,27 +788,28 @@ namespace FishMMO.Server.Implementation
 			{
 				await Log.Error(LogPrefix,
 					$"Renewal token for '{accountName}' aborted: no verified real IP for connection {conn.ClientId}. " +
-					"The client keeps its existing token; the next sweep will retry.");
+					"The client keeps its existing token; the next sweep will retry.").ConfigureAwait(false);
 				return false;
 			}
 
 			// Renewal is a best-effort path but a transient DB blip here forces the
 			// client back through full SRP at the LoginServer, which compounds load
 			// during exactly the conditions that caused the blip. Make one short
-			// retry with linear backoff before giving up.
-			var currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
+			// retry with linear backoff before giving up. Failed reads are never cached, so the
+			// retry reads again (shared with any other renewal retrying at the same moment).
+			var currentSigningKey = await GetCurrentSigningKeyAsync(loginServerId).ConfigureAwait(false);
 			ct.ThrowIfCancellationRequested();
 			if (currentSigningKey.Key == null)
 			{
-				await Task.Delay(150, ct);
+				await Task.Delay(150, ct).ConfigureAwait(false);
 				if (!conn.IsActive) return false;
 				ct.ThrowIfCancellationRequested();
-				currentSigningKey = await FetchCurrentSigningKeyCoreAsync(loginServerId);
+				currentSigningKey = await GetCurrentSigningKeyAsync(loginServerId).ConfigureAwait(false);
 			}
 			byte[] signingKey = currentSigningKey.Key;
 			if (signingKey == null)
 			{
-				await Log.Warning(LogPrefix, $"Renewal token skipped for '{accountName}': signing key unavailable for LoginServer {loginServerId}.");
+				await Log.Warning(LogPrefix, $"Renewal token skipped for '{accountName}': signing key unavailable for LoginServer {loginServerId}.").ConfigureAwait(false);
 				return false;
 			}
 
@@ -588,7 +846,7 @@ namespace FishMMO.Server.Implementation
 
 				if (rawToken == null)
 				{
-					await Log.Warning(LogPrefix, $"Renewal token generation failed for '{accountName}'.");
+					await Log.Warning(LogPrefix, $"Renewal token generation failed for '{accountName}'.").ConfigureAwait(false);
 					return false;
 				}
 
@@ -597,14 +855,14 @@ namespace FishMMO.Server.Implementation
 				if (Server.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<IAuthTokenService>(out var tokenSvc))
 				{
-					await Log.Warning(LogPrefix, $"Renewal token skipped for '{accountName}': IAuthTokenService unavailable.");
+					await Log.Warning(LogPrefix, $"Renewal token skipped for '{accountName}': IAuthTokenService unavailable.").ConfigureAwait(false);
 					return false;
 				}
 
-				var r = await tokenSvc.IssueAsync(tokenHash, accountName, loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes));
+				var r = await tokenSvc.IssueAsync(tokenHash, accountName, loginServerId, DateTime.UtcNow.AddMinutes(expirationMinutes)).ConfigureAwait(false);
 				if (!r.IsSuccess)
 				{
-					await Log.Warning(LogPrefix, $"Renewal IssueAsync DB error for '{accountName}': [{r.ErrorCode}] {r.ErrorMessage}");
+					await Log.Warning(LogPrefix, $"Renewal IssueAsync DB error for '{accountName}': [{r.ErrorCode}] {r.ErrorMessage}").ConfigureAwait(false);
 					return false;
 				}
 
@@ -638,7 +896,7 @@ namespace FishMMO.Server.Implementation
 				}
 				catch (Exception ex)
 				{
-					await Log.Error(LogPrefix, $"Renewal token encryption failed for '{accountName}': {ex.Message}");
+					await Log.Error(LogPrefix, $"Renewal token encryption failed for '{accountName}': {ex}").ConfigureAwait(false);
 					return false;
 				}
 
@@ -694,13 +952,29 @@ namespace FishMMO.Server.Implementation
 		/// to the main thread in the opposite order, so the client would see the higher
 		/// sequence first and reject both — and every renewal after them. Serialising per
 		/// connection keeps the sequence the client observes strictly increasing.
+		/// <para>
+		/// A sweep-started renewal (<paramref name="throttled"/>) first waits for one of the
+		/// <see cref="MaxConcurrentRenewals"/> work slots. The first renewal after a token
+		/// authentication does not: it runs on the token-auth worker that authenticated the
+		/// connection, which already bounds how many of those run at once, and making it queue
+		/// behind periodic renewals would slow sign-ins down exactly when renewals are backed up.
+		/// </para>
 		/// </remarks>
-		private async Task RunRenewalAsync(NetworkConnection conn, TokenRenewalState state)
+		/// <param name="conn">The connection to renew.</param>
+		/// <param name="state">Its renewal schedule; the caller holds its in-flight guard.</param>
+		/// <param name="throttled">Whether to take a work slot first.</param>
+		private async Task RunRenewalAsync(NetworkConnection conn, TokenRenewalState state, bool throttled)
 		{
 			bool issued = false;
+			bool holdsSlot = false;
 			try
 			{
-				issued = await IssueRenewalTokenCoreAsync(conn, state, state.AccountName, state.AccessLevel, state.LoginServerId, ShutdownToken);
+				if (throttled)
+				{
+					await renewalWorkSlots.WaitAsync(ShutdownToken).ConfigureAwait(false);
+					holdsSlot = true;
+				}
+				issued = await IssueRenewalTokenCoreAsync(conn, state, state.AccountName, state.AccessLevel, state.LoginServerId, ShutdownToken).ConfigureAwait(false);
 			}
 			catch (OperationCanceledException)
 			{
@@ -708,15 +982,17 @@ namespace FishMMO.Server.Implementation
 			}
 			catch (Exception ex)
 			{
-				await Log.Error(LogPrefix, $"Token renewal threw for '{state.AccountName}': {ex.Message}");
+				await Log.Error(LogPrefix, $"Token renewal threw for '{state.AccountName}': {ex}").ConfigureAwait(false);
 			}
 			finally
 			{
-				DateTime nowUtc = DateTime.UtcNow;
+				// Off the main thread (see IssueRenewalTokenCoreAsync): only this renewal's own
+				// schedule is written here, and the InFlight release below publishes it to the sweep.
+				double nowSeconds = MonotonicClock.NowSeconds;
 				if (issued)
 				{
 					state.ConsecutiveFailures = 0;
-					state.NextAttemptUtc = nowUtc + RenewalInterval;
+					state.NextAttemptSeconds = nowSeconds + NextRenewalDelay(RenewalInterval, RenewalJitterFraction, NextJitterSample()).TotalSeconds;
 				}
 				else
 				{
@@ -724,12 +1000,75 @@ namespace FishMMO.Server.Implementation
 					// sweep into a per-tick retry storm, but never past the point where the
 					// token would expire — a late retry is still better than none.
 					state.ConsecutiveFailures = Math.Min(state.ConsecutiveFailures + 1, 8);
-					double backoffSeconds = RenewalRetryBaseDelay.TotalSeconds * Math.Pow(2, state.ConsecutiveFailures - 1);
-					double capSeconds = RenewalInterval.TotalSeconds;
-					state.NextAttemptUtc = nowUtc + TimeSpan.FromSeconds(Math.Min(backoffSeconds, capSeconds));
+					state.NextAttemptSeconds = nowSeconds + RenewalRetryDelay(state.ConsecutiveFailures, RenewalRetryBaseDelay, RenewalInterval).TotalSeconds;
 				}
 				Interlocked.Exchange(ref state.InFlight, 0);
+				if (holdsSlot)
+				{
+					renewalWorkSlots.Release();
+				}
 			}
+		}
+
+		/// <summary>A uniform sample in [0, 1) for renewal jitter; safe from any thread.</summary>
+		private double NextJitterSample()
+		{
+			lock (renewalJitterRandom)
+			{
+				return renewalJitterRandom.NextDouble();
+			}
+		}
+
+		/// <summary>
+		/// Delay until the next renewal after a successful one: the interval brought forward by up
+		/// to <paramref name="jitterFraction"/> of itself.
+		/// </summary>
+		/// <param name="interval">The nominal renewal interval.</param>
+		/// <param name="jitterFraction">Largest fraction of the interval to bring the renewal forward by, clamped to [0, 1).</param>
+		/// <param name="unitSample">A uniform sample in [0, 1).</param>
+		internal static TimeSpan NextRenewalDelay(TimeSpan interval, double jitterFraction, double unitSample)
+		{
+			double fraction = Math.Max(0.0, Math.Min(jitterFraction, 0.99));
+			double sample = Math.Max(0.0, Math.Min(unitSample, 1.0));
+			return TimeSpan.FromTicks((long)(interval.Ticks * (1.0 - fraction * sample)));
+		}
+
+		/// <summary>
+		/// Delay before retrying after <paramref name="consecutiveFailures"/> failed renewals in a
+		/// row: doubling from <paramref name="baseDelay"/>, never longer than <paramref name="cap"/>.
+		/// </summary>
+		internal static TimeSpan RenewalRetryDelay(int consecutiveFailures, TimeSpan baseDelay, TimeSpan cap)
+		{
+			int doublings = Math.Max(0, Math.Min(consecutiveFailures, 8) - 1);
+			double seconds = baseDelay.TotalSeconds * Math.Pow(2, doublings);
+			return TimeSpan.FromSeconds(Math.Min(seconds, cap.TotalSeconds));
+		}
+
+		/// <summary>
+		/// How many renewals one sweep may start for <paramref name="trackedConnections"/>
+		/// connections: enough for <paramref name="headroom"/> times the steady-state rate, and
+		/// enough to start every one of them within <paramref name="drainWindowSeconds"/> should
+		/// they all come due at once — whichever is larger, and never fewer than
+		/// <paramref name="minimum"/>.
+		/// </summary>
+		/// <remarks>
+		/// Steady state is one renewal per connection per interval, i.e.
+		/// <c>connections × sweep / interval</c> per sweep; headroom above it drains a backlog of
+		/// retries. The drain window bounds the worst case — a whole server's players rejoining
+		/// together after a restart — to a delay the old tokens can absorb: the caller passes a
+		/// part of the slack between a renewal coming due and the old token expiring. Spreading
+		/// such a burst over the window, rather than starting it in one frame, is the point.
+		/// </remarks>
+		internal static int RenewalStartBudget(int trackedConnections, double sweepSeconds, double intervalSeconds, double headroom, double drainWindowSeconds, int minimum)
+		{
+			if (trackedConnections <= 0 || sweepSeconds <= 0.0)
+			{
+				return Math.Max(0, minimum);
+			}
+			double steadyShare = intervalSeconds > 0.0 ? Math.Max(1.0, headroom) / intervalSeconds : 0.0;
+			double drainShare = drainWindowSeconds > 0.0 ? 1.0 / drainWindowSeconds : 0.0;
+			double perSweep = trackedConnections * sweepSeconds * Math.Max(steadyShare, drainShare);
+			return Math.Max(minimum, (int)Math.Min(int.MaxValue, Math.Ceiling(perSweep)));
 		}
 
 		/// <summary>
@@ -751,8 +1090,20 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double nowSeconds = MonotonicClock.NowSeconds;
 			var clients = NetworkManager?.ServerManager?.Clients;
+
+			/* Bounded twice. A group of connections that came due together — every player who
+			 * rejoined within a few seconds of a scene restart — used to start all at once, in one
+			 * frame, as fire-and-forget database work; and when the database slowed, the next
+			 * sweeps started more on top of the ones still running. The start budget spreads a
+			 * burst over several sweeps, and the work slots (MaxConcurrentRenewals) stop the
+			 * pile-up. A due renewal left behind stays due and is picked up by a later sweep; the
+			 * budget's headroom over the steady-state rate means the backlog drains. */
+			int budget = RenewalStartBudget(renewalStates.Count, RenewalSweepIntervalSeconds,
+				RenewalInterval.TotalSeconds, RenewalStartHeadroom,
+				RenewalSlackSeconds * RenewalDrainSlackFraction, MinRenewalStartsPerSweep);
+			int started = 0;
 
 			foreach (var kvp in renewalStates)
 			{
@@ -776,7 +1127,14 @@ namespace FishMMO.Server.Implementation
 					continue;
 				}
 
-				if (nowUtc < state.NextAttemptUtc)
+				if (nowSeconds < state.NextAttemptSeconds)
+				{
+					continue;
+				}
+
+				// Out of budget: keep walking only to reap dead entries above; nothing more
+				// starts this sweep.
+				if (started >= budget)
 				{
 					continue;
 				}
@@ -786,7 +1144,11 @@ namespace FishMMO.Server.Implementation
 					continue;
 				}
 
-				_ = RunRenewalAsync(conn, state);
+				started++;
+				// On the thread pool from the first instruction: otherwise everything up to the
+				// first incomplete await — the signing-key read is usually a cache hit, so that
+				// includes building and hashing the token — ran here on the main thread.
+				_ = Task.Run(() => RunRenewalAsync(conn, state, throttled: true));
 			}
 		}
 

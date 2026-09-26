@@ -197,6 +197,14 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for the crosshair's opacity, 0 to 1.</summary>
 		public const string CrosshairOpacityKey = "Crosshair.Opacity";
 
+		// ── Network statistics ──────────────────────────────────────
+
+		/// <summary>Configuration key for whether the network statistics overlay is drawn.</summary>
+		public const string NetworkStatsEnabledKey = "NetworkStats.Enabled";
+
+		/// <summary>Configuration key for whether the overlay draws its traffic graph.</summary>
+		public const string NetworkStatsGraphKey = "NetworkStats.ShowGraph";
+
 		// ── World labels ────────────────────────────────────────────
 
 		/// <summary>Configuration key for the world label size multiplier.</summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Database.Data
 {
@@ -80,13 +81,39 @@ namespace FishMMO.Database.Data
 		public readonly DateTime TimeCreated;
 		/// <summary>Timestamp of last save.</summary>
 		public readonly DateTime LastSaved;
+		/// <summary>
+		/// The character's complete set of active buffs as captured with this snapshot, or null when
+		/// the snapshot says nothing about buffs.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Null and empty are different instructions.</b> A save that carries a set — including an
+		/// empty one — makes the stored buffs exactly that set: rows it does not name are deleted, in
+		/// the same transaction as the character row and under the same version and ownership checks,
+		/// so a set is written only when the row it was captured with is. Null leaves the stored
+		/// buffs untouched, which is what every snapshot that did not come from a live character
+		/// means: a fetched row, the world server's flag edits, a character being created.
+		/// </para>
+		/// <para>
+		/// <b>Why the set rides the row instead of its own table write.</b> Buffs used to be upserted
+		/// on their own and never deleted, so a buff that expired or was dismissed after it was first
+		/// saved came back at the next login. Deleting what the set no longer names needs an ordering
+		/// that survives two saves landing out of order — an older save must never re-add a row a
+		/// newer one dropped — and per-buff versions cannot give one: a buff re-applied after it ended
+		/// is a new instance whose counter starts again, and a set that became empty leaves no row to
+		/// carry a version at all. The character row's own version is the per-character ordering that
+		/// already exists, and writing the set under it is what makes the set as ordered as the row.
+		/// Never populated by a fetch; buffs are read through <c>ICharacterBuffService</c>.
+		/// </para>
+		/// </remarks>
+		public readonly IReadOnlyList<CharacterBuffData> Buffs;
 
 		long IVersioned<CharacterData>.Version => Version;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterData"/> struct.
 		/// </summary>
-		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, long sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, long version, DateTime timeCreated, DateTime lastSaved)
+		public CharacterData(long id, string name, string nameLowercase, string account, bool selected, long worldServerID, string sceneName, long sceneHandle, string bindScene, float bindX, float bindY, float bindZ, long instanceID, float instanceX, float instanceY, float instanceZ, float instanceRotX, float instanceRotY, float instanceRotZ, float instanceRotW, int raceID, int modelIndex, float x, float y, float z, float rotX, float rotY, float rotZ, float rotW, byte accessLevel, bool online, int flags, long version, DateTime timeCreated, DateTime lastSaved, IReadOnlyList<CharacterBuffData> buffs = null)
 		{
 			ID = id;
 			Name = name;
@@ -123,16 +150,17 @@ namespace FishMMO.Database.Data
 			Version = version;
 			TimeCreated = timeCreated;
 			LastSaved = lastSaved;
+			Buffs = buffs;
 		}
 
 		public CharacterData WithVersion(long newVersion)
 		{
-			return new CharacterData(ID, Name, NameLowercase, Account, Selected, WorldServerID, SceneName, SceneHandle, BindScene, BindX, BindY, BindZ, InstanceID, InstanceX, InstanceY, InstanceZ, InstanceRotX, InstanceRotY, InstanceRotZ, InstanceRotW, RaceID, ModelIndex, X, Y, Z, RotX, RotY, RotZ, RotW, AccessLevel, Online, Flags, newVersion, TimeCreated, LastSaved);
+			return new CharacterData(ID, Name, NameLowercase, Account, Selected, WorldServerID, SceneName, SceneHandle, BindScene, BindX, BindY, BindZ, InstanceID, InstanceX, InstanceY, InstanceZ, InstanceRotX, InstanceRotY, InstanceRotZ, InstanceRotW, RaceID, ModelIndex, X, Y, Z, RotX, RotY, RotZ, RotW, AccessLevel, Online, Flags, newVersion, TimeCreated, LastSaved, Buffs);
 		}
 
 		public CharacterData WithFlagsVersionAndTimestamp(int flags, long version, DateTime lastSaved)
 		{
-			return new CharacterData(ID, Name, NameLowercase, Account, Selected, WorldServerID, SceneName, SceneHandle, BindScene, BindX, BindY, BindZ, InstanceID, InstanceX, InstanceY, InstanceZ, InstanceRotX, InstanceRotY, InstanceRotZ, InstanceRotW, RaceID, ModelIndex, X, Y, Z, RotX, RotY, RotZ, RotW, AccessLevel, Online, flags, version, TimeCreated, lastSaved);
+			return new CharacterData(ID, Name, NameLowercase, Account, Selected, WorldServerID, SceneName, SceneHandle, BindScene, BindX, BindY, BindZ, InstanceID, InstanceX, InstanceY, InstanceZ, InstanceRotX, InstanceRotY, InstanceRotZ, InstanceRotW, RaceID, ModelIndex, X, Y, Z, RotX, RotY, RotZ, RotW, AccessLevel, Online, flags, version, TimeCreated, lastSaved, Buffs);
 		}
 	}
 }

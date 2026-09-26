@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using FishNet.Connection;
 using FishMMO.Database.Data.Enums;
+using ChatService = FishMMO.Database.Npgsql.Services.ChatService;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
@@ -17,21 +18,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	public class ChatSystemRuntimeData : RuntimeDataContainer, IChatSystemRuntimeData
 	{
-		/// <summary>
-		/// Timestamp of the last successful database fetch for chat messages.
-		/// </summary>
-		public DateTime LastFetchTime { get; set; }
-
-		/// <summary>
-		/// Position (ID) of the last fetched chat message in the database.
-		/// </summary>
-		public long LastFetchPosition { get; set; }
+		/// <inheritdoc/>
+		public ChatPumpCursor PumpCursor { get; private set; }
 
 		/// <inheritdoc/>
-		public List<IPlayerCharacter> CharacterBroadcastBuffer { get; private set; }
-
-		/// <inheritdoc/>
-		public List<NetworkConnection> ConnectionBroadcastBuffer { get; private set; }
+		public HashSet<NetworkConnection> ConnectionBroadcastSet { get; private set; }
 
 		/// <inheritdoc/>
 		public Dictionary<Shared.ChatChannel, ChatCommand> ChannelCommandMap { get; set; }
@@ -90,10 +81,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			LastFetchTime = DateTime.UtcNow;
-			LastFetchPosition = 0;
-			CharacterBroadcastBuffer = new List<IPlayerCharacter>();
-			ConnectionBroadcastBuffer = new List<NetworkConnection>();
+			/* The window is the writer's contract, not a tuning knob of the reader's: see
+			 * ChatService.PumpCommitWindowSeconds. */
+			PumpCursor = new ChatPumpCursor(TimeSpan.FromSeconds(ChatService.PumpCommitWindowSeconds));
+			ConnectionBroadcastSet = new HashSet<NetworkConnection>();
 			ChannelCommandMap = new Dictionary<Shared.ChatChannel, ChatCommand>();
 			IncomingChatQueue = new ConcurrentQueue<(NetworkConnection, ChatBroadcast)>();
 			Interlocked.Exchange(ref incomingQueueSize, 0);
@@ -111,10 +102,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override void Clear()
 		{
-			LastFetchTime = DateTime.UtcNow;
-			LastFetchPosition = 0;
-			CharacterBroadcastBuffer?.Clear();
-			ConnectionBroadcastBuffer?.Clear();
+			PumpCursor?.Reset();
+			ConnectionBroadcastSet?.Clear();
 			ChannelCommandMap?.Clear();
 			// ConcurrentQueues: drain instead of nulling — they may be in use from another thread.
 			if (IncomingChatQueue != null)
@@ -139,8 +128,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		protected override void OnDeinitialize()
 		{
 			Clear();
-			CharacterBroadcastBuffer = null;
-			ConnectionBroadcastBuffer = null;
+			PumpCursor = null;
+			ConnectionBroadcastSet = null;
 			ChannelCommandMap = null;
 			IncomingChatQueue = null;
 			PendingPersistQueue = null;

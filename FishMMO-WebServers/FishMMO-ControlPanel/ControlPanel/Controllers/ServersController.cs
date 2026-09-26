@@ -86,14 +86,13 @@ namespace FishMMO.ControlPanel.Controllers
 				return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The server board could not be read." });
 			}
 
-			DateTime now = DateTime.UtcNow;
 			var data = result.Data;
 			return Ok(new
 			{
 				staleAfterSeconds = StaleAfterSeconds,
-				loginServers = data.LoginServers.Select(s => Project(s, now)),
-				worldServers = data.WorldServers.Select(s => Project(s, now)),
-				sceneServers = data.SceneServers.Select(s => Project(s, now)),
+				loginServers = data.LoginServers.Select(Project),
+				worldServers = data.WorldServers.Select(Project),
+				sceneServers = data.SceneServers.Select(Project),
 				sceneInstanceCount = data.SceneInstanceCount,
 			});
 		}
@@ -122,7 +121,12 @@ namespace FishMMO.ControlPanel.Controllers
 					sceneServerId = s.SceneServerID,
 					worldServerId = s.WorldServerID,
 					sceneName = s.SceneName,
-					sceneHandle = s.SceneHandle,
+					/* Only a Ready row has a handle. A Loading row's scene_handle holds the
+					 * dequeuing scene server's claim token — negative, and meaningless outside that
+					 * server's dequeue — and a Pending row's holds 0, so the panel printed
+					 * "handle -1843751" for every scene still loading. Sent as null, and the page
+					 * says what the row is doing instead. */
+					sceneHandle = s.Status == (int)FishMMO.Database.Data.Enums.SceneStatus.Ready ? s.SceneHandle : (int?)null,
 					status = s.Status,
 					statusName = ((FishMMO.Database.Data.Enums.SceneStatus)s.Status).ToString(),
 					type = s.Type,
@@ -225,19 +229,27 @@ namespace FishMMO.ControlPanel.Controllers
 				return BadRequest(new { error = $"The delay cannot exceed {MaxShutdownDelaySeconds} seconds (24 hours)." });
 			}
 
-			DateTime deadline = DateTime.UtcNow.AddSeconds(request.Seconds.Value);
+			int seconds = request.Seconds.Value;
 			audit.TargetName = $"{kind}/{id}";
-			audit.Details = new { kind, seconds = request.Seconds, deadlineUtc = deadline };
+			audit.Details = new { kind, seconds };
 
+			/* The delay goes to the database, which adds it to its own clock in the statement that
+			 * writes the deadline. Every server counts that deadline down against the database
+			 * clock, so an instant built here from DateTime.UtcNow moved the shutdown by this
+			 * host's skew: five minutes asked for on a panel two minutes slow gave players three. */
 			var result = isWorld
-				? await worldServers.SetShutdownAsync(id, deadline, HttpContext.RequestAborted)
-				: await sceneServers.SetShutdownAsync(id, deadline, HttpContext.RequestAborted);
+				? await worldServers.SetShutdownInAsync(id, seconds, HttpContext.RequestAborted)
+				: await sceneServers.SetShutdownInAsync(id, seconds, HttpContext.RequestAborted);
 
 			if (!result.IsSuccess)
 			{
 				audit.Outcome = DatabaseReplies.Outcome(result);
 				return DatabaseReplies.Failure(this, result, log, "That shutdown could not be scheduled.");
 			}
+
+			// The deadline the row now holds, as the database wrote it.
+			DateTime deadline = result.Data;
+			audit.Details = new { kind, seconds, deadlineUtc = deadline };
 
 			log.LogWarning("{Kind} server {Id} shutdown scheduled for {Deadline:O} by '{Actor}'. Reason: {Reason}",
 				kind, id, deadline, User.Identity?.Name, request.Reason);
@@ -312,21 +324,30 @@ namespace FishMMO.ControlPanel.Controllers
 			return isWorld || string.Equals(kind, "scene", StringComparison.OrdinalIgnoreCase);
 		}
 
-		private static object Project(ServerAdminData s, DateTime now) => new
+		/// <summary>One server as the board's JSON carries it.</summary>
+		/// <remarks>
+		/// Both ages come from the database, measured in the statement that read the row against
+		/// the clock that stamped the pulse and that every server counts its shutdown down
+		/// against. They used to be this host's <c>DateTime.UtcNow</c> minus the stamps, so a
+		/// panel host running a minute fast showed every healthy server as stale and one running
+		/// slow hid a dead one, and each countdown was off by the same skew. Staleness is still
+		/// judged here, from the database's age, so the threshold stays the panel's to report.
+		/// </remarks>
+		private static object Project(ServerAdminData s) => new
 		{
 			id = s.ID,
 			name = s.Name,
 			address = s.Address,
 			port = s.Port,
 			lastPulseUtc = s.LastPulse,
-			pulseAgeSeconds = Math.Round((now - s.LastPulse).TotalSeconds, 1),
-			stale = (now - s.LastPulse).TotalSeconds > StaleAfterSeconds,
+			pulseAgeSeconds = Math.Round(s.PulseAgeSeconds, 1),
+			stale = s.PulseAgeSeconds > StaleAfterSeconds,
 			startedUtc = s.TimeCreated,
 			characterCount = s.CharacterCount,
 			locked = s.Locked,
 			shutdownAtUtc = s.ShutdownAtUtc,
-			secondsUntilShutdown = s.ShutdownAtUtc.HasValue
-				? (double?)Math.Round((s.ShutdownAtUtc.Value - now).TotalSeconds, 1)
+			secondsUntilShutdown = s.ShutdownInSeconds.HasValue
+				? (double?)Math.Round(s.ShutdownInSeconds.Value, 1)
 				: null,
 		};
 

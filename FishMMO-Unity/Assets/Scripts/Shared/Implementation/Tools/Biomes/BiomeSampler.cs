@@ -54,8 +54,10 @@ namespace FishMMO.Shared.Biomes
 			/* Measured within this scene's own terrains. Scene servers load world scenes
 			 * additively and every scene is built around its own origin, so their terrains overlap
 			 * in world space; an unscoped search answers with whichever tile the global array lists
-			 * first, which may belong to a different zone entirely. */
-			Scene scene = settings != null ? settings.gameObject.scene : default;
+			 * first, which may belong to a different zone entirely. The component resolves its
+			 * scene once (WorldSceneSettings.OwnScene) rather than this asking the engine on every
+			 * sample. */
+			Scene scene = settings != null ? settings.OwnScene : default;
 			if (TrySampleTerrainHeight(worldPosition, scene, out float height))
 			{
 				reading.Height = height;
@@ -122,37 +124,36 @@ namespace FishMMO.Shared.Biomes
 		/// the landmass's base and span <em>are</em> that tile's — so nothing moves where the old
 		/// code was already right.
 		/// </para>
+		/// <para>
+		/// <b>Walks this scene's tiles, not every loaded terrain.</b> The tiles and their bounds
+		/// come from <see cref="SceneTerrainExtent.TilesOf"/>, measured once per change in the
+		/// loaded terrains rather than per sample, so a sample costs one engine call — the height
+		/// itself — and no allocation, however many other scenes are loaded. This runs per
+		/// character per second for weather exposure, on the server and the owning client alike.
+		/// </para>
 		/// </remarks>
 		public static bool TrySampleTerrainHeight(Vector3 worldPosition, Scene scene, out float normalizedHeight)
 		{
 			normalizedHeight = 0f;
-			Terrain[] terrains = Terrain.activeTerrains;
-			if (terrains == null)
+			SceneTerrainExtent.Tile[] tiles = SceneTerrainExtent.TilesOf(scene, out SceneTerrainExtent extent);
+			for (int i = 0; i < tiles.Length; i++)
 			{
-				return false;
-			}
-			SceneTerrainExtent extent = SceneTerrainExtent.Of(scene);
-			bool onlyOne = scene.IsValid();
-			for (int i = 0; i < terrains.Length; i++)
-			{
-				Terrain terrain = terrains[i];
-				if (terrain == null || terrain.terrainData == null
-					|| onlyOne && terrain.gameObject.scene.handle != scene.handle)
+				SceneTerrainExtent.Tile tile = tiles[i];
+				if (!tile.Covers(worldPosition))
 				{
 					continue;
 				}
-				Vector3 origin = terrain.GetPosition();
-				Vector3 size = terrain.terrainData.size;
-				if (worldPosition.x < origin.x || worldPosition.x > origin.x + size.x
-					|| worldPosition.z < origin.z || worldPosition.z > origin.z + size.z)
+				Terrain terrain = tile.Terrain;
+				if (terrain == null)
 				{
+					// Destroyed since it was measured; the next measurement drops it.
 					continue;
 				}
 				// SampleHeight is relative to the tile's own transform, so the tile's origin puts
 				// it back into world space before the landmass normalises it.
-				float worldY = terrain.SampleHeight(worldPosition) + origin.y;
+				float worldY = terrain.SampleHeight(worldPosition) + tile.Origin.y;
 				normalizedHeight = extent.Found ? extent.Normalize(worldY)
-					: size.y > 0f ? Mathf.Clamp01((worldY - origin.y) / size.y) : 0f;
+					: tile.Size.y > 0f ? Mathf.Clamp01((worldY - tile.Origin.y) / tile.Size.y) : 0f;
 				return true;
 			}
 			return false;

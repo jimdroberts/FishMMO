@@ -38,7 +38,26 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterQuestData> quests, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterQuestData> quests, CancellationToken cancellationToken = default)
+			=> PersistBatchAsync(quests, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<BulkWriteResult>> PersistOwnedAsync(IEnumerable<CharacterQuestData> quests, IReadOnlyCollection<CharacterSessionLeaseData> claims, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaims(claims);
+			return invalid != null
+				? Task.FromResult(DatabaseResult<BulkWriteResult>.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: PersistBatchAsync(quests, claims, cancellationToken);
+		}
+
+		/// <summary>
+		/// The batch write behind <see cref="PersistAsync(IEnumerable{CharacterQuestData}, CancellationToken)"/> and
+		/// <see cref="PersistOwnedAsync"/>.
+		/// </summary>
+		/// <param name="quests">Rows to write.</param>
+		/// <param name="claims">The writer's claims, or null for the ungated write. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterQuestData> quests, IReadOnlyCollection<CharacterSessionLeaseData>? claims, CancellationToken cancellationToken)
 		{
 			if (quests == null || !quests.Any())
 			{
@@ -65,24 +84,17 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
 			{
 				var characterIds = questList.Select(q => q.CharacterID).Distinct().ToArray();
-				var activeCharacterIds = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-					.Select(c => c.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+				/* The ownership gate, and the per-character existence check it subsumes: the rows of a
+				 * missing or deleted character, or — for an owned write — of one whose claim the writer
+				 * no longer holds, are left out and reported as Filtered rather than failing every other
+				 * character's rows with them. See CharacterWriteGate. */
+				CharacterWriteAdmission admission = await CharacterWriteGate.AdmitAsync(dbContext, characterIds, claims, cancellationToken).ConfigureAwait(false);
+				int unownedRows = admission.CountUnowned(questList, row => row.CharacterID);
 
-				if (activeCharacterIdSet.Count != characterIds.Length)
-				{
-					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
-					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
-				}
-
-				var activeQuests = questList.Where(q => activeCharacterIdSet.Contains(q.CharacterID)).ToList();
+				var activeQuests = questList.Where(q => admission.Admits(q.CharacterID)).ToList();
 				if (activeQuests.Count == 0)
 				{
-					return new BulkWriteResult(suppliedRows, 0, 0);
+					return new BulkWriteResult(suppliedRows, 0, 0, unownedRows);
 				}
 
 				var now = DateTime.UtcNow;
@@ -130,12 +142,32 @@ namespace FishMMO.Database.Npgsql.Services
 					cancellationToken,
 					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
 
-				return new BulkWriteResult(suppliedRows, activeQuests.Count, appliedRows);
+				return new BulkWriteResult(suppliedRows, activeQuests.Count, appliedRows, unownedRows);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteQuestAsync(long characterId, int templateId, long incomingVersion, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult> DeleteQuestAsync(long characterId, int templateId, long incomingVersion, CancellationToken cancellationToken = default)
+			=> DeleteQuestCoreAsync(characterId, templateId, incomingVersion, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> DeleteQuestOwnedAsync(long characterId, int templateId, long incomingVersion, CharacterSessionLeaseData claim, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaim(claim, characterId);
+			return invalid != null
+				? Task.FromResult(DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: DeleteQuestCoreAsync(characterId, templateId, incomingVersion, claim, cancellationToken);
+		}
+
+		/// <summary>
+		/// The delete behind <see cref="DeleteQuestAsync"/> and <see cref="DeleteQuestOwnedAsync"/>.
+		/// </summary>
+		/// <param name="characterId">Character who owns the quest.</param>
+		/// <param name="templateId">Quest template ID to delete.</param>
+		/// <param name="incomingVersion">Only deletes if this version exceeds the stored version.</param>
+		/// <param name="claim">The writer's claim, or null for the ungated delete. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult> DeleteQuestCoreAsync(long characterId, int templateId, long incomingVersion, CharacterSessionLeaseData? claim, CancellationToken cancellationToken)
 		{
 			if (characterId <= 0)
 			{
@@ -151,7 +183,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid Version. Version must be greater than 0.");
 			}
 
-			return await ExecuteWriteAsync(async dbContext =>
+			Func<NpgsqlDbContext, Task> delete = async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var sql = $@"UPDATE {TableName}
@@ -173,7 +205,23 @@ namespace FishMMO.Database.Npgsql.Services
 						throw new StaleStateException("Quest delete rejected due to a stale Version.");
 					}
 				}
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			};
+
+			if (!claim.HasValue)
+			{
+				return await ExecuteWriteAsync(delete, saveChanges: false, operationName: nameof(DeleteQuestAsync), cancellationToken: cancellationToken).ConfigureAwait(false);
+			}
+
+			/* Owned: the gate and the soft delete in one transaction, so the claim it admits is held —
+			 * under the character's share lock — until the tombstone is written. Retrying after a lost
+			 * commit reply is safe: the tombstone already carries this version, so the retry matches
+			 * nothing and finds no live row. */
+			CharacterSessionLeaseData held = claim.Value;
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				await CharacterWriteGate.AdmitOneAsync(dbContext, characterId, held, cancellationToken).ConfigureAwait(false);
+				await delete(dbContext).ConfigureAwait(false);
+			}, saveChanges: false, operationName: nameof(DeleteQuestOwnedAsync), cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

@@ -94,6 +94,20 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool Immortal { get { return this.immortal; } set { this.immortal = value; } }
 
+		/// <summary>
+		/// True while this character's server brain has it evading: an NPC walking home after a
+		/// leash, which takes no damage. See <see cref="INPCBrain.IsEvading"/>.
+		/// </summary>
+		/// <remarks>
+		/// The same question the debuff and knockback paths ask (<see cref="CharacterEvade"/>), so
+		/// the three hostile routes cannot disagree about who is evading. On a client an NPC has no
+		/// brain, so this is false there.
+		/// </remarks>
+		private bool IsEvading()
+		{
+			return CharacterEvade.RefusesHostileEffects(Character);
+		}
+
 		// ───── Combat State ─────────────────────────────────────────────────
 
 		[Header("Combat")]
@@ -331,6 +345,8 @@ namespace FishMMO.Shared
 		/// target, amount, damage type (null for heals), the kind, and how many separate hits the
 		/// amount was merged from — always at least one. The last is what lets the caster's display
 		/// settle every predicted label a coalesced report stands for rather than only the first.
+		/// For a refusal (<see cref="CombatEventRules.IsRefusal"/>) the amount is zero, the type is
+		/// the refused hit's, and the count is how many hits were refused.
 		/// </para>
 		/// </remarks>
 		public static event Action<ICharacter, ICharacter, int, DamageAttributeTemplate, CombatEventKind, int> OnCombatEventReceived;
@@ -353,10 +369,14 @@ namespace FishMMO.Shared
 		/// multi-target ability that hits the same character several times in one tick, or a
 		/// stack of damage-over-time effects expiring together, costs one entry per (source, type)
 		/// rather than one message each.
+		/// <para>
+		/// A refusal (<see cref="CombatEventRules.IsRefusal"/>) has no amount and is queued anyway;
+		/// every other kind needs a positive one. See <see cref="ReportRefusal"/>.
+		/// </para>
 		/// </remarks>
 		private void QueueCombatEvent(ICharacter source, CombatEventKind kind, DamageAttributeTemplate damageAttribute, int amount)
 		{
-			if (!base.IsServerStarted || amount <= 0)
+			if (!base.IsServerStarted || (amount <= 0 && !kind.IsRefusal()))
 			{
 				return;
 			}
@@ -369,6 +389,81 @@ namespace FishMMO.Shared
 
 			int damageTemplateID = damageAttribute != null ? damageAttribute.ID : 0;
 			combatEvents.Add(sourceObjectID, kind, damageTemplateID, amount);
+		}
+
+		/// <summary>
+		/// Queues the report for a hit this character refused, if the refusal is one to report.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Server only (<see cref="QueueCombatEvent"/> checks), and only with an attacker: the report
+		/// goes to the attacker's connection alone (<see cref="CombatEventRules.ReachesBystanders"/>),
+		/// so environmental damage, which has nobody to tell, queues nothing.
+		/// </para>
+		/// <para>
+		/// Periodic ticks are reported under the same kinds as direct hits. The caster never
+		/// predicted a tick, so there is nothing of its own for one to settle, but a
+		/// damage-over-time effect that silently stops doing anything is the same unexplained
+		/// silence the report exists to remove. The cost is that a refused tick may settle a
+		/// pending direct-hit prediction of the same type on the same target — which, while the
+		/// target is refusing everything that source sends, is the right answer for that
+		/// prediction too.
+		/// </para>
+		/// </remarks>
+		/// <param name="attacker">The character whose hit was refused.</param>
+		/// <param name="damageAttribute">The refused hit's damage type; the caster's prediction pairs on it.</param>
+		private void ReportRefusal(ICharacter attacker, DamageAttributeTemplate damageAttribute)
+		{
+			if (attacker == null || !base.IsServerStarted)
+			{
+				return;
+			}
+
+			if (TryResolveRefusalReport(Immortal, IsEvading(), IsAlive, out CombatEventKind kind))
+			{
+				QueueCombatEvent(attacker, kind, damageAttribute, 0);
+			}
+		}
+
+		/// <summary>
+		/// What a refused hit reports, if anything.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>A dead target reports nothing.</b> <see cref="Immortal"/> is also how a corpse is kept
+		/// from dying twice (<c>NPC.Despawn</c> sets it), and a hit on a corpse is not an immunity —
+		/// the thing is dead. The report is for a live target that turned the hit away.
+		/// </para>
+		/// <para>
+		/// <b>Evade before Immune.</b> A character can be both — a boss made immortal for a phase
+		/// that then leashes — and the evade is the more informative answer: it says why, and it
+		/// ends when the NPC gets home.
+		/// </para>
+		/// <para>Pure, so the rule is a truth table.</para>
+		/// </remarks>
+		/// <param name="immortal">True when the target is <see cref="Immortal"/>.</param>
+		/// <param name="evading">True when the target is evading (<see cref="CharacterEvade"/>).</param>
+		/// <param name="alive">True when the target has health left (<see cref="IsAlive"/>).</param>
+		/// <param name="kind">The refusal to report, when this returns true.</param>
+		/// <returns>True when the refusal is reported.</returns>
+		public static bool TryResolveRefusalReport(bool immortal, bool evading, bool alive, out CombatEventKind kind)
+		{
+			kind = CombatEventKind.Damage;
+			if (!alive)
+			{
+				return false;
+			}
+			if (evading)
+			{
+				kind = CombatEventKind.Evade;
+				return true;
+			}
+			if (immortal)
+			{
+				kind = CombatEventKind.Immune;
+				return true;
+			}
+			return false;
 		}
 
 		/// <summary>
@@ -469,8 +564,16 @@ namespace FishMMO.Shared
 					sourceOwner = sourceNob.Owner;
 				}
 
+				/* A refusal is for the attacker alone. With no connection behind the source — an NPC
+				 * attacker, or a source that has since despawned — there is nobody to tell. */
+				if (!entry.Kind.ReachesBystanders() && (sourceOwner == null || !sourceOwner.IsValid))
+				{
+					continue;
+				}
+
 				/* Partitioned by channel, then one set broadcast per channel. The reliable half holds
-				 * at most the source's own connection. */
+				 * at most the source's own connection; the unreliable half is empty for a kind that
+				 * does not reach bystanders. */
 				combatEventReliableRecipients.Clear();
 				combatEventUnreliableRecipients.Clear();
 				for (int o = 0; o < combatEventObserverBuffer.Count; ++o)
@@ -480,13 +583,14 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
-					if (sourceOwner != null && conn == sourceOwner)
+					switch (CombatEventRules.ResolveDelivery(entry.Kind, sourceOwner != null && conn == sourceOwner))
 					{
-						combatEventReliableRecipients.Add(conn);
-					}
-					else
-					{
-						combatEventUnreliableRecipients.Add(conn);
+						case CombatEventRules.Delivery.Reliable:
+							combatEventReliableRecipients.Add(conn);
+							break;
+						case CombatEventRules.Delivery.Unreliable:
+							combatEventUnreliableRecipients.Add(conn);
+							break;
 					}
 				}
 
@@ -571,11 +675,12 @@ namespace FishMMO.Shared
 			 * the two cannot compound. See CharacterAttributeController.ApplyObservedHealthDelta.
 			 *
 			 * The owner is skipped: its own reconcile is authoritative and arrives every tick, and a
-			 * second writer on the same value could only fight it. */
+			 * second writer on the same value could only fight it. A refusal moved nothing, and says
+			 * so by kind rather than by trusting its amount to be zero. */
 			if (!targetNob.IsOwner)
 			{
 				CharacterAttributeController attributeController = targetNob.GetComponent<CharacterAttributeController>();
-				if (attributeController != null)
+				if (attributeController != null && eventKind.MovesHealth())
 				{
 					attributeController.ApplyObservedHealthDelta(msg.Amount,
 						eventKind == CombatEventKind.Heal || eventKind == CombatEventKind.PeriodicHeal);
@@ -602,8 +707,10 @@ namespace FishMMO.Shared
 			}
 
 			CombatEventKind kind = eventKind;
+			/* A refusal carries the refused hit's type too: the caster's pending prediction is keyed
+			 * on it, and a refusal that dropped it could settle only a typeless prediction. */
 			DamageAttributeTemplate damageAttribute =
-				(kind == CombatEventKind.Damage || kind == CombatEventKind.PeriodicDamage) && msg.DamageTemplateID != 0
+				kind.CarriesDamageType() && msg.DamageTemplateID != 0
 				? DamageAttributeTemplate.Get<DamageAttributeTemplate>(msg.DamageTemplateID)
 				: null;
 
@@ -1210,7 +1317,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Applies damage to this character from an attacker. Handles resistance calculation,
 		/// kill detection, combat state, and ECA trigger dispatch. Does nothing if the character
-		/// is immortal or already dead. Resistance-reduced damage below 1 is silently discarded.
+		/// is immortal, evading (an NPC walking home after a leash, see
+		/// <see cref="INPCBrain.IsEvading"/>) or already dead. An immortal or evading refusal is
+		/// reported to the attacker as <see cref="CombatEventKind.Immune"/> or
+		/// <see cref="CombatEventKind.Evade"/> (<see cref="TryResolveRefusalReport"/>).
+		/// Resistance-reduced damage below 1 is silently discarded.
 		/// </summary>
 		/// <param name="attacker">The character dealing damage, or null for environmental damage.</param>
 		/// <param name="amount">Base damage before resistance is applied.</param>
@@ -1220,8 +1331,17 @@ namespace FishMMO.Shared
 		/// <returns>The post-resistance, post-mitigation amount that landed; zero when nothing did. See <see cref="IDamageable.Damage"/>.</returns>
 		public int Damage(ICharacter attacker, int amount, DamageAttributeTemplate damageAttribute, bool ignoreAchievements = false, bool periodic = false)
 		{
-			if (Immortal)
+			/* An evading NPC is refused exactly as an immortal one is: before resistance, combat
+			 * entry, contribution, the landed-damage report and the OnDamaged event, so the hit
+			 * raises no threat and moves no bar anywhere. What it does raise is a REFUSAL report to
+			 * the attacker alone — "Evade" or "Immune". The brain exists only on the server, so for
+			 * an evade the caster's client predicted the hit and drew its number, and without the
+			 * report that number simply greyed out a second later as if the hit had been lost; for
+			 * an immortal target the client refused too and drew nothing, and the word is all the
+			 * attacker learns. */
+			if (Immortal || IsEvading())
 			{
+				ReportRefusal(attacker, damageAttribute);
 				return 0;
 			}
 
@@ -1423,14 +1543,13 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// A plain multicast invoke abandons the remainder of the list at the first exception.
 		/// That is unusually costly for this event: its subscribers are the scene server's
-		/// <c>CharacterSystem</c> — which sets <see cref="CharacterFlags.IsDead"/> and sends the
-		/// client its <c>DeathBroadcast</c> — plus one <c>AggressionState</c> per aggressive NPC,
-		/// registered at runtime. A single throwing NPC handler could therefore stop a player
-		/// ever being told they died, leaving them with no death dialog and no way to respawn.
+		/// <c>CharacterSystem</c> — which sends the client its <c>DeathBroadcast</c> — plus the pet
+		/// and arena systems and the AI's <c>AggressionDispatcher</c>, whose one subscription serves
+		/// every NPC's threat table. A single throwing handler could therefore stop a player ever
+		/// being told they died, leaving them with no death dialog and no way to respawn.
 		/// <para>
-		/// It would also disarm this method's own re-entry guard, which tests the very flag that
-		/// <c>CharacterSystem</c>'s handler sets: with that handler skipped, the character is
-		/// never marked dead and a subsequent <see cref="Kill"/> would run the whole path again.
+		/// The re-entry guard does not depend on any of them: <see cref="Kill"/> sets
+		/// <see cref="CharacterFlags.IsDead"/> itself before this runs.
 		/// </para>
 		/// <para>
 		/// Applied here and not to <c>OnDamaged</c>/<c>OnHealed</c> deliberately.

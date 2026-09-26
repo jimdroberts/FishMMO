@@ -93,16 +93,68 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				List<GuildRankData> ranks = rows.Select(r => new GuildRankData(
-					r.ID,
-					r.Version,
-					r.GuildID,
-					r.RankOrder,
-					r.Name ?? string.Empty,
-					r.Permissions)).ToList();
+				List<GuildRankData> ranks = rows.Select(ToData).ToList();
 
 				return (IReadOnlyList<GuildRankData>)ranks;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<GuildRankData>>>> FetchManyAsync(long[] guildIds, CancellationToken cancellationToken = default)
+		{
+			long[] ids = guildIds == null ? Array.Empty<long>() : guildIds.Where(id => id > 0).Distinct().ToArray();
+			if (ids.Length == 0)
+			{
+				return DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<GuildRankData>>>.Success(
+					new Dictionary<long, IReadOnlyList<GuildRankData>>());
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				/* Ordered by guild and then rank order, so each guild's rows arrive already in the
+				 * order the single-guild read promises and grouping them preserves it. */
+				var rows = await dbContext.GuildRanks
+					.AsNoTracking()
+					.Where(r => ids.Contains(r.GuildID))
+					.OrderBy(r => r.GuildID)
+					.ThenBy(r => r.RankOrder)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var grouped = new Dictionary<long, List<GuildRankData>>(ids.Length);
+				for (int i = 0; i < ids.Length; ++i)
+				{
+					grouped[ids[i]] = new List<GuildRankData>();
+				}
+				for (int i = 0; i < rows.Count; ++i)
+				{
+					if (grouped.TryGetValue(rows[i].GuildID, out List<GuildRankData> ladder))
+					{
+						ladder.Add(ToData(rows[i]));
+					}
+				}
+
+				var result = new Dictionary<long, IReadOnlyList<GuildRankData>>(grouped.Count);
+				foreach (KeyValuePair<long, List<GuildRankData>> entry in grouped)
+				{
+					result[entry.Key] = entry.Value;
+				}
+				return (IReadOnlyDictionary<long, IReadOnlyList<GuildRankData>>)result;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Projects one rank row onto its data transfer shape. Shared by the single and bulk reads.
+		/// </summary>
+		private static GuildRankData ToData(GuildRankEntity r)
+		{
+			return new GuildRankData(
+				r.ID,
+				r.Version,
+				r.GuildID,
+				r.RankOrder,
+				r.Name ?? string.Empty,
+				r.Permissions);
 		}
 
 		/// <inheritdoc/>

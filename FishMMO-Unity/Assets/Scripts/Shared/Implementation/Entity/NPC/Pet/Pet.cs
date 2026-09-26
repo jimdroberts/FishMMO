@@ -333,12 +333,17 @@ namespace FishMMO.Shared
 		/// death paths see it — would silently get the NPC corpse behaviour instead, leaving the
 		/// pet parked in the world as an immortal, AI-disabled corpse that nothing ever collects.
 		/// </para>
+		/// <para>
+		/// Pooled out of the world scene (<see cref="PersistentPool"/>), as the NPC fallback and loot
+		/// are: FishNet leaves a despawned object where it was, and a pet pooled inside an instance
+		/// scene died with it when the instance unloaded, while the pool still counted it.
+		/// </para>
 		/// </remarks>
 		public override void Despawn()
 		{
 			if (NetworkObject != null && NetworkObject.IsSpawned && base.IsServerStarted)
 			{
-				NetworkManager.ServerManager.Despawn(NetworkObject, FishNet.Object.DespawnType.Pool);
+				PersistentPool.Despawn(NetworkManager, NetworkObject);
 				return;
 			}
 

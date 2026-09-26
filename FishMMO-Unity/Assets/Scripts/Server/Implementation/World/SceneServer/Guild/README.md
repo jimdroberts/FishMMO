@@ -83,8 +83,10 @@ The edit path's grant check compares only the bits being **added** against the a
 - Guild member removal (kick) with seniority checks: you cannot act on somebody at or above you
 - Guild rank changes for members, decided by `GuildRules.CanChangeMemberRank`
 - Append-only activity log (`GuildLogEventType`) trimmed to `guildLogRetainedEntries` every `guildLogPruneInterval` appends — pruning on every append would double the write cost of every guild event for a table that only needs to stay roughly bounded
-- Periodic guild update synchronization pump: fetches update rows from the database, computes removed members, broadcasts leave/add to local members
-- Per-guild online character tracking (`GuildCharacterTracker`) and cached member tracking (`GuildMemberTracker`) with automatic cleanup when no local members remain
+- Periodic guild update synchronization pump on the party pump's watermark model (`UpdatePumpWatermark`): the mark starts at the fetch time less a clock-skew allowance, an unreadable guild holds it only within a retry horizon, and a processed-update record stops the passes inside that window re-sending the same update. Rosters and ladders for every changed guild are read in two bulk queries
+- Roster deltas: after a member's first full roster from this server, the pump sends `GuildRosterDeltaBroadcast` with only the rows that changed for that member's officer-note audience, falls back to the whole roster when more than half changed, and sends the rank list only when the ladder or the member's own rank moved (`GuildRosterDelta`, `GuildRecipientBaselines`). Every copy is one multicast per audience
+- A 30 s guild existence sweep that notices guilds disbanded on another scene server (a disband leaves no update row for the pump to find)
+- Per-guild online character tracking (`GuildCharacterTracker`) and the roster as last delivered (`GuildMemberTracker`, full rows keyed by character ID), with automatic cleanup when no local members remain
 - Chat command integration (`/gi`, `/ginvite`) for in-game guild invitations by character name
 - Achievement integration for guild creation (`GuildCreateAchievementTemplate`) and guild joining (`GuildJoinAchievementTemplate`)
 - Membership-removal in-flight guard (`BeginMembershipRemoval` / `EndMembershipRemoval`) so a leave and a kick for the same character cannot both run
@@ -100,8 +102,8 @@ The edit path's grant check compares only the bits being **added** against the a
 
 - **Unity 6.3 LTS**
 - **FishNetworking** — networking framework
-- **FishMMO Server Core** — provides `ServerBehaviour`, `IGuildSystem`, `IGuildSystemRuntimeData`, `IGuildSystemMainThreadQueueData`, `IGuildCharacterMappingData`, `ICharacterSystem`, `AsyncWorkerData`, `IngressGuard`, and `ChatHelper`
-- **FishMMO Shared** — provides `IGuildController`, `GuildPermissions`, `GuildRankDefaults`, `GuildTextLimits`, `GuildLogEventType`, `GuildResultType`, `CharacterAttributeTemplate`, `CharacterCurrency`, `AchievementTemplate`, `Authentication`, and the broadcast types (`GuildCreateBroadcast`, `GuildInviteBroadcast`, `GuildAcceptInviteBroadcast`, `GuildDeclineInviteBroadcast`, `GuildLeaveBroadcast`, `GuildRemoveBroadcast`, `GuildChangeRankBroadcast`, `GuildSetMessageOfTheDayBroadcast`, `GuildSetNoticeBroadcast`, `GuildTransferLeadershipBroadcast`, `GuildDisbandBroadcast`, `GuildLogRequestBroadcast`, `GuildRankListRequestBroadcast`, `GuildEditRankBroadcast`, `GuildCreateRankBroadcast`, `GuildDeleteRankBroadcast`, `GuildSetMemberNoteBroadcast`, `GuildSetRecruitmentBroadcast`, `GuildDirectoryRequestBroadcast`, `GuildApplyBroadcast`, `GuildApplicationListRequestBroadcast`, `GuildResolveApplicationBroadcast`, and the outbound `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `GuildAddEntry`, `GuildRankListBroadcast`, `GuildRankEntry`, `GuildInfoBroadcast`, `GuildRecruitmentInfoBroadcast`, `GuildDirectoryBroadcast`, `GuildApplicationListBroadcast`, `GuildLogBroadcast`, `GuildCreationCostBroadcast`, `GuildResultBroadcast`)
+- **FishMMO Server Core** — provides `ServerBehaviour`, `IGuildSystem`, `IGuildSystemRuntimeData`, `IGuildSystemMainThreadQueueData`, `IGuildCharacterMappingData`, `ICharacterSystem`, `AsyncWorkerData`, `IngressGuard`, `RepeatingFaultLog`, `MonotonicClock` and `ChatHelper`; `UpdatePumpWatermark` lives beside the party system (`../Party/`), which shares it
+- **FishMMO Shared** — provides `IGuildController`, `GuildPermissions`, `GuildRankDefaults`, `GuildTextLimits`, `GuildLogEventType`, `GuildResultType`, `CharacterAttributeTemplate`, `CharacterCurrency`, `AchievementTemplate`, `Authentication`, and the broadcast types (`GuildCreateBroadcast`, `GuildInviteBroadcast`, `GuildAcceptInviteBroadcast`, `GuildDeclineInviteBroadcast`, `GuildLeaveBroadcast`, `GuildRemoveBroadcast`, `GuildChangeRankBroadcast`, `GuildSetMessageOfTheDayBroadcast`, `GuildSetNoticeBroadcast`, `GuildTransferLeadershipBroadcast`, `GuildDisbandBroadcast`, `GuildLogRequestBroadcast`, `GuildRankListRequestBroadcast`, `GuildEditRankBroadcast`, `GuildCreateRankBroadcast`, `GuildDeleteRankBroadcast`, `GuildSetMemberNoteBroadcast`, `GuildSetRecruitmentBroadcast`, `GuildDirectoryRequestBroadcast`, `GuildApplyBroadcast`, `GuildApplicationListRequestBroadcast`, `GuildResolveApplicationBroadcast`, and the outbound `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `GuildRosterDeltaBroadcast`, `GuildAddEntry`, `GuildRankListBroadcast`, `GuildRankEntry`, `GuildInfoBroadcast`, `GuildRecruitmentInfoBroadcast`, `GuildDirectoryBroadcast`, `GuildApplicationListBroadcast`, `GuildLogBroadcast`, `GuildCreationCostBroadcast`, `GuildResultBroadcast`)
 - **FishMMO Database** — provides `IGuildService`, `ICharacterGuildService`, `IGuildUpdateService`, `IGuildRankService`, `IGuildApplicationService`, `IGuildLogService`, `ICharacterAttributeService`, `ICharacterFriendService`, `ICurrencyLedgerService`, `IPlotService`, `GuildRankData`, and `DatabaseResult<T>`
 
 ## Installation / Build
@@ -116,7 +118,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
    - `GuildCharacterMappingData` → `IGuildCharacterMappingData`
    - `GuildSystemMainThreadQueueData` → `IGuildSystemMainThreadQueueData`
    - `AsyncWorkerData` (shared async work queue)
-3. On initialize, `GuildSystem` validates its data containers and `ICharacterSystem`, registers the chat commands (`/gi`, `/ginvite`), registers 22 broadcast handlers, subscribes to character connect/disconnect hooks, registers the periodic guild update callback, and clamps every inspector value.
+3. On initialize, `GuildSystem` validates its data containers and `ICharacterSystem`, registers the chat commands (`/gi`, `/ginvite`), registers 22 broadcast handlers, subscribes to character connect/disconnect hooks, registers the periodic guild update callback and the guild existence sweep, and clamps every inspector value.
 4. On deinitialize, it drains the remaining main-thread queue, unregisters broadcast handlers, unsubscribes character hooks, and unregisters the periodic callback.
 5. Clients send guild broadcasts; the server pre-filters on the cached mask, performs async DB work that re-resolves the requester's `GuildAuthority`, and replies with result broadcasts. Other servers pick up changes via the periodic guild update synchronization pump.
 
@@ -129,6 +131,8 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `maxMainThreadActionsPerFrame` | int | 100 | Max guild-system actions drained from main-thread queue per frame (min 1) |
 | `maxGuildSize` | int | 100 | Maximum number of members allowed per guild |
 | `updatePumpRate` | float | 1.0 | Periodic guild update polling interval in seconds |
+| `guildUpdateClockSkewAllowanceSeconds` | float | 5.0 | Skew between this server's clock and the database's tolerated by the pump's watermark (min 0). The retry horizon is ten times this, and never under 60 s; the processed-update record is kept for twice the horizon |
+| `guildExistenceSweepSeconds` | float | 30.0 | Seconds between checks that every guild with members on this server still exists; a guild disbanded on another server is noticed within this long (min 1) |
 | `guildCreationFeeCurrency` | CharacterAttributeTemplate | — | Currency attribute charged to found a guild. Empty means free |
 | `guildCreationFee` | long | 0 | Amount charged to found a guild. Zero or less disables the fee |
 | `invitationTtlSeconds` | float | 45.0 | Invitation lifetime in seconds before automatic expiration (min 5.0) |
@@ -231,7 +235,7 @@ Every operation is debounced per connection by `ingressDebounceMilliseconds`. As
 
 Any member may read the rank ladder: a player cannot be expected to work within rules they are not allowed to see, and the masks are already implied by which buttons every other member visibly has.
 
-Outbound, the system sends `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `GuildLeaveBroadcast`, `GuildRankListBroadcast`, `GuildInfoBroadcast`, `GuildRecruitmentInfoBroadcast`, `GuildDirectoryBroadcast`, `GuildApplicationListBroadcast`, `GuildLogBroadcast`, `GuildCreationCostBroadcast`, `GuildInviteBroadcast` and `GuildResultBroadcast`.
+Outbound, the system sends `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `GuildRosterDeltaBroadcast`, `GuildLeaveBroadcast`, `GuildRankListBroadcast`, `GuildInfoBroadcast`, `GuildRecruitmentInfoBroadcast`, `GuildDirectoryBroadcast`, `GuildApplicationListBroadcast`, `GuildLogBroadcast`, `GuildCreationCostBroadcast`, `GuildInviteBroadcast` and `GuildResultBroadcast`.
 
 ### Create Guild Path
 
@@ -276,6 +280,8 @@ A refusal answers through `RefuseRankEdit`, which sends both the `GuildResultTyp
 
 `SendGuildRankList` / `PublishGuildRankLadderAsync` emit `GuildRankListBroadcast` carrying the ladder, the viewer's own rank order and the viewer's permissions, so the client draws only what the viewer may actually do.
 
+`PublishGuildRankLadderAsync` (after any ladder edit) reads the roster and the ladder once, then delivers on the main thread (`DeliverPublishedLadder`): each local member is re-checked (their controller must still name the guild), their server-side standing is refreshed, and they join the audience for their rank — **one multicast per rank held locally**, through the same `DeliverRankListAudiences` the pump uses, instead of one message per member. The ladder becomes the guild's delivered ladder (`AdvanceDeliveredLadder`) and each recipient is recorded as holding its generation at their rank, so the pump's pass over the update this edit writes does not send the same list again, and a member already holding it is skipped. `SendGuildRankList` (one member: a rank-list request, create) still forgets that member's ladder baseline, because its ladder comes from a resolve of its own.
+
 ### Leave / Remove / Rank Change Path
 
 **Leave** (`LeaveGuildAsync`): fetches the current members; when the leaver holds the top seat and members remain it finds the most senior remaining rank order and promotes a random member of that rank into the leader seat — and if no successor can be found at all it **refuses the leave**, logging an error, rather than leaving the guild leaderless. It then deletes the leaving member, and — when nobody remains — deletes the guild, its update marker, and releases its housing plots (`ReleaseGuildPlotsAsync`). Otherwise it triggers the guild-update marker. Marshals back (`CompleteLocalLeave`) to reset the controller, remove the tracker, and broadcast `GuildLeaveBroadcast`. Two cases stop short of that: a leaver with **no row** in the roster (removed on another server before this one heard) writes nothing at all and only clears the stale local state — the remaining-member count would otherwise be one short, and a two-member guild would be deleted with its other member still in it — and a member **delete that fails** refuses the leave with `Failed` instead of telling the player they left while the row stays.
@@ -290,20 +296,34 @@ A refusal answers through `RefuseRankEdit`, which sends both the `GuildResultTyp
 
 `OnPeriodicUpdate(deltaTime)`:
 
-1. Guards against re-entrance via `TryBeginUpdatePump`.
-2. Snapshots tracked guild IDs and the last fetch time on the main thread.
-3. Enqueues async work: `FetchAndProcessGuildUpdatesAsync`.
-   - Fetches guild update rows since `lastFetch` via `IGuildUpdateService.FetchAsync`.
-   - For each updated guild, fetches the current member rows via `ICharacterGuildService.FetchManyAsync` and the rank ladder. A guild enters the pass only with both; one whose roster or ladder could not be read is logged and held for the next pass.
-   - Marshals to the main thread:
-     - Advances `LastFetchTime` to one tick past the newest `LastUpdate` the pass processed — the rows' own timestamps — but never past this server's clock at the moment the query was sent (a writer whose clock runs ahead would otherwise drag the mark past later updates), and no further than the oldest update it could not read. Using `DateTime.UtcNow` at marshal time silently skipped every update written while the pass was running.
-     - Computes removed members (in the previous cache but not in the current set) and sends `GuildLeaveBroadcast` where applicable.
-     - Refreshes the `GuildMemberTracker` cache.
-     - Broadcasts `GuildAddMultipleBroadcast` (`BuildRoster` → `GuildAddEntry` rows, with officer notes included only for viewers holding `ViewOfficerNotes`) to all local online guild members.
-     - Broadcasts `GuildRankListBroadcast` alongside it, so a rank edit made on another server reaches this one's members.
-     - Updates each member's server-side `IGuildController` rank and permission mask.
+1. Sweeps the processed-update record every 30 s (`SweepProcessedGuildUpdates`, records older than `UpdatePumpWatermark.ProcessedRecordLifetime`), whether or not a pass is in flight.
+2. Guards against re-entrance via `TryBeginUpdatePump`.
+3. Snapshots tracked guild IDs and the last fetch time on the main thread.
+4. Enqueues async work: `FetchAndProcessGuildUpdatesAsync`.
+   - Reads this server's clock **before** the query, less `guildUpdateClockSkewAllowanceSeconds` (`UpdatePumpWatermark.FetchStarted`): the update rows are stamped by the database's clock, so the mark trails this server's by the allowance. That is where the pass's mark starts.
+   - Fetches guild update rows since `lastFetch` via `IGuildUpdateService.FetchAsync`, and skips any the processed-update record says were already delivered (`HasProcessedGuildUpdate`).
+   - Reads the rosters of every remaining guild in one query (`ICharacterGuildService.FetchManyAsync(long[])`) and their ladders in another (`IGuildRankService.FetchManyAsync(long[])`). A bulk read fails only because the database did, so a failure holds every guild in the pass. Seeding a ladder for a guild that has none is the one per-guild step left.
+   - A guild whose roster came back **empty** — which is what a deleted guild reads as — is checked with `IGuildService.FetchExistingIdsAsync` before its empty ladder would be re-seeded; one that is gone has its local members cleared (`ClearLocalGuildMembers`). No other guild's existence is read by the pump.
+   - Each unprocessed update is classified by `UpdatePumpWatermark.Classify`: **read** (delivered and recorded as processed), **unread inside the retry horizon** (the mark is held at its timestamp so the next pass fetches it again), or **unread for longer than the horizon** (logged once and released, so one unreadable guild can no longer pin the mark). A guild enters the delivery only with both its roster and its ladder.
+   - Marshals to the main thread: sets `LastFetchTime` to the mark, then `ApplyGuildSnapshot` for each guild read. The processed record is written only once that delivery is actually queued, so a full main-thread queue re-fetches the update instead of dropping it.
 
-Roster entries carry `LastOnlineUnixSeconds` (via `ToUnixSeconds`), not .NET ticks, and the guild id lives once on the `GuildAddMultipleBroadcast` envelope rather than being repeated on every member row.
+`ApplyGuildSnapshot(guildID, rows, ladder, mapData)`, per guild:
+
+- Members in the previous snapshot and not in this one are untracked (`RemoveGuildCharacterTracker`) and have their standing cleared (`ClearGuildStanding`). If that takes the last local member, the guild's delivered roster and ladder are dropped and nothing is sent.
+- `GuildMemberTracker[guildID]` becomes the new roster, as full rows (officer notes included) keyed by character ID: the baseline the next pass diffs against.
+- Each local member whose controller names **this** guild (`guildController.ID == guildID`; a character who has moved to another guild is skipped) has its server-side rank order, permission mask and leader seat refreshed from the row just read.
+- Each online member is placed in one of four roster audiences: the public or officer-note copy (by whether their rank holds `ViewOfficerNotes`), each whole or delta. A member whose client already holds this guild's roster from this server, in the same copy (`GuildRecipientBaselines.HasRoster`), gets the delta; anybody else gets the whole roster and is recorded as holding it.
+- The delta copy is `GuildRosterDelta.Diff` against the previous roster, then `GuildRosterDelta.Choose`: nothing when nothing that audience can see changed; `GuildRosterDeltaBroadcast` (`GuildID`, `Upserts`, `Removals`) otherwise; the whole roster when more than half the rows changed. Last-seen counts as a change only while the member is offline, since an online character's last-seen moves with every save; the officer note counts only for the officer copy.
+- The rank list goes only to members whose client does not hold the current ladder **generation** at their current rank (`GuildRecipientBaselines.HasLadder`). A generation is a counter that moves only when the ladder read differs from the one last delivered (`AdvanceDeliveredLadder`), so a member changing zone costs one roster row, not a roster and a ladder for everybody.
+- Every copy is one multicast (`Server.NetworkWrapper.Broadcast(HashSet<NetworkConnection>, …)`), serialised once; the rank list goes out as one multicast per rank held locally (`DeliverRankListAudiences`), since it carries the viewer's own rank and mask. Each recipient receives its roster or delta before its rank list.
+
+Baselines are forgotten whenever the client may no longer hold what was recorded: on connect and disconnect, when a character joins or leaves the guild here, when the pump evicts them, and — the ladder only — when a rank list reaches them by a path that records no generation (one member's rank-list request, the create path). The login snapshot that `CharacterSystem` sends as a character loads calls `IGuildSystem.ForgetGuildDeliveryBaselines`, so the pump's next delivery to that character goes out whole. A forgotten baseline costs one full send; a wrong one would leave a panel stale.
+
+Roster entries carry `LastOnlineUnixSeconds` (via `ToUnixSeconds`), not .NET ticks, and the guild id lives once on the `GuildAddMultipleBroadcast` and `GuildRosterDeltaBroadcast` envelopes rather than being repeated on every member row. The location a member carries while logged out is `GuildRosterDelta.OfflineLocation` ("Offline"), the one definition the disconnect path, the delta rule and the client panel share.
+
+### Guild Existence Sweep
+
+A disband deletes the guild's update row with it, so the pump never hears of a disband done on another scene server. `OnPeriodicGuildExistenceSweep` (every `guildExistenceSweepSeconds`, 30 s) snapshots the tracked guild IDs and `SweepVanishedGuildsAsync` asks which still exist; the local members of any that do not are cleared exactly as a local disband clears them. It has its own in-flight flag and `RepeatingFaultLog`; a failed read clears nothing and the next sweep asks again. The pump used to read the existence of every tracked guild on every one-second pass.
 
 ### Failure Semantics
 
@@ -350,8 +370,12 @@ Roster entries carry `LastOnlineUnixSeconds` (via `ToUnixSeconds`), not .NET tic
 | Guild leave (leader transfer) | Leave as leader with remaining members; confirm leadership is transferred |
 | Guild leave (last member) | Leave as the sole member; confirm the guild, its update marker and its plots are removed |
 | Remove rank constraint | Kick a member at or above your rank order; confirm refusal |
-| Periodic sync pump | Confirm updates are fetched at `updatePumpRate` and local members receive `GuildAddMultipleBroadcast` plus `GuildRankListBroadcast` |
+| Periodic sync pump | Confirm updates are fetched at `updatePumpRate`; a member's first delivery from this server is `GuildAddMultipleBroadcast` plus `GuildRankListBroadcast` |
+| Roster delta | With the roster already delivered, have one member change zone; confirm the others receive one `GuildRosterDeltaBroadcast` carrying that row, and no rank list |
+| Unreadable guild | Make one guild's roster read fail repeatedly; confirm other guilds' updates still arrive once each, and that the stuck update is logged and released after the retry horizon (60 s at the default allowance) |
 | Removed member sync | Remove a member on another server; confirm the pump detects the removal and sends `GuildLeaveBroadcast` locally |
+| Disband on another server | Disband a guild on another scene server; confirm this server's members receive `GuildLeaveBroadcast` within `guildExistenceSweepSeconds` |
+| Rank edit publish | Edit a rank with members of several ranks online here; confirm one `GuildRankListBroadcast` per rank held, and that the next pump pass does not send it again |
 | Cross-server rank edit | Edit a rank on another server; confirm local members' controllers pick up the new mask on the next pump |
 | Ingress debounce | Send rapid consecutive guild requests from the same connection; confirm excess requests are dropped |
 | Ingress in-flight guard | Send overlapping async-backed guild requests; confirm only the first is processed |
@@ -493,25 +517,40 @@ OnServerGuildDisbandBroadcastReceived → DisbandGuildAsync
 OnPeriodicUpdate(deltaTime)
 │
 ├─ 1. Check Initialized + ServerState == Started
-├─ 2. TryBeginUpdatePump (re-entrance guard)
-├─ 3. Snapshot GuildCharacterTracker keys + LastFetchTime on main thread
-├─ 4. TryEnqueueAsyncWork → FetchAndProcessGuildUpdatesAsync
+├─ 2. Every 30 s: SweepProcessedGuildUpdates (records older than twice the retry horizon)
+├─ 3. TryBeginUpdatePump (re-entrance guard)
+├─ 4. Snapshot GuildCharacterTracker keys + LastFetchTime on main thread
+├─ 5. TryEnqueueAsyncWork → FetchAndProcessGuildUpdatesAsync
 │     │
+│     ├─ Async: mark = now − skew allowance (read BEFORE the query)
 │     ├─ Async: IGuildUpdateService.FetchAsync(since lastFetch)
-│     ├─ For each updated guild: ICharacterGuildService.FetchManyAsync + the rank ladder
-│     │     (either read failing → logged, guild held for the next pass)
+│     │     └── skip updates already in the processed-update record
+│     ├─ Async: ICharacterGuildService.FetchManyAsync(ids) + IGuildRankService.FetchManyAsync(ids)
+│     │     (one query each for every changed guild; a failure holds them all)
+│     ├─ Async: empty roster → FetchExistingIdsAsync for those guilds only;
+│     │     gone → ClearLocalGuildMembers
+│     ├─ Async: UpdatePumpWatermark.Classify per update
+│     │     ├── read               → deliver, record as processed
+│     │     ├── unread, in horizon → hold the mark at its timestamp
+│     │     └── unread, too old    → log once, release
 │     └─ TryEnqueueMainThread
-│        ├── LastFetchTime = newest processed LastUpdate + 1 tick, capped at
-│        │     the query's start time and the oldest update that could not be read
-│        ├── Compute removed members (previous cache − current DB members)
-│        ├── For removed local members: reset controller, broadcast GuildLeaveBroadcast
-│        ├── Refresh GuildMemberTracker
-│        ├── BuildRoster → GuildAddMultipleBroadcast (officer notes only for
-│        │     viewers holding ViewOfficerNotes)
-│        ├── BuildRankEntries → GuildRankListBroadcast
-│        └── Update each controller's rank order and permission mask
+│        ├── LastFetchTime = mark
+│        └── ApplyGuildSnapshot per guild
+│              ├── Evict members missing from the roster (untrack + ClearGuildStanding)
+│              ├── GuildMemberTracker[guild] = roster (full rows, the next diff's baseline)
+│              ├── Refresh each local member's rank order, mask and leader seat
+│              ├── Roster: whole to members with no baseline in their officer-note copy,
+│              │     GuildRosterDeltaBroadcast to the rest (whole if > half changed)
+│              └── Rank list: one multicast per rank, only to members without the
+│                    current ladder generation at their rank
 │
 └─ On failure / empty: EndUpdatePump
+
+OnPeriodicGuildExistenceSweep(deltaTime)            [every guildExistenceSweepSeconds]
+│
+├─ Snapshot GuildCharacterTracker keys; in-flight flag
+└─ SweepVanishedGuildsAsync → FetchExistingIdsAsync(all tracked)
+       └─ vanished → TryEnqueueMainThread → ClearLocalGuildMembers
 
 OnUpdate(deltaTime)
 │
@@ -525,23 +564,25 @@ OnUpdate(deltaTime)
 ```
 CharacterSystem_OnConnect(conn, character)
 │
-├─ 1. Validate character has IGuildController with ID > 0
-├─ 2. AddGuildCharacterTracker(guildID, characterID)
-└─ 3. EnqueuePersistence → PersistGuildMemberAsync(characterID, guildID, sceneName)
-       ├─ Fetch the membership row; failed read, no row, or a row in another
-       │     guild → write nothing (the controller is stale; never re-create)
-       ├─ Persist the row's OWN rank with the new location, at its version + 1
-       └─ Trigger guild-update marker
+├─ 1. SendGuildCreationCost (every character, in a guild or not)
+├─ 2. Validate character has IGuildController with ID > 0
+├─ 3. AddGuildCharacterTracker(guildID, characterID)   (forgets the delivery baselines)
+└─ 4. EnqueuePersistence → PersistGuildMemberAsync(characterID, guildID, sceneName)
+       ├─ ICharacterGuildService.UpdateLocationAsync: one UPDATE of the location
+       │     label, matched on character AND guild. No row, or a row in another
+       │     guild → nothing matches (the controller is stale; never re-create)
+       ├─ Trigger guild-update marker
+       └─ PublishGuildInfoAsync to this member alone (notice + message of the day)
 
 CharacterSystem_OnDisconnect(conn, character)
 │
-├─ 1. ClearPendingInvitation(character.ID)
-├─ 2. Validate character has IGuildController with ID > 0
-├─ 3. RemoveGuildCharacterTracker(guildID, characterID)
-└─ 4. Skipped while a leave/kick of this character is in flight here; otherwise
+├─ 1. RemovePendingInvitation(character.ID)
+├─ 2. Forget the character's delivery baselines
+├─ 3. Validate character has IGuildController with ID > 0
+├─ 4. RemoveGuildCharacterTracker(guildID, characterID)
+└─ 5. Skipped while a leave/kick of this character is in flight here; otherwise
        EnqueuePersistence → PersistGuildMemberAsync(characterID, guildID, "Offline")
-       ├─ Same row-first rules as connect
-       ├─ Persist the row's own rank with "Offline" location
+       ├─ Same location-only UPDATE as connect, with GuildRosterDelta.OfflineLocation
        └─ Trigger guild-update marker
 ```
 
@@ -559,10 +600,15 @@ Guild/
 ├── GuildSystem.Ranks.cs               # Partial: rank list/create/edit/delete handlers, member notes
 ├── GuildSystem.Recruitment.cs         # Partial: advertisement, directory, application queue
 ├── GuildAuthority.cs                  # GuildAuthority value, GuildActionResult, GuildRules
+├── GuildRosterDelta.cs                # Pure rules for roster deltas: RowChanged, Diff, Choose
+│                                      #   (none / delta / full), SameLadder, OfflineLocation
+├── GuildRecipientBaselines.cs         # What each local member's client holds: roster (guild +
+│                                      #   officer-note audience) and ladder (generation + rank)
 ├── GuildSystemRuntimeData.cs          # Pending invitations, invite/application cooldowns, membership
-│                                      #   removal guard, last guild-update fetch timestamp, ingress guard
+│                                      #   removal guard, last guild-update fetch timestamp, the
+│                                      #   processed-update record, ingress guard
 ├── GuildSystemMainThreadQueueData.cs  # Per-system main-thread action queue container
-├── GuildCharacterMappingData.cs       # Guild-to-membership tracking for online/local and known members
+├── GuildCharacterMappingData.cs       # Local online members per guild, and each guild's roster as last delivered
 └── README.md                          # System documentation
 ```
 
@@ -591,7 +637,7 @@ SystemMainThreadQueueData
 └── GuildSystemMainThreadQueueData : IGuildSystemMainThreadQueueData
 ```
 
-`GuildAuthority`, `GuildActionResult` and `GuildRules` are plain types with no base class; `GuildRules` is a static decision table over `GuildAuthority`.
+`GuildAuthority`, `GuildActionResult` and `GuildRules` are plain types with no base class; `GuildRules` is a static decision table over `GuildAuthority`. `GuildRosterDelta` is a pure static class and `GuildRecipientBaselines` a plain main-thread class, so the delta rules can be pinned by EditMode tests without a server.
 
 ## License
 

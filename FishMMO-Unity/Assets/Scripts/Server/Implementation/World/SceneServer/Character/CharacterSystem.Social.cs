@@ -150,6 +150,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 									Members = addBroadcasts.ToArray(),
 								}, true, Channel.Reliable);
 
+								/* Sent outside the guild update pump, which records what each client
+								 * holds and sends deltas against that record. This roster, and the
+								 * ladder below, may be older or newer than it, so the pump's next
+								 * delivery to this character goes out whole. */
+								if (Server.BehaviourRegistry.TryGet(out IGuildSystem<NetworkConnection> guildSystem))
+								{
+									guildSystem.ForgetGuildDeliveryBaselines(characterID);
+								}
+
 								if (!ladderRead)
 								{
 									return;

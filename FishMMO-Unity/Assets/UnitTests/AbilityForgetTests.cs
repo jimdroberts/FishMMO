@@ -108,8 +108,8 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(body.Contains("long version = long.MaxValue;"),
 				"the delete must quote the version ceiling: a forget is authoritative for a row resolved by identity, and quoting the in-memory version refused it whenever the row had been bumped by a late save");
 
-			LogAssert.IsTrue(body.Contains("ForgetAbilityAsync(characterID, abilityID, version, guardKey)"),
-				"and the delete must be handed the resolved identity rather than the request");
+			LogAssert.IsTrue(body.Contains("ForgetAbilityAsync(characterID, abilityID, version, claim, guardKey)"),
+				"and the delete must be handed the resolved identity rather than the request, with the session claim it was asked under (O27)");
 		}
 
 		[Test]
@@ -271,8 +271,10 @@ namespace FishMMO.UnitTests
 			}
 
 			string source = File.ReadAllText(path).Replace("\r\n", "\n");
+			/* The ungated and the ownership-gated delete (O27) share one body, which sits between the
+			 * two entry points and FetchAsync, so the slice reads all three. */
 			string body = MethodBody(source,
-				"public async Task<DatabaseResult> DeleteAbilityAsync(",
+				"public Task<DatabaseResult> DeleteAbilityAsync(",
 				"public async Task<DatabaseResult<IReadOnlyList<CharacterAbilityData>>> FetchAsync(");
 
 			LogAssert.IsTrue(body.Contains("DELETE FROM {TableName}"),

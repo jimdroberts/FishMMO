@@ -185,8 +185,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			/* A transition into a combat sub-state (orbit, flank, kite) is not a disengage.
 			 * Clearing the target here is what previously broke every variety roll: the sub-state
-			 * was handed a null target and bailed straight to idle. */
-			if (controller.PendingState != null && controller.PendingState.KeepsCombatTarget)
+			 * was handed a null target and bailed straight to idle. Nor is a boss phase handing the
+			 * fight to its own attacking state (AIController.HandOverFight): the new state carries
+			 * on against the same target, in the same ring slot, with the cast still going. */
+			if (controller.PendingState != null &&
+				(controller.PendingState.KeepsCombatTarget || controller.IsHandingOverFight))
 			{
 				return;
 			}
@@ -320,6 +323,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		protected virtual void OnCombatEnded(AIController controller)
 		{
 			ReleaseCombatSlot(controller);
+
+			/* The fight is over, so the grudges go with it. A table left behind was the half of the
+			 * stuck-NPC defect this side of the brain owned: the target walked out of the detection
+			 * radius, the NPC drifted off with its table still full, and when combat entry was an
+			 * empty-to-non-empty edge every later hit from range was recorded and ignored. Entry no
+			 * longer depends on the table, but a stale one still skews the next fight's target
+			 * pick, keeps the NPC out of shelter and holds its retreat streak open. Emptying it
+			 * also ends that streak — this is the end of a fight, which is what the streak's
+			 * reset is keyed to. */
+			controller.AggressionState?.Clear();
 
 			if (controller.Character is Pet)
 			{
@@ -479,10 +492,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		private static ICharacter PickGroupSharedTarget(AIController controller)
 		{
-			if (controller.Group == null || controller.Group.GroupTarget == null)
-				return null;
-
-			ICharacter groupTarget = controller.Group.GroupTarget.GetComponent<ICharacter>();
+			/* The pack's identity-checked focus, not a component lookup on a stored transform: a
+			 * pooled character's transform outlives it and is handed to the pool's next occupant,
+			 * who would have become the whole pack's focus. */
+			ICharacter groupTarget = controller.Group != null ? controller.Group.GroupTargetCharacter : null;
 			return AITargetSelection.IsValidTarget(groupTarget) ? groupTarget : null;
 		}
 
@@ -675,8 +688,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		{
 			return controller.PickBestAbility(
 				PreferredDistance > 0f ? PreferredDistance : float.MaxValue,
-				IsEnemyAbility);
+				IsEnemyAbilityFilter);
 		}
+
+		/// <summary>
+		/// <see cref="IsEnemyAbility"/> as a delegate, built once.
+		/// </summary>
+		/// <remarks>
+		/// Passing the method group straight to <see cref="AIController.PickBestAbility(float, System.Func{Ability, bool})"/>
+		/// allocated a new delegate on every pick: the compiler caches a static method group's
+		/// delegate only from C# 11, and this project compiles as C# 9.
+		/// </remarks>
+		protected static readonly System.Func<Ability, bool> IsEnemyAbilityFilter = IsEnemyAbility;
 
 		/// <summary>
 		/// True when an ability is something to aim at an enemy.

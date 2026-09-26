@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04fe331fd7b7497428e04153a130f31c, type: 3}
+  m_Name: HousingSystem
+  m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.HousingSystem
+  ownershipMode: 0
+  currencyTemplate: {fileID: 11400000, guid: 5f83904fcedd0864fbb6162f45fbeb9e, type: 2}
+  taxPerPeriod: 0
+  taxPeriodDays: 7
+  taxGraceDays: 14
+  taxSweepIntervalSeconds: 300
+  vaultBaseFee: 100
+  vaultFeePercentPerDay: 10
+  plotSyncIntervalSeconds: 10
+  accessSweepIntervalSeconds: 0.5
+  housingDebounceMilliseconds: 250
+  housingGlobalRateMilliseconds: 50

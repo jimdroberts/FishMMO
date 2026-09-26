@@ -58,8 +58,8 @@ All public methods acquire `lock(syncRoot)` before accessing any internal state.
 
 - Unity 6.3 LTS (IL2CPP scripting backend)
 - FishNet networking framework (`FishNet.Connection.NetworkConnection`)
-- FishMMO server core assemblies (`FishMMO.Server.Core.Account`, `FishMMO.Server.Core.Collections`)
-- `FishMMO-Auth.dll` shared library — provides the generic `AccountManager<T>` / `SrpAccountManager<T>` / `TokenAccountManager<T>` base classes, `AccountData`, `ConnectionEncryptionData`, `ServerSrpData`, the `AuthState` enum, and the `ArrivalOrderTracker<T>` collection (in `FishMMO.Auth.Core.Collections`).
+- FishMMO server core (`FishMMO.Server.Core.Collections`). The account interfaces are not in this project: they live in `FishMMO-ServerAuth.dll` (below)
+- The FishMMO-Auth libraries: `FishMMO-ServerAuth.dll` provides the generic `AccountManager<T>` / `SrpAccountManager<T>` / `TokenAccountManager<T>` base classes, `AccountData`, `ServerSrpData` and the `ArrivalOrderTracker<T>` collection (in `FishMMO.Auth.Core.Collections`); `FishMMO-AuthShared.dll` provides `ConnectionEncryptionData` and the `AuthState` enum.
 - `SecureRemotePassword` third-party library (2048-bit parameters, SHA-512)
 - `System.Security.Cryptography` for SHA-512 and `CryptographicOperations.ZeroMemory`
 - `CryptoHelper` (FishMMO shared) for X25519 ECDH + HKDF-SHA256 key derivation, AES-GCM, nonce construction
@@ -325,7 +325,9 @@ Values are explicitly numbered and must not be renumbered — sweep logic and gu
 ### Directory Tree
 
 ```
-# FishMMO-Auth (netstandard2.1 shared library — Assets/Dependencies/FishMMO-Auth.dll)
+# FishMMO-Auth: netstandard2.1 libraries auto-copied to Assets/Dependencies/. The tree merges two of them by folder:
+# everything here is in FishMMO-ServerAuth.dll except Core/Enums and ConnectionEncryptionData, which are in
+# FishMMO-AuthShared.dll. (The third, FishMMO-ClientAuth.dll, is the client's.)
 FishMMO-Auth/
 ├── Core/
 │   ├── Interfaces/
@@ -433,7 +435,7 @@ All public methods acquire `lock(syncRoot)`. The `TryAdvanceAuthState` callback 
 | `System.Security.Cryptography` | SHA-512 hash algorithm for SRP; `CryptographicOperations.ZeroMemory` for key cleanup |
 | `CryptoHelper` | X25519 ECDH + HKDF-SHA256 key derivation, AES-GCM, nonce construction, protocol versioning |
 | `AccessLevel` | Enum defining account permission tiers (Player, GameMaster, Admin, etc.) |
-| `ArrivalOrderTracker<T>` *(now in `FishMMO-Auth.dll` — `FishMMO.Auth.Core.Collections`)* | O(1) track/untrack with oldest-first iteration for TTL sweeps |
+| `ArrivalOrderTracker<T>` *(now in `FishMMO-ServerAuth.dll` — `FishMMO.Auth.Core.Collections`)* | O(1) track/untrack with oldest-first iteration for TTL sweeps |
 
 ### Integration Points
 

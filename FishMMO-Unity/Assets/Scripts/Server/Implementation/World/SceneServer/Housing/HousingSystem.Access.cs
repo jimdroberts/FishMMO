@@ -369,18 +369,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// A player standing in a scene that has plots, and where they were when the sweep looked.
+		/// </summary>
+		private struct Occupant
+		{
+			/// <summary>The character.</summary>
+			public IPlayerCharacter Player;
+
+			/// <summary>Their position when read; moved to the exit if they are put out.</summary>
+			public Vector3 Position;
+		}
+
+		/// <summary>
+		/// The occupants of the scene being enforced. Main thread only; empty between uses.
+		/// </summary>
+		/// <remarks>
+		/// Reused rather than allocated per scene per sweep, and cleared after each use so it holds
+		/// no character alive between sweeps. Nothing an eviction does can re-enter enforcement, so
+		/// one buffer serves both the sweep and the single-plot entry points.
+		/// </remarks>
+		private readonly List<Occupant> occupantBuffer = new List<Occupant>();
+
+		/// <summary>
 		/// Puts out anybody standing inside a plot they may not be in.
 		/// </summary>
 		/// <remarks>
-		/// Walks scenes, not plots and not players, because the player list is the expensive half.
-		/// Building it means enumerating every character on the server and filtering by scene, so it
-		/// is built once per scene and reused across that scene's foundations — doing it per
-		/// foundation would make a district of fifty plots fifty passes over the whole server's
-		/// characters, twice a second.
+		/// <para>Walks scenes, and reads each scene's occupants once per sweep: who is there, from
+		/// FishNet's own per-scene connection set, and where each of them is, read once and reused
+		/// for every plot in the scene. The sweep used to walk every character on the server for
+		/// every scene with plots, asking each which scene it was in, and then re-read every
+		/// occupant's position once per plot — on a busy server, tens of thousands of engine calls
+		/// a second to find, almost always, nobody out of place.</para>
 		///
-		/// <para>Scenes with nobody in them cost one pass and stop, and the plots inside a scene are
-		/// filtered on state first: an empty lot bars nobody, and most of a housing district is
-		/// unclaimed most of the time.</para>
+		/// <para>A scene whose plots are all empty lots is skipped before anybody in it is looked
+		/// at: an empty lot bars nobody, and most of a housing district is unclaimed most of the
+		/// time.</para>
 		/// </remarks>
 		private void TickAccessEnforcement(float deltaTime)
 		{
@@ -399,22 +422,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (int sceneHandle in resolvedScenes)
 			{
 				IReadOnlyList<PlotFoundation> foundations = PlotFoundation.Registry.ForScene(sceneHandle);
-				if (foundations.Count < 1)
+				PlotFoundation barring = FirstBarringFoundation(foundations);
+				if (barring == null)
 				{
 					continue;
 				}
 
-				List<IPlayerCharacter> players = PlayersInScene(sceneHandle);
-				if (players == null || players.Count < 1)
+				if (SnapshotOccupants(barring, sceneHandle, occupantBuffer))
 				{
-					continue;
+					for (int i = 0; i < foundations.Count; ++i)
+					{
+						EvictTrespassers(foundations[i], occupantBuffer);
+					}
 				}
+				occupantBuffer.Clear();
+			}
+		}
 
-				for (int i = 0; i < foundations.Count; ++i)
+		/// <summary>
+		/// The first plot in a scene that could bar anybody, or null when every one is an empty lot.
+		/// </summary>
+		private static PlotFoundation FirstBarringFoundation(IReadOnlyList<PlotFoundation> foundations)
+		{
+			for (int i = 0; i < foundations.Count; ++i)
+			{
+				PlotFoundation foundation = foundations[i];
+				if (foundation != null && foundation.PlotID > 0 && foundation.State != PlotState.Empty)
 				{
-					EvictTrespassers(foundations[i], players);
+					return foundation;
 				}
 			}
+			return null;
 		}
 
 		/// <summary>
@@ -432,20 +470,70 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			EvictTrespassers(foundation, PlayersInScene(foundation.gameObject.scene.handle));
+			if (SnapshotOccupants(foundation, foundation.gameObject.scene.handle, occupantBuffer))
+			{
+				EvictTrespassers(foundation, occupantBuffer);
+			}
+			occupantBuffer.Clear();
 		}
 
 		/// <summary>
-		/// Pushes everybody in <paramref name="players"/> who may not be in this plot back outside it.
+		/// Pushes everybody who may not be in any of these plots back outside, reading each scene's
+		/// occupants once however many of its plots are in the list.
+		/// </summary>
+		/// <remarks>
+		/// For a batch of changes arriving together — a cross-channel poll can bring dozens at once
+		/// — where the single-plot entry point would read the same scene's occupants once per plot.
+		/// </remarks>
+		private void EvictTrespassersFrom(List<PlotFoundation> foundations)
+		{
+			if (foundations == null || foundations.Count < 1)
+			{
+				return;
+			}
+
+			HashSet<int> doneScenes = null;
+			for (int i = 0; i < foundations.Count; ++i)
+			{
+				PlotFoundation first = foundations[i];
+				if (first == null)
+				{
+					continue;
+				}
+
+				int sceneHandle = first.gameObject.scene.handle;
+				if (!(doneScenes ??= new HashSet<int>()).Add(sceneHandle))
+				{
+					continue;
+				}
+
+				if (SnapshotOccupants(first, sceneHandle, occupantBuffer))
+				{
+					for (int j = i; j < foundations.Count; ++j)
+					{
+						PlotFoundation foundation = foundations[j];
+						if (foundation != null && foundation.gameObject.scene.handle == sceneHandle)
+						{
+							EvictTrespassers(foundation, occupantBuffer);
+						}
+					}
+				}
+				occupantBuffer.Clear();
+			}
+		}
+
+		/// <summary>
+		/// Pushes everybody in <paramref name="occupants"/> who may not be in this plot back outside it.
 		/// </summary>
 		/// <param name="foundation">The plot to clear.</param>
-		/// <param name="players">
-		/// The characters in the plot's own scene. Supplied by the caller so a sweep over many plots
-		/// builds it once.
+		/// <param name="occupants">
+		/// The plot's own scene's occupants, read once by the caller so a sweep over many plots does
+		/// not re-read them. An evicted occupant's position is updated to where they were put, so
+		/// the next plot tested sees where they are, not where they were.
 		/// </param>
-		private void EvictTrespassers(PlotFoundation foundation, List<IPlayerCharacter> players)
+		private void EvictTrespassers(PlotFoundation foundation, List<Occupant> occupants)
 		{
-			if (foundation == null || foundation.PlotID <= 0 || players == null || players.Count < 1)
+			if (foundation == null || foundation.PlotID <= 0 || occupants == null || occupants.Count < 1)
 			{
 				return;
 			}
@@ -459,16 +547,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			Bounds bounds = foundation.Bounds;
 
-			for (int i = 0; i < players.Count; ++i)
+			for (int i = 0; i < occupants.Count; ++i)
 			{
-				IPlayerCharacter player = players[i];
-				if (player == null)
-				{
-					continue;
-				}
-
-				Transform transform = player.Transform;
-				if (transform == null)
+				Occupant occupant = occupants[i];
+				if (occupant.Player == null)
 				{
 					continue;
 				}
@@ -476,34 +558,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* Geometry before permissions. Almost nobody is standing in any given plot, and the
 				 * containment test is two comparisons where resolving access reads a dictionary and
 				 * a guild controller. */
-				Vector3 position = transform.position;
-				if (!PlotEviction.IsInsideFootprint(bounds, position))
+				if (!PlotEviction.IsInsideFootprint(bounds, occupant.Position))
 				{
 					continue;
 				}
 
-				if (foundation.AllowsEntry(player.ID, GuildIDOf(player)))
+				if (foundation.AllowsEntry(occupant.Player.ID, GuildIDOf(occupant.Player)))
 				{
 					continue;
 				}
 
-				Evict(player, foundation, bounds, position);
+				if (Evict(occupant.Player, foundation, bounds, occupant.Position, out Vector3 exit))
+				{
+					occupant.Position = exit;
+					occupants[i] = occupant;
+				}
 			}
 		}
 
 		/// <summary>
 		/// Moves one player to the nearest point outside a plot.
 		/// </summary>
+		/// <returns>True when the player was moved, with <paramref name="exit"/> where to.</returns>
 		/// <remarks>
 		/// Velocity is zeroed along with the position. Carrying momentum through the move would walk
 		/// the player straight back over the boundary they were just put outside of, and the next
 		/// sweep would move them again — which is not an eviction, it is a player pinned to a wall.
 		/// </remarks>
-		private static void Evict(IPlayerCharacter player, PlotFoundation foundation, Bounds bounds, Vector3 position)
+		private static bool Evict(IPlayerCharacter player, PlotFoundation foundation, Bounds bounds, Vector3 position, out Vector3 exit)
 		{
+			exit = position;
+
 			if (player.Motor == null)
 			{
-				return;
+				return false;
 			}
 
 			/* Not while a teleport is already in flight. The teleport is about to decide where this
@@ -511,44 +599,61 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * them outside a plot in a scene they are no longer in. */
 			if (player.IsTeleporting)
 			{
-				return;
+				return false;
 			}
 
-			Vector3 exit = PlotEviction.NearestExit(bounds, position);
+			exit = PlotEviction.NearestExit(bounds, position);
 			if (exit == position)
 			{
-				return;
+				return false;
 			}
 
 			player.Motor.SetPositionAndRotationAndVelocity(exit, player.Transform.rotation, Vector3.zero);
 
 			Log.Debug("HousingSystem",
 				$"CharID={player.ID} was evicted from plot {foundation.PlotID} ('{foundation.PlotKey}', {foundation.State}).");
+			return true;
 		}
 
 		/// <summary>
-		/// The players currently in one loaded scene.
+		/// Reads who is standing in one loaded scene, and where. Main thread only.
 		/// </summary>
+		/// <param name="inScene">Any foundation in the scene, for the scene itself.</param>
+		/// <param name="sceneHandle">The scene's handle.</param>
+		/// <param name="into">Cleared, then filled.</param>
+		/// <returns>True when anybody is there.</returns>
 		/// <remarks>
-		/// Read from the character system's mapping container rather than tracked here. It already
-		/// knows who is where and keeps that current through connects, disconnects and scene
-		/// changes; a second copy of that bookkeeping would only be a second thing to get out of
-		/// step, and the one that was wrong would be the one deciding whether to move a player.
+		/// <para>Who is there comes from FishNet's connection set for the scene — the same live set
+		/// scene-wide broadcasts use — mapped to characters through the character system's mapping
+		/// container, which already keeps that current through connects, disconnects and scene
+		/// changes. A second copy of that bookkeeping here would only be a second thing to get out of
+		/// step, and the one that was wrong would be the one deciding whether to move a player.</para>
+		///
+		/// <para>Each candidate's own object is then asked which scene it is in. The connection set
+		/// says which scenes a client has loaded, which is not quite where its character stands
+		/// across a scene change, and a position is only meaningful against the plots of the scene
+		/// it was measured in. That is one question per player in a housing scene, where the sweep
+		/// used to ask it of every player on the server once per housing scene.</para>
 		/// </remarks>
-		private List<IPlayerCharacter> PlayersInScene(int sceneHandle)
+		private bool SnapshotOccupants(PlotFoundation inScene, int sceneHandle, List<Occupant> into)
 		{
-			if (Server?.DataContainerRegistry == null ||
+			into.Clear();
+
+			if (inScene == null ||
+				Server?.NetworkWrapper == null ||
+				Server.DataContainerRegistry == null ||
 				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out ICharacterMappingData<NetworkConnection> mappingData) ||
-				mappingData.CharactersByID == null)
+				mappingData.ConnectionCharacters == null ||
+				!Server.NetworkWrapper.TryGetSceneConnections(inScene.gameObject.scene, out HashSet<NetworkConnection> connections))
 			{
-				return null;
+				return false;
 			}
 
-			List<IPlayerCharacter> players = null;
-
-			foreach (IPlayerCharacter player in mappingData.CharactersByID.Values)
+			foreach (NetworkConnection conn in connections)
 			{
-				if (player == null)
+				if (conn == null ||
+					!mappingData.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player) ||
+					player == null)
 				{
 					continue;
 				}
@@ -559,10 +664,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				(players ??= new List<IPlayerCharacter>()).Add(player);
+				into.Add(new Occupant
+				{
+					Player = player,
+					Position = transform.position,
+				});
 			}
 
-			return players;
+			return into.Count > 0;
 		}
 
 		/// <summary>

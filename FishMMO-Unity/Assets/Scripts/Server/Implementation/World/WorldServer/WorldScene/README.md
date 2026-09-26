@@ -17,6 +17,7 @@
 - [Project Structure](#project-structure)
 - [License](#license)
 - [Scene-routing queue feedback](#scene-routing-queue-feedback)
+- [Keeping a place in line](#keeping-a-place-in-line)
 - [Routing safety nets](#routing-safety-nets)
 
 ## Overview
@@ -49,27 +50,31 @@ A runtime-data processing gate (`Interlocked.CompareExchange`) prevents overlapp
 - Authentication handoff via `WorldServerAuthenticator.OnClientAuthenticationResult` triggering the instance routing flow
 - Connection disconnect cleanup via `ServerManager.OnRemoteConnectionState` subscription removing connections from all queues
 - Per-account instance-lookup debounce (`ExpiringKeyTracker<string>`) preventing DB flood from rapid reconnect attempts
-- Waiting queue TTL purge sweeps removing stale connections that exceed `waitingQueueTtlSeconds`, kicking active stale waiters and silently cleaning inactive entries. The TTL measures the **total** wait: the arrival stamp survives re-queue cycles, and only a terminal outcome (routed, purged, disconnected) clears it
+- Waiting queue TTL purge sweeps removing stale connections that exceed `waitingQueueTtlSeconds`, kicking active stale waiters and silently cleaning inactive entries. An open-world wait is timed from the later of joining and the scene's last placement (`lastPlacementAtByScene`, rule `WorldSceneRoutingRules.QueueWaitExpired`), so the TTL fires only when the line has stalled: a queue that is moving never purges its tail. The arrival stamp survives re-queue cycles, and only a terminal outcome (routed, purged, disconnected) clears it
 - Scene-routing queue feedback: waiting clients receive a periodic `WorldSceneQueuePositionBroadcast` carrying their position, the size of the queue they are in, an estimated wait, and *why* they are waiting (`Capacity`, `SceneLoading`, `CombatLogoutBody`)
 - Defense-in-depth queue size cap (`MAX_WAITING_QUEUE_SIZE = 2500` per queue type) preventing unbounded memory growth
 - Write-through TTL cache for scene-instance query results (`AvailableSceneCache`, default 5 s) and scene-server addresses (`SceneServerAddressCache`, default 10 s) with failure-triggered invalidation
 - Cache-aware `FetchAvailableScenesAsync` and `FetchSceneServerAddressAsync` wrappers with bypass when TTL is set to 0
 - Bounded cache expiry sweeps (`SweepSceneCaches`: max 64 scan, 32 remove per cycle)
-- Batch DB integration eliminating N+1 query overhead: `FetchSelectedCharactersByAccountsAsync` for character data, `FetchSceneServersByIDsAsync` for cache-miss server addresses
+- Batch DB integration eliminating N+1 query overhead: `FetchSelectedCharactersByAccountsAsync` for character data, `FetchSceneServersByIDsAsync` for cache-miss server addresses, `ISceneService.FetchWithAgesAsync` for instance rows, and one `ICharacterService.UpdateSceneBatchAsync` per pass for every scene bind
+- Capacity-bounded open-world pass: only as many waiting connections as there are free slots are taken, oldest first in the order queue positions are reported (plus any combat-logout holds); the rest stay queued untouched (`WorldSceneRoutingRules.SelectForRouting`)
+- **A place in line survives a drop and a purge** — an account whose open-world wait ended without its say (the connection dropped, or the stalled-line purge sent it back) has its place held for `queuePlaceGraceSeconds` (60 s); rejoining the same scene's queue inside the window resumes it. A player who chose **Leave queue** sends `WorldSceneQueueLeaveBroadcast` first and gives the place up. See [Keeping a place in line](#keeping-a-place-in-line)
 - Two-pass open-world routing: Pass 1 assigns preferred handles via O(1) dictionary lookup; Pass 2 assigns fallback handles via capacity heap (O(log N) per connection)
 - Race guard on all `WorldSceneConnectBroadcast` dispatches: skips broadcast if connection was re-queued during async processing
-- Connection count aggregation combining DB scene character totals with waiting open-world and instance queue counts, with cached scene character count TTL
+- Connection count aggregation combining DB scene character totals (one `ISceneService.SumCharacterCountAsync` over Ready scenes) with waiting open-world and instance queue counts, with cached scene character count TTL
 - `CleanupAndEnqueueNewSceneIfNeededAsync` requesting new scene-load when connections remain waiting after routing
-- Scene-server stale entry cleanup: unreachable scene servers trigger `DeleteByHandleAsync` and instance flag clearing before world-scene fallback
-- Instance flag management: `ClearInstanceFlagAndFallbackAsync` clears `CharacterFlags.IsInInstance`, bumps version, persists updated record, and falls back to world scene
+- Scene-server stale entry cleanup: unreachable scene servers trigger one `DeleteManyAsync` for their instance rows and instance flag clearing before world-scene fallback
+- Instance flag management: `ReleaseFromInstanceAsync` clears `CharacterFlags.IsInInstance`, bumps version and persists the updated record; the pass then moves the connection to the open-world queue for the scene on the row it already read
 - Per-system main-thread queue isolation with configurable drain cap per frame (`maxMainThreadActionsPerFrame`)
 - `RunOnMainThreadAsync` returning `Task<bool>` with immediate false completion on enqueue failure, preventing async callers from hanging on unfulfilled `TaskCompletionSource`
 - Graceful shutdown: drains pending main-thread actions, clears all caches and trackers, unsubscribes events, and deletes world-scene DB rows for this world server with a 5-second timeout
 - Async worker backpressure via `TryEnqueueAsyncWork` (rejects when queue unavailable/full, releases processing gate on failure)
 - **De-duplicated scene requests** — a new instance is asked for through `ISceneService.EnqueueIfUnderOutstandingLimitAsync`, which counts outstanding Pending/Loading rows and inserts in a single statement. The routing pass runs every cycle for as long as anyone is waiting, so an unconditional enqueue produced one request every `WaitQueueRateSeconds` throughout a zone's load — ten stacked copies of one zone for a twenty-second cold start. The limit is derived from how many instances the waiting population could actually fill, capped at `MaxOutstandingSceneLoads`, so a genuine surge still gets parallel loads. The cost of getting it wrong is measured in minutes: an empty extra instance is not eligible for stale unload until `StaleSceneTimeout` (five minutes)
-- **Bounded instance-queue fan-out** — instance-queue connections are processed in batches of `InstanceRoutingBatchSize` rather than all at once, so one routing cycle cannot put thousands of concurrent database round trips in flight
+- **Batched instance routing** — instance-queue connections are routed in batches of `InstanceRoutingBatchSize` (`ProcessInstanceBatchAsync`): one main-thread hop to take the batch off the queue, one read each for characters, instances and scene servers, at most one bind write, and one main-thread action applying every outcome (`RoutingOutcome`). The decision per connection is the pure table `WorldSceneRoutingRules.DecideInstanceRoute`; instance ages come from the database clock
+- **One read per world login** — `WorldServerAuthenticator` reads the selected character and its staff lock together (`FetchSelectedWithLockAsync`), and only a character actually being sent to its instance gets a world bind
 - **Lock-aware routing** — scene servers whose `locked` flag is set are skipped by open-world routing (`IsSceneServerRoutable`). Instance routing deliberately ignores the lock: a character bound to a dungeon can only go to the one server hosting it, so refusing there would evict them from their instance rather than drain them
 - **Wait-clock hand-over** — a connection released from the instance queue to the open-world queue restarts its expiry clock, because the instance wait is bounded by the scene row's age (`InstanceReadyGraceSeconds`, 180s) and already exceeds the open-world TTL (45s)
+- **No host wall clock in any duration** — every wait this system times (queue TTL, reporting clock, residency watchdog, instance-lookup debounce, combat-logout grace, the scene-count and routing caches) is a `MonotonicClock` reading, so an NTP or operator step of the host clock cannot expire every waiting connection at once or hold every debounce shut. Anything compared with a database row is compared by the database: scene-server liveness is `SceneServerData.PulseAgeSeconds`, measured as the row is read, and the dead-host sweep hands `DeleteByStaleSceneServersAsync` an age rather than a cutoff instant
 
 ## Prerequisites
 
@@ -119,6 +124,7 @@ The asset is created via the Unity menu: **Assets → Create → FishMMO → Ser
 | `maxMainThreadActionsPerFrame` | `int` | `100` | ≥ 1 | Max world-scene actions drained from main-thread queue per frame |
 | `instanceLookupDebounceSeconds` | `float` | `3.0` | ≥ 0.1 | Minimum seconds between instance DB routing lookups for the same account |
 | `waitingQueueTtlSeconds` | `float` | `45.0` | ≥ 5.0 | Maximum seconds a connection may remain in waiting queues before being purged |
+| `queuePlaceGraceSeconds` | `float` | `60.0` | ≥ 0.0 | Seconds an account's open-world place is held after a drop or a purge, for a rejoin of the same scene's queue to resume it. 0 disables |
 | `waitingQueueSweepIntervalSeconds` | `float` | `5.0` | ≥ 1.0 | Seconds between stale waiting-queue purge sweeps |
 | `debounceCleanupIntervalSeconds` | `float` | `60.0` | ≥ 5.0 | Seconds between stale debounce-entry cleanup sweeps |
 | `debounceCleanupMaxScanPerSweep` | `int` | `256` | ≥ 1 | Max account debounce entries scanned per cleanup sweep |
@@ -161,7 +167,7 @@ Server.AccountManager.GetAccountNameByConnection(conn, out string accountName);
 TryBeginInstanceLookup(accountName);
 
 // 3. Enqueue async instance routing
-TryEnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn, skipDebounce: true));
+TryEnqueueAsyncWork(() => ProcessInstanceBatchAsync(new List<NetworkConnection>(1) { conn }, skipDebounce: true));
 ```
 
 ### Open-World Queue Processing
@@ -190,9 +196,10 @@ if (preferredHandle > 0 &&
     capacityByHandle.TryGetValue(preferredHandle, out int prefRemaining) &&
     prefRemaining > 0)
 {
-    // Route to preferred channel — no DB update needed
+    // Route to preferred channel. Binds are written for the whole pass in one
+    // UpdateSceneBatchAsync before any connect is sent.
     capacityByHandle[preferredHandle] = prefRemaining - 1;
-    BroadcastSceneConnect(conn, prefServer);
+    assignments.Add((conn, charData, preferredHandle, prefServer));
 }
 ```
 
@@ -202,12 +209,10 @@ When instance routing fails (stale instance, invalid flag), the system falls bac
 
 ```csharp
 // Clear instance flag and persist
-characterFlags.DisableBit(CharacterFlags.IsInInstance);
-var updatedChar = charData.WithFlagsVersionAndTimestamp(characterFlags, charData.Version + 1, DateTime.UtcNow);
-await charService.PersistAsync(updatedChar);
+await ReleaseFromInstanceAsync(charService, charData);
 
-// Re-queue into open-world waiting maps
-await FallbackToWorldSceneAsync(conn, accountName);
+// Move to the open-world waiting maps for the scene on the row already read
+outcome.MoveToOpenWorld(conn, charData);
 ```
 
 ## Operational Checks
@@ -218,8 +223,8 @@ await FallbackToWorldSceneAsync(conn, accountName);
 | Connection count | `WorldSceneMappingData.ConnectionCount` | Sum of DB scene characters + open-world waiting + instance waiting |
 | Queue processing active | `WorldSceneSystemRuntimeData.TryBeginProcessing()` returns `false` when busy | Gate prevents overlapping cycles |
 | Debounce active | Rapid same-account reconnects within `instanceLookupDebounceSeconds` | Second attempt is silently dropped |
-| TTL purge active | Connection in queue > its effective TTL | `WorldSceneQueuePositionBroadcast { QueuePosition = -1 }` sent, then the connection is closed with `Disconnect(false)` and the log shows "waiting queue TTL exceeded" |
-| Queue feedback flowing | Client waiting on a full or loading scene | `WorldSceneQueuePositionBroadcast` every `queuePositionUpdateRateSeconds` with a 1-based position; the client shows a wait dialog with a Close button |
+| TTL purge active | Connection in queue > its effective TTL | `WorldSceneQueuePositionBroadcast { QueuePosition = -1, Reason = <what it was waiting for> }` sent, then the connection is closed with `Disconnect(false)` and the log shows "waiting queue TTL exceeded"; the client's `UIWorldQueueDisplay` switches to its "wait ended" state with Try again / Return to login, and Try again inside `queuePlaceGraceSeconds` logs "resumed its account's place" |
+| Queue feedback flowing | Client waiting on a full or loading scene | `WorldSceneQueuePositionBroadcast` every `queuePositionUpdateRateSeconds` with a 1-based position; the client shows `UIWorldQueueDisplay` (position, queue size, estimate, elapsed wait, Leave queue) above the loading overlay |
 | Scene-load wait allowance | Client waiting while a scene instance loads | Not purged until `waitingQueueTtlSeconds × SceneLoadWaitTtlMultiplier` |
 | Combat-logout hold | Character with `IsCombatLogged` whose instance is unavailable | Held up to `CombatLogoutRoutingGraceSeconds`, reported to the client as `CombatLogoutBody`, then routed normally |
 | Queue cap enforced | Queue size reaches `MAX_WAITING_QUEUE_SIZE` | New connections kicked with "Waiting queue capacity exceeded" |
@@ -254,7 +259,7 @@ flowchart LR
 │              │         │                     │                      │
 │              │    Pass │    Fail → Kick       │                      │
 │              │         ▼                     │                      │
-│              │  ProcessInstanceConnectionAsync│                      │
+│              │  ProcessInstanceBatchAsync     │                      │
 │              └───────────────────────────────┘                      │
 └─────────────────────────────────────────────────────────────────────┘
                               │
@@ -263,8 +268,8 @@ flowchart LR
    ┌──────────────────┐           ┌───────────────────────┐
    │ IsInInstance=true │           │ IsInInstance=false     │
    │                  │           │                       │
-   │ Fetch instance   │           │ FallbackToWorldScene  │
-   │ scene from DB    │           │ Async                 │
+   │ Fetch instance   │           │ MoveToOpenWorld       │
+   │ scenes (batched) │           │ (no re-read)          │
    │       │          │           │     │                 │
    │  ┌────┴─────┐    │           │     ▼                 │
    │  ▼          ▼    │           │ AddToQueue (open-     │
@@ -293,16 +298,16 @@ flowchart LR
                                   │    ScenesAsync (cache) │
                                   │ 2. Resolve server     │
                                   │    addresses (batch)   │
-                                  │ 3. Snapshot & dequeue │
-                                  │    waiting conns      │
+                                  │ 3. Take oldest N      │
+                                  │    (N = free slots)   │
                                   │ 4. Batch fetch char   │
                                   │    data               │
                                   │ 5. Pass 1: preferred  │
                                   │    handle (O(1))      │
                                   │ 6. Pass 2: fallback   │
                                   │    heap (O(log N))    │
-                                  │ 7. Re-queue if no     │
-                                  │    capacity           │
+                                  │ 7. One batch bind,    │
+                                  │    then connects      │
                                   │ 8. Enqueue new scene  │
                                   │    if still waiting   │
                                   └───────────────────────┘
@@ -315,6 +320,8 @@ flowchart LR
 ```
 WorldScene/
 ├── WorldSceneSystem.cs                    # Queue orchestration, scene routing, DB coordination
+├── WorldSceneRoutingRules.cs              # Pure routing decisions: queue selection, bind need, instance route
+├── WorldQueuePlaceMemory.cs               # Places held for accounts whose wait ended without their say
 ├── WorldSceneMappingData.cs               # Runtime queue/state maps for open-world and instance routing
 ├── WorldSceneSystemRuntimeData.cs         # Runtime state (authenticator, timers, processing gate, caches)
 ├── WorldSceneSystemMainThreadQueueData.cs # Per-system main-thread action queue container
@@ -388,11 +395,11 @@ Mutable runtime state for queue processing, debounce, caching, and authenticator
 | `NextWaitingQueueSweep` | `float` | Countdown until stale waiting-queue purge sweep |
 | `NextDebounceCleanup` | `float` | Countdown until debounce cleanup sweep |
 | `InstanceLookupDebounce` | `ExpiringKeyTracker<string>` | Per-account debounce tracker preventing DB flood from rapid instance lookups |
-| `WaitingQueueEnteredUtcByClientId` | `Dictionary<int, DateTime>` | Timestamps tracking when each client entered a waiting queue (for TTL purge) |
+| `WaitingQueueEnteredAtByClientId` | `Dictionary<int, double>` | When each client entered a waiting queue, on `MonotonicClock` (for TTL purge) |
 | `AvailableSceneCache` | `TimedCache<string, IReadOnlyList<SceneData>>` | Write-through TTL cache of `FetchAvailableAsync` results keyed by scene name |
-| `SceneServerAddressCache` | `TimedCache<long, (string, ushort)>` | Write-through TTL cache of scene server addresses keyed by scene server ID |
+| `SceneServerAddressCache` | `TimedCache<long, ushort>` | Write-through TTL cache of scene server ports keyed by scene server ID (the address is always the game host) |
 | `CachedSceneCharacterCount` | `int` | Cached total character count across all scenes for connection count aggregation |
-| `CachedSceneCharacterCountUtc` | `DateTime` | UTC timestamp of the last `CachedSceneCharacterCount` update |
+| `CachedSceneCharacterCountAt` | `double` | `MonotonicClock` reading of the last `CachedSceneCharacterCount` update (negative infinity until the first) |
 | `LoginAuthenticator` | `WorldServerAuthenticator` | Reference to the world server authenticator for auth event subscription |
 | `NextWaitQueueUpdate` | `float` | Timer countdown until next wait-queue processing tick |
 
@@ -411,9 +418,9 @@ Provides `Enqueue(Action)` and `Drain(int)` methods for marshalling async worker
 | Integration | Purpose |
 |---|---|
 | `WorldServerAuthenticator` | Auth success trigger for scene routing |
-| `ISceneService` | Scene lookup, available instance fetch, enqueue new scene, delete by handle |
+| `ISceneService` | Available instance fetch, instance rows with database-measured ages (`FetchWithAgesAsync`), de-duplicated scene requests, one-statement deletes of dead instance rows (`DeleteManyAsync`) and of stale rows (`DeleteStaleUnreadyAsync`, `DeleteByStaleSceneServersAsync`), the scene population sum (`SumCharacterCountAsync`) |
 | `ISceneServerService` | Single and batch scene server address resolution |
-| `ICharacterService` | Single and batch character fetch, scene handle persistence, flag updates |
+| `ICharacterService` | Batch selected-character fetch, one batch scene bind per pass (`UpdateSceneBatchAsync`), instance-flag release, combat-logout clear |
 | `WorldServerSystemRuntimeData` | World server ID context for DB scene queries |
 | `WorldSceneDetailsCache` | Per-scene max client metadata |
 | `AsyncWorkerData` | Bounded background execution with enqueue backpressure |
@@ -441,9 +448,9 @@ queue — and sends each one its position.
 | `QueuePosition` | 1-based position while waiting; `0` = routed (a `WorldSceneConnectBroadcast` follows); `-1` = the wait was abandoned and the connection is closing |
 | `TotalQueued` | Size of the group this client is waiting in |
 | `EstimatedWaitSeconds` | Derived from `routedLastCycleByScene`; `0` means unknown, which the client renders as "Please wait…" rather than as no wait |
-| `Reason` | `Capacity`, `SceneLoading`, or `CombatLogoutBody` |
+| `Reason` | `Capacity`, `SceneLoading`, or `CombatLogoutBody`. On `-1`, what the connection was waiting for when its time ran out |
 
-**A healthy login never sees this dialog.** Every routed client passes through the queue — it
+**A healthy login never sees this panel.** Every routed client passes through the queue — it
 is enqueued on authentication and emptied by the next routing cycle — so a sweep landing in
 that gap would flash "Queue position: 1 of 1" over a login that was never really queued.
 Connections are ranked across the whole group but only *notified* once they have waited longer
@@ -453,13 +460,13 @@ position.
 
 Both routing paths go through `BroadcastSceneConnect`. The instance path used to hand-roll its
 own copy, which checked only the instance queue for the re-queue race, never sent the
-position-0 that dismisses the wait dialog, and never cleared the wait tracking. The shared
+position-0 that dismisses the wait panel, and never cleared the wait tracking. The shared
 helper checks both queues, because a connection can be put back on either and routing one that
 is waiting on the other sends it somewhere the later decision did not choose.
 
 Positions go out on the unreliable channel — they are re-sent every sweep, so a lost one is
 corrected by the next. `0` and `-1` are one-shot transitions with nothing behind them and go
-reliably; losing one strands the wait dialog on screen. For the same reason the TTL purge sends
+reliably; losing one strands the wait panel on screen. For the same reason the TTL purge sends
 `-1` and then calls `Disconnect(false)` rather than `Kick`, because `Kick` calls
 `Disconnect(true)`, which drops the transport immediately and discards the notice with it.
 
@@ -468,7 +475,9 @@ reliably; losing one strands the wait dialog on screen. For the same reason the 
 The three waits look identical to a player and mean very different things:
 
 - **`Capacity`** — every running instance of the target scene is full. Bounded by
-  `waitingQueueTtlSeconds`.
+  `waitingQueueTtlSeconds` without a placement in that scene: the line takes only as many as
+  there are free slots, oldest first, so while it moves the players behind are waiting their
+  turn, not stuck.
 - **`SceneLoading`** — a scene instance has been requested and is still loading on a scene
   server. Bounded by `waitingQueueTtlSeconds × SceneLoadWaitTtlMultiplier`, because a large
   world scene can take longer to load than the capacity TTL allows, and purging then bounces a
@@ -497,10 +506,11 @@ only by the combat-logout hold.
 
 ### Two clocks, because they answer different questions
 
-`WaitingQueueEnteredUtcByClientId` answers *should this wait be cut short*, and the
+`WaitingQueueEnteredAtByClientId` answers *should this wait be cut short*, and the
 combat-logout hold restarts it every cycle precisely so that it is not.
 `waitingSinceByClientId` answers *how long has this player been waiting*, and nothing resets
-it. Reporting and ranking both read the second.
+it. Reporting and ranking both read the second. Both are `MonotonicClock` readings: a stepped
+host clock would otherwise age every waiting connection at once.
 
 Using one clock for both is a trap worth naming, because it silently disables the feature for
 the case that needs it most: a combat-logout hold resets the clock on every routing cycle, so
@@ -508,6 +518,46 @@ the reporting delay is never satisfied and a player waiting up to
 `CombatLogoutRoutingGraceSeconds` for their own body is told nothing at all. Ranking is wrong
 for the same reason — a held connection keeps sorting to the back of its own queue while
 clients that arrived after it move ahead.
+
+## Keeping a place in line
+
+The open-world queue is first in, first out by when each connection began waiting, and that
+order used to belong to the connection. Anything that ended the connection ended the place: a
+link that dropped and reconnected four seconds later, or a player the stalled-line purge sent
+back, rejoined behind everyone who had arrived after them. On a full world, a flaky link meant
+never reaching the front.
+
+`WorldQueuePlaceMemory` holds the place for the **account** instead, for one scene, for
+`queuePlaceGraceSeconds` after the wait ended:
+
+| How the wait ended | Place |
+|---|---|
+| Connection dropped (`OnRemoteConnectionStopped`, or found inactive by a pass) | Held |
+| Purged by the stalled-line TTL (`-1` sent) | Held — "Try again" resumes it |
+| Player chose **Leave queue** (`WorldSceneQueueLeaveBroadcast`) | Given up |
+| Routed to a scene server | Nothing to hold; any held place is dropped |
+| Kicked for a routing failure (no selected character, no scene) | Not held |
+
+A rejoin is resumed in `MoveToOpenWorldQueueNow`, the one place a connection joins an
+open-world line, and only there. Only the **ordering** clock (`waitingSinceByClientId`) takes the
+held start. The **expiry** clock is reset as for any join, because the returning player is on a
+new visit to a line that may still be stalled, and timing it from the old start would purge them
+on the next sweep. A resumed place is spent; the same wait can be remembered again if it ends
+again, so a player can retry through several stalls without losing the place.
+
+**Why the leave has to be said.** From here a player closing the connection on purpose looks
+exactly like a drop. The client's Leave queue sends `WorldSceneQueueLeaveBroadcast` before
+`QuitToLogin`, whose disconnect waits for the outgoing bundle to flush. The handler takes the
+connection off both queues, forgets the account's place, and marks the connection as leaving
+until it is gone: a routing pass may be holding it off the queue maps at that moment, and
+without the mark it would be put back on a queue, or sent a scene server, in the half second
+the client spends closing. If the message is lost, the place is held for the window and then
+forgotten, which is the worst case.
+
+The account and scene of each open-world wait are recorded when it joins
+(`openWorldPlaceByClientId`) because they have to outlive the queue maps: a routing pass takes a
+connection off them while it works, and the account manager may have dropped a closed
+connection before this system hears of it. Every time involved is a `MonotonicClock` reading.
 
 ## Routing safety nets
 

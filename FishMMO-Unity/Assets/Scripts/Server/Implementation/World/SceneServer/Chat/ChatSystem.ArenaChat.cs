@@ -1,5 +1,6 @@
 using FishNet.Connection;
 using FishNet.Transporting;
+using System.Collections.Generic;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishMMO.Server.Core.World.SceneServer;
@@ -45,7 +46,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) ||
+				!Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData) ||
+				chatData.ConnectionBroadcastSet == null)
 			{
 				return false;
 			}
@@ -57,17 +60,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Text = msg.Text,
 			};
 
-			foreach (var kvp in mappingData.ConnectionCharacters)
+			/* Only the arena's own connections are considered, from FishNet's per-scene set.
+			 *
+			 * This walked every character on the server and asked each for its scene — a native
+			 * call per player per team line, a thousand of them on a full server to find the
+			 * handful in one match (hot-path audit L3). Everybody who can be on a team here is
+			 * connected to the arena scene; the set is read, never kept or changed, and the
+			 * recipients are copied out of it before anything is sent. */
+			if (!Server.NetworkWrapper.TryGetSceneConnections(sender.GameObject.scene, out HashSet<NetworkConnection> sceneConnections))
 			{
-				IPlayerCharacter member = kvp.Value;
-				if (member?.GameObject == null || member.Owner == null || !member.Owner.IsActive ||
-					member.GameObject.scene.handle != sceneHandle ||
-					ArenaTeamRegistry.GetTeam(sceneHandle, member.ID) != team)
+				return false;
+			}
+
+			HashSet<NetworkConnection> recipients = chatData.ConnectionBroadcastSet;
+			recipients.Clear();
+			try
+			{
+				foreach (NetworkConnection conn in sceneConnections)
 				{
-					continue;
+					if (conn == null ||
+						!conn.IsActive ||
+						!mappingData.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter member) ||
+						member == null ||
+						ArenaTeamRegistry.GetTeam(sceneHandle, member.ID) != team)
+					{
+						continue;
+					}
+					recipients.Add(conn);
 				}
 
-				Server.NetworkWrapper.Broadcast(member.Owner, relay, true, Channel.Reliable);
+				if (recipients.Count > 0)
+				{
+					Server.NetworkWrapper.Broadcast(recipients, relay, true, Channel.Reliable);
+				}
+			}
+			finally
+			{
+				recipients.Clear();
 			}
 
 			// Nothing to persist.

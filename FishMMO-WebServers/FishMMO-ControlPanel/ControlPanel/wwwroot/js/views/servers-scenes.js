@@ -98,7 +98,7 @@ export async function render(host, ctx) {
 						label: 'Scene',
 						cell: (s) => `
 							<div class="cell-primary">${ui.esc(s.sceneName)}</div>
-							<div class="cell-sub">handle ${ui.esc(s.sceneHandle)}${s.characterId ? ` · opened for character ${ui.esc(s.characterId)}` : ''}</div>`,
+							<div class="cell-sub">${handleLabel(ui, s)}${s.characterId ? ` · opened for character ${ui.esc(s.characterId)}` : ''}</div>`,
 					},
 					{ label: 'Status', cell: (s) => statusBadge(ui, s) },
 					{ label: 'Type', cell: (s) => ui.badge(typeLabel(s)) },
@@ -164,6 +164,22 @@ function statusBadge(ui, s) {
 	const known = STATUSES.find((x) => x.value === Number(s.status));
 	const label = s.statusName || known?.label || `status ${s.status}`;
 	return ui.statusBadge(readable(label), known?.tone ?? '', known?.pulse ?? false);
+}
+
+/* Only a Ready scene has a handle. While a scene server is loading a row, scene_handle holds
+ * that server's dequeue claim token (a large negative number with no meaning here), and a
+ * Pending row holds 0; the server sends null for both, and the page says what the row is doing
+ * instead. A Failed row never loaded, so it never had a handle. The status is checked as well as
+ * the null, so the page cannot print a token whatever it is sent. */
+function handleLabel(ui, s) {
+	const status = Number(s.status);
+	if (status === 2 && s.sceneHandle !== null && s.sceneHandle !== undefined) {
+		return `handle ${ui.esc(s.sceneHandle)}`;
+	}
+	if (status === 3) {
+		return 'no handle';
+	}
+	return 'loading';
 }
 
 function typeLabel(s) {

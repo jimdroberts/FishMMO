@@ -29,6 +29,125 @@ namespace FishMMO.Shared
 		PeriodicDamage = 2,
 		/// <summary>Health was restored by a periodic effect — a heal-over-time tick. See <see cref="PeriodicDamage"/>.</summary>
 		PeriodicHeal = 3,
+		/// <summary>
+		/// A hit was REFUSED because the target is evading: an NPC walking home after a leash
+		/// ended its fight (<c>INPCBrain.IsEvading</c>). <see cref="CombatEventBroadcast.Amount"/>
+		/// is zero and <see cref="CombatEventBroadcast.DamageTemplateID"/> names the refused hit's
+		/// type. See <see cref="CombatEventRules.IsRefusal"/>.
+		/// </summary>
+		/// <remarks>
+		/// Reported rather than silently dropped because the caster's client cannot know: the brain
+		/// exists only on the server, so the caster predicted the hit, drew its number, and — with
+		/// nothing coming back — watched that number grey out a second later as if the hit had
+		/// been lost. The report tells it why, at once, and lets it turn the number into the word.
+		/// </remarks>
+		Evade = 4,
+		/// <summary>
+		/// A hit was REFUSED because the target cannot be hurt at all
+		/// (<c>ICharacterDamageController.Immortal</c>): a training dummy, a quest giver, a character
+		/// mid-teleport. Amount and type as for <see cref="Evade"/>.
+		/// </summary>
+		Immune = 5,
+	}
+
+	/// <summary>
+	/// The rules each <see cref="CombatEventKind"/> carries through the pipeline: whether it moves
+	/// health, whether it carries a damage type, and who is told about it.
+	/// </summary>
+	/// <remarks>
+	/// One place rather than a kind test at each of the four stages (coalesce, route, apply,
+	/// draw), so a kind added later is classified once. Pure, so every rule is a truth table.
+	/// </remarks>
+	public static class CombatEventRules
+	{
+		/// <summary>
+		/// True for a report of a hit the target refused (<see cref="CombatEventKind.Evade"/>,
+		/// <see cref="CombatEventKind.Immune"/>). Such a report has no amount; it exists to settle
+		/// the attacker's prediction and tell them why nothing landed.
+		/// </summary>
+		/// <param name="kind">The kind to classify.</param>
+		/// <returns>True for a refusal.</returns>
+		public static bool IsRefusal(this CombatEventKind kind)
+		{
+			return kind == CombatEventKind.Evade || kind == CombatEventKind.Immune;
+		}
+
+		/// <summary>
+		/// True when a report of this kind changes the target's health, so an observer may move the
+		/// bar from it (<c>CharacterAttributeController.ApplyObservedHealthDelta</c>).
+		/// </summary>
+		/// <param name="kind">The kind to classify.</param>
+		/// <returns>False for a refusal: nothing landed.</returns>
+		public static bool MovesHealth(this CombatEventKind kind)
+		{
+			return !kind.IsRefusal();
+		}
+
+		/// <summary>
+		/// True when a report of this kind carries <see cref="CombatEventBroadcast.DamageTemplateID"/>.
+		/// </summary>
+		/// <remarks>
+		/// Damage of both kinds carries it for colouring. A refusal carries the type of the hit it
+		/// refused, because the type is part of the key the caster's pending prediction is paired
+		/// on — without it the refusal could only settle a typeless prediction. Heals carry none.
+		/// </remarks>
+		/// <param name="kind">The kind to classify.</param>
+		/// <returns>True when the damage type is meaningful for this kind.</returns>
+		public static bool CarriesDamageType(this CombatEventKind kind)
+		{
+			return kind == CombatEventKind.Damage ||
+				kind == CombatEventKind.PeriodicDamage ||
+				kind.IsRefusal();
+		}
+
+		/// <summary>
+		/// Whether observers other than the attacker's own connection are told about a report of
+		/// this kind.
+		/// </summary>
+		/// <remarks>
+		/// A landed number is news to everyone watching the target. A refusal is feedback about one
+		/// player's own action, and only that player has a prediction for it to settle, so it goes
+		/// to the attacker alone — a training dummy under twenty players does not show every one of
+		/// them everyone else's "Immune", and pays nothing on the wire for bystanders.
+		/// </remarks>
+		/// <param name="kind">The kind to classify.</param>
+		/// <returns>True when bystanders receive it.</returns>
+		public static bool ReachesBystanders(this CombatEventKind kind)
+		{
+			return !kind.IsRefusal();
+		}
+
+		/// <summary>How one observer of the target receives one report, if at all.</summary>
+		public enum Delivery : byte
+		{
+			/// <summary>Not sent to this observer.</summary>
+			None = 0,
+			/// <summary>Sent reliably: this observer owns the source and holds its predictions.</summary>
+			Reliable = 1,
+			/// <summary>Sent unreliably: a bystander's floating number.</summary>
+			Unreliable = 2,
+		}
+
+		/// <summary>
+		/// Routes one report to one observer of its target.
+		/// </summary>
+		/// <remarks>
+		/// Reliable to the connection that owns the SOURCE — for the caster, absence of a report is
+		/// the prediction system's only rejection signal, so a lost packet would grey out a landed
+		/// hit. Unreliable to every other observer for a kind that reaches bystanders, and nothing
+		/// at all for one that does not.
+		/// </remarks>
+		/// <param name="kind">What the report describes.</param>
+		/// <param name="observerOwnsSource">True when this observer is the connection that owns the source.</param>
+		/// <returns>How this observer receives the report.</returns>
+		public static Delivery ResolveDelivery(CombatEventKind kind, bool observerOwnsSource)
+		{
+			if (observerOwnsSource)
+			{
+				return Delivery.Reliable;
+			}
+			return kind.ReachesBystanders() ? Delivery.Unreliable : Delivery.None;
+		}
 	}
 
 	/// <summary>
@@ -48,6 +167,13 @@ namespace FishMMO.Shared
 	/// observers — one lost label is not worth a resend — and coalesced per target per tick, so a
 	/// burst of area hits on one creature costs one message rather than one per hit.
 	/// </para>
+	/// <para>
+	/// It also reports a hit the target REFUSED — <see cref="CombatEventKind.Evade"/> or
+	/// <see cref="CombatEventKind.Immune"/>, with a zero amount — to the attacker's connection
+	/// only (<see cref="CombatEventRules.ReachesBystanders"/>). The two kinds were added to the
+	/// existing byte, so the layout is unchanged; a client built before them reads the new values
+	/// as ordinary damage of zero.
+	/// </para>
 	/// </remarks>
 	[UseGlobalCustomSerializer]
 	public struct CombatEventBroadcast : IBroadcast
@@ -62,7 +188,10 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public int SourceObjectID;
 
-		/// <summary>The amount, after every modifier the server applies. Never negative.</summary>
+		/// <summary>
+		/// The amount, after every modifier the server applies. Never negative, and zero for a
+		/// refusal (<see cref="CombatEventRules.IsRefusal"/>).
+		/// </summary>
 		public int Amount;
 
 		/// <summary>What happened; a <see cref="CombatEventKind"/>.</summary>

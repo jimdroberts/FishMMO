@@ -328,14 +328,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private float nextMeterSweepTime;
 
 		/// <summary>
-		/// UTC time at which the next leadership audit sweep is due.
+		/// When the next leadership audit sweep is due, in <see cref="MonotonicClock"/> seconds.
 		/// </summary>
-		private DateTime nextLeadershipAuditUtc;
+		/// <remarks>
+		/// Every schedule, grace and TTL in this system is a local duration and runs on the
+		/// monotonic clock. The one wall-clock comparison left is the update pump's, whose mark and
+		/// processed records are the database's timestamps (see <see cref="UpdatePumpWatermark"/>).
+		/// </remarks>
+		private double nextLeadershipAuditAt;
 
 		/// <summary>
-		/// UTC time at which the next runtime cache prune is due.
+		/// When the next runtime cache prune is due, in <see cref="MonotonicClock"/> seconds.
 		/// </summary>
-		private DateTime nextCacheSweepUtc;
+		private double nextCacheSweepAt;
 
 		/// <summary>
 		/// Rotating position in the locally-tracked party list where the audit resumes.
@@ -362,7 +367,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// both of which run there. Keyed by party, so several members leaving together schedule
 		/// one look rather than one each.
 		/// </remarks>
-		private readonly Dictionary<long, DateTime> pendingLeadershipRechecks = new Dictionary<long, DateTime>();
+		private readonly Dictionary<long, double> pendingLeadershipRechecks = new Dictionary<long, double>();
 
 		/// <summary>Scratch list of party IDs whose re-check has come due.</summary>
 		private readonly List<long> dueLeadershipRechecks = new List<long>();
@@ -397,22 +402,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private readonly Dictionary<int, List<IPlayerCharacter>> vitalsSceneGroups = new Dictionary<int, List<IPlayerCharacter>>();
 
 		/// <summary>
-		/// Last observed-buff set sent for each character, as a content signature.
+		/// Which observed-buff set each vitals recipient was last sent for each member it sees.
 		/// </summary>
 		/// <remarks>
-		/// <para>
-		/// Keyed by character id and holding a signature rather than the array itself, because the
-		/// arrays are rebuilt from a shared scratch buffer every pump and retaining one would retain
-		/// a buffer that is about to be overwritten.
-		/// </para>
-		/// <para>
-		/// Cleared for a character when they leave the scene server (<see cref="OnCharacterLeave"/>
-		/// territory, alongside the combat meter), so a character who returns is sent their buffs
-		/// again rather than inheriting a signature from a previous session and having their first
-		/// payload silently omit the array.
-		/// </para>
+		/// Per RECIPIENT, holding signatures rather than arrays (the arrays are rebuilt from a shared
+		/// scratch buffer every pump). It used to be one signature per described member, which could
+		/// not say whether a particular recipient held the set — see
+		/// <see cref="ObservedBuffDeliveryLedger"/> for the defect that caused and the rule that
+		/// replaced it.
 		/// </remarks>
-		private readonly Dictionary<long, int> lastSentBuffSignature = new Dictionary<long, int>();
+		private readonly ObservedBuffDeliveryLedger observedBuffLedger = new ObservedBuffDeliveryLedger();
+
+		/// <summary>Scratch recipient set for one scene group's vitals multicast.</summary>
+		/// <remarks>Main-thread only; the multicast reads it and never keeps it.</remarks>
+		private readonly HashSet<NetworkConnection> vitalsRecipients = new HashSet<NetworkConnection>();
+
+		/// <summary>Character IDs of <see cref="vitalsRecipients"/>, for the buff ledger.</summary>
+		private readonly List<long> vitalsRecipientIDs = new List<long>();
+
+		/// <summary>Scratch recipient set for one party's roster multicast from the update pump.</summary>
+		private readonly HashSet<NetworkConnection> rosterRecipients = new HashSet<NetworkConnection>();
 
 		/// <summary>Spare member lists returned by <see cref="vitalsSceneGroups"/> between uses.</summary>
 		private readonly Stack<List<IPlayerCharacter>> vitalsGroupPool = new Stack<List<IPlayerCharacter>>();
@@ -422,6 +431,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>Scratch buff list used to re-base one member's observed buffs.</summary>
 		private readonly List<ObservedBuffEntry> vitalsBuffBuffer = new List<ObservedBuffEntry>();
+
+		/// <summary>
+		/// Each entry of <see cref="vitalsBuffBuffer"/>'s absolute expiry, in whole seconds, for the
+		/// buff signature. Parallel to it, index for index.
+		/// </summary>
+		private readonly List<long> vitalsBuffExpiryBuffer = new List<long>();
 
 		/// <summary>
 		/// Operation keys used by party ingress guards.
@@ -571,7 +586,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
 			ingressSweepMaxRemovals = Mathf.Max(1, ingressSweepMaxRemovals);
 			runtimeData.EndUpdatePump();
-			runtimeData.NextInvitationSweepUtc = DateTime.UtcNow;
+			runtimeData.NextInvitationSweepAt = MonotonicClock.NowSeconds;
 
 			/* Every field this ScriptableObject carries is reset here.
 			 *
@@ -652,6 +667,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			vitalsGroupPool.Clear();
 			vitalsEntryBuffer.Clear();
 			vitalsBuffBuffer.Clear();
+			vitalsBuffExpiryBuffer.Clear();
+			vitalsRecipients.Clear();
+			vitalsRecipientIDs.Clear();
+			rosterRecipients.Clear();
+			observedBuffLedger.Clear();
 
 			pendingLeadershipRechecks.Clear();
 			dueLeadershipRechecks.Clear();
@@ -660,8 +680,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			leadershipAuditCursor = 0;
 
 			nextMeterSweepTime = 0.0f;
-			nextLeadershipAuditUtc = DateTime.MinValue;
-			nextCacheSweepUtc = DateTime.MinValue;
+			nextLeadershipAuditAt = double.NegativeInfinity;
+			nextCacheSweepAt = double.NegativeInfinity;
 		}
 
 		/// <summary>
@@ -856,16 +876,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < runtimeData.NextInvitationSweepUtc)
+			double now = MonotonicClock.NowSeconds;
+			if (now < runtimeData.NextInvitationSweepAt)
 			{
 				return;
 			}
 
-			runtimeData.NextInvitationSweepUtc = nowUtc.AddSeconds(invitationSweepIntervalSeconds);
+			runtimeData.NextInvitationSweepAt = now + invitationSweepIntervalSeconds;
 
 			runtimeData.SweepExpiredInvitations(
-				nowUtc,
+				now,
 				TimeSpan.FromSeconds(invitationTtlSeconds),
 				invitationSweepMaxScan,
 				invitationSweepMaxRemove);
@@ -874,7 +894,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * same bounded sweep. Their TTL is the cooldown itself: past it the entry can no
 			 * longer refuse anything. */
 			runtimeData.SweepInviteCooldowns(
-				nowUtc,
+				now,
 				TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
 				invitationSweepMaxScan,
 				invitationSweepMaxRemove);
@@ -1010,23 +1030,58 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* The audience is every member of the group INCLUDING the one each row describes,
+			 * because ABSENCE is the signal: the client greys a member out by counting the pumps they
+			 * were missing from, so dropping the recipient's own row would read as "you went away".
+			 *
+			 * It is presence that is needed there, not values. The client ignores the three fractions
+			 * on its own row — UITKParty.RefreshLocalMemberVitals derives them exactly from the local
+			 * reconciled controller every tick, and a one-second quantised copy could only overwrite
+			 * that with a coarser value. They are still written: the entry's three fraction bytes are
+			 * unconditional in the wire format (PartyVitalsSerializer), and a presence-without-values
+			 * row would need a flag bit there that no other reader wants.
+			 *
+			 * One message for the whole group, serialised once. It used to be serialised again for
+			 * every member it went to. */
+			vitalsRecipients.Clear();
+			vitalsRecipientIDs.Clear();
+			for (int i = 0; i < members.Count; ++i)
+			{
+				NetworkConnection owner = members[i].Owner;
+				if (owner != null && owner.IsActive && vitalsRecipients.Add(owner))
+				{
+					vitalsRecipientIDs.Add(members[i].ID);
+				}
+			}
+
+			if (vitalsRecipients.Count < 1)
+			{
+				// Nobody in this group can receive anything, so nothing is built or recorded as sent.
+				return;
+			}
+
 			vitalsEntryBuffer.Clear();
 
 			for (int i = 0; i < members.Count; ++i)
 			{
 				IPlayerCharacter member = members[i];
 
-				ObservedBuffEntry[] buffs = BuildObservedBuffs(member, now);
+				ObservedBuffEntry[] buffs = BuildObservedBuffs(member, now, out int signature);
 
 				/* The buff array is the bulk of this payload and it rarely changes, so it is sent
-				 * only when the visible set actually differs from what this member last had sent.
+				 * only when somebody in the audience does not already hold the current set — see
+				 * ObservedBuffDeliveryLedger for why that is a question about each RECIPIENT.
 				 *
 				 * The rest of the entry still goes out every pump even when nothing moved. That is
 				 * deliberate: the client greys a member out by counting the pumps they were ABSENT
 				 * from (UITKParty.VitalsMisses), so dropping an unchanged member from the payload
 				 * would read as "they went away" rather than "nothing happened". Omitting just the
 				 * array keeps that signal intact while removing what actually costs bytes. */
-				bool buffsChanged = HasObservedBuffSetChanged(member.ID, buffs);
+				bool buffsChanged = observedBuffLedger.NeedsSend(vitalsRecipientIDs, member.ID, signature);
+				if (buffsChanged)
+				{
+					observedBuffLedger.MarkSent(vitalsRecipientIDs, member.ID, signature);
+				}
 
 				PartyMemberVitalsEntry entry = new PartyMemberVitalsEntry()
 				{
@@ -1061,64 +1116,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Members = vitalsEntryBuffer.ToArray(),
 			};
 
-			/* Sent to every member of the group INCLUDING the one it describes, because ABSENCE is
-			 * the signal: the client greys a member out by counting the pumps they were missing
-			 * from, so dropping the recipient's own row would read as "you went away".
-			 *
-			 * It is presence that is needed here, not values. The rationale this comment used to
-			 * give — one code path on the client rather than two that can drift — had not been true
-			 * since UITKParty.RefreshLocalMemberVitals was added: the panel derives its own three
-			 * fractions EXACTLY from the local reconciled controller every tick, precisely because
-			 * a one-second pump is far too slow for your own bar. The row's quantised copy of the
-			 * same fact could only overwrite an exact value with a coarser one until the next tick
-			 * redid the work, so the client now ignores the values on its own row. They are still
-			 * written: the entry's three fraction bytes are unconditional in the wire format
-			 * (PartyVitalsSerializer), and a presence-without-values row would need a flag bit
-			 * there that no other reader wants. */
-			for (int i = 0; i < members.Count; ++i)
-			{
-				Server.NetworkWrapper.Broadcast(members[i].Owner, broadcast, true, Channel.Reliable);
-			}
+			Server.NetworkWrapper.Broadcast(vitalsRecipients, broadcast, true, Channel.Reliable);
+
+			vitalsRecipients.Clear();
+			vitalsRecipientIDs.Clear();
 		}
 
 		/// <summary>
-		/// True when <paramref name="buffs"/> differs from the set last sent for this character,
-		/// recording the new set as sent.
+		/// Content signature of an observed-buff set, as compared by <see cref="ObservedBuffDeliveryLedger"/>.
 		/// </summary>
+		/// <param name="buffs">The entries about to be sent, in the order they will be sent.</param>
+		/// <param name="expirySeconds">Each entry's absolute expiry in whole seconds (<see cref="BuffExpirySecond"/>), index for index.</param>
+		/// <returns>The signature; 0 for no buffs at all, never 0 otherwise.</returns>
 		/// <remarks>
 		/// <para>
-		/// The signature deliberately ignores <see cref="ObservedBuffEntry.RemainingSeconds"/>'s
-		/// exact value and keeps only whole seconds. Remaining time falls continuously, so hashing
-		/// it at full precision would report a change on every single pump and the gate would never
-		/// close — while a viewer reading a duration off an icon cannot see finer than a second
-		/// anyway. Stacks and the template set are compared exactly, because those are the changes
-		/// a player is actually watching for.
+		/// <b>Template, stacks and absolute EXPIRY — not the time remaining.</b> Remaining time falls
+		/// continuously, so a signature over it changed on every pump and re-sent every timed buff to
+		/// every party member once a second. The expiry is fixed while a buff counts down and moves
+		/// only when the buff is refreshed, which is exactly when the client's countdown needs a new
+		/// starting point; between those, the party panel counts down on its own from the last array
+		/// it was sent (<c>UITKParty.OnPartyUpdateVitals</c> re-bases its clock only when an array
+		/// arrives).
 		/// </para>
 		/// <para>
 		/// Order-sensitive by construction: <c>BuildObservedBuffs</c> walks a
 		/// <c>SortedDictionary</c>, so an unchanged set always hashes identically.
 		/// </para>
 		/// </remarks>
-		/// <param name="characterID">Character the buffs belong to.</param>
-		/// <param name="buffs">The set about to be sent, or null when the character has none.</param>
-		/// <returns>True when the array must be included in this payload.</returns>
-		private bool HasObservedBuffSetChanged(long characterID, ObservedBuffEntry[] buffs)
+		internal static int ComputeObservedBuffSignature(IReadOnlyList<ObservedBuffEntry> buffs, IReadOnlyList<long> expirySeconds)
 		{
-			int signature = ComputeObservedBuffSignature(buffs);
-
-			if (lastSentBuffSignature.TryGetValue(characterID, out int previous) && previous == signature)
-			{
-				return false;
-			}
-
-			lastSentBuffSignature[characterID] = signature;
-			return true;
-		}
-
-		/// <summary>Content signature of an observed-buff set. See <see cref="HasObservedBuffSetChanged"/>.</summary>
-		internal static int ComputeObservedBuffSignature(ObservedBuffEntry[] buffs)
-		{
-			if (buffs == null || buffs.Length < 1)
+			if (buffs == null || buffs.Count < 1)
 			{
 				return 0;
 			}
@@ -1127,12 +1154,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				// 17/31 rather than a plain sum, so a stack moving between two buffs still differs.
 				int hash = 17;
-				hash = (hash * 31) + buffs.Length;
-				for (int i = 0; i < buffs.Length; ++i)
+				hash = (hash * 31) + buffs.Count;
+				for (int i = 0; i < buffs.Count; ++i)
 				{
+					long expiry = expirySeconds != null && i < expirySeconds.Count ? expirySeconds[i] : 0L;
 					hash = (hash * 31) + buffs[i].TemplateID;
 					hash = (hash * 31) + buffs[i].Stacks;
-					hash = (hash * 31) + Mathf.FloorToInt(buffs[i].RemainingSeconds);
+					hash = (hash * 31) + (int)(expiry ^ (expiry >> 32));
 				}
 				// Never collides with the "no buffs at all" signature above.
 				return hash == 0 ? 1 : hash;
@@ -1140,10 +1168,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// A buff's absolute expiry in whole seconds, for the buff signature.
+		/// </summary>
+		/// <param name="expiryTick">The buff's <c>ExpiryTick</c>.</param>
+		/// <param name="tickDelta">Seconds per tick; zero or less when not known.</param>
+		/// <returns>
+		/// -1 for a permanent buff; the expiry tick in whole seconds of the tick domain; or the tick
+		/// itself when the tick rate is not known, which is just as fixed while the buff counts down.
+		/// </returns>
+		/// <remarks>
+		/// Whole seconds so a refresh is noticed at the resolution a viewer reads a duration at. The
+		/// product is taken in double precision: a tick count times a float step loses whole seconds
+		/// once the server has been up for a few days.
+		/// </remarks>
+		internal static long BuffExpirySecond(uint expiryTick, double tickDelta)
+		{
+			if (expiryTick == FishNet.Managing.Timing.TimeManager.UNSET_TICK)
+			{
+				return -1L;
+			}
+
+			return tickDelta > 0.0 ? (long)Math.Floor(expiryTick * tickDelta) : expiryTick;
+		}
+
+		/// <summary>
 		/// Copies a member's server-filtered observed buffs, re-based to the current moment.
 		/// </summary>
 		/// <param name="member">The member whose buffs to read.</param>
 		/// <param name="now">Current unscaled time, in seconds.</param>
+		/// <param name="signature">The set's signature (<see cref="ComputeObservedBuffSignature"/>); 0 when it is empty.</param>
 		/// <returns>The member's visible buffs and debuffs, or null when it has none.</returns>
 		/// <remarks>
 		/// <para>
@@ -1166,8 +1219,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// bytes on the wire per member per second.
 		/// </para>
 		/// </remarks>
-		private ObservedBuffEntry[] BuildObservedBuffs(IPlayerCharacter member, float now)
+		private ObservedBuffEntry[] BuildObservedBuffs(IPlayerCharacter member, float now, out int signature)
 		{
+			signature = 0;
+
 			if (!member.TryGet(out IBuffController buffController))
 			{
 				return null;
@@ -1177,6 +1232,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (source == null || source.Count < 1)
 			{
 				return null;
+			}
+
+			// Unity objects: compared with == rather than ?. so a destroyed manager reads as missing.
+			double tickDelta = 0.0;
+			var networkManager = Server?.NetworkWrapper?.NetworkManager;
+			if (networkManager != null && networkManager.TimeManager != null)
+			{
+				tickDelta = networkManager.TimeManager.TickDelta;
 			}
 
 			/* Read straight off the buff container, at the server's current tick.
@@ -1189,6 +1252,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			uint currentTick = buffController.GetCurrentDomainTick();
 
 			vitalsBuffBuffer.Clear();
+			vitalsBuffExpiryBuffer.Clear();
 
 			foreach (Buff buff in source.Values)
 			{
@@ -1213,6 +1277,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					RemainingSeconds = remaining,
 					TotalSeconds = template.Duration,
 				});
+				vitalsBuffExpiryBuffer.Add(BuffExpirySecond(buff.ExpiryTick, tickDelta));
 
 				/* Bounded. See maxVitalsBuffsPerMember: this list has no natural size limit and
 				 * this payload is sent party-size times per party per second. Truncated from the
@@ -1225,6 +1290,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
+			signature = ComputeObservedBuffSignature(vitalsBuffBuffer, vitalsBuffExpiryBuffer);
 			return vitalsBuffBuffer.Count > 0 ? vitalsBuffBuffer.ToArray() : null;
 		}
 
@@ -1289,38 +1355,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void SweepPartyRuntimeCaches()
 		{
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < nextCacheSweepUtc)
+			double now = MonotonicClock.NowSeconds;
+			if (now < nextCacheSweepAt)
 			{
 				return;
 			}
-			nextCacheSweepUtc = nowUtc.AddSeconds(leadershipAuditIntervalSeconds);
+			nextCacheSweepAt = now + leadershipAuditIntervalSeconds;
 
 			if (!Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData sweepData))
 			{
 				return;
 			}
 
-			sweepData.SweepLeaderAbsences(nowUtc, TimeSpan.FromSeconds(leadershipAbsenceGraceSeconds * 4.0));
+			sweepData.SweepLeaderAbsences(now, TimeSpan.FromSeconds(leadershipAbsenceGraceSeconds * 4.0));
 
 			/* A processed-update record only has to outlive the window in which its update can
-			 * still be re-fetched, which is the skew allowance. Several times that is generous,
-			 * and past it the record is only holding memory for a party that has stopped
-			 * changing. */
-			sweepData.SweepProcessedPartyUpdates(nowUtc, PartyUpdateRetryHorizon);
+			 * still be re-fetched; past that it is only holding memory for a party that has
+			 * stopped changing. See UpdatePumpWatermark.ProcessedRecordLifetime for how long that
+			 * window is. The records are the update rows' database timestamps, so they are aged on
+			 * the database's clock as the pump last read it; until a fetch has read it, nothing is
+			 * swept. */
+			if (partyDatabaseClock.TryNow(out DateTime databaseNowUtc))
+			{
+				sweepData.SweepProcessedPartyUpdates(databaseNowUtc, UpdatePumpWatermark.ProcessedRecordLifetime(partyUpdateClockSkewAllowanceSeconds));
+			}
 		}
 
 		/// <summary>
-		/// How long a party update stays worth re-reading, and how long its processed record is kept.
+		/// How long a party update stays worth re-reading.
 		/// </summary>
 		/// <remarks>
-		/// One value for both on purpose. The pump holds its watermark back for an update whose
-		/// roster it could not read (see <see cref="FetchAndProcessPartyUpdatesAsync"/>), and every
-		/// update behind that mark is fetched again each tick and skipped only because its
-		/// processed record says it was handled. Holding the mark back past the records' lifetime
-		/// would turn that skip into a full re-read and re-broadcast of every such party, every tick.
+		/// The pump holds its watermark back for an update whose roster it could not read (see
+		/// <see cref="FetchAndProcessPartyUpdatesAsync"/>), and every update behind that mark is
+		/// fetched again each tick and skipped only because its processed record says it was
+		/// handled — so the records are kept for longer than this; see
+		/// <see cref="UpdatePumpWatermark.ProcessedRecordLifetime"/>.
 		/// </remarks>
-		private TimeSpan PartyUpdateRetryHorizon => TimeSpan.FromSeconds(Mathf.Max(60.0f, partyUpdateClockSkewAllowanceSeconds * 10.0f));
+		/// <summary>The database's clock as the update pump last read it.</summary>
+		private readonly UpdatePumpWatermark.DatabaseClock partyDatabaseClock = new UpdatePumpWatermark.DatabaseClock();
+
+		private TimeSpan PartyUpdateRetryHorizon => UpdatePumpWatermark.RetryHorizon(partyUpdateClockSkewAllowanceSeconds);
 
 		/// <summary>
 		/// Re-sends the change announcements the database refused, off the main thread.
@@ -1438,14 +1512,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void ScheduleLeadershipRecheck(long partyID)
 		{
-			ScheduleLeadershipRecheckAt(partyID, DateTime.UtcNow.AddSeconds(leadershipRecheckDelaySeconds));
+			ScheduleLeadershipRecheckAt(partyID, MonotonicClock.NowSeconds + leadershipRecheckDelaySeconds);
 		}
 
 		/// <summary>
 		/// Queues one party for a leadership re-check at a specific time.
 		/// </summary>
 		/// <param name="partyID">The party to look at again.</param>
-		/// <param name="dueUtc">When to look.</param>
+		/// <param name="due">When to look, in <see cref="MonotonicClock"/> seconds.</param>
 		/// <remarks>
 		/// Used by the absence grace to arrange the second sighting that confirms a leader has
 		/// really gone. Without it the first sighting would start a clock nothing ever came back
@@ -1455,20 +1529,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// departures cannot pull a confirmation forward to before its grace has elapsed.
 		/// </para>
 		/// </remarks>
-		private void ScheduleLeadershipRecheckAt(long partyID, DateTime dueUtc)
+		private void ScheduleLeadershipRecheckAt(long partyID, double due)
 		{
 			if (partyID < 1 || !transferLeadershipOnDisconnect)
 			{
 				return;
 			}
 
-			if (pendingLeadershipRechecks.TryGetValue(partyID, out DateTime existingUtc) &&
-				existingUtc > dueUtc)
+			if (pendingLeadershipRechecks.TryGetValue(partyID, out double existing) &&
+				existing > due)
 			{
 				return;
 			}
 
-			pendingLeadershipRechecks[partyID] = dueUtc;
+			pendingLeadershipRechecks[partyID] = due;
 		}
 
 		/// <summary>
@@ -1476,15 +1550,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="partyID">The party being examined.</param>
 		/// <param name="leaderCharacterID">The member holding the rank.</param>
-		/// <param name="dueUtc">When the grace elapses, when this returns false.</param>
+		/// <param name="due">When the grace elapses, in <see cref="MonotonicClock"/> seconds, when this returns false.</param>
 		/// <returns>True when the absence has been confirmed.</returns>
-		private bool TryConfirmLeaderAbsent(long partyID, long leaderCharacterID, out DateTime dueUtc)
+		private bool TryConfirmLeaderAbsent(long partyID, long leaderCharacterID, out double due)
 		{
-			dueUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
+			due = now;
 
 			return Server?.DataContainerRegistry.TryGet(out IPartySystemRuntimeData runtimeData) == true &&
-				   runtimeData.TryConfirmLeaderAbsent(partyID, leaderCharacterID, DateTime.UtcNow,
-													  TimeSpan.FromSeconds(leadershipAbsenceGraceSeconds), out dueUtc);
+				   runtimeData.TryConfirmLeaderAbsent(partyID, leaderCharacterID, now,
+													  TimeSpan.FromSeconds(leadershipAbsenceGraceSeconds), out due);
 		}
 
 		/// <summary>
@@ -1509,12 +1584,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			dueLeadershipRechecks.Clear();
-			foreach (KeyValuePair<long, DateTime> pending in pendingLeadershipRechecks)
+			foreach (KeyValuePair<long, double> pending in pendingLeadershipRechecks)
 			{
-				if (nowUtc < pending.Value)
+				if (now < pending.Value)
 				{
 					continue;
 				}
@@ -1548,10 +1623,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * the assumption the work would run; a full worker queue is a busy moment, not a
 				 * reason for a party to stop being examined until the round-robin audit reaches
 				 * it. Re-scheduled a little out so a queue that stays full does not spin. */
-				DateTime retryUtc = nowUtc.AddSeconds(leadershipRecheckDelaySeconds);
+				double retryAt = now + leadershipRecheckDelaySeconds;
 				for (int i = 0; i < partyIDs.Count; ++i)
 				{
-					ScheduleLeadershipRecheckAt(partyIDs[i], retryUtc);
+					ScheduleLeadershipRecheckAt(partyIDs[i], retryAt);
 				}
 			}
 		}
@@ -1584,12 +1659,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
-			if (nowUtc < nextLeadershipAuditUtc)
+			double now = MonotonicClock.NowSeconds;
+			if (now < nextLeadershipAuditAt)
 			{
 				return;
 			}
-			nextLeadershipAuditUtc = nowUtc.AddSeconds(leadershipAuditIntervalSeconds);
+			nextLeadershipAuditAt = now + leadershipAuditIntervalSeconds;
 
 			/* Observations belonging to parties nothing looks at any more. One that is going to
 			 * resolve does so within a grace period, because whatever started it also scheduled
@@ -1644,23 +1719,74 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				for (int i = 0; i < partyIDs.Count; ++i)
+				/* Two queries for the whole sweep — every roster, then who in them is online —
+				 * rather than two per party. A read that fails leaves the sweep for next time, as a
+				 * failed per-party read always did: this is the backstop, and it comes round again. */
+				long[] ids = partyIDs.ToArray();
+				DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterPartyData>>> rostersResult = await charPartyService.FetchManyAsync(ids);
+				if (!rostersResult.IsSuccess || rostersResult.Data == null)
 				{
-					long partyID = partyIDs[i];
+					return;
+				}
 
-					DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(partyID);
-					if (!membersResult.IsSuccess || membersResult.Data == null || membersResult.Data.Count < 1)
+				IReadOnlyDictionary<long, IReadOnlyList<long>> online = await FetchOnlineMembersForLeadershipAsync(charPartyService, ids, caller);
+
+				foreach (KeyValuePair<long, IReadOnlyList<CharacterPartyData>> roster in rostersResult.Data)
+				{
+					if (roster.Value == null || roster.Value.Count < 1)
 					{
 						continue;
 					}
 
-					await RepairPartyLeadershipAsync(charPartyService, partyID, membersResult.Data, caller);
+					await RepairPartyLeadershipAsync(charPartyService, roster.Key, roster.Value, OnlineMembersOf(online, roster.Key), caller);
 				}
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("PartySystem", $"Error auditing party leadership: {ex}");
 			}
+		}
+
+		/// <summary>
+		/// Reads, in one query, which members of several parties hold a live session — the evidence
+		/// the absent-leader repair decides on.
+		/// </summary>
+		/// <param name="charPartyService">Membership service.</param>
+		/// <param name="partyIDs">The parties about to be settled.</param>
+		/// <param name="caller">Name used in the log line.</param>
+		/// <returns>
+		/// The online members per party; null when the repair is switched off, or when the read
+		/// failed — which the repair answers exactly as it answers "could not tell": nothing moves.
+		/// </returns>
+		/// <remarks>
+		/// Read before the parties' mutation claims are taken rather than under each one, which is
+		/// what lets one query serve a whole pass. The difference is milliseconds against a
+		/// leadershipAbsenceGraceSeconds confirmation that needs two sightings, and every rank write
+		/// the repair makes is version-gated against the roster it read.
+		/// </remarks>
+		private async Task<IReadOnlyDictionary<long, IReadOnlyList<long>>> FetchOnlineMembersForLeadershipAsync(ICharacterPartyService charPartyService, long[] partyIDs, string caller)
+		{
+			if (!transferLeadershipOnDisconnect || charPartyService == null || partyIDs == null || partyIDs.Length < 1)
+			{
+				return null;
+			}
+
+			DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<long>>> result = await charPartyService.FetchOnlineMemberIdsAsync(partyIDs);
+			if (!result.IsSuccess || result.Data == null)
+			{
+				await Log.Warning("PartySystem", $"{caller} could not read who is online in {partyIDs.Length} part(ies); no absent leader is moved this pass: [{result.ErrorCode}] {result.ErrorMessage}");
+				return null;
+			}
+
+			return result.Data;
+		}
+
+		/// <summary>
+		/// One party's online members from a bulk read, or null when the read did not happen.
+		/// </summary>
+		private static IReadOnlyList<long> OnlineMembersOf(IReadOnlyDictionary<long, IReadOnlyList<long>> online, long partyID)
+		{
+			return online != null && online.TryGetValue(partyID, out IReadOnlyList<long> members) ? members : null;
 		}
 
 		/// <summary>
@@ -1704,13 +1830,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * skip one. A duplicate costs one redundant roster broadcast; a skip costs a
 				 * party that disagrees with itself until something else happens to it.
 				 *
-				 * Held back further by the skew allowance, because the rows are timestamped by the
-				 * database's clock and this mark is stamped by this server's — two different
-				 * clocks. See partyUpdateClockSkewAllowanceSeconds. */
-				DateTime fetchStartedUtc = DateTime.UtcNow.AddSeconds(-partyUpdateClockSkewAllowanceSeconds);
-
-				// Async DB fetch
-				DatabaseResult<List<PartyUpdateData>> fetchResult = await partyUpdateService.FetchAsync(partyIds, lastFetch);
+				 * The mark is the database's own clock, read by the fetch before the rows, so no host
+				 * clock is ever compared with the rows' stamps (a host running ahead used to skip
+				 * updates). It is still held back by partyUpdateClockSkewAllowanceSeconds, which is now
+				 * a commit window: a row stamped at its transaction's start can commit after a later
+				 * read began. */
+				DatabaseResult<UpdatePumpRead<PartyUpdateData>> fetchResult = await partyUpdateService.FetchAsync(partyIds, lastFetch);
 
 				/* A failed fetch leaves the watermark where it was, so nothing is skipped — the next
 				 * tick asks again. Logged because this pump is the only way a change made on another
@@ -1721,110 +1846,148 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (fetchResult.Data == null || fetchResult.Data.Count < 1)
+				partyDatabaseClock.Observe(fetchResult.Data.ReadStartedUtc);
+				DateTime fetchStartedUtc = UpdatePumpWatermark.FetchStarted(fetchResult.Data.ReadStartedUtc, partyUpdateClockSkewAllowanceSeconds);
+
+				if (fetchResult.Data.Updates == null || fetchResult.Data.Updates.Count < 1)
 				{
 					return;
 				}
 
-				List<PartyUpdateData> updates = fetchResult.Data;
-
-				// For each unique party that was updated, fetch the current members
-				HashSet<long> updatedParties = new HashSet<long>();
-				Dictionary<long, IReadOnlyList<CharacterPartyData>> partyMembersMap = new Dictionary<long, IReadOnlyList<CharacterPartyData>>();
-				Dictionary<long, DateTime> processedUpdateStamps = new Dictionary<long, DateTime>();
+				List<PartyUpdateData> updates = fetchResult.Data.Updates;
 
 				Server.DataContainerRegistry.TryGet(out IPartySystemRuntimeData dedupeData);
 
-				/* Where the watermark may move to: fetchStartedUtc, unless a roster read below fails.
+				/* The newest not-yet-processed update per party.
 				 *
-				 * A failed read leaves its update unprocessed so a later tick retries it — but that
-				 * tick only sees the update while it is still at or after the watermark, and the
-				 * watermark was moving to fetchStartedUtc regardless. That left the retry a window
-				 * exactly the skew allowance wide: a roster read failing for longer than that lost
-				 * the update for good, and the change it carried never reached this server's members
-				 * until something else changed the party. The mark is held at the oldest update
-				 * still owed a read instead — bounded by PartyUpdateRetryHorizon, past which the
-				 * processed records that keep the re-reads cheap have been swept. */
-				DateTime watermarkUtc = fetchStartedUtc;
-				DateTime retryHorizonUtc = fetchStartedUtc - PartyUpdateRetryHorizon;
-
+				 * Already-handled updates are skipped. The watermark trails real time by the skew
+				 * allowance, so an update stays in the fetch window for several pumps after it was
+				 * written — five, at the defaults. Without this, each of those would re-read the
+				 * roster, re-ask who is online and re-broadcast the party to everybody in it, all to
+				 * reach the conclusion the first pass already reached. Skipping them is what lets the
+				 * allowance be sized for the worst skew worth tolerating instead of being traded off
+				 * against how much work the pump does. */
+				Dictionary<long, DateTime> pending = new Dictionary<long, DateTime>();
 				foreach (PartyUpdateData update in updates)
 				{
-					if (updatedParties.Contains(update.PartyID))
-					{
-						continue;
-					}
-					updatedParties.Add(update.PartyID);
-
-					/* Already handled on an earlier tick.
-					 *
-					 * The watermark trails real time by the skew allowance, so an update stays in
-					 * the fetch window for several pumps after it was written — five, at the
-					 * defaults. Without this, each of those would re-read the roster, re-ask who is
-					 * online and re-broadcast the party to everybody in it, all to reach the
-					 * conclusion the first pass already reached. Skipping them is what lets the
-					 * allowance be sized for the worst skew worth tolerating instead of being
-					 * traded off against how much work the pump does. */
 					if (dedupeData != null && dedupeData.HasProcessedPartyUpdate(update.PartyID, update.LastUpdate))
 					{
 						continue;
 					}
 
+					if (!pending.TryGetValue(update.PartyID, out DateTime known) || update.LastUpdate > known)
+					{
+						pending[update.PartyID] = update.LastUpdate;
+					}
+				}
 
-					DatabaseResult<IReadOnlyList<CharacterPartyData>> membersResult = await charPartyService.FetchManyAsync(update.PartyID);
-					if (membersResult.IsSuccess && membersResult.Data != null)
+				/* Where the watermark may move to: fetchStartedUtc, unless a roster read fails — see
+				 * UpdatePumpWatermark. A failed read leaves its update unprocessed so a later tick
+				 * retries it, and the mark is held at the oldest update still owed a read so that
+				 * tick can still see it — bounded by PartyUpdateRetryHorizon, past which the
+				 * processed records that keep the re-reads cheap have been swept. */
+				DateTime watermarkUtc = fetchStartedUtc;
+				DateTime retryHorizonUtc = fetchStartedUtc - PartyUpdateRetryHorizon;
+
+				Dictionary<long, IReadOnlyList<CharacterPartyData>> partyMembersMap = new Dictionary<long, IReadOnlyList<CharacterPartyData>>(pending.Count);
+				Dictionary<long, DateTime> processedUpdateStamps = new Dictionary<long, DateTime>(pending.Count);
+
+				if (pending.Count > 0)
+				{
+					long[] pendingIDs = new long[pending.Count];
+					pending.Keys.CopyTo(pendingIDs, 0);
+
+					/* One roster query for every changed party, where there used to be one per party
+					 * — and one "who is online" query for the leadership repair below, where there
+					 * used to be one per party as well. A login wave that touched two hundred parties
+					 * in a second cost four hundred serial round trips, and the in-flight guard held
+					 * every later pump behind them. A bulk read has no per-party failure: it fails
+					 * because the database did, so a failed one holds every party in the pass. */
+					DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterPartyData>>> rostersResult = await charPartyService.FetchManyAsync(pendingIDs);
+					IReadOnlyDictionary<long, IReadOnlyList<CharacterPartyData>> rosters = null;
+					if (rostersResult.IsSuccess && rostersResult.Data != null)
+					{
+						rosters = rostersResult.Data;
+					}
+					else
+					{
+						await Log.Warning("PartySystem", $"Party update pump could not read the rosters of {pendingIDs.Length} part(ies); each is read again next tick within {PartyUpdateRetryHorizon.TotalSeconds:0}s: [{rostersResult.ErrorCode}] {rostersResult.ErrorMessage}");
+					}
+
+					foreach (KeyValuePair<long, DateTime> entry in pending)
+					{
+						IReadOnlyList<CharacterPartyData> roster = null;
+						bool read = rosters != null && rosters.TryGetValue(entry.Key, out roster) && roster != null;
+
+						UpdatePumpWatermark.Outcome outcome = UpdatePumpWatermark.Classify(read, entry.Value, retryHorizonUtc);
+						watermarkUtc = UpdatePumpWatermark.Hold(watermarkUtc, outcome, entry.Value);
+
+						switch (outcome)
+						{
+							case UpdatePumpWatermark.Outcome.Processed:
+								partyMembersMap[entry.Key] = roster;
+								/* Stamped beside the roster that came back, not where the update was
+								 * read: an update whose roster read failed stays unprocessed and is
+								 * picked up on a later tick, instead of being marked done for work
+								 * that never happened. */
+								processedUpdateStamps[entry.Key] = entry.Value;
+								break;
+							case UpdatePumpWatermark.Outcome.GiveUp:
+								await Log.Error("PartySystem", $"Party update pump has been unable to read the roster of party {entry.Key} for longer than {PartyUpdateRetryHorizon.TotalSeconds:0}s; giving up on the update of {entry.Value:O}. Its members on this server keep the roster they had until the party next changes.");
+								break;
+						}
+					}
+
+					if (partyMembersMap.Count > 0)
 					{
 						/* Last line of defence for the party's one-leader invariant.
 						 *
 						 * The removal paths hand leadership on before they delete anybody and the
-						 * promotion path is serialised against them, so this should never fire —
-						 * but "should never" is doing a lot of work across two scene servers,
-						 * several async hops and a database that can refuse a write. Neither
-						 * broken state has a way out on its own: a leaderless party cannot promote
-						 * anybody (that needs a leader), and a two-leader party looks healthy to
-						 * every check that merely asks whether a leader exists.
+						 * promotion path is serialised against them, so this should never fire — but
+						 * "should never" is doing a lot of work across two scene servers, several
+						 * async hops and a database that can refuse a write. Neither broken state has
+						 * a way out on its own: a leaderless party cannot promote anybody (that needs
+						 * a leader), and a two-leader party looks healthy to every check that merely
+						 * asks whether a leader exists.
 						 *
 						 * The pump sees a party exactly when something changed it, which is exactly
 						 * when its leadership could have broken, so this is both the cheapest place
 						 * to notice and the earliest — including when the change was a leader
 						 * disconnecting, which writes a party update on its way out. Two scene
-						 * servers pumping the same party reach the same answer by construction,
-						 * and the repair takes the party's mutation claim so it cannot land in the
-						 * middle of a promotion — see RepairPartyLeadershipAsync.
-						 *
-						 * The roster is re-read after a repair so the broadcast below carries the
-						 * new rank rather than the one that was just corrected. */
-						if (membersResult.Data.Count > 0 &&
-							(await RepairPartyLeadershipAsync(charPartyService, update.PartyID, membersResult.Data, "PartyUpdatePump")).Changed)
+						 * servers pumping the same party reach the same answer by construction, and
+						 * the repair takes the party's mutation claim so it cannot land in the middle
+						 * of a promotion — see RepairPartyLeadershipAsync. */
+						long[] readIDs = new long[partyMembersMap.Count];
+						partyMembersMap.Keys.CopyTo(readIDs, 0);
+
+						IReadOnlyDictionary<long, IReadOnlyList<long>> online = await FetchOnlineMembersForLeadershipAsync(charPartyService, readIDs, "PartyUpdatePump");
+
+						List<long> repaired = null;
+						for (int i = 0; i < readIDs.Length; ++i)
 						{
-							DatabaseResult<IReadOnlyList<CharacterPartyData>> repairedResult = await charPartyService.FetchManyAsync(update.PartyID);
-							if (repairedResult.IsSuccess && repairedResult.Data != null)
+							IReadOnlyList<CharacterPartyData> roster = partyMembersMap[readIDs[i]];
+							if (roster.Count > 0 &&
+								(await RepairPartyLeadershipAsync(charPartyService, readIDs[i], roster, OnlineMembersOf(online, readIDs[i]), "PartyUpdatePump")).Changed)
 							{
-								membersResult = repairedResult;
+								(repaired ??= new List<long>()).Add(readIDs[i]);
 							}
 						}
 
-						partyMembersMap[update.PartyID] = membersResult.Data;
-
-						/* Stamped here, beside the roster that came back, and not where the update
-						 * was read. A roster fetch that fails leaves the party out of the map and
-						 * therefore out of this — so the update stays unprocessed and is picked up
-						 * on a later tick, instead of being marked done for work that never
-						 * happened. */
-						processedUpdateStamps[update.PartyID] = update.LastUpdate;
-					}
-					else if (update.LastUpdate >= retryHorizonUtc)
-					{
-						await Log.Warning("PartySystem", $"Party update pump could not read the roster of party {update.PartyID}; it is read again next tick: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
-
-						if (update.LastUpdate < watermarkUtc)
+						/* Re-read after a repair so the broadcast below carries the new ranks rather
+						 * than the ones just corrected. Rare, and one query for all of them; if it
+						 * fails the pre-repair roster goes out, and the repair's own announcement
+						 * brings the pump straight back to the party. */
+						if (repaired != null)
 						{
-							watermarkUtc = update.LastUpdate;
+							DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterPartyData>>> repairedResult = await charPartyService.FetchManyAsync(repaired.ToArray());
+							if (repairedResult.IsSuccess && repairedResult.Data != null)
+							{
+								foreach (KeyValuePair<long, IReadOnlyList<CharacterPartyData>> roster in repairedResult.Data)
+								{
+									partyMembersMap[roster.Key] = roster.Value;
+								}
+							}
 						}
-					}
-					else
-					{
-						await Log.Error("PartySystem", $"Party update pump has been unable to read the roster of party {update.PartyID} for longer than {PartyUpdateRetryHorizon.TotalSeconds:0}s; giving up on the update of {update.LastUpdate:O}. Its members on this server keep the roster they had until the party next changes: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
 					}
 				}
 
@@ -1872,119 +2035,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 					foreach (var kvp in partyMembersMap)
 					{
-						long partyID = kvp.Key;
-						IReadOnlyList<CharacterPartyData> dbMembers = kvp.Value;
-
-						var currentMemberIDs = new HashSet<long>(dbMembers.Count);
-						for (int i = 0; i < dbMembers.Count; i++)
-						{
-							currentMemberIDs.Add(dbMembers[i].CharacterID);
-						}
-
-						// Check if we have previously cached the party member list
-						if (mapData.PartyMemberTracker.TryGetValue(partyID, out var previousMembers))
-						{
-							// Compute the difference: members that are in previousMembers but not in currentMemberIDs
-							List<long> difference = new List<long>();
-							foreach (long prevID in previousMembers)
-							{
-								if (!currentMemberIDs.Contains(prevID))
-								{
-									difference.Add(prevID);
-								}
-							}
-
-							foreach (long memberID in difference)
-							{
-								// Tell the member connection to leave their party immediately
-								if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var partyCharacterMappingData) &&
-									partyCharacterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
-									character != null &&
-									character.TryGet(out IPartyController targetPartyController))
-								{
-									/* Rank is cleared with the ID. Leaving it set left an ex-member
-									 * carrying PartyRank.Leader, and every leader-only gate in this
-									 * file reads the pair — so the moment that character joined
-									 * another party it would arrive already believing it led the
-									 * one it just joined, until the next pump corrected it. */
-									targetPartyController.ID = 0;
-									targetPartyController.Rank = PartyRank.None;
-
-									// The tracker keeps them until something says otherwise; this is that something.
-									RemovePartyCharacterTracker(partyID, memberID);
-
-									Server.NetworkWrapper.Broadcast(character.Owner, new PartyLeaveBroadcast(), true, Channel.Reliable);
-								}
-							}
-						}
-						/* Cache the party member IDs — unless the evictions above took this
-						 * server's last member of the party with them, in which case the party is
-						 * no longer ours to track at all. RemovePartyCharacterTracker drops both
-						 * trackers together for exactly that reason, and re-adding one of them
-						 * here unconditionally would leave a member list behind for a party this
-						 * server has stopped pumping, with nothing left that would ever remove
-						 * it. */
-						if (mapData.PartyCharacterTracker.ContainsKey(partyID))
-						{
-							mapData.PartyMemberTracker[partyID] = currentMemberIDs;
-						}
-						else
-						{
-							mapData.PartyMemberTracker.Remove(partyID);
-						}
-
-						var addBroadcasts = new List<PartyAddEntry>(dbMembers.Count);
-						for (int i = 0; i < dbMembers.Count; i++)
-						{
-							var x = dbMembers[i];
-							addBroadcasts.Add(new PartyAddEntry()
-							{
-								CharacterID = x.CharacterID,
-								Rank = (PartyRank)x.Rank,
-								HealthPCT = PartyVitalsQuantiser.FractionToByte(x.HealthPCT),
-							});
-						}
-
-						PartyAddMultipleBroadcast partyAddBroadcast = new PartyAddMultipleBroadcast()
-						{
-							PartyID = partyID,
-							Members = addBroadcasts.ToArray(),
-						};
-
-						if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
-						{
-							// Tell all of the local party members to update their party member lists
-							foreach (CharacterPartyData member in dbMembers)
-							{
-								if (characterMappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-								{
-									/* Only a character whose controller names THIS party is told
-									 * about it.
-									 *
-									 * The test used to be "is it in any party at all", which is a
-									 * different question and answers yes for somebody who has
-									 * since joined a DIFFERENT one. A pump cycle that read this
-									 * party's rows just before that character's row moved would
-									 * then set their rank from the old party, and send them the
-									 * old party's roster — and the client applies a roster payload
-									 * by adopting its PartyID, so their panel would flip to the
-									 * party they had left until the next pump flipped it back.
-									 *
-									 * Refreshing is all this loop does. Every way a character
-									 * actually enters a party sets the controller itself, so a
-									 * disagreement here is always a stale or in-flight state that
-									 * the owning path will settle, never something to be
-									 * corrected from a roster read several awaits old. */
-									if (!character.TryGet(out IPartyController partyController) ||
-										partyController.ID != member.PartyID)
-									{
-										continue;
-									}
-									partyController.Rank = (PartyRank)member.Rank;
-									Server.NetworkWrapper.Broadcast(character.Owner, partyAddBroadcast, true, Channel.Reliable);
-								}
-							}
-						}
+						ApplyPartySnapshot(kvp.Key, kvp.Value, mapData);
 					}
 				});
 
@@ -2013,6 +2064,169 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					runtimeData.EndUpdatePump();
 				}
+			}
+		}
+
+		/// <summary>
+		/// Applies one party's freshly read roster on this server and delivers it. Main thread only.
+		/// </summary>
+		/// <param name="partyID">The party.</param>
+		/// <param name="dbMembers">The party's membership rows, as read.</param>
+		/// <param name="mapData">Party membership tracking for this server.</param>
+		/// <remarks>
+		/// The roster is one message for every local member, so it is serialised once and multicast;
+		/// it used to be serialised again for every member it went to. Every recipient, and every
+		/// evicted member, is also forgotten by the buff ledger: the client rebuilds member rows from
+		/// a roster change, and a rebuilt row holds no buffs until it is sent them again.
+		/// </remarks>
+		private void ApplyPartySnapshot(long partyID, IReadOnlyList<CharacterPartyData> dbMembers, IPartyCharacterMappingData mapData)
+		{
+			Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData);
+
+			var currentMemberIDs = new HashSet<long>(dbMembers.Count);
+			for (int i = 0; i < dbMembers.Count; i++)
+			{
+				currentMemberIDs.Add(dbMembers[i].CharacterID);
+			}
+
+			// Check if we have previously cached the party member list
+			if (mapData.PartyMemberTracker.TryGetValue(partyID, out var previousMembers))
+			{
+				// Compute the difference: members that are in previousMembers but not in currentMemberIDs
+				List<long> difference = null;
+				foreach (long prevID in previousMembers)
+				{
+					if (!currentMemberIDs.Contains(prevID))
+					{
+						(difference ??= new List<long>()).Add(prevID);
+					}
+				}
+
+				if (difference != null)
+				{
+					foreach (long memberID in difference)
+					{
+						/* Untracked whatever their controller says. A character absent from this
+						 * party's roster is not a local member of it; the tracker keeps them until
+						 * something says otherwise, and this is that something. */
+						RemovePartyCharacterTracker(partyID, memberID);
+
+						/* Told to leave only while their controller still names THIS party. The
+						 * snapshot is several awaits old, and a member who left here and has since
+						 * joined another party must not be taken out of that one — the pump for the
+						 * new party skips anybody whose controller does not name it, so nothing would
+						 * ever put them back. The guild pump has applied the same test since issue
+						 * #267 (ClearGuildStanding). */
+						if (characterMappingData != null &&
+							characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) &&
+							character != null &&
+							character.TryGet(out IPartyController targetPartyController) &&
+							targetPartyController.ID == partyID)
+						{
+							/* Rank is cleared with the ID. Leaving it set left an ex-member carrying
+							 * PartyRank.Leader, and every leader-only gate in this file reads the
+							 * pair — so the moment that character joined another party it would
+							 * arrive already believing it led the one it just joined, until the next
+							 * pump corrected it. */
+							targetPartyController.ID = 0;
+							targetPartyController.Rank = PartyRank.None;
+
+							// Their client drops the whole party panel, buffs included.
+							observedBuffLedger.ForgetRecipient(memberID);
+
+							Server.NetworkWrapper.Broadcast(character.Owner, new PartyLeaveBroadcast(), true, Channel.Reliable);
+						}
+					}
+				}
+			}
+
+			/* Cache the party member IDs — unless the evictions above took this server's last
+			 * member of the party with them, in which case the party is no longer ours to track at
+			 * all. RemovePartyCharacterTracker drops both trackers together for exactly that
+			 * reason, and re-adding one of them here unconditionally would leave a member list
+			 * behind for a party this server has stopped pumping, with nothing left that would ever
+			 * remove it. */
+			if (mapData.PartyCharacterTracker.ContainsKey(partyID))
+			{
+				mapData.PartyMemberTracker[partyID] = currentMemberIDs;
+			}
+			else
+			{
+				mapData.PartyMemberTracker.Remove(partyID);
+			}
+
+			if (characterMappingData == null)
+			{
+				return;
+			}
+
+			rosterRecipients.Clear();
+			try
+			{
+				foreach (CharacterPartyData member in dbMembers)
+				{
+					if (!characterMappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
+					{
+						continue;
+					}
+
+					/* Only a character whose controller names THIS party is told about it.
+					 *
+					 * The test used to be "is it in any party at all", which is a different
+					 * question and answers yes for somebody who has since joined a DIFFERENT one. A
+					 * pump cycle that read this party's rows just before that character's row moved
+					 * would then set their rank from the old party, and send them the old party's
+					 * roster — and the client applies a roster payload by adopting its PartyID, so
+					 * their panel would flip to the party they had left until the next pump flipped
+					 * it back.
+					 *
+					 * Refreshing is all this loop does. Every way a character actually enters a
+					 * party sets the controller itself, so a disagreement here is always a stale or
+					 * in-flight state that the owning path will settle, never something to be
+					 * corrected from a roster read several awaits old. */
+					if (character == null ||
+						!character.TryGet(out IPartyController partyController) ||
+						partyController.ID != member.PartyID)
+					{
+						continue;
+					}
+					partyController.Rank = (PartyRank)member.Rank;
+
+					NetworkConnection owner = character.Owner;
+					if (owner != null && owner.IsActive)
+					{
+						rosterRecipients.Add(owner);
+						observedBuffLedger.ForgetRecipient(character.ID);
+					}
+				}
+
+				if (rosterRecipients.Count < 1)
+				{
+					return;
+				}
+
+				var addBroadcasts = new PartyAddEntry[dbMembers.Count];
+				for (int i = 0; i < dbMembers.Count; i++)
+				{
+					var x = dbMembers[i];
+					addBroadcasts[i] = new PartyAddEntry()
+					{
+						CharacterID = x.CharacterID,
+						Rank = (PartyRank)x.Rank,
+						HealthPCT = PartyVitalsQuantiser.FractionToByte(x.HealthPCT),
+					};
+				}
+
+				// Tell all of the local party members to update their party member lists, in one message.
+				Server.NetworkWrapper.Broadcast(rosterRecipients, new PartyAddMultipleBroadcast()
+				{
+					PartyID = partyID,
+					Members = addBroadcasts,
+				}, true, Channel.Reliable);
+			}
+			finally
+			{
+				rosterRecipients.Clear();
 			}
 		}
 
@@ -2127,10 +2341,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				meterData.Forget(character.ID);
 			}
 
-			/* Same reasoning as the meter above: a stale signature would make this character's
-			 * first payload after they return omit their buff array, leaving their party's icons
-			 * empty until something about their buffs happened to change. */
-			lastSentBuffSignature.Remove(character.ID);
+			/* Same reasoning as the meter above: this character's client is gone, and whatever it
+			 * was sent went with it. A record left behind would make their next session's first
+			 * payloads omit arrays they no longer hold, leaving their party's icons empty until
+			 * something about those buffs happened to change. */
+			observedBuffLedger.ForgetRecipient(character.ID);
 
 			if (Server?.Database?.ServiceRegistry == null)
 			{
@@ -2716,7 +2931,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						return;
 					}
 
-					DateTime nowUtc = DateTime.UtcNow;
+					double now = MonotonicClock.NowSeconds;
 
 					/* Per (inviter, target), not per connection. Recorded before the pending slot
 					 * is taken so a target who declines instantly still cannot be re-invited
@@ -2726,12 +2941,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							inviterCharacterID,
 							targetCharacterID,
 							TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
-							nowUtc))
+							now))
 					{
 						return;
 					}
 
-					PendingPartyInvitation invitation = new PendingPartyInvitation(inviterPartyID, inviterCharacterID, nowUtc);
+					PendingPartyInvitation invitation = new PendingPartyInvitation(inviterPartyID, inviterCharacterID, now);
 
 					// if the target doesn't already have a pending invite
 					if (!runtimeData.TryAddPendingInvitation(targetCharacterID, invitation))
@@ -2804,7 +3019,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* Expiry re-tested here against the issue time rather than left to the sweep. The
 				 * sweep is bounded and periodic, so an invitation can outlive its TTL by up to a
 				 * sweep interval — and reading the entry refreshes the queue's clock. */
-				if (DateTime.UtcNow - invitation.IssuedUtc > TimeSpan.FromSeconds(invitationTtlSeconds))
+				if (MonotonicClock.NowSeconds - invitation.IssuedAt > invitationTtlSeconds)
 				{
 					runtimeData.RemovePendingInvitation(partyController.Character.ID);
 					return;
@@ -3185,10 +3400,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						},
 					};
 
-					// The joiner's own view.
-					Server.NetworkWrapper.Broadcast(conn, addBroadcast, true, Channel.Reliable);
-
-					/* And everybody already in the party who is on this scene server.
+					/* The joiner's own view — and everybody already in the party who is on this
+					 * scene server, in the same message.
 					 *
 					 * The update pump reaches every member eventually, wherever they are, but
 					 * "eventually" is up to a pump interval — and the people most likely to be
@@ -3198,25 +3411,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * still converge through the pump, which is why this is an addition to that
 					 * mechanism rather than a replacement for it.
 					 *
-					 * The joiner is skipped: they were just sent the same row directly, and their
-					 * controller may not be in the tracker yet. */
-					if (Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var partyMapping) &&
-						partyMapping.PartyCharacterTracker.TryGetValue(partyID, out HashSet<long> localMembers) &&
-						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMapping))
+					 * One multicast, serialised once; the row is identical for every recipient. The
+					 * joiner is in the tracker by now (added above), and the set holds their
+					 * connection once however they are reached. */
+					rosterRecipients.Clear();
+					try
 					{
-						foreach (long memberID in localMembers)
+						if (conn.IsActive)
 						{
-							if (memberID == characterID)
-							{
-								continue;
-							}
+							rosterRecipients.Add(conn);
+						}
 
-							if (characterMapping.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
-								member?.Owner != null)
+						if (Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var partyMapping) &&
+							partyMapping.PartyCharacterTracker.TryGetValue(partyID, out HashSet<long> localMembers) &&
+							Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMapping))
+						{
+							foreach (long memberID in localMembers)
 							{
-								Server.NetworkWrapper.Broadcast(member.Owner, addBroadcast, true, Channel.Reliable);
+								if (characterMapping.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
+									member?.Owner != null &&
+									member.Owner.IsActive)
+								{
+									rosterRecipients.Add(member.Owner);
+								}
 							}
 						}
+
+						Server.NetworkWrapper.Broadcast(rosterRecipients, addBroadcast, true, Channel.Reliable);
+					}
+					finally
+					{
+						rosterRecipients.Clear();
 					}
 
 					if (PartyJoinAchievementTemplate != null &&
@@ -3598,23 +3823,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="partyID">Party to inspect.</param>
 		/// <param name="members">The party's full membership rows.</param>
 		/// <param name="incumbent">The row of the member currently holding the rank.</param>
+		/// <param name="onlineMemberIDs">
+		/// The party's members who hold a live session, read by the caller in one query for every
+		/// party it is settling (<see cref="FetchOnlineMembersForLeadershipAsync"/>); null when that
+		/// read failed.
+		/// </param>
 		/// <param name="caller">Name used in log lines.</param>
 		/// <returns>What was done, if anything.</returns>
-		private async Task<PartyLeadershipRepair> RepairAbsentLeaderAsync(ICharacterPartyService charPartyService, long partyID, IReadOnlyList<CharacterPartyData> members, CharacterPartyData incumbent, string caller)
+		private async Task<PartyLeadershipRepair> RepairAbsentLeaderAsync(ICharacterPartyService charPartyService, long partyID, IReadOnlyList<CharacterPartyData> members, CharacterPartyData incumbent, IReadOnlyList<long> onlineMemberIDs, string caller)
 		{
 			if (!transferLeadershipOnDisconnect)
 			{
 				return default;
 			}
 
-			DatabaseResult<IReadOnlyList<long>> onlineResult = await charPartyService.FetchOnlineMemberIdsAsync(partyID);
-			if (!onlineResult.IsSuccess || onlineResult.Data == null)
+			if (onlineMemberIDs == null)
 			{
 				// Could not tell. Absence of evidence, so nothing is moved.
 				return default;
 			}
 
-			IReadOnlyList<long> online = onlineResult.Data;
+			IReadOnlyList<long> online = onlineMemberIDs;
 			if (online.Count < 1)
 			{
 				// Nobody is playing in this party, so nobody is stuck.
@@ -3659,9 +3888,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * between scene servers is indistinguishable from one that has logged off, and the
 			 * only thing that separates them is how long it lasts. The first sighting starts a
 			 * clock and schedules the second, which is what confirms it. */
-			if (!TryConfirmLeaderAbsent(partyID, incumbent.CharacterID, out DateTime recheckDueUtc))
+			if (!TryConfirmLeaderAbsent(partyID, incumbent.CharacterID, out double recheckDue))
 			{
-				TryEnqueueMainThread(() => ScheduleLeadershipRecheckAt(partyID, recheckDueUtc));
+				TryEnqueueMainThread(() => ScheduleLeadershipRecheckAt(partyID, recheckDue));
 				return default;
 			}
 
@@ -3729,9 +3958,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="charPartyService">Membership service.</param>
 		/// <param name="partyID">Party to settle.</param>
 		/// <param name="members">The party's full membership rows.</param>
+		/// <param name="onlineMemberIDs">
+		/// The party's online members, read by the caller alongside the roster; null when that read
+		/// failed or the absent-leader repair is off.
+		/// </param>
 		/// <param name="caller">Name used in log lines.</param>
 		/// <returns>What was done, if anything.</returns>
-		private async Task<PartyLeadershipRepair> RepairPartyLeadershipAsync(ICharacterPartyService charPartyService, long partyID, IReadOnlyList<CharacterPartyData> members, string caller)
+		private async Task<PartyLeadershipRepair> RepairPartyLeadershipAsync(ICharacterPartyService charPartyService, long partyID, IReadOnlyList<CharacterPartyData> members, IReadOnlyList<long> onlineMemberIDs, string caller)
 		{
 			if (!TryBeginPartyMutation(partyID, out long mutationToken))
 			{
@@ -3744,7 +3977,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			try
 			{
 				PartyLeadershipRepair repair = await EnsurePartyLeadershipAsync(
-					charPartyService, partyID, members, caller, repairAbsentLeader: true);
+					charPartyService, partyID, members, caller, repairAbsentLeader: true, onlineMemberIDs: onlineMemberIDs);
 
 				if (repair.Changed &&
 					Server?.Database?.ServiceRegistry != null &&
@@ -3887,8 +4120,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// somebody added or taken out mid-operation, and asking the database who is online would
 		/// answer about a roster that no longer matches the one being reasoned about.
 		/// </param>
+		/// <param name="onlineMemberIDs">
+		/// For <paramref name="repairAbsentLeader"/>: the party's online members, read by the caller
+		/// in bulk. Null means the read failed, and no absent leader is moved.
+		/// </param>
 		/// <returns>What was done, if anything.</returns>
-		private async Task<PartyLeadershipRepair> EnsurePartyLeadershipAsync(ICharacterPartyService charPartyService, long partyID, IReadOnlyList<CharacterPartyData> members, string caller, bool repairAbsentLeader = false, bool preferOnlineSuccessor = false)
+		private async Task<PartyLeadershipRepair> EnsurePartyLeadershipAsync(ICharacterPartyService charPartyService, long partyID, IReadOnlyList<CharacterPartyData> members, string caller, bool repairAbsentLeader = false, bool preferOnlineSuccessor = false, IReadOnlyList<long> onlineMemberIDs = null)
 		{
 			if (charPartyService == null || members == null || members.Count < 1)
 			{
@@ -3927,7 +4164,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (leaderCount == 1)
 			{
 				return repairAbsentLeader
-					? await RepairAbsentLeaderAsync(charPartyService, partyID, members, incumbent, caller)
+					? await RepairAbsentLeaderAsync(charPartyService, partyID, members, incumbent, onlineMemberIDs, caller)
 					: default;
 			}
 

@@ -252,17 +252,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * sweep, while remaining perfectly able to attack them. The same walk also collapses a
 			 * character rigged with several colliders, which would otherwise be added to
 			 * detectedEnemies once per collider and weighted that many times by whatever picks a
-			 * target from the list. Same resolver the hit-resolving paths use. */
+			 * target from the list. Same resolver the hit-resolving paths use.
+			 *
+			 * NPCs share the character layer with players, so in a camp most of what the sphere
+			 * returns is other NPCs — and always this NPC's own collider. Our own body is rejected
+			 * by reference before any lookup, and an NPC the brain host drives is resolved from its
+			 * collider map, which is one dictionary read where the resolver pays a rigidbody read
+			 * and an interface component lookup. Anything else (a player, an NPC with no brain)
+			 * goes through the resolver as before. */
+			Collider ownCollider = controller.Character.Collider;
+			AIBrainHost host = controller.Host;
 			sweepKeys.Clear();
 			for (int i = 0; i < overlapCount && i < controller.SweepHits.Length; ++i)
 			{
 				Collider hitCollider = controller.SweepHits[i];
-				if (hitCollider == null)
+				if (hitCollider == null || ReferenceEquals(hitCollider, ownCollider))
 				{
 					continue;
 				}
 
-				GameObject key = TargetOrdering.ResolveHitKey(hitCollider, out ICharacter def);
+				GameObject key;
+				ICharacter def;
+				if (host != null && host.TryGetBrain(hitCollider, out AIController otherBrain))
+				{
+					def = otherBrain.Character;
+					key = def != null ? def.GameObject : null;
+				}
+				else
+				{
+					key = TargetOrdering.ResolveHitKey(hitCollider, out def);
+				}
+
 				// Ignore ourselves, and anything that is not a character.
 				if (key == null || def == null || def == controller.Character)
 				{

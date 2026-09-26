@@ -75,6 +75,18 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* An evading NPC refuses every debuff another character tries to put on it — stun,
+			 * root, mesmerize, slow and the rest; CharacterEvade.IsHostileBuff says why it is every
+			 * debuff and not a list. Asked after the stacks are drawn, so the shared generator
+			 * advances the same on every peer whatever this answers (the brain, and so the answer,
+			 * exists only on the server), and ahead of the contribution record below, so a refused
+			 * debuff earns no loot rights either. A caster's client that predicted the debuff is
+			 * corrected by the next full buff set, which does not name it. */
+			if (CharacterEvade.RefusesBuff(target, BuffTemplate, initiator))
+			{
+				return;
+			}
+
 			// Only same-character replicate-domain TickEventData can go through Apply
 			// directly. A caster's replicate tick is not necessarily in the target's
 			// controller domain, so cross-character effects must route through the

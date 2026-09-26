@@ -138,10 +138,39 @@ nothing. The 20 s establish wait aborted after roughly five seconds and reported
 Two of the pipeline's queues hold a client on a live, authenticated connection while it waits:
 the LoginServer's admission queue, and the WorldServer's scene-routing queue (see
 [World Scene System → Scene-routing queue feedback](../../Server/Implementation/World/WorldServer/WorldScene/README.md#scene-routing-queue-feedback)).
-Neither involves this class — no connection state changes, so nothing here fires — which is
-exactly why they need their own feedback channel. `Client` presents both through one shared
-wait dialog so they cannot drift apart or fight over the same control, and the dialog's only
-action leaves the queue via `QuitToLogin`.
+Neither involves this class while it waits — no connection state changes, so nothing here
+fires — which is exactly why they need their own feedback channel.
+
+Both are shown on one panel, `UITKWorldQueueDisplay` (`UIWorldQueueDisplay` in ClientPreboot),
+at `UITKPanelLayer.SystemStatus`: above the loading overlay, because every return through the
+world server after a zone change, channel switch or bind-point respawn has that overlay up, and
+the shared dialog (a `Modal`) was drawn underneath it. It shows the position, the queue's size,
+the server's estimate, the elapsed wait and a bar for how much of the line ahead has cleared,
+with **Leave queue**. The queue it is showing (`QueueKind`) picks the wording in
+`WorldQueuePresentation`:
+
+- The **login queue** ("CONNECTING") has one wait. **Leave queue** is `QuitToLogin`. When the
+  login server gives up (`-1`: timed out, or shutting down) the client is already back at the
+  login screen, and the panel explains why with a single **Close**: rejoining means signing in
+  again, and the login queue keeps nothing across connections.
+- The **world scene-routing queue** ("ENTERING THE WORLD") names what it is waiting for.
+  **Leave queue** is `Client.LeaveWorldQueue`, which sends `WorldSceneQueueLeaveBroadcast` before
+  `QuitToLogin`: the world server holds an account's place for a grace window after a drop, and
+  a player who chose to go must not keep one.
+
+Without the panel, both fall back to the shared dialog, and the client logs the missing panel
+once.
+
+When the world server gives up on a wait it sends position `-1` and closes the connection. This
+class would read that close as a drop and redial on its own after the backoff, behind a
+"reconnecting" overlay the player never asked for, so `Client` calls `ForceDisconnect()` first,
+and the panel offers the choice instead: **Try again** (`Client.RejoinWorldQueue` →
+`TryReconnect()`, the ordinary world reconnect with the session still held) or **Return to
+login**. Try again keeps the place in line: the world server holds it for about a minute after
+a purge (see [Keeping a place in line](../../Server/Implementation/World/WorldServer/WorldScene/README.md#keeping-a-place-in-line)),
+and it does the same for a connection that simply dropped and reconnected. Try again waits for `ClientState == Stopped`
+(`Client.CanRejoinWorldQueue`): reconnecting while the forced close is still in flight lets that
+close consume the new attempt's teardown flag, and the attempt aborts without a word.
 
 ## No panel waits on a reply forever
 
@@ -169,11 +198,11 @@ Three properties matter:
   request — the SRP exchange and the two-factor prompt both report progress before they finish,
   and a client can sit in the login queue for minutes. Each one buys the deadline again.
 - **So does a queue position.** The login queue is the one place a login legitimately outlasts
-  the deadline, and its `LoginQueuePositionBroadcast` is handled by `Client`, not by the panels.
-  Both login panels therefore register for it themselves and refresh the guard on any position
-  ≥ 0. Without that the panel announced "the server did not respond" *beside* a live queue
-  dialog, with sign-in re-enabled — and clicking it only produced "connection already in
-  progress".
+  the deadline, and its `LoginQueuePositionBroadcast` is handled by `Client` (which shows it on
+  the queue panel), not by the login panels. Both login panels therefore register for it
+  themselves and refresh the guard on any position ≥ 0. Without that the panel announced "the
+  server did not respond" *beside* a live queue display, with sign-in re-enabled — and clicking
+  it only produced "connection already in progress".
 
 Server-select is deliberately **not** guarded. Its lock spans a whole multi-hop journey — world
 login, scene routing, scene load — not one round trip, and that journey has its own queue

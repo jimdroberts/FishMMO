@@ -83,6 +83,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// One fault log per quest, for its event handlers. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Quest events are raised through <see cref="QuestEventDispatch"/>, which isolates each
+		/// handler and reports what happened here by quest. Per quest, not one for the system: a
+		/// broken quest throws on every kill of its target, and sharing a log with it would reduce
+		/// a different quest's first fault to a summary line. Bounded by the number of quest
+		/// templates, since only a quest that has faulted gets an entry.
+		/// </remarks>
+		private readonly Dictionary<string, RepeatingFaultLog> questHandlerFaults = new Dictionary<string, RepeatingFaultLog>(StringComparer.Ordinal);
+
+		/// <summary>
 		/// Initializes the quest system, subscribing to all quest lifecycle events.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -118,6 +130,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IQuestController.OnQuestTurnedIn += OnQuestTurnedIn;
 			IQuestController.OnQuestFailed += OnQuestFailed;
 			IQuestController.OnQuestAbandoned += OnQuestAbandoned;
+			QuestEventDispatch.Reporter = ReportQuestHandler;
 
 			Server.NetworkWrapper.RegisterBroadcast<QuestAcceptBroadcast>(OnServerQuestAcceptBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<QuestTurnInBroadcast>(OnServerQuestTurnInBroadcastReceived, true);
@@ -149,6 +162,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IQuestController.OnQuestTurnedIn -= OnQuestTurnedIn;
 			IQuestController.OnQuestFailed -= OnQuestFailed;
 			IQuestController.OnQuestAbandoned -= OnQuestAbandoned;
+			if (QuestEventDispatch.Reporter == (Action<string, Exception>)ReportQuestHandler)
+			{
+				QuestEventDispatch.Reporter = null;
+			}
+			questHandlerFaults.Clear();
 
 			Server.NetworkWrapper.UnregisterBroadcast<QuestAcceptBroadcast>(OnServerQuestAcceptBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<QuestTurnInBroadcast>(OnServerQuestTurnInBroadcastReceived);
@@ -193,6 +211,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				runtimeData.IngressGuard.End(guardKey);
 			}
+		}
+
+		/// <summary>
+		/// Records how one quest's event handlers ended. Installed as
+		/// <see cref="QuestEventDispatch.Reporter"/>; main thread only.
+		/// </summary>
+		/// <param name="questName">The quest the event was for.</param>
+		/// <param name="fault">What a handler threw, or null when every handler returned.</param>
+		private void ReportQuestHandler(string questName, Exception fault)
+		{
+			string key = questName ?? string.Empty;
+			if (fault == null)
+			{
+				// The healthy path: a lookup that finds nothing for every quest that never faulted.
+				if (questHandlerFaults.TryGetValue(key, out RepeatingFaultLog recovered))
+				{
+					recovered.ReportSuccess();
+				}
+				return;
+			}
+
+			if (!questHandlerFaults.TryGetValue(key, out RepeatingFaultLog faults))
+			{
+				faults = new RepeatingFaultLog("QuestSystem", $"An event handler for quest '{key}'");
+				questHandlerFaults.Add(key, faults);
+			}
+			faults.Report(fault, MonotonicClock.NowSeconds);
 		}
 
 		#region Event Handlers
@@ -286,15 +331,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			objective.Increment(amount);
 
-			SendQuestUpdate(playerCharacter, quest);
-			PersistQuest(playerCharacter, quest);
-
+			/* Completion is decided before anything is sent or written, so the objective that
+			 * finishes a quest produces one update and one row write carrying both the final value
+			 * and the Complete status. It used to send and write the Active state and then, a line
+			 * later, send and write it again as Complete — two broadcasts and two upserts on the
+			 * character's lane, the first superseded before it could land. */
 			if (quest.AreAllObjectivesComplete())
 			{
 				quest.TrySetStatus(QuestStatus.Complete);
-				SendQuestUpdate(playerCharacter, quest);
-				PersistQuest(playerCharacter, quest);
 			}
+
+			SendQuestUpdate(playerCharacter, quest);
+			PersistQuest(playerCharacter, quest);
 		}
 
 		/// <summary>
@@ -782,6 +830,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Builds a CharacterQuestData DTO from a quest instance and enqueues async persistence.
 		/// </summary>
+		/// <remarks>
+		/// The write quotes the session claim it was made under, captured here with the change, and
+		/// lands only while that claim is still held (the service's <c>PersistOwnedAsync</c>). A
+		/// character with no claim on this server is not ours to write — it is leaving or has been
+		/// evicted — and the change stays in memory only, which is where the owning server's load
+		/// will leave it too.
+		/// </remarks>
 		private void PersistQuest(IPlayerCharacter character, QuestInstance quest)
 		{
 			if (quest.Template == null)
@@ -791,6 +846,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (!TryGetDbService<ICharacterQuestService>(out var questService))
 			{
+				return;
+			}
+
+			if (!TryCaptureSessionClaim(character.ID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("QuestSystem", $"PersistQuest: this server holds no session claim for CharID={character.ID}; quest {quest.Template.ID} was not written.");
 				return;
 			}
 
@@ -807,12 +868,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				objectiveValues: SerializeObjectiveValues(objectiveValues)
 			);
 
-			EnqueuePersistence(() => PersistQuestAsync(questService, dto), characterID);
+			EnqueuePersistence(() => PersistQuestAsync(questService, dto, claim), characterID);
 		}
 
 		/// <summary>
 		/// Deletes a quest from the DB (turn-in or abandon).
 		/// </summary>
+		/// <remarks>Ownership-gated like <see cref="PersistQuest"/>, and for the same reason.</remarks>
 		private void DeleteQuest(IPlayerCharacter character, QuestInstance quest)
 		{
 			if (quest.Template == null)
@@ -825,12 +887,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			if (!TryCaptureSessionClaim(character.ID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("QuestSystem", $"DeleteQuest: this server holds no session claim for CharID={character.ID}; the delete of quest {quest.Template.ID} was not written.");
+				return;
+			}
+
 			quest.Version = NextQuestVersion(quest);
 			long characterID = character.ID;
 			int templateID = quest.Template.ID;
 			long version = quest.Version;
 
-			EnqueuePersistence(() => DeleteQuestAsync(questService, characterID, templateID, version), characterID);
+			EnqueuePersistence(() => DeleteQuestAsync(questService, characterID, templateID, version, claim), characterID);
 		}
 
 		/// <summary>
@@ -877,14 +945,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// as they change rather than by the periodic save, so a write that is given up on stays
 		/// lost until the quest changes again.
 		/// </remarks>
-		private async Task PersistQuestAsync(ICharacterQuestService service, CharacterQuestData dto)
+		private async Task PersistQuestAsync(ICharacterQuestService service, CharacterQuestData dto, CharacterSessionLeaseData claim)
 		{
 			try
 			{
+				IReadOnlyCollection<CharacterSessionLeaseData> claims = ClaimsOf(claim);
 				DatabaseResult<BulkWriteResult> result = default;
 				for (int attempt = 1; attempt <= MaxQuestWriteAttempts; ++attempt)
 				{
-					result = await service.PersistAsync(new[] { dto });
+					/* A refusal by the ownership gate is final (not transient), so it ends the loop at
+					 * once and is reported as a failure below, never as a written quest. */
+					result = await service.PersistOwnedAsync(new[] { dto }, claims);
 					if (result.IsSuccess || !result.IsTransient || attempt == MaxQuestWriteAttempts)
 					{
 						break;
@@ -911,14 +982,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// retried (bounded, on this lane), and one that survives the retries is logged as the
 		/// error it is.
 		/// </remarks>
-		private async Task DeleteQuestAsync(ICharacterQuestService service, long characterID, int templateID, long version)
+		private async Task DeleteQuestAsync(ICharacterQuestService service, long characterID, int templateID, long version, CharacterSessionLeaseData claim)
 		{
 			try
 			{
 				DatabaseResult result = default;
 				for (int attempt = 1; attempt <= MaxQuestWriteAttempts; ++attempt)
 				{
-					result = await service.DeleteQuestAsync(characterID, templateID, version);
+					result = await service.DeleteQuestOwnedAsync(characterID, templateID, version, claim);
 					if (result.IsSuccess || !result.IsTransient || attempt == MaxQuestWriteAttempts)
 					{
 						break;
@@ -926,7 +997,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Task.Delay(QuestWriteRetryStepMs * attempt);
 				}
 
-				if (!result.IsSuccess)
+				if (IsClaimRefusal(result))
+				{
+					/* Not this server's to write any more: whoever holds the character loaded it with
+					 * the quest still in the log, and this session's turn-in — rewards included, which
+					 * are ownership-gated item writes — is discarded with it. */
+					await Log.Warning("QuestSystem",
+						$"DeleteQuestAsync (CharID={characterID}, TemplateID={templateID}) was refused because this server no longer holds the character's session claim.");
+				}
+				else if (!result.IsSuccess)
 				{
 					await Log.Error("QuestSystem",
 						$"DeleteQuestAsync failed (CharID={characterID}, TemplateID={templateID}, Version={version}): [{result.ErrorCode}] {result.ErrorMessage}. " +

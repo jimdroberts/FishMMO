@@ -28,6 +28,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </para>
 	/// <para>
 	/// DequeueAsync uses atomic FOR UPDATE SKIP LOCKED pattern to prevent race conditions during concurrent dequeuing.
+	/// Scene rows are stamped and aged by the database clock, never by a caller's host clock: see
+	/// <see cref="DequeueAsync"/> and <see cref="FetchWithAgesAsync"/>.
 	/// Both enqueues are retry-safe: each takes a request key once, and a retry after a reply lost past the
 	/// commit answers with the row its first attempt wrote rather than queueing a second load. The uncapped
 	/// EnqueueAsync they replaced (open-world routing in 2026-08, the dungeon finder in 2026-08) had no caller
@@ -235,18 +237,48 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 			CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Dequeues the next pending scene load request and marks it as loading.
+		/// Claims the oldest pending scene load request for a scene server and marks it as loading.
 		/// </summary>
+		/// <param name="sceneServerId">The scene server taking the row, which will host the instance. Must be positive.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// DatabaseResult containing scene data if a pending scene was found and dequeued, or error information on failure.
+		/// DatabaseResult containing the claimed scene and its age in seconds by the database
+		/// clock, or error information on failure.
 		/// </returns>
 		/// <remarks>
-		/// Uses FromSqlRaw with FOR UPDATE SKIP LOCKED and execution strategy wrapping to ensure transient database
+		/// Uses FOR UPDATE SKIP LOCKED and execution strategy wrapping to ensure transient database
 		/// failures are automatically retried. Atomically updates status from Pending to Loading to prevent race conditions.
 		/// Returns failure with error code <c>NOT_FOUND</c> when no pending scenes exist.
+		/// <para>
+		/// The age is how long ago the row was queued, measured by the database clock that stamped
+		/// <c>time_created</c>. It is the only form of the row's creation time a scene server can
+		/// compare with anything: <c>time_created</c> itself is a database-clock instant, and the
+		/// scene server's own clock may disagree with it by any amount. Never negative.
+		/// </para>
+		/// <para>
+		/// <b>Retry-safe.</b> The claim is written onto the row: <c>scene_server_id</c> names the
+		/// claimant, and <c>scene_handle</c> carries a claim token taken once per call, outside the
+		/// retried statement. A retry after a reply lost past the commit finds the row its first
+		/// attempt claimed by (claimant, token, Loading) and returns it, rather than claiming a
+		/// second row and leaving the first in Loading, owned by nobody, until the world server
+		/// reaped it five minutes later. <c>scene_handle</c> means nothing on a row that is not yet
+		/// Ready — the process-local handle does not exist until the scene is loaded — and
+		/// <see cref="SetReadyAsync"/> replaces the token with the real handle. The token is
+		/// negative, so it cannot be mistaken for a handle.
+		/// </para>
+		/// <para>
+		/// Naming the claimant at dequeue also means a Loading row is no longer anonymous:
+		/// <see cref="DeleteBySceneServerAsync"/> (a scene server's restart and shutdown cleanup)
+		/// and <see cref="DeleteByStaleSceneServersAsync"/> (the world server's dead-host sweep)
+		/// now remove the loads a stopped scene server had taken, instead of leaving them to the
+		/// age-based <see cref="DeleteStaleUnreadyAsync"/>.
+		/// </para>
+		/// <para>
+		/// One row per call on purpose, not a batch: the per-pulse budget is a handful of rows and
+		/// is decided by the caller between claims.
+		/// </para>
 		/// </remarks>
-		Task<DatabaseResult<SceneData>> DequeueAsync(CancellationToken cancellationToken = default);
+		Task<DatabaseResult<(SceneData Scene, double AgeSeconds)>> DequeueAsync(long sceneServerId, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates the status of a scene.
@@ -262,6 +294,19 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// failures are automatically retried. Returns entity not found exception if scene doesn't exist.
 		/// </remarks>
 		Task<DatabaseResult> UpdateStatusAsync(long sceneId, SceneStatus status, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Sets the status of several scenes in one statement.
+		/// </summary>
+		/// <param name="sceneIds">Scene rows to update. Non-positive and duplicate ids are ignored.</param>
+		/// <param name="status">New scene status.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The number of rows updated. A row that no longer exists is simply not counted.</returns>
+		/// <remarks>
+		/// For a sweep that fails several expired loads at once, which used to cost one round trip
+		/// and one queued work item per row.
+		/// </remarks>
+		Task<DatabaseResult<int>> UpdateStatusManyAsync(IReadOnlyCollection<long> sceneIds, SceneStatus status, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Sets the loading scene identified by <paramref name="sceneId"/> to ready status,
@@ -358,6 +403,33 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult> DeleteAsync(long sceneId, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Deletes several scene rows by their database IDs in one statement.
+		/// </summary>
+		/// <param name="sceneIds">Scene rows to delete. Non-positive and duplicate ids are ignored.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The number of rows deleted.</returns>
+		/// <remarks>Idempotent, for the reason given on <see cref="DeleteAsync"/>.</remarks>
+		Task<DatabaseResult<int>> DeleteManyAsync(IReadOnlyCollection<long> sceneIds, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Reads several scene rows by ID, each with its age in seconds by the database clock.
+		/// </summary>
+		/// <param name="sceneIds">Scene rows to read. Non-positive and duplicate ids are ignored.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// The rows that exist, in no particular order. An id with no row is absent from the result,
+		/// which is the answer "that row is gone" — distinct from a failed result, which answers
+		/// nothing.
+		/// </returns>
+		/// <remarks>
+		/// For the world server's instance routing, which used to read one row per waiting connection
+		/// even when a whole party waited on the same instance. The age is for the same reason as on
+		/// <see cref="DequeueAsync"/>: it is measured by the clock that stamped the row, so the
+		/// caller's own clock never enters the comparison.
+		/// </remarks>
+		Task<DatabaseResult<IReadOnlyList<(SceneData Scene, double AgeSeconds)>>> FetchWithAgesAsync(IReadOnlyCollection<long> sceneIds, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Gets the instance a character opened for one particular scene.
 		/// </summary>
 		/// <param name="characterId">Character ID.</param>
@@ -429,34 +501,59 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<int>> PulseBatchAsync(List<(long sceneId, int characterCount)> pulses, int maxBatchSize = 1000, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Sums the character count of a world server's Ready scenes.
+		/// </summary>
+		/// <param name="worldServerId">World server whose population to count.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>The total, 0 when there are no Ready scenes.</returns>
+		/// <remarks>
+		/// The same rows <c>FetchManyAsync</c> returns, added up by the database. The world server's
+		/// population count needs only the total, and reading every scene row to add it up grew with
+		/// the scene count on every routing cycle.
+		/// </remarks>
+		Task<DatabaseResult<int>> SumCharacterCountAsync(long worldServerId, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Deletes scene rows for a world server that never reached <see cref="SceneStatus.Ready"/>
-		/// and are older than <paramref name="olderThanUtc"/>.
+		/// and are at least <paramref name="minAgeSeconds"/> old.
 		/// </summary>
 		/// <param name="worldServerId">World server whose rows to reap.</param>
-		/// <param name="olderThanUtc">Rows created strictly before this instant are eligible.</param>
+		/// <param name="minAgeSeconds">
+		/// Rows older than this, by the database clock, are eligible. An age rather than an instant
+		/// because <c>time_created</c> is stamped by the database clock, and a cutoff computed from
+		/// the caller's own clock would shift by however far that host has drifted from it.
+		/// </param>
 		/// <param name="maxRows">Upper bound on rows removed in one call, so a large backlog is drained across several sweeps rather than in one long transaction.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>DatabaseResult containing the number of rows deleted.</returns>
 		/// <remarks>
 		/// Nothing else removes a Pending, Loading or Failed row. That is not merely untidy:
 		/// such a row keeps its <c>character_id</c>, and a character pointed at one can never
-		/// finish entering the world. A Loading row orphaned by a scene server that died between
-		/// dequeue and load still has <c>scene_server_id = 0</c>, so
-		/// <see cref="DeleteBySceneServerAsync"/> does not match it on that server's restart, and
-		/// it survives indefinitely. Reaping by age is what bounds both.
+		/// finish entering the world. A Pending row that no scene server ever takes has no owner
+		/// to remove it, and a row that failed to load is left behind by the server that tried.
+		/// Reaping by age is what bounds both. (A Loading row now names its claimant — see
+		/// <see cref="DequeueAsync"/> — so one orphaned by a scene server that died mid-load is
+		/// removed on that server's restart or by <see cref="DeleteByStaleSceneServersAsync"/>
+		/// first; this sweep is the backstop.)
 		/// <para>
 		/// Ready rows are deliberately untouched: they represent live scene instances and are
 		/// removed by the scene server that owns them when it unloads them or shuts down.
 		/// </para>
 		/// </remarks>
-		Task<DatabaseResult<int>> DeleteStaleUnreadyAsync(long worldServerId, DateTime olderThanUtc, int maxRows = 256, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<int>> DeleteStaleUnreadyAsync(long worldServerId, double minAgeSeconds, int maxRows = 256, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Deletes this world server's scene rows whose owning scene server has stopped pulsing,
 		/// or is no longer registered at all.
 		/// </summary>
 		/// <param name="worldServerId">World server whose rows to reap.</param>
-		/// <param name="pulseOlderThanUtc">A scene server that has not pulsed since this instant is treated as gone.</param>
+		/// <param name="pulseStaleSeconds">
+		/// A scene server whose last pulse is at least this many seconds old, by the database clock
+		/// that stamped it, is treated as gone. An age rather than an instant for the reason given
+		/// on <see cref="DeleteStaleUnreadyAsync"/>: an instant computed from the caller's clock
+		/// shifted the cutoff by however far that host had drifted from the database, and a world
+		/// server running a minute fast reaped every scene of every healthy scene server.
+		/// </param>
 		/// <param name="maxRows">Upper bound on rows removed in one call.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>DatabaseResult containing the number of rows deleted.</returns>
@@ -469,11 +566,12 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// bounced back, re-routed from the same row, and bounced again, with nothing in the loop
 		/// that ages out.
 		/// <para>
-		/// Rows whose <c>scene_server_id</c> is 0 are skipped: those are queued or loading scenes
-		/// that have not been assigned a host yet, and belong to
-		/// <see cref="DeleteStaleUnreadyAsync"/>.
+		/// Rows whose <c>scene_server_id</c> is 0 are skipped: those are queued scenes that no scene
+		/// server has taken yet, and belong to <see cref="DeleteStaleUnreadyAsync"/>. A Loading row
+		/// names the server that claimed it (see <see cref="DequeueAsync"/>), so the loads a dead
+		/// scene server had taken go with the rest of its scenes.
 		/// </para>
 		/// </remarks>
-		Task<DatabaseResult<int>> DeleteByStaleSceneServersAsync(long worldServerId, DateTime pulseOlderThanUtc, int maxRows = 256, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<int>> DeleteByStaleSceneServersAsync(long worldServerId, double pulseStaleSeconds, int maxRows = 256, CancellationToken cancellationToken = default);
 	}
 }

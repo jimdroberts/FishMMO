@@ -49,6 +49,13 @@ namespace FishMMO.Server.Implementation
 		/// verification of forged connection tokens before the handshake enters the
 		/// core's capacity-limited SRP channels.
 		/// </summary>
+		/// <remarks>
+		/// This limiter, the revocation and token-mint limiters and the real-IP caches are timed on
+		/// <see cref="MonotonicClock"/>, through the trackers' monotonic overloads, and every caller of
+		/// each uses that clock alone. Each is a duration, and on <c>DateTime.UtcNow</c> a host clock
+		/// stepped back kept every key inside its window (and every cached IP fresh) for the size of
+		/// the step, while a step forward released them all at once.
+		/// </remarks>
 		private readonly ExpiringKeyTracker<string> handshakeRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>Minimum interval between accepted handshakes per rate-limit key (100ms = 10/sec).</summary>
@@ -94,17 +101,53 @@ namespace FishMMO.Server.Implementation
 		/// (clients that open a QUIC connection but never authenticate). Default 15 seconds.
 		/// Configurable via the Unity Inspector.
 		/// </summary>
+		/// <remarks>
+		/// It bounds the handshake and nothing after it. The window ends when the core completes
+		/// the key agreement (<see cref="BaseAuthenticatorCore{TConnection}.OnHandshakeReceived"/>
+		/// returns true), and from then the core's pending-authentication limits apply: a
+		/// progress TTL for machine work, and <c>TwoFactorWindowSeconds</c> for a player at the
+		/// two-factor prompt. It used to run until authentication, so it silently bounded the whole
+		/// sign-in — and a player who took more than about fifteen seconds from connecting to
+		/// typing their authenticator code was disconnected.
+		/// </remarks>
 		[UnityEngine.SerializeField]
 		private float authHandshakeTimeoutSeconds = 15f;
 
 		/// <summary>
-		/// Thread-safe map of ClientId → UTC timestamp when the remote connection was established.
-		/// Used by the authentication timeout sweep in <see cref="OnAuthSweep"/> to disconnect
-		/// clients that connect but never send a <see cref="ClientHandshake"/>.
-		/// Entries are added on <see cref="RemoteConnectionState.Started"/> and removed on
-		/// <see cref="RemoteConnectionState.Stopped"/> or successful authentication.
+		/// Thread-safe map of ClientId → monotonic time (seconds) when the connection's handshake
+		/// window opened. Used by the timeout sweep in <see cref="SweepAuthTimeouts"/> to disconnect
+		/// clients that connect but never complete a <see cref="ClientHandshake"/>.
+		/// Entries are added on <see cref="RemoteConnectionState.Started"/> and removed when the
+		/// handshake completes (<see cref="EndHandshakeWindow"/>), on
+		/// <see cref="RemoteConnectionState.Stopped"/>, or on successful authentication
+		/// (<see cref="OnAuthentication"/>).
 		/// </summary>
-		private protected readonly ConcurrentDictionary<int, DateTime> connectionStartTimes = new ConcurrentDictionary<int, DateTime>();
+		/// <remarks>
+		/// Times are <see cref="MonotonicClock"/> seconds: the timeout is a local duration, and on
+		/// the wall clock a step forward timed out every connection mid-handshake at once.
+		/// </remarks>
+		private protected readonly ConcurrentDictionary<int, double> connectionStartTimes = new ConcurrentDictionary<int, double>();
+
+		/// <summary>
+		/// Handshake deadlines in the order they fall due: one (ClientId, start) pair per start or
+		/// restart recorded in <see cref="connectionStartTimes"/>. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Every deadline is its start plus the same timeout, so the order starts are recorded in is
+		/// the order they expire in, and <see cref="SweepAuthTimeouts"/> only ever looks at the
+		/// head. A pair whose start no longer matches the map — the connection stopped,
+		/// authenticated, or was restarted since — is simply dropped when it comes due.
+		/// <para>
+		/// This replaced a cursor over a <c>ToArray()</c> snapshot of the map, which took every one
+		/// of the dictionary's locks and allocated the snapshot on every frame that 32 or fewer
+		/// connections were pending — the cursor wrapped to the start each frame — plus a full
+		/// snapshot pass every 30 seconds as a backstop for the entries the cursor could miss.
+		/// </para>
+		/// </remarks>
+		private readonly Queue<(int ClientId, double StartedSeconds)> handshakeDeadlines = new Queue<(int ClientId, double StartedSeconds)>();
+
+		/// <summary>Most handshake deadlines acted on in one frame; the rest wait at the head.</summary>
+		private const int MaxHandshakeDeadlinesPerFrame = 64;
 
 		/// <summary>
 		/// Per-connection random nonce, assigned when a remote connection starts and removed
@@ -160,6 +203,14 @@ namespace FishMMO.Server.Implementation
 		/// lifetime so an entry always outlives the window in which the token would still
 		/// verify — expiry alone rejects it after that.
 		/// </summary>
+		/// <remarks>
+		/// The one cache here that stays on the wall clock, deliberately. Its job is to outlive a
+		/// validity window that is itself wall-clock time — the expiry IPFetch writes into the
+		/// token, which another process issued — and it can only be sure to if both are measured on
+		/// the same clock. Timed on the monotonic clock, a host clock stepped back would let an entry
+		/// lapse while the token it guards had become valid again, and the replay it exists to stop
+		/// would get through.
+		/// </remarks>
 		private static readonly TimeSpan RedeemedTokenTtl = TimeSpan.FromMinutes(5);
 
 		/// <summary>Thread-safe queue for marshalling network operations to the main Unity thread.</summary>
@@ -376,17 +427,20 @@ namespace FishMMO.Server.Implementation
 			OnAuthSweep();
 			SweepAuthTimeouts();
 			// Sweep expired entries from the handshake rate limiter to prevent
-			// unbounded memory growth under sustained handshake traffic.
-			handshakeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
-			tokenMintRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
+			// unbounded memory growth under sustained handshake traffic. The limiters and the
+			// real-IP cache are timed on the monotonic clock; see handshakeRateLimiter.
+			double nowSeconds = MonotonicClock.NowSeconds;
+			handshakeRateLimiter.SweepExpired(nowSeconds, maxScan: 64, maxRemove: 16);
+			tokenMintRateLimiter.SweepExpired(nowSeconds, maxScan: 64, maxRemove: 16);
 			// Same for the revocation limiters. The global one holds a single key, so its
 			// sweep is sized accordingly.
-			revokeRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
-			revokeGlobalRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 1, maxRemove: 1);
+			revokeRateLimiter.SweepExpired(nowSeconds, maxScan: 64, maxRemove: 16);
+			revokeGlobalRateLimiter.SweepExpired(nowSeconds, maxScan: 1, maxRemove: 1);
 			// Backstop for real-IP entries whose disconnect event never arrived. Entries are
 			// touched on every read, so this only reaches genuinely abandoned ones — an
 			// active connection, including one sitting in the login queue, is never evicted.
-			connectionRealIps.SweepExpired(DateTime.UtcNow, ConnectionRealIpTtl, maxScan: 64, maxRemove: 16);
+			connectionRealIps.SweepExpired(nowSeconds, ConnectionRealIpTtl, maxScan: 64, maxRemove: 16);
+			// Wall clock on purpose: see redeemedConnectionTokens.
 			redeemedConnectionTokens.SweepExpired(DateTime.UtcNow, RedeemedTokenTtl, maxScan: 64, maxRemove: 16);
 			TouchActiveConnectionRealIps();
 		}
@@ -412,10 +466,10 @@ namespace FishMMO.Server.Implementation
 			var clients = NetworkManager?.ServerManager?.Clients;
 			if (clients == null || clients.Count == 0) return;
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double nowSeconds = MonotonicClock.NowSeconds;
 			foreach (var clientId in clients.Keys)
 			{
-				connectionRealIps.TryGetAndTouch(clientId, nowUtc, out _);
+				connectionRealIps.TryGetAndTouch(clientId, nowSeconds, out _);
 			}
 		}
 
@@ -435,49 +489,43 @@ namespace FishMMO.Server.Implementation
 		/// <summary>
 		/// Disconnects clients that connected but never sent a valid
 		/// <see cref="ClientHandshake"/> within <see cref="authHandshakeTimeoutSeconds"/>.
-		/// Bounded scan (max 32 entries/frame) to keep per-frame cost low.
-		/// Authenticated connections are removed from the tracker without disconnecting.
 		/// </summary>
+		/// <remarks>
+		/// Reads <see cref="handshakeDeadlines"/> from the head and stops at the first deadline not
+		/// yet due, so a frame with nothing due costs one comparison and allocates nothing. At most
+		/// <see cref="MaxHandshakeDeadlinesPerFrame"/> are acted on per frame; the rest are still
+		/// at the head next frame.
+		/// </remarks>
 		private void SweepAuthTimeouts()
 		{
-			if (authHandshakeTimeoutSeconds <= 0f || connectionStartTimes.IsEmpty)
+			if (authHandshakeTimeoutSeconds <= 0f || handshakeDeadlines.Count == 0)
 				return;
 
-			DateTime now = DateTime.UtcNow;
-			TimeSpan timeout = TimeSpan.FromSeconds(authHandshakeTimeoutSeconds);
-			const int maxScanPerFrame = 32;
+			double now = MonotonicClock.NowSeconds;
+			double timeout = authHandshakeTimeoutSeconds;
+			var clients = NetworkManager?.ServerManager?.Clients;
 
-			// Refresh the snapshot when the cursor is at the start (new cycle)
-			// or when the snapshot is null/stale (first call or dictionary changed).
-			if (authTimeoutSweepCursor == 0 || authTimeoutSnapshot == null)
+			for (int processed = 0; processed < MaxHandshakeDeadlinesPerFrame && handshakeDeadlines.Count > 0; processed++)
 			{
-				authTimeoutSnapshot = connectionStartTimes.ToArray();
-			}
+				(int clientId, double started) = handshakeDeadlines.Peek();
+				if (now - started <= timeout)
+					break;
 
-			var snapshot = authTimeoutSnapshot;
-			int scanned = 0;
+				handshakeDeadlines.Dequeue();
 
-			for (int i = authTimeoutSweepCursor; i < snapshot.Length && scanned < maxScanPerFrame; i++, scanned++)
-			{
-				var kvp = snapshot[i];
-				int clientId = kvp.Key;
-				DateTime started = kvp.Value;
-
-				// Skip entries that were already removed between snapshot and now.
-				if (!connectionStartTimes.ContainsKey(clientId))
+				// Superseded: the connection completed its handshake, stopped or authenticated
+				// (entry gone), or its deadline was restarted (a later pair carries the current
+				// start).
+				if (!connectionStartTimes.TryGetValue(clientId, out double current) || current != started)
 					continue;
 
 				NetworkConnection conn = null;
-				var clients = NetworkManager?.ServerManager?.Clients;
 				if (clients != null)
 					clients.TryGetValue(clientId, out conn);
-				if (conn != null && conn.IsAuthenticated)
-				{
-					connectionStartTimes.TryRemove(clientId, out _);
-					continue;
-				}
 
-				if (conn == null)
+				// Connection gone without a Stopped event, or authenticated without passing
+				// through OnAuthentication: nothing to time out.
+				if (conn == null || conn.IsAuthenticated)
 				{
 					connectionStartTimes.TryRemove(clientId, out _);
 					continue;
@@ -485,109 +533,25 @@ namespace FishMMO.Server.Implementation
 
 				// A connection parked in the login queue is deliberately left
 				// unauthenticated until the queue admits it, which is indistinguishable
-				// here from a client that connected and never handshook. Refresh its
+				// here from a client that connected and never handshook. Restart its
 				// deadline instead of disconnecting: without this, every client queued for
 				// longer than authHandshakeTimeoutSeconds (15s by default) was dropped, so
-				// the queue could not hold anyone past that. The timeout still applies from
-				// the moment they leave the queue.
+				// the queue could not hold anyone past that. The queue's answer covers the
+				// admission window after it pops the client too, so the next restart lands no
+				// earlier than the moment the client was admitted and the full timeout still
+				// applies from there.
 				if (IsConnectionAwaitingQueueAdmission(conn))
 				{
 					connectionStartTimes[clientId] = now;
+					handshakeDeadlines.Enqueue((clientId, now));
 					continue;
 				}
 
-				if (now - started > timeout)
-				{
-					_ = Log.Warning(LogPrefix,
-						$"Connection {clientId} timed out waiting for ClientHandshake " +
-						$"({(now - started).TotalSeconds:F1}s > {authHandshakeTimeoutSeconds}s). Disconnecting.");
-					connectionStartTimes.TryRemove(clientId, out _);
-					try { conn.Disconnect(true); } catch { /* best effort */ }
-				}
-			}
-
-			// Advance cursor; wrap to 0 when we've covered the entire snapshot.
-			authTimeoutSweepCursor += scanned;
-			if (authTimeoutSweepCursor >= snapshot.Length)
-				authTimeoutSweepCursor = 0;
-
-			// Periodic full sweep to prevent unbounded dictionary growth under
-			// sustained connection churn.  The per-frame bounded scan (32 entries)
-			// with cursor provides fair coverage; this periodic full pass ensures
-			// stale entries are eventually cleaned up regardless of cursor position.
-			if (Time.realtimeSinceStartup - lastFullAuthTimeoutSweepTime >= FullAuthTimeoutSweepIntervalSeconds)
-			{
-				lastFullAuthTimeoutSweepTime = Time.realtimeSinceStartup;
-				PerformFullAuthTimeoutSweep(timeout, now);
-			}
-		}
-
-		/// <summary>Timestamp of the last full auth-timeout sweep (seconds since startup).</summary>
-		private float lastFullAuthTimeoutSweepTime = 0f;
-
-		/// <summary>Interval in seconds between full sweeps of <see cref="connectionStartTimes"/>.</summary>
-		private const float FullAuthTimeoutSweepIntervalSeconds = 30f;
-
-		/// <summary>
-		/// Cursor into the most recent snapshot of <see cref="connectionStartTimes"/>.
-		/// Advances each frame by <c>maxScanPerFrame</c> entries to guarantee every entry
-		/// is eventually visited, unlike <c>foreach</c> on a <see cref="ConcurrentDictionary{TKey,TValue}"/>
-		/// which returns a snapshot-at-enumeration that may skip entries indefinitely
-		/// under high connection churn.
-		/// </summary>
-		private int authTimeoutSweepCursor = 0;
-
-		/// <summary>
-		/// Most recent snapshot of <see cref="connectionStartTimes"/> for the per-frame
-		/// bounded scan.  Refreshed when the cursor wraps around or on first use each cycle.
-		/// </summary>
-		private KeyValuePair<int, DateTime>[] authTimeoutSnapshot = null;
-
-		/// <summary>
-		/// Processes ALL entries in <see cref="connectionStartTimes"/> to remove stale
-		/// entries that the per-frame bounded scan may have repeatedly skipped.
-		/// Uses <see cref="ConcurrentDictionary{TKey,TValue}.ToArray"/> to obtain a
-		/// stable snapshot; the allocation is acceptable at 30-second intervals.
-		/// </summary>
-		private void PerformFullAuthTimeoutSweep(TimeSpan timeout, DateTime now)
-		{
-			if (connectionStartTimes.IsEmpty) return;
-
-			int removed = 0;
-			foreach (var kvp in connectionStartTimes.ToArray())
-			{
-				int clientId = kvp.Key;
-				DateTime started = kvp.Value;
-
-				NetworkConnection conn = null;
-				var clients = NetworkManager?.ServerManager?.Clients;
-				if (clients != null)
-					clients.TryGetValue(clientId, out conn);
-
-				// Remove stale entries: connection gone or already authenticated.
-				if (conn == null || conn.IsAuthenticated)
-				{
-					connectionStartTimes.TryRemove(clientId, out _);
-					removed++;
-				}
-				// Timed-out connections: disconnect AND remove.
-				else if (now - started > timeout)
-				{
-					_ = Log.Warning(LogPrefix,
-						$"Connection {clientId} timed out waiting for ClientHandshake " +
-						$"({(now - started).TotalSeconds:F1}s > {timeout.TotalSeconds:F1}s) — " +
-						"disconnecting (full sweep).");
-					connectionStartTimes.TryRemove(clientId, out _);
-					try { conn.Disconnect(true); } catch { /* best effort */ }
-					removed++;
-				}
-			}
-
-			if (removed > 0)
-			{
-				_ = Log.Debug(LogPrefix,
-					$"Full auth-timeout sweep removed {removed} stale entries " +
-					$"({connectionStartTimes.Count} remaining).");
+				_ = Log.Warning(LogPrefix,
+					$"Connection {clientId} timed out waiting for ClientHandshake " +
+					$"({now - started:F1}s > {authHandshakeTimeoutSeconds}s). Disconnecting.");
+				connectionStartTimes.TryRemove(clientId, out _);
+				try { conn.Disconnect(true); } catch { /* best effort */ }
 			}
 		}
 
@@ -622,17 +586,19 @@ namespace FishMMO.Server.Implementation
 				return;
 			}
 
-			// Reject revocation requests from connections that have not started the
-			// authentication process.  This broadcast is registered with
-			// requiresAuthentication:false to allow authenticated clients to revoke
-			// tokens after the auth channel is torn down on logout, but completely
-			// unauthenticated connections (those that never sent a ClientHandshake)
-			// must not trigger DB queries.
-			//
-			// connectionStartTimes is populated on RemoteConnectionState.Started and
-			// removed on Stopped.  A connection that never started the auth process
-			// will not have an entry here.
-			if (!connectionStartTimes.ContainsKey(conn.ClientId))
+			/* Who may revoke: an authenticated connection (the client revokes its token on
+			 * logout, over the connection it is signed in on), or one still signing in — inside
+			 * its handshake window, or past the handshake and pending authentication in the
+			 * core. This broadcast is registered with requiresAuthentication:false so the
+			 * second kind can reach it; anything else must not trigger DB queries.
+			 *
+			 * The gate used to be connectionStartTimes alone. That map tracks the handshake
+			 * window and loses a connection once it authenticates, so every logout's
+			 * revocation from a signed-in client was dropped here and the token stayed valid
+			 * until it expired — the one case the broadcast exists for. It also loses the
+			 * connection when its handshake completes (EndHandshakeWindow), and from then the
+			 * core's pending tracking is what says the connection is still signing in. */
+			if (!conn.IsAuthenticated && !connectionStartTimes.ContainsKey(conn.ClientId) && !(Core?.IsAuthPending(conn) ?? false))
 			{
 				return;
 			}
@@ -643,7 +609,7 @@ namespace FishMMO.Server.Implementation
 			// connection's ClientId as the rate-limit key to prevent bypass attacks.
 			string ip = ResolveRateLimitKey(conn);
 			string rateLimitKey = !string.IsNullOrEmpty(ip) ? ip : $"conn:{conn.ClientId}";
-			if (!revokeRateLimiter.TryBegin(rateLimitKey, DateTime.UtcNow, RevokeRateLimitDuration))
+			if (!revokeRateLimiter.TryBegin(rateLimitKey, MonotonicClock.NowSeconds, RevokeRateLimitDuration))
 			{
 				_ = Log.Warning(LogPrefix, $"Revoke token rate limited for key {rateLimitKey}.");
 				return;
@@ -653,7 +619,7 @@ namespace FishMMO.Server.Implementation
 			// fallback key (conn:{clientId}), this global cap prevents an attacker from
 			// saturating the DB with revocation queries across many connections.
 			// Limits total revocations to 10/sec regardless of connection count.
-			if (!revokeGlobalRateLimiter.TryBegin("global", DateTime.UtcNow, RevokeGlobalRateLimitDuration))
+			if (!revokeGlobalRateLimiter.TryBegin("global", MonotonicClock.NowSeconds, RevokeGlobalRateLimitDuration))
 			{
 				_ = Log.Warning(LogPrefix, "Revoke token globally rate limited.");
 				return;
@@ -776,9 +742,31 @@ namespace FishMMO.Server.Implementation
 					_ = Log.Error(LogPrefix, $"Exception in main-thread auth action: {ex}");
 				}
 			}
-			if (!drainAll && mainThreadQueue.Count > 0)
-				_ = Log.Warning(LogPrefix, $"Main-thread queue back-pressure: {mainThreadQueue.Count} actions remain after draining {maxMainThreadActionsPerUpdate}.");
+			if (drainAll || mainThreadQueue.IsEmpty)
+				return;
+
+			/* Rate-limited: this is true on every frame for as long as the backlog lasts, which
+			 * is exactly when the server is busiest, and it used to log a warning on each of
+			 * them. One line per interval, carrying how many frames it covers, says the same. */
+			backPressureFrames++;
+			float nowSeconds = Time.unscaledTime;
+			if (nowSeconds >= nextBackPressureWarningTime)
+			{
+				nextBackPressureWarningTime = nowSeconds + BackPressureWarningIntervalSeconds;
+				_ = Log.Warning(LogPrefix, $"Main-thread queue back-pressure: {mainThreadQueue.Count} actions remain after draining {maxMainThreadActionsPerUpdate} " +
+					$"({backPressureFrames} frame(s) over the limit since the last report).");
+				backPressureFrames = 0;
+			}
 		}
+
+		/// <summary>Seconds between main-thread back-pressure warnings.</summary>
+		private const float BackPressureWarningIntervalSeconds = 5f;
+
+		/// <summary><see cref="Time.unscaledTime"/> before which no further back-pressure warning is logged.</summary>
+		private float nextBackPressureWarningTime;
+
+		/// <summary>Frames that ended with a backlog since the last back-pressure warning.</summary>
+		private int backPressureFrames;
 
 		/// <summary>Thread-safe enqueue of an action to be executed on the main Unity thread.</summary>
 		protected void EnqueueMainThreadAction(Action action) => mainThreadQueue.Enqueue(action);
@@ -859,14 +847,14 @@ namespace FishMMO.Server.Implementation
 		{
 			if (conn == null) return null;
 
-			if (connectionRealIps.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? ownIp))
+			if (connectionRealIps.TryGetAndTouch(conn.ClientId, MonotonicClock.NowSeconds, out string? ownIp))
 			{
 				return HandshakeService.NormalizeIp(ownIp);
 			}
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 				rt.ConnectionIpCache != null &&
-				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? realIp))
+				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, MonotonicClock.NowSeconds, out string? realIp))
 			{
 				return HandshakeService.NormalizeIp(realIp);
 			}
@@ -973,7 +961,7 @@ namespace FishMMO.Server.Implementation
 		{
 			if (conn == null || !conn.IsActive) return;
 
-			if (!tokenMintRateLimiter.TryBegin(conn.ClientId, DateTime.UtcNow, TokenMintRateLimitDuration))
+			if (!tokenMintRateLimiter.TryBegin(conn.ClientId, MonotonicClock.NowSeconds, TokenMintRateLimitDuration))
 			{
 				// Dropped, not answered: an answer is the cost being limited.
 				return;
@@ -1161,7 +1149,7 @@ namespace FishMMO.Server.Implementation
 			if (msg.Cookie == null || msg.Cookie.Length == 0)
 			{
 				string rateLimitKey = ResolveHandshakeRateLimitKey(conn);
-				if (!handshakeRateLimiter.TryBegin(rateLimitKey, DateTime.UtcNow, HandshakeRateLimitInterval))
+				if (!handshakeRateLimiter.TryBegin(rateLimitKey, MonotonicClock.NowSeconds, HandshakeRateLimitInterval))
 				{
 					// Log the trip — previous builds disconnected here with zero
 					// output, which hid every low-latency handshake failure.
@@ -1258,10 +1246,29 @@ namespace FishMMO.Server.Implementation
 			{
 				await Log.Warning(LogPrefix, $"Core is null during OnHandshakeReceived for connection {clientId} — handshake discarded. Ensure InitializeWorkers() was called before accepting connections.");
 			}
-			else
+			else if (Core.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.ConnectionToken, msg.MinVersion, msg.MaxVersion, msg.GameVersion ?? ""))
 			{
-				Core.OnHandshakeReceived(conn, msg.PublicKey, msg.Cookie, msg.ConnectionToken, msg.MinVersion, msg.MaxVersion, msg.GameVersion ?? "");
+				// The handshake is complete and the core now tracks the connection as pending
+				// authentication, so its limits take over from the handshake timeout.
+				EndHandshakeWindow(clientId);
 			}
+		}
+
+		/// <summary>
+		/// Ends a connection's handshake window: its handshake has completed, so
+		/// <see cref="authHandshakeTimeoutSeconds"/> no longer applies to it.
+		/// </summary>
+		/// <remarks>
+		/// Called only when the core reports the handshake complete, which is also the moment the
+		/// core starts tracking the connection, so there is no gap in which an unauthenticated
+		/// connection is bounded by neither. Removing the map entry is all it takes: its pair in
+		/// <see cref="handshakeDeadlines"/> no longer matches when it falls due and is dropped
+		/// there, which keeps the queue main-thread only and head-ordered.
+		/// </remarks>
+		/// <param name="clientId">The connection's client ID.</param>
+		private void EndHandshakeWindow(int clientId)
+		{
+			connectionStartTimes.TryRemove(clientId, out _);
 		}
 
 		/// <summary>
@@ -1676,14 +1683,15 @@ namespace FishMMO.Server.Implementation
 			if (string.IsNullOrEmpty(realIp)) return;
 
 			// Authenticator-owned cache: authoritative, and present on every server type.
-			connectionRealIps.Upsert(clientId, realIp, DateTime.UtcNow);
+			double nowSeconds = MonotonicClock.NowSeconds;
+			connectionRealIps.Upsert(clientId, realIp, nowSeconds);
 
 			// Mirror into the account-creation container where it exists (Login Server), so
 			// its ingress validation keeps seeing the same data as before.
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.ConnectionIpCache?.Upsert(clientId, realIp, DateTime.UtcNow);
+				runtimeData.ConnectionIpCache?.Upsert(clientId, realIp, nowSeconds);
 			}
 		}
 
@@ -1694,7 +1702,11 @@ namespace FishMMO.Server.Implementation
 			{
 				// Record the connection start time for the authentication timeout sweep.
 				// TryAdd is a no-op if the key already exists (defense against duplicate Started events).
-				connectionStartTimes.TryAdd(conn.ClientId, DateTime.UtcNow);
+				double startedSeconds = MonotonicClock.NowSeconds;
+				if (connectionStartTimes.TryAdd(conn.ClientId, startedSeconds) && authHandshakeTimeoutSeconds > 0f)
+				{
+					handshakeDeadlines.Enqueue((conn.ClientId, startedSeconds));
+				}
 				// Generate a random nonce to bind this handshake to this specific
 				// connection instance.  If the ClientId is recycled during an await
 				// in OnServerClientHandshakeReceivedAsync, the nonce check detects
@@ -1754,8 +1766,21 @@ namespace FishMMO.Server.Implementation
 		/// Invokes the authentication result event for a connection.
 		/// On success, the stale-auth sweep no longer purges this connection.
 		/// </summary>
+		/// <remarks>
+		/// Every core reports its result through here on the main thread, so this is where a
+		/// successful connection leaves both pending-authentication trackers: the core's
+		/// (<see cref="BaseAuthenticatorCore{TConnection}.EndAuthTracking"/>, which otherwise kept
+		/// the slot until its TTL ran out and then logged the connection as recycled) and the
+		/// handshake-timeout map. A connection normally left the map when its handshake completed
+		/// (<see cref="EndHandshakeWindow"/>); the removal here is the backstop.
+		/// </remarks>
 		public virtual void OnAuthentication(NetworkConnection conn, bool authenticated)
 		{
+			if (authenticated && conn != null)
+			{
+				connectionStartTimes.TryRemove(conn.ClientId, out _);
+				Core?.EndAuthTracking(conn);
+			}
 			OnAuthenticationResult?.Invoke(conn, authenticated);
 		}
 

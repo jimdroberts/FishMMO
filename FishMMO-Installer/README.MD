@@ -125,6 +125,7 @@ The web server service registration (menu 3-5) is **cross-platform** — systemd
 |---|---|
 | 1 | Configure Web Server Settings (IPFetch, Patcher, WebGL, Control Panel) |
 | 2 | Configure Discord Bot Settings |
+| 3 | Configure Secrets & Environment (database, mail, service, Discord token: one file) |
 
 The wizard (`AppSettingsInstaller`) supports configuration for 5 components:
 
@@ -134,7 +135,7 @@ The wizard (`AppSettingsInstaller`) supports configuration for 5 components:
 | Patcher Web Server | 5-1 | `appsettings.json` | HttpPort, Patches directory |
 | WebGL Web Server | 5-1 | `appsettings.json` | HttpPort |
 | Control Panel Web Server | 5-1 | `appsettings.json` | HttpPort, Npgsql connection string |
-| Discord Bot | 5-2 | `appsettings.json` | Token, Guild ID, Npgsql DSN, chat bridge, rate limiting |
+| Discord Bot | 5-2 | `appsettings.json` | Guild ID, `Npgsql` host/port/database/schema, chat bridge, rate limiting. No secrets: option 3 opens Secrets & Environment (5-3), which holds `FISHMMO_DISCORD_TOKEN` and the `FISHMMO_DB_*` credentials. |
 
 The installer's **own** database connection (Host, Port, Database, Username, Password) is
 not part of this wizard — it is menu 2-1, `DatabaseSecretsInstaller`, which writes the
@@ -485,9 +486,11 @@ Database operations require `appsettings.json` in the working directory. Non-sen
 }
 ```
 
-### Npgsql connection string format (for web servers and the Discord bot)
+### Npgsql connection string format (for web servers)
 
-Components that use `ConnectionStrings` format use semicolon-delimited Npgsql DSNs:
+The IPFetch and Control Panel web servers read `ConnectionStrings:NpgsqlConnection`, a
+semicolon-delimited Npgsql DSN. The Discord bot does not: it reads the `Npgsql` section and the
+`FISHMMO_DB_*` credentials, like the game servers.
 
 ```
 Host=127.0.0.1;Port=5432;Database=fish_mmo_postgresql;Username=;Password=;Ssl Mode=Prefer;

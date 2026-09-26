@@ -182,12 +182,15 @@ namespace FishMMO.Database.Data
 		public DateTime? OldestUnsentCreatedAt { get; set; }
 
 		/// <summary>
-		/// When the read was taken (UTC).
+		/// When the read was taken (UTC), by the database clock.
 		/// </summary>
 		/// <remarks>
 		/// The ages above are differences against this instant, computed by the caller rather
-		/// than stored, so a panel clock that disagrees with the database's cannot turn a young
-		/// queue into an alarm or an old one into silence.
+		/// than stored. It is the database's time because the database stamps
+		/// <c>created_at</c> (a column default), so both sides of every age come from one clock
+		/// and a panel clock that disagrees with the database's cannot turn a young queue into an
+		/// alarm or an old one into silence. It used to be the panel's own <c>DateTime.UtcNow</c>,
+		/// and the alarm moved with the panel host's clock.
 		/// </remarks>
 		public DateTime ReadAtUtc { get; set; }
 	}
@@ -311,7 +314,7 @@ namespace FishMMO.Database.Data
 		/// <summary>When the oldest undelivered row was enqueued (UTC), or null when all went out.</summary>
 		public DateTime? OldestUnsentCreatedAt { get; set; }
 
-		/// <summary>When the read was taken (UTC). See <see cref="EmailQueuePage.ReadAtUtc"/>.</summary>
+		/// <summary>When the read was taken (UTC), by the database clock. See <see cref="EmailQueuePage.ReadAtUtc"/>.</summary>
 		public DateTime ReadAtUtc { get; set; }
 	}
 
@@ -403,6 +406,27 @@ namespace FishMMO.Database.Data
 
 		/// <summary>When the row was matched (UTC), or null while waiting.</summary>
 		public DateTime? TimeMatched { get; set; }
+
+		/// <summary>
+		/// Seconds since <see cref="TimeCreated"/>, measured by the database clock at the read.
+		/// Never negative.
+		/// </summary>
+		/// <remarks>
+		/// Measured by the database because it stamped <see cref="TimeCreated"/>. A reader that
+		/// subtracted the stamp from its own clock would be measuring its host's drift as much as
+		/// the wait.
+		/// </remarks>
+		public double WaitSeconds { get; set; }
+
+		/// <summary>
+		/// Seconds since <see cref="LastPulse"/>, measured by the database clock at the read. Never
+		/// negative.
+		/// </summary>
+		/// <remarks>
+		/// What decides whether the row reads as stale, so it is taken by the clock that wrote the
+		/// heartbeat, exactly as the matcher itself judges a row. See <see cref="WaitSeconds"/>.
+		/// </remarks>
+		public double PulseAgeSeconds { get; set; }
 	}
 
 	/// <summary>How many group finder rows are in each state.</summary>
@@ -436,7 +460,12 @@ namespace FishMMO.Database.Data
 		/// <summary>How many rows are in each state, over the whole table.</summary>
 		public GroupFinderQueueCounts Counts { get; set; } = new GroupFinderQueueCounts();
 
-		/// <summary>When the read was taken (UTC).</summary>
+		/// <summary>When the read was taken (UTC), by the database clock.</summary>
+		/// <remarks>
+		/// For display only. The ages on each row are measured by the database in the statement
+		/// that read them (<see cref="GroupFinderQueueAdminData.PulseAgeSeconds"/>), not derived
+		/// from this.
+		/// </remarks>
 		public DateTime ReadAtUtc { get; set; }
 	}
 }

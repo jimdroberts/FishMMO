@@ -24,7 +24,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// <para><b>Admission rate:</b> Clients are admitted from the queue at a
 	/// server-configured rate (<c>LoginQueueAdmissionRatePerSecond</c>) to prevent
 	/// the newly-admitted clients from immediately re-saturating auth capacity.</para>
+	///
+	/// <para><b>When it engages:</b> only when a handshake would push the number of connections
+	/// mid-authentication past the authenticator's pending cap (<c>AuthMaxPendingConnections</c>,
+	/// default 1,000 on the login server: what its SRP verify and proof channels hold between them,
+	/// see <c>PendingAuthRules.DefaultLoginPendingCap</c>). The authenticator finds this system in the behaviour registry when it
+	/// needs it, so the system has to be listed in the LoginServer scene's behaviours for the
+	/// queue to exist at all.</para>
+	///
+	/// <para><b>Threading:</b> main thread only. Every entry point is reached from a FishNet
+	/// callback, the authenticator's handshake path or its per-frame sweep, all of which run on
+	/// the main thread.</para>
 	/// </summary>
+	[UnityEngine.CreateAssetMenu(fileName = "LoginQueueSystem", menuName = "FishMMO/Server/LoginServer/Login Queue System", order = 1)]
 	public class LoginQueueSystem : ServerBehaviour
 	{
 		/// <summary>
@@ -50,7 +62,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Maximum rate at which clients are admitted from the queue (per second).
 		/// Smooths re-admission to prevent auth-capacity re-saturation.
 		/// </summary>
-		private float admissionRatePerSecond = 5.0f;
+		private float admissionRatePerSecond = DefaultAdmissionRatePerSecond;
+
+		/// <summary>
+		/// Admissions per second when <c>LoginQueueAdmissionRatePerSecond</c> is not configured.
+		/// </summary>
+		/// <remarks>
+		/// Fifty: under what the SRP pipeline completes, so the queue drains into it rather than
+		/// refilling the pending cap it is waiting on. The bottleneck is the proof stage, two workers
+		/// by default, each proof several database round trips (the lockout reads, the online check,
+		/// the token write) plus the SRP arithmetic — tens of milliseconds, so somewhere near a hundred
+		/// a second between them. The old five a second took a hundred seconds to drain a full queue
+		/// of 500 while the pipeline sat mostly idle. An admitted client that finds the cap still full
+		/// is re-admitted at once rather than sent to the back (<see cref="recentlyAdmitted"/>), so a
+		/// rate slightly above the pipeline costs a retry, not a place.
+		/// </remarks>
+		public const float DefaultAdmissionRatePerSecond = 50f;
 
 		/// <summary>
 		/// Maximum seconds a client can remain in the queue before being timed out.
@@ -59,9 +86,21 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private float queueTimeoutSeconds = 300f;
 
 		/// <summary>
-		/// Accumulator for rate-limited admission timing.
+		/// Admissions paid for and not yet spent. Accrues at <see cref="admissionRatePerSecond"/>
+		/// and each admission spends one; see <see cref="AccrueAdmissionCredit"/>.
 		/// </summary>
-		private float nextAdmissionTime;
+		/// <remarks>
+		/// A credit rather than a countdown to the next single admission: the countdown admitted at
+		/// most one client per frame, so any configured rate above the frame rate was silently cut
+		/// to the frame rate.
+		/// </remarks>
+		private float admissionCredit;
+
+		/// <summary>
+		/// Most admission credit that can build up while clients are queued, in seconds of the
+		/// admission rate — so a frame hitch can make up at most this much lost time.
+		/// </summary>
+		private const float MaxAdmissionCreditSeconds = 1f;
 
 		/// <summary>
 		/// Accumulator for the next position-broadcast sweep.
@@ -79,19 +118,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private const float PurgeSweepIntervalSeconds = 10f;
 
 		/// <summary>
-		/// Set of client IDs that were recently admitted from the queue.
+		/// Client IDs recently admitted from the queue, in admission order.
 		/// If a recently-admitted client's re-handshake fails (auth cap full),
 		/// they get immediate re-admission instead of being re-queued at the tail.
 		/// Entries expire after <see cref="RecentAdmitTtlSeconds"/>.
 		/// </summary>
-		// ConcurrentDictionary used instead of HashSet for thread safety.
-		// OnClientDisconnected() is called from FishNet network callbacks (potentially
-		// on a transport thread), while TryEnqueue() and TryAdmitFromQueue() run on
-		// the Unity main thread. ConcurrentDictionary provides lock-free reads/writes.
-		private readonly ConcurrentDictionary<int, DateTime> recentlyAdmitted = new ConcurrentDictionary<int, DateTime>();
+		/// <remarks>
+		/// A fixed window per client from its admission, on the monotonic clock: every entry lives
+		/// the same TTL and a re-admission restarts it at the back, so the oldest entry is always the
+		/// next to expire and <see cref="SweepRecentlyAdmitted"/> reads only the head — nothing at
+		/// all while the set is empty — and a lapsed entry reads as absent even before the sweep
+		/// reaches it. It was a ConcurrentDictionary swept on a timer that never reset while the set
+		/// was empty, so from ten seconds after startup its Count, which takes every one of the
+		/// dictionary's locks, ran every frame.
+		/// </remarks>
+		private readonly FixedWindowCounter<int> recentlyAdmitted =
+			new FixedWindowCounter<int>(TimeSpan.FromSeconds(RecentAdmitTtlSeconds));
 
 		/// <summary>
-		/// UTC time each connection first entered the queue, preserved across re-queues.
+		/// Monotonic time (seconds) each connection first entered the queue, preserved across
+		/// re-queues. <see cref="PurgeStaleEntries"/> times the queue timeout from it.
 		/// </summary>
 		/// <remarks>
 		/// A client that is admitted and then deferred again (auth cap still full once its
@@ -100,10 +146,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// every cycle and a client can be recycled indefinitely while later arrivals get
 		/// in ahead of it. Keyed by ClientId so the entry survives the connection object
 		/// leaving and re-entering the queue.
+		/// <para>
+		/// Monotonic because the timeout is a local duration: on the wall clock, a step forward
+		/// timed out — and disconnected — everyone in the queue at the next purge.
+		/// </para>
 		/// </remarks>
-		private readonly ConcurrentDictionary<int, DateTime> firstQueuedUtc = new ConcurrentDictionary<int, DateTime>();
+		private readonly ConcurrentDictionary<int, double> firstQueuedSeconds = new ConcurrentDictionary<int, double>();
 		private const float RecentAdmitTtlSeconds = 15f;
-		private float nextRecentAdmitSweep;
+
+		/// <summary>Reused by <see cref="PurgeStaleEntries"/> so a purge pass allocates nothing.</summary>
+		private readonly List<NetworkConnection> purgeBuffer = new List<NetworkConnection>();
 
 		/// <summary>
 		/// Returns the current number of clients in the queue.
@@ -132,7 +184,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// from under a client the server itself just invited back.
 		/// </remarks>
 		public bool IsAwaitingAdmission(NetworkConnection conn) =>
-			conn != null && (IsQueued(conn) || recentlyAdmitted.ContainsKey(conn.ClientId));
+			conn != null && (IsQueued(conn) || recentlyAdmitted.GetCount(conn.ClientId, MonotonicClock.NowSeconds) > 0);
 
 		#region ServerBehaviour Lifecycle
 
@@ -141,9 +193,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			queue = new ArrivalOrderTracker<NetworkConnection>();
 			ReadConfiguration();
-			nextAdmissionTime = 0f;
+			// One admission ready, as the countdown this replaced started at zero: the first
+			// client queued after idle is admitted at once, the rest at the configured rate.
+			admissionCredit = 1f;
 			nextQueueUpdate = 0f;
 			nextPurgeSweep = PurgeSweepIntervalSeconds;
+			recentlyAdmitted.Clear();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -153,7 +208,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (queue == null)
 				return;
 
-			SweepRecentlyAdmitted(deltaTime);
+			SweepRecentlyAdmitted(MonotonicClock.NowSeconds);
 			TryAdmitFromQueue(deltaTime);
 			BroadcastPositionUpdates(deltaTime);
 			PurgeStaleEntries(deltaTime);
@@ -183,7 +238,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				queue = null;
 			}
 			recentlyAdmitted.Clear();
-			firstQueuedUtc.Clear();
+			firstQueuedSeconds.Clear();
 		}
 
 		#endregion
@@ -202,7 +257,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			maxQueueSize = cfg.GetInt("LoginQueueMaxSize", 500);
 			if (maxQueueSize < 1) maxQueueSize = 1;
 			if (maxQueueSize > 10000) maxQueueSize = 10000;
-			admissionRatePerSecond = ReadFloatConfig(cfg, "LoginQueueAdmissionRatePerSecond", 5.0f, 0.1f, 100f);
+			admissionRatePerSecond = ReadFloatConfig(cfg, "LoginQueueAdmissionRatePerSecond", DefaultAdmissionRatePerSecond, 0.1f, 100f);
 			queueTimeoutSeconds = ReadFloatConfig(cfg, "LoginQueueTimeoutSeconds", 300f, 30f, 3600f);
 
 			Log.Debug("LoginQueueSystem",
@@ -248,9 +303,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Fast-pass: if this client was recently admitted from the queue
 			// but their re-handshake failed (auth cap still full), admit them
 			// immediately instead of re-queuing at the tail.
-			if (recentlyAdmitted.ContainsKey(conn.ClientId))
+			if (recentlyAdmitted.GetCount(conn.ClientId, MonotonicClock.NowSeconds) > 0)
 			{
-				recentlyAdmitted.TryRemove(conn.ClientId, out _);
+				recentlyAdmitted.Remove(conn.ClientId);
 				int pos = 0; // immediate re-admission
 				SendPositionUpdate(conn, pos, 0, queue.Count);
 				Log.Debug("LoginQueueSystem",
@@ -271,16 +326,20 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			// Preserve the original arrival time across re-queues so queueTimeoutSeconds
 			// bounds the client's total wait rather than restarting each cycle.
-			DateTime arrivedUtc = firstQueuedUtc.GetOrAdd(conn.ClientId, DateTime.UtcNow);
-			queue.TrackIfMissing(conn, arrivedUtc);
+			// The tracker's own timestamp is unused: the timeout is timed from firstQueuedSeconds.
+			firstQueuedSeconds.GetOrAdd(conn.ClientId, MonotonicClock.NowSeconds);
+			queue.TrackIfMissing(conn, default);
 
 			// Send an immediate position update so the client knows they're queued.
-			int position = queue.GetPosition(conn);
+			// The connection was not queued (checked above) and was appended at the tail, so
+			// its 1-based position is the queue length — no need for GetPosition, which walks
+			// the queue from the head and made every enqueue O(N).
+			int position = queue.Count;
 			int estimate = EstimateWaitSeconds(position);
-			SendPositionUpdate(conn, position, estimate, queue.Count);
+			SendPositionUpdate(conn, position, estimate, position);
 
 			Log.Debug("LoginQueueSystem",
-				$"Connection {conn.ClientId} queued at position {position}/{queue.Count}.");
+				$"Connection {conn.ClientId} queued at position {position}/{position}.");
 
 			return true;
 		}
@@ -290,24 +349,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 		#region Queue Processing
 
 		/// <summary>
-		/// Admits clients from the front of the queue at the configured admission rate.
+		/// Admits clients from the front of the queue at the configured admission rate —
+		/// as many per frame as the accrued credit pays for.
 		/// Admitted clients receive position=0, signalling them to re-initiate the handshake.
 		/// </summary>
 		private void TryAdmitFromQueue(float deltaTime)
 		{
-			if (queue.Count == 0) return;
+			bool queueEmpty = queue.Count == 0;
+			admissionCredit = AccrueAdmissionCredit(admissionCredit, deltaTime, admissionRatePerSecond, queueEmpty);
+			if (queueEmpty) return;
 
-			nextAdmissionTime -= deltaTime;
-			if (nextAdmissionTime > 0f) return;
-
-			// Discard dead entries without spending the admission tick on them.
+			// Discard dead entries without spending admission credit on them.
 			// Popping a disconnected client used to consume the tick anyway, so a run of
 			// stale entries throttled real admissions to the queue's drain rate (5/s by
 			// default) — the queue appeared to stall for clients who were still waiting.
 			// Bounded so a fully-dead queue cannot spin the whole frame.
 			const int maxSkipPerTick = 64;
 			int skipped = 0;
-			while (skipped < maxSkipPerTick && queue.PopOldest(out NetworkConnection conn, out _))
+			double nowSeconds = MonotonicClock.NowSeconds;
+			while (admissionCredit >= 1f && skipped < maxSkipPerTick && queue.PopOldest(out NetworkConnection conn, out _))
 			{
 				if (conn == null || !conn.IsActive)
 				{
@@ -317,8 +377,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 				// Track as recently admitted so that if their re-handshake
 				// fails (auth cap still full), they get a fast-pass through
-				// TryEnqueue instead of being re-queued at the tail.
-				recentlyAdmitted[conn.ClientId] = DateTime.UtcNow;
+				// TryEnqueue instead of being re-queued at the tail. Removed first so a
+				// re-admission moves to the back and the set stays in admission order.
+				recentlyAdmitted.Remove(conn.ClientId);
+				recentlyAdmitted.Increment(conn.ClientId, nowSeconds);
 
 				// Position 0 = "you are being processed now — retry your handshake"
 				SendPositionUpdate(conn, 0, 0, 0);
@@ -326,16 +388,37 @@ namespace FishMMO.Server.Implementation.LoginServer
 					$"Connection {conn.ClientId} admitted from queue. " +
 					$"{queue.Count} remaining.");
 
-				// One live client per interval.
-				nextAdmissionTime = 1.0f / admissionRatePerSecond;
-				return;
+				admissionCredit -= 1f;
 			}
 
 			if (skipped > 0)
 			{
 				Log.Debug("LoginQueueSystem", $"Skipped {skipped} dead queue entries while admitting.");
 			}
-			// Nothing live was admitted; retry on the next tick rather than idling a full interval.
+		}
+
+		/// <summary>
+		/// Advances the admission credit by one frame.
+		/// </summary>
+		/// <remarks>
+		/// While clients are queued the credit grows at <paramref name="ratePerSecond"/>, capped at
+		/// <see cref="MaxAdmissionCreditSeconds"/> of it (never below one admission), and each
+		/// admission spends one — so the rate holds whatever the frame rate, and a hitch makes up
+		/// at most that much lost time. With the queue empty it refills to one admission and no
+		/// further: the first client queued after idle goes straight through and the rate applies
+		/// from there, rather than an idle spell banking a burst.
+		/// </remarks>
+		/// <param name="credit">Credit before this frame.</param>
+		/// <param name="deltaTime">Seconds since the last frame.</param>
+		/// <param name="ratePerSecond">Configured admission rate.</param>
+		/// <param name="queueEmpty">Whether no client is waiting.</param>
+		/// <returns>Credit after this frame.</returns>
+		internal static float AccrueAdmissionCredit(float credit, float deltaTime, float ratePerSecond, bool queueEmpty)
+		{
+			float rate = Math.Max(0f, ratePerSecond);
+			float cap = queueEmpty ? 1f : Math.Max(1f, rate * MaxAdmissionCreditSeconds);
+			float accrued = credit + Math.Max(0f, deltaTime) * rate;
+			return Math.Min(accrued, cap);
 		}
 
 		/// <summary>
@@ -359,28 +442,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Removes expired entries from <see cref="recentlyAdmitted"/>.
-		/// Runs every <see cref="PurgeSweepIntervalSeconds"/> seconds.
+		/// Removes entries past their TTL from <see cref="recentlyAdmitted"/>, oldest first.
 		/// </summary>
-		private void SweepRecentlyAdmitted(float deltaTime)
+		/// <remarks>
+		/// Every frame, reading only the head: an entry leaves exactly when its TTL runs out, so
+		/// the fast-pass window is the same for every client (clearing the whole set, as this once
+		/// did, made it anywhere from 0 to ~25 seconds), and a frame with nothing due — including
+		/// every frame while the set is empty — costs one peek.
+		/// </remarks>
+		private void SweepRecentlyAdmitted(double nowSeconds)
 		{
-			nextRecentAdmitSweep -= deltaTime;
-			if (nextRecentAdmitSweep > 0f || recentlyAdmitted.Count == 0) return;
-
-			nextRecentAdmitSweep = PurgeSweepIntervalSeconds;
-
-			// Remove only entries past their TTL. Clearing the whole set (the previous
-			// behaviour) made the fast-pass window anywhere from 0 to ~25 seconds
-			// depending on where a client landed relative to the sweep, so a client
-			// admitted just before one lost its fast pass almost immediately.
-			DateTime cutoff = DateTime.UtcNow.AddSeconds(-RecentAdmitTtlSeconds);
-			foreach (var pair in recentlyAdmitted)
-			{
-				if (pair.Value <= cutoff)
-				{
-					recentlyAdmitted.TryRemove(pair.Key, out _);
-				}
-			}
+			recentlyAdmitted.SweepExpired(nowSeconds, int.MaxValue);
 		}
 
 		/// <summary>
@@ -391,8 +463,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="clientId">The FishNet client ID that disconnected.</param>
 		public void OnClientDisconnected(int clientId)
 		{
-			recentlyAdmitted.TryRemove(clientId, out _);
-			firstQueuedUtc.TryRemove(clientId, out _);
+			recentlyAdmitted.Remove(clientId);
+			firstQueuedSeconds.TryRemove(clientId, out _);
 			// We can't look up the NetworkConnection from just the clientId
 			// without access to the ServerManager, but the next purge sweep
 			// will catch it. The recentlyAdmitted cleanup is the critical path
@@ -416,8 +488,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public void OnClientDisconnected(NetworkConnection conn)
 		{
 			if (conn == null) return;
-			recentlyAdmitted.TryRemove(conn.ClientId, out _);
-			firstQueuedUtc.TryRemove(conn.ClientId, out _);
+			recentlyAdmitted.Remove(conn.ClientId);
+			firstQueuedSeconds.TryRemove(conn.ClientId, out _);
 			queue?.Remove(conn);
 		}
 
@@ -431,14 +503,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			nextPurgeSweep = PurgeSweepIntervalSeconds;
 
-			DateTime now = DateTime.UtcNow;
-			DateTime timeoutThreshold = now.AddSeconds(-queueTimeoutSeconds);
+			double now = MonotonicClock.NowSeconds;
 
-			var toRemove = new System.Collections.Generic.List<NetworkConnection>();
+			List<NetworkConnection> toRemove = purgeBuffer;
+			toRemove.Clear();
 
-			queue.ForEachInOrder((conn, enteredUtc, _) =>
+			queue.ForEachInOrder((conn, _, _) =>
 			{
-				if (conn == null || !conn.IsActive || enteredUtc < timeoutThreshold)
+				if (conn == null || !conn.IsActive ||
+					(firstQueuedSeconds.TryGetValue(conn.ClientId, out double arrived) && now - arrived > queueTimeoutSeconds))
 					toRemove.Add(conn);
 			});
 
@@ -463,9 +536,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 						}
 					}
 					catch (Exception ex)
-				{
-					Log.Warning("LoginQueueSystem", $"Error disconnecting purged client {conn?.ClientId}: {ex.Message}");
-				}
+					{
+						Log.Warning("LoginQueueSystem", $"Error disconnecting purged client {conn?.ClientId}: {ex}");
+					}
 				}
 			}
 
@@ -475,6 +548,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					$"Purged {toRemove.Count} stale entries from queue. " +
 					$"{queue.Count} remaining.");
 			}
+			toRemove.Clear();
 		}
 
 		#endregion

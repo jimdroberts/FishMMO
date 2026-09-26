@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FishMMO.Shared;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
@@ -9,10 +10,17 @@ namespace FishMMO.Server.Core.World.SceneServer
 	public interface IGuildCharacterMappingData : IRuntimeDataContainer
 	{
 		/// <summary>
-		/// Tracks all guild members for guilds with at least one member logged into this server.
-		/// Key: Guild ID, Value: Set of Character IDs.
+		/// The roster this server last delivered, for each guild with at least one member logged
+		/// into it. Key: Guild ID, Value: each member's row by character ID, in the FULL projection
+		/// (officer notes included).
 		/// </summary>
-		Dictionary<long, HashSet<long>> GuildMemberTracker { get; }
+		/// <remarks>
+		/// The baseline the guild pump diffs a freshly read roster against: departed members are
+		/// the keys missing from the new read, and a <c>GuildRosterDeltaBroadcast</c> carries the
+		/// rows that differ. One collection for both, so the set of members and the rows they were
+		/// sent cannot drift apart.
+		/// </remarks>
+		Dictionary<long, Dictionary<long, GuildAddEntry>> GuildMemberTracker { get; }
 
 		/// <summary>
 		/// Tracks currently online guild members on this scene server.

@@ -12,6 +12,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </remarks>
 	public interface ICharacterAchievementService :
 		IPersistManyAction<CharacterAchievementData>,
+		IPersistManyOwnedAction<CharacterAchievementData>,
 		IDeleteByKeyVersionedAction<long>,
 		IFetchCollectionByKeyAction<long, CharacterAchievementData>
 	{

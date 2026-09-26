@@ -19,10 +19,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	/// </para>
 	/// <para>
 	/// It is scene-scoped by construction: neighbours come from the NPC's own
-	/// <see cref="PhysicsScene"/>, which the scene server gives every stacked instance separately
-	/// (<c>LocalPhysicsMode.Physics3D</c>). Attackers around one target are spaced by
-	/// <see cref="AICombatSlots"/>; this only stops bodies overlapping in the wander, idle and
-	/// approach cases the ring does not cover.
+	/// <see cref="PhysicsScene"/>'s <see cref="AIBodyGrid"/>, which is separate for every stacked
+	/// instance. Attackers around one target are spaced by <see cref="AICombatSlots"/>; this only
+	/// stops bodies overlapping in the wander, idle and approach cases the ring does not cover.
 	/// </para>
 	/// </remarks>
 	public static class AISeparation
@@ -34,11 +33,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// The velocity that moves <paramref name="self"/> out of its neighbours' bodies.
 		/// </summary>
 		/// <param name="self">This NPC's position.</param>
+		/// <param name="selfKey">This NPC's identity key; breaks the tie when two bodies coincide.</param>
 		/// <param name="neighbours">Positions of nearby NPC bodies.</param>
+		/// <param name="neighbourKeys">Each neighbour's identity key, in the same order.</param>
 		/// <param name="radius">Distance at which a neighbour starts to push, in metres.</param>
 		/// <param name="maxSpeed">Push speed when fully overlapped, in metres per second.</param>
 		/// <returns>A horizontal velocity, zero when nothing is inside the radius.</returns>
-		public static Vector3 Resolve(Vector3 self, IReadOnlyList<Vector3> neighbours, float radius, float maxSpeed)
+		public static Vector3 Resolve(Vector3 self, uint selfKey, IReadOnlyList<Vector3> neighbours, IReadOnlyList<uint> neighbourKeys, float radius, float maxSpeed)
 		{
 			if (neighbours == null || neighbours.Count == 0 || radius <= 0f || maxSpeed <= 0f)
 			{
@@ -59,8 +60,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 				if (sqrDistance < COINCIDENT_SQR)
 				{
-					// Exactly on top of each other: any direction is out. Pick a stable one.
-					away = Vector3.right;
+					/* Exactly on top of each other: any direction is out, but the two bodies must
+					 * not pick the SAME one. A fixed +x did exactly that: both pushed the same way,
+					 * slid together at the push speed to a NavMesh edge and stayed stacked there —
+					 * and a spawner without random placement stacks every NPC it places on one
+					 * point. Each pair gets its own axis from both keys, and the lower key takes
+					 * one end of it and the higher the other, so the pair separates; three or more
+					 * stacked bodies spread along different axes. */
+					uint otherKey = neighbourKeys != null && i < neighbourKeys.Count ? neighbourKeys[i] : selfKey;
+					away = CoincidentPushDirection(selfKey, otherKey);
 					sqrDistance = 0f;
 				}
 
@@ -76,6 +84,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			return push / strength * Mathf.Min(maxSpeed, strength * maxSpeed);
+		}
+
+		/// <summary>
+		/// The horizontal direction <paramref name="selfKey"/> pushes in when its body coincides
+		/// with <paramref name="otherKey"/>'s.
+		/// </summary>
+		/// <remarks>
+		/// The pair's axis depends only on the unordered pair, and the lower key pushes along it
+		/// while the higher pushes against it, so the two answers are exact opposites. Equal keys —
+		/// which distinct NPCs never have, see <see cref="AIController.IdentityKey"/> — fall back
+		/// to a fixed direction.
+		/// </remarks>
+		/// <param name="selfKey">The pushing body's key.</param>
+		/// <param name="otherKey">The coincident body's key.</param>
+		/// <returns>A unit horizontal direction.</returns>
+		public static Vector3 CoincidentPushDirection(uint selfKey, uint otherKey)
+		{
+			if (selfKey == otherKey)
+			{
+				return Vector3.right;
+			}
+
+			uint low = selfKey < otherKey ? selfKey : otherKey;
+			uint high = selfKey < otherKey ? otherKey : selfKey;
+			float angle = AIController.PhaseFraction(low, high) * (2f * Mathf.PI);
+			Vector3 axis = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+			return selfKey == low ? axis : -axis;
 		}
 	}
 }

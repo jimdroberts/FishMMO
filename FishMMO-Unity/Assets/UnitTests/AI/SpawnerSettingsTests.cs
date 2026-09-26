@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests.AI
 			 * interval, so a wiped camp takes the better part of a minute and no authored
 			 * MinimumRespawnTime can raise the ceiling. */
 			SpawnerRuntime spawner = SpawnerTestKit.NewRuntime(new SpawnerScheduler(), maxSpawnCount: 10);
-			DateTime overdue = DateTime.UtcNow.AddSeconds(-1.0);
+			double overdue = spawner.Scheduler.Now - 1.0;
 			for (int i = 0; i < 5; ++i)
 			{
 				spawner.AddRespawnTimer(overdue);
@@ -49,23 +49,23 @@ namespace FishMMO.UnitTests.AI
 			SpawnerRuntime spawner = SpawnerTestKit.NewRuntime(new SpawnerScheduler(), maxSpawnCount: 10);
 			for (int i = 0; i < 3; ++i)
 			{
-				spawner.AddRespawnTimer(DateTime.UtcNow.AddSeconds(-1.0));
+				spawner.AddRespawnTimer(spawner.Scheduler.Now - 1.0);
 			}
 			for (int i = 0; i < 2; ++i)
 			{
-				spawner.AddRespawnTimer(DateTime.UtcNow.AddMinutes(5.0));
+				spawner.AddRespawnTimer(spawner.Scheduler.Now + 300.0);
 			}
 
 			spawner.TryRespawn();
 
 			Assert.AreEqual(2, spawner.PendingRespawnCount,
 				"Only the overdue timers should have been consumed.");
-			List<DateTime> remaining = (List<DateTime>)typeof(SpawnerRuntime)
+			List<double> remaining = (List<double>)typeof(SpawnerRuntime)
 				.GetField("respawnTimers", BindingFlags.Instance | BindingFlags.NonPublic)
 				.GetValue(spawner);
-			foreach (DateTime deadline in remaining)
+			foreach (double deadline in remaining)
 			{
-				Assert.Greater(deadline, DateTime.UtcNow, "A future timer was consumed.");
+				Assert.Greater(deadline, spawner.Scheduler.Now, "A future timer was consumed.");
 			}
 		}
 
@@ -81,13 +81,13 @@ namespace FishMMO.UnitTests.AI
 			});
 
 			System.Type type = typeof(SpawnerRuntime);
-			float now = Time.time;
+			double now = spawner.Scheduler.Now;
 			type.GetMethod("ScheduleNextRespawnCheck", BindingFlags.Instance | BindingFlags.NonPublic)
 				.Invoke(spawner, new object[] { now });
-			float next = (float)type.GetField("nextRespawnCheckTime", BindingFlags.Instance | BindingFlags.NonPublic)
+			double next = (double)type.GetField("nextRespawnCheckTime", BindingFlags.Instance | BindingFlags.NonPublic)
 				.GetValue(spawner);
 
-			return next - now;
+			return (float)(next - now);
 		}
 
 		[Test]

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -384,8 +384,19 @@ namespace FishMMO.UnitTests
 		{
 			string damage = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs");
-			LogAssert.IsTrue(damage.Contains("if (sourceOwner != null && conn == sourceOwner)"),
+			/* The partition now asks a pure rule, CombatEventRules.ResolveDelivery, which also routes
+			 * the refusal kinds (Evade, Immune) to the source owner alone. The pin anchors on the call
+			 * keying it on ownership, and checks the rule itself for every kind: the owner is always
+			 * reliable, and nobody else ever is. */
+			LogAssert.IsTrue(damage.Contains("CombatEventRules.ResolveDelivery(entry.Kind, sourceOwner != null && conn == sourceOwner)"),
 				"The channel partition must key on owning the entry's source.");
+			foreach (CombatEventKind kind in (CombatEventKind[])Enum.GetValues(typeof(CombatEventKind)))
+			{
+				LogAssert.AreEqual(CombatEventRules.Delivery.Reliable, CombatEventRules.ResolveDelivery(kind, true),
+					$"The source owner gets {kind} reliably.");
+				LogAssert.IsTrue(CombatEventRules.ResolveDelivery(kind, false) != CombatEventRules.Delivery.Reliable,
+					$"Nobody but the source owner gets {kind} reliably.");
+			}
 			LogAssert.IsTrue(damage.Contains("combatEventReliableRecipients, message, true, Channel.Reliable"),
 				"Reliable for the caster whose predictions this report settles.");
 			LogAssert.IsTrue(damage.Contains("combatEventUnreliableRecipients, message, true, Channel.Unreliable"),

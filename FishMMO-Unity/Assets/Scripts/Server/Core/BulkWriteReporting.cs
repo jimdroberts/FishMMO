@@ -55,22 +55,59 @@ namespace FishMMO.Server.Core
 
 			BulkWriteResult write = result.Data;
 
-			if (write.Filtered > 0)
+			if (write.Unowned > 0)
+			{
+				/* Refused by the ownership gate: those characters' claims are no longer this
+				 * server's, so their rows were not written and must not be. The row save and the
+				 * lease refresh evict such a character; this line says what its tables lost. */
+				await Log.Warning(tag,
+					$"{operation}{where}: {write.Unowned} of {write.Supplied} rows were refused because this server " +
+					$"no longer holds their characters' session claims. {write}");
+			}
+
+			if (write.Filtered > write.Unowned)
 			{
 				/* The service declined to attempt these rows: an unresolvable character or
 				 * template, or a key it had already seen. Nothing about the database's state
 				 * explains it, so the batch itself is wrong and someone should look. */
 				await Log.Warning(tag,
-					$"{operation}{where}: {write.Filtered} of {write.Supplied} rows were not attempted " +
+					$"{operation}{where}: {write.Filtered - write.Unowned} of {write.Supplied} rows were not attempted " +
 					$"(an unresolved character or template, or a key the batch named twice). {write}");
 			}
-			else if (write.Superseded > 0)
+
+			if (write.Filtered == 0 && write.Superseded > 0)
 			{
 				// Expected under concurrency, and the stored data is the newer of the two.
 				await Log.Debug(tag, $"{operation}{where}: {write}");
 			}
 
 			return true;
+		}
+
+		/// <summary>
+		/// Whether a best-effort write lets its caller clear the dirty marks of the rows it carried.
+		/// Pure.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Only a write that succeeded AND attempted every row. A filtered row never reached the
+		/// database — an unresolved character or template, a key the batch named twice, or a row
+		/// the ownership gate refused because this server no longer holds its character's claim
+		/// (<see cref="BulkWriteResult.Unowned"/>, which is counted as filtered) — so retiring its
+		/// mark would retire a value that was never stored, and the periodic save has no retry of
+		/// its own to notice. A superseded row is the opposite and safe: the database refused it
+		/// because it already holds something newer.
+		/// </para>
+		/// <para>
+		/// A failed write — including a refusal of the whole batch as
+		/// <see cref="DatabaseErrorCodes.Forbidden"/> — clears nothing.
+		/// </para>
+		/// </remarks>
+		/// <param name="result">The write's outcome.</param>
+		/// <returns>True when every row the batch carried was attempted.</returns>
+		public static bool MayClearDirtyMarks(DatabaseResult<BulkWriteResult> result)
+		{
+			return result.IsSuccess && result.Data.Filtered == 0;
 		}
 
 		/// <summary>

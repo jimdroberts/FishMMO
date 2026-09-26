@@ -283,12 +283,11 @@ namespace FishMMO.ControlPanel.Controllers
 			}
 
 			var data = result.Data;
-			DateTime now = data.ReadAtUtc;
 
 			return Ok(new
 			{
 				pulseStaleAfterSeconds = PulseStaleAfterSeconds,
-				readAtUtc = now,
+				readAtUtc = data.ReadAtUtc,
 				counts = new
 				{
 					waiting = data.Counts.Waiting,
@@ -316,13 +315,17 @@ namespace FishMMO.ControlPanel.Controllers
 					partyId = g.PartyID,
 					instanceId = g.InstanceID,
 					queuedUtc = g.TimeCreated,
-					waitSeconds = AgeSeconds(g.TimeCreated, now),
+					/* Both ages are measured by the database clock in the statement that read the
+					 * row, the clock that stamped time_created and last_pulse. This panel's own
+					 * clock used to be subtracted from them, so a panel host running fast showed a
+					 * healthy queue as stale and one running slow hid a dead scene server. */
+					waitSeconds = Math.Round(g.WaitSeconds, 1),
 					lastPulseUtc = g.LastPulse,
-					pulseAgeSeconds = AgeSeconds(g.LastPulse, now),
+					pulseAgeSeconds = Math.Round(g.PulseAgeSeconds, 1),
 					/* A long wait on a stale row is not the matcher failing. It is a scene server
 					 * that went away with somebody queued on it, and the two have completely
 					 * different fixes — so the page must be able to tell them apart. */
-					stale = (now - g.LastPulse).TotalSeconds > PulseStaleAfterSeconds,
+					stale = g.PulseAgeSeconds > PulseStaleAfterSeconds,
 					matchedUtc = g.TimeMatched,
 				}),
 				page = data.Page,
@@ -554,10 +557,11 @@ namespace FishMMO.ControlPanel.Controllers
 		/// timestamp.
 		/// </summary>
 		/// <remarks>
-		/// Measured against the database read rather than against the browser's clock, and never
-		/// negative: a panel host whose clock runs behind the database's would otherwise turn a
-		/// freshly queued message into an age "in the future", which reads as a bug in the page
-		/// rather than in the deployment.
+		/// <paramref name="now"/> is the page's <c>ReadAtUtc</c>, which the database supplies from
+		/// the same clock that stamped <c>created_at</c>, so this is a difference of two database
+		/// readings and neither this host's clock nor the browser's enters it. Never negative, so
+		/// a row that committed a moment before the instant was read cannot show an age "in the
+		/// future".
 		/// </remarks>
 		private static double? AgeSeconds(DateTime? timestamp, DateTime now) =>
 			timestamp.HasValue ? Math.Round(Math.Max(0, (now - timestamp.Value).TotalSeconds), 1) : null;

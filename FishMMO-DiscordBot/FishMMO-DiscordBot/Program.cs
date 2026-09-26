@@ -121,6 +121,10 @@ namespace FishMMO.DiscordBot
 					services.AddSingleton<IAdminAuditService>(provider =>
 						new AdminAuditService(provider.GetRequiredService<NpgsqlDbContextFactory>()));
 
+					// The bridge writes chat through the scene servers' own INSERT, so its rows carry the database clock.
+					services.AddSingleton<IChatService>(provider =>
+						new ChatService(provider.GetRequiredService<NpgsqlDbContextFactory>()));
+
 					services.AddSingleton<BotConfigurationService>();
 					services.AddSingleton<ChatRelayPolicy>();
 					services.AddSingleton<RateLimiterService>();

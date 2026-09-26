@@ -185,6 +185,18 @@ namespace FishMMO.Server.Implementation
 				core.VerifyChannelCapacity = Server.Configuration.GetInt("AuthSrpVerifyChannelCapacity", 500);
 				core.ProofChannelCapacity = Server.Configuration.GetInt("AuthSrpProofChannelCapacity", 500);
 				core.MaxConcurrentTotpVerifications = Server.Configuration.GetInt("AuthMaxConcurrentTotpVerifications", 4);
+				// The pending-authentication cap is also the login queue's threshold: a handshake
+				// that would exceed it is offered to LoginQueueSystem rather than dropped. Unset, it
+				// is what the verify and proof channels above hold between them (1,000 with the
+				// defaults), so the queue engages where it starts to serve players better than
+				// admission does; see PendingAuthRules.DefaultLoginPendingCap. World and Scene
+				// servers keep the core's 10,000 (TokenServerAuthenticator).
+				core.MaxPendingAuthConnections = Server.Configuration.GetInt("AuthMaxPendingConnections",
+					PendingAuthRules.DefaultLoginPendingCap(core.VerifyChannelCapacity, core.ProofChannelCapacity));
+				// Seconds a player has to answer each two-factor prompt (default 120, kept within
+				// 30-600 by the core). Only this server prompts, so only it reads the key.
+				core.TwoFactorWindowSeconds = Server.Configuration.GetInt("AuthTwoFactorWindowSeconds",
+					(int)BaseAuthenticatorCore<NetworkConnection>.DefaultTwoFactorWindowSeconds);
 			}
 
 			// Apply cached key material that was set before the core was created,
@@ -777,7 +789,7 @@ namespace FishMMO.Server.Implementation
 					outer.Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 					rt.ConnectionIpCache != null)
 				{
-					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out ip))
+					if (rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, MonotonicClock.NowSeconds, out ip))
 						return ip;
 				}
 				return null;

@@ -146,6 +146,22 @@ namespace FishMMO.Auth.Implementation
 		/// </remarks>
 		public int LastRetryAfterSeconds { get; private set; }
 
+		/// <summary>
+		/// Whether the most recent auth result answered a two-factor code this client sent, rather
+		/// than arriving unasked.
+		/// </summary>
+		/// <remarks>
+		/// Set before <see cref="OnAuthResultCallback"/> fires, like <see cref="LastRetryAfterSeconds"/>.
+		/// It is what tells the two meanings of <see cref="ClientAuthenticationResult.TwoFactorExpired"/>
+		/// apart without a timer of the client's own: the server lets a prompt's window run out only
+		/// while no code from it is being checked, so an expiry that answers a code is the attempt
+		/// limit, and one that arrives unasked is the window.
+		/// </remarks>
+		public bool LastResultAnsweredTwoFactorCode { get; private set; }
+
+		/// <summary>True from sending a two-factor code until the server answers it.</summary>
+		private bool twoFactorCodeAwaitingAnswer;
+
 		#endregion
 
 		#region Credential Setup
@@ -732,6 +748,8 @@ namespace FishMMO.Auth.Implementation
 						? ClientAuthenticationResult.TokenDecryptFailed
 						: result;
 
+				// A sign-in completed by a two-factor code answers that code.
+				LastResultAnsweredTwoFactorCode = TakeTwoFactorCodeAwaitingAnswer();
 				OnAuthResultCallback(effectiveResult);
 
 				/* The effective result, not the raw one. Logging `result` reported LoginSuccess
@@ -767,6 +785,7 @@ namespace FishMMO.Auth.Implementation
 		public void OnAuthResultReceived(ClientAuthenticationResult result, int retryAfterSeconds)
 		{
 			LastRetryAfterSeconds = retryAfterSeconds > 0 ? retryAfterSeconds : 0;
+			LastResultAnsweredTwoFactorCode = TakeTwoFactorCodeAwaitingAnswer();
 
 			if (result == ClientAuthenticationResult.TokenInvalid ||
 				result == ClientAuthenticationResult.TokenExpired ||
@@ -880,6 +899,8 @@ namespace FishMMO.Auth.Implementation
 				return;
 			}
 
+			// Before the send: a transport may deliver the answer before the send returns.
+			twoFactorCodeAwaitingAnswer = true;
 			SendTwoFactorVerify(encryptedCode, totpSeq);
 		}
 
@@ -920,6 +941,16 @@ namespace FishMMO.Auth.Implementation
 			registrationProfile = null;
 			verifyRequestUsername = null;
 			verifyRequestCode = null;
+			// A code sent on this connection can no longer be answered.
+			twoFactorCodeAwaitingAnswer = false;
+		}
+
+		/// <summary>Reads and clears whether a two-factor code is awaiting its answer: the result arriving now is that answer.</summary>
+		private bool TakeTwoFactorCodeAwaitingAnswer()
+		{
+			bool awaiting = twoFactorCodeAwaitingAnswer;
+			twoFactorCodeAwaitingAnswer = false;
+			return awaiting;
 		}
 
 		/// <summary>

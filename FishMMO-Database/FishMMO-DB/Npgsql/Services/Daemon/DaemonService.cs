@@ -44,10 +44,20 @@ namespace FishMMO.Database.Npgsql.Services
 
 			string host = hostName.Trim();
 			var reported = apps ?? Array.Empty<DaemonAppReport>();
-			DateTime now = DateTime.UtcNow;
 
 			return await ExecuteTransactionAsync(async dbContext =>
 			{
+				/* Every stamp this heartbeat writes is the database's time, never this process's.
+				 * This service runs inside the daemon, on the game host, so DateTime.UtcNow here was
+				 * that host's clock: the panel measured the heartbeat's age against its own clock,
+				 * and a host running a minute behind the panel showed as silent while it beat every
+				 * ten seconds — or a dead one as alive, for as long as it ran ahead. The supervision
+				 * history below said "the database's clock" and was stamped with the host's.
+				 *
+				 * Read here for the host row's first write, and again once the host row is locked;
+				 * see there. */
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+
 				var hostRow = await dbContext.DaemonHosts
 					.FirstOrDefaultAsync(h => h.HostName == host, cancellationToken)
 					.ConfigureAwait(false);
@@ -87,6 +97,13 @@ namespace FishMMO.Database.Npgsql.Services
 					$"SELECT id FROM {hostTable} WHERE id = {{0}} FOR UPDATE",
 					new object[] { hostRow.ID },
 					cancellationToken).ConfigureAwait(false);
+
+				/* The instant this beat is recorded at, taken once the lock is held. Two beats for
+				 * one host are applied in the order they win this lock, and read the clock in that
+				 * order too, so the history's timestamps run in the order its comparisons were made;
+				 * a clock read before the wait could stamp the later comparison earlier. */
+				now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+				hostRow.LastHeartbeatUtc = now;
 
 				var existing = await dbContext.DaemonApps
 					.Where(a => a.HostID == hostRow.ID)
@@ -221,14 +238,29 @@ namespace FishMMO.Database.Npgsql.Services
 			string host = hostName.Trim();
 			string instance = Clamp(instanceId.Trim(), 128);
 
-			/* Taken once, outside the retried delegate, and written as the claim. A connection lost
-			 * after the claim committed but before its reply arrived is retried, and the retry used
-			 * to claim a DIFFERENT set, leaving the first claimed by this daemon and never run —
-			 * nothing releases a claim, so those commands simply expired. The retry now takes its
-			 * own claims back by (instance, stamp) (issue #267). A write, so it goes through the
-			 * write wrapper; it had been issued through the read one. */
-			DateTime claimStampUtc = DateTime.UtcNow;
+			/* The claim's stamp: taken once, outside the retried delegate, and written as the claim.
+			 * A connection lost after the claim committed but before its reply arrived is retried,
+			 * and the retry used to claim a DIFFERENT set, leaving the first claimed by this daemon
+			 * and never run — nothing releases a claim, so those commands simply expired. The retry
+			 * now takes its own claims back by (instance, stamp) (issue #267).
+			 *
+			 * Read from the database clock, like every other instant on the row. It was the daemon
+			 * host's DateTime.UtcNow, and the panel shows how long a command waited (claimed less
+			 * requested) and ran (completed less claimed), so those showed the skew between two
+			 * machines. A read of its own rather than clock_timestamp() inside the UPDATE, because
+			 * the retry must know the value before it sends anything: a stamp the server chose would
+			 * come back only in the first attempt's reply, which is exactly what was lost. */
+			var stamp = await ExecuteReadAsync(
+				dbContext => ReadDatabaseUtcNowAsync(dbContext, cancellationToken),
+				cancellationToken: cancellationToken).ConfigureAwait(false);
+			if (!stamp.IsSuccess)
+			{
+				return DatabaseResult<IReadOnlyList<DaemonCommandData>>.Failure(
+					stamp.ErrorCode, stamp.ErrorMessage, stamp.IsTransient);
+			}
+			DateTime claimStampUtc = stamp.Data;
 
+			// A write, so it goes through the write wrapper; it had been issued through the read one.
 			return await ExecuteWriteAsync(async dbContext =>
 			{
 				/* One statement selects and claims. Written in raw SQL because EF cannot express
@@ -241,35 +273,76 @@ namespace FishMMO.Database.Npgsql.Services
 				 * matched nothing would look exactly like an empty queue.
 				 *
 				 * host_name is a parameter, and it is the daemon's own. A daemon cannot ask for
-				 * another host's work. */
+				 * another host's work.
+				 *
+				 * Expiry is judged by the database clock, which stamped expires_utc, and the time
+				 * left is measured in the same statement and returned with each row. The claim used
+				 * to compare expires_utc with the daemon's own stamp, and the daemon re-checked
+				 * against its own wall clock, so a daemon five minutes ahead of the panel that
+				 * stamped the row saw every command as already expired. The daemon now counts the
+				 * returned seconds down on a monotonic clock (DaemonCommandExpiry), and no host's
+				 * wall clock enters the decision. clock_timestamp() rather than now(): this runs in
+				 * its own implicit transaction, but the measurement should be as late as the
+				 * statement allows.
+				 *
+				 * Only an unclaimed command is refused for being expired. This call's own claims —
+				 * a retry taking back what its first attempt claimed — come back whatever the clock
+				 * now says: one that expired between the two attempts returns with no time left, and
+				 * the daemon refuses it and records why. Filtered out here, it would stay claimed by
+				 * this daemon with no outcome, a row an operator watches forever. */
 				string table = dbContext.GetTableName<DaemonCommandEntity>();
-				/* FromSqlRaw materialises the entity, so RETURNING must name every mapped column,
-				 * request_key included: a column missing here fails every claim with
-				 * INVALID_OPERATION. */
 				string sql = $@"
 					UPDATE {table} SET claimed_utc = {{2}}, claimed_by = {{1}}
 					WHERE id IN (
 						SELECT id FROM {table}
 						WHERE host_name = {{0}}
-						  AND (claimed_utc IS NULL OR (claimed_utc = {{2}} AND claimed_by = {{1}}))
-						  AND expires_utc > {{2}}
+						  AND ((claimed_utc IS NULL AND expires_utc > {DatabaseUtcClockSql})
+						       OR (claimed_utc = {{2}} AND claimed_by = {{1}}))
 						ORDER BY requested_utc, id
 						FOR UPDATE SKIP LOCKED
 						LIMIT {{3}}
 					)
 					RETURNING id, host_name, app_name, verb, requested_by, requested_utc, reason,
 					          expires_utc, claimed_utc, claimed_by, completed_utc, succeeded, outcome,
-					          request_key";
+					          EXTRACT(EPOCH FROM (expires_utc - {DatabaseUtcClockSql}))::double precision";
 
-				var claimed = await dbContext.Set<DaemonCommandEntity>()
-					.FromSqlRaw(sql, host, instance, claimStampUtc, maxCommands)
-					.AsNoTracking()
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
+				var claimed = await ReadRowsAsync(
+					dbContext,
+					sql,
+					new object[] { host, instance, claimStampUtc, maxCommands },
+					ReadClaimedRow,
+					cancellationToken).ConfigureAwait(false);
 
-				return (IReadOnlyList<DaemonCommandData>)claimed.Select(MapCommand).ToList();
+				/* The statement returns rows in no particular order; the daemon executes them in
+				 * the order they were asked for. */
+				return (IReadOnlyList<DaemonCommandData>)claimed
+					.OrderBy(c => c.RequestedUtc)
+					.ThenBy(c => c.ID)
+					.ToList();
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
+
+		/// <summary>
+		/// Maps one row laid out as <see cref="ClaimCommandsAsync"/> returns it, with the seconds
+		/// the database measured as left before it expires.
+		/// </summary>
+		private static DaemonCommandData ReadClaimedRow(System.Data.Common.DbDataReader reader) => new DaemonCommandData
+		{
+			ID = reader.GetInt64(0),
+			HostName = reader.GetString(1),
+			AppName = reader.GetString(2),
+			Verb = (DaemonCommandVerb)reader.GetInt32(3),
+			RequestedBy = reader.GetString(4),
+			RequestedUtc = DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc),
+			Reason = reader.GetString(6),
+			ExpiresUtc = DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Utc),
+			ClaimedUtc = reader.IsDBNull(8) ? (DateTime?)null : DateTime.SpecifyKind(reader.GetDateTime(8), DateTimeKind.Utc),
+			ClaimedBy = reader.IsDBNull(9) ? null : reader.GetString(9),
+			CompletedUtc = reader.IsDBNull(10) ? (DateTime?)null : DateTime.SpecifyKind(reader.GetDateTime(10), DateTimeKind.Utc),
+			Succeeded = reader.IsDBNull(11) ? (bool?)null : reader.GetBoolean(11),
+			Outcome = reader.IsDBNull(12) ? null : reader.GetString(12),
+			ExpiresInSeconds = reader.IsDBNull(13) ? (double?)null : reader.GetDouble(13),
+		};
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult> CompleteCommandAsync(
@@ -312,7 +385,14 @@ namespace FishMMO.Database.Npgsql.Services
 						errorCode: DatabaseErrorCodes.Forbidden);
 				}
 
-				command.CompletedUtc = DateTime.UtcNow;
+				/* By the database clock, like the request and the claim beside it on the panel: the
+				 * daemon host's clock here made "ran for" the skew between two machines. A daemon
+				 * reports each command once, so a completion already present is this report's own
+				 * first attempt, whose reply was lost after it committed; it keeps its stamp. */
+				if (command.CompletedUtc == null)
+				{
+					command.CompletedUtc = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+				}
 				command.Succeeded = succeeded;
 				command.Outcome = Clamp(outcome, 1024);
 
@@ -325,35 +405,101 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var hosts = await dbContext.DaemonHosts
-					.AsNoTracking()
-					.OrderBy(h => h.HostName)
-					.ToListAsync(cancellationToken)
+				/* Both reads in one REPEATABLE READ, read-only transaction: the hosts and their
+				 * applications are one snapshot, and now() — that transaction's start — is one
+				 * instant every age on the page is measured against, as on the server board. */
+				await using var snapshot = await dbContext.Database
+					.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken)
 					.ConfigureAwait(false);
+				await dbContext.Database.ExecuteSqlRawAsync("SET TRANSACTION READ ONLY", cancellationToken).ConfigureAwait(false);
 
-				var apps = await dbContext.DaemonApps
-					.AsNoTracking()
-					.OrderBy(a => a.Name)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
+				/* Raw SQL so the ages are taken by the database, inside the statement that reads the
+				 * stamps, against the clock that wrote them (HeartbeatAsync). The panel used to
+				 * subtract LastHeartbeatUtc from its own DateTime.UtcNow, which measured the skew
+				 * between the panel host and whichever host had stamped the row, and called a
+				 * daemon silent or alive on that. */
+				var hosts = await ReadRowsAsync(
+					dbContext,
+					$@"SELECT h.id, h.host_name, h.daemon_version, h.os_description, h.processor_count,
+							h.started_utc, h.last_heartbeat_utc, {AgeSecondsSql("h.last_heartbeat_utc")}
+						FROM {dbContext.GetTableName<DaemonHostEntity>()} AS h
+						ORDER BY h.host_name",
+					Array.Empty<object>(),
+					ReadHostRow,
+					cancellationToken).ConfigureAwait(false);
 
-				var byHost = apps.GroupBy(a => a.HostID).ToDictionary(g => g.Key, g => g.ToList());
+				var apps = await ReadRowsAsync(
+					dbContext,
+					$@"SELECT a.host_id, a.id, a.name, a.status, a.process_id, a.restart_attempts,
+							a.max_restart_attempts, a.monitored_port, a.last_reported_utc, {AgeSecondsSql("a.last_reported_utc")}
+						FROM {dbContext.GetTableName<DaemonAppEntity>()} AS a
+						ORDER BY a.name",
+					Array.Empty<object>(),
+					reader => (HostID: reader.GetInt64(0), App: ReadAppRow(reader, 1)),
+					cancellationToken).ConfigureAwait(false);
 
-				return (IReadOnlyList<DaemonHostData>)hosts.Select(h => new DaemonHostData
+				await snapshot.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+				var byHost = apps.GroupBy(a => a.HostID).ToDictionary(g => g.Key, g => g.Select(a => a.App).ToList());
+				foreach (var host in hosts)
 				{
-					ID = h.ID,
-					HostName = h.HostName,
-					DaemonVersion = h.DaemonVersion,
-					OSDescription = h.OSDescription,
-					ProcessorCount = h.ProcessorCount,
-					StartedUtc = h.StartedUtc,
-					LastHeartbeatUtc = h.LastHeartbeatUtc,
-					Apps = byHost.TryGetValue(h.ID, out var list)
-						? list.Select(a => MapApp(a, h.HostName)).ToList()
-						: new List<DaemonAppData>(),
-				}).ToList();
+					if (byHost.TryGetValue(host.ID, out var list))
+					{
+						foreach (var app in list)
+						{
+							app.HostName = host.HostName;
+						}
+						host.Apps = list;
+					}
+				}
+				return (IReadOnlyList<DaemonHostData>)hosts;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
+
+		/// <summary>
+		/// Seconds from <paramref name="column"/> to the start of the reading transaction, by the
+		/// database clock, clamped at zero.
+		/// </summary>
+		/// <remarks>
+		/// <c>now()</c>, the transaction's start, so every age in one read is measured against one
+		/// instant. The snapshot is taken at the transaction's first statement, so a heartbeat that
+		/// committed in between is a few milliseconds newer than that instant; hence the clamp.
+		/// <c>AT TIME ZONE 'UTC'</c> because the columns hold UTC without a zone.
+		/// </remarks>
+		/// <param name="column">A qualified column name from this file, never user input.</param>
+		private static string AgeSecondsSql(string column) =>
+			$"GREATEST(0.0, EXTRACT(EPOCH FROM ((now() AT TIME ZONE 'UTC') - {column}))::double precision)";
+
+		/// <summary>Maps one host row laid out as <see cref="FetchHostsAsync"/> reads it.</summary>
+		private static DaemonHostData ReadHostRow(System.Data.Common.DbDataReader reader) => new DaemonHostData
+		{
+			ID = reader.GetInt64(0),
+			HostName = reader.GetString(1),
+			DaemonVersion = reader.IsDBNull(2) ? null : reader.GetString(2),
+			OSDescription = reader.IsDBNull(3) ? null : reader.GetString(3),
+			ProcessorCount = reader.GetInt32(4),
+			StartedUtc = DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc),
+			LastHeartbeatUtc = DateTime.SpecifyKind(reader.GetDateTime(6), DateTimeKind.Utc),
+			HeartbeatAgeSeconds = reader.IsDBNull(7) ? 0.0 : reader.GetDouble(7),
+			Apps = new List<DaemonAppData>(),
+		};
+
+		/// <summary>
+		/// Maps one application row laid out as <see cref="FetchHostsAsync"/> reads it, starting at
+		/// <paramref name="ordinal"/>. The host name is filled in from the host.
+		/// </summary>
+		private static DaemonAppData ReadAppRow(System.Data.Common.DbDataReader reader, int ordinal) => new DaemonAppData
+		{
+			ID = reader.GetInt64(ordinal),
+			Name = reader.GetString(ordinal + 1),
+			Status = (DaemonAppStatus)reader.GetInt32(ordinal + 2),
+			ProcessID = reader.IsDBNull(ordinal + 3) ? (int?)null : reader.GetInt32(ordinal + 3),
+			RestartAttempts = reader.GetInt32(ordinal + 4),
+			MaxRestartAttempts = reader.GetInt32(ordinal + 5),
+			MonitoredPort = reader.GetInt32(ordinal + 6),
+			LastReportedUtc = DateTime.SpecifyKind(reader.GetDateTime(ordinal + 7), DateTimeKind.Utc),
+			ReportAgeSeconds = reader.IsDBNull(ordinal + 8) ? 0.0 : reader.GetDouble(ordinal + 8),
+		};
 
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<long>> EnqueueCommandAsync(
@@ -394,7 +540,6 @@ namespace FishMMO.Database.Npgsql.Services
 
 			string host = hostName.Trim();
 			string app = appName.Trim();
-			DateTime now = DateTime.UtcNow;
 			// Taken once, outside the retried delegate. See the probe below.
 			Guid requestKey = Guid.NewGuid();
 
@@ -439,6 +584,15 @@ namespace FishMMO.Database.Npgsql.Services
 					throw new DatabaseException($"'{host}' does not supervise an application named '{app}'.",
 						errorCode: DatabaseErrorCodes.NotFound);
 				}
+
+				/* The request and its expiry are the database's time, never this process's. The
+				 * panel runs this, and its DateTime.UtcNow set a deadline that each daemon then read
+				 * against its own clock: a panel slow or a daemon fast by the lifetime (five minutes)
+				 * made every command arrive already expired, and the opposite skew ran commands after
+				 * the operator had stopped waiting for them. The claim judges expiry by this same
+				 * clock (ClaimCommandsAsync). Read here, on the attempt that writes, so a retry that
+				 * found nothing above stamps the write it actually makes. */
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 
 				var command = new DaemonCommandEntity
 				{
@@ -604,19 +758,6 @@ namespace FishMMO.Database.Npgsql.Services
 
 		private static string Clamp(string value, int max) =>
 			string.IsNullOrEmpty(value) || value.Length <= max ? value : value.Substring(0, max);
-
-		private static DaemonAppData MapApp(DaemonAppEntity a, string hostName) => new DaemonAppData
-		{
-			ID = a.ID,
-			HostName = hostName,
-			Name = a.Name,
-			Status = a.Status,
-			ProcessID = a.ProcessID,
-			RestartAttempts = a.RestartAttempts,
-			MaxRestartAttempts = a.MaxRestartAttempts,
-			MonitoredPort = a.MonitoredPort,
-			LastReportedUtc = a.LastReportedUtc,
-		};
 
 		private static DaemonCommandData MapCommand(DaemonCommandEntity c) => new DaemonCommandData
 		{

@@ -367,6 +367,7 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.PhoneUnverified:
 				case ClientAuthenticationResult.BetaAccessRequired:
 				case ClientAuthenticationResult.TwoFactorLocked:
+				case ClientAuthenticationResult.TwoFactorExpired:
 				case ClientAuthenticationResult.BetaCodeInvalid:
 				case ClientAuthenticationResult.AccountDetailsInvalid:
 					break;

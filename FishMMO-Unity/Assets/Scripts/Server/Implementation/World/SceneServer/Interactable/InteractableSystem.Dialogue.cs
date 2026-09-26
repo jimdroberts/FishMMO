@@ -881,9 +881,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Goes through <c>EnqueuePersistence</c> rather than <c>TryEnqueueAsyncWork</c>: the
 		/// in-memory state has already been committed and the choice's reward is about to be
 		/// granted, so a silently dropped write is the repeat-reward exploit reopening. The write
-		/// itself is an OR-merge and therefore idempotent, which is what makes the queue's
-		/// direct-thread-pool fallback safe to use here — and what lets a merge that failed be
-		/// carried again by the next one, see <see cref="unconfirmedDialogueChoices"/>.
+		/// itself is an OR-merge and therefore idempotent, which is what makes the bounded
+		/// teardown fallback (which keeps no per-entity order) safe to use here — and what lets a
+		/// merge that failed be carried again by the next one, see
+		/// <see cref="unconfirmedDialogueChoices"/>.
 		/// </remarks>
 		private void PersistCachedChoices(long characterId, int templateId, short choices)
 		{

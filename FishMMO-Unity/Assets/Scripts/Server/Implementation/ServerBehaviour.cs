@@ -285,24 +285,61 @@ namespace FishMMO.Server.Implementation
 		}
 
 		/// <summary>
-		/// Enqueues persistence work through the async worker. If the bounded channel is full,
-		/// runs the work directly on the thread pool as a fallback to prevent data loss.
+		/// Enqueues persistence work through the async worker, which never refuses it for being over
+		/// its backpressure threshold. Only when the worker is not running at all does the work run
+		/// on the thread pool instead, through a small bounded gate.
 		/// <para>
 		/// Use this instead of <see cref="TryEnqueueAsyncWork"/> for post-processing persistence
 		/// where in-memory state has already been committed and the database write must not be silently dropped.
 		/// </para>
 		/// </summary>
-		/// <returns><c>true</c> if enqueued normally; <c>false</c> if the fallback path was used.</returns>
+		/// <remarks>
+		/// <para>
+		/// The over-threshold path used to be <c>Task.Run</c>, outside the worker's concurrency cap.
+		/// During a database stall — exactly when the queue fills — every further write started at
+		/// once, the connection pool ran dry, the timeouts filed repair snapshots, and those queued
+		/// more writes. It also broke the per-entity FIFO that item writes rely on. Over-threshold work
+		/// now waits its turn in the worker like everything else; see
+		/// <see cref="IAsyncWorkerData.EnqueueRequired"/>.
+		/// </para>
+		/// <para>
+		/// The remaining fallback — the worker not running, which in practice means teardown — is
+		/// bounded by <see cref="PersistenceFallbackGate"/> for the same reason.
+		/// </para>
+		/// </remarks>
+		/// <returns>
+		/// <c>true</c> if admitted within the worker's threshold; <c>false</c> if it was admitted over
+		/// it or had to use the fallback. Either way the work WILL run: false means "the server is
+		/// saturated", which is what callers tell the client.
+		/// </returns>
 		protected bool EnqueuePersistence(Func<Task> work, long entityKey = 0, [CallerMemberName] string callerName = null)
 		{
-			if (TryEnqueueAsyncWork(work, entityKey, callerName))
+			if (work == null)
+			{
 				return true;
+			}
 
 			string tag = GetType().Name;
-			Log.Error(tag, $"{callerName}: Async worker full — persistence running via direct fallback (entityKey={entityKey}).");
+			if (Server?.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker) == true)
+			{
+				switch (asyncWorker.EnqueueRequired(work, entityKey, callerName))
+				{
+					case AsyncWorkAdmission.Admitted:
+						return true;
+					case AsyncWorkAdmission.AdmittedOverCapacity:
+						ReportPersistenceOverflow(tag, callerName);
+						return false;
+					default:
+						// Not running: fall through to the bounded fallback.
+						break;
+				}
+			}
+
+			Log.Warning(tag, $"{callerName}: async worker unavailable; persistence running on the bounded fallback (entityKey={entityKey}).");
 
 			_ = Task.Run(async () =>
 			{
+				await PersistenceFallbackGate.WaitAsync().ConfigureAwait(false);
 				try
 				{
 					await work();
@@ -311,9 +348,51 @@ namespace FishMMO.Server.Implementation
 				{
 					await Log.Error(tag, $"{callerName}: Direct fallback persistence failed (entityKey={entityKey}): {ex}");
 				}
+				finally
+				{
+					PersistenceFallbackGate.Release();
+				}
 			});
 
 			return false;
+		}
+
+		/// <summary>
+		/// Most fallback persistence writes running at once, across every behaviour. Small on
+		/// purpose: this path exists for teardown, and its only job is not to exhaust the
+		/// connection pool that the synchronous shutdown flush needs.
+		/// </summary>
+		private static readonly SemaphoreSlim PersistenceFallbackGate = new SemaphoreSlim(8, 8);
+
+		/// <summary>Over-threshold admissions since the last overflow line was written.</summary>
+		private static int persistenceOverflowSuppressed;
+
+		/// <summary><see cref="System.Diagnostics.Stopwatch"/> timestamp before which no further overflow line is written.</summary>
+		private static long persistenceOverflowNextLogTimestamp;
+
+		/// <summary>
+		/// Logs that persistence was admitted over the worker's threshold: the first time, then one
+		/// counted line per interval. Any thread.
+		/// </summary>
+		/// <remarks>
+		/// A stall admits thousands of these, and a line each would bury the log that explains the
+		/// stall. The count is what matters.
+		/// </remarks>
+		private static void ReportPersistenceOverflow(string tag, string callerName)
+		{
+			long now = System.Diagnostics.Stopwatch.GetTimestamp();
+			long next = Interlocked.Read(ref persistenceOverflowNextLogTimestamp);
+			if (now < next ||
+				Interlocked.CompareExchange(ref persistenceOverflowNextLogTimestamp, now + (System.Diagnostics.Stopwatch.Frequency * 10), next) != next)
+			{
+				Interlocked.Increment(ref persistenceOverflowSuppressed);
+				return;
+			}
+
+			int suppressed = Interlocked.Exchange(ref persistenceOverflowSuppressed, 0);
+			Log.Error(tag,
+				$"{callerName}: async worker over its threshold — persistence admitted behind the backlog" +
+				(suppressed > 0 ? $" ({suppressed} more since the last report)." : "."));
 		}
 
 		/// <summary>

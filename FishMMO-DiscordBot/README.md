@@ -42,10 +42,24 @@ Bridging is two-way:
 
 - **Game → Discord:** `ChatPollingService` periodically reads new rows from the
   game's chat table and forwards the relayable ones to the matching Discord
-  channel.
+  channel. It reads through `ChatService.FetchRelayAsync` with a `ChatReadWindow`
+  (both in `FishMMO-DB`), the same window the scene servers' chat pump keeps:
+  each read starts a commit window behind what it has settled and skips by ID
+  what it has already handled, so a row that commits out of ID order is not
+  skipped and no row is relayed twice. Each poll reads at most 5 pages of 200
+  rows, so a relay that has fallen behind catches up over several polls, and the
+  first read starts at the database's "now", so a restarted bot does not replay
+  history. A read that fails settles nothing and is read again on the next poll;
+  once a batch's reads have succeeded, each row is recorded as handled before it
+  is checked for a link code or sent, so a row whose send fails costs that one
+  row and is never relayed twice.
 - **Discord → Game:** Discord messages in a managed channel are intercepted by
   `CommandHandlingService` and written into the chat table by
   `GameChatBridgeService`, subject to `RateLimiterService` and `BridgeBanService`.
+  The write goes through `ChatService.PersistBridgedAsync`, the same `INSERT` the
+  scene servers use, so the row is stamped by the database clock the scene
+  servers' chat pumps page by, not by the bot host's clock, which could stamp a
+  row behind a window the pumps had already passed.
 
 Account verification is one-way: the game and the Control Panel issue a code,
 `DiscordVerificationService` DMs it to the player, and the player types it back
@@ -124,9 +138,9 @@ into the output directory as `appsettings.json` / `appsettings.Production.json`.
 | `BotConfigurationService` | Loads and saves `botconfig.json` (dynamic channels) and `botdata.json` (bridge bans, muted zones, command permissions, and legacy links awaiting import). |
 | `AccountLinkingService` | Holds pending `/link` codes in memory, writes confirmed links to the database, caches link lookups for 60 s, and imports old `botdata.json` links on start. |
 | `DiscordVerificationService` | Delivers the one Discord verification DM per account. Woken by PostgreSQL `LISTEN/NOTIFY`, a slow safety sweep, the gateway's Ready event and member joins. See [Account Verification by Discord](#account-verification-by-discord). |
-| `ChatPollingService` | Reads new chat rows at a configured interval, spots `/link` codes typed in game chat, and relays allowed channels to Discord. |
+| `ChatPollingService` | Reads new chat rows at a configured interval through `ChatService.FetchRelayAsync` and a `ChatReadWindow`, spots `/link` codes typed in game chat, and relays allowed channels to Discord. |
 | `ChatRelayPolicy` | The allowlist of in-game channels that may be republished to Discord. |
-| `GameChatBridgeService` | Writes Discord messages from managed channels into the game's chat table, after rate-limit and bridge-ban checks. |
+| `GameChatBridgeService` | Writes Discord messages from managed channels into the game's chat table through `ChatService.PersistBridgedAsync`, after rate-limit and bridge-ban checks. |
 | `DynamicChannelManagerService` | Creates / archives Discord channels for game worlds and scenes. |
 | `CommandHandlingService` | Dispatches inbound Discord messages to `Modules/` and handles command results. |
 | `BridgeBanService` | Tracks characters and accounts banned from the bridge; consulted before forwarding. A Discord author is checked by their linked account. |
@@ -267,11 +281,13 @@ and `appsettings.json` files in the working directory override them.
 ```json
 {
   "Discord": {
-    "Token": "",
     "DefaultGuildId": 0
   },
-  "ConnectionStrings": {
-    "Npgsql": "Host=localhost;Port=5432;Database=fishmmo;Username=;Password=;"
+  "Npgsql": {
+    "Host": "127.0.0.1",
+    "Port": "5432",
+    "Database": "fishmmo",
+    "Schema": "public"
   },
   "ChatPollingIntervalSeconds": 5,
   "ChatRelay": {
@@ -292,9 +308,9 @@ and `appsettings.json` files in the working directory override them.
 
 | Section | Notes |
 |---|---|
-| `Discord.Token` | **Secret.** Never committed; the bot reads its token from the `FISHMMO_DISCORD_TOKEN` environment variable. |
+| `FISHMMO_DISCORD_TOKEN` (environment) | **Secret.** Not a config key: the bot reads its token only from this environment variable, and refuses to connect without it. |
 | `Discord.DefaultGuildId` | The Discord server the bot operates in. **Must be the server the game's invite link points players to** — verification DMs can only reach its members. `0` disables channel creation and verification delivery. |
-| `ConnectionStrings.Npgsql` | **Secret.** Override via environment (`ConnectionStrings__Npgsql`). |
+| `Npgsql` | Database host, port, name and pool settings, read by FishMMO-DB's `NpgsqlDbConfiguration` through the shared `NpgsqlDbContextFactory`, as every other FishMMO process reads them. **No credentials here:** they come from `FISHMMO_DB_USERNAME` / `FISHMMO_DB_PASSWORD` or the platform secrets file (see the FishMMO-DB README). `FISHMMO_DB_HOST` / `FISHMMO_DB_PORT` / `FISHMMO_DB_NAME` override the host, port and name. |
 | `ChatPollingIntervalSeconds` | How often `ChatPollingService` reads new chat rows. |
 | `ChatRelay.GameToDiscordChannels` | **Allowlist** of in-game channels the bot may republish to Discord. Omit for the default (`Say`, `World`, `Trade`, `Region`). See the warning below. |
 | `BridgeMessageMaxLength` | Caps a Discord message bridged into the game. Keep at or below the game's `ChatBroadcast.MaxTextLength` (**128**) — clients discard anything longer, so a larger value makes long messages vanish rather than arrive truncated. |
@@ -312,8 +328,9 @@ and `appsettings.json` files in the working directory override them.
 > Inbound Discord messages are sanitised at the bridge and again server-side, and are no longer
 > exempt from in-game tab filtering.
 
-> **Production:** set `FISHMMO_DISCORD_TOKEN` and `ConnectionStrings__Npgsql`
-> through the environment rather than committing them to any `appsettings` file.
+> **Production:** set `FISHMMO_DISCORD_TOKEN`, `FISHMMO_DB_USERNAME` and
+> `FISHMMO_DB_PASSWORD` through the environment (or the database secrets file)
+> rather than committing them to any `appsettings` file.
 
 ---
 
@@ -343,9 +360,9 @@ Docker.
 - Required bot permissions: read/send/manage messages in the bridged channels,
   manage channels under the dynamic category, and (for moderation commands)
   timeout / ban members.
-- The database user needs `LISTEN` on the FishMMO database. Point
-  `ConnectionStrings__Npgsql` at PostgreSQL directly, or at a pooler in
-  **session** mode. A transaction-mode pooler (PgBouncer's default) drops
+- The database user needs `LISTEN` on the FishMMO database. Point the `Npgsql`
+  settings (or `FISHMMO_DB_HOST` / `FISHMMO_DB_PORT`) at PostgreSQL directly, or
+  at a pooler in **session** mode. A transaction-mode pooler (PgBouncer's default) drops
   `LISTEN`, and deliveries then wait for the sweep.
 - A delivery left claimed after an ambiguous send is logged at error level with
   the account name. Watch for those; each one needs a person to check with the

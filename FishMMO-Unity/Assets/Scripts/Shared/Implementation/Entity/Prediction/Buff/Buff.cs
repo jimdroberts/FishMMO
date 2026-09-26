@@ -13,12 +13,9 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class Buff
 	{
-		/// <summary>
-		/// Version number for this buff instance, used for database state-driven safety on updates.
-		/// Incremented whenever the buff's state changes in a way that requires persistence
-		/// (e.g., stacks added/removed, remaining time checkpointed).
-		/// </summary>
-		public long Version;
+		/* No persistence version. A character's buffs are saved as one set with its character row
+		 * and ordered by the row's version (CharacterData.Buffs); a per-instance counter could not
+		 * order a set, because a buff re-applied after it ended starts counting again. */
 
 		/// <summary>
 		/// The absolute network tick at which this buff expires.

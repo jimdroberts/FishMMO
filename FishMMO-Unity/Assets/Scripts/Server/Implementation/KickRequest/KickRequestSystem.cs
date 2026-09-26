@@ -230,79 +230,73 @@ namespace FishMMO.Server.Implementation
 			try
 			{
 				if (Server.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService) ||
-					!Server.Database.ServiceRegistry.TryGet<IAccountService>(out var accountService))
+					!Server.Database.ServiceRegistry.TryGet<IKickRequestService>(out var kickRequestService))
 				{
 					return;
 				}
 
-				// Fetch kick requests from the database
-				DatabaseResult<List<KickRequestData>> dbResult = await kickRequestService.FetchAsync(
-					data.LastFetchTime, data.LastPosition, UpdateFetchCount);
+				/* Read through the window, on the database's clock. The poll used to keep a (time, id)
+				 * cursor seeded from this host's clock: a host running ahead of the database skipped
+				 * every kick stamped inside the lead, and a kick whose transaction committed after a
+				 * later-stamped one's was passed before it was visible. See KickRequestReadWindow. */
+				KickRequestReadWindow window = data.ReadWindow;
+				KickRequestPollQuery query = window.BuildQuery(UpdateFetchCount, MonotonicClock.NowSeconds - data.WatchStartedAt);
+				DatabaseResult<KickRequestPage> dbResult = await kickRequestService.FetchAsync(query);
 
-				/* A failed fetch leaves the cursor where it was, so the requests are read again on the
+				/* A failed fetch leaves the window where it was, so the requests are read again on the
 				 * next poll. It is still logged: an operator's kick that never lands, with nothing in
 				 * the log to say the poll is failing, looks exactly like a kick that was never issued. */
-				if (!dbResult.IsSuccess)
+				if (!dbResult.IsSuccess || dbResult.Data == null)
 				{
 					await Log.Warning("KickRequestSystem", $"Kick request poll failed: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
 					return;
 				}
 
-				if (dbResult.Data == null || dbResult.Data.Count == 0)
-				{
-					return;
-				}
+				KickRequestPage page = dbResult.Data;
+				List<KickRequestData> requests = page.Requests;
 
-				// Process last-login checks in batches to avoid saturating the DB connection pool.
-				const int BatchSize = 10;
-				var loginResults = new DatabaseResult<DateTime>[dbResult.Data.Count];
-				for (int batchStart = 0; batchStart < dbResult.Data.Count; batchStart += BatchSize)
-				{
-					int batchEnd = Math.Min(batchStart + BatchSize, dbResult.Data.Count);
-					var batchTasks = new Task<DatabaseResult<DateTime>>[batchEnd - batchStart];
-					for (int i = batchStart; i < batchEnd; i++)
-					{
-						batchTasks[i - batchStart] = accountService.FetchLastLoginAsync(dbResult.Data[i].AccountName);
-					}
-					await Task.WhenAll(batchTasks);
-					for (int i = batchStart; i < batchEnd; i++)
-					{
-						loginResults[i] = batchTasks[i - batchStart].Result;
-					}
-				}
+				/* Each request arrives with its account's last login, read by the same query.
+				 * This used to follow the page with one FetchLastLoginAsync per kick, ten at a time,
+				 * and every login, world and scene server polls this page — so a hundred kicks cost
+				 * each of them a hundred extra round trips before it had even looked at whether the
+				 * account was connected to it. */
 
-				/* The polling position advances past each request only once its kick is actually on
-				 * its way to the main thread (or was found stale).
+				/* A request is recorded as handled only once its kick is actually on its way to the
+				 * main thread (or it was found stale).
 				 *
-				 * It used to advance past the whole page before any of them were queued, and the
+				 * The poll used to advance past the whole page before any of them were queued, and the
 				 * queue's refusal was ignored, so a kick that met a full main-thread queue was simply
 				 * gone: the cursor was already beyond it, nothing retried it, and the operator's kick
 				 * never landed. Stopping at the first refusal leaves that request and everything after
 				 * it to be read again on the next poll; the ones queued before it are not repeated. */
-				KickRequestData lastSettled = default;
-				bool anySettled = false;
+				DateTime? firstUnsettledUtc = null;
 
 				// Process results — kick any accounts that haven't reconnected since the request
-				for (int i = 0; i < dbResult.Data.Count; i++)
+				for (int i = 0; i < requests.Count; i++)
 				{
-					KickRequestData kickRequest = dbResult.Data[i];
-					DatabaseResult<DateTime> lastLoginResult = loginResults[i];
+					KickRequestData kickRequest = requests[i];
 
-					/* A failed read proceeds with the kick, and says so. Missing evidence that the
-					 * account reconnected is not evidence that it did, and an operator's kick is the
-					 * one to honour when the two cannot be told apart — but an account kicked twice
-					 * because the check could not run should leave a trace explaining why. */
-					if (!lastLoginResult.IsSuccess)
+					// The query skipped these already; a request is never kicked twice either way.
+					if (window.IsHandled(kickRequest.ID, kickRequest.TimeCreated))
 					{
-						await Log.Warning("KickRequestSystem", $"Could not read the last login of '{kickRequest.AccountName}'; kicking without knowing whether it reconnected since the request: [{lastLoginResult.ErrorCode}] {lastLoginResult.ErrorMessage}");
+						continue;
 					}
-					else if (lastLoginResult.Data >= kickRequest.TimeCreated)
+
+					/* No account row matched, so there is no last login to compare: proceed with the
+					 * kick, and say so. Missing evidence that the account reconnected is not evidence
+					 * that it did, and an operator's kick is the one to honour when the two cannot be
+					 * told apart — but a kick that could not be checked should leave a trace. */
+					if (!kickRequest.AccountLastLogin.HasValue)
 					{
-						// If the last successful login happened after the kick request,
-						// the account reconnected and the kick is stale.
-						lastSettled = kickRequest;
-						anySettled = true;
+						await Log.Warning("KickRequestSystem", $"No account matches kick request '{kickRequest.AccountName}'; kicking without knowing whether it reconnected since the request.");
+					}
+					else if (kickRequest.AccountLastLogin.Value >= kickRequest.TimeCreated)
+					{
+						/* If the last successful login happened after the kick request, the account
+						 * reconnected and the kick is stale. Both stamps are the database's own clock
+						 * (AccountService.PersistLastLoginAsync), so the comparison measures no host's
+						 * skew. */
+						window.MarkHandled(kickRequest.ID, kickRequest.TimeCreated);
 						continue;
 					}
 
@@ -369,23 +363,21 @@ namespace FishMMO.Server.Implementation
 
 					if (!queued)
 					{
-						await Log.Error("KickRequestSystem", $"Main-thread queue refused the kick of '{accountName}'; it and the {dbResult.Data.Count - i - 1} request(s) after it will be read again on the next poll.");
+						await Log.Error("KickRequestSystem", $"Main-thread queue refused the kick of '{accountName}'; it and the {requests.Count - i - 1} request(s) after it will be read again on the next poll.");
+						firstUnsettledUtc = kickRequest.TimeCreated;
 						break;
 					}
 
-					lastSettled = kickRequest;
-					anySettled = true;
+					window.MarkHandled(kickRequest.ID, kickRequest.TimeCreated);
 				}
 
-				// Update polling position under lock for safe cross-thread visibility.
-				if (anySettled)
-				{
-					lock (this.kickLock)
-					{
-						data.LastFetchTime = lastSettled.TimeCreated;
-						data.LastPosition = lastSettled.ID;
-					}
-				}
+				/* Settled after every read that returned, including an empty one, or an idle window
+				 * never advances. A refusal, or a page that came back full, holds the window at the
+				 * first request still owed. Only the poll holding IsProcessing touches the window, and
+				 * the lock taken to release it publishes these writes to the next poll's thread. */
+				DateTime? lastRowUtc = requests.Count > 0 ? requests[requests.Count - 1].TimeCreated : (DateTime?)null;
+				window.CompleteRead(page.ReadFromUtc, page.ReadStartedUtc,
+					KickRequestReadWindow.UnsettledFrom(page.Drained, lastRowUtc, firstUnsettledUtc));
 			}
 			catch (Exception ex)
 			{

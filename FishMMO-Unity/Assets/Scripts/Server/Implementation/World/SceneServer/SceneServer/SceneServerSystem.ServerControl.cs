@@ -10,6 +10,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -44,30 +45,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// awaiting main-thread adoption.
 		/// </summary>
 		/// <remarks>
-		/// Boxed so publication is a single atomic reference store; the struct contains a
+		/// A reference so publication is a single atomic store; the struct it carries contains a
 		/// <see cref="DateTime"/>? which would not be. Same arrangement as
-		/// <c>WorldServerSystem</c>.
+		/// <c>WorldServerSystem</c>. The reading carries the moment its reply arrived, which is
+		/// what anchors the shutdown countdown.
 		/// </remarks>
-		private object pendingSceneControlState;
+		private ServerControlReading pendingSceneControlState;
 
 		/// <summary>
 		/// Control state of each world this server hosts scenes for, published by the pulse
-		/// worker. Boxed for the same reason.
+		/// worker as one reference for the same reason.
 		/// </summary>
 		/// <remarks>
 		/// Every hosted world has an entry; a world whose row could not be read maps to
 		/// <c>null</c>, meaning "keep what was adopted last" — not "no longer hosted".
 		/// </remarks>
-		private object pendingWorldControlStates;
+		private Dictionary<long, ServerControlReading> pendingWorldControlStates;
 
 		/// <summary>This scene server's own control state, as last adopted. Main thread only.</summary>
 		private ServerControlState sceneControlState;
+
+		/// <summary>
+		/// This scene server's countdown to its own scheduled shutdown, on
+		/// <see cref="MonotonicClock"/>. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Anchored from the seconds left that each pulse measured by the database clock. It used
+		/// to compare the row's instant with this host's <c>DateTime.UtcNow</c>, so a host running
+		/// fast cleared its players early and a clock stepped forward cleared them at once. See
+		/// <see cref="ShutdownCountdown"/>.
+		/// </remarks>
+		private readonly ShutdownCountdown sceneShutdownCountdown = new ShutdownCountdown();
 
 		/// <summary>
 		/// Control state per world server id, as last adopted. Main thread only.
 		/// </summary>
 		private readonly Dictionary<long, ServerControlState> worldControlStates =
 			new Dictionary<long, ServerControlState>();
+
+		/// <summary>
+		/// Countdown to each hosted world's scheduled shutdown, keyed as
+		/// <see cref="worldControlStates"/> is. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// On the database's measure, like this server's own: the world server and every scene
+		/// server clearing its players have to reach the same deadline, and they could only do
+		/// that on the one clock they share.
+		/// </remarks>
+		private readonly Dictionary<long, ShutdownCountdown> worldShutdownCountdowns =
+			new Dictionary<long, ShutdownCountdown>();
 
 		/// <summary>
 		/// Countdown thresholds already announced, keyed by the server being shut down.
@@ -113,12 +139,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Publishes this scene server's control state for the main thread to adopt.
-		/// Called from the pulse worker.
+		/// Called from the pulse worker, straight after the read's reply arrives.
 		/// </summary>
 		/// <param name="state">Control state read back by the pulse.</param>
+		/// <remarks>
+		/// Stamped here rather than on adoption, a pulse later: the arrival time anchors the
+		/// database-measured shutdown countdown. See <see cref="ShutdownCountdown"/>.
+		/// </remarks>
 		private void PublishControlState(ServerControlState state)
 		{
-			Volatile.Write(ref pendingSceneControlState, state);
+			Volatile.Write(ref pendingSceneControlState, ServerControlReading.ArrivedNow(state));
 		}
 
 		/// <summary>
@@ -155,11 +185,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			var states = new Dictionary<long, ServerControlState?>(hostedWorldServerIDs.Count);
+			var states = new Dictionary<long, ServerControlReading>(hostedWorldServerIDs.Count);
 			for (int i = 0; i < hostedWorldServerIDs.Count; ++i)
 			{
 				long worldServerID = hostedWorldServerIDs[i];
 				DatabaseResult<ServerControlState> result = await worldServerService.FetchControlStateAsync(worldServerID);
+				// Stamped as the reply arrives: it anchors the world's shutdown countdown here.
+				double readAt = MonotonicClock.NowSeconds;
 				if (!result.IsSuccess)
 				{
 					/* A world whose row cannot be read is deliberately not treated as shutting
@@ -175,7 +207,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					states[worldServerID] = null;
 					continue;
 				}
-				states[worldServerID] = result.Data;
+				states[worldServerID] = new ServerControlReading(result.Data, readAt);
 			}
 
 			Volatile.Write(ref pendingWorldControlStates, states);
@@ -193,21 +225,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </returns>
 		private bool ProcessControlState()
 		{
-			object publishedScene = Volatile.Read(ref pendingSceneControlState);
+			ServerControlReading publishedScene = Volatile.Read(ref pendingSceneControlState);
 			if (publishedScene != null)
 			{
 				Volatile.Write(ref pendingSceneControlState, null);
-				AdoptSceneControlState((ServerControlState)publishedScene);
+				AdoptSceneControlState(publishedScene);
 			}
 
-			object publishedWorlds = Volatile.Read(ref pendingWorldControlStates);
+			Dictionary<long, ServerControlReading> publishedWorlds = Volatile.Read(ref pendingWorldControlStates);
 			if (publishedWorlds != null)
 			{
 				Volatile.Write(ref pendingWorldControlStates, null);
-				AdoptWorldControlStates((Dictionary<long, ServerControlState?>)publishedWorlds);
+				AdoptWorldControlStates(publishedWorlds);
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			// Every countdown below runs on this clock from the database's measure of the time
+			// left, never on this host's wall clock. See ShutdownCountdown.
+			double now = MonotonicClock.NowSeconds;
 
 			/* Quitting is deferred by one tick after the players have been cleared.
 			 *
@@ -229,11 +263,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// This scene server's own shutdown clears everyone off it and stops the process.
-			if (sceneControlState.HasShutdown)
+			if (sceneShutdownCountdown.IsScheduled)
 			{
-				AnnounceShutdown(SelfShutdownKey, null, sceneControlState, nowUtc, "This scene server");
+				AnnounceShutdown(SelfShutdownKey, null, sceneShutdownCountdown, now, "This scene server");
 
-				if (nowUtc >= sceneControlState.ShutdownAtUtc.Value)
+				if (sceneShutdownCountdown.IsDue(now))
 				{
 					Log.Warning("SceneServerSystem", "Scheduled shutdown deadline reached; clearing players.");
 					DisconnectCharacters(null);
@@ -245,15 +279,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// A world shutting down clears that world's characters off this server. This process
 			// keeps running: it may be hosting scenes for other worlds, and taking it down for
 			// one of them would be an outage for the rest.
-			foreach (var kvp in worldControlStates)
+			foreach (var kvp in worldShutdownCountdowns)
 			{
-				ServerControlState worldState = kvp.Value;
-				if (!worldState.HasShutdown)
+				ShutdownCountdown worldCountdown = kvp.Value;
+				if (!worldCountdown.IsScheduled)
 				{
 					continue;
 				}
 
-				AnnounceShutdown(kvp.Key, kvp.Key, worldState, nowUtc, "The world");
+				AnnounceShutdown(kvp.Key, kvp.Key, worldCountdown, now, "The world");
 
 				/* Acted on once per deadline, not once per pulse.
 				 *
@@ -264,7 +298,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * repetition on its own; a row left behind by a world server that is simply not
 				 * running would not, and this would log and re-scan every five seconds for as
 				 * long as this scene server hosts one of its scenes. */
-				if (nowUtc >= worldState.ShutdownAtUtc.Value && worldShutdownsApplied.Add(kvp.Key))
+				if (worldCountdown.IsDue(now) && worldShutdownsApplied.Add(kvp.Key))
 				{
 					Log.Warning("SceneServerSystem",
 						$"World server {kvp.Key} reached its shutdown deadline; clearing its characters from this scene server.");
@@ -278,8 +312,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Adopts this scene server's control state, logging transitions.
 		/// </summary>
-		private void AdoptSceneControlState(ServerControlState state)
+		private void AdoptSceneControlState(ServerControlReading reading)
 		{
+			ServerControlState state = reading.State;
 			if (Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) &&
 				runtimeData.IsLocked != state.Locked)
 			{
@@ -289,20 +324,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					: "This scene server is now UNLOCKED and accepting work again.");
 			}
 
-			if (sceneControlState.ShutdownAtUtc != state.ShutdownAtUtc)
+			if (sceneShutdownCountdown.Adopt(reading))
 			{
-				if (!state.HasShutdown)
-				{
-					announcedShutdownThresholds.Remove(SelfShutdownKey);
-					Log.Warning("SceneServerSystem", "Scheduled shutdown cancelled.");
-				}
-				else
-				{
-					// A rescheduled shutdown is a new countdown, so previously announced marks
-					// must not suppress warnings for the new deadline.
-					announcedShutdownThresholds.Remove(SelfShutdownKey);
-					Log.Warning("SceneServerSystem", $"Shutdown scheduled for {state.ShutdownAtUtc.Value:u}.");
-				}
+				// Set, moved or cancelled: either way the old countdown is void, and previously
+				// announced marks must not suppress warnings for a new deadline.
+				announcedShutdownThresholds.Remove(SelfShutdownKey);
+				Log.Warning("SceneServerSystem", sceneShutdownCountdown.IsScheduled
+					? $"Shutdown scheduled for {state.ShutdownAtUtc.Value:u}, in {sceneShutdownCountdown.SecondsRemaining(MonotonicClock.NowSeconds):F0}s by the database clock."
+					: "Scheduled shutdown cancelled.");
 			}
 
 			sceneControlState = state;
@@ -311,7 +340,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Adopts the control state of the worlds this server hosts scenes for.
 		/// </summary>
-		private void AdoptWorldControlStates(Dictionary<long, ServerControlState?> states)
+		private void AdoptWorldControlStates(Dictionary<long, ServerControlReading> states)
 		{
 			// Forget worlds this server no longer hosts anything for, so their countdown
 			// bookkeeping does not accumulate for the life of the process.
@@ -330,6 +359,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					for (int i = 0; i < gone.Count; ++i)
 					{
 						worldControlStates.Remove(gone[i]);
+						worldShutdownCountdowns.Remove(gone[i]);
 						announcedShutdownThresholds.Remove(gone[i]);
 						worldShutdownsApplied.Remove(gone[i]);
 					}
@@ -338,22 +368,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			foreach (var kvp in states)
 			{
-				if (!kvp.Value.HasValue)
+				if (kvp.Value == null)
 				{
 					// Unreadable this pulse: whatever was adopted last stands, bookkeeping and all.
 					continue;
 				}
 
-				ServerControlState state = kvp.Value.Value;
-				if (worldControlStates.TryGetValue(kvp.Key, out ServerControlState previous) &&
-					previous.ShutdownAtUtc != state.ShutdownAtUtc)
+				if (!worldShutdownCountdowns.TryGetValue(kvp.Key, out ShutdownCountdown countdown))
 				{
-					// Cancelled or rescheduled: either way the old countdown is void, and a new
-					// deadline has to be actionable again.
+					worldShutdownCountdowns[kvp.Key] = countdown = new ShutdownCountdown();
+				}
+				if (countdown.Adopt(kvp.Value))
+				{
+					// Set, cancelled or rescheduled: either way the old countdown is void, and a
+					// new deadline has to be actionable again.
 					announcedShutdownThresholds.Remove(kvp.Key);
 					worldShutdownsApplied.Remove(kvp.Key);
 				}
-				worldControlStates[kvp.Key] = state;
+				worldControlStates[kvp.Key] = kvp.Value.State;
 			}
 		}
 
@@ -362,12 +394,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="key">Bookkeeping key: <see cref="SelfShutdownKey"/> or a world server id.</param>
 		/// <param name="worldServerID">World to warn, or <c>null</c> to warn everyone on this server.</param>
-		/// <param name="state">Control state carrying the deadline.</param>
-		/// <param name="nowUtc">Current time.</param>
+		/// <param name="countdown">The countdown to the deadline.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <param name="subject">What is going down, for the message text.</param>
-		private void AnnounceShutdown(long key, long? worldServerID, ServerControlState state, DateTime nowUtc, string subject)
+		private void AnnounceShutdown(long key, long? worldServerID, ShutdownCountdown countdown, double now, string subject)
 		{
-			double remaining = state.SecondsUntilShutdown(nowUtc);
+			double remaining = countdown.SecondsRemaining(now);
 			if (remaining <= 0.0)
 			{
 				return;

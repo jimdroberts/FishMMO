@@ -45,9 +45,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Land is destroyed at the end of this, so it is measured in days rather than minutes: a
 		/// player on holiday should not lose a house they paid for, and a player who has genuinely
 		/// left should not hold land forever. Nothing is taken until it has been overdue for the
-		/// whole grace period, and every sweep in between tries the charge again.
+		/// whole grace period, and every period that falls due in between is billed again — a
+		/// payment in full then lifts the missed-payment mark.
 		/// </remarks>
-		[Tooltip("Days an overdue plot is kept before it is reclaimed. The owner is charged again on every sweep in between.")]
+		[Tooltip("Days an overdue plot is kept before it is reclaimed. Each period that falls due in between is billed again; paying it clears the arrears mark.")]
 		[SerializeField]
 		private float taxGraceDays = 14f;
 
@@ -59,19 +60,107 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private float taxSweepIntervalSeconds = 300f;
 
 		/// <summary>
-		/// Most plots charged in one sweep.
+		/// Most plots read per page of one world's sweep.
+		/// </summary>
+		/// <remarks>
+		/// A page's offline owners are charged together in one transaction (see
+		/// <see cref="IPlotService.ChargeTaxOfflineAsync"/>), so a page costs a handful of round trips
+		/// rather than several per plot, and can be far larger than the 64 plots a sweep used to
+		/// bill one at a time — a 10,000-plot backlog took about 13 hours to clear at that rate.
+		/// </remarks>
+		private const int TaxBatchSize = 256;
+
+		/// <summary>
+		/// Most pages one sweep reads from one world.
 		/// </summary>
 		/// <remarks>
 		/// A server that has been down across a billing period comes back to every plot at once.
-		/// Bounding the batch means that arrives as several sweeps rather than one that tries to
-		/// charge the entire world in a single pass.
+		/// Bounding the pages means that arrives over a few sweeps rather than as one that holds a
+		/// worker for as long as the whole world takes — 4,096 plots a world per sweep.
 		/// </remarks>
-		private const int TaxBatchSize = 64;
+		private const int MaxTaxPagesPerSweep = 16;
+
+		/// <summary>
+		/// How long the world sweep leaves a plot alone once it has found the owner held by
+		/// another server.
+		/// </summary>
+		/// <remarks>
+		/// The server holding the owner bills them from its own sweep (see
+		/// <see cref="SweepHeldOwnersAsync"/>), within one sweep interval. This only stops every
+		/// other server re-reading the plot meanwhile — the head of the page used to fill with such
+		/// plots, and every sweep on every server read the same ones and billed nobody behind them.
+		/// Long enough that re-checking is rare, short enough that a holder which never bills
+		/// (tax switched off there, or it went down holding the claim until the lease ran out) costs
+		/// minutes, not the period.
+		/// </remarks>
+		private static readonly TimeSpan TaxOwnedElsewhereRetry = TimeSpan.FromMinutes(15);
 
 		/// <summary>
 		/// Seconds until the next tax sweep.
 		/// </summary>
+		/// <remarks>
+		/// The first sweep runs shortly after startup (<see cref="RandomiseSweepPhases"/>), at a
+		/// random point in a short window rather than at zero: at zero every scene server swept on
+		/// its first frame and in lockstep, all reading the same page in the same order.
+		/// </remarks>
 		private float taxSweepCountdown;
+
+		/// <summary>
+		/// Earliest and latest seconds after startup at which the first tax sweep runs.
+		/// </summary>
+		/// <remarks>
+		/// A world is billed only while some server hosts its housing scene, so a world that was
+		/// unhosted, or a server that was down across a billing period, has bills waiting. Running
+		/// the first sweep within a minute of startup collects them straight away instead of up to
+		/// a whole interval later. Ten seconds gives the plot scenes time to resolve; the spread
+		/// keeps servers started together from sweeping in step.
+		/// </remarks>
+		private const float TaxStartupSweepMinSeconds = 10f;
+		private const float TaxStartupSweepMaxSeconds = 40f;
+
+		/// <summary>
+		/// Seconds between retries of the startup sweep while nothing is ready to sweep yet.
+		/// </summary>
+		private const float TaxStartupSweepRetrySeconds = 15f;
+
+		/// <summary>
+		/// True until the first tax sweep has been handed to the worker.
+		/// </summary>
+		/// <remarks>
+		/// While set, a sweep that finds no hosted world and nobody held (the plot scenes have not
+		/// resolved yet) retries in <see cref="TaxStartupSweepRetrySeconds"/> rather than waiting a
+		/// full interval. It clears once a sweep is enqueued, or once an interval has passed since
+		/// startup, so a server that hosts no housing at all stops retrying.
+		/// </remarks>
+		private bool taxStartupSweepPending;
+
+		/// <summary>
+		/// Seconds since startup, counted only while the startup sweep is pending.
+		/// </summary>
+		private float taxStartupElapsed;
+
+		/// <summary>
+		/// 1 while a sweep is running on the worker, 0 otherwise. Set on the main thread, cleared by
+		/// the sweep itself whichever way it ends.
+		/// </summary>
+		/// <remarks>
+		/// A sweep that takes longer than the interval — a backlog, or a slow database — used to be
+		/// joined by the next one, and the two read and billed the same plots.
+		/// </remarks>
+		private int taxSweepInFlight;
+
+		/// <summary>
+		/// Picks where in their intervals this server's periodic sweeps start. Main thread only.
+		/// </summary>
+		private void RandomiseSweepPhases()
+		{
+			System.Random random = new System.Random();
+			taxSweepCountdown = TaxStartupSweepMinSeconds +
+				(float)(random.NextDouble() * (TaxStartupSweepMaxSeconds - TaxStartupSweepMinSeconds));
+			taxStartupSweepPending = true;
+			taxStartupElapsed = 0f;
+			plotSyncCountdown = (float)(random.NextDouble() * Mathf.Max(1f, plotSyncIntervalSeconds));
+		}
 
 		/// <summary>
 		/// True when this server charges tax at all.
@@ -97,13 +186,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Runs the tax sweep on its interval.
+		/// Runs the tax sweep on its interval, one at a time.
 		/// </summary>
 		private void TickTax(float deltaTime)
 		{
 			if (!IsTaxEnabled)
 			{
 				return;
+			}
+
+			if (taxStartupSweepPending)
+			{
+				taxStartupElapsed += deltaTime;
+				if (taxStartupElapsed >= Mathf.Max(1f, taxSweepIntervalSeconds))
+				{
+					taxStartupSweepPending = false;
+				}
 			}
 
 			taxSweepCountdown -= deltaTime;
@@ -113,16 +211,52 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			taxSweepCountdown = Mathf.Max(1f, taxSweepIntervalSeconds);
 
-			/* Swept per world this server is hosting scenes for, not globally. A scene server holds
-			 * scenes for several worlds, and each world's land is its own. */
-			foreach (long worldServerID in CollectHostedWorlds())
+			/* A misconfigured currency is refused here rather than per plot. With no currency nobody
+			 * can pay, so every owner held here would be marked unpaid on every sweep, and after the
+			 * grace period every one of their houses would be taken — for a mistake in an asset. */
+			if (currencyTemplate == null)
 			{
-				long world = worldServerID;
-				if (!TryEnqueueAsyncWork(() => SweepTaxAsync(world)))
-				{
-					Log.Warning("HousingSystem", $"Could not enqueue the tax sweep for world {world}.");
-				}
+				Log.Error("HousingSystem", "Tax is enabled but currencyTemplate is not assigned; no tax is charged and nothing is reclaimed until it is.");
+				return;
 			}
+
+			if (System.Threading.Interlocked.CompareExchange(ref taxSweepInFlight, 1, 0) != 0)
+			{
+				Log.Debug("HousingSystem", "The previous tax sweep is still running; this interval's is skipped.");
+				return;
+			}
+
+			/* Both gathered here, on the main thread: the scene mapping and the character map are
+			 * main-thread state, and the sweep runs on the worker. The held set is a snapshot. An
+			 * owner who arrives after it is treated as held elsewhere — the offline charge's
+			 * assertion finds this server's claim — and is billed by the next sweep's held pass; one
+			 * who leaves after it is charged in memory, finds nobody, and falls back to the row. */
+			List<long> worlds = CollectHostedWorlds();
+			long[] heldHere = CollectHeldCharacterIDs();
+			if (worlds.Count < 1 && heldHere.Length < 1)
+			{
+				System.Threading.Interlocked.Exchange(ref taxSweepInFlight, 0);
+				if (taxStartupSweepPending)
+				{
+					// The plot scenes have not resolved yet; try the startup sweep again shortly.
+					taxSweepCountdown = TaxStartupSweepRetrySeconds;
+				}
+				return;
+			}
+
+			if (!TryEnqueueAsyncWork(() => SweepTaxAsync(worlds, heldHere)))
+			{
+				System.Threading.Interlocked.Exchange(ref taxSweepInFlight, 0);
+				if (taxStartupSweepPending)
+				{
+					taxSweepCountdown = TaxStartupSweepRetrySeconds;
+				}
+				Log.Warning("HousingSystem", taxStartupSweepPending
+					? "Could not enqueue the startup tax sweep; retrying shortly."
+					: "Could not enqueue the tax sweep; it runs again next interval.");
+				return;
+			}
+			taxStartupSweepPending = false;
 		}
 
 		/// <summary>
@@ -145,50 +279,179 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Charges every plot that has come due, and reclaims the ones that have run out of grace.
+		/// The characters this server holds. Main thread only.
+		/// </summary>
+		private long[] CollectHeldCharacterIDs()
+		{
+			if (Server?.DataContainerRegistry == null ||
+				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out ICharacterMappingData<NetworkConnection> mappingData) ||
+				mappingData.CharactersByID == null ||
+				mappingData.CharactersByID.Count < 1)
+			{
+				return Array.Empty<long>();
+			}
+
+			long[] ids = new long[mappingData.CharactersByID.Count];
+			mappingData.CharactersByID.Keys.CopyTo(ids, 0);
+			return ids;
+		}
+
+		/// <summary>
+		/// Bills this server's own characters wherever their land is, then sweeps each hosted world.
 		/// </summary>
 		/// <remarks>
-		/// Safe to run from every scene server hosting the world at once. Winning the right to
-		/// charge is a pinned update, so a period produces one payment however many servers sweep —
-		/// which is why this needs no leader and survives any of them dying.
+		/// <para>Two halves, because two different things decide who may bill a plot. An owner who is
+		/// logged in may only be charged by the server holding them — their balance is in its memory
+		/// — and that server may be hosting nothing of the world their land is in: a dungeon, a
+		/// different region. The world sweep used to assume the holder swept that world too, found
+		/// the owner held elsewhere, and left the plot for a server that never came. So the holder
+		/// bills its own characters first, by owner rather than by world.</para>
+		///
+		/// <para>The world half then bills everybody nobody is holding, in batches, and steps past
+		/// the rest. Safe to run from every scene server at once: winning a period is a locked
+		/// compare on its due date, so a period produces one charge however many servers sweep it,
+		/// which is why this needs no leader and survives any of them dying.</para>
 		/// </remarks>
-		private async Task SweepTaxAsync(long worldServerID)
+		private async Task SweepTaxAsync(List<long> worlds, long[] heldHere)
 		{
-			if (!TryGetDbService(out IPlotService plotService))
+			try
 			{
-				Log.Error("HousingSystem", $"Tax sweep for world {worldServerID} skipped: IPlotService unavailable.");
-				return;
-			}
-
-			DateTime now = DateTime.UtcNow;
-
-			DatabaseResult<List<PlotData>> due = await plotService.FetchTaxDueAsync(worldServerID, now, TaxBatchSize);
-			if (!due.IsSuccess || due.Data == null)
-			{
-				Log.Error("HousingSystem", $"Tax sweep for world {worldServerID} failed: [{due.ErrorCode}] {due.ErrorMessage}");
-				return;
-			}
-			if (due.Data.Count < 1)
-			{
-				return;
-			}
-
-			TimeSpan grace = TimeSpan.FromDays(Mathf.Max(0f, taxGraceDays));
-			TimeSpan period = TimeSpan.FromDays(Mathf.Max(0.001f, taxPeriodDays));
-
-			foreach (PlotData plot in due.Data)
-			{
-				if (!plot.TaxDueUtc.HasValue)
+				if (!TryGetDbService(out IPlotService plotService))
 				{
-					continue;
+					Log.Error("HousingSystem", "Tax sweep skipped: IPlotService unavailable.");
+					return;
 				}
 
-				await ProcessDuePlotAsync(plotService, plot, plot.TaxDueUtc.Value, now, period, grace);
+				DateTime now = DateTime.UtcNow;
+				TimeSpan grace = TimeSpan.FromDays(Mathf.Max(0f, taxGraceDays));
+				TimeSpan period = TimeSpan.FromDays(Mathf.Max(0.001f, taxPeriodDays));
+
+				// Plots this sweep has already acted on, so the world half does not act on them twice.
+				HashSet<long> settled = new HashSet<long>();
+
+				if (heldHere.Length > 0)
+				{
+					await SweepHeldOwnersAsync(plotService, heldHere, now, period, grace, settled);
+				}
+
+				HashSet<long> heldSet = new HashSet<long>(heldHere);
+				foreach (long worldServerID in worlds)
+				{
+					await SweepWorldAsync(plotService, worldServerID, heldSet, now, period, grace, settled);
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("HousingSystem", $"Tax sweep failed; the next interval runs it again: {ex}");
+			}
+			finally
+			{
+				System.Threading.Interlocked.Exchange(ref taxSweepInFlight, 0);
 			}
 		}
 
 		/// <summary>
-		/// Charges one overdue plot, or reclaims it when its grace has run out.
+		/// Bills every due plot owned by a character this server holds, in any world.
+		/// </summary>
+		private async Task SweepHeldOwnersAsync(IPlotService plotService, long[] heldHere, DateTime now, TimeSpan period, TimeSpan grace, HashSet<long> settled)
+		{
+			DatabaseResult<List<PlotData>> due = await plotService.FetchTaxDueForOwnersAsync(heldHere, now);
+			if (!due.IsSuccess || due.Data == null)
+			{
+				Log.Error("HousingSystem", $"Tax sweep could not read the plots this server's characters owe on: [{due.ErrorCode}] {due.ErrorMessage}");
+				return;
+			}
+
+			foreach (PlotData plot in due.Data)
+			{
+				if (!plot.TaxDueUtc.HasValue || !settled.Add(plot.ID))
+				{
+					continue;
+				}
+
+				DateTime dueUtc = plot.TaxDueUtc.Value;
+				PlotTaxRoute route = PlotTaxRouting.Route(
+					PlotTaxDecision.Decide(plot.OwnerCharacterID, plot.OwnerGuildID, plot.TaxDelinquentSinceUtc, now, grace),
+					ownerHeldHere: true);
+
+				await SettleDuePlotAsync(plotService, plot, route, dueUtc, PlotTaxBilling.Bill(dueUtc, now, period, taxPerPeriod));
+			}
+		}
+
+		/// <summary>
+		/// Sweeps one world's due plots page by page, charging the offline owners of each page in
+		/// one batch.
+		/// </summary>
+		private async Task SweepWorldAsync(IPlotService plotService, long worldServerID, HashSet<long> heldSet, DateTime now, TimeSpan period, TimeSpan grace, HashSet<long> settled)
+		{
+			DateTime afterDueUtc = DateTime.MinValue;
+			long afterPlotID = 0;
+
+			for (int page = 0; page < MaxTaxPagesPerSweep; ++page)
+			{
+				DatabaseResult<List<PlotData>> due = await plotService.FetchTaxDueAsync(worldServerID, now, afterDueUtc, afterPlotID, TaxBatchSize);
+				if (!due.IsSuccess || due.Data == null)
+				{
+					Log.Error("HousingSystem", $"Tax sweep for world {worldServerID} failed: [{due.ErrorCode}] {due.ErrorMessage}");
+					return;
+				}
+				if (due.Data.Count < 1)
+				{
+					return;
+				}
+
+				List<PlotTaxCharge> offline = new List<PlotTaxCharge>();
+				foreach (PlotData plot in due.Data)
+				{
+					if (!plot.TaxDueUtc.HasValue || !settled.Add(plot.ID))
+					{
+						continue;
+					}
+
+					DateTime dueUtc = plot.TaxDueUtc.Value;
+					PlotTaxRoute route = PlotTaxRouting.Route(
+						PlotTaxDecision.Decide(plot.OwnerCharacterID, plot.OwnerGuildID, plot.TaxDelinquentSinceUtc, now, grace),
+						heldSet.Contains(plot.OwnerCharacterID));
+
+					/* Priced once, here, for whichever path carries it out: the in-memory charge and
+					 * the batched one bill the same periods, the same amount, and move the date to the
+					 * same place. */
+					PlotTaxBill bill = PlotTaxBilling.Bill(dueUtc, now, period, taxPerPeriod);
+
+					if (route == PlotTaxRoute.ChargeOffline)
+					{
+						if (bill.IsDue)
+						{
+							offline.Add(new PlotTaxCharge(plot.ID, plot.OwnerCharacterID, dueUtc, bill.NextDueUtc, bill.Amount));
+						}
+						continue;
+					}
+
+					await SettleDuePlotAsync(plotService, plot, route, dueUtc, bill);
+				}
+
+				if (offline.Count > 0)
+				{
+					await ChargeOfflineOwnersAsync(plotService, worldServerID, offline, now);
+				}
+
+				/* The cursor moves past this page whatever became of it. Plots that could not be
+				 * settled keep their date and would otherwise head every page read after them. */
+				PlotData last = due.Data[due.Data.Count - 1];
+				afterDueUtc = last.TaxDueUtc ?? afterDueUtc;
+				afterPlotID = last.ID;
+
+				if (due.Data.Count < TaxBatchSize)
+				{
+					return;
+				}
+			}
+
+			Log.Debug("HousingSystem", $"World {worldServerID} still has plots due after {MaxTaxPagesPerSweep} pages; the next sweep continues.");
+		}
+
+		/// <summary>
+		/// Carries out the per-plot routes: reclamation, guild deferral, and charging an owner held here.
 		/// </summary>
 		/// <remarks>
 		/// Grace runs from the <em>first</em> missed payment, not from the current due date. The due
@@ -200,77 +463,104 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// never in a write after it. The sweep decides to reclaim before it decides to charge, from
 		/// that mark alone, so a mark that outlived a payment — one failed write — took the house off
 		/// an owner who had paid every period since.</para>
+		///
+		/// <para><paramref name="bill"/> covers every period that has fallen due
+		/// (<see cref="PlotTaxBilling"/>): a plot several periods behind is charged for all of them
+		/// at once, or marked unpaid for all of them, and its date moves past them all.</para>
 		/// </remarks>
-		private async Task ProcessDuePlotAsync(
-			IPlotService plotService,
-			PlotData plot,
-			DateTime dueUtc,
-			DateTime now,
-			TimeSpan period,
-			TimeSpan grace)
+		private async Task SettleDuePlotAsync(IPlotService plotService, PlotData plot, PlotTaxRoute route, DateTime dueUtc, PlotTaxBill bill)
 		{
-			PlotTaxAction action = PlotTaxDecision.Decide(
-				plot.OwnerCharacterID,
-				plot.OwnerGuildID,
-				plot.TaxDelinquentSinceUtc,
-				now,
-				grace);
-
-			if (action == PlotTaxAction.None)
+			if (route != PlotTaxRoute.Reclaim && !bill.IsDue)
 			{
+				// Nothing to bill (a date the arithmetic cannot move on); the cursor steps past it.
 				return;
 			}
 
-			if (action == PlotTaxAction.Reclaim)
+			switch (route)
 			{
-				await ReclaimAsync(plotService, plot, plot.TaxDelinquentSinceUtc ?? dueUtc);
+				case PlotTaxRoute.Reclaim:
+					await ReclaimAsync(plotService, plot, plot.TaxDelinquentSinceUtc ?? dueUtc);
+					return;
+
+				case PlotTaxRoute.Defer:
+					/* Past every period due, like a charge, not one period per sweep: stepped one at a
+					 * time, a guild plot that had fallen behind stayed due and was read again by every
+					 * sweep until it caught up. */
+					DatabaseResult<int> deferred = await plotService.TryAdvanceTaxAsync(plot.ID, dueUtc, bill.NextDueUtc);
+					if (!deferred.IsSuccess)
+					{
+						// Harmless — the plot is simply swept again — but not silent.
+						Log.Warning("HousingSystem", $"Could not move guild plot {plot.ID}'s tax date on: [{deferred.ErrorCode}] {deferred.ErrorMessage}");
+					}
+					return;
+
+				case PlotTaxRoute.ChargeHere:
+					/* This server holds the character, so the balance lives in memory and the ordinary
+					 * persistence path writes it. Winning the bill comes first — the advance is a
+					 * compare-and-set on the date, so of every scene server sweeping this plot exactly
+					 * one bills it — and only then is the money taken, so a lost race takes nothing. */
+					if (await TryWinPeriodAsync(plotService, plot, dueUtc, bill.NextDueUtc))
+					{
+						await ChargeWonPeriodAsync(plotService, plot, dueUtc, bill);
+					}
+					return;
+
+				default:
+					/* None, or ChargeOffline, which only the world half batches. A plot the rule says
+					 * to leave alone keeps its date; the cursor steps past it. */
+					return;
+			}
+		}
+
+		/// <summary>
+		/// Charges one page's offline owners in a single transaction and reports what happened.
+		/// </summary>
+		/// <remarks>
+		/// <para>Everything happens inside <see cref="IPlotService.ChargeTaxOfflineAsync"/>: the
+		/// owners are locked and asserted unclaimed, the bills are won by locking the plots that
+		/// still hold the date read, the money is taken — each bill in full or not at all — and the
+		/// missed-payment marks and the ledger rows land in the same commit. An owner some server holds is not charged —
+		/// deducting from the row underneath a server that holds them would be overwritten by its
+		/// next save — and their plot steps aside until <see cref="TaxOwnedElsewhereRetry"/> has
+		/// passed; the server holding them bills them.</para>
+		/// <para>The unchanged-version write an earlier version of this path relied on was refused
+		/// by the upsert's version guard every single time and reported as paid: free rent for
+		/// anyone who logged off. The batch debits in place, under the row lock, at version + 1.</para>
+		/// </remarks>
+		private async Task ChargeOfflineOwnersAsync(IPlotService plotService, long worldServerID, List<PlotTaxCharge> charges, DateTime now)
+		{
+			DatabaseResult<List<PlotTaxChargeResult>> charged = await plotService.ChargeTaxOfflineAsync(
+				charges,
+				currencyTemplate.ID,
+				now + TaxOwnedElsewhereRetry,
+				(int)CurrencyMovementReason.LandTax,
+				(int)CurrencyMovementState.Absorbed);
+
+			if (!charged.IsSuccess || charged.Data == null)
+			{
+				Log.Warning("HousingSystem",
+					$"Offline tax for {charges.Count} plot(s) in world {worldServerID} could not be charged; nothing was taken and the next sweep tries again: [{charged.ErrorCode}] {charged.ErrorMessage}");
 				return;
 			}
 
-			if (action == PlotTaxAction.Defer)
+			int paid = 0, unpaid = 0, gone = 0, elsewhere = 0, skipped = 0;
+			foreach (PlotTaxChargeResult result in charged.Data)
 			{
-				DatabaseResult<int> deferred = await plotService.TryAdvanceTaxAsync(plot.ID, dueUtc, dueUtc + period);
-				if (!deferred.IsSuccess)
+				switch (result.Outcome)
 				{
-					// Harmless — the plot is simply swept again — but not silent.
-					Log.Warning("HousingSystem", $"Could not move guild plot {plot.ID}'s tax date on: [{deferred.ErrorCode}] {deferred.ErrorMessage}");
+					case PlotTaxChargeOutcome.Paid: ++paid; break;
+					case PlotTaxChargeOutcome.Unpaid: ++unpaid; break;
+					case PlotTaxChargeOutcome.OwnerGone:
+						++gone;
+						Log.Debug("HousingSystem", $"Plot {result.PlotID}'s owner CharID={result.OwnerCharacterID} is deleted; the period is marked unpaid and the plot runs out its grace.");
+						break;
+					case PlotTaxChargeOutcome.OwnedElsewhere: ++elsewhere; break;
+					default: ++skipped; break;
 				}
-				return;
 			}
 
-			/* Two shapes of charge, and the difference is who is authoritative for the money.
-			 *
-			 * ONLINE HERE: this server holds the character, so the attribute lives in memory and
-			 * the ordinary persistence path writes it. Winning the right to charge comes first —
-			 * the plot row's tax advance is a compare-and-set, so of every scene server sweeping
-			 * this world exactly one bills the period — and only then is the money taken.
-			 *
-			 * OFFLINE: nobody holds the character. The money is taken straight from the row, and
-			 * the advance and the debit are ONE transaction that also asserts, under the row
-			 * lock, that no server has claimed the character. A second server sweeping the same
-			 * plot either finds the period already advanced (its transaction rolls back, no
-			 * money moves) or finds the character claimed (it skips, no period consumed). The
-			 * unchanged-version write this replaced was refused by the upsert's version guard
-			 * every single time and reported as paid: free rent for anyone who logged off.
-			 *
-			 * ONLINE ELSEWHERE: the offline transaction's ownership assertion fails. Nothing is
-			 * charged and nothing is advanced; the server that holds the character sweeps this
-			 * world too and bills them there. */
-			if (!await IsOwnerOnlineHereAsync(plot.OwnerCharacterID))
-			{
-				await SettleOfflineOutcomeAsync(plotService, plot, dueUtc,
-					await TryChargeOfflineOwnerAsync(plotService, plot, dueUtc, dueUtc + period, plot.OwnerCharacterID, taxPerPeriod, advancePeriod: true));
-				return;
-			}
-
-			/* Online here: the period is won before any money moves, so a lost race takes
-			 * nothing from the player. The probe above spent nothing either. */
-			if (!await TryWinPeriodAsync(plotService, plot, dueUtc, dueUtc + period))
-			{
-				return;
-			}
-
-			await ChargeWonPeriodAsync(plotService, plot, dueUtc, dueUtc + period);
+			Log.Debug("HousingSystem",
+				$"Offline tax in world {worldServerID}: {paid} paid, {unpaid} unpaid, {gone} owner gone, {elsewhere} held elsewhere (deferred), {skipped} skipped.");
 		}
 
 		/// <summary>
@@ -349,11 +639,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const float WonPeriodRetrySeconds = 2f;
 
 		/// <summary>
-		/// Charges an owner for a period this server has already won.
+		/// Charges an owner for a bill this server has already won: every period it covers, in full
+		/// or not at all.
 		/// </summary>
 		/// <remarks>
-		/// <para>The period is spent the moment it is won — its date has moved on, and no server will
-		/// pick it up again — so every way of failing to charge it is a free period. The owner is
+		/// <para>The bill is spent the moment it is won — its date has moved on, and no server will
+		/// pick it up again — so every way of failing to charge it is free rent. The owner is
 		/// charged in memory if they are still here, from their stored row if they have gone.</para>
 		///
 		/// <para>The stored-row charge refuses while any server holds the character, and a character
@@ -362,9 +653,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// period was already won and nobody else ever would. So an outcome that is neither paid nor
 		/// unpaid is tried again, a few seconds apart, which is what the logout needs.</para>
 		/// </remarks>
-		private async Task ChargeWonPeriodAsync(IPlotService plotService, PlotData plot, DateTime dueUtc, DateTime nextDueUtc)
+		private async Task ChargeWonPeriodAsync(IPlotService plotService, PlotData plot, DateTime dueUtc, PlotTaxBill bill)
 		{
 			string lastOutcome = null;
+			DateTime nextDueUtc = bill.NextDueUtc;
 
 			for (int attempt = 1; attempt <= WonPeriodChargeAttempts; ++attempt)
 			{
@@ -373,29 +665,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await Task.Delay(TimeSpan.FromSeconds(WonPeriodRetrySeconds * (attempt - 1)));
 				}
 
-				OnlineChargeOutcome online = await TryChargeOnlineOwnerAsync(plot.OwnerCharacterID, taxPerPeriod);
+				OnlineChargeOutcome online = await TryChargeOnlineOwnerAsync(plot.OwnerCharacterID, bill.Amount);
 				if (online == OnlineChargeOutcome.Charged)
 				{
-					RecordLandTax(plot.OwnerCharacterID, taxPerPeriod);
-					MarkPlotChanged(plot.ID);
+					/* No plot_updates mark: other channels draw a plot's owner, state, structures and
+					 * guest list, and a payment changes none of them. */
+					RecordLandTax(plot.OwnerCharacterID, bill.Amount);
 					return;
 				}
 				if (online == OnlineChargeOutcome.Refused)
 				{
-					/* Unpaid. The owner keeps the house until their grace runs out, which is the
-					 * point of having one. */
+					/* Unpaid — for the whole bill, as the batched charge treats one it cannot cover.
+					 * The owner keeps the house until their grace runs out, which is the point of
+					 * having one. */
 					await MarkUnpaidAsync(plotService, plot, dueUtc);
-					Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} could not pay {taxPerPeriod} tax on plot {plot.ID}.");
+					Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} could not pay {bill.Amount} tax ({bill.Periods} period(s)) on plot {plot.ID}.");
 					return;
 				}
 				if (online == OnlineChargeOutcome.NotOnline)
 				{
-					/* Logged out between the probe and the charge. The period is already ours, so the
-					 * debit runs against the row without advancing it again. */
-					OfflineChargeOutcome offline = await TryChargeOfflineOwnerAsync(plotService, plot, dueUtc, nextDueUtc, plot.OwnerCharacterID, taxPerPeriod, advancePeriod: false);
+					/* Logged out between the sweep's snapshot and the charge. The bill is already
+					 * ours, so the debit runs against the row without advancing it again. */
+					OfflineChargeOutcome offline = await TryChargeWonPeriodFromRowAsync(plotService, plot, plot.OwnerCharacterID, bill.Amount);
 					if (offline == OfflineChargeOutcome.Paid || offline == OfflineChargeOutcome.Unpaid)
 					{
-						await SettleOfflineOutcomeAsync(plotService, plot, dueUtc, offline);
+						await SettleOfflineOutcomeAsync(plotService, plot, dueUtc, bill, offline);
 						return;
 					}
 					lastOutcome = offline.ToString();
@@ -486,90 +780,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Applies the plot-side consequence of an offline charge: delinquency cleared or marked,
-		/// or nothing at all when another server owns the outcome.
+		/// Applies the plot-side consequence of a won bill charged from the stored row:
+		/// delinquency cleared or marked.
 		/// </summary>
-		private async Task SettleOfflineOutcomeAsync(IPlotService plotService, PlotData plot, DateTime dueUtc, OfflineChargeOutcome outcome)
+		private async Task SettleOfflineOutcomeAsync(IPlotService plotService, PlotData plot, DateTime dueUtc, PlotTaxBill bill, OfflineChargeOutcome outcome)
 		{
 			switch (outcome)
 			{
 				case OfflineChargeOutcome.Paid:
 					// The missed-payment mark came off inside the payment's own transaction.
-					RecordLandTax(plot.OwnerCharacterID, taxPerPeriod);
-					MarkPlotChanged(plot.ID);
+					RecordLandTax(plot.OwnerCharacterID, bill.Amount);
 					return;
 				case OfflineChargeOutcome.Unpaid:
 					await MarkUnpaidAsync(plotService, plot, dueUtc);
-					Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} could not pay {taxPerPeriod} tax on plot {plot.ID}.");
-					return;
-				case OfflineChargeOutcome.OwnedElsewhere:
-					Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} is claimed by another server; leaving plot {plot.ID}'s tax for that server's sweep.");
+					Log.Debug("HousingSystem", $"CharID={plot.OwnerCharacterID} could not pay {bill.Amount} tax ({bill.Periods} period(s)) on plot {plot.ID}.");
 					return;
 				default:
-					// PeriodAlreadyBilled, or a fault already logged where it happened: nothing to settle here.
+					/* Still held (mid-logout), or a fault already logged where it happened: nothing to
+					 * settle here. ChargeWonPeriodAsync tries again, and hands the period back if it
+					 * never can. */
 					return;
 			}
-		}
-
-		/// <summary>
-		/// Whether this server holds the owner's character. Main-thread lookup; spends nothing.
-		/// </summary>
-		private Task<bool> IsOwnerOnlineHereAsync(long characterID)
-		{
-			TaskCompletionSource<bool> completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-			if (!TryEnqueueHousingMainThread(() =>
-			{
-				bool here = Server?.DataContainerRegistry != null &&
-					Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out ICharacterMappingData<NetworkConnection> mappingData) &&
-					mappingData.CharactersByID != null &&
-					mappingData.CharactersByID.ContainsKey(characterID);
-				completion.TrySetResult(here);
-			}))
-			{
-				completion.TrySetResult(false);
-			}
-			return completion.Task;
 		}
 
 		/// <summary>How an offline owner's tax charge ended.</summary>
 		private enum OfflineChargeOutcome
 		{
-			/// <summary>The debit, the period advance and the lifted missed-payment mark committed together.</summary>
+			/// <summary>The debit and the lifted missed-payment mark committed together.</summary>
 			Paid = 0,
-			/// <summary>The owner could not cover the tax; the period advance committed alone.</summary>
+			/// <summary>The owner could not cover the tax; nothing was written.</summary>
 			Unpaid = 1,
-			/// <summary>A server holds the character's session — possibly this one, mid-logout; nothing was touched.</summary>
+			/// <summary>A server holds the character's session — this one, mid-logout; nothing was touched.</summary>
 			OwnedElsewhere = 2,
-			/// <summary>Another server advanced this period first; the debit rolled back.</summary>
-			PeriodAlreadyBilled = 3,
 			/// <summary>A database fault; nothing was touched.</summary>
 			Faulted = 4,
 		}
 
 		/// <summary>
-		/// Charges an owner nobody is hosting, straight from the database, atomically with the
-		/// plot's period advance.
+		/// Charges a period this server has already won to an owner who logged out of it before the
+		/// in-memory charge could be made, straight from their stored row.
 		/// </summary>
 		/// <remarks>
+		/// <para>The one per-plot offline charge left: an ordinary offline owner is charged by the
+		/// batch (<see cref="ChargeOfflineOwnersAsync"/>), which wins the period and takes the money
+		/// in one transaction. This period is already won — its date moved when
+		/// <see cref="TryWinPeriodAsync"/> advanced it — so the batch's pin would never match it.</para>
 		/// <para>Everything happens inside one unit of work. The ownership assertion takes the
 		/// character row's lock and answers "unclaimed" only while no server holds a session for
 		/// it — so no scene server can be mid-save on an in-memory copy this write would then
 		/// silently overwrite, and none can log the character in until the transaction ends. The
 		/// debit is version-gated like every attribute write (<c>version + 1</c>, applied only if
-		/// strictly newer), and the advance is the plot service's compare-and-set. If either
-		/// refuses, the whole thing rolls back and nothing moved.</para>
+		/// strictly newer). If it refuses, the whole thing rolls back and nothing moved.</para>
 		/// <para>A payment also lifts the plot's missed-payment mark, inside the same transaction.
 		/// Lifted by a write after the commit, as it used to be, a failure left the mark on a plot
 		/// that had been paid for, and the next sweep reclaimed it by that mark alone.</para>
-		/// <para>This is what makes the sweep safe to run on every scene server of a cluster at
-		/// once: the database, not any server, decides who bills a period.</para>
 		/// </remarks>
-		/// <param name="advancePeriod">
-		/// True to win the period inside this transaction (the ordinary offline case); false when
-		/// the caller already advanced it and only the debit is outstanding.
-		/// </param>
-		private async Task<OfflineChargeOutcome> TryChargeOfflineOwnerAsync(
-			IPlotService plotService, PlotData plot, DateTime dueUtc, DateTime nextDueUtc, long characterID, long amount, bool advancePeriod)
+		private async Task<OfflineChargeOutcome> TryChargeWonPeriodFromRowAsync(
+			IPlotService plotService, PlotData plot, long characterID, long amount)
 		{
 			if (characterID <= 0 || amount <= 0 || currencyTemplate == null)
 			{
@@ -629,32 +896,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			bool canPay = currency.HasValue && currency.Value.Value >= amount;
-
-			// The period, first: whoever advances it owns it, whether or not the owner can pay.
-			if (advancePeriod)
-			{
-				DatabaseResult<int> advanced = await plotService.TryAdvanceTaxAsync(plot.ID, dueUtc, nextDueUtc);
-				if (!advanced.IsSuccess)
-				{
-					await unitOfWork.RollbackAsync();
-					Log.Warning("HousingSystem", $"Offline tax for plot {plot.ID}: could not advance its due date: [{advanced.ErrorCode}] {advanced.ErrorMessage}");
-					return OfflineChargeOutcome.Faulted;
-				}
-				if (advanced.Data != 1)
-				{
-					await unitOfWork.RollbackAsync();
-					return OfflineChargeOutcome.PeriodAlreadyBilled;
-				}
-			}
-
 			if (!canPay)
 			{
-				DatabaseResult unpaidCommit = await unitOfWork.CommitAsync();
-				if (!unpaidCommit.IsSuccess)
-				{
-					Log.Warning("HousingSystem", $"Offline tax for plot {plot.ID}: could not commit the unpaid period: [{unpaidCommit.ErrorCode}] {unpaidCommit.ErrorMessage}");
-					return OfflineChargeOutcome.Faulted;
-				}
+				// Nothing to write: the period was won before this, and the caller marks the miss.
+				await unitOfWork.RollbackAsync();
 				return OfflineChargeOutcome.Unpaid;
 			}
 
@@ -666,6 +911,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				row.TemplateID,
 				row.Value - (int)amount,
 				row.CurrentValue);
+			/* The ungated write, and deliberately so: every other per-character write quotes the
+			 * session claim it was made under (CharacterWriteGate), but this one is made for a
+			 * character NO server holds, and the assertion above — under the row lock, for the whole
+			 * transaction — is what proves it. There is no claim to quote, and a gated write would
+			 * refuse the very owner it exists to bill. */
 			DatabaseResult<BulkWriteResult> persisted = await attributeService.PersistAsync(new List<CharacterAttributeData> { updated });
 			if (!persisted.IsSuccess || persisted.Data.Applied != 1)
 			{
@@ -808,7 +1058,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}, characterID))
 			{
-				Log.Warning("HousingSystem", $"Currency ledger: async worker was full; the record for CharID={characterID} ran on the unbounded fallback path.");
+				Log.Warning("HousingSystem", $"Currency ledger: the persistence queue is saturated; the record for CharID={characterID} is still written, but late (behind the backlog, or through the teardown fallback).");
 			}
 		}
 	}

@@ -81,8 +81,10 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="container">The container the items are in.</param>
 		/// <param name="operation">Short operation name used in persistence log lines.</param>
 		/// <returns>
-		/// True when the batch was enqueued normally; false when the bounded queue was full and the
-		/// write ran on the fallback path. Never a rollback signal — memory is already authoritative.
+		/// True when the batch was enqueued within the worker's threshold; false when it was admitted
+		/// over it and waits behind the backlog (or, the worker not running, went to the bounded
+		/// fallback). The write runs either way. Never a rollback signal — memory is already
+		/// authoritative.
 		/// </returns>
 		bool TryPersistGrantedItems(IPlayerCharacter character, List<Item> modifiedItems, InventoryType container, string operation);
 
@@ -106,14 +108,24 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// character system before it releases the session.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Main thread only, while the character is still resident. The returned work writes the
 		/// snapshot in one transaction under <paramref name="lease"/>; the caller awaits it before
 		/// the release so the next owner reads it. Returns null when there is nothing to capture.
+		/// </para>
+		/// <para>
+		/// <b>The caller must look at the outcome.</b> <see cref="ItemWriteOutcome.Retry"/> means the
+		/// items are not in the database: the claim must be kept and the same work run again before
+		/// it is released, because once another server claims and loads the character nothing can
+		/// deliver them. The work may be run any number of times — a rerun of a flush that did land
+		/// re-states the same rows, and one overtaken by a later write reports
+		/// <see cref="ItemWriteOutcome.Superseded"/>.
+		/// </para>
 		/// </remarks>
 		/// <param name="character">The departing character.</param>
 		/// <param name="lease">The session this server still holds for it, already taken out of the live token map.</param>
 		/// <returns>The flush to await, or null.</returns>
-		Func<Task> CaptureDespawnFlush(IPlayerCharacter character, CharacterSessionInfo? lease);
+		Func<Task<ItemWriteOutcome>> CaptureDespawnFlush(IPlayerCharacter character, CharacterSessionInfo? lease);
 
 		/// <summary>
 		/// Runs a two-character exchange — a completed player trade — as ONE database

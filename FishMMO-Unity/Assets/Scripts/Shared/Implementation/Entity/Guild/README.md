@@ -19,7 +19,9 @@
 
 ## Overview
 
-The Guild system manages player guilds in FishMMO. It supports guild creation, invitations, membership, rank management (Member / Officer / Leader), member removal, and voluntary leave with automatic leadership transfer. Guild state is persisted to the database and synchronized across multiple scene servers via a periodic polling mechanism. The system uses a client-server architecture where all mutations are validated server-side with async database operations, and results are marshalled back to the main thread for in-memory state changes and network broadcasts.
+The Guild system manages player guilds in FishMMO. It supports guild creation, invitations, applications, membership, an editable rank ladder whose ranks hold permission masks, member removal, and voluntary leave with automatic leadership transfer. Guild state is persisted to the database and synchronized across multiple scene servers via a periodic polling mechanism. The system uses a client-server architecture where all mutations are validated server-side with async database operations, and results are marshalled back to the main thread for in-memory state changes and network broadcasts.
+
+This folder holds the shared, client-facing half: `GuildController` (the per-character behaviour that receives every guild broadcast), `GuildPermissions`, `GuildRankDefaults` and the legacy `GuildRank` enum. The server half — the decisions, the rank ladder rules, the update pump and its roster deltas — is documented in `Server/Implementation/World/SceneServer/Guild/README.md`, which is the reference for anything server-side.
 
 ## Supported Platforms
 
@@ -36,11 +38,12 @@ The Guild system manages player guilds in FishMMO. It supports guild creation, i
 
 - Guild creation with name validation and uniqueness checking
 - Invitation system with pending invite tracking and accept/decline flow
-- Three-tier rank hierarchy: Member, Officer, Leader
-- Rank-based permission enforcement (invite, kick, promote)
+- An editable, contiguous rank ladder (seeded 1 / 2 / 3: member, officer, leader) where each rank holds a `GuildPermissions` mask and its order is used only for seniority
+- Permission-mask enforcement, always re-decided server-side from the database; the controller's cached `RankOrder` / `Permissions` / `LeaderRankOrder` only decide which controls the client draws
 - Automatic leadership transfer on leader departure
 - Auto-deletion of empty guilds when last member leaves
-- Cross-server guild synchronization via periodic database polling
+- Cross-server guild synchronization via periodic database polling; after the first full roster a client receives `GuildRosterDeltaBroadcast` with only the changed rows
+- Guild join triggers fire only on the server's join notice for a new membership, never on a roster (so a login or zone change is not a join)
 - Async two-queue architecture: background DB operations + main-thread state marshalling
 - SyncVar-based guild ID broadcasting to nearby players (unreliable channel, 1.0s interval)
 - Reliable broadcast delivery for all guild mutation operations
@@ -59,10 +62,10 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 ## Quick Start Guide
 
-1. **GuildController** — Automatically attached to player character prefabs as a `CharacterBehaviour`. Stores the character's guild ID (SyncVar) and rank.
+1. **GuildController** — Automatically attached to player character prefabs as a `CharacterBehaviour`. Stores the character's guild ID (SyncVar) and its cached standing: rank order, permission mask and the leader's rank order.
 2. **GuildSystem** — Server-side ScriptableObject (`ServerBehaviour`) that processes all guild broadcasts and manages async DB operations.
-3. **Create a guild** — A player sends a `GuildCreateBroadcast` with a guild name. The server validates and persists the guild, then sets the creator as Leader.
-4. **Invite members** — Leaders and Officers send `GuildInviteBroadcast`. The target receives the invite and can accept or decline.
+3. **Create a guild** — A player sends a `GuildCreateBroadcast` with a guild name. The server validates and persists the guild, seeds the rank ladder, and seats the creator on the top rank.
+4. **Invite members** — A member whose rank holds `GuildPermissions.Invite` sends `GuildInviteBroadcast`. The target receives the invite and can accept or decline.
 5. **Chat commands** — Use `/gi <name>` or `/ginvite <name>` to invite a player by name.
 
 ## Configuration
@@ -73,31 +76,29 @@ This is an integrated module within the FishMMO project. No separate installatio
 |-------|------|---------|-------------|
 | `maxGuildSize` | `int` | 100 | Maximum members per guild |
 | `updatePumpRate` | `float` | 1.0 | Seconds between cross-server guild sync polls |
+| `guildExistenceSweepSeconds` | `float` | 30.0 | Seconds between checks for guilds disbanded on another scene server; their members here are cleared within this long |
+
+The full inspector table is in the server README.
 
 ### Data Model (GuildController)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `ID` | `long` (SyncVar) | Guild ID; 0 = not in a guild. Synchronized via unreliable channel, server-only writes. |
-| `Rank` | `GuildRank` | Character's rank within the guild (None, Member, Officer, Leader). Not synced — set from broadcasts. |
+| `ID` | `long` (SyncVar) | Guild ID; 0 = not in a guild. Synchronized via unreliable channel, server-only writes, and not sent to the owner, which learns it from its own roster row. |
+| `RankOrder` | `byte` | The character's position on its guild's ladder (higher is more senior). Not synced — set from roster rows and deltas. |
+| `Permissions` | `GuildPermissions` | The character's rank's permission mask, set from `GuildRankListBroadcast`. A client-side convenience; the server re-decides every action. |
+| `LeaderRankOrder` | `byte` | The top seat on the ladder, so the client can tell whether it holds it. |
 
 ### Server-Side Data Containers
 
 | Container | Purpose |
 |-----------|---------|
-| `GuildSystemRuntimeData` | Pending invitations (`Dictionary<long, long>`: target → inviter), last DB fetch timestamp |
-| `GuildCharacterMappingData` | `GuildCharacterTracker`: online guild members on this server; `GuildMemberTracker`: all guild members (from DB) |
+| `GuildSystemRuntimeData` | Pending invitations, invite and application cooldowns, the membership-removal guard, the pump's last fetch time and processed-update record, the ingress guard |
+| `GuildCharacterMappingData` | `GuildCharacterTracker`: online guild members on this server; `GuildMemberTracker`: each tracked guild's roster as last delivered (full rows keyed by character ID) |
 
-### Rank Permissions
+### Permissions
 
-| Action | Required Rank |
-|--------|---------------|
-| Create guild | Any (not already in a guild) |
-| Invite member | Leader or Officer |
-| Accept/Decline invite | Any (must have pending invite) |
-| Leave guild | Any |
-| Remove member | Officer+ (cannot kick equal or higher rank) |
-| Change rank | Leader only |
+Every rank holds a `GuildPermissions` mask: `Invite`, `Kick`, `Promote`, `EditMessageOfTheDay`, `EditNotice`, `EditRanks`, `ManageBank`, `ManageApplications`, `Disband`, `EditRecruitment`, `ViewOfficerNotes`, `EditOfficerNotes`, `EditPublicNotes`, `TransferLeadership`. Acting on another member also requires outranking them (a strictly higher `RankOrder`). Creating a guild, accepting or declining an invite, applying and leaving need no permission. The seeded masks and the ladder limits live in `GuildRankDefaults`; the decision table (`GuildRules`) is described in the server README.
 
 ### Network Synchronization
 
@@ -128,9 +129,9 @@ The guild ID is synced via SyncVar at 1.0s intervals on the unreliable channel (
 | Event | Parameters | Description |
 |-------|------------|-------------|
 | `OnReceiveGuildInvite` | `long inviterCharacterID` | Guild invitation received |
-| `OnAddGuildMember` | `GuildAddBroadcast` | Member added to the guild list. The broadcast carries `GuildID` plus one `GuildAddEntry` (`Member`); `GuildAddMultipleBroadcast` carries the guild id **once** and a list of entries, re-attaching it per row so the same handler serves a roster refresh and a single add |
-| `OnValidateGuildMembers` | `HashSet<long> memberIDs` | Full member set received for validation |
-| `OnRemoveGuildMember` | `long memberID` | Member removed from guild list |
+| `OnAddGuildMember` | `GuildAddBroadcast` | Member added to or updated in the guild list (every listener treats it as add-or-update). The broadcast carries `GuildID` plus one `GuildAddEntry` (`Member`); `GuildAddMultipleBroadcast` carries the guild id **once** and a list of entries, re-attaching it per row so the same handler serves a roster refresh and a single add. Each upsert in a `GuildRosterDeltaBroadcast` raises it too |
+| `OnValidateGuildMembers` | `HashSet<long> memberIDs` | Full member set received for validation (whole rosters only; a delta carries its removals instead) |
+| `OnRemoveGuildMember` | `long memberID` | Member removed from guild list: a kick, or a removal in a roster delta |
 | `OnLeaveGuild` | _(none)_ | Local character left the guild |
 | `OnReceiveGuildResult` | `GuildResultType result` | Result of a guild operation |
 | `OnReceiveGuildInfo` | `long guildID, string name, string notice, string motd` | Descriptive text arrived |
@@ -144,6 +145,20 @@ The guild ID is synced via SyncVar at 1.0s intervals on the unreliable channel (
 The creation fee is also **stored** on the controller as `CreationCostCurrencyTemplateID` /
 `CreationCost`, not only raised, because the guild panel is usually bound after the broadcast
 arrives: it reads the stored values when it binds and listens for changes afterwards.
+
+### Join and leave triggers
+
+`OnGuildJoinTriggers` fire only from the server's **join notice** — the single `GuildAddBroadcast`
+the create and join paths send — and only when it names a guild the client did not already hold
+(`GuildController.IsNewMembership`). A whole roster (`GuildAddMultipleBroadcast`) adopts the guild
+and the character's rank and fires nothing: every login and zone change loads the character on a
+scene server whose first guild message is that roster, and the guild ID cannot tell a join from a
+reload there, because the SyncVar is not sent to its owner and a freshly spawned character holds 0
+until its first roster arrives. A roster delta never changes the guild ID; the local player's own
+row in it updates `RankOrder` only, and a delta naming a guild other than the one held is ignored as
+stale. The one join no notice announces is an application accepted while the applicant was offline
+or on another scene server; they find the guild in their roster on their next load.
+`OnGuildLeaveTriggers` fire on `GuildLeaveBroadcast`.
 
 ### Pooling reset
 
@@ -162,32 +177,49 @@ GuildCreateBroadcast                 # Client → Server: request to create a gu
 GuildInviteBroadcast                 # Bidirectional: invite a character to a guild
 GuildAcceptInviteBroadcast           # Client → Server: accept a guild invitation
 GuildDeclineInviteBroadcast          # Client → Server: decline a guild invitation
-GuildAddBroadcast                    # Server → Client: guild member added (single)
-GuildAddMultipleBroadcast            # Server → Client: bulk guild member add (periodic sync)
+GuildAddBroadcast                    # Server → Client: the join notice (create / join), our own row
+GuildAddMultipleBroadcast            # Server → Client: whole roster (login snapshot, pump's first delivery)
+GuildRosterDeltaBroadcast            # Server → Client: GuildID, Upserts, Removals since the last roster
 GuildLeaveBroadcast                  # Bidirectional: leave the guild
 GuildRemoveBroadcast                 # Bidirectional: remove a member from the guild
 GuildChangeRankBroadcast             # Client → Server: change a member's rank
 GuildResultBroadcast                 # Server → Client: operation result (success/error)
-GuildResultType (enum)               # Success, InvalidGuildName, NameAlreadyExists, AlreadyInGuild
+GuildResultType (enum)               # Result codes, e.g. Success, InvalidGuildName, NameAlreadyExists, InsufficientRank
+GuildCreationCostBroadcast           # Server → Client: the founding fee (0/0 when free)
+GuildInfoBroadcast                   # Server → Client: name, notice, message of the day
+GuildSetMessageOfTheDayBroadcast     # Client → Server
+GuildSetNoticeBroadcast              # Client → Server
+GuildTransferLeadershipBroadcast     # Client → Server
+GuildDisbandBroadcast                # Client → Server: with the typed confirmation name
+GuildLogRequestBroadcast / GuildLogBroadcast
 ```
+
+The rank ladder, notes, recruitment and application messages are in `GuildRankBroadcasts.cs`:
+`GuildRankListBroadcast` (the ladder plus the viewer's own rank order, mask and the leader's seat),
+`GuildRankListRequestBroadcast`, `GuildEditRankBroadcast`, `GuildCreateRankBroadcast`,
+`GuildDeleteRankBroadcast`, `GuildSetMemberNoteBroadcast`, `GuildRecruitmentInfoBroadcast`,
+`GuildSetRecruitmentBroadcast`, `GuildDirectoryRequestBroadcast` / `GuildDirectoryBroadcast`,
+`GuildApplyBroadcast`, `GuildApplicationListRequestBroadcast` / `GuildApplicationListBroadcast` and
+`GuildResolveApplicationBroadcast`.
 
 ### Integration Points
 
 | System | Integration |
 |--------|-------------|
-| `CharacterSystem` | Loads guild membership from DB on character connect; fires `OnConnect`/`OnDisconnect` events |
+| `CharacterSystem` | Loads guild membership from DB as a character loads and sends the login roster and ladder (then calls `IGuildSystem.ForgetGuildDeliveryBaselines`); fires `OnConnect`/`OnDisconnect` events |
 | `ChatHelper` | Registers `/gi` and `/ginvite` chat commands for guild invites |
-| `IPeriodicUpdateSystem` | Registers periodic callback for cross-server guild synchronization |
-| `IGuildService` | DB service for guild creation, existence checks, and deletion |
-| `ICharacterGuildService` | DB service for member CRUD, rank updates, and capacity checks |
+| `IPeriodicUpdateSystem` | Registers the cross-server update pump and the guild existence sweep |
+| `IGuildService` | DB service for guild creation, existence checks (`FetchExistingIdsAsync`), and deletion |
+| `ICharacterGuildService` | DB service for member CRUD, rank updates, location updates, capacity checks and bulk roster reads (`FetchManyAsync(long[])`) |
+| `IGuildRankService` | DB service for the rank ladder, including bulk ladder reads |
 | `IGuildUpdateService` | DB service for cross-server change notification (fetch/persist/delete) |
 
 ### Async Architecture
 
 The guild system uses a two-queue architecture for safe async-to-main-thread communication:
 
-1. **Async Worker Queue** (`IAsyncWorkerData`): Game logic calls `EnqueueAsyncWork()` to dispatch database operations to background threads.
-2. **Main-Thread Queue** (`IGuildSystemMainThreadQueueData`): Async tasks call `EnqueueMainThread()` to marshal state changes and broadcasts back to the main thread. Drained each frame in `OnLateUpdate`.
+1. **Async Worker Queue** (`IAsyncWorkerData`): Game logic calls `TryEnqueueAsyncWork` (or `EnqueuePersistence` for writes that must not be dropped) to dispatch database operations to background threads.
+2. **Main-Thread Queue** (`IGuildSystemMainThreadQueueData`): Async tasks call `TryEnqueueMainThread` to marshal state changes and broadcasts back to the main thread. Drained each frame in `OnUpdate`, up to `maxMainThreadActionsPerFrame`.
 
 This ensures:
 - Database operations never block the game loop
@@ -198,13 +230,15 @@ This ensures:
 
 | Check | Expected Result | How to Verify |
 |-------|----------------|---------------|
-| Guild creation | Guild persisted to DB, creator set as Leader | Create guild, verify in DB and in-game |
+| Guild creation | Guild persisted to DB, ladder seeded 1/2/3, creator on the top rank | Create guild, verify in DB and in-game |
 | Guild name validation | Invalid/duplicate names rejected | Attempt creation with invalid or taken name |
 | Invite flow | Target receives invite, can accept/decline | Send invite, check target receives broadcast |
 | Capacity enforcement | Invite rejected when guild is full | Fill guild to `maxGuildSize`, attempt invite |
-| Rank permissions | Non-Leader cannot change ranks; non-Officer cannot kick | Attempt restricted operations with lower ranks |
-| Leadership transfer | Leader leaves, random Officer (or Member) promoted | Have leader leave, verify new leader assigned |
+| Rank permissions | A rank without `Promote` cannot change ranks; one without `Kick` cannot kick; nobody acts on a member at or above them | Attempt restricted operations from ranks lacking the permission |
+| Leadership transfer | Leader leaves, a random member of the most senior remaining rank takes the top seat | Have leader leave, verify new leader assigned |
 | Cross-server sync | Guild changes propagate to all scene servers | Modify guild on one server, verify update on another |
+| Roster delta | After the first roster, a member's zone change reaches the others as one `GuildRosterDeltaBroadcast` row | Watch client traffic while a guildmate changes zone |
+| Join triggers | Fire on a real join; do not fire on login or zone change | Join a guild, then relog and change zone with a join trigger configured |
 | SyncVar broadcast | Nearby players see guild ID update | Change guild, observe nearby clients |
 | Empty guild cleanup | Guild deleted when last member leaves | Remove all members, verify guild deleted from DB |
 
@@ -216,123 +250,41 @@ This ensures:
 flowchart LR
     Char[Character] --> Guild[GuildSystem]
     Guild --> Roster[Member roster]
-    Guild --> Roles[Role / permissions]
-    Guild --> Bank[Guild bank]
+    Guild --> Roles[Rank ladder / permission masks]
     Guild --> Persist[(PostgreSQL Guilds)]
+    Persist --> Pump[Update pump, every scene server]
+    Pump -->|roster or delta + rank list| Char
     Roster --> Chat[Guild chat channel]
 ```
 
-### 1. Creating a Guild
+The server-side handlers (create, invite, accept, leave, kick, rank changes, the ladder, applications,
+disband and the update pump) are drawn step by step in the server README,
+`Server/Implementation/World/SceneServer/Guild/README.md`. What follows is what the client receives.
+
+### What the Client Receives
 
 ```
-Client sends GuildCreateBroadcast(guildName)
-  └── Server: OnServerGuildCreateBroadcastReceived
-      ├── Validate: connection active, not already in a guild
-      ├── Validate: guild name passes Constants.Authentication.IsAllowedGuildName
-      └── Async task: CreateGuildAsync
-          ├── Check guild name uniqueness (IGuildService.ExistsAsync)
-          ├── Create guild in DB (IGuildService.PersistAsync → returns new guild ID)
-          ├── Persist creator as Leader (ICharacterGuildService.PersistAsync)
-          └── Marshal to main thread:
-              ├── Set gc.ID = newGuildID, gc.Rank = Leader
-              ├── AddGuildCharacterTracker(guildID, characterID)
-              └── Broadcast GuildAddBroadcast to creator
-```
+Character loads on a scene server (login or zone change)
+  └── CharacterSystem sends GuildAddMultipleBroadcast (whole roster) + GuildRankListBroadcast
+      └── GuildController: adopt GuildID and our RankOrder from our own row; no join triggers
+          └── GuildRankListBroadcast sets RankOrder, Permissions, LeaderRankOrder
 
-### 2. Inviting a Member
+Create / join (invite accepted, application accepted while online here)
+  └── GuildAddBroadcast (join notice: our own row)
+      └── IsNewMembership(held, announced) → fire OnGuildJoinTriggers once
 
-```
-Client sends GuildInviteBroadcast(inviterID, targetID)
-  └── Server: OnServerGuildInviteBroadcastReceived
-      ├── Validate: inviter is Leader or Officer, target is different character
-      └── Async task: InviteToGuildAsync
-          ├── Check guild capacity (ICharacterGuildService.CountAsync < maxGuildSize)
-          └── Marshal to main thread:
-              ├── Validate: target has no pending invite, target not already in a guild
-              ├── Add to PendingInvitations[targetID] = inviterID
-              └── Broadcast GuildInviteBroadcast to target
-```
+Update pump, whenever the guild changes (every updatePumpRate seconds)
+  ├── First delivery from this server, or more than half the roster changed
+  │     └── GuildAddMultipleBroadcast (whole roster, officer notes only if we may read them)
+  ├── Otherwise, if anything we can see changed
+  │     └── GuildRosterDeltaBroadcast(GuildID, Upserts, Removals)
+  │           ├── ignored unless GuildID is the guild we hold
+  │           ├── each upsert → OnAddGuildMember (our own row: RankOrder only)
+  │           └── each removal (never our own) → OnRemoveGuildMember
+  └── GuildRankListBroadcast only if the ladder or our rank moved
 
-### 3. Accepting an Invitation
-
-```
-Client sends GuildAcceptInviteBroadcast
-  └── Server: OnServerGuildAcceptInviteBroadcastReceived
-      ├── Validate: character not in a guild, has pending invitation
-      ├── Remove from PendingInvitations
-      └── Async task: AcceptGuildInviteAsync
-          ├── Re-check guild capacity
-          ├── Persist membership as Member (ICharacterGuildService.PersistAsync)
-          ├── Notify other servers (IGuildUpdateService.PersistAsync)
-          └── Marshal to main thread:
-              ├── Set gc.ID = guildID, gc.Rank = Member
-              ├── AddGuildCharacterTracker(guildID, characterID)
-              └── Broadcast GuildAddBroadcast to new member
-```
-
-### 4. Declining an Invitation
-
-```
-Client sends GuildDeclineInviteBroadcast
-  └── Server: OnServerGuildDeclineInviteBroadcastReceived
-      └── Remove character from PendingInvitations
-```
-
-### 5. Leaving a Guild
-
-```
-Client sends GuildLeaveBroadcast
-  └── Server: OnServerGuildLeaveBroadcastReceived
-      ├── Validate: character is in a guild
-      ├── Immediately: set gc.ID = 0, gc.Rank = None
-      ├── RemoveGuildCharacterTracker(guildID, characterID)
-      ├── Broadcast GuildLeaveBroadcast to character
-      └── Async task: LeaveGuildAsync
-          ├── If leader: fetch members, transfer leadership to random officer (or member)
-          ├── Delete membership (ICharacterGuildService.DeleteAsync)
-          ├── If last member: delete guild entirely
-          └── Otherwise: notify other servers (IGuildUpdateService.PersistAsync)
-```
-
-### 6. Removing a Member (Kick)
-
-```
-Client sends GuildRemoveBroadcast(memberID)
-  └── Server: OnServerGuildRemoveBroadcastReceived
-      ├── Validate: requester is Officer+, target is not self
-      └── Async task: RemoveGuildMemberAsync
-          ├── Verify target exists, is in same guild
-          ├── Verify rank permission (can't kick equal or higher rank)
-          ├── Delete membership (ICharacterGuildService.DeleteAsync)
-          ├── Notify other servers (IGuildUpdateService.PersistAsync)
-          └── Marshal to main thread: RemoveGuildCharacterTracker
-```
-
-### 7. Changing Rank
-
-```
-Client sends GuildChangeRankBroadcast(memberID, newRank)
-  └── Server: OnServerGuildChangeRankBroadcastReceived
-      ├── Validate: requester is Leader, target is not self
-      └── Async task: ChangeGuildRankAsync
-          ├── Update rank in DB (ICharacterGuildService.UpdateRankAsync)
-          └── Notify other servers (IGuildUpdateService.PersistAsync)
-```
-
-### 8. Cross-Server Synchronization
-
-```
-OnPeriodicUpdate (every updatePumpRate seconds)
-  └── FetchAndProcessGuildUpdatesAsync
-      ├── Read GuildCharacterTracker keys (guilds with online members on this server)
-      ├── Fetch guild updates since LastFetchTime (IGuildUpdateService.FetchAsync)
-      ├── For each updated guild: fetch full member list (ICharacterGuildService.FetchManyAsync)
-      └── Marshal to main thread:
-          ├── Update LastFetchTime
-          ├── Diff previous vs current members → send GuildLeaveBroadcast to removed members
-          ├── Cache new member set in GuildMemberTracker
-          ├── Update server-side ranks for online members
-          └── Broadcast GuildAddMultipleBroadcast to each online member
+Leave, kick, or the guild disbanded (another server's disband: within guildExistenceSweepSeconds)
+  └── GuildLeaveBroadcast → ID = 0, ClearGuildStanding, OnLeaveGuild, OnGuildLeaveTriggers
 ```
 
 ## Project Structure
@@ -341,24 +293,27 @@ OnPeriodicUpdate (every updatePumpRate seconds)
 
 ```
 Guild/
-├── GuildController.cs             # Per-entity controller (CharacterBehaviour / NetworkBehaviour)
-├── GuildRank.cs                   # Enum: None, Member, Officer, Leader
-├── IGuildController.cs            # Guild controller interface + static OnReadID event + instance events
+├── GuildController.cs             # Per-entity controller (CharacterBehaviour / NetworkBehaviour):
+│                                  #   guild ID SyncVar, cached standing, every client-side handler
+├── GuildPermissions.cs            # [Flags] permission mask a rank holds
+├── GuildRankDefaults.cs           # Seeded ladder masks, rank-order and name limits, TrySanitizeRankName
+├── GuildRank.cs                   # Legacy enum (None, Member, Officer, Leader); ranks are now ladder rows
 └── README.md                      # This file
 ```
 
 ### Related Files (Outside This Directory)
 
 ```
-Shared/Implementation/Network/Character/GuildBroadcasts.cs                             # FishNet broadcast structs for all guild operations
-Server/Core/World/SceneServer/Guild/IGuildSystemRuntimeData.cs                        # Interface for guild runtime state (invitations, fetch time)
-Server/Core/World/SceneServer/Guild/IGuildCharacterMappingData.cs                     # Interface for guild↔character mapping data
-Server/Core/World/SceneServer/Guild/IGuildSystemMainThreadQueueData.cs                # Per-system main-thread queue interface
-Server/Implementation/World/SceneServer/Guild/GuildSystem.cs                          # Server-side guild management (1200+ lines)
-Server/Implementation/World/SceneServer/Guild/GuildSystemRuntimeData.cs               # Concrete runtime data container
-Server/Implementation/World/SceneServer/Guild/GuildCharacterMappingData.cs            # Concrete guild↔character mapping data
-Server/Implementation/World/SceneServer/Guild/GuildSystemMainThreadQueueData.cs       # Concrete main-thread queue data container
-Server/Implementation/World/SceneServer/Character/CharacterSystem.cs                  # Loads guild membership from DB on character load
+Shared/Core/Entity/Guild/IGuildController.cs                                            # Guild controller interface + static OnReadID event
+Shared/Implementation/Network/Character/GuildBroadcasts.cs                             # Membership, roster, delta, text, disband and log broadcasts
+Shared/Implementation/Network/Character/GuildRankBroadcasts.cs                         # Ladder, notes, recruitment and application broadcasts
+Server/Core/World/SceneServer/Guild/IGuildSystem.cs                                     # Server contract, incl. ForgetGuildDeliveryBaselines
+Server/Core/World/SceneServer/Guild/IGuildSystemRuntimeData.cs                         # Invitations, cooldowns, fetch time, processed-update record
+Server/Core/World/SceneServer/Guild/IGuildCharacterMappingData.cs                      # Local members and the roster as last delivered
+Server/Core/World/SceneServer/Guild/IGuildSystemMainThreadQueueData.cs                 # Per-system main-thread queue interface
+Server/Implementation/World/SceneServer/Guild/                                          # GuildSystem and its partials, GuildAuthority/GuildRules,
+                                                                                        #   GuildRosterDelta, GuildRecipientBaselines, data containers
+Server/Implementation/World/SceneServer/Character/CharacterSystem.Social.cs            # Sends the login roster and ladder as a character loads
 ```
 
 ### Inheritance Hierarchies
@@ -384,14 +339,16 @@ RuntimeDataContainer
 ├── GuildSystemRuntimeData : IGuildSystemRuntimeData
 └── GuildCharacterMappingData : IGuildCharacterMappingData
 
-MainThreadQueueData
+SystemMainThreadQueueData
 └── GuildSystemMainThreadQueueData : IGuildSystemMainThreadQueueData
 ```
 
 #### Supporting Types
 
 ```
-GuildRank (enum)                     # None, Member, Officer, Leader
+GuildPermissions (enum, [Flags] long)   # The permission mask
+GuildRankDefaults (static class)        # Ladder constants and defaults
+GuildRank (enum)                        # Legacy: None, Member, Officer, Leader
 ```
 
 ## License

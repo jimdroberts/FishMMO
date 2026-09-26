@@ -15,9 +15,11 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public ConcurrentDictionary<int, byte> InFlightRequests { get; private set; }
 
 		/// <summary>
-		/// Per-connection cooldown tracker: maps clientId to the earliest UTC time the next request is allowed.
+		/// Per-connection cooldown tracker: maps clientId to the earliest time the next request is
+		/// allowed, as <see cref="MonotonicClock"/> seconds. A cooldown is a local duration, which a
+		/// wall-clock step back would have stretched to the length of the step.
 		/// </summary>
-		public ConcurrentDictionary<int, DateTime> NextAllowedRequestUtc { get; private set; }
+		public ConcurrentDictionary<int, double> NextAllowedRequestSeconds { get; private set; }
 
 		/// <summary>
 		/// Per-connection in-flight gate for character LIST requests, tracked separately from
@@ -40,18 +42,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public ConcurrentDictionary<int, byte> InFlightListRequests { get; private set; }
 
 		/// <summary>
-		/// Per-connection cooldown tracker for character LIST requests. See
-		/// <see cref="InFlightListRequests"/>.
+		/// Per-connection cooldown tracker for character LIST requests, as <see cref="MonotonicClock"/>
+		/// seconds. See <see cref="InFlightListRequests"/>.
 		/// </summary>
-		public ConcurrentDictionary<int, DateTime> NextAllowedListRequestUtc { get; private set; }
+		public ConcurrentDictionary<int, double> NextAllowedListRequestSeconds { get; private set; }
 
 		/// <inheritdoc/>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			InFlightRequests = new ConcurrentDictionary<int, byte>();
-			NextAllowedRequestUtc = new ConcurrentDictionary<int, DateTime>();
+			NextAllowedRequestSeconds = new ConcurrentDictionary<int, double>();
 			InFlightListRequests = new ConcurrentDictionary<int, byte>();
-			NextAllowedListRequestUtc = new ConcurrentDictionary<int, DateTime>();
+			NextAllowedListRequestSeconds = new ConcurrentDictionary<int, double>();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -59,9 +61,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		public override void Clear()
 		{
 			InFlightRequests?.Clear();
-			NextAllowedRequestUtc?.Clear();
+			NextAllowedRequestSeconds?.Clear();
 			InFlightListRequests?.Clear();
-			NextAllowedListRequestUtc?.Clear();
+			NextAllowedListRequestSeconds?.Clear();
 		}
 
 		/// <inheritdoc/>
@@ -69,9 +71,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		{
 			Clear();
 			InFlightRequests = null;
-			NextAllowedRequestUtc = null;
+			NextAllowedRequestSeconds = null;
 			InFlightListRequests = null;
-			NextAllowedListRequestUtc = null;
+			NextAllowedListRequestSeconds = null;
 		}
 	}
 }

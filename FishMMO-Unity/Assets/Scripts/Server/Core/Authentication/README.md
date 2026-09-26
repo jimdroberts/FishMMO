@@ -85,12 +85,12 @@ These features are implemented by the concrete authenticators that consume the c
 ### Production Safeguards (Full Pipeline)
 
 - **Per-connection in-flight gating** — at most one in-flight SRP request per connection per phase; duplicates silently dropped.
-- **Stale authentication TTL** — 15-second sweep disconnects and purges half-open connections; 60-second hard deadline prevents unbounded TTL extension.
+- **Stale authentication TTL** — once the handshake completes (which ends the host's 15-second handshake timeout), machine work is purged 15 seconds after its last progress, and progress stops extending one phase after 60 seconds. A player at the two-factor prompt has `TwoFactorWindowSeconds` instead (default 120 seconds per prompt, `AuthTwoFactorWindowSeconds` in the Login Server `.cfg`, 30–600). See `PendingAuthRules`.
 - **Kick-request write debounce** — at most one `IKickRequestService.PersistAsync(accountName)` per 10 seconds per account via `ExpiringKeyTracker<string>`.
 - **Upstream rate limiting** — IP-based debounce on SRP verify ingress, account-based debounce before DB lookup, per-IP rate limiting on account creation with failure tracking and automatic blocking.
 - **Connection IP cache TTL** — `LastSeenCacheTracker<int, string>` with bounded sweep to prevent unbounded memory growth.
 - **AccountManager backstop sweep** — `ArrivalOrderTracker` with oldest-first traversal purges stale SRP/encryption state.
-- **Max pending auth cap** — `MaxPendingAuthConnections` (10,000) prevents memory exhaustion from half-open connection floods.
+- **Max pending auth cap** — `MaxPendingAuthConnections` (`AuthMaxPendingConnections` in the server `.cfg`; default 1,000 on the Login Server — its SRP verify + proof channel capacity, where the login queue starts to serve players better than admission — and 10,000 on World and Scene servers) prevents memory exhaustion from half-open connection floods. Only connections still authenticating count; a player at the two-factor prompt does not, and the whole pending set, prompts included, is capped at 10 times the cap instead (`PendingAuthRules.AdmitsNewPending`). Tracking ends when a connection authenticates. On the Login Server a handshake past the cap is offered to the login queue.
 - **Bounded channel capacity** — verify: 500, proof: 500, token: 500; all with `DropWrite` → `ServerBusy`. Account creation does not use a channel: it hands work to `AsyncWorkerData`, whose admission cap is `maxOutstandingItems` (16,384, overridable with `AsyncWorkerMaxOutstandingItems`).
 - **Time-sliced main-thread drain** — `maxMainThreadActionsPerUpdate` (100) prevents frame spikes from queue bursts.
 
@@ -98,7 +98,7 @@ These features are implemented by the concrete authenticators that consume the c
 
 - Unity 6.3 LTS with IL2CPP scripting backend.
 - FishNet Networking framework (`Authenticator` base class, `NetworkConnection`, `Channel`, `Broadcast` system).
-- `FishMMO.Server.Core.Account` — `ConnectionEncryptionData` for per-connection AES keys, nonce counters, and sequence tracking; `IAccountManager<TConnection>`, `ISrpAccountManager<TConnection>`, `ITokenAccountManager<TConnection>`.
+- The FishMMO-Auth libraries — `ConnectionEncryptionData` for per-connection AES keys, nonce counters, and sequence tracking (`FishMMO.Auth.Implementation`, in `FishMMO-AuthShared.dll`); `IAccountManager<TConnection>`, `ISrpAccountManager<TConnection>`, `ITokenAccountManager<TConnection>` (`FishMMO.Auth.Core`, in `FishMMO-ServerAuth.dll`).
 - `IRuntimeDataContainer` interface — marker for runtime data lifecycle integration.
 - `System.Threading.Channels` (.NET BCL) — `Channel<T>` for bounded async producer-consumer queues.
 - `System.Threading.CancellationTokenSource` (.NET BCL) — cooperative cancellation for async workers.
@@ -187,12 +187,12 @@ The core authentication types are compiled as part of the server core assembly a
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `AuthStaleTtlSeconds` | 15 s | Max time for a connection to complete authentication before purge |
-| `AuthHardDeadlineSeconds` | 60 s | Absolute limit from auth start; prevents unbounded TTL extension |
+| `AuthStaleTtlSeconds` | 15 s | Max time between progress reports while authenticating, before purge |
+| `AuthHardDeadlineSeconds` | 60 s | Progress stops extending an authenticating phase after this long; prevents unbounded TTL extension |
+| `TwoFactorWindowSeconds` | 120 s | Time to answer each two-factor prompt; configurable as `AuthTwoFactorWindowSeconds`, clamped to 30–600 s |
 | *(no interval constant)* | every frame | Sweeps run from `BaseAuthenticatorCore.Tick()`, which `BaseServerAuthenticator` calls each Unity frame — the scan/removal caps below bound the cost, not a timer |
-| `AuthSweepMaxScan` | 256 | Max entries evaluated per sweep cycle |
-| `AuthSweepMaxRemovals` | 64 | Max entries purged per sweep cycle |
-| `MaxPendingAuthConnections` | 10,000 | Cap on concurrent pending auth connections |
+| `AuthSweepMaxRemovals` | 64 | Max entries purged per sweep cycle (authenticating entries and two-factor prompts are kept in two lists, each in the order it falls due, so the sweep reads only the heads) |
+| `MaxPendingAuthConnections` | 1,000 Login / 10,000 World, Scene | Cap on concurrent pending auth connections; configurable as `AuthMaxPendingConnections`. The Login Server's default is `PendingAuthRules.DefaultLoginPendingCap`, the verify and proof channel capacities added |
 | `maxMainThreadActionsPerUpdate` | 100 | Max queued actions drained per Unity frame |
 
 ### Rate Limiting
@@ -364,7 +364,8 @@ private async Task ProcessSrpVerifyAsync(
 | SRP login completes end-to-end | Connect a client with valid credentials | `ClientAuthResultBroadcast` with `LoginSuccess`; credentials nulled; keys established |
 | Account creation completes | Connect with `register: true` and valid credentials | `ClientAuthResultBroadcast` with `AccountCreated` |
 | Token reconnection works | After SRP login, connect to World server | `TokenAuthBroadcast` sent; `WorldLoginSuccess` received |
-| Stale auth purged | Start handshake but do not complete SRP within 15 seconds | Connection disconnected and all state purged |
+| Stale auth purged | Complete the handshake but send nothing for 15 seconds | Connection disconnected and all state purged |
+| Two-factor prompt waits for a person | Reach `TwoFactorRequired` and answer after 60 seconds | Code accepted; only an answer later than `TwoFactorWindowSeconds` (120 s) is cut off |
 | In-flight gating prevents duplicates | Send duplicate `SrpVerifyRequestBroadcast` while first is processing | Second packet silently dropped |
 | Rate limiting rejects rapid attempts | Send multiple SRP verify from same IP within 1 second | Subsequent attempts debounced before channel write |
 | AES-GCM failure disconnects | Send corrupted encrypted payload | `CryptographicException` caught; generic failure broadcast; disconnect; state purged |
@@ -560,26 +561,42 @@ Counter: Monotonically incremented per operation. Throws CryptographicException 
 ```
 Server/Core/Authentication/
 ├── IAuthenticatorQueueData.cs    # Interface: bounded channels + CancellationTokenSource for async SRP processing
-├── SrpVerifyRequest.cs           # Readonly struct: encrypted username + ephemeral + seq + encryption context
-├── SrpProofRequest.cs            # Readonly struct: encrypted client proof + seq + encryption context
 └── README.md                     # This file
+
+FishMMO-Auth/FishMMO-ServerAuth/Implementation/Requests/   (FishMMO.Auth.Implementation)
+├── SrpVerifyRequest.cs           # Readonly struct: encrypted username + ephemeral + seq + encryption context
+└── SrpProofRequest.cs            # Readonly struct: encrypted client proof + seq + encryption context
 ```
 
 ### Related Core Modules
 
 ```
-Server/Core/Account/
-├── IAccountManager.cs            # Base interface: encryption state, account lookup, auth state machine, lifecycle
-├── ISrpAccountManager.cs         # Extended interface: SRP-specific connection account creation + sweep
-├── ITokenAccountManager.cs       # Extended interface: token-based account creation (no SRP state)
-├── ConnectionEncryptionData.cs   # Per-connection AES keys, nonce counters, sequence tracking
-├── AccountData.cs                # Per-connection auth state, access level, SRP data
-└── AuthState.cs                  # Auth state machine enum (Handshake → VerifyPending → WaitingForProof → Authenticated)
+FishMMO-Auth/FishMMO-ServerAuth/   (FishMMO-ServerAuth.dll; there is no Server/Core/Account/ in this project)
+├── Core/Interfaces/
+│   ├── IAccountManager.cs        # Base interface: encryption state, account lookup, auth state machine, lifecycle
+│   ├── ISrpAccountManager.cs     # Extended interface: SRP-specific connection account creation + sweep
+│   └── ITokenAccountManager.cs   # Extended interface: token-based account creation (no SRP state)
+└── Implementation/Connection/
+    └── AccountData.cs            # Per-connection auth state, access level, SRP data
+
+FishMMO-Auth/FishMMO-AuthShared/   (FishMMO-AuthShared.dll)
+├── Core/Enums/
+│   └── AuthState.cs              # Auth state machine enum (Handshake → VerifyPending → WaitingForProof → Authenticated)
+└── Implementation/Connection/
+    └── ConnectionEncryptionData.cs  # Per-connection AES keys, nonce counters, sequence tracking
+
+Server/Implementation/Account/     # The FishNet-typed account managers over those bases
 
 Server/Core/Collections/
 ├── ExpiringKeyTracker.cs         # Head-first expiry queue for rate limiting
-├── LastSeenCacheTracker.cs       # TTL cache with bounded sweep
-└── ArrivalOrderTracker.cs        # Oldest-first tracker for stale-connection sweeps
+└── LastSeenCacheTracker.cs       # TTL cache with bounded sweep (the authenticators' real-IP cache)
+
+FishMMO-Auth/FishMMO-ServerAuth/Core/
+├── PendingAuthRules.cs           # Pending-auth phases, time limits, cap rules
+└── Collections/
+    ├── ArrivalOrderTracker.cs    # Oldest-first tracker for stale-connection sweeps
+    ├── FixedWindowCounter.cs     # Per-key fixed-window counter (lockouts, handshake burst limit)
+    └── PendingAuthTracker.cs     # Pending-auth connections, two deadline-ordered lists
 ```
 
 ### Implementation Modules (FishNet-Specific)
@@ -698,7 +715,7 @@ IAccountManager<TConnection>
 | **DDoS on account creation** | Per-IP rate limiting, failure tracking, automatic IP blocking (5 min), bounded channel |
 | **Credential theft via packet capture** | SRP-6a: password never transmitted; X25519 + AES-256-GCM: forward secrecy per session |
 | **Replay attacks** | Counter-based nonces, HMAC-SHA256 cookies, sequence validation, ephemeral keys |
-| **Half-open connection floods** | 15-second stale-auth TTL sweep disconnects + purges incomplete sessions |
+| **Half-open connection floods** | 15-second handshake timeout, then a 15-second stale-auth TTL, disconnect + purge incomplete sessions; a two-factor prompt holds no cap slot, only a place under the 10× pending ceiling, for at most its window per counted attempt |
 | **Already-online account hijack** | Kick-request debounce via `ExpiringKeyTracker` (10 s per account) |
 | **Reconnect storms** | IP-based and account-based debounce before channel ingress |
 | **UTF-8 smuggling** | `StrictUtf8` with `DecoderFallbackException` rejects malformed sequences |

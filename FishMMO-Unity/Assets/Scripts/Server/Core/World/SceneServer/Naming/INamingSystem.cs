@@ -21,6 +21,18 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void SendNamingBroadcast(TConnection conn, NamingSystemType type, long id, string name);
 
 		/// <summary>
+		/// Send several resolved names of one type back to the requesting connection in one reply.
+		/// </summary>
+		/// <param name="conn">Opaque connection object representing the requester.</param>
+		/// <param name="type">Type of naming resolution (for example character or guild).</param>
+		/// <param name="ids">Identifiers answered.</param>
+		/// <param name="names">
+		/// The name of the id at the same index, or empty when no such entity exists. The same
+		/// length as <paramref name="ids"/>.
+		/// </param>
+		void SendNamingBatchBroadcast(TConnection conn, NamingSystemType type, long[] ids, string[] names);
+
+		/// <summary>
 		/// Send the result of a reverse-name lookup (name -> id) back to the requester.
 		/// If the name was not found the implementation should send an appropriate
 		/// payload indicating failure (commonly id = 0 and empty name).

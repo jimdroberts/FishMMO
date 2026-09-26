@@ -69,9 +69,19 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// that is quietly done twice.
 		/// </para>
 		/// <para>
-		/// Expired commands are never returned. A restart carried out twenty minutes after it
+		/// Expired commands are never claimed. A restart carried out twenty minutes after it
 		/// was asked for — once the operator has moved on and players are back on the server —
-		/// is worse than one that never happened.
+		/// is worse than one that never happened. The one expired command that can come back is
+		/// this call's own claim, retaken by a retry after its first reply was lost, with no time
+		/// left: the caller refuses it and reports that, rather than leaving it claimed with no
+		/// outcome.
+		/// </para>
+		/// <para>
+		/// Expiry is judged by the database clock, which stamped the command, and each returned
+		/// command carries the seconds it had left at the claim
+		/// (<see cref="DaemonCommandData.ExpiresInSeconds"/>). The caller re-checks by counting
+		/// those down on its own monotonic clock (<see cref="DaemonCommandExpiry"/>), never by
+		/// comparing <see cref="DaemonCommandData.ExpiresUtc"/> with its wall clock.
 		/// </para>
 		/// </remarks>
 		/// <param name="hostName">The claiming daemon's own host name. It gets nothing else.</param>
@@ -116,7 +126,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="verb">Start, stop or restart.</param>
 		/// <param name="requestedBy">The operator account.</param>
 		/// <param name="reason">Why. Recorded here and in the audit log.</param>
-		/// <param name="lifetime">How long it stays executable before being abandoned.</param>
+		/// <param name="lifetime">
+		/// How long it stays executable before being abandoned, counted from the database's time
+		/// at the write.
+		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		Task<DatabaseResult<long>> EnqueueCommandAsync(
 			string hostName,

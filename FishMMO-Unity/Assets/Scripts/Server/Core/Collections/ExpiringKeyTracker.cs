@@ -91,6 +91,50 @@ namespace FishMMO.Server.Core.Collections
 		}
 
 		/// <summary>
+		/// Attempts to begin a debounce/rate-limit window for a key, timed on
+		/// <see cref="MonotonicClock"/>.
+		/// </summary>
+		/// <param name="key">Tracker key.</param>
+		/// <param name="nowSeconds">Current <see cref="MonotonicClock.NowSeconds"/> reading.</param>
+		/// <param name="duration">Window duration.</param>
+		/// <returns><c>true</c> if allowed now; otherwise <c>false</c>.</returns>
+		/// <remarks>
+		/// A debounce is a duration, and on <c>DateTime.UtcNow</c> a host clock stepped back an hour
+		/// held every recently seen key inside its window for that hour: an account refused for three
+		/// seconds was refused for sixty minutes. The tracker only ever compares the instants it is
+		/// given with one another, so the monotonic reading is carried in the same field, offset from
+		/// an arbitrary origin.
+		/// <para>
+		/// One tracker, one clock. Driving an instance through both this overload and the
+		/// <see cref="DateTime"/> one compares unrelated numbers; every tracker in the codebase uses
+		/// exactly one of them.
+		/// </para>
+		/// </remarks>
+		public bool TryBegin(TKey key, double nowSeconds, TimeSpan duration)
+		{
+			return TryBegin(key, FromMonotonic(nowSeconds), duration);
+		}
+
+		/// <summary>
+		/// Sweeps expired keys, for a tracker timed on <see cref="MonotonicClock"/>. See
+		/// <see cref="TryBegin(TKey, double, TimeSpan)"/>.
+		/// </summary>
+		/// <param name="nowSeconds">Current <see cref="MonotonicClock.NowSeconds"/> reading.</param>
+		/// <param name="maxScan">Maximum queue nodes to inspect this sweep.</param>
+		/// <param name="maxRemove">Maximum keys to remove this sweep.</param>
+		/// <returns>Number of entries removed.</returns>
+		public int SweepExpired(double nowSeconds, int maxScan, int maxRemove)
+		{
+			return SweepExpired(FromMonotonic(nowSeconds), maxScan, maxRemove);
+		}
+
+		/// <summary>
+		/// Carries a <see cref="MonotonicClock"/> reading in a <see cref="DateTime"/> so the two
+		/// overloads share one implementation. See <see cref="MonotonicInstant"/>.
+		/// </summary>
+		private static DateTime FromMonotonic(double seconds) => MonotonicInstant.From(seconds);
+
+		/// <summary>
 		/// Removes a key from the tracker if present. Useful for cancelling a debounce
 		/// window when the operation it was guarding has already failed and the caller
 		/// wants to allow an immediate retry rather than make the user wait out the window.

@@ -17,7 +17,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public IngressGuard IngressGuard { get; private set; }
 
 		/// <inheritdoc/>
-		public Dictionary<int, DateTime> ChannelSwitchCooldownByClientId { get; private set; }
+		public Dictionary<int, double> ChannelSwitchCooldownByClientId { get; private set; }
 
 		/// <inheritdoc/>
 		public float NextCooldownCleanup { get; set; }
@@ -45,7 +45,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
 			IngressGuard = new IngressGuard();
-			ChannelSwitchCooldownByClientId = new Dictionary<int, DateTime>();
+			ChannelSwitchCooldownByClientId = new Dictionary<int, double>();
 			NextCooldownCleanup = 0f;
 			AvailableSceneCache = new TimedCache<string, IReadOnlyList<SceneData>>(StringComparer.OrdinalIgnoreCase);
 			SceneServerAddressCache = new TimedCache<long, ushort>();

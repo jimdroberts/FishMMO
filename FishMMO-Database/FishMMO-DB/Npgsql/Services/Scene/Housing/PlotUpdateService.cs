@@ -62,16 +62,34 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc />
-		public async Task<DatabaseResult<List<PlotUpdateData>>> FetchAsync(List<long> plotIDs, DateTime lastFetch, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<PlotUpdatePollData>> FetchAsync(List<long> plotIDs, DateTime lastFetch, CancellationToken cancellationToken = default)
 		{
-			if (plotIDs == null || plotIDs.Count < 1)
-			{
-				return DatabaseResult<List<PlotUpdateData>>.Success(new List<PlotUpdateData>());
-			}
+			long[] ids = plotIDs == null
+				? Array.Empty<long>()
+				: plotIDs.Where(id => id > 0).Distinct().ToArray();
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				long[] ids = plotIDs.Distinct().ToArray();
+				/* The database clock BEFORE the marks are read, so "every mark stamped at or after
+				 * this is still to be found" is a statement about the clock the writers stamp with
+				 * (see PersistAsync). The poller starts its next window from this, never from its own
+				 * clock: one running ahead of the database's used to step past marks it had not read
+				 * yet, and lose them for good. Read even when there is nothing to watch, so an empty
+				 * poll still moves the window. */
+				DateTime asOfUtc = DateTime.SpecifyKind(
+					await ExecuteReturningAsync(
+						dbContext,
+						"SELECT clock_timestamp() AT TIME ZONE 'UTC'",
+						Array.Empty<object>(),
+						reader => reader.GetDateTime(0),
+						cancellationToken).ConfigureAwait(false),
+					DateTimeKind.Utc);
+
+				List<PlotUpdateData> results = new List<PlotUpdateData>();
+				if (ids.Length < 1)
+				{
+					return new PlotUpdatePollData(results, asOfUtc);
+				}
 
 				List<PlotUpdateEntity> updates = await dbContext.PlotUpdates
 					.AsNoTracking()
@@ -79,12 +97,12 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				List<PlotUpdateData> results = new List<PlotUpdateData>(updates.Count);
+				results.Capacity = updates.Count;
 				foreach (PlotUpdateEntity update in updates)
 				{
 					results.Add(new PlotUpdateData(update.ID, update.PlotID, update.LastUpdate));
 				}
-				return results;
+				return new PlotUpdatePollData(results, asOfUtc);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

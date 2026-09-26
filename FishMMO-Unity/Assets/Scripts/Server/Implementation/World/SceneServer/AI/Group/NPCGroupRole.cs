@@ -1,25 +1,26 @@
-using FishMMO.Shared;
-using FishMMO.Shared.Core;
-using FishMMO.Server.Core.World.SceneServer;
 namespace FishMMO.Server.Implementation.World.SceneServer.AI
 {
 	/// <summary>
-	/// Roles that NPCs can play within an <see cref="NPCGroup"/>.
-	/// The group brain uses these roles to coordinate tactics —
-	/// e.g., the tank holds aggro, the healer prioritizes healing,
-	/// and DPS focus the group's target.
+	/// Roles that NPCs can play within an <see cref="NPCGroup"/>, authored per spawner entry
+	/// (<c>NPCSpawnableSettings.PackRole</c>).
 	/// </summary>
+	/// <remarks>
+	/// Read by <see cref="BaseAttackingState.PickTarget"/> (a tank picks by threat, DPS and Support
+	/// take the pack's focus), by <see cref="NPCGroup"/> (a tank's target becomes the focus, and a
+	/// Flank puts tanks at the front). A healer's behaviour comes from its archetype
+	/// (<see cref="HealerAttackingState"/>), not from this role.
+	/// </remarks>
 	public enum NPCGroupRole
 	{
-		/// <summary>No specific role. Behaves independently.</summary>
+		/// <summary>No specific role: picks its own targets, but still answers alerts and takes a tactic slot.</summary>
 		None,
-		/// <summary>Tank — taunts and holds threat.</summary>
+		/// <summary>Tank — picks by threat; its target is the pack's focus; holds a Flank's front.</summary>
 		Tank,
-		/// <summary>Healer — prioritizes healing group members.</summary>
+		/// <summary>Healer — no targeting rule of its own; heals through a healer archetype.</summary>
 		Healer,
-		/// <summary>DPS — focuses fire on the group's target.</summary>
+		/// <summary>DPS — takes the pack's focus when choosing a target.</summary>
 		DPS,
-		/// <summary>Support — buffs allies, debuffs enemies.</summary>
+		/// <summary>Support — takes the pack's focus when choosing a target.</summary>
 		Support
 	}
 }

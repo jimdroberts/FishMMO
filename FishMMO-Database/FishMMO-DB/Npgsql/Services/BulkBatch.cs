@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FishMMO.Database.Exceptions;
 
 namespace FishMMO.Database.Npgsql.Services
 {
@@ -59,6 +60,38 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return kept.Count == rows.Count ? rows : kept;
+		}
+
+		/// <summary>
+		/// The per-character validation of a bulk write that spans characters: the rows of a
+		/// character that is missing or deleted are left out — and so reported as
+		/// <see cref="BulkWriteResult.Filtered"/> — and the batch fails only when it named no live
+		/// character at all.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// These services used to throw when ANY character in the batch was gone. That was harmless
+		/// for a batch about one character and ruinous for the periodic save's, which carries every
+		/// resident at once: one character whose row had been deleted underneath the server failed
+		/// the table for the whole population, pass after pass, until it left.
+		/// </para>
+		/// <para>
+		/// A batch that names only missing characters still fails as it always did, with NotFound —
+		/// so a caller writing one character sees exactly the answer it used to. A caller that clears
+		/// its dirty marks only when nothing was filtered (see <c>BulkWriteReporting</c>) keeps them
+		/// for the pass, which is the safe direction: the rows are simply written again.
+		/// </para>
+		/// </remarks>
+		/// <param name="requested">Every character the batch names.</param>
+		/// <param name="live">The ones that exist and are not deleted.</param>
+		/// <exception cref="DatabaseEntityNotFoundException">None of the named characters is live.</exception>
+		internal static void RequireAnyLiveCharacter(IReadOnlyList<long> requested, HashSet<long> live)
+		{
+			if (live.Count > 0 || requested == null || requested.Count == 0)
+			{
+				return;
+			}
+			throw new DatabaseEntityNotFoundException("Character", requested[0].ToString(), "Character not found or deleted.");
 		}
 	}
 }

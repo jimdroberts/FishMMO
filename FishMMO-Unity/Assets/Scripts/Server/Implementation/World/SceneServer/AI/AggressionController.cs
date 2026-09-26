@@ -79,6 +79,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		private readonly Stack<AggressionEntry> entryPool = new Stack<AggressionEntry>();
 		private readonly List<long> staleKeys = new List<long>();
 
+		/// <summary>
+		/// Raised with a character's ID when this table starts tracking it.
+		/// </summary>
+		/// <remarks>
+		/// Together with <see cref="EntryRemoved"/> this is what keeps
+		/// <see cref="AggressionDispatcher"/>'s reverse index (character → the NPCs tracking it)
+		/// exact. Raised from the one place an entry is created and the three places one is
+		/// dropped, so no caller can add or remove threat without the index hearing about it.
+		/// Null on a table nothing indexes, such as a test's.
+		/// </remarks>
+		internal System.Action<long> EntryAdded;
+
+		/// <summary>
+		/// Raised with a character's ID when this table stops tracking it: removed, gone stale, or
+		/// cleared. See <see cref="EntryAdded"/>.
+		/// </summary>
+		internal System.Action<long> EntryRemoved;
+
 		/// <summary>The raw aggression table keyed by character ID. Read-only.</summary>
 	public IReadOnlyDictionary<long, AggressionEntry> Table => table;
 		/// <summary>Number of entries currently tracked in the aggression table.</summary>
@@ -276,6 +294,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					table.Remove(staleKeys[i]);
 					staleEntry.Reset();
 					entryPool.Push(staleEntry);
+					EntryRemoved?.Invoke(staleKeys[i]);
 				}
 			}
 		}
@@ -343,12 +362,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			table.Remove(characterId);
 			entry.Reset();
 			entryPool.Push(entry);
+			EntryRemoved?.Invoke(characterId);
 			return true;
 		}
 
-		/// <summary>
-		/// Clears all entries and returns them to the pool.
-		/// </summary>
 		/// <summary>
 		/// Resets the table and its clock for a pooled NPC being reused.
 		/// </summary>
@@ -358,12 +375,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			Clock = 0f;
 		}
 
+		/// <summary>
+		/// Clears all entries and returns them to the pool.
+		/// </summary>
 		public void Clear()
 		{
 			foreach (var kvp in table)
 			{
 				kvp.Value.Reset();
 				entryPool.Push(kvp.Value);
+				EntryRemoved?.Invoke(kvp.Key);
 			}
 			table.Clear();
 		}
@@ -375,6 +396,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				entry = entryPool.Count > 0 ? entryPool.Pop() : new AggressionEntry();
 				entry.Reset();
 				table[characterId] = entry;
+				EntryAdded?.Invoke(characterId);
 			}
 			return entry;
 		}

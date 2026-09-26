@@ -30,7 +30,7 @@ At startup the composition root:
 5. Starts `VerifyDatabaseSchema` concurrently with behaviour initialization and joins it just before the transport opens: pending migrations abort startup, a check that could not run is only a warning.
 6. Disables KCC auto-simulation and starts the FishNet server.
 
-During runtime, `LateUpdate` drives two loops: the behaviour update loop (snapshot-safe against registration mutations) and the periodic callback system (enumeration-complete-before-invoke pattern). Shutdown is idempotent and tears down subsystems in reverse order.
+During runtime, `LateUpdate` drives two loops: the behaviour update loop (snapshot-safe against registration mutations) and the periodic callback system (enumeration-complete-before-invoke pattern). Each behaviour's update and each periodic callback runs in its own `try`/`catch`, so one that throws cannot skip the behaviours after it or the frame's saves and pumps; a `RepeatingFaultLog` per failing unit keeps a throw that repeats every frame to one full trace and a periodic count. Shutdown is idempotent and tears down subsystems in reverse order.
 
 The Implementation layer sits between the abstract `Server.Core` interfaces and the concrete FishNet/Unity runtime. Each server type (Login, World, Scene) is loaded as an Addressable scene; `ServerLauncher` selects which scene(s) to load based on command-line arguments or a configurable boot list.
 
@@ -53,11 +53,11 @@ the two noted otherwise. Each has its own README with the detail; this table is 
 
 | System | Type | Notes |
 |---|---|---|
-| Scene server lifecycle | `SceneServerSystem` (+ `.AdminCommands`, `.ServerControl` partials) | Scene load/unload, instance placement via `SceneServerPlacementPolicy`. |
-| Character | `CharacterSystem` (+ `.Connection`, `.Loading`, `.Saving`, `.Social`, `.Instance`, `.CombatLogout` partials) | Spawn/despawn, persistence, combat-logout. |
+| Scene server lifecycle | `SceneServerSystem` (+ `.AdminCommands*`, `.GameMasterCommands*`, `.OperatorCommands`, `.StaffConsole`, `.ServerControl`, `.Weather` partials) | Scene load/unload, instance placement via `SceneServerPlacementPolicy`, instance lifetimes (`SceneInstanceLifetime`); `.Weather` hosts `WeatherHost`. |
+| Character | `CharacterSystem` (+ `.Connection`, `.Loading`, `.Saving`, `.Social`, `.Instance`, `.CombatLogout`, `.Unstuck` partials) | Spawn/despawn, persistence, combat-logout. |
 | Character inventory | `CharacterInventorySystem` | Inventory/equipment/bank/bag operations and the exchange funnel. |
 | Interactable | `InteractableSystem` (+ 11 partials) | Merchants, containers, dialogue, mailbox, corpses, ability crafting, waypoints — **and arenas and the group/dungeon finders** (see below). |
-| Chat | `ChatSystem` (+ `.LocalChat`, `.WorldChat`, `.TellChat`, `.GroupChat`, `.ArenaChat` partials) | |
+| Chat | `ChatSystem` (+ `.LocalChat`, `.WorldChat`, `.TellChat`, `.GroupChat`, `.ArenaChat`, `.SupportCommands`, `.Help`, `.Audit`, `.ReportPlayer`, `.FloodMute` partials) | Per-sender rate gate (`ChatRateGate`) and flood mute (`ChatFloodMute`). |
 | Guild | `GuildSystem` (+ `.Authority`, `.Ranks`, `.Recruitment` partials) | Rank ladder, authority checks, invites/applications. |
 | Party | `PartySystem` | Membership, plus `PartyCombatMeterData` server-side meters. |
 | Friend | `FriendSystem` | |
@@ -69,6 +69,10 @@ the two noted otherwise. Each has its own README with the detail; this table is 
 | Hotkey | `HotkeySystem` | |
 | Naming | `NamingSystem` | Name resolution/caching for IDs the client has not seen. |
 | Scene channel | `SceneChannelSystem` | |
+| Ability | `AbilitySystem` | Granting and forgetting crafted abilities. |
+| AI | `AISystem` | Runs the process's one `AIBrainHost`; NPC brains, packs (`NPCGroup`) and the AI tick. |
+| Spawner | `SpawnerSystem` | Populates each loaded world scene from its baked spawn table and drives respawns. |
+| Leaderboard | `LeaderboardSystem` | PvP and PvE boards read from the database, cached briefly per page. |
 | Waypoint | `WaypointPersistence`, `WaypointSceneAudit` (static helpers, not behaviours) | Discovered-waypoint pages, OR-merged; the audit compares live `WaypointRegistry` indices against baked `WorldSceneDetails.Waypoints` once per loaded scene. |
 | Scene-server auth | `SceneServerAuthenticator` | Not a behaviour — a `TokenServerAuthenticator` subclass attached to the `NetworkManager`. |
 
@@ -79,7 +83,8 @@ the two noted otherwise. Each has its own README with the detail; this table is 
 
 **Housing ships disabled and has no client UI.** `HousingSystem.ownershipMode` defaults to
 `HousingOwnershipMode.Neither`, so `IsHousingEnabled` is false and `InitializeOnce` returns
-early — a stock server runs no housing at all. There is no housing UI anywhere under
+early — a stock server runs no housing at all. The system is in `SceneServer.unity`'s behaviour
+list, with its asset left at `Neither`, so enabling housing is a change to that one field. There is no housing UI anywhere under
 `Assets/Scripts/Client/`; the system is server-side plumbing (plots, building, taxes, vaults,
 access lists) with no way for a player to reach it yet.
 
@@ -106,12 +111,13 @@ access lists) with no way for a player to reach it yet.
 - **Auto-discovered runtime data containers** — behaviours declare `[RequiresDataContainer(typeof(T))]`; the server discovers, deduplicates, priority-sorts, and creates containers automatically.
 - **Generic component registries** — `ServerComponentRegistry<TNet, TConn, TComponent>` registers components under concrete type and all `IServerComponent`-derived interfaces for dependency lookup.
 - **Network abstraction** — `INetworkManagerWrapper` / `FishNetNetworkWrapper` decouple the server from FishNet internals, exposing start/stop, transport config, broadcast registration, and authenticator attachment.
+- **Broadcast to many, serialised once** — `Broadcast(HashSet<NetworkConnection>, ...)`, `BroadcastToScene(scene, ...)` and `TryGetSceneConnections(scene, out ...)` send one message to a set of connections or a whole scene with a single serialisation, instead of one `Broadcast` per recipient. Chat, party, guild, arena, weather and housing fan-outs use them.
 - **Per-connection broadcast budget** — `FishNetNetworkWrapper.RegisterBroadcast<T>` wraps every handler in a token-bucket admission check (`AdmitBroadcast`) before dispatch. FishNet drains all pending packets each frame on the main thread and has no per-connection message-rate limit of its own, so this is the transport-agnostic backstop: `BroadcastMaxMessagesPerSecond` (default 100) with `BroadcastMessageBurst` (default 200); a connection that keeps sending past an empty bucket is kicked with `KickReason.ExploitExcessiveData` after 200 overflows. The wrapper delegate is remembered in `broadcastWrappers` so `UnregisterBroadcast` hands FishNet the same instance it registered.
 - **Transport-level inbound limits** — WebTransport gets `SetInboundRateLimit(TransportMaxInboundMessagesPerSecond, TransportInboundMessageBurst)` enforced on the socket receive thread, and `SetNativeLimits(...)` for connection-level caps applied inside the native library before the QUIC handshake (`TransportConnectIntervalMs`, `TransportMaxConnectionsPerIP`, `TransportMaxHalfOpenConnections`, `TransportMaxQueuedDatagramsPerConnection`, `TransportMaxH3StreamsPerConnection`; `-1` keeps the library default, `0` disables). Applied to both the standalone and Multipass-child transports.
 - **Startup schema verification** — `VerifyDatabaseSchema` runs concurrently with behaviour initialization and joins just before the transport opens. Pending migrations are fatal; a check that could not run at all is only a warning (unverified, not known-bad). It verifies *applied migrations only* — an entity changed with no migration generated for it leaves nothing pending and passes (issue #162).
-- **Login admission queue** — `LoginQueueSystem` holds a FIFO of connections arriving at auth capacity (`ArrivalOrderTracker<NetworkConnection>`), keeps them connected at the QUIC layer, and pushes `LoginQueuePositionBroadcast` on a server-controlled interval. Update rate and admission rate are server-authoritative (`LoginQueueUpdateRateSeconds`, `LoginQueueAdmissionRatePerSecond`); clients cannot ask for faster updates.
+- **Login admission queue** — `LoginQueueSystem` holds a FIFO of connections arriving past the authenticator's pending cap (`AuthMaxPendingConnections`, 1,000 by default on the login server) in an `ArrivalOrderTracker<NetworkConnection>`, keeps them connected at the QUIC layer, and pushes `LoginQueuePositionBroadcast` on a server-controlled interval. Update rate and admission rate are server-authoritative (`LoginQueueUpdateRateSeconds`, default 2 s; `LoginQueueAdmissionRatePerSecond`, default 50, spent as credit so several can be admitted in one frame); clients cannot ask for faster updates. It is listed in `LoginServer.unity`'s behaviours; without it, or when the queue is full (`LoginQueueMaxSize`, 500), a handshake past the cap is answered `ServerBusy` and dropped.
 - **Bounded sync-over-async, shutdown only** — `UnitySyncOverAsync` is the one sanctioned way to block on a `Task` from `OnDestroy`/`OnApplicationQuit`, where nothing can yield. Startup must not use it: any `await` in the call chain that captures Unity's `SynchronizationContext` can never resume while the main thread sits in `GetResult()`, and the transport would never bind.
-- **Periodic callback system** — `IPeriodicUpdateSystem` with register/unregister/update-interval; enumeration-safe dispatch; callbacks receive their registered interval, not frame delta.
+- **Periodic callback system** — `IPeriodicUpdateSystem` with register/unregister/update-interval; enumeration-safe dispatch. A new callback's first run lands at a random point in its first interval, so work registered on the same frame (saves, snapshots, sweeps) does not fire on the same frame forever. Each run receives the real time elapsed since the previous one, not the nominal interval, and the overshoot is carried into the next period so a timer does not drift slow; after a hitch longer than a whole interval it runs once, not in a burst.
 - **Main-thread queue helper** — generic `MainThreadQueueHelper.Drain<T>` / `TryEnqueue<T>` for marshalling async work back to Unity's main thread.
 - **Address resolution** — `ServerAddressProvider` resolves IPv4/IPv6 bind addresses from the transport layer with optional overrides.
 - **Physics ticker** — `PhysicsTicker` hooks FishNet's `OnPrePhysicsSimulation` to manually advance a scene's `PhysicsScene`.
@@ -122,6 +128,11 @@ access lists) with no way for a player to reach it yet.
 - **Idempotent shutdown** — `PerformShutdown` runs once via `hasShutdown` flag, cleaning up behaviours, containers, authenticator workers, network, database, and core server in reverse order.
 - **KCC integration** — `KinematicCharacterSystem.AutoSimulation` set to `false` for deterministic server-driven simulation.
 - **Snapshot-safe behaviour dispatch** — behaviour list is snapshotted before `OnLateUpdate` dispatch to prevent `InvalidOperationException` if behaviours register or unregister during update.
+- **Fault isolation** — every behaviour update and periodic callback is caught separately. `RepeatingFaultLog` (`Server/Core`) logs the first failure, and any failure that differs from the last, in full; identical repeats are counted and summarised at most every 10 s, and the first success afterwards logs one recovery line.
+- **Persistence admission** — `ServerBehaviour.EnqueuePersistence` hands work to `IAsyncWorkerData.EnqueueRequired`, which admits it even past the worker's backpressure threshold, so it waits its turn under the concurrency cap and keeps per-entity order. Only when the worker is not running (teardown) does it run on the thread pool, through a gate of 8.
+- **Session claims** — `ServerBehaviour.SessionClaims.cs`: `TryCaptureSessionClaim` captures the claim this server holds for a character at the request, and every per-character owned write quotes it, so a write captured by a session released a moment later is refused (`IsClaimRefusal`) rather than landing over the next owner's state.
+- **Bandwidth recording** — `ServerBandwidthRecorder`, started by `LoginServerSystem`, `WorldServerSystem` and `SceneServerSystem`, samples the transport's cumulative counters every 60 s on the async worker and writes one row per database-clock minute to `server_bandwidth_minute` (the Control Panel's bandwidth page). `ServerBandwidthLedger` (`Server/Core`) is the pure bookkeeping: each minute is written as a SET of its running total, so a failed write is simply re-sent with the next sample.
+- **Monotonic durations** — local durations (timeouts, TTLs, cooldowns, caches) run on `MonotonicClock` (`Server/Core`), never `DateTime.UtcNow`; an instant that must mean the same thing in another process comes from the database. `ShutdownCountdown` (`Server/Core`) anchors a scheduled shutdown's seconds-remaining, as the database measured them, on this clock.
 - **Cached delegate names** — `PeriodicCallbackData.CallbackName` caches the reflection-derived display name at construction time; no runtime reflection in any log path.
 
 ## Prerequisites
@@ -194,7 +205,7 @@ The second command-line argument selects the server type. If no argument is prov
 | `BroadcastMaxMessagesPerSecond` / `BroadcastMessageBurst` | Server `.cfg` | Transport-agnostic per-connection broadcast budget (defaults 100 / 200). `0` disables |
 | `TransportMaxInboundMessagesPerSecond` / `TransportInboundMessageBurst` | Server `.cfg` | WebTransport receive-thread budget (defaults 200 / 400) |
 | `TransportConnectIntervalMs`, `TransportMaxConnectionsPerIP`, `TransportMaxHalfOpenConnections`, `TransportMaxQueuedDatagramsPerConnection`, `TransportMaxH3StreamsPerConnection` | Server `.cfg` | Native WebTransport connection limits applied pre-handshake. `-1` = library default, `0` = disabled |
-| `LoginQueueUpdateRateSeconds` / `LoginQueueAdmissionRatePerSecond` | Server `.cfg` | `LoginQueueSystem` position-broadcast interval and admission smoothing |
+| `LoginQueueUpdateRateSeconds` / `LoginQueueAdmissionRatePerSecond` / `LoginQueueMaxSize` / `LoginQueueTimeoutSeconds` | Server `.cfg` | `LoginQueueSystem` position-broadcast interval (default 2 s), admissions per second (default 50), queue length (default 500) and longest wait (default 300 s) |
 | `FISHMMO_SMTP_HOST`, `FISHMMO_SMTP_PORT`, … | Environment | Override the configured SMTP settings for container/orchestration deployments |
 
 ## Usage Examples
@@ -205,9 +216,10 @@ The second command-line argument selects the server type. If no argument is prov
 // Inside a ServerBehaviour's InitializeOnce:
 Server.RegisterPeriodicCallback(5.0f, OnHeartbeat);
 
-private void OnHeartbeat(float interval)
+private void OnHeartbeat(float elapsed)
 {
-    // interval == 5.0f (the registered period, not frame deltaTime)
+    // elapsed: real seconds since the previous run (about 5; more after a hitch).
+    // The first run lands at a random point within the first 5 s.
     Database.SendHeartbeat();
 }
 
@@ -264,7 +276,8 @@ if (Server.DataContainerRegistry.TryGet<MyRuntimeData>(out var data))
 | Waypoint authoring drift | Scene-server scene load | `WaypointSceneAudit` logs any live-only / baked-only waypoint indices; agreement logs nothing to fix |
 | Window title updated | 15-second cycle (default) | OS process/console title reflects server status |
 | Graceful shutdown | Stop Play Mode or `Ctrl+C` | All subsystems deinitialised in reverse order, no errors |
-| Periodic callbacks fire | Register a callback with known interval | Callback invoked on schedule with correct interval argument |
+| Periodic callbacks fire | Register a callback with known interval | First run within one interval; later runs every interval, each passed the real elapsed time |
+| A throwing behaviour is contained | Make one behaviour's `OnUpdate` throw every frame | Other behaviours and periodic callbacks keep running; one full trace, then a summary line at most every 10 s |
 
 ## Flow Diagram
 
@@ -316,8 +329,8 @@ flowchart TD
 │   └─ NetworkWrapper.StartServer()                                   │
 │                                                                     │
 │  LateUpdate()                                                       │
-│   ├─ UpdateServerBehaviours(deltaTime)   ← snapshot-safe dispatch   │
-│   └─ UpdatePeriodicCallbacks(deltaTime)  ← enum-then-invoke         │
+│   ├─ UpdateServerBehaviours(deltaTime)   ← isolated, snapshot-safe  │
+│   └─ UpdatePeriodicCallbacks(deltaTime)  ← enum-then-invoke, isol.  │
 │                                                                     │
 │  PerformShutdown() [idempotent]                                     │
 │   ├─ Clear periodic callbacks                                       │
@@ -361,6 +374,9 @@ Implementation/
 ├── README.md                                    # This document
 ├── Server.cs                                    # Composition root and lifecycle coordinator
 ├── ServerBehaviour.cs                           # Base class for server-side behaviours (ScriptableObject)
+├── ServerBehaviour.PlayerRequests.cs            # Partial: the character-state gate for player requests
+├── ServerBehaviour.SessionClaims.cs             # Partial: session-claim capture for per-character writes
+├── ServerBandwidthRecorder.cs                   # Per-minute bandwidth rows for the Control Panel
 ├── ServerBehaviourRegistry.cs                   # Behaviour registration/initialisation orchestration
 ├── ServerComponentRegistry.cs                   # Generic component registry base class
 ├── FishNetNetworkWrapper.cs                     # FishNet adapter + broadcast budget + transport limits
@@ -368,7 +384,7 @@ Implementation/
 ├── MainThreadQueueHelper.cs                     # Static helper for main-thread queue drain/enqueue
 ├── UnitySyncOverAsync.cs                        # Bounded, deadlock-safe blocking wait (shutdown paths only)
 ├── ServerAddressProvider.cs                     # Local/public server address resolution
-├── PeriodicCallbackData.cs                      # Periodic callback timing state with cached name
+├── PeriodicCallbackData.cs                      # Periodic callback timing state, elapsed time, fault log, cached name
 ├── PhysicsTicker.cs                             # Physics tick integration via FishNet TimeManager
 ├── ServerLauncher.cs                            # Bootstrap: CLI args -> Addressable scene loading
 ├── ServerWindowTitleUpdater.cs                  # OS-native window/process title updater
@@ -418,11 +434,13 @@ Implementation/
 │
 └── World/                                       # World and scene server systems
     ├── SceneServer/                             #   Scene-server-specific systems
+    │   ├── Ability/                             #     AbilitySystem
     │   ├── Achievement/                         #     AchievementSystem
+    │   ├── AI/                                  #     AISystem, AIBrainHost, brains, packs (NPCGroup)
     │   ├── Authentication/                      #     SceneServerAuthenticator
-    │   ├── Character/                           #     CharacterSystem + 6 partials
+    │   ├── Character/                           #     CharacterSystem + 7 partials
     │   ├── CharacterInventory/                  #     CharacterInventorySystem, ItemContainerMapping
-    │   ├── Chat/                                #     ChatSystem + Local/World/Tell/Group/Arena partials
+    │   ├── Chat/                                #     ChatSystem + 10 partials, ChatRateGate, ChatFloodMute
     │   ├── Friend/                              #     FriendSystem
     │   ├── Guild/                               #     GuildSystem + Authority/Ranks/Recruitment, GuildAuthority
     │   ├── Hotkey/                              #     HotkeySystem
@@ -431,26 +449,36 @@ Implementation/
     │   │                                        #       (Merchant, Container, Dialogue, Mailbox, Corpse,
     │   │                                        #        AbilityCraft, Waypoint, Arena, ArenaMatch,
     │   │                                        #        GroupFinder, DungeonFinder)
+    │   ├── Leaderboard/                         #     LeaderboardSystem
     │   ├── Naming/                              #     NamingSystem
     │   ├── Party/                               #     PartySystem, PartyCombatMeterData
     │   ├── Pet/                                 #     PetSystem
     │   ├── Quest/                               #     QuestSystem
     │   ├── SceneChannel/                        #     SceneChannelSystem
+    │   ├── Spawner/                             #     SpawnerSystem, spawn tables, pooling
     │   ├── Trade/                               #     TradeSystem + Handlers/Commit, TradeSession, TradeExchange
     │   ├── Waypoint/                            #     WaypointPersistence, WaypointSceneAudit (static helpers)
+    │   ├── Weather/                             #     WeatherHost (driven by SceneServerSystem.Weather)
     │   └── SceneServer/                         #     Scene server lifecycle
     │       ├── SceneServerSystem.cs
-    │       ├── SceneServerSystem.AdminCommands.cs
+    │       ├── SceneServerSystem.AdminCommands*.cs      # + .Character, .Economy, .Weather
+    │       ├── SceneServerSystem.GameMasterCommands*.cs # + .Moderation, .Support, .World
+    │       ├── SceneServerSystem.OperatorCommands.cs
+    │       ├── SceneServerSystem.StaffConsole.cs
     │       ├── SceneServerSystem.ServerControl.cs
+    │       ├── SceneServerSystem.Weather.cs
     │       ├── SceneServerPlacementPolicy.cs
     │       ├── SceneServerRuntimeData.cs
     │       ├── SceneServerSystemMainThreadQueueData.cs
     │       ├── SceneInstanceDetails.cs
+    │       ├── SceneInstanceLifetime.cs
     │       └── SceneInstanceMappingData.cs
     └── WorldServer/                             #   World-server-specific systems
         ├── Authentication/                      #     WorldServerAuthenticator.cs
         ├── WorldScene/                          #     World scene management
         │   ├── WorldSceneSystem.cs
+        │   ├── WorldSceneRoutingRules.cs        # Pure routing decisions
+        │   ├── WorldQueuePlaceMemory.cs         # Held open-world queue places
         │   ├── WorldSceneSystemRuntimeData.cs
         │   ├── WorldSceneSystemMainThreadQueueData.cs
         │   └── WorldSceneMappingData.cs
@@ -481,7 +509,8 @@ ScriptableObject
     └── (scene-server systems: CharacterSystem, CharacterInventorySystem, InteractableSystem,
          ChatSystem, GuildSystem, PartySystem, FriendSystem, TradeSystem, HousingSystem,
          QuestSystem, AchievementSystem, PetSystem, HotkeySystem, NamingSystem,
-         SceneChannelSystem — several of them `partial`)
+         SceneChannelSystem, AbilitySystem, AISystem, SpawnerSystem, LeaderboardSystem —
+         several of them `partial`)
 
 RuntimeDataContainer : IRuntimeDataContainer
 ├── LoginServerRuntimeData

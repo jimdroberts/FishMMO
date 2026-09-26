@@ -73,6 +73,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Housing enabled. Ownership mode: {this.ownershipMode} " +
 				$"(player: {this.AllowsPlayerOwnership}, guild: {this.AllowsGuildOwnership}).");
 
+			RandomiseSweepPhases();
 			SubscribeToPlots();
 			RegisterHousingBroadcasts();
 			SubscribeToCharacterLifecycle();
@@ -95,6 +96,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			housingIngressGuard.Clear();
 			UnsubscribeFromCharacterLifecycle();
 			UnsubscribeFromPlots();
+			ResetSweepState();
+		}
+
+		/// <summary>
+		/// Forgets the periodic sweeps' progress.
+		/// </summary>
+		/// <remarks>
+		/// This is a ScriptableObject asset, so its fields outlive a play session in the editor. A
+		/// sweep flag left set by a session that stopped mid-sweep would keep every later session's
+		/// sweep from ever starting, and a sync watermark left behind would start the next session's
+		/// window from a moment that belongs to a different run.
+		/// </remarks>
+		private void ResetSweepState()
+		{
+			System.Threading.Interlocked.Exchange(ref taxSweepInFlight, 0);
+			plotSyncInFlight.Clear();
+			plotSyncWatermarkUtc.Clear();
+			plotSyncEpochs.Clear();
+			occupantBuffer.Clear();
 		}
 
 		/// <summary>

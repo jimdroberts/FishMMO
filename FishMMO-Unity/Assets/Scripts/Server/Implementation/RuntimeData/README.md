@@ -48,6 +48,7 @@ Concrete per-system containers (e.g., `PartySystemRuntimeData`, `GuildSystemRunt
 - **Type-safe registry** — `RuntimeDataContainerRegistry` extends `ServerComponentRegistry` and provides `Register<T>()`, `Unregister<T>()`, `TryGet<T>(out T)`, `Get<T>()`, `InitializeAll(IServer)`, and `DeinitializeAll()`. Behaviours access containers via `Server.DataContainerRegistry.TryGet<IMyData>(out var data)`.
 - **Lifecycle management** — `InitializeAll` iterates registered containers, calling `container.Initialize(server, serverManager)` which sets references and calls the abstract `InitializeOnce()`. `DeinitializeAll` calls `Clear()` then `Deinitialize()` on each unique instance (deduplicated via `HashSet`), then empties the registry.
 - **Bounded async work queue (AsyncWorkerData)** — Replaces fire-and-forget `_ = SomeAsync(...)` with backpressure-aware scheduling. Concurrency is bounded by a `SemaphoreSlim` (`maxConcurrency`, default 32), not by a fixed set of worker loops, so an item awaiting a database call or a main-thread hand-off delays only the items ordered behind it. Admission is bounded separately: `Enqueue` returns `false` once `maxOutstandingItems` (default 16384) items are accepted but unfinished. `Enqueue(work, entityKey)` appends to a per-key `OrderedLane` — a chain of `ContinueWith` continuations held in a `ConcurrentDictionary<long, OrderedLane>` and retired when the key empties — giving FIFO order per entity while different keys proceed independently; `entityKey` 0 means "no ordering requirement" and takes the unordered path. Dispatch always goes through `Task.Run` / `TaskScheduler.Default`, so nothing ever executes inline on the enqueuing (main) thread. Exposes `PendingCount` and `CompletedCount` for monitoring.
+- **Required work is never refused for backpressure** — `EnqueueRequired(work, entityKey)` is for writes whose in-memory side has already happened (`ServerBehaviour.EnqueuePersistence` calls it). Past `maxOutstandingItems` it still admits the item, which runs under the same concurrency cap and keeps its place in its entity's lane; it just waits behind the backlog. The result says which (`AsyncWorkAdmission.Admitted`, `AdmittedOverCapacity`), and it is `Refused` only when the pool is not running. Over-threshold items still count toward the threshold, so ordinary `Enqueue` callers keep seeing backpressure until the backlog drains. It replaced a caller-side fallback that ran over-threshold persistence on the thread pool outside the cap, which during a database stall turned into unbounded concurrent writes and broke per-entity order.
 - **Shutdown drains rather than discards (AsyncWorkerData)** — `Clear()` only stops accepting new work; it does not throw away what was already accepted, because the work pending at shutdown is precisely the character saves and session releases the behaviours enqueued as they tore down. `OnDeinitialize` then polls `outstandingCount` for up to `DrainTimeoutMilliseconds` (3000), clamped to whatever is left of the process-wide teardown budget by `UnitySyncOverAsync.ClampToShutdownBudget`. The `SemaphoreSlim` is dropped, never disposed — an item that outlived the drain still holds it.
 - **Main-thread action marshalling (MainThreadQueueData)** — Abstract base container with a `Queue<Action>` guarded by `lock`. Background threads call `TryEnqueue(Action)` (bounded at 10 000 pending actions). Main thread calls `Drain()` or `Drain(int maxActions)` each frame, which copies actions under lock then invokes outside the lock to minimize lock hold time. Uses a reusable `drainBuffer` list to avoid per-call allocation.
 - **Per-system queue isolation (SystemMainThreadQueueData)** — Abstract subclass of `MainThreadQueueData` that concrete per-system queue containers inherit, ensuring each system gets its own isolated queue instance via the `DataContainerRegistry`.
@@ -271,14 +272,14 @@ if (Server.DataContainerRegistry.TryGet<IAsyncWorkerData>(out var asyncWorker))
 ```csharp
 public interface IPartySystemRuntimeData : IRuntimeDataContainer
 {
-    bool TryGetPendingInvitation(long targetCharacterID, out long partyID);
-    bool TryAddPendingInvitation(long targetCharacterID, long partyID, DateTime nowUtc);
+    bool TryGetPendingInvitation(long targetCharacterID, out PendingPartyInvitation invitation);
+    bool TryAddPendingInvitation(long targetCharacterID, PendingPartyInvitation invitation);
     bool RemovePendingInvitation(long targetCharacterID);
-    int SweepExpiredInvitations(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
-    DateTime LastFetchTime { get; set; }
+    int SweepExpiredInvitations(double now, TimeSpan ttl, int maxScan, int maxRemove); // MonotonicClock seconds
+    DateTime LastFetchTime { get; set; }        // the update pump's mark: compared with database stamps
     bool TryBeginUpdatePump();
     void EndUpdatePump();
-    DateTime NextInvitationSweepUtc { get; set; }
+    double NextInvitationSweepAt { get; set; }  // MonotonicClock seconds: a local schedule
     IngressGuard IngressGuard { get; }
 }
 ```
@@ -288,19 +289,19 @@ public interface IPartySystemRuntimeData : IRuntimeDataContainer
 ```csharp
 public class PartySystemRuntimeData : RuntimeDataContainer, IPartySystemRuntimeData
 {
-    private LastSeenCacheTracker<long, long> pendingInvitations;
+    private LastSeenCacheTracker<long, PendingPartyInvitation> pendingInvitations;
     private int updatePumpInFlight;
 
     public DateTime LastFetchTime { get; set; }
-    public DateTime NextInvitationSweepUtc { get; set; }
+    public double NextInvitationSweepAt { get; set; }
     public IngressGuard IngressGuard { get; private set; }
 
     public override ServerComponentInitializationStatus InitializeOnce()
     {
-        pendingInvitations = new LastSeenCacheTracker<long, long>();
+        pendingInvitations = new LastSeenCacheTracker<long, PendingPartyInvitation>();
         LastFetchTime = DateTime.UtcNow;
         Interlocked.Exchange(ref updatePumpInFlight, 0);
-        NextInvitationSweepUtc = DateTime.UtcNow;
+        NextInvitationSweepAt = MonotonicClock.NowSeconds;
         IngressGuard = new IngressGuard();
         return ServerComponentInitializationStatus.Initialized;
     }
@@ -310,7 +311,7 @@ public class PartySystemRuntimeData : RuntimeDataContainer, IPartySystemRuntimeD
         pendingInvitations?.Clear();
         LastFetchTime = DateTime.UtcNow;
         Interlocked.Exchange(ref updatePumpInFlight, 0);
-        NextInvitationSweepUtc = DateTime.UtcNow;
+        NextInvitationSweepAt = MonotonicClock.NowSeconds;
         IngressGuard?.Clear();
     }
 
@@ -363,6 +364,7 @@ public class PartySystem : ServerBehaviour, IPartySystem<NetworkConnection>
 | Async worker startup | Check debug log `"AsyncWorkerData"` → `"Initialized (MaxConcurrency=32, MaxOutstanding=16384)"` | Values match the configured (or default) limits |
 | Async worker backpressure | Hold more than `maxOutstandingItems` items accepted-but-unfinished | `Enqueue` returns `false`; the caller handles the refusal rather than the item being silently dropped |
 | Async worker entity ordering | Enqueue multiple items with the same non-zero `entityKey` | All items share one `OrderedLane` and execute in FIFO order; items with other keys run concurrently |
+| Required work past the threshold | `EnqueueRequired` while more than `maxOutstandingItems` are outstanding | Returns `AdmittedOverCapacity`; the item runs after the backlog, in its entity's order, never beside the concurrency cap |
 | Async worker shutdown | Stop the server | Debug log `"Deinitialized (Completed=X, Remaining=Y)"`; `Remaining` is 0 unless the drain budget expired first |
 | Main-thread queue capacity | Enqueue more than 10 000 actions without draining | `TryEnqueue` returns `false` |
 | Main-thread drain | Call `Drain()` on main thread after enqueueing actions | All queued actions execute; drain returns count |
@@ -468,7 +470,7 @@ Server/
 │   ├── IRuntimeDataContainer.cs              # Marker + generic data container interface (extends IServerComponent)
 │   ├── IRuntimeDataContainerFactory.cs       # Factory interface: CreateContainer(Type), IsValidContainerType(Type)
 │   ├── IRuntimeDataContainerRegistry.cs      # Registry interface (extends IServerComponentRegistry)
-│   ├── IAsyncWorkerData.cs                   # Interface: Enqueue (unordered + entity-keyed), PendingCount, CompletedCount
+│   ├── IAsyncWorkerData.cs                   # Interface: Enqueue (unordered + entity-keyed), EnqueueRequired, PendingCount, CompletedCount; AsyncWorkAdmission
 │   ├── IMainThreadQueueData.cs               # Interface: TryEnqueue(Action), Drain(), Drain(int maxActions)
 │   └── RequiresDataContainerAttribute.cs     # [RequiresDataContainer(typeof(T), InitializationPriority = N)]
 │
@@ -489,6 +491,7 @@ IServerComponent
     ├── IAsyncWorkerData
     │       • Enqueue(Func<Task>, callerName?) → bool
     │       • Enqueue(Func<Task>, entityKey, callerName?) → bool
+    │       • EnqueueRequired(Func<Task>, entityKey, callerName?) → AsyncWorkAdmission
     │       • PendingCount → int
     │       • CompletedCount → long
     ├── IMainThreadQueueData

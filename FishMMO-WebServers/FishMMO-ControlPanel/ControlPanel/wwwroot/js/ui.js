@@ -305,6 +305,7 @@ const ICONS = {
 	flag: 'M5 21V4h13l-2.5 4L18 12H5',
 	bell: 'M18 15V10a6 6 0 1 0-12 0v5l-2 3h16l-2-3Z M10 21h4',
 	mail: 'M3 6h18v12H3z M3 7l9 6 9-6',
+	chart: 'M3 20h18 M6 16v-5 M11 16V6 M16 16v-8 M21 16v-3',
 };
 
 export function icon(name, size = 16) {

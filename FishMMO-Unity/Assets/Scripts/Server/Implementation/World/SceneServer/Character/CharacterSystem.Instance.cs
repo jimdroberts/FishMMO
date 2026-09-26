@@ -223,9 +223,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* Clamped at zero rather than sent negative. An instance past its expiry is closed
 				 * by the next pulse, and a countdown that has gone negative on screen in the
 				 * meantime reads as a bug rather than as "any moment now". */
-				if (sceneServerSystem.TryGetInstanceExpiry(instanceSceneID, out DateTime expiresUtc))
+				if (sceneServerSystem.TryGetInstanceRemainingSeconds(instanceSceneID, out double remaining))
 				{
-					double remaining = (expiresUtc - DateTime.UtcNow).TotalSeconds;
 					remainingSeconds = remaining > 0.0 ? (int)Math.Ceiling(remaining) : 0;
 				}
 			}

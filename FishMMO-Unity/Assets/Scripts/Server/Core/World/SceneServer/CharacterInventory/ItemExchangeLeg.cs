@@ -45,6 +45,13 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// transaction as the item rows. Half a trade landing — the items without the coin —
 		/// is exactly the failure this exists to rule out.
 		/// </summary>
+		/// <remarks>
+		/// The sheet is written exactly as memory holds it, so the caller applies every payment AND
+		/// every credit before handing the legs back. A leg used to carry the credit separately, to be
+		/// folded into the written row while memory received it only after the commit — and every
+		/// other capture of the sheet in that window overwrote the credited row with one that lacked
+		/// it. The trade now holds the credit instead (<c>TradeCurrencySettlement</c>).
+		/// </remarks>
 		public bool PersistAttributes;
 
 		/// <summary>
@@ -55,21 +62,6 @@ namespace FishMMO.Server.Core.World.SceneServer
 
 		/// <summary>The ledger reason to record <see cref="CurrencyPaid"/> under.</summary>
 		public CurrencyMovementReason LedgerReason = CurrencyMovementReason.PlayerTrade;
-
-		/// <summary>
-		/// Currency this character RECEIVES, which is NOT yet in memory when the leg is captured.
-		/// </summary>
-		/// <remarks>
-		/// Deductions are applied to memory before the write (an escrow: a concurrent spend can
-		/// only spend what is left), but credits are applied only after the commit. A credit
-		/// applied before it could be spent during the write, and a refused write could then not
-		/// take it back exactly. So the attribute row for <see cref="CurrencyTemplateID"/> is
-		/// written as memory plus this amount, and the caller credits memory on success.
-		/// </remarks>
-		public long CurrencyCredit;
-
-		/// <summary>The attribute template <see cref="CurrencyCredit"/> is added to. Zero when no credit.</summary>
-		public int CurrencyTemplateID;
 
 		/// <summary>
 		/// Every inventory slot the exchange read or wrote on this character. Locked from the

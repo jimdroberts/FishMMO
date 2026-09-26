@@ -456,6 +456,15 @@ namespace FishMMO.Database.Npgsql.Services
 
 				if (rowsAffected > 0)
 				{
+					/* The buff set rides the row, inside this transaction and behind the checks the
+					 * UPDATE just passed. See CharacterBuffService.ReplaceSetsAsync. */
+					if (characterData.Buffs != null)
+					{
+						await CharacterBuffService.ReplaceSetsAsync(
+							dbContext,
+							CharacterBuffService.FlattenSets(new[] { (characterData.ID, characterData.Version, characterData.Buffs) }),
+							cancellationToken).ConfigureAwait(false);
+					}
 					return SaveCharacterWriteOutcome.Success;
 				}
 
@@ -515,6 +524,491 @@ namespace FishMMO.Database.Npgsql.Services
 				default:
 					return DatabaseResult.Failure(DatabaseErrorCodes.DatabaseError, "Unexpected save outcome.");
 			}
+		}
+
+		/// <summary>
+		/// Takes the row lock on every named character, in ascending id order, inside the caller's
+		/// transaction.
+		/// </summary>
+		/// <remarks>
+		/// <b>The order is the point.</b> A statement that updates many character rows locks them in
+		/// whatever order its plan visits them, and two such statements over overlapping rows can each
+		/// hold a row the other is waiting for. The two-character exchange already locks ascending
+		/// (<c>CharacterInventorySystem.RunExchangeAsync</c>), so every multi-row writer here locks
+		/// ascending too and no cycle can form between them. <c>FOR NO KEY UPDATE</c> is the mode an
+		/// ordinary UPDATE takes, so this adds no conflict the write would not have had, and it still
+		/// admits the <c>FOR KEY SHARE</c> locks every character-owned table's foreign key takes.
+		/// With <c>ORDER BY</c>, PostgreSQL applies the locks as the sorted rows are returned.
+		/// </remarks>
+		private async Task LockCharacterRowsAscendingAsync(NpgsqlDbContext dbContext, long[] characterIds, CancellationToken cancellationToken)
+		{
+			await ReadRowsAsync(
+				dbContext,
+				$"SELECT id FROM {TableName} WHERE id = ANY({{0}}::bigint[]) ORDER BY id FOR NO KEY UPDATE",
+				new object[] { characterIds },
+				reader => reader.GetInt64(0),
+				cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// <para>
+		/// <b>Why this exists.</b> The periodic save used to await <see cref="PersistOwnedAsync"/> once
+		/// per resident character, each in its own context and transaction: three round trips a
+		/// character, in series. At 500 residents that was about 1,500 round trips a pass, and at a
+		/// few thousand the pass outlasted its own interval, so the next was skipped and the effective
+		/// save interval doubled. This is one transaction of three statements for the whole list — four
+		/// when any row carries a buff set, which is written for exactly the rows the UPDATE wrote (see
+		/// <see cref="CharacterBuffService.ReplaceSetsAsync"/>).
+		/// </para>
+		/// <para>
+		/// <b>Exactly the checks the single-row write makes, per row.</b> A row is written only when it
+		/// is not deleted, its incoming version is newer than the stored one, and — when the request
+		/// carries a claim — the row is still Online under that server and token. Rows the UPDATE did
+		/// not return are then read back, still under the locks this transaction holds, and classified
+		/// by <see cref="ClassifyUnwritten"/>; nothing about one row decides another's outcome.
+		/// </para>
+		/// <para>
+		/// One transaction for the whole list, so callers keep lists to a few hundred rows: the row
+		/// locks are held until the commit.
+		/// </para>
+		/// </remarks>
+		public async Task<DatabaseResult<IReadOnlyList<CharacterPersistResult>>> PersistManyAsync(IReadOnlyList<CharacterPersistRequest> requests, CancellationToken cancellationToken = default)
+		{
+			if (requests == null || requests.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<CharacterPersistResult>>.Success(Array.Empty<CharacterPersistResult>());
+			}
+
+			var results = new List<CharacterPersistResult>(requests.Count);
+
+			/* Malformed rows are answered here and never sent. A character named twice keeps its
+			 * newest snapshot, as BulkBatch.KeepNewest would, and the older one is Stale: the batch
+			 * itself holds something newer, which is exactly what Stale means. An UPDATE ... FROM
+			 * that matched one row twice would apply an arbitrary one of the two. */
+			var positionOf = new Dictionary<long, int>(requests.Count);
+			var valid = new List<CharacterPersistRequest>(requests.Count);
+			foreach (CharacterPersistRequest request in requests)
+			{
+				CharacterData data = request.Data;
+				if (data.ID <= 0 ||
+					data.Version <= 0 ||
+					data.Name == null ||
+					data.Account == null ||
+					(request.Ownership.HasValue &&
+						(!request.Ownership.Value.IsValid || request.Ownership.Value.CharacterID != data.ID)))
+				{
+					results.Add(new CharacterPersistResult(data.ID, CharacterPersistOutcome.Invalid));
+					continue;
+				}
+
+				if (positionOf.TryGetValue(data.ID, out int at))
+				{
+					if (data.Version > valid[at].Data.Version)
+					{
+						results.Add(new CharacterPersistResult(data.ID, CharacterPersistOutcome.Stale));
+						valid[at] = request;
+					}
+					else
+					{
+						results.Add(new CharacterPersistResult(data.ID, CharacterPersistOutcome.Stale));
+					}
+					continue;
+				}
+
+				positionOf[data.ID] = valid.Count;
+				valid.Add(request);
+			}
+
+			if (valid.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<CharacterPersistResult>>.Success(results);
+			}
+
+			valid.Sort((a, b) => a.Data.ID.CompareTo(b.Data.ID));
+
+			DatabaseResult<List<CharacterPersistResult>> written = await ExecuteTransactionAsync<List<CharacterPersistResult>>(
+				dbContext => PersistManyInTransactionAsync(dbContext, valid, cancellationToken),
+				saveChanges: false,
+				cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			if (!written.IsSuccess)
+			{
+				return DatabaseResult<IReadOnlyList<CharacterPersistResult>>.Failure(written.ErrorCode, written.ErrorMessage, written.IsTransient);
+			}
+
+			results.AddRange(written.Data);
+			return DatabaseResult<IReadOnlyList<CharacterPersistResult>>.Success(results);
+		}
+
+		/// <summary>
+		/// The statements of <see cref="PersistManyAsync"/>, inside its transaction.
+		/// </summary>
+		/// <param name="dbContext">The transaction's context.</param>
+		/// <param name="rows">Validated, de-duplicated rows in ascending id order.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>One outcome per row.</returns>
+		private async Task<List<CharacterPersistResult>> PersistManyInTransactionAsync(
+			NpgsqlDbContext dbContext,
+			List<CharacterPersistRequest> rows,
+			CancellationToken cancellationToken)
+		{
+			int n = rows.Count;
+			var ids = new long[n];
+			var names = new string[n];
+			var accounts = new string[n];
+			var worldServerIds = new long[n];
+			var sceneNames = new string[n];
+			var sceneHandles = new long[n];
+			var bindScenes = new string[n];
+			var bindX = new float[n];
+			var bindY = new float[n];
+			var bindZ = new float[n];
+			var instanceIds = new long[n];
+			var instanceX = new float[n];
+			var instanceY = new float[n];
+			var instanceZ = new float[n];
+			var instanceRotX = new float[n];
+			var instanceRotY = new float[n];
+			var instanceRotZ = new float[n];
+			var instanceRotW = new float[n];
+			var raceIds = new int[n];
+			var modelIndexes = new int[n];
+			var x = new float[n];
+			var y = new float[n];
+			var z = new float[n];
+			var rotX = new float[n];
+			var rotY = new float[n];
+			var rotZ = new float[n];
+			var rotW = new float[n];
+			// smallint, not byte[]: Npgsql binds a byte[] as bytea.
+			var accessLevels = new short[n];
+			var flags = new int[n];
+			var versions = new long[n];
+			var gated = new bool[n];
+			var ownerServerIds = new long[n];
+			var ownerTokens = new Guid[n];
+
+			for (int i = 0; i < n; ++i)
+			{
+				CharacterData d = rows[i].Data;
+				ids[i] = d.ID;
+				names[i] = d.Name;
+				accounts[i] = d.Account;
+				worldServerIds[i] = d.WorldServerID;
+				sceneNames[i] = d.SceneName ?? string.Empty;
+				sceneHandles[i] = d.SceneHandle;
+				bindScenes[i] = d.BindScene ?? string.Empty;
+				bindX[i] = d.BindX;
+				bindY[i] = d.BindY;
+				bindZ[i] = d.BindZ;
+				instanceIds[i] = d.InstanceID;
+				instanceX[i] = d.InstanceX;
+				instanceY[i] = d.InstanceY;
+				instanceZ[i] = d.InstanceZ;
+				instanceRotX[i] = d.InstanceRotX;
+				instanceRotY[i] = d.InstanceRotY;
+				instanceRotZ[i] = d.InstanceRotZ;
+				instanceRotW[i] = d.InstanceRotW;
+				raceIds[i] = d.RaceID;
+				modelIndexes[i] = d.ModelIndex;
+				x[i] = d.X;
+				y[i] = d.Y;
+				z[i] = d.Z;
+				rotX[i] = d.RotX;
+				rotY[i] = d.RotY;
+				rotZ[i] = d.RotZ;
+				rotW[i] = d.RotW;
+				accessLevels[i] = d.AccessLevel;
+				flags[i] = d.Flags;
+				versions[i] = d.Version;
+				gated[i] = rows[i].Ownership.HasValue;
+				ownerServerIds[i] = rows[i].Ownership?.OwnerServerID ?? 0L;
+				ownerTokens[i] = rows[i].Ownership?.OwnerToken ?? Guid.Empty;
+			}
+
+			await LockCharacterRowsAscendingAsync(dbContext, ids, cancellationToken).ConfigureAwait(false);
+
+			/* The columns PersistInternalAsync writes, and only those: not `selected`, which belongs to
+			 * the login flow, and nothing of the session, which belongs to the claim operations. */
+			string sql = $@"
+				UPDATE {TableName} AS c
+				SET name = u.name,
+					account = u.account,
+					world_server_id = u.world_server_id,
+					scene_name = u.scene_name,
+					scene_handle = u.scene_handle,
+					bind_scene = u.bind_scene,
+					bind_x = u.bind_x,
+					bind_y = u.bind_y,
+					bind_z = u.bind_z,
+					instance_id = u.instance_id,
+					instance_x = u.instance_x,
+					instance_y = u.instance_y,
+					instance_z = u.instance_z,
+					instance_rot_x = u.instance_rot_x,
+					instance_rot_y = u.instance_rot_y,
+					instance_rot_z = u.instance_rot_z,
+					instance_rot_w = u.instance_rot_w,
+					race_id = u.race_id,
+					model_index = u.model_index,
+					x = u.x,
+					y = u.y,
+					z = u.z,
+					rot_x = u.rot_x,
+					rot_y = u.rot_y,
+					rot_z = u.rot_z,
+					rot_w = u.rot_w,
+					access_level = u.access_level,
+					flags = u.flags,
+					version = u.version,
+					last_saved = {{33}}
+				FROM UNNEST(
+					{{0}}::bigint[], {{1}}::text[], {{2}}::text[], {{3}}::bigint[], {{4}}::text[], {{5}}::bigint[],
+					{{6}}::text[], {{7}}::real[], {{8}}::real[], {{9}}::real[],
+					{{10}}::bigint[], {{11}}::real[], {{12}}::real[], {{13}}::real[],
+					{{14}}::real[], {{15}}::real[], {{16}}::real[], {{17}}::real[],
+					{{18}}::integer[], {{19}}::integer[],
+					{{20}}::real[], {{21}}::real[], {{22}}::real[], {{23}}::real[], {{24}}::real[], {{25}}::real[], {{26}}::real[],
+					{{27}}::smallint[], {{28}}::integer[], {{29}}::bigint[],
+					{{30}}::boolean[], {{31}}::bigint[], {{32}}::uuid[]
+				) AS u(id, name, account, world_server_id, scene_name, scene_handle,
+					bind_scene, bind_x, bind_y, bind_z,
+					instance_id, instance_x, instance_y, instance_z,
+					instance_rot_x, instance_rot_y, instance_rot_z, instance_rot_w,
+					race_id, model_index,
+					x, y, z, rot_x, rot_y, rot_z, rot_w,
+					access_level, flags, version,
+					gated, owner_server_id, owner_token)
+				WHERE c.id = u.id
+					AND c.deleted = FALSE
+					AND c.version < u.version
+					AND (NOT u.gated
+						OR (c.session_state = {{34}}
+							AND c.session_owner_server_id = u.owner_server_id
+							AND c.session_owner_token = u.owner_token))
+				RETURNING c.id";
+
+			List<long> updated = await ReadRowsAsync(
+				dbContext,
+				sql,
+				new object[]
+				{
+					ids, names, accounts, worldServerIds, sceneNames, sceneHandles,
+					bindScenes, bindX, bindY, bindZ,
+					instanceIds, instanceX, instanceY, instanceZ,
+					instanceRotX, instanceRotY, instanceRotZ, instanceRotW,
+					raceIds, modelIndexes,
+					x, y, z, rotX, rotY, rotZ, rotW,
+					accessLevels, flags, versions,
+					gated, ownerServerIds, ownerTokens,
+					DateTime.UtcNow,
+					(short)CharacterSessionState.Online,
+				},
+				reader => reader.GetInt64(0),
+				cancellationToken).ConfigureAwait(false);
+
+			var updatedSet = new HashSet<long>(updated);
+			var results = new List<CharacterPersistResult>(n);
+			var unwritten = new List<CharacterPersistRequest>();
+			List<(long CharacterID, long Version, IReadOnlyList<CharacterBuffData> Buffs)> buffSets = null;
+			foreach (CharacterPersistRequest row in rows)
+			{
+				if (updatedSet.Contains(row.Data.ID))
+				{
+					results.Add(new CharacterPersistResult(row.Data.ID, CharacterPersistOutcome.Saved));
+					if (row.Data.Buffs != null)
+					{
+						(buffSets ??= new List<(long, long, IReadOnlyList<CharacterBuffData>)>()).Add((row.Data.ID, row.Data.Version, row.Data.Buffs));
+					}
+				}
+				else
+				{
+					unwritten.Add(row);
+				}
+			}
+
+			/* Only the rows the UPDATE wrote carry their buff set, and in the same transaction: a row
+			 * refused as stale, unowned or deleted writes no set, which is what keeps an older save
+			 * from deleting or re-adding a buff a newer one decided. See
+			 * CharacterBuffService.ReplaceSetsAsync. */
+			if (buffSets != null)
+			{
+				await CharacterBuffService.ReplaceSetsAsync(dbContext, CharacterBuffService.FlattenSets(buffSets), cancellationToken).ConfigureAwait(false);
+			}
+
+			if (unwritten.Count == 0)
+			{
+				return results;
+			}
+
+			// Read under the locks taken above, so what is read is what the UPDATE saw.
+			long[] unwrittenIds = unwritten.Select(r => r.Data.ID).ToArray();
+			var stored = await ReadRowsAsync(
+				dbContext,
+				$@"SELECT id, deleted, version, session_state, session_owner_server_id, session_owner_token
+					FROM {TableName} WHERE id = ANY({{0}}::bigint[])",
+				new object[] { unwrittenIds },
+				reader => new
+				{
+					ID = reader.GetInt64(0),
+					Deleted = reader.GetBoolean(1),
+					Version = reader.GetInt64(2),
+					State = (CharacterSessionState)reader.GetInt16(3),
+					OwnerServerId = reader.GetInt64(4),
+					OwnerToken = reader.GetGuid(5),
+				},
+				cancellationToken).ConfigureAwait(false);
+
+			var storedById = stored.ToDictionary(s => s.ID);
+			foreach (CharacterPersistRequest row in unwritten)
+			{
+				CharacterPersistOutcome outcome = storedById.TryGetValue(row.Data.ID, out var s)
+					? ClassifyUnwritten(row, true, s.Deleted, s.Version, s.State, s.OwnerServerId, s.OwnerToken)
+					: ClassifyUnwritten(row, false, false, 0L, CharacterSessionState.Offline, 0L, Guid.Empty);
+				results.Add(new CharacterPersistResult(row.Data.ID, outcome));
+			}
+
+			return results;
+		}
+
+		/// <summary>
+		/// Says why a row of a batched save was not written, from the stored row as it stands under
+		/// the batch's lock.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The single-row save's order, kept: a missing or deleted row first; then a lost claim, which
+		/// is checked before the version because a server that has lost its claim usually ALSO looks
+		/// version-stale once the new owner has saved, and reporting that as a benign stale write is
+		/// what let a displaced server keep trying forever; then the version.
+		/// </para>
+		/// <para>
+		/// An equal version under a claim still held is this caller's own write, replayed — a
+		/// transaction retried after its commit reply was lost. The single-row path reports that as a
+		/// DUPLICATE_REPLAY error, which callers then mistook for a failure worth retrying. Without a
+		/// claim an equal version proves nothing about who wrote it, so it is Stale.
+		/// </para>
+		/// </remarks>
+		/// <param name="request">The row that was sent.</param>
+		/// <param name="exists">Whether a row with that id exists at all.</param>
+		/// <param name="deleted">Whether it is soft-deleted.</param>
+		/// <param name="storedVersion">Its stored version.</param>
+		/// <param name="sessionState">Its session state.</param>
+		/// <param name="ownerServerId">The server its session names.</param>
+		/// <param name="ownerToken">The token its session names.</param>
+		/// <returns>Why the row was not written.</returns>
+		public static CharacterPersistOutcome ClassifyUnwritten(
+			CharacterPersistRequest request,
+			bool exists,
+			bool deleted,
+			long storedVersion,
+			CharacterSessionState sessionState,
+			long ownerServerId,
+			Guid ownerToken)
+		{
+			if (!exists || deleted)
+			{
+				return CharacterPersistOutcome.NotFound;
+			}
+
+			if (request.Ownership.HasValue)
+			{
+				CharacterSessionLeaseData lease = request.Ownership.Value;
+				if (sessionState != CharacterSessionState.Online ||
+					ownerServerId != lease.OwnerServerID ||
+					ownerToken != lease.OwnerToken)
+				{
+					return CharacterPersistOutcome.OwnershipLost;
+				}
+			}
+
+			if (storedVersion == request.Data.Version && request.Ownership.HasValue)
+			{
+				return CharacterPersistOutcome.Replayed;
+			}
+
+			/* storedVersion > incoming is the ordinary stale write. An equal version without a claim
+			 * is stale for the reason above. A LOWER stored version on a row that is owned and live
+			 * cannot be here at all — the UPDATE would have written it under the lock this read shares
+			 * — so reporting it as Stale rather than Saved is the answer that loses nothing: the
+			 * caller's next pass writes a newer version anyway. */
+			return CharacterPersistOutcome.Stale;
+		}
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// <see cref="ReleaseAsync"/> for many characters in one transaction, with the same per-row
+		/// ownership check: a triple that no longer matches (already released, or claimed away after
+		/// a lease lapse) releases nothing and is simply absent from the result. Rows are locked in
+		/// ascending id order first; see <see cref="LockCharacterRowsAscendingAsync"/>.
+		/// </remarks>
+		public async Task<DatabaseResult<IReadOnlyList<long>>> ReleaseManyAsync(IReadOnlyList<CharacterSessionLeaseData> leases, CancellationToken cancellationToken = default)
+		{
+			if (leases == null || leases.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Success(Array.Empty<long>());
+			}
+
+			// Exact triples only once; a malformed one can never match a claim.
+			var distinct = new HashSet<(long, long, Guid)>();
+			var valid = new List<CharacterSessionLeaseData>(leases.Count);
+			foreach (CharacterSessionLeaseData lease in leases)
+			{
+				if (lease.IsValid && distinct.Add((lease.CharacterID, lease.OwnerServerID, lease.OwnerToken)))
+				{
+					valid.Add(lease);
+				}
+			}
+			if (valid.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Success(Array.Empty<long>());
+			}
+			valid.Sort((a, b) => a.CharacterID.CompareTo(b.CharacterID));
+
+			long[] ids = valid.Select(l => l.CharacterID).ToArray();
+			long[] serverIds = valid.Select(l => l.OwnerServerID).ToArray();
+			Guid[] tokens = valid.Select(l => l.OwnerToken).ToArray();
+
+			DatabaseResult<List<long>> released = await ExecuteTransactionAsync<List<long>>(async dbContext =>
+			{
+				await LockCharacterRowsAscendingAsync(dbContext, ids, cancellationToken).ConfigureAwait(false);
+
+				return await ReadRowsAsync(
+					dbContext,
+					$@"UPDATE {TableName} AS c
+						SET session_state = {{3}},
+							session_owner_server_id = 0,
+							session_owner_token = {{4}},
+							session_lease_expires_utc = {{5}},
+							last_saved = {{6}}
+						FROM UNNEST({{0}}::bigint[], {{1}}::bigint[], {{2}}::uuid[]) AS u(id, owner_server_id, owner_token)
+						WHERE c.id = u.id
+							AND c.deleted = FALSE
+							AND c.session_state = {{7}}
+							AND c.session_owner_server_id = u.owner_server_id
+							AND c.session_owner_token = u.owner_token
+						RETURNING c.id",
+					new object[]
+					{
+						ids,
+						serverIds,
+						tokens,
+						(short)CharacterSessionState.Offline,
+						Guid.Empty,
+						DateTime.UnixEpoch,
+						DateTime.UtcNow,
+						(short)CharacterSessionState.Online,
+					},
+					reader => reader.GetInt64(0),
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+			if (!released.IsSuccess)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Failure(released.ErrorCode, released.ErrorMessage, released.IsTransient);
+			}
+			return DatabaseResult<IReadOnlyList<long>>.Success(released.Data);
 		}
 
 		/// <inheritdoc/>
@@ -1075,12 +1569,17 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				/* Projected to the two columns rather than materialising characters.
 				 *
-				 * The only caller is a display path — labelling rows in a browsable list — and a
-				 * character row is wide. Pulling whole entities to read one string each would put
-				 * the cost of a full character load on a query a client can ask for repeatedly. */
+				 * The callers are display paths — labelling rows in a browsable list, and the scene
+				 * servers' batched name lookups — and a character row is wide. Pulling whole
+				 * entities to read one string each would put the cost of a full character load on a
+				 * query a client can ask for repeatedly.
+				 *
+				 * A deleted character does not resolve, as the documented contract says and as the
+				 * single lookup (fetchByIdQuery) has always had it: a name lookup must not answer
+				 * differently depending on whether it arrived alone or in a batch. */
 				var rows = await dbContext.Characters
 					.AsNoTracking()
-					.Where(c => ids.Contains(c.ID))
+					.Where(c => ids.Contains(c.ID) && !c.Deleted)
 					.Select(c => new { c.ID, c.Name })
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
@@ -1420,6 +1919,17 @@ namespace FishMMO.Database.Npgsql.Services
 							  .Append("CAST(").Append('{').Append(p + 2).Append("} AS uuid))");
 					}
 
+					/* Ascending row locks first. This statement and the batched save and release
+					 * (PersistManyAsync, ReleaseManyAsync) update overlapping sets of character rows,
+					 * and each would otherwise lock them in its own plan order — so two of them could
+					 * each hold a row the other waits on. See LockCharacterRowsAscendingAsync. */
+					var lockIds = new long[batchSize];
+					for (int i = 0; i < batchSize; i++)
+					{
+						lockIds[i] = valid[batchStart + i].CharacterID;
+					}
+					await LockCharacterRowsAscendingAsync(dbContext, lockIds, cancellationToken).ConfigureAwait(false);
+
 					// Ownership is verified per row: a server that released the session, or had it
 					// claimed away after its lease expired, matches nothing here and so cannot
 					// extend the current owner's lease.
@@ -1644,6 +2154,129 @@ namespace FishMMO.Database.Npgsql.Services
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
+		}
+
+		/// <summary>
+		/// Upper bound on the characters one <see cref="UpdateSceneBatchAsync"/> statement names.
+		/// Larger batches are written in several statements.
+		/// </summary>
+		private const int MaxSceneBindsPerStatement = 1000;
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// The write <see cref="UpdateSceneAsync"/> makes, for many characters in one statement, with
+		/// the same guard (a row that exists and is not deleted) and the same last-writer-wins
+		/// semantics, for the reasons given there.
+		/// <para>
+		/// Rows are locked in id order before they are written, in the mode the UPDATE takes anyway
+		/// (<c>FOR NO KEY UPDATE</c>, which leaves foreign-key checks on the row unblocked). Two
+		/// multi-row writers that lock overlapping rows in different orders can deadlock; a fixed
+		/// order is what prevents it.
+		/// </para>
+		/// </remarks>
+		public async Task<DatabaseResult<IReadOnlyList<long>>> UpdateSceneBatchAsync(
+			long worldServerId,
+			IReadOnlyList<(long CharacterId, string SceneName, long SceneHandle)> binds,
+			CancellationToken cancellationToken = default)
+		{
+			if (binds == null || binds.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Success(Array.Empty<long>());
+			}
+
+			// One entry per character. A later entry wins, as it would have had the single-row
+			// writes run in order.
+			var byId = new SortedDictionary<long, (string SceneName, long SceneHandle)>();
+			for (int i = 0; i < binds.Count; ++i)
+			{
+				var bind = binds[i];
+				if (bind.CharacterId > 0)
+				{
+					byId[bind.CharacterId] = (bind.SceneName ?? string.Empty, bind.SceneHandle);
+				}
+			}
+			if (byId.Count == 0)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Success(Array.Empty<long>());
+			}
+
+			var entries = byId.ToList();
+			var written = new List<long>(entries.Count);
+			for (int offset = 0; offset < entries.Count; offset += MaxSceneBindsPerStatement)
+			{
+				int count = Math.Min(MaxSceneBindsPerStatement, entries.Count - offset);
+				var ids = new long[count];
+				var sceneNames = new string[count];
+				var sceneHandles = new long[count];
+				for (int i = 0; i < count; ++i)
+				{
+					var entry = entries[offset + i];
+					ids[i] = entry.Key;
+					sceneNames[i] = entry.Value.SceneName;
+					sceneHandles[i] = entry.Value.SceneHandle;
+				}
+
+				// Absolute values, so a retry after a reply lost past the commit writes the same
+				// thing again and returns the same ids.
+				var result = await ExecuteWriteAsync(async dbContext =>
+				{
+					var tableName = dbContext.GetTableName<CharacterEntity>();
+					var sql = $@"WITH batch AS (
+							SELECT * FROM unnest({{1}}::bigint[], {{2}}::text[], {{3}}::bigint[]) AS b(id, scene_name, scene_handle)
+						),
+						locked AS (
+							SELECT c.id, batch.scene_name, batch.scene_handle FROM {tableName} AS c
+							JOIN batch ON batch.id = c.id
+							WHERE c.deleted = FALSE
+							ORDER BY c.id
+							FOR NO KEY UPDATE OF c
+						)
+						UPDATE {tableName} AS c
+						SET world_server_id = {{0}},
+							scene_name = locked.scene_name,
+							scene_handle = locked.scene_handle,
+							last_saved = {{4}}
+						FROM locked
+						WHERE c.id = locked.id
+						RETURNING c.id";
+
+					return await ReadRowsAsync(
+						dbContext,
+						sql,
+						new object[] { worldServerId, ids, sceneNames, sceneHandles, DateTime.UtcNow },
+						reader => reader.GetInt64(0),
+						cancellationToken).ConfigureAwait(false);
+				}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+				if (!result.IsSuccess)
+				{
+					return DatabaseResult<IReadOnlyList<long>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+				}
+				written.AddRange(result.Data);
+			}
+
+			return DatabaseResult<IReadOnlyList<long>>.Success(written);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<(CharacterData Character, CharacterLockState Lock)?>> FetchSelectedWithLockAsync(string accountName, CancellationToken cancellationToken = default)
+		{
+			if (!Authentication.IsAllowedUsername(accountName))
+			{
+				return DatabaseResult<(CharacterData Character, CharacterLockState Lock)?>.Failure(DatabaseErrorCodes.ValidationError, Authentication.InvalidUsernameError);
+			}
+
+			// The row FetchByAccountAsync(selected: true) reads already carries the lock columns;
+			// FetchLockAsync read the same row a second time just to get them.
+			return await ExecuteReadAsync<(CharacterData Character, CharacterLockState Lock)?>(async dbContext =>
+			{
+				var entity = await fetchByAccountSelectedQuery(dbContext, accountName, true, cancellationToken).ConfigureAwait(false);
+				if (entity == null)
+				{
+					return null;
+				}
+				return (MapEntityToData(entity), new CharacterLockState(entity.LockedUntil, entity.LockedBy, entity.LockReason));
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

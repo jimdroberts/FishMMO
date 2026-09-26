@@ -15,6 +15,13 @@ namespace FishMMO.UnitTests
 	/// not about scheduling. The gates complete their continuations inline, so a read the test
 	/// completes has finished by the time <c>SetResult</c> returns and the shared task can be read
 	/// without awaiting.
+	/// <para>
+	/// That inlining holds only with no synchronization context. The Unity test runner installs
+	/// one, and a <c>ConfigureAwait(false)</c> continuation is then queued rather than run inside
+	/// <c>SetResult</c>, so every assertion straight after completing a gate raced the cache and
+	/// five tests failed for the harness, not the cache. The fixture clears the context for each
+	/// test and restores it afterwards.
+	/// </para>
 	/// </remarks>
 	[TestFixture]
 	public class SingleFlightCacheTests
@@ -26,13 +33,23 @@ namespace FishMMO.UnitTests
 		private int fetches;
 		private TaskCompletionSource<int> gate;
 
+		private System.Threading.SynchronizationContext previousContext;
+
 		[SetUp]
 		public void SetUp()
 		{
+			previousContext = System.Threading.SynchronizationContext.Current;
+			System.Threading.SynchronizationContext.SetSynchronizationContext(null);
 			now = new DateTime(2026, 9, 25, 12, 0, 0, DateTimeKind.Utc);
 			cache = new SingleFlightCache<string, int>(() => now);
 			fetches = 0;
 			gate = null;
+		}
+
+		[TearDown]
+		public void TearDown()
+		{
+			System.Threading.SynchronizationContext.SetSynchronizationContext(previousContext);
 		}
 
 		/// <summary>A read that stays in flight until the test completes <see cref="gate"/>.</summary>

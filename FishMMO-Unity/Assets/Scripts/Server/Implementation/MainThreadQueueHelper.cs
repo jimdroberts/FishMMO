@@ -43,8 +43,16 @@ namespace FishMMO.Server.Implementation
 		{
 			/// <summary>Running total of rejected enqueues since process start.</summary>
 			public static long Dropped;
-			/// <summary>Last warning timestamp (DateTime.UtcNow.Ticks) for rate limiting.</summary>
-			public static long LastWarnTicks;
+			/// <summary>
+			/// Last warning timestamp, in <see cref="MonotonicClock.NowTicks"/>, for rate limiting.
+			/// Starts far in the past so the first drop is always reported, however soon after the
+			/// host booted it comes.
+			/// </summary>
+			/// <remarks>
+			/// A local duration. On the wall clock a host stepped back silenced every drop warning
+			/// for the size of the step, exactly while the main thread might be stalling.
+			/// </remarks>
+			public static long LastWarnTicks = long.MinValue / 2;
 		}
 
 		/// <summary>
@@ -113,7 +121,7 @@ namespace FishMMO.Server.Implementation
 		{
 			long total = Interlocked.Increment(ref DropTracker<TQueue>.Dropped);
 
-			long nowTicks = DateTime.UtcNow.Ticks;
+			long nowTicks = MonotonicClock.NowTicks;
 			long last = Interlocked.Read(ref DropTracker<TQueue>.LastWarnTicks);
 			if (nowTicks - last < WarnIntervalTicks)
 			{

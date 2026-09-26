@@ -287,10 +287,14 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteWriteAsync(async dbContext =>
 			{
-				var now = DateTime.UtcNow;
-				var sql = $@"UPDATE {TableName} SET last_login = {{0}} WHERE name_lowercase = {{1}}";
+				/* Stamped by the DATABASE clock, like the column's default and like the kick requests
+				 * it is compared with: a game server treats a kick whose account logged in at or after
+				 * the kick's stamp as stale. Stamped by the login server's own clock, a login server
+				 * running ahead of the database made a login that came BEFORE a kick look later than
+				 * it, and the kick was skipped as stale on every server. */
+				var sql = $@"UPDATE {TableName} SET last_login = {DatabaseUtcClockSql} WHERE name_lowercase = {{0}}";
 				var rowsAffected = await dbContext.Database
-					.ExecuteSqlRawAsync(sql, new object[] { now, accountName.ToLowerInvariant() }, cancellationToken)
+					.ExecuteSqlRawAsync(sql, new object[] { accountName.ToLowerInvariant() }, cancellationToken)
 					.ConfigureAwait(false);
 				if (rowsAffected == 0)
 				{

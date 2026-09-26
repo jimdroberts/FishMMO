@@ -3,7 +3,9 @@ using FishNet.Broadcast;
 using FishNet.Managing;
 using FishNet.Transporting;
 using System;
+using System.Collections.Generic;
 using FishMMO.Server.Core;
+using UnityEngine.SceneManagement;
 
 namespace FishMMO.Server.Implementation
 {
@@ -93,5 +95,45 @@ namespace FishMMO.Server.Implementation
 		/// <param name="broadcast">The message to broadcast.</param>
 		/// <param name="channel">The channel to use for broadcasting (default is Reliable).</param>
 		void Broadcast<T>(NetworkConnection conn, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast;
+
+		/// <summary>
+		/// Broadcasts one message to every connection in a set, serialising it once.
+		/// </summary>
+		/// <remarks>
+		/// The single-connection overload serialises per call, so a loop over it pays the
+		/// serialisation once per recipient. Use this for any fan-out: a scene's connections, a
+		/// match's team, a party's local members. The set is read, never kept; an empty or null
+		/// set is a no-op.
+		/// </remarks>
+		/// <typeparam name="T">The broadcast type.</typeparam>
+		/// <param name="connections">The recipients.</param>
+		/// <param name="broadcast">The message to broadcast.</param>
+		/// <param name="requireAuthentication">Whether each recipient must be authenticated.</param>
+		/// <param name="channel">The channel to use for broadcasting (default is Reliable).</param>
+		void Broadcast<T>(HashSet<NetworkConnection> connections, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast;
+
+		/// <summary>
+		/// Broadcasts one message to every connection FishNet has in a scene, serialising it once.
+		/// </summary>
+		/// <remarks>
+		/// Reads <c>SceneManager.SceneConnections</c>, which FishNet keeps per loaded scene, so no
+		/// caller needs to walk the server's characters asking each for its scene.
+		/// </remarks>
+		/// <typeparam name="T">The broadcast type.</typeparam>
+		/// <param name="scene">The scene whose connections receive the message.</param>
+		/// <param name="broadcast">The message to broadcast.</param>
+		/// <param name="requireAuthentication">Whether each recipient must be authenticated.</param>
+		/// <param name="channel">The channel to use for broadcasting (default is Reliable).</param>
+		/// <returns>True if the scene had at least one connection.</returns>
+		bool BroadcastToScene<T>(Scene scene, T broadcast, bool requireAuthentication = true, Channel channel = Channel.Reliable) where T : struct, IBroadcast;
+
+		/// <summary>
+		/// Gets FishNet's live connection set for a scene. The set belongs to FishNet: read it on
+		/// the main thread and never modify or keep it.
+		/// </summary>
+		/// <param name="scene">The scene.</param>
+		/// <param name="connections">The scene's connections, or null.</param>
+		/// <returns>True if the scene has at least one connection.</returns>
+		bool TryGetSceneConnections(Scene scene, out HashSet<NetworkConnection> connections);
 	}
 }

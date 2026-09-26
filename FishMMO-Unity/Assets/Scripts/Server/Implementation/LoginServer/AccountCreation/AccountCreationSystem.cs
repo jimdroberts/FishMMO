@@ -67,6 +67,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private float ipRateLimitSeconds = 5.0f;
 
 		/// <summary>Per-IP debounce for <see cref="AccountVerifyBroadcast"/>. See the handler.</summary>
+		/// <remarks>
+		/// Timed on <see cref="MonotonicClock"/>, like the connection caches in the runtime data: each
+		/// is a duration, and a host clock stepped back held them for the size of the step.
+		/// </remarks>
 		private readonly ExpiringKeyTracker<string> verifyRateLimiter = new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 
 		private static readonly TimeSpan VerifyRateLimitDuration = TimeSpan.FromSeconds(1);
@@ -97,11 +101,15 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int maxGlobalAccountCreationsPerHour = 1000;
 
 		/// <summary>
-		/// Lock-free sliding-window state for the global hourly cap. The hour
-		/// is identified by UTC hours-since-epoch; on tick-over the counter is
-		/// reset atomically. Uses Interlocked operations rather than a lock so
-		/// the hot path stays alloc-free under contention.
+		/// Fixed-window state for the global hourly cap, guarded by
+		/// <see cref="globalCreationsCounterLock"/>. The hour is identified by whole hours on
+		/// <see cref="MonotonicClock"/>; on tick-over the counter is reset.
 		/// </summary>
+		/// <remarks>
+		/// The budget is a local duration, not a calendar hour: nothing depends on its windows
+		/// starting on the hour. Numbered by the wall clock, any step of the host clock started a new
+		/// window and handed out a fresh hour's budget on the spot.
+		/// </remarks>
 		private long globalCreationsCurrentHourBucket = -1;
 		private int globalCreationsCurrentHourCount = 0;
 		private readonly object globalCreationsCounterLock = new object();
@@ -169,13 +177,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int maxMainThreadResponsesPerFrame = 100;
 
 		/// <summary>
-		/// Hard cap on the number of unique IPs tracked in the <see cref="IAccountCreationSystemMappingData.IpFailureTracker"/>.
-		/// Prevents unbounded dictionary growth if an attacker floods from spoofed or rotating IPs.
+		/// Hard cap on the number of IPs holding failures in <see cref="IAccountCreationSystemMappingData.IpAbuse"/>.
+		/// Prevents unbounded growth if an attacker floods from spoofed or rotating IPs.
 		/// When the cap is reached, <see cref="TryTrackIpFailure"/> returns <c>false</c> so the caller can
 		/// fail closed (disconnect the request) rather than silently skipping the increment, which would
 		/// let the offender stay just under the per-IP block threshold indefinitely.
 		/// </summary>
 		private const int MaxIpFailureTrackerEntries = 50_000;
+
+		/// <summary>
+		/// Seconds between maintenance sweeps of the per-IP and per-username trackers.
+		/// </summary>
+		/// <remarks>
+		/// Every sweep is head-first over entries in expiry order and stops at the first live one,
+		/// so a sweep with nothing to do costs a lock and a comparison per tracker. That is what
+		/// lets it run every second: the once-a-minute cadence it replaced existed only because
+		/// each pass used to enumerate the dictionaries.
+		/// </remarks>
+		private const float MappingSweepIntervalSeconds = 1f;
 
 		/// <summary>
 		/// Maximum entries scanned per map during one maintenance sweep.
@@ -223,16 +242,22 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private const int MaxVerifyUsernameFailureEntries = 50_000;
 
 		/// <summary>
-		/// Maximum entries scanned per sweep when evicting expired per-username verification failure records.
+		/// Maximum closed windows removed per sweep of the per-username verification failure tracker.
 		/// </summary>
-		private const int VerifyUsernameFailureSweepMaxScan = 64;
+		private const int VerifyUsernameFailureSweepMaxRemovals = 256;
 
 		/// <summary>
-		/// Per-username verification failure counter for cross-connection rate limiting.
-		/// Key = lowercased username, Value = (failureCount, firstFailureUtc).
-		/// Entries are lazily evicted when checked and proactively swept in <see cref="CleanUpMappingData"/>.
+		/// Per-username verification failures within <see cref="VerifyUsernameLockoutDuration"/> of the
+		/// first, for cross-connection rate limiting. Keyed by the normalized username.
 		/// </summary>
-		private readonly ConcurrentDictionary<string, (int Count, DateTime FirstFailure)> verifyUsernameFailures = new ConcurrentDictionary<string, (int, DateTime)>();
+		/// <remarks>
+		/// A closed window reads as zero whether or not it has been swept, and the sweep in
+		/// <see cref="CleanUpMappingData"/> walks windows in the order they opened, so it reaches
+		/// every closed one. The dictionary it replaced was swept 64 entries from its head once a
+		/// minute, which never got past the first 64 live entries.
+		/// </remarks>
+		private readonly FishMMO.Auth.Core.Collections.FixedWindowCounter<string> verifyUsernameFailures =
+			new FishMMO.Auth.Core.Collections.FixedWindowCounter<string>(VerifyUsernameLockoutDuration, StringComparer.Ordinal);
 
 		/// <summary>
 		/// Maximum allowed size in bytes for any single encrypted field in CreateAccountBroadcast.
@@ -424,7 +449,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		private void OnServerCreateAccountBroadcastReceived(NetworkConnection conn, CreateAccountBroadcast msg, Channel channel)
 		{
-			verifyRateLimiter.SweepExpired(DateTime.UtcNow, maxScan: 64, maxRemove: 16);
+			verifyRateLimiter.SweepExpired(MonotonicClock.NowSeconds, maxScan: 64, maxRemove: 16);
 			// Already-authenticated connections should not be creating accounts.
 			if (conn.IsAuthenticated)
 			{
@@ -513,39 +538,30 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return EnqueueResult.Unavailable;
 			}
 
-			// Check IP block BEFORE updating rate-limit timestamp.
-			// This ensures blocked IPs don't refresh their rate-limit entry,
-			// so the cleanup sweep can expire and eventually lift the block.
-			if (mappingData.IpFailureTracker.TryGetValue(request.IpAddress, out int failureCount))
-			{
-				if (failureCount >= maxFailedAttempts)
-				{
-					if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
-					{
-						runtimeData.IncrementRejected();
-					}
-
-					request.Connection.Disconnect(true); // Disconnect immediately to mitigate DoS
-					return EnqueueResult.Blocked;
-				}
-			}
-
-			// Atomic IP rate-limit check using AddOrUpdate to prevent TOCTOU race.
-			bool wasRateLimited = false;
-			DateTime nowUtc = DateTime.UtcNow;
-			mappingData.IpRateLimitTracker.AddOrUpdate(
+			// The block is checked before the rate limit, and neither a blocked nor a
+			// rate-limited attempt is recorded, so a blocked IP cannot keep its own block alive
+			// by retrying: it lapses ipBlockDurationSeconds after the IP's last recorded activity.
+			// Check and record happen under one lock, so there is no TOCTOU race.
+			// The global hourly budget below and the per-IP rules are all local durations, on the
+			// monotonic clock.
+			double now = MonotonicClock.NowSeconds;
+			IpAbuseTracker.AttemptVerdict verdict = mappingData.IpAbuse.TryBeginAttempt(
 				request.IpAddress,
-				nowUtc,
-				(_, lastAttempt) =>
+				now,
+				TimeSpan.FromSeconds(ipRateLimitSeconds),
+				maxFailedAttempts,
+				IpBlockRetention);
+			if (verdict == IpAbuseTracker.AttemptVerdict.Blocked)
+			{
+				if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var runtimeData))
 				{
-					if ((nowUtc - lastAttempt).TotalSeconds < ipRateLimitSeconds)
-					{
-						wasRateLimited = true;
-						return lastAttempt; // Don't update timestamp if rate limited.
-					}
-					return nowUtc;
-				});
-			if (wasRateLimited)
+					runtimeData.IncrementRejected();
+				}
+
+				request.Connection.Disconnect(true); // Disconnect immediately to mitigate DoS
+				return EnqueueResult.Blocked;
+			}
+			if (verdict == IpAbuseTracker.AttemptVerdict.RateLimited)
 			{
 				return EnqueueResult.RateLimited;
 			}
@@ -559,7 +575,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// do not deplete the shared cap. Failures here are reported as QueueFull
 			// (which maps to ServerBusy on the wire) to avoid disclosing the
 			// existence/threshold of the global cap to a probing attacker.
-			if (!TryCheckGlobalCreationBudget(nowUtc))
+			if (!TryCheckGlobalCreationBudget(now))
 			{
 				return EnqueueResult.QueueFull;
 			}
@@ -579,7 +595,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// (<see cref="IncrementGlobalCreationCount"/>) so that failed requests do not
 		/// deplete the budget.
 		/// </summary>
-		private bool TryCheckGlobalCreationBudget(DateTime nowUtc)
+		private bool TryCheckGlobalCreationBudget(double now)
 		{
 			int cap = maxGlobalAccountCreationsPerHour;
 			if (cap <= 0)
@@ -587,7 +603,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return true; // Cap disabled by configuration.
 			}
 
-			long currentBucket = (long)(nowUtc - DateTime.UnixEpoch).TotalHours;
+			long currentBucket = GlobalCreationHourBucket(now);
 			lock (globalCreationsCounterLock)
 			{
 				if (globalCreationsCurrentHourBucket != currentBucket)
@@ -603,7 +619,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// Atomically consumes one slot from the rolling hourly global account-creation budget.
 		/// Must only be called after the account has been successfully persisted.
 		/// </summary>
-		private void IncrementGlobalCreationCount(DateTime nowUtc)
+		private void IncrementGlobalCreationCount(double now)
 		{
 			int cap = maxGlobalAccountCreationsPerHour;
 			if (cap <= 0)
@@ -611,7 +627,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return; // Cap disabled by configuration.
 			}
 
-			long currentBucket = (long)(nowUtc - DateTime.UnixEpoch).TotalHours;
+			long currentBucket = GlobalCreationHourBucket(now);
 			lock (globalCreationsCounterLock)
 			{
 				if (globalCreationsCurrentHourBucket != currentBucket)
@@ -622,6 +638,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				globalCreationsCurrentHourCount++;
 			}
 		}
+
+		/// <summary>The global budget's window for a <see cref="MonotonicClock"/> reading: whole hours on that clock.</summary>
+		private static long GlobalCreationHourBucket(double now) => (long)Math.Floor(now / 3600.0);
 
 		/// <summary>
 		/// Sends immediate ServerBusy response when rate limited or queue full.
@@ -963,9 +982,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 							// (duplicate username, validation errors, DB faults) do not
 							// deplete the shared budget — an attacker cannot exhaust the
 							// cap by sending bad registrations.
-							IncrementGlobalCreationCount(DateTime.UtcNow);
+							IncrementGlobalCreationCount(MonotonicClock.NowSeconds);
 							// Clear failure tracker on success
-							mappingData.IpFailureTracker.TryRemove(request.IpAddress, out _);
+							mappingData.IpAbuse.ClearFailures(request.IpAddress);
 
 							/* The optional details, then the beta code. Both after the row exists and neither
 							 * able to undo it: the account is real now. A profile that failed to write leaves
@@ -1369,7 +1388,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Periodically cleans up stale IP rate-limit and failure-tracking entries
 		/// to prevent unbounded memory growth from one-time visitors.
-		/// Iterating a ConcurrentDictionary creates a point-in-time snapshot, so this is safe.
+		/// Every sweep here is head-first over entries in expiry order, so each pass reaches the
+		/// oldest entries and costs nothing when none has expired.
 		/// </summary>
 		private void CleanUpMappingData(float deltaTime)
 		{
@@ -1379,97 +1399,42 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			// Float accumulation of deltaTime is acceptable here: a 60-second
-			// interval resets to 0 each cycle, so precision loss is negligible.
+			// Float accumulation of deltaTime is acceptable here: the interval resets to 0 each
+			// cycle, so precision loss is negligible.
 			runtimeData.CleanupTimer += deltaTime;
-			if (runtimeData.CleanupTimer < 60f)
+			if (runtimeData.CleanupTimer < MappingSweepIntervalSeconds)
 			{
 				return;
 			}
 			runtimeData.CleanupTimer = 0f;
 
-			if (!Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
+			double nowSeconds = MonotonicClock.NowSeconds;
+
+			// Per-IP attempt/failure records lapse ipBlockDurationSeconds after their last
+			// activity. Head-first in activity order, so the oldest go first and the sweep
+			// always reaches them.
+			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
 			{
-				return;
-			}
-
-			DateTime cutoff = DateTime.UtcNow.AddSeconds(-ipBlockDurationSeconds);
-
-			// Evict rate-limit entries older than the block duration.
-			CleanupExpiredEntries(mappingData.IpRateLimitTracker,
-				entry => entry.Value < cutoff,
-				cleanupMaxScanPerMap,
-				cleanupMaxRemovalsPerMap);
-
-			// Evict failure-tracking entries for IPs whose block period has expired.
-			// Once the rate-limit entry is gone (expired above), the failure count serves no purpose.
-			// Snapshot keys first to avoid mutating the dictionary during enumeration.
-			// Uses key-only TryRemove: the rate-limit entry being expired is sufficient
-			// justification for removal. A concurrent request that created a fresh failure
-			// entry after the rate-limit expired will simply re-create the entry.
-			int scannedFailures = 0;
-			int removedFailures = 0;
-			var failureKeysToRemove = new System.Collections.Generic.List<string>();
-			foreach (var entry in mappingData.IpFailureTracker)
-			{
-				if (scannedFailures >= cleanupMaxScanPerMap)
-					break;
-				scannedFailures++;
-				if (!mappingData.IpRateLimitTracker.ContainsKey(entry.Key))
-				{
-					failureKeysToRemove.Add(entry.Key);
-				}
-			}
-
-			foreach (var key in failureKeysToRemove)
-			{
-				if (removedFailures >= cleanupMaxRemovalsPerMap)
-					break;
-				if (mappingData.IpFailureTracker.TryRemove(key, out _))
-				{
-					removedFailures++;
-				}
+				mappingData.IpAbuse.SweepExpired(nowSeconds, IpBlockRetention, cleanupMaxRemovalsPerMap);
 			}
 
 			// Evict stale per-connection caches as a backstop against delayed disconnect events.
 			TimeSpan cacheTtl = TimeSpan.FromSeconds(Math.Max(1f, ipBlockDurationSeconds));
-			runtimeData.ConnectionIpCache.SweepExpired(DateTime.UtcNow, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
-			runtimeData.ConnectionEncryptionCache.SweepExpired(DateTime.UtcNow, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
+			// Monotonic, like every other reader and writer of these caches (the authenticator's
+			// included): one cache, one clock.
+			runtimeData.ConnectionIpCache.SweepExpired(nowSeconds, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
+			runtimeData.ConnectionEncryptionCache.SweepExpired(nowSeconds, cacheTtl, cleanupMaxScanPerMap, cleanupMaxRemovalsPerMap);
 
 			// Evict expired per-username verification failure entries.
 			SweepExpiredVerifyUsernameFailures();
 		}
 
 		/// <summary>
-		/// Performs bounded, lock-free cleanup over a concurrent dictionary using <see cref="ConcurrentDictionary{TKey,TValue}.TryRemove(TKey, out TValue)"/>.
+		/// How long an IP's attempt and failure record lasts after its last activity — the
+		/// configured block duration, so a blocked IP stays blocked for that long after its last
+		/// recorded failure.
 		/// </summary>
-		private static void CleanupExpiredEntries<TKey, TValue>(
-			ConcurrentDictionary<TKey, TValue> map,
-			Func<KeyValuePair<TKey, TValue>, bool> isExpired,
-			int maxScan,
-			int maxRemove)
-		{
-			if (map == null || map.Count == 0 || maxScan <= 0 || maxRemove <= 0)
-			{
-				return;
-			}
-
-			int scanned = 0;
-			int removed = 0;
-			foreach (KeyValuePair<TKey, TValue> entry in map)
-			{
-				scanned++;
-				if (isExpired(entry) && map.TryRemove(entry.Key, out _))
-				{
-					removed++;
-				}
-
-				if (scanned >= maxScan || removed >= maxRemove)
-				{
-					break;
-				}
-			}
-		}
+		private TimeSpan IpBlockRetention => TimeSpan.FromSeconds(Math.Max(1f, ipBlockDurationSeconds));
 
 		/// <summary>
 		/// Drains the main-thread queue via the base class generic helper.
@@ -1570,7 +1535,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server?.DataContainerRegistry != null &&
 				Server.DataContainerRegistry.TryGet<IAccountCreationSystemRuntimeData>(out var rt) &&
 				rt.ConnectionIpCache != null &&
-				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, DateTime.UtcNow, out string? realIp))
+				rt.ConnectionIpCache.TryGetAndTouch(conn.ClientId, MonotonicClock.NowSeconds, out string? realIp))
 			{
 				return HandshakeService.NormalizeIp(realIp);
 			}
@@ -1589,7 +1554,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return Server.AccountManager.GetConnectionEncryptionData(conn, out encryptionData) && encryptionData != null;
 			}
 
-			DateTime now = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			if (runtimeData.ConnectionEncryptionCache.TryGetAndTouch(conn.ClientId, now, out ConnectionEncryptionData cached) &&
 				cached != null)
 			{
@@ -1656,8 +1621,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Reuse account creation rate limiting for verification attempts.
 			if (Server.DataContainerRegistry.TryGet<IAccountCreationSystemMappingData>(out var mappingData))
 			{
-				if (mappingData.IpFailureTracker.TryGetValue(ipAddress, out int failureCount) &&
-					failureCount >= maxFailedAttempts)
+				if (mappingData.IpAbuse.IsBlocked(ipAddress, MonotonicClock.NowSeconds, maxFailedAttempts, IpBlockRetention))
 				{
 					conn.Disconnect(true);
 					return;
@@ -1668,7 +1632,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			 * until maxFailedAttempts accumulate, every message here enqueued a decrypt and a
 			 * database lookup from an unauthenticated connection. One verification per IP per
 			 * second is far more than any honest client sends. */
-			if (!verifyRateLimiter.TryBegin(ipAddress, DateTime.UtcNow, VerifyRateLimitDuration))
+			if (!verifyRateLimiter.TryBegin(ipAddress, MonotonicClock.NowSeconds, VerifyRateLimitDuration))
 			{
 				return;
 			}
@@ -1818,36 +1782,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 					else
 					{
-						// Per-username brute-force check. Uses the CAS-style
-						// TryRemove(KeyValuePair) overload so an expired entry is only
-						// evicted if no concurrent thread has updated it in the meantime
-						// — prevents losing a fresh failure counter to a stale eviction.
+						// Per-username brute-force check. A closed window reads as zero, so the
+						// lockout lifts on time whether or not the sweep has reached it; the read
+						// and any eviction happen under the counter's one lock, so no concurrent
+						// failure can be lost to a stale eviction.
 						// Use NFKC + invariant-case normalisation so confusable Unicode
 						// usernames cannot bypass the per-username lockout.
 						string userKey = Authentication.NormalizeAccountLookup(username);
-						if (verifyUsernameFailures.TryGetValue(userKey, out var failInfo))
+						if (verifyUsernameFailures.GetCount(userKey, MonotonicClock.NowSeconds) >= MaxVerifyFailuresPerUsername)
 						{
-							if (DateTime.UtcNow - failInfo.FirstFailure > VerifyUsernameLockoutDuration)
-							{
-								// Window expired — try to evict, but only if the entry we
-								// observed is the one still in the map. If a concurrent
-								// TrackVerifyUsernameFailure has already reset it, the CAS
-								// fails and we leave their fresh entry intact.
-								// Use TryGetValue + TryRemove instead of the ICollection<KVP>.Remove
-								// pattern which has known issues under IL2CPP.
-								if (verifyUsernameFailures.TryGetValue(userKey, out var existing)
-									&& existing.Count == failInfo.Count
-									&& existing.FirstFailure == failInfo.FirstFailure)
-								{
-									verifyUsernameFailures.TryRemove(userKey, out _);
-								}
-							}
-							else if (failInfo.Count >= MaxVerifyFailuresPerUsername)
-							{
-								// Locked out — reject immediately.
-								result = ClientAuthenticationResult.InvalidUsernameOrPassword;
-								goto trackFailure;
-							}
+							// Locked out — reject immediately.
+							result = ClientAuthenticationResult.InvalidUsernameOrPassword;
+							goto trackFailure;
 						}
 
 						/* One conditional update tries the code against every code the account holds — email,
@@ -1941,34 +1887,26 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// Tracks a failure against <paramref name="ipAddress"/> in the per-IP failure
 		/// counter. Returns <c>false</c> when the tracker is at capacity AND the IP
-		/// is not already present — the caller should treat that as a fail-closed
+		/// holds no failures yet — the caller should treat that as a fail-closed
 		/// signal (disconnect) rather than silently ignoring the failure, otherwise
 		/// an attacker can exhaust the tracker to escape the per-IP block.
-		/// Existing IPs are always incremented regardless of capacity.
+		/// IPs already failing are always incremented regardless of capacity.
 		/// </summary>
-		private static bool TryTrackIpFailure(IAccountCreationSystemMappingData mappingData, string ipAddress)
+		private bool TryTrackIpFailure(IAccountCreationSystemMappingData mappingData, string ipAddress)
 		{
-			if (mappingData == null || string.IsNullOrEmpty(ipAddress))
+			if (mappingData?.IpAbuse == null || string.IsNullOrEmpty(ipAddress))
 				return true;
 
-			// NOTE: Capacity check is 'racy by design' — under flood, the dictionary may
-			// temporarily exceed MaxIpFailureTrackerEntries before the race resolves.
-			// This is an acceptable probabilistic memory guard.
-			if (mappingData.IpFailureTracker.Count >= MaxIpFailureTrackerEntries &&
-				!mappingData.IpFailureTracker.ContainsKey(ipAddress))
-			{
-				return false;
-			}
-			mappingData.IpFailureTracker.AddOrUpdate(ipAddress, 1, (_, existing) => existing + 1);
-			return true;
+			// Exact, not probabilistic: the capacity check and the increment share the
+			// tracker's lock, so the cap cannot be overshot under a flood.
+			return mappingData.IpAbuse.TryRecordFailure(ipAddress, MonotonicClock.NowSeconds, IpBlockRetention, MaxIpFailureTrackerEntries);
 		}
 
 		/// <summary>
 		/// Tracks a verification failure for the given username in the per-username rate limiter.
-		/// Atomically resets the (count, firstFailure) pair when an existing entry's lockout
-		/// window has already elapsed — i.e., this single AddOrUpdate handles both the
-		/// "first failure", "continuing failure within window", and "window expired, start a
-		/// fresh window" cases without TOCTOU races against concurrent updates or sweeps.
+		/// A failure with no open window opens a fresh one; within a window it adds to the count.
+		/// Counting, window restart and the capacity check share one lock, so no concurrent
+		/// update or sweep can lose an increment.
 		/// </summary>
 		private void TrackVerifyUsernameFailure(string username)
 		{
@@ -1976,47 +1914,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (string.IsNullOrEmpty(failKey))
 				return;
 
-			// Hard cap: reject new entries when the tracker is full to prevent
-			// unbounded memory growth from unique-username flood attacks. Existing
-			// entries are still incremented so a real lockout still applies even
-			// when the tracker is at capacity.
-			if (verifyUsernameFailures.Count >= MaxVerifyUsernameFailureEntries &&
-				!verifyUsernameFailures.ContainsKey(failKey))
-				return;
-
-			DateTime now = DateTime.UtcNow;
-			verifyUsernameFailures.AddOrUpdate(
-				failKey,
-				_ => (1, now),
-				(_, existing) =>
-				{
-					// Window expired between observation and increment — start fresh
-					// atomically so a concurrent sweep can't double-decrement us back
-					// to zero or lose the increment entirely.
-					if (now - existing.FirstFailure > VerifyUsernameLockoutDuration)
-						return (1, now);
-					return (existing.Count + 1, existing.FirstFailure);
-				});
+			// Hard cap: new usernames are not tracked when the tracker is full, to prevent
+			// unbounded memory growth from unique-username flood attacks. Usernames already
+			// being counted still are, so a real lockout still applies at capacity.
+			verifyUsernameFailures.Increment(failKey, MonotonicClock.NowSeconds, MaxVerifyUsernameFailureEntries);
 		}
 
 		/// <summary>
-		/// Evicts expired entries from <see cref="verifyUsernameFailures"/> whose lockout
-		/// window has elapsed. Bounded scan to avoid stalling the main thread.
+		/// Evicts closed windows from <see cref="verifyUsernameFailures"/>, oldest first,
+		/// stopping at the first one still open.
 		/// </summary>
 		private void SweepExpiredVerifyUsernameFailures()
 		{
-			DateTime now = DateTime.UtcNow;
-			int scanned = 0;
-			foreach (var kvp in verifyUsernameFailures)
-			{
-				if (++scanned > VerifyUsernameFailureSweepMaxScan)
-					break;
-				if (now - kvp.Value.FirstFailure > VerifyUsernameLockoutDuration)
-				{
-					verifyUsernameFailures.TryRemove(kvp.Key, out _);
-
-				}
-			}
+			verifyUsernameFailures.SweepExpired(MonotonicClock.NowSeconds, VerifyUsernameFailureSweepMaxRemovals);
 		}
 
 		/// <summary>Broadcasts a terminal result for a request refused before any account was written.</summary>

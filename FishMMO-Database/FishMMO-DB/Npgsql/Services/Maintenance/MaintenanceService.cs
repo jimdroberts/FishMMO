@@ -46,6 +46,32 @@ namespace FishMMO.Database.Npgsql.Services
 		public const int StaleAfterSeconds = 60;
 
 		/// <summary>
+		/// Seconds from <paramref name="stampUtc"/> to <paramref name="databaseNowUtc"/>, never
+		/// negative.
+		/// </summary>
+		/// <remarks>
+		/// Both instants must come from the database clock: a stamp it wrote, and a "now" read from
+		/// it (<see cref="BaseService{T}.ReadDatabaseUtcNowAsync"/>). Clamped at zero because a pulse
+		/// that commits between the clock read and the row read is a few milliseconds newer than
+		/// the instant it is measured against, as on the server board.
+		/// </remarks>
+		public static double AgeSeconds(DateTime databaseNowUtc, DateTime stampUtc)
+		{
+			return Math.Max(0.0, (databaseNowUtc - stampUtc).TotalSeconds);
+		}
+
+		/// <summary>Whether a server whose last pulse is this many seconds old counts as silent.</summary>
+		/// <remarks>
+		/// Strictly past <see cref="StaleAfterSeconds"/>: a pulse exactly that old is still a
+		/// pulsing server. The one rule behind a target's PulsingAtStart, the derivation's "silent"
+		/// and the panel's not-pulsing badge.
+		/// </remarks>
+		public static bool IsSilent(double pulseAgeSeconds)
+		{
+			return pulseAgeSeconds > StaleAfterSeconds;
+		}
+
+		/// <summary>
 		/// How long past the deadline a server may still be pulsing before the target is Failed.
 		/// </summary>
 		/// <remarks>
@@ -134,9 +160,10 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 			}
 
-			DateTime now = DateTime.UtcNow;
-			DateTime deadline = now.AddSeconds(drainSeconds);
 			string windowName = string.IsNullOrWhiteSpace(name) ? "Maintenance" : Clamp(name.Trim(), 128);
+
+			// Taken once, outside the retried delegate. See the probe below.
+			Guid requestKey = Guid.NewGuid();
 
 			/* The plan is committed before a single server is touched. If this process dies
 			 * between the two, what is left is a window whose targets say "nothing written yet",
@@ -144,7 +171,54 @@ namespace FishMMO.Database.Npgsql.Services
 			 * of who locked it or why. */
 			var created = await ExecuteTransactionAsync(async dbContext =>
 			{
+				/* A retry after a reply lost past the commit answers with the window its first
+				 * attempt planned. It used to plan again, find that window's own targets live, and
+				 * refuse with "already in maintenance window N" — telling the operator a window
+				 * they had just started had failed, while the advance pass went on to lock and
+				 * stop every server in it. First, before the clock read and the clash check, so
+				 * the answer does not depend on anything that has moved since. */
+				long planned = await dbContext.Set<MaintenanceOperationEntity>()
+					.AsNoTracking()
+					.Where(o => o.RequestKey == requestKey)
+					.Select(o => o.ID)
+					.FirstOrDefaultAsync(cancellationToken)
+					.ConfigureAwait(false);
+				if (planned > 0)
+				{
+					return new PlanResult { OperationID = planned };
+				}
+
+				/* The deadline is the database's time plus the drain, never this process's. Every
+				 * server counts its shutdown down against the database clock (ServerControlSql), so
+				 * a deadline built on the panel's DateTime.UtcNow moved every stop in the window by
+				 * the panel host's skew — a fifteen-minute drain planned on a panel two minutes slow
+				 * gave players thirteen — and PulsingAtStart compared a pulse the database stamped
+				 * with the panel's clock. ServerControlSql.ScheduleIn does the same for one server;
+				 * here it stays an absolute instant, because one deadline covers the whole window. */
 				var ids = requested.Select(t => t.ServerID).Distinct().ToList();
+
+				/* Lock every named server row before the clash check below reads the live windows.
+				 * Without it two starts naming the same server could both read "no live window" and
+				 * both commit, and the server would sit in two windows, each owning its deadline.
+				 * Under READ COMMITTED a statement counts from its own snapshot, so the lock is taken
+				 * in one statement and the live windows are read in a later one, which sees a window a
+				 * concurrent start committed while this one waited. World rows then scene rows, each in
+				 * id order, so two starts over overlapping servers queue instead of deadlocking. */
+				long[] lockIds = ids.OrderBy(id => id).ToArray();
+				string worldTable = dbContext.GetTableName<WorldServerEntity>();
+				string sceneTable = dbContext.GetTableName<SceneServerEntity>();
+				await ExecuteScalarLongAsync(dbContext,
+					$"SELECT COUNT(*) FROM (SELECT id FROM {worldTable} WHERE id = ANY({{0}}) ORDER BY id FOR UPDATE) locked",
+					new object[] { lockIds },
+					cancellationToken).ConfigureAwait(false);
+				await ExecuteScalarLongAsync(dbContext,
+					$"SELECT COUNT(*) FROM (SELECT id FROM {sceneTable} WHERE id = ANY({{0}}) ORDER BY id FOR UPDATE) locked",
+					new object[] { lockIds },
+					cancellationToken).ConfigureAwait(false);
+
+				// Read after the locks were granted, which may have been a while.
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+				DateTime deadline = now.AddSeconds(drainSeconds);
 
 				var worldRows = await dbContext.WorldServers
 					.AsNoTracking()
@@ -184,6 +258,7 @@ namespace FishMMO.Database.Npgsql.Services
 					StartedUtc = now,
 					DeadlineUtc = deadline,
 					Targets = new List<MaintenanceTargetEntity>(),
+					RequestKey = requestKey,
 				};
 
 				foreach (var target in requested)
@@ -230,7 +305,7 @@ namespace FishMMO.Database.Npgsql.Services
 						// Recorded now, because after the window it is unknowable: a server that
 						// was already silent and one that stopped because of this window look the
 						// same once it is over.
-						PulsingAtStart = (now - lastPulse).TotalSeconds <= StaleAfterSeconds,
+						PulsingAtStart = !IsSilent(AgeSeconds(now, lastPulse)),
 						ObservedRegistered = true,
 						ObservedLastPulseUtc = lastPulse,
 					});
@@ -327,8 +402,9 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { operationId },
 					cancellationToken).ConfigureAwait(false);
 
-				// Taken after the locks were granted, which may have been a while.
-				DateTime now = DateTime.UtcNow;
+				// Taken after the locks were granted, which may have been a while, and by the
+				// database clock the deadline was planned on.
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 
 				var operation = await dbContext.Set<MaintenanceOperationEntity>()
 					.Include(o => o.Targets)
@@ -415,7 +491,9 @@ namespace FishMMO.Database.Npgsql.Services
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				return (IReadOnlyList<MaintenanceOperationData>)rows.Select(ToData).ToList();
+				// The ages on the reply are measured here, by the clock that wrote the stamps.
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+				return (IReadOnlyList<MaintenanceOperationData>)rows.Select(row => ToData(row, now)).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
@@ -440,8 +518,14 @@ namespace FishMMO.Database.Npgsql.Services
 					.Include(o => o.Targets)
 					.FirstOrDefaultAsync(o => o.ID == operationId, cancellationToken)
 					.ConfigureAwait(false);
+				if (row == null)
+				{
+					return null;
+				}
 
-				return row == null ? null : ToData(row);
+				// The ages on the reply are measured here, by the clock that wrote the stamps.
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
+				return ToData(row, now);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
@@ -538,8 +622,11 @@ namespace FishMMO.Database.Npgsql.Services
 					new object[] { (int)MaintenanceStatus.Draining, (int)MaintenanceStatus.ShuttingDown },
 					cancellationToken).ConfigureAwait(false);
 
-				// Taken after the locks were granted, which may have been a while.
-				DateTime now = DateTime.UtcNow;
+				/* Taken after the locks were granted, which may have been a while, and by the
+				 * database clock: every instant this derivation compares — the deadline, each
+				 * server's last pulse — was written by it, so a panel whose own clock ran fast
+				 * called a pulsing server silent, and failed a window early. */
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 
 				var operations = await dbContext.Set<MaintenanceOperationEntity>()
 					.Include(o => o.Targets)
@@ -640,8 +727,10 @@ namespace FishMMO.Database.Npgsql.Services
 				 * that server the instant it reads the row, with no countdown and no warning to
 				 * the players on it, long after the operator stopped watching. The derivation
 				 * fails such a target instead, which is what actually happened to it. Judged
-				 * under the lock, so no write can begin once the derivation may fail the target. */
-				DateTime now = DateTime.UtcNow;
+				 * under the lock, so no write can begin once the derivation may fail the target —
+				 * and by the database clock the derivation reads, so the two agree on that instant
+				 * whichever host each runs on. */
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 				if (write.Deadline == null || now > write.Deadline.Value.AddSeconds(ShutdownGraceSeconds))
 				{
 					return null;
@@ -769,8 +858,7 @@ namespace FishMMO.Database.Npgsql.Services
 				return;
 			}
 
-			double pulseAgeSeconds = (now - observation.LastPulse).TotalSeconds;
-			bool silent = pulseAgeSeconds > StaleAfterSeconds;
+			bool silent = IsSilent(AgeSeconds(now, observation.LastPulse));
 
 			if (observation.ShutdownAtUtc == null)
 			{
@@ -899,7 +987,10 @@ namespace FishMMO.Database.Npgsql.Services
 			status == MaintenanceStatus.Cancelled ||
 			status == MaintenanceStatus.Failed;
 
-		private static MaintenanceOperationData ToData(MaintenanceOperationEntity operation) => new MaintenanceOperationData
+		/// <summary>One window as a reply, with its ages measured at <paramref name="databaseNowUtc"/>.</summary>
+		/// <param name="operation">The window and its targets.</param>
+		/// <param name="databaseNowUtc">The database's time at the read; see <see cref="AgeSeconds"/>.</param>
+		private static MaintenanceOperationData ToData(MaintenanceOperationEntity operation, DateTime databaseNowUtc) => new MaintenanceOperationData
 		{
 			ID = operation.ID,
 			Name = operation.Name,
@@ -914,6 +1005,8 @@ namespace FishMMO.Database.Npgsql.Services
 			CancelledUtc = operation.CancelledUtc,
 			CancelReason = operation.CancelReason,
 			Outcome = operation.Outcome,
+			// Not clamped: a deadline that has passed reads as negative, which is what it is.
+			SecondsUntilDeadline = (operation.DeadlineUtc - databaseNowUtc).TotalSeconds,
 			Targets = (operation.Targets ?? Array.Empty<MaintenanceTargetEntity>())
 				.OrderBy(t => t.Kind, StringComparer.Ordinal)
 				.ThenBy(t => t.ServerName, StringComparer.OrdinalIgnoreCase)
@@ -936,6 +1029,9 @@ namespace FishMMO.Database.Npgsql.Services
 					ObservedLocked = t.ObservedLocked,
 					ObservedShutdownUtc = t.ObservedShutdownUtc,
 					ObservedLastPulseUtc = t.ObservedLastPulseUtc,
+					ObservedPulseAgeSeconds = t.ObservedLastPulseUtc.HasValue
+						? AgeSeconds(databaseNowUtc, t.ObservedLastPulseUtc.Value)
+						: (double?)null,
 					ObservedRegistered = t.ObservedRegistered,
 					Note = t.Note,
 				})

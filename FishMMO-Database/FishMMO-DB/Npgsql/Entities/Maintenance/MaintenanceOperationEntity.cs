@@ -76,6 +76,17 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>What happened in the end, in words.</summary>
 		public string Outcome { get; set; }
 
+		/// <summary>
+		/// The writer's once-per-request identity: a retry after a lost reply finds the row its first
+		/// attempt wrote instead of writing a second one. Null for rows written without one.
+		/// </summary>
+		/// <remarks>
+		/// Here a second write would not even be written: the retry found its own window's targets
+		/// live and refused itself with "already in maintenance window N", so the operator was told
+		/// a window they had just started had failed.
+		/// </remarks>
+		public Guid? RequestKey { get; set; }
+
 		/// <summary>The servers in this window.</summary>
 		public ICollection<MaintenanceTargetEntity> Targets { get; set; }
 	}

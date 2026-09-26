@@ -43,33 +43,38 @@ The subsystem uses a split execution model:
 ## Features
 
 - **Scene instance lifecycle management** — loads and unloads scene instances on demand from database-queued requests using FishNet's `SceneManager`
-- **Periodic heartbeat pulses** — sends server and per-scene heartbeat data to the database at a configurable interval, using an atomic `Interlocked.CompareExchange` gate to prevent overlapping pulses
+- **Periodic heartbeat pulses** — sends server and per-scene heartbeat data to the database at a configurable interval, using an atomic `Interlocked.CompareExchange` gate to prevent overlapping pulses. Only the database dispatch is gated: the local sweep (`SweepSceneInstances` — lifetime cap, closing warnings, idle unload) runs on every pulse, so a stalled database no longer keeps expired instances open, idle scenes loaded, or players unwarned
 - **Zero-allocation pulse collection** — reusable runtime buffers with manual `foreach` loops (no `AddRange` enumerator boxing) eliminate per-pulse GC pressure; pulse data is snapshotted before async dispatch
-- **Simplified pulse payload** — only `(Handle, CharacterCount)` tuples are sent to the async worker; stale-pulse detection (`StalePulse`, `LastExit`) stays local on the main thread
+- **Simplified pulse payload** — only `(SceneID, CharacterCount)` tuples are sent to the async worker; stale-pulse detection (`StalePulse`, `LastExitAt`) stays local on the main thread
+- **Monotonic instance clocks** — every instance duration (lifetime cap, closing warnings, idle timeout, pending-load TTL) is measured on `MonotonicClock`, never on the host's wall clock, so a stepped clock cannot close instances early. The one outside input, the row's age, is measured by the database against the clock that stamped `time_created` and arrives with `ISceneService.DequeueAsync`; `SceneInstanceLifetime` holds the arithmetic as pure functions
+- **Batched scene bookkeeping** — the rows of every scene a pulse closes are deleted in one `DeleteManyAsync`, and a pending sweep fails all its expired loads in one `UpdateStatusManyAsync`
 - **Scene load rate limiting** — `maxScenesLoadedPerPulse` bounds the dequeue loop per pulse cycle to prevent DB flood from overwhelming the scene server
+- **Retry-safe dequeue** — `ISceneService.DequeueAsync(serverID)` writes the claim onto the row (`scene_server_id` = this server, `scene_handle` = a negative per-call claim token until `SetReadyAsync` writes the real handle). A retry after a reply lost past the commit finds its own claim and returns that row instead of taking a second one and stranding the first in Loading for the five-minute age sweep. A named claimant also means this server's startup/shutdown `DeleteBySceneServerAsync`, and the world server's dead-host sweep, remove loads it took but never finished
 - **Duplicate load guard** — `TryAdd` atomically rejects duplicate scene IDs in `PendingScenes`, preventing races when two queued callbacks target the same scene
 - **Pending scene TTL** — bounded sweep with configurable timeout, interval, and max removals per pass; expired requests are failed in the database and cleaned up locally
 - **Flat O(1) handle lookup** — `SceneInstanceByHandle` provides constant-time lookup for unload, routing, and character count adjustment, replacing O(worlds × scenes) nested iteration
 - **Empty container cleanup** — unload handler prunes empty scene-name and world-server dictionaries to prevent memory leak from scene churn
-- **Bounded persistence enqueue** — scene-lifecycle database writes (`SetSceneReadyAsync`, `UpdateSceneStatusAsync`, `DeleteSceneAsync`) go through `EnqueuePersistence`, which falls back to the thread pool with a logged error when the async worker channel is full. Relief for a saturated pool is never unbounded work fired from the frame thread, and the database is never left with stale state
+- **Bounded persistence enqueue** — scene-lifecycle database writes (`SetSceneReadyAsync`, `UpdateSceneStatusAsync`, `UpdateSceneStatusesAsync`, `DeleteSceneAsync`, `DeleteScenesAsync`) go through `EnqueuePersistence`, which admits them even past the async worker's backpressure threshold (`IAsyncWorkerData.EnqueueRequired`: behind the backlog, under the same concurrency cap) with a rate-limited error log; only a worker that is not running at all (teardown) sends them to a small bounded thread-pool fallback. Relief for a saturated pool is never unbounded work fired from the frame thread, and the database is never left with stale state
 - **Load-aware scene placement** — `SceneServerPlacementPolicy.ResolveDequeueBudget` tapers this server's per-pulse dequeue budget by its own scene count and character count. `ISceneService.DequeueAsync` is a `FOR UPDATE SKIP LOCKED` take-the-oldest, so without this whichever server pulses first claims everything in its window regardless of load; a full server returns a budget of `0` and leaves the row queued for a peer with room. No cluster query, no peer visibility, so no stale view of the cluster can make the decision wrong
 - **Deliberate-exit reclaim** — `NoteDeliberateInstanceExit` marks `ISceneInstanceDetails.VacatedDeliberately` when an occupant leaves by choice rather than by losing its connection. A non-open-world instance carrying that mark is reaped on the next pulse (`staleSceneTimeoutMinutes` forced to `0`) instead of holding a placement slot for the idle timeout. Any arrival clears the mark in `AddCharacterCount`, so a rejoined instance is not destroyed out from under a live run
 - **Policy configuration push** — `ApplyObserverStreamingConfiguration` and `ApplyPlacementConfiguration` run during initialization, forwarding recognised `Observer*` and `Placement*` configuration keys into `ObserverStreamingPolicy` and `SceneServerPlacementPolicy`. Both log their resolved values at startup, because a misconfigured cap does not error — it quietly stops this server taking work, and the symptom surfaces on a different machine as uneven load
 - **Scene-set instance broadcast** — `BroadcastToInstance(ISceneInstanceDetails, string)` addresses the instance through FishNet's `SceneConnections` set for `details.Handle`, one dictionary probe and one serialization, rather than walking every connection the scene server knows and rebuilding the same bytes per recipient
 - **Waypoint scene audit hook** — after a scene reports ready, `WaypointSceneAudit.Audit(sceneName, sceneHandle, cache)` is deferred one main-thread turn so it runs after every scene `NetworkObject`'s `OnStartServer`. It is a diagnostic, not a gate: a refused enqueue simply skips the audit
-- **Character count integration** — connect/load increments and disconnect decrements tracked per scene instance via `SceneInstanceDetails.AddCharacterCount`; `LastExit` updated when a scene becomes empty for stale detection
+- **Character count integration** — connect/load increments and disconnect decrements tracked per scene instance via `SceneInstanceDetails.AddCharacterCount`; `LastExitAt` updated when a scene becomes empty for stale detection
 - **Connection routing helpers** — `TryLoadSceneForConnection` and `UnloadSceneForConnection` manage per-connection scene visibility through FishNet
 - **PhysicsTicker setup** — each loaded scene gets a `PhysicsTicker` GameObject with `HideFlags.DontSave` for explicit cleanup safety and local physics support
 - **Scene handle reuse safety** — all handle→details mappings are removed on unload; documented at both Add and Remove sites to prevent stale resolution after handle reuse
-- **PendingSceneInfo struct** — merges `SceneData` + `EnqueuedUtc` into a single map entry, eliminating dual-map sync risk
+- **PendingSceneInfo struct** — merges `SceneData`, `EnqueuedAt` and `RowCreatedAt` into a single map entry, eliminating dual-map sync risk
 - **Enumerate-then-remove safety** — `SweepExpiredPendingScenes` collects IDs into a buffer before removal; pattern documented inline
 - **Per-type stale timeouts** — open-world scenes and instanced (Group/PvP) scenes are aged out on separate, independently configurable clocks; see `StaleInstanceSceneTimeout`
 - **Operator control state** — the `scene_servers` row is the authority for this server's `locked` and `shutdown_at_utc`; the pulse *reads them back* (`UPDATE ... RETURNING`) rather than writing them, so anything that can write the row controls the server
 - **Drain on lock** — a locked scene server stops dequeuing scene-load requests and is skipped by the world server's open-world routing, while the players already on it keep playing
 - **Scheduled shutdown** — players are warned as the countdown crosses 15m/10m/5m/2m/1m/30s/10s, then disconnected with a maintenance notice one tick before the process stops, so the notice reaches them
+- **Countdowns on the database's measure** — every read of a control row returns, beside `shutdown_at_utc`, the seconds left before it measured by the database clock in the reading statement (`ServerControlState.ShutdownInSeconds`). The reading is stamped with `MonotonicClock` as its reply arrives (`ServerControlReading`), and `ShutdownCountdown` runs the deadline on the monotonic clock from there, keeping the earliest anchor while the schedule is unchanged (each reading is late by its own round trip, never early). The row's instant is only the schedule's identity. `/admin shutdown` hands the delay itself to the database (`SetShutdownInAsync`), which adds it to its own clock as it writes the deadline. Comparing the instant with `DateTime.UtcNow`, as this used to, made a host running fast stop early, a clock stepped forward stop at once, and the world server and the scene servers clearing its players count down to different moments
 - **World-shutdown awareness** — the pulse also reads the control state of every world this server hosts scenes for, so a world-wide shutdown clears that world's characters from this server without taking down scenes belonging to other worlds
 - **In-game `/admin` commands** — `SceneServerSystem.AdminCommands` registers a single `/admin` command at `AccessLevel.Admin`; see the root README for the full command table
-- **Database registration and cleanup** — registers this scene server node in the database during initialization and deletes stale scene rows from previous runs; performs blocking cleanup on deinitialization
+- **Database registration and cleanup** — registers this scene server node in the database during initialization, under the configured `ServerName` (initialization fails without one: `scene_servers` upserts on the name, so a shared name would give every scene server one row and one ID, and each startup's `DeleteBySceneServerAsync` would wipe the others' scenes), and deletes stale scene rows from previous runs; performs blocking cleanup on deinitialization
+- **Bandwidth recording** — starts a `ServerBandwidthRecorder` (`ServerType.Scene`) at the end of initialization, which writes one row a minute of this process's traffic to `server_bandwidth_minute` for the Control Panel; stopped last on deinitialization with a bounded final sample
 
 ## Prerequisites
 
@@ -79,6 +84,7 @@ The subsystem uses a split execution model:
 - `WorldSceneDetailsCache` ScriptableObject populated with valid scene names
 - `ICharacterSystem<NetworkConnection, Scene>` and `ICharacterMappingData<NetworkConnection>` registered in the server behaviour/data registries
 - `IServerAddressProvider` returning a valid `ServerAddress` for this node
+- A `ServerName` configuration value, unique per scene server
 
 ## Installation / Build
 
@@ -98,11 +104,12 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 2. Ensure the database is running and accessible (Npgsql connection).
 3. The `SceneServerSystem.InitializeOnce()` method automatically:
    - Validates all dependencies (server services, data containers, scene manager, character system, database services).
-   - Registers the scene server node in the database via `ISceneServerService.PersistAsync`.
+   - Registers the scene server node in the database via `ISceneServerService.PersistAsync`, under its configured `ServerName`.
    - Deletes stale scene rows from previous runs via `ISceneService.DeleteBySceneServerAsync`.
    - Subscribes to FishNet `OnLoadEnd` / `OnUnloadEnd` and character connect/disconnect/load events.
    - Registers the periodic pulse callback at the configured `PulseRate`.
    - Clamps all configuration values to safe minimums.
+   - Starts the `ServerBandwidthRecorder`.
 4. The world server queues scene load requests in the database; the scene server dequeues and loads them each pulse.
 
 ### Adding a New Scene Type
@@ -237,12 +244,13 @@ flowchart LR
 │                                                              │
 │  ┌─ Main Thread ──────────────────────────────────────────┐  │
 │  │ 1. SweepExpiredPendingScenes (bounded TTL cleanup)     │  │
-│  │ 2. TryBeginPulse (atomic gate)                         │  │
-│  │ 3. Collect pulse data into reusable buffers            │  │
-│  │    - ScenePulseDataBuffer: (Handle, CharacterCount)    │  │
-│  │    - ScenesToUnloadBuffer: stale scene handles         │  │
-│  │ 4. Unload stale scenes immediately                     │  │
-│  │ 5. Snapshot pulse data for async                       │  │
+│  │ 2. SweepSceneInstances (every pulse, ungated)          │  │
+│  │    - close expired instances, warn at 10/5/1 min       │  │
+│  │    - ScenePulseDataBuffer: (SceneID, CharacterCount)   │  │
+│  │    - ScenesToUnloadBuffer: stale scene IDs             │  │
+│  │    - one DeleteManyAsync for every row closed          │  │
+│  │ 3. TryBeginPulse (atomic gate, async dispatch only)    │  │
+│  │ 4. Snapshot pulse data for async                       │  │
 │  └────────────────────────┬───────────────────────────────┘  │
 │                           │ TryEnqueueAsyncWork              │
 │                           ▼                                  │
@@ -302,7 +310,7 @@ flowchart LR
 │       sceneHandle, ±1)                                       │
 │       └─ TryGetSceneInstanceDetails (O(1) flat lookup)       │
 │          └─ instance.AddCharacterCount(amount)               │
-│             ├─ If CharacterCount < 1 → LastExit = UtcNow     │
+│             ├─ If CharacterCount < 1 → LastExitAt = now      │
 │             └─ Else → VacatedDeliberately = false            │
 │                                                              │
 │  Deliberate exit (CharacterSystem.Connection)                │
@@ -321,8 +329,23 @@ SceneServer/
 │                                           #   policy configuration push, instance lifetime
 ├── SceneServerSystem.ServerControl.cs      # Partial: lock / scheduled-shutdown control state, warnings
 ├── SceneServerSystem.AdminCommands.cs      # Partial: the in-game /admin command surface
+├── SceneServerSystem.AdminCommands.Character.cs # Partial: /admin character state (health, life and death,
+│                                           #   immortality, attributes)
+├── SceneServerSystem.AdminCommands.Economy.cs   # Partial: /admin currency read/set/give/take and item grants
+├── SceneServerSystem.AdminCommands.Weather.cs   # Partial: /admin weather and /admin climate
+├── SceneServerSystem.GameMasterCommands.cs # Partial: the in-game /gm command surface
+├── SceneServerSystem.GameMasterCommands.Moderation.cs # Partial: /gm messages, warnings, kicks, mutes, temporary bans
+├── SceneServerSystem.GameMasterCommands.Support.cs    # Partial: /gm support-ticket queue
+├── SceneServerSystem.GameMasterCommands.World.cs      # Partial: read-only /gm weather and /gm clock
+├── SceneServerSystem.OperatorCommands.cs   # Partial: command table, dispatcher, help, reply and target
+│                                           #   helpers shared by /gm and /admin
+├── OperatorCommandParsing.cs               # Pure text handling behind /gm and /admin
+├── SceneServerSystem.StaffConsole.cs       # Partial: the staff console's catalogue and read requests
+├── SceneServerSystem.Weather.cs            # Partial: world clock and weather hosts
 ├── SceneServerPlacementPolicy.cs           # Pure static placement policy: soft/hard caps and the
 │                                           #   per-pulse dequeue budget taper
+├── SceneInstanceLifetime.cs                # Pure static lifetime, warning and idle-timeout arithmetic
+│                                           #   on the monotonic clock
 ├── SceneServerRuntimeData.cs              # Scene server identity (ID, IsLocked), atomic pulse gate,
 │                                           #   reusable zero-allocation buffers, pending scene sweep timer
 ├── SceneServerSystemMainThreadQueueData.cs # Concrete main-thread queue container for marshalling
@@ -330,7 +353,7 @@ SceneServer/
 ├── SceneInstanceMappingData.cs            # WorldScenes nested hierarchy, flat SceneInstanceByHandle
 │                                           #   and SceneNameByHandle maps, PendingScenes tracking
 ├── SceneInstanceDetails.cs                # Per-instance metadata: WorldServerID, SceneServerID, Name,
-│                                           #   Handle, SceneType, CharacterCount, StalePulse, LastExit,
+│                                           #   Handle, SceneType, CharacterCount, StalePulse, LastExitAt,
 │                                           #   VacatedDeliberately
 └── README.md                              # This documentation
 ```
@@ -360,7 +383,7 @@ ISceneInstanceDetails
 | `ISceneServerSystemMainThreadQueueData` | Main-thread queue for marshalling async results |
 | `ISceneInstanceMappingData` | World/scene/handle mapping hierarchy, flat lookups, and pending tracking |
 | `ISceneInstanceDetails` | Per-instance runtime metadata and character count with stale detection |
-| `PendingSceneInfo` | Readonly struct combining `SceneData` + `EnqueuedUtc` in a single map entry |
+| `PendingSceneInfo` | Readonly struct combining `SceneData`, `EnqueuedAt` and `RowCreatedAt` (both `MonotonicClock` seconds) in a single map entry |
 | `SceneServerPlacementPolicy` | Static, database-free policy deciding how many pending scenes this server claims per pulse |
 
 ## License
@@ -389,3 +412,7 @@ Two things to keep in mind when adding a sub-command here:
 - **Move characters through `Motor`, never the transform.** The motor is what the
   prediction system reconciles against. A transform write is corrected away on the next
   tick, so the character snaps back and the command looks like it did nothing.
+- **A write to a character is claim-gated.** The currency commands (`setgold`, `givegold`,
+  `takegold`) and `setattr` refuse a target this server holds no session claim for (`TryCaptureSessionClaim`) before the value
+  moves, and write through `PersistOwnedAsync` quoting that claim, so the row lands only while
+  the claim is still held. See the character system's README.

@@ -110,6 +110,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		public RaceTemplate FactionOverride;
 
 		/// <summary>
+		/// The role an NPC from this entry plays in its spawner's pack. Read only when the spawner's
+		/// pack is enabled (<see cref="SpawnerDefinition.Pack"/>).
+		/// </summary>
+		/// <remarks>
+		/// DPS by default, the role a pack member had when groups were built by hand: it takes the
+		/// pack's focus when choosing a target. A Tank's target becomes that focus; None keeps the
+		/// NPC's own targeting while it still answers the pack's alerts. A healer heals through a
+		/// healer archetype whatever its role says.
+		/// </remarks>
+		[Tooltip("This entry's role in the spawner's pack. Only read when the spawner's Pack is enabled.")]
+		public NPCGroupRole PackRole = NPCGroupRole.DPS;
+
+		/// <summary>
 		/// Minimum uniform scale applied to the spawned NPC. 0 or 1 leaves the prefab scale alone.
 		/// </summary>
 		/// <remarks>

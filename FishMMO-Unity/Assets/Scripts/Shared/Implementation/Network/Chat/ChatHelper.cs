@@ -153,7 +153,7 @@ namespace FishMMO.Shared
 			{ ChatChannel.Region, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to everyone in your region." } },
 			{ ChatChannel.Party, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to your party." } },
 			{ ChatChannel.Guild, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to your guild." } },
-			{ ChatChannel.Tell, new ChatCommandHelp() { Category = "Chat", Arguments = "<character> <message>", Summary = "Sends a private message to one character." } },
+			{ ChatChannel.Tell, new ChatCommandHelp() { Category = "Chat", Arguments = "<character> <message>", Summary = "Sends a private message to one character. Put a name with a space in double quotes." } },
 			{ ChatChannel.Trade, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks in the trade channel." } },
 			{ ChatChannel.Say, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to everyone nearby." } },
 			{ ChatChannel.Team, new ChatCommandHelp() { Category = "Chat", Arguments = "<message>", Summary = "Talks to your arena team." } },

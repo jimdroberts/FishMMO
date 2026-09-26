@@ -52,12 +52,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			/* Do NOT reset the orbit angle to zero here.
 			 *
-			 * NPCGroup.AssignTacticalPositions hands every pack member a distinct angle so a
-			 * Surround or Flank tactic spreads them around the target. Zeroing it on entry threw
-			 * that assignment away and put every member of the pack on the same point of the
-			 * circle — which is the one thing the tactic exists to prevent. Start from wherever
-			 * the NPC currently stands relative to its target instead, so an ungrouped NPC still
-			 * begins its orbit from a sensible place. */
+			 * A pack tactic hands every member fighting the pack's focus a distinct slot
+			 * (AIController.PackSlotAngle) so a Surround or Flank spreads them around the target.
+			 * Zeroing the angle on entry threw that assignment away and put every member of the pack
+			 * on the same point of the circle — which is the one thing the tactic exists to prevent.
+			 * Start from wherever the NPC currently stands relative to its target instead, so an NPC
+			 * with no slot still begins its orbit from a sensible place. */
 			controller.OrbitAngle = ResolveStartAngle(controller);
 			controller.SubStateTimer = OrbitDuration;
 		}
@@ -66,17 +66,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// Chooses the angle to begin orbiting from.
 		/// </summary>
 		/// <remarks>
-		/// A grouped NPC keeps whatever angle its pack tactic assigned. An ungrouped one starts
-		/// from its current bearing to the target, so entering the state does not teleport its
-		/// destination to the far side of the circle.
+		/// A pack member with a tactic slot starts at its slot. Anyone else starts from its current
+		/// bearing to the target, so entering the state does not teleport its destination to the far
+		/// side of the circle.
 		/// </remarks>
 		/// <param name="controller">The AI controller.</param>
 		/// <returns>The starting orbit angle in radians.</returns>
 		private static float ResolveStartAngle(AIController controller)
 		{
-			if (controller.Group != null && controller.Group.Tactic != PackTactic.None)
+			if (controller.HasPackSlot)
 			{
-				return controller.OrbitAngle;
+				return controller.PackSlotAngle;
 			}
 
 			if (controller.Target == null)
@@ -134,16 +134,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				}
 			}
 
-			// Calculate the new position around the target using polar coordinates.
-			// The angle is stored on the controller (per-NPC) to avoid shared SO state.
-			controller.OrbitAngle += OrbitSpeed * deltaTime;
-
-			/* A pack tactic sets the ring it wants its members on; honour it so Surround and Kite
-			 * produce a ring of the size the group asked for rather than each member using its own
-			 * state asset's radius. TacticOrbitRadius had no reader at all before this. */
-			float radius = (controller.Group != null && controller.Group.Tactic != PackTactic.None)
-				? controller.Group.TacticOrbitRadius
-				: OrbitRadius;
+			/* Calculate the new position around the target using polar coordinates. The angle is
+			 * stored on the controller (per-NPC) to avoid shared SO state.
+			 *
+			 * A pack member with a tactic slot steers to the slot on the ring the pack asked for,
+			 * rather than advancing its own angle: the pack re-fits the slots twice a second (and
+			 * turns them, for Kite), and a member that also advanced by OrbitSpeed would be snapped
+			 * back at every evaluation — at the default 2 rad/s its destination swung a full radian
+			 * and back twice a second. */
+			float radius;
+			if (controller.HasPackSlot && controller.Group != null)
+			{
+				controller.OrbitAngle = controller.PackSlotAngle;
+				// A zero ring would send the member into the enemy's collider; fall back to the state's own.
+				radius = controller.Group.TacticOrbitRadius > 0f ? controller.Group.TacticOrbitRadius : OrbitRadius;
+			}
+			else
+			{
+				controller.OrbitAngle += OrbitSpeed * deltaTime;
+				radius = OrbitRadius;
+			}
 
 			float x = Mathf.Cos(controller.OrbitAngle) * radius;
 			float z = Mathf.Sin(controller.OrbitAngle) * radius;

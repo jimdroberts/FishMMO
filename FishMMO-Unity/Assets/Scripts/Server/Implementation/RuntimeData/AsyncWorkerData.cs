@@ -192,6 +192,31 @@ namespace FishMMO.Server.Implementation
 			return true;
 		}
 
+		/// <inheritdoc/>
+		public AsyncWorkAdmission EnqueueRequired(Func<Task> work, long entityKey, string callerName = null)
+		{
+			if (work == null || !accepting || concurrencyGate == null || lanes == null)
+			{
+				return AsyncWorkAdmission.Refused;
+			}
+
+			/* Counted like any other item, so ordinary callers keep seeing backpressure, but not
+			 * refused at the threshold: this is work whose in-memory side has already happened. */
+			bool withinCapacity = Interlocked.Increment(ref outstandingCount) <= maxOutstandingItems;
+
+			var item = new AsyncWorkItem(work, callerName);
+			if (entityKey != 0)
+			{
+				DispatchOrdered(entityKey, item);
+			}
+			else
+			{
+				DispatchUnordered(item);
+			}
+
+			return withinCapacity ? AsyncWorkAdmission.Admitted : AsyncWorkAdmission.AdmittedOverCapacity;
+		}
+
 		/// <summary>
 		/// Admits one item if the pool is running and has room, reserving its slot.
 		/// </summary>

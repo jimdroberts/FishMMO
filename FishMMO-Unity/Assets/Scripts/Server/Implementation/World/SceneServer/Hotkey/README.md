@@ -1,10 +1,11 @@
 # Hotkey System
 
-**Short description:** Server-side authority for player hotkey bindings on the SceneServer, handling single and batch set requests with slot validation, ingress debounce protection, and in-memory runtime mutation.
+**Short description:** Server-side authority for player hotkey bindings on the SceneServer, handling single and batch set requests with slot validation, ingress debounce protection, in-memory runtime mutation, an authoritative echo of every request, and claim-gated persistence.
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Persistence](#persistence)
 - [Supported Platforms](#supported-platforms)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
@@ -22,11 +23,19 @@
 The Hotkey system is the SceneServer authority for player hotkey bindings. It receives single and batch hotkey set requests from clients, validates slot boundaries, initializes per-character hotkey storage when needed, and applies updates to the character runtime state.
 
 This subsystem is intentionally lightweight:
-- No database persistence.
-- No background workers.
-- Main-thread request validation and in-memory mutation only.
+- Main-thread request validation and in-memory mutation, answered with the server's authoritative slot values.
+- A resident's changed bar is staged and written by a periodic pump; a departing character's bar is written by the character system's own save-and-release. See [Persistence](#persistence).
 
-The source of truth for active hotkey bindings is the runtime list on `IPlayerCharacter.Hotkeys`. Because this system only updates runtime memory, any long-term persistence/reload behavior is handled by separate character save/load systems.
+The source of truth for active hotkey bindings is the runtime list on `IPlayerCharacter.Hotkeys`; the `character_hotkeys` rows are loaded into it at login.
+
+## Persistence
+
+Every change stages the character's whole bar (`IHotkeySystemRuntimeData.StageHotkeyWrite`), newest-only per character. Two writers take it from there, and every write is **ownership-gated**: it quotes the session claim the character is held under and lands only while that claim is still held (`ICharacterHotkeyService.PersistOwnedAsync`, `CharacterWriteGate`).
+
+- **The pump** (`persistFlushIntervalSeconds`, default 5 s) drains the stage and writes each bar under the claim held for its character *at the drain*, captured on the main thread from `SessionTokens` and carried with the write. A staged bar whose character holds no claim here is dropped: the character has left (its departure wrote the live bar) or was evicted (its bar is not ours to write). A bar that did not land complete is re-staged from the live bar at the next pass — unless the gate refused it (`HotkeySystem.RestagesAfter`), which no retry can change.
+- **The departure.** `CharacterSystem` writes a departing character's whole live bar inside the save-and-release, before the release (`IHotkeySystemRuntimeData.TakeDepartingBar`, via `AppendDepartureSubEntities`): logout, transfer, the end of a combat-logout linger, a linger reclaimed, and the shutdown flush. It used to be flushed from `OnDisconnect` as a write of its own, which only the ordered lane kept ahead of the release, and from this system's teardown — which runs *before* the character system's shutdown flush releases every claim. Gated, a bar that lands after its release is refused and lost, not merely late, so neither happens any more.
+
+Rows are versioned by `NextHotkeyVersion` (UTC ticks, monotonic). Every slot is written, empty ones included, because the upsert has no delete path. A stored bar newer than the one being written is skipped as superseded rather than failing the batch, which may carry many characters' bars.
 
 ## Supported Platforms
 
@@ -45,12 +54,14 @@ The source of truth for active hotkey bindings is the runtime list on `IPlayerCh
 - Automatic per-character hotkey list initialization seeded with `Constants.Configuration.MaximumPlayerHotkeys` entries
 - Multiple hotkey bars without a bar anywhere on the server: `MaximumPlayerHotkeys` is `HotkeyBarCount * HotkeySlotsPerBar` (both game settings in `Constants.Configuration`), and a slot index is `bar * HotkeySlotsPerBar + position`. The server, the wire and the `character_hotkeys` rows all work in that flat index; only the client draws bars. Raising `HotkeyBarCount` is safe on a live game (new bars are appended); changing `HotkeySlotsPerBar` re-deals stored bindings and is not.
 - Slot range validation (`0 <= slot < hotkeyCount`) and hotkey type enum range validation (`0..MaxHotkeyType`)
-- `ReferenceID` lower-bound validation (rejects values below `-1`)
+- `ReferenceID` lower-bound validation (rejects values below `-1`) and ownership validation of the item, equipment slot or ability a binding names (`IsHotkeyReferenceValid`)
 - Ingress debounce protection per connection per operation type via `IngressGuard`
 - Configurable debounce window, bulk update cap, sweep interval, entry TTL, and sweep removal limit
 - Bounded periodic cleanup of stale ingress guard entries via `OnUpdate` sweep
-- Graceful failure semantics: invalid single requests are no-ops; invalid batch entries are skipped silently
-- No network echo/broadcast emitted during set operations, keeping updates deterministic and cheap
+- Graceful failure semantics: an invalid single request changes nothing; invalid batch entries are skipped while valid ones apply
+- Every request is answered, accepted or refused (validation, `CanAct`, debounce), with the server's authoritative value: `HotkeySetBroadcast` for the one slot, `HotkeySetMultipleBroadcast` for the whole bar. The client applies a binding locally the moment the icon is dropped, so a refusal answered in silence would leave it showing a binding the server never took until the next login
+- Login-time prune (`ICharacterSystem.OnConnect`, before the bar is sent): bindings whose item or ability no longer exists are cleared and the bar is staged; any bar still staged from an earlier session is dropped first
+- `ForgetAbilityBindings` clears every binding of a forgotten ability (matched on type and id), stages the bar and echoes it
 
 ## Prerequisites
 
@@ -66,8 +77,8 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 1. Ensure `HotkeySystem` is present on the scene server GameObject (it inherits from `ServerBehaviour` and implements `IHotkeySystem`).
 2. Verify that `HotkeySystemRuntimeData` is registered as the `IHotkeySystemRuntimeData` data container (declared via `[RequiresDataContainer(typeof(HotkeySystemRuntimeData))]`).
-3. On initialize, `HotkeySystem` automatically registers broadcast handlers for `HotkeySetBroadcast` and `HotkeySetMultipleBroadcast`.
-4. On deinitialize, it unregisters the broadcast handlers and clears the ingress guard state.
+3. On initialize, `HotkeySystem` registers broadcast handlers for `HotkeySetBroadcast` and `HotkeySetMultipleBroadcast`, subscribes `ICharacterSystem.OnConnect` for the login-time prune, and registers the persistence pump (`persistFlushIntervalSeconds`).
+4. On deinitialize, it unregisters the broadcast handlers, the `OnConnect` subscription and the pump, and clears the ingress guard state. It writes nothing: the character system's shutdown flush writes every resident's live bar under its claim, before the release.
 5. Clients send `HotkeySetBroadcast` for single updates or `HotkeySetMultipleBroadcast` for batch updates; the server validates and applies them to the character's runtime hotkey list.
 
 ## Configuration
@@ -81,6 +92,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `ingressSweepIntervalSeconds` | float | 5.0 | Seconds between bounded ingress guard cleanup sweeps |
 | `ingressEntryTtlSeconds` | float | 30.0 | Seconds before stale ingress guard entries are removed |
 | `ingressSweepMaxRemovals` | int | 128 | Maximum stale ingress guard entries removed per sweep |
+| `persistFlushIntervalSeconds` | float | 5.0 | Seconds between runs of the persistence pump that writes staged bars (min 1.0) |
 
 ### Validation Constants
 
@@ -92,7 +104,8 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 | Thread | Work |
 |---|---|
-| Main thread | Request validation, ingress guard checks, hotkey list mutation, sweep cleanup |
+| Main thread | Request validation, ingress guard checks, hotkey list mutation, echo, staging, the pump's drain and claim capture, login prune, sweep cleanup |
+| Async worker | Ownership-gated bar writes (`PersistHotkeysAsync` → `ICharacterHotkeyService.PersistOwnedAsync`), keyed by character |
 
 ## Usage Examples
 
@@ -109,22 +122,23 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 `OnServerHotkeySetBroadcastReceived(conn, msg, channel)`:
 
-1. Validates connection and spawned player object.
-2. Acquires ingress debounce guard (`SetSingle` operation).
-3. Resolves `IPlayerCharacter` component and validates incoming payload.
-4. Calls `TryApplyHotkey(...)` to validate and apply the hotkey data.
-5. Releases ingress guard in `finally` block.
+1. Resolves the requesting character (`TryBeginPlayerRequest` with `PlayerRequestGate.SkipCanAct`).
+2. Checks `CharacterStateValidation.CanAct` here, so a refusal can be answered: refused → echoes the slot.
+3. Acquires ingress debounce guard (`SetSingle` operation); refused → echoes the slot.
+4. Calls `TryApplyHotkey(...)` to validate and apply the hotkey data; on success stages the bar for the pump.
+5. Echoes the slot's authoritative value (`AcknowledgeHotkey`) whether or not it applied.
+6. Releases ingress guard in `finally` block.
 
 ### Batch Update Path
 
 `OnServerHotkeySetMultipleBroadcastReceived(conn, msg, channel)`:
 
-1. Validates connection and spawned player object.
-2. Acquires ingress debounce guard (`SetMultiple` operation).
-3. Resolves `IPlayerCharacter` component and validates batch payload (non-null, at least one entry).
+1. Resolves the requesting character (`TryBeginPlayerRequest` with `PlayerRequestGate.SkipCanAct`) and validates the batch payload (non-null, at least one entry).
+2. Checks `CharacterStateValidation.CanAct`; refused → echoes the whole bar.
+3. Acquires ingress debounce guard (`SetMultiple` operation); refused → echoes the whole bar.
 4. Clamps iteration count to `maxBulkHotkeyUpdates`.
-5. Iterates each entry, skipping null sub-messages.
-6. Calls `TryApplyHotkey(...)` independently per entry — one malformed entry does not fail the batch.
+5. Calls `TryApplyHotkey(...)` independently per entry — one malformed entry does not fail the batch.
+6. Stages the bar if any entry applied, then echoes the whole bar once (`AcknowledgeAllHotkeys`).
 7. Releases ingress guard in `finally` block.
 
 ### Internal Helpers
@@ -139,15 +153,17 @@ Creates and seeds the character hotkey list with `Constants.Configuration.Maximu
 2. Validates hotkey type is within defined enum range (`0..MaxHotkeyType`).
 3. Validates `ReferenceID >= -1`.
 4. Validates slot index is within bounds (`0 <= slot < Hotkeys.Count`).
-5. Creates a normalized `HotkeyData` value and assigns it to the target slot.
-6. Returns `true` on success, `false` on any validation failure.
+5. A clear (`Type` 0, or the unset `ReferenceID`) is always accepted and written as the empty binding.
+6. Otherwise validates that the character owns what the binding names (`IsHotkeyReferenceValid`, shared with the login prune): an occupied inventory or equipment slot, or a known ability by its instance id; a bank binding is never valid.
+7. Creates a normalized `HotkeyData` value and assigns it to the target slot.
+8. Returns `true` on success, `false` on any validation failure.
 
 ### Failure Semantics
 
-- Invalid single requests are no-ops (silent return).
-- Invalid entries in batch requests are skipped; valid entries still apply.
-- No network echo/broadcast is emitted by this subsystem during set operations.
-- Ingress debounce rejects rapid-fire requests from the same connection per operation type.
+- Invalid single requests change nothing and are answered with the slot's authoritative value (nothing is echoed for a slot index out of range).
+- Invalid entries in batch requests are skipped; valid entries still apply; the whole bar is echoed.
+- Ingress debounce rejects rapid-fire requests from the same connection per operation type, and the rejection is answered the same way.
+- A pump write that did not land complete is re-staged from the live bar at the next pass, unless the ownership gate refused it (`RestagesAfter`).
 
 ## Operational Checks
 
@@ -157,13 +173,15 @@ Creates and seeds the character hotkey list with `Constants.Configuration.Maximu
 | Runtime data container available | Verify `IHotkeySystemRuntimeData` resolves from `DataContainerRegistry` |
 | Single hotkey set | Send `HotkeySetBroadcast` with valid slot/type; confirm `IPlayerCharacter.Hotkeys[slot]` is updated |
 | Batch hotkey set | Send `HotkeySetMultipleBroadcast` with mixed valid/invalid entries; confirm valid slots update and invalid entries are skipped |
-| Slot boundary rejection | Send a hotkey set with slot index out of range; confirm no mutation occurs |
-| Type range rejection | Send a hotkey set with `Type > MaxHotkeyType`; confirm no mutation occurs |
+| Slot boundary rejection | Send a hotkey set with slot index out of range; confirm no mutation occurs and no slot is echoed (there is none to echo) |
+| Type range rejection | Send a hotkey set with `Type > MaxHotkeyType`; confirm no mutation occurs and the slot's stored value is echoed back |
 | ReferenceID rejection | Send a hotkey set with `ReferenceID < -1`; confirm no mutation occurs |
-| Ingress debounce | Send rapid consecutive requests from the same connection; confirm excess requests are dropped |
+| Ingress debounce | Send rapid consecutive requests from the same connection; confirm excess requests are refused and answered with the authoritative slot |
 | Bulk cap enforcement | Send a batch with more entries than `maxBulkHotkeyUpdates`; confirm only the first N are processed |
 | Ingress sweep cleanup | Wait for sweep interval; confirm stale guard entries are removed without errors |
 | Deinitialize cleanup | Trigger deinitialize; confirm broadcast handlers are unregistered and ingress guard is cleared |
+| Departure writes the bar | Rebind a slot and log out within the pump interval; confirm the new binding is in `character_hotkeys` after the release, written by the save-and-release |
+| Claim gate | Stage a bar, release the character's claim before the pump runs; confirm the pump drops the bar (no claim) and a write quoting the released claim is refused as `FORBIDDEN` |
 
 ## Flow Diagram
 
@@ -183,17 +201,18 @@ flowchart LR
 ```
 OnServerHotkeySetBroadcastReceived(conn, msg, channel)
 │
-├─ 1. Validate connection + spawned object
-├─ 2. Acquire ingress guard (SetSingle)
-│      └── Reject if debounce window active
-├─ 3. Resolve IPlayerCharacter component
-├─ 4. Validate incoming HotkeyData payload
-├─ 5. TryApplyHotkey(playerCharacter, msg.HotkeyData)
+├─ 1. TryBeginPlayerRequest (SkipCanAct) → IPlayerCharacter
+├─ 2. CanAct → refused: AcknowledgeHotkey(slot)
+├─ 3. Acquire ingress guard (SetSingle)
+│      └── Debounce window active → AcknowledgeHotkey(slot)
+├─ 4. TryApplyHotkey(playerCharacter, msg.HotkeyData)
 │      ├── EnsureHotkeysInitialized(playerCharacter)
 │      ├── Validate Type <= MaxHotkeyType
 │      ├── Validate ReferenceID >= -1
 │      ├── Validate 0 <= slot < Hotkeys.Count
-│      └── Assign normalized HotkeyData to slot
+│      ├── Clear → empty binding; else IsHotkeyReferenceValid (ownership)
+│      └── Assign normalized HotkeyData to slot → StageHotkeyPersist
+├─ 5. AcknowledgeHotkey(slot) (applied or not)
 └─ 6. Release ingress guard (finally)
 ```
 
@@ -202,17 +221,15 @@ OnServerHotkeySetBroadcastReceived(conn, msg, channel)
 ```
 OnServerHotkeySetMultipleBroadcastReceived(conn, msg, channel)
 │
-├─ 1. Validate connection + spawned object
-├─ 2. Acquire ingress guard (SetMultiple)
-│      └── Reject if debounce window active
-├─ 3. Resolve IPlayerCharacter component
-├─ 4. Validate batch payload (non-null, count >= 1)
-├─ 5. Clamp iteration to min(msg.Hotkeys.Count, maxBulkHotkeyUpdates)
-├─ 6. For each entry:
-│      ├── Skip if sub-message HotkeyData is null
-│      └── TryApplyHotkey(playerCharacter, subMsg.HotkeyData)
-│           ├── Validate type, referenceID, and slot range
-│           └── Assign normalized HotkeyData to slot (or skip on failure)
+├─ 1. TryBeginPlayerRequest (SkipCanAct); batch non-null, count >= 1
+├─ 2. CanAct → refused: AcknowledgeAllHotkeys
+├─ 3. Acquire ingress guard (SetMultiple)
+│      └── Debounce window active → AcknowledgeAllHotkeys
+├─ 4. Clamp iteration to min(msg.Hotkeys.Length, maxBulkHotkeyUpdates)
+├─ 5. For each entry: TryApplyHotkey(playerCharacter, subMsg.HotkeyData)
+│      ├── Validate type, referenceID, slot range and ownership
+│      └── Assign normalized HotkeyData to slot (or skip on failure)
+├─ 6. Any applied → StageHotkeyPersist; AcknowledgeAllHotkeys (one echo)
 └─ 7. Release ingress guard (finally)
 ```
 
@@ -233,7 +250,7 @@ OnUpdate(deltaTime)
 ```
 Hotkey/
 ├── HotkeySystem.cs              # Network handlers, ingress protection, and hotkey validation/application logic
-├── HotkeySystemRuntimeData.cs   # Runtime data container for ingress guard state
+├── HotkeySystemRuntimeData.cs   # Ingress guard, the per-character write stage, row building (BuildRows, NextHotkeyVersion), TakeDepartingBar
 └── README.md
 ```
 

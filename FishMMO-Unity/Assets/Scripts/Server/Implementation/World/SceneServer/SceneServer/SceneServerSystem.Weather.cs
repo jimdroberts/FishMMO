@@ -53,7 +53,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			worldClockHost = new WorldClockHost(networkManager, Server.Database, epoch);
 			worldClockHost.Start();
 
-			weatherHost = new WeatherHost(networkManager, characterMapping);
+			weatherHost = new WeatherHost(Server.NetworkWrapper, characterMapping);
 			weatherHost.Start();
 			// Shared content — ECA actions on triggers, which both peers load — reaches the
 			// authoritative edits through here, because it cannot reference this assembly.

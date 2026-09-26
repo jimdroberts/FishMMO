@@ -91,6 +91,24 @@ namespace FishMMO.Client
 		System = 900,
 
 		/// <summary>
+		/// A connection-state panel that has to be read over the loading overlay: the world
+		/// server's scene-routing queue display.
+		/// </summary>
+		/// <remarks>
+		/// Above <see cref="System"/> because the wait it reports usually happens behind that
+		/// overlay. A zone change, a channel switch and a bind-point respawn all return through
+		/// the world server with the overlay up, and at <see cref="Modal"/> the queue dialog sat
+		/// underneath it, so the one message explaining a long wait could not be seen.
+		/// <para>
+		/// Below <see cref="SystemAlert"/> on purpose. The two should not be up together — the
+		/// queue display steps aside when a reconnect starts — but if they ever are, the reconnect
+		/// display is the one describing the connection that is actually running, and it wins
+		/// deliberately rather than by registration order.
+		/// </para>
+		/// </remarks>
+		SystemStatus = 950,
+
+		/// <summary>
 		/// The reconnect display, which is raised on top of the loading overlay.
 		/// </summary>
 		/// <remarks>

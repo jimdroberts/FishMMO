@@ -72,13 +72,13 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="lastFetch">Timestamp to compare against.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the list of party update data on success,
+		/// A <see cref="DatabaseResult{T}"/> containing the party update rows and the database clock the read began at,
 		/// or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
 		/// Filters by both timestamp and party ID list.
 		/// </remarks>
-		Task<DatabaseResult<List<PartyUpdateData>>> FetchAsync(
+		Task<DatabaseResult<UpdatePumpRead<PartyUpdateData>>> FetchAsync(
 			List<long> partyIds,
 			DateTime lastFetch,
 			CancellationToken cancellationToken = default);

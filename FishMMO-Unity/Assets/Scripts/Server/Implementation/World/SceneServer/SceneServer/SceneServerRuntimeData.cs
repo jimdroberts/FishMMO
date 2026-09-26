@@ -37,7 +37,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <inheritdoc/>
-		public DateTime NextPendingSceneSweepUtc { get; set; }
+		public double NextPendingSceneSweepAt { get; set; }
 
 		/// <inheritdoc/>
 		public List<(long SceneID, int CharacterCount)> ScenePulseDataBuffer { get; private set; }
@@ -62,7 +62,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			NextPendingSceneSweepUtc = DateTime.UtcNow;
+			NextPendingSceneSweepAt = 0.0;
 			ScenePulseDataBuffer = new List<(long, int)>();
 			ScenesToUnloadBuffer = new List<long>();
 			SceneGroupValuesBuffer = new List<Dictionary<long, ISceneInstanceDetails>>();
@@ -81,7 +81,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ID = 0;
 			IsLocked = false;
 			Interlocked.Exchange(ref pulseInFlight, 0);
-			NextPendingSceneSweepUtc = DateTime.UtcNow;
+			NextPendingSceneSweepAt = 0.0;
 			ScenePulseDataBuffer?.Clear();
 			ScenesToUnloadBuffer?.Clear();
 			SceneGroupValuesBuffer?.Clear();

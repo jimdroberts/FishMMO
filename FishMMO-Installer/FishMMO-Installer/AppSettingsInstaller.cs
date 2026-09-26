@@ -21,7 +21,9 @@ namespace FishMMO.Installer
 	///   <item>Patcher Web Server — WebServer.HttpPort + Patches.DirectoryName</item>
 	///   <item>WebGL Web Server — WebServer.HttpPort</item>
 	///   <item>Control Panel Web Server — WebServer.HttpPort + ConnectionStrings.NpgsqlConnection</item>
-	///   <item>Discord Bot — Discord.Token + Discord.DefaultGuildId + ConnectionStrings.Npgsql + rate-limiting</item>
+	///   <item>Discord Bot — Discord.DefaultGuildId + Npgsql (host, port, database, schema) + chat bridge + rate-limiting.
+	///   Its token and database credentials are secrets and live only in the shared secrets file
+	///   (<see cref="SecretsEnvironmentInstaller"/>).</item>
 	/// </list>
 	///
 	/// Supported outputs:
@@ -270,19 +272,34 @@ namespace FishMMO.Installer
 					if (envName == null) return;
 					await WriteDiscordBotSettings(dir, $"appsettings.{envName}.json");
 				},
-				generateSecrets: GenerateDiscordBotSecretsFile);
+				generateSecrets: ConfigureDiscordBotSecrets,
+				secretsLabel: "Set the bot token and database credentials (Secrets & Environment)");
 		}
 
+		/// <summary>
+		/// Writes the Discord bot's non-secret settings.
+		/// </summary>
+		/// <remarks>
+		/// The bot reads its token only from <c>FISHMMO_DISCORD_TOKEN</c>, and its database settings
+		/// from the <c>Npgsql</c> section (host, port, database, schema) with credentials from
+		/// <c>FISHMMO_DB_USERNAME</c> / <c>FISHMMO_DB_PASSWORD</c> or the secrets file, like every other
+		/// FishMMO process. This screen used to write <c>Discord:Token</c> and
+		/// <c>ConnectionStrings:Npgsql</c>, which the bot never reads: a bot configured here had no
+		/// token and no database, and the token sat in a file at rest for nothing. Both keys are
+		/// removed from an existing file when it is rewritten.
+		/// </remarks>
 		private static async Task WriteDiscordBotSettings(string targetDir, string fileName)
 		{
 			string filePath = Path.Combine(targetDir, fileName);
 
-			// Load existing values as defaults.
-			string? existingToken = null;
+			// Load existing values as defaults. The fallbacks match FishMMO-Setup's templates.
 			ulong existingGuildId = 0;
-			string? existingDsn = null;
+			string existingHost = "127.0.0.1";
+			string existingPort = "5432";
+			string existingDatabase = "fishmmo";
+			string existingSchema = "public";
 			int existingPollInterval = 5;
-			int existingMaxMsgLen = 2000;
+			int existingMaxMsgLen = DiscordBridgeMessageMaxLength;
 			int existingMaxPerWindow = 10;
 			int existingWindowSec = 60;
 
@@ -294,11 +311,13 @@ namespace FishMMO.Installer
 					JsonObject? existing = JsonNode.Parse(text)?.AsObject();
 					if (existing != null)
 					{
-						existingToken = existing["Discord"]?["Token"]?.GetValue<string>();
 						if (existing["Discord"]?["DefaultGuildId"] is JsonNode gidNode
 							&& ulong.TryParse(gidNode.ToString(), out ulong gid))
 							existingGuildId = gid;
-						existingDsn = existing["ConnectionStrings"]?["Npgsql"]?.GetValue<string>();
+						existingHost = existing["Npgsql"]?["Host"]?.ToString() ?? existingHost;
+						existingPort = existing["Npgsql"]?["Port"]?.ToString() ?? existingPort;
+						existingDatabase = existing["Npgsql"]?["Database"]?.ToString() ?? existingDatabase;
+						existingSchema = existing["Npgsql"]?["Schema"]?.ToString() ?? existingSchema;
 						if (existing["ChatPollingIntervalSeconds"] is JsonNode ciNode
 							&& int.TryParse(ciNode.ToString(), out int ci))
 							existingPollInterval = ci;
@@ -318,20 +337,31 @@ namespace FishMMO.Installer
 
 			await Log.Info("FishMMOInstaller", $"Configuring: {filePath}");
 			Console.WriteLine("Press Enter to keep the current value shown in brackets.");
+			Console.WriteLine("The bot token and database credentials are not set here: use option 3, or");
+			Console.WriteLine("Configuration > Configure Secrets & Environment.");
 			Console.WriteLine();
 
 			Console.WriteLine("--- Discord ---");
-			string token = InstallerProcessHelper.PromptForPassword(
-				$"  Bot Token [{MaskSecret(existingToken)}]: ");
-			if (string.IsNullOrEmpty(token)) token = existingToken ?? string.Empty;
-			ulong guildId = PromptUlong("  Default Guild ID", existingGuildId);
+			ulong guildId = PromptUlong("  Default Guild ID (0 disables)", existingGuildId);
 
-			string npgsqlDsn = PromptNpgsqlDsn(existingDsn);
+			Console.WriteLine();
+			Console.WriteLine("--- Database (no credentials; FISHMMO_DB_* override these) ---");
+			string dbHost = PromptString("  Host", existingHost);
+			string dbPort = PromptString("  Port", existingPort);
+			string dbName = PromptString("  Database", existingDatabase);
+			string dbSchema = PromptString("  Schema", existingSchema);
 
 			Console.WriteLine();
 			Console.WriteLine("--- Chat Bridge ---");
 			int pollInterval = PromptInt("  ChatPollingIntervalSeconds", existingPollInterval);
-			int maxMsgLen = PromptInt("  BridgeMessageMaxLength", existingMaxMsgLen);
+			int maxMsgLen = PromptInt($"  BridgeMessageMaxLength (at most {DiscordBridgeMessageMaxLength})", existingMaxMsgLen);
+			if (maxMsgLen > DiscordBridgeMessageMaxLength)
+			{
+				// Clients discard any chat line longer than ChatBroadcast.MaxTextLength, so a larger cap
+				// makes long bridged messages vanish rather than arrive truncated.
+				Console.WriteLine($"  Capped at {DiscordBridgeMessageMaxLength}: the game drops longer chat lines.");
+				maxMsgLen = DiscordBridgeMessageMaxLength;
+			}
 
 			Console.WriteLine();
 			Console.WriteLine("--- Rate Limiting ---");
@@ -342,11 +372,22 @@ namespace FishMMO.Installer
 			JsonObject root = await LoadOrCreateJsonObject(filePath);
 
 			JsonObject discord = EnsureObject(root, "Discord");
-			discord["Token"] = JsonValue.Create(token);
+			if (discord.Remove("Token"))
+			{
+				Console.WriteLine();
+				Console.WriteLine("Removed Discord:Token from this file. The bot never read it; it reads");
+				Console.WriteLine("FISHMMO_DISCORD_TOKEN. Set that with option 3 if you have not already.");
+			}
 			discord["DefaultGuildId"] = JsonValue.Create(guildId);
 
-			JsonObject connStrings = EnsureObject(root, "ConnectionStrings");
-			connStrings["Npgsql"] = JsonValue.Create(npgsqlDsn);
+			if (root["ConnectionStrings"] is JsonObject connStrings && connStrings.Remove("Npgsql") && connStrings.Count == 0)
+				root.Remove("ConnectionStrings");
+
+			JsonObject npgsql = EnsureObject(root, "Npgsql");
+			npgsql["Host"] = JsonValue.Create(dbHost);
+			npgsql["Port"] = JsonValue.Create(dbPort);
+			npgsql["Database"] = JsonValue.Create(dbName);
+			npgsql["Schema"] = JsonValue.Create(dbSchema);
 
 			root["ChatPollingIntervalSeconds"] = JsonValue.Create(pollInterval);
 			root["BridgeMessageMaxLength"] = JsonValue.Create(maxMsgLen);
@@ -359,37 +400,25 @@ namespace FishMMO.Installer
 			await Log.Info("FishMMOInstaller", $"{fileName} written and secured at: {filePath}");
 		}
 
-		private static async Task GenerateDiscordBotSecretsFile(string targetDir)
+		/// <summary>The game's ChatBroadcast.MaxTextLength: clients drop any longer chat line.</summary>
+		private const int DiscordBridgeMessageMaxLength = 128;
+
+		/// <summary>
+		/// The bot's secrets are the shared ones: <c>FISHMMO_DISCORD_TOKEN</c> and the
+		/// <c>FISHMMO_DB_*</c> credentials, in the one secrets file every FishMMO systemd unit loads.
+		/// </summary>
+		/// <remarks>
+		/// This used to export <c>Discord__Token</c> and <c>ConnectionStrings__Npgsql</c> as a fish,
+		/// PowerShell or .env snippet. The bot reads neither, and each snippet was another copy of a
+		/// live credential, which <see cref="SecretsEnvironmentInstaller"/> stopped making for the same
+		/// reason. So this opens that screen instead.
+		/// </remarks>
+		private static async Task ConfigureDiscordBotSecrets(string targetDir)
 		{
-			Console.WriteLine("Select output format:");
-			Console.WriteLine("1 : fish shell snippet  (~/.config/fish/conf.d/fishmmo-secrets.fish)");
-			Console.WriteLine("2 : systemd / .env file (fishmmo-secrets.env in target directory)");
-			Console.WriteLine("3 : PowerShell / CMD snippet  (%USERPROFILE%\\fishmmo-secrets.ps1 or .cmd)");
-			Console.WriteLine("0 : Back");
-
-			ConsoleKeyInfo key = Console.ReadKey(true);
+			Console.WriteLine("The bot reads FISHMMO_DISCORD_TOKEN (Other secrets) and the FISHMMO_DB_*");
+			Console.WriteLine("credentials (Database) from the shared secrets file. Opening that screen.");
 			Console.WriteLine();
-			if (key.Key == ConsoleKey.D0 || key.KeyChar == '0') return;
-			if (key.Key != ConsoleKey.D1 && key.Key != ConsoleKey.D2 && key.Key != ConsoleKey.D3) return;
-
-			Console.WriteLine("Enter Discord Bot secret values to export as environment variables.");
-			Console.WriteLine();
-
-			string token = InstallerProcessHelper.PromptForRequiredPassword("  Discord Bot Token: ");
-			string dsn = PromptNpgsqlDsn(existingDsn: null);
-
-			var secrets = new Dictionary<string, string>
-			{
-				["Discord__Token"] = token,
-				["ConnectionStrings__Npgsql"] = dsn,
-			};
-
-			switch (key.Key)
-			{
-				case ConsoleKey.D1: await WriteFishSecretsSnippet(secrets); break;
-				case ConsoleKey.D2: await WriteSystemdEnvFile(targetDir, secrets); break;
-				case ConsoleKey.D3: await WriteWindowsSecretsSnippet(secrets); break;
-			}
+			await SecretsEnvironmentInstaller.Configure();
 		}
 
 		// ──────────────────────────────────────────────────────────────────────────
@@ -399,14 +428,15 @@ namespace FishMMO.Installer
 			string targetDir,
 			Func<string, Task> writeBase,
 			Func<string, Task> writeEnvOverride,
-			Func<string, Task> generateSecrets)
+			Func<string, Task> generateSecrets,
+			string secretsLabel = "Generate secrets environment-variable file")
 		{
 			Console.WriteLine($"Configure {componentName} at: {targetDir}");
 			Console.WriteLine();
 			Console.WriteLine("Select action:");
 			Console.WriteLine("1 : Write / update appsettings.json");
 			Console.WriteLine("2 : Write / update environment override (appsettings.<env>.json)");
-			Console.WriteLine("3 : Generate secrets environment-variable file");
+			Console.WriteLine($"3 : {secretsLabel}");
 			Console.WriteLine("0 : Back");
 
 			ConsoleKeyInfo key = Console.ReadKey(true);

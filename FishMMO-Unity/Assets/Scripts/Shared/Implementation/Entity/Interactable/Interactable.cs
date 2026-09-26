@@ -315,6 +315,10 @@ namespace FishMMO.Shared
 		/// also what keeps world items inside the map's fixed memory budget rather than being
 		/// destroyed and re-instantiated on every drop.
 		/// </para>
+		/// <para>
+		/// It pools the way the spawner does (<see cref="PersistentPool"/>): out of the world scene.
+		/// Left in it, every drop that had ever been picked up died with the scene at its unload.
+		/// </para>
 		/// </remarks>
 		public void Despawn()
 		{
@@ -325,9 +329,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (base.IsServerStarted && NetworkObject != null && NetworkObject.IsSpawned)
+			if (base.IsServerStarted)
 			{
-				NetworkManager.ServerManager.Despawn(NetworkObject, FishNet.Object.DespawnType.Pool);
+				PersistentPool.Despawn(NetworkManager, NetworkObject);
 			}
 		}
 
@@ -401,11 +405,12 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			if (character.NextInteractTime >= DateTime.UtcNow)
+			double now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+			if (character.NextInteractSeconds >= now)
 			{
 				return false;
 			}
-			character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(InteractRateLimit);
+			character.NextInteractSeconds = now + InteractRateLimit / 1000.0;
 			return true;
 		}
 

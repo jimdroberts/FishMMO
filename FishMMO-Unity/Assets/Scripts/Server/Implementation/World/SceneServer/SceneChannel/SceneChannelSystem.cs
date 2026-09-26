@@ -373,7 +373,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime expiredBefore = DateTime.UtcNow.AddSeconds(-channelSwitchCooldownSeconds);
+			double expiredBefore = MonotonicClock.NowSeconds - channelSwitchCooldownSeconds;
 			List<int> expiredKeys = null;
 			int removed = 0;
 
@@ -733,12 +733,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * switch ends the connection — so on its own it never limited switching at all, only
 			 * repeated *attempts* within one session. The limit that actually holds is claimed
 			 * against the character row in ValidateAndSwitchChannelAsync; this exists to keep a
-			 * spamming client from reaching the database in the first place. */
-			DateTime now = DateTime.UtcNow;
+			 * spamming client from reaching the database in the first place.
+			 *
+			 * Timed on the monotonic clock, being a duration; the persisted cooldown below is a
+			 * database instant and stays one. */
+			double now = MonotonicClock.NowSeconds;
 			if (cooldowns != null)
 			{
-				if (cooldowns.TryGetValue(conn.ClientId, out DateTime lastSwitch) &&
-					(now - lastSwitch).TotalSeconds < channelSwitchCooldownSeconds)
+				if (cooldowns.TryGetValue(conn.ClientId, out double lastSwitch) &&
+					now - lastSwitch < channelSwitchCooldownSeconds)
 				{
 					SendTransferRefused(conn, SceneTransferRefusalReason.OnCooldown);
 					return;
@@ -1289,8 +1292,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * shutdown, so a crashed one leaves it behind, pulse frozen at the moment it died. The
 			 * row was treated as proof of life anyway, and a dead server's channels were offered —
 			 * and accepted, spending the player's switch cooldown — until the world server's
-			 * stale-row sweep caught up with its scenes. */
-			if ((DateTime.UtcNow - result.Data.LastPulse).TotalSeconds >= SceneServerPulseStaleSeconds)
+			 * stale-row sweep caught up with its scenes.
+			 *
+			 * Judged by the age the database measured as it read the row, the same test the
+			 * world server routes by. Subtracting last_pulse from this host's clock compared two
+			 * clocks, and hid or offered channels by however far they disagreed. */
+			if (result.Data.PulseAgeSeconds >= SceneServerPulseStaleSeconds)
 			{
 				runtimeData.SceneServerAddressCache?.Invalidate(sceneServerID);
 				return null;
@@ -1315,11 +1322,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime now = DateTime.UtcNow;
 			runtimeData.AvailableSceneCache?.SweepExpired(
-				now, TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds), 64, 32);
+				TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds), 64, 32);
 			runtimeData.SceneServerAddressCache?.SweepExpired(
-				now, TimeSpan.FromSeconds(sceneServerCacheTtlSeconds), 64, 32);
+				TimeSpan.FromSeconds(sceneServerCacheTtlSeconds), 64, 32);
 		}
 
 		#endregion

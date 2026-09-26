@@ -54,6 +54,23 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<string?>> FetchNameAsync(long guildId, CancellationToken cancellationToken = default);
 
 		/// <summary>
+		/// Fetches the names of a set of guilds in one query.
+		/// </summary>
+		/// <remarks>
+		/// For the scene servers' batched name lookups: every guild name a client asked for in one
+		/// frame, resolved together instead of one query per guild (hot-path audit M18). Bounded
+		/// internally as well as by its caller, because it answers a request a client controls
+		/// the timing of.
+		/// </remarks>
+		/// <param name="guildIds">Guilds to resolve. Duplicates and non-positive IDs are ignored.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// The name of each guild found, by ID. A guild that does not exist is absent. A failure
+		/// result on database errors.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyDictionary<long, string>>> FetchNamesAsync(IReadOnlyList<long> guildIds, CancellationToken cancellationToken = default);
+
+		/// <summary>
 		/// Which of the given guilds still exist.
 		/// </summary>
 		/// <remarks>

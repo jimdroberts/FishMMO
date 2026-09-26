@@ -145,6 +145,126 @@ namespace FishMMO.Shared
 			changeCount = 0;
 			snapshotChangeCount = 0;
 			snapshotVersion = 0;
+			/* An open settlement belongs to the occupant that opened it. Clearing the token here is
+			 * what makes a late close from that occupant's transaction a no-op on the next one's
+			 * attribute rather than taking a held credit back out of somebody else's balance. */
+			settlementToken = 0;
+			HeldValue = 0;
+		}
+
+		/// <summary>
+		/// Part of <see cref="Value"/> that an unresolved transaction has credited and may still take
+		/// back, and that is therefore not yet the character's to spend. Zero outside a settlement.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why a credit is in <see cref="Value"/> before its transaction commits.</b> A write that
+		/// credits this attribute in the database — a trade's payee leg — used to carry "memory plus
+		/// the credit" while memory itself received the credit only after the commit. Every other
+		/// capture of the attribute in between (the periodic save, another batch's full sheet, a
+		/// merchant's write) stamped a newer version with no credit in it and overwrote the credited
+		/// row, and until the next save the database held the trade's items moved and one side's
+		/// currency missing. With the credit in the value, every capture carries it.
+		/// </para>
+		/// <para>
+		/// <b>Why it is held.</b> The credit was deferred so that a refused write never has to claw
+		/// back money the player has already spent. Holding it keeps that guarantee:
+		/// <see cref="CharacterCurrency.TrySpend"/> spends only <see cref="Value"/> minus this, so a
+		/// refusal can always take the credit back exactly. Earning is not affected.
+		/// </para>
+		/// <para>Server state only: never serialized, never persisted, cleared with the persistence state.</para>
+		/// </remarks>
+		public int HeldValue { get; private set; }
+
+		/// <summary>The open settlement's token; zero when none is open.</summary>
+		private long settlementToken;
+
+		/// <summary>Source of settlement tokens.</summary>
+		private static long lastSettlementToken;
+
+		/// <summary>
+		/// True while a transaction that has already moved this value in memory is waiting for its
+		/// outcome in the database.
+		/// </summary>
+		/// <remarks>
+		/// While it is, that transaction is the only writer of this attribute's row: a save that
+		/// captured it could land the moved value even if the transaction then rolls back, and the
+		/// database would then show a trade that never happened. The character's own save paths leave
+		/// a settling attribute dirty and write it on the first pass after the outcome.
+		/// </remarks>
+		public bool IsSettling => settlementToken != 0;
+
+		/// <summary>
+		/// Opens a settlement on this attribute. Main thread only.
+		/// </summary>
+		/// <returns>The token that credits and closes it, or zero when one is already open.</returns>
+		public long BeginSettlement()
+		{
+			if (settlementToken != 0)
+			{
+				return 0;
+			}
+			settlementToken = System.Threading.Interlocked.Increment(ref lastSettlementToken);
+			HeldValue = 0;
+			return settlementToken;
+		}
+
+		/// <summary>
+		/// Adds a credit that the open settlement may still take back, and holds it. Main thread only.
+		/// </summary>
+		/// <param name="token">The token <see cref="BeginSettlement"/> returned.</param>
+		/// <param name="amount">The credit. Must be positive and must not overflow the value.</param>
+		/// <returns>False, changing nothing, when the token is not the open settlement or the amount is unusable.</returns>
+		public bool CreditHeld(long token, int amount)
+		{
+			if (token == 0 || token != settlementToken || amount <= 0 || (long)value + amount > int.MaxValue)
+			{
+				return false;
+			}
+			AddValue(amount);
+			HeldValue += amount;
+			return true;
+		}
+
+		/// <summary>
+		/// Closes the open settlement. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// A committed settlement keeps its credit and merely stops holding it. A refused one takes the
+		/// held credit back first: exactly, since nothing could spend it — unless a direct write that
+		/// bypasses <see cref="CharacterCurrency"/> (an operator setting the balance) has lowered the
+		/// value beneath it, in which case what remains is taken and the rest is reported as
+		/// <paramref name="shortfall"/> for the caller to log.
+		/// </remarks>
+		/// <param name="token">The token <see cref="BeginSettlement"/> returned.</param>
+		/// <param name="committed">True to keep the held credit; false to take it back.</param>
+		/// <param name="shortfall">How much of the credit could not be taken back.</param>
+		/// <returns>
+		/// False, changing nothing, when the token is not the open settlement: it was already closed,
+		/// or the attribute has since been reset for another occupant of the pooled object.
+		/// </returns>
+		public bool EndSettlement(long token, bool committed, out int shortfall)
+		{
+			shortfall = 0;
+			if (token == 0 || token != settlementToken)
+			{
+				return false;
+			}
+
+			int held = HeldValue;
+			settlementToken = 0;
+			HeldValue = 0;
+
+			if (!committed && held > 0)
+			{
+				int taken = Math.Min(held, Math.Max(0, value));
+				shortfall = held - taken;
+				if (taken > 0)
+				{
+					AddValue(-taken);
+				}
+			}
+			return true;
 		}
 
 		/// <summary>

@@ -256,6 +256,15 @@ namespace FishMMO.Client
 		/// </summary>
 		public int LastRetryAfterSeconds => core?.LastRetryAfterSeconds ?? 0;
 
+		/// <summary>
+		/// Whether the most recent auth result answered a two-factor code this client sent, rather than
+		/// arriving unasked. Read it inside an <see cref="OnClientAuthenticationResult"/> handler: it is
+		/// what tells the two meanings of <see cref="ClientAuthenticationResult.TwoFactorExpired"/>
+		/// apart — an answer to a code means the attempts ran out, an unasked one that the prompt's
+		/// time did.
+		/// </summary>
+		public bool LastResultAnsweredTwoFactorCode => core?.LastResultAnsweredTwoFactorCode ?? false;
+
 	/// <summary>
 	/// Resets the authentication state and re-initiates the handshake on the
 	/// current connection after a randomized jitter delay (0-1s). The jitter

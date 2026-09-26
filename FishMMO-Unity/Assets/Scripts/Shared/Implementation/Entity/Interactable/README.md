@@ -39,7 +39,7 @@ The Interactable system is a server-authoritative, template-driven framework for
 - Server-authoritative validation with `sqrMagnitude`-based range checks (no square root)
 - Template-driven configuration via ScriptableObjects per interactable type
 - Scene-object registration and generated naming via `SceneObjectNamer` (name generator, seeded per spawn; 5 bytes on the wire)
-- Object pooling support through `ISpawnable`: a server-side spawner owns the object as its `ISpawnOwner` and recycles it through FishNet's pool
+- Object pooling support through `ISpawnable`: a server-side spawner owns the object as its `ISpawnOwner` and recycles it through FishNet's pool; one with no spawner (ground loot, a container placed by script) is pooled through `PersistentPool`, out of the world scene, so the scene's unload cannot destroy an instance the pool still holds
 - Client-side overhead title rendering with customizable colour, written onto a `Nameplate` (`EnsureNameplate` builds one on demand for an object that has none — a crate does not carry a plate prefab, a banker does)
 - Arena queueing and arena objectives (`ArenaBoard`, `ArenaObjective`) and claimable housing land (`PlotFoundation`)
 - Achievement integration on most interactable types
@@ -341,7 +341,7 @@ Two of those lists sell abilities, and they sell different things. `Abilities` s
 | `ReadPayload()`   | Reads `ID` (Int64) from network reader, registers in scene.             |
 | `WritePayload()`  | Writes `ID` (Int64) to network writer.                                  |
 | `ResetState()`    | Clears `OnDespawn` event and `Spawner` (object pooling reset).          |
-| `Despawn()`       | Hands the object to `Spawner.Despawn(this)`, or despawns it to the pool directly when it has no spawner. |
+| `Despawn()`       | Hands the object to `Spawner.Despawn(this)`, or, when it has no spawner, despawns it to the pool through `PersistentPool.Despawn`, which keeps the pooled instance out of the world scene. |
 
 ### ISpawnable Members
 
@@ -415,7 +415,7 @@ flowchart LR
     Char[Character] -->|interact| Target[Interactable entity]
     Target --> Sys[InteractableSystem]
     Sys -->|range + cooldown| Sys
-    Sys --> Handler[Per-type handler]
+    Sys -->|ExecuteOnInteract| Handler[OnInteractTriggers - ECA]
     Handler --> Effect[Loot / dialogue / portal / quest]
 ```
 
@@ -425,20 +425,26 @@ flowchart LR
 Player requests interaction
         │
         ▼
-  CanInteract(IPlayerCharacter)
+  CanInteract(IPlayerCharacter)          (a pure question)
         │
-        ├── NextInteractTime < UtcNow?  ──No──▶  Rejected
+        ├── On a corpse (and not the corpse)?  ──Yes──▶  Rejected
         │       │
-        │      Yes
+        │      No
         │       ▼
-        ├── InRange(transform)?  ──No──▶  Rejected
+        └── InRange(transform)?  ──No──▶  Rejected
+                │
+               Yes
+                ▼
+  TryConsumeInteractRateLimit(IPlayerCharacter)   (interaction path only)
+        │
+        ├── NextInteractSeconds >= now?  ──Yes──▶  Rejected
         │       │
-        │      Yes
+        │      No
         │       ▼
-        └── Set NextInteractTime = UtcNow + InteractRateLimit
+        └── Set NextInteractSeconds = now + InteractRateLimit
                 │
                 ▼
-           return true → Subclass handles interaction
+           ExecuteOnInteract → OnInteractTriggers
 ```
 
 Range checking uses `sqrMagnitude` for efficiency (no square root).

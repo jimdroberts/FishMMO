@@ -7,6 +7,7 @@ using FishNet.Transporting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using FishMMO.Logging;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
@@ -29,6 +30,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 	/// <para>
 	/// Weather is not persisted (Q4): a restarted server regenerates it from a fresh seed.
 	/// </para>
+	/// <para>
+	/// <b>One scene per frame.</b> Each scene's pass — prune, climate, cover, director — runs about
+	/// once a second as before, but the scenes take turns across the frames of that second instead
+	/// of all landing on one (see <see cref="ScenePassesThisFrame"/>). A pass samples the weather
+	/// and the biomes at a dozen or more points, so the one-frame version cost that many times the
+	/// scene count on a single frame. Each pass is also isolated: one scene that throws is
+	/// reported to its own fault log and cannot skip the scenes after it or the frame's flush.
+	/// Nothing reads one scene's weather against another's, so no consumer depends on them
+	/// updating together: every timeline, climate offset and cover value is per scene, and the
+	/// timeline events have no subscribers that compare scenes.
+	/// </para>
 	/// </remarks>
 	public sealed class WeatherHost : IWeatherService
 	{
@@ -38,6 +50,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		public const float DirectorMinimumSquareKm = 2f;
 		/// <summary>How often surface cover is re-sent so clients' integration cannot drift far.</summary>
 		public const float CoverResyncSeconds = 30f;
+		/// <summary>How often each scene's pass runs.</summary>
+		public const float ScenePassSeconds = 1f;
+		/// <summary>
+		/// The frame rate the scene rotation is sized for: at or above it every scene gets its pass
+		/// once per <see cref="ScenePassSeconds"/>; below it passes slow in proportion, never burst.
+		/// </summary>
+		public const int MinimumFramesPerScenePass = 30;
+		/// <summary>
+		/// Shortest gap the server allows between one connection's full-timeline requests. Half the
+		/// honest client's own two-second cooldown, so jitter never refuses a real one.
+		/// </summary>
+		public const int ResyncDebounceMilliseconds = 1000;
+
+		/// <summary>The <see cref="IngressGuard"/> operation code for a resync request.</summary>
+		private const byte ResyncOperation = 1;
 
 		private sealed class SceneWeather
 		{
@@ -57,17 +84,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			public float CoverResync;
 			public WeatherDeltaBroadcast Pending;
 			public bool HasPending;
+			/// <summary>When, on the host's clock, this scene's pass last ran (or it was added).</summary>
+			public double LastPassAt;
+			/// <summary>Set when the scene unloads, so a flush already queued for it is dropped.</summary>
+			public bool Removed;
+			/// <summary>Fault logs for this scene's pass and flush, created on the first failure.</summary>
+			public RepeatingFaultLog PassFaults;
+			public RepeatingFaultLog FlushFaults;
 		}
 
+		private readonly INetworkManagerWrapper network;
 		private readonly NetworkManager networkManager;
 		private readonly ICharacterMappingData<NetworkConnection> characters;
 		private readonly Dictionary<int, SceneWeather> scenes = new Dictionary<int, SceneWeather>();
-		private readonly List<SceneWeather> flushList = new List<SceneWeather>();
-		private float secondTimer;
 
-		public WeatherHost(NetworkManager networkManager, ICharacterMappingData<NetworkConnection> characters)
+		/// <summary>The scenes in the order their passes take turns.</summary>
+		private readonly List<SceneWeather> rotation = new List<SceneWeather>();
+
+		/// <summary>The next scene in <see cref="rotation"/> to run its pass.</summary>
+		private int rotationCursor;
+
+		/// <summary>Scene passes owed; see <see cref="ScenePassesThisFrame"/>.</summary>
+		private float passCredits;
+
+		/// <summary>Seconds of game time since this host started, advanced by each tick.</summary>
+		private double clock;
+
+		/// <summary>Scenes with a delta waiting for this frame's flush, in the order they queued.</summary>
+		private readonly List<SceneWeather> flushList = new List<SceneWeather>();
+
+		/// <summary>Debounces full-timeline requests per connection.</summary>
+		private readonly IngressGuard resyncGuard = new IngressGuard();
+
+		/// <summary>
+		/// Picks each scene's cover-resync phase. Not the scene's own RNG: that stream belongs to
+		/// the director, and drawing from it would change which storms every scene gets.
+		/// </summary>
+		private readonly System.Random phaseRandom = new System.Random();
+
+		public WeatherHost(INetworkManagerWrapper network, ICharacterMappingData<NetworkConnection> characters)
 		{
-			this.networkManager = networkManager;
+			this.network = network ?? throw new ArgumentNullException(nameof(network));
+			networkManager = network.NetworkManager;
 			this.characters = characters;
 		}
 
@@ -94,6 +152,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			networkManager.SceneManager.OnUnloadEnd -= SceneManager_OnUnloadEnd;
 			networkManager.ServerManager.UnregisterBroadcast<WeatherResyncRequestBroadcast>(OnResyncRequest);
 			scenes.Clear();
+			rotation.Clear();
+			rotationCursor = 0;
+			passCredits = 0f;
+			flushList.Clear();
+			resyncGuard.Clear();
 			WeatherQuery.Clear();
 			WeatherQuery.TickSource = null;
 		}
@@ -122,6 +185,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				{
 					WeatherQuery.Unregister(sw.Scene);
 					scenes.Remove(unloaded.Handle);
+					RemoveFromRotation(sw);
+					sw.Removed = true;
+					flushList.Remove(sw);
 				}
 			}
 		}
@@ -163,7 +229,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			sw.WindHeadingDegrees = sw.Rng.Range(0f, 360f);
 			sw.WindSpeedMetersPerSecond = 4f;
 			sw.NextSpawnTick = NowTick + timeline.SecondsToTicks(sw.Rng.Range(5f, 30f));
+			/* Its own phase in (0, interval], so scenes loaded together — every scene at startup —
+			 * do not all queue their cover on the same pass forever after. */
+			sw.CoverResync = CoverResyncSeconds * (float)(1.0 - phaseRandom.NextDouble());
+			sw.LastPassAt = clock;
 			scenes[scene.handle] = sw;
+			rotation.Add(sw);
 			WeatherQuery.Register(scene, timeline);
 			_ = Log.Debug("WeatherHost", $"Weather for {scene.name} (handle {scene.handle}): {mode}, director {(sw.Director ? "on" : "off")}.");
 		}
@@ -192,29 +263,81 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		{
 			if (connection != null && scenes.TryGetValue(scene.handle, out SceneWeather sw))
 			{
-				networkManager.ServerManager.Broadcast(connection, sw.Timeline.ToBroadcast(), true, Channel.Reliable);
+				network.Broadcast(connection, sw.Timeline.ToBroadcast(), true, Channel.Reliable);
 			}
 		}
 
+		/// <summary>
+		/// Answers a client that found a gap in its deltas with the whole timeline.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Each answer copies the layer and cell lists and sends the full timeline reliably, and
+		/// only the honest client paces itself, so a modified one could make the server amplify
+		/// traffic at will. Two checks stop that. A request whose revision is already the
+		/// current one is answered with nothing (<see cref="ResyncWanted"/>), and a connection
+		/// gets at most one answer per <see cref="ResyncDebounceMilliseconds"/>.
+		/// </para>
+		/// <para>
+		/// A dropped request costs an honest client nothing it cannot recover: it only asks after
+		/// a delta skips a revision, and the next delta that does so asks again.
+		/// </para>
+		/// </remarks>
 		private void OnResyncRequest(NetworkConnection connection, WeatherResyncRequestBroadcast msg, Channel channel)
 		{
 			if (connection == null || !characters.ConnectionCharacters.TryGetValue(connection, out IPlayerCharacter character) || character?.GameObject == null)
 			{
 				return;
 			}
-			OnCharacterSpawned(connection, character.GameObject.scene);
+			if (!scenes.TryGetValue(character.GameObject.scene.handle, out SceneWeather sw) ||
+				!ResyncWanted(msg.HaveRevision, sw.Timeline.Revision))
+			{
+				return;
+			}
+			if (!resyncGuard.TryBegin(connection.ClientId, ResyncOperation, ResyncDebounceMilliseconds, out long guardKey))
+			{
+				return;
+			}
+			try
+			{
+				network.Broadcast(connection, sw.Timeline.ToBroadcast(), true, Channel.Reliable);
+			}
+			finally
+			{
+				resyncGuard.End(guardKey);
+			}
 		}
 
+		/// <summary>
+		/// Whether a resync request needs an answer.
+		/// </summary>
+		/// <remarks>
+		/// Not when the client already holds the current revision: the server's revision moves
+		/// only when a delta is sent, so there is nothing it lacks. An honest client never asks in
+		/// that state — it asks when a delta arrives more than one revision ahead of it, and the
+		/// server is at least there — so only a client asking for the sake of it is refused.
+		/// Anything else is answered, including a revision AHEAD of the server's: that is another
+		/// scene's counter, left over from a scene change whose own timeline is on its way.
+		/// </remarks>
+		/// <param name="haveRevision">The revision the client says it holds.</param>
+		/// <param name="currentRevision">The scene's current revision.</param>
+		internal static bool ResyncWanted(uint haveRevision, uint currentRevision)
+		{
+			return haveRevision != currentRevision;
+		}
+
+		/// <summary>
+		/// Sends a message to every connection in a scene, serialised once.
+		/// </summary>
+		/// <remarks>
+		/// FishNet's own per-scene connection set rather than a walk over every character on the
+		/// server asking each for its scene, and one serialisation rather than one per recipient.
+		/// A delta that reaches a client which has not yet received its full timeline, or holds
+		/// another scene's, is ignored there by scene name and revision.
+		/// </remarks>
 		private void SendToScene<T>(SceneWeather sw, T message) where T : struct, FishNet.Broadcast.IBroadcast
 		{
-			int handle = sw.Scene.handle;
-			foreach (IPlayerCharacter character in characters.CharactersByID.Values)
-			{
-				if (character?.GameObject != null && character.GameObject.scene.handle == handle && character.Owner != null && character.Owner.IsActive)
-				{
-					networkManager.ServerManager.Broadcast(character.Owner, message, true, Channel.Reliable);
-				}
-			}
+			network.BroadcastToScene(sw.Scene, message, true, Channel.Reliable);
 		}
 
 		private ref WeatherDeltaBroadcast Pending(SceneWeather sw)
@@ -223,6 +346,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			{
 				sw.Pending = new WeatherDeltaBroadcast { SceneName = sw.Timeline.SceneName };
 				sw.HasPending = true;
+				flushList.Add(sw);
 			}
 			return ref sw.Pending;
 		}
@@ -263,56 +387,159 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			d.CoverTick = sw.Timeline.CoverTick;
 		}
 
+		/// <summary>
+		/// Sends each scene's batched edits as one delta.
+		/// </summary>
+		/// <remarks>
+		/// Each scene is isolated, like its pass. The delta is taken off the scene before it is
+		/// sent, so a send that throws is not retried every frame under a fresh revision; the
+		/// clients see the gap on the next delta and ask for the whole timeline. Anything queued
+		/// while flushing — a timeline listener making an edit — waits for the next frame.
+		/// </remarks>
 		private void Flush()
 		{
-			flushList.Clear();
-			foreach (SceneWeather sw in scenes.Values)
+			int count = flushList.Count;
+			if (count < 1)
 			{
-				if (sw.HasPending)
-				{
-					flushList.Add(sw);
-				}
+				return;
 			}
-			foreach (SceneWeather sw in flushList)
+			for (int i = 0; i < count; i++)
 			{
-				sw.Timeline.Revision++;
-				sw.Pending.Revision = sw.Timeline.Revision;
-				SendToScene(sw, sw.Pending);
+				SceneWeather sw = flushList[i];
+				if (sw.Removed || !sw.HasPending)
+				{
+					continue;
+				}
+				WeatherDeltaBroadcast delta = sw.Pending;
 				sw.HasPending = false;
 				sw.Pending = default;
-				WeatherEvents.RaiseTimelineChanged(sw.Scene, sw.Timeline);
+				sw.Timeline.Revision++;
+				delta.Revision = sw.Timeline.Revision;
+				try
+				{
+					SendToScene(sw, delta);
+					WeatherEvents.RaiseTimelineChanged(sw.Scene, sw.Timeline);
+					sw.FlushFaults?.ReportSuccess();
+				}
+				catch (Exception ex)
+				{
+					sw.FlushFaults ??= new RepeatingFaultLog("WeatherHost", $"Weather flush for {sw.Timeline.SceneName} (handle {sw.Scene.handle})");
+					sw.FlushFaults.Report(ex, Time.realtimeSinceStartupAsDouble);
+				}
 			}
+			flushList.RemoveRange(0, count);
 		}
 
 		// ── Tick ──────────────────────────────────────────────────────
 
 		public void Tick(float deltaTime)
 		{
-			secondTimer += deltaTime;
-			if (secondTimer >= 1f)
+			clock += deltaTime;
+
+			int passes = ScenePassesThisFrame(ref passCredits, rotation.Count, deltaTime);
+			for (int i = 0; i < passes && rotation.Count > 0; i++)
 			{
-				float seconds = secondTimer;
-				secondTimer = 0f;
+				if (rotationCursor >= rotation.Count)
+				{
+					rotationCursor = 0;
+				}
+				RunScenePass(rotation[rotationCursor++]);
+			}
+
+			Flush();
+			resyncGuard.Sweep(sweepIntervalSeconds: 10f, entryTtlSeconds: 30f, maxRemovals: 256);
+		}
+
+		/// <summary>
+		/// How many scene passes to run this frame, so that every scene gets one about once per
+		/// <see cref="ScenePassSeconds"/>, spread across the frames rather than all on one.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A token bucket: each frame earns passes in proportion to the scene count and the time
+		/// that passed, and at most a whole round of them is ever owed, so a hitch does not bank a
+		/// second pass for any scene. The passes run are capped at
+		/// <c>ceil(scenes / <see cref="MinimumFramesPerScenePass"/>)</c> a frame — one, for thirty
+		/// scenes or fewer — so the backlog after a hitch drains over the following frames instead
+		/// of bursting on one.
+		/// </para>
+		/// <para>
+		/// <b>No scene is starved.</b> The rotation takes scenes strictly in turn, and at or above
+		/// <see cref="MinimumFramesPerScenePass"/> frames a second the cap allows at least a whole
+		/// round a second; below it every scene still gets its turn, only less often, and its pass
+		/// is handed the real time since its last one.
+		/// </para>
+		/// </remarks>
+		/// <param name="credits">Passes owed and not yet run; carried from frame to frame.</param>
+		/// <param name="sceneCount">Scenes in the rotation.</param>
+		/// <param name="deltaTime">Seconds since the last frame.</param>
+		/// <returns>The passes to run this frame.</returns>
+		internal static int ScenePassesThisFrame(ref float credits, int sceneCount, float deltaTime)
+		{
+			if (sceneCount < 1)
+			{
+				credits = 0f;
+				return 0;
+			}
+
+			credits += sceneCount * Mathf.Max(0f, deltaTime) / ScenePassSeconds;
+			if (credits > sceneCount)
+			{
+				credits = sceneCount;
+			}
+
+			int cap = Mathf.Max(1, (sceneCount + MinimumFramesPerScenePass - 1) / MinimumFramesPerScenePass);
+			int passes = Mathf.Min((int)credits, cap);
+			credits -= passes;
+			return passes;
+		}
+
+		/// <summary>
+		/// One scene's pass: prune, climate, driver, cover and director, over the time since its
+		/// last one. A throw is reported to the scene's own fault log.
+		/// </summary>
+		private void RunScenePass(SceneWeather sw)
+		{
+			float seconds = (float)(clock - sw.LastPassAt);
+			sw.LastPassAt = clock;
+			if (sw.Settings == null)
+			{
+				return;
+			}
+			try
+			{
 				uint now = NowTick;
 				double worldHours = WorldClock.Shared.HasAnchor ? WorldClock.Shared.WorldHoursAt(now) : 0;
-				foreach (SceneWeather sw in scenes.Values)
+				sw.Timeline.Prune(now);
+				ApplyClimate(sw, now, worldHours);
+				DriveWeather(sw, now, worldHours);
+				if (sw.Timeline.SceneMode != WeatherSceneMode.None)
 				{
-					if (sw.Settings == null)
-					{
-						continue;
-					}
-					sw.Timeline.Prune(now);
-					ApplyClimate(sw, now, worldHours);
-					DriveWeather(sw, now, worldHours);
-					if (sw.Timeline.SceneMode == WeatherSceneMode.None)
-					{
-						continue;
-					}
 					IntegrateCover(sw, now, seconds);
 					RunDirector(sw, now);
 				}
+				sw.PassFaults?.ReportSuccess();
 			}
-			Flush();
+			catch (Exception ex)
+			{
+				sw.PassFaults ??= new RepeatingFaultLog("WeatherHost", $"Weather pass for {sw.Timeline.SceneName} (handle {sw.Scene.handle})");
+				sw.PassFaults.Report(ex, Time.realtimeSinceStartupAsDouble);
+			}
+		}
+
+		/// <summary>Takes a scene out of the pass rotation, keeping the cursor on the scene it was on.</summary>
+		private void RemoveFromRotation(SceneWeather sw)
+		{
+			int index = rotation.IndexOf(sw);
+			if (index < 0)
+			{
+				return;
+			}
+			rotation.RemoveAt(index);
+			if (index < rotationCursor)
+			{
+				rotationCursor--;
+			}
 		}
 
 		/// <summary>
@@ -368,19 +595,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			var average = new WeatherAccumulator();
 			float temperature = 0f;
 			Vector2 c = area.center;
-			Vector2[] points =
+			for (int i = 0; i < CoverSampleOffsets.Length; i++)
 			{
-				c,
-				c + new Vector2(-area.width, -area.height) * 0.25f,
-				c + new Vector2(area.width, -area.height) * 0.25f,
-				c + new Vector2(-area.width, area.height) * 0.25f,
-				c + new Vector2(area.width, area.height) * 0.25f,
-			};
-			foreach (Vector2 p in points)
-			{
+				Vector2 p = c + Vector2.Scale(CoverSampleOffsets[i], area.size);
 				WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, new Vector3(p.x, 0f, p.y), tick);
-				average.Add(sample.Frame, 1f / points.Length);
-				temperature += sample.Temperature / points.Length;
+				average.Add(sample.Frame, 1f / CoverSampleOffsets.Length);
+				temperature += sample.Temperature / CoverSampleOffsets.Length;
 			}
 			WeatherFrame frame = average.Resolve();
 			double coverHours = WorldClock.Shared.HasAnchor ? WorldClock.Shared.WorldHoursAt(tick) : 0;
@@ -393,6 +613,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				QueueCover(sw);
 			}
 		}
+
+		/// <summary>
+		/// Where cover is sampled, as fractions of the scene's area from its centre: the centre and
+		/// the middle of each quarter. Static, so a pass does not allocate the list.
+		/// </summary>
+		private static readonly Vector2[] CoverSampleOffsets =
+		{
+			Vector2.zero,
+			new Vector2(-0.25f, -0.25f),
+			new Vector2(0.25f, -0.25f),
+			new Vector2(-0.25f, 0.25f),
+			new Vector2(0.25f, 0.25f),
+		};
 
 		/// <summary>The scene's world-space X/Z rectangle, from its biome map or its terrain.</summary>
 		private static bool TryGetArea(SceneWeather sw, out Rect area)
@@ -561,13 +794,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			}
 		}
 
+		/// <summary>
+		/// Distance in X/Z from a point to the nearest player in the scene, or
+		/// <see cref="float.MaxValue"/> when there is none.
+		/// </summary>
+		/// <remarks>
+		/// Walks the scene's own connections rather than every character on the server asking each
+		/// for its scene.
+		/// </remarks>
 		private float NearestPlayerDistance(SceneWeather sw, Vector3 p)
 		{
 			float best = float.MaxValue;
-			int handle = sw.Scene.handle;
-			foreach (IPlayerCharacter character in characters.CharactersByID.Values)
+			if (!network.TryGetSceneConnections(sw.Scene, out HashSet<NetworkConnection> connections))
 			{
-				if (character?.GameObject == null || character.GameObject.scene.handle != handle)
+				return best;
+			}
+			foreach (NetworkConnection connection in connections)
+			{
+				if (connection == null ||
+					!characters.ConnectionCharacters.TryGetValue(connection, out IPlayerCharacter character) ||
+					character?.GameObject == null)
 				{
 					continue;
 				}

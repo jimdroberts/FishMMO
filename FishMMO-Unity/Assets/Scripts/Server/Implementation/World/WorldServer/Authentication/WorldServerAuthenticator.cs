@@ -6,6 +6,7 @@ using FishNet.Connection;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.Collections;
 using FishMMO.Server.Core.World.WorldServer;
 using FishMMO.Shared;
@@ -54,24 +55,53 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Prevents repeated expensive DB calls (FetchByAccountAsync) from rapid re-auth attempts.
 		/// Entries expire automatically and are swept via <see cref="OnAuthSweep"/>.
 		/// </summary>
+		/// <remarks>
+		/// Timed on <see cref="MonotonicClock"/> by both its callers: a debounce is a duration, and on
+		/// the wall clock a host clock stepped back refused an account's sign-in for the size of the step.
+		/// </remarks>
 		private readonly ExpiringKeyTracker<string> loginAttemptByAccount =
 			new ExpiringKeyTracker<string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
-		/// Per-account "recently admitted" timestamps, used to bound the burst-admission
-		/// race window described on <see cref="TimeSpan.FromSeconds(recentAdmissionWindowSeconds)"/>. Periodically swept.
+		/// Accounts admitted within the last <see cref="recentAdmissionWindowSeconds"/>, keyed by
+		/// account, one window per admission on the monotonic clock, used to bound the
+		/// burst-admission race (see <see cref="TryLoginAsync"/>). Re-admitting an account restarts
+		/// its window at the back.
 		/// </summary>
-		private readonly ConcurrentDictionary<string, DateTime> recentAdmissionsByAccount =
-			new ConcurrentDictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+		/// <remarks>
+		/// Windows are kept in the order they opened, so expiry is swept head-first. It was a
+		/// dictionary swept by enumerating at most <see cref="sweepMaxScan"/> entries from its head,
+		/// which never reached an expired entry sitting behind that many live ones — and the
+		/// admission count those entries fed never came back down, so under a steady login rate the
+		/// world answered ServerFull well short of <see cref="MaxPlayers"/> real players. Monotonic
+		/// because the window is a local duration: a wall-clock step back would have held every
+		/// reservation for the length of the step.
+		/// <para>
+		/// Created on first use: its window comes from a serialized field, which Unity has not
+		/// applied yet when field initializers run.
+		/// </para>
+		/// </remarks>
+		private FishMMO.Auth.Core.Collections.FixedWindowCounter<string> recentAdmissionsByAccount;
 
 		/// <summary>
-		/// Tracks the number of entries in <see cref="recentAdmissionsByAccount"/>.
-		/// Updated atomically via Interlocked — incremented on first admission for a
-		/// username, decremented on sweep removal. Avoids the systematic undercount that
-		/// would occur from iterating a ConcurrentDictionary snapshot while concurrent
-		/// admissions add new entries.
+		/// The recent-admission windows, or null when the reservation is disabled
+		/// (<see cref="recentAdmissionWindowSeconds"/> zero or less).
 		/// </summary>
-		private int recentAdmissionCount;
+		private FishMMO.Auth.Core.Collections.FixedWindowCounter<string> RecentAdmissions
+		{
+			get
+			{
+				if (recentAdmissionWindowSeconds <= 0f)
+				{
+					return null;
+				}
+				// Token-auth workers and the main thread both get here; EnsureInitialized
+				// publishes exactly one instance.
+				return LazyInitializer.EnsureInitialized(ref recentAdmissionsByAccount,
+					() => new FishMMO.Auth.Core.Collections.FixedWindowCounter<string>(
+						TimeSpan.FromSeconds(recentAdmissionWindowSeconds), StringComparer.OrdinalIgnoreCase));
+			}
+		}
 
 		/// <summary>
 		/// Maximum number of players allowed to connect to the world server.
@@ -104,7 +134,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Rate-limit TryLoginAsync per account to prevent repeated expensive DB calls.
 			username = Authentication.NormalizeAccountLookup(username);
-			if (!loginAttemptByAccount.TryBegin(username, DateTime.UtcNow, TimeSpan.FromSeconds(loginAttemptDebounceSeconds)))
+			if (!loginAttemptByAccount.TryBegin(username, MonotonicClock.NowSeconds, TimeSpan.FromSeconds(loginAttemptDebounceSeconds)))
 			{
 				await Log.Warning("WorldServerAuthenticator", $"Rate-limited TryLoginAsync for account '{username}'");
 				return ClientAuthenticationResult.ServerBusy;
@@ -120,7 +150,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			int sceneCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData)
 				? sceneData.ConnectionCount
 				: 0;
-			int recentCount = CountRecentAdmissions(DateTime.UtcNow);
+			int recentCount = CountRecentAdmissions(MonotonicClock.NowSeconds);
 			if ((long)sceneCount + recentCount >= MaxPlayers)
 			{
 				loginAttemptByAccount.Remove(username);
@@ -134,30 +164,28 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return ClientAuthenticationResult.ServerBusy;
 			}
 
-			// If login is successful, verify the account has a selected character before world entry.
-			DatabaseResult<CharacterData?> fetchResult = await characterService.FetchByAccountAsync(username, selected: true);
+			/* If login is successful, verify the account has a selected character before world entry,
+			 * and read its staff lock with it. One read: the lock columns are on the same row, and
+			 * reading it a second time just for them doubled what every world login cost the
+			 * database. A failed read fails closed for the lock as it always did. */
+			DatabaseResult<(CharacterData Character, CharacterLockState Lock)?> fetchResult = await characterService.FetchSelectedWithLockAsync(username);
 			if (!fetchResult.IsSuccess)
 			{
-				await Log.Warning("WorldServerAuthenticator", $"Selected character fetch failed for account '{username}': [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}. Answering ServerBusy.");
+				await Log.Warning("WorldServerAuthenticator", $"Selected character fetch failed for account '{username}': [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}. Answering ServerBusy (fail-closed).");
 				loginAttemptByAccount.Remove(username);
 				return ClientAuthenticationResult.ServerBusy;
 			}
 
 			if (fetchResult.Data.HasValue)
 			{
+				CharacterData selected = fetchResult.Data.Value.Character;
+
 				/* A staff character lock. Character select refuses a locked character, but a client
 				 * that already holds a token can come straight here — a kicked client reconnecting —
-				 * and the account's selection still points at the locked character. Fail closed on a
-				 * failed read. A locked character answers NoCharacterSelected: the client goes back to
-				 * character select, whose own refusal says who locked it and until when. */
-				DatabaseResult<CharacterLockState> lockResult = await characterService.FetchLockAsync(fetchResult.Data.Value.ID);
-				if (!lockResult.IsSuccess)
-				{
-					await Log.Warning("WorldServerAuthenticator", $"Character lock fetch failed for account '{username}': [{lockResult.ErrorCode}] {lockResult.ErrorMessage}. Refusing entry (fail-closed).");
-					loginAttemptByAccount.Remove(username);
-					return ClientAuthenticationResult.ServerBusy;
-				}
-				if (lockResult.Data.IsLocked(DateTime.UtcNow))
+				 * and the account's selection still points at the locked character. A locked
+				 * character answers NoCharacterSelected: the client goes back to character select,
+				 * whose own refusal says who locked it and until when. */
+				if (fetchResult.Data.Value.Lock.IsLocked(DateTime.UtcNow))
 				{
 					loginAttemptByAccount.Remove(username);
 					await Log.Info("WorldServerAuthenticator", $"Account '{username}' tried to enter the world with a character locked by staff; refusing.");
@@ -180,7 +208,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				 * that will not clear on its own. */
 				if (Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData))
 				{
-					AccessLevel accessLevel = (AccessLevel)(int)fetchResult.Data.Value.AccessLevel;
+					AccessLevel accessLevel = (AccessLevel)(int)selected.AccessLevel;
 
 					if (worldData.ShutdownAtUtc.HasValue)
 					{
@@ -197,13 +225,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 				// Reserve a slot for the brief window before UpdateConnectionCountAsync
 				// notices this admission. Repeated admissions for the same username (e.g.
-				// fast reconnect) overwrite the timestamp rather than double-counting.
-				//
-				// TryAdd avoids double-counting when an existing entry is updated.
-				recentAdmissionsByAccount.AddOrUpdate(
-					username,
-					_ => { Interlocked.Increment(ref recentAdmissionCount); return DateTime.UtcNow; },
-					(_, _) => DateTime.UtcNow);
+				// fast reconnect) refresh the timestamp rather than double-counting.
+				var recentAdmissions = RecentAdmissions;
+				if (recentAdmissions != null)
+				{
+					recentAdmissions.Remove(username);
+					recentAdmissions.Increment(username, MonotonicClock.NowSeconds);
+				}
 				return ClientAuthenticationResult.WorldLoginSuccess;
 			}
 
@@ -214,18 +242,24 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Returns the number of distinct usernames admitted within the recent-admission
-		/// window. This uses an <see cref="Interlocked"/>-maintained counter rather than
-		/// iterating <see cref="recentAdmissionsByAccount"/>, avoiding the systematic
-		/// undercount that a foreach snapshot would produce when concurrent admissions
-		/// add entries during iteration.
-		///
-		/// <para>Removals happen in <see cref="OnAuthSweep"/>, which decrements the counter
-		/// when it removes expired entries. Between sweeps the counter may include a small
-		/// number of expired-but-not-yet-swept entries — this overcount is conservative
-		/// (slightly under-admits), which is the safe direction.</para>
+		/// Returns the number of distinct usernames admitted within the recent-admission window.
 		/// </summary>
-		private int CountRecentAdmissions(DateTime now) => Thread.VolatileRead(ref recentAdmissionCount);
+		/// <remarks>
+		/// Expired admissions are swept first, head-first, so the count is exact at the moment it
+		/// is read: the sweep costs one comparison per admission that has expired since the last
+		/// one, plus one. A per-frame sweep in <see cref="OnAuthSweep"/> keeps that backlog small
+		/// and reclaims memory when no one is logging in.
+		/// </remarks>
+		private int CountRecentAdmissions(double nowSeconds)
+		{
+			var recentAdmissions = RecentAdmissions;
+			if (recentAdmissions == null)
+			{
+				return 0;
+			}
+			recentAdmissions.SweepExpired(nowSeconds, int.MaxValue);
+			return recentAdmissions.Count;
+		}
 
 		/// <summary>
 		/// Sweeps expired login-attempt rate-limit entries to prevent unbounded memory growth.
@@ -233,22 +267,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		protected override void OnAuthSweep()
 		{
 			base.OnAuthSweep();
-			loginAttemptByAccount.SweepExpired(DateTime.UtcNow, sweepMaxScan, sweepMaxRemove);
+			double nowSeconds = MonotonicClock.NowSeconds;
+			loginAttemptByAccount.SweepExpired(nowSeconds, sweepMaxScan, sweepMaxRemove);
 
-			// Bounded sweep of the recent-admission map. Keeps the dictionary from
-			// retaining stale entries across server uptime even if no new logins arrive.
-			// Decrements the admission counter atomically so CountRecentAdmissions
-			// remains consistent without iterating the dictionary.
-			DateTime cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(recentAdmissionWindowSeconds);
-			int scanned = 0;
-			foreach (var kvp in recentAdmissionsByAccount)
-			{
-				if (++scanned > sweepMaxScan) break;
-				if (kvp.Value < cutoff && recentAdmissionsByAccount.TryRemove(kvp.Key, out _))
-				{
-					Interlocked.Decrement(ref recentAdmissionCount);
-				}
-			}
+			// Head-first over admissions in the order they happened, so the oldest expired
+			// ones always go first and a frame with nothing expired costs one comparison.
+			RecentAdmissions?.SweepExpired(nowSeconds, sweepMaxRemove);
 		}
 	}
 }

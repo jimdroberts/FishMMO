@@ -19,7 +19,7 @@
 
 ## Overview
 
-The client authentication module handles the entire client-side lifecycle of authenticating with FishMMO servers. The Unity-facing class `ClientLoginAuthenticator` is a **thin FishNet adapter** that owns an inner sealed `LoginAuthenticatorCore : ClientAuthenticatorCore` (from `FishMMO-Auth.dll`). The engine-independent `ClientAuthenticatorCore` runs the entire client-side state machine — ephemeral X25519 keypair generation, handshake, cookie echoing, ECDH + transcript-bound HKDF key derivation, AES-256-GCM encrypt/decrypt with counter-based nonces, SRP verify/proof, account creation, token reconnection, two-factor verification, duplicate-message guards, and key-material zeroing.
+The client authentication module handles the entire client-side lifecycle of authenticating with FishMMO servers. The Unity-facing class `ClientLoginAuthenticator` is a **thin FishNet adapter** that owns an inner sealed `LoginAuthenticatorCore : ClientAuthenticatorCore` (from `FishMMO-ClientAuth.dll`). The engine-independent `ClientAuthenticatorCore` runs the entire client-side state machine — ephemeral X25519 keypair generation, handshake, cookie echoing, ECDH + transcript-bound HKDF key derivation, AES-256-GCM encrypt/decrypt with counter-based nonces, SRP verify/proof, account creation, token reconnection, two-factor verification, duplicate-message guards, and key-material zeroing.
 
 The Unity wrapper's job is purely routing:
 
@@ -43,7 +43,7 @@ With the encrypted channel established by the core, the authenticator supports f
 
 `ClientSrpData` (from `FishMMO.Auth.Core`) wraps the `SrpClient` library (2048-bit group, SHA-512) to generate ephemeral values, compute client proofs, generate salt/verifier pairs for registration, and verify server proofs. All SRP references are explicitly nulled on cleanup to allow GC collection of sensitive string data.
 
-All cryptographic operations are performed by the core through three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via `FishMMO-Auth.dll`):
+All cryptographic operations are performed by the core through three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped in `FishMMO-AuthShared.dll`):
 
 - **`HandshakeService`** — X25519 ECDH key agreement and transcript-hash computation.
 - **`SrpService`** — Client-side SRP field encryption/decryption (username, ephemeral, proof, salt, registration fields, TOTP, 2FA setup, account verify, auth token).
@@ -93,7 +93,7 @@ Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (Cry
 - Unity 6.3 LTS with IL2CPP scripting backend.
 - FishNet Networking framework (`FishNet.Authenticating.Authenticator` base class, `NetworkManager`, `ClientManager`, `Broadcast` system).
 - `SecureRemotePassword` library — provides `SrpClient`, `SrpParameters`, `SrpEphemeral`, `SrpSession` for 2048-bit SHA-512 SRP-6a.
-- `FishMMO-Auth.dll` — Shared authentication library providing:
+- The FishMMO-Auth libraries, built as three DLLs: `FishMMO-AuthShared.dll` (everything below), `FishMMO-ClientAuth.dll` (`ClientAuthenticatorCore`), and `FishMMO-ServerAuth.dll`, which the client does not use:
   - `FishMMO.Auth.Core`: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, `StrictUtf8`, nonce builder, protocol version constants), `ClientSrpData`, `ClientAuthenticationResult`, `AccessLevel`.
   - `FishMMO.Auth.Implementation`: `HandshakeService`, `SrpService`, `TokenService` — static service classes that encapsulate all client-side crypto operations.
 - `FishMMO.Shared.Authentication` — centralized validation rules (`IsAllowedUsername`: 3–32 chars, alphanumeric + underscores; `IsAllowedPassword`: 8–32 chars, expanded charset).
@@ -103,7 +103,7 @@ Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (Cry
 
 ## Installation / Build
 
-This is an integrated module within the FishMMO Unity project. The client authentication classes are compiled as part of the client assembly. They depend on `FishMMO-Auth.dll` (auto-copied to `Assets/Dependencies/` by the FishMMO-Auth build) for all crypto service classes and core types, and on the shared `Authentication` validation utilities.
+This is an integrated module within the FishMMO Unity project. The client authentication classes are compiled as part of the client assembly. They depend on `FishMMO-AuthShared.dll` and `FishMMO-ClientAuth.dll` (auto-copied to `Assets/Dependencies/` by the FishMMO-Auth build) for all crypto service classes, core types and the client state machine, and on the shared `Authentication` validation utilities.
 
 Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNet `NetworkManager` used for client connections, and that `SetClient()` is called with a valid `Client` instance before any connection attempt.
 
@@ -137,6 +137,7 @@ Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNe
 2. During login, if `OnClientAuthenticationResult` fires with `TwoFactorRequired`, prompt the user for a TOTP code or recovery code.
 3. Call `authenticator.SendTotpCode(code)` with the 6-digit TOTP code or XXXX-XXXX-XXXX-XXXX recovery code.
 4. `OnClientAuthenticationResult` fires again with `LoginSuccess` (on valid code) or `TwoFactorInvalid` (on failure — retry allowed).
+5. The Login Server gives each prompt a window (`TwoFactorWindowSeconds`, default 120 s) and allows five codes per sign-in. When either runs out it answers `TwoFactorExpired` and closes the connection. The client keeps no timer of its own for the prompt, so it cannot disagree with the server's; `LastResultAnsweredTwoFactorCode` says which ending it was — `true` when the result answered a code this client sent (the attempts ran out), `false` when it arrived unasked (the window did, which the server only lets happen while no code is being checked). `UITKLogin` closes the prompt, says which, and returns to the sign-in form. A connection that stops during the step with no answer at all (a dropped network, or a server older than `TwoFactorExpired`) is still reported as the step ending.
 
 ## Configuration
 
@@ -146,6 +147,7 @@ Ensure `ClientLoginAuthenticator` is attached as the authenticator on the FishNe
 |----------|------|--------|-------------|
 | `Client` | `Client` | Public (set via `SetClient()`) | FishNet client wrapper for broadcasting messages |
 | `HasAuthToken` | `bool` | Public (read-only) | Whether a stored auth token exists for token-based reconnection |
+| `LastResultAnsweredTwoFactorCode` | `bool` | Public (read-only) | Whether the most recent auth result answered a two-factor code this client sent; read it in an `OnClientAuthenticationResult` handler to tell the two `TwoFactorExpired` endings apart |
 
 ### Credential Setup
 
@@ -365,6 +367,12 @@ Client                                         Server
   │  On failure:                                   │
   │◄── ClientAuthResultBroadcast ─────────────────│  { TwoFactorInvalid }
   │  (Retry by calling SendTotpCode again)         │
+  │                                               │
+  │  No code within the window (120 s by default): │
+  │◄── ClientAuthResultBroadcast ─────────────────│  { TwoFactorExpired }, unasked
+  │  The fifth wrong code:                         │
+  │◄── ClientAuthResultBroadcast ─────────────────│  { TwoFactorExpired }, answering it
+  │◄── connection closed ─────────────────────────│
 ```
 
 ### Phase 4: Token-Based Reconnection
@@ -454,25 +462,28 @@ Client/Authentication/
 └── README.md                     # This file
 ```
 
-### FishMMO-Auth DLL (shared library)
+### FishMMO-Auth DLLs (shared libraries)
 
-Core types and crypto services consumed by the authenticator. Built from the `FishMMO-Auth` project and auto-copied to `Assets/Dependencies/FishMMO-Auth.dll`.
+Core types and crypto services consumed by the authenticator. Built from the `FishMMO-Auth` solution's `FishMMO-AuthShared` and `FishMMO-ClientAuth` projects and auto-copied to `Assets/Dependencies/FishMMO-AuthShared.dll` and `Assets/Dependencies/FishMMO-ClientAuth.dll`. (The third, `FishMMO-ServerAuth.dll`, holds the server's side.)
 
 ```
 FishMMO-Auth/
-├── Core/
-│   ├── CryptoHelper.cs                # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, GcmNonceContext, nonce builder
-│   ├── ClientSrpData.cs               # Client SRP state (ephemeral, proof, session verify, salt/verifier generation)
-│   ├── ClientAuthenticationResult.cs  # Enum: auth result codes (LoginSuccess, TokenDecryptFailed, etc.)
-│   └── AccessLevel.cs                 # Enum: Player, Moderator, Admin, etc.
+├── FishMMO-AuthShared/                            # → FishMMO-AuthShared.dll
+│   ├── Core/Enums/
+│   │   ├── ClientAuthenticationResult.cs          # Enum: auth result codes (LoginSuccess, TokenDecryptFailed, etc.)
+│   │   └── AccessLevel.cs                         # Enum: Player, Moderator, Admin, etc.
+│   ├── Implementation/Crypto/
+│   │   └── CryptoHelper.cs                        # AES-256-GCM, X25519 ECDH, HKDF-SHA256, StrictUtf8, GcmNonceContext, nonce builder
+│   ├── Implementation/SRP/
+│   │   └── ClientSrpData.cs                       # Client SRP state (ephemeral, proof, session verify, salt/verifier generation)
+│   └── Implementation/Services/
+│       ├── HandshakeService.cs                    # X25519 ECDH key agreement (client + server sides)
+│       ├── SrpService.cs                          # Client-side SRP encrypt/decrypt (username, ephemeral, proof, registration, TOTP, 2FA)
+│       └── TokenService.cs                        # Client-side token encryption for World/Scene server auth
 │
-├── Implementation/Auth/
-│   └── ClientAuthenticatorCore.cs     # Engine-independent client-side state machine (abstract base for LoginAuthenticatorCore)
-│
-└── Implementation/Services/
-    ├── HandshakeService.cs            # X25519 ECDH key agreement (client + server sides)
-    ├── SrpService.cs                  # Client-side SRP encrypt/decrypt (username, ephemeral, proof, registration, TOTP, 2FA)
-    └── TokenService.cs                # Client-side token encryption for World/Scene server auth
+└── FishMMO-ClientAuth/                            # → FishMMO-ClientAuth.dll
+    └── Implementation/Auth/
+        └── ClientAuthenticatorCore.cs             # Engine-independent client-side state machine (abstract base for LoginAuthenticatorCore)
 ```
 
 ### Related Modules
@@ -520,7 +531,7 @@ FishNet.Authenticating.Authenticator (abstract MonoBehaviour)
         └── events: OnClientAuthenticationResult, OnTwoFactorSetupReceived
 ```
 
-The inner `LoginAuthenticatorCore` implements all 11 abstract callbacks of `ClientAuthenticatorCore`:
+The inner `LoginAuthenticatorCore` implements all 13 abstract callbacks of `ClientAuthenticatorCore`:
 
 | Abstract callback | Implementation |
 |---|---|
@@ -570,7 +581,8 @@ System.Object (from FishMMO-Auth)
 | `FishNet.Authenticating.Authenticator` | Base class for client/server authentication in FishNet |
 | `FishNet.Managing.NetworkManager` | Provides `ClientManager` for broadcast registration and connection state events |
 | `SecureRemotePassword` | SRP-6a protocol library (2048-bit group, SHA-512): `SrpClient`, `SrpParameters`, `SrpEphemeral`, `SrpSession` |
-| `FishMMO-Auth.dll` | Shared auth library: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, nonce builder, `StrictUtf8`), `ClientSrpData`, `ClientAuthenticationResult`, `AccessLevel`, `HandshakeService`, `SrpService`, `TokenService` |
+| `FishMMO-AuthShared.dll` | Shared auth library: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, nonce builder, `StrictUtf8`), `ClientSrpData`, `ClientAuthenticationResult`, `AccessLevel`, `HandshakeService`, `SrpService`, `TokenService` |
+| `FishMMO-ClientAuth.dll` | `ClientAuthenticatorCore`, the engine-independent client state machine `LoginAuthenticatorCore` derives from |
 | `FishMMO.Shared.Authentication` | Centralized validation: `IsAllowedUsername` (3–32 chars, alphanumeric + underscores), `IsAllowedPassword` (8–32 chars, expanded charset) |
 | `Client` | FishNet client wrapper for `Broadcast()` and `ForceDisconnect()` |
 | `FishMMO.Logging` | Structured logging via `Log.Warning()`, `Log.Error()`, `Log.Debug()` |

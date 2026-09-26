@@ -28,6 +28,9 @@ namespace FishMMO.Database.Npgsql.Services
 	/// - Converts to custom DatabaseException hierarchy with sanitized messages
 	/// - Returns DatabaseResult for safe, typed error handling
 	/// - Preserves detailed error information for logging while exposing safe messages to clients
+	///
+	/// Writes happen only through <see cref="ReplaceSetsAsync"/>, which <see cref="CharacterService"/>
+	/// runs inside its own character-row transaction; see <see cref="ICharacterBuffService"/>.
 	/// </remarks>
 	public sealed class CharacterBuffService : BaseService<CharacterBuffEntity>, ICharacterBuffService
 	{
@@ -49,77 +52,182 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 		}
 
-		/// <inheritdoc/>
-		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterBuffData> buffs, CancellationToken cancellationToken = default)
+		/// <summary>
+		/// Every row of a batch of buff sets, flattened into the column arrays the replace statement
+		/// binds.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="Owners"/> names every character whose set is being replaced, including those
+		/// whose set is empty: an owner with no rows is how "this character has no buffs" reaches the
+		/// database, and it is the case the old upsert could not express at all.
+		/// </remarks>
+		public sealed class BuffSetRows
 		{
-			var buffList = buffs?.ToList();
-			if (buffList == null || buffList.Count == 0)
+			/// <summary>Every character whose stored set is replaced. Distinct.</summary>
+			public long[] Owners;
+			/// <summary>Per row: the owning character.</summary>
+			public long[] CharacterIds;
+			/// <summary>Per row: the buff template.</summary>
+			public int[] TemplateIds;
+			/// <summary>Per row: the version stamped on it, which is its character's snapshot version.</summary>
+			public long[] Versions;
+			/// <summary>Per row: seconds of duration left.</summary>
+			public double[] RemainingTimes;
+			/// <summary>Per row: seconds until the next tick.</summary>
+			public double[] TickTimes;
+			/// <summary>Per row: stacks.</summary>
+			public int[] Stacks;
+			/// <summary>Per row: ticks fired so far.</summary>
+			public int[] TickCounts;
+
+			/// <summary>Number of buff rows (not owners).</summary>
+			public int RowCount => CharacterIds.Length;
+		}
+
+		/// <summary>
+		/// Flattens buff sets into the arrays <see cref="ReplaceSetsAsync"/> binds. Pure.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The set decides whose rows they are, and which version they carry.</b> Every row is
+		/// written under its set's character and its set's version, whatever the DTO says: a set is
+		/// written only after its character row has passed that row's version and ownership checks in
+		/// the same transaction, so the row's character and version are the ones proven, and a row
+		/// naming anyone else must not ride on that proof.
+		/// </para>
+		/// <para>
+		/// A template named twice in one set keeps its first occurrence. The capture reads a
+		/// dictionary keyed by template, so a duplicate is a caller defect — and an
+		/// <c>INSERT ... ON CONFLICT</c> that meets one key twice fails the whole statement, which
+		/// would take the character row down with it. A character named by two sets keeps the one
+		/// with the higher version, for the reason <c>PersistManyAsync</c> keeps the newer of two
+		/// snapshots.
+		/// </para>
+		/// </remarks>
+		/// <param name="sets">The sets to write: the character, its snapshot version, and its complete set of buffs (never null; empty means none).</param>
+		/// <returns>The column arrays, or null when <paramref name="sets"/> names nobody.</returns>
+		public static BuffSetRows FlattenSets(IReadOnlyList<(long CharacterID, long Version, IReadOnlyList<CharacterBuffData> Buffs)> sets)
+		{
+			if (sets == null || sets.Count == 0)
 			{
-				return DatabaseResult<BulkWriteResult>.Failure(
-					DatabaseErrorCodes.ValidationError,
-					"No buffs to save. Buffs collection must not be null or empty.");
+				return null;
 			}
 
-			if (buffList.Any(b => b.Version <= 0))
+			var newest = new Dictionary<long, (long Version, IReadOnlyList<CharacterBuffData> Buffs)>(sets.Count);
+			var order = new List<long>(sets.Count);
+			for (int i = 0; i < sets.Count; ++i)
 			{
-				return DatabaseResult<BulkWriteResult>.Failure(
-					DatabaseErrorCodes.ValidationError,
-					"One or more buffs had an invalid Version. Version must be greater than 0.");
+				(long characterId, long version, IReadOnlyList<CharacterBuffData> buffs) = sets[i];
+				if (characterId <= 0 || buffs == null)
+				{
+					continue;
+				}
+				if (newest.TryGetValue(characterId, out var held))
+				{
+					if (version > held.Version)
+					{
+						newest[characterId] = (version, buffs);
+					}
+					continue;
+				}
+				newest[characterId] = (version, buffs);
+				order.Add(characterId);
 			}
 
-			// Counted before collapsing, so a key the batch names twice shows as Filtered. See BulkBatch.
-			int suppliedRows = buffList.Count;
-			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
-			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
-			buffList = BulkBatch.KeepNewest(buffList, buff => (buff.CharacterID, buff.TemplateID), buff => buff.Version);
-
-
-			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
+			if (order.Count == 0)
 			{
-				var characterIds = buffList.Select(b => b.CharacterID).Distinct().ToArray();
-				var activeCharacterIds = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-					.Select(c => c.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
+				return null;
+			}
 
-				if (activeCharacterIdSet.Count != characterIds.Length)
+			var characterIds = new List<long>();
+			var templateIds = new List<int>();
+			var versions = new List<long>();
+			var remainingTimes = new List<double>();
+			var tickTimes = new List<double>();
+			var stacks = new List<int>();
+			var tickCounts = new List<int>();
+			var seen = new HashSet<int>();
+
+			foreach (long characterId in order)
+			{
+				(long version, IReadOnlyList<CharacterBuffData> buffs) = newest[characterId];
+				seen.Clear();
+				for (int i = 0; i < buffs.Count; ++i)
 				{
-					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
-					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
+					CharacterBuffData buff = buffs[i];
+					if (!seen.Add(buff.TemplateID))
+					{
+						continue;
+					}
+					characterIds.Add(characterId);
+					templateIds.Add(buff.TemplateID);
+					versions.Add(version);
+					remainingTimes.Add(buff.RemainingTime);
+					tickTimes.Add(buff.TickTime);
+					stacks.Add(buff.Stacks);
+					tickCounts.Add(buff.TickCount);
 				}
+			}
 
-				var activeBuffs = buffList.Where(b => activeCharacterIdSet.Contains(b.CharacterID)).ToList();
-				if (activeBuffs.Count == 0)
-				{
-					return new BulkWriteResult(suppliedRows, 0, 0);
-				}
+			return new BuffSetRows
+			{
+				Owners = order.ToArray(),
+				CharacterIds = characterIds.ToArray(),
+				TemplateIds = templateIds.ToArray(),
+				Versions = versions.ToArray(),
+				RemainingTimes = remainingTimes.ToArray(),
+				TickTimes = tickTimes.ToArray(),
+				Stacks = stacks.ToArray(),
+				TickCounts = tickCounts.ToArray(),
+			};
+		}
 
-				var now = DateTime.UtcNow;
-				var characterIdArray = activeBuffs.Select(b => b.CharacterID).ToArray();
-				var templateIdArray = activeBuffs.Select(b => b.TemplateID).ToArray();
-				var versionArray = activeBuffs.Select(b => b.Version).ToArray();
-				var remainingTimeArray = activeBuffs.Select(b => b.RemainingTime).ToArray();
-				var tickTimeArray = activeBuffs.Select(b => b.TickTime).ToArray();
-				var stacksArray = activeBuffs.Select(b => b.Stacks).ToArray();
-				var tickCountArray = activeBuffs.Select(b => b.TickCount).ToArray();
+		/// <summary>
+		/// Makes each named character's stored buffs exactly its set, inside the caller's
+		/// transaction. One statement for the whole batch.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Only <c>ICharacterService</c>'s row writes call this, and only for rows they have just
+		/// written.</b> That is the entire concurrency argument, and it is why this method carries no
+		/// version guard of its own. The character row's <c>UPDATE ... WHERE version &lt; incoming</c>
+		/// (plus the ownership triple when a claim is held) runs first in the same transaction and
+		/// holds the row lock until the commit, so for any one character the sets are applied in the
+		/// order of their snapshots' versions: a newer save that already committed makes an older
+		/// one's row update match nothing, and that older save then writes no set at all — it cannot
+		/// delete a buff the newer save wrote, nor re-add one the newer save dropped. Two saves in
+		/// flight together serialise on the row lock and the second re-checks the version after the
+		/// first commits.
+		/// </para>
+		/// <para>
+		/// Per-row versions could not do this. A buff that ended and was applied again is a new
+		/// instance whose counter restarts, so it was refused as stale against its own dead
+		/// predecessor's row for as many saves as that row had seen; and a set that became empty has
+		/// no row left to carry a version, so an older save landing after it could re-insert what it
+		/// had dropped. The row version is stamped from the snapshot for inspection only.
+		/// </para>
+		/// <para>
+		/// Rows a set does not name are hard-deleted, soft-deleted ones included: this is live
+		/// gameplay churn, not an audit trail, and the row guard above is what orders writers, so no
+		/// tombstone is needed to refuse a late one. The deletion runs in the same statement as the
+		/// upsert and the two touch disjoint keys — what the set names versus what it does not — so
+		/// the shared snapshot of a data-modifying <c>WITH</c> cannot make them disagree.
+		/// </para>
+		/// </remarks>
+		/// <param name="dbContext">The caller's context, with its transaction open.</param>
+		/// <param name="rows">The flattened sets, from <see cref="FlattenSets"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		internal static async Task ReplaceSetsAsync(NpgsqlDbContext dbContext, BuffSetRows rows, CancellationToken cancellationToken)
+		{
+			if (rows == null || rows.Owners == null || rows.Owners.Length == 0)
+			{
+				return;
+			}
 
-				var sql = $@"
-					INSERT INTO {TableName}
-						(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count, time_created, deleted, time_deleted)
-					SELECT
-						u.character_id,
-						u.template_id,
-						u.version,
-						u.remaining_time,
-						u.tick_time,
-						u.stacks,
-						u.tick_count,
-						{{7}},
-						FALSE,
-						NULL
+			string table = dbContext.GetTableName<CharacterBuffEntity>();
+			string sql = $@"
+				WITH incoming AS (
+					SELECT *
 					FROM UNNEST(
 						{{0}}::bigint[],
 						{{1}}::integer[],
@@ -129,29 +237,45 @@ namespace FishMMO.Database.Npgsql.Services
 						{{5}}::integer[],
 						{{6}}::integer[]
 					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count)
-					ON CONFLICT (character_id, template_id)
-					DO UPDATE SET
-						remaining_time = EXCLUDED.remaining_time,
-						tick_time = EXCLUDED.tick_time,
-						stacks = EXCLUDED.stacks,
-						tick_count = EXCLUDED.tick_count,
-						deleted = FALSE,
-						time_deleted = NULL,
-						version = EXCLUDED.version
-					WHERE
-						EXCLUDED.version > {TableName}.version;";
+				),
+				dropped AS (
+					DELETE FROM {table} AS b
+					WHERE b.character_id = ANY({{7}}::bigint[])
+						AND NOT EXISTS (
+							SELECT 1 FROM incoming AS i
+							WHERE i.character_id = b.character_id AND i.template_id = b.template_id)
+				)
+				INSERT INTO {table}
+					(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count, time_created, deleted, time_deleted)
+				SELECT
+					i.character_id, i.template_id, i.version, i.remaining_time, i.tick_time, i.stacks, i.tick_count,
+					{{8}}, FALSE, NULL
+				FROM incoming AS i
+				ON CONFLICT (character_id, template_id)
+				DO UPDATE SET
+					remaining_time = EXCLUDED.remaining_time,
+					tick_time = EXCLUDED.tick_time,
+					stacks = EXCLUDED.stacks,
+					tick_count = EXCLUDED.tick_count,
+					deleted = FALSE,
+					time_deleted = NULL,
+					version = EXCLUDED.version";
 
-				int appliedRows = await ExecuteBulkUpsertAsync(
-					dbContext,
-					sql,
-					activeBuffs.Count,
-					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, tickCountArray, now },
-					"One or more buffs were rejected due to a stale Version.",
-					cancellationToken,
-					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
-
-				return new BulkWriteResult(suppliedRows, activeBuffs.Count, appliedRows);
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			await dbContext.Database.ExecuteSqlRawAsync(
+				sql,
+				new object[]
+				{
+					rows.CharacterIds,
+					rows.TemplateIds,
+					rows.Versions,
+					rows.RemainingTimes,
+					rows.TickTimes,
+					rows.Stacks,
+					rows.TickCounts,
+					rows.Owners,
+					DateTime.UtcNow,
+				},
+				cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

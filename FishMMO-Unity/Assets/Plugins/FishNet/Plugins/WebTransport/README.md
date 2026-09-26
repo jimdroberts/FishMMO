@@ -31,7 +31,7 @@ Because no binary is tracked, the library that loads at runtime can be older
 than the C# that calls it. `WebTransportNative.EnsureInitialized` checks that
 before anything else:
 
-- `wt_abi_version()` must equal `WebTransportNative.ExpectedAbiVersion` (**3**,
+- `wt_abi_version()` must equal `WebTransportNative.ExpectedAbiVersion` (**4**,
   paired with `WT_ABI_VERSION` in `FishMMO-WebTransport/src/webtransport_api.h`;
   `FishMMO-WebTransport/tests/check_abi_version.sh` verifies the pair). A
   mismatch, a `DllNotFoundException`, or a library too old to export
@@ -80,6 +80,149 @@ per-connection in-flight cap, 8 MB), means the peer is not reading and its
 stream is already broken, so `KickSlowClient` disconnects it rather than let the
 shared queue drop other clients' reliable packets. Broadcasts (`connectionId ==
 -1`) count against nobody.
+
+## Traffic statistics
+
+The transport counts what it sends and receives, and game code reads it all
+through one call. FishNet's `StatisticsManager` is not used: it is off in
+release builds, hard-disabled on servers (`UNITY_SERVER`), its byte types are
+`internal`, and development builds count each byte twice.
+
+```csharp
+using FishNet.Transporting.WebTransport;
+
+TransportTraffic.Capture(out TransportTrafficSnapshot now);          // any thread, no allocation
+if (TransportTrafficMath.TryComputeRates(in previous, in now, out TransportTrafficRates r))
+{
+    double upKBps   = r.WireSentBytesPerSecond / 1024.0;              // NaN when unknown
+    double overhead = r.SentOverheadRatio;                            // wire bytes per app byte
+}
+```
+
+### Layers
+
+Every figure carries a `TrafficMeasure`: `Measured`, `BrowserReported`,
+`Estimated`, or `Unavailable`. An unavailable value is `-1` (integers) or `NaN`
+(rates, times) — **never read it as 0 or show it as 0**.
+
+| Layer | What it is | Desktop client, editor, servers | WebGL, browser gives bytes | WebGL, no bytes (Chrome) |
+|---|---|---|---|---|
+| **App** `App{Sent,Recv}{Reliable,Unreliable}{Bytes,Messages}` | FishNet bundles handed to / delivered by the transport | Measured (managed socket) | Measured | Measured |
+| **Framing** `Framing{Sent,Recv}Bytes` | the length prefix on every reliable message | Measured (exact) | Measured (exact) | Measured (exact) |
+| **QUIC** `Quic{Sent,Recv}Bytes` | UDP payload: QUIC headers, AEAD tags, padding, ACK-only packets, retransmissions, handshake | Measured (msquic `UDP_*_BYTES`) | BrowserReported (`getStats()`) | Estimated (model below) |
+| **Datagrams** `Udp{Sent,Recv}Datagrams` | UDP datagrams | Measured (msquic `UDP_SEND` / `UDP_RECV`) | Estimated (`packetsSent/Received`) | Estimated (model) |
+| **Wire** `Wire{Sent,Recv}Bytes` (derived) | QUIC + 28 B (IPv4 20 + UDP 8) per datagram | Estimated, exact up to IP options | Estimated | Estimated |
+
+Ethernet framing is deliberately not added: egress is billed at the IP level.
+`TransportTrafficMath.IpV4UdpHeaderBytes` is 28 because the native stack binds
+IPv4 only.
+
+`snapshot.Process` (native only) adds msquic's process-wide counters:
+`QuicAppSentBytes`/`QuicAppRecvBytes` (the app layer plus this transport's
+framing and HTTP/3 headers, as msquic saw it), connections created, active and
+connected (gauges), handshake failures, connections refused by this
+transport's limits, by msquic load and for no ALPN, protocol errors, packets
+lost/dropped/undecryptable, stateless retries and resets. `SessionsOpened` /
+`SessionsActive` are WebTransport sessions: accepted clients on a server,
+successful connects (one per hop) on a client.
+
+`snapshot.Connection` (clients only) is the client connection's RTT (smoothed,
+min, max, variance), path MTU, congestion window, packets and bytes each way,
+and lost packets (msquic's suspected − spurious; QUIC retransmits the frames of
+lost packets, so this is also the retransmission count). On WebGL only the RTT
+fields can be known, and only where `getStats()` exists.
+
+### Totals and clocks
+
+- **Process lifetime.** A client's server hop builds a new socket; nothing in
+  `TransportTraffic` is reset by it (the per-session `GetClientWireStats`
+  handshake diagnostics still are). msquic's counters are baselined at every
+  `wt_init` and folded into a carried total before every `wt_deinit`, so a
+  deinitialise does not reset them and a Unity domain reload restarts the
+  managed and native totals together.
+- **Clock.** `TimestampSeconds` is `Stopwatch` seconds, the same basis as the
+  server's `MonotonicClock.NowSeconds`. Only differences mean anything.
+- **Rates.** `TryComputeRates` fails on an empty interval, a backend change, or
+  an application total that went backwards (not one process lifetime). A layer
+  whose measure differs between the two ends — a WebGL client whose first
+  `getStats()` answer arrived mid-interval — comes back `Unavailable` for that
+  interval rather than as a spike. To smooth a display, difference against the
+  snapshot from a few seconds back rather than averaging one-second rates.
+
+### Where counting happens
+
+- **Sends** are counted after the native (or browser) send call accepted them,
+  per recipient: a server broadcast is serialised once but paid for once per
+  client.
+- **Receives** are counted on arrival, on the msquic worker thread, **before**
+  the server's per-connection rate limiter and before the incoming-event queue:
+  a flooder's refused messages still crossed the wire.
+- The hot-path cost is two or three uncontended `Interlocked` adds per message.
+  Send and receive counters sit on separate cache lines.
+
+### Connection statistics and the blocking read
+
+A connection-level msquic read blocks until that connection's worker answers.
+So `Capture` never makes one: the client socket reads
+`wt_client_get_connection_stats` itself in `IterateIncoming`, on the thread
+that polls and later destroys the handle, **at most once a second and only
+while something has called `Capture` in the last five seconds**. A hidden panel
+costs nothing. The first capture after a quiet spell therefore carries no
+connection statistics yet. The native side keeps the connection handle open
+until an in-flight read returns, so a read that meets the connection's
+shutdown is safe.
+
+### WebGL
+
+The jslib's `WTGetStats` returns the answers already received from each
+session's `getStats()` and asks for fresh ones, so figures are at most one
+capture old; cumulative fields are summed over every session the page has
+opened. Byte counts are used only when **both** directions are present. Sent
+bytes are `bytesSent + bytesSentOverhead` when the overhead field exists (the
+specification's split); Firefox reports wire bytes in `bytesSent` and omits the
+overhead field. Chrome ships `getStats()` only behind a flag and without byte
+counters, so on Chrome the QUIC layer is **Estimated** by
+`TransportTrafficMath.EstimateBrowserQuic` from the socket's own counters:
+
+- per message: the exact length prefix (reliable), a 1-byte Quarter Stream ID
+  (datagram), a 3-byte frame header;
+- per packet: 30 bytes (1 flags + 9 connection id + 4 packet number + 16 AEAD
+  tag); a packet per datagram message, and per reliable message or per 1200
+  stream bytes, whichever is more;
+- ACKs: one per two packets received, riding on data packets when there are
+  enough of them, 5 bytes each;
+- per session: a client handshake flight of about 1350 bytes, a server flight of
+  about 3000 (a typical certificate chain), and the HTTP/3 set-up (about 150 up,
+  35 down).
+
+The constants come from the RFCs and the native library's own framing; they
+have not been checked against a packet capture, which is why the result is
+labelled Estimated wherever it is shown.
+
+### For a server bandwidth sampler
+
+Take a snapshot every interval and store the **measured** deltas:
+`AppSentBytes`/`AppRecvBytes`, `QuicSentBytes`/`QuicRecvBytes`,
+`UdpSentDatagrams`/`UdpRecvDatagrams` (all `Measured` on a server),
+`SessionsActive` at sample time, and from `TransportTrafficRates`
+`SessionsOpened` (sessions accepted), `ConnectionsRefused` (listener limits,
+msquic load, no ALPN) and `HandshakeFailures`. Compute the IP-level
+figure when reading (`udp + datagrams × 28`), never store it. The process
+counters cover the whole process, including traffic of connections that never
+became sessions, which is exactly what an operator pays for.
+
+One msquic 2.5.9 quirk bounds the sent-datagram count. `QuicPacketBuilderSendBatch`
+reports each batch with the flush's *running* datagram total rather than the
+batch's own, so a flush that emits several batches over-counts `UDP_SEND`; the
+byte counters are unaffected. Measured on loopback with both ends in one process
+(`FishMMO-WebTransport/tests/stats_e2e.cpp`, and a scratch probe): paced
+game-like traffic and a 300 KB reliable burst counted exactly; a connection's
+handshake counted about 20 % more datagrams than were received; a tight mixed
+burst of datagrams and stream messages more than double. The received count is
+exact. The error reaches only the sent IP-header estimate (28 B per over-counted
+datagram), which is labelled Estimated anyway — a few hundred bytes per
+handshake. The fix belongs upstream (count per batch); it is not patched here
+because the Windows build ships msquic's prebuilt `msquic.dll`.
 
 ## Wire format
 

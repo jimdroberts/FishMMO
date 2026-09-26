@@ -67,10 +67,20 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.OwnerGuildID)
 				.HasFilter("owner_guild_id <> 0");
 
-			/* The tax sweep's only query: owned plots whose payment has come due. Filtered to rows
-			 * that have a due date at all, because unowned land is not taxed and is the majority of
-			 * the table on any server with room left to build on. */
-			builder.HasIndex(e => e.TaxDueUtc)
+			/* The tax sweep's page: one world's owned plots whose payment has come due, walked in due
+			 * order with the plot ID as the tie-break. Filtered to rows that have a due date at all,
+			 * because unowned land is not taxed and is the majority of the table on any server with
+			 * room left to build on.
+			 *
+			 * The world leads because every sweep names one; the date alone used to lead, so a sweep
+			 * of one world walked every other world's due rows too. The ID is last because the sweep
+			 * pages with a (tax_due_utc, id) keyset cursor, and a cursor on the date alone cannot
+			 * step past two plots that fall due in the same instant.
+			 *
+			 * tax_next_attempt_utc is deliberately not in the key. It is null on almost every row and
+			 * set only on plots whose owner is playing on another server, so it is cheaper to filter
+			 * on the heap than to widen the index every plot pays for. */
+			builder.HasIndex(e => new { e.WorldServerID, e.TaxDueUtc, e.ID })
 				.HasFilter("tax_due_utc IS NOT NULL");
 
 			/* Serves two purposes at once: "which plot do I own", asked per character on login and

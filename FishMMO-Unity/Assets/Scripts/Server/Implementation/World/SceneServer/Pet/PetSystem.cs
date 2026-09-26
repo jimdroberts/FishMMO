@@ -458,11 +458,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// PetAbilityTemplate survives rather than being silently lost at the next login.
 			PersistPetDismissed(owner, pet);
 
-			if (pet.NetworkObject != null &&
-				pet.NetworkObject.IsSpawned)
-			{
-				ServerManager.Despawn(pet.NetworkObject, DespawnType.Pool);
-			}
+			// Out of the world scene, not in place — see DespawnPet.
+			DespawnPet(pet.NetworkObject);
 			pet.PetOwner = null;
 			petController.Pet = null;
 			petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
@@ -951,15 +948,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				petController.Pet.NetworkObject != null &&
 				petController.Pet.NetworkObject.IsSpawned)
 			{
-				ServerManager.Despawn(petController.Pet.NetworkObject, DespawnType.Pool);
+				DespawnPet(petController.Pet.NetworkObject);
 				petController.Pet = null;
 			}
 
 			Pet pet = nob.GetComponent<Pet>();
 			if (pet == null)
 			{
-				// Pool object has no Pet component — return it to the pool to prevent a leak.
-				ServerManager.Despawn(nob, DespawnType.Pool);
+				/* Pool object has no Pet component — return it to the pool to prevent a leak. It was
+				 * retrieved and never spawned, so it goes back the way the character system returns a
+				 * character it never spawned (StorePooledInstantiated) rather than through a despawn,
+				 * and is kept out of the world scenes like every other pooled pet. */
+				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(nob, true);
+				PersistentPool.Keep(Server.NetworkWrapper.NetworkManager, nob);
 				return false;
 			}
 
@@ -1329,10 +1330,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (pet.NetworkObject != null && pet.NetworkObject.IsSpawned)
-			{
-				ServerManager.Despawn(pet.NetworkObject, DespawnType.Pool);
-			}
+			DespawnPet(pet.NetworkObject);
 
 			/* Drop the reference. Leaving it set meant that after a pet died, the owner's
 			 * controller still pointed at a despawned, pooled object — so a Summon or Follow
@@ -1340,6 +1338,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pet.PetOwner = null;
 			petController.Pet = null;
 			petController.OnOwnerAttacked -= PetController_OnOwnerAttacked;
+		}
+
+		/// <summary>
+		/// Returns a spawned pet to the pool, out of the world scene. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// FishMMO pools through <see cref="PersistentPool"/>, as NPCs and loot do. FishNet leaves a
+		/// despawned object wherever it was, so a pet pooled in place sat inside the world scene its
+		/// owner had been in, and an instance scene unloads with its last occupant — destroying a
+		/// pooled pet the pool still counted. The next summon then paid for a fresh instantiate.
+		/// </remarks>
+		/// <param name="petObject">The pet's network object, or null.</param>
+		private void DespawnPet(NetworkObject petObject)
+		{
+			if (petObject != null && petObject.IsSpawned)
+			{
+				PersistentPool.Despawn(Server.NetworkWrapper.NetworkManager, petObject);
+			}
 		}
 
 		/// <summary>
@@ -1383,11 +1399,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pet.CaptureKnownAbilities();
 
 			long characterID = owner.ID;
+
+			/* The row quotes the session claim held for the owner now, and lands only while it is
+			 * still held (the service's PersistOwnedAsync). Every dismissal runs while the owner is
+			 * resident — connected, or a combat-logout body — so it holds one; the departure paths
+			 * take the claim out of SessionTokens before they raise anything, and never dismiss a pet
+			 * (a pet that is out at logout stays out). Without a claim the owner is not ours to
+			 * write, and nothing is: the owner's own departure snapshot, taken before its release,
+			 * already says what became of the pet. */
+			if (!TryCaptureSessionClaim(characterID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("PetSystem", $"Pet for character {characterID} was dismissed, but this server holds no session claim for it; the dismissal was not written.");
+				return;
+			}
+
 			long version = ++owner.Version;
 			List<int> abilities = pet.PetAbilityIDs != null ? new List<int>(pet.PetAbilityIDs) : new List<int>();
 
-			// Keyed by characterID to serialize with any other pet op for the same character.
-			EnqueuePersistence(() => SavePetDismissedAsync(characterID, version, templateID, abilities), characterID);
+			/* Keyed by characterID to serialize with any other pet op for the same character — and
+			 * with the owner's save-and-release, which runs on the same lane and so after this. */
+			EnqueuePersistence(() => SavePetDismissedAsync(characterID, version, templateID, abilities, claim), characterID);
 		}
 
 		/// <summary>
@@ -1397,8 +1428,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="version">Version to stamp the row with.</param>
 		/// <param name="templateID">Pet template identifier.</param>
 		/// <param name="abilities">Pet ability template identifiers.</param>
+		/// <param name="claim">The owner's session claim when the pet was dismissed.</param>
 		/// <returns>Asynchronous persistence task.</returns>
-		private async Task SavePetDismissedAsync(long characterID, long version, int templateID, List<int> abilities)
+		private async Task SavePetDismissedAsync(long characterID, long version, int templateID, List<int> abilities, CharacterSessionLeaseData claim)
 		{
 			try
 			{
@@ -1408,13 +1440,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
+				/* The batched owned write with one row: the same upsert and the same prune of the rows
+				 * the dismissed pet leaves unrestorable as the single-row write, behind the ownership
+				 * gate. A refusal means the owner's claim is gone and so is this server's say over its
+				 * pet; the report logs it, and the owner is evicted by the row save or the lease
+				 * refresh. */
 				CharacterPetData petData = new CharacterPetData(0, version, characterID, templateID, abilities, false);
-				DatabaseResult persistResult = await charPetService.PersistAsync(petData);
-				if (!persistResult.IsSuccess)
-				{
-					await Log.Warning("PetSystem", $"SavePetDismissedAsync failed for CharID={characterID} at version {version}: " +
-						$"{persistResult.ErrorCode} - {persistResult.ErrorMessage}");
-				}
+				DatabaseResult<BulkWriteResult> persistResult = await charPetService.PersistOwnedAsync(new[] { petData }, ClaimsOf(claim));
+				await BulkWriteReporting.ReportAsync("PetSystem", "Pet dismissal save", persistResult, $"CharID={characterID}, version {version}");
 			}
 			catch (Exception ex)
 			{

@@ -52,7 +52,7 @@ runtime it was compiled with — plus, on Linux, `libnuma`, which the NUMA-aware
 msquic static archive needs. A binary copied from another machine may fail to
 load; the managed side catches the older-than-the-caller case up front through
 the ABI check (`WT_ABI_VERSION` / `WebTransportNative.ExpectedAbiVersion`, both
-**3** at present).
+**4** at present).
 
 ### What gets built?
 

@@ -157,5 +157,22 @@ namespace FishMMO.Shared
 				? MatchedTransferAction.GiveUp
 				: MatchedTransferAction.Wait;
 		}
+
+		/// <summary>
+		/// Whether a matched row may be honoured, given the party the character's membership row
+		/// names now.
+		/// </summary>
+		/// <param name="matchedPartyID">The party the row was matched into; 0 for a match that forms no party (an arena seat).</param>
+		/// <param name="memberPartyID">The party the character's membership row names; 0 when they have none.</param>
+		/// <remarks>
+		/// A row matched into a party the character is not in — a late-join whose claim could not
+		/// be released after the party refused them, or a member the group has since dropped — is
+		/// not a transfer: moving them would put a stranger in somebody else's run, with no leader
+		/// able to remove them. A match with no party has nothing to check.
+		/// </remarks>
+		public static bool IsMatchHonoured(long matchedPartyID, long memberPartyID)
+		{
+			return matchedPartyID <= 0 || memberPartyID == matchedPartyID;
+		}
 	}
 }

@@ -31,9 +31,10 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void EndPulse();
 
 		/// <summary>
-		/// Next UTC timestamp when pending-scene cleanup is allowed.
+		/// When pending-scene cleanup is next allowed, in seconds on
+		/// <see cref="MonotonicClock"/>.
 		/// </summary>
-		DateTime NextPendingSceneSweepUtc { get; set; }
+		double NextPendingSceneSweepAt { get; set; }
 
 		/// <summary>
 		/// Reusable buffer for scene pulse payload data (Handle, CharacterCount).

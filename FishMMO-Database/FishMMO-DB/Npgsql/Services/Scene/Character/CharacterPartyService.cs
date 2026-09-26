@@ -66,29 +66,6 @@ namespace FishMMO.Database.Npgsql.Services
 		private const int CombatLoggedFlagMask = 1 << 13;
 
 		/// <summary>
-		/// Compiled query for retrieving the party members that currently hold a live session.
-		/// </summary>
-		/// <remarks>
-		/// A join rather than two round trips: the alternative is fetching the roster and then
-		/// asking about each member, which is a query per member on a path that already runs once
-		/// per changed party per pump.
-		/// </remarks>
-		private static readonly Func<NpgsqlDbContext, long, DateTime, IAsyncEnumerable<long>> getOnlinePartyMemberIdsQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, DateTime nowUtc) =>
-				context.CharacterParties
-					.AsNoTracking()
-					.Where(p => p.PartyID == partyId)
-					.Join(context.Characters.AsNoTracking(),
-						  p => p.CharacterID,
-						  c => c.ID,
-						  (p, c) => c)
-					.Where(c => !c.Deleted &&
-								c.SessionState != CharacterSessionState.Offline &&
-								c.SessionLeaseExpiresUtc > nowUtc &&
-								(c.Flags & CombatLoggedFlagMask) == 0)
-					.Select(c => c.ID));
-
-		/// <summary>
 		/// Compiled query for counting party members.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> getPartyMemberCountQuery =
@@ -373,16 +350,41 @@ namespace FishMMO.Database.Npgsql.Services
 			return await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getPartyMembersQuery(dbContext, partyId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
-				var members = entities.Select(p => new CharacterPartyData(
-					id: p.ID,
-					version: p.Version,
-					characterID: p.CharacterID,
-					partyID: p.PartyID,
-					rank: p.Rank,
-					healthPCT: p.HealthPCT
-				)).ToList();
+				var members = entities.Select(ToData).ToList();
 
 				return (IReadOnlyList<CharacterPartyData>)members;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterPartyData>>>> FetchManyAsync(long[] partyIds, CancellationToken cancellationToken = default)
+		{
+			long[] ids = DistinctPositive(partyIds);
+			if (ids.Length == 0)
+			{
+				return DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterPartyData>>>.Success(
+					new Dictionary<long, IReadOnlyList<CharacterPartyData>>());
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				// ids.Contains translates to party_id = ANY(@ids): one statement, one index scan.
+				var entities = await dbContext.CharacterParties
+					.AsNoTracking()
+					.Where(p => ids.Contains(p.PartyID))
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var grouped = EmptyGroups<CharacterPartyData>(ids);
+				for (int i = 0; i < entities.Count; ++i)
+				{
+					if (grouped.TryGetValue(entities[i].PartyID, out List<CharacterPartyData> members))
+					{
+						members.Add(ToData(entities[i]));
+					}
+				}
+
+				return Freeze(grouped);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -396,13 +398,112 @@ namespace FishMMO.Database.Npgsql.Services
 					"Party ID must be greater than 0.");
 			}
 
+			/* Answered by the bulk query rather than by a copy of it. "Online" is a four-clause
+			 * predicate that has to agree with the account session checks; two copies of it would
+			 * be two definitions the moment somebody edited one. */
+			var result = await FetchOnlineMemberIdsAsync(new[] { partyId }, cancellationToken).ConfigureAwait(false);
+			if (!result.IsSuccess)
+			{
+				return DatabaseResult<IReadOnlyList<long>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
+			}
+
+			return DatabaseResult<IReadOnlyList<long>>.Success(
+				result.Data.TryGetValue(partyId, out IReadOnlyList<long> online) ? online : Array.Empty<long>());
+		}
+
+		/// <inheritdoc/>
+		/// <remarks>
+		/// A join rather than two round trips: the alternative is fetching the roster and then
+		/// asking about each member, which is a query per member on a path that already runs once
+		/// per pump.
+		/// </remarks>
+		public async Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<long>>>> FetchOnlineMemberIdsAsync(long[] partyIds, CancellationToken cancellationToken = default)
+		{
+			long[] ids = DistinctPositive(partyIds);
+			if (ids.Length == 0)
+			{
+				return DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<long>>>.Success(
+					new Dictionary<long, IReadOnlyList<long>>());
+			}
+
 			var nowUtc = DateTime.UtcNow;
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var ids = await getOnlinePartyMemberIdsQuery(dbContext, partyId, nowUtc).MaterializeAsync(cancellationToken).ConfigureAwait(false);
-				return (IReadOnlyList<long>)ids;
+				var rows = await dbContext.CharacterParties
+					.AsNoTracking()
+					.Where(p => ids.Contains(p.PartyID))
+					.Join(dbContext.Characters.AsNoTracking(),
+						  p => p.CharacterID,
+						  c => c.ID,
+						  (p, c) => new { p.PartyID, Character = c })
+					.Where(x => !x.Character.Deleted &&
+								x.Character.SessionState != CharacterSessionState.Offline &&
+								x.Character.SessionLeaseExpiresUtc > nowUtc &&
+								(x.Character.Flags & CombatLoggedFlagMask) == 0)
+					.Select(x => new { x.PartyID, CharacterID = x.Character.ID })
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				var grouped = EmptyGroups<long>(ids);
+				for (int i = 0; i < rows.Count; ++i)
+				{
+					if (grouped.TryGetValue(rows[i].PartyID, out List<long> online))
+					{
+						online.Add(rows[i].CharacterID);
+					}
+				}
+
+				return Freeze(grouped);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Projects one membership row onto its data transfer shape.
+		/// </summary>
+		private static CharacterPartyData ToData(CharacterPartyEntity p)
+		{
+			return new CharacterPartyData(
+				id: p.ID,
+				version: p.Version,
+				characterID: p.CharacterID,
+				partyID: p.PartyID,
+				rank: p.Rank,
+				healthPCT: p.HealthPCT);
+		}
+
+		/// <summary>
+		/// The distinct positive IDs in a request, or an empty array for a null one.
+		/// </summary>
+		private static long[] DistinctPositive(long[] ids)
+		{
+			return ids == null ? Array.Empty<long>() : ids.Where(id => id > 0).Distinct().ToArray();
+		}
+
+		/// <summary>
+		/// One empty list per requested key, so every key the caller asked about is in the answer.
+		/// </summary>
+		private static Dictionary<long, List<T>> EmptyGroups<T>(long[] ids)
+		{
+			var grouped = new Dictionary<long, List<T>>(ids.Length);
+			for (int i = 0; i < ids.Length; ++i)
+			{
+				grouped[ids[i]] = new List<T>();
+			}
+			return grouped;
+		}
+
+		/// <summary>
+		/// Re-types a grouping as the read-only shape the interface promises.
+		/// </summary>
+		private static IReadOnlyDictionary<long, IReadOnlyList<T>> Freeze<T>(Dictionary<long, List<T>> grouped)
+		{
+			var result = new Dictionary<long, IReadOnlyList<T>>(grouped.Count);
+			foreach (KeyValuePair<long, List<T>> entry in grouped)
+			{
+				result[entry.Key] = entry.Value;
+			}
+			return result;
 		}
 
 		/// <inheritdoc/>

@@ -26,7 +26,7 @@ namespace FishMMO.UnitTests.AI
 			for (int i = 0; i < pendingTimers; ++i)
 			{
 				// Not yet due: the steady state, where the poll scans and finds nothing to do.
-				spawner.AddRespawnTimer(DateTime.UtcNow.AddMinutes(5.0));
+				spawner.AddRespawnTimer(spawner.Scheduler.Now + 300.0);
 			}
 			return spawner;
 		}

@@ -151,6 +151,8 @@ namespace FishMMO.Client
 		private const string UI_SCALE_VALUE_NAME = "ui-scale-value";
 		private const string CHAT_FONT_SLIDER_NAME = "chat-font-slider";
 		private const string CHAT_FONT_VALUE_NAME = "chat-font-value";
+		private const string NETSTATS_ENABLED_NAME = "netstats-enabled-toggle";
+		private const string NETSTATS_GRAPH_NAME = "netstats-graph-toggle";
 		private const string HOTBAR_SECTION_NAME = "options-hotbar-section";
 		private const string HOTBAR_LAYOUT_NAME = "hotbar-layout-dropdown";
 		private const string RESET_LAYOUT_NAME = "options-reset-layout-btn";
@@ -486,6 +488,8 @@ namespace FishMMO.Client
 		private Label uiScaleValueLabel;
 		private Slider chatFontSlider;
 		private Label chatFontValueLabel;
+		private Toggle netStatsEnabledToggle;
+		private Toggle netStatsGraphToggle;
 		private VisualElement hotbarSection;
 		private DropdownField hotbarLayoutDropdown;
 		private DropdownField profileDropdown;
@@ -667,6 +671,8 @@ namespace FishMMO.Client
 			uiScaleValueLabel = Root.Q<Label>(UI_SCALE_VALUE_NAME);
 			chatFontSlider = Root.Q<Slider>(CHAT_FONT_SLIDER_NAME);
 			chatFontValueLabel = Root.Q<Label>(CHAT_FONT_VALUE_NAME);
+			netStatsEnabledToggle = Root.Q<Toggle>(NETSTATS_ENABLED_NAME);
+			netStatsGraphToggle = Root.Q<Toggle>(NETSTATS_GRAPH_NAME);
 			hotbarSection = Root.Q<VisualElement>(HOTBAR_SECTION_NAME);
 			hotbarLayoutDropdown = Root.Q<DropdownField>(HOTBAR_LAYOUT_NAME);
 			profileDropdown = Root.Q<DropdownField>(PROFILE_DROPDOWN_NAME);
@@ -687,6 +693,7 @@ namespace FishMMO.Client
 			InitializeNameplateSettings();
 			InitializeInterfaceSettings();
 			InitializeChatSettings();
+			InitializeNetworkStatsSettings();
 			InitializeHotbarSettings();
 			InitializeColorSettings();
 			InitializeProfileSection();
@@ -2317,6 +2324,41 @@ namespace FishMMO.Client
 					chatFontSlider.SetValueWithoutNotify(value);
 				}
 			});
+		}
+
+		// ── Network statistics ──────────────────────────────────────
+
+		/// <summary>
+		/// Binds the two network statistics rows to <see cref="ClientNetworkStatsSettings"/>.
+		/// </summary>
+		/// <remarks>
+		/// Writes go through the settings class, not straight to <see cref="ClientSettings"/>, for
+		/// the crosshair's reason: the overlay is a separate document that only reacts to that
+		/// class's change event. The graph row is disabled, not hidden, while the overlay is off:
+		/// its value is still the player's choice and still what the overlay will draw when it
+		/// comes back, and a row that vanished would hide that.
+		/// </remarks>
+		private void InitializeNetworkStatsSettings()
+		{
+			if (netStatsEnabledToggle != null)
+			{
+				// Without notify: assigning `value` raises the callback, which writes back to the
+				// file this was just read from. See InitializeBrightness.
+				netStatsEnabledToggle.SetValueWithoutNotify(ClientNetworkStatsSettings.Enabled);
+				netStatsEnabledToggle.RegisterValueChangedCallback((evt) =>
+				{
+					ClientNetworkStatsSettings.SetEnabled(evt.newValue);
+					netStatsGraphToggle?.SetEnabled(evt.newValue);
+				});
+			}
+
+			if (netStatsGraphToggle != null)
+			{
+				netStatsGraphToggle.SetValueWithoutNotify(ClientNetworkStatsSettings.ShowGraph);
+				netStatsGraphToggle.SetEnabled(ClientNetworkStatsSettings.Enabled);
+				netStatsGraphToggle.RegisterValueChangedCallback((evt) =>
+					ClientNetworkStatsSettings.SetShowGraph(evt.newValue));
+			}
 		}
 
 		// ── Hotbars ─────────────────────────────────────────────────

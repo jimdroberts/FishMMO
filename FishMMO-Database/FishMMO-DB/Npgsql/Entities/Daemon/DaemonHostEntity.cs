@@ -38,7 +38,11 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>When the daemon process started.</summary>
 		public DateTime StartedUtc { get; set; }
 
-		/// <summary>Last time the daemon said it was alive.</summary>
+		/// <summary>Last time the daemon said it was alive, by the database clock.</summary>
+		/// <remarks>
+		/// Stamped by the database as the heartbeat is applied, never by the daemon: its age is
+		/// judged on the panel against the same clock (<c>DaemonService.FetchHostsAsync</c>).
+		/// </remarks>
 		public DateTime LastHeartbeatUtc { get; set; }
 
 		/// <summary>The applications it supervises.</summary>

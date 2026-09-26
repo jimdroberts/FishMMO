@@ -541,7 +541,7 @@ namespace FishMMO.Client
 				{
 					if (UIManager.TryGetTK("UIChat", out UITKChat uiChat))
 					{
-						uiChat.SetInputText($"/tell {displayName} ");
+						uiChat.SetInputText(ChatTellAddress.FormatCommand(displayName));
 					}
 				}
 				));

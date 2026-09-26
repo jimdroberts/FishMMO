@@ -397,7 +397,7 @@ function loginTable(ui, servers) {
 			{
 				label: 'Last pulse',
 				align: 'right',
-				cell: (s) => `<span class="nowrap" title="${ui.esc(ui.dateTime(s.lastPulseUtc))}">${ui.ago(s.lastPulseUtc)}</span>`,
+				cell: (s) => pulseCell(ui, s),
 			},
 		],
 		rows: servers,
@@ -416,7 +416,7 @@ function controlledTable(ui, servers, kind, readAt, emptyText) {
 			{
 				label: 'Last pulse',
 				align: 'right',
-				cell: (s) => `<span class="nowrap" title="${ui.esc(ui.dateTime(s.lastPulseUtc))}">${ui.ago(s.lastPulseUtc)}</span>`,
+				cell: (s) => pulseCell(ui, s),
 			},
 			{ label: '', align: 'right', cell: (s) => controlButtons(ui, s, kind) },
 		],
@@ -425,6 +425,18 @@ function controlledTable(ui, servers, kind, readAt, emptyText) {
 		rowAttrs: (s) => (s.isStale ? 'class="is-alert"' : ''),
 		emptyText,
 	});
+}
+
+/* How long since the server last pulsed, as the database measured it when the board was
+ * read — the same age the stale badge and the threshold use. Not `ui.ago(lastPulseUtc)`: that
+ * is this browser's clock minus a stamp the database wrote, so a browser a minute off showed a
+ * healthy server's pulse as a minute old, or "in 1m", beside a badge saying it was live. The
+ * stamp itself stays in the tooltip. */
+function pulseCell(ui, s) {
+	const text = Number.isFinite(s.pulseAgeSeconds)
+		? `${ui.duration(s.pulseAgeSeconds)} ago`
+		: ui.ago(s.lastPulseUtc);
+	return `<span class="nowrap tnum" title="${ui.esc(ui.dateTime(s.lastPulseUtc))}">${ui.esc(text)}</span>`;
 }
 
 function serverCell(ui, s) {

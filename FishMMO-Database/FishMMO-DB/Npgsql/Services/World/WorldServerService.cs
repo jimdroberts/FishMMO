@@ -59,29 +59,36 @@ namespace FishMMO.Database.Npgsql.Services
 						port = EXCLUDED.port,
 						character_count = EXCLUDED.character_count,
 						last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
-					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked, shutdown_at_utc";
+					RETURNING id, name, time_created, last_pulse, address, port, character_count, {ServerControlSql.Columns(null)}";
 
+				// The control state is read through ServerControlSql so its shutdown countdown is
+				// measured by the database clock, as every pulse's is.
 				return await ExecuteReturningAsync(
 					dbContext,
 					sql,
 					new object[] { name, address, (int)port, characterCount, locked },
-					reader => new WorldServerEntity
+					reader =>
 					{
-						ID = reader.GetInt64(0),
-						Name = reader.GetString(1),
-						TimeCreated = reader.GetDateTime(2),
-						LastPulse = reader.GetDateTime(3),
-						Address = reader.GetString(4),
-						Port = reader.GetInt32(5),
-						CharacterCount = reader.GetInt32(6),
-						Locked = reader.GetBoolean(7),
-						ShutdownAtUtc = reader.IsDBNull(8) ? (DateTime?)null : reader.GetDateTime(8),
+						ServerControlState control = ServerControlSql.Read(reader, 7);
+						var entity = new WorldServerEntity
+						{
+							ID = reader.GetInt64(0),
+							Name = reader.GetString(1),
+							TimeCreated = reader.GetDateTime(2),
+							LastPulse = reader.GetDateTime(3),
+							Address = reader.GetString(4),
+							Port = reader.GetInt32(5),
+							CharacterCount = reader.GetInt32(6),
+							Locked = control.Locked,
+							ShutdownAtUtc = control.ShutdownAtUtc,
+						};
+						return (Entity: entity, Control: control);
 					},
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result.IsSuccess
-				? DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)>.Success((result.Data.ID, MapEntityToDto(result.Data), new ServerControlState(result.Data.Locked, result.Data.ShutdownAtUtc)))
+				? DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)>.Success((result.Data.Entity.ID, MapEntityToDto(result.Data.Entity), result.Data.Control))
 				: DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 		}
 
@@ -103,7 +110,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var sql = $@"UPDATE {TableName}
 					SET last_pulse = timezone('UTC', CURRENT_TIMESTAMP), character_count = {{0}}
 					WHERE id = {{1}}
-					RETURNING locked, shutdown_at_utc";
+					RETURNING {ServerControlSql.Columns(null)}";
 
 				/* Nullable, so "no such row" is distinguishable from "row says unlocked".
 				 *
@@ -115,9 +122,7 @@ namespace FishMMO.Database.Npgsql.Services
 					dbContext,
 					sql,
 					new object[] { characterCount, serverId },
-					reader => (ServerControlState?)new ServerControlState(
-						reader.GetBoolean(0),
-						reader.IsDBNull(1) ? (DateTime?)null : reader.GetDateTime(1)),
+					reader => (ServerControlState?)ServerControlSql.Read(reader, 0),
 					cancellationToken).ConfigureAwait(false);
 
 				if (!state.HasValue)
@@ -203,6 +208,38 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult<DateTime>> SetShutdownInAsync(long serverId, int seconds, CancellationToken cancellationToken = default)
+		{
+			if (serverId <= 0)
+			{
+				return DatabaseResult<DateTime>.Failure(DatabaseErrorCodes.ValidationError, "Server ID must be greater than 0.");
+			}
+			if (seconds < 0)
+			{
+				// A deadline in the past is an immediate shutdown with no warning. See the callers.
+				return DatabaseResult<DateTime>.Failure(DatabaseErrorCodes.ValidationError, "The delay cannot be negative.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// Locks in the same statement, for the reason given on SetShutdownAsync.
+				DateTime? deadline = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					ServerControlSql.ScheduleIn(TableName),
+					new object[] { (double)seconds, serverId },
+					ServerControlSql.ReadScheduled,
+					cancellationToken).ConfigureAwait(false);
+
+				if (!deadline.HasValue)
+				{
+					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
+				}
+
+				return deadline.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult<ServerControlState>> FetchControlStateAsync(long serverId, CancellationToken cancellationToken = default)
 		{
 			if (serverId <= 0)
@@ -212,19 +249,27 @@ namespace FishMMO.Database.Npgsql.Services
 
 			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entity = await dbContext.WorldServers
-					.AsNoTracking()
-					.Where(w => w.ID == serverId)
-					.Select(w => new { w.Locked, w.ShutdownAtUtc })
-					.FirstOrDefaultAsync(cancellationToken)
-					.ConfigureAwait(false);
+				/* Raw SQL so the time left before the shutdown is measured by the database clock,
+				 * as the world server's own pulse measures it. The scene servers reading this
+				 * row clear the world's characters on that deadline, and they must count down
+				 * to the same moment the world server stops at, whatever their host clocks say. */
+				var sql = $@"SELECT {ServerControlSql.Columns("w")}
+					FROM {TableName} AS w
+					WHERE w.id = {{0}}";
 
-				if (entity == null)
+				var rows = await ReadRowsAsync(
+					dbContext,
+					sql,
+					new object[] { serverId },
+					reader => ServerControlSql.Read(reader, 0),
+					cancellationToken).ConfigureAwait(false);
+
+				if (rows.Count == 0)
 				{
 					throw new DatabaseEntityNotFoundException("WorldServer", serverId.ToString());
 				}
 
-				return new ServerControlState(entity.Locked, entity.ShutdownAtUtc);
+				return rows[0];
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 

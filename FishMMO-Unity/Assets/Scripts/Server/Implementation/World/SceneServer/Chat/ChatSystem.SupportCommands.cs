@@ -113,7 +113,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Category = "Support",
 				Arguments = "<character> <what happened>",
-				Summary = "Reports a player to the staff.",
+				Summary = "Reports a player to the staff. Put a name with a space in double quotes.",
 			});
 			ChatHelper.SetCommandHelp("/bug", new ChatCommandHelp()
 			{
@@ -153,6 +153,55 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		#region Filing
 
+		/// <summary>What a <c>/report</c> line named, or which half of it was missing.</summary>
+		internal enum ReportCommandParse
+		{
+			/// <summary>A player, and something said about them.</summary>
+			Complete = 0,
+
+			/// <summary>No player could be read: nothing typed, an empty quoted name, or a quote never closed.</summary>
+			NoTarget = 1,
+
+			/// <summary>A player, and nothing said about them.</summary>
+			NoDetails = 2,
+		}
+
+		/// <summary>
+		/// Splits the text after <c>/report</c> into the player named and what they did, by the rule
+		/// <c>/tell</c> uses: one word, or a name in double quotes.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The target used to be the first space-delimited word, so a character whose name holds a
+		/// space ("Aragorn of Arnor") could not be reported at all: the ticket named "Aragorn" — or
+		/// whoever does carry that name — and the rest of the name became the first words of the
+		/// description. <see cref="ChatTellAddress"/> is the one parser for a typed character name in
+		/// a chat line, so a player who has learnt to quote a name for a whisper quotes it here too.
+		/// </para>
+		/// <para>
+		/// An unquoted target is still one word, never matched against longer online names: who a
+		/// report is filed against must not depend on who happens to be logged in. The reply names
+		/// the player the report was filed against, so a misread name is visible at once.
+		/// </para>
+		/// </remarks>
+		/// <param name="text">The text after the command.</param>
+		/// <param name="targetName">The player named, or empty when none could be read.</param>
+		/// <param name="details">What happened, trimmed; empty unless the parse is complete.</param>
+		/// <returns>Whether both halves were there, and which one was missing when not.</returns>
+		internal static ReportCommandParse ParseReportCommand(string text, out string targetName, out string details)
+		{
+			if (ChatTellAddress.TryParse(text, out targetName, out details))
+			{
+				return ReportCommandParse.Complete;
+			}
+
+			// TryParse refuses a missing body as well as a missing name; the address alone tells them apart.
+			details = string.Empty;
+			return ChatTellAddress.TryParseAddress(text, out targetName)
+				? ReportCommandParse.NoDetails
+				: ReportCommandParse.NoTarget;
+		}
+
 		/// <summary>
 		/// <c>/report &lt;character name&gt; &lt;what happened&gt;</c> — files a player report.
 		/// </summary>
@@ -171,29 +220,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return true;
 			}
 
-			string remainder = (msg.Text ?? string.Empty).Trim();
-			string targetName = ChatHelper.GetWordAndTrimmed(remainder, out string details);
-
-			/* A single word leaves the whole remainder as the "trimmed" part — that is a name with
-			 * nothing said about it, which staff can only close with "what did they do?". */
-			if (string.IsNullOrWhiteSpace(targetName))
+			switch (ParseReportCommand(msg.Text, out string targetName, out string details))
 			{
-				targetName = details;
-				details = string.Empty;
+				case ReportCommandParse.NoTarget:
+					ReplySupport(character, "Name a player: /report <name> <what happened>. Put a name with a space in double quotes.");
+					return true;
+				case ReportCommandParse.NoDetails:
+					// A name with nothing said about it, which staff can only close with "what did they do?".
+					ReplySupport(character, "Say what happened: /report <name> <what happened>");
+					return true;
 			}
 
-			if (string.IsNullOrWhiteSpace(targetName))
-			{
-				ReplySupport(character, "Name a player: /report <name> <what happened>");
-				return true;
-			}
-			if (string.IsNullOrWhiteSpace(details))
-			{
-				ReplySupport(character, "Say what happened: /report <name> <what happened>");
-				return true;
-			}
-
-			targetName = targetName.Trim();
 			if (string.Equals(targetName, character.CharacterName, StringComparison.OrdinalIgnoreCase))
 			{
 				ReplySupport(character, "You cannot report yourself. Use /helpme to ask staff for help.");

@@ -24,8 +24,9 @@ namespace FishMMO.UnitTests
 	/// GameObject does not own; it is destroyed with the slot.</item>
 	/// <item>The static skeleton bone cache is keyed by root instance ID; a race model reloaded
 	/// on a live character must clear the outgoing root's entry.</item>
-	/// <item>The server answers a debounced name request with nothing; the client re-sends a
-	/// pending request instead of appending callbacks to it forever.</item>
+	/// <item>The server answers a name request over its budget with nothing; the client re-sends a
+	/// pending request instead of appending callbacks to it forever, and releases one the server
+	/// answered "no such entity".</item>
 	/// </list>
 	/// </remarks>
 	[TestFixture]
@@ -63,9 +64,20 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void APendingNameRequestIsSentAgainInsteadOfWaitingForever()
 		{
-			string body = MethodBody(CodeOnly(Read(NamingPath)), "public static void SetName(NamingSystemType type, long id, Action<string> action)");
-			LogAssert.IsTrue(body.Contains("NameRequestRetrySeconds"), "SetName re-sends a request that has been pending longer than the retry window");
-			LogAssert.AreEqual(2, CountOccurrences(body, "new NamingBroadcast()"), "one send for a new request and one re-send for a stale pending one");
+			/* The retry rule itself moved into PendingNameRequests, where NamingBatchTests pins it by
+			 * behaviour; this pins that SetName and the per-frame flush go through it. */
+			string code = CodeOnly(Read(NamingPath));
+			string setName = MethodBody(code, "public static void SetName(NamingSystemType type, long id, Action<string> action)");
+			LogAssert.IsTrue(setName.Contains("new PendingNameRequests(NameRequestRetrySeconds)"), "pending requests re-send after the retry window");
+			LogAssert.IsTrue(setName.Contains("requests.Request(id, action,"), "SetName queues the ask, chaining its callback onto any already waiting");
+			LogAssert.AreEqual(0, CountOccurrences(setName, "Client.Broadcast("), "SetName sends nothing itself: a frame's asks leave as one batch");
+
+			string flush = MethodBody(code, "private static void FlushNameRequests()");
+			LogAssert.IsTrue(flush.Contains("TakeBatch(now, NamingRequestBatchBroadcast.MaxIDs, nameBatchScratch)"), "the flush stamps what it sends, a bounded batch at a time");
+			LogAssert.AreEqual(1, CountOccurrences(flush, "new NamingRequestBatchBroadcast()"), "one request per type per frame");
+
+			string answer = MethodBody(code, "private static void ApplyNameAnswer(NamingSystemType type, long id, string name, double now)");
+			LogAssert.IsTrue(answer.Contains("requests?.ResolveMissing(id, now)"), "a not-found answer releases what was waiting instead of holding it for the session");
 		}
 
 		// ── helpers ───────────────────────────────────────────────────────────

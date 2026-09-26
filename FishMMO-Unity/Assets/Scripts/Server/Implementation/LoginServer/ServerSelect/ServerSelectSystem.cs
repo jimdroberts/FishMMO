@@ -45,6 +45,23 @@ namespace FishMMO.Server.Implementation.LoginServer
 		[SerializeField] private int serverListCooldownMilliseconds = 1000;
 
 		/// <summary>
+		/// How long one read of the world-server list is served to every client, in seconds.
+		/// </summary>
+		/// <remarks>
+		/// Every request used to run its own identical query, limited only by the per-connection
+		/// cooldown, so a login wave of N clients a second was N world_server reads a second. The
+		/// list changes on a world server's pulse (every few seconds) and on registration, so a
+		/// read or two a second answers everyone just as well. Freshness counts from when the read
+		/// started; requests that arrive while a read is running share it. Zero keeps the
+		/// sharing of in-flight reads but serves no completed read to a later request.
+		/// </remarks>
+		[Tooltip("Seconds one read of the world-server list is served to every client")]
+		[SerializeField][Min(0f)] private float serverListCacheSeconds = 2f;
+
+		/// <summary>The only key in <see cref="ServerSelectSystemRuntimeData.ServerList"/>: the list is the same for everyone.</summary>
+		private const byte ServerListKey = 0;
+
+		/// <summary>
 		/// Initializes the server select system, registering broadcast handlers for server list requests.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -137,44 +154,41 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Asynchronously queries the database for active world servers and sends the list to the client.
+		/// Answers a client's server-list request from the shared list, reading it from the
+		/// database only when no fresh read exists or is running.
 		/// </summary>
 		/// <param name="conn">Network connection of the requesting client.</param>
 		private async Task ProcessServerListRequestAsync(NetworkConnection conn)
 		{
 			try
 			{
-				if (!TryGetDbService(out IWorldServerService worldServerService))
+				if (!Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData) ||
+					runtimeData.ServerList == null)
 				{
-					await Log.Warning("ServerSelectSystem", "WorldServerService unavailable for server list request.");
 					SendEmptyServerList(conn);
 					return;
 				}
 
-				DatabaseResult<List<WorldServerData>> dbResult = await worldServerService.FetchActiveAsync(idleTimeout);
+				TimeSpan cacheLifetime = TimeSpan.FromSeconds(Mathf.Max(0f, serverListCacheSeconds));
 
-				if (!dbResult.IsSuccess || dbResult.Data == null)
+				// Reads start one queue node each; reclaim the lapsed ones here, off the main
+				// thread, so the cache stays bounded without a per-frame sweep.
+				runtimeData.ServerList.SweepExpired(cacheLifetime, 8, 8);
+
+				// A failed read yields null, which is returned to the requests that shared it but
+				// never kept: the next request reads again.
+				WorldServerDetails[] worldServerList = await runtimeData.ServerList.GetOrFetchAsync(
+					ServerListKey, cacheLifetime, FetchServerListAsync, list => list != null);
+
+				if (worldServerList == null)
 				{
-					await Log.Warning("ServerSelectSystem", $"Failed to fetch active servers: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
 					SendEmptyServerList(conn);
 					return;
 				}
 
-				// Map database DTOs to network broadcast type
-				WorldServerDetails[] worldServerList = new WorldServerDetails[dbResult.Data.Count];
-				for (int i = 0; i < dbResult.Data.Count; i++)
-				{
-					WorldServerData data = dbResult.Data[i];
-					worldServerList[i] = new WorldServerDetails()
-					{
-						Name = data.Name,
-						Port = (ushort)data.Port,
-						CharacterCount = data.CharacterCount,
-						Locked = data.Locked,
-					};
-				}
-
-				// Marshal response back to main thread - FishNet Broadcast is not thread-safe
+				// Marshal response back to main thread - FishNet Broadcast is not thread-safe.
+				// The array is shared by every request served from this read; nothing mutates it
+				// after the read, and each broadcast serializes it when sent.
 				TryEnqueueMainThread(() =>
 				{
 					if (conn != null && conn.IsActive)
@@ -189,11 +203,50 @@ namespace FishMMO.Server.Implementation.LoginServer
 			catch (Exception ex)
 			{
 				await Log.Error("ServerSelectSystem", $"Error processing server list request: {ex}");
+				// A read shared by many requests can fault for all of them at once; answer each
+				// rather than leave its client waiting on a list that will not come.
+				SendEmptyServerList(conn);
 			}
 			finally
 			{
 				EndServerListRequest(conn);
 			}
+		}
+
+		/// <summary>
+		/// One read of the active world-server list, mapped to the broadcast type.
+		/// </summary>
+		/// <returns>The list, or null when it could not be read (logged once per read, not per requester).</returns>
+		private async Task<WorldServerDetails[]> FetchServerListAsync()
+		{
+			if (!TryGetDbService(out IWorldServerService worldServerService))
+			{
+				await Log.Warning("ServerSelectSystem", "WorldServerService unavailable for server list request.");
+				return null;
+			}
+
+			DatabaseResult<List<WorldServerData>> dbResult = await worldServerService.FetchActiveAsync(idleTimeout).ConfigureAwait(false);
+
+			if (!dbResult.IsSuccess || dbResult.Data == null)
+			{
+				await Log.Warning("ServerSelectSystem", $"Failed to fetch active servers: [{dbResult.ErrorCode}] {dbResult.ErrorMessage}");
+				return null;
+			}
+
+			// Map database DTOs to network broadcast type
+			WorldServerDetails[] worldServerList = new WorldServerDetails[dbResult.Data.Count];
+			for (int i = 0; i < dbResult.Data.Count; i++)
+			{
+				WorldServerData data = dbResult.Data[i];
+				worldServerList[i] = new WorldServerDetails()
+				{
+					Name = data.Name,
+					Port = (ushort)data.Port,
+					CharacterCount = data.CharacterCount,
+					Locked = data.Locked,
+				};
+			}
+			return worldServerList;
 		}
 
 		/// <summary>
@@ -256,8 +309,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// Debounce and add in-flight slot using generic helper
 			return TryBeginInFlightRequest<ServerSelectSystemRuntimeData>(conn, runtimeData =>
 			{
-				DateTime nowUtc = DateTime.UtcNow;
-				if (runtimeData.NextAllowedRequestUtcByClientId.TryGetValue(conn.ClientId, out DateTime nextAllowed) && nowUtc < nextAllowed)
+				double now = MonotonicClock.NowSeconds;
+				if (runtimeData.NextAllowedRequestSecondsByClientId.TryGetValue(conn.ClientId, out double nextAllowed) && now < nextAllowed)
 				{
 					return false;
 				}
@@ -276,7 +329,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			EndInFlightRequest<ServerSelectSystemRuntimeData>(conn, runtimeData =>
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedRequestUtcByClientId[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(serverListCooldownMilliseconds);
+				runtimeData.NextAllowedRequestSecondsByClientId[conn.ClientId] = MonotonicClock.NowSeconds + serverListCooldownMilliseconds / 1000.0;
 			});
 		}
 
@@ -288,7 +341,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server.DataContainerRegistry.TryGet<ServerSelectSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedRequestUtcByClientId.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedRequestSecondsByClientId.TryRemove(conn.ClientId, out _);
 			}
 		}
 	}

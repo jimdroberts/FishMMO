@@ -22,9 +22,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	/// <para>
 	/// <b>What it does instead.</b> One subscription for the whole process. Damage is the hot path
 	/// and is dispatched by dictionary lookup on the defender — O(1) regardless of how many NPCs
-	/// exist. Heal and kill still have to consider several NPCs (a heal matters to anyone tracking
-	/// either party), but they walk a plain list and skip anyone whose threat table is empty with
-	/// a field read, which is what almost every NPC in a scene is at any moment.
+	/// exist. Heal and kill have to consider several NPCs (a heal matters to anyone tracking
+	/// either party), and they are dispatched through a reverse index — character ID to the NPCs
+	/// whose tables track it — so they cost the number of NPCs actually involved, not the number
+	/// registered.
+	/// </para>
+	/// <para>
+	/// The index replaced a walk over every registered state. That list spans every scene instance
+	/// on the process and every pooled, inactive NPC, and heal events are frequent — every
+	/// heal-over-time tick, heal action and consumable raises one — so two thousand registered NPCs
+	/// and a hundred HoT ticks a second was two hundred thousand iterations a second to find the
+	/// handful of NPCs that cared. The tables themselves keep the index exact through
+	/// <see cref="AggressionController.EntryAdded"/> and <see cref="AggressionController.EntryRemoved"/>.
 	/// </para>
 	/// <para>
 	/// Server-side only. Registration happens when an NPC's aggression state is built and is
@@ -39,18 +48,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		private static readonly Dictionary<ICharacter, AggressionState> statesByCharacter =
 			new Dictionary<ICharacter, AggressionState>();
 
-		/// <summary>
-		/// The same states as a list, for the events that must consider more than one NPC.
-		/// </summary>
-		/// <remarks>
-		/// Kept alongside the dictionary because iterating <c>Dictionary.Values</c> allocates an
-		/// enumerator on every heal and kill, and these run inside combat.
-		/// </remarks>
-		private static readonly List<AggressionState> allStates = new List<AggressionState>();
+		/* There is deliberately no list of every registered state any more. It existed for the
+		 * heal and kill walks, which now go through the reverse index below, and its removal was a
+		 * linear search: unloading a 500-NPC scene cost about a million comparisons. */
 
 		/// <summary>
-		/// Scratch buffer so a handler can mutate the registry (an NPC entering combat may be
-		/// despawned by the same event chain) without invalidating the iteration.
+		/// For each character ID, the NPC states whose threat tables currently hold an entry for it.
+		/// </summary>
+		/// <remarks>
+		/// The reverse of every table at once, maintained by the tables' own add and remove hooks.
+		/// Lists are small — the number of NPCs one character is fighting — so membership tests and
+		/// removal are linear scans of a handful of entries. Emptied lists go back to
+		/// <see cref="trackerListPool"/> rather than to the garbage collector, because entries come
+		/// and go with every engagement.
+		/// </remarks>
+		private static readonly Dictionary<long, List<AggressionState>> trackersByCharacter =
+			new Dictionary<long, List<AggressionState>>();
+
+		/// <summary>Recycled lists for <see cref="trackersByCharacter"/>.</summary>
+		private static readonly Stack<List<AggressionState>> trackerListPool = new Stack<List<AggressionState>>();
+
+		/// <summary>
+		/// Scratch buffer so a handler can mutate the registry or the index (an NPC entering combat
+		/// may be despawned by the same event chain, and forgetting a victim edits the very list
+		/// being dispatched from) without invalidating the iteration.
 		/// </summary>
 		private static readonly List<AggressionState> dispatchBuffer = new List<AggressionState>();
 
@@ -75,7 +96,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <summary>
 		/// Number of NPCs currently registered. Diagnostics.
 		/// </summary>
-		public static int RegisteredCount => allStates.Count;
+		public static int RegisteredCount => statesByCharacter.Count;
 
 		/// <summary>
 		/// Registers an NPC's threat state to receive combat events.
@@ -90,7 +111,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			statesByCharacter[character] = state;
-			allStates.Add(state);
 
 			EnsureSubscribed();
 		}
@@ -98,6 +118,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <summary>
 		/// Stops routing events to an NPC's threat state.
 		/// </summary>
+		/// <remarks>
+		/// The caller empties the state's table first (<see cref="AggressionState.Destroy"/> does),
+		/// which takes it out of the reverse index through the table's own remove hook. Anything
+		/// still indexed is swept out here as well, so an unregistered state can never be handed a
+		/// heal or a kill.
+		/// </remarks>
 		/// <param name="character">The NPC that owns the state.</param>
 		public static void Unregister(ICharacter character)
 		{
@@ -107,7 +133,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			statesByCharacter.Remove(character);
-			allStates.Remove(state);
+
+			if (state.Controller != null && state.Controller.HasAggression)
+			{
+				foreach (KeyValuePair<long, AggressionEntry> pair in state.Controller.Table)
+				{
+					UntrackCharacter(pair.Key, state);
+				}
+			}
 
 			/* The subscription is deliberately NOT released when the last NPC unregisters. Scenes
 			 * empty and refill constantly, and churning a static event subscription on that cycle
@@ -121,11 +154,122 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public static void Clear()
 		{
 			statesByCharacter.Clear();
-			allStates.Clear();
+			trackersByCharacter.Clear();
 			dispatchBuffer.Clear();
 			ownerByPet.Clear();
 			petsByOwner.Clear();
 		}
+
+		#region Reverse index
+
+		/// <summary>
+		/// Records that <paramref name="state"/>'s table now tracks <paramref name="characterId"/>.
+		/// Called by the table's <see cref="AggressionController.EntryAdded"/> hook.
+		/// </summary>
+		/// <param name="characterId">The character the table started tracking.</param>
+		/// <param name="state">The NPC state that owns the table.</param>
+		internal static void TrackCharacter(long characterId, AggressionState state)
+		{
+			if (!IsRegistered(state))
+			{
+				// An unregistered state receives no events, so it has nothing to be found for.
+				return;
+			}
+
+			if (!trackersByCharacter.TryGetValue(characterId, out List<AggressionState> trackers))
+			{
+				trackers = trackerListPool.Count > 0 ? trackerListPool.Pop() : new List<AggressionState>(2);
+				trackersByCharacter[characterId] = trackers;
+			}
+			if (!trackers.Contains(state))
+			{
+				trackers.Add(state);
+			}
+		}
+
+		/// <summary>
+		/// True when <paramref name="state"/> is the state registered for its character.
+		/// </summary>
+		private static bool IsRegistered(AggressionState state)
+		{
+			return state != null &&
+				state.Character != null &&
+				statesByCharacter.TryGetValue(state.Character, out AggressionState registered) &&
+				ReferenceEquals(registered, state);
+		}
+
+		/// <summary>
+		/// Records that <paramref name="state"/>'s table no longer tracks
+		/// <paramref name="characterId"/>. Called by the table's
+		/// <see cref="AggressionController.EntryRemoved"/> hook.
+		/// </summary>
+		/// <param name="characterId">The character the table stopped tracking.</param>
+		/// <param name="state">The NPC state that owns the table.</param>
+		internal static void UntrackCharacter(long characterId, AggressionState state)
+		{
+			if (!trackersByCharacter.TryGetValue(characterId, out List<AggressionState> trackers))
+			{
+				return;
+			}
+
+			int index = trackers.IndexOf(state);
+			if (index < 0)
+			{
+				return;
+			}
+
+			int last = trackers.Count - 1;
+			trackers[index] = trackers[last];
+			trackers.RemoveAt(last);
+
+			if (trackers.Count == 0)
+			{
+				trackersByCharacter.Remove(characterId);
+				trackerListPool.Push(trackers);
+			}
+		}
+
+		/// <summary>
+		/// Appends every registered NPC state whose table tracks <paramref name="characterId"/> to
+		/// <paramref name="into"/>, skipping any already present.
+		/// </summary>
+		/// <remarks>
+		/// Pure over the index, so it can be pinned without a scene. Appends rather than clears so
+		/// a heal can gather the trackers of the healer and of the healed into one list with each
+		/// NPC in it once.
+		/// </remarks>
+		/// <param name="characterId">The tracked character.</param>
+		/// <param name="into">Receives the states.</param>
+		/// <returns>How many states were appended.</returns>
+		internal static int CollectTrackers(long characterId, List<AggressionState> into)
+		{
+			if (!trackersByCharacter.TryGetValue(characterId, out List<AggressionState> trackers))
+			{
+				return 0;
+			}
+
+			int start = into.Count;
+			for (int i = 0; i < trackers.Count; ++i)
+			{
+				AggressionState state = trackers[i];
+				bool present = false;
+				for (int j = 0; j < start; ++j)
+				{
+					if (ReferenceEquals(into[j], state))
+					{
+						present = true;
+						break;
+					}
+				}
+				if (!present)
+				{
+					into.Add(state);
+				}
+			}
+			return into.Count - start;
+		}
+
+		#endregion
 
 		#region Shared threat
 
@@ -365,9 +509,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// the owner's pinned and hovered targets.
 		/// </para>
 		/// <para>
-		/// A scan of every registered table, so it is for a click, not a tick. The caller's
-		/// <paramref name="accept"/> applies its own rules — alive, in range, hostile — before an
-		/// entry can win, so a distant grudge does not send the pet across the map.
+		/// Reads the reverse index, so it considers only the NPCs actually tracking the subject.
+		/// The caller's <paramref name="accept"/> applies its own rules — alive, in range, hostile —
+		/// before an entry can win, so a distant grudge does not send the pet across the map.
 		/// </para>
 		/// </remarks>
 		/// <param name="subject">The character the threat is measured against.</param>
@@ -377,15 +521,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public static bool TryFindHighestThreatAgainst(ICharacter subject, System.Predicate<ICharacter> accept, out ICharacter best)
 		{
 			best = null;
-			if (subject == null)
+			if (subject == null ||
+				!trackersByCharacter.TryGetValue(subject.ID, out List<AggressionState> trackers))
 			{
 				return false;
 			}
 
 			float bestPoints = 0f;
-			for (int i = 0; i < allStates.Count; ++i)
+			for (int i = 0; i < trackers.Count; ++i)
 			{
-				AggressionState state = allStates[i];
+				AggressionState state = trackers[i];
 				if (state == null || !state.HasAggression)
 				{
 					continue;
@@ -476,7 +621,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
-			int count = BeginDispatch();
+			/* Only an NPC tracking the healed or the healer can turn this heal into threat —
+			 * HandleHealed applies exactly that rule — so those are the only ones asked. */
+			dispatchBuffer.Clear();
+			if (healed != null)
+			{
+				CollectTrackers(healed.ID, dispatchBuffer);
+			}
+			CollectTrackers(healer.ID, dispatchBuffer);
+
+			int count = dispatchBuffer.Count;
 			for (int i = 0; i < count; ++i)
 			{
 				dispatchBuffer[i].HandleHealed(healer, healed, amount);
@@ -496,38 +650,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
-			int count = BeginDispatch();
+			/* Copied out of the index before dispatch: forgetting the victim removes each state
+			 * from the very list this came from. */
+			dispatchBuffer.Clear();
+			int count = CollectTrackers(victim.ID, dispatchBuffer);
 			for (int i = 0; i < count; ++i)
 			{
 				dispatchBuffer[i].HandleKilled(victim);
 			}
 			EndDispatch();
-		}
-
-		/// <summary>
-		/// Snapshots the states that could care about a non-damage event.
-		/// </summary>
-		/// <remarks>
-		/// Skips NPCs with an empty threat table, which is the overwhelming majority at any moment
-		/// — a field read instead of a delegate invocation and a handler frame. Copying into a
-		/// buffer also means a handler is free to register or unregister without corrupting the
-		/// walk, which happens whenever an event pulls an NPC into combat or kills it.
-		/// </remarks>
-		/// <returns>The number of entries in <see cref="dispatchBuffer"/>.</returns>
-		private static int BeginDispatch()
-		{
-			dispatchBuffer.Clear();
-
-			for (int i = 0; i < allStates.Count; ++i)
-			{
-				AggressionState state = allStates[i];
-				if (state != null && state.HasAggression)
-				{
-					dispatchBuffer.Add(state);
-				}
-			}
-
-			return dispatchBuffer.Count;
 		}
 
 		/// <summary>

@@ -114,7 +114,7 @@ namespace FishMMO.UnitTests
 			 * ability must carry it before the completion that learns it is queued. */
 			string body = MethodBody(ReadSource(SystemPath),
 				"private async Task PersistGrantedAbilityAsync(GrantRequest request)",
-				"private void QueueGrantCompletion(GrantRequest request, bool persisted)");
+				"private bool QueueGrantCompletion(GrantRequest request, bool persisted)");
 
 			int applied = body.IndexOf("request.Ability.ID = result.Data;", StringComparison.Ordinal);
 			LogAssert.IsTrue(applied >= 0,
@@ -177,8 +177,8 @@ namespace FishMMO.UnitTests
 				"public bool TryGrantAbility(",
 				"private async Task PersistGrantedAbilityAsync(GrantRequest request)");
 
-			LogAssert.AreEqual(3, Occurrences(body, "return false;"),
-				"the grant must still refuse for its three documented reasons");
+			LogAssert.AreEqual(4, Occurrences(body, "return false;"),
+				"the grant must still refuse for its four documented reasons: an unusable request, no ability service, no session claim to write under (O27), and a refused enqueue");
 			LogAssert.AreEqual(Occurrences(body, "return false;"), Occurrences(body, "releaseGuard?.Invoke();"),
 				"every refusal must release the guard it is about to stop owning");
 		}
@@ -238,9 +238,11 @@ namespace FishMMO.UnitTests
 				Assert.Ignore($"the database project is not checked out beside the Unity project ({AbilityServicePath}).");
 			}
 
+			/* The batch body lives behind both the ungated and the ownership-gated entry points
+			 * (PersistAsync and PersistOwnedAsync, 2026-09-25), so the pin reads the shared body. */
 			string source = File.ReadAllText(path).Replace("\r\n", "\n");
 			string body = MethodBody(source,
-				"public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterAbilityData> abilities",
+				"private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterAbilityData> abilities",
 				"/// <inheritdoc/>");
 
 			LogAssert.IsTrue(body.Contains("var existingItems = list.Where(a => a.ID > 0).ToList();"),

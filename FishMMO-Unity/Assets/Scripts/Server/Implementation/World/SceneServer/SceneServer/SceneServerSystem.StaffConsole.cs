@@ -8,6 +8,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
+using FishMMO.Server.Core;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using Channel = FishNet.Transporting.Channel;
@@ -47,7 +48,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Longest message body a ticket detail carries.</summary>
 		private const int StaffTicketTextLength = 1024;
 
-		/// <summary>When each staff member may next make each kind of request, by (character, kind).</summary>
+		/// <summary>
+		/// When each staff member may next make each kind of request, by (character, kind), in
+		/// <see cref="MonotonicClock.NowTicks"/>: a throttle is a local duration.
+		/// </summary>
 		private readonly Dictionary<long, long> staffRequestNextTicks = new Dictionary<long, long>();
 
 		/// <summary>Registers the staff console's read requests.</summary>
@@ -157,7 +161,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			long now = DateTime.UtcNow.Ticks;
+			long now = MonotonicClock.NowTicks;
 			long key = character.ID * 4 + kind;
 			if (staffRequestNextTicks.TryGetValue(key, out long next) && next > now)
 			{

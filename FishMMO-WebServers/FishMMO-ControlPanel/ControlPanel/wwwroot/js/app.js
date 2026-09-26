@@ -32,6 +32,7 @@ const VIEWS = {
 	'servers/maintenance': () => import('./views/servers-maintenance.js'),
 	'servers/maintenance/': () => import('./views/servers-maintenance.js'),
 	'servers/scenes': () => import('./views/servers-scenes.js'),
+	'servers/bandwidth': () => import('./views/servers-bandwidth.js'),
 	'daemon/hosts': () => import('./views/daemon-hosts.js'),
 	'daemon/events': () => import('./views/daemon-events.js'),
 	'daemon/logs': () => import('./views/daemon-logs.js'),

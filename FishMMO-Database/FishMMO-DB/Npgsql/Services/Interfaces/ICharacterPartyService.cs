@@ -64,5 +64,39 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>The character IDs of members with a live session; empty when none are online.</returns>
 		Task<DatabaseResult<IReadOnlyList<long>>> FetchOnlineMemberIdsAsync(long partyId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches the rosters of several parties in one query.
+		/// </summary>
+		/// <remarks>
+		/// For the scene server's party update pump, which used to read each changed party's roster
+		/// in its own round trip. A login wave that touches two hundred parties in one second then
+		/// cost two hundred serial queries before any of them could be delivered, and the pump's
+		/// in-flight guard held every later tick behind them.
+		/// </remarks>
+		/// <param name="partyIds">The parties to read. Non-positive and repeated IDs are ignored.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// One entry per distinct requested party, ALWAYS present: a party with no membership rows
+		/// maps to an empty list, exactly as <c>FetchManyAsync(long)</c> answers for it. A caller can
+		/// therefore tell "read, and empty" from "not read" by the result alone.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterPartyData>>>> FetchManyAsync(long[] partyIds, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Returns, for each of several parties, the members who currently hold a live session.
+		/// </summary>
+		/// <remarks>
+		/// The bulk form of <see cref="FetchOnlineMemberIdsAsync(long, CancellationToken)"/>, with the
+		/// same definition of "online" — the single-party form is answered by this one, so the two
+		/// cannot drift apart. Grouped by the membership row's own party, so a character who moved
+		/// between parties is reported under the party the database says they are in now.
+		/// </remarks>
+		/// <param name="partyIds">The parties to inspect. Non-positive and repeated IDs are ignored.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// One entry per distinct requested party, ALWAYS present; empty when nobody in it is online.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<long>>>> FetchOnlineMemberIdsAsync(long[] partyIds, CancellationToken cancellationToken = default);
 	}
 }

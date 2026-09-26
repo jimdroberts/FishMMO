@@ -1,0 +1,143 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UINetworkStats.uss" />
+    <!--
+        The network statistics overlay: what this client sends and receives, per layer, with a
+        badge per row saying whether the figures were measured, reported by the browser, or
+        estimated. Driven entirely from UITKNetworkStats; every value below is the placeholder a
+        refresh overwrites, and a dash is what an unknown value reads as.
+
+        Element names follow one pattern per row, a stem plus a suffix (down, up, down-total,
+        up-total, badge, row), because UITKNetworkStats resolves them from its RowStems table.
+    -->
+    <ui:VisualElement name="netstats-root" class="netstats-root" picking-mode="Ignore">
+        <ui:VisualElement name="netstats-panel" class="netstats-panel">
+
+            <!-- The header is the drag handle. -->
+            <ui:VisualElement name="panel-header" class="netstats-header">
+                <ui:Label text="NETWORK" class="netstats-title" />
+                <ui:Label name="netstats-backend" text="" class="netstats-backend" />
+            </ui:VisualElement>
+
+            <!-- On the wire, in bits: the unit a connection is sold in. -->
+            <ui:VisualElement name="netstats-headline" class="netstats-headline">
+                <ui:Label text="▼" class="netstats-arrow netstats-arrow--down" />
+                <ui:Label name="netstats-headline-down" text="—" class="fish-label netstats-headline__value" />
+                <ui:Label text="▲" class="netstats-arrow netstats-arrow--up" />
+                <ui:Label name="netstats-headline-up" text="—" class="fish-label netstats-headline__value" />
+                <ui:VisualElement class="netstats-spacer" />
+                <ui:Label name="netstats-headline-badge" text="…" class="netstats-badge netstats-badge--pending" />
+            </ui:VisualElement>
+
+            <!-- The last minute on the wire. The two lines are added in code, beneath the scale label. -->
+            <ui:VisualElement name="netstats-graph" class="netstats-graph">
+                <ui:Label name="netstats-graph-scale" text="" class="netstats-graph__scale" picking-mode="Ignore" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="netstats-row netstats-row--captions">
+                <ui:Label text="" class="netstats-name" />
+                <ui:Label text="▼ DOWN" class="netstats-caption netstats-caption--down" />
+                <ui:Label text="▲ UP" class="netstats-caption netstats-caption--up" />
+                <ui:VisualElement class="netstats-badge-spacer" />
+            </ui:VisualElement>
+
+            <!-- Rate over the total since launch, per layer. -->
+            <ui:VisualElement name="netstats-app-row" class="netstats-row">
+                <ui:Label text="App" class="netstats-name" />
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-app-down" text="—" class="fish-label netstats-value" />
+                    <ui:Label name="netstats-app-down-total" text="—" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-app-up" text="—" class="fish-label netstats-value" />
+                    <ui:Label name="netstats-app-up-total" text="—" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:Label name="netstats-app-badge" text="…" class="netstats-badge netstats-badge--pending" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="netstats-quic-row" class="netstats-row">
+                <ui:Label text="QUIC/UDP" class="netstats-name" />
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-quic-down" text="—" class="fish-label netstats-value" />
+                    <ui:Label name="netstats-quic-down-total" text="—" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-quic-up" text="—" class="fish-label netstats-value" />
+                    <ui:Label name="netstats-quic-up-total" text="—" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:Label name="netstats-quic-badge" text="…" class="netstats-badge netstats-badge--pending" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="netstats-wire-row" class="netstats-row">
+                <ui:Label text="Wire (IP)" class="netstats-name" />
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-wire-down" text="—" class="fish-label netstats-value" />
+                    <ui:Label name="netstats-wire-down-total" text="—" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-wire-up" text="—" class="fish-label netstats-value" />
+                    <ui:Label name="netstats-wire-up-total" text="—" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:Label name="netstats-wire-badge" text="…" class="netstats-badge netstats-badge--pending" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="netstats-rule" />
+
+            <ui:VisualElement name="netstats-dgram-row" class="netstats-row">
+                <ui:Label text="Datagrams" class="netstats-name" />
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-dgram-down" text="—" class="fish-label netstats-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-dgram-up" text="—" class="fish-label netstats-value" />
+                </ui:VisualElement>
+                <ui:Label name="netstats-dgram-badge" text="…" class="netstats-badge netstats-badge--pending" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="netstats-overhead-row" class="netstats-row">
+                <ui:Label text="Overhead" class="netstats-name" />
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-overhead-down" text="—" class="fish-label netstats-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-overhead-up" text="—" class="fish-label netstats-value" />
+                </ui:VisualElement>
+                <ui:Label name="netstats-overhead-badge" text="…" class="netstats-badge netstats-badge--pending" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="netstats-rule" />
+
+            <!--
+                The current connection. No directions here: the four slots are the round trip,
+                the loss, the path MTU and the congestion window, each over its caption.
+            -->
+            <ui:VisualElement name="netstats-link-row" class="netstats-link">
+                <ui:VisualElement class="netstats-row">
+                    <ui:Label text="Link" class="netstats-name" />
+                    <ui:VisualElement class="netstats-cell">
+                        <ui:Label name="netstats-link-down" text="—" class="fish-label netstats-value" />
+                        <ui:Label text="RTT" class="netstats-total" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="netstats-cell">
+                        <ui:Label name="netstats-link-up" text="—" class="fish-label netstats-value" />
+                        <ui:Label text="LOSS" class="netstats-total" />
+                    </ui:VisualElement>
+                    <ui:Label name="netstats-link-badge" text="…" class="netstats-badge netstats-badge--pending" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-row">
+                    <ui:Label text="" class="netstats-name" />
+                    <ui:VisualElement class="netstats-cell">
+                        <ui:Label name="netstats-link-down-total" text="—" class="fish-label netstats-value" />
+                        <ui:Label text="PATH MTU" class="netstats-total" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="netstats-cell">
+                        <ui:Label name="netstats-link-up-total" text="—" class="fish-label netstats-value" />
+                        <ui:Label text="CWND" class="netstats-total" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="netstats-badge-spacer" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

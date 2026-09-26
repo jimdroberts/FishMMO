@@ -114,17 +114,17 @@ namespace FishMMO.UnitTests
 			SourceScanPins.HoldsAndFires("OnUnstuckCommand", SourceScanPins.ReadCode(UnstuckPath),
 				c =>
 				{
-					int writes = Regex.Matches(c, @"nextUnstuckUtc\[[^\]]+\]\s*=(?!=)|nextUnstuckUtc\.(?:Add|TryAdd)\(").Count;
+					int writes = Regex.Matches(c, @"nextUnstuckAt\[[^\]]+\]\s*=(?!=)|nextUnstuckAt\.(?:Add|TryAdd)\(").Count;
 					if (writes != 1)
 					{
 						return $"the cooldown is started in {writes} places; it must be exactly one, after the move";
 					}
 					return SourceScanPins.InOrder(Handler(c),
-						"nextUnstuckUtc.TryGetValue(character.ID",
+						"nextUnstuckAt.TryGetValue(character.ID",
 						"Motor.SetPositionAndRotationAndVelocity(",
-						"nextUnstuckUtc[character.ID] =");
+						"nextUnstuckAt[character.ID] =");
 				},
-				SourceScanPins.InsertBefore("if (!TryResolveUnstuckDestination(", "nextUnstuckUtc[character.ID] = now;\n"),
+				SourceScanPins.InsertBefore("if (!TryResolveUnstuckDestination(", "nextUnstuckAt[character.ID] = now;\n"),
 				"the cooldown starts before the move");
 		}
 

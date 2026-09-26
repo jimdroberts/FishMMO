@@ -34,6 +34,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		private const int dbShutdownTimeoutMs = 5_000;
 
+		/// <summary>Writes this process's bandwidth to the database once a minute. Null until initialised.</summary>
+		private ServerBandwidthRecorder bandwidthRecorder;
+
 		/// <summary>
 		/// Interval (in seconds) between heartbeat pulses to the database.
 		/// </summary>
@@ -116,6 +119,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			int characterCount = Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var sceneData) ? sceneData.ConnectionCount : 0;
 
+			// This asset outlives a play session in the editor; no countdown carries over.
+			shutdownCountdown.Clear();
+			shutdownQuitIssued = false;
+			System.Threading.Volatile.Write(ref pendingControlState, null);
+
 			if (!await RegisterAsync(server.Address, server.Port, characterCount, cancellationToken))
 			{
 				return ServerComponentInitializationStatus.FailedToGetDbContext;
@@ -126,6 +134,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			{
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
+
+			// Bandwidth statistics for the Control Panel. See ServerBandwidthRecorder.
+			bandwidthRecorder = ServerBandwidthRecorder.TryStart(Server, ServerType.World);
 
 			_ = Log.Debug("WorldServerSystem", $"Initialized (PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
@@ -180,6 +191,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					Log.Error("WorldServerSystem", $"Failed to deregister world server from DB (ServerID={runtimeData.ID}): {ex}");
 				}
 			}
+
+			// Last, so deregistration has the shutdown budget first: a bounded final bandwidth sample.
+			bandwidthRecorder?.Stop();
+			bandwidthRecorder = null;
 		}
 
 		/// <summary>
@@ -212,6 +227,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			DatabaseResult<(long ServerId, WorldServerData ServerData, ServerControlState Control)> result =
 				await worldServerService.PersistAsync(name, serverAddress, port, characterCount, data.IsLocked, cancellationToken);
+			// Stamped as the reply arrives: it anchors the database-measured shutdown countdown.
+			double registrationReadAt = MonotonicClock.NowSeconds;
 
 			if (!result.IsSuccess)
 			{
@@ -231,7 +248,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			 * adopted, two pulses in: WorldServerAuthenticator admitted players to the locked world
 			 * for that window, and a scheduled shutdown went unannounced. The registration reply
 			 * now carries both (issue #267). */
-			ApplyControlState(result.Data.Control);
+			ApplyControlState(new ServerControlReading(result.Data.Control, registrationReadAt));
 			return true;
 		}
 
@@ -239,6 +256,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Sends a heartbeat/pulse update with the current character count.
 		/// </summary>
 		/// <param name="characterCount">Current character count.</param>
+		/// <remarks>
+		/// One pulse at a time. Each pulse reads back the row's lock and shutdown state and
+		/// publishes it for the main thread; while the database was stalled, pulses overlapped,
+		/// and two finishing out of order could publish the older state over the newer — a lock
+		/// lifted and then re-applied, or a cancelled shutdown brought back. With one in flight,
+		/// publications are in the order the reads were made. A pulse skipped here is covered by
+		/// the one still running.
+		/// </remarks>
 		public void Pulse(int characterCount)
 		{
 			if (!Server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData data))
@@ -246,20 +271,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			// Queue async DB pulse
-			if (!TryEnqueueAsyncWork(() => PulseAsync(data.ID, characterCount)))
+			if (!data.TryBeginPulse())
 			{
+				return;
+			}
+
+			// Queue async DB pulse
+			if (!TryEnqueueAsyncWork(() => PulseAsync(data, characterCount)))
+			{
+				data.EndPulse();
 				Log.Warning("WorldServerSystem", "Failed to enqueue world server pulse work item.");
 			}
 		}
 
 		/// <summary>
-		/// Asynchronously sends a heartbeat pulse to the database.
+		/// Asynchronously sends a heartbeat pulse to the database, releasing the pulse gate when done.
 		/// </summary>
-		/// <param name="serverId">Database ID of this world server.</param>
+		/// <param name="data">This world server's runtime data; holds its ID and the pulse gate.</param>
 		/// <param name="characterCount">Current number of connected characters.</param>
-		private async Task PulseAsync(long serverId, int characterCount)
+		private async Task PulseAsync(IWorldServerSystemRuntimeData data, int characterCount)
 		{
+			long serverId = data.ID;
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null)
@@ -271,6 +303,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					return;
 				}
 				DatabaseResult<ServerControlState> result = await worldServerService.PulseAsync(serverId, characterCount);
+				// Stamped here, as the reply arrives, not when the main thread adopts it a pulse
+				// later: it anchors the database-measured shutdown countdown. See ShutdownCountdown.
+				ServerControlReading reading = result.IsSuccess ? ServerControlReading.ArrivedNow(result.Data) : null;
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("WorldServerSystem", $"PulseAsync DB error (ServerID={serverId}): {result.ErrorCode} - {result.ErrorMessage}");
@@ -281,15 +316,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				 *
 				 * Applying it here would mean touching Unity APIs from an async worker —
 				 * Server.Quit() is one — and writing a DateTime? that the main thread reads,
-				 * which is not a single atomic store. Boxing into a volatile reference makes
-				 * publication atomic; OnPeriodicPulse picks it up on the next tick, so a control
-				 * change takes effect within two pulses rather than one. That is well inside the
-				 * granularity of any shutdown an operator would schedule. */
-				System.Threading.Volatile.Write(ref pendingControlState, result.Data);
+				 * which is not a single atomic store. Publishing the reading, a reference, through
+				 * a volatile store makes publication atomic; OnPeriodicPulse picks it up on the
+				 * next tick. A lock change therefore takes effect within two pulses. A shutdown's
+				 * deadline does not wait on that: the reading carries its own arrival time, and
+				 * the countdown runs on the monotonic clock from there. */
+				System.Threading.Volatile.Write(ref pendingControlState, reading);
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("WorldServerSystem", $"Error during pulse (ServerID={serverId}): {ex}");
+			}
+			finally
+			{
+				// After the publication above, so the next pulse cannot start — and publish —
+				// before this one's result is in place.
+				data.EndPulse();
 			}
 		}
 
@@ -297,11 +339,27 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Most recent control state read back by a pulse, awaiting main-thread adoption.
 		/// </summary>
 		/// <remarks>
-		/// Boxed so publication is a single reference store, which is atomic; the struct it
-		/// holds contains a <see cref="DateTime"/>? that would not be. Written by the async
-		/// pulse worker, taken by <see cref="OnPeriodicPulse"/> on the main thread.
+		/// A reference so publication is a single store, which is atomic; the struct it carries
+		/// contains a <see cref="DateTime"/>? that would not be. Written by the async pulse
+		/// worker, taken by <see cref="OnPeriodicPulse"/> on the main thread.
 		/// </remarks>
-		private object pendingControlState;
+		private ServerControlReading pendingControlState;
+
+		/// <summary>
+		/// This world server's countdown to a scheduled shutdown, on <see cref="MonotonicClock"/>.
+		/// Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Anchored from the seconds left that each read of the row measured by the database
+		/// clock. It used to compare the row's instant with <c>DateTime.UtcNow</c>, so a world host
+		/// running fast stopped early, a clock stepped forward stopped the world at once, and the
+		/// scene servers clearing this world's players counted down to a different moment from the
+		/// world itself.
+		/// </remarks>
+		private readonly ShutdownCountdown shutdownCountdown = new ShutdownCountdown();
+
+		/// <summary>Set once the shutdown deadline has been acted on, so it is acted on once.</summary>
+		private bool shutdownQuitIssued;
 
 		/// <summary>
 		/// Adopts the lock and shutdown state read back from this server's database row.
@@ -310,13 +368,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// Main thread only. Logs each transition rather than the steady state, so the operator
 		/// log shows when a lock or a shutdown took effect without a line every pulse.
 		/// </remarks>
-		/// <param name="state">Control state as the database currently holds it.</param>
-		private void ApplyControlState(ServerControlState state)
+		/// <param name="reading">Control state as the database holds it, and when the read arrived.</param>
+		private void ApplyControlState(ServerControlReading reading)
 		{
-			if (!Server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData data))
+			if (reading == null || !Server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData data))
 			{
 				return;
 			}
+
+			ServerControlState state = reading.State;
 
 			if (data.IsLocked != state.Locked)
 			{
@@ -326,32 +386,49 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					: "This world server is now UNLOCKED and accepting logins again.");
 			}
 
-			if (data.ShutdownAtUtc != state.ShutdownAtUtc)
+			// The authenticator only asks whether a shutdown is scheduled; the countdown is below.
+			data.ShutdownAtUtc = state.ShutdownAtUtc;
+
+			if (shutdownCountdown.Adopt(reading))
 			{
-				data.ShutdownAtUtc = state.ShutdownAtUtc;
-				Log.Warning("WorldServerSystem", state.ShutdownAtUtc.HasValue
-					? $"Shutdown scheduled for {state.ShutdownAtUtc.Value:u} ({state.SecondsUntilShutdown(DateTime.UtcNow):F0}s)."
+				Log.Warning("WorldServerSystem", shutdownCountdown.IsScheduled
+					? $"Shutdown scheduled for {state.ShutdownAtUtc.Value:u}, in {shutdownCountdown.SecondsRemaining(MonotonicClock.NowSeconds):F0}s by the database clock."
 					: "Scheduled shutdown cancelled.");
 			}
 
-			if (state.HasShutdown && DateTime.UtcNow >= state.ShutdownAtUtc.Value)
-			{
-				/* The deadline has arrived. Quitting runs Server.PerformShutdown, which is the
-				 * ordinary graceful teardown — it saves, releases session claims and removes
-				 * this world's scene rows. Nothing here disconnects clients first: the world
-				 * server holds only clients in transit between login and a scene server, and
-				 * they recover through their own reconnect loop. */
-				Log.Warning("WorldServerSystem", "Scheduled shutdown deadline reached; stopping the world server.");
-
-				// Fully qualified: ServerBehaviour exposes a `Server` property that shadows the
-				// type name, and Quit is a static on the type.
-				FishMMO.Server.Implementation.Server.Quit();
-			}
+			QuitIfShutdownDue();
 		}
 
 		/// <summary>
-		/// Periodic callback that sends a heartbeat pulse to the database.
-		/// </summary>		/// <summary>
+		/// Stops the world server once its scheduled shutdown has fallen due on the monotonic
+		/// countdown. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Checked on every periodic pulse, not only when a reading arrives: the countdown runs on
+		/// this process's clock between readings, so a database that is slow to answer does not
+		/// hold the shutdown back.
+		/// </remarks>
+		private void QuitIfShutdownDue()
+		{
+			if (shutdownQuitIssued || !shutdownCountdown.IsDue(MonotonicClock.NowSeconds))
+			{
+				return;
+			}
+			shutdownQuitIssued = true;
+
+			/* The deadline has arrived. Quitting runs Server.PerformShutdown, which is the
+			 * ordinary graceful teardown — it saves, releases session claims and removes this
+			 * world's scene rows. Nothing here disconnects clients first: the world server holds
+			 * only clients in transit between login and a scene server, and they recover through
+			 * their own reconnect loop. */
+			Log.Warning("WorldServerSystem", "Scheduled shutdown deadline reached; stopping the world server.");
+
+			// Fully qualified: ServerBehaviour exposes a `Server` property that shadows the type
+			// name, and Quit is a static on the type.
+			FishMMO.Server.Implementation.Server.Quit();
+		}
+
+		/// <summary>
 		/// Periodic callback that sends a heartbeat pulse to the database.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
@@ -363,11 +440,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Adopt whatever the last pulse read back before issuing the next one.
-			object published = System.Threading.Volatile.Read(ref pendingControlState);
+			ServerControlReading published = System.Threading.Volatile.Read(ref pendingControlState);
 			if (published != null)
 			{
 				System.Threading.Volatile.Write(ref pendingControlState, null);
-				ApplyControlState((ServerControlState)published);
+				ApplyControlState(published);
+			}
+			else
+			{
+				QuitIfShutdownDue();
 			}
 
 			if (Server.BehaviourRegistry.TryGet(out IWorldSceneSystem _))

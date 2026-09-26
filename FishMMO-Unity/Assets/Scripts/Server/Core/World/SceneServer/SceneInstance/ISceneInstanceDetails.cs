@@ -11,7 +11,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 	/// <remarks>
 	/// Implementations should document any threading guarantees for the exposed
 	/// properties and keep the values (for example <see cref="CharacterCount"/>
-	/// and <see cref="LastExit"/>) updated as instance state changes.
+	/// and <see cref="LastExitAt"/>) updated as instance state changes.
 	/// </remarks>
 	public interface ISceneInstanceDetails
 	{
@@ -73,10 +73,15 @@ namespace FishMMO.Server.Core.World.SceneServer
 		bool StalePulse { get; }
 
 		/// <summary>
-		/// Timestamp when the last character exited the instance. Useful for stale
-		/// instance detection and cleanup heuristics.
+		/// When the last character exited the instance, in seconds on this process's
+		/// <see cref="FishMMO.Server.Core.MonotonicClock"/>. Measures how long an empty scene has
+		/// been empty, for the idle unload.
 		/// </summary>
-		DateTime LastExit { get; set; }
+		/// <remarks>
+		/// A monotonic reading rather than a wall-clock time because it is only ever used for a
+		/// duration, and a wall clock stepped forward would unload every idle scene at once.
+		/// </remarks>
+		double LastExitAt { get; set; }
 
 		/// <summary>
 		/// True when the instance emptied because its occupants CHOSE to leave, rather than
@@ -104,7 +109,8 @@ namespace FishMMO.Server.Core.World.SceneServer
 		bool VacatedDeliberately { get; set; }
 
 		/// <summary>
-		/// When the scene row this instance was loaded for was created.
+		/// When the scene row this instance was loaded for was created, in seconds on this
+		/// process's <see cref="FishMMO.Server.Core.MonotonicClock"/>.
 		/// </summary>
 		/// <remarks>
 		/// The row's creation time rather than the moment the scene finished loading, so the age
@@ -112,12 +118,18 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// has to measure: an instance that took a minute to come up has still been occupying a
 		/// slot for that minute.
 		/// <para>
-		/// Distinct from <see cref="LastExit"/>, which measures how long an instance has been
+		/// Derived from the row's age as the database measured it when the row was dequeued, not
+		/// from its <c>time_created</c> compared with this host's clock. The row is stamped by the
+		/// database and this host's clock can disagree with that by any amount, and a wall clock
+		/// is the wrong thing to time a duration with anyway. May precede this process's start.
+		/// </para>
+		/// <para>
+		/// Distinct from <see cref="LastExitAt"/>, which measures how long an instance has been
 		/// <em>empty</em>. The two bound different things — an abandoned instance and an endless
 		/// one — and neither substitutes for the other.
 		/// </para>
 		/// </remarks>
-		DateTime CreatedUtc { get; set; }
+		double CreatedAt { get; set; }
 
 		/// <summary>
 		/// Character the instance was created for. Zero for an open-world scene.

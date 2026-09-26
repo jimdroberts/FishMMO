@@ -10,17 +10,29 @@ namespace FishMMO.UnitTests.AI
 	/// Builds <see cref="SpawnerRuntime"/>s that can run a full respawn pass without a network stack.
 	/// </summary>
 	/// <remarks>
-	/// A runtime with no <c>NetworkManager</c> reaches <see cref="SpawnerRuntime.SpawnObject"/>'s
-	/// own guard and returns. Everything up to that point — the guards, the condition evaluation,
-	/// the timer bookkeeping — is the code under test and runs for real.
+	/// The network half of a spawn is replaced through
+	/// <see cref="SpawnerRuntime.NetworkSpawnOverride"/> with one that makes a
+	/// <see cref="FakeSpawnable"/>, so a spawn succeeds and is tracked. Everything around it — the
+	/// guards, the condition evaluation, the selection, the timer bookkeeping — is the code under
+	/// test and runs for real. It used to lean on a runtime with no network manager returning
+	/// from <see cref="SpawnerRuntime.SpawnObject"/> early, which spent the timer; a spawn that
+	/// does not happen now keeps its timer, so that stand-in no longer looks like a success.
 	/// </remarks>
 	internal static class SpawnerTestKit
 	{
+		/// <summary>IDs for spawned fakes, clear of the small ones tests hand-pick.</summary>
+		private static long nextSpawnedId = 1_000_000;
+
 		/// <summary>
 		/// A runtime with one (prefab-less) spawnable and a zero check interval, so a test tick is
-		/// never swallowed by the spawner's own gate.
+		/// never swallowed by the spawner's own gate. Its spawns succeed unless
+		/// <paramref name="spawn"/> says otherwise.
 		/// </summary>
-		public static SpawnerRuntime NewRuntime(SpawnerScheduler scheduler, int maxSpawnCount = 10, Action<SpawnerDefinition> tune = null)
+		/// <param name="scheduler">The scheduler the runtime reports to.</param>
+		/// <param name="maxSpawnCount">The spawner's maximum.</param>
+		/// <param name="tune">Adjusts the definition before the runtime is built.</param>
+		/// <param name="spawn">Stands in for the network spawn; null makes a fresh <see cref="FakeSpawnable"/>.</param>
+		public static SpawnerRuntime NewRuntime(SpawnerScheduler scheduler, int maxSpawnCount = 10, Action<SpawnerDefinition> tune = null, Func<SpawnableSettings, ISpawnable> spawn = null)
 		{
 			SpawnerDefinition definition = new SpawnerDefinition
 			{
@@ -31,7 +43,9 @@ namespace FishMMO.UnitTests.AI
 				RespawnCheckIntervalMaximum = 0.0f,
 			};
 			tune?.Invoke(definition);
-			return new SpawnerRuntime(definition, default, null, scheduler);
+			SpawnerRuntime runtime = new SpawnerRuntime(definition, default, null, scheduler);
+			runtime.NetworkSpawnOverride = spawn ?? (_ => new FakeSpawnable(++nextSpawnedId));
+			return runtime;
 		}
 
 		/// <summary>
@@ -87,6 +101,22 @@ namespace FishMMO.UnitTests.AI
 		{
 			++Calls;
 			return Allow;
+		}
+	}
+
+	/// <summary>
+	/// A respawn condition that throws, standing in for anything in a pass that can.
+	/// </summary>
+	[Serializable]
+	internal sealed class ThrowingRespawnCondition : RespawnCondition
+	{
+		/// <summary>How many times it has been asked.</summary>
+		public int Calls;
+
+		public override bool OnCheckCondition(SpawnerRuntime spawner)
+		{
+			++Calls;
+			throw new InvalidOperationException("condition failed");
 		}
 	}
 

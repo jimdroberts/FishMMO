@@ -8,6 +8,12 @@ namespace FishMMO.Shared
 	/// Manages quest instances for a character including acceptance, objective tracking,
 	/// completion, turn-in, failure, and abandonment. Syncs state via broadcasts.
 	/// </summary>
+	/// <remarks>
+	/// Every <see cref="IQuestController"/> event is raised through <see cref="QuestEventDispatch"/>,
+	/// never invoked directly: these are called from the middle of combat and loot (an ECA action
+	/// on a kill), and a handler that threw for one broken quest used to unwind through whatever
+	/// raised it.
+	/// </remarks>
 	public class QuestController : CharacterBehaviour, IQuestController
 	{
 		/// <summary>
@@ -160,7 +166,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			IQuestController.OnQuestAccepted?.Invoke(Character, template);
+			QuestEventDispatch.Raise(IQuestController.OnQuestAccepted, Character, template, QuestEventDispatch.Reporter);
 		}
 
 		/// <inheritdoc />
@@ -183,7 +189,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			IQuestController.OnObjectiveUpdated?.Invoke(Character, questName, objectiveIndex, amount);
+			QuestEventDispatch.Raise(IQuestController.OnObjectiveUpdated, Character, questName, objectiveIndex, amount, QuestEventDispatch.Reporter);
 		}
 
 		/// <inheritdoc />
@@ -202,7 +208,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			IQuestController.OnQuestComplete?.Invoke(Character, questName);
+			QuestEventDispatch.Raise(IQuestController.OnQuestComplete, Character, questName, QuestEventDispatch.Reporter);
 			return true;
 		}
 
@@ -218,7 +224,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			IQuestController.OnQuestTurnedIn?.Invoke(Character, questName);
+			QuestEventDispatch.Raise(IQuestController.OnQuestTurnedIn, Character, questName, QuestEventDispatch.Reporter);
 			return true;
 		}
 
@@ -234,7 +240,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			IQuestController.OnQuestFailed?.Invoke(Character, questName);
+			QuestEventDispatch.Raise(IQuestController.OnQuestFailed, Character, questName, QuestEventDispatch.Reporter);
 			return true;
 		}
 
@@ -246,7 +252,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			IQuestController.OnQuestAbandoned?.Invoke(Character, questName);
+			QuestEventDispatch.Raise(IQuestController.OnQuestAbandoned, Character, questName, QuestEventDispatch.Reporter);
 			return true;
 		}
 

@@ -130,12 +130,15 @@ namespace FishMMO.Database.Data
 	{
 		public readonly long CharacterID;
 		public readonly DateTime LockedUntilUtc;
+		/// <summary>Seconds left on the lock, measured by the database clock when it was read.</summary>
+		public readonly double RemainingSeconds;
 		public readonly string Reason;
 
-		public ArenaPenaltyData(long characterID, DateTime lockedUntilUtc, string reason)
+		public ArenaPenaltyData(long characterID, DateTime lockedUntilUtc, double remainingSeconds, string reason)
 		{
 			CharacterID = characterID;
 			LockedUntilUtc = lockedUntilUtc;
+			RemainingSeconds = remainingSeconds;
 			Reason = reason;
 		}
 	}

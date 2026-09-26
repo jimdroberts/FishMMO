@@ -37,6 +37,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.HasIndex(e => e.StartedUtc)
 				.HasDatabaseName("ix_maintenance_operations_started");
 
+			/* One row per request. A write retried after its reply was lost (the connection dropped
+			 * after the commit) carries the same key and lands on the row its first attempt made,
+			 * instead of writing a second (issue #267). Filtered, so rows written without a key
+			 * never collide. */
+			builder.HasIndex(e => e.RequestKey)
+				.IsUnique()
+				.HasFilter("request_key IS NOT NULL");
+
 			builder.HasMany(e => e.Targets)
 				.WithOne(t => t.Operation)
 				.HasForeignKey(t => t.OperationID)

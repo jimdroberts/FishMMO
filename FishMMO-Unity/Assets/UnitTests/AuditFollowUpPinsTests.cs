@@ -208,7 +208,7 @@ namespace FishMMO.UnitTests
 			/* The ability upsert validates a batch whole, so a pet whose character row is gone took
 			 * its owner's rows down with it on the very save the next server reads under. */
 			string body = MethodBody(ReadSource(SavingPath),
-				"private async Task SaveSubEntitiesSequentiallyAsync(SubEntitySnapshot s)",
+				"private async Task<bool> SaveSubEntitiesSequentiallyAsync(SubEntitySnapshot s, long characterID)",
 				"private void SaveAndDespawnCharacter(");
 
 			LogAssert.IsTrue(body.Contains("s.Abilities.GroupBy(a => a.CharacterID)"),

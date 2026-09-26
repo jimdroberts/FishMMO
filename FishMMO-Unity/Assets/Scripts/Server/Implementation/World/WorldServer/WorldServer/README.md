@@ -49,7 +49,10 @@ This separation avoids blocking frame/update loops during normal operation while
 - Orderly shutdown cleanup that deletes the world server DB row with a 5-second timeout, preventing ghost records
 - `CreateAssetMenu` support for ScriptableObject-based instantiation (`FishMMO/Server/WorldServer/World Server System`)
 - Explicit dependency validation at initialization for `Server`, `Database.ServiceRegistry`, `IWorldServerService`, `ServerName` config, and `IWorldSceneSystem`
-- Admission lock flag (`IsLocked`) persisted with each registration, usable by world authentication gates
+- Admission lock flag (`IsLocked`) and scheduled shutdown (`ShutdownAtUtc`) mirrored from this server's database row (`ServerControlState`), read by `WorldServerAuthenticator`. They are set on the row (the Control Panel), not here: the registration reply and every pulse reply carry the row's state, and the pulse publishes it as a `ServerControlReading` for the main thread to adopt on the next pulse, so a lock change takes effect within two pulses and a locked world is locked from its first admission
+- Scheduled shutdown on the monotonic clock: `ShutdownCountdown` (`Server/Core`) anchors the seconds left, as the database measured them in the reading statement, on `MonotonicClock` at the moment each reply arrived, keeping the earliest anchor for one schedule. When it falls due the world server quits through the ordinary graceful teardown (`Server.Quit`). It is checked on every pulse, so a slow database does not hold it back, and a host clock that runs fast or is stepped no longer moves the deadline
+- One pulse in flight (`IWorldServerSystemRuntimeData.TryBeginPulse` / `EndPulse`), released only after the pulse's reading is published, so readings are adopted in the order they were made; while the database was stalled, overlapping pulses could publish an older lock or shutdown state over a newer one
+- Bandwidth recording: a `ServerBandwidthRecorder` is started once registered (one row per minute to `server_bandwidth_minute`, for the Control Panel) and stopped last on deinitialise
 
 ## Prerequisites
 
@@ -82,7 +85,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 2. Configure `ServerName` in the server configuration file or provider.
 3. Set the `PulseRate` field in the inspector (default: `5.0` seconds).
 4. Ensure the database connection string points to a valid PostgreSQL instance with the FishMMO schema.
-5. Start the world server — `InitializeOnce()` will register the server in the database and begin periodic heartbeat pulses.
+5. Start the world server — `InitializeOnceAsync()` will register the server in the database and begin periodic heartbeat pulses.
 
 ### Verifying Registration
 
@@ -103,18 +106,19 @@ This is an integrated module within the FishMMO project. No separate installatio
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `ID` | `long` | `0` | Database identifier for this world server instance, set after registration |
-| `IsLocked` | `bool` | `false` | Admission lock flag used by world authentication gates to reject new connections |
+| `IsLocked` | `bool` | `false` | The row's admission lock, adopted from the last reading; `WorldServerAuthenticator` refuses player characters while it is set |
+| `ShutdownAtUtc` | `DateTime?` | `null` | The row's scheduled shutdown instant, adopted from the last reading; while set, `WorldServerAuthenticator` admits nobody. The countdown itself runs on `ShutdownCountdown`, not on this value |
 
 ## Usage Examples
 
 ### Programmatic Registration
 
 ```csharp
-// WorldServerSystem.Register is called automatically during InitializeOnce(),
+// WorldServerSystem.RegisterAsync is awaited automatically during InitializeOnceAsync(),
 // but can also be invoked directly through the IWorldServerSystem interface:
 if (server.BehaviourRegistry.TryGet(out IWorldServerSystem worldServer))
 {
-    worldServer.Register("192.168.1.100", 7770, 0);
+    bool registered = await worldServer.RegisterAsync("192.168.1.100", 7770, 0);
 }
 ```
 
@@ -141,11 +145,13 @@ if (server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData runtim
 
 ### Locking the Server
 
+Lock the world, or schedule its shutdown, on its database row (the Control Panel's server controls). Setting `runtimeData.IsLocked` directly does not stick: the next reading adopted from the row overwrites it. The running server adopts a change within two pulses:
+
 ```csharp
-// Set the lock flag before the next registration or pulse persists it:
 if (server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData runtimeData))
 {
-    runtimeData.IsLocked = true;
+    bool locked = runtimeData.IsLocked;                      // as of the last adopted reading
+    bool shuttingDown = runtimeData.ShutdownAtUtc.HasValue;
 }
 ```
 
@@ -160,6 +166,9 @@ if (server.DataContainerRegistry.TryGet(out IWorldServerSystemRuntimeData runtim
 | Missing `ServerName` config | Omit `ServerName` from configuration | `InitializeOnce` returns `FailedToFindRequiredDependency` |
 | Missing `IWorldServerService` | Remove service from DB registry | `InitializeOnce` returns `FailedToGetDbContext` |
 | Pulse backpressure | Flood async worker queue | Warning log: `Failed to enqueue world server pulse work item.` |
+| One pulse at a time | Stall the database longer than `PulseRate` | No second pulse starts until the first finishes |
+| Lock adopted | Lock the world on its row | Within two pulses: `This world server is now LOCKED ...` logged; player logins answered `ServerLocked` |
+| Scheduled shutdown | Schedule a shutdown on the row | `Shutdown scheduled for ..., in Ns by the database clock.`; at the deadline `Scheduled shutdown deadline reached; stopping the world server.` and a graceful quit |
 | Runtime data reset on shutdown | Inspect `IWorldServerSystemRuntimeData.ID` after stop | Value is `0` |
 
 ## Flow Diagram
@@ -200,10 +209,10 @@ flowchart LR
                 │                               │
                 ▼                               ▼
   ┌───────────────────────┐      ┌──────────────────────────────┐
-  │   Register(addr,      │      │ IPeriodicUpdateSystem        │
+  │  RegisterAsync(addr,  │      │ IPeriodicUpdateSystem        │
   │         port, count)  │      │ registers OnPeriodicPulse    │
   │                       │      │ at PulseRate interval        │
-  │  Task.Run → DB        │      └──────────────┬───────────────┘
+  │  await DB             │      └──────────────┬───────────────┘
   │  PersistAsync(...)    │                      │
   │  → runtimeData.ID =  │                      │  every PulseRate seconds
   │    result.ServerId    │                      ▼
@@ -211,25 +220,31 @@ flowchart LR
                                  │   OnPeriodicPulse(deltaTime) │
                                  │  1. Guard: Initialized,      │
                                  │     Started, Server != null  │
-                                 │  2. Read ConnectionCount     │
+                                 │  2. Adopt the last published │
+                                 │     control reading, or      │
+                                 │     check the countdown      │
+                                 │  3. Read ConnectionCount     │
                                  │     from scene mapping data  │
-                                 │  3. Call Pulse(count)         │
+                                 │  4. Call Pulse(count)         │
                                  └──────────────┬───────────────┘
                                                 │
                                                 ▼
                                  ┌──────────────────────────────┐
                                  │   Pulse(characterCount)      │
+                                 │  TryBeginPulse() or skip     │
                                  │  TryEnqueueAsyncWork(        │
-                                 │    PulseAsync(serverId,      │
-                                 │              count))         │
+                                 │    PulseAsync(data, count))  │
                                  └──────────────┬───────────────┘
                                                 │
                                                 ▼
                                  ┌──────────────────────────────┐
                                  │  AsyncWorkerData (bg thread) │
-                                 │  PulseAsync(serverId, count) │
+                                 │  PulseAsync(data, count)     │
                                  │  → IWorldServerService       │
                                  │    .PulseAsync(id, count)    │
+                                 │  → publish ServerControl-    │
+                                 │    Reading (arrival stamped) │
+                                 │  finally: EndPulse()         │
                                  └──────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -244,6 +259,7 @@ flowchart LR
                  │  2. Delete world server DB   │
                  │     row (5s timeout)         │
                  │  3. Reset runtimeData.ID = 0 │
+                 │  4. Stop bandwidth recorder  │
                  └─────────────────────────────┘
 ```
 
@@ -252,7 +268,7 @@ flowchart LR
 ```
 WorldServer/WorldServer/
 ├── WorldServerSystem.cs              # World server registration + heartbeat orchestration
-├── WorldServerSystemRuntimeData.cs   # Runtime world server ID + lock state container
+├── WorldServerSystemRuntimeData.cs   # Runtime world server ID, lock/shutdown state, pulse gate
 └── README.md                         # This file
 ```
 
@@ -260,8 +276,11 @@ WorldServer/WorldServer/
 
 ```
 Server/Core/World/WorldServer/WorldServer/
-├── IWorldServerSystem.cs             # Core-facing interface: Register(), Pulse()
-└── IWorldServerSystemRuntimeData.cs  # Core-facing interface: ID, IsLocked
+├── IWorldServerSystem.cs             # Core-facing interface: RegisterAsync(), Pulse()
+└── IWorldServerSystemRuntimeData.cs  # Core-facing interface: ID, IsLocked, ShutdownAtUtc, TryBeginPulse/EndPulse
+
+Server/Core/
+└── ShutdownCountdown.cs              # ShutdownCountdown + ServerControlReading: the database-measured countdown
 ```
 
 ### Related Data Containers

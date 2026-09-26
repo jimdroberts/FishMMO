@@ -284,9 +284,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			phaseBehaviorTree != null ? phaseBehaviorTree : (archetype != null ? archetype.BehaviorTree : null);
 
 		/// <summary>
-		/// Optional LOD settings for distance-based update throttling. When assigned, replaces the
-		/// fixed 1-in-3 stagger with distance-based tiers: Active (nearby players), Nearby, Far,
-		/// and Dormant (no observers). Null means always Active.
+		/// Optional LOD settings for distance-based update throttling. When assigned, the brain
+		/// runs distance-based tiers by nearest player: Active, Nearby, Far, and Dormant (nobody
+		/// within the Far band). Null means always Active: every AI tick runs the full pipeline.
 		/// </summary>
 		public AILodSettings LodSettings => archetype != null ? archetype.LodSettings : null;
 
@@ -337,6 +337,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					return;
 				}
 				bossScript = value;
+				// The old state's adds are nobody's to dismiss once the state is replaced.
+				BossState?.ReleaseAdds();
 				BossState = value != null ? new BossScriptState(value) : null;
 				ClearPhaseOverrides();
 			}
@@ -643,7 +645,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		[Header("Tick Rate")]
 		[Tooltip("Brain updates per second. 5-10 is the useful band. Rounded to a divisor of the network tick rate.")]
 		[Range(1f, 30f)]
-		public float AiTickRate = 8f;
+		public float AiTickRate = DEFAULT_AI_TICK_RATE;
+
+		/// <summary>
+		/// The brain rate every NPC runs unless its <see cref="AiTickRate"/> is changed, and the rate
+		/// <see cref="AIBrainHost"/> ticks packs at.
+		/// </summary>
+		public const float DEFAULT_AI_TICK_RATE = 8f;
 
 		/// <summary>
 		/// Network ticks between brain updates, derived from <see cref="AiTickRate"/>.
@@ -672,8 +680,78 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 		private float nextLeashUpdate = 0.0f;
 		private float nextEnemySweepUpdate = 0.0f;
-		private float aggressionTickTimer = 0.0f;
+
+		/// <summary>
+		/// Seconds between threat-table decay passes.
+		/// </summary>
+		private const float AGGRESSION_TICK_INTERVAL = 0.5f;
+
+		/// <summary>
+		/// Schedules threat decay and measures the time each pass covers. See <see cref="TickAggression"/>.
+		/// </summary>
+		private AIStateClock aggressionClock;
+
+		/// <summary>
+		/// This NPC's slot in the brain-tick stagger. Derived from <see cref="IdentityKey"/>.
+		/// </summary>
 		private int staggerID;
+
+		/// <summary>
+		/// A well-mixed hash of this pooled instance's identity: the one source every per-NPC
+		/// phase, stagger and tie-break is drawn from.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Hashed rather than used raw. Unity hands out instance IDs sequentially across every
+		/// object and component an instantiation creates, so a camp of one prefab spawned together
+		/// tends to have IDs a constant stride apart — and a stride that shares a factor with the
+		/// brain interval puts the whole camp on a fraction of the brain ticks, <c>id % 4</c> on
+		/// the same one at worst. The hash is a bijection on 32 bits, so distinct instances still
+		/// get distinct keys, which is what lets <see cref="AISeparation"/> break a tie with it.
+		/// </para>
+		/// <para>
+		/// Stable for the life of the pooled object, so an NPC keeps its phases across respawns
+		/// and nothing draws from its seeded RNG to pick them.
+		/// </para>
+		/// </remarks>
+		public uint IdentityKey { get; private set; }
+
+		/// <summary>
+		/// The brain host driving this controller, set by <see cref="AIBrainHost.Prepare"/>. Null
+		/// for a brain nothing hosts, which then has no neighbours to separate from.
+		/// </summary>
+		internal AIBrainHost Host { get; set; }
+
+		/// <summary>
+		/// True once the host has stopped ticking this brain because it kept throwing. Cleared
+		/// when the NPC is next prepared. See <see cref="AIBrainHost.MaxConsecutiveTickFaults"/>.
+		/// </summary>
+		public bool Quarantined { get; internal set; }
+
+		/// <summary>
+		/// Every collider in the NPC's hierarchy, collected when the brain is first bound.
+		/// </summary>
+		internal Collider[] BodyColliders { get; private set; }
+
+		/// <summary>
+		/// True while the brain is live: prepared for this spawn, not suspended for a corpse, and
+		/// not quarantined by the host.
+		/// </summary>
+		public bool IsRunning => enabled && Prepared && !Quarantined;
+
+		/// <summary>
+		/// True while the NPC is on a leash return that began in a fight. Half of
+		/// <see cref="IsEvading"/>; the other half is that the return is still the current state.
+		/// </summary>
+		private bool leashEvade;
+
+		/// <summary>
+		/// Reusable condition context for <see cref="Ability.MeetsActivationConditions"/>, so
+		/// scoring the spellbook does not allocate one per pick. The ability re-creates it only if
+		/// its initiator differs, which it never does for one brain.
+		/// </summary>
+		[System.NonSerialized]
+		internal EventData ActivationCheckData;
 
 		/// <summary>
 		/// Seconds the current target has been continuously tracked, which drives the aim accuracy
@@ -779,16 +857,94 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		private AILodTier currentLodTier = AILodTier.Active;
 
 		/// <summary>
-		/// The NPC group this controller belongs to. Set by <see cref="NPCGroup"/>.
+		/// The pack this NPC fights with, or null. Written only by <see cref="NPCGroup"/>.
 		/// </summary>
-		[System.NonSerialized]
-		public NPCGroup Group;
+		/// <remarks>
+		/// Set when a pack spawner spawns the NPC (<c>SpawnerRuntime.JoinPack</c>) or a boss calls it
+		/// in as an add, and cleared when it leaves: on death (<see cref="SuspendForCorpse"/>), on
+		/// despawn and pool reset (<see cref="ResetForPool"/>), and on destruction.
+		/// </remarks>
+		public NPCGroup Group { get; internal set; }
 
 		/// <summary>
-		/// This NPC's role within its group. Set by <see cref="NPCGroup"/>.
+		/// This NPC's role within its pack; <see cref="NPCGroupRole.None"/> outside one. Written only
+		/// by <see cref="NPCGroup"/>.
 		/// </summary>
-		[System.NonSerialized]
-		public NPCGroupRole GroupRole;
+		public NPCGroupRole GroupRole { get; internal set; }
+
+		/// <summary>
+		/// The bearing around the pack's focus this NPC's tactic assigned it, in radians, in the
+		/// <see cref="OrbitState"/> convention. Meaningful only while <see cref="HasPackSlot"/>.
+		/// </summary>
+		public float PackSlotAngle { get; private set; }
+
+		/// <summary>
+		/// True while the pack's tactic has a slot for this NPC: it is fighting the pack's focus and
+		/// the pack has a tactic.
+		/// </summary>
+		public bool HasPackSlot { get; private set; }
+
+		/// <summary>
+		/// Gives this NPC its tactic slot. Called by <see cref="NPCGroup"/> at each evaluation.
+		/// </summary>
+		/// <param name="angle">The slot's bearing around the focus, in radians.</param>
+		internal void SetPackSlot(float angle)
+		{
+			PackSlotAngle = angle;
+			HasPackSlot = true;
+		}
+
+		/// <summary>
+		/// Takes this NPC off its tactic slot.
+		/// </summary>
+		internal void ClearPackSlot()
+		{
+			PackSlotAngle = 0f;
+			HasPackSlot = false;
+		}
+
+		/// <summary>
+		/// Leaves this NPC's pack, if it is in one. Safe to call at any time and more than once.
+		/// </summary>
+		internal void LeavePack()
+		{
+			NPCGroup group = Group;
+			if (group != null)
+			{
+				group.RemoveMember(this);
+			}
+
+			// Whatever the pack did or did not know of this brain, it holds no membership now.
+			Group = null;
+			GroupRole = NPCGroupRole.None;
+			ClearPackSlot();
+		}
+
+		/// <summary>
+		/// The boss that called this NPC in as an add and may send it away again, or null. Written
+		/// only by <see cref="BossScriptState"/>.
+		/// </summary>
+		/// <remarks>
+		/// The add's half of <see cref="BossScriptState"/>'s list of live adds, cleared when the add
+		/// leaves the fight as a pack member does (<see cref="LeaveSummoner"/>). Not the pack: a boss's
+		/// pack may be its spawner's, and those members are not the boss's to despawn.
+		/// </remarks>
+		internal BossScriptState Summoner { get; set; }
+
+		/// <summary>
+		/// Stops being its boss's add, if it is one. Safe to call at any time and more than once.
+		/// </summary>
+		/// <remarks>
+		/// Called where the NPC leaves its pack — on death, on despawn and pool reset, and on
+		/// destruction — for the same reason: the brain is pooled and reissued, and a boss still
+		/// holding it would, on its next leash reset, despawn whatever NPC the pool made of it next.
+		/// </remarks>
+		internal void LeaveSummoner()
+		{
+			BossScriptState summoner = Summoner;
+			Summoner = null;
+			summoner?.ForgetAdd(this);
+		}
 
 		/// <summary>
 		/// Runtime state for the boss script. Null when no <see cref="BossScript"/> is assigned.
@@ -982,14 +1138,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </remarks>
 		private float measuredTickSpeedSqr;
 
-		/// <summary>Scratch buffer for the separation overlap query. Grown on demand.</summary>
-		private Collider[] separationHits = new Collider[16];
-
 		/// <summary>Scratch list of neighbour positions for <see cref="AISeparation.Resolve"/>.</summary>
 		private readonly List<Vector3> separationNeighbours = new List<Vector3>(16);
 
-		/// <summary>Scratch list of bodies already counted, so a multi-collider NPC pushes once.</summary>
-		private readonly List<GameObject> separationKeys = new List<GameObject>(16);
+		/// <summary>
+		/// Scratch list of the neighbours' identity keys, in the same order, for the tie-break
+		/// when two bodies coincide. One entry per body: the grid holds bodies, not colliders.
+		/// </summary>
+		private readonly List<uint> separationKeys = new List<uint>(16);
 
 		/// <summary>Schedules the current state's updates and measures the interval each covers.</summary>
 		private AIStateClock stateClock;
@@ -1068,14 +1224,116 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				networkTickDelta = 1f / 30f;
 			}
 
-			float networkTickRate = 1f / networkTickDelta;
-			float requested = Mathf.Clamp(AiTickRate, 0.1f, networkTickRate);
-
-			ticksPerAiUpdate = Mathf.Max(1, Mathf.RoundToInt(networkTickRate / requested));
+			ticksPerAiUpdate = ResolveTicksPerAiUpdate(AiTickRate, networkTickDelta);
 
 			// Stagger the very first brain update so a wave of NPCs spawned together does not all
 			// think on the same tick for the rest of their lives.
 			aiTickCounter = ticksPerAiUpdate > 1 ? (staggerID % ticksPerAiUpdate) : 0;
+		}
+
+		/// <summary>
+		/// Network ticks per AI tick for a requested brain rate: the nearest whole divisor of the
+		/// network tick. Pure, and shared with the packs <see cref="AIBrainHost"/> ticks, so a pack
+		/// thinks on the same cadence as its members.
+		/// </summary>
+		/// <param name="aiTickRate">The requested rate, in hertz.</param>
+		/// <param name="networkTickDelta">Seconds per network tick; 1/30 when not positive.</param>
+		/// <returns>Network ticks between AI ticks, at least 1.</returns>
+		public static int ResolveTicksPerAiUpdate(float aiTickRate, float networkTickDelta)
+		{
+			if (networkTickDelta <= 0f)
+			{
+				networkTickDelta = 1f / 30f;
+			}
+
+			float networkTickRate = 1f / networkTickDelta;
+			float requested = Mathf.Clamp(aiTickRate, 0.1f, networkTickRate);
+			return Mathf.Max(1, Mathf.RoundToInt(networkTickRate / requested));
+		}
+
+		/// <summary>
+		/// Mixes an instance ID into a key whose every bit depends on every input bit.
+		/// </summary>
+		/// <remarks>
+		/// The "lowbias32" integer hash: xor-shifts and odd multiplies, each invertible, so the whole
+		/// is a bijection on 32 bits — two instances never share a key. See <see cref="IdentityKey"/>.
+		/// </remarks>
+		/// <param name="instanceId">A Unity instance ID.</param>
+		/// <returns>The mixed key.</returns>
+		public static uint MixIdentity(int instanceId)
+		{
+			uint x = unchecked((uint)instanceId);
+			x ^= x >> 16;
+			x = unchecked(x * 0x7feb352dU);
+			x ^= x >> 15;
+			x = unchecked(x * 0x846ca68bU);
+			x ^= x >> 16;
+			return x;
+		}
+
+		/// <summary>
+		/// A fraction in [0, 1) drawn from <paramref name="key"/>, different for each
+		/// <paramref name="salt"/>, so one identity can seed several independent phases.
+		/// </summary>
+		/// <param name="key">An identity key from <see cref="MixIdentity"/>.</param>
+		/// <param name="salt">Distinguishes the phases drawn from one key.</param>
+		/// <returns>The fraction.</returns>
+		public static float PhaseFraction(uint key, uint salt)
+		{
+			uint mixed = MixIdentity(unchecked((int)(key ^ (salt * 0x9e3779b9U))));
+			// The top 24 bits, so the result is exact in a float and strictly below one.
+			return (mixed >> 8) * (1f / 16777216f);
+		}
+
+		/// <summary>
+		/// The phase of the LOD stagger, in AI ticks.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The part of the stagger the brain-tick phase did not use. The brain tick already takes
+		/// <c>staggerID % ticksPerAiUpdate</c>; the LOD gate used to add the whole
+		/// <c>staggerID</c> again, and when the two moduli share a factor the phases are correlated:
+		/// with a brain every 4th network tick and an Active interval of 2, the combinations of the
+		/// two phases fill only 4 of the 8 network-tick slots in each cycle, doubling the per-tick
+		/// peak. Taking the quotient instead makes the two phases independent, so a population
+		/// spreads over every slot.
+		/// </para>
+		/// <para>Pure, so the spread can be asserted directly.</para>
+		/// </remarks>
+		/// <param name="staggerID">The NPC's stagger slot.</param>
+		/// <param name="ticksPerAiUpdate">Network ticks per brain tick.</param>
+		/// <returns>The LOD phase.</returns>
+		public static int ResolveLodPhase(int staggerID, int ticksPerAiUpdate)
+		{
+			return Mathf.Abs(staggerID) / Mathf.Max(1, ticksPerAiUpdate);
+		}
+
+		/// <summary>
+		/// Starts this NPC's periodic checks at their own point in each period.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The enemy sweep, the LOD re-evaluation, the leash check, the shelter check and threat
+		/// decay all used to start at zero and never be offset. A scene's NPCs are spawned together,
+		/// so every one of them then swept on the same brain tick every 1.5 s, re-evaluated LOD on
+		/// the same one every 2 s, and so on: a camp of two hundred ran all its sweeps — an overlap,
+		/// a component lookup per body and a line-of-sight ray per enemy each — on one tick in every
+		/// forty-eight. Each period now starts at a fraction drawn from <see cref="IdentityKey"/>,
+		/// so the same work is spread evenly across the period instead.
+		/// </para>
+		/// <para>
+		/// Called by <see cref="AIBrainHost.Prepare"/> once the initial state has been entered,
+		/// because the leash period belongs to the state.
+		/// </para>
+		/// </remarks>
+		internal void SeedTimerPhases()
+		{
+			nextEnemySweepUpdate = EnemySweepRate * PhaseFraction(IdentityKey, 1);
+			lodReevaluateTimer = LodSettings != null ? LodSettings.ReevaluateInterval * PhaseFraction(IdentityKey, 2) : 0f;
+			nextLeashUpdate = CurrentState != null ? Mathf.Max(0f, CurrentState.LeashUpdateRate) * PhaseFraction(IdentityKey, 3) : 0f;
+			AIShelterSettings shelter = Shelter;
+			nextShelterCheck = shelter != null ? Mathf.Max(0f, shelter.CheckInterval) * PhaseFraction(IdentityKey, 4) : 0f;
+			aggressionClock.Rearm(AGGRESSION_TICK_INTERVAL * PhaseFraction(IdentityKey, 5));
 		}
 
 		/// <summary>
@@ -1091,15 +1349,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * Seeded from the GameObject's instance ID rather than Character.ID: the brain is bound
 			 * the first time the server spawns the NPC, and a pooled instance keeps the brain for
 			 * life, so an ID-derived bucket would be whatever ID the first occupant happened to
-			 * draw. The instance ID is stable and well spread. */
-			staggerID = Mathf.Abs(gameObject.GetInstanceID());
+			 * draw. The instance ID is stable but NOT well spread — see IdentityKey — so it is
+			 * hashed first. */
+			IdentityKey = MixIdentity(gameObject.GetInstanceID());
+			staggerID = (int)(IdentityKey & 0x7FFFFFFFU);
+
+			/* Collected once: a pooled NPC's hierarchy is fixed for its life, and the host maps each
+			 * of these to this brain while it ticks (see AIBrainHost.TryGetBrain). Inactive children
+			 * included, so a hitbox enabled later is still known. */
+			BodyColliders = GetComponentsInChildren<Collider>(true);
 
 			// One threat table per NPC; ApplyArchetypeTuning below gives it the archetype's numbers.
 			AggressionState = new AggressionState(Character);
 
-			// Wire event-driven combat entry: when the NPC takes damage for the first time,
-			// enter combat immediately instead of waiting for the next physics sweep.
-			AggressionState.OnCombatInitiated = OnThreatReceived;
+			/* Event-driven combat entry: every hit is offered to OnThreatReceived, which enters
+			 * combat at once when the NPC is not already fighting or evading, instead of waiting
+			 * for the next physics sweep. */
+			AggressionState.OnHitRecorded = OnThreatReceived;
 
 			if (Agent == null)
 			{
@@ -1181,6 +1447,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <param name="attackingState">Attacking state for the phase, or null to keep the current one.</param>
 		/// <param name="behaviorTree">Behavior tree for the phase, or null to keep the current one.</param>
 		/// <param name="abilityRotation">Ability rotation for the phase, or null to keep the current one.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>An attacking-state override takes over the fight at once.</b> <see cref="AttackingState"/>
+		/// reads the override, but the NPC keeps running whichever attacking state it entered until
+		/// something re-enters one. What did, by accident, was the out-of-combat enemy sweep: it
+		/// tested only "is the current state the resolved attacking state", so after an override
+		/// it ran against the old one and, a sweep interval later and in the Active tier only,
+		/// re-entered the new one with a fresh target pick and the cast interrupted. The sweep no
+		/// longer runs in any combat state (<see cref="SweepMayRun"/>), so the swap now happens
+		/// here, when the phase starts, through <see cref="HandOverFight"/>, which keeps the target
+		/// and the cast in progress. A boss not
+		/// in its attacking state is left alone: a combat sub-state returns to
+		/// <see cref="AttackingState"/> and so picks the override up on its own, and a boss out of
+		/// combat enters it the next time it engages.
+		/// </para>
+		/// </remarks>
 		public void SetPhaseOverrides(BaseAIState attackingState, AIBehaviorTree behaviorTree, AIAbilityRotation abilityRotation)
 		{
 			if (attackingState != null)
@@ -1194,6 +1476,63 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (abilityRotation != null)
 			{
 				phaseAbilityRotation = abilityRotation;
+			}
+
+			if (FightNeedsHandOver(AttackingState != null,
+				CurrentState is BaseAttackingState,
+				CurrentState != null && ReferenceEquals(CurrentState, AttackingState)))
+			{
+				HandOverFight();
+			}
+		}
+
+		/// <summary>
+		/// Whether the fight in progress has to move to a different attacking state: the NPC is in
+		/// an attacking state, and it is not the one <see cref="AttackingState"/> now resolves to.
+		/// </summary>
+		/// <remarks>Pure, so the rule can be pinned without a scene.</remarks>
+		/// <param name="hasAttackingState">True when an attacking state resolves at all.</param>
+		/// <param name="inAttackingState">True when the current state is an attacking state.</param>
+		/// <param name="inResolvedAttackingState">True when the current state is the one <see cref="AttackingState"/> resolves to.</param>
+		/// <returns>True to hand the fight over now.</returns>
+		public static bool FightNeedsHandOver(bool hasAttackingState, bool inAttackingState, bool inResolvedAttackingState)
+		{
+			return hasAttackingState && inAttackingState && !inResolvedAttackingState;
+		}
+
+		/// <summary>
+		/// True only while <see cref="HandOverFight"/> is moving an ongoing fight from one attacking
+		/// state to another. <see cref="BaseAttackingState.Exit"/> reads it, alongside
+		/// <see cref="PendingState"/>, to tell a hand-over from a disengage.
+		/// </summary>
+		public bool IsHandingOverFight { get; private set; }
+
+		/// <summary>
+		/// Moves the fight in progress into the attacking state <see cref="AttackingState"/> now
+		/// resolves to, without ending it.
+		/// </summary>
+		/// <remarks>
+		/// A plain <see cref="ChangeState"/> would run the outgoing state's Exit as a disengage — drop
+		/// the target, give up the ring slot and interrupt the cast — and the incoming state would
+		/// then have to find a target from a fresh sweep, which may not pick the one the boss was
+		/// fighting. Marked for the duration of the transition so Exit leaves all three alone.
+		/// </remarks>
+		private void HandOverFight()
+		{
+			BaseAIState next = AttackingState;
+			if (next == null)
+			{
+				return;
+			}
+
+			IsHandingOverFight = true;
+			try
+			{
+				ChangeState(next);
+			}
+			finally
+			{
+				IsHandingOverFight = false;
 			}
 		}
 
@@ -1221,12 +1560,38 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
+		/// The boss's part of a leash reset: sends the adds it called in back to the pool, then
+		/// returns its script to its first phase. Every leash that honours
+		/// <see cref="BossScript.ResetOnLeash"/> comes through here.
+		/// </summary>
+		/// <remarks>
+		/// The adds go with the leash rather than with <see cref="ResetBossScript"/>, which a despawn
+		/// runs too. A leash promises the encounter as it was before the pull, and adds left standing
+		/// met the next pull beside a full-health boss about to call the same adds in again. A boss
+		/// that dies or despawns only lets go of its adds (<see cref="BossScriptState.ReleaseAdds"/>),
+		/// which fight on as they always have. Only the adds the boss spawned are dismissed, never
+		/// the rest of its pack; see <see cref="BossScriptState.DismissAdds"/>.
+		/// </remarks>
+		private void ResetBossScriptForLeash()
+		{
+			BossState?.DismissAdds(NetworkManager);
+			ResetBossScript();
+		}
+
+		/// <summary>
 		/// Unsubscribes from global events on destroy to prevent memory leaks.
 		/// </summary>
 		private void OnDestroying()
 		{
 			ReleaseCombatSlots();
 			AggressionState?.Destroy();
+
+			/* An NPC destroyed with its scene never despawns, so this is the only way out of its
+			 * pack; the pack would otherwise count a destroyed brain until its next evaluation. The
+			 * same holds for its boss's list of adds, and for its own list if it is a boss. */
+			LeavePack();
+			LeaveSummoner();
+			BossState?.ReleaseAdds();
 		}
 
 		/// <summary>
@@ -1310,12 +1675,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			offMeshReseatTimer = 0f;
 			offMeshWarned = false;
 			stateClock = default;
-			aggressionTickTimer = 0f;
+			aggressionClock = default;
+			leashEvade = false;
 			behaviorTreeTimer = 0f;
 			lodReevaluateTimer = 0f;
 			currentLodTier = AILodTier.Active;
-			Group = null;
-			GroupRole = NPCGroupRole.None;
+
+			/* Out of the pack, not merely forgetting it: the pack still listed this brain, and would
+			 * have counted it, read its health and alerted it into its next occupant's life. The
+			 * next spawn rejoins through its spawner. */
+			LeavePack();
+
+			/* Likewise out of its boss's adds, and, as a boss, done with its own: they are not
+			 * dismissed by a despawn, only no longer this brain's, so the next occupant of this pool
+			 * slot can neither be sent away by a boss it never met nor send away adds it never
+			 * called. */
+			LeaveSummoner();
+			BossState?.ReleaseAdds();
 			PendingState = null;
 			CurrentState = null;
 			ResetBossScript();
@@ -1329,12 +1705,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
-		/// Unity Update loop. Applies LOD-based tick scheduling and dispatches to
-		/// tier-appropriate update pipelines for behavior simplification.
+		/// One network tick of this brain, called by <see cref="AIBrainHost"/>. Steps the body, then
+		/// applies LOD-based tick scheduling and dispatches to tier-appropriate update pipelines
+		/// for behavior simplification.
 		/// <para>
-		/// <b>Tick scheduling:</b> Each LOD tier has a frame stagger modulus that spreads
-		/// NPC updates evenly across frames (e.g., Active: every 3rd frame ≈ 50ms at 60 FPS).
-		/// Dormant NPCs use a dedicated high-modulus gate so even their wake-up check is cheap.
+		/// <b>Tick scheduling:</b> The brain runs every <see cref="ticksPerAiUpdate"/> network
+		/// ticks, and each LOD tier has an interval in those AI ticks, offset per NPC by its LOD
+		/// phase (<see cref="ResolveLodPhase"/>) so updates spread evenly across ticks.
+		/// Dormant NPCs use a dedicated high-interval gate so even their wake-up check is cheap.
 		/// </para>
 		/// <para>
 		/// <b>Behavior simplification:</b>
@@ -1346,48 +1724,66 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </list>
 		/// </para>
 		/// </summary>
-		internal void Tick()
+		/// <returns>
+		/// True when this network tick ran a tier pipeline to completion. <see cref="AIBrainHost"/>
+		/// counts only those as proof the brain is healthy: a throw inside the pipeline recurs once
+		/// per pipeline run, and the body-only ticks in between must not reset the count.
+		/// </returns>
+		internal bool Tick()
 		{
 			/* The brain is a tick callback, not Update, so disabling the MonoBehaviour does not
 			 * stop it by itself: a corpse kept sweeping, leashing (warping home and healing itself)
 			 * and driving its agent for the whole of its decay. SuspendForCorpse disables the
 			 * controller and halts it; this is what makes the disable mean something. */
-			if (!enabled || !Prepared)
+			if (!IsRunning)
 			{
-				return;
+				return false;
 			}
 
-			// An agent off the mesh cannot step, path or arrive. Put it back before anything asks it to.
-			RecoverIfOffMesh(networkTickDelta);
-
-			// Apply this tick's slice of agent motion before anything reads the position.
-			StepAgent(networkTickDelta);
-
-			/* Facing runs on every network tick, the brain on a fraction of them.
-			 *
-			 * The two rates want different things. Rotation is replicated by the NetworkTransform,
-			 * which sends on the network tick, so turning any faster than that is work nobody ever
-			 * sees — and turning any slower makes an NPC's head visibly snap between orientations
-			 * while its position is being smoothly interpolated. Matching the send rate is exactly
-			 * right. The brain, meanwhile, has no reason to run at 30 Hz. */
-			if (LookTarget != null)
+			/* The body runs on every network tick — except for a Dormant NPC with nowhere to go.
+			 * Nobody is within the Far band to see it, it has no path to advance, and its brain
+			 * does not run, so re-seating an idle agent and re-aiming at nothing thirty times a
+			 * second for every dormant NPC in the process was the whole of its cost. One with a
+			 * path keeps walking, so it arrives where it was going rather than freezing mid-stride.
+			 * The path is only asked about when Dormant; every other tier steps regardless. */
+			if (ShouldStepBody(currentLodTier, currentLodTier == AILodTier.Dormant && AgentHasSomewhereToGo()))
 			{
-				FaceLookTarget(networkTickDelta);
-			}
+				// An agent off the mesh cannot step, path or arrive. Put it back before anything asks it to.
+				RecoverIfOffMesh(networkTickDelta);
 
-			/* The aim is written on the same schedule as the facing, and for the same reason. Both
-			 * feed AbilityController.PopulateAiAim, which runs on every network tick — so a value
-			 * written on the brain tick is between one and four ticks stale by the time it is read.
-			 * The brain tick throttles thinking, and aiming is not thinking: it is one subtraction
-			 * and a LookRotation against state the controller already holds. */
-			UpdateAim(networkTickDelta);
+				// Apply this tick's slice of agent motion before anything reads the position.
+				StepAgent(networkTickDelta);
+
+				/* Facing runs on every network tick, the brain on a fraction of them.
+				 *
+				 * The two rates want different things. Rotation is replicated by the NetworkTransform,
+				 * which sends on the network tick, so turning any faster than that is work nobody ever
+				 * sees — and turning any slower makes an NPC's head visibly snap between orientations
+				 * while its position is being smoothly interpolated. Matching the send rate is exactly
+				 * right. The brain, meanwhile, has no reason to run at 30 Hz. */
+				if (LookTarget != null)
+				{
+					FaceLookTarget(networkTickDelta);
+				}
+
+				/* The aim is written on the same schedule as the facing, and for the same reason. Both
+				 * feed AbilityController.PopulateAiAim, which runs on every network tick — so a value
+				 * written on the brain tick is between one and four ticks stale by the time it is read.
+				 * The brain tick throttles thinking, and aiming is not thinking: it is one subtraction
+				 * and a LookRotation against state the controller already holds. */
+				UpdateAim(networkTickDelta);
+			}
+			else
+			{
+				measuredTickSpeedSqr = 0f;
+			}
 
 			aiTickCounter++;
 
 			// --- AI tick gate: only a fraction of network ticks drive the brain. ---
 			if (aiTickCounter < ticksPerAiUpdate)
 			{
-				return;
+				return false;
 			}
 			aiTickCounter = 0;
 
@@ -1412,6 +1808,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					if (previousTier != currentLodTier)
 					{
 						OnLodTierChanged(previousTier, currentLodTier);
+
+						/* Nothing refreshes the separation push below the Nearby tier, so it is
+						 * dropped at the change rather than whenever the throttled pipeline next
+						 * runs: a push left over from the last Active tick would otherwise go on
+						 * sliding a Dormant NPC that still has a path, at the push speed, for as long
+						 * as it stayed dormant. */
+						if (currentLodTier >= AILodTier.Far)
+						{
+							separationVelocity = Vector3.zero;
+						}
 					}
 				}
 
@@ -1420,13 +1826,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			/* Stagger gate.
 			 *
-			 * staggerID spreads NPCs across the interval so a thousand of them do not all think on
-			 * the same tick and spike one frame in every N. Keyed off a monotonic AI tick index
+			 * The LOD phase spreads NPCs across the interval so a thousand of them do not all think
+			 * on the same tick and spike one frame in every N. Keyed off a monotonic AI tick index
 			 * rather than Time.frameCount, so the spread is identical on a server running at 200
-			 * FPS and one running at 30. */
-			if (tickInterval > 1 && ((AiTickIndex + staggerID) % tickInterval) != 0)
+			 * FPS and one running at 30. It is the part of the stagger the brain-tick phase did not
+			 * use — see ResolveLodPhase for what reusing the whole of it cost. */
+			if (tickInterval > 1 &&
+				((AiTickIndex + (uint)ResolveLodPhase(staggerID, ticksPerAiUpdate)) % (uint)tickInterval) != 0)
 			{
-				return;
+				return false;
 			}
 
 			/* Exact, not accumulated. Every timer downstream — leash, sweep, threat decay, state
@@ -1439,7 +1847,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			// Dormant NPCs run nothing but the re-evaluation above.
 			if (currentLodTier == AILodTier.Dormant)
 			{
-				return;
+				return false;
 			}
 
 			/* The retreat budget advances on every AI tick regardless of state, because the refund
@@ -1466,6 +1874,33 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					UpdateFar(dt);
 					break;
 			}
+			return true;
+		}
+
+		/// <summary>
+		/// Whether this network tick should advance the NPC's body — off-mesh recovery, the agent
+		/// step, facing and aim.
+		/// </summary>
+		/// <remarks>
+		/// Every tier but Dormant always does. A Dormant NPC does only while it still has a path or
+		/// is on an off-mesh link: nobody is within the Far band to see it, its brain does not run,
+		/// and an idle agent needs nothing. Pure, so the rule can be pinned without an agent.
+		/// </remarks>
+		/// <param name="tier">The NPC's current LOD tier.</param>
+		/// <param name="hasSomewhereToGo">True when the agent has a path or is traversing a link. Only consulted when Dormant.</param>
+		/// <returns>True to step the body this tick.</returns>
+		public static bool ShouldStepBody(AILodTier tier, bool hasSomewhereToGo)
+		{
+			return tier != AILodTier.Dormant || hasSomewhereToGo;
+		}
+
+		/// <summary>
+		/// True when the agent is live on the NavMesh and still has a path to follow or a link to
+		/// cross. An agent off the mesh answers false and is re-seated when the NPC wakes.
+		/// </summary>
+		private bool AgentHasSomewhereToGo()
+		{
+			return AgentIsUsable() && (Agent.hasPath || Agent.isOnOffMeshLink);
 		}
 
 		/// <summary>
@@ -1593,28 +2028,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			// Clear threat table.
 			AggressionState?.Clear();
 
-			// Reset boss script phases.
+			// Reset boss script phases and dismiss the boss's adds.
 			if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
 			{
-				ResetBossScript();
+				ResetBossScriptForLeash();
 			}
 
 			TransitionToIdleState();
 		}
 
-		/// <summary>
-		/// Event-driven combat entry. Called by <see cref="AggressionState"/> when the
-		/// NPC receives its first threat event (damage from a player/NPC). Immediately
-		/// transitions to combat without waiting for the next <see cref="SweepForEnemies"/>
-		/// physics poll.
-		/// <para>
-		/// This eliminates the biggest polling cost for non-Active NPCs: thousands of
-		/// per-NPC physics OverlapSphere calls every <see cref="EnemySweepRate"/> seconds.
-		/// Nearby/Far tier NPCs rely entirely on this event to detect combat.
-		/// Active tier NPCs still run SweepForEnemies for proactive (hostile faction) detection.
-		/// </para>
-		/// </summary>
-		/// <param name="attacker">The character that generated the first threat event.</param>
 		/// <summary>
 		/// True while this NPC cannot be hurt. An immortal NPC has no reason to target anything, so
 		/// neither the enemy sweep nor an incoming hit acquires a target for it.
@@ -1631,13 +2053,141 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			Character.TryGet(out ICharacterDamageController ownDamage) &&
 			ownDamage.Immortal;
 
+		/// <summary>
+		/// True while the current state is part of a fight: the attacking state itself, or a combat
+		/// sub-state (orbit, flank, strafe, retreat) that keeps the combat target.
+		/// </summary>
+		/// <remarks>
+		/// Not <c>CurrentState == AttackingState</c>. A hit taken mid-orbit or mid-retreat is part of
+		/// the fight already in progress; reading only the attacking state would let every such hit
+		/// yank the NPC back into it and onto whoever hit it last, which would end every flee the
+		/// moment the pursuer landed a blow.
+		/// </remarks>
+		public bool IsInCombatState =>
+			CurrentState != null && (CurrentState is BaseAttackingState || CurrentState.KeepsCombatTarget);
+
+		/// <inheritdoc />
+		/// <remarks>
+		/// <para>
+		/// Only a return that a leash started out of a fight evades. <see cref="ReturnHomeState"/> is
+		/// also one of the random movement states a calm NPC drifts between, and an NPC strolling
+		/// home from a wander is as attackable as one wandering. The flag is set by
+		/// <see cref="CheckLeash"/> and ANDed here with "the return is still the current state" and
+		/// "the brain is running", so every way out of the return — arrival, a warp, a tier reset,
+		/// a new fight, a corpse, the pool — ends the evade without having to remember to.
+		/// </para>
+		/// </remarks>
+		public bool IsEvading
+		{
+			get
+			{
+				// The flag first: almost no NPC is evading, and this is read on every hit an NPC takes.
+				if (!leashEvade)
+				{
+					return false;
+				}
+				return IsEvadingRule(leashEvade, IsRunning, CurrentState != null && ReferenceEquals(CurrentState, ReturnHomeState));
+			}
+		}
+
+		/// <summary>
+		/// The evade rule, pure so it can be pinned without a scene: an NPC evades while a
+		/// fight-ending leash return is its current state and its brain is running.
+		/// </summary>
+		/// <param name="leashEvade">True when a leash sent the NPC home out of a fight.</param>
+		/// <param name="running">True while the brain is prepared, enabled and not quarantined.</param>
+		/// <param name="inReturnHomeState">True while the return-home state is the current state.</param>
+		/// <returns>True while the NPC must take no damage.</returns>
+		public static bool IsEvadingRule(bool leashEvade, bool running, bool inReturnHomeState)
+		{
+			return leashEvade && running && inReturnHomeState;
+		}
+
+		/// <summary>
+		/// Whether a leash that is sending the NPC home should make it evade.
+		/// </summary>
+		/// <remarks>
+		/// Only a leash that ends a fight: the NPC was in a combat state, or still held threat. A
+		/// calm NPC that has merely drifted past its leash range walks home as attackable as it was.
+		/// A pet never evades: it has no spawn-point leash, and its return is catching up with its
+		/// owner. Pure, so it can be pinned without a scene.
+		/// </remarks>
+		/// <param name="isPet">True for a pet.</param>
+		/// <param name="inCombatState">True when the NPC was in a combat state as the leash tripped.</param>
+		/// <param name="heldThreat">True when its threat table was not empty as the leash tripped.</param>
+		/// <returns>True to evade on the way home.</returns>
+		public static bool LeashStartsEvade(bool isPet, bool inCombatState, bool heldThreat)
+		{
+			return !isPet && (inCombatState || heldThreat);
+		}
+
+		/// <summary>
+		/// Whether a leash that is walking the NPC home heals it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Only a leash heals: this is asked by <see cref="CheckLeash"/> and nowhere else, so the
+		/// same return state picked as a calm movement (<see cref="TransitionToRandomMovementState"/>)
+		/// never heals. Every leash does — a calm drift past the leash as well as one that ends a
+		/// fight — exactly as the full-leash warp always has, provided the return actually became the
+		/// current state and the archetype's return state is authored to heal
+		/// (<see cref="ReturnHomeState.CompleteHealOnReturn"/>).
+		/// </para>
+		/// <para>Pure, so it can be pinned without a scene.</para>
+		/// </remarks>
+		/// <param name="enteredReturn">True when the leash's transition put the return state in force.</param>
+		/// <param name="completeHealOnReturn">The return state's authored heal flag.</param>
+		/// <returns>True to heal the NPC to full.</returns>
+		public static bool LeashReturnHeals(bool enteredReturn, bool completeHealOnReturn)
+		{
+			return enteredReturn && completeHealOnReturn;
+		}
+
+		/// <summary>
+		/// The state half of the combat-entry rule, pure so it can be pinned without a scene: a
+		/// threat event may start a fight only for a running brain that has an attacking state, is
+		/// not already fighting, and is not evading.
+		/// </summary>
+		/// <remarks>
+		/// This replaced an edge: combat used to start only when the threat table went from empty
+		/// to non-empty, and a fight that ended any way but a kill left the table non-empty, so
+		/// every later hit was recorded and ignored. The rule is now asked on every hit and reads
+		/// only the brain's own state, so there is no edge to consume.
+		/// </remarks>
+		/// <param name="hasAttackingState">True when the NPC can fight at all.</param>
+		/// <param name="running">True while the brain is prepared, enabled and not quarantined.</param>
+		/// <param name="inCombatState">True while the NPC is already fighting (see <see cref="IsInCombatState"/>).</param>
+		/// <param name="evading">True while the NPC is on a fight-ending leash return (see <see cref="IsEvading"/>).</param>
+		/// <returns>True when the threat may start a fight, subject to the per-character checks.</returns>
+		public static bool CanEnterCombatFromThreat(bool hasAttackingState, bool running, bool inCombatState, bool evading)
+		{
+			return hasAttackingState && running && !inCombatState && !evading;
+		}
+
+		/// <summary>
+		/// Event-driven combat entry. Called by <see cref="AggressionState"/> on every hit the NPC
+		/// takes, and by <see cref="ApplyTaunt"/>. Transitions to combat at once, without waiting
+		/// for the next <see cref="SweepForEnemies"/> physics poll, whenever the NPC is not already
+		/// fighting.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This eliminates the biggest polling cost for non-Active NPCs: thousands of per-NPC
+		/// physics OverlapSphere calls every <see cref="EnemySweepRate"/> seconds. Nearby tier NPCs
+		/// rely entirely on this event to detect combat; Active tier NPCs still run
+		/// SweepForEnemies for proactive (hostile faction) detection.
+		/// </para>
+		/// <para>
+		/// Called on every hit, so the cheap state checks come first: for an NPC already fighting —
+		/// every hit after the first — it returns on a few property reads, before any component
+		/// lookup.
+		/// </para>
+		/// </remarks>
+		/// <param name="attacker">The character that generated the threat.</param>
 		public void OnThreatReceived(ICharacter attacker)
 		{
-			if (attacker == null || AttackingState == null)
-				return;
-
-			// Already in combat or returning home — don't interrupt.
-			if (CurrentState == AttackingState || CurrentState == ReturnHomeState)
+			if (attacker == null ||
+				!CanEnterCombatFromThreat(AttackingState != null, IsRunning, IsInCombatState, IsEvading))
 				return;
 
 			// An immortal NPC has no reason to target anything.
@@ -1646,6 +2196,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			// A passive pet does not fight back; that is the whole meaning of the stance.
 			if (!PetStanceAllowsAutoEngage(false))
+				return;
+
+			/* A pet does not answer an attacker it could only reach by breaking its owner leash.
+			 * The attacking state would send it running and call it back at OwnerLeashRange on its
+			 * first update; with combat entry now asked on every hit, the next shot at the owner
+			 * would send it out again, and a pet guarding an owner under fire from range would
+			 * shuttle between the two for as long as the shooting lasted. */
+			if (cachedPet != null &&
+				cachedPet.PetOwner != null &&
+				cachedPet.PetOwner.Transform != null &&
+				attacker.Transform != null &&
+				AttackingState is BaseAttackingState petAttacking &&
+				!PetCanAnswerAttacker(cachedPet.PetOwner.Transform.position, attacker.Transform.position,
+					petAttacking.OwnerLeashRange, Mathf.Max(petAttacking.PreferredDistance, MaxOffensiveReach)))
 				return;
 
 			// Verify the attacker is alive.
@@ -1659,15 +2223,124 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
+		/// Whether a pack member may join its pack's fight against an enemy a packmate engaged.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The combat-entry rule a hit is asked (<see cref="CanEnterCombatFromThreat"/>), plus the
+		/// per-character checks that follow it there: the member must be alive and mortal, and the
+		/// enemy a valid target. So an alert never wakes a corpse or a quarantined brain, never drags
+		/// an evading member back into the fight it leashed out of, and never re-targets a member
+		/// already fighting — mid-orbit and mid-flee included, which the old test of the attacking
+		/// state alone yanked back into the attack.
+		/// </para>
+		/// <para>
+		/// A member strolling home as a calm movement is not evading and does answer; only a leash
+		/// that ended a fight makes a return an evade. Pure, so it can be pinned.
+		/// </para>
+		/// </remarks>
+		/// <param name="hasAttackingState">True when the member can fight at all.</param>
+		/// <param name="running">True while its brain is prepared, enabled and not quarantined.</param>
+		/// <param name="inCombatState">True while it is already fighting.</param>
+		/// <param name="evading">True while it is on a fight-ending leash return.</param>
+		/// <param name="immortal">True while it cannot be hurt.</param>
+		/// <param name="alive">True while it is alive.</param>
+		/// <param name="enemyValid">True when the enemy is alive and in the world.</param>
+		/// <returns>True when the member joins the fight.</returns>
+		public static bool MayAnswerPackAlert(bool hasAttackingState, bool running, bool inCombatState, bool evading, bool immortal, bool alive, bool enemyValid)
+		{
+			return CanEnterCombatFromThreat(hasAttackingState, running, inCombatState, evading) && !immortal && alive && enemyValid;
+		}
+
+		/// <summary>
+		/// Joins the pack's fight against <paramref name="enemy"/>, if this member is free to.
+		/// Called by <see cref="NPCGroup.AlertGroup"/>.
+		/// </summary>
+		/// <param name="enemy">The character a packmate engaged.</param>
+		/// <returns>True when this member entered its attacking state against the enemy.</returns>
+		internal bool AnswerPackAlert(ICharacter enemy)
+		{
+			if (!MayAnswerPackAlert(AttackingState != null, IsRunning, IsInCombatState, IsEvading,
+					IsImmortal,
+					Character != null && Character.TryGet(out ICharacterDamageController damage) && damage.IsAlive,
+					AITargetSelection.IsValidTarget(enemy)))
+			{
+				return false;
+			}
+
+			// A passive pet stays out of it; a packmate's fight is not an owner's order.
+			if (!PetStanceAllowsAutoEngage(false))
+			{
+				return false;
+			}
+
+			Target = enemy.Transform;
+			LookTarget = enemy.Transform;
+			ChangeState(AttackingState);
+			return true;
+		}
+
+		/// <summary>
+		/// Whether a pet may turn on an attacker standing at <paramref name="attackerPosition"/>
+		/// without breaking its owner leash to do it. Pure, so the rule can be pinned.
+		/// </summary>
+		/// <remarks>
+		/// Measured from the owner, because the owner leash is: the attacking state calls the pet
+		/// back once the PET is <paramref name="ownerLeashRange"/> from its owner. The pet can hit
+		/// from <paramref name="reach"/> short of its target, so an attacker within the leash plus
+		/// that reach can be answered from inside the leash; one further out cannot, and the pet
+		/// would break off before landing a blow. A leash of zero or less means no owner leash.
+		/// </remarks>
+		/// <param name="ownerPosition">The pet's owner.</param>
+		/// <param name="attackerPosition">The character that hit the pet or its owner.</param>
+		/// <param name="ownerLeashRange">The attacking state's <see cref="BaseAttackingState.OwnerLeashRange"/>.</param>
+		/// <param name="reach">How far from its target the pet can fight: its preferred distance or its longest offensive reach.</param>
+		/// <returns>True when the pet may engage.</returns>
+		public static bool PetCanAnswerAttacker(Vector3 ownerPosition, Vector3 attackerPosition, float ownerLeashRange, float reach)
+		{
+			if (ownerLeashRange <= 0f)
+			{
+				return true;
+			}
+			float allowed = ownerLeashRange + Mathf.Max(0f, reach);
+			return (attackerPosition - ownerPosition).sqrMagnitude <= allowed * allowed;
+		}
+
+		/// <summary>
+		/// Whether the out-of-combat enemy sweep may run for an NPC in this state.
+		/// </summary>
+		/// <remarks>
+		/// Never while going home, and never in a fight — which is any state that keeps the combat
+		/// target (<see cref="IsInCombatState"/>): the attacking state and every combat sub-state.
+		/// The sweep is how a calm NPC notices an enemy; an NPC already fighting has a target, a
+		/// threat table and a re-evaluation timer for that. Pure, so it can be pinned without a scene.
+		/// </remarks>
+		/// <param name="hasAttackingState">True when the NPC can fight at all.</param>
+		/// <param name="returningHome">True while the return-home state is the current state.</param>
+		/// <param name="inCombatState">True while the current state is part of a fight.</param>
+		/// <returns>True when the sweep may run.</returns>
+		public static bool SweepMayRun(bool hasAttackingState, bool returningHome, bool inCombatState)
+		{
+			return hasAttackingState && !returningHome && !inCombatState;
+		}
+
+		/// <summary>
 		/// Sweeps for nearby enemies and transitions to attacking state if any are found.
 		/// </summary>
 		/// <param name="deltaTime">Seconds elapsed since the previous AI tick.</param>
 		private void SweepForEnemies(float deltaTime)
 		{
-			// Only sweep for enemies if not returning home or already attacking.
-			if (AttackingState == null ||
-				CurrentState == ReturnHomeState ||
-				CurrentState == AttackingState)
+			/* Only sweep when not going home and not already fighting — and "fighting" is every
+			 * state that keeps the combat target (IsInCombatState), not just the attacking state.
+			 * Testing the attacking state alone let the sweep run mid-orbit, mid-flank and
+			 * mid-retreat, and a sweep that saw anybody re-entered the attacking state and re-picked
+			 * its target from the sweep's candidates: an orbit or a flank was cut short, a flee
+			 * ended the moment its pursuer came into view, and the target was chosen afresh from
+			 * whoever the sweep could see. It was also, by accident, the only thing that installed a
+			 * boss phase's attacking state mid-fight; SetPhaseOverrides does that on purpose now. */
+			if (!SweepMayRun(AttackingState != null,
+				CurrentState != null && CurrentState == ReturnHomeState,
+				IsInCombatState))
 			{
 				return;
 			}
@@ -1739,6 +2412,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
+		/// Ends a walk home — or a warp that stands in for one: the evade is over, the threat table
+		/// is emptied, and the NPC goes back to its calm movement states.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The table is emptied on arrival as well as when the leash trips, because it can refill on
+		/// the way: an NPC that owns a pet shares the threat of every hit its pet takes, however far
+		/// it has to walk. A table carried home is a fight the NPC no longer knows it is in.
+		/// </para>
+		/// <para>
+		/// Called by <see cref="ReturnHomeState"/> on arrival (walked, or warped because home could
+		/// not be pathed to) and by <see cref="CheckLeash"/> after a full-leash warp out of a fight.
+		/// </para>
+		/// </remarks>
+		internal void CompleteReturnHome()
+		{
+			leashEvade = false;
+			AggressionState?.Clear();
+			TransitionToRandomMovementState();
+		}
+
+		/// <summary>
 		/// Checks leash distance and transitions to return home or warps home if leash is exceeded.
 		/// </summary>
 		/// <param name="deltaTime">Seconds elapsed since the previous AI tick.</param>
@@ -1755,6 +2450,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (nextLeashUpdate < 0.0f)
 			{
 				float distanceToHome = (Home - Character.Transform.position).sqrMagnitude;
+
+				// Measured before anything below clears it: did this leash end a fight?
+				bool inCombatState = IsInCombatState;
+				bool heldThreat = AggressionState?.HasAggression ?? false;
+				bool endsFight = inCombatState || heldThreat;
 
 				// Warp back to home if leash is greatly exceeded.
 				if (distanceToHome > CurrentState.MaxLeashRange * CurrentState.MaxLeashRange)
@@ -1779,10 +2479,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					// Clear aggression on full leash reset.
 					AggressionState?.Clear();
 
-					// Reset boss script phases on leash.
+					// Reset boss script phases on leash, and dismiss the boss's adds.
 					if (BossState != null && BossScript != null && BossScript.ResetOnLeash)
 					{
-						ResetBossScript();
+						ResetBossScriptForLeash();
+					}
+
+					/* The warp is a reset: the NPC is home, healed and holds no threat, so the fight
+					 * is over and the NPC must leave it. It used to stay in its attacking state with
+					 * its target still set, run the whole leash distance straight back to the player,
+					 * and be warped home again on the next check — healed each time. Leaving through
+					 * the same door as a completed walk home also ends any evade. */
+					if (endsFight)
+					{
+						CompleteReturnHome();
 					}
 
 					return;
@@ -1795,7 +2505,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					// NPC back into attacking after it arrives home.
 					AggressionState?.Clear();
 
+					/* A boss that walks home at full health (the return heals it) must not come back
+					 * fighting with its last phase's overrides: ResetOnLeash promises a heal AND a
+					 * phase reset "when leashing back home", and this walk is that leash. Only the
+					 * warp above used to honour it. */
+					if (endsFight && BossState != null && BossScript != null && BossScript.ResetOnLeash)
+					{
+						ResetBossScriptForLeash();
+					}
+
 					ChangeState(ReturnHomeState);
+
+					/* ChangeState can decline — no return state, or a nested transition out of it — so
+					 * both consequences below stand only when the return actually became the current
+					 * state. */
+					bool returning = CurrentState != null && ReferenceEquals(CurrentState, ReturnHomeState);
+
+					/* The heal is the leash's, not the state's. The return state is also one of the
+					 * calm movement states, and while it healed on Enter a damaged NPC that merely
+					 * strolled home between fights was topped up to full on the way; only here is it
+					 * known that a leash sent it. Every leash heals, as the warp above does — the
+					 * authored flag on the return state says whether this archetype's does at all. */
+					if (LeashReturnHeals(returning, ReturnHomeState is ReturnHomeState homeAsset && homeAsset.CompleteHealOnReturn) &&
+						Character.TryGet(out ICharacterDamageController returningDamageController))
+					{
+						returningDamageController.CompleteHeal();
+					}
+
+					/* Set after the transition, which clears it: a leash that ends a fight makes the
+					 * walk home an evade (see IsEvading). */
+					leashEvade = LeashStartsEvade(cachedPet != null, inCombatState, heldThreat) && returning;
 				}
 
 				nextLeashUpdate = CurrentState.LeashUpdateRate;
@@ -1911,18 +2650,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
-		/// Throttles aggression decay to fixed 0.5s intervals instead of every tick.
+		/// Throttles aggression decay to one pass per <see cref="AGGRESSION_TICK_INTERVAL"/> instead
+		/// of every tick, crediting each pass with the time that really passed.
 		/// Called by <see cref="UpdateActive"/> and <see cref="UpdateNearby"/> but
 		/// NOT by <see cref="UpdateFar"/> (Far tier NPCs have no threat table).
 		/// </summary>
+		/// <remarks>
+		/// The pass used to be credited the nominal 0.5 s whatever had elapsed. The brain tick is
+		/// coarser than that in the Nearby tier — a pass lands every 0.8 s there — so decay and the
+		/// stale timeout ran at 62.5% speed and 30 s of "no events" took 48. The clock is the same
+		/// <see cref="AIStateClock"/> the state machine uses for the same reason.
+		/// </remarks>
 		private void TickAggression(float dt)
 		{
-			aggressionTickTimer -= dt;
-			if (aggressionTickTimer <= 0f)
+			if (aggressionClock.Advance(dt, out float elapsed))
 			{
-				const float AGGRESSION_TICK_INTERVAL = 0.5f;
-				AggressionState?.Tick(AGGRESSION_TICK_INTERVAL);
-				aggressionTickTimer = AGGRESSION_TICK_INTERVAL;
+				AggressionState?.Tick(elapsed);
+				aggressionClock.Rearm(AGGRESSION_TICK_INTERVAL, dt);
 			}
 
 			/* An empty threat table is what "this fight is over" means, and it is the only signal
@@ -2441,8 +3185,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			uint currentTick = cooldownController.ResolveAuthoritativeTick(TimeManager.LocalTick);
 
-			EventData activationCheckData = null;
-
 			for (int i = 0; i < cachedAbilities.Count; i++)
 			{
 				Ability ability = cachedAbilities[i];
@@ -2455,8 +3197,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				if (cooldownController.IsOnCooldown(ability.ID, currentTick))
 					continue;
 
-				// Skip abilities the character can't afford.
-				if (!ability.MeetsActivationConditions(Character, ref activationCheckData))
+				// Skip abilities the character can't afford. The context is the controller's own,
+				// reused across picks rather than allocated per pick.
+				if (!ability.MeetsActivationConditions(Character, ref ActivationCheckData))
 					continue;
 
 				float abilityRange = ResolveAbilityReach(ability);
@@ -2516,14 +3259,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			float sqrMinRange = minRange * minRange;
 			uint currentTick = cooldownController.ResolveAuthoritativeTick(TimeManager.LocalTick);
 
-			EventData activationCheckData = null;
-
 			for (int i = 0; i < cachedAbilities.Count; i++)
 			{
 				Ability ability = cachedAbilities[i];
 				if (cooldownController.IsOnCooldown(ability.ID, currentTick))
 					continue;
-				if (!ability.MeetsActivationConditions(Character, ref activationCheckData))
+				if (!ability.MeetsActivationConditions(Character, ref ActivationCheckData))
 					continue;
 				float reach = ResolveAbilityReach(ability);
 				if (reach * reach >= sqrMinRange)
@@ -2555,6 +3296,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			{
 				return;
 			}
+
+			/* Every real transition ends an evade. CheckLeash sets the flag again straight after the
+			 * transition that starts one, so this single funnel is what guarantees no other path
+			 * into or out of the return can leave an NPC immune. */
+			leashEvade = false;
 
 			if (CurrentState != null)
 			{
@@ -2588,10 +3334,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					attackingState.PickTarget(this, targets);
 				}
 
-				// Alert the NPC group when entering combat.
-				if (Group != null && Target != null)
+				/* Alert the pack when entering combat. The identity-checked character, not the
+				 * transform: a pooled target's transform can already belong to somebody else. */
+				if (Group != null)
 				{
-					Group.AlertGroup(Target);
+					ICharacter engaged = TargetCharacter;
+					if (engaged != null)
+					{
+						Group.AlertGroup(engaged);
+					}
 				}
 			}
 			else
@@ -2616,6 +3367,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public bool ForceTarget(ICharacter character)
 		{
 			if (character == null || !AITargetSelection.IsValidTarget(character))
+			{
+				return false;
+			}
+
+			/* An evading NPC cannot be pulled back into the fight it just leashed out of. A taunt
+			 * that could would be the same exploit the evade exists to stop, by another route. */
+			if (IsEvading)
 			{
 				return false;
 			}
@@ -2795,6 +3553,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			Quaternion targetRotation = Quaternion.LookRotation(direction);
 
+			/* Already facing it: leave the transform alone. The smoothing below only ever
+			 * approaches the target, so without this an NPC facing an interactor or a standing
+			 * target rewrote its rotation — a transform write and a change notification — on every
+			 * network tick for as long as the look target was set. */
+			Quaternion current = Character.Transform.rotation;
+			if (Quaternion.Angle(current, targetRotation) <= FACING_TOLERANCE_DEGREES)
+			{
+				return;
+			}
+
 			/* Exponential smoothing rather than Slerp(a, b, rate * dt).
 			 *
 			 * The linear form is frame-rate dependent: doubling the frame rate halves each step
@@ -2803,8 +3571,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * smoothing sampled continuously, so the result is identical at any step size. */
 			float t = 1f - Mathf.Exp(-TurnRate * deltaTime);
 
-			Character.Transform.rotation = Quaternion.Slerp(Character.Transform.rotation, targetRotation, t);
+			Character.Transform.rotation = Quaternion.Slerp(current, targetRotation, t);
 		}
+
+		/// <summary>
+		/// Angle, in degrees, within which the NPC counts as already facing its look target.
+		/// Well under what the rotation compression on the wire can show.
+		/// </summary>
+		public const float FACING_TOLERANCE_DEGREES = 0.1f;
 
 		/// <summary>
 		/// Speed below which the agent's velocity is not worth turning toward, in metres per second.
@@ -2815,16 +3589,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// Recomputes the push away from overlapping NPC bodies in this NPC's own physics scene.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Runs on the brain tick for the Active and Nearby tiers only. Players are not pushed
 		/// against — they do not run agents and never took part in crowd avoidance either — and
 		/// neither is anything outside this NPC's <see cref="PhysicsScene"/>, which is what keeps
 		/// stacked scene instances from touching each other. See <see cref="AISeparation"/>.
+		/// </para>
+		/// <para>
+		/// Neighbours come from the host's per-scene <see cref="AIBodyGrid"/>, built once per
+		/// network tick for everyone who asks, not from a physics overlap per NPC. The overlap hit
+		/// this NPC's own collider on every call and paid an interface component lookup for it and
+		/// for each neighbour; the grid holds every NPC body in the scene already resolved, and
+		/// excludes this one by key.
+		/// </para>
 		/// </remarks>
 		private void UpdateSeparation()
 		{
 			separationVelocity = Vector3.zero;
 
-			if (SeparationSpeed <= 0f || Agent == null || Character == null || !PhysicsScene.IsValid())
+			if (SeparationSpeed <= 0f || Agent == null || Character == null || Host == null || !PhysicsScene.IsValid())
+			{
+				return;
+			}
+
+			AIBodyGrid grid = Host.GetBodyGrid(PhysicsScene);
+			if (grid == null)
 			{
 				return;
 			}
@@ -2832,40 +3621,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			float radius = SeparationRadius > 0f ? SeparationRadius : Agent.radius * 2f;
 			Vector3 position = Character.Transform.position;
 
-			int hitCount;
-			while (true)
-			{
-				hitCount = PhysicsScene.OverlapSphere(position, radius, separationHits, Constants.Layers.Player, QueryTriggerInteraction.Ignore);
-				if (!TargetOrdering.TryGrowQueryBuffer(ref separationHits, hitCount))
-				{
-					break;
-				}
-			}
-
+			/* The vertical reach stands in for the height the old overlap sphere had against a
+			 * standing body's collider: another NPC counts if its capsule could reach this one's
+			 * sphere, so one standing on a bridge overhead does not push the one below. */
 			separationNeighbours.Clear();
 			separationKeys.Clear();
-			for (int i = 0; i < hitCount && i < separationHits.Length; ++i)
-			{
-				Collider hit = separationHits[i];
-				if (hit == null)
-				{
-					continue;
-				}
+			grid.Query(position, radius, radius + Agent.height, IdentityKey, separationNeighbours, separationKeys);
 
-				GameObject key = TargetOrdering.ResolveHitKey(hit, out ICharacter other);
-				if (key == null || other == null || other == Character || !(other is NPC))
-				{
-					continue;
-				}
-				if (TargetOrdering.ContainsBody(separationKeys, key))
-				{
-					continue;
-				}
-				separationKeys.Add(key);
-				separationNeighbours.Add(other.Transform.position);
-			}
-
-			separationVelocity = AISeparation.Resolve(position, separationNeighbours, radius, SeparationSpeed);
+			separationVelocity = AISeparation.Resolve(position, IdentityKey, separationNeighbours, separationKeys, radius, SeparationSpeed);
 		}
 
 		/// <summary>
@@ -2912,17 +3675,50 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			/* Re-seat the simulation on the transform even when the step is zero: anything that
 			 * moved the transform directly (a platform, a scripted placement) would otherwise
-			 * leave the agent believing it is somewhere else. */
-			Agent.nextPosition = before + step;
-			t.position = Agent.nextPosition;
+			 * leave the agent believing it is somewhere else.
+			 *
+			 * But only when there is something to re-seat. A standing NPC whose agent already sits
+			 * on its transform used to pay a NavMesh projection (the nextPosition write) and a
+			 * transform write — a static collider move — on every network tick regardless:
+			 * thirty a second for every idle NPC in the process. */
+			if (NeedsAgentWrite(step, Agent.nextPosition, before))
+			{
+				Agent.nextPosition = before + step;
+				t.position = Agent.nextPosition;
 
-			// What the mesh let through, not what was asked for: the stuck detector reads this.
-			measuredTickSpeedSqr = MeasureTickSpeedSqr(before, t.position, tickDelta);
+				// What the mesh let through, not what was asked for: the stuck detector reads this.
+				measuredTickSpeedSqr = MeasureTickSpeedSqr(before, t.position, tickDelta);
+			}
+			else
+			{
+				measuredTickSpeedSqr = 0f;
+			}
 
-			if (LookTarget == null && ResolveTickHeading(t.rotation, velocity, Agent.angularSpeed, tickDelta, out Quaternion heading))
+			// The speed test first, so a standing NPC does not read its rotation just to be told no.
+			if (LookTarget == null &&
+				velocity.sqrMagnitude >= HEADING_SPEED_THRESHOLD * HEADING_SPEED_THRESHOLD &&
+				ResolveTickHeading(t.rotation, velocity, Agent.angularSpeed, tickDelta, out Quaternion heading))
 			{
 				t.rotation = heading;
 			}
+		}
+
+		/// <summary>
+		/// Whether a tick's step has to be written to the agent and the transform.
+		/// </summary>
+		/// <remarks>
+		/// Only when the NPC is moving, or when something other than the step has moved its
+		/// transform away from where its agent believes it is. Both comparisons use Unity's
+		/// approximate vector equality, a hundredth of a millimetre: far below anything a tick can
+		/// show. Pure, so the rule can be pinned without an agent.
+		/// </remarks>
+		/// <param name="step">This tick's displacement.</param>
+		/// <param name="agentPosition">Where the agent's simulation has the NPC.</param>
+		/// <param name="transformPosition">Where the transform has it.</param>
+		/// <returns>True to write the step.</returns>
+		public static bool NeedsAgentWrite(Vector3 step, Vector3 agentPosition, Vector3 transformPosition)
+		{
+			return step != Vector3.zero || agentPosition != transformPosition;
 		}
 
 		/// <summary>
@@ -3062,6 +3858,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </remarks>
 		public void HaltMovement()
 		{
+			// A body that has stopped is not walking home; nothing it was evading for remains.
+			leashEvade = false;
 			Target = null;
 			LookTarget = null;
 			ClearPath();
@@ -3073,6 +3871,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * mid-attack kept its ring slot around its victim for the whole of its decay: the
 			 * pack still counted the corpse as an attacker and spread itself around a body. */
 			ReleaseCombatSlots();
+		}
+
+		/// <summary>
+		/// Stops a brain the host has given up on: it no longer runs, acquires targets or evades,
+		/// and its body is brought to a halt where it stands.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="IsRunning"/> reads <see cref="Quarantined"/>, so the evade — which would
+		/// otherwise leave a quarantined NPC immune for good — and combat entry both end here. The
+		/// halt is attempted but not trusted: a brain that threw thirty times in a row may throw
+		/// again, and nothing here may take the host's tick down with it.
+		/// </remarks>
+		internal void Quarantine()
+		{
+			Quarantined = true;
+			leashEvade = false;
+			try
+			{
+				HaltMovement();
+			}
+			catch (System.Exception ex)
+			{
+				Log.Error("AIController", $"Halting quarantined brain on {gameObject.name} also threw: {ex}");
+			}
 		}
 
 		/// <inheritdoc />
@@ -3088,6 +3910,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * scene would be walked and handed every such event for the whole of its decay.
 			 * HaltMovement already clears it; repeated here so the rule survives a change there. */
 			AggressionState?.Clear();
+
+			/* A corpse is not a packmate. It leaves at death rather than when its body decays, so the
+			 * pack stops counting, reading and protecting it at once, and a pack whose last member
+			 * falls is released there and then. Its respawn joins its spawner's pack afresh. */
+			LeavePack();
+
+			/* Nor a live add. A dead add stops counting towards its boss's cap, and a leash reset
+			 * leaves its corpse to decay with its loot rather than despawning it. A boss that dies
+			 * lets go of its adds, which fight on as they always have. */
+			LeaveSummoner();
+			BossState?.ReleaseAdds();
 
 			return wasRunning;
 		}
@@ -3139,6 +3972,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
+			/* An evading NPC takes no threat. Its table was emptied when the leash tripped and is
+			 * emptied again on arrival; a taunt landing in between would either pull it back into
+			 * the fight it leashed out of or be carried home as a grudge. */
+			if (IsEvading)
+			{
+				return;
+			}
+
 			float points = threatPoints;
 
 			if (guaranteeTopThreat)
@@ -3154,24 +3995,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				}
 			}
 
-			/* The empty→non-empty edge belongs to whoever writes the first entry. AggressionState
-			 * detects it only in HandleDamaged, so a taunt that seeded the table consumed the edge
-			 * silently: when ForceTarget below declines (passive stance, authored false, dead
-			 * victim), the NPC's table is non-empty and the FIRST REAL HIT then sees wasEmpty ==
-			 * false and never fires OnCombatInitiated — the same consumed-edge failure HandleKilled's
-			 * comment documents. A Nearby-tier NPC relies on that event for combat entry, so it stood
-			 * idle until promoted into sweep range. Firing the edge here keeps the invariant: every
-			 * first entry initiates combat, whoever wrote it. */
-			bool wasEmpty = !Aggression.HasAggression;
-
+			/* Threat a taunt grants is offered to the same combat-entry rule a hit is. That rule
+			 * reads the NPC's state, not the table's, so it does not matter who wrote the table's
+			 * first entry: an idle NPC taunted without a forced switch still turns on the taunter,
+			 * and a later real hit still starts the fight if this one did not. (Combat entry used
+			 * to be an empty-to-non-empty edge on the table, and a taunt that seeded the table
+			 * silently consumed it.) */
 			if (points > 0f)
 			{
 				Aggression.AddPoints(taunter.ID, points);
-			}
-
-			if (wasEmpty && Aggression.HasAggression)
-			{
-				AggressionState?.OnCombatInitiated?.Invoke(taunter);
+				OnThreatReceived(taunter);
 			}
 
 			if (forceImmediateTargetSwitch)
@@ -3188,7 +4021,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </remarks>
 		public void ApplyAreaThreat(ICharacter caster, float threatPoints, int resourceSpent)
 		{
-			if (caster == null || AggressionState == null)
+			// An evading NPC takes no threat; see ApplyTaunt.
+			if (caster == null || AggressionState == null || IsEvading)
 			{
 				return;
 			}

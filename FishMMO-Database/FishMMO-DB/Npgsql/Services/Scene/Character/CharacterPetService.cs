@@ -107,7 +107,9 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid version. Version must be greater than 0.");
 			}
 
-			var result = await ExecuteWriteAsync(async dbContext =>
+			/* A transaction now, not a lone statement: the pet row and the pruning of the rows it
+			 * leaves unrestorable commit together. See PruneUnrestorableRowsAsync. */
+			var result = await ExecuteTransactionAsync<int>(async dbContext =>
 			{
 				var now = DateTime.UtcNow;
 				var abilities = petData.Abilities?.ToArray() ?? Array.Empty<int>();
@@ -156,11 +158,18 @@ namespace FishMMO.Database.Npgsql.Services
 						ELSE 2
 					END AS value";
 
-				return await ExecuteScalarIntAsync(
+				int written = await ExecuteScalarIntAsync(
 					dbContext,
 					sql,
 					new object[] { petData.CharacterID, petData.TemplateID, petData.Version, abilities, petData.Spawned, now, petData.ID },
 					cancellationToken).ConfigureAwait(false);
+
+				// Written, or superseded by a newer pet row: either way the character has one to prune against.
+				if (written == 0 || written == 2)
+				{
+					await PruneUnrestorableRowsAsync(dbContext, new[] { petData.CharacterID }, cancellationToken).ConfigureAwait(false);
+				}
+				return written;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			if (!result.IsSuccess)
@@ -184,7 +193,27 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterPetData> pets, CancellationToken cancellationToken = default)
+			=> PersistBatchAsync(pets, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<BulkWriteResult>> PersistOwnedAsync(IEnumerable<CharacterPetData> pets, IReadOnlyCollection<CharacterSessionLeaseData> claims, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaims(claims);
+			return invalid != null
+				? Task.FromResult(DatabaseResult<BulkWriteResult>.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: PersistBatchAsync(pets, claims, cancellationToken);
+		}
+
+		/// <summary>
+		/// The batch write behind <see cref="PersistAsync(IEnumerable{CharacterPetData}, CancellationToken)"/> and
+		/// <see cref="PersistOwnedAsync"/>. Prunes the dead attribute and buff rows of every pet it
+		/// writes; see <see cref="PruneUnrestorableRowsAsync"/>.
+		/// </summary>
+		/// <param name="pets">Rows to write.</param>
+		/// <param name="claims">The writer's claims, or null for the ungated write. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterPetData> pets, IReadOnlyCollection<CharacterSessionLeaseData>? claims, CancellationToken cancellationToken)
 		{
 			var petList = pets?.Where(p => p.CharacterID > 0).ToList();
 			if (petList == null || petList.Count == 0)
@@ -243,30 +272,24 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				/* Both branches contribute. The batch is split by whether a row already has a
 				 * primary key, so neither statement alone describes what the caller asked for. */
-				BulkWriteResult outcome = new BulkWriteResult(suppliedRows, 0, 0);
 				var characterIds = petList.Select(p => p.CharacterID).Distinct().ToArray();
-				var activeCharacterIds = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => characterIds.Contains(c.ID) && !c.Deleted)
-					.Select(c => c.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-				if (activeCharacterIdSet.Count != characterIds.Length)
-				{
-					var missingCharacterId = characterIds.First(id => !activeCharacterIdSet.Contains(id));
-					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
-				}
+				/* The ownership gate, and the per-character existence check it subsumes: the rows of a
+				 * missing or deleted character, or — for an owned write — of one whose claim the writer
+				 * no longer holds, are left out and reported as Filtered rather than failing every other
+				 * character's rows with them. See CharacterWriteGate. */
+				CharacterWriteAdmission admission = await CharacterWriteGate.AdmitAsync(dbContext, characterIds, claims, cancellationToken).ConfigureAwait(false);
+				int unownedRows = admission.CountUnowned(petsToUpdate, row => row.CharacterID) + admission.CountUnowned(petsToInsert, row => row.CharacterID);
+				BulkWriteResult outcome = new BulkWriteResult(suppliedRows, 0, 0, unownedRows);
+				var admittedCharacterIds = admission.Writable.ToArray();
 
 				var now = DateTime.UtcNow;
 
 				// Template ids are signed hashes; only 0 means "no template". See PersistAsync.
 				var activeUpdates = petsToUpdate
-					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID != 0)
+					.Where(p => admission.Admits(p.CharacterID) && p.TemplateID != 0)
 					.ToList();
 				var activeInserts = petsToInsert
-					.Where(p => activeCharacterIdSet.Contains(p.CharacterID) && p.TemplateID != 0)
+					.Where(p => admission.Admits(p.CharacterID) && p.TemplateID != 0)
 					.ToList();
 
 				if (activeUpdates.Count > 0)
@@ -274,7 +297,7 @@ namespace FishMMO.Database.Npgsql.Services
 					var ids = activeUpdates.Select(p => p.ID).Distinct().ToArray();
 					var existingIds = await dbContext.CharacterPets
 						.AsNoTracking()
-						.Where(p => ids.Contains(p.ID) && activeCharacterIdSet.Contains(p.CharacterID))
+						.Where(p => ids.Contains(p.ID) && admittedCharacterIds.Contains(p.CharacterID))
 						.Select(p => p.ID)
 						.ToListAsync(cancellationToken)
 						.ConfigureAwait(false);
@@ -403,8 +426,73 @@ namespace FishMMO.Database.Npgsql.Services
 					outcome += new BulkWriteResult(0, activeInserts.Count, appliedInserts);
 				}
 
+				// After the pet rows, in the same transaction: prune against what is now stored.
+				await PruneUnrestorableRowsAsync(dbContext, admittedCharacterIds, cancellationToken).ConfigureAwait(false);
+
 				return outcome;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Deletes every pet attribute and pet buff row of these characters that no longer matches
+		/// the version of the pet row stored for them, inside the caller's transaction.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Those rows can never be restored.</b> All three pet tables are stamped with the
+		/// character's version on each pass, and the restore (<c>PetSystem.LoadAndSpawnPetAsync</c>)
+		/// keeps only the attribute and buff rows whose version equals the pet row's. Every pass
+		/// therefore leaves the previous pass's rows behind for any template the current pet no
+		/// longer has — a buff that ended, an attribute a previous pet knew — and nothing ever
+		/// removed them, so they piled up for the life of the character.
+		/// </para>
+		/// <para>
+		/// <b>Why here, in every pet-row write, and not in a sweep.</b> Deciding "cannot be restored"
+		/// needs the stored pet row, and the pet-row write is the one moment that row changes: this
+		/// runs in the same transaction, after the upsert, so it compares against exactly what the
+		/// transaction leaves behind — the newer row if this write was superseded, which keeps that
+		/// row's attributes and buffs and deletes this write's stale ones. The comparison is equality,
+		/// not order, so a newer snapshot's rows written ahead of a pet row that has not committed yet
+		/// are deleted only if they could not be restored anyway; the retry that writes that pet row
+		/// writes its rows again. A sweep would have to make the same comparison, on a timer, over
+		/// every character, and would need a home that runs it; the write already has the rows it
+		/// needs locked. The pet-row write precedes the attribute and buff writes of the same pass
+		/// (<c>CharacterSystem.SavePetsAsync</c>), so a pass never deletes the rows it is about to
+		/// write, and at most one pass's worth of rows written late behind a newer pet row survives
+		/// until the next pet-row write.
+		/// </para>
+		/// <para>
+		/// Unconditional on ownership, deliberately: it deletes only rows no reader can use, whoever
+		/// holds the character. The caller passes only the characters whose pet row it just wrote.
+		/// </para>
+		/// </remarks>
+		/// <param name="dbContext">The pet-row write's context, with its transaction open.</param>
+		/// <param name="characterIds">The characters whose pet row the caller just wrote.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private static async Task PruneUnrestorableRowsAsync(NpgsqlDbContext dbContext, long[] characterIds, CancellationToken cancellationToken)
+		{
+			if (characterIds == null || characterIds.Length == 0)
+			{
+				return;
+			}
+
+			string pets = dbContext.GetTableName<CharacterPetEntity>();
+			foreach (string dependent in new[]
+			{
+				dbContext.GetTableName<CharacterPetAttributeEntity>(),
+				dbContext.GetTableName<CharacterPetBuffEntity>(),
+			})
+			{
+				string sql = $@"
+					DELETE FROM {dependent} AS d
+					WHERE d.character_id = ANY({{0}}::bigint[])
+						AND NOT EXISTS (
+							SELECT 1 FROM {pets} AS p
+							WHERE p.character_id = d.character_id
+								AND p.deleted = FALSE
+								AND p.version = d.version)";
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { characterIds }, cancellationToken).ConfigureAwait(false);
+			}
 		}
 
 		/// <inheritdoc/>

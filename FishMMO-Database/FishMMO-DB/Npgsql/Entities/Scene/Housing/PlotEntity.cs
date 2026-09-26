@@ -108,6 +108,25 @@ namespace FishMMO.Database.Npgsql.Entities
 		public DateTime? TaxDelinquentSinceUtc { get; set; }
 
 		/// <summary>
+		/// The earliest moment a sweep may try this plot's due period again, or null when it may be
+		/// tried as soon as it is due.
+		/// </summary>
+		/// <remarks>
+		/// Set when a sweep found the owner held by another server, and only then. Such an owner is
+		/// billed by the server holding them (their balance lives in that server's memory, so nobody
+		/// else may take it), and until that happens the plot stays due. Without this column it also
+		/// stayed at the head of the sweep's <c>ORDER BY tax_due_utc</c> page: a page's worth of
+		/// owners playing somewhere else and every sweep on every server re-read the same plots and
+		/// billed nobody behind them.
+		///
+		/// <para>Not a second due date. <see cref="TaxDueUtc"/> is still the only thing that says
+		/// what is owed, and still the pin; this only says when to look again. Every write that
+		/// moves <see cref="TaxDueUtc"/> — an advance, a restore, a claim, a release — clears it,
+		/// because it only ever describes the period currently due.</para>
+		/// </remarks>
+		public DateTime? TaxNextAttemptUtc { get; set; }
+
+		/// <summary>
 		/// Where the plot is in its lifecycle.
 		/// </summary>
 		/// <remarks>

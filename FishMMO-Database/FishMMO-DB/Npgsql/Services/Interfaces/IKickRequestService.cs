@@ -50,6 +50,10 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <summary>
 		/// Checks whether a pending kick request exists for the specified account.
 		/// </summary>
+		/// <remarks>
+		/// A request is pending for a bounded time after its stamp, measured by the database's
+		/// clock, which wrote the stamp; never by the calling process's.
+		/// </remarks>
 		/// <param name="accountName">Account name to check.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
@@ -81,26 +85,28 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<int>> DeleteAsync(string accountName, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Fetches paginated kick requests based on timestamp and position.
+		/// Reads one page of kick requests for a game server's poll, on the database's clock.
 		/// </summary>
-		/// <param name="lastFetch">Timestamp to compare requests against.</param>
-		/// <param name="lastPosition">Last request ID fetched (for pagination).</param>
-		/// <param name="amount">Maximum number of requests to fetch.</param>
+		/// <param name="query">
+		/// Where to read from and what to skip, built by <see cref="KickRequestReadWindow.BuildQuery"/>.
+		/// </param>
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the list of kick request data on success,
-		/// or a <see cref="DatabaseException"/> on failure.
+		/// The page — requests stamped at or after the start and not already handled, in
+		/// <c>(time_created, id)</c> order — with the database clock taken before it was read and
+		/// the start it read from; or a <see cref="DatabaseException"/> on failure.
 		/// </returns>
 		/// <remarks>
-		/// This method uses LINQ (ToListAsync with AsNoTracking) and automatically benefits from
-		/// the retry policy configured on the DbContext without requiring explicit execution strategy wrapping.
-		/// Uses pagination pattern with timestamp and ID for reliable cursor-based pagination.
-		/// Returns empty list for invalid amount.
+		/// The reader keeps its place with <see cref="KickRequestReadWindow"/>, which reads a commit
+		/// window (<see cref="KickRequestService.PollCommitWindowSeconds"/>) behind what it has
+		/// settled and skips what it has handled, so a request that commits after a later-stamped
+		/// one is still read. A first read (no <see cref="KickRequestPollQuery.FromUtc"/>) starts
+		/// <see cref="KickRequestPollQuery.FirstReadLookbackSeconds"/> before the database's "now".
+		/// Each request carries its account's last login (<see cref="KickRequestData.AccountLastLogin"/>),
+		/// read in the same query, so the caller needs no per-kick lookup to tell a stale kick.
 		/// </remarks>
-		Task<DatabaseResult<List<KickRequestData>>> FetchAsync(
-			DateTime lastFetch,
-			long lastPosition,
-			int amount,
+		Task<DatabaseResult<KickRequestPage>> FetchAsync(
+			KickRequestPollQuery query,
 			CancellationToken cancellationToken = default);
 	}
 }

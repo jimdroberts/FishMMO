@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using FishMMO.Shared;
 using UnityEngine;
 
@@ -133,7 +134,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <summary>
 		/// Shortest delay between respawn checks, in seconds.
 		/// </summary>
-		[Tooltip("Shortest delay between respawn checks, in seconds. Respawn deadlines are wall-clock, so this only sets how soon after a deadline the object appears - it does not change respawn timing itself.")]
+		[Tooltip("Shortest delay between respawn checks, in seconds. Respawn deadlines are kept on the server's monotonic clock, independent of these checks, so this only sets how soon after a deadline the object appears - it does not change respawn timing itself.")]
 		public float RespawnCheckIntervalMinimum = 3.0f;
 
 		/// <summary>
@@ -165,6 +166,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// </summary>
 		[SerializeReference, SubclassSelector]
 		public List<SpawnableSettings> Spawnables;
+
+		/// <summary>
+		/// Makes this spawner's NPCs one pack: its tactic and focus. Each NPC entry's
+		/// <c>PackRole</c> says what that member does in it.
+		/// </summary>
+		/// <remarks>
+		/// One spawner is one pack. A pack whose members all die is released, and the next spawn
+		/// founds a new one; a respawn while any member stands rejoins it. For an exact composition
+		/// that comes back as authored — one tank, one healer, two DPS — list each member as its own
+		/// entry, spawn Linear and turn <see cref="UniqueSpawnables"/> on, so a respawn refills the
+		/// entry that died. Off by default.
+		/// </remarks>
+		[Header("Pack")]
+		public NPCPackSettings Pack = new NPCPackSettings();
 
 #if UNITY_EDITOR
 		/// <summary>

@@ -424,6 +424,14 @@ Phase 5 assumes the login server has authentication capacity. When it does not, 
 and answers with a position on a timer. Admission is rate-smoothed so a drained queue cannot
 immediately re-saturate the auth workers.
 
+The queue engages at the login server's `MaxPendingAuthConnections` (`AuthMaxPendingConnections`).
+Unset, that is what the SRP verify and proof channels hold between them — 500 + 500 = 1,000 — because
+past it admitting more connections only risks the channels refusing them with `ServerBusy`, while the
+queue keeps their place. The old default of 10,000 meant the queue could never engage. Admission
+runs at `LoginQueueAdmissionRatePerSecond` (50 by default, under what the proof stage completes on
+two workers), several per frame from accumulated credit, and a player at the two-factor prompt does
+not count against the cap.
+
 ```mermaid
 sequenceDiagram
     participant Client as ClientAuthenticatorCore
@@ -438,7 +446,7 @@ sequenceDiagram
         Auth->>Auth: ClearHandshakeRateLimit(conn), (the retry below is server-invited)
         loop every LoginQueueUpdateRateSeconds (2s)
             Queue-->>Client: LoginQueuePositionBroadcast { n, TotalQueued, EstimatedWaitSeconds }
-            Client->>Client: Queue dialog + refresh the panel's reply deadline
+            Client->>Client: Queue panel (UITKWorldQueueDisplay, login wording), + refresh the panel's reply deadline
         end
         Queue-->>Client: LoginQueuePositionBroadcast { QueuePosition: 0 }
         Client->>Client: RetryHandshakeAsync: jitter 0-1s, OnRehandshakeRequired() + OnConnected(null)
@@ -448,9 +456,14 @@ sequenceDiagram
     else Wait exceeded LoginQueueTimeoutSeconds
         Queue-->>Client: LoginQueuePositionBroadcast { QueuePosition: -1 }
         Queue->>Queue: conn.Disconnect(false), (not Kick — that discards the notice)
-        Client->>Client: QuitToLogin + "the login queue timed out"
+        Client->>Client: QuitToLogin, then the panel says the wait ended (Close only)
     end
 ```
+
+The wait is shown on the same `UITKWorldQueueDisplay` panel as the world server's scene-routing
+queue (Phase 9a), with its own wording: it sits above the loading overlay, where the shared dialog
+it replaced was drawn behind it. The dialog remains only as a fallback for a scene without the
+panel, which is logged once as an authoring fault.
 
 **The re-handshake must not clear the credentials.** This is the subtlety that makes or breaks
 the whole feature. Resetting the client's per-connection crypto state for the retry is correct —
@@ -513,11 +526,30 @@ sequenceDiagram
 
     alt Code valid
         Server-->>Client: SrpSuccessBroadcast {,   Result: LoginSuccess,,   Token: enc(auth_token), }
-    else Code invalid
-        Server-->>Client: ClientAuthResultBroadcast {,   Result: TwoFactorFailed, }
-        Note over Server: Per-username failure counter, Lockout after 5 failures (60 min)
+    else Code invalid, attempts left
+        Server-->>Client: ClientAuthResultBroadcast {,   Result: TwoFactorInvalid, }
+        Note over Client,Server: Re-prompt, with the whole window again
+    else Code invalid, and it was the last of 5 attempts
+        Server-->>Client: ClientAuthResultBroadcast {,   Result: TwoFactorExpired, }, then disconnect
+    else Account's two-factor step locked
+        Server-->>Client: ClientAuthResultBroadcast {,   Result: TwoFactorLocked,,   retry-after, }
     end
+
+    Note over Server: No code within AuthTwoFactorWindowSeconds (120 s), TwoFactorExpired, then disconnect
 ```
+
+**Each prompt gets the whole two-factor window** — `AuthTwoFactorWindowSeconds`, 120 s by
+default, clamped 30–600 — the first prompt and every re-prompt after a wrong code. It used to
+inherit the 15 s machine-progress TTL, which cut off players still unlocking their phones. A
+player at the prompt does not count against `MaxPendingAuthConnections`, so people typing codes
+cannot fill the login queue's threshold. The prompt ends one of two ways without signing in, and
+both are answered `TwoFactorExpired` before the connection closes: the window ran out (the
+answer arrives unasked), or the code just sent was the last of the five a sign-in allows (the
+answer arrives in reply to it). Wrong codes are also counted per username in memory (15 lock the
+username's two-factor step for 5 minutes) and in the database, shared with the Control Panel
+(`AuthLockoutTwoFactor*`: 5 in 15 minutes lock it for 30), and a locked step is answered
+`TwoFactorLocked` with the time left. A code or proof whose connection closed while it was being
+checked issues nothing.
 
 ### Phase 7: Token Issuance & Character Select
 
@@ -762,6 +794,14 @@ authenticated on the World server behind a loading overlay.
 
 That wait used to be both **silent and unbounded**, which is indistinguishable from a hang.
 
+**The open-world queue is strictly first in, first out.** Each routing cycle takes only as many
+waiting connections as there are free slots, oldest first (`WorldSceneRoutingRules.SelectForRouting`),
+fetches their characters, and leaves everyone else queued in order; it used to snapshot and clear
+the whole waiting set every cycle to place a handful. A wait is shown on `UITKWorldQueueDisplay`, a
+panel above the loading overlay (every return through the world server after a zone change has the
+overlay up, and the shared dialog it replaced was drawn behind it): position, estimated wait,
+elapsed wait, the reason, and **Leave queue**.
+
 ```mermaid
 sequenceDiagram
     participant Client as Client
@@ -773,17 +813,23 @@ sequenceDiagram
 
     loop every queuePositionUpdateRateSeconds (2s)
         World-->>Client: WorldSceneQueuePositionBroadcast {, QueuePosition: n, TotalQueued, EstimatedWaitSeconds, Reason, }
-        Client->>Client: Wait dialog: position + reason, Close leaves the queue → QuitToLogin
+        Client->>Client: Queue panel: position, estimate, elapsed, reason
+    end
+
+    opt Player chooses Leave queue
+        Client->>World: WorldSceneQueueLeaveBroadcast (place given up)
+        Client->>Client: QuitToLogin
     end
 
     alt Capacity found
         World-->>Client: WorldSceneQueuePositionBroadcast { QueuePosition: 0 }
         World-->>Client: WorldSceneConnectBroadcast { Port }
-        Note over Client: Dialog dismissed, Phase 9 begins
+        Note over Client: Panel dismissed, Phase 9 begins
     else Wait exceeded its TTL
         World-->>Client: WorldSceneQueuePositionBroadcast { QueuePosition: -1 }
-        World->>World: conn.Disconnect(false), (not Kick — that discards the notice)
-        Client->>Client: QuitToLogin + "could not find room"
+        World->>World: Remember the account's place (60 s grace), conn.Disconnect(false), (not Kick — that discards the notice)
+        Client->>Client: Stop the connection manager's own redial, Panel: wait ended, Try again or Return to login
+        Client->>World: Try again: the ordinary world reconnect, resuming the place inside the grace window
     end
 ```
 
@@ -795,7 +841,7 @@ because they are one-shot transitions and losing one strands the dialog on scree
 
 | `Reason` | Meaning | Bounded by |
 |---|---|---|
-| `Capacity` | Every instance of the target scene is full | `waitingQueueTtlSeconds` (45 s) |
+| `Capacity` | Every instance of the target scene is full | `waitingQueueTtlSeconds` (45 s), timed from the later of joining and the scene's last placement, so it fires only when the line has **stalled** (`WorldSceneRoutingRules.QueueWaitExpired`) |
 | `SceneLoading` | An instance was requested and is still loading | `waitingQueueTtlSeconds × SceneLoadWaitTtlMultiplier` (180 s) — a large world scene can take longer to load than the capacity TTL allows |
 | `CombatLogoutBody` | Only the instance holding the character's body can hand it back | `CombatLogoutRoutingGraceSeconds` (150 s), which exceeds the 2-minute session lease so giving up is safe |
 
@@ -807,7 +853,20 @@ would drop the player into somebody else's private instance, `character_id` and 
 `ProcessOpenWorldQueueAsync` filters the type, as `SceneChannelSystem` already did when building
 a channel list.
 
-**A healthy login never sees the dialog.** Every routed client passes through this queue, so a
+A capacity wait timed from joining alone purged the tail of any queue longer than one TTL's worth
+of placements while the line was still moving, and a retry went to the back, so those players
+cycled for ever. Timed from the scene's last placement, a moving line keeps everyone in it.
+
+**A place survives a dropped connection.** `WorldQueuePlaceMemory` remembers an account's place in
+one scene's queue — the time it began waiting, which is what the queue is ordered by — when the
+wait ends without the player's say: a disconnect, or a stalled-line purge. Rejoining the same
+scene's queue within `queuePlaceGraceSeconds` (60 s by default) resumes it; rejoining later, or
+another scene's queue, starts at the back, and a resumed place is spent. A player who chooses
+**Leave queue** sends `WorldSceneQueueLeaveBroadcast` first, because a deliberate leave looks
+exactly like a drop from the server's side, and the place is forgotten. All the queue's times are
+monotonic-clock readings.
+
+**A healthy login never sees the panel.** Every routed client passes through this queue, so a
 sweep landing between enqueue and the next routing cycle would flash a position at someone who
 was never really queued. Connections are ranked across the whole group but only notified once
 they have waited longer than one full routing cycle.
@@ -864,8 +923,8 @@ sequenceDiagram
 
     rect rgb(240, 255, 240)
         Note over Client,World: TOKEN RENEWAL (Phase 8/9, then periodic)
-        World->>World: SweepTokenRenewals(), • Every 5s, per authenticated connection, • Due when now >= NextAttemptUtc, • Per-connection in-flight guard
-        World->>World: IssueRenewalTokenCoreAsync(), • Resolve verified real IP (abort if unknown), • Fetch current signing key from DB, • BuildToken(): now + 10min,   same username, accessLevel, loginServerId
+        World->>World: SweepTokenRenewals(), • Every 5s, per authenticated connection, • Due when now >= NextAttemptUtc (jittered up to 20% early, so a reconnect wave does not renew in lockstep), • Starts budgeted per sweep (at least 32), database work capped at 32 concurrent, • Per-connection in-flight guard
+        World->>World: IssueRenewalTokenCoreAsync(), off the main thread, • Resolve verified real IP (abort if unknown), • Current signing key, cached 30 s per login server, • BuildToken(): now + 10min,   same username, accessLevel, loginServerId
         World->>DB: PersistTokenHash(new_token_hash)
         World->>World: EncryptTokenForSend(), ⚠ consumes an AES-GCM send sequence, so it runs ONLY after the DB write succeeds
         World-->>Client: RenewTokenResponseBroadcast {, Token, Result: LoginSuccess, }
@@ -931,7 +990,7 @@ successful decrypt at a peer-chosen sequence.
 
 #### Revocation only works if it is actually sent
 
-Two things used to make logout revocation a guaranteed no-op, and both are easy to
+Three things used to make logout revocation a guaranteed no-op, and all are easy to
 reintroduce:
 
 1. **`RevokeTokenBroadcast` must be registered by every server type, not just the LoginServer.**
@@ -946,6 +1005,14 @@ reintroduce:
    `Client.QuitToLogin` revokes first and then defers `ForceDisconnect` by
    `RevocationFlushTicks` (2), bounded by `RevocationFlushTimeoutSeconds` (0.5 s). Everything
    else in the teardown still runs immediately.
+3. **The handler's gate must admit a signed-in connection.** It refuses connections that never
+   began a handshake, so an anonymous peer cannot make it query the database. It used to decide
+   that from the handshake-window map alone, which loses a connection the moment it authenticates
+   — so every revocation from a signed-in client, the one case the broadcast exists for, was
+   dropped at the gate and the token stayed valid until it expired. It now admits an
+   authenticated connection, one inside its handshake window, or one the core still tracks as
+   pending authentication, and then applies the per-IP (one per 5 s) and global (10 per second)
+   limits.
 
 The local token copy is zeroed either way, which is why this was invisible: nothing on the
 client could use the token afterwards, but anyone who had captured it still could, for the
@@ -1284,7 +1351,7 @@ Suspicion: a flood of connection requests, handshake attempts, or API calls from
 1. **Verify NGINX rate limits are active** — check `limit_req_zone` and `limit_conn_zone` counters via `nginx -s reopen` logs or live metrics. Confirm the zones are not exhausted by legitimate traffic.
 2. **Enable stricter limits** — reduce `limit_req` to 5r/s (API) and 1r/s (patch), tighten `limit_conn` to 5 conn/IP. Apply at NGINX edge; no game-server restart required.
 3. **Check nonce cache pressure** — if the `ClientGate` nonce LRU exceeds 20,000 entries, the `Array.Sort` on eviction causes CPU spikes. Consider restarting the IPFetch/Patcher processes to flush the cache.
-4. **If the attack targets QUIC game ports**, the game server's per-IP handshake limiter (8 per sliding 2s window) and global cap (500/sec) provide the last line of defense. Monitor `MaxPendingAuthConnections` (10,000) — if hit, legitimate clients are locked out.
+4. **If the attack targets QUIC game ports**, the game server's per-IP handshake limiter (8 per sliding 2s window) and global cap (500/sec) provide the last line of defense. Monitor `MaxPendingAuthConnections` (1,000 on the Login Server, where it hands arrivals to the login queue; 10,000 on World and Scene servers) — if hit on a World or Scene server, legitimate clients are locked out.
 
 #### Account Takeover
 
@@ -1326,12 +1393,13 @@ Suspicion: the TLS private key for `game.fishmmo.com` (or `api.fishmmo.com`) has
 │  LAYER 3: Game Server                                       │
 │  ├─ Global handshake cap: 500/sec                           │
 │  ├─ Per-IP handshake limit: 8 per 2s window                 │
-│  ├─ Pending auth cap: 10,000                                │
+│  ├─ Pending auth cap: 1,000 Login, 10,000 World/Scene       │
 │  ├─ Auth TTL sweep: 15s stale, 60s hard deadline            │
+│  ├─ Two-factor prompt window: 120s per prompt               │
 │  ├─ Per-account rate limit: 1s (SRP verify)                 │
 │  ├─ Per-IP account creation limit: configurable             │
 │  ├─ Global hourly account creation cap                      │
-│  ├─ TOTP failure lockout: 5 failures → 60 min               │
+│  ├─ TOTP lockout: 5/sign-in; 5 in 15 min → 30 min           │
 │  ├─ Account verification brute-force protection              │
 │  ├─ Per-account scene auth callback: 2s                     │
 │  ├─ IngressGuard: per-connection, per-operation debounce    │
@@ -1613,7 +1681,7 @@ Application wants to quit
 | `GameHost` | `GeneratedHostConfig.GameHost` (build-time substituted; committed value is the `FISHMMO_SENTINEL_PLACEHOLDER_GAME_HOST` sentinel) | `Constants.cs` → `HostConfig.generated.cs` |
 | `AuthStaleTtlSeconds` | 15s | `BaseAuthenticatorCore.cs` |
 | `AuthHardDeadlineSeconds` | 60s | `BaseAuthenticatorCore.cs` |
-| `MaxPendingAuthConnections` | 10,000 | `BaseAuthenticatorCore.cs` |
+| `MaxPendingAuthConnections` | 1,000 Login (SRP verify + proof channel capacity, `PendingAuthRules.DefaultLoginPendingCap`) / 10,000 World, Scene | `BaseAuthenticatorCore.cs`, `SrpAuthenticatorCore.cs` |
 | `HandshakeIpWindowSeconds` | 2s | `BaseAuthenticatorCore.cs` |
 | `HandshakeIpBurstLimit` | 8 | `BaseAuthenticatorCore.cs` |
 | `MaxGlobalHandshakesPerSecond` | 500 | `BaseAuthenticatorCore.cs` |
@@ -1790,9 +1858,11 @@ All FishMMO servers read configuration from `.cfg` files in the working director
 | `Smtp:FromName` | string | `"FishMMO"` | Login | Display name for the From address. Overridable via `FISHMMO_SMTP_FROM_NAME` env var. |
 | `Smtp:UseSsl` | bool (string) | `true` | Login | Enable SSL/TLS for SMTP. Production must be `true`. Overridable via `FISHMMO_SMTP_USE_SSL` env var. |
 | `AllowedOrigins` | string (CSV) | `https://play.fishmmo.com` | Login | Comma-separated CORS origins permitted for WebGL clients. |
+| `AuthMaxPendingConnections` | int | `1000` Login (verify + proof channel capacity) / `10000` World, Scene | All | Connections allowed to be mid-authentication at once; on the Login server the login queue's threshold. A player at the two-factor prompt does not count. Commented out in the templates. |
+| `AuthTwoFactorWindowSeconds` | int | `120` | Login | Seconds a player has to answer each two-factor prompt. Clamped 30–600. Not in the templates. |
 | `LoginQueueUpdateRateSeconds` | float | `2.0` | Login | How often queued clients receive a position update. |
 | `LoginQueueMaxSize` | int | `500` | Login | Queue capacity; clients beyond it are rejected outright rather than queued. |
-| `LoginQueueAdmissionRatePerSecond` | float | `5.0` | Login | Rate at which queued clients are admitted to the login server. |
+| `LoginQueueAdmissionRatePerSecond` | float | `50.0` | Login | Rate at which queued clients are admitted to the login server. |
 | `LoginQueueTimeoutSeconds` | int | `300` | Login | Maximum wait before a queued client is timed out. |
 
 ### Secret Keys (not stored in .cfg files)

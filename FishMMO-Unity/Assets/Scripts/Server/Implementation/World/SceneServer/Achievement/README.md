@@ -21,7 +21,7 @@
 
 The Achievement system handles server-side achievement progression and reward payout for scene-server player characters. It listens to achievement update/completion events, pushes immediate client UI updates via broadcasts, applies gameplay rewards synchronously (abilities/items), and persists reward side effects asynchronously through `AsyncWorkerData` to avoid blocking gameplay flow.
 
-All DB writes are queued through `TryEnqueueAsyncWork(...)` to `IAsyncWorkerData`. If queueing fails (backpressure/missing dependency), the system logs warnings with character/slot/template context while keeping gameplay state intact. This design keeps player feedback immediate while deferring I/O latency.
+Its one kind of DB write, a known-ability reward row, goes through `EnqueuePersistence(...)` to `IAsyncWorkerData`, keyed by character so it runs on the lane the character's save-and-release runs on; the worker admits it even past its backpressure threshold rather than dropping it. Each row quotes the session claim captured when the reward was earned and lands only while that claim is held (`ICharacterKnownAbilityService.PersistOwnedAsync`). With no claim the reward is still learned in memory, with a warning, and no row is queued. This design keeps player feedback immediate while deferring I/O latency.
 
 ## Supported Platforms
 
@@ -41,9 +41,9 @@ All DB writes are queued through `TryEnqueueAsyncWork(...)` to `IAsyncWorkerData
 - Item reward processing with inventory-first placement and automatic bank fallback when inventory capacity is insufficient; the destination container is chosen once, before any item is placed, so a reward set is never split across inventory and bank
 - Item rewards are granted through `ICharacterInventorySystem.TryGrantItem`, the inventory system's single funnel. The funnel places the item, broadcasts the slot, persists it and writes back the identity the database assigns. This system does not place, broadcast or persist items itself: doing so left every reward at `ID == 0` — unequippable, and rewritten as a fresh row on every save until a snapshot repaired it
 - Asynchronous persistence of all reward side effects through `IAsyncWorkerData` to avoid blocking gameplay
-- Per-learned-template DB persistence queuing for known abilities
-- Per-modified-slot DTO capture on main thread with async persistence queuing for items
-- Graceful degradation: logs warnings on persistence queue failures while keeping in-memory gameplay state intact
+- Per-learned-template DB persistence queuing for known abilities, ownership-gated by the character's session claim
+- Item persistence belongs to the inventory system's grant funnel; this system queues no item writes
+- Graceful degradation: a reward earned while this server holds no session claim is learned in memory and logged, not written
 
 ## Prerequisites
 
@@ -124,7 +124,7 @@ Behavior:
 
 1. Skip known abilities/events.
 2. Learn unknown rewards via `IAbilityController`.
-3. Queue DB persist (`PersistKnownAbilityAsync`) per learned template.
+3. Queue DB persist (`PersistKnownAbilityAsync`, through `EnqueuePersistence` keyed by character) per learned template, under the session claim captured once for the reward set. No claim: learned in memory only, one warning.
 4. Broadcast single/multi known-ability add payloads.
 
 #### Item Rewards
@@ -149,8 +149,8 @@ Behavior:
 | Item reward — bank fallback | Complete an achievement with item rewards when inventory is full but bank has room; verify `BankSetMultipleItemsBroadcast` |
 | Item reward — both full | Complete an achievement with item rewards when neither container has room; verify the System-channel refusal message and that no item is placed |
 | Reward item identity | Inspect a rewarded item after the grant; its `ID` must be the database-assigned row id, not `0` (the funnel writes the identity back and re-sends the slot) |
-| Async persistence queuing | Check logs for successful `TryEnqueueAsyncWork` calls after reward application |
-| Persistence failure graceful degradation | Simulate persistence queue failure; confirm warning is logged and gameplay state remains intact |
+| Async persistence queuing | Complete an achievement with ability rewards; confirm a known-ability row is written for each learned template; a refused or failed write is logged as `Known ability reward save` |
+| No session claim | Grant an ability reward to a character this server holds no claim for; confirm the warning, that the ability is learned in memory, and that no row is written |
 
 ## Flow Diagram
 

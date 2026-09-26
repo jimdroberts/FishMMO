@@ -1,5 +1,6 @@
 using FishNet.Connection;
 using FishMMO.Shared;
+using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -475,8 +476,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				AchievementTemplate = null,
 				Entrance = context.Board,
 				State = GroupFinderState.Waiting,
-				NextBackfillAttemptUtc = DateTime.MaxValue,
-				QueuedAtUtc = DateTime.UtcNow,
+				NextBackfillAttemptAt = double.PositiveInfinity,
+				QueuedAt = MonotonicClock.NowSeconds,
 				Ranked = context.Template.IsRankedFormat(context.Format),
 				BalanceTeams = context.Template.BalanceTeams,
 				RatingBandBase = context.Template.RatingBandBase,
@@ -699,7 +700,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (groupID > 0)
 				{
 					DatabaseResult<int> groupResult = await queueService.EnqueueGroupAsync(
-						worldServerID, DbSceneType(SceneType.PvP), sceneName, context.Format, groupID, memberIDs, GroupFinderStaleBefore);
+						worldServerID, DbSceneType(SceneType.PvP), sceneName, context.Format, groupID, memberIDs, GroupFinderStaleAfter);
 					queued = groupResult.IsSuccess && groupResult.Data == memberIDs.Count;
 					busy = groupResult.IsSuccess || groupResult.ErrorCode == DatabaseErrorCodes.StaleState;
 					if (!queued && busy)
@@ -716,7 +717,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				else
 				{
 					DatabaseResult<long> soloResult = await queueService.EnqueueAsync(
-						worldServerID, characterID, DbSceneType(SceneType.PvP), sceneName, context.Format, GroupFinderStaleBefore);
+						worldServerID, characterID, DbSceneType(SceneType.PvP), sceneName, context.Format, GroupFinderStaleAfter);
 					queued = soloResult.IsSuccess && soloResult.Data > 0;
 					busy = soloResult.IsSuccess;
 					if (!soloResult.IsSuccess)
@@ -733,7 +734,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.PvP), sceneName, context.Format, GroupFinderStaleBefore);
+				var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.PvP), sceneName, context.Format, GroupFinderStaleAfter);
 				int waiting = countResult.IsSuccess ? Math.Max(memberIDs.Count, countResult.Data) : memberIDs.Count;
 
 				TryEnqueueMainThread(() =>
@@ -746,7 +747,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							continue;
 						}
 
-						entry.NextBackfillAttemptUtc = DateTime.MaxValue;
+						entry.NextBackfillAttemptAt = double.PositiveInfinity;
 						groupFinderEntries[entry.CharacterID] = entry;
 						SendGroupFinderStatus(entry.Connection, entry, GroupFinderState.Waiting, GroupFinderRefusalReason.None, waiting);
 					}
@@ -775,7 +776,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <para>
 		/// <b>Backfill first.</b> A live match of this arena and format with a seat vacated inside
 		/// its backfill window takes the longest-waiting solo before any new match is formed: a
-		/// game already running is a better use of a waiter than a game that might form.
+		/// game already running is a better use of a waiter than a game that might form. Only when
+		/// the pump's read of openings names this arena and format: the backfill transaction locks
+		/// and scans, and without an opening it can only find nothing.
 		/// </para>
 		/// <para>
 		/// <b>Then form.</b> Ranked formats match within a rating band anchored on the longest
@@ -785,7 +788,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// whichever server hosts it reads the right ratings.
 		/// </para>
 		/// </remarks>
-		private async Task ProcessWaitingArenaGroupAsync(IGroupFinderQueueService queueService, string sceneName, int format, List<GroupFinderPumpItem> waiters)
+		/// <param name="waitingCount">
+		/// The live waiters under this arena and format, counted by the pump for every key at once
+		/// before any was processed; null when that count failed, and then no match is formed.
+		/// </param>
+		/// <param name="backfillOpen">Whether a live match of this arena and format may have a seat to backfill.</param>
+		private async Task ProcessWaitingArenaGroupAsync(IGroupFinderQueueService queueService, string sceneName, int format, List<GroupFinderPumpItem> waiters, int? waitingCount, bool backfillOpen)
 		{
 			if (waiters.Count == 0)
 			{
@@ -800,11 +808,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			bool ranked = waiters[0].Ranked;
 
 			var stillWaiting = new List<GroupFinderPumpItem>(waiters);
+			int backfilled = 0;
 
 			// Backfill: seats vacated in live matches, one waiter per seat, bounded per pump.
-			for (int i = 0; i < ArenaBackfillPerPump && stillWaiting.Count > 0; ++i)
+			for (int i = 0; backfillOpen && i < ArenaBackfillPerPump && stillWaiting.Count > 0; ++i)
 			{
-				var backfill = await queueService.TryBackfillArenaSeatAsync(worldServerID, sceneName, format, GroupFinderStaleBefore);
+				var backfill = await queueService.TryBackfillArenaSeatAsync(worldServerID, sceneName, format, GroupFinderStaleAfter);
 				if (!backfill.IsSuccess)
 				{
 					await LogMatchmakingFailureAsync(backfill, $"Arena: no seat backfilled for '{sceneName}' format {format}");
@@ -816,38 +825,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 				await Log.Debug("InteractableSystem",
 					$"Arena: character {backfill.Data.CharacterID} backfilled team {backfill.Data.Team + 1} of match {backfill.Data.MatchID} ('{sceneName}' format {format}).");
+				++backfilled;
 				int index = stillWaiting.FindIndex(w => w.CharacterID == backfill.Data.CharacterID);
 				if (index >= 0)
 				{
 					stillWaiting.RemoveAt(index);
-					await DispatchMatchedAsync(backfill.Data.CharacterID, 0, backfill.Data.InstanceID);
+					// No party: an arena seat is not one, so there is no membership to check or rank to read.
+					DispatchMatched(backfill.Data.CharacterID, 0, backfill.Data.InstanceID, PartyRank.Member);
 				}
 				/* A waiter from another server took the seat: their own pump sees the row matched
 				 * and moves them. Try again; another seat may be open. */
 			}
 
-			var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.PvP), sceneName, format, GroupFinderStaleBefore);
-			if (!countResult.IsSuccess)
+			if (!waitingCount.HasValue)
 			{
-				await Log.Warning("InteractableSystem", $"Arena: could not count the waiters for '{sceneName}' format {format}; no match is formed this pump: [{countResult.ErrorCode}] {countResult.ErrorMessage}");
 				return;
 			}
-			int waiting = countResult.Data;
+
+			/* The count was taken before the backfills above, and each one took a waiting row of
+			 * this arena and format — from this server or another — so it comes down by exactly
+			 * the number seated. */
+			int waiting = Math.Max(0, waitingCount.Value - backfilled);
 
 			if (waiting >= matchSize && stillWaiting.Count > 0)
 			{
 				/* Rating source and band. The band grows with the longest wait this server can see;
 				 * a waiter on another server anchors their own server's band, so the two widen at
 				 * about the same rate and whoever pumps first forms the match. */
-				DateTime oldest = DateTime.UtcNow;
+				double now = MonotonicClock.NowSeconds;
+				double oldest = now;
 				foreach (GroupFinderPumpItem w in stillWaiting)
 				{
-					if (w.QueuedAtUtc < oldest)
+					if (w.QueuedAt < oldest)
 					{
-						oldest = w.QueuedAtUtc;
+						oldest = w.QueuedAt;
 					}
 				}
-				double waited = (DateTime.UtcNow - oldest).TotalSeconds;
+				double waited = now - oldest;
 
 				ArenaRatingSource ratingSource = ArenaRatingSource.None;
 				long seasonID = 0;
@@ -883,7 +897,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				var composeOptions = new ArenaComposeOptions(band, waiters[0].BalanceTeams);
 
 				var formResult = await queueService.TryFormArenaMatchAsync(
-					worldServerID, sceneName, format, templateID, teamCount, teamSize, GroupFinderStaleBefore, 128, ratingSource, composeOptions);
+					worldServerID, sceneName, format, templateID, teamCount, teamSize, GroupFinderStaleAfter, 128, ratingSource, composeOptions);
 
 				/* The hosting server stamps the match itself if this does not land — it reads the
 				 * row's season and resolves one when it finds none — so a failure is logged, not
@@ -916,7 +930,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							if (waiter.CharacterID == seat.CharacterID)
 							{
 								placedHere.Add(seat.CharacterID);
-								await DispatchMatchedAsync(seat.CharacterID, 0, match.InstanceID);
+								DispatchMatched(seat.CharacterID, 0, match.InstanceID, PartyRank.Member);
 								break;
 							}
 						}
@@ -1061,7 +1075,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 					if (lockResult.Data.Count > 0)
 					{
-						profile.QueueLockSeconds = Math.Max(1, (int)Math.Ceiling((lockResult.Data[0].LockedUntilUtc - DateTime.UtcNow).TotalSeconds));
+						profile.QueueLockSeconds = Math.Max(1, (int)Math.Ceiling(lockResult.Data[0].RemainingSeconds));
 						profile.QueueLockReason = lockResult.Data[0].Reason ?? string.Empty;
 					}
 				}

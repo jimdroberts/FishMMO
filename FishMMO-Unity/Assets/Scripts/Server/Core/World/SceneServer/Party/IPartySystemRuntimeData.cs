@@ -11,6 +11,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 	/// player was shown apart from the one that replaced it. Carrying the inviter and the issue
 	/// time lets the accept path prove the two are the same invitation. See
 	/// <c>PendingGuildInvitation</c> for the same reasoning on the guild side.
+	/// <para>
+	/// The issue time is a <see cref="MonotonicClock"/> reading, not a calendar instant. It is
+	/// only ever used to age the invitation against its TTL, which is a local duration: on the
+	/// wall clock a host stepped back kept every invitation acceptable for the size of the step.
+	/// </para>
 	/// </remarks>
 	public readonly struct PendingPartyInvitation
 	{
@@ -20,20 +25,20 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>The character who sent the invitation.</summary>
 		public readonly long InviterCharacterID;
 
-		/// <summary>When the invitation was issued (UTC).</summary>
-		public readonly DateTime IssuedUtc;
+		/// <summary>When the invitation was issued, in <see cref="MonotonicClock"/> seconds.</summary>
+		public readonly double IssuedAt;
 
 		/// <summary>
 		/// Initializes a new pending party invitation.
 		/// </summary>
 		/// <param name="partyID">The party the target was invited to.</param>
 		/// <param name="inviterCharacterID">The character who sent the invitation.</param>
-		/// <param name="issuedUtc">When the invitation was issued (UTC).</param>
-		public PendingPartyInvitation(long partyID, long inviterCharacterID, DateTime issuedUtc)
+		/// <param name="issuedAt">When the invitation was issued, in <see cref="MonotonicClock"/> seconds.</param>
+		public PendingPartyInvitation(long partyID, long inviterCharacterID, double issuedAt)
 		{
 			PartyID = partyID;
 			InviterCharacterID = inviterCharacterID;
-			IssuedUtc = issuedUtc;
+			IssuedAt = issuedAt;
 		}
 	}
 
@@ -66,24 +71,24 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="inviterCharacterID">The character sending the invitation.</param>
 		/// <param name="targetCharacterID">The character being invited.</param>
 		/// <param name="cooldown">Minimum interval between invitations to the same target.</param>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <returns>True when the invitation may proceed; false while the cooldown is active.</returns>
 		/// <remarks>
 		/// The pending-invitation slot is not a rate limit — declining clears it immediately — and
 		/// the ingress debounce is per connection rather than per target, so neither stops one
 		/// player from keeping a modal permanently on another player's screen.
 		/// </remarks>
-		bool TryBeginInviteCooldown(long inviterCharacterID, long targetCharacterID, TimeSpan cooldown, DateTime nowUtc);
+		bool TryBeginInviteCooldown(long inviterCharacterID, long targetCharacterID, TimeSpan cooldown, double now);
 
 		/// <summary>
 		/// Sweeps expired invite cooldown entries using bounded scan/remove limits.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <param name="ttl">Cooldown entry time-to-live.</param>
 		/// <param name="maxScan">Maximum queue entries to scan.</param>
 		/// <param name="maxRemove">Maximum expired entries to remove.</param>
 		/// <returns>Number of removed entries.</returns>
-		int SweepInviteCooldowns(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
+		int SweepInviteCooldowns(double now, TimeSpan ttl, int maxScan, int maxRemove);
 
 		/// <summary>
 		/// Reports whether a party update has already been processed by this server.
@@ -124,13 +129,20 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Drops processed-update records for parties that have stopped changing.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="nowUtc">
+		/// This server's wall clock. The records are the update rows' own timestamps, stamped by the
+		/// database, so this is the pump's cross-clock comparison and not a local duration; the
+		/// lifetime already allows for the skew between the two (see
+		/// <c>UpdatePumpWatermark.ProcessedRecordLifetime</c>).
+		/// </param>
 		/// <param name="ttl">Age past which a record is discarded.</param>
 		/// <returns>The number of records removed.</returns>
 		/// <remarks>
-		/// A record only has to outlive the skew allowance — past that the watermark has moved
-		/// beyond the update and it can never be re-fetched. Anything older belongs to a party
-		/// that has gone quiet and would otherwise sit in the map for the lifetime of the process.
+		/// A record only has to outlive the window in which its update can still be re-fetched —
+		/// the retry horizon plus the skew allowance, since the mark can be held that far back; the
+		/// pump passes <c>UpdatePumpWatermark.ProcessedRecordLifetime</c>. Anything older belongs to
+		/// a party that has gone quiet and would otherwise sit in the map for the lifetime of the
+		/// process.
 		/// </remarks>
 		int SweepProcessedPartyUpdates(DateTime nowUtc, TimeSpan ttl);
 
@@ -163,11 +175,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// </remarks>
 		/// <param name="partyID">The party being examined.</param>
 		/// <param name="leaderCharacterID">The member currently holding the rank.</param>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading. The grace is a local duration.</param>
 		/// <param name="grace">How long the leader must be continuously absent.</param>
-		/// <param name="dueUtc">
-		/// When the grace elapses. Meaningful only when this returns false, so the caller can
-		/// arrange to look again rather than leaving the observation to expire unread.
+		/// <param name="due">
+		/// When the grace elapses, on the same clock. Meaningful only when this returns false, so the
+		/// caller can arrange to look again rather than leaving the observation to expire unread.
 		/// </param>
 		/// <returns>
 		/// True when the absence has been confirmed and leadership may be moved. Confirming does
@@ -176,7 +188,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <see cref="ClearLeaderAbsence"/> once the rank has moved, or once the holder turns out
 		/// to be present.
 		/// </returns>
-		bool TryConfirmLeaderAbsent(long partyID, long leaderCharacterID, DateTime nowUtc, TimeSpan grace, out DateTime dueUtc);
+		bool TryConfirmLeaderAbsent(long partyID, long leaderCharacterID, double now, TimeSpan grace, out double due);
 
 		/// <summary>
 		/// Forgets any absence being tracked for a party.
@@ -187,7 +199,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Drops absence observations that nothing has come back to finish.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <param name="ttl">Age past which an unfinished observation is discarded.</param>
 		/// <returns>The number of observations removed.</returns>
 		/// <remarks>
@@ -196,7 +208,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// last member left this server — and would otherwise sit in the map for the lifetime of
 		/// the process.
 		/// </remarks>
-		int SweepLeaderAbsences(DateTime nowUtc, TimeSpan ttl);
+		int SweepLeaderAbsences(double now, TimeSpan ttl);
 
 		/// <summary>
 		/// Claims exclusive rights to mutate one party's membership or ranks.
@@ -289,12 +301,12 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Sweeps expired invitations using bounded scan/remove limits.
 		/// </summary>
-		/// <param name="nowUtc">Current UTC timestamp.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
 		/// <param name="ttl">Invitation time-to-live.</param>
 		/// <param name="maxScan">Maximum queue entries to scan.</param>
 		/// <param name="maxRemove">Maximum expired entries to remove.</param>
 		/// <returns>Number of removed invitations.</returns>
-		int SweepExpiredInvitations(DateTime nowUtc, TimeSpan ttl, int maxScan, int maxRemove);
+		int SweepExpiredInvitations(double now, TimeSpan ttl, int maxScan, int maxRemove);
 
 		/// <summary>
 		/// Timestamp of the last successful database fetch for party updates.
@@ -313,9 +325,9 @@ namespace FishMMO.Server.Core.World.SceneServer
 		void EndUpdatePump();
 
 		/// <summary>
-		/// Next scheduled UTC time for invitation cleanup.
+		/// When the next invitation cleanup is due, in <see cref="MonotonicClock"/> seconds.
 		/// </summary>
-		DateTime NextInvitationSweepUtc { get; set; }
+		double NextInvitationSweepAt { get; set; }
 
 		/// <summary>
 		/// Shared ingress guard for per-connection per-operation debounce and in-flight tracking.

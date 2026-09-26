@@ -366,10 +366,19 @@ function hostCard(ui, h) {
 		body: `
 			${h.isStale ? `<div style="padding:var(--sp-4) var(--sp-4) 0">${ui.banner('danger',
 				'This daemon has stopped reporting',
-				`Last heartbeat ${ui.ago(h.lastHeartbeatUtc)}. Nothing on ${h.hostName} is being supervised: a process that fails there will not be restarted, and the states below are whatever was true when the daemon last spoke. A command queued for this host will not be collected — it will sit until its deadline and be abandoned. This is a fault on the host itself, not on any one process.`)}</div>` : ''}
+				`Last heartbeat ${agoByDatabase(ui, h.heartbeatAgeSeconds, h.lastHeartbeatUtc)}. Nothing on ${h.hostName} is being supervised: a process that fails there will not be restarted, and the states below are whatever was true when the daemon last spoke. A command queued for this host will not be collected — it will sit until its deadline and be abandoned. This is a fault on the host itself, not on any one process.`)}</div>` : ''}
 			${appsTable(ui, h)}`,
-		foot: `Heartbeat ${ui.ago(h.lastHeartbeatUtc)}${Number.isFinite(h.heartbeatAgeSeconds) ? ` (${ui.duration(h.heartbeatAgeSeconds)} ago)` : ''} · daemon up ${uptime(ui, h.startedUtc)}`,
+		foot: `Heartbeat ${agoByDatabase(ui, h.heartbeatAgeSeconds, h.lastHeartbeatUtc)} · daemon up ${uptime(ui, h.startedUtc)}`,
 	});
+}
+
+/* How long ago the database stamped something, as the database measured it when the page was
+ * read — the same age the stale flag is decided on. Not `ui.ago(stamp)`: that is this browser's
+ * clock minus a stamp the database wrote, so a browser a minute off showed a beating daemon's
+ * heartbeat as a minute old, or "in 1m", beside a badge saying it was live. The stamp itself
+ * stays in the tooltip, and `ui.ago` remains only for a payload that carries no age. */
+function agoByDatabase(ui, ageSeconds, stamp) {
+	return Number.isFinite(ageSeconds) ? `${ui.duration(ageSeconds)} ago` : ui.ago(stamp);
 }
 
 /* Carries how long the daemon has been silent rather than the word "stale" alone: "silent for
@@ -410,7 +419,7 @@ function appsTable(ui, h) {
 			{
 				label: 'Last report',
 				align: 'right',
-				cell: (a) => `<span class="nowrap" title="${ui.esc(ui.dateTime(a.lastReportedUtc))}">${ui.ago(a.lastReportedUtc)}</span>`,
+				cell: (a) => `<span class="nowrap" title="${ui.esc(ui.dateTime(a.lastReportedUtc))}">${ui.esc(agoByDatabase(ui, a.reportAgeSeconds, a.lastReportedUtc))}</span>`,
 			},
 			{ label: '', align: 'right', cell: (a) => controlButtons(ui, a, h) },
 		],

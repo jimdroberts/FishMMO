@@ -25,7 +25,8 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	public interface IServerBoardService
 	{
 		/// <summary>
-		/// When one registered server last pulsed, for a health check.
+		/// How long ago one registered server last pulsed, in seconds by the database clock, for a
+		/// health check.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -41,11 +42,18 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// treat differently from a stale pulse: never registered and stopped talking are
 		/// different faults.
 		/// </para>
+		/// <para>
+		/// <b>An age, not the stamp.</b> The database stamps every pulse, so the age is measured
+		/// against the database clock inside the reading statement, never negative. This used to
+		/// return <c>last_pulse</c> for the supervising daemon to subtract from its own
+		/// <c>DateTime.UtcNow</c>: a daemon host running faster than the database by more than
+		/// the stale limit saw every healthy server as silent and restarted it, over and over.
+		/// </para>
 		/// </remarks>
 		/// <param name="kind">Which tier: <c>login</c>, <c>world</c> or <c>scene</c>.</param>
 		/// <param name="serverName">The name the server registered under, from its own configuration.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		Task<DatabaseResult<System.DateTime?>> FetchLastPulseAsync(
+		Task<DatabaseResult<double?>> FetchPulseAgeAsync(
 			string kind,
 			string serverName,
 			CancellationToken cancellationToken = default);

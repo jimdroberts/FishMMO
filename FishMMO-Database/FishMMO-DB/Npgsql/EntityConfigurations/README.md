@@ -16,15 +16,22 @@ than reorganising files to match the folder structure.
 
 ## What is here
 
-55 files, one per table, mirroring the folders under `Npgsql/Entities/`. The table name a
+67 files configuring 72 tables, mirroring the folders under `Npgsql/Entities/`: one file per
+table, except that `Bandwidth/`, `Daemon/` and `Maintenance/` each keep their folder's
+configurations in one file (`ServerBandwidthEntityConfigurations.cs`,
+`DaemonEntityConfigurations.cs`, `MaintenanceEntityConfigurations.cs`). The table name a
 configuration declares with `ToTable(...)` is the authority for the schema; the C# names are
 `<Name>Entity` / `<Name>EntityConfiguration`.
 
 | Folder | Tables |
 |---|---|
 | (root) | `deployment_secrets` |
-| `Login/` | `accounts`, `auth_tokens`, `connection_token_keys`, `email_queue`, `login_servers`, `login_server_signing_keys`, `two_factor_recovery_codes` |
+| `Login/` | `accounts`, `account_beta_codes`, `admin_audit_log`, `auth_tokens`, `beta_codes`, `connection_token_keys`, `email_queue`, `login_servers`, `login_server_signing_keys`, `password_reset_tokens`, `sms_queue`, `two_factor_recovery_codes`, `two_factor_reset_requests`, `web_sessions` |
 | `World/` | `world_servers`, `kick_requests` |
+| `Bandwidth/` | `server_bandwidth_minute`, `server_bandwidth_hour` — measured per-minute traffic each server writes about itself (SET-upserted, no FK), rolled into hours by the Control Panel |
+| `Daemon/` | `daemon_hosts`, `daemon_apps`, `daemon_commands`, `daemon_app_events` |
+| `Maintenance/` | `maintenance_operations`, `maintenance_targets` |
+| `Support/` | `support_tickets`, `support_ticket_messages` |
 | `Scene/` | `scenes`, `scene_servers`, `chat`, `quests`, `group_finder_queue` |
 | `Scene/Character/` | `characters` plus 22 per-character tables, including `character_item`, `character_waypoints` and `currency_ledger` |
 | `Scene/Guild/` | `guilds`, `guild_rank`, `guild_log`, `guild_application`, `guild_updates` |
@@ -37,14 +44,23 @@ The full per-table inventory lives in [`../../README.md`](../../README.md#table-
 ## Conventions these files follow
 
 - Timestamps default with `HasDefaultValueSql("timezone('UTC', CURRENT_TIMESTAMP)")`, never a
-  client clock, so rows written by different scene servers order correctly under clock skew.
+  client clock, so rows written by different scene servers order correctly under clock skew. A
+  default only covers an insert that omits the column, so the raw-SQL writers of stamps another
+  process judges (pulses, chat rows, update marks, queue heartbeats) take the database clock in the
+  statement itself; see [The database clock](../../README.md#the-database-clock). A bandwidth
+  row's `bucket_start` has no default at all: the writing server reads the database clock first
+  and keys the row with it, so a retried upsert lands under the same minute.
 - Every index a service's hot query depends on is declared here, with a comment naming the query
   it serves. Services write their upserts as raw SQL with an `ON CONFLICT (columns)` list, so a
   unique index declared here is load-bearing for that statement: change its columns and the upsert
   starts failing at runtime, not at compile time.
 - Partial indexes are used wherever the interesting rows are a minority of the table
   (`HasFilter("active = TRUE")`, `HasFilter("tax_due_utc IS NOT NULL")`,
-  `HasFilter("owner_character_id <> 0")`, and similar).
+  `HasFilter("owner_character_id <> 0")`, `HasFilter("request_key IS NOT NULL")`, and similar).
+  Where the filter compares against a constant (`status < 4`), the queries it serves write that
+  comparison as a literal rather than a parameter: the planner can use the index only when it can
+  prove the query implies the filter, and it proves nothing about a parameter once a plan is
+  cached. `ArenaMatchEntityConfiguration.UnfinishedFilter` is the one text both sides share.
 - Enum-valued columns are stored as `int` with a comment fixing the numeric meaning, because this
   assembly cannot reference `FishMMO.Shared`. The pairing is pinned by tests
   (`ItemContainerTypeParityTests`, `CurrencyLedgerStateTests`), not by a shared type.
@@ -79,10 +95,27 @@ The full per-table inventory lives in [`../../README.md`](../../README.md#table-
   (`HasFilter("active = TRUE")`) so at most one season is active; `arena_rating` is unique on
   `(SeasonID, CharacterID)` with a `(SeasonID, Rating)` leaderboard index and defaults of `1500`
   rating / `1500` peak; `arena_penalty` is the deserter lock, one row per character.
+  `arena_match` also has the partial index `ix_arena_match_unfinished_time_created` on
+  `TimeCreated`, filtered to unfinished matches (`status < 4`, before `Ended`), for the
+  abandoned-match sweep every scene server runs (`ArenaMatchService.CancelAbandonedAsync`): nothing
+  deletes finished matches, so without the filter that unscoped sweep read a table that only grows.
 - **`Scene/Housing/`** — five tables. `plots` is unique on
   `(WorldServerID, SceneName, PlotKey)` — plots are world-scoped, and `PlotKey` is capped at 64 to
   match `PlotIdentity.MaxPlotKeyLength` — with a filtered unique index
-  `ix_plots_one_house_per_character` enforcing one house per character and a filtered `TaxDueUtc`
-  index for the tax sweep. `plot_structures`, `plot_access` and `plot_updates` cascade from the
-  plot; `plot_vault` deliberately has **no** foreign key to `plots` (it holds what a character is
-  owed after the plot is gone) and cascades from the character instead.
+  `ix_plots_one_house_per_character` enforcing one house per character. The tax sweep's page reads
+  `(WorldServerID, TaxDueUtc, ID)`, filtered to `tax_due_utc IS NOT NULL`: the world leads because
+  every sweep names one, and the ID ends the key because the sweep pages with a
+  `(tax_due_utc, id)` keyset. `TaxNextAttemptUtc` (`tax_next_attempt_utc`) is set only while a
+  plot's owner is held by another server, deferring the plot for the sweeps that cannot bill it; it
+  is null on almost every row, so it is filtered on the heap rather than added to the index.
+  `plot_structures`, `plot_access` and `plot_updates` cascade from the plot; `plot_vault`
+  deliberately has **no** foreign key to `plots` (it holds what a character is owed after the plot
+  is gone) and cascades from the character instead.
+- **`Bandwidth/`** — two tables, no foreign keys (a server's history outlives its registration row).
+  `server_bandwidth_minute` is keyed `(ServerKind, ServerName, BucketStart, InstanceID)`: the
+  upsert's conflict target (`ServerBandwidthService.RecordAsync`) and, in that column order, one
+  server's history in time order. `server_bandwidth_hour` is keyed
+  `(ServerKind, ServerName, BucketStart)`, summed over instances by the rollup. Each has a
+  `BucketStart` index for the reads over all servers and the retention deletes. Neither carries an
+  `xmin` token: a minute row has one single-flight writer, and an hour row is recomputed whole
+  from its minutes, so rewriting it always leaves the same row.

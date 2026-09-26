@@ -62,7 +62,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// ability along the bar produces a dozen accepted requests in a couple of seconds and only
 		/// the last one can be right, so batching is both cheaper and more accurate. A crash inside
 		/// the window loses at most this many seconds of re-binding, which a player repeats in
-		/// moments; the disconnect path flushes immediately so a normal logout loses nothing.
+		/// moments. A departing character's bar is written by its own save-and-release, before its
+		/// session is released, so a normal logout loses nothing — see
+		/// <see cref="IHotkeySystemRuntimeData.TakeDepartingBar"/>.
 		/// </remarks>
 		[Header("Persistence")]
 		[Tooltip("Seconds between flushes of pending hotkey writes to the database")]
@@ -228,18 +230,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/* Hotkeys were NEVER persisted. ICharacterHotkeyService.PersistAsync — both overloads —
 			 * had no caller anywhere in the repository; the load path reads the rows and the save
 			 * path never wrote them, so every bar was whatever the last successful write had left
-			 * behind, which for most characters is nothing. Flushed periodically and on disconnect
-			 * from here rather than from CharacterSystem.Saving, because this system already owns
-			 * the runtime bar and the save path belongs to another area of the audit. */
+			 * behind, which for most characters is nothing. A resident's changes are flushed
+			 * periodically from here; a departing character's bar is written by the character
+			 * system's own save-and-release, before the release (IHotkeySystemRuntimeData
+			 * .TakeDepartingBar). It used to be flushed from OnDisconnect as a write of its own,
+			 * which only the lane order kept ahead of the release; every hotkey write is
+			 * ownership-gated now, so one that landed after the release would be refused and lost. */
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem) &&
 				characterSystem != null)
 			{
 				characterSystem.OnConnect += CharacterSystem_OnConnect;
-				characterSystem.OnDisconnect += CharacterSystem_OnDisconnect;
 			}
 			else
 			{
-				Log.Warning("HotkeySystem", "InitializeOnce: ICharacterSystem not found; hotkeys will only be flushed periodically.");
+				Log.Warning("HotkeySystem", "InitializeOnce: ICharacterSystem not found; login-time pruning of dead bindings is off.");
 			}
 
 			persistFlushIntervalSeconds = Mathf.Max(1.0f, persistFlushIntervalSeconds);
@@ -276,7 +280,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, Scene> characterSystem))
 			{
 				characterSystem.OnConnect -= CharacterSystem_OnConnect;
-				characterSystem.OnDisconnect -= CharacterSystem_OnDisconnect;
 			}
 
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -284,8 +287,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPersistFlush);
 			}
 
-			// Last chance to get anything still staged onto disk before the system goes away.
-			FlushPendingHotkeyWrites();
+			/* No flush here, deliberately. Teardown runs in reverse registration order, so this runs
+			 * BEFORE the character system's shutdown flush — and that flush releases every claim
+			 * straight after the character's own writes, without waiting for the worker. A bar
+			 * enqueued from here could land after its release and be refused. The shutdown flush
+			 * writes every resident's and every lingering body's live bar itself, under the claim,
+			 * before the release (IHotkeySystemRuntimeData.TakeDepartingBar); the stage it reads
+			 * outlives this behaviour, since data containers are torn down after every behaviour. */
 
 			if (Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
 			{
@@ -588,6 +596,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
+			/* A new session starts here, so anything still staged for this character belongs to an
+			 * earlier one — a session evicted for a lost claim leaves its stage behind, since only a
+			 * departure takes it — and must not be written under this session's claim over the bar
+			 * it has just loaded. */
+			if (Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData))
+			{
+				runtimeData.TryDrainHotkeyWrite(character.ID, out _);
+			}
+
 			bool changed = false;
 			for (int i = 0; i < character.Hotkeys.Count; ++i)
 			{
@@ -707,41 +724,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Flushes the character's bar immediately when they disconnect.
-		/// </summary>
-		/// <param name="conn">The departing connection.</param>
-		/// <param name="character">The departing character.</param>
-		/// <remarks>
-		/// A normal logout must not lose the last few seconds of re-binding, and the character
-		/// object is about to be despawned, so this cannot wait for the pump. Staging first picks
-		/// up any change made since the last flush; the drain then writes it and removes it from
-		/// the stage so the pump does not write it a second time under a newer version.
-		/// </remarks>
-		private void CharacterSystem_OnDisconnect(NetworkConnection conn, IPlayerCharacter character)
-		{
-			if (character == null || character.ID <= 0)
-			{
-				return;
-			}
-
-			StageHotkeyPersist(character);
-
-			if (!Server.DataContainerRegistry.TryGet<IHotkeySystemRuntimeData>(out var runtimeData) ||
-				!runtimeData.TryDrainHotkeyWrite(character.ID, out HotkeyData[] hotkeys))
-			{
-				return;
-			}
-
-			List<CharacterHotkeyData> dtos = BuildHotkeyDtos(runtimeData, character.ID, hotkeys);
-			if (dtos.Count > 0)
-			{
-				EnqueuePersistence(() => PersistHotkeysAsync(dtos), character.ID);
-			}
-		}
-
-		/// <summary>
 		/// Drains and writes every staged hotkey bar.
 		/// </summary>
+		/// <remarks>
+		/// Each bar is written under the session claim held for its character NOW, captured here on
+		/// the main thread and carried with the write, which lands only while that claim is still
+		/// held (the service's <c>PersistOwnedAsync</c>). A staged bar whose character has no claim
+		/// here is dropped: the character has left — its departure wrote the live bar before its
+		/// release — or it was evicted, and its bar is no longer this server's to write.
+		/// </remarks>
 		private void FlushPendingHotkeyWrites()
 		{
 			if (Server?.DataContainerRegistry == null ||
@@ -759,50 +750,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			for (int i = 0; i < flushBuffer.Count; ++i)
 			{
 				long characterID = flushBuffer[i].Key;
-				List<CharacterHotkeyData> dtos = BuildHotkeyDtos(runtimeData, characterID, flushBuffer[i].Value);
+				if (!TryCaptureSessionClaim(characterID, out CharacterSessionLeaseData claim))
+				{
+					Log.Debug("HotkeySystem", $"FlushPendingHotkeyWrites: CharID={characterID} holds no session claim here; its staged bar is not this server's to write.");
+					continue;
+				}
+
+				List<CharacterHotkeyData> dtos = runtimeData.BuildRows(characterID, flushBuffer[i].Value);
 				if (dtos.Count > 0)
 				{
-					EnqueuePersistence(() => PersistHotkeysAsync(dtos), characterID);
+					EnqueuePersistence(() => PersistHotkeysAsync(dtos, claim), characterID);
 				}
 			}
 			flushBuffer.Clear();
 		}
 
 		/// <summary>
-		/// Converts a staged bar into database DTOs, stamping each row with a fresh version.
-		/// </summary>
-		/// <param name="runtimeData">The hotkey runtime data supplying versions.</param>
-		/// <param name="characterID">The owning character.</param>
-		/// <param name="hotkeys">The staged bar.</param>
-		/// <returns>One DTO per slot.</returns>
-		/// <remarks>
-		/// EVERY slot is written, including the empty ones. The rows are keyed
-		/// <c>(character_id, slot)</c> and the upsert has no delete path, so writing only the
-		/// occupied slots would leave a cleared slot showing its previous binding forever — the
-		/// clear would simply never reach the database.
-		/// </remarks>
-		private static List<CharacterHotkeyData> BuildHotkeyDtos(IHotkeySystemRuntimeData runtimeData, long characterID, HotkeyData[] hotkeys)
-		{
-			List<CharacterHotkeyData> dtos = new List<CharacterHotkeyData>(hotkeys.Length);
-			for (int i = 0; i < hotkeys.Length; ++i)
-			{
-				HotkeyData hotkey = hotkeys[i];
-				dtos.Add(new CharacterHotkeyData(
-					id: 0,
-					version: runtimeData.NextHotkeyVersion(),
-					characterID: characterID,
-					type: hotkey.Type,
-					slot: hotkey.Slot,
-					referenceID: hotkey.ReferenceID));
-			}
-			return dtos;
-		}
-
-		/// <summary>
-		/// Writes a character's hotkey bar to the database.
+		/// Writes a character's hotkey bar to the database, under the claim it was captured with.
 		/// </summary>
 		/// <param name="hotkeys">The rows to persist.</param>
-		private async Task PersistHotkeysAsync(List<CharacterHotkeyData> hotkeys)
+		/// <param name="claim">The session claim held for the character when the bar was drained.</param>
+		private async Task PersistHotkeysAsync(List<CharacterHotkeyData> hotkeys, CharacterSessionLeaseData claim)
 		{
 			try
 			{
@@ -814,9 +782,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				/* The bar is written whole, empty slots included, so anything short of a complete
 				 * write leaves a cleared slot still showing its old binding. Reported as a
-				 * discrepancy rather than silently accepted, and handed back to be re-staged. */
-				if (!await BulkWriteReporting.RequireCompleteAsync("HotkeySystem", "Hotkey bar save",
-						await hotkeyService.PersistAsync(hotkeys), $"{hotkeys.Count} slots") &&
+				 * discrepancy rather than silently accepted, and handed back to be re-staged —
+				 * unless the ownership gate refused it, which no retry can change. */
+				DatabaseResult<BulkWriteResult> result = await hotkeyService.PersistOwnedAsync(hotkeys, ClaimsOf(claim));
+				if (!await BulkWriteReporting.RequireCompleteAsync("HotkeySystem", "Hotkey bar save", result, $"{hotkeys.Count} slots") &&
+					RestagesAfter(result) &&
 					hotkeys.Count > 0)
 				{
 					failedBarWrites.Enqueue(hotkeys[0].CharacterID);
@@ -830,6 +800,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					failedBarWrites.Enqueue(hotkeys[0].CharacterID);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Whether a bar write that did not land complete is handed back to be re-staged from the
+		/// live bar. Pure.
+		/// </summary>
+		/// <remarks>
+		/// Everything short of a complete write is retried — a cleared slot must reach the database —
+		/// except a refusal by the ownership gate, whole (<c>FORBIDDEN</c>) or per row
+		/// (<see cref="BulkWriteResult.Unowned"/>): the claim the bar was written under is gone, the
+		/// character is no longer this server's, and it is being evicted. Re-staging would only have
+		/// the next pump refuse it again. The re-stage itself also looks only at resident characters,
+		/// so an evicted one would be skipped there too; this keeps the queue from carrying it.
+		/// </remarks>
+		/// <param name="result">The write's outcome.</param>
+		/// <returns>True when the bar should be written again.</returns>
+		public static bool RestagesAfter(DatabaseResult<BulkWriteResult> result)
+		{
+			if (result.IsSuccess)
+			{
+				return !result.Data.IsComplete && result.Data.Unowned == 0;
+			}
+			return !IsClaimRefusal(result);
 		}
 
 		#endregion

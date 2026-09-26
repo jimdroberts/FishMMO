@@ -11,11 +11,19 @@ namespace FishMMO.Database.Data
 		public readonly string AccountName;
 		public readonly DateTime TimeCreated;
 
-		public KickRequestData(long id, string accountName, DateTime timeCreated)
+		/// <summary>
+		/// The kicked account's last successful login, read in the same query as the request, or
+		/// null when no account row matches <see cref="AccountName"/>. A login after
+		/// <see cref="TimeCreated"/> means the account reconnected and the kick is stale.
+		/// </summary>
+		public readonly DateTime? AccountLastLogin;
+
+		public KickRequestData(long id, string accountName, DateTime timeCreated, DateTime? accountLastLogin = null)
 		{
 			ID = id;
 			AccountName = accountName;
 			TimeCreated = timeCreated;
+			AccountLastLogin = accountLastLogin;
 		}
 	}
 }

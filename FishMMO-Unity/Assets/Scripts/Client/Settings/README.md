@@ -20,6 +20,7 @@ The settings screen itself is `UITKOptions` in
 | `ClientAudioFocusWatcher` | Reports window focus so the unfocused mute has something to act on. |
 | `AudioChannel` | The volume groups. |
 | `ClientCrosshairSettings` | Whether the crosshair is drawn, and its shape, size and opacity. |
+| `ClientNetworkStatsSettings` | Whether the network statistics overlay (`UITKNetworkStats`) is drawn, and its traffic graph. |
 | `ClientNameplateSettings` | Overhead nameplate opacity, scale, background strength, budget, guild and title rows. |
 | `ClientWorldLabelSettings` | World-label scale, distance, opacity, budget, occlusion, and the per-kind nameplate ranges. |
 | `UIProfile` | Reads and writes a shareable UI layout/colour file, separate from `Configuration.cfg`. |
@@ -97,6 +98,7 @@ files.
 | Audio | `Audio.Volume.<Channel>`, `Audio.MuteWhenUnfocused` |
 | Gameplay | `ShowDamage`, `ShowHeals`, `ShowAchievementCompletion`, `IgnorePartyInvites`, `IgnoreGuildInvites` |
 | Crosshair | `Crosshair.Enabled`, `Crosshair.Style`, `Crosshair.Size`, `Crosshair.Opacity` |
+| Network statistics | `NetworkStats.Enabled` (default off), `NetworkStats.ShowGraph` (default on) — the **UI** tab's Network rows |
 | World labels | `WorldLabels.Scale`, `WorldLabels.Distance`, `WorldLabels.Opacity`, `WorldLabels.MaxVisible`, `WorldLabels.Occlude`, `WorldLabels.NpcNameRange`, `WorldLabels.PlayerNameRange`, `WorldLabels.ShowOwnName` |
 | Nameplates | `Nameplates.Opacity`, `Nameplates.Scale`, `Nameplates.BackgroundOpacity`, `Nameplates.MaxVisible`, `Nameplates.ShowGuild`, `Nameplates.ShowTitles`, `Nameplates.ShowIcons` |
 | Map | `Map.MinimapZoom`, `Map.MinimapRotates`, `Map.MinimapFrameRate`, `Map.ShowCoordinates` |

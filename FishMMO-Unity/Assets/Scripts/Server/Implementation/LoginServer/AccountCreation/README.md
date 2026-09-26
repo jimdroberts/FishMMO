@@ -48,7 +48,7 @@ The request pipeline follows four stages:
 - **Zero-blocking network thread** — encrypted payloads are validated and queued on the network thread with no decryption or I/O
 - **AES-GCM encryption** — per-field sequence-derived nonces for username, salt, and verifier with AAD binding to `AuthMessageType.CreateAccount`
 - **SRP (Secure Remote Password) protocol** — credentials stored as salt + verifier; plaintext passwords never reach the server
-- **Per-IP rate limiting** — configurable `ipRateLimitSeconds` cooldown between attempts from the same IP using atomic `ConcurrentDictionary.AddOrUpdate` (TOCTOU-safe)
+- **Per-IP rate limiting** — configurable `ipRateLimitSeconds` cooldown between attempts from the same IP checked and recorded under one lock in `IpAbuseTracker` (TOCTOU-safe); a blocked or rate-limited attempt records nothing
 - **Per-IP failure tracking and DoS blocking** — IPs exceeding `maxFailedAttempts` are temporarily blocked and immediately disconnected. The tracker is capped at `MaxIpFailureTrackerEntries` (50,000); at the cap `TryTrackIpFailure` returns `false` so the caller fails closed rather than silently skipping the increment, which would let an offender sit just under the block threshold indefinitely
 - **Global hourly creation cap** — `maxGlobalAccountCreationsPerHour` (default 1000) bounds the blast radius of a distributed registration flood that per-IP limits cannot see. The window is UTC hours-since-epoch, held under `globalCreationsCounterLock`; the budget is *checked* at enqueue and *consumed* only after a successful persist, so failed requests do not deplete it. A value of 0 or less disables the cap and logs a loud startup `Warning`
 - **Per-IP verification debounce** — `AccountVerifyBroadcast` is debounced to one attempt per IP per second by an `ExpiringKeyTracker<string>` (`VerifyRateLimitDuration`), independent of the failure counter. Before it, every verify message from an unauthenticated connection bought a decrypt and a database lookup until `maxFailedAttempts` had accumulated
@@ -60,7 +60,7 @@ The request pipeline follows four stages:
 - **Username validation** — centralized `Authentication.IsAllowedUsername()` check before any DB call
 - **Salt / verifier length validation** — `MaxSaltLength` (256) and `MaxVerifierLength` (1024) enforced before persistence
 - **Encrypted field size guard** — `MaxEncryptedFieldSize` (2048 bytes) rejects oversized payloads on the network thread
-- **Periodic stale-entry cleanup** — every 60 seconds, bounded sweeps evict expired rate-limit and failure entries with configurable scan/removal caps
+- **Periodic stale-entry cleanup** — every second, head-first sweeps evict expired per-IP records and per-username windows in expiry order, stopping at the first live entry, so every expired entry is reached and an idle pass costs a comparison. A per-IP record (and any block) lapses `ipBlockDurationSeconds` after its last accepted attempt or recorded failure
 - **Per-connection caching** — `LastSeenCacheTracker` caches IP addresses and encryption data to reduce lock pressure on `AccountManager`
 - **Thread-safe runtime metrics** — `Interlocked`-backed counters for `TotalProcessed`, `TotalRejected`, `TotalFailed`
 - **Database error mapping** — `UniqueViolation` and `ValidationError` mapped to `InvalidUsernameOrPassword`; other errors map to `ServerBusy`
@@ -68,7 +68,7 @@ The request pipeline follows four stages:
 - **Stateless behaviour** — all mutable state in `RuntimeDataContainer` instances; system logic is pure and testable
 - **Engine-agnostic core** — interface/implementation split with generic `TConnection` parameter
 - **Account verification** — encrypted verification code flow via `AccountVerifyBroadcast`. One conditional update (`IAccountService.PersistVerifiedByCodeAsync`) tries the code against every code the account holds — email, SMS and Discord — and a match on any one of them verifies the account, so the broadcast's channel field is not consulted. A wrong code is counted in the database (`VerificationFailureTicket.RecordAsync`, shared with the Control Panel) and the third in a row opens a support ticket for the account. The client's answer is `InvalidUsernameOrPassword` either way: the message is accepted before any password, so it must not say which accounts exist and are waiting for a code
-- **Per-username verification brute-force protection** — failed verification attempts tracked per username (lowercased). After `MaxVerifyFailuresPerUsername` (5) failures, further attempts are rejected for `VerifyUsernameLockoutDuration` (60 minutes). Bounded sweep (`VerifyUsernameFailureSweepMaxScan`, 64) evicts stale entries. Hard cap of `MaxVerifyUsernameFailureEntries` (50,000) prevents memory exhaustion.
+- **Per-username verification brute-force protection** — failed verification attempts tracked per username (lowercased) in a `FixedWindowCounter` on the monotonic clock. After `MaxVerifyFailuresPerUsername` (5) failures within `VerifyUsernameLockoutDuration` (60 minutes) of the first, further attempts are rejected until that window closes. A head-first sweep (`VerifyUsernameFailureSweepMaxRemovals`, 256 per pass) evicts closed windows oldest first. Hard cap of `MaxVerifyUsernameFailureEntries` (50,000) prevents memory exhaustion.
 - **Verification delivery** — email codes are enqueued to `email_queue` and SMS codes to `sms_queue`, both drained by the Control Panel. A Discord code is only issued (`PersistDiscordVerifyCodeAsync`, once per account, never replaced); issuing it raises a PostgreSQL notification that wakes FishMMO-DiscordBot, which sends the account's one DM when the player is in the game's Discord server
 - **No grace period** — an unverified account cannot sign in, whether or not a message has reached it yet: after a correct password the server answers `AccountUnverified` and the client asks for a code. Which channels count is `AccountVerificationRules` (FishMMO-DB), shared with the Control Panel: the player's choices that `VerifyEmail` / `VerifySms` / `VerifyDiscord` switch on and the account can receive, falling back to email. Registration is refused (`AccountDetailsInvalid`) when no enabled channel could reach the new account; an existing account in that position is let in, because it cannot be asked
 - **Dev/Release mode gating** — `#if UNITY_EDITOR || DEVELOPMENT_BUILD` skips 2FA setup and email verification entirely in development builds; release builds run the full pipeline
@@ -160,7 +160,7 @@ All tunables are clamped to safe minimums during `InitializeOnce()`:
 | `MaxVerifyFailuresPerUsername` | `5` | Maximum failed verification attempts per username before lockout. Tightened from 10: against a 900,000-value six-digit code space, 10 attempts with IP rotation gave a non-trivial success probability |
 | `VerifyUsernameLockoutDuration` | `60` min | Lockout window for per-username verification failures. Extended from 30 minutes to outlast typical email-delivery windows |
 | `MaxVerifyUsernameFailureEntries` | `50,000` | Hard cap on tracked username entries to prevent memory exhaustion |
-| `VerifyUsernameFailureSweepMaxScan` | `64` | Maximum entries scanned per sweep for expired verification failures |
+| `VerifyUsernameFailureSweepMaxRemovals` | `256` | Maximum closed verification-failure windows removed per sweep |
 | `MaxIpFailureTrackerEntries` | `50,000` | Hard cap on the per-IP failure tracker; at the cap `TryTrackIpFailure` returns `false` and the request fails closed |
 | `VerifyRateLimitDuration` | `1` s | Per-IP debounce for `AccountVerifyBroadcast`, held in an `ExpiringKeyTracker<string>` |
 
@@ -226,7 +226,7 @@ ClientManager.Broadcast(broadcast);
 | Malformed UTF-8 | Decrypted bytes are not valid UTF-8 | `DecoderFallbackException` caught; decrypted arrays zeroed; connection disconnected |
 | Invalid username | Username fails `Authentication.IsAllowedUsername()` | `InvalidUsernameOrPassword` response; no DB call made |
 | Duplicate username | DB returns `UniqueViolation` | `InvalidUsernameOrPassword` response; IP failure count incremented |
-| Stale entry cleanup | 60 seconds elapse | Expired rate-limit and failure entries evicted within scan/removal bounds |
+| Stale entry cleanup | 1 second elapses | Expired per-IP records and verification-failure windows evicted head-first |
 | Graceful shutdown | Server deinitializes | Remaining queued responses fully drained; broadcasts unregistered; caches cleared |
 | Proxy mode | `useConnectionIdForRateLimiting = true` | Rate limiting keyed by `conn.ClientId` instead of IP address; startup logs a warning that this needs a trusted proxy |
 | Global hourly cap | Exceed `maxGlobalAccountCreationsPerHour` successful creations within one UTC hour | Further requests refused with `ServerBusy` (indistinguishable from queue-full, by design) until the hour rolls over |
@@ -322,6 +322,7 @@ Server/Core/LoginServer/AccountCreation/
 ├── IAccountCreationSystemRuntimeData.cs         # Runtime metrics interface
 ├── IAccountCreationSystemMappingData.cs         # Mapping data interface (rate-limit/failure)
 ├── IAccountCreationSystemMainThreadQueueData.cs # Main-thread queue interface
+├── IpAbuseTracker.cs                            # Per-IP rate limit + failure block, one record per IP, head-first expiry
 └── AccountCreationRequest.cs                    # Immutable request struct (generic over TConnection)
 ```
 
@@ -372,12 +373,11 @@ Thread-safe per-IP rate limiting and DoS protection data. Implements `IAccountCr
 
 | Property | Type | Purpose |
 |----------|------|---------|
-| `IpRateLimitTracker` | `ConcurrentDictionary<string, DateTime>` | Last attempt timestamp per IP for rate limiting |
-| `IpFailureTracker` | `ConcurrentDictionary<string, int>` | Failed attempt count per IP for DoS blocking |
+| `IpAbuse` | `IpAbuseTracker` | Per-IP last accepted attempt (rate limit) and failure count (block), one record per IP, kept in activity order |
 
-**Thread Safety:** Both dictionaries are `ConcurrentDictionary` — safe for simultaneous access from network and worker threads.
+**Thread Safety:** `IpAbuseTracker` takes one short lock per operation — safe for simultaneous access from network and worker threads.
 
-**Lifecycle:** `InitializeOnce()` creates empty concurrent dictionaries. `Clear()` clears dictionaries without nulling (may be accessed from other threads during runtime). `OnDeinitialize()` clears and nulls references.
+**Lifecycle:** `InitializeOnce()` creates an empty tracker. `Clear()` clears it without nulling (it may be accessed from other threads during runtime). `OnDeinitialize()` clears and nulls the reference.
 
 #### AccountCreationSystemMainThreadQueueData
 

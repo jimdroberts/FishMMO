@@ -65,17 +65,30 @@ namespace FishMMO.Shared
 		/// <param name="sourceObjectID">NetworkObject id of the source, or 0.</param>
 		/// <param name="kind">What happened.</param>
 		/// <param name="damageTemplateID">Damage template id, or 0 for a heal.</param>
-		/// <param name="amount">The amount. Non-positive amounts are ignored: they produce no label.</param>
+		/// <param name="amount">
+		/// The amount. Non-positive amounts are ignored for every kind that moves health: they
+		/// produce no label. A refusal (<see cref="CombatEventRules.IsRefusal"/>) has no amount and is
+		/// recorded whatever is passed, as zero.
+		/// </param>
 		public void Add(int sourceObjectID, CombatEventKind kind, int damageTemplateID, int amount)
 		{
-			if (amount <= 0)
+			/* A refusal is the one kind with nothing to add up: the hit did not land. It is still an
+			 * event — the attacker predicted the hit and is owed the reason it did not land — so it is
+			 * counted rather than dropped, and its amount is pinned at zero so a caller cannot make a
+			 * refusal move anybody's health bar. */
+			if (kind.IsRefusal())
+			{
+				amount = 0;
+			}
+			else if (amount <= 0)
 			{
 				return;
 			}
 
 			// Heals carry no damage type; normalising it here keeps the merge key honest.
-			// Periodic damage keeps its type — the client colours DoT numbers by it.
-			if (kind != CombatEventKind.Damage && kind != CombatEventKind.PeriodicDamage)
+			// Damage of both kinds keeps its type — the client colours numbers by it — and so does
+			// a refusal, whose type is part of the key the caster's pending prediction pairs on.
+			if (!kind.CarriesDamageType())
 			{
 				damageTemplateID = 0;
 			}

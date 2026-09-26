@@ -11,8 +11,9 @@ one database commit.
 |---|---|
 | `TradeSystem.cs` | Lifecycle, configuration, invitations, the range/state tick, session open/close. |
 | `TradeSystem.Handlers.cs` | The eight broadcast handlers: `TradeRequestBroadcast`, `TradeRequestResponseBroadcast`, `TradeOfferItemBroadcast`, `TradeWithdrawItemBroadcast`, `TradeSetCurrencyBroadcast`, `TradeConfirmBroadcast` (confirm/revoke), `TradeAcceptBroadcast` (accept/un-accept), `TradeCancelBroadcast`. Every refusal is answered with a `TradeRefusedBroadcast` and the current table. |
-| `TradeSystem.Commit.cs` | Completion: re-validation, currency deduction, in-memory exchange, credit, one persistence unit, client notification. |
-| `TradeSession.cs` | Pure state, the `TradePhase`, and the confirm/accept rules (`TryAddOffer`, `TryRemoveOffer`, `TrySetCurrency`, `TryConfirm`, `TryAccept`, `TryBeginCommit`). **Every change clears both confirmations and both acceptances and bumps the version; a confirm and an accept must each quote the current version.** It also carries the `CommitState` the commit hangs its escrow, its `TradeExchange.Applied` and its failure reason on. |
+| `TradeSystem.Commit.cs` | Completion: re-validation, the currency settlement, in-memory exchange, one persistence unit, client notification. |
+| `TradeCurrencySettlement.cs` | Pure attribute arithmetic for the currency half: both payments taken and both credits given (held) at the apply, closed exactly with the outcome. |
+| `TradeSession.cs` | Pure state, the `TradePhase`, and the confirm/accept rules (`TryAddOffer`, `TryRemoveOffer`, `TrySetCurrency`, `TryConfirm`, `TryAccept`, `TryBeginCommit`). **Every change clears both confirmations and both acceptances and bumps the version; a confirm and an accept must each quote the current version.** It also carries the `CommitState` the commit hangs its currency settlement, its `TradeExchange.Applied` and its failure reason on. |
 | `TradeExchange.cs` | Pure container arithmetic: TAKE every offer out of both bags, GIVE each to the other, or undo everything. Emits the rows each write must carry. |
 | `TradeSystemRuntimeData.cs` / `TradeSystemMainThreadQueueData.cs` | The ingress guard and the main-thread queue. |
 
@@ -107,23 +108,22 @@ Five hops, in this order (`ICharacterInventorySystem.TryRunExchange`, passed the
    other write for either character can commit until this transaction ends.
 3. **Main thread, `ApplyExchange`, under the locks** — re-validate everything as if the
    trade were proposed now (presence, `CanAct`, scene, range, every offered slot, both
-   balances, no `int` overflow on receipt); **deduct** both currency offers (an escrow — a
-   concurrent spend can only spend what is left, and a refusal refunds exactly); apply the
-   item exchange in memory all-or-nothing (`TradeExchange.TryApply`); hand back the rows.
-   Sequences and versions are stamped HERE, so every write captured before this instant is
-   older than the trade and every write captured after carries it. Every touched slot on
-   both sides is locked from this instant until the outcome. **Credits are not applied
-   here**: they ride in the written attribute row and land in memory only once the commit
-   is known, so a refusal never has to claw back money already spent.
+   balances, no `int` overflow on receipt); open the **currency settlement**
+   (`TradeCurrencySettlement.TryOpen`): take both payments AND give both credits in memory,
+   the credits **held**; apply the item exchange in memory all-or-nothing
+   (`TradeExchange.TryApply`); hand back the rows. Sequences and versions are stamped HERE,
+   so every write captured before this instant is older than the trade and every write
+   captured after carries it — currency included. Every touched slot on both sides is locked
+   from this instant until the outcome.
 4. **Worker** — both characters' item rows (an item that crossed whole keeps its id and is
    re-owned by the upsert; only an item that merged entirely into a resident stack is
    deleted), both attribute sheets, the `currency_ledger` rows (`PlayerTrade`, `Absorbed`),
    commit.
-5. **Main thread, `FinishExchange`** — on commit: credit both, close as `Completed` (the
+5. **Main thread, `FinishExchange`** — on commit: release the holds, close as `Completed` (the
    close goes BEFORE the inventory updates, because the clients still hold their local slot
    locks and their handlers refuse a locked slot), then the set/remove broadcasts. On
-   refusal: `TradeExchange.Applied.Undo()` restores both bags exactly, the deductions are
-   refunded, the session closes with the reason; the inventory system **voids** every batch
+   refusal: `TradeExchange.Applied.Undo()` restores both bags exactly, the settlement takes
+   back both credits and refunds both payments exactly, the session closes with the reason; the inventory system **voids** every batch
    captured for either character while the applied state was visible
    (`ItemWriteJournal.VoidCaptures`) — a snapshot or despawn flush captured in that window
    described a trade that never happened — and reconciles both from the restored memory.
@@ -137,6 +137,34 @@ Room is estimated when an offer is **confirmed** and again when it is **accepted
 (`TradeRules.HasRoomFor`), so a player short of bag space hears it while the table is still
 theirs to trim rather than after both have accepted. The exchange's own all-or-nothing
 refusal remains the decision.
+
+### Currency: credited at the apply, held until the outcome
+
+Credits used to reach memory only in the finish hop, after the commit, while the transaction
+wrote the payee's currency row as "memory plus the credit". Every other capture of that
+attribute in between — the periodic save, another item batch's full sheet (which queues on the
+same row lock and lands straight after the commit), a merchant's write — carried a newer
+version with no credit and overwrote the credited row. The items had moved and the seller's
+coin was missing from the database until the next save; a crash in that interval lost it.
+
+Now memory holds exactly what the transaction writes from the apply onwards, so no capture
+can lack the credit. Exact undo — the reason the credit was deferred — is kept by
+`CharacterAttribute.CreditHeld`: the credit is in the balance but `CharacterCurrency.TrySpend`
+spends only `Value - HeldValue`, so a refusal can always take it back. Earning is unaffected,
+and `CanAfford` still reports the whole balance (a hold means "not now", not "too poor").
+
+While a trade settles, both currency attributes are `IsSettling`, and the character's own
+saves (`CharacterSystem.AppendAttributeData`: periodic, despawn, linger, shutdown) leave them
+dirty for the pass after the outcome. Without that, a periodic save could land the moved
+balances while the transaction was still undecided, and a refusal would leave the database
+showing a payment or a credit for a trade that never happened — for a departing character,
+with no later save to put it right. The settlement is closed through the attribute references
+and tokens the apply took, so a party in combat-logout linger is still restored, and a party
+whose pooled object was reset for somebody else is left alone.
+
+Not covered, and reported rather than engineered: a player-initiated currency write by one of
+the two parties inside the settlement window (a merchant, mail or loot write captures the whole
+sheet, holds included), followed by a refused commit and a crash before the next save.
 
 ## Tuning (the `TradeSystem` asset)
 
@@ -153,6 +181,8 @@ use; unset refuses currency offers with `NoCurrency`).
 
 `Assets/UnitTests/TradeSessionTests.cs` (the acceptance truth table),
 `TradeExchangeTests.cs` (conservation on success and on every refusal, the room estimate,
-against real `InventoryController`s), `TradePanelTests.cs` (the window on a real UI
-Toolkit panel). `Assets/ZZRenderScratch/TradePanelRender.cs` renders the window with a
+against real `InventoryController`s), `Currency/TradeCurrencySettlementTests.cs` (the currency
+half: credited at the apply, a held credit unspendable, exact reversal, a reset attribute left
+alone, and source pins on the save path's settling skip), `TradePanelTests.cs` (the window on a
+real UI Toolkit panel). `Assets/ZZRenderScratch/TradePanelRender.cs` renders the window with a
 mock two-sided table.

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -54,72 +55,217 @@ namespace FishMMO.Shared.Biomes
 
 		// ── Measuring ─────────────────────────────────────────────────
 
-		private static readonly System.Collections.Generic.Dictionary<int, SceneTerrainExtent> cache =
-			new System.Collections.Generic.Dictionary<int, SceneTerrainExtent>();
+		/// <summary>
+		/// One terrain tile of a scene, with the bounds the samplers test read once rather than per
+		/// sample.
+		/// </summary>
+		public readonly struct Tile
+		{
+			/// <summary>The terrain. Unity-null once it has been destroyed.</summary>
+			public readonly Terrain Terrain;
 
-		/// <summary>The terrain count the cache was built against.</summary>
-		private static int cachedTerrainCount = -1;
+			/// <summary>World position of the tile's corner, from <see cref="Terrain.GetPosition"/>.</summary>
+			public readonly Vector3 Origin;
+
+			/// <summary>The tile's size, from its terrain data.</summary>
+			public readonly Vector3 Size;
+
+			public Tile(Terrain terrain, Vector3 origin, Vector3 size)
+			{
+				Terrain = terrain;
+				Origin = origin;
+				Size = size;
+			}
+
+			/// <summary>True when the tile lies under a world position, edges included.</summary>
+			public bool Covers(Vector3 worldPosition)
+			{
+				return worldPosition.x >= Origin.x && worldPosition.x <= Origin.x + Size.x
+					&& worldPosition.z >= Origin.z && worldPosition.z <= Origin.z + Size.z;
+			}
+		}
+
+		/// <summary>One scene's measurement: the landmass and the tiles it was measured from.</summary>
+		private sealed class Entry
+		{
+			public SceneTerrainExtent Extent;
+			public Tile[] Tiles;
+			/// <summary>False while a terrain of the scene has no data yet, so the entry is not kept.</summary>
+			public bool Complete;
+		}
+
+		private static readonly Tile[] NoTiles = new Tile[0];
+
+		/// <summary>Measurements by scene handle; 0 is the unscoped measurement of every terrain.</summary>
+		private static readonly Dictionary<int, Entry> cache = new Dictionary<int, Entry>();
+
+		/// <summary>The active terrains the cache was measured against, in Unity's order.</summary>
+		private static readonly List<Terrain> snapshot = new List<Terrain>();
+
+		/// <summary>Reused for the comparison, so checking the snapshot does not allocate.</summary>
+		private static readonly List<Terrain> probe = new List<Terrain>();
+
+		/// <summary><see cref="Time.frameCount"/> at which <see cref="snapshot"/> was last compared.</summary>
+		private static int validatedFrame = -1;
 
 		/// <summary>
 		/// The extent of a scene's terrains, measured once and remembered.
 		/// </summary>
 		/// <param name="scene">The scene to measure. An invalid scene measures every loaded terrain.</param>
 		/// <remarks>
-		/// Re-measured whenever the number of active terrains changes, which covers a scene loading
-		/// or unloading and a terrain being added or destroyed, without needing to be told. Reading
-		/// the count is far cheaper than the union, and a terrain count that is stable while the
-		/// tiles underneath it are swapped one-for-one is not a case this needs to survive.
+		/// See <see cref="TilesOf"/> for when a measurement is taken again.
 		/// </remarks>
 		public static SceneTerrainExtent Of(Scene scene)
 		{
-			Terrain[] terrains = Terrain.activeTerrains;
-			int count = terrains != null ? terrains.Length : 0;
-			if (count != cachedTerrainCount)
-			{
-				cache.Clear();
-				cachedTerrainCount = count;
-			}
+			return EntryFor(scene).Extent;
+		}
 
-			int key = scene.IsValid() ? scene.handle : 0;
-			if (cache.TryGetValue(key, out SceneTerrainExtent cached))
-			{
-				return cached;
-			}
-
-			SceneTerrainExtent measured = Measure(terrains, scene);
-			cache[key] = measured;
-			return measured;
+		/// <summary>
+		/// The tiles a scene's ground is made of, in the order Unity lists its active terrains, and
+		/// the landmass they make up.
+		/// </summary>
+		/// <param name="scene">The scene. An invalid scene answers with every loaded terrain.</param>
+		/// <param name="extent">Receives the scene's landmass, as <see cref="Of"/> would.</param>
+		/// <returns>The tiles, including any with no height range; never null. Do not modify it.</returns>
+		/// <remarks>
+		/// <para>
+		/// <b>Why a cache at all.</b> <see cref="Terrain.activeTerrains"/> builds a new array on
+		/// every read, and a lookup that walked it asked every tile of every loaded scene for its
+		/// scene, data, position and size. The biome sampler did that on every weather sample,
+		/// and the weather is sampled per character per second for exposure — with fifty terrains
+		/// and three hundred players, some six hundred arrays and sixty thousand engine calls a
+		/// second, most of them about scenes the character was not in.
+		/// </para>
+		/// <para>
+		/// <b>When it is measured again.</b> In play mode the active terrains are compared, by
+		/// reference and in order, against the list the cache was built from: once per frame, and
+		/// again whenever a scene is asked about that has no measurement yet, so a scene that
+		/// loaded this frame is measured against this frame's terrains. Any difference — a scene
+		/// loading or unloading, a terrain enabled, disabled, added or destroyed — drops every
+		/// measurement. A measurement that found a terrain with no data yet (added a moment before
+		/// its data is assigned) is not kept. Outside play mode nothing is kept at all: tools add,
+		/// move and resize terrain between calls within one editor frame, and nothing there is
+		/// sampled often enough to be worth the risk.
+		/// </para>
+		/// <para>
+		/// A terrain moved or resized in place keeps its identity, so a tool that does that in play
+		/// mode calls <see cref="Invalidate"/>, as it always had to for the landmass.
+		/// </para>
+		/// </remarks>
+		public static Tile[] TilesOf(Scene scene, out SceneTerrainExtent extent)
+		{
+			Entry entry = EntryFor(scene);
+			extent = entry.Extent;
+			return entry.Tiles;
 		}
 
 		/// <summary>Forgets every measurement. For tests, and for tools that move terrain.</summary>
 		public static void Invalidate()
 		{
 			cache.Clear();
-			cachedTerrainCount = -1;
+			snapshot.Clear();
+			validatedFrame = -1;
 		}
 
-		private static SceneTerrainExtent Measure(Terrain[] terrains, Scene scene)
+		/// <summary>
+		/// Whether the active terrains must be compared with the snapshot before answering.
+		/// </summary>
+		/// <param name="frame">The current frame.</param>
+		/// <param name="validatedFrame">The frame the snapshot was last compared on.</param>
+		/// <param name="cacheMiss">True when the scene asked about has no measurement.</param>
+		/// <remarks>
+		/// Once per frame, and on a miss. The miss is what makes a scene that finished loading
+		/// after this frame's comparison exact rather than a frame late: its terrains are in the
+		/// active list now, and the comparison is what puts them in the snapshot it is measured
+		/// from.
+		/// </remarks>
+		internal static bool MustCompareSnapshot(int frame, int validatedFrame, bool cacheMiss)
 		{
-			var extent = new SceneTerrainExtent();
-			if (terrains == null)
+			return cacheMiss || frame != validatedFrame;
+		}
+
+		private static Entry EntryFor(Scene scene)
+		{
+			if (!Application.isPlaying)
 			{
-				return extent;
+				Terrain.GetActiveTerrains(probe);
+				return Measure(probe, scene);
 			}
+
+			int key = scene.IsValid() ? scene.handle : 0;
+			bool miss = !cache.TryGetValue(key, out Entry entry);
+			int frame = Time.frameCount;
+			if (MustCompareSnapshot(frame, validatedFrame, miss))
+			{
+				validatedFrame = frame;
+				Terrain.GetActiveTerrains(probe);
+				if (!SameTerrains(probe, snapshot))
+				{
+					snapshot.Clear();
+					snapshot.AddRange(probe);
+					cache.Clear();
+					miss = true;
+				}
+			}
+
+			if (miss)
+			{
+				entry = Measure(snapshot, scene);
+				if (entry.Complete)
+				{
+					cache[key] = entry;
+				}
+			}
+			return entry;
+		}
+
+		private static bool SameTerrains(List<Terrain> a, List<Terrain> b)
+		{
+			if (a.Count != b.Count)
+			{
+				return false;
+			}
+			for (int i = 0; i < a.Count; i++)
+			{
+				if (!ReferenceEquals(a[i], b[i]))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		private static Entry Measure(List<Terrain> terrains, Scene scene)
+		{
+			var entry = new Entry { Complete = true };
+			var extent = new SceneTerrainExtent();
+			List<Tile> tiles = null;
 
 			bool onlyOne = scene.IsValid();
 			float minX = float.MaxValue, minZ = float.MaxValue;
 			float maxX = float.MinValue, maxZ = float.MinValue;
 
-			for (int i = 0; i < terrains.Length; i++)
+			for (int i = 0; i < terrains.Count; i++)
 			{
 				Terrain terrain = terrains[i];
-				if (terrain == null || terrain.terrainData == null
-					|| onlyOne && terrain.gameObject.scene.handle != scene.handle)
+				if (terrain == null || onlyOne && terrain.gameObject.scene.handle != scene.handle)
 				{
 					continue;
 				}
+				TerrainData data = terrain.terrainData;
+				if (data == null)
+				{
+					// Added and not yet given its data, most likely; measure again next time.
+					entry.Complete = false;
+					continue;
+				}
 				Vector3 origin = terrain.GetPosition();
-				Vector3 size = terrain.terrainData.size;
+				Vector3 size = data.size;
+
+				// Every tile with data is sampled, whatever its size — the height lookup always
+				// accepted a flat one — but only tiles with real size make up the landmass.
+				(tiles ??= new List<Tile>()).Add(new Tile(terrain, origin, size));
+
 				if (size.x <= 0f || size.z <= 0f || size.y <= 0f)
 				{
 					continue;
@@ -148,7 +294,9 @@ namespace FishMMO.Shared.Biomes
 			{
 				extent.Area = Rect.MinMaxRect(minX, minZ, maxX, maxZ);
 			}
-			return extent;
+			entry.Extent = extent;
+			entry.Tiles = tiles != null ? tiles.ToArray() : NoTiles;
+			return entry;
 		}
 
 		/// <summary>

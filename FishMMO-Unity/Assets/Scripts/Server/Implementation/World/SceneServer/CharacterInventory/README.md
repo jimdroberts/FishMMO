@@ -64,9 +64,9 @@ A per-connection ingress guard provides debounce, global rate limiting, and in-f
 
 - Server-authoritative inventory, equipment, and bank item management over a single `character_item` table
 - Atomic `ItemWriteBatch` persistence: every item row, item delete and attribute row one logical operation touches commits or rolls back together
-- Session-ownership gate inside the same transaction (`ICharacterSessionOwnershipService.AssertOwnershipAsync`), quoting the ownership triple held when the mutation happened rather than when the write ran
+- Session-ownership gate inside the same transaction (`ICharacterSessionOwnershipService.AssertOwnershipAsync`), quoting the ownership triple held when the mutation happened rather than when the write ran. A write that carries a triple must find exactly that claim: an unclaimed row — which is what a character this server has just released looks like — is accepted only for a write with no triple at all (`AllowsUnclaimedItemWrite`)
 - Capture-sequence ordering via `ItemWriteJournal`, which refuses a batch superseded by a later-captured write that already committed
-- Periodic authoritative item snapshot of every resident character (`ICharacterItemService.SaveSnapshotAsync`) — prune plus ungated upsert of all three containers in one transaction
+- Periodic authoritative item snapshot (`ICharacterItemService.SaveSnapshotAsync`) — prune plus ungated upsert of all three containers in one transaction — spread across the interval by character id and taken only for a character whose containers differ from what the database last confirmed (`ItemSnapshotContent`)
 - Reconcile queue: a batch that never reached the database schedules an immediate repair snapshot with per-character backoff (`MaxReconcileBackoff` 30 s)
 - Database-assigned item identities written back on the main thread (`ApplyAssignedIdentities`), with the destination slot locked until they land
 - Same-container slot swaps via `SwapContainerItems`, reporting both affected items and any vacated slot
@@ -82,7 +82,7 @@ A per-connection ingress guard provides debounce, global rate limiting, and in-f
 - Bounded ingress guard sweep with configurable interval, TTL, and max removals per pass
 - Slot bounds validation and `CharacterStateValidation.CanAct` before any container mutation
 - Banker scene object validation: existence check, scene match, interaction range, and banker type confirmation
-- Backpressure handling: when `AsyncWorkerData` refuses admission (its outstanding-work cap), `EnqueuePersistence` still runs the work on the thread pool as a fallback and the client is told `ServerBusy` ("outcome unknown"), not that the operation failed
+- Backpressure handling: past `AsyncWorkerData`'s outstanding-work cap, `EnqueuePersistence` still admits the work (`IAsyncWorkerData.EnqueueRequired`) — behind the backlog, under the same concurrency cap and in the character's lane order — and the client is told `ServerBusy` ("outcome unknown"), not that the operation failed. Only a worker that is not running at all (teardown) sends the work to a small bounded thread-pool fallback
 - `CreateAssetMenu` integration for ScriptableObject creation in the Unity Editor
 
 ## Prerequisites
@@ -123,7 +123,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `ingressSweepIntervalSeconds` | float | 5.0 | Seconds between bounded ingress guard cleanup sweeps |
 | `ingressEntryTtlSeconds` | float | 30.0 | Seconds before stale ingress guard entries are removed |
 | `ingressSweepMaxRemovals` | int | 128 | Maximum stale ingress guard entries removed per sweep |
-| `itemSnapshotIntervalSeconds` | float | 60.0 | Seconds between full inventory/bank/equipment snapshots of every resident character |
+| `itemSnapshotIntervalSeconds` | float | 60.0 | Seconds in which every resident character is visited once, in the 1 s slice its id falls in, for a full inventory/bank/equipment snapshot (taken only when its items changed) |
 
 ### Internal Constants
 
@@ -133,6 +133,8 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `maxIdentityWriteBacksPerFrame` | 64 | Ceiling on queued identity write-backs drained per frame. One action per batch that created items, so this is back-pressure rather than a rate that is reached |
 | `DepartedWatermarkRetention` | 10 min | How long a departed character's journal watermarks are kept before the snapshot sweep prunes them |
 | `ItemWriteJournal.MaxReconcileBackoff` | 30 s | Longest wait between repair snapshots for one character |
+| `ItemSnapshotSliceSeconds` | 1.0 | Width of one slice of the snapshot interval; each character is visited in the slice its id falls in |
+| `MaxReconcileCapturesPerFrame` | 16 | Most repair snapshots captured in one frame; the rest wait in the due-time queue |
 
 ### Clamped Minimums
 
@@ -170,7 +172,7 @@ The server-side `IngressOperation` codes are an implementation detail; `ItemOper
 | `Unknown` | 0 | Unclassified |
 | `Rejected` | 1 | Validation refused the request; nothing changed |
 | `Throttled` | 2 | Ingress debounce or in-flight guard refused it |
-| `ServerBusy` | 3 | The async worker refused admission; the work runs on the thread-pool fallback, so the **outcome is unknown** rather than failed |
+| `ServerBusy` | 3 | The async worker is over its backpressure threshold; the work is still admitted behind the backlog (or, with the worker not running, on the bounded fallback), so the **outcome is unknown** rather than failed |
 
 The message carries no item identity — only the operation, the reason, and the slot indices the client itself sent. It is an instruction to resync those slots, never a source of truth about them.
 
@@ -207,7 +209,7 @@ There are **no equipment broadcast handlers**. Outbound, the system sends `Equip
 | `TryGrantItem(character, item, container)` | Places a granted item, locks its slot until the database mints an identity, and broadcasts it to the owner with id 0 so the client shows it as pending |
 | `TryPersistGrantedItems(character, modifiedItems, container, operation)` | Persists a set of items an external system placed |
 | `PersistInventoryChanges(character, changed, removed)` | One batch of row updates plus real deletes; the target of `ServerItemHooks.InventoryChanged` |
-| `CaptureDespawnFlush(character, lease)` | Captures the logout snapshot **while the character is still resident** and returns the work as a `Func<Task>`. `CharacterSystem` awaits it before releasing the session, so it is ordered against the hand-off rather than racing it on another lane |
+| `CaptureDespawnFlush(character, lease)` | Captures the logout snapshot **while the character is still resident** and returns the work as a `Func<Task<ItemWriteOutcome>>`. `CharacterSystem` awaits it before releasing the session, so it is ordered against the hand-off rather than racing it on another lane, and acts on the outcome: `Retry` keeps the claim and the flush is run again (a bounded retry, then the pending-flush queue) until it lands, `NotOwned` stops everything, `Written`/`Superseded`/`Rejected` let the release go ahead. The work may be run any number of times: it is a snapshot, so a rerun restates the same rows or is superseded |
 | `TryRunExchange(first, second, applyOnMainThread, onFinished, operation)` | Two-party exchange; trade rides this |
 | `NotifyInventorySlots(character, set, emptied)` | Tells the owner what a set of slots now holds |
 | `SwapContainerItems(...)` | Same-container and cross-container swap primitives |
@@ -260,11 +262,15 @@ For an unequip the owner is also sent `EquipmentUnequipItemBroadcast` naming the
 
 The two-party path trade rides. `RunExchangeAsync` runs on a worker with two hops to the main thread, and the ordering is the whole design: take the row locks, **then** apply to memory on the main thread, **then** write, **then** commit. The lane key is the lower of the two character ids, so two exchanges between the same pair queue behind each other; ordering against every other write for either character is the row locks' job, not the lane's.
 
+Each leg's attribute sheet (`ItemExchangeLeg.PersistAttributes`) is written exactly as memory holds it at the capture: the caller applies every payment AND every credit in the apply hop. A leg used to carry its credit separately, folded into the written row while memory received it only after the commit — which let any other capture of that attribute in the window overwrite the credited row — and had to insist that row land whole (`AttributesMustApplyWhole`, now gone). Trade holds the credit instead so a refusal can still take it back exactly; see the trade system's README. Every batch's attribute rows now go through `RequireAttemptedWrite`: a row superseded by a newer capture of the same memory counts as written.
+
 `PostMainThreadAsync` waits out a full main-thread queue rather than dropping the action — an exchange that cannot reach the main thread cannot finish, and a finish that never arrives leaves a trade window open with its slots locked. Every exit path finishes on the main thread exactly once, and `FinishExchangeOnMainThread` releases the slot locks the run took.
 
 ### Periodic Item Snapshot
 
-`SnapshotAllResidentCharacterItems` runs every `itemSnapshotIntervalSeconds` and writes a full snapshot for every resident character, plus any lingering combat-logout bodies (`CollectLingeringCharacters`).
+`DriveItemSnapshotCycle` visits every resident character — plus any lingering combat-logout bodies (`CollectLingeringCharacters`) — once per `itemSnapshotIntervalSeconds`, spread across the interval: the interval is cut into one-second slices and each character takes its turn in the slice its id falls in (`ItemSnapshotSliceOf`). On its turn a character is snapshotted only if its containers differ from what the database was last confirmed to hold (`ItemSnapshotContent.Matches` against the journal's confirmed record), if it holds an item with no identity yet, or if there is no confirmed record; and never while a snapshot of it is still queued (`ItemWriteJournal.TryMarkSnapshotOutstanding`).
+
+The comparison is of content, not a dirty flag, on purpose: the snapshot exists to backstop writes some path forgot to make, so it must not depend on every path remembering to raise a flag. The confirmed record is retired by every sequence claim (`TryClaimSequence`) and recorded only by a snapshot whose sequence is still the character's newest, and every write of `character_item` for a resident passes that claim — so the record never describes a database that something else has since changed. It used to rewrite every resident's items on one frame every interval (about 75,000 deletes and as many inserts a minute at 500 residents holding 150 items).
 
 Before it existed, the incremental writes were the *only* record of a character's items — neither the periodic character save nor the logout save touched inventory, bank or equipment — so an incremental write that was silently rejected was permanent loss at the next login rather than a glitch. The snapshot downgrades every such failure to something that survives at most one interval.
 
@@ -289,10 +295,10 @@ Three details are load-bearing:
 
 - Validation failures: no state change, and an `ItemOperationFailedBroadcast` with `Rejected` from the handler's `finally`.
 - Ingress refusal: `Throttled`.
-- Enqueue refusal: the work still runs on the thread-pool fallback, so the client is told `ServerBusy` — outcome unknown, not failed.
+- Enqueue over the worker's threshold: the work is still admitted behind the backlog (`IAsyncWorkerData.EnqueueRequired`), so the client is told `ServerBusy` — outcome unknown, not failed.
 - Mutation success: the client receives the original success broadcast payload (or, for a merge, set-slot/remove messages).
 - Database rollback: memory is **not** rolled back; `RequestReconcile` schedules a repair snapshot with backoff, and the rolled-back batch is never retried.
-- Ownership refusal (`AssertOwnershipAsync` fails): deliberately **not** reconciled. Another server is authoritative for that character; rewriting this server's copy over its state is the duplication the guard exists to prevent.
+- Ownership refusal (`AssertOwnershipAsync` fails): deliberately **not** reconciled. Another server is authoritative for that character; rewriting this server's copy over its state is the duplication the guard exists to prevent. A batch captured under a claim that has since been released is refused the same way (`Forbidden` → `ItemWriteOutcome.NotOwned`): every assertion used to pass `allowUnclaimed: true`, so a batch run a moment after the release landed on the released character, over the rows the next load reads and anything written to it offline. The departure flush is unaffected because it runs before its own release.
 - Superseded batches are skipped with a debug log naming the operation, character and sequence.
 - Cross-container swap exceptions: both containers are rolled back in memory before anything is captured.
 
@@ -321,14 +327,14 @@ Three details are load-bearing:
 | Ingress debounce | Send rapid consecutive requests for the same operation; confirm excess requests return `Throttled` |
 | Global rate limit | Send different operations faster than 15 ms apart from the same connection; confirm `Throttled` |
 | Ingress guard sweep | Wait for the sweep interval; confirm stale guard entries are removed without errors |
-| Periodic snapshot | Wait `itemSnapshotIntervalSeconds`; confirm every resident character's three containers are written in one transaction and orphan rows are pruned |
+| Periodic snapshot | Change a character's items and wait `itemSnapshotIntervalSeconds`; confirm its three containers are written in one transaction and orphan rows are pruned, and that a character whose items did not change is not written |
 | Snapshot prune | Empty a character's bank, wait for a snapshot; confirm the bank rows are removed rather than lingering |
 | Reconcile after rollback | Force a batch to fail at the database; confirm memory is unchanged and a repair snapshot follows with backoff |
 | Ownership refusal | Let another server claim the character mid-write; confirm the batch is refused, logged, and **not** reconciled |
 | Identity write-back | Grant an item; confirm the client first sees id 0 with the slot locked, then the slot unlocks and re-sends with the assigned id |
 | Logout flush ordering | Disconnect a character; confirm `CaptureDespawnFlush` runs before the session release, not on a separate lane |
 | Exchange | Run a trade; confirm row locks precede the memory apply and the finish runs on the main thread exactly once |
-| Persistence backpressure | Saturate the async work queue; confirm the client receives `ServerBusy` and the work still completes on the fallback |
+| Persistence backpressure | Saturate the async work queue; confirm the client receives `ServerBusy` and the work still completes behind the backlog |
 | Deinitialize cleanup | Trigger deinitialize; confirm handlers are unregistered, the installed delegates cleared, the ingress guard cleared and the write journal cleared |
 
 ## Flow Diagram
@@ -370,7 +376,11 @@ EnqueueItemBatch → EnqueuePersistence(characterID)
                                              ├─ attribute upserts
                                              ├─ CommitAsync
                                              │    └─ failure → RequestReconcile
-                                             └─ TryEnqueueMainThread
+                                             ├─ snapshot (not a departure flush):
+                                             │    RecordSnapshotConfirmed
+                                             ├─ PostMainThreadAsync (identities; none
+                                             │    for a departure flush)
+                                             └─ returns ItemWriteOutcome
 main thread: ApplyAssignedIdentities
   └─ write ids onto live Items, unlock slots, re-broadcast
 ```
@@ -469,12 +479,16 @@ TryRunExchange(first, second, applyOnMainThread, onFinished, operation)
 OnUpdate(deltaTime)
 │
 ├─ IngressGuard.Sweep(ingressSweepIntervalSeconds, ingressEntryTtlSeconds, ingressSweepMaxRemovals)
-├─ itemSnapshotTimer elapsed:
-│    ├─ SnapshotAllResidentCharacterItems
-│    │    └─ per character: CaptureSnapshotBatch (all three containers, one sequence,
+├─ DriveItemSnapshotCycle (the slices that came due this frame)
+│    ├─ per character in the slice: SnapshotCharacterItemsIfChanged
+│    │    ├─ skip while a snapshot of it is queued (one outstanding snapshot per character)
+│    │    ├─ skip when its containers match the confirmed record (ItemSnapshotContent.Matches)
+│    │    └─ else CaptureSnapshotBatch (all three containers, one sequence,
 │    │         one transaction, containers it read named explicitly)
-│    └─ itemWriteJournal.PruneDeparted(DepartedWatermarkRetention)
+│    └─ once per full interval: itemWriteJournal.PruneDeparted(DepartedWatermarkRetention)
 ├─ DrainReconcileRequests → repair snapshots for characters whose write rolled back
+│    (a due-time queue, at most MaxReconcileCapturesPerFrame a frame; a request for a
+│     character with a snapshot already queued is deferred, not dropped)
 └─ DrainMainThreadQueue<ICharacterInventorySystemMainThreadQueueData>(maxIdentityWriteBacksPerFrame)
 ```
 
@@ -513,6 +527,7 @@ CharacterInventory/
 ├── CharacterInventorySystemMainThreadQueueData.cs # Per-system main-thread queue (identity write-backs,
 │                                                  #   exchange hops)
 ├── ItemContainerMapping.cs                        # InventoryType ↔ ItemContainerType casts, in one place
+├── ItemSnapshotContent.cs                         # Confirmed-snapshot content comparison for the periodic skip
 └── README.md
 ```
 
@@ -522,6 +537,7 @@ CharacterInventory/
 - `Server/Core/World/SceneServer/CharacterInventory/ICharacterInventorySystemRuntimeData.cs`
 - `Server/Core/World/SceneServer/CharacterInventory/ICharacterInventorySystemMainThreadQueueData.cs`
 - `Server/Core/World/SceneServer/CharacterInventory/ItemExchangeLeg.cs`
+- `Server/Core/World/SceneServer/CharacterInventory/ItemWriteOutcome.cs`
 
 ### Inheritance Hierarchy
 

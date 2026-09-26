@@ -223,6 +223,9 @@ namespace FishMMO.UnitTests
 				/* Filing a player report changes no game state, and the reporter is often dead or
 				 * stunned by the person they are reporting (issue #252). */
 				{ "Implementation/World/SceneServer/Chat/ChatSystem.ReportPlayer.cs", "files a support ticket" },
+				/* Reading a leaderboard page is a database read that changes nothing and leads to
+				 * nothing, and a dead or stunned player may still look (issue #261). */
+				{ "Implementation/World/SceneServer/Leaderboard/LeaderboardSystem.cs", "reads a leaderboard page" },
 			};
 
 		[Test]

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.WorldServer;
 
@@ -23,6 +24,21 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <inheritdoc />
 		public DateTime? ShutdownAtUtc { get; set; }
 
+		/// <summary>1 while a heartbeat pulse is in flight; 0 when idle.</summary>
+		private int pulseInFlight;
+
+		/// <inheritdoc/>
+		public bool TryBeginPulse()
+		{
+			return Interlocked.CompareExchange(ref pulseInFlight, 1, 0) == 0;
+		}
+
+		/// <inheritdoc/>
+		public void EndPulse()
+		{
+			Interlocked.Exchange(ref pulseInFlight, 0);
+		}
+
 		/// <summary>
 		/// Initializes the world server runtime data container.
 		/// </summary>
@@ -31,6 +47,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			ID = 0;
 			IsLocked = false;
 			ShutdownAtUtc = null;
+			Interlocked.Exchange(ref pulseInFlight, 0);
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -42,6 +59,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			ID = 0;
 			IsLocked = false;
 			ShutdownAtUtc = null;
+			Interlocked.Exchange(ref pulseInFlight, 0);
 		}
 
 		/// <summary>

@@ -8,6 +8,18 @@
 
 #include "webtransport_api.h"
 
+/* Internal functions shared between this library's own source files.
+ * The library is linked without -fvisibility=hidden, so every non-static
+ * function lands in the .so's dynamic symbol table; WT_HIDDEN keeps new
+ * internal helpers out of it, so the exported surface stays exactly the
+ * WT_API one plus what earlier revisions already exported.  (Windows builds
+ * use WINDOWS_EXPORT_ALL_SYMBOLS and export every function regardless.) */
+#if defined(__GNUC__) && !defined(_WIN32)
+  #define WT_HIDDEN __attribute__((visibility("hidden")))
+#else
+  #define WT_HIDDEN
+#endif
+
 #include <msquic.h>
 #include <stdbool.h>
 #include <string.h>

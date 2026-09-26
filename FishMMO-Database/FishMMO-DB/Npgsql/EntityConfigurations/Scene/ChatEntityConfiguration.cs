@@ -55,13 +55,14 @@ namespace FishMMO.Database.Npgsql.Entities
 			// Composite index for character chat history
 			builder.HasIndex(e => new { e.CharacterID, e.TimeCreated });
 
-			// Composite index for chat pagination (FetchAsync hot path)
-			// Covers WHERE time_created >= @lastFetch AND id > @lastPosition ORDER BY time_created, id
+			// Composite index for the chat pump (ChatService.FetchPumpAsync hot path)
+			// Covers WHERE time_created >= @windowStart [AND (time_created, id) > (@t, @id)] ORDER BY time_created, id
 			builder.HasIndex(e => new { e.TimeCreated, e.ID });
 
-			// Composite index for scene-server local channel filtering (FetchAsync hot path)
-			// Covers WHERE scene_server_id = @sceneServerId filtering by channel
-			// Used to exclude local messages: localChannels.Contains(c.Channel) && c.SceneServerID == sceneServerId
+			// Composite index on (scene_server_id, channel), from the removed ChatService.FetchAsync's
+			// local-message exclusion. The pump (FetchPumpAsync) now range-scans (time_created, id)
+			// above and applies its echo rule, NOT (scene_server_id = @sceneServerId AND channel IN
+			// (World, Trade, Party, Guild, Tell)), as a filter on that scan.
 			builder.HasIndex(e => new { e.SceneServerID, e.Channel });
 
 			/* One row per request. A write retried after its reply was lost (the connection dropped

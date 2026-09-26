@@ -49,7 +49,8 @@ All database work is asynchronous. Main-thread mutations (FishNet broadcasts, ch
 - Auto-reconnect through world server load balancing to the scene server hosting the target channel (SceneHandle-aware routing)
 - Per-connection, per-operation ingress guard with configurable debounce and in-flight gating (`RequestList`, `SelectChannel`)
 - Bounded ingress guard sweep with configurable TTL, interval, and max removals
-- Per-connection channel switch cooldown with configurable interval and bounded dictionary (DoS defense)
+- Per-connection channel switch cooldown with configurable interval and bounded dictionary (DoS defense), timed on `MonotonicClock` so a stepped host clock cannot hold every entry inside its window
+- Scene-server liveness judged by `SceneServerData.PulseAgeSeconds` — the pulse's age as the database measured it when the row was read — with the world server's `SceneServerPulseStaleSeconds` threshold (60 s); never by subtracting `LastPulse` from this host's clock
 - Hard cap on cooldown dictionary size (`maxCooldownEntries`) rejecting new entries when saturated
 - Periodic cleanup of expired cooldown entries with bounded removal per sweep
 - Immediate cooldown entry removal on client disconnect
@@ -359,7 +360,7 @@ OnUpdate(deltaTime)
        └── When elapsed:
               ├─ Reset timer to cooldownCleanupIntervalSeconds
               ├─ CleanupExpiredCooldownEntries()
-              │    └── Remove entries where (UtcNow - lastSwitch) > cooldownSeconds
+              │    └── Remove entries where (MonotonicClock.NowSeconds - lastSwitch) > cooldownSeconds
               │         (bounded by cooldownCleanupMaxRemovals)
               └─ SweepSceneCaches()
                      ├─ AvailableSceneCache.SweepExpired(ttl, maxScan=64, maxRemove=32)
@@ -408,7 +409,7 @@ RuntimeDataContainer
 | Property | Type | Purpose |
 |---|---|---|
 | `IngressGuard` | `IngressGuard` | Per-connection, per-operation debounce and in-flight gating |
-| `ChannelSwitchCooldownByClientId` | `Dictionary<int, DateTime>` | Tracks last channel switch time per client for cooldown enforcement |
+| `ChannelSwitchCooldownByClientId` | `Dictionary<int, double>` | Tracks each client's last channel switch attempt, in `MonotonicClock` seconds, for cooldown enforcement |
 | `NextCooldownCleanup` | `float` | Countdown until next stale cooldown dictionary cleanup sweep |
 | `AvailableSceneCache` | `TimedCache<string, IReadOnlyList<SceneData>>` | Write-through TTL cache of `FetchAvailableAsync` results keyed by `worldServerID\|sceneName` |
 | `SceneServerAddressCache` | `TimedCache<long, ushort>` | Write-through TTL cache of scene server ports keyed by scene server ID; used only to prove the host process is alive |

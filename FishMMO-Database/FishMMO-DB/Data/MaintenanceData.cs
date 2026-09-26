@@ -105,6 +105,19 @@ namespace FishMMO.Database.Data
 		/// <summary>What happened in the end, in words, for whoever reads this later.</summary>
 		public string Outcome { get; set; }
 
+		/// <summary>
+		/// Seconds until <see cref="DeadlineUtc"/>, measured by the database clock when this was
+		/// read; zero or negative once it has passed.
+		/// </summary>
+		/// <remarks>
+		/// Measured by the clock the deadline was planned on and every server counts down against,
+		/// never by the reader's. The panel used to subtract its own <c>DateTime.UtcNow</c>, so a
+		/// panel host running slow showed a countdown with time still on it for servers that had
+		/// already stopped. A reader that wants a live countdown anchors this on its own clock at
+		/// the moment the reply arrived.
+		/// </remarks>
+		public double SecondsUntilDeadline { get; set; }
+
 		/// <summary>Every server in the window, with its own progress.</summary>
 		public IReadOnlyList<MaintenanceTargetData> Targets { get; set; } = Array.Empty<MaintenanceTargetData>();
 	}
@@ -180,6 +193,18 @@ namespace FishMMO.Database.Data
 
 		/// <summary>When it last pulsed, or null once its registration is gone.</summary>
 		public DateTime? ObservedLastPulseUtc { get; set; }
+
+		/// <summary>
+		/// Seconds since <see cref="ObservedLastPulseUtc"/>, measured by the database clock when this
+		/// was read; never negative, and null exactly when that is.
+		/// </summary>
+		/// <remarks>
+		/// The pulse is stamped by the database, so its age is taken on the database's clock too.
+		/// The panel used to subtract its own <c>DateTime.UtcNow</c>, and a panel host a minute fast
+		/// flagged every healthy target as not pulsing. Compare it with
+		/// <c>MaintenanceService.StaleAfterSeconds</c> through <c>MaintenanceService.IsSilent</c>.
+		/// </remarks>
+		public double? ObservedPulseAgeSeconds { get; set; }
 
 		/// <summary>Whether its registration row still exists at all.</summary>
 		public bool ObservedRegistered { get; set; }

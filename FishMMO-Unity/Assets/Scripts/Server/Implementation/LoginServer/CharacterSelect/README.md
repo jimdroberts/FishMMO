@@ -21,7 +21,7 @@
 
 The Character Select system manages the character list, delete, and select workflows on the login server. It keeps the network handler path lightweight by queuing database-heavy work onto `AsyncWorkerData`, then marshals all FishNet broadcast responses back onto the Unity main thread through a dedicated main-thread queue container (`CharacterSelectSystemMainThreadQueueData`).
 
-Per-connection in-flight gating prevents a single client from queuing multiple concurrent operations, and a post-release cooldown (`RequestCooldownMilliseconds = 2000`) prevents rapid sequential spam. List requests have their own gate and cooldown (`InFlightListRequests` / `NextAllowedListRequestUtc`), separate from select/delete: sharing one pair meant the list request the client issues on arrival armed a two-second cooldown that then refused the player's very next click on Play. Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) avoids frame spikes.
+Per-connection in-flight gating prevents a single client from queuing multiple concurrent operations, and a post-release cooldown (`RequestCooldownMilliseconds = 2000`) prevents rapid sequential spam. List requests have their own gate and cooldown (`InFlightListRequests` / `NextAllowedListRequestSeconds`), separate from select/delete: sharing one pair meant the list request the client issues on arrival armed a two-second cooldown that then refused the player's very next click on Play. Bounded main-thread response draining (`maxMainThreadResponsesPerFrame`) avoids frame spikes.
 
 ### Threading Model
 
@@ -75,8 +75,8 @@ All request flows guarantee a response to the client, even on failure, to preven
 - **Character selection** — atomic Unit of Work transaction with defense-in-depth ownership verification and `SetSelectedAsync`
 - **World server routing** — after successful selection, fetches active world servers via `IWorldServerService.FetchActiveAsync` and sends `ServerListBroadcast`
 - **Per-connection in-flight gating** — `ConcurrentDictionary<int, byte>` prevents duplicate concurrent operations per connection
-- **Post-release cooldown** — 2-second gap between successive requests enforced via `NextAllowedRequestUtc`, with `NextAllowedListRequestUtc` tracking list requests independently
-- **Separate list gate** — list requests use `InFlightListRequests` / `NextAllowedListRequestUtc` so the automatic list fetch on arrival cannot throttle the deliberate selection that immediately follows it
+- **Post-release cooldown** — 2-second gap between successive requests enforced via `NextAllowedRequestSeconds`, with `NextAllowedListRequestSeconds` tracking list requests independently; both in `MonotonicClock` seconds, so a host clock step cannot stretch or skip them
+- **Separate list gate** — list requests use `InFlightListRequests` / `NextAllowedListRequestSeconds` so the automatic list fetch on arrival cannot throttle the deliberate selection that immediately follows it
 - **Single-character-in-world enforcement** — `ICharacterService.FetchInWorldCharacterAsync` refuses a selection while another character on the account is still in the world; the read fails closed
 - **Bounded main-thread draining** — configurable `maxMainThreadResponsesPerFrame` to time-slice response dispatch
 - **Character name validation** — `Authentication.IsAllowedCharacterName` check on delete and select before any async work
@@ -143,9 +143,9 @@ This is an integrated module within the FishMMO server framework. No separate in
 | Property | Type | Purpose |
 |----------|------|---------|
 | `InFlightRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate preventing duplicate concurrent select/delete operations |
-| `NextAllowedRequestUtc` | `ConcurrentDictionary<int, DateTime>` | Per-connection post-release cooldown timestamp for select/delete; enforces `RequestCooldownMilliseconds` |
+| `NextAllowedRequestSeconds` | `ConcurrentDictionary<int, double>` | Per-connection post-release cooldown for select/delete, in `MonotonicClock` seconds; enforces `RequestCooldownMilliseconds` |
 | `InFlightListRequests` | `ConcurrentDictionary<int, byte>` | Per-connection in-flight gate for list requests, tracked separately from select/delete |
-| `NextAllowedListRequestUtc` | `ConcurrentDictionary<int, DateTime>` | Per-connection cooldown timestamp for list requests |
+| `NextAllowedListRequestSeconds` | `ConcurrentDictionary<int, double>` | Per-connection cooldown for list requests, in `MonotonicClock` seconds |
 
 **Thread Safety:** `ConcurrentDictionary` allows safe access from both network and worker threads.
 

@@ -223,9 +223,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <summary>True once the offered slots' locks were released for the apply.</summary>
 			public bool OfferLocksReleased;
 
-			/// <summary>Currency taken from each side in memory before the write; refunded on refusal.</summary>
-			public long FirstDeducted;
-			public long SecondDeducted;
+			/// <summary>
+			/// Both sides' payments taken and credits given (held) in memory at the apply; closed with
+			/// the outcome. Null when no currency moves or the apply never reached it.
+			/// </summary>
+			public TradeCurrencySettlement Currency;
 
 			/// <summary>The applied item exchange, or null when the apply aborted before mutating.</summary>
 			public TradeExchange.Applied Applied;

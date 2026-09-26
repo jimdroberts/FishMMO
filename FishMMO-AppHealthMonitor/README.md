@@ -6,9 +6,12 @@ manager" for headless Unity server builds (LoginServer, WorldServer,
 SceneServer) and any auxiliary processes (IPFetch, Patcher API, etc.) when a
 full systemd/Docker setup isn't desired.
 
-The supervisor performs **process liveness, TCP/UDP/WebSocket port probes, CPU
-and memory thresholds, exponential-backoff restarts, and a circuit breaker** to
-stop hammering a permanently broken process.
+The supervisor performs **process liveness, TCP/UDP port probes, a database
+pulse check for the game servers, CPU and memory thresholds, exponential-backoff
+restarts, and a circuit breaker** to stop hammering a permanently broken
+process. With database credentials it also joins the **control plane**: it
+reports what it supervises and carries out Start/Stop/Restart commands an
+operator queued for its host.
 
 ---
 
@@ -24,6 +27,8 @@ stop hammering a permanently broken process.
 - [Console Commands](#console-commands)
 - [Build & Run](#build--run)
 - [Headless Mode](#headless-mode)
+- [Database Pulse Check](#database-pulse-check)
+- [Control Plane](#control-plane)
 - [Known Limitations](#known-limitations)
 - [Flow Diagram](#flow-diagram)
 
@@ -37,8 +42,9 @@ application. Each `HealthMonitor` launches its process, waits for the configured
 initial-health-check delay, then enters a polling loop that:
 
 1. Verifies the process is still alive.
-2. Probes the configured port(s) using `TcpHealthChecker`, `UdpHealthChecker`,
-   or `WebSocketHealthChecker` (selected by `PortType`).
+2. Runs the configured checks (selected by `PortType`): `TcpHealthChecker`,
+   `UdpHealthChecker`, or `PulseHealthChecker`, which reads the game server's
+   heartbeat from the database (see [Database Pulse Check](#database-pulse-check)).
 3. Optionally samples CPU and memory usage and compares to configured
    thresholds (with a tolerance counter to ignore transient spikes).
 4. On consecutive failures, kills the process gracefully (with a force-kill
@@ -75,16 +81,18 @@ inspect status and intervene without restarting the supervisor itself.
 FishMMO-AppHealthMonitor/AppHealthMonitor/
 ├── Program.cs                # Entry point; builds DaemonOrchestrator + CommandHandler
 ├── DaemonOrchestrator.cs     # Manages monitor lifecycle, start/stop signalling, shutdown
+├── DaemonControlPlane.cs     # Database control plane: host/app status rows, command queue
+├── ISupervisionHost.cs       # Seam a monitor uses to rejoin the running cycle on revival
 ├── CommandHandler.cs         # Interactive console command loop
 ├── ConsoleCommand.cs         # record: Name, Description, Func<Task> Action
 ├── HealthMonitor.cs          # One per app — launch / probe / restart loop
 ├── HealthMonitorStatus.cs    # Snapshot DTO used by 'status' command
-├── HealthCheckerFactory.cs   # Selects TCP/UDP/WebSocket probe per PortType
-├── IHealthChecker.cs         # Probe contract: Task<bool> CheckAsync(...)
+├── HealthCheckerFactory.cs   # Selects the check per PortType
+├── IHealthChecker.cs         # Check contract: Task<bool> IsResponsiveAsync(...)
 ├── TcpHealthChecker.cs       # TCP connect probe
-├── UdpHealthChecker.cs       # UDP send/receive probe
-├── WebSocketHealthChecker.cs # WebSocket upgrade probe
-├── PortType.cs               # enum: TCP, UDP, WebSocket
+├── UdpHealthChecker.cs       # UDP send probe
+├── PulseHealthChecker.cs     # Game-server heartbeat age, read from the database
+├── PortType.cs               # enum: TCP, UDP, DatabasePulse
 ├── AppConfig.cs              # Per-application config + validation
 └── appsettings.json          # Headless flag + Applications[] array
 ```
@@ -96,10 +104,12 @@ FishMMO-AppHealthMonitor/AppHealthMonitor/
 | Component | Responsibility |
 |---|---|
 | `DaemonOrchestrator` | Top-level lifecycle. Builds the per-app `HealthMonitor` set, exposes `TrySignalStart()`, `CancelCurrentMonitoring()`, `GetActiveMonitorStatuses()`, and `Shutdown()`. |
+| `DaemonControlPlane` | Optional. Heartbeats this host's row, reports a status row per supervised app, and claims and executes the commands queued for this host (see [Control Plane](#control-plane)). `TryCreate` returns null, and the daemon supervises as before, when no database credentials are configured or `ControlPlane:Enabled` is false. |
 | `HealthMonitor` | Owns one child process. Implements launch, settle-delay, probe loop, threshold breach detection, graceful + forced kill, and exponential-backoff restart with a circuit breaker. |
 | `HealthMonitorStatus` | Read-only snapshot for the `status` console command (name, PID, state, restart counters, failure counters). |
 | `HealthCheckerFactory` | Returns the right `IHealthChecker` for each `PortType` declared in the app config. |
-| `IHealthChecker` / `Tcp`/`Udp`/`WebSocket` checkers | Stateless probes invoked per cycle. |
+| `IHealthChecker` / `Tcp`/`Udp` checkers | Stateless probes invoked per cycle. |
+| `PulseHealthChecker` | Reads a game server's pulse age from the database by tier and registered name. Fails open. |
 | `AppConfig` | Strongly-typed app entry. `TryApplyDefaultsAndValidate(out error)` enforces sane minimums (e.g., `CheckIntervalSeconds >= 5`), resolves the exe path, and normalizes `HealthCheckHost`. |
 | `CommandHandler` | Cancellable `ReadLineAsync` loop; dispatches `start`, `stop`, `status`, `force-kill`, `force-restart`, `shutdown`, `exit`, `help`. |
 | `ConsoleCommand` | `record` of `(Name, Description, Func<Task> Action)` registered at construction. |
@@ -127,8 +137,11 @@ The file has two top-level fields:
       "Name": "LoginServer",
       "ApplicationExePath": "/path/to/GameServer",
       "LaunchArguments": "LOGIN",
-      "MonitoredPort": 7770,
-      "PortTypes": [ "TCP", "UDP" ],
+      "MonitoredPort": 0,
+      "PortTypes": [ "DatabasePulse" ],
+      "PulseTier": "login",
+      "PulseServerName": "LoginServer",
+      "PulseStaleSeconds": 90,
 
       "CheckIntervalSeconds": 30,
       "LaunchDelaySeconds": 2,
@@ -148,7 +161,6 @@ The file has two top-level fields:
       "CircuitBreakerFailureThreshold": 3,
 
       "PortCheckTimeoutMs": 2000,
-      "WebSocketCheckTimeoutMs": 5000,
       "HealthCheckHost": "127.0.0.1"
     }
   ]
@@ -163,7 +175,10 @@ The file has two top-level fields:
 | `ApplicationExePath` | required | Absolute or relative path to the executable; resolved via `Path.GetFullPath` and verified to exist. |
 | `LaunchArguments` | `""` | Optional command-line arguments. |
 | `MonitoredPort` | `0` | `0` means **process-only** monitoring (no port probe). |
-| `PortTypes` | `[]` | Subset of `TCP`, `UDP`, `WebSocket`. Empty = process-only. |
+| `PortTypes` | `[]` | Subset of `TCP`, `UDP`, `DatabasePulse`. Empty = process-only. Every configured check must pass. The game servers use `DatabasePulse`: WebTransport is QUIC over UDP, so a TCP probe fails against a healthy server and a UDP send succeeds against a dead one. |
+| `PulseTier` | required with `DatabasePulse` | `login`, `world` or `scene`: which server table to read. |
+| `PulseServerName` | `Name` | The name the server registers under (its own `ServerName` setting). Matched by name, not address or port. |
+| `PulseStaleSeconds` | `90` | Pulse age, as the database measures it, above which the server counts as down (three missed 30 s beats). |
 | `CheckIntervalSeconds` | min `5` | Probe interval. |
 | `LaunchDelaySeconds` | `0` | Wait this long **after** launching *this* app before launching the *next* one in the list (lets the previous app initialize). Not applied to the last app. |
 | `InitialHealthCheckDelaySeconds` | min `1` | Delay before the first probe after launch — lets the process fully boot. |
@@ -177,8 +192,7 @@ The file has two top-level fields:
 | `MaxRestartDelaySeconds` | min `1` | Cap for exponential backoff. |
 | `MaxRestartAttempts` | min `1` | After this many restarts, the circuit breaker may trip. |
 | `CircuitBreakerFailureThreshold` | min `1` | Consecutive failures across launches that trip the breaker. |
-| `PortCheckTimeoutMs` | min `1` | TCP / UDP probe timeout. |
-| `WebSocketCheckTimeoutMs` | min `1` | WebSocket probe timeout (the upgrade handshake needs more time than a raw TCP connect). |
+| `PortCheckTimeoutMs` | min `1` | TCP / UDP probe timeout. A pulse read gets the larger of this and 5 s, since it is a database round trip, not a socket connect. |
 | `HealthCheckHost` | `"127.0.0.1"` | Probe target host; must match the interface the app actually binds to. |
 
 `AppConfig.TryApplyDefaultsAndValidate(out string error)` runs at startup and
@@ -272,6 +286,51 @@ sudo systemctl enable --now fishmmo-apphealthmonitor
 
 ---
 
+## Database Pulse Check
+
+`PulseHealthChecker` asks the database how long ago the server last pulsed
+(`IServerBoardService.FetchPulseAgeAsync`). The age is measured by the database,
+which stamped the pulse, so this host's clock plays no part: subtracting a local
+`DateTime.UtcNow` from the stamp made a daemon host running fast restart every
+healthy server on every check, and one running slow keep a dead server
+"healthy" for the size of the lag.
+
+**It fails open.** A database that cannot be read, a read that times out, or a
+name with no registered row reports healthy, with a log line. During a database
+outage every pulse looks stale at once, and failing closed would have every
+daemon restart every server together; a server still starting has not
+registered yet, and killing it mid-start would make that permanent. The cost is
+that a genuinely dead server is not caught while the database is unreadable.
+
+Without database credentials the pulse check cannot run: `HealthCheckerFactory`
+logs a warning for each application configured with it and skips the check, and
+the application is still supervised by its process and any other checks.
+
+---
+
+## Control Plane
+
+With database credentials, and unless `ControlPlane:Enabled` is `false`, the
+daemon polls every `ControlPlane:PollSeconds` (default 10, kept within 5–300):
+it heartbeats its host row, reports one status row per supervised application,
+and claims up to 10 commands queued for **its own host**. A command is a verb
+from a closed set (Start / Stop / Restart) and the **name** of an application
+this daemon already supervises. The name is resolved against the daemon's own
+`appsettings.json`; anything else is refused. No path, argument or shell ever
+comes from the database, so write access to the database can restart a FishMMO
+process but cannot make a host run something new.
+
+**Expiry is judged without this host's wall clock.** Commands live five
+minutes. The claim returns the seconds each command has left as the database
+measured them in the claiming statement (`ExpiresInSeconds`), and the daemon
+counts them down on a monotonic clock anchored just before it sent the claim
+(`DaemonCommandExpiry`, FishMMO-DB), so any error is toward refusing. Comparing
+the command's `ExpiresUtc` with the local clock refused every command on a host
+running five minutes fast and ran stale ones on a host running slow. A command
+that expired before it could run is recorded as refused and nothing is done.
+
+---
+
 ## Known Limitations
 
 - **Single config file.** Hot-reload of `appsettings.json` is not supported —
@@ -311,7 +370,7 @@ flowchart TD
 
     Probe --> Alive{Process alive?}
     Alive -- no --> Restart
-    Alive -- yes --> Port[TCP / UDP / WS probe]
+    Alive -- yes --> Port[TCP / UDP probe or database pulse]
     Port --> Res[CPU / memory sample]
     Res --> OK{All within thresholds?}
     OK -- yes --> Probe

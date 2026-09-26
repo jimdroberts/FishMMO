@@ -521,12 +521,19 @@ namespace FishMMO.UnitTests
 		/// SOURCE assertions — the taunt needs a live AIController with aggression state. The
 		/// guarantee must not divide by the taunter's own vulnerability multiplier: it is transient
 		/// (gone on the first heal) while the granted points are permanent, so the discounted score
-		/// fell back under the previous top's ceiling the moment the tank was healed. And a taunt
-		/// that writes the table's FIRST entry must fire the combat-initiation edge itself, or the
-		/// first real hit sees a non-empty table and never initiates combat.
+		/// fell back under the previous top's ceiling the moment the tank was healed. And a taunt's
+		/// threat must be offered to the brain's combat-entry rule, so an idle NPC taunted without
+		/// a forced switch still turns on the taunter.
 		/// </summary>
+		/// <remarks>
+		/// F5 originally pinned a taunt firing the table's empty-to-non-empty edge itself, so it
+		/// could not consume the edge the first real hit needed. The hot-path audit of 2026-09-25
+		/// (H9) removed the edge: combat entry is now asked on every hit and every taunt and reads
+		/// the NPC's state, not the table's, so there is nothing left to consume. What this pins
+		/// now is that the taunt still goes through that rule, after its points land.
+		/// </remarks>
 		[Test]
-		public void Taunt_GuaranteeIsPermanent_AndTheEdgeIsNotConsumed()
+		public void Taunt_GuaranteeIsPermanent_AndItsThreatCanStartTheFight()
 		{
 			/* The ECA action is a shared shell; the arithmetic runs in the server brain. */
 			string action = ReadSource(
@@ -545,12 +552,12 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(body.Contains("float requiredPoints = ceilingScore + leadOverHighest;"),
 				"The guarantee clears the score ceiling at the taunter's multiplier floor of 1, so it survives any later heal.");
 
-			int wasEmpty = body.IndexOf("bool wasEmpty = !Aggression.HasAggression;", System.StringComparison.Ordinal);
 			int add = body.IndexOf("Aggression.AddPoints(taunter.ID, points);", System.StringComparison.Ordinal);
-			LogAssert.IsTrue(body.Contains("AggressionState?.OnCombatInitiated?.Invoke(taunter);"),
-				"A taunt that seeds the table must fire the empty-to-non-empty edge itself.");
-			LogAssert.IsTrue(wasEmpty >= 0 && add > wasEmpty,
-				"Detected before the points are added, like HandleDamaged does.");
+			int offer = body.IndexOf("OnThreatReceived(taunter);", System.StringComparison.Ordinal);
+			LogAssert.IsTrue(add >= 0 && offer > add,
+				"A taunt's threat must be offered to the combat-entry rule once its points have landed.");
+			LogAssert.IsFalse(body.Contains("bool wasEmpty"),
+				"Combat entry must not hang on the table's empty-to-non-empty edge any more.");
 		}
 
 		// ── Helpers ──────────────────────────────────────────────────────────────────

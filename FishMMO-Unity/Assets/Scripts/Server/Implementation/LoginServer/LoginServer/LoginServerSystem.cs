@@ -52,8 +52,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// </remarks>
 		[SerializeField] private float signingKeyRotationHours = 24.0f;
 
-		/// <summary>UTC timestamp when the currently active signing key was issued.</summary>
-		private DateTime signingKeyIssuedUtc;
+		/// <summary>
+		/// <see cref="MonotonicClock"/> seconds when the currently active signing key was issued.
+		/// The key's age is a local duration: on the wall clock a step forward rotated early and a
+		/// step back postponed rotation by the length of the step.
+		/// </summary>
+		private double signingKeyIssuedSeconds;
 
 		/// <summary>Guards against re-entrant rotation while a previous rotation is still in flight.</summary>
 		private int rotationInFlight;
@@ -63,6 +67,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// it is written to the database. Loaded once from configuration in <see cref="InitializeOnce"/>.
 		/// </summary>
 		private byte[] signingKeyKek;
+
+		/// <summary>Writes this process's bandwidth to the database once a minute. Null until initialised.</summary>
+		private ServerBandwidthRecorder bandwidthRecorder;
 
 		/// <summary>
 		/// Synchronous entry point. This system registers itself in the database, so it must be
@@ -241,7 +248,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Configure the authenticator for token issuance
-			signingKeyIssuedUtc = DateTime.UtcNow;
+			signingKeyIssuedSeconds = MonotonicClock.NowSeconds;
 			if (Server.NetworkWrapper.NetworkManager.ServerManager.GetAuthenticator() is ServerAuthenticator authenticator)
 			{
 				authenticator.TokenSigningKey = hmacKey;
@@ -324,6 +331,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 			{
 				periodicSystem.RegisterPeriodicCallback(PulseRate, OnPeriodicPulse);
 			}
+
+			// Bandwidth statistics for the Control Panel. See ServerBandwidthRecorder.
+			bandwidthRecorder = ServerBandwidthRecorder.TryStart(Server, ServerType.Login);
 
 			_ = Log.Debug("LoginServerSystem", $"Initialized (ServerID={runtimeData.ID}, Address={server.Address}:{server.Port}, PulseRate={PulseRate}s)");
 			return ServerComponentInitializationStatus.Initialized;
@@ -437,6 +447,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 					}
 				}
 			}
+
+			// Last, so deregistration has the shutdown budget first: a bounded final bandwidth sample.
+			bandwidthRecorder?.Stop();
+			bandwidthRecorder = null;
 		}
 
 		/// <summary>
@@ -452,9 +466,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			if (Server.DataContainerRegistry.TryGet<ILoginServerRuntimeData>(out var runtimeData))
 			{
-				if (!TryEnqueueAsyncWork(() => PulseAsync(runtimeData.ID)))
+				/* One heartbeat at a time. While the database is stalled a pulse can take longer
+				 * than the pulse interval, and each new one used to start regardless, piling
+				 * identical writes onto a database that was already not keeping up. The heartbeat
+				 * only has to land once per interval; a pulse skipped here is covered by the one
+				 * still running. The gate is released when that pulse finishes, or here when it
+				 * could not be queued at all. */
+				if (runtimeData.TryBeginPulse())
 				{
-					Log.Warning("LoginServerSystem", "Failed to enqueue pulse work item.");
+					if (!TryEnqueueAsyncWork(() => PulseAsync(runtimeData)))
+					{
+						runtimeData.EndPulse();
+						Log.Warning("LoginServerSystem", "Failed to enqueue pulse work item.");
+					}
 				}
 
 				// C6: Token signing key rotation. Inspects the age of the in-memory active key and
@@ -464,7 +488,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				// mechanism fails, key rotation also stops. Consider adding an independent rotation
 				// timer.
 				if (signingKeyRotationHours > 0f &&
-					(DateTime.UtcNow - signingKeyIssuedUtc).TotalHours >= signingKeyRotationHours &&
+					(MonotonicClock.NowSeconds - signingKeyIssuedSeconds) / 3600.0 >= signingKeyRotationHours &&
 					System.Threading.Interlocked.CompareExchange(ref rotationInFlight, 1, 0) == 0)
 				{
 					if (!TryEnqueueAsyncWork(() => RotateSigningKeyAsync(runtimeData.ID)))
@@ -529,7 +553,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					authenticator.AtomicSwapSigningKey(newHmacKey, keyResult.Data.ID, newTotpMasterKey);
 				}
 
-				signingKeyIssuedUtc = DateTime.UtcNow;
+				signingKeyIssuedSeconds = MonotonicClock.NowSeconds;
 				await Log.Debug("LoginServerSystem", $"Rotated token-signing key (ServerID={serverId}, NewKeyID={keyResult.Data.ID}).");
 			}
 			catch (Exception ex)
@@ -543,11 +567,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 		}
 
 		/// <summary>
-		/// Asynchronously sends a heartbeat pulse to the database.
+		/// Asynchronously sends a heartbeat pulse to the database, releasing the pulse gate when done.
 		/// </summary>
-		/// <param name="serverId">The login server's database ID.</param>
-		private async Task PulseAsync(long serverId)
+		/// <param name="runtimeData">This login server's runtime data; holds its ID and the pulse gate.</param>
+		private async Task PulseAsync(ILoginServerRuntimeData runtimeData)
 		{
+			long serverId = runtimeData.ID;
 			try
 			{
 				if (Server.Database?.ServiceRegistry == null ||
@@ -566,6 +591,10 @@ namespace FishMMO.Server.Implementation.LoginServer
 			catch (Exception ex)
 			{
 				await Log.Error("LoginServerSystem", $"Error during pulse: {ex}");
+			}
+			finally
+			{
+				runtimeData.EndPulse();
 			}
 		}
 	}

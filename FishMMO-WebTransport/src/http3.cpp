@@ -38,6 +38,7 @@
  */
 
 #include "http3.h"
+#include "stream_manager.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -1108,15 +1109,63 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
 /* Forward declaration — unlinks a stream context from the session list */
 void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx);
 
+/* Forward declaration — classifies streams parked before SETTINGS; called
+ * from the server control stream's START_COMPLETE (h3_send_only_stream_cb). */
+static void h3_server_replay_parked_streams(h3_session_t* h3);
+
 /* Forward declaration — h3_client_process_data is defined later and
  * called from h3_client_stream_cb when the client receives the server's
  * response on the CONNECT request stream. */
 int h3_client_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
 
+/* Unlink with the session lock already held (see h3_stream_ctx_unlink). */
+static void h3_stream_ctx_unlink_locked(h3_session_t* h3, h3_stream_ctx_t* sctx)
+{
+    h3_stream_ctx_t** pp = &h3->stream_ctx_list;
+    while (*pp) {
+        if (*pp == sctx) {
+            *pp = sctx->next;
+            sctx->next = NULL;
+            sctx->h3 = NULL;
+            if (h3->stream_ctx_count > 0) h3->stream_ctx_count--;
+            return;
+        }
+        pp = &(*pp)->next;
+    }
+}
+
+/* Deliver an event for a stream the native rescue handed to the stream
+ * manager (h3_stream_ctx_t.fwd), and release our context once msquic is
+ * done with the stream.  The stream manager's handler does the real work,
+ * exactly as if it had been installed with SetCallbackHandler — including
+ * StreamClose on SHUTDOWN_COMPLETE — so this only frees the h3 side. */
+static QUIC_STATUS h3_stream_forward(h3_stream_ctx_t* sctx, void* fwd,
+                                     HQUIC stream, QUIC_STREAM_EVENT* event)
+{
+    const bool done = event->Type == QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE;
+    QUIC_STATUS st = wt_stream_manager_stream_event(fwd, stream, event);
+    if (done) {
+        int expected = 0;
+        if (atomic_compare_exchange_strong(&sctx->freed, &expected, 1)) {
+            if (sctx->h3) h3_stream_ctx_unlink(sctx);
+            free(sctx->recv_buf);
+            free(sctx);
+        }
+    }
+    return st;
+}
+
 static QUIC_STATUS QUIC_API
 h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 {
     h3_stream_ctx_t* sctx = (h3_stream_ctx_t*)ctx;
+
+    /* Handed to the stream manager by the native rescue: every event goes
+     * there.  fwd never changes once set, so a lock-free read is enough to
+     * take this path; the cases below re-check under H3_LOCK wherever they
+     * would otherwise touch the buffer or free the context. */
+    void* fwd = atomic_ptr_load(&sctx->fwd);
+    if (fwd) return h3_stream_forward(sctx, fwd, stream, event);
 
     switch (event->Type) {
     case QUIC_STREAM_EVENT_RECEIVE: {
@@ -1126,44 +1175,69 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
 
         if (total == 0) return QUIC_STATUS_SUCCESS;
 
-        /* Cap at 64KB for HTTP/3 frames.
-         * Use overflow-safe check: ensure total doesn't push us past 64KB.
-         * (total > 65536) catches the large-payload overflow case;
-         * (recv_offset > 65536 - total) catches the gradual-accumulation case. */
-        if (total > 65536 || sctx->recv_offset > 65536 - total) {
-            MsQuic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-            return QUIC_STATUS_ABORTED;
-        }
-
-        uint32_t needed = sctx->recv_offset + total;
-        if (needed > sctx->recv_capacity) {
-            uint32_t new_cap = sctx->recv_capacity ? sctx->recv_capacity * 2 : 4096;
-            if (new_cap < needed) new_cap = needed;
-            uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, new_cap);
-            if (!newbuf) {
-                /* realloc failure under memory pressure — the original
-                 * buffer is still valid (realloc semantics) but is too
-                 * small for incoming data.  Returning OUT_OF_MEMORY would
-                 * leave the stream open with an undersized buffer, causing
-                 * the next RECEIVE to hit the same failure in a tight loop.
-                 * Shut down the stream to prevent corruption and let the
-                 * peer retry. */
-                WT_LOG_ERROR("h3_stream_cb: realloc(%u) failed for stream — "
-                             "shutting down (recv_offset=%u, total=%u)",
-                             new_cap, sctx->recv_offset, total);
-                MsQuic->StreamShutdown(stream,
-                    QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-                return QUIC_STATUS_OUT_OF_MEMORY;
+        /* ── Buffer under the session lock ────────────────────────
+         * The native rescue (application thread) copies this buffer and
+         * sets fwd in one H3_LOCK section.  Appending under the same lock,
+         * after re-checking fwd, means these bytes land either before that
+         * copy (and are part of it) or after the hand-over (and are
+         * forwarded) — never into a buffer that was already handed over,
+         * and the realloc below can never move the buffer under the copy.
+         * A stream the rescue has claimed (stream_type -2) only buffers:
+         * the rescue is about to take its bytes, and no handshake
+         * processing may run on it concurrently. */
+        h3_session_t* h3 = sctx->h3;
+        bool claimed = false;
+        QUIC_STATUS refuse = QUIC_STATUS_SUCCESS;
+        if (h3) H3_LOCK(h3);
+        fwd = atomic_ptr_load(&sctx->fwd);
+        if (!fwd) {
+            /* Cap at 64KB for HTTP/3 frames.
+             * Use overflow-safe check: ensure total doesn't push us past 64KB.
+             * (total > 65536) catches the large-payload overflow case;
+             * (recv_offset > 65536 - total) catches the gradual-accumulation case. */
+            if (total > 65536 || sctx->recv_offset > 65536 - total) {
+                refuse = QUIC_STATUS_ABORTED;
+            } else {
+                uint32_t needed = sctx->recv_offset + total;
+                if (needed > sctx->recv_capacity) {
+                    uint32_t new_cap = sctx->recv_capacity ? sctx->recv_capacity * 2 : 4096;
+                    if (new_cap < needed) new_cap = needed;
+                    uint8_t* newbuf = (uint8_t*)realloc(sctx->recv_buf, new_cap);
+                    if (!newbuf) {
+                        /* realloc failure under memory pressure — the original
+                         * buffer is still valid (realloc semantics) but is too
+                         * small for incoming data.  Returning OUT_OF_MEMORY would
+                         * leave the stream open with an undersized buffer, causing
+                         * the next RECEIVE to hit the same failure in a tight loop.
+                         * Shut down the stream to prevent corruption and let the
+                         * peer retry. */
+                        WT_LOG_ERROR("h3_stream_cb: realloc(%u) failed for stream — "
+                                     "shutting down (recv_offset=%u, total=%u)",
+                                     new_cap, sctx->recv_offset, total);
+                        refuse = QUIC_STATUS_OUT_OF_MEMORY;
+                    } else {
+                        sctx->recv_buf = newbuf;
+                        sctx->recv_capacity = new_cap;
+                    }
+                }
+                if (refuse == QUIC_STATUS_SUCCESS) {
+                    for (uint32_t i = 0; i < count; i++) {
+                        memcpy(sctx->recv_buf + sctx->recv_offset,
+                               bufs[i].Buffer, bufs[i].Length);
+                        sctx->recv_offset += bufs[i].Length;
+                    }
+                }
             }
-            sctx->recv_buf = newbuf;
-            sctx->recv_capacity = new_cap;
+            claimed = sctx->stream_type == -2;
         }
+        if (h3) H3_UNLOCK(h3);
 
-        for (uint32_t i = 0; i < count; i++) {
-            memcpy(sctx->recv_buf + sctx->recv_offset,
-                   bufs[i].Buffer, bufs[i].Length);
-            sctx->recv_offset += bufs[i].Length;
+        if (fwd) return h3_stream_forward(sctx, fwd, stream, event);
+        if (refuse != QUIC_STATUS_SUCCESS) {
+            MsQuic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+            return refuse;
         }
+        if (claimed) return QUIC_STATUS_SUCCESS;
 
         /* Process buffered data for HTTP/3 handshake detection
          * and state machine advancement. If the handshake completes
@@ -1184,7 +1258,6 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * (session.h/session.c) and eliminates the TOCTOU window that
          * a simple freed-flag check would have (check passes, then
          * free runs on another thread while process_data is executing). */
-        h3_session_t* h3 = sctx->h3;
         if (h3 && h3_session_acquire(h3)) {
             int hr = h3_server_process_data(h3, sctx);
             h3_session_release(h3);
@@ -1203,12 +1276,22 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
          * where the HTTP/3 handshake frames arrive in the same stream
          * event as the FIN — without this call, the last chunk of
          * handshake data would remain buffered and unprocessed,
-         * causing the handshake to hang indefinitely. */
+         * causing the handshake to hang indefinitely.
+         * Same fwd re-check and rescue claim as RECEIVE. */
+        h3_session_t* h3 = sctx->h3;
+        bool claimed = false;
+        if (h3) {
+            H3_LOCK(h3);
+            fwd = atomic_ptr_load(&sctx->fwd);
+            claimed = sctx->stream_type == -2;
+            H3_UNLOCK(h3);
+            if (fwd) return h3_stream_forward(sctx, fwd, stream, event);
+        }
+        if (claimed) return QUIC_STATUS_SUCCESS;
         if (sctx->recv_offset > 0 && sctx->recv_buf != NULL) {
             /* Snapshot h3 and acquire a ref before dereference.
              * See RECEIVE case for the full M-1 refcount analysis —
              * same race applies here. */
-            h3_session_t* h3 = sctx->h3;
             if (h3 && h3_session_acquire(h3)) {
                 int hr = h3_server_process_data(h3, sctx);
                 h3_session_release(h3);
@@ -1222,11 +1305,27 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
     }
 
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
+        /* Only h3's own sends (CONNECT responses, rejections) reach here:
+         * the stream manager sends only on a stream after it has adopted
+         * it, and those completions are forwarded above. */
         free(event->SEND_COMPLETE.ClientContext);
         return QUIC_STATUS_SUCCESS;
 
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE: {
+        /* Leave the session's list in the same H3_LOCK section that
+         * re-checks fwd: from then on the native rescue can no longer find
+         * this context to hand over, so it is ours to free — or it was
+         * handed over first, and the event belongs to the stream manager. */
+        h3_session_t* h3 = sctx->h3;
+        if (h3) {
+            H3_LOCK(h3);
+            fwd = atomic_ptr_load(&sctx->fwd);
+            if (!fwd)
+                h3_stream_ctx_unlink_locked(h3, sctx);
+            H3_UNLOCK(h3);
+            if (fwd) return h3_stream_forward(sctx, fwd, stream, event);
+        }
         /* CAS guard: msquic fires PEER_SEND_ABORTED (if peer aborts)
          * followed by the terminal SHUTDOWN_COMPLETE.  Without this
          * guard the stream context is freed twice — UAF then double-free. */
@@ -1235,7 +1334,6 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
             /* Already freed by a prior callback — ignore. */
             return QUIC_STATUS_SUCCESS;
         }
-        if (sctx->h3) h3_stream_ctx_unlink(sctx);
         free(sctx->recv_buf);
         free(sctx);
         MsQuic->StreamClose(stream);
@@ -1247,46 +1345,55 @@ h3_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
     }
 }
 
-static h3_stream_ctx_t* h3_stream_ctx_create(HQUIC stream, h3_session_t* h3)
+/* Create a stream context and link it into the session's list.
+ *
+ * @p established non-NULL (a peer stream arriving during the handshake):
+ * if the handshake has completed by the time we hold the lock, create
+ * nothing and set *established — the caller routes the stream to the
+ * stream manager instead.  The native rescue completes the handshake on
+ * the application thread, in the same H3_LOCK section in which it hands
+ * over every linked stream (h3_server_adopt_streams); a stream linked after
+ * that section would otherwise stay with the handshake forever.
+ *
+ * The context is linked BEFORE its handler is set, so the rescue may adopt
+ * it (set fwd) first; h3_stream_cb then forwards from its first event. */
+static h3_stream_ctx_t* h3_stream_ctx_create(HQUIC stream, h3_session_t* h3,
+                                             bool* established)
 {
-    /* Per-session cap on tracked stream contexts.  Reserve the slot
-     * under the lock before allocating so concurrent creates cannot
-     * both pass the check.  A NULL return makes the caller abort the
-     * stream, which is the correct answer to a client opening streams
-     * it never completes. */
+    if (established) *established = false;
+    h3_stream_ctx_t* sctx = (h3_stream_ctx_t*)calloc(1, sizeof(*sctx));
+    if (!sctx) return NULL;
+    sctx->quic_stream = stream;
+    sctx->stream_type = -1;
+    sctx->h3 = h3;
     if (h3) {
         H3_LOCK(h3);
+        if (established && h3->handshake_complete) {
+            H3_UNLOCK(h3);
+            free(sctx);
+            *established = true;
+            return NULL;
+        }
+        /* Per-session cap on tracked stream contexts, checked and reserved
+         * in the same section as the link so concurrent creates cannot both
+         * pass it.  A NULL return makes the caller abort the stream, which
+         * is the correct answer to a client opening streams it never
+         * completes. */
         if (h3->max_stream_ctx != 0 &&
             h3->stream_ctx_count >= h3->max_stream_ctx) {
             H3_UNLOCK(h3);
+            free(sctx);
             WT_LOG_WARN("H3: stream context cap (%u) reached — refusing stream",
                         (unsigned)h3->max_stream_ctx);
             return NULL;
         }
         h3->stream_ctx_count++;
-        H3_UNLOCK(h3);
-    }
-    h3_stream_ctx_t* sctx = (h3_stream_ctx_t*)calloc(1, sizeof(*sctx));
-    if (!sctx) {
-        if (h3) {
-            H3_LOCK(h3);
-            if (h3->stream_ctx_count > 0) h3->stream_ctx_count--;
-            H3_UNLOCK(h3);
-        }
-        return NULL;
-    }
-    sctx->quic_stream = stream;
-    sctx->stream_type = -1;
-    sctx->h3 = h3;
-    MsQuic->SetCallbackHandler(stream,
-                                (void*)(uintptr_t)k_h3_stream_handler, sctx);
-    /* Link into the session's stream context list for cleanup tracking */
-    if (h3) {
-        H3_LOCK(h3);
         sctx->next = h3->stream_ctx_list;
         h3->stream_ctx_list = sctx;
         H3_UNLOCK(h3);
     }
+    MsQuic->SetCallbackHandler(stream,
+                                (void*)(uintptr_t)k_h3_stream_handler, sctx);
     return sctx;
 }
 
@@ -1327,6 +1434,11 @@ void h3_stream_ctx_unlink(h3_stream_ctx_t* sctx)
  */
 typedef struct h3_send_only_ctx_s {
     HQUIC           stream;
+    /* Owning session, or NULL once detached.  Cleared only under that
+     * session's lock (h3_send_only_claim, the bootstrap failure paths);
+     * read and written via atomic_ptr_* because the stream's callback reads
+     * it on the QUIC worker while the teardown may clear it on the
+     * application thread. */
     h3_session_t*   h3;
     int             role;       /* 1 = server_control, 2 = client_control, 0 = other */
     /* Claim flag for "who performs StreamClose + free(ctx)". Exactly one of the
@@ -1341,15 +1453,47 @@ typedef struct h3_send_only_ctx_s {
     uint32_t        pending_send_len;
 } h3_send_only_ctx_t;
 
-static void h3_send_only_clear_session_ref(h3_send_only_ctx_t* c, HQUIC stream)
+/* Detach c from its session and claim its close, as one step under the
+ * session lock.  Returns true when the caller now owns StreamClose + free(c).
+ *
+ * Two paths race for a control stream's context: the stream's own
+ * SHUTDOWN_COMPLETE (QUIC worker) and h3_session_free.  The latter normally
+ * runs on the same worker, but on the server it runs on the application
+ * thread when the connection's teardown was handed to it (see app_state in
+ * server.h) — and a control stream whose StreamStart was still queued then
+ * gets its START_COMPLETE / SHUTDOWN_COMPLETE after the connection's
+ * SHUTDOWN_COMPLETE, concurrently with that teardown.
+ *
+ * Both paths unregister the context from the session AND claim it inside
+ * one H3_LOCK section, so whichever enters second finds it gone and never
+ * touches it again; the loser holds no pointer to a context the winner
+ * frees.  (Unregistering under the lock but claiming outside it, as this
+ * used to, let h3_session_free write `->h3 = NULL` into a context the
+ * callback had just freed.)  c stays valid for the whole of this call on
+ * either side: the worker is inside c's own stream callback, and the
+ * teardown's StreamClose waits for that callback to return before free(c).
+ * The session stays valid too — h3_session_free frees it only after that
+ * StreamClose.  This also replaces the earlier stale-context fix: the
+ * session never keeps a server_control_ctx / client_control_ctx pointer to
+ * a context that is being freed. */
+static bool h3_send_only_claim(h3_send_only_ctx_t* c)
 {
-    if (!c || !c->h3) return;
-    H3_LOCK(c->h3);
-    if (c->role == 1 && c->h3->server_control_stream == stream)
-        c->h3->server_control_stream = NULL;
-    if (c->role == 2 && c->h3->client_control_stream == stream)
-        c->h3->client_control_stream = NULL;
-    H3_UNLOCK(c->h3);
+    h3_session_t* h3 = (h3_session_t*)atomic_ptr_load(&c->h3);
+    if (!h3)
+        return atomic_exchange(&c->closed, 1) == 0;
+    H3_LOCK(h3);
+    if (c->role == 1 && h3->server_control_ctx == c) {
+        h3->server_control_stream = NULL;
+        h3->server_control_ctx = NULL;
+    }
+    if (c->role == 2 && h3->client_control_ctx == c) {
+        h3->client_control_stream = NULL;
+        h3->client_control_ctx = NULL;
+    }
+    atomic_ptr_store(&c->h3, NULL);
+    const bool won = atomic_exchange(&c->closed, 1) == 0;
+    H3_UNLOCK(h3);
+    return won;
 }
 
 /* Abort a send-only stream without StreamClose (callback owns close). */
@@ -1363,34 +1507,29 @@ static void h3_send_only_abort(HQUIC stream)
 }
 
 /**
- * Abort AND close a send-only stream synchronously, releasing its context.
+ * Close a send-only stream synchronously and release its context, on the
+ * connection-teardown path.  The caller has already aborted the stream and,
+ * if @p c is non-NULL, claimed it (h3_session_free claims under the session
+ * lock — see h3_send_only_claim); @p c NULL means an untracked stream.
  *
- * Used on the connection-teardown path. Aborting alone is not enough there:
- * StreamShutdown is asynchronous, and the caller (the connection's
- * SHUTDOWN_COMPLETE handler) goes on to call ConnectionClose immediately, so
- * the stream's own SHUTDOWN_COMPLETE — the only place that would StreamClose
- * the handle — is never delivered. The stream object then keeps a rundown
+ * Aborting alone is not enough there: StreamShutdown is asynchronous, and
+ * the caller goes on to ConnectionClose, so the stream's own
+ * SHUTDOWN_COMPLETE — the only other place that would StreamClose the
+ * handle — may never be delivered. The stream object then keeps a rundown
  * reference on the registration and MsQuicRegistrationClose blocks forever
  * inside CxPlatRundownReleaseAndWait, hanging wt_server_destroy.
  *
- * StreamClose is safe to call here despite the "let SHUTDOWN_COMPLETE close it"
- * rule above, because the atomic claim makes exactly one path do it, and
- * StreamClose itself waits for any in-flight callback on that stream to return
- * before it completes.
+ * StreamClose returns only once any in-flight callback on the stream has
+ * returned, and none follows it, so freeing @p c afterwards is safe on
+ * either thread.
  */
 static void h3_send_only_close_now(HQUIC stream, h3_send_only_ctx_t* c)
 {
     if (!stream) return;
-    if (!c) {
-        MsQuic->StreamClose(stream);
-        return;
-    }
-    if (atomic_exchange(&c->closed, 1) == 0) {
-        MsQuic->StreamClose(stream);
-        if (c->pending_send) {
-            free(c->pending_send);
-            c->pending_send = NULL;
-        }
+    MsQuic->StreamClose(stream);
+    if (c) {
+        free(c->pending_send);
+        c->pending_send = NULL;
         free(c);
     }
 }
@@ -1447,6 +1586,19 @@ h3_send_only_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
                     h3_send_only_abort(stream);
             }
         }
+        /* Server control stream up, SETTINGS queued: classify the peer
+         * streams parked while SETTINGS were pending.  Only on success —
+         * a successful start means the connection had not shut down when
+         * msquic processed it, so this runs, serialised on the worker,
+         * before the connection's SHUTDOWN_COMPLETE and so before any
+         * teardown can free the session. */
+        if (c && c->role == 1 && QUIC_SUCCEEDED(event->START_COMPLETE.Status)) {
+            h3_session_t* h3 = (h3_session_t*)atomic_ptr_load(&c->h3);
+            if (h3 && h3_session_acquire(h3)) {
+                h3_server_replay_parked_streams(h3);
+                h3_session_release(h3);
+            }
+        }
         break;
 
     case QUIC_STREAM_EVENT_SEND_COMPLETE: {
@@ -1468,12 +1620,11 @@ h3_send_only_stream_cb(HQUIC stream, void* ctx, QUIC_STREAM_EVENT* event)
     }
 
     case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE: {
-        h3_send_only_clear_session_ref(c, stream);
         if (c) {
             /* Close and free only if we win the claim. When h3_session_free
              * already took it, that path owns both — touching c after losing
-             * the exchange (including free) would race its free. */
-            if (atomic_exchange(&c->closed, 1) == 0) {
+             * the claim (including free) would race its free. */
+            if (h3_send_only_claim(c)) {
                 if (c->pending_send) {
                     free(c->pending_send);
                     c->pending_send = NULL;
@@ -2057,15 +2208,28 @@ static int h3_server_bootstrap_settings(h3_session_t* h3, const char* reason)
     }
     send_ctx->stream = srv_ctrl;
 
-    H3_LOCK(h3);
-    h3->server_control_stream = srv_ctrl;
-    h3->server_control_ctx = send_ctx;
-    H3_UNLOCK(h3);
-
     /* Queue the payload for START_COMPLETE delivery — never StreamSend
      * before the stream is fully started (QuicStreamSendBufferRequest crash). */
     send_ctx->pending_send = srv_data;
     send_ctx->pending_send_len = (uint32_t)(1 + settings_len);
+
+    /* Register the stream and publish "SETTINGS sent" BEFORE StreamStart.
+     * START_COMPLETE runs on the connection's worker — possibly before
+     * StreamStart even returns here — and replays the streams parked while
+     * SETTINGS were pending; h3_server_process_data only classifies them
+     * once it sees server_settings_sent.  Setting it after StreamStart (as
+     * this used to) could leave that replay re-parking every stream.  The
+     * state only moves forward: a native rescue may already have reached
+     * ESTABLISHED. */
+    h3_server_state_t prev_state;
+    H3_LOCK(h3);
+    h3->server_control_stream = srv_ctrl;
+    h3->server_control_ctx = send_ctx;
+    prev_state = h3->server_state;
+    if (h3->server_state < H3_SRV_WAIT_CONNECT)
+        h3->server_state = H3_SRV_WAIT_CONNECT;
+    h3->server_settings_sent = true;
+    H3_UNLOCK(h3);
 
     WT_LOG_INFO("H3: bootstrap: server control stream open %p (uni-only; no server QPACK)",
                 (void*)srv_ctrl);
@@ -2074,22 +2238,25 @@ static int h3_server_bootstrap_settings(h3_session_t* h3, const char* reason)
     st = MsQuic->StreamStart(srv_ctrl, QUIC_STREAM_START_FLAG_SHUTDOWN_ON_FAIL);
     if (QUIC_FAILED(st)) {
         WT_LOG_ERROR("H3: bootstrap: StreamStart server control failed: 0x%x", st);
+        /* Nothing was started, so no callback has run: unregister, detach
+         * and roll the publish back in one locked step (the later retry
+         * needs server_settings_sent false). */
         H3_LOCK(h3);
-        if (h3->server_control_stream == srv_ctrl) {
+        if (h3->server_control_ctx == send_ctx) {
             h3->server_control_stream = NULL;
             h3->server_control_ctx = NULL;
         }
+        atomic_ptr_store(&send_ctx->h3, NULL);
+        h3->server_settings_sent = false;
+        if (h3->server_state == H3_SRV_WAIT_CONNECT)
+            h3->server_state = prev_state;
         H3_UNLOCK(h3);
-        /* Detach h3 before async abort — same UAF guard as h3_session_free. */
-        send_ctx->h3 = NULL;
         free(send_ctx->pending_send);
         send_ctx->pending_send = NULL;
         h3_send_only_abort(srv_ctrl);
         return -1;
     }
 
-    h3->server_settings_sent = true;
-    h3->server_state = H3_SRV_WAIT_CONNECT;
     WT_LOG_INFO("H3: bootstrap SETTINGS queued stream=%p state=WAIT_CONNECT "
                 "reason=%s (control SETTINGS only; no server QPACK uni)",
                 (void*)srv_ctrl, reason);
@@ -2120,66 +2287,62 @@ void h3_server_poll_deferred(h3_session_t* h3)
         return;
     }
 
-    /* ── Reprocess streams deferred while waiting for SETTINGS ──
-     * h3_server_process_data's "first bidi before SETTINGS" branch
-     * (see its "Wait for poll to send SETTINGS before classifying
-     * CONNECT" comment) parks the stream with stream_type == -1 and
-     * returns without re-arming anything — MsQuic only re-invokes the
-     * RECEIVE callback when NEW data arrives, so a stream whose sole
-     * chunk landed before SETTINGS was sent would otherwise never get
-     * reclassified and would sit until the H3 handshake timeout fires.
-     * Now that SETTINGS has just been sent, give any such streams a
-     * chance to be classified (CONNECT vs native fallback).
-     *
-     * Collect under lock, process outside — h3_server_process_data can
-     * reach h3_fallback_to_native_protocol -> on_ready, which calls
-     * wt_stream_manager_accept_stream (MsQuic->SetCallbackHandler);
-     * matches the "collect under lock, process outside" pattern used
-     * for the same reason in server.cpp's deferred-stream replay. */
-    h3_stream_ctx_t* pending_list = NULL;
-    H3_LOCK(h3);
-    {
-        h3_stream_ctx_t* ds = h3->stream_ctx_list;
-        h3_stream_ctx_t* pending_tail = NULL;
-        while (ds) {
-            h3_stream_ctx_t* next = ds->next;
-            if (ds->stream_type == -1 && ds->quic_stream &&
-                ds->recv_offset > 0) {
-                /* Unlink from the session's tracking list. */
-                if (h3->stream_ctx_list == ds) {
-                    h3->stream_ctx_list = ds->next;
-                } else {
-                    h3_stream_ctx_t* prev = h3->stream_ctx_list;
-                    while (prev && prev->next != ds) prev = prev->next;
-                    if (prev) prev->next = ds->next;
-                }
-                /* Re-link onto our own local pending list. */
-                ds->next = NULL;
-                if (pending_tail) pending_tail->next = ds;
-                else pending_list = ds;
-                pending_tail = ds;
-            }
-            ds = next;
-        }
-    }
-    H3_UNLOCK(h3);
+    /* Streams parked while SETTINGS were pending are replayed on the
+     * connection's worker by the control stream's START_COMPLETE — see
+     * h3_server_replay_parked_streams. */
+}
 
-    h3_stream_ctx_t* p = pending_list;
-    while (p) {
-        h3_stream_ctx_t* next = p->next;
-        p->next = NULL;
-        WT_LOG_INFO("H3: reprocessing stream deferred pre-SETTINGS "
-                    "stream=%p len=%u", (void*)p->quic_stream, p->recv_offset);
-        /* Re-link into the session list — h3_server_process_data's
-         * success paths (native fallback / CONNECT accept) expect the
-         * sctx to still be reachable via h3->stream_ctx_list for the
-         * same unlink-and-free bookkeeping used on the non-deferred path. */
+/**
+ * Classify the peer streams parked while SETTINGS were pending.
+ *
+ * h3_server_process_data parks a bidi stream whose first bytes arrive
+ * before the server's SETTINGS are out ("first bidi before SETTINGS"): its
+ * stream_type stays -1 and nothing re-arms it — msquic calls RECEIVE again
+ * only when NEW data arrives, so a stream whose sole chunk landed early
+ * would sit until the H3 handshake timeout.  Once SETTINGS are queued this
+ * gives each such stream its classification (CONNECT vs native fallback).
+ *
+ * Runs on the connection's QUIC worker, from the server control stream's
+ * START_COMPLETE.  It used to run on the poll thread straight after the
+ * bootstrap's StreamStart, where it raced everything the worker does to
+ * the same streams: RECEIVE reallocating recv_buf, SHUTDOWN_COMPLETE
+ * freeing the context and closing the handle (a disconnect racing the
+ * bootstrap freed a parked context the poll thread was about to
+ * reprocess), and — through on_ready — the stream handler swap and replay
+ * that wt_stream_manager_accept_stream_prefill documents as worker-only.
+ * On the worker every one of those is serialised with this call.
+ *
+ * One stream at a time, rescanning the list after each: processing a
+ * stream can complete the handshake, and on_h3_session_ready then hands
+ * every other parked stream to the stream manager and frees its context.
+ * Whatever is still on the list afterwards is still ours; `replayed` makes
+ * sure each is processed once.
+ */
+static void h3_server_replay_parked_streams(h3_session_t* h3)
+{
+    for (;;) {
+        h3_stream_ctx_t* p = NULL;
         H3_LOCK(h3);
-        p->next = h3->stream_ctx_list;
-        h3->stream_ctx_list = p;
+        if (!h3->handshake_complete) {
+            for (h3_stream_ctx_t* ds = h3->stream_ctx_list; ds; ds = ds->next) {
+                if (ds->stream_type == -1 && ds->quic_stream &&
+                    ds->recv_offset > 0 && !ds->replayed) {
+                    ds->replayed = true;
+                    p = ds;
+                    break;
+                }
+            }
+        }
         H3_UNLOCK(h3);
-        h3_server_process_data(h3, p);
-        p = next;
+        if (!p) break;
+
+        WT_LOG_INFO("H3: replaying stream parked before SETTINGS "
+                    "stream=%p len=%u", (void*)p->quic_stream, p->recv_offset);
+        /* Same handling as a RECEIVE (h3_stream_cb): a failed handshake
+         * step aborts the stream.  On success p may already be freed. */
+        HQUIC stream = p->quic_stream;
+        if (h3_server_process_data(h3, p) < 0)
+            MsQuic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
     }
 }
 
@@ -2246,54 +2409,69 @@ void h3_session_free(h3_session_t* h3)
      * reaches 0. */
     atomic_store(&h3->released, true);
 
-    /* Shut down tracked control streams to trigger SHUTDOWN_COMPLETE,
-     * which StreamClose's the handle exactly once in h3_send_only_stream_cb.
-     * Do NOT StreamClose here — that double-closed and SEGVd in QuicStreamFree.
+    /* Take the tracked control streams and close them here, synchronously.
      *
-     * CRITICAL: Null c->h3 in the send_ctx BEFORE calling h3_send_only_abort.
-     * h3_send_only_abort → StreamShutdown(ABORT|IMMEDIATE) is ASYNCHRONOUS —
-     * the SHUTDOWN_COMPLETE callback may fire on a QUIC worker thread AFTER
-     * this function returns and frees h3.  If c->h3 still points to h3 at
-     * that point, h3_send_only_clear_session_ref will lock a mutex in freed
-     * memory → SEGV in pthread_mutex_lock / QuicStreamFree. */
+     * Each send-only context is unregistered, detached (c->h3 = NULL) and
+     * claimed in the SAME locked section — see h3_send_only_claim, which
+     * the stream's own SHUTDOWN_COMPLETE runs under this same lock.  One
+     * side wins; the other never touches the context again.  That matters
+     * because this function does not always run on the connection's
+     * worker: on the server the connection's teardown runs on the
+     * application thread when it was deferred there (see app_state in
+     * server.h), and a control stream whose StreamStart was still queued
+     * gets its callbacks after the connection's SHUTDOWN_COMPLETE,
+     * concurrently with this.  Detaching outside the lock, as this used to,
+     * could write into a context that callback had just freed.
+     *
+     * Abort then close synchronously: the caller calls ConnectionClose
+     * right after this returns, so a stream left waiting on its own
+     * asynchronous SHUTDOWN_COMPLETE never gets closed at all — see
+     * h3_send_only_close_now.  StreamClose also waits out any callback
+     * still running on the stream, so the context and this session outlive
+     * it. */
     HQUIC srv_ctrl = NULL;
     HQUIC cli_ctrl = NULL;
     HQUIC qpack_enc = NULL;
     HQUIC qpack_dec = NULL;
-    void* srv_ctx = NULL;
-    void* cli_ctx = NULL;
+    h3_send_only_ctx_t* srv_ctx = NULL;
+    h3_send_only_ctx_t* cli_ctx = NULL;
+    bool srv_owned = false;
+    bool cli_owned = false;
     H3_LOCK(h3);
     srv_ctrl = h3->server_control_stream;
     h3->server_control_stream = NULL;
-    srv_ctx = h3->server_control_ctx;
+    srv_ctx = (h3_send_only_ctx_t*)h3->server_control_ctx;
     h3->server_control_ctx = NULL;
     cli_ctrl = h3->client_control_stream;
     h3->client_control_stream = NULL;
-    cli_ctx = h3->client_control_ctx;
+    cli_ctx = (h3_send_only_ctx_t*)h3->client_control_ctx;
     h3->client_control_ctx = NULL;
     qpack_enc = h3->server_qpack_encoder_stream;
     h3->server_qpack_encoder_stream = NULL;
     qpack_dec = h3->server_qpack_decoder_stream;
     h3->server_qpack_decoder_stream = NULL;
+    if (srv_ctx) {
+        atomic_ptr_store(&srv_ctx->h3, NULL);
+        srv_owned = atomic_exchange(&srv_ctx->closed, 1) == 0;
+    }
+    if (cli_ctx) {
+        atomic_ptr_store(&cli_ctx->h3, NULL);
+        cli_owned = atomic_exchange(&cli_ctx->closed, 1) == 0;
+    }
     H3_UNLOCK(h3);
 
-    /* Detach h3 back-pointer BEFORE queuing async abort — the callback
-     * will see c->h3 == NULL and skip h3_send_only_clear_session_ref. */
-    if (srv_ctx) ((h3_send_only_ctx_t*)srv_ctx)->h3 = NULL;
-    if (cli_ctx) ((h3_send_only_ctx_t*)cli_ctx)->h3 = NULL;
-
-    /* Abort then close synchronously. The caller (the connection's
-     * SHUTDOWN_COMPLETE handler) calls ConnectionClose right after this
-     * returns, so a stream left waiting on its own asynchronous
-     * SHUTDOWN_COMPLETE never gets closed at all — see h3_send_only_close_now. */
-    if (srv_ctrl) {
+    /* A context still registered cannot have been claimed by its callback
+     * (the callback unregisters in the same step), so *_owned is always true
+     * when *_ctx is set; the checks only keep a broken invariant from
+     * turning into a double close. */
+    if (srv_ctrl && (!srv_ctx || srv_owned)) {
         WT_LOG_INFO("H3: session_free closing server control stream %p", (void*)srv_ctrl);
         h3_send_only_abort(srv_ctrl);
-        h3_send_only_close_now(srv_ctrl, (h3_send_only_ctx_t*)srv_ctx);
+        h3_send_only_close_now(srv_ctrl, srv_ctx);
     }
-    if (cli_ctrl) {
+    if (cli_ctrl && (!cli_ctx || cli_owned)) {
         h3_send_only_abort(cli_ctrl);
-        h3_send_only_close_now(cli_ctrl, (h3_send_only_ctx_t*)cli_ctx);
+        h3_send_only_close_now(cli_ctrl, cli_ctx);
     }
     if (qpack_enc) {
         WT_LOG_INFO("H3: session_free closing server QPACK encoder %p", (void*)qpack_enc);
@@ -2340,8 +2518,12 @@ void h3_session_free(h3_session_t* h3)
              * (the CAS above) on entry, and StreamClose is what guarantees no
              * further callbacks for this stream. Freeing first would leave that
              * window open on a use-after-free. */
+            /* A stream the native rescue handed to the stream manager
+             * (fwd set) is that manager's to close — the connection's
+             * teardown did so in wt_stream_manager_close_streams — so only
+             * the h3 context is released here. */
             HQUIC dead_stream = sctx->quic_stream;
-            if (dead_stream) {
+            if (dead_stream && !atomic_ptr_load(&sctx->fwd)) {
                 MsQuic->StreamClose(dead_stream);
             }
             free(sctx->recv_buf);
@@ -2375,7 +2557,7 @@ bool h3_session_accept_stream(h3_session_t* h3, HQUIC stream)
      * can inspect the data.  The callback will determine if this
      * is HTTP/3 or native and dispatch accordingly. */
 
-    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, NULL);
+    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, NULL, NULL);
     if (!sctx) {
         if (h3->on_error)
             h3->on_error(h3->callback_ctx, -1, "Stream ctx alloc failed");
@@ -2451,14 +2633,15 @@ int32_t h3_client_connect(h3_session_t* h3,
                                   : QUIC_STATUS_OUT_OF_MEMORY;
         if (QUIC_FAILED(st)) {
             free(sb);
+            /* Unregister and detach in one locked step before the async
+             * abort — same protocol as h3_send_only_claim. */
             H3_LOCK(h3);
-            if (h3->client_control_stream == ctrl_stream) {
+            if (h3->client_control_ctx == ctrl_ctx) {
                 h3->client_control_stream = NULL;
                 h3->client_control_ctx = NULL;
             }
+            atomic_ptr_store(&ctrl_ctx->h3, NULL);
             H3_UNLOCK(h3);
-            /* Detach h3 before async abort — same UAF guard as h3_session_free. */
-            ctrl_ctx->h3 = NULL;
             h3_send_only_abort(ctrl_stream);
             return -1;
         }
@@ -2600,7 +2783,7 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
          * this is a regular data stream (bidi only from our app layer).
          * Uni streams after establish (rare) are still owned by H3/QPACK. */
         if (is_unidirectional) {
-            h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, h3);
+            h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, h3, NULL);
             if (!sctx) return -1;
             sctx->is_unidirectional = true;
             sctx->stream_type = -1;
@@ -2610,9 +2793,12 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
         return 1;
     }
 
-    /* Create stream context for buffered read */
-    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, h3);
-    if (!sctx) return -1;
+    /* Create stream context for buffered read.  If the native rescue
+     * completed the handshake since the caller looked, this is a regular
+     * data stream: hand it to the stream manager (return 1). */
+    bool established = false;
+    h3_stream_ctx_t* sctx = h3_stream_ctx_create(stream, h3, &established);
+    if (!sctx) return established ? 1 : -1;
     sctx->is_unidirectional = is_unidirectional;
     *out_sctx = sctx;
 
@@ -2646,6 +2832,129 @@ int h3_server_handle_stream(h3_session_t* h3, HQUIC stream,
     return 1;
 }
 
+/* Native-client policy shared by the worker-side fallback and the rescue:
+ * with an origin allow-list configured, raw-QUIC clients (which cannot
+ * present an Origin) are refused unless allow_native_clients is set. */
+static bool h3_native_client_refused(const h3_session_t* h3)
+{
+    const char* allowed = h3->allowed_origins;
+    const bool origins_configured =
+        (allowed != NULL && allowed[0] != '\0' &&
+         strcmp(allowed, "*") != 0);
+    return origins_configured && !h3->allow_native_clients;
+}
+
+/* See http3.h.  Application thread, inside the connection's gate.
+ *
+ * ── Why the rescue never touches a stream directly ────────────────
+ * It used to claim the stalled stream under H3_LOCK and then, lock
+ * released, run on_h3_session_ready, which read that stream's buffer,
+ * switched its handler to the stream manager and freed its context.  All
+ * of that raced the stream's own callbacks on the worker: RECEIVE
+ * reallocating the buffer, SHUTDOWN_COMPLETE freeing the context and
+ * closing the handle, and msquic reading the handler while it was being
+ * switched.  A client could trigger it on purpose: a 1-byte first message
+ * (0x01 on the wire stalls the handshake) and a disconnect as the rescue
+ * runs — a remotely triggerable use-after-free (ASan: on_h3_session_ready
+ * reading a context h3_stream_cb had freed).
+ *
+ * Now every access to a stream's context or buffer from this thread is
+ * inside H3_LOCK, which h3_stream_cb also takes to buffer, and to leave
+ * the session's list before freeing; handlers are never switched from
+ * here — h3_server_adopt_streams sets fwd and h3_stream_cb forwards.  The
+ * completion is claimed (completing) so a worker-side CONNECT or fallback
+ * cannot complete the same handshake concurrently. */
+int h3_server_native_rescue(h3_session_t* h3)
+{
+    if (!h3 || !h3->is_server) return 0;
+
+    bool claimed = false;
+    H3_LOCK(h3);
+    if (!h3->handshake_complete && !h3->native_stream_ctx) {
+        h3_stream_ctx_t* candidate = NULL;
+        for (h3_stream_ctx_t* ds = h3->stream_ctx_list; ds; ds = ds->next) {
+            if (ds->quic_stream && ds->recv_offset > 0 &&
+                !atomic_ptr_load(&ds->fwd)) {
+                candidate = ds;
+                break;
+            }
+        }
+        if (candidate && atomic_exchange(&h3->completing, 1) == 0) {
+            /* From here the worker only buffers this stream's bytes
+             * (h3_stream_cb); h3_server_adopt_streams takes them. */
+            candidate->stream_type = -2;
+            h3->poll_rescue = true;
+            claimed = true;
+        }
+    }
+    H3_UNLOCK(h3);
+    if (!claimed) return 0;
+
+    if (h3_native_client_refused(h3)) {
+        WT_LOG_WARN("Rejected native client: allowed_origins is "
+                    "configured and allow_native_clients is disabled.");
+        if (h3->on_error)
+            h3->on_error(h3->callback_ctx, -1, "Native clients not allowed");
+        return -1;
+    }
+
+    /* on_h3_session_ready creates the session, reports the connection, and
+     * — seeing poll_rescue — hands the streams over and completes the
+     * handshake with h3_server_adopt_streams. */
+    if (h3->on_ready)
+        h3->on_ready(h3->callback_ctx, h3->quic_conn, "/", "");
+    return 1;
+}
+
+/* See http3.h.  Application thread, from on_h3_session_ready. */
+void h3_server_adopt_streams(h3_session_t* h3, struct wt_stream_manager_s* mgr)
+{
+    if (!h3 || !mgr) return;
+    int adopted = 0, refused = 0;
+
+    /* One H3_LOCK section for the whole hand-over and the completion:
+     *  - each stream's buffer is copied and its fwd set together, so a
+     *    RECEIVE (which buffers under this lock) is either in the copy or
+     *    forwarded — none lost, none delivered twice;
+     *  - a stream still on the list has not been freed (h3_stream_cb leaves
+     *    the list under this lock before freeing), and its buffer is only
+     *    read here, never freed, so a worker still inside
+     *    h3_server_process_data for it reads valid memory;
+     *  - handshake_complete is set before the lock is released, so a peer
+     *    stream arriving now is either on the list (and adopted) or refused
+     *    by h3_stream_ctx_create (and routed to the stream manager).
+     * The stream manager runs each prefill through its framing, which
+     * reports complete messages to the application; that is a queueing
+     * callback, and nothing here waits on the worker.
+     *
+     * The stalled stream (claimed, -2) goes first, then any stream still
+     * waiting for classification (-1): the order the peer opened them in
+     * practice, and the order the old replay used. */
+    H3_LOCK(h3);
+    for (int pass = 0; pass < 2; pass++) {
+        for (h3_stream_ctx_t* ds = h3->stream_ctx_list; ds; ds = ds->next) {
+            if (!ds->quic_stream || atomic_ptr_load(&ds->fwd)) continue;
+            if (ds->stream_type != (pass == 0 ? -2 : -1)) continue;
+            void* smctx = wt_stream_manager_adopt_stream(
+                mgr, ds->quic_stream, ds->recv_buf, ds->recv_offset);
+            if (smctx) {
+                atomic_ptr_store(&ds->fwd, smctx);
+                adopted++;
+            } else {
+                /* No slot: the stream was aborted and its SHUTDOWN_COMPLETE
+                 * still comes to h3_stream_cb, which frees and closes it. */
+                refused++;
+            }
+        }
+    }
+    h3->handshake_complete = true;
+    h3->server_state = H3_SRV_ESTABLISHED;
+    H3_UNLOCK(h3);
+
+    WT_LOG_INFO("H3: native rescue handed %d stream(s) to the session%s",
+                adopted, refused ? " (some refused: no stream slot)" : "");
+}
+
 /* See http3.h for the contract and the two call sites. */
 int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx)
 {
@@ -2658,11 +2967,7 @@ int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx)
      * allow_native_clients if they need both browser CORS and
      * native client access on the same server. */
     {
-        const char* allowed = h3->allowed_origins;
-        const bool origins_configured =
-            (allowed != NULL && allowed[0] != '\0' &&
-             strcmp(allowed, "*") != 0);
-        if (origins_configured && !h3->allow_native_clients) {
+        if (h3_native_client_refused(h3)) {
             WT_LOG_WARN("Rejected native client: allowed_origins is "
                         "configured and allow_native_clients is disabled. "
                         "Set allow_native_clients=true to permit native "
@@ -2674,6 +2979,12 @@ int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx)
             return -1;
         }
     }
+
+    /* Claim the completion (see h3_session_t.completing).  Lost only to
+     * the application thread's native rescue, which then hands this
+     * stream over itself — so do nothing and report "still handshaking". */
+    if (atomic_exchange(&h3->completing, 1) != 0)
+        return 0;
 
     /* ── CRITICAL: Save stream context for data replay ──
      * The buffered data in sctx->recv_buf was received before
@@ -3142,6 +3453,12 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx)
                                                     phdr.origin[0] ? phdr.origin : "(none)",
                                                     phdr.path[0] ? phdr.path : "(none)",
                                                     phdr.authority[0] ? phdr.authority : "(none)");
+
+                                        /* Claim the completion (see
+                                         * h3_session_t.completing); lost only
+                                         * to a native rescue already running. */
+                                        if (atomic_exchange(&h3->completing, 1) != 0)
+                                            return 0;
 
                                         /* Record session metadata for WT stream framing.
                                          * Use MsQuic->GetParam to get the actual QUIC stream ID,

@@ -428,6 +428,7 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.TwoFactorInvalid:
 				case ClientAuthenticationResult.BetaAccessRequired:
 				case ClientAuthenticationResult.TwoFactorLocked:
+				case ClientAuthenticationResult.TwoFactorExpired:
 					break;
 			}
 		}

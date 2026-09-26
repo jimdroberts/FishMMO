@@ -25,8 +25,20 @@ namespace FishMMO.Database.Data
 		/// <summary>When the daemon started.</summary>
 		public DateTime StartedUtc { get; set; }
 
-		/// <summary>Last time it said it was alive.</summary>
+		/// <summary>Last time it said it was alive, by the database clock.</summary>
 		public DateTime LastHeartbeatUtc { get; set; }
+
+		/// <summary>
+		/// Seconds since <see cref="LastHeartbeatUtc"/>, measured by the database clock when this was
+		/// read. Never negative.
+		/// </summary>
+		/// <remarks>
+		/// The heartbeat is stamped by the database and its age is taken there too, so no host's
+		/// clock enters it. It used to be stamped with the daemon host's clock and aged against the
+		/// panel's, so the difference between two machines' clocks decided whether a daemon read
+		/// as silent. The caller holds the threshold and makes the call, as the server board does.
+		/// </remarks>
+		public double HeartbeatAgeSeconds { get; set; }
 
 		/// <summary>What it supervises.</summary>
 		public IReadOnlyList<DaemonAppData> Apps { get; set; } = Array.Empty<DaemonAppData>();
@@ -59,8 +71,14 @@ namespace FishMMO.Database.Data
 		/// <summary>The health-checked port.</summary>
 		public int MonitoredPort { get; set; }
 
-		/// <summary>When it was last reported on.</summary>
+		/// <summary>When it was last reported on, by the database clock.</summary>
 		public DateTime LastReportedUtc { get; set; }
+
+		/// <summary>
+		/// Seconds since <see cref="LastReportedUtc"/>, measured by the database clock when this was
+		/// read. Never negative.
+		/// </summary>
+		public double ReportAgeSeconds { get; set; }
 	}
 
 	/// <summary>
@@ -109,22 +127,35 @@ namespace FishMMO.Database.Data
 		/// <summary>The operator account that asked.</summary>
 		public string RequestedBy { get; set; }
 
-		/// <summary>When they asked.</summary>
+		/// <summary>When they asked, by the database clock.</summary>
 		public DateTime RequestedUtc { get; set; }
 
 		/// <summary>Why.</summary>
 		public string Reason { get; set; }
 
-		/// <summary>After which it must not be executed.</summary>
+		/// <summary>After which it must not be executed, by the database clock.</summary>
 		public DateTime ExpiresUtc { get; set; }
 
-		/// <summary>When a daemon took it.</summary>
+		/// <summary>
+		/// Seconds left before <see cref="ExpiresUtc"/>, measured by the database clock in the
+		/// statement that claimed this command. Null on a row that was not read by a claim.
+		/// </summary>
+		/// <remarks>
+		/// What a daemon judges expiry by, together with its own monotonic clock
+		/// (<see cref="DaemonCommandExpiry"/>). It must never compare <see cref="ExpiresUtc"/> with
+		/// its own wall clock: the stamp is the database's, so that comparison measured the skew
+		/// between the two machines along with the time left, and a daemon five minutes ahead of the
+		/// database refused every command it was given.
+		/// </remarks>
+		public double? ExpiresInSeconds { get; set; }
+
+		/// <summary>When a daemon took it, by the database clock.</summary>
 		public DateTime? ClaimedUtc { get; set; }
 
 		/// <summary>Which daemon instance took it.</summary>
 		public string ClaimedBy { get; set; }
 
-		/// <summary>When it finished.</summary>
+		/// <summary>When it finished, by the database clock.</summary>
 		public DateTime? CompletedUtc { get; set; }
 
 		/// <summary>Whether it worked.</summary>

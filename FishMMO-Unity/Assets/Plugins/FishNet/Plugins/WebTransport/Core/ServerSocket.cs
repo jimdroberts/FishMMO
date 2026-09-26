@@ -925,6 +925,7 @@ namespace FishNet.Transporting.WebTransport.Server
 			this.clientsLock.EnterWriteLock();
 			try
 			{
+				TransportTrafficCounters.OnServerSessionsClosed(this.clients.Count);
 				this.clients.Clear();
 				this.idMapToNative.Clear();
 				this.idMapFromNative.Clear();
@@ -1025,7 +1026,13 @@ namespace FishNet.Transporting.WebTransport.Server
 					this.serverHandle, nativeId, packet.Data, packet.Length);
 			}
 
-			if (result != 0)
+			if (result == 0)
+			{
+				/* Counted per recipient: a broadcast is serialised once but sent, and paid for,
+				 * once per client. */
+				TransportTrafficCounters.CountSent(packet.Channel, packet.Length);
+			}
+			else
 			{
 				if (this.outboundKicked.Contains(connectionId))
 					return;
@@ -1189,6 +1196,7 @@ namespace FishNet.Transporting.WebTransport.Server
 							return;
 						}
 						this.clients.Add(fishNetId);
+						TransportTrafficCounters.OnServerSessionOpened();
 						idMapToNative[fishNetId] = nativeConnectionId;
 						idMapFromNative[nativeConnectionId] = fishNetId;
 						clientAddresses[fishNetId] = remoteAddr;
@@ -1240,7 +1248,8 @@ namespace FishNet.Transporting.WebTransport.Server
 					this.clientsLock.EnterWriteLock();
 					try
 					{
-						this.clients.Remove(fishNetId);
+						if (this.clients.Remove(fishNetId))
+							TransportTrafficCounters.OnServerSessionsClosed(1);
 						this.idMapToNative.Remove(fishNetId);
 						this.idMapFromNative.Remove(nativeConnectionId);
 						this.clientAddresses.Remove(fishNetId);
@@ -1276,6 +1285,10 @@ namespace FishNet.Transporting.WebTransport.Server
 				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid stream data length {length} from connection {nativeConnectionId}. Dropping.");
 				return;
 			}
+
+			/* Counted on arrival, before the rate limiter: a flooder's refused messages still
+			 * crossed the wire and still cost bandwidth, which is what these figures are for. */
+			TransportTrafficCounters.CountReceived(0, length);
 
 			// Per-connection budget, before the copy and before the shared queue.
 			if (!TryAdmitInbound(nativeConnectionId, out InboundBucket bucket) ||
@@ -1346,6 +1359,8 @@ namespace FishNet.Transporting.WebTransport.Server
 				transport.NetworkManager?.LogWarning($"[WebTransport Server] Invalid datagram length {length} from connection {nativeConnectionId}. Dropping.");
 				return;
 			}
+
+			TransportTrafficCounters.CountReceived(1, length);
 
 			// Per-connection budget, before the copy and before the shared queue.
 			if (!TryAdmitInbound(nativeConnectionId, out InboundBucket bucket) ||

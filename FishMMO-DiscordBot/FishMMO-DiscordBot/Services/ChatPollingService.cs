@@ -8,8 +8,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using FishMMO.Database;
+using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql;
-using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database.Npgsql.Services;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace FishMMO.DiscordBot.Services
@@ -19,10 +22,39 @@ namespace FishMMO.DiscordBot.Services
 	/// and forwards them to the appropriate Discord channels.
 	/// Uses a reentrancy guard to prevent overlapping polls.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>A window, not an ID cursor.</b> The relay used to read <c>id &gt; last id seen</c>. Chat
+	/// IDs are taken when a row is INSERTed and the row becomes visible when its transaction
+	/// commits, so a row that committed after a higher ID had already been read was skipped for
+	/// good (hot-path audit H5). It now reads through <see cref="ChatReadWindow"/>, the same window
+	/// the scene servers' pump keeps: each read starts a commit window behind what it has settled
+	/// and skips by ID what it has already handled, so no row is skipped and none is relayed twice.
+	/// </para>
+	/// <para>
+	/// <b>Bounded.</b> Each poll reads at most <see cref="RelayMaxPagesPerPoll"/> pages of
+	/// <see cref="RelayPageSize"/> rows. A relay that has fallen behind — Discord was unreachable
+	/// for a while — catches up over several polls instead of in one query of unbounded size.
+	/// </para>
+	/// <para>
+	/// <b>No replay at startup.</b> The first read starts at the database's own "now", and nothing
+	/// stamped before it is ever read, so a restarted bot does not republish history.
+	/// </para>
+	/// </remarks>
 	public class ChatPollingService : IHostedService, IDisposable
 	{
+		/// <summary>Rows per page of one relay read.</summary>
+		private const int RelayPageSize = 200;
+
+		/// <summary>
+		/// Most pages one poll reads. With <see cref="RelayPageSize"/>, the most rows one poll
+		/// handles; the rest wait for the next poll.
+		/// </summary>
+		private const int RelayMaxPagesPerPoll = 5;
+
 		private readonly DiscordSocketClient discordClient;
 		private readonly NpgsqlDbContextFactory dbContextFactory;
+		private readonly IChatService chatService;
 		private readonly ILogger<ChatPollingService> logger;
 		private readonly DynamicChannelManagerService dynamicChannelManager;
 		private readonly BridgeBanService bridgeBanService;
@@ -31,7 +63,12 @@ namespace FishMMO.DiscordBot.Services
 		private readonly SemaphoreSlim pollLock = new SemaphoreSlim(1, 1);
 		private Timer? timer;
 		private readonly int pollingIntervalSeconds;
-		private long lastProcessedChatId;
+
+		/// <summary>
+		/// Where the relay has got to in the chat table. Touched only inside a poll, which
+		/// <see cref="pollLock"/> keeps to one at a time.
+		/// </summary>
+		private readonly ChatReadWindow readWindow = new ChatReadWindow(TimeSpan.FromSeconds(ChatService.PumpCommitWindowSeconds));
 		private readonly ulong? defaultGuildId;
 		private int disposed;
 
@@ -40,6 +77,7 @@ namespace FishMMO.DiscordBot.Services
 		/// </summary>
 		/// <param name="discordClient">The Discord socket client.</param>
 		/// <param name="dbContextFactory">Factory for creating database contexts.</param>
+		/// <param name="chatService">Chat persistence; the relay reads new rows through it.</param>
 		/// <param name="logger">Logger instance.</param>
 		/// <param name="configuration">Application configuration.</param>
 		/// <param name="dynamicChannelManager">Service managing dynamic Discord channels.</param>
@@ -47,6 +85,7 @@ namespace FishMMO.DiscordBot.Services
 		public ChatPollingService(
 			DiscordSocketClient discordClient,
 			NpgsqlDbContextFactory dbContextFactory,
+			IChatService chatService,
 			ILogger<ChatPollingService> logger,
 			IConfiguration configuration,
 			DynamicChannelManagerService dynamicChannelManager,
@@ -56,6 +95,7 @@ namespace FishMMO.DiscordBot.Services
 		{
 			this.discordClient = discordClient;
 			this.dbContextFactory = dbContextFactory;
+			this.chatService = chatService;
 			this.logger = logger;
 			this.dynamicChannelManager = dynamicChannelManager;
 			this.bridgeBanService = bridgeBanService;
@@ -136,53 +176,27 @@ namespace FishMMO.DiscordBot.Services
 
 			ulong guildId = defaultGuildId.Value;
 
-			using var dbContext = dbContextFactory.CreateDbContext();
-
-			if (lastProcessedChatId == 0)
+			bool firstRead = !readWindow.LastReadStartedUtc.HasValue;
+			DatabaseResult<ChatPumpPage> read = await chatService.FetchRelayAsync(new ChatRelayQuery
 			{
-				var highestId = await dbContext.Chat
-					.AsQueryable()
-					.OrderByDescending(c => c.ID)
-					.Select(c => c.ID)
-					.FirstOrDefaultAsync();
-				lastProcessedChatId = highestId;
-				logger.LogInformation("Initialized lastProcessedChatId to {LastProcessedId}.", lastProcessedChatId);
-			}
+				FromUtc = readWindow.Watermark,
+				ExcludeIds = readWindow.SnapshotSeenIds(),
+				PageSize = RelayPageSize,
+				MaxPages = RelayMaxPagesPerPoll,
+			});
 
-			var newChatMessages = await dbContext.Chat
-				.AsQueryable()
-				.Where(c => c.ID > lastProcessedChatId)
-				// Bridged Discord messages are excluded here so the relay cannot echo its own
-				// traffic back. Everything else is fetched so the cursor advances and so link
-				// verification can scan it; what is actually SENT is decided by relayPolicy below.
-				.Where(c => c.Channel != (byte)ChatChannel.Discord)
-				.OrderBy(c => c.ID)
-				.ToListAsync();
-
-			if (newChatMessages.Count == 0)
+			// A failed read settles nothing: the next poll reads the same window again.
+			if (!read.IsSuccess || read.Data == null)
 			{
+				logger.LogError("Could not read new chat messages: [{ErrorCode}] {ErrorMessage}", read.ErrorCode, read.ErrorMessage);
 				return;
 			}
 
-			/* The cursor moves once the batch's database reads below have succeeded, not before. It
-			 * used to move first, so a read that threw — or a Discord send that threw part-way through
-			 * the batch — lost every message after it for good. Now a failed read leaves the batch to be
-			 * read again, and each send is caught on its own, so one refusal costs one message. */
-			long batchEndId = newChatMessages[newChatMessages.Count - 1].ID;
-
-			// Check for account link verification codes in all new messages
-			foreach (var msg in newChatMessages)
+			ChatPumpPage page = read.Data;
+			List<ChatData> newChatMessages = page.Messages ?? new List<ChatData>();
+			if (firstRead)
 			{
-				if (!string.IsNullOrEmpty(msg.CharacterName) && !string.IsNullOrEmpty(msg.Message))
-				{
-					var verification = await accountLinkingService.TryVerifyFromChatAsync(
-						msg.CharacterName, msg.AccountName ?? string.Empty, msg.Message);
-
-					if (verification != null)
-					{
-						await NotifyLinkOutcomeAsync(verification);
-					}
-				}
+				logger.LogInformation("Relaying game chat stamped from {ReadStartedUtc:o} (database clock) on; nothing earlier is replayed.", page.ReadStartedUtc);
 			}
 
 			// Batch-collect IDs for entities we need from the DB
@@ -203,8 +217,90 @@ namespace FishMMO.DiscordBot.Services
 				}
 			}
 
-			// Batch-fetch world servers
 			var worldServerNames = new Dictionary<long, string>();
+			var sceneServerNames = new Dictionary<long, string>();
+			var characterNames = new Dictionary<long, string>();
+			try
+			{
+				await ReadLabelsAsync(worldIdsNeeded, sceneIdsNeeded, charIdsNeeded, worldServerNames, sceneServerNames, characterNames);
+			}
+			catch (Exception) when (firstRead)
+			{
+				/* The first read's start is where the relay begins, even though its rows go
+				 * unhandled this time: without it the next poll would start at a new "now" and
+				 * begin after them. Settling a read that handled nothing moves the start no
+				 * further than the floor, so they are read again. */
+				readWindow.CompleteRead(page.ReadStartedUtc, drained: false, lastRowTimeUtc: null);
+				throw;
+			}
+
+			/* Every read this batch needs has succeeded. A read above that threw left the window
+			 * unsettled and every row unrecorded, so the next poll reads the batch again. From here
+			 * each row is recorded as handled BEFORE anything is done with it, so a row whose
+			 * verification or send fails costs that row once and is never relayed twice; and each
+			 * is caught on its own, so one refusal costs one message. */
+			DateTime? lastRowTime = null;
+			foreach (ChatData chatMessage in newChatMessages)
+			{
+				lastRowTime = chatMessage.TimeCreated;
+				if (!readWindow.Admit(chatMessage.ID, chatMessage.TimeCreated))
+				{
+					continue;
+				}
+
+				// Account link verification codes can be typed in any channel.
+				if (!string.IsNullOrEmpty(chatMessage.CharacterName) && !string.IsNullOrEmpty(chatMessage.Message))
+				{
+					try
+					{
+						var verification = await accountLinkingService.TryVerifyFromChatAsync(
+							chatMessage.CharacterName, chatMessage.AccountName ?? string.Empty, chatMessage.Message);
+
+						if (verification != null)
+						{
+							await NotifyLinkOutcomeAsync(verification);
+						}
+					}
+					catch (Exception ex)
+					{
+						logger.LogError(ex, "Could not check chat message {ChatId} for an account link code; continuing with the rest of the batch.", chatMessage.ID);
+					}
+				}
+
+				try
+				{
+					await ForwardAsync(chatMessage, guildId, worldServerNames, sceneServerNames, characterNames);
+				}
+				catch (Exception ex)
+				{
+					logger.LogError(ex, "Could not forward chat message {ChatId} to Discord; continuing with the rest of the batch.", chatMessage.ID);
+				}
+			}
+
+			// Settled even when the read returned nothing: an idle relay's window still moves on.
+			readWindow.CompleteRead(page.ReadStartedUtc, page.Drained, lastRowTime);
+		}
+
+		/// <summary>
+		/// Reads the world, scene and character names a batch needs to label its lines, in one
+		/// query each. Throws on a failed read, leaving the batch unhandled.
+		/// </summary>
+		private async Task ReadLabelsAsync(
+			HashSet<long> worldIdsNeeded,
+			HashSet<long> sceneIdsNeeded,
+			HashSet<long> charIdsNeeded,
+			Dictionary<long, string> worldServerNames,
+			Dictionary<long, string> sceneServerNames,
+			Dictionary<long, string> characterNames)
+		{
+			if (worldIdsNeeded.Count == 0 && sceneIdsNeeded.Count == 0 && charIdsNeeded.Count == 0)
+			{
+				return;
+			}
+
+			using var dbContext = dbContextFactory.CreateDbContext();
+
+			// Batch-fetch world servers
 			if (worldIdsNeeded.Count > 0)
 			{
 				var worldServers = await dbContext.WorldServers.AsQueryable()
@@ -217,7 +313,6 @@ namespace FishMMO.DiscordBot.Services
 			}
 
 			// Batch-fetch scene servers
-			var sceneServerNames = new Dictionary<long, string>();
 			if (sceneIdsNeeded.Count > 0)
 			{
 				var sceneServers = await dbContext.SceneServers.AsQueryable()
@@ -230,7 +325,6 @@ namespace FishMMO.DiscordBot.Services
 			}
 
 			// Batch-fetch character names
-			var characterNames = new Dictionary<long, string>();
 			if (charIdsNeeded.Count > 0)
 			{
 				var characters = await dbContext.Characters.AsQueryable()
@@ -241,26 +335,11 @@ namespace FishMMO.DiscordBot.Services
 					characterNames[ch.ID] = ch.Name ?? "Unknown Character";
 				}
 			}
-
-			// Every read this batch needs has succeeded; nothing below reads the database.
-			lastProcessedChatId = batchEndId;
-
-			foreach (var chatMessage in newChatMessages)
-			{
-				try
-				{
-					await ForwardAsync(chatMessage, guildId, worldServerNames, sceneServerNames, characterNames);
-				}
-				catch (Exception ex)
-				{
-					logger.LogError(ex, "Could not forward chat message {ChatId} to Discord; continuing with the rest of the batch.", chatMessage.ID);
-				}
-			}
 		}
 
 		/// <summary>Relays one chat row to its Discord channel, if it passes the relay gate.</summary>
 		private async Task ForwardAsync(
-			ChatEntity chatMessage,
+			ChatData chatMessage,
 			ulong guildId,
 			Dictionary<long, string> worldServerNames,
 			Dictionary<long, string> sceneServerNames,
@@ -268,16 +347,15 @@ namespace FishMMO.DiscordBot.Services
 		{
 			/* THE relay gate. Nothing reaches Discord without passing an explicit allowlist.
 			 *
-			 * This check used to be the `Channel != Discord` filter on the query above and
+			 * This check used to be the `Channel != Discord` filter on the relay's query and
 			 * nothing else, which meant every channel the game has — including whispers,
 			 * guild chat and party chat — was published to a public Discord channel. See
 			 * ChatRelayPolicy for what the allowlist contains and why private channels cannot
 			 * be added to it from configuration.
 			 *
 			 * The gate is here rather than in the query on purpose: the query still has to
-			 * see every row so the cursor advances past channels we do not relay, and so the
-			 * account-link verification pass below can spot a verification code wherever a
-			 * player typed it. Neither of those republishes anything. */
+			 * return every row so the account-link verification pass can spot a verification
+			 * code wherever a player typed it. That pass republishes nothing. */
 			if (!relayPolicy.IsRelayable(chatMessage.Channel))
 			{
 				return;

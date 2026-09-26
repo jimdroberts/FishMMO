@@ -463,17 +463,28 @@ public override ServerComponentInitializationStatus InitializeOnce()
 **5.1 Server.LateUpdate() (Every Frame)**
 ```
 → Calculate deltaTime
-→ Update all ServerBehaviours:
-    • foreach behaviour in ServerBehaviours:
+→ Update all ServerBehaviours (UpdateServerBehaviours):
+    • foreach behaviour in a snapshot of ServerBehaviours:
         if (behaviour.Initialized)
-            behaviour.OnLateUpdate(deltaTime)
-→ Process periodic callbacks:
+            try   behaviour.OnLateUpdate(deltaTime)
+            catch → that behaviour's RepeatingFaultLog (first trace in full, then counted summaries)
+→ Process periodic callbacks (UpdatePeriodicCallbacks):
     • foreach callback in periodicCallbacks:
         callback.TimeRemaining -= deltaTime
-        if (TimeRemaining <= 0)
-            callback.Action.Invoke(deltaTime)
-            callback.TimeRemaining = callback.Interval
+        callback.Elapsed += deltaTime
+    • foreach callback now due (TimeRemaining <= 0), at most once per frame:
+        callback.TimeRemaining += callback.Interval   (overshoot carried; restarts after a hitch longer than an interval)
+        try   callback.Action.Invoke(elapsed)          (the real time since its last run, not the interval)
+        catch → the callback's RepeatingFaultLog
 ```
+
+Each behaviour and each periodic callback is isolated: one that throws no longer skips every
+behaviour after it and that frame's periodic callbacks (saves, pumps), and a throw that repeats
+every frame logs one full trace plus a periodic count instead of a trace per frame. A callback's
+first run is at a random phase in (0, interval] (`RandomInitialPhase`), so work registered on the
+same frame — the 30 s save, the 60 s item snapshot, the 5 s and 10 s sweeps — spreads across its
+interval instead of landing on one frame every time. A callback that assumed its argument was its
+nominal interval must use the value it is given.
 
 **5.2 Client Connections**
 ```
@@ -650,10 +661,10 @@ Unity Engine Start
             ├─▶ Server.LateUpdate()
             │   ├─ Calculate deltaTime
             │   ├─ Update all ServerBehaviours:
-            │   │   ╰─ behaviour.OnLateUpdate(deltaTime)
+            │   │   ╰─ behaviour.OnLateUpdate(deltaTime), each in its own try/catch
             │   ╰─ Process periodic callbacks:
-            │       ├─ Decrement TimeRemaining
-            │       ╰─ Invoke callback when TimeRemaining <= 0
+            │       ├─ Decrement TimeRemaining, accumulate Elapsed
+            │       ╰─ When due: carry the overshoot, invoke with Elapsed, each in its own try/catch
             │
             ╰─▶ READY FOR CLIENT CONNECTIONS
                 ├─ Client connects

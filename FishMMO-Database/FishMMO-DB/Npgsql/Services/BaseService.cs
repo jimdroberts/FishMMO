@@ -1316,6 +1316,36 @@ namespace FishMMO.Database.Npgsql.Services
 			return Convert.ToInt64(result);
 		}
 
+		/// <summary>
+		/// The database's UTC wall time as a statement runs: <c>clock_timestamp()</c>, as a UTC
+		/// <c>timestamp without time zone</c> like every stamp this layer writes.
+		/// </summary>
+		/// <remarks>
+		/// <c>clock_timestamp()</c> rather than <c>now()</c>: <c>now()</c> is the start of the
+		/// transaction, and a caller that reads the clock after its row locks were granted means the
+		/// instant it was granted them. A read that wants one instant for several statements in one
+		/// snapshot uses <c>now()</c> itself, as the server board does.
+		/// </remarks>
+		protected const string DatabaseUtcClockSql = "(clock_timestamp() AT TIME ZONE 'UTC')";
+
+		/// <summary>
+		/// Reads the database's UTC wall time (<see cref="DatabaseUtcClockSql"/>) on the ambient
+		/// connection and transaction.
+		/// </summary>
+		/// <remarks>
+		/// For a service that judges instants the database wrote — a pulse, a heartbeat, a deadline
+		/// a server counts down against — so that its "now" comes from the clock that wrote them.
+		/// The calling process's <see cref="DateTime.UtcNow"/> is another host's clock: subtracted
+		/// from a database stamp it measures that host's skew along with the age, so a panel a minute
+		/// fast calls every healthy server silent, and a deadline planned from it moves by the skew.
+		/// </remarks>
+		/// <returns>The database's current UTC time, with <see cref="DateTimeKind.Utc"/>.</returns>
+		protected static async Task<DateTime> ReadDatabaseUtcNowAsync(NpgsqlDbContext dbContext, CancellationToken cancellationToken)
+		{
+			var result = await ExecuteScalarCoreAsync(dbContext, "SELECT " + DatabaseUtcClockSql, Array.Empty<object>(), cancellationToken).ConfigureAwait(false);
+			return DateTime.SpecifyKind(Convert.ToDateTime(result), DateTimeKind.Utc);
+		}
+
 		private static async Task<object> ExecuteScalarCoreAsync(
 			NpgsqlDbContext dbContext,
 			string sql,

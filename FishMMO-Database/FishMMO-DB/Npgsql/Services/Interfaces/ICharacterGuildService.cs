@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Database.Data;
@@ -80,5 +81,22 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </para>
 		/// </remarks>
 		Task<DatabaseResult<bool>> UpdateLocationAsync(long characterId, long guildId, string location, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches the rosters of several guilds in one query.
+		/// </summary>
+		/// <remarks>
+		/// For the scene server's guild update pump. It used to read each changed guild's roster in
+		/// its own round trip — two, with the ladder — so a login wave touching many guilds cost two
+		/// serial queries per guild before any of them could be delivered. Each row carries the same
+		/// columns as <c>FetchManyAsync(long)</c>, race and last-seen included.
+		/// </remarks>
+		/// <param name="guildIds">The guilds to read. Non-positive and repeated IDs are ignored.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// One entry per distinct requested guild, ALWAYS present: a guild with no membership rows
+		/// maps to an empty list, as <c>FetchManyAsync(long)</c> answers for it.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterGuildData>>>> FetchManyAsync(long[] guildIds, CancellationToken cancellationToken = default);
 	}
 }

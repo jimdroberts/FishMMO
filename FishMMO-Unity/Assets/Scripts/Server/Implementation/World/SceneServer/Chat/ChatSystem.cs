@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using ChatService = FishMMO.Database.Npgsql.Services.ChatService;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
@@ -51,12 +52,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private int maxIncomingChatsPerFrame = 500;
 
 		/// <summary>
-		/// Hard cap on the incoming chat queue size. If a client enqueues a message
-		/// while the queue already has this many entries, the connection is kicked
-		/// to prevent memory exhaustion from a flood attack.
+		/// Hard cap on the incoming chat queue size. A message arriving while the queue already
+		/// has this many entries is dropped, and the drops are logged.
 		/// </summary>
-		[Tooltip("Maximum pending incoming chat messages before the sender is kicked (DoS protection)")]
+		/// <remarks>
+		/// Dropped, not kicked. Every sender is charged its rate tokens before its message is
+		/// queued (see <see cref="ChatRateGate"/>), so no one sender can fill the queue; reaching
+		/// the cap means many senders within their limits at once — a main-thread hitch, not an
+		/// attack — and the connection that happens to arrive next is no more guilty than the rest.
+		/// </remarks>
+		[Tooltip("Maximum pending incoming chat messages; beyond it new messages are dropped (memory bound)")]
 		[SerializeField] private int maxIncomingQueueSize = 10000;
+
+		/// <summary>
+		/// Messages dropped at the incoming cap since the last log line. Main thread only.
+		/// </summary>
+		private int incomingOverflowDrops;
+
+		/// <summary>
+		/// <see cref="MonotonicClock.NowTicks"/> before which another incoming-cap log line is not
+		/// written. Main thread only.
+		/// </summary>
+		private long nextIncomingOverflowLogTicks;
 
 		/// <summary>
 		/// Internal message rate limit tracker.
@@ -178,10 +195,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		[Tooltip("The server chat message pump rate limit in seconds.")]
 		[SerializeField] private float messagePumpRate = 2.0f;
+
 		/// <summary>
-		/// Number of chat messages to fetch per database poll.
+		/// Rows per page of a pump read.
 		/// </summary>
-		[SerializeField] private int messageFetchCount = 20;
+		/// <remarks>
+		/// Replaces <c>messageFetchCount</c> (20), which was the WHOLE of a read: one page of the
+		/// entire shard's chat every two seconds, however far behind the pump was. Above about
+		/// ten persisted lines a second across all servers the backlog grew without limit and
+		/// whispers arrived minutes late (hot-path audit H6). A read now keeps going while its
+		/// pages come back full, and only rows relevant to this server count against it.
+		/// </remarks>
+		[Tooltip("Rows per page of a chat pump read. Pages are read while they come back full, up to the page limit.")]
+		[SerializeField] private int messagePumpPageSize = 100;
+
+		/// <summary>
+		/// Most pages one pump read may walk, bounding a read's work when the pump has fallen behind.
+		/// </summary>
+		/// <remarks>
+		/// At the defaults a read takes up to 1,000 relevant rows, 500 a second at a two-second
+		/// pump. A read that stops at the limit carries on from where it stopped on the next pump.
+		/// </remarks>
+		[Tooltip("Most pages one chat pump read may walk before leaving the rest for the next pump.")]
+		[SerializeField] private int messagePumpMaxPages = 10;
+
 		/// <summary>
 		/// If true, allows repeat messages from clients without spam filtering.
 		/// </summary>
@@ -190,10 +227,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// The server chat message pump rate limit in seconds.
 		/// </summary>
 		public float MessagePumpRate => messagePumpRate;
+
 		/// <summary>
-		/// Number of chat messages to fetch per database poll.
+		/// Fetch failures of the chat pump. Touched only by the one pump in flight, which the
+		/// in-flight flag serialises, so never by two threads at once.
 		/// </summary>
-		public int MessageFetchCount => messageFetchCount;
+		private readonly RepeatingFaultLog pumpFetchFaults = new RepeatingFaultLog("ChatSystem", "Chat message pump fetch");
+
+		/// <summary>
+		/// Ticks of the database clock at the start of a FIRST pump read whose rows could not be
+		/// handed to the main thread, or 0. Written by the worker, taken by the next query build.
+		/// See <see cref="ChatPumpCursor.PinFloor"/>.
+		/// </summary>
+		private long pendingPumpFloorTicks;
+
+		/// <summary>
+		/// Failures delivering pumped rows on the main thread.
+		/// </summary>
+		private readonly RepeatingFaultLog pumpDeliveryFaults = new RepeatingFaultLog("ChatSystem", "Chat message pump delivery");
+
+		/// <summary>
+		/// Monotonic seconds for <see cref="RepeatingFaultLog"/>, safe off the main thread.
+		/// </summary>
+		private static double MonotonicSeconds => System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
 
 		/// <summary>
 		/// Initializes the chat system, registering broadcast handlers and chat helper commands.
@@ -260,6 +316,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(MessagePumpRate, OnPeriodicMessagePump);
 				periodicSystem.RegisterPeriodicCallback(persistFlushIntervalSeconds, OnPeriodicPersistFlush);
 				periodicSystem.RegisterPeriodicCallback(outboundBatchIntervalSeconds, OnPeriodicOutboundFlush);
+				periodicSystem.RegisterPeriodicCallback(FloodMuteSweepIntervalSeconds, OnPeriodicFloodMuteSweep);
 			}
 
 			/* Clamp the inspector value to the wire contract.
@@ -283,13 +340,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			outboundBatchIntervalSeconds = Mathf.Max(0.01f, outboundBatchIntervalSeconds);
 			maxOutboundBatchSize = Mathf.Max(1, maxOutboundBatchSize);
 			maxBufferedWorldMessages = Mathf.Max(1, maxBufferedWorldMessages);
+			messagePumpPageSize = Mathf.Clamp(messagePumpPageSize, 1, ChatService.MaxPumpPageSize);
+			messagePumpMaxPages = Mathf.Clamp(messagePumpMaxPages, 1, ChatService.MaxPumpPages);
 
 			/* Cleared here rather than trusted. This object outlives a play session in the editor,
 			 * and a flag left set by one that was torn down mid-flush would stop the next from ever
 			 * persisting a line of chat. */
 			Interlocked.Exchange(ref persistFlushInFlight, 0);
+			incomingOverflowDrops = 0;
+			nextIncomingOverflowLogTicks = 0;
 
-			Log.Debug("ChatSystem", $"Initialized (MessagePumpRate={MessagePumpRate}s, FetchCount={MessageFetchCount})");
+			// Flood mute settings and state. See ChatSystem.FloodMute.cs.
+			InitializeFloodMute();
+
+			Log.Debug("ChatSystem", $"Initialized (MessagePumpRate={MessagePumpRate}s, PumpPageSize={messagePumpPageSize}, PumpMaxPages={messagePumpMaxPages})");
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -345,7 +409,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicMessagePump);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPersistFlush);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicOutboundFlush);
+				periodicSystem.UnregisterPeriodicCallback(OnPeriodicFloodMuteSweep);
 			}
+
+			floodMuteStates.Clear();
 		}
 
 		/// <summary>
@@ -463,22 +530,53 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Periodic callback that fetches and processes chat messages from the database asynchronously.
+		/// Periodic callback that starts one read of the cross-server chat pump.
 		/// </summary>
-		/// <param name="deltaTime">Delta time parameter (unused).</param>
+		/// <remarks>
+		/// <para>
+		/// The pump is the only way a whisper, party or guild line reaches a player on a different
+		/// scene server from its sender, and the way World, Trade and Discord lines reach every
+		/// scene server but the sender's. Each read asks the database for the rows relevant to
+		/// somebody this server hosts, starting a commit window behind what it has settled and
+		/// skipping by ID what it has already handled. See <see cref="ChatPumpCursor"/> for why it
+		/// is a window rather than a cursor, and <c>ChatService.FetchPumpAsync</c> for the query.
+		/// </para>
+		/// <para>
+		/// What is relevant is read from the server's own maps HERE, on the main thread, and the
+		/// read carries a snapshot of it: the maps are not safe to touch from the worker.
+		/// </para>
+		/// </remarks>
+		/// <param name="deltaTime">Elapsed seconds (unused).</param>
 		private void OnPeriodicMessagePump(float deltaTime)
 		{
-			if (Initialized &&
-				Server != null &&
-				Server.ServerState == ConnectionState.Started &&
-				Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
+			if (!Initialized ||
+				Server == null ||
+				Server.ServerState != ConnectionState.Started ||
+				!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> _) ||
+				!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData))
 			{
-				if (!runtimeData.TryBeginMessagePump())
-				{
-					return;
-				}
+				return;
+			}
 
-				if (!TryEnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync()))
+			if (!runtimeData.TryBeginMessagePump())
+			{
+				return;
+			}
+
+			bool handedOff = false;
+			try
+			{
+				ChatPumpQuery query = BuildPumpQuery(runtimeData);
+				handedOff = TryEnqueueAsyncWork(() => FetchAndProcessChatMessagesAsync(query));
+			}
+			catch (Exception ex)
+			{
+				pumpDeliveryFaults.Report(ex, MonotonicSeconds);
+			}
+			finally
+			{
+				// A read that never started must not leave the pump believing one is in flight.
+				if (!handedOff)
 				{
 					runtimeData.EndMessagePump();
 				}
@@ -486,10 +584,93 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Asynchronously fetches new chat messages from the database and marshals processing to the main thread.
+		/// Snapshots what this server hosts into a pump query, and records the keys on the cursor.
+		/// Main thread only.
 		/// </summary>
+		/// <param name="runtimeData">The chat runtime data holding the cursor.</param>
+		/// <returns>The query for one read.</returns>
+		private ChatPumpQuery BuildPumpQuery(IChatSystemRuntimeData runtimeData)
+		{
+			var keys = new HashSet<ChatPumpKey>();
+			var worldIds = new List<long>();
+			var partyIds = new List<long>();
+			var guildIds = new List<long>();
+			var names = new List<string>();
+
+			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+			{
+				foreach (KeyValuePair<long, Dictionary<long, IPlayerCharacter>> world in mappingData.CharactersByWorld)
+				{
+					if (world.Value != null && world.Value.Count > 0)
+					{
+						worldIds.Add(world.Key);
+						keys.Add(ChatPumpKey.World(world.Key));
+					}
+				}
+
+				// The only possible tell targets here; a whisper to anybody else is another server's.
+				foreach (string nameLowerCase in mappingData.CharactersByLowerCaseName.Keys)
+				{
+					if (!string.IsNullOrEmpty(nameLowerCase))
+					{
+						names.Add(nameLowerCase);
+						keys.Add(ChatPumpKey.Tell(nameLowerCase));
+					}
+				}
+			}
+
+			if (Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var partyData))
+			{
+				foreach (KeyValuePair<long, HashSet<long>> party in partyData.PartyCharacterTracker)
+				{
+					if (party.Key > 0 && party.Value != null && party.Value.Count > 0)
+					{
+						partyIds.Add(party.Key);
+						keys.Add(ChatPumpKey.Party(party.Key));
+					}
+				}
+			}
+
+			if (Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var guildData))
+			{
+				foreach (KeyValuePair<long, HashSet<long>> guild in guildData.GuildCharacterTracker)
+				{
+					if (guild.Key > 0 && guild.Value != null && guild.Value.Count > 0)
+					{
+						guildIds.Add(guild.Key);
+						keys.Add(ChatPumpKey.Guild(guild.Key));
+					}
+				}
+			}
+
+			ChatPumpCursor cursor = runtimeData.PumpCursor;
+			long lostFirstReadTicks = System.Threading.Interlocked.Exchange(ref pendingPumpFloorTicks, 0);
+			if (lostFirstReadTicks != 0)
+			{
+				cursor.PinFloor(new DateTime(lostFirstReadTicks, DateTimeKind.Utc));
+			}
+			cursor.BeginRead(keys);
+
+			return new ChatPumpQuery
+			{
+				FromUtc = cursor.Watermark,
+				ExcludeIds = cursor.SnapshotSeenIds(),
+				SceneServerId = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var sceneRuntimeData) ? sceneRuntimeData.ID : 0,
+				WorldServerIds = worldIds.ToArray(),
+				PartyIds = partyIds.ToArray(),
+				GuildIds = guildIds.ToArray(),
+				TellTargetsLowerCase = names.ToArray(),
+				PageSize = messagePumpPageSize,
+				MaxPages = messagePumpMaxPages,
+			};
+		}
+
+		/// <summary>
+		/// Runs one pump read on the async worker and hands the rows to the main thread.
+		/// </summary>
+		/// <param name="query">The read, snapshotted on the main thread.</param>
 		/// <returns>Asynchronous fetch-and-process task.</returns>
-		private async Task FetchAndProcessChatMessagesAsync()
+		private async Task FetchAndProcessChatMessagesAsync(ChatPumpQuery query)
 		{
 			bool handedOffToMainThread = false;
 			try
@@ -499,78 +680,56 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					return;
 				}
-				if (!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> _))
-				{
-					return;
-				}
-				if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData data))
-				{
-					return;
-				}
-				if (Server?.Database?.ServiceRegistry == null)
-				{
-					return;
-				}
-				if (!Server.Database.ServiceRegistry.TryGet<IChatService>(out var chatService))
+				if (!TryGetDbService(out IChatService chatService))
 				{
 					return;
 				}
 
-				long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData) ? runtimeData.ID : 0;
+				DatabaseResult<ChatPumpPage> result = await chatService.FetchPumpAsync(query);
 
-				// Capture fetch state from main-thread data container
-				DateTime lastFetchTime = data.LastFetchTime;
-				long lastFetchPosition = data.LastFetchPosition;
-				int fetchCount = MessageFetchCount;
-
-				// Async DB fetch on background thread
-				DatabaseResult<List<ChatData>> result = await chatService.FetchAsync(lastFetchTime, lastFetchPosition, fetchCount, sceneServerID);
-
-				/* A failed fetch leaves the cursor where it was, so nothing is skipped — the next pump
-				 * asks again. It is still logged: this pump is the only way a whisper, party or guild
-				 * line reaches a player on another scene server, and an outage of it is otherwise
-				 * invisible until players notice. */
-				if (!result.IsSuccess)
+				/* A failed read leaves the cursor where it was, so nothing is skipped — the next pump
+				 * asks again. It is still reported: this pump is the only way a whisper, party or
+				 * guild line reaches a player on another scene server, and an outage of it is
+				 * otherwise invisible until players notice. */
+				if (!result.IsSuccess || result.Data == null)
 				{
-					await Log.Warning("ChatSystem", $"Chat message pump fetch failed: [{result.ErrorCode}] {result.ErrorMessage}");
+					pumpFetchFaults.Report(new InvalidOperationException($"[{result.ErrorCode}] {result.ErrorMessage}"), MonotonicSeconds);
 					return;
 				}
+				pumpFetchFaults.ReportSuccess();
 
-				if (result.Data == null || result.Data.Count < 1)
-				{
-					return;
-				}
+				ChatPumpPage page = result.Data;
 
-				List<ChatData> messages = result.Data;
-				ChatData latest = messages[messages.Count - 1];
-
-				// Marshal processing to main thread — Broadcasts must run on main thread
+				/* Handed over even when it holds no rows: the cursor still has to learn where the
+				 * database clock stood, or an idle server's window would never advance and every
+				 * read would scan further back than the last. */
 				if (TryEnqueueMainThread(() =>
 				{
 					try
 					{
-						// Update fetch state on main thread
-						if (Server?.DataContainerRegistry.TryGet(out IChatSystemRuntimeData mainData) == true)
-						{
-							mainData.LastFetchPosition = latest.ID;
-							mainData.LastFetchTime = latest.TimeCreated;
-						}
-
-						ProcessChatMessages(messages);
+						ApplyPumpPage(page);
 					}
 					finally
 					{
-						// Clear pump flag AFTER cursor update, preventing re-fetch of same rows.
+						// Cleared AFTER the cursor moved, so the next read starts from where this one settled.
 						ClearMessagePumpFlag();
 					}
 				}))
 				{
 					handedOffToMainThread = true;
 				}
+				else if (!query.FromUtc.HasValue)
+				{
+					/* A first read whose rows never reach the cursor would leave no record of where it
+					 * started, and the next read would begin at a later "now". Keep its start so the
+					 * next query covers the span. A later read needs nothing: its watermark has not
+					 * moved, so the next read covers the same rows again. */
+					System.Threading.Interlocked.CompareExchange(ref pendingPumpFloorTicks, page.ReadStartedUtc.Ticks, 0);
+				}
 			}
 			catch (Exception ex)
 			{
-				await Log.Error("ChatSystem", $"Error fetching chat messages: {ex}");
+				pumpFetchFaults.Report(ex, MonotonicSeconds);
 			}
 			finally
 			{
@@ -584,35 +743,113 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Processes a list of chat messages, broadcasting them to appropriate channels and clients.
+		/// Delivers the rows of one pump read that the cursor admits, then settles the cursor.
 		/// Must be called on the main thread.
 		/// </summary>
-		/// <param name="messages">List of chat message data to process.</param>
-		private void ProcessChatMessages(List<ChatData> messages)
+		/// <param name="page">The read.</param>
+		private void ApplyPumpPage(ChatPumpPage page)
 		{
-			if (messages == null || messages.Count < 1)
+			if (page == null ||
+				Server == null ||
+				!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) ||
+				runtimeData.PumpCursor == null)
 			{
 				return;
 			}
-			foreach (ChatData message in messages)
+
+			ChatPumpCursor cursor = runtimeData.PumpCursor;
+			DateTime? lastRowTime = null;
+			bool rowFailed = false;
+			try
 			{
-				ChatChannel channel = (ChatChannel)message.Channel;
-				if (channel == ChatChannel.Discord)
+				List<ChatData> messages = page.Messages;
+				for (int i = 0; messages != null && i < messages.Count; i++)
 				{
-					OnSendDiscordMessage(message.WorldServerID, message.SceneServerID, message.Message);
-				}
-				else if (ChatHelper.ChatChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
-				{
-					// sender is intentionally null for pump-sourced messages:
-					// async handlers use null to suppress persistence (already persisted)
-					// and skip sender-specific operations (connection relay, etc.).
-					sayCommand.Func?.Invoke(null, new ChatBroadcast()
+					ChatData message = messages[i];
+					lastRowTime = message.TimeCreated;
+
+					if (!cursor.Admit(message.ID, message.TimeCreated, PumpKeyOf(message)))
 					{
-						Channel = channel,
-						SenderID = message.CharacterID,
-						Text = message.Message,
-					});
+						continue;
+					}
+
+					/* One row that throws costs that row, not the read: it is already recorded as
+					 * handled, so it is not retried forever either. */
+					try
+					{
+						ProcessChatMessage(message);
+					}
+					catch (Exception ex)
+					{
+						rowFailed = true;
+						pumpDeliveryFaults.Report(ex, MonotonicSeconds);
+					}
 				}
+			}
+			finally
+			{
+				cursor.CompleteRead(page.ReadStartedUtc, page.Drained, lastRowTime);
+			}
+			if (!rowFailed)
+			{
+				pumpDeliveryFaults.ReportSuccess();
+			}
+		}
+
+		/// <summary>
+		/// The relevance key of a pumped row, parsed exactly as the pump's SQL matched it.
+		/// </summary>
+		/// <param name="message">The row.</param>
+		/// <returns>The key, or a <see cref="ChatPumpKeyKind.None"/> key for a row with no parsable address.</returns>
+		private static ChatPumpKey PumpKeyOf(ChatData message)
+		{
+			switch ((ChatChannel)message.Channel)
+			{
+				case ChatChannel.World:
+				case ChatChannel.Trade:
+				case ChatChannel.Discord:
+					return ChatPumpKey.World(message.WorldServerID);
+				case ChatChannel.Party:
+					return long.TryParse(ChatPumpKey.FirstWord(message.Message), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long partyID)
+						? ChatPumpKey.Party(partyID)
+						: default;
+				case ChatChannel.Guild:
+					return long.TryParse(ChatPumpKey.FirstWord(message.Message), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long guildID)
+						? ChatPumpKey.Guild(guildID)
+						: default;
+				case ChatChannel.Tell:
+					/* The address, not the first word: a name with a space is written quoted, and
+					 * the SQL extracts it the same way (ChatService.BuildPumpFilterSql). */
+					return ChatTellAddress.TryParseAddress(message.Message, out string targetName)
+						? ChatPumpKey.Tell(targetName)
+						: default;
+				default:
+					return default;
+			}
+		}
+
+		/// <summary>
+		/// Routes one pumped row through its channel's handler with no sender.
+		/// Must be called on the main thread.
+		/// </summary>
+		/// <param name="message">Chat message data to process.</param>
+		private void ProcessChatMessage(ChatData message)
+		{
+			ChatChannel channel = (ChatChannel)message.Channel;
+			if (channel == ChatChannel.Discord)
+			{
+				OnSendDiscordMessage(message.WorldServerID, message.SceneServerID, message.Message);
+			}
+			else if (ChatHelper.ChatChannelCommands.TryGetValue(channel, out ChatCommandDetails sayCommand))
+			{
+				// sender is intentionally null for pump-sourced messages: handlers use null to
+				// suppress persistence (already persisted) and skip sender-specific replies.
+				sayCommand.Func?.Invoke(null, new ChatBroadcast()
+				{
+					Channel = channel,
+					SenderID = message.CharacterID,
+					Text = message.Message,
+				});
 			}
 		}
 
@@ -650,25 +887,94 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Travels inside the struct so no shared mutable state between same-frame messages.
 			msg.ReceivedUtcTicks = DateTime.UtcNow.Ticks;
 
-			// Enqueue into the lock-free incoming queue for main-thread draining.
+			// Enqueue into the incoming queue for time-sliced draining on the main thread.
 			// This decouples the network callback from game-logic processing,
 			// preventing network spikes from freezing gameplay.
-			if (Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) &&
-				runtimeData.IncomingChatQueue != null)
+			if (!Server.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) ||
+				runtimeData.IncomingChatQueue == null)
 			{
-				// DoS protection: atomically increment the counter (O(1)) and check
-				// against the hard cap. If over limit, decrement back and kick.
-				// Replaces ConcurrentQueue.Count which is O(N).
-				int newSize = runtimeData.IncrementIncomingQueueSize();
-				if (newSize > maxIncomingQueueSize)
-				{
-					runtimeData.DecrementIncomingQueueSize();
-					conn.Kick(FishNet.Managing.Server.KickReason.ExploitExcessiveData);
-					return;
-				}
-
-				runtimeData.IncomingChatQueue.Enqueue((conn, msg));
+				return;
 			}
+
+			/* The sender is charged BEFORE the message is queued. See ChatRateGate.
+			 *
+			 * The sender is resolved from the server's own connection map for the same reason the
+			 * drain resolves it there (see DrainIncomingChatQueue). A connection with no resident
+			 * character has nothing to charge, and nothing it sends would be processed anyway. */
+			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var chatCharMapping) ||
+				!chatCharMapping.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter sender) ||
+				sender == null)
+			{
+				return;
+			}
+
+			/* The rate is charged on the monotonic clock, not on ReceivedUtcTicks. That stamp is the
+			 * legal record of when the server received the line, a wall-clock instant that is
+			 * persisted; the bucket and the minimum gap are local durations. Charged on the wall
+			 * clock, a host stepped back refused every sender's next line for the size of the step,
+			 * and each refusal counted towards a flood mute. */
+			long rateTicks = MonotonicClock.NowTicks;
+			if (!TryChargeChatRate(sender, rateTicks))
+			{
+				/* Throttled: dropped, as the bucket always did — but counted, and too many refusals
+				 * in a short window mute the sender and tell them why. See ChatFloodMute. */
+				RecordChatRateRefusal(conn, sender);
+				return;
+			}
+
+			// Memory bound: O(1) atomic counter rather than ConcurrentQueue.Count, which is O(N).
+			int newSize = runtimeData.IncrementIncomingQueueSize();
+			if (newSize > maxIncomingQueueSize)
+			{
+				runtimeData.DecrementIncomingQueueSize();
+				RecordIncomingOverflow(rateTicks);
+				return;
+			}
+
+			runtimeData.IncomingChatQueue.Enqueue((conn, msg));
+		}
+
+		/// <summary>
+		/// Charges one message against the sender's chat rate. See <see cref="ChatRateGate"/>.
+		/// </summary>
+		/// <param name="sender">The sending character, whose rate fields are read and written back.</param>
+		/// <param name="nowTicks"><see cref="MonotonicClock.NowTicks"/> as the message arrived.</param>
+		/// <returns>True if the message may be queued.</returns>
+		private bool TryChargeChatRate(IPlayerCharacter sender, long nowTicks)
+		{
+			var state = new ChatRateGate.State
+			{
+				Tokens = sender.ChatTokens,
+				LastRefillTicks = sender.ChatTokenLastRefillTicks,
+				IsFull = sender.IsChatTokensFull,
+				NextMessageTicks = sender.NextChatMessageTicks,
+			};
+
+			bool allowed = ChatRateGate.TryCharge(ref state, nowTicks, chatTokenBucketCapacity, chatTokenRefillRate, MessageRateLimit);
+
+			sender.ChatTokens = state.Tokens;
+			sender.ChatTokenLastRefillTicks = state.LastRefillTicks;
+			sender.IsChatTokensFull = state.IsFull;
+			sender.NextChatMessageTicks = state.NextMessageTicks;
+			return allowed;
+		}
+
+		/// <summary>
+		/// Counts a message dropped at the incoming cap and logs the count at most every ten seconds.
+		/// </summary>
+		/// <param name="nowTicks"><see cref="MonotonicClock.NowTicks"/> now.</param>
+		private void RecordIncomingOverflow(long nowTicks)
+		{
+			++incomingOverflowDrops;
+			if (nowTicks < nextIncomingOverflowLogTicks)
+			{
+				return;
+			}
+			nextIncomingOverflowLogTicks = nowTicks + TimeSpan.TicksPerSecond * 10;
+			Log.Warning("ChatSystem",
+				$"The incoming chat queue is at its cap of {maxIncomingQueueSize}; dropped {incomingOverflowDrops} message(s) since the last report. " +
+				$"The main thread is draining chat slower than players are sending it within their rate limits.");
+			incomingOverflowDrops = 0;
 		}
 
 		/// <summary>
@@ -726,8 +1032,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * typing three ordinary characters. Nothing is gained by kicking for either case:
 			 * an over-long message is truncated and an empty one is dropped, which refuses the
 			 * exploit just as completely without punishing the honest client that triggers the
-			 * same condition. Flood protection, which is the case a kick is actually right for,
-			 * is unchanged and lives in OnServerChatBroadcastReceived. */
+			 * same condition. Flood protection lives in OnServerChatBroadcastReceived, which charges
+			 * each sender's rate before anything is queued. */
 			if (msg.Text.Length > maxMessageLength)
 			{
 				msg.Text = msg.Text.Substring(0, maxMessageLength);
@@ -758,47 +1064,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Use ticks directly from the broadcast struct — avoids DateTime allocation per message.
 			long receivedTicks = msg.ReceivedUtcTicks;
 
-			// --- Token Bucket Anti-Spam ---
-			// Refill tokens based on elapsed time since last refill, then consume one.
-			// If the bucket is empty the message is silently dropped.
-			if (chatTokenBucketCapacity > 0 && chatTokenRefillRate > 0f)
-			{
-				double elapsedSeconds = (receivedTicks - sender.ChatTokenLastRefillTicks) / (double)TimeSpan.TicksPerSecond;
-				if (elapsedSeconds > 0)
-				{
-					if (sender.IsChatTokensFull)
-					{
-						sender.ChatTokens = chatTokenBucketCapacity;
-						sender.IsChatTokensFull = false;
-					}
-					else
-					{
-						sender.ChatTokens += elapsedSeconds * chatTokenRefillRate;
-						if (sender.ChatTokens > chatTokenBucketCapacity)
-						{
-							sender.ChatTokens = chatTokenBucketCapacity;
-						}
-					}
-					sender.ChatTokenLastRefillTicks = receivedTicks;
-				}
+			/* The token bucket and the minimum gap were charged when the message was queued, in
+			 * OnServerChatBroadcastReceived; see ChatRateGate. */
 
-				if (sender.ChatTokens < 1.0)
-				{
-					return; // throttled — bucket empty
-				}
-
-				sender.ChatTokens -= 1.0;
-			}
-
-			// Legacy per-message cooldown (kept as secondary gate alongside the token bucket).
-			if (MessageRateLimit > 0)
-			{
-				if (sender.NextChatMessageTicks > receivedTicks)
-				{
-					return;
-				}
-				sender.NextChatMessageTicks = receivedTicks + (long)(MessageRateLimit * TimeSpan.TicksPerMillisecond);
-			}
 			/* The duplicate filter is for chat, not for commands.
 			 *
 			 * It ran before the command was parsed, so repeating any slash command was silently
@@ -840,6 +1108,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (sender.ChatMutedUntilTicks > receivedTicks)
 			{
 				OnSendSystemMessage(conn, ChatMutePolicy.DescribeForPlayer(sender.ChatMutedUntilTicks, sender.ChatMuteReason, receivedTicks));
+				return;
+			}
+
+			/* The flood mute, at the same point for the same reason: it silences chat, not commands.
+			 * It is held apart from the stored mute above; see ChatSystem.FloodMute.cs. */
+			if (TryRefuseFloodMuted(conn, sender))
+			{
 				return;
 			}
 
@@ -951,11 +1226,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </para>
 		/// <para>
 		/// A private list per flush would have fixed only the corruption. Overlapping writes also
-		/// commit out of order — each stamps <c>time_created</c> when it runs, not when it commits —
-		/// and the other scene servers' pumps page the table by that stamp, so a slow flush that
-		/// commits after a faster, later one lands behind their cursors and its whispers, party and
-		/// guild lines are never delivered off this server. Serialising the flushes is what keeps
-		/// the rows in commit order.
+		/// commit out of order — each is stamped when its INSERT runs, not when it commits — and a
+		/// slow flush committing after a faster, later one is exactly what the other scene servers'
+		/// pumps must then absorb inside their commit window. They do now (see
+		/// <see cref="ChatPumpCursor"/>), for every writer on the shard; serialising this server's
+		/// own flushes still keeps its rows in the order they were said.
 		/// </para>
 		/// </remarks>
 		private void OnPeriodicPersistFlush(float deltaTime)
@@ -1030,6 +1305,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * data clears and nulls the buffer immediately afterwards, whether or not a write is
 				 * still reading it. The buffer is left to the shutdown path alone. */
 				var batch = new List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)>();
+				// Each line's first-queued time, index for index with the batch: the retry window is
+				// measured on it, and it cannot ride the database tuple.
+				var queuedAt = new List<double>();
 
 				while (batch.Count < maxPersistBatchSize && runtimeData.PendingPersistQueue.TryDequeue(out PendingChatPersist entry))
 				{
@@ -1042,6 +1320,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						(FishMMO.Database.Data.Enums.ChatChannel)(byte)entry.Channel,
 						entry.Message,
 						new DateTime(entry.ReceivedTicks, DateTimeKind.Utc)));
+					queuedAt.Add(entry.QueuedAtSeconds);
 				}
 
 				if (batch.Count < 1)
@@ -1051,7 +1330,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 				// All-or-nothing: IChatService.PersistBatchAsync writes the whole list in one
 				// transaction, so a retry after a failure cannot duplicate rows.
+				long writeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
 				DatabaseResult result = await chatService.PersistBatchAsync(batch);
+				double writeSeconds = (System.Diagnostics.Stopwatch.GetTimestamp() - writeStarted) / (double)System.Diagnostics.Stopwatch.Frequency;
+
+				/* The other scene servers' pumps read a commit window behind their progress (see
+				 * ChatService.PumpCommitWindowSeconds): a row that commits later than that after its
+				 * stamp can be behind every reader already, and is then never delivered off this
+				 * server — though it is still in the log. This call's wall time bounds stamp to
+				 * commit from above, so exceeding the window is the one case worth an operator's
+				 * attention. Retries inside the call restamp, so this can only over-report. */
+				if (result.IsSuccess && writeSeconds > ChatService.PumpCommitWindowSeconds)
+				{
+					await Log.Warning("ChatSystem",
+						$"Persisting {batch.Count} chat message(s) took {writeSeconds:0.0}s, longer than the {ChatService.PumpCommitWindowSeconds:0}s pump commit window. " +
+						"Whispers, party and guild lines in it may not have reached players on other scene servers.");
+				}
+
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("ChatSystem", $"FlushPersistQueueAsync DB error ({batch.Count} messages): [{result.ErrorCode}] {result.ErrorMessage}");
@@ -1067,7 +1362,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * persistRetryWindowSeconds. Anything else is a row the database will not take,
 					 * so the batch is bisected until the failing rows are isolated and only those
 					 * are lost — see PersistWithIsolationAsync. */
-					await PersistWithIsolationAsync(chatService, batch, result, 0);
+					await PersistWithIsolationAsync(chatService, batch, queuedAt, result, 0);
 				}
 			}
 			catch (Exception ex)
@@ -1100,11 +1395,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="chatService">Chat persistence service.</param>
 		/// <param name="entries">Entries whose write just failed.</param>
+		/// <param name="queuedAt">Each entry's first-queued <see cref="MonotonicClock"/> seconds, index for index.</param>
 		/// <param name="failure">The failure that write returned.</param>
 		/// <param name="depth">Current bisection depth; recursion stops at <see cref="maxPersistIsolationDepth"/>.</param>
 		private async Task PersistWithIsolationAsync(
 			IChatService chatService,
 			List<(long, string, string, long, long, FishMMO.Database.Data.Enums.ChatChannel, string, DateTime)> entries,
+			List<double> queuedAt,
 			DatabaseResult failure,
 			int depth)
 		{
@@ -1125,7 +1422,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (failure.IsTransient)
 			{
-				await RequeueForPersistRetryAsync(entries, failure);
+				await RequeueForPersistRetryAsync(entries, queuedAt, failure);
 				return;
 			}
 
@@ -1141,17 +1438,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			int half = entries.Count / 2;
 			var first = entries.GetRange(0, half);
 			var second = entries.GetRange(half, entries.Count - half);
+			var firstQueuedAt = queuedAt.GetRange(0, half);
+			var secondQueuedAt = queuedAt.GetRange(half, queuedAt.Count - half);
 
 			DatabaseResult firstResult = await chatService.PersistBatchAsync(first);
 			if (!firstResult.IsSuccess)
 			{
-				await PersistWithIsolationAsync(chatService, first, firstResult, depth + 1);
+				await PersistWithIsolationAsync(chatService, first, firstQueuedAt, firstResult, depth + 1);
 			}
 
 			DatabaseResult secondResult = await chatService.PersistBatchAsync(second);
 			if (!secondResult.IsSuccess)
 			{
-				await PersistWithIsolationAsync(chatService, second, secondResult, depth + 1);
+				await PersistWithIsolationAsync(chatService, second, secondQueuedAt, secondResult, depth + 1);
 			}
 		}
 
@@ -1168,6 +1467,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="failure">The failure, for the log line.</param>
 		private async Task RequeueForPersistRetryAsync(
 			List<(long characterId, string characterName, string accountName, long worldServerId, long sceneServerId, FishMMO.Database.Data.Enums.ChatChannel channel, string message, DateTime serverReceivedTime)> entries,
+			List<double> queuedAt,
 			DatabaseResult failure)
 		{
 			if (Server?.DataContainerRegistry.TryGet(out IChatSystemRuntimeData runtimeData) != true ||
@@ -1178,13 +1478,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			long oldestRetainedTicks = DateTime.UtcNow.AddSeconds(-persistRetryWindowSeconds).Ticks;
+			// Measured from when each line was first queued, on the monotonic clock: the receipt stamp is
+			// wall time, and a host clock step would discard or keep a whole backlog at once.
+			double oldestRetained = MonotonicClock.NowSeconds - persistRetryWindowSeconds;
 			int expired = 0;
 
 			for (int i = 0; i < entries.Count; ++i)
 			{
 				var entry = entries[i];
-				if (entry.serverReceivedTime.Ticks < oldestRetainedTicks)
+				if (queuedAt[i] < oldestRetained)
 				{
 					++expired;
 					continue;
@@ -1197,7 +1499,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					entry.worldServerId,
 					(ChatChannel)(byte)entry.channel,
 					entry.message,
-					entry.serverReceivedTime.Ticks));
+					entry.serverReceivedTime.Ticks,
+					queuedAt[i]));
 			}
 
 			if (expired > 0)
@@ -1327,7 +1630,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				keyBuffer.Add(kvp.Key);
 			}
 
-			var characterBroadcastBuffer = runtimeData.CharacterBroadcastBuffer;
+			/* One recipient set per world, and each message serialised once for all of them. This
+			 * looped a single-connection send over every character in the world for every
+			 * message, serialising the same line once per player (hot-path audit S1). */
+			HashSet<NetworkConnection> recipients = runtimeData.ConnectionBroadcastSet;
+			if (recipients == null)
+			{
+				return;
+			}
 
 			for (int k = 0; k < keyBuffer.Count; k++)
 			{
@@ -1340,23 +1650,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Cap messages sent per flush to prevent huge network bursts.
 				int sendCount = Math.Min(messages.Count, maxOutboundBatchSize);
 
-				if (mappingData.CharactersByWorld.TryGetValue(worldID, out var characters))
+				if (FillWorldRecipients(mappingData, worldID, recipients))
 				{
-					// Defensive copy into reusable buffer.
-					// Manual loop avoids boxing the Dictionary.ValueCollection struct enumerator
-					// that AddRange(IEnumerable<T>) would cause.
-					characterBroadcastBuffer.Clear();
-					foreach (var character in characters.Values)
+					try
 					{
-						characterBroadcastBuffer.Add(character);
-					}
-
-					for (int m = 0; m < sendCount; m++)
-					{
-						for (int c = 0; c < characterBroadcastBuffer.Count; c++)
+						for (int m = 0; m < sendCount; m++)
 						{
-							Server.NetworkWrapper.Broadcast(characterBroadcastBuffer[c].Owner, messages[m], true, Channel.Reliable);
+							Server.NetworkWrapper.Broadcast(recipients, messages[m], true, Channel.Reliable);
 						}
+					}
+					finally
+					{
+						recipients.Clear();
 					}
 				}
 
@@ -1441,23 +1746,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Text = relayText,
 			};
 
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) &&
-				mappingData.CharactersByWorld.TryGetValue(worldServerID, out var characters) &&
-				Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData))
-			{
-				// Defensive copy into reusable buffer: Broadcast may trigger a disconnect callback that modifies the collection.
-				// Manual loop avoids boxing the Dictionary.ValueCollection struct enumerator.
-				var buffer = chatData.CharacterBroadcastBuffer;
-				buffer.Clear();
-				foreach (var character in characters.Values)
-				{
-					buffer.Add(character);
-				}
-				for (int i = 0; i < buffer.Count; i++)
-				{
-					Server.NetworkWrapper.Broadcast(buffer[i].Owner, newMsg, true, Channel.Reliable);
-				}
-			}
+			BroadcastToWorld(worldServerID, newMsg);
 		}
 	}
 }

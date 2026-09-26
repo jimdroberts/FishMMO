@@ -312,12 +312,19 @@ namespace FishMMO.Auth.Implementation
 									 result == ClientAuthenticationResult.WorldLoginSuccess ||
 									 result == ClientAuthenticationResult.SceneLoginSuccess;
 
+				/* Checked on the main thread, where the answer about the connection is final. A
+				 * connection that closed while its token was being verified is neither answered nor
+				 * reported: reporting it authenticated used to hand the host a dead connection to
+				 * admit, with its post-sign-in work run for nobody. */
 				EnqueueMainThread(conn, () =>
 				{
-					if (IsConnectionActive(conn))
+					if (!IsConnectionActive(conn))
 					{
-						BroadcastAuthResult(conn, result, reliable: true);
+						PurgeConnectionAuthState(conn, disconnect: false);
+						return;
 					}
+
+					BroadcastAuthResult(conn, result, reliable: true);
 
 					OnAuthenticationResult(conn, authenticated);
 
@@ -335,7 +342,8 @@ namespace FishMMO.Auth.Implementation
 				// post-auth hook so the host can issue a freshly-minted auth token with a
 				// refreshed expiration window over the existing AES-GCM session channel.
 				// Failures here are non-fatal — the client retains its current token.
-				if (authenticated)
+				// Not for a connection that has already closed: the hook mints a token.
+				if (authenticated && IsConnectionActive(conn))
 				{
 					try
 					{

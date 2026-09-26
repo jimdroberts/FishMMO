@@ -113,6 +113,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public long Version;
 			/// <summary>The row to write.</summary>
 			public CharacterAbilityData AbilityData;
+			/// <summary>
+			/// The session claim the grant was requested under. The row is written only while it is
+			/// still held, and a revoke of the row quotes it too — see
+			/// <see cref="ServerBehaviour.TryCaptureSessionClaim"/>.
+			/// </summary>
+			public CharacterSessionLeaseData Claim;
 			/// <summary>Crafted event template ids for the wire, or null when none were chosen.</summary>
 			public int[] CraftedEvents;
 			/// <summary>
@@ -243,9 +249,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
+			/* The claim the row will be written under, captured now, with the request. A resident
+			 * character always holds one; one that does not is leaving or has been evicted, and a
+			 * grant it could never record is refused before anything is constructed or charged. */
+			long characterID = character.ID;
+			if (!TryCaptureSessionClaim(characterID, out CharacterSessionLeaseData claim))
+			{
+				Log.Warning("AbilitySystem",
+					$"TryGrantAbility: this server holds no session claim for CharID={characterID}; refusing the grant of template {template.ID}.");
+				releaseGuard?.Invoke();
+				return false;
+			}
+
 			Ability ability = new Ability(template, craftedEvents);
 			long version = ++ability.Version;
-			long characterID = character.ID;
 
 			GrantRequest request = new GrantRequest()
 			{
@@ -259,6 +276,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					templateID: template.ID,
 					abilityEvents: craftedEvents,
 					cooldown: 0f),
+				Claim = claim,
 				CraftedEvents = craftedEvents.Count > 0 ? craftedEvents.ToArray() : null,
 				Settle = settle,
 				ReleaseGuard = releaseGuard,
@@ -297,11 +315,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult<long> result = await abilityService.PersistAsync(request.AbilityData);
+				/* Ownership-gated: the row lands only while the claim the grant was requested under is
+				 * still held. A refusal means another session owns the character now (or none does,
+				 * after a release) — the grant is answered as any failed write is: nothing learned,
+				 * nothing charged. The row save and the lease refresh evict such a character within
+				 * one interval, so the player's next sight of it is the owning server's state. */
+				DatabaseResult<long> result = await abilityService.PersistOwnedAsync(request.AbilityData, request.Claim);
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("AbilitySystem",
-						$"PersistGrantedAbilityAsync DB error (CharID={request.CharacterID}, TemplateID={request.AbilityData.TemplateID}): {result.ErrorCode} - {result.ErrorMessage}");
+						IsClaimRefusal(result)
+							? $"PersistGrantedAbilityAsync: the grant of template {request.AbilityData.TemplateID} to CharID={request.CharacterID} was refused because this server no longer holds the character's session claim."
+							: $"PersistGrantedAbilityAsync DB error (CharID={request.CharacterID}, TemplateID={request.AbilityData.TemplateID}): {result.ErrorCode} - {result.ErrorMessage}");
 					QueueGrantCompletion(request, persisted: false);
 					return;
 				}
@@ -319,7 +344,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * an ability the player owns from their next login without ever paying for it.
 					 * Revoked inline — this worker is already on the character's lane, behind the
 					 * write it undoes. */
-					await RevokeUnsettledGrantAsync(request.CharacterID, request.Ability.ID, "the main-thread queue was saturated before settlement");
+					await RevokeUnsettledGrantAsync(request.CharacterID, request.Ability.ID, request.Claim, "the main-thread queue was saturated before settlement");
 				}
 			}
 			catch (Exception ex)
@@ -498,15 +523,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="request">The grant whose row is to go.</param>
 		/// <param name="why">For the log.</param>
 		/// <remarks>
+		/// <para>
 		/// Keyed by character, so it lands on the same ordered lane as the write it undoes and after
 		/// it. The ability was never learned or announced, so no in-memory or observer state needs
 		/// touching — only the row. Quotes the version ceiling for the reason a forget does: the row
 		/// is resolved by identity and ownership, and the version is not the safety predicate.
+		/// </para>
+		/// <para>
+		/// <b>Quotes the grant's claim, and is admitted after its release too.</b> The commonest
+		/// revoke is a player who logged out inside the grant's round trip: their save-and-release
+		/// was queued on this lane before the settlement found them gone, so the revoke always runs
+		/// after the release. Refused there, the unpaid row would stand and the character would own
+		/// the ability from their next login. So the delete is admitted while the claim is held OR
+		/// while the character holds none at all (<c>admitReleased</c>), and refused only once
+		/// another session has claimed — and loaded — the character.
+		/// </para>
 		/// </remarks>
 		private void RevokeUnsettledGrant(GrantRequest request, string why)
 		{
 			long characterID = request.CharacterID;
 			long abilityID = request.Ability.ID;
+			CharacterSessionLeaseData claim = request.Claim;
 
 			if (abilityID <= 0)
 			{
@@ -515,7 +552,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			if (!TryEnqueueAsyncWork(() => RevokeUnsettledGrantAsync(characterID, abilityID, why), characterID))
+			if (!TryEnqueueAsyncWork(() => RevokeUnsettledGrantAsync(characterID, abilityID, claim, why), characterID))
 			{
 				Log.Error("AbilitySystem",
 					$"RevokeUnsettledGrant: the async worker refused the revoke of ability {abilityID} for CharID={characterID} ({why}); the row stands and the character owns an ability that was never settled.");
@@ -525,7 +562,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// The worker half of <see cref="RevokeUnsettledGrant"/>.
 		/// </summary>
-		private async Task RevokeUnsettledGrantAsync(long characterID, long abilityID, string why)
+		private async Task RevokeUnsettledGrantAsync(long characterID, long abilityID, CharacterSessionLeaseData claim, string why)
 		{
 			try
 			{
@@ -536,11 +573,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult result = await abilityService.DeleteAbilityAsync(characterID, abilityID, long.MaxValue);
+				DatabaseResult result = await abilityService.DeleteAbilityOwnedAsync(characterID, abilityID, long.MaxValue, claim, admitReleased: true);
 				if (!result.IsSuccess)
 				{
 					await Log.Error("AbilitySystem",
-						$"RevokeUnsettledGrantAsync DB error (AbilityID={abilityID}, CharID={characterID}, {why}): {result.ErrorCode} - {result.ErrorMessage}. The row stands unpaid.");
+						IsClaimRefusal(result)
+							? $"RevokeUnsettledGrantAsync: ability {abilityID} for CharID={characterID} was not revoked ({why}) because another session has claimed the character and loaded the row. The row stands unpaid."
+							: $"RevokeUnsettledGrantAsync DB error (AbilityID={abilityID}, CharID={characterID}, {why}): {result.ErrorCode} - {result.ErrorMessage}. The row stands unpaid.");
 				}
 			}
 			catch (Exception ex)
@@ -613,8 +652,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				long characterID = character.ID;
 				long abilityID = msg.AbilityID;
 
+				/* The delete quotes the claim it was requested under, captured now. A resident
+				 * character always holds one; without it the character is not ours to change, which
+				 * the player hears as the write failing — which is what it would do. */
+				if (!TryCaptureSessionClaim(characterID, out CharacterSessionLeaseData claim))
+				{
+					Log.Warning("AbilitySystem",
+						$"OnServerAbilityForgetBroadcastReceived: this server holds no session claim for CharID={characterID}; the forget of ability {abilityID} was refused.");
+					SendForgetResult(conn, abilityID, AbilityForgetFailure.PersistFailed);
+					return;
+				}
+
 				guardTransferred = TryEnqueueAsyncWork(
-					() => ForgetAbilityAsync(characterID, abilityID, version, guardKey),
+					() => ForgetAbilityAsync(characterID, abilityID, version, claim, guardKey),
 					characterID);
 
 				if (!guardTransferred)
@@ -639,8 +689,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="characterID">The owning character.</param>
 		/// <param name="abilityID">The row identity.</param>
 		/// <param name="version">The version the delete is issued at.</param>
+		/// <param name="claim">The session claim the forget was requested under.</param>
 		/// <param name="guardKey">The ingress guard to release when this finishes.</param>
-		private async Task ForgetAbilityAsync(long characterID, long abilityID, long version, long guardKey)
+		private async Task ForgetAbilityAsync(long characterID, long abilityID, long version, CharacterSessionLeaseData claim, long guardKey)
 		{
 			try
 			{
@@ -652,11 +703,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				DatabaseResult result = await abilityService.DeleteAbilityAsync(characterID, abilityID, version);
+				/* Ownership-gated. A refusal is answered as the write failing — the ability is still
+				 * known, which is true of every copy the player can see — and the character, whose
+				 * claim is gone, is evicted by the row save or the lease refresh within one interval. */
+				DatabaseResult result = await abilityService.DeleteAbilityOwnedAsync(characterID, abilityID, version, claim);
 				if (!result.IsSuccess)
 				{
 					await Log.Warning("AbilitySystem",
-						$"ForgetAbility DB error (AbilityID={abilityID}, CharID={characterID}): {result.ErrorCode} - {result.ErrorMessage}");
+						IsClaimRefusal(result)
+							? $"ForgetAbility: the forget of ability {abilityID} for CharID={characterID} was refused because this server no longer holds the character's session claim."
+							: $"ForgetAbility DB error (AbilityID={abilityID}, CharID={characterID}): {result.ErrorCode} - {result.ErrorMessage}");
 					QueueForgetCompletion(characterID, abilityID, AbilityForgetFailure.PersistFailed);
 					return;
 				}

@@ -82,7 +82,7 @@ namespace AppHealthMonitor
 
 			try
 			{
-				var result = await board.FetchLastPulseAsync(tier, serverName, timeoutCts.Token);
+				var result = await board.FetchPulseAgeAsync(tier, serverName, timeoutCts.Token);
 
 				if (!result.IsSuccess)
 				{
@@ -92,8 +92,8 @@ namespace AppHealthMonitor
 					return true;
 				}
 
-				DateTime? lastPulse = result.Data;
-				if (lastPulse == null)
+				double? pulseAge = result.Data;
+				if (pulseAge == null)
 				{
 					/* No row at all. Unlike an unreadable database this IS an answer — but not
 					 * the answer "it is down": a server that has never finished starting has not
@@ -105,7 +105,11 @@ namespace AppHealthMonitor
 					return true;
 				}
 
-				double age = (DateTime.UtcNow - lastPulse.Value).TotalSeconds;
+				/* Measured by the database, which stamped the pulse. This host's clock used to be
+				 * subtracted from the stamp, so a daemon host running faster than the database by
+				 * more than the limit judged every healthy server dead and restarted it on every
+				 * check, and one running slow kept a dead server "healthy" for the size of the lag. */
+				double age = pulseAge.Value;
 				if (age > staleSeconds)
 				{
 					Log.Warning(logSource,

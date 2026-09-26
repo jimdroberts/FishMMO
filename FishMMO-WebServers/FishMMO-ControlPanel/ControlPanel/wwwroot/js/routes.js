@@ -35,6 +35,7 @@ export const ROUTES = [
 	{ path: 'servers/board', group: 'Servers', label: 'Board', icon: 'server', level: 3, title: 'Server board', crumb: 'Servers', built: true },
 	{ path: 'servers/maintenance', group: 'Servers', label: 'Maintenance', icon: 'clock', level: 3, title: 'Maintenance', crumb: 'Servers', built: true },
 	{ path: 'servers/scenes', group: 'Servers', label: 'Scene instances', icon: 'home', level: 3, title: 'Scene instances', crumb: 'Servers', built: true },
+	{ path: 'servers/bandwidth', group: 'Servers', label: 'Bandwidth', icon: 'chart', level: 3, title: 'Bandwidth', crumb: 'Servers', built: true },
 
 	{ path: 'daemon/hosts', group: 'Daemon', label: 'Hosts & processes', icon: 'activity', level: 3, title: 'Hosts and processes', crumb: 'Daemon', built: true },
 	/* "Command log", not "Events": every row on that page is a command this panel wrote and

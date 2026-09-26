@@ -2,6 +2,7 @@ using FishNet.Connection;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
@@ -300,7 +301,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// run against a destroyed instance. See ChatHelper.RemoveCommands.
 			ChatHelper.RemoveCommands(new[] { "/leaveinstance", "/exitinstance" });
 			ChatHelper.RemoveCommands(UnstuckCommandWords);
-			nextUnstuckUtc.Clear();
+			nextUnstuckAt.Clear();
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -334,203 +335,483 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			sceneUnloadLastTimeByClientId.Clear();
 			validatedSceneLastTimeByClientId.Clear();
 
-			/* Capture every claim this server holds BEFORE the lingers are finalised.
-			 *
-			 * FinalizeCombatLinger takes a lingering body's token out of SessionTokens and hands it
-			 * to the async worker pool to save and release. That pool is drained on a bounded
-			 * budget during teardown, so on a slow database the release can be dropped — and unlike
-			 * a dropped save, a dropped release is not a small loss: the character stays Online
-			 * until its two-minute lease expires, and the player is refused by every scene server
-			 * for that whole time after a restart.
-			 *
-			 * Snapshotting first puts those tokens in the synchronous release loop below, which
-			 * runs regardless of what the pool manages. The pool's own release then finds the
-			 * session already Offline and reports nothing to do, which is exactly what
-			 * ReleaseCharacterSessionAsync treats as success. */
+			/* Every claim this server holds, connected characters' and lingering bodies' alike. Each
+			 * one is either written and then released by the shutdown flush, or released as it is if
+			 * there is nothing of it to write — never both, and never before its writes. */
 			Dictionary<long, CharacterSessionInfo> heldClaims = null;
 			if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> claimData))
 			{
 				heldClaims = new Dictionary<long, CharacterSessionInfo>(claimData.SessionTokens);
 			}
 
-			// Bring every lingering body back into the normal save/despawn/release path before
-			// the shutdown snapshot below runs, so its state is captured and its claim handed
-			// back rather than being left Online until the lease expires.
-			FinalizeAllCombatLingers("scene server shutting down");
-
-			// Save all characters and release all sessions before shutdown
-			if (Server.Database?.ServiceRegistry != null &&
-				Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService))
+			if (Server.Database?.ServiceRegistry == null ||
+				!Server.Database.ServiceRegistry.TryGet<ICharacterService>(out var characterService) ||
+				!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
 			{
-				if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
+				// Nothing can be written or released without the database. The lingers still end,
+				// through their ordinary path, so no bookkeeping outlives this run.
+				FinalizeAllCombatLingers("scene server shutting down");
+				return;
+			}
+
+			var sessionTokens = heldClaims ?? new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
+			Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem);
+			// For the lane barrier before each release; resolved here, on the main thread.
+			Server.DataContainerRegistry.TryGet(out IAsyncWorkerData asyncWorker);
+
+			/* Snapshot on the main thread (Unity API access required) everything a logout would
+			 * write, the way a logout captures it, paired with the claim held for each so every write
+			 * can prove ownership. A server that lost a claim before shutting down must not use its
+			 * final flush to overwrite the state of whichever server owns it now.
+			 *
+			 * The connection events were unsubscribed above, so this is the ONLY save a connected
+			 * character gets on a graceful shutdown — and it used to carry its own hand-picked list of
+			 * three tables. SubEntitySnapshot is the one list of sub-entity tables for exactly that
+			 * reason, so it is used here too, and the item flush is captured as SaveAndDespawnCharacter
+			 * captures it. The row first: the pet rows share the version BuildCharacterData stamps. */
+			var entries = new List<ShutdownFlushEntry>(data.CharactersByID.Count + LingeringCharacterCount);
+			var captured = new HashSet<long>();
+			foreach (var character in data.CharactersByID.Values)
+			{
+				CharacterSessionInfo? ownership = sessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
+					? held
+					: (CharacterSessionInfo?)null;
+				if (TryCaptureShutdownEntry(character, ownership, inventorySystem, entries))
 				{
-					/* Claims as they stood before the lingers were finalised — see above. Falls
-					 * back to reading them now only if the pre-snapshot could not be taken, which
-					 * means the mapping data was unavailable then and this will be empty anyway. */
-					var sessionTokens = heldClaims ?? new Dictionary<long, CharacterSessionInfo>(data.SessionTokens);
+					captured.Add(character.ID);
+				}
+			}
 
-					// Snapshot character data on the main thread (Unity API access required),
-					// paired with the claim held for each so the shutdown write can prove
-					// ownership. A server that lost a claim before shutting down must not use
-					// its final flush to overwrite the state of whichever server owns it now.
-					Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem);
-					var characterDataList = new List<(CharacterData Data, CharacterSessionInfo? Ownership, SubEntitySnapshot SubEntities, Func<Task> ItemFlush)>();
-					foreach (var character in data.CharactersByID.Values)
+			/* Lingering bodies go into the same flush, not through FinalizeCombatLinger. That path
+			 * hands each body's save and release to the async worker pool, which teardown drains on a
+			 * bounded budget and may abandon — and its release used to be raced by this method's own
+			 * release of the same token, handing the claim back before the body's state was written. */
+			CaptureLingeringBodiesForShutdown(sessionTokens, inventorySystem, entries, captured);
+
+			/* Anything the retry queue still holds: a save, an item flush or a release the pool
+			 * dropped or the database refused earlier. Same steps, same order. */
+			foreach (var kvp in DrainPendingFlushes())
+			{
+				PendingCharacterFlush pending = kvp.Value;
+				lock (pending.Gate)
+				{
+					entries.Add(new ShutdownFlushEntry
 					{
-						try
-						{
-							CharacterSessionInfo? ownership = sessionTokens.TryGetValue(character.ID, out CharacterSessionInfo held)
-								? held
-								: (CharacterSessionInfo?)null;
+						CharacterID = kvp.Key,
+						Row = pending.CharacterData,
+						Session = pending.Session,
+						ItemFlush = pending.ItemFlush,
+						SubEntities = pending.SubEntities,
+					});
+				}
+			}
 
-							/* Everything a logout would write, captured the way a logout captures it.
-							 *
-							 * The connection events were unsubscribed above, so this is the ONLY save a
-							 * connected character gets on a graceful shutdown — and it used to carry
-							 * its own hand-picked list of three tables: buffs, attributes, abilities.
-							 * Pets, achievements, waypoints, factions, archetypes and knowledge changed
-							 * since the last periodic save were lost on every restart, and so was the
-							 * item snapshot that backstops any incremental item write that had failed.
-							 * SubEntitySnapshot is the one list of sub-entity tables for exactly this
-							 * reason, so it is used here too; and the item flush is captured as
-							 * SaveAndDespawnCharacter captures it.
-							 *
-							 * The row first: the pet rows share the version BuildCharacterData stamps.
-							 * Only the writes below are allowed to run off the main thread. */
-							CharacterData row = BuildCharacterData(character);
-							var subEntities = new SubEntitySnapshot();
-							AppendSubEntities(character, subEntities);
-							Func<Task> itemFlush = inventorySystem?.CaptureDespawnFlush(character, ownership);
+			// Claims with nothing captured to write: characters still waiting for their scene to
+			// load, and any whose capture threw. Released as they are.
+			var releaseOnly = new List<CharacterSessionLeaseData>();
+			foreach (var kvp in sessionTokens)
+			{
+				if (!captured.Contains(kvp.Key))
+				{
+					releaseOnly.Add(new CharacterSessionLeaseData(kvp.Key, kvp.Value.ServerID, kvp.Value.Token));
+				}
+			}
 
-							characterDataList.Add((row, ownership, subEntities, itemFlush));
-						}
-						catch (Exception ex)
+			// Bounded: an unresponsive database must not hold process exit open forever.
+			// Characters already saved and released before the deadline keep their progress; the
+			// token stops starting new work rather than leaving it running unobserved.
+			bool flushed;
+			try
+			{
+				flushed = UnitySyncOverAsync.TryRun(
+					cancellationToken => FlushForShutdownAsync(characterService, entries, releaseOnly, asyncWorker, cancellationToken),
+					shutdownFlushTimeoutMs);
+			}
+			catch (Exception ex)
+			{
+				Log.Error("CharacterSystem", $"OnDeinitialize: the shutdown flush failed: {ex}");
+				flushed = false;
+			}
+
+			if (!flushed)
+			{
+				Log.Warning("CharacterSystem", $"OnDeinitialize: character save/session release timed out after {shutdownFlushTimeoutMs}ms; " +
+					"characters not yet flushed keep their claims until the lease expires, and their progress since the last save is lost.");
+			}
+		}
+
+		#region Shutdown Flush
+
+		/// <summary>Characters whose items are flushed and claims released at once during shutdown.</summary>
+		/// <remarks>
+		/// Each lane holds one database connection at a time, and the async worker may still be
+		/// using up to its own cap, so this stays well under the connection pool.
+		/// </remarks>
+		private const int ShutdownFlushParallelism = 16;
+
+		/// <summary>
+		/// Everything the shutdown flush writes and hands back for one character, captured on the
+		/// main thread.
+		/// </summary>
+		private sealed class ShutdownFlushEntry
+		{
+			/// <summary>The character.</summary>
+			public long CharacterID;
+			/// <summary>Its row, or null when there is none to write (a pending release).</summary>
+			public CharacterData? Row;
+			/// <summary>The claim that authorises the writes and is released after them, or null.</summary>
+			public CharacterSessionInfo? Session;
+			/// <summary>Its sub-entity rows, or null.</summary>
+			public SubEntitySnapshot SubEntities;
+			/// <summary>Its item flush, or null.</summary>
+			public Func<Task<ItemWriteOutcome>> ItemFlush;
+			/// <summary>
+			/// Set when the row write reports the claim gone: nothing more of this character is
+			/// written or released. Its sub-entity writes would be refused by their own ownership
+			/// gate; leaving them out saves the round trip and the refusal noise.
+			/// </summary>
+			public bool Unowned;
+		}
+
+		/// <summary>
+		/// Captures one resident character for the shutdown flush. Main thread only.
+		/// </summary>
+		/// <returns>False when the capture threw; the character's claim is then released unwritten.</returns>
+		private bool TryCaptureShutdownEntry(
+			IPlayerCharacter character,
+			CharacterSessionInfo? ownership,
+			ICharacterInventorySystem inventorySystem,
+			List<ShutdownFlushEntry> entries)
+		{
+			try
+			{
+				CharacterData row = BuildCharacterData(character);
+				var subEntities = new SubEntitySnapshot();
+				AppendDepartureSubEntities(character, subEntities, ownership);
+				Func<Task<ItemWriteOutcome>> itemFlush = inventorySystem?.CaptureDespawnFlush(character, ownership);
+
+				entries.Add(new ShutdownFlushEntry
+				{
+					CharacterID = character.ID,
+					Row = row,
+					Session = ownership,
+					SubEntities = subEntities,
+					ItemFlush = itemFlush,
+				});
+				return true;
+			}
+			catch (Exception ex)
+			{
+				Log.Error("CharacterSystem", $"OnDeinitialize: Failed to snapshot character {character?.ID}: {ex}");
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Writes every captured character and hands every claim back, in the order that keeps a
+		/// claim from being released before the writes it covers have finished.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why the order changed.</b> This used to walk the characters one at a time — the row,
+		/// then the items, then each sub-entity table, with retry delays — and only after the whole
+		/// walk, and the pending-flush walk after it, release any session. At 15–20 round trips a
+		/// character a few hundred residents outlasted the shutdown budget, which is eight seconds
+		/// for the whole teardown, not the thirty this method asks for; and when the budget ran out
+		/// no release had happened at all. Every character stayed Online for the two-minute lease and
+		/// was refused by every scene server after the restart.
+		/// </para>
+		/// <list type="number">
+		///   <item><description>
+		///     Claims with nothing to write are released first, in one statement: nothing has to
+		///     precede them.
+		///   </description></item>
+		///   <item><description>
+		///     Every row in one statement per <see cref="CharacterRowsPerBatch"/> characters. A row
+		///     refused because the claim is gone marks its character: nothing more of it is written
+		///     or released.
+		///   </description></item>
+		///   <item><description>
+		///     Every sub-entity table once, for every character together.
+		///   </description></item>
+		///   <item><description>
+		///     Then, in parallel lanes, each character's item flush — retried while it is worth
+		///     retrying — and, straight after it, that character's release.
+		///   </description></item>
+		/// </list>
+		/// <para>
+		/// <b>Why no release can race a save.</b> A character's release is issued only after its
+		/// row (step 2), its sub-entity rows (step 3) and its item flush (step 4) have each been
+		/// awaited to completion, so everything the next owner will read is written — or has
+		/// definitively failed — before the claim it reads under exists. When the deadline stops the
+		/// flush, the characters not yet reached keep their claims: another server cannot load them
+		/// until the lease expires, so a write of ours still in flight cannot land behind a load.
+		/// </para>
+		/// <para>
+		/// <b>A flush that fails every attempt is still followed by its release, here only.</b> At
+		/// runtime the claim is kept so the retry queue can deliver the flush later (see
+		/// <see cref="SaveAndReleaseCharacterAsync"/>). At shutdown there is no later: the process is
+		/// exiting and nothing will run the flush again. Holding the claim would only keep the player
+		/// out for the rest of the lease and then load the very same rows, so the loss is logged and
+		/// the claim returned.
+		/// </para>
+		/// </remarks>
+		private async Task FlushForShutdownAsync(
+			ICharacterService characterService,
+			List<ShutdownFlushEntry> entries,
+			List<CharacterSessionLeaseData> releaseOnly,
+			IAsyncWorkerData asyncWorker,
+			CancellationToken cancellationToken)
+		{
+			// 1. Claims with nothing to write.
+			if (releaseOnly.Count > 0)
+			{
+				try
+				{
+					DatabaseResult<IReadOnlyList<long>> released = await characterService.ReleaseManyAsync(releaseOnly, cancellationToken);
+					if (!released.IsSuccess)
+					{
+						await Log.Warning("CharacterSystem",
+							$"OnDeinitialize: releasing {releaseOnly.Count} unwritten claim(s) failed: {released.ErrorCode} - {released.ErrorMessage}. They free themselves when their leases expire.");
+					}
+				}
+				catch (Exception ex) when (!(ex is OperationCanceledException))
+				{
+					await Log.Error("CharacterSystem", $"OnDeinitialize: releasing {releaseOnly.Count} unwritten claim(s) failed: {ex}");
+				}
+			}
+
+			// 2. Every row, batched. Per-row outcomes; a failed batch fails only its own rows.
+			var unowned = new HashSet<long>();
+			var rows = new List<CharacterPersistRequest>(entries.Count);
+			foreach (ShutdownFlushEntry entry in entries)
+			{
+				if (entry.Row.HasValue)
+				{
+					rows.Add(ToPersistRequest(entry.Row.Value, entry.Session));
+				}
+			}
+			for (int offset = 0; offset < rows.Count; offset += CharacterRowsPerBatch)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+				int count = Math.Min(CharacterRowsPerBatch, rows.Count - offset);
+				try
+				{
+					DatabaseResult<IReadOnlyList<CharacterPersistResult>> result =
+						await characterService.PersistManyAsync(rows.GetRange(offset, count), cancellationToken);
+					if (!result.IsSuccess)
+					{
+						await Log.Warning("CharacterSystem", $"OnDeinitialize: a batch of {count} character rows failed: {result.ErrorCode} - {result.ErrorMessage}");
+						continue;
+					}
+					foreach (CharacterPersistResult outcome in result.Data)
+					{
+						if (outcome.Outcome == CharacterPersistOutcome.OwnershipLost && unowned.Add(outcome.CharacterID))
 						{
-							Log.Error("CharacterSystem", $"OnDeinitialize: Failed to snapshot character {character.ID}: {ex}");
+							await Log.Error("CharacterSystem",
+								$"OnDeinitialize: character {outcome.CharacterID} is no longer claimed by this server; " +
+								"its unsaved state is discarded rather than overwriting the current owner's.");
 						}
 					}
+				}
+				catch (Exception ex) when (!(ex is OperationCanceledException))
+				{
+					await Log.Error("CharacterSystem", $"OnDeinitialize: a batch of {count} character rows failed: {ex}");
+				}
+			}
 
-					// Bounded: an unresponsive database must not hold process exit open forever.
-					// Characters already saved before the deadline keep their progress; the token
-					// cancels the in-flight write rather than leaving it running unobserved.
-					bool flushed = UnitySyncOverAsync.TryRun(async cancellationToken =>
+			// 3. Every sub-entity table once, for every character that still holds its claim.
+			var subEntities = new SubEntitySnapshot(entries.Count);
+			foreach (ShutdownFlushEntry entry in entries)
+			{
+				if (unowned.Contains(entry.CharacterID))
+				{
+					entry.Unowned = true;
+					continue;
+				}
+				subEntities.AddFrom(entry.SubEntities);
+			}
+			cancellationToken.ThrowIfCancellationRequested();
+			try
+			{
+				await SaveSubEntitiesSequentiallyAsync(subEntities, 0);
+			}
+			catch (Exception ex) when (!(ex is OperationCanceledException))
+			{
+				// Each table has already reported its own failure; a throw here must not stop the
+				// items and releases below, which do not depend on it.
+				await Log.Error("CharacterSystem", $"OnDeinitialize: the sub-entity flush failed: {ex}");
+			}
+
+			// 4. Each character's items, then its release.
+			cancellationToken.ThrowIfCancellationRequested();
+			int flushFailures = 0;
+			int releases = 0;
+			using (var lanes = new SemaphoreSlim(ShutdownFlushParallelism, ShutdownFlushParallelism))
+			{
+				var work = new List<Task>(entries.Count);
+				foreach (ShutdownFlushEntry entry in entries)
+				{
+					work.Add(FlushAndReleaseForShutdownAsync(entry, lanes, asyncWorker, cancellationToken,
+						() => Interlocked.Increment(ref flushFailures),
+						() => Interlocked.Increment(ref releases)));
+				}
+				await Task.WhenAll(work);
+			}
+
+			await Log.Debug("CharacterSystem",
+				$"OnDeinitialize: flushed {entries.Count} character(s); {releases} claim(s) released after their writes, " +
+				$"{releaseOnly.Count} released unwritten, {unowned.Count} no longer ours, {flushFailures} item flush(es) lost.");
+		}
+
+		/// <summary>
+		/// Step 4 of <see cref="FlushForShutdownAsync"/> for one character: its item flush, then its
+		/// release. Never throws.
+		/// </summary>
+		/// <remarks>
+		/// <b>The release waits for the character's lane too</b> (<see cref="DrainCharacterLaneAsync"/>).
+		/// Everything other systems queued for this character before the shutdown — a quest update or
+		/// turn-in, a grant, a forget, a pet dismissal, a merchant's currency row — sits on its ordered
+		/// lane of the async worker and quotes the claim released here; each is ownership-gated, so
+		/// one still queued when the claim is handed back is refused, not merely late. At runtime the
+		/// save-and-release and the retry queue run on that lane and so after them; this flush runs
+		/// off it, so it waits for it instead — briefly, because a lane that does not drain must not
+		/// cost the player the two-minute lease.
+		/// </remarks>
+		private async Task FlushAndReleaseForShutdownAsync(
+			ShutdownFlushEntry entry,
+			SemaphoreSlim lanes,
+			IAsyncWorkerData asyncWorker,
+			CancellationToken cancellationToken,
+			Action onFlushLost,
+			Action onReleased)
+		{
+			if (entry.Unowned)
+			{
+				return;
+			}
+
+			try
+			{
+				await lanes.WaitAsync(cancellationToken);
+			}
+			catch (OperationCanceledException)
+			{
+				// Out of time before this character's turn: it keeps its claim, so nothing of ours
+				// can land behind another server's load of it.
+				return;
+			}
+
+			try
+			{
+				if (entry.ItemFlush != null)
+				{
+					ItemWriteOutcome outcome = await RunItemFlushWithRetryAsync(entry.ItemFlush, entry.CharacterID, cancellationToken);
+					if (outcome == ItemWriteOutcome.NotOwned)
 					{
-						// Save all spawned characters
-						foreach (var entry in characterDataList)
-						{
-							cancellationToken.ThrowIfCancellationRequested();
-							try
-							{
-								CharacterData charData = entry.Data;
-								DatabaseResult result = entry.Ownership.HasValue
-									? await characterService.PersistOwnedAsync(
-										charData,
-										new CharacterSessionLeaseData(charData.ID, entry.Ownership.Value.ServerID, entry.Ownership.Value.Token),
-										cancellationToken)
-									: await characterService.PersistAsync(charData, cancellationToken);
-
-								bool ownershipLost = !result.IsSuccess && result.ErrorCode == DatabaseErrorCodes.Forbidden;
-
-								if (!result.IsSuccess)
-								{
-									// Forbidden is not a transient failure: the claim is gone and
-									// the snapshot is unpersistable by design. Name it plainly so
-									// a shutdown after a lease lapse is not mistaken for data loss
-									// caused by the shutdown itself.
-									if (ownershipLost)
-									{
-										await Log.Error("CharacterSystem",
-											$"OnDeinitialize: character {charData.ID} is no longer claimed by this server; " +
-											"its unsaved state is discarded rather than overwriting the current owner's.");
-									}
-									else
-									{
-										await Log.Warning("CharacterSystem", $"OnDeinitialize: DB error saving character {charData.ID}: {result.ErrorCode} - {result.ErrorMessage}");
-									}
-								}
-
-								/* Persist this character's items and sub-entities before moving on to
-								 * the next one, in the order the logout path writes them. Interleaving
-								 * rather than batching is deliberate: when the shutdown deadline expires
-								 * early, this leaves whole characters saved instead of every character
-								 * holding a row with none of the state that row implies.
-								 *
-								 * Skipped once the claim is gone. The row write was refused for
-								 * exactly that reason, and the sub-entity tables carry no ownership
-								 * check of their own — writing them anyway would overwrite the state of
-								 * whichever server owns the character now. (The item flush does check,
-								 * and would be refused; it is skipped for the same reason.) */
-								if (!ownershipLost)
-								{
-									if (entry.ItemFlush != null)
-									{
-										await entry.ItemFlush();
-									}
-									await SaveSubEntitiesSequentiallyAsync(entry.SubEntities, entry.Data.ID);
-								}
-							}
-							catch (Exception ex)
-							{
-								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to save character {entry.Data.ID}: {ex}");
-							}
-						}
-
-						// Flush anything still queued for retry before releasing live sessions,
-						// so a save or release that the async worker pool dropped earlier is
-						// not lost to shutdown as well.
-						foreach (var kvp in DrainPendingFlushes())
-						{
-							cancellationToken.ThrowIfCancellationRequested();
-							try
-							{
-								/* The same steps, in the same order, as RunPendingFlushAsync: the row
-								 * through the ownership-gated save while a claim is still held, then the
-								 * despawn item flush, then the release. This used to write the row through
-								 * the ungated PersistAsync whatever claim it held, discard the result, and
-								 * never run the item flush at all — so a flush the pool had dropped was
-								 * dropped a second time here, and its claim handed back without it. */
-								PendingCharacterFlush pending = kvp.Value;
-								if (pending.CharacterData.HasValue)
-								{
-									await SaveCharacterAsync(pending.CharacterData.Value, pending.Session);
-								}
-								if (pending.ItemFlush != null)
-								{
-									await pending.ItemFlush();
-								}
-								if (pending.Session.HasValue)
-								{
-									await ReleaseCharacterSessionAsync(kvp.Key, pending.Session.Value.ServerID, pending.Session.Value.Token);
-								}
-							}
-							catch (Exception ex)
-							{
-								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to flush pending work for character {kvp.Key}: {ex}");
-							}
-						}
-
-						// Release all claimed sessions (spawned + waiting-to-load characters)
-						foreach (var kvp in sessionTokens)
-						{
-							cancellationToken.ThrowIfCancellationRequested();
-							try
-							{
-								await ReleaseCharacterSessionAsync(kvp.Key, kvp.Value.ServerID, kvp.Value.Token);
-							}
-							catch (Exception ex)
-							{
-								await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to release session for character {kvp.Key}: {ex}");
-							}
-						}
-					}, shutdownFlushTimeoutMs);
-
-					if (!flushed)
+						return;
+					}
+					if (outcome == ItemWriteOutcome.Retry || outcome == ItemWriteOutcome.Rejected)
 					{
-						Log.Warning("CharacterSystem", $"OnDeinitialize: character save/session release timed out after {shutdownFlushTimeoutMs}ms; some progress may not have been persisted.");
+						onFlushLost();
+						await Log.Error("CharacterSystem",
+							$"OnDeinitialize: the item flush for character {entry.CharacterID} did not land ({outcome}); " +
+							"its item changes since the last snapshot are lost.");
+					}
+				}
+
+				if (entry.Session.HasValue &&
+					!await DrainCharacterLaneAsync(asyncWorker, entry.CharacterID, ShutdownLaneDrainTimeoutMs, cancellationToken))
+				{
+					await Log.Warning("CharacterSystem",
+						$"OnDeinitialize: character {entry.CharacterID}'s queued writes did not drain within {ShutdownLaneDrainTimeoutMs}ms; " +
+						"releasing its claim anyway, and anything still queued for it will be refused by the ownership gate.");
+				}
+
+				if (entry.Session.HasValue &&
+					await ReleaseCharacterSessionAsync(entry.CharacterID, entry.Session.Value.ServerID, entry.Session.Value.Token))
+				{
+					onReleased();
+				}
+			}
+			catch (OperationCanceledException)
+			{
+				// The deadline fell between two flush attempts: the claim is kept, as above.
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("CharacterSystem", $"OnDeinitialize: Failed to flush character {entry.CharacterID}: {ex}");
+			}
+			finally
+			{
+				lanes.Release();
+			}
+		}
+
+		/// <summary>
+		/// How long a shutdown release waits for the character's queued writes before it goes ahead.
+		/// </summary>
+		/// <remarks>
+		/// A queued write is a round trip or two, so a healthy lane drains in milliseconds. One that
+		/// does not is stuck — typically on a hop to the main thread, which is blocked in this very
+		/// flush — and waiting for it out of the whole budget would keep the claim, and the player,
+		/// out for the lease's two minutes after the restart for the sake of a write that may never
+		/// run.
+		/// </remarks>
+		private const int ShutdownLaneDrainTimeoutMs = 1500;
+
+		/// <summary>
+		/// Completes once every item already queued on a character's ordered lane of the async worker
+		/// has run.
+		/// </summary>
+		/// <remarks>
+		/// A marker is queued on the lane and awaited: lanes run their items one at a time in the
+		/// order they were queued, so the marker runs only after everything ahead of it. Admitted even
+		/// over the backpressure threshold (<see cref="IAsyncWorkerData.EnqueueRequired"/>), since a
+		/// refusal here would only mean releasing without waiting.
+		/// </remarks>
+		/// <param name="asyncWorker">The worker, or null.</param>
+		/// <param name="characterID">The character whose lane to wait for.</param>
+		/// <param name="timeoutMs">How long to wait before giving up.</param>
+		/// <param name="cancellationToken">The flush's deadline. Cancellation propagates.</param>
+		/// <returns>False when the worker is not running or the wait timed out.</returns>
+		/// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
+		private static async Task<bool> DrainCharacterLaneAsync(IAsyncWorkerData asyncWorker, long characterID, int timeoutMs, CancellationToken cancellationToken)
+		{
+			if (asyncWorker == null || characterID <= 0)
+			{
+				return false;
+			}
+
+			var reached = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			AsyncWorkAdmission admission = asyncWorker.EnqueueRequired(() =>
+			{
+				reached.TrySetResult(true);
+				return Task.CompletedTask;
+			}, characterID, nameof(DrainCharacterLaneAsync));
+			if (admission == AsyncWorkAdmission.Refused)
+			{
+				return false;
+			}
+
+			using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+			{
+				timeout.CancelAfter(timeoutMs);
+				using (timeout.Token.Register(() => reached.TrySetCanceled()))
+				{
+					try
+					{
+						return await reached.Task.ConfigureAwait(false);
+					}
+					catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+					{
+						return false;
 					}
 				}
 			}
 		}
+
+		#endregion
 
 		#region Async Helpers
 

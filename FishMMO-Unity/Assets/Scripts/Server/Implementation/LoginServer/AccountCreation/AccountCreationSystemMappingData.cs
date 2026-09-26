@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Concurrent;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.LoginServer;
 
@@ -12,34 +10,25 @@ namespace FishMMO.Server.Implementation.LoginServer
 	/// </summary>
 	public class AccountCreationSystemMappingData : RuntimeDataContainer, IAccountCreationSystemMappingData
 	{
-		/// <summary>
-		/// Tracks last account creation attempt per IP address for rate limiting.
-		/// </summary>
-		public ConcurrentDictionary<string, DateTime> IpRateLimitTracker { get; private set; }
+		/// <inheritdoc/>
+		public IpAbuseTracker IpAbuse { get; private set; }
 
 		/// <summary>
-		/// Tracks number of failed attempts per IP for DoS detection.
-		/// </summary>
-		public ConcurrentDictionary<string, int> IpFailureTracker { get; private set; }
-
-		/// <summary>
-		/// Initializes the mapping data container with empty concurrent dictionaries.
+		/// Initializes the mapping data container with an empty tracker.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			IpRateLimitTracker = new ConcurrentDictionary<string, DateTime>();
-			IpFailureTracker = new ConcurrentDictionary<string, int>();
+			IpAbuse = new IpAbuseTracker();
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
 		/// <summary>
-		/// Clears all mapping data entries. Does not null references since
-		/// ConcurrentDictionaries may be accessed from other threads during runtime.
+		/// Clears all mapping data entries. Does not null the reference, since the tracker may be
+		/// accessed from other threads during runtime.
 		/// </summary>
 		public override void Clear()
 		{
-			IpRateLimitTracker?.Clear();
-			IpFailureTracker?.Clear();
+			IpAbuse?.Clear();
 		}
 
 		/// <summary>
@@ -48,8 +37,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		protected override void OnDeinitialize()
 		{
 			Clear();
-			IpRateLimitTracker = null;
-			IpFailureTracker = null;
+			IpAbuse = null;
 		}
 	}
 }

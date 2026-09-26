@@ -242,8 +242,9 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		string LastChatMessage { get; set; }
 		/// <summary>
-		/// The next time the character is allowed to send a chat message, stored as UTC ticks.
-		/// Avoids DateTime allocation on every message comparison.
+		/// The next time the character is allowed to send a chat message, as ticks on the clock of
+		/// the side that keeps it: the server's monotonic clock, the client's wall clock. Zero is
+		/// "no gap pending". Avoids DateTime allocation on every message comparison.
 		/// </summary>
 		long NextChatMessageTicks { get; set; }
 		/// <summary>
@@ -261,8 +262,8 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		bool IsChatTokensFull { get; set; }
 		/// <summary>
-		/// UTC ticks of the last token bucket refill.
-		/// Used to calculate how many tokens to add based on elapsed time.
+		/// Ticks of the last token bucket refill, on the server's monotonic clock; zero before the
+		/// first. Used to calculate how many tokens to add based on elapsed time.
 		/// Stored as ticks to avoid per-message DateTime allocation.
 		/// </summary>
 		long ChatTokenLastRefillTicks { get; set; }
@@ -280,9 +281,10 @@ namespace FishMMO.Shared.Core
 		/// <summary>The reason recorded with the mute in force, shown to the muted player. Server-side.</summary>
 		string ChatMuteReason { get; set; }
 		/// <summary>
-		/// The next time the character is allowed to interact with objects.
+		/// When the character may next interact, in seconds of <see cref="System.Diagnostics.Stopwatch"/>
+		/// time (a monotonic clock, so a host clock step cannot lock interaction out). 0 means now.
 		/// </summary>
-		DateTime NextInteractTime { get; set; }
+		double NextInteractSeconds { get; set; }
 
 		/// <summary>
 		/// The list of hotkey data for this character.

@@ -55,8 +55,8 @@ namespace FishMMO.UnitTests
 				"the sub-entity snapshot must carry knowledge, like the other eight tables");
 			LogAssert.IsTrue(source.Contains("AppendKnownAbilityData(character, snapshot.KnownAbilities, snapshot.KnowledgeVersions)"),
 				"and the capture must collect it, with the version it was captured at");
-			LogAssert.IsTrue(source.Contains("SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions)"),
-				"and both save paths must write it");
+			LogAssert.IsTrue(source.Contains("SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims)"),
+				"and both save paths must write it, under the claims it was captured with");
 		}
 
 		[Test]

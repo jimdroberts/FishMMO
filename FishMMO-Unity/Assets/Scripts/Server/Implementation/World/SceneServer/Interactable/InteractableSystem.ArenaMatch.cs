@@ -8,9 +8,11 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Data.Enums;
 using FishMMO.Database.Npgsql.Services.Interfaces;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -104,14 +106,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public int Streak;
 			/// <summary>Standing in the instance right now.</summary>
 			public bool Present;
+			/// <summary>
+			/// The player's connection while <see cref="Present"/>, or null. Written only by
+			/// <see cref="SyncSeatConnection"/>, which keeps the team's connection set in step.
+			/// </summary>
+			public NetworkConnection Connection;
 			/// <summary>Never arrived before the gathering timeout; no longer part of the match.</summary>
 			public bool Dropped;
 			/// <summary>When a dead player is put back, or null while alive.</summary>
-			public DateTime? RespawnAtUtc;
+			public double? RespawnAt;
 			/// <summary>Left the match for good while it was live. Their seat is vacated; nothing more is written for them but a rating loss.</summary>
 			public bool Forfeited;
 			/// <summary>Disconnected from a live match and inside the reconnect grace, or null.</summary>
-			public DateTime? DisconnectedAtUtc;
+			public double? DisconnectedAt;
 			/// <summary>Rank change written when they disconnected, so a return inside the grace can refund it exactly.</summary>
 			public int ForfeitRankDelta;
 			/// <summary>Whether the win/loss/matches attributes were charged for a forfeit.</summary>
@@ -153,13 +160,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			/// <summary>Flag stand: where a dropped flag lies.</summary>
 			public Vector3 DropPosition;
 			/// <summary>Flag stand: when a dropped flag goes home by itself.</summary>
-			public DateTime DropExpiresUtc;
+			public double DropExpiresAt;
 			/// <summary>Control point: team whose capture is in progress, or -1.</summary>
 			public int ProgressTeam = -1;
 			/// <summary>Control point: interactions towards a capture.</summary>
 			public int Progress;
-			/// <summary>Control point: seconds held since the last point was scored.</summary>
-			public int HeldSeconds;
+			/// <summary>Control point: real seconds held and not yet scored.</summary>
+			public double HeldSeconds;
+			/// <summary>
+			/// Control point: the moment held time has been accrued up to, in
+			/// <see cref="MonotonicClock"/> seconds. Reset on capture; not a number until the first.
+			/// </summary>
+			public double HeldAccruedTo = double.NaN;
 		}
 
 		/// <summary>One match hosted here.</summary>
@@ -167,6 +179,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			public long MatchID;
 			public long InstanceID;
+			/// <summary>The instance's scene, for scene-wide sends. Its handle is <see cref="SceneHandle"/>.</summary>
+			public Scene Scene;
 			public int SceneHandle;
 			public string SceneName;
 			public ArenaTemplate Template;
@@ -174,30 +188,49 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public int TeamCount;
 			public int TeamSize;
 			public ArenaMatchPhase Phase;
-			public DateTime PhaseEndsUtc;
+			public double PhaseEndsAt;
 			public int LastBroadcastSecond = -1;
+			/// <summary>Live: the clock second the time warnings were last checked at.</summary>
+			public int LastWarningCheckSecond = int.MaxValue;
 			public int[] TeamScores;
 			public int WinnerTeam = -1;
 			public bool Ranked;
 			public long SeasonID;
 			/// <summary>Ranked: tick retries spent on seats whose rating read failed, and when the next may run.</summary>
 			public int RatingReadRetries;
-			public DateTime NextRatingReadUtc;
-			/// <summary>Live: until when vacated seats may be filled from the queue.</summary>
-			public DateTime BackfillUntilUtc = DateTime.MinValue;
+			public double NextRatingReadAt;
 			/// <summary>Whether the first kill has happened.</summary>
 			public bool FirstBloodDone;
 			/// <summary>Per team: whether the near-limit announcement fired.</summary>
 			public bool[] NearLimitFired;
 			/// <summary>Time warnings already fired.</summary>
 			public readonly HashSet<int> TimeWarningsFired = new HashSet<int>();
-			/// <summary>Whether a seat re-read is in flight for a stranger who might be a backfill.</summary>
-			public bool SeatReloadInFlight;
+			/// <summary>
+			/// 1 while a seat re-read is in flight, 0 otherwise. One at a time.
+			/// </summary>
+			/// <remarks>
+			/// An int for <see cref="Interlocked"/>, set here and cleared by the read's worker in its
+			/// own <c>finally</c>, as the group finder's pump flag is. It used to be cleared by an
+			/// action on the bounded main-thread queue; a queue that refused that action left it set
+			/// for the rest of the match, and no backfilled player arriving after was ever seated.
+			/// </remarks>
+			public int SeatReloadInFlight;
+			/// <summary>
+			/// A stranger arrived and the seats should be re-read; set while a read is in flight, the
+			/// tick starts one once it lands. A backfill who arrived during a read that started
+			/// before their seat was written would otherwise have waited for the next stranger.
+			/// </summary>
+			public bool SeatReloadWanted;
 			/// <summary>A seat re-read failed and is owed a retry by the tick; how many have run, and when the next may.</summary>
 			public bool SeatReloadDue;
 			public int SeatReloadRetries;
-			public DateTime NextSeatReloadUtc;
+			public double NextSeatReloadAt;
 			public readonly Dictionary<long, ArenaSeatState> Seats = new Dictionary<long, ArenaSeatState>();
+			/// <summary>
+			/// Per team, the connections of its seats that are on the team channel
+			/// (<see cref="ArenaRules.IsOnTeamChannel"/>). Kept by <see cref="SyncSeatConnection"/>.
+			/// </summary>
+			public HashSet<NetworkConnection>[] TeamConnections;
 			/// <summary>Objectives in the scene, by scene object id. Empty for deathmatch.</summary>
 			public readonly Dictionary<long, ArenaObjectiveState> Objectives = new Dictionary<long, ArenaObjectiveState>();
 
@@ -210,16 +243,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// <summary>Instance row id by Unity scene handle, for the events that only know the scene.</summary>
 		private readonly Dictionary<int, long> arenaInstanceBySceneHandle = new Dictionary<int, long>();
 
-		/// <summary>Instances whose match rows are being read.</summary>
-		private readonly HashSet<long> arenaMatchesLoading = new HashSet<long>();
+		/// <summary>Instances whose match rows are being read, as a set.</summary>
+		/// <remarks>
+		/// Added on the main thread when a read is issued and removed by that read's worker in its
+		/// own <c>finally</c> — hence concurrent. It used to be removed by an action on the bounded
+		/// main-thread queue, and a queue that refused the action left the instance marked as
+		/// loading for good: its match was never hosted.
+		/// </remarks>
+		private readonly ConcurrentDictionary<long, byte> arenaMatchesLoading = new ConcurrentDictionary<long, byte>();
 
 		/// <summary>A match read that failed on the database and is owed a retry by the tick.</summary>
 		private struct ArenaMatchLoadRetry
 		{
-			public int SceneHandle;
+			public Scene Scene;
 			public string SceneName;
 			public int Retries;
-			public DateTime NextUtc;
+			public double NextAt;
 		}
 
 		/// <summary>Failed match reads awaiting their retry, by instance row id. Main thread only.</summary>
@@ -322,32 +361,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (!arenaMatchesLoading.Add(details.SceneID))
+			if (!arenaMatchesLoading.TryAdd(details.SceneID, 0))
 			{
 				// Already being read; the arrival is picked up from the scene when it lands.
 				return;
 			}
 
 			long instanceID = details.SceneID;
-			int sceneHandle = scene.handle;
 			string sceneName = details.Name;
 
-			if (!TryEnqueueAsyncWork(() => LoadArenaMatchAsync(instanceID, sceneHandle, sceneName), instanceID))
+			if (!TryEnqueueAsyncWork(() => LoadArenaMatchAsync(instanceID, scene, sceneName), instanceID))
 			{
-				arenaMatchesLoading.Remove(instanceID);
+				arenaMatchesLoading.TryRemove(instanceID, out _);
 				Log.Warning("InteractableSystem", $"Arena: could not enqueue the match read for instance {instanceID}.");
 			}
 		}
 
 		/// <summary>Reads the match and its seats for an instance this server has just started hosting.</summary>
-		private async Task LoadArenaMatchAsync(long instanceID, int sceneHandle, string sceneName)
+		/// <remarks>
+		/// Owns the instance's loading mark from the moment it was issued and clears it in its own
+		/// <c>finally</c>, whatever happens to the outcome it hands the main thread. A second read
+		/// issued in the moment between that and the outcome landing is harmless:
+		/// <see cref="RegisterArenaMatch"/> hosts a match once.
+		/// </remarks>
+		private async Task LoadArenaMatchAsync(long instanceID, Scene scene, string sceneName)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 				{
-					TryEnqueueMainThread(() => arenaMatchesLoading.Remove(instanceID));
 					return;
 				}
 
@@ -363,17 +406,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (!matchResult.IsSuccess)
 				{
 					await Log.Warning("InteractableSystem", $"Arena: could not read the match of instance {instanceID} ('{sceneName}'); retrying: [{matchResult.ErrorCode}] {matchResult.ErrorMessage}");
-					TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName));
+					TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, scene, sceneName));
 					return;
 				}
 				if (!matchResult.Data.HasValue)
 				{
 					await Log.Warning("InteractableSystem", $"Arena: instance {instanceID} ('{sceneName}') is a PvP scene with no match row; it will run as a plain instance.");
-					TryEnqueueMainThread(() =>
-					{
-						arenaMatchesLoading.Remove(instanceID);
-						arenaMatchLoadRetries.Remove(instanceID);
-					});
+					TryEnqueueMainThread(() => arenaMatchLoadRetries.Remove(instanceID));
 					return;
 				}
 
@@ -382,17 +421,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				if (!membersResult.IsSuccess)
 				{
 					await Log.Warning("InteractableSystem", $"Arena: could not read the seats of match {match.ID}; retrying: [{membersResult.ErrorCode}] {membersResult.ErrorMessage}");
-					TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName));
+					TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, scene, sceneName));
 					return;
 				}
 
 				IReadOnlyList<ArenaMatchMemberData> members = membersResult.Data;
-				TryEnqueueMainThread(() => RegisterArenaMatch(match, members, sceneHandle));
+				TryEnqueueMainThread(() => RegisterArenaMatch(match, members, scene));
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("InteractableSystem", $"Error reading arena match for instance {instanceID}: {ex}");
-				TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName));
+				TryEnqueueMainThread(() => OnArenaMatchLoadFailed(instanceID, scene, sceneName));
+			}
+			finally
+			{
+				arenaMatchesLoading.TryRemove(instanceID, out _);
 			}
 		}
 
@@ -400,13 +443,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Schedules the tick's retry of a match read that failed. Main thread only.
 		/// </summary>
 		/// <remarks>
-		/// Bounded by <see cref="ArenaReadMaxRetries"/>. Past that the instance is left to the
-		/// arrival path, which still reads again whenever somebody else spawns into it.
+		/// Bounded by <see cref="ArenaReadMaxRetries"/>, counted where the retries are issued. Past
+		/// that the instance is left to the arrival path, which still reads again whenever somebody
+		/// else spawns into it.
 		/// </remarks>
-		private void OnArenaMatchLoadFailed(long instanceID, int sceneHandle, string sceneName)
+		private void OnArenaMatchLoadFailed(long instanceID, Scene scene, string sceneName)
 		{
-			arenaMatchesLoading.Remove(instanceID);
-
 			if (arenaMatchesByInstance.ContainsKey(instanceID))
 			{
 				arenaMatchLoadRetries.Remove(instanceID);
@@ -414,28 +456,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			arenaMatchLoadRetries.TryGetValue(instanceID, out ArenaMatchLoadRetry retry);
-			if (retry.Retries >= ArenaReadMaxRetries)
-			{
-				arenaMatchLoadRetries.Remove(instanceID);
-				Log.Error("InteractableSystem", $"Arena: gave up reading the match of instance {instanceID} ('{sceneName}') after {retry.Retries} retries; it is not hosted until somebody else arrives.");
-				return;
-			}
-
-			retry.SceneHandle = sceneHandle;
+			retry.Scene = scene;
 			retry.SceneName = sceneName;
-			retry.NextUtc = DateTime.UtcNow.AddSeconds(ArenaReadRetrySeconds);
+			retry.NextAt = MonotonicClock.NowSeconds + ArenaReadRetrySeconds;
 			arenaMatchLoadRetries[instanceID] = retry;
 		}
 
 		/// <summary>Re-issues the match reads that failed, once their retry is due. Main thread only.</summary>
-		private void RetryArenaMatchLoads(DateTime now)
+		/// <remarks>
+		/// A retry is rescheduled when it is issued, not only when its failure is reported: a report
+		/// the main-thread queue refused would otherwise have left it waiting forever. The loading
+		/// mark keeps a retry from overlapping a read still in flight.
+		/// </remarks>
+		private void RetryArenaMatchLoads(double now)
 		{
 			if (arenaMatchLoadRetries.Count == 0)
 			{
 				return;
 			}
-
-			Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData);
 
 			foreach (long instanceID in arenaMatchLoadRetries.Keys.ToList())
 			{
@@ -443,36 +481,48 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				// Hosted by an arrival's read in the meantime, or the instance is gone: nothing owed.
 				if (arenaMatchesByInstance.ContainsKey(instanceID) ||
-					mappingData == null ||
-					!mappingData.SceneInstanceByHandle.ContainsKey(retry.SceneHandle))
+					!IsArenaInstanceLoaded(retry.Scene.handle, instanceID))
 				{
 					arenaMatchLoadRetries.Remove(instanceID);
 					continue;
 				}
 
-				if (now < retry.NextUtc || !arenaMatchesLoading.Add(instanceID))
+				if (now < retry.NextAt || arenaMatchesLoading.ContainsKey(instanceID))
+				{
+					continue;
+				}
+
+				if (retry.Retries >= ArenaReadMaxRetries)
+				{
+					arenaMatchLoadRetries.Remove(instanceID);
+					Log.Error("InteractableSystem", $"Arena: gave up reading the match of instance {instanceID} ('{retry.SceneName}') after {retry.Retries} retries; it is not hosted until somebody else arrives.");
+					continue;
+				}
+
+				if (!arenaMatchesLoading.TryAdd(instanceID, 0))
 				{
 					continue;
 				}
 
 				++retry.Retries;
-				retry.NextUtc = DateTime.MaxValue;
+				retry.NextAt = now + ArenaReadRetrySeconds;
 				arenaMatchLoadRetries[instanceID] = retry;
 
-				int sceneHandle = retry.SceneHandle;
+				Scene scene = retry.Scene;
 				string sceneName = retry.SceneName;
-				if (!TryEnqueueAsyncWork(() => LoadArenaMatchAsync(instanceID, sceneHandle, sceneName), instanceID))
+				if (!TryEnqueueAsyncWork(() => LoadArenaMatchAsync(instanceID, scene, sceneName), instanceID))
 				{
-					OnArenaMatchLoadFailed(instanceID, sceneHandle, sceneName);
+					// Still scheduled: the next retry is already set for its time.
+					arenaMatchesLoading.TryRemove(instanceID, out _);
 				}
 			}
 		}
 
 		/// <summary>Creates the local match state and seats everyone already standing in the scene. Main thread only.</summary>
-		private void RegisterArenaMatch(ArenaMatchData match, IReadOnlyList<ArenaMatchMemberData> members, int sceneHandle)
+		private void RegisterArenaMatch(ArenaMatchData match, IReadOnlyList<ArenaMatchMemberData> members, Scene scene)
 		{
-			arenaMatchesLoading.Remove(match.InstanceID);
 			arenaMatchLoadRetries.Remove(match.InstanceID);
+			int sceneHandle = scene.handle;
 
 			if (arenaMatchesByInstance.ContainsKey(match.InstanceID))
 			{
@@ -489,6 +539,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				MatchID = match.ID,
 				InstanceID = match.InstanceID,
+				Scene = scene,
 				SceneHandle = sceneHandle,
 				SceneName = match.SceneName,
 				Template = template,
@@ -496,12 +547,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				TeamCount = Math.Max(2, match.TeamCount),
 				TeamSize = Math.Max(1, match.TeamSize),
 				Phase = ArenaMatchPhase.Gathering,
-				PhaseEndsUtc = DateTime.UtcNow.AddSeconds(template != null ? template.GatheringTimeoutSeconds : 90),
+				PhaseEndsAt = MonotonicClock.NowSeconds + (template != null ? template.GatheringTimeoutSeconds : 90),
 				Ranked = match.Ranked || (template != null && template.IsRankedFormat(match.Format)),
 				SeasonID = match.SeasonID,
 			};
 			state.TeamScores = new int[state.TeamCount];
 			state.NearLimitFired = new bool[state.TeamCount];
+			state.TeamConnections = new HashSet<NetworkConnection>[state.TeamCount];
+			for (int t = 0; t < state.TeamCount; ++t)
+			{
+				state.TeamConnections[t] = new HashSet<NetworkConnection>();
+			}
 
 			foreach (ArenaMatchMemberData member in members)
 			{
@@ -529,15 +585,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				LoadArenaRatings(state, state.Seats.Keys.ToList());
 			}
 
-			// Whoever arrived while the rows were being read.
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
+			/* Whoever arrived while the rows were being read: the scene's own connections, rather
+			 * than every character on the server asked for its scene one native call at a time.
+			 * Copied first, because seating a resident sends, and FishNet's set is not ours to
+			 * enumerate across anything that might change it. */
+			if (Server.NetworkWrapper.TryGetSceneConnections(scene, out HashSet<NetworkConnection> sceneConnections) &&
+				Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
 			{
-				foreach (IPlayerCharacter resident in charMapping.CharactersByID.Values)
+				var residents = new List<IPlayerCharacter>(sceneConnections.Count);
+				foreach (NetworkConnection resident in sceneConnections)
 				{
-					if (resident?.GameObject != null && resident.GameObject.scene.handle == sceneHandle)
+					if (resident != null && charMapping.ConnectionCharacters.TryGetValue(resident, out IPlayerCharacter character) && character != null)
 					{
-						SeatArrived(state, resident);
+						residents.Add(character);
 					}
+				}
+				foreach (IPlayerCharacter character in residents)
+				{
+					SeatArrived(state, character);
 				}
 			}
 
@@ -577,7 +642,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			long seasonID = state.SeasonID;
 
 			// Gives this read the retry interval to land before the tick tries again.
-			state.NextRatingReadUtc = DateTime.UtcNow.AddSeconds(ArenaReadRetrySeconds);
+			state.NextRatingReadAt = MonotonicClock.NowSeconds + ArenaReadRetrySeconds;
 
 			EnqueuePersistence(async () =>
 			{
@@ -688,16 +753,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			if (!state.Seats.TryGetValue(character.ID, out ArenaSeatState seat))
 			{
-				if (state.Phase == ArenaMatchPhase.Live && DateTime.UtcNow < state.BackfillUntilUtc && !state.SeatReloadInFlight)
+				/* Any stranger while live, not only inside the backfill window. The window bounds
+				 * when the QUEUE may seat somebody; the seated player then has to be moved here,
+				 * which takes seconds, so a backfill taken near the window's end used to arrive
+				 * after it had closed here, was never re-read, and stood in the match with no team.
+				 * The other strangers are spectating game masters, and a re-read is cheap. */
+				if (state.Phase == ArenaMatchPhase.Live)
 				{
-					state.SeatReloadInFlight = true;
-					long instanceID = state.InstanceID;
-					long matchID = state.MatchID;
-					long arrivedID = character.ID;
-					if (!TryEnqueueAsyncWork(() => ReloadArenaSeatsAsync(instanceID, matchID, arrivedID), matchID))
-					{
-						state.SeatReloadInFlight = false;
-					}
+					state.SeatReloadWanted = true;
+					TryStartSeatReload(state);
 					return;
 				}
 
@@ -716,11 +780,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				seat.Dropped = false;
 				PublishArenaRoster(state);
 			}
+			SyncSeatConnection(state, seat, character.Owner);
 
 			// Back inside the reconnect grace: their seat is theirs, and the forfeit is undone.
-			if (seat.DisconnectedAtUtc.HasValue && state.Phase == ArenaMatchPhase.Live && !seat.Forfeited)
+			if (seat.DisconnectedAt.HasValue && state.Phase == ArenaMatchPhase.Live && !seat.Forfeited)
 			{
-				seat.DisconnectedAtUtc = null;
+				seat.DisconnectedAt = null;
 				RefundForfeit(character, seat);
 				UnlockArenaQueue(seat.CharacterID);
 				BroadcastArenaEvent(state, ArenaEventKind.PlayerReconnected, null, seat, seat.Team, 0);
@@ -741,17 +806,45 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>
+		/// Starts a seat re-read if none is in flight. Main thread only.
+		/// </summary>
+		/// <returns>True when a read was started.</returns>
+		private bool TryStartSeatReload(ArenaMatchState state)
+		{
+			// One at a time. A stranger who arrives meanwhile leaves SeatReloadWanted set, and the tick starts the next.
+			if (Interlocked.CompareExchange(ref state.SeatReloadInFlight, 1, 0) != 0)
+			{
+				return false;
+			}
+
+			state.SeatReloadWanted = false;
+			long instanceID = state.InstanceID;
+			long matchID = state.MatchID;
+			if (!TryEnqueueAsyncWork(() => ReloadArenaSeatsAsync(state, instanceID, matchID), matchID))
+			{
+				Interlocked.Exchange(ref state.SeatReloadInFlight, 0);
+				state.SeatReloadWanted = true;
+				return false;
+			}
+			return true;
+		}
+
+		/// <summary>
 		/// Re-reads a live match's seats after a stranger arrived: a backfill from the queue adds a
 		/// row this server has not seen.
 		/// </summary>
-		private async Task ReloadArenaSeatsAsync(long instanceID, long matchID, long arrivedID)
+		/// <param name="flight">
+		/// The match whose in-flight mark this read owns. Touched here only through
+		/// <see cref="Interlocked"/>, to clear the mark in <c>finally</c>; everything else about the
+		/// match is the main thread's.
+		/// </param>
+		private async Task ReloadArenaSeatsAsync(ArenaMatchState flight, long instanceID, long matchID)
 		{
 			try
 			{
 				if (Server?.Database?.ServiceRegistry == null ||
 					!Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var matchService))
 				{
-					TryEnqueueMainThread(() => { if (arenaMatchesByInstance.TryGetValue(instanceID, out var s)) s.SeatReloadInFlight = false; });
 					return;
 				}
 
@@ -774,7 +867,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					{
 						return;
 					}
-					state.SeatReloadInFlight = false;
 					state.SeatReloadDue = false;
 
 					var added = new List<long>();
@@ -824,6 +916,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				await Log.Error("InteractableSystem", $"Error re-reading seats of arena match {matchID}: {ex}");
 				TryEnqueueMainThread(() => OnArenaSeatReloadFailed(instanceID, matchID));
 			}
+			finally
+			{
+				Interlocked.Exchange(ref flight.SeatReloadInFlight, 0);
+			}
 		}
 
 		/// <summary>Owes a failed seat re-read a retry from the tick. Main thread only.</summary>
@@ -834,18 +930,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			state.SeatReloadInFlight = false;
 			state.SeatReloadDue = true;
-			state.NextSeatReloadUtc = DateTime.UtcNow.AddSeconds(ArenaReadRetrySeconds);
+			state.NextSeatReloadAt = MonotonicClock.NowSeconds + ArenaReadRetrySeconds;
 		}
 
 		/// <summary>
 		/// Retries the reads a match is owed: a seat re-read that failed, and ranked seats whose
 		/// rating read failed. Main thread only; bounded by <see cref="ArenaReadMaxRetries"/> each.
 		/// </summary>
-		private void TickArenaReads(ArenaMatchState state, DateTime now)
+		private void TickArenaReads(ArenaMatchState state, double now)
 		{
-			if (state.SeatReloadDue && !state.SeatReloadInFlight && now >= state.NextSeatReloadUtc)
+			bool idle = Volatile.Read(ref state.SeatReloadInFlight) == 0;
+			if (idle && state.SeatReloadDue && now >= state.NextSeatReloadAt)
 			{
 				if (state.SeatReloadRetries >= ArenaReadMaxRetries)
 				{
@@ -856,17 +952,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				{
 					++state.SeatReloadRetries;
 					state.SeatReloadDue = false;
-					state.SeatReloadInFlight = true;
-					long instanceID = state.InstanceID;
-					long matchID = state.MatchID;
-					if (!TryEnqueueAsyncWork(() => ReloadArenaSeatsAsync(instanceID, matchID, 0), matchID))
+					if (!TryStartSeatReload(state))
 					{
-						OnArenaSeatReloadFailed(instanceID, matchID);
+						OnArenaSeatReloadFailed(state.InstanceID, state.MatchID);
 					}
 				}
 			}
+			else if (idle && state.SeatReloadWanted)
+			{
+				// A stranger arrived while the last read was in flight: read again for them.
+				TryStartSeatReload(state);
+			}
 
-			if (!state.Ranked || now < state.NextRatingReadUtc || state.RatingReadRetries >= ArenaReadMaxRetries)
+			if (!state.Ranked || now < state.NextRatingReadAt || state.RatingReadRetries >= ArenaReadMaxRetries)
 			{
 				return;
 			}
@@ -902,7 +1000,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			seat.Present = false;
-			seat.RespawnAtUtc = null;
+			SyncSeatConnection(state, seat, null);
+			seat.RespawnAt = null;
 			DropCarriedFlag(state, seat, character.Transform != null ? character.Transform.position : seat.LastPosition);
 
 			if (state.Phase == ArenaMatchPhase.Live)
@@ -933,7 +1032,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (character?.GameObject == null ||
 				!TryGetArenaMatchForScene(character.GameObject.scene.handle, out ArenaMatchState state) ||
 				!state.Seats.TryGetValue(character.ID, out ArenaSeatState seat) ||
-				seat.Dropped || seat.Forfeited || seat.DisconnectedAtUtc.HasValue)
+				seat.Dropped || seat.Forfeited || seat.DisconnectedAt.HasValue)
 			{
 				return;
 			}
@@ -944,7 +1043,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			seat.Present = false;
-			seat.RespawnAtUtc = null;
+			SyncSeatConnection(state, seat, null);
+			seat.RespawnAt = null;
 			seat.Name = character.CharacterName;
 			DropCarriedFlag(state, seat, character.Transform != null ? character.Transform.position : seat.LastPosition);
 
@@ -961,7 +1061,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			int grace = state.Template != null ? state.Template.ReconnectGraceSeconds : 60;
 			if (grace > 0)
 			{
-				seat.DisconnectedAtUtc = DateTime.UtcNow;
+				seat.DisconnectedAt = MonotonicClock.NowSeconds;
 				BroadcastArenaEvent(state, ArenaEventKind.PlayerDisconnected, null, seat, seat.Team, grace);
 				Log.Debug("InteractableSystem", $"Arena: {character.CharacterName} left match {state.MatchID} while it was live; seat held for {grace}s.");
 			}
@@ -981,11 +1081,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			seat.Forfeited = true;
 			seat.Present = false;
-			seat.DisconnectedAtUtc = null;
-			seat.RespawnAtUtc = null;
+			SyncSeatConnection(state, seat, null);
+			seat.DisconnectedAt = null;
+			seat.RespawnAt = null;
 
 			long matchID = state.MatchID;
 			long characterID = seat.CharacterID;
+			PersistSeatVacated(matchID, characterID);
+
+			BroadcastArenaEvent(state, ArenaEventKind.PlayerForfeited, null, seat, seat.Team, 0);
+			Log.Debug("InteractableSystem", $"Arena: seat of character {characterID} in match {matchID} forfeited and vacated.");
+		}
+
+		/// <summary>
+		/// Writes a seat as vacated: open for backfill, and no longer holding its player in the match.
+		/// </summary>
+		/// <remarks>
+		/// Unvacated, the seat cannot be backfilled, the player is refused by both finders as "in a
+		/// live match" until it ends, and a leaver's history does not show the desertion. Nothing
+		/// else ever writes it.
+		/// </remarks>
+		private void PersistSeatVacated(long matchID, long characterID)
+		{
 			EnqueuePersistence(async () =>
 			{
 				try
@@ -997,8 +1114,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						return;
 					}
 
-					/* Unvacated, the seat cannot be backfilled and the leaver's history does not
-					 * show the desertion — nothing else ever writes it. */
 					DatabaseResult<bool> vacated = await WriteArenaRowAsync(() => matchService.MarkSeatVacatedAsync(matchID, characterID));
 					if (!vacated.IsSuccess)
 					{
@@ -1010,9 +1125,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					await Log.Error("InteractableSystem", $"Error vacating seat of character {characterID} in arena match {matchID}: {ex}");
 				}
 			}, matchID);
-
-			BroadcastArenaEvent(state, ArenaEventKind.PlayerForfeited, null, seat, seat.Team, 0);
-			Log.Debug("InteractableSystem", $"Arena: seat of character {characterID} in match {matchID} forfeited and vacated.");
 		}
 
 		/// <summary>Undoes the attribute charges of a forfeit for a player who came back in time.</summary>
@@ -1029,11 +1141,117 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			seat.ForfeitRankDelta = 0;
 		}
 
+		/// <summary>
+		/// The match hosted in a scene, for the events that know only the scene. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Checked against the instance the scene holds now, not only its handle: Unity reuses a
+		/// scene handle once its scene unloads, so a match whose instance was closed from elsewhere
+		/// could otherwise be handed the kills, departures and objectives of whatever scene loaded
+		/// next under the same handle, until the tick noticed.
+		/// </remarks>
 		private bool TryGetArenaMatchForScene(int sceneHandle, out ArenaMatchState state)
 		{
+			if (arenaInstanceBySceneHandle.TryGetValue(sceneHandle, out long instanceID) &&
+				arenaMatchesByInstance.TryGetValue(instanceID, out state) &&
+				IsArenaInstanceLoaded(sceneHandle, instanceID))
+			{
+				return true;
+			}
 			state = null;
-			return arenaInstanceBySceneHandle.TryGetValue(sceneHandle, out long instanceID) &&
-				arenaMatchesByInstance.TryGetValue(instanceID, out state);
+			return false;
+		}
+
+		/// <summary>
+		/// Whether the scene with this handle is still the instance with this row id. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// The handle alone cannot say: it is the scene manager's, and it is given to the next scene
+		/// that loads once this one has gone. The row id is the instance's own identity.
+		/// </remarks>
+		private bool IsArenaInstanceLoaded(int sceneHandle, long instanceID)
+		{
+			return Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) &&
+				mappingData.SceneInstanceByHandle.TryGetValue(sceneHandle, out ISceneInstanceDetails details) &&
+				details != null &&
+				details.SceneID == instanceID;
+		}
+
+		/// <summary>
+		/// Records the connection a seat's player is on — or null when they are not in the arena —
+		/// and keeps their team's connection set in step with it. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// The one writer of <see cref="ArenaSeatState.Connection"/> and of
+		/// <see cref="ArenaMatchState.TeamConnections"/>. Called after every change to a seat's
+		/// presence or its dropped mark — arrival, reseat, despawn, departure, forfeit — so the set
+		/// is exactly the rule <see cref="ArenaRules.IsOnTeamChannel"/> applied to the seats, and a
+		/// team send is one multicast instead of a walk of the server's characters.
+		/// </remarks>
+		private static void SyncSeatConnection(ArenaMatchState state, ArenaSeatState seat, NetworkConnection connection)
+		{
+			HashSet<NetworkConnection> team = state.TeamConnections != null && seat.Team >= 0 && seat.Team < state.TeamConnections.Length
+				? state.TeamConnections[seat.Team]
+				: null;
+
+			if (seat.Connection != null && !ReferenceEquals(seat.Connection, connection))
+			{
+				team?.Remove(seat.Connection);
+			}
+			seat.Connection = connection;
+
+			if (connection == null || team == null)
+			{
+				return;
+			}
+			if (ArenaRules.IsOnTeamChannel(seat.Present, seat.Dropped))
+			{
+				team.Add(connection);
+			}
+			else
+			{
+				team.Remove(connection);
+			}
+		}
+
+		/// <summary>
+		/// The connections of the arena team a character is seated on, in the match hosted in the
+		/// scene they are standing in: every seat of that team whose player is in the arena now.
+		/// Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// For team-only sends — team chat — as one multicast
+		/// (<c>INetworkManagerWrapper.Broadcast(HashSet&lt;NetworkConnection&gt;, ...)</c>) rather than a walk
+		/// of every character on the server. Membership is <see cref="ArenaRules.IsOnTeamChannel"/>:
+		/// the team as <see cref="ArenaTeamRegistry"/> publishes it (no dropped seats), narrowed to
+		/// the players present to receive it. Kept current on arrival, reseat, despawn, departure
+		/// and forfeit.
+		/// </para>
+		/// <para>
+		/// The set belongs to the coordinator: read it on the main thread, and never modify or keep
+		/// it. It changes as players come and go, and it is emptied when the match closes.
+		/// </para>
+		/// </remarks>
+		/// <param name="sceneHandle">The handle of the scene the character is standing in.</param>
+		/// <param name="characterID">The character.</param>
+		/// <param name="teamConnections">The team's connections, the character's own among them; null when false.</param>
+		/// <returns>
+		/// False when that scene hosts no match on this server, or the character holds no seat in
+		/// it that is on its team's channel (no seat, a dropped seat, or not present).
+		/// </returns>
+		public bool TryGetArenaTeamConnections(int sceneHandle, long characterID, out HashSet<NetworkConnection> teamConnections)
+		{
+			teamConnections = null;
+			if (!TryGetArenaMatchForScene(sceneHandle, out ArenaMatchState state) ||
+				!state.Seats.TryGetValue(characterID, out ArenaSeatState seat) ||
+				!ArenaRules.IsOnTeamChannel(seat.Present, seat.Dropped) ||
+				state.TeamConnections == null || seat.Team < 0 || seat.Team >= state.TeamConnections.Length)
+			{
+				return false;
+			}
+			teamConnections = state.TeamConnections[seat.Team];
+			return true;
 		}
 
 		// ──────────────────────────────────────────────────────────────────
@@ -1102,7 +1320,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			int respawnSeconds = state.Template != null ? state.Template.RespawnSeconds : 0;
-			victimSeat.RespawnAtUtc = respawnSeconds > 0 ? DateTime.UtcNow.AddSeconds(respawnSeconds) : (DateTime?)null;
+			victimSeat.RespawnAt = respawnSeconds > 0 ? MonotonicClock.NowSeconds + respawnSeconds : (double?)null;
 
 			if (victim.Owner != null && victim.Owner.IsActive)
 			{
@@ -1126,6 +1344,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		// ──────────────────────────────────────────────────────────────────
 
 		/// <summary>Advances every hosted match by one second.</summary>
+		/// <param name="deltaTime">
+		/// Real seconds since the last tick. Unused, deliberately: every arena timer is a moment
+		/// compared with now — phase ends, respawns, reconnect graces, dropped flags, and control
+		/// point holds (<see cref="ArenaObjectiveState.HeldAccruedTo"/>) — so a tick that comes
+		/// late, or one that stands for several after a hitch, loses nothing by being one tick.
+		/// <para>
+		/// Those moments are <see cref="MonotonicClock"/> seconds. Each is a local duration: on the
+		/// wall clock a host stepped forward ended every phase, grace and respawn inside the step on
+		/// one tick, and credited every held control point with the whole step. A deserter's queue lock
+		/// is a duration the database adds to its own now.
+		/// </para>
+		/// </param>
 		private void OnArenaTick(float deltaTime)
 		{
 			if (Server == null)
@@ -1133,7 +1363,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			DateTime now = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			// Before the early out: a match whose read failed is exactly one that is not hosted yet.
 			RetryArenaMatchLoads(now);
@@ -1149,9 +1379,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				/* The instance went away under us: a lifetime cap, a close from elsewhere. The match
 				 * row must not stay open, or every seat is "in a live match" forever and locked out
-				 * of both finders; a match that had not ended is recorded as cancelled. */
-				if (!Server.DataContainerRegistry.TryGet<ISceneInstanceMappingData>(out var mappingData) ||
-					!mappingData.SceneInstanceByHandle.ContainsKey(state.SceneHandle))
+				 * of both finders; a match that had not ended is recorded as cancelled. Judged by the
+				 * instance's row id as well as the handle: a scene that loaded under the recycled
+				 * handle is not this match's instance. */
+				if (!IsArenaInstanceLoaded(state.SceneHandle, state.InstanceID))
 				{
 					if (state.Phase < ArenaMatchPhase.Ended)
 					{
@@ -1184,7 +1415,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						break;
 					case ArenaMatchPhase.Ended:
 					case ArenaMatchPhase.Cancelled:
-						if (now >= state.PhaseEndsUtc)
+						if (now >= state.PhaseEndsAt)
 						{
 							CloseArenaMatch(state, state.Phase == ArenaMatchPhase.Ended ? "the match ended" : "the match was cancelled");
 						}
@@ -1201,7 +1432,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
-		private void TickGathering(ArenaMatchState state, DateTime now)
+		private void TickGathering(ArenaMatchState state, double now)
 		{
 			bool allPresent = true;
 			foreach (ArenaSeatState seat in state.Seats.Values)
@@ -1219,7 +1450,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			if (now < state.PhaseEndsUtc)
+			if (now < state.PhaseEndsAt)
 			{
 				return;
 			}
@@ -1252,9 +1483,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			BeginReadyCheckOrCountdown(state);
 		}
 
-		private void TickReadyCheck(ArenaMatchState state, DateTime now)
+		private void TickReadyCheck(ArenaMatchState state, double now)
 		{
-			int seconds = Math.Max(0, (int)Math.Ceiling((state.PhaseEndsUtc - now).TotalSeconds));
+			/* Everyone accepted since the last tick: the countdown starts here, inside the tick,
+			 * never from the answer's handler. A countdown started at an arbitrary moment put
+			 * every later tick at an arbitrary point within its seconds, and at some points the
+			 * frame's jitter decided which second each tick saw. Started on the tick, every tick
+			 * lands on a whole second (see ArenaRules.ResolveTickSecond). */
+			if (AllSeatsReady(state))
+			{
+				Log.Debug("InteractableSystem", $"Arena: match {state.MatchID} everyone accepted.");
+				BeginArenaCountdown(state);
+				return;
+			}
+
+			int seconds = ArenaRules.ResolveTickSecond(state.PhaseEndsAt - now);
 			if (seconds != state.LastBroadcastSecond)
 			{
 				state.LastBroadcastSecond = seconds;
@@ -1282,13 +1525,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			CancelArenaMatch(state, silent.Count > 0 ? $"{string.Join(", ", silent)} did not accept" : "the ready check timed out");
 		}
 
-		private void TickCountdown(ArenaMatchState state, DateTime now)
+		private void TickCountdown(ArenaMatchState state, double now)
 		{
-			int seconds = Math.Max(0, (int)Math.Ceiling((state.PhaseEndsUtc - now).TotalSeconds));
-			if (seconds != state.LastBroadcastSecond)
+			/* Every second passed since the last announcement, in order: each carries its own
+			 * cues, and one skipped is a cue that never plays. Ordinarily one per tick; after a
+			 * hitch, the ones it swallowed, back to back. */
+			int seconds = ArenaRules.ResolveTickSecond(state.PhaseEndsAt - now);
+			int steps = ArenaRules.ResolveCountdownSteps(state.LastBroadcastSecond, seconds, out int highest);
+			for (int i = 0; i < steps; ++i)
+			{
+				BroadcastArenaState(state, highest - i);
+			}
+			if (steps > 0)
 			{
 				state.LastBroadcastSecond = seconds;
-				BroadcastArenaState(state, seconds);
 			}
 
 			if (seconds <= 0)
@@ -1297,7 +1547,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
-		private void TickLive(ArenaMatchState state, DateTime now)
+		private void TickLive(ArenaMatchState state, double now)
 		{
 			bool changed = false;
 
@@ -1306,10 +1556,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
 				// Reconnect grace run out.
-				if (seat.DisconnectedAtUtc.HasValue && !seat.Forfeited)
+				if (seat.DisconnectedAt.HasValue && !seat.Forfeited)
 				{
 					int grace = state.Template != null ? state.Template.ReconnectGraceSeconds : 60;
-					if (now >= seat.DisconnectedAtUtc.Value.AddSeconds(grace))
+					if (now >= seat.DisconnectedAt.Value + grace)
 					{
 						ForfeitSeat(state, seat);
 						changed = true;
@@ -1317,9 +1567,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				// Respawns due.
-				if (charMapping != null && seat.RespawnAtUtc.HasValue && now >= seat.RespawnAtUtc.Value && seat.Present)
+				if (charMapping != null && seat.RespawnAt.HasValue && now >= seat.RespawnAt.Value && seat.Present)
 				{
-					seat.RespawnAtUtc = null;
+					seat.RespawnAt = null;
 					if (charMapping.CharactersByID.TryGetValue(seat.CharacterID, out IPlayerCharacter character) &&
 						character?.GameObject != null && character.GameObject.scene.handle == state.SceneHandle &&
 						character.IsFlagged(CharacterFlags.IsDead))
@@ -1341,15 +1591,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				changed = true;
 			}
 
-			bool scored = TickControlPoints(state);
+			bool scored = TickControlPoints(state, now);
 
 			bool timed = state.Template != null && state.Template.MatchMinutes > 0;
-			int seconds = timed ? Math.Max(0, (int)Math.Ceiling((state.PhaseEndsUtc - now).TotalSeconds)) : 0;
+			int seconds = timed ? ArenaRules.ResolveTickSecond(state.PhaseEndsAt - now) : 0;
 			bool timeUp = timed && seconds <= 0;
 
-			if (timed && state.Template.TimeWarningSeconds != null && state.Template.TimeWarningSeconds.Contains(seconds) && state.TimeWarningsFired.Add(seconds))
+			/* Every warning the clock passed since the last tick, not only one whose exact second
+			 * this tick happened to see: a late tick stepped over a second, and its warning was
+			 * lost. */
+			if (timed && state.Template.TimeWarningSeconds != null)
 			{
-				BroadcastArenaEvent(state, ArenaEventKind.TimeWarning, null, null, -1, seconds);
+				foreach (int warning in state.Template.TimeWarningSeconds)
+				{
+					if (ArenaRules.IsThresholdCrossed(state.LastWarningCheckSecond, seconds, warning) && state.TimeWarningsFired.Add(warning))
+					{
+						BroadcastArenaEvent(state, ArenaEventKind.TimeWarning, null, null, -1, warning);
+					}
+				}
+				state.LastWarningCheckSecond = seconds;
 			}
 
 			if (CheckArenaOutcome(state, timeUp))
@@ -1378,7 +1638,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			state.Phase = ArenaMatchPhase.ReadyCheck;
-			state.PhaseEndsUtc = DateTime.UtcNow.AddSeconds(seconds);
+			state.PhaseEndsAt = MonotonicClock.NowSeconds + seconds;
 			state.LastBroadcastSecond = -1;
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
@@ -1436,43 +1696,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			bool allReady = true;
-			foreach (ArenaSeatState other in state.Seats.Values)
-			{
-				if (!other.Dropped && !other.Ready)
-				{
-					allReady = false;
-					break;
-				}
-			}
-
-			if (allReady)
-			{
-				Log.Debug("InteractableSystem", $"Arena: match {state.MatchID} everyone accepted.");
-				BeginArenaCountdown(state);
-				return;
-			}
-
-			int seconds = Math.Max(0, (int)Math.Ceiling((state.PhaseEndsUtc - DateTime.UtcNow).TotalSeconds));
+			/* The last acceptance does not start the countdown here: the next tick does, at most a
+			 * second from now (TickReadyCheck), so the countdown is on the tick's grid. Everyone is
+			 * told the new tally at once either way. */
+			int seconds = Math.Max(0, (int)Math.Ceiling(state.PhaseEndsAt - MonotonicClock.NowSeconds));
 			BroadcastReadyCheck(state, seconds);
 			BroadcastArenaState(state, seconds);
 		}
 
-		private void BroadcastReadyCheck(ArenaMatchState state, int seconds)
+		/// <summary>Whether every seat still in the match has accepted the ready check.</summary>
+		private static bool AllSeatsReady(ArenaMatchState state)
 		{
-			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
-			{
-				return;
-			}
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
-				if (seat.Dropped || !seat.Present ||
-					!charMapping.CharactersByID.TryGetValue(seat.CharacterID, out IPlayerCharacter character) ||
-					character?.Owner == null || !character.Owner.IsActive)
+				if (!seat.Dropped && !seat.Ready)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>Sends each present seat its own view of the ready check: whether they have answered differs per seat.</summary>
+		private void BroadcastReadyCheck(ArenaMatchState state, int seconds)
+		{
+			foreach (ArenaSeatState seat in state.Seats.Values)
+			{
+				if (seat.Dropped || !seat.Present || seat.Connection == null || !seat.Connection.IsActive)
 				{
 					continue;
 				}
-				SendReadyCheck(state, seat, character.Owner, seconds);
+				SendReadyCheck(state, seat, seat.Connection, seconds);
 			}
 		}
 
@@ -1484,7 +1738,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 			if (seconds < 0)
 			{
-				seconds = Math.Max(0, (int)Math.Ceiling((state.PhaseEndsUtc - DateTime.UtcNow).TotalSeconds));
+				seconds = Math.Max(0, (int)Math.Ceiling(state.PhaseEndsAt - MonotonicClock.NowSeconds));
 			}
 			int accepted = 0, total = 0;
 			foreach (ArenaSeatState other in state.Seats.Values)
@@ -1517,7 +1771,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			state.Phase = ArenaMatchPhase.Countdown;
 			int seconds = state.Template != null ? Math.Max(1, state.Template.CountdownSeconds) : 10;
-			state.PhaseEndsUtc = DateTime.UtcNow.AddSeconds(seconds);
+			state.PhaseEndsAt = MonotonicClock.NowSeconds + seconds;
 			state.LastBroadcastSecond = -1;
 			ArenaTeamRegistry.SetLive(state.SceneHandle, false);
 			DiscoverArenaObjectives(state);
@@ -1546,27 +1800,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			state.Phase = ArenaMatchPhase.Live;
 			bool timed = state.Template != null && state.Template.MatchMinutes > 0;
-			state.PhaseEndsUtc = timed ? DateTime.UtcNow.AddMinutes(state.Template.MatchMinutes) : DateTime.MaxValue;
+			state.PhaseEndsAt = timed ? MonotonicClock.NowSeconds + state.Template.MatchMinutes * 60.0 : double.PositiveInfinity;
 			state.LastBroadcastSecond = -1;
+			// One past the full clock, so a warning authored at the match's own length fires once, on the first tick.
+			state.LastWarningCheckSecond = timed ? state.Template.MatchMinutes * 60 + 1 : int.MaxValue;
 			ArenaTeamRegistry.SetLive(state.SceneHandle, true);
 
-			// Anyone who did not make it to the countdown is out for good, and their seat opens.
+			/* Anyone who did not make it to the countdown is out for good, and their seat opens.
+			 *
+			 * A seat dropped at the gathering timeout is the same player — they never arrived — so
+			 * its row is vacated here too. It used to stay Seated for the whole match: the seat could
+			 * not be backfilled, and both finders refused its player as "in a live match" until the
+			 * match ended. It is vacated quietly rather than forfeited: failing to arrive is a failed
+			 * transfer as often as a choice, and the gathering timeout already told the room. Before
+			 * now a dropped seat can still be reclaimed by arriving during the countdown, which is
+			 * why the write waits for this moment. */
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
-				if (!seat.Present && !seat.Dropped && !seat.Forfeited)
+				if (seat.Forfeited)
+				{
+					continue;
+				}
+				if (seat.Dropped)
+				{
+					PersistSeatVacated(state.MatchID, seat.CharacterID);
+				}
+				else if (!seat.Present)
 				{
 					ForfeitSeat(state, seat);
 				}
 			}
 
 			int backfill = state.Template != null ? state.Template.BackfillWindowSeconds : 60;
-			state.BackfillUntilUtc = backfill > 0 ? DateTime.UtcNow.AddSeconds(backfill) : DateTime.MinValue;
 
 			PersistArenaStatus(state, ArenaMatchStatus.Live);
 			if (backfill > 0)
 			{
 				long matchID = state.MatchID;
-				DateTime until = state.BackfillUntilUtc;
+				/* A length, not a moment: the database stamps the window's end on its own clock,
+				 * because the backfill transactions that read it run on other scene servers and
+				 * compare it with the database's clock. */
+				TimeSpan window = TimeSpan.FromSeconds(backfill);
 				EnqueuePersistence(async () =>
 				{
 					try
@@ -1579,7 +1853,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						}
 
 						// The window is what the queue's backfill reads; without it no vacated seat is ever filled.
-						DatabaseResult<bool> opened = await WriteArenaRowAsync(() => matchService.SetBackfillWindowAsync(matchID, until));
+						DatabaseResult<bool> opened = await WriteArenaRowAsync(() => matchService.SetBackfillWindowAsync(matchID, window));
 						if (!opened.IsSuccess)
 						{
 							await Log.Warning("InteractableSystem", $"Arena: the backfill window of match {matchID} could not be opened: [{opened.ErrorCode}] {opened.ErrorMessage}");
@@ -1630,7 +1904,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			state.Phase = ArenaMatchPhase.Ended;
 			state.WinnerTeam = winnerTeam;
 			int resultsSeconds = state.Template != null ? Math.Max(3, state.Template.ResultsSeconds) : 15;
-			state.PhaseEndsUtc = DateTime.UtcNow.AddSeconds(resultsSeconds);
+			state.PhaseEndsAt = MonotonicClock.NowSeconds + resultsSeconds;
 			ArenaTeamRegistry.SetLive(state.SceneHandle, false);
 
 			Log.Debug("InteractableSystem", $"Arena: match {state.MatchID} ended; winner team {winnerTeam}; scores {string.Join("/", state.TeamScores)}.");
@@ -1638,10 +1912,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// A disconnected seat still inside its grace loses now; the match is over.
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
-				if (seat.DisconnectedAtUtc.HasValue && !seat.Forfeited)
+				if (seat.DisconnectedAt.HasValue && !seat.Forfeited)
 				{
 					seat.Forfeited = true;
-					seat.DisconnectedAtUtc = null;
+					seat.DisconnectedAt = null;
 				}
 			}
 
@@ -1936,21 +2210,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private void CancelArenaMatch(ArenaMatchState state, string reason)
 		{
 			state.Phase = ArenaMatchPhase.Cancelled;
-			state.PhaseEndsUtc = DateTime.UtcNow.AddSeconds(ArenaCancelledSeconds);
+			state.PhaseEndsAt = MonotonicClock.NowSeconds + ArenaCancelledSeconds;
 			ArenaTeamRegistry.SetLive(state.SceneHandle, false);
 
 			Log.Debug("InteractableSystem", $"Arena: match {state.MatchID} cancelled: {reason}.");
 			PersistArenaStatus(state, ArenaMatchStatus.Cancelled);
 			ArenaServerEvents.RaiseMatchCancelled(state.MatchID, state.Template, reason);
 
-			if (Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
+			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
-				foreach (ArenaSeatState seat in state.Seats.Values)
+				if (seat.Present && seat.Connection != null)
 				{
-					if (seat.Present && charMapping.CharactersByID.TryGetValue(seat.CharacterID, out IPlayerCharacter character) && character?.Owner != null)
-					{
-						SendSystemMessage(character.Owner, $"The match was cancelled: {reason}. You will be returned to the world.");
-					}
+					SendSystemMessage(seat.Connection, $"The match was cancelled: {reason}. You will be returned to the world.");
 				}
 			}
 
@@ -1971,8 +2242,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		private void ForgetArenaMatch(ArenaMatchState state)
 		{
 			arenaMatchesByInstance.Remove(state.InstanceID);
-			arenaInstanceBySceneHandle.Remove(state.SceneHandle);
-			ArenaTeamRegistry.Unpublish(state.SceneHandle);
+
+			/* The handle's entries are removed only while they are still this match's. A match whose
+			 * instance vanished under it is forgotten a tick later, by which time the recycled handle
+			 * may belong to the next arena, whose mapping and published roster must survive this. */
+			if (arenaInstanceBySceneHandle.TryGetValue(state.SceneHandle, out long mappedInstanceID) &&
+				mappedInstanceID == state.InstanceID)
+			{
+				arenaInstanceBySceneHandle.Remove(state.SceneHandle);
+				ArenaTeamRegistry.Unpublish(state.SceneHandle);
+			}
+
+			if (state.TeamConnections != null)
+			{
+				foreach (HashSet<NetworkConnection> team in state.TeamConnections)
+				{
+					team.Clear();
+				}
+			}
 		}
 
 		// ──────────────────────────────────────────────────────────────────
@@ -2039,7 +2326,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 				objective.ProgressTeam = -1;
 				objective.Progress = 0;
-				objective.HeldSeconds = 0;
+				objective.HeldSeconds = 0.0;
 			}
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
@@ -2108,7 +2395,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				tracked.Progress = result.Progress;
 				if (result.Captured)
 				{
-					tracked.HeldSeconds = 0;
+					tracked.HeldSeconds = 0.0;
+					tracked.HeldAccruedTo = MonotonicClock.NowSeconds;
 					seat.Score += state.Template != null ? state.Template.ControlPointCaptureScore : 5;
 					BroadcastArenaEvent(state, ArenaEventKind.PointCaptured, seat, null, seat.Team, 0);
 					Log.Debug("InteractableSystem", $"Arena: {player.CharacterName} captured a control point for team {seat.Team + 1} in match {state.MatchID}.");
@@ -2121,8 +2409,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
-		/// <summary>Scores held control points once a second. Returns true when a team scored.</summary>
-		private bool TickControlPoints(ArenaMatchState state)
+		/// <summary>
+		/// Scores held control points for the real time held since the last accrual. Returns true
+		/// when a team scored.
+		/// </summary>
+		/// <remarks>
+		/// Held time is measured from each point's own capture moment and never past the match's
+		/// end, so a point taken just before a tick is credited the moment it was held, and a
+		/// hitch that swallowed several ticks — or one that runs past the final whistle — is
+		/// credited exactly the time that fell inside the match.
+		/// </remarks>
+		private bool TickControlPoints(ArenaMatchState state, double now)
 		{
 			if (state.Mode != ArenaMode.KingOfTheHill)
 			{
@@ -2130,6 +2427,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			int perPoint = state.Template != null ? Math.Max(1, state.Template.ControlPointHoldSecondsPerPoint) : 1;
+			double accrueTo = now < state.PhaseEndsAt ? now : state.PhaseEndsAt;
 			bool scored = false;
 			foreach (ArenaObjectiveState objective in state.Objectives.Values)
 			{
@@ -2138,11 +2436,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					continue;
 				}
 
-				objective.HeldSeconds += 1;
-				if (objective.HeldSeconds >= perPoint)
+				// Owned without a capture stamp cannot happen today; were it to, it starts accruing now rather than from the clock's origin.
+				if (double.IsNaN(objective.HeldAccruedTo))
 				{
-					objective.HeldSeconds = 0;
-					state.TeamScores[objective.Team] += 1;
+					objective.HeldAccruedTo = accrueTo;
+				}
+				double elapsed = accrueTo - objective.HeldAccruedTo;
+				if (accrueTo > objective.HeldAccruedTo)
+				{
+					objective.HeldAccruedTo = accrueTo;
+				}
+				objective.HeldSeconds = ArenaRules.AccrueHold(objective.HeldSeconds, elapsed, perPoint, out int points);
+				if (points > 0)
+				{
+					state.TeamScores[objective.Team] += points;
 					scored = true;
 					AnnounceNearLimit(state, objective.Team);
 				}
@@ -2166,14 +2473,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				objective.CarrierCharacterID = 0;
 				objective.DropPosition = where;
 				int seconds = state.Template != null ? Math.Max(1, state.Template.FlagDropSeconds) : 20;
-				objective.DropExpiresUtc = DateTime.UtcNow.AddSeconds(seconds);
+				objective.DropExpiresAt = MonotonicClock.NowSeconds + seconds;
 				BroadcastArenaEvent(state, ArenaEventKind.FlagDropped, seat, null, objective.Team, seconds);
 			}
 			seat.CarriedFlagObjectiveID = 0;
 		}
 
 		/// <summary>Dropped flags: returned on the timer, or by whoever walks up to them. Returns true when any changed.</summary>
-		private bool TickDroppedFlags(ArenaMatchState state, DateTime now, ICharacterMappingData<NetworkConnection> charMapping)
+		private bool TickDroppedFlags(ArenaMatchState state, double now, ICharacterMappingData<NetworkConnection> charMapping)
 		{
 			if (state.Mode != ArenaMode.CaptureTheFlag)
 			{
@@ -2191,7 +2498,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					continue;
 				}
 
-				if (now >= objective.DropExpiresUtc)
+				if (now >= objective.DropExpiresAt)
 				{
 					objective.Flag = ArenaFlagState.Home;
 					objective.DropPosition = Vector3.zero;
@@ -2263,13 +2570,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>Sends one announceable moment to everyone standing in the arena.</summary>
+		/// <remarks>
+		/// One multicast to the instance's scene, serialised once. It used to walk every character
+		/// on the server, asking each for its scene with a native call, and serialise the message
+		/// again per occupant — on every kill, capture and announcement.
+		/// </remarks>
 		private void BroadcastArenaEvent(ArenaMatchState state, ArenaEventKind kind, ArenaSeatState actor, ArenaSeatState target, int team, int value)
 		{
-			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
-			{
-				return;
-			}
-
 			var msg = new ArenaEventBroadcast
 			{
 				Kind = kind,
@@ -2283,14 +2590,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				Value = value,
 			};
 
-			foreach (IPlayerCharacter occupant in charMapping.CharactersByID.Values)
-			{
-				if (occupant?.GameObject != null && occupant.GameObject.scene.handle == state.SceneHandle &&
-					occupant.Owner != null && occupant.Owner.IsActive)
-				{
-					Server.NetworkWrapper.Broadcast(occupant.Owner, msg, true, FishNet.Transporting.Channel.Reliable);
-				}
-			}
+			Server.NetworkWrapper.BroadcastToScene(state.Scene, msg, true, FishNet.Transporting.Channel.Reliable);
 		}
 
 		// ──────────────────────────────────────────────────────────────────
@@ -2304,7 +2604,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				return;
 			}
-			DateTime until = DateTime.UtcNow.AddMinutes(minutes);
+			TimeSpan duration = TimeSpan.FromMinutes(minutes);
 			EnqueuePersistence(async () =>
 			{
 				try
@@ -2317,10 +2617,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					}
 
 					// A lock that is not written is a penalty that was never applied: the queue reads only the row.
-					DatabaseResult<bool> locked = await WriteArenaRowAsync(() => penaltyService.SetAsync(characterID, until, reason));
+					DatabaseResult<bool> locked = await WriteArenaRowAsync(() => penaltyService.SetAsync(characterID, duration, reason));
 					if (!locked.IsSuccess)
 					{
-						await Log.Warning("InteractableSystem", $"Arena: character {characterID} was not locked out of the queue until {until:u} ({reason}): [{locked.ErrorCode}] {locked.ErrorMessage}");
+						await Log.Warning("InteractableSystem", $"Arena: character {characterID} was not locked out of the queue for {minutes} minutes ({reason}): [{locked.ErrorCode}] {locked.ErrorMessage}");
 					}
 				}
 				catch (Exception ex)
@@ -2423,7 +2723,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			foreach (ArenaSeatState seat in state.Seats.Values)
 			{
-				if (seat.Team == team && !seat.Dropped && !seat.Forfeited && (seat.Present || seat.DisconnectedAtUtc.HasValue))
+				if (seat.Team == team && !seat.Dropped && !seat.Forfeited && (seat.Present || seat.DisconnectedAt.HasValue))
 				{
 					return true;
 				}
@@ -2652,9 +2952,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		}
 
 		/// <summary>Sends the match state to everyone standing in the arena.</summary>
+		/// <remarks>
+		/// One multicast to the instance's scene; see <see cref="BroadcastArenaEvent"/>. A
+		/// connection still loading into the scene is among its connections and receives this too;
+		/// the client ignores match state until its character exists.
+		/// </remarks>
 		private void BroadcastArenaState(ArenaMatchState state, int secondsRemaining = 0)
 		{
-			if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping))
+			// Nobody in the scene — the last player just left — is nobody to build the scoreboard for.
+			if (!Server.NetworkWrapper.TryGetSceneConnections(state.Scene, out HashSet<NetworkConnection> occupants))
 			{
 				return;
 			}
@@ -2675,7 +2981,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					Score = seat.Score,
 					Present = seat.Present,
 					Ready = seat.Ready,
-					Reconnecting = seat.DisconnectedAtUtc.HasValue,
+					Reconnecting = seat.DisconnectedAt.HasValue,
 				});
 			}
 
@@ -2700,15 +3006,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			};
 
 			/* Everyone standing in the arena, not only the seats: a spectating game master sees the
-			 * same scoreboard, and a seat that arrived a moment ago is covered either way. */
-			foreach (IPlayerCharacter occupant in charMapping.CharactersByID.Values)
-			{
-				if (occupant?.GameObject != null && occupant.GameObject.scene.handle == state.SceneHandle &&
-					occupant.Owner != null && occupant.Owner.IsActive)
-				{
-					Server.NetworkWrapper.Broadcast(occupant.Owner, msg, true, FishNet.Transporting.Channel.Reliable);
-				}
-			}
+			 * same scoreboard, and a seat that arrived a moment ago is covered either way. Read and
+			 * sent in this one call, on the main thread, as FishNet's set requires. */
+			Server.NetworkWrapper.Broadcast(occupants, msg, true, FishNet.Transporting.Channel.Reliable);
 		}
 	}
 }

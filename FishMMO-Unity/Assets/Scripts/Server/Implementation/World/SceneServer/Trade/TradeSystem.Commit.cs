@@ -35,19 +35,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	///   </description></item>
 	///   <item><description>
 	///     <see cref="ApplyExchange"/> (main thread, both row locks held by the worker):
-	///     re-validate everything as if the trade were proposed now, deduct both currency
-	///     offers (an escrow — a concurrent spend can only spend what is left, and a refused
-	///     write refunds exactly), apply the item exchange in memory all-or-nothing, and hand
-	///     back the rows. Credits are NOT applied here: they ride in the written row and land
-	///     in memory only once the commit is known, so a refusal never has to claw back money
-	///     the player may already have spent.
+	///     re-validate everything as if the trade were proposed now, take both currency
+	///     payments and give both credits (<see cref="TradeCurrencySettlement"/>), apply the
+	///     item exchange in memory all-or-nothing, and hand back the rows. Memory now holds
+	///     exactly what the transaction writes, so no other capture of either character can
+	///     write a sheet without the trade in it. The credits are HELD: in the balance, out of
+	///     reach of any spend, so a refusal still takes back exactly what it gave.
 	///   </description></item>
 	///   <item><description>
 	///     <see cref="FinishExchange"/> (main thread, after the commit or the rollback): on
-	///     success credit both, tell both clients, close as Completed. On refusal undo the
-	///     item exchange exactly (every touched slot was locked throughout), refund the
-	///     deductions, close as Failed; the inventory system voids anything captured from the
-	///     applied state and reconciles both characters.
+	///     success release the holds, tell both clients, close as Completed. On refusal undo the
+	///     item exchange exactly (every touched slot was locked throughout), take back the
+	///     credits and refund the payments, close as Failed; the inventory system voids anything
+	///     captured from the applied state and reconciles both characters.
 	///   </description></item>
 	/// </list>
 	/// </remarks>
@@ -136,11 +136,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long firstPays = session.First.Currency;
 			long secondPays = session.Second.Currency;
 
-			if (!ValidateCurrencyLeg(first, second, firstPays) || !ValidateCurrencyLeg(second, first, secondPays))
+			CharacterAttribute firstCurrency = null;
+			CharacterAttribute secondCurrency = null;
+			if (firstPays > 0 || secondPays > 0)
 			{
+				TryGetCurrency(first, out firstCurrency);
+				TryGetCurrency(second, out secondCurrency);
+			}
+
+			/* Both payments taken and both credits given, held, before the items move — checked in
+			 * full first, so a refusal here has changed nothing. Credits used to reach memory only in
+			 * the finish hop, which left a window in which any other capture of the payee's sheet
+			 * overwrote the credited row; see TradeCurrencySettlement. */
+			if (!TradeCurrencySettlement.TryOpen(firstCurrency, secondCurrency, firstPays, secondPays,
+					out TradeCurrencySettlement currency, out TradeCurrencySettlement.Refusal currencyRefusal))
+			{
+				Log.Debug("TradeSystem", $"Session {session.ID}: currency refused ({currencyRefusal}).");
 				commit.FailureReason = TradeCloseReason.Failed;
 				return null;
 			}
+			commit.Currency = currency;
 
 			/* The offered slots were the reservation while the table was open. The exchange
 			 * needs them unlocked — RemoveItem refuses a locked slot — and the inventory
@@ -149,28 +164,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ReleaseOfferLocks(session, first, second);
 			commit.OfferLocksReleased = true;
 
-			// Deduct: the escrow. Refunded exactly on any refusal.
-			if (firstPays > 0 && !CharacterCurrency.TrySpend(first, currencyTemplate, firstPays))
-			{
-				commit.FailureReason = TradeCloseReason.Failed;
-				return null;
-			}
-			commit.FirstDeducted = firstPays;
-
-			if (secondPays > 0 && !CharacterCurrency.TrySpend(second, currencyTemplate, secondPays))
-			{
-				RefundDeductions(session, first, second);
-				commit.FailureReason = TradeCloseReason.Failed;
-				return null;
-			}
-			commit.SecondDeducted = secondPays;
-
 			var firstSide = new TradeExchange.Side { Inventory = firstInventory, Offers = session.First.Offers };
 			var secondSide = new TradeExchange.Side { Inventory = secondInventory, Offers = session.Second.Offers };
 
 			if (!TradeExchange.TryApply(firstSide, secondSide, out TradeExchange.Failure failure, out TradeExchange.Applied applied))
 			{
-				RefundDeductions(session, first, second);
+				CloseCurrency(session, committed: false);
 				commit.FailureReason = failure == TradeExchange.Failure.NoRoom ? TradeCloseReason.NoRoom : TradeCloseReason.Failed;
 				Log.Debug("TradeSystem", $"Session {session.ID}: exchange refused ({failure}).");
 				return null;
@@ -181,8 +180,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			commit.SecondSide = secondSide;
 
 			bool currencyMoved = firstPays > 0 || secondPays > 0;
-			int currencyTemplateID = currencyTemplate != null ? currencyTemplate.ID : 0;
 
+			// The sheets are written as memory holds them, credits included; see ItemExchangeLeg.PersistAttributes.
 			return new[]
 			{
 				new ItemExchangeLeg
@@ -193,8 +192,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					TouchedSlots = firstSide.TouchedSlots,
 					PersistAttributes = currencyMoved,
 					CurrencyPaid = firstPays,
-					CurrencyCredit = secondPays,
-					CurrencyTemplateID = currencyTemplateID,
 				},
 				new ItemExchangeLeg
 				{
@@ -204,8 +201,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					TouchedSlots = secondSide.TouchedSlots,
 					PersistAttributes = currencyMoved,
 					CurrencyPaid = secondPays,
-					CurrencyCredit = firstPays,
-					CurrencyTemplateID = currencyTemplateID,
 				},
 			};
 		}
@@ -227,17 +222,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			if (committed)
 			{
-				// The trade is true. Credit what the written rows already hold.
-				if (commit.SecondDeducted > 0 && first != null)
-				{
-					CharacterCurrency.TryAdd(first, currencyTemplate, commit.SecondDeducted);
-				}
-				if (commit.FirstDeducted > 0 && second != null)
-				{
-					CharacterCurrency.TryAdd(second, currencyTemplate, commit.FirstDeducted);
-				}
+				// The trade is true. The credits are already in memory; they stop being held.
+				CloseCurrency(session, committed: true);
 
-				Log.Debug("TradeSystem", $"Session {session.ID} completed: {session.First.CharacterID} gave {session.First.Offers.Count} item(s) + {commit.FirstDeducted} currency; {session.Second.CharacterID} gave {session.Second.Offers.Count} item(s) + {commit.SecondDeducted} currency.");
+				Log.Debug("TradeSystem", $"Session {session.ID} completed: {session.First.CharacterID} gave {session.First.Offers.Count} item(s) + {commit.Currency?.First.Paid ?? 0} currency; {session.Second.CharacterID} gave {session.Second.Offers.Count} item(s) + {commit.Currency?.Second.Paid ?? 0} currency.");
 
 				/* The close goes first, on purpose. The owning client holds its own lock on
 				 * every slot it offered (mirrored from the last TradeStateBroadcast), and its
@@ -265,30 +253,60 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				commit.Applied.Undo();
 			}
-			RefundDeductions(session, first, second);
+			CloseCurrency(session, committed: false);
 
 			Log.Debug("TradeSystem", $"Session {session.ID}: exchange did not commit ({commit.FailureReason}); memory restored.");
 			CloseSession(session, commit.FailureReason, commit.FailureReason);
 		}
 
-		/// <summary>Gives back what <see cref="ApplyExchange"/> deducted. Idempotent.</summary>
-		private void RefundDeductions(TradeSession session, IPlayerCharacter first, IPlayerCharacter second)
+		/// <summary>
+		/// Closes the currency settlement the apply opened: keeps the credits on a commit, takes them
+		/// back and refunds the payments on a refusal. Idempotent.
+		/// </summary>
+		/// <remarks>
+		/// Works on the attributes the apply resolved, not on a fresh lookup by id, so a party that
+		/// has since gone into combat-logout linger is still restored; a party whose pooled object has
+		/// been reset for somebody else is left alone (the settlement's token no longer matches).
+		/// </remarks>
+		private void CloseCurrency(TradeSession session, bool committed)
 		{
-			TradeSession.CommitState commit = session.Commit;
-			if (commit == null)
+			TradeCurrencySettlement currency = session.Commit?.Currency;
+			if (currency == null || currency.Closed)
 			{
 				return;
 			}
-			if (commit.FirstDeducted > 0 && first != null)
+
+			currency.Close(committed, out TradeCurrencySettlement.LegOutcome first, out TradeCurrencySettlement.LegOutcome second);
+			ReportCurrencyClose(session, session.First.CharacterID, first);
+			ReportCurrencyClose(session, session.Second.CharacterID, second);
+		}
+
+		/// <summary>Logs whatever closing one side's currency could not do exactly.</summary>
+		private static void ReportCurrencyClose(TradeSession session, long characterID, TradeCurrencySettlement.LegOutcome outcome)
+		{
+			if (!outcome.Closed)
 			{
-				CharacterCurrency.TryAdd(first, currencyTemplate, commit.FirstDeducted);
+				Log.Debug("TradeSystem", $"Session {session.ID}: character {characterID}'s currency was no longer this trade's to settle (the character left and its object was reused).");
+				return;
 			}
-			if (commit.SecondDeducted > 0 && second != null)
+			if (outcome.CreditShortfall > 0 || outcome.RefundShortfall > 0)
 			{
-				CharacterCurrency.TryAdd(second, currencyTemplate, commit.SecondDeducted);
+				// Only reachable through a write that bypasses CharacterCurrency while the trade settled
+				// (an operator setting the balance), or a balance pushed to the int ceiling meanwhile.
+				Log.Error("TradeSystem",
+					$"Session {session.ID}: reversing character {characterID}'s currency was inexact — {outcome.CreditShortfall} of the credit could not be taken back and {outcome.RefundShortfall} of the payment could not be refunded.");
 			}
-			commit.FirstDeducted = 0;
-			commit.SecondDeducted = 0;
+		}
+
+		/// <summary>The character's currency attribute, when the trade has a currency configured and the character has it.</summary>
+		private bool TryGetCurrency(IPlayerCharacter character, out CharacterAttribute currency)
+		{
+			currency = null;
+			return currencyTemplate != null &&
+				character != null &&
+				character.TryGet(out ICharacterAttributeController attributes) &&
+				attributes.TryGetAttribute(currencyTemplate, out currency) &&
+				currency != null;
 		}
 
 		/// <summary>
@@ -303,40 +321,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			Log.Error("TradeSystem", $"Session {session.ID}: exchange outcome not received within {CommitTimeoutSeconds:0}s; treating as refused.");
 			FinishExchange(session, committed: false);
-		}
-
-		/// <summary>
-		/// True when <paramref name="payer"/> can pay <paramref name="amount"/> and
-		/// <paramref name="payee"/> can receive it without overflowing.
-		/// </summary>
-		/// <remarks>
-		/// Currency is an <c>int</c>-valued attribute. A balance near the ceiling receiving a
-		/// large offer would wrap negative inside <c>AddValue</c>, which is a far worse outcome
-		/// than refusing the trade.
-		/// </remarks>
-		private bool ValidateCurrencyLeg(IPlayerCharacter payer, IPlayerCharacter payee, long amount)
-		{
-			if (amount <= 0)
-			{
-				return true;
-			}
-
-			if (currencyTemplate == null)
-			{
-				return false;
-			}
-
-			if (!CharacterCurrency.TryGetBalance(payer, currencyTemplate, out long payerBalance) || payerBalance < amount)
-			{
-				return false;
-			}
-
-			if (!CharacterCurrency.TryGetBalance(payee, currencyTemplate, out long payeeBalance))
-			{
-				return false;
-			}
-
-			return payeeBalance + amount <= int.MaxValue;
 		}
 
 		/// <summary>Unlocks every offered slot on both sides, for the commit path.</summary>

@@ -49,7 +49,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>The port it is health-checked on.</summary>
 		public int MonitoredPort { get; set; }
 
-		/// <summary>When the daemon last reported on it.</summary>
+		/// <summary>When the daemon last reported on it, by the database clock.</summary>
 		public DateTime LastReportedUtc { get; set; }
 	}
 }

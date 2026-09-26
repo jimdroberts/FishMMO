@@ -176,8 +176,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			/// <summary>Last waiting count sent, so the pump only speaks when the number moves.</summary>
 			public int LastSentWaitingCount = -1;
 
-			/// <summary>When this server first saw the row matched, for the transfer grace.</summary>
-			public DateTime MatchedAtUtc;
+			/// <summary>
+			/// When this server first saw the row matched, for the transfer grace, in
+			/// <see cref="MonotonicClock"/> seconds. Every time on an entry is a local duration of
+			/// this server's; the queue row's own times are the database's (DbNow).
+			/// </summary>
+			public double MatchedAt;
 
 			/// <summary>Party the row was matched into.</summary>
 			public long MatchedPartyID;
@@ -185,11 +189,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			/// <summary>Instance the row was matched into.</summary>
 			public long MatchedInstanceID;
 
-			/// <summary>Earliest time the pump may try to late-join this waiter into an open run.</summary>
-			public DateTime NextBackfillAttemptUtc;
+			/// <summary>
+			/// Earliest time the pump may try to late-join this waiter into an open run, in
+			/// <see cref="MonotonicClock"/> seconds; positive infinity for never.
+			/// </summary>
+			public double NextBackfillAttemptAt;
 
-			/// <summary>When this server registered the entry, for the arena's widening rating band.</summary>
-			public DateTime QueuedAtUtc;
+			/// <summary>
+			/// When this server registered the entry, for the arena's widening rating band, in
+			/// <see cref="MonotonicClock"/> seconds.
+			/// </summary>
+			public double QueuedAt;
 
 			/// <summary>Arena: whether the format is ranked.</summary>
 			public bool Ranked;
@@ -239,7 +249,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public int GroupSize;
 			public float HealthPCT;
 			public bool BackfillDue;
-			public DateTime QueuedAtUtc;
+			public double QueuedAt;
 			public bool Ranked;
 			public bool BalanceTeams;
 			public int RatingBandBase;
@@ -261,13 +271,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </remarks>
 		private int groupFinderPumpInFlight;
 
-		/// <summary>Next time the stale-row sweep runs. Runs whether or not anybody is queued here.</summary>
-		private DateTime nextGroupFinderStaleSweepUtc;
+		/// <summary>
+		/// Next time the stale-row sweep runs, in <see cref="MonotonicClock"/> seconds. Runs whether
+		/// or not anybody is queued here.
+		/// </summary>
+		private double nextGroupFinderStaleSweepAt;
 
 		/// <summary>
-		/// The moment before which a heartbeat counts as stopped.
+		/// How old a heartbeat may be before it counts as stopped.
 		/// </summary>
-		private DateTime GroupFinderStaleBefore => DateTime.UtcNow.AddSeconds(-groupFinderStalePulseSeconds);
+		/// <remarks>
+		/// An age, not a moment. The database stamps every heartbeat and applies this against its
+		/// own clock, because the row being judged was usually pulsed by a different scene server:
+		/// a moment computed here compared this machine's clock with that one's, so a server running
+		/// behind had its waiters left out of every count and, far enough behind, swept.
+		/// </remarks>
+		private TimeSpan GroupFinderStaleAfter => TimeSpan.FromSeconds(groupFinderStalePulseSeconds);
 
 		/// <summary>
 		/// Registers the group finder's requests and pump. Called from InitializeOnce.
@@ -276,7 +295,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			groupFinderEntries.Clear();
 			Interlocked.Exchange(ref groupFinderPumpInFlight, 0);
-			nextGroupFinderStaleSweepUtc = DateTime.UtcNow;
+			nextGroupFinderStaleSweepAt = MonotonicClock.NowSeconds;
 
 			groupFinderPumpIntervalSeconds = Mathf.Max(0.5f, groupFinderPumpIntervalSeconds);
 			groupFinderStalePulseSeconds = Mathf.Max(groupFinderPumpIntervalSeconds * 3.0f, groupFinderStalePulseSeconds);
@@ -481,7 +500,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 
 				DatabaseResult<long> enqueueResult = await queueService.EnqueueAsync(
-					worldServerID, characterID, DbSceneType(SceneType.Group), dungeonName, difficultyIndex, GroupFinderStaleBefore);
+					worldServerID, characterID, DbSceneType(SceneType.Group), dungeonName, difficultyIndex, GroupFinderStaleAfter);
 				if (!enqueueResult.IsSuccess)
 				{
 					await Log.Warning("InteractableSystem",
@@ -514,7 +533,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 
-				var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.Group), dungeonName, difficultyIndex, GroupFinderStaleBefore);
+				var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.Group), dungeonName, difficultyIndex, GroupFinderStaleAfter);
 				int waiting = countResult.IsSuccess ? Math.Max(1, countResult.Data) : 1;
 
 				DungeonRequestContext captured = context;
@@ -541,7 +560,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						AchievementTemplate = captured.AchievementTemplate,
 						Entrance = captured.Entrance,
 						State = GroupFinderState.Waiting,
-						NextBackfillAttemptUtc = DateTime.UtcNow,
+						NextBackfillAttemptAt = MonotonicClock.NowSeconds,
 					};
 					groupFinderEntries[characterID] = entry;
 
@@ -797,8 +816,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			DateTime now = DateTime.UtcNow;
-			bool sweepDue = now >= nextGroupFinderStaleSweepUtc;
+			double now = MonotonicClock.NowSeconds;
+			bool sweepDue = now >= nextGroupFinderStaleSweepAt;
 
 			if (groupFinderEntries.Count == 0 && !sweepDue)
 			{
@@ -871,8 +890,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					Capacity = entry.Capacity,
 					GroupSize = entry.GroupSize,
 					HealthPCT = healthPCT,
-					BackfillDue = entry.State == GroupFinderState.Waiting && now >= entry.NextBackfillAttemptUtc,
-					QueuedAtUtc = entry.QueuedAtUtc,
+					BackfillDue = entry.State == GroupFinderState.Waiting && now >= entry.NextBackfillAttemptAt,
+					QueuedAt = entry.QueuedAt,
 					Ranked = entry.Ranked,
 					BalanceTeams = entry.BalanceTeams,
 					RatingBandBase = entry.RatingBandBase,
@@ -899,7 +918,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			if (sweepDue)
 			{
-				nextGroupFinderStaleSweepUtc = now.AddSeconds(groupFinderStaleSweepIntervalSeconds);
+				nextGroupFinderStaleSweepAt = now + groupFinderStaleSweepIntervalSeconds;
 			}
 
 			Interlocked.Exchange(ref groupFinderPumpInFlight, 1);
@@ -997,6 +1016,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// Worker half of the pump: heartbeat, read back, act on matches, fill open runs, form
 		/// groups, sweep.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The fixed cost of a pump is a handful of statements however many waiters and keys this
+		/// server has: one heartbeat that returns the rows (and, for matched rows, the party
+		/// membership the transfer checks), one count across every key, and one read of where arena
+		/// seats may be backfilled. Only forming, late-joining and backfilling remain per key, and
+		/// the backfill transaction runs only for a key that read says has an opening. It used to
+		/// be a round trip per matched row, per key and per arena key on every pump — about fifty,
+		/// in series, for thirty matched players across ten keys.
+		/// </para>
+		/// </remarks>
 		private async Task RunGroupFinderPumpAsync(List<GroupFinderPumpItem> items, bool sweepDue)
 		{
 			try
@@ -1012,7 +1042,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					/* Rows twice the stale window old. Every scene server sweeps, whether or not
 					 * it has waiters, because the rows that need sweeping belong to servers that
 					 * are no longer here to do it. Bounded per call; a backlog drains over sweeps. */
-					var sweepResult = await queueService.DeleteStaleAsync(DateTime.UtcNow.AddSeconds(-2.0 * groupFinderStalePulseSeconds), 256);
+					var sweepResult = await queueService.DeleteStaleAsync(TimeSpan.FromSeconds(2.0 * groupFinderStalePulseSeconds), 256);
 					if (!sweepResult.IsSuccess)
 					{
 						await Log.Warning("InteractableSystem", $"Group finder could not sweep stale queue rows: [{sweepResult.ErrorCode}] {sweepResult.ErrorMessage}");
@@ -1025,10 +1055,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					/* Arena matches whose instance is gone but whose row never reached Ended — a
 					 * hosting server that died, a load that failed — would hold every seat out of
 					 * both finders forever. Ten minutes is far longer than any gathering or match
-					 * takes to reach a hosting server. */
+					 * takes to reach a hosting server.
+					 *
+					 * Every scene server runs this, deliberately not one elected per world: the
+					 * matches it exists for are the ones whose own server is gone, and an elected
+					 * sweeper is one more server that can be gone. What made it expensive was the
+					 * table, not the servers — the sweep read all of a history nothing deletes — and
+					 * it now reads only the unfinished matches, through their own partial index. */
 					if (Server.Database.ServiceRegistry.TryGet<IArenaMatchService>(out var arenaService))
 					{
-						var cancelResult = await arenaService.CancelAbandonedAsync(DateTime.UtcNow.AddMinutes(-10), 64);
+						var cancelResult = await arenaService.CancelAbandonedAsync(TimeSpan.FromMinutes(10), 64);
 						if (!cancelResult.IsSuccess)
 						{
 							await Log.Warning("InteractableSystem", $"Arena: could not cancel abandoned matches: [{cancelResult.ErrorCode}] {cancelResult.ErrorMessage}");
@@ -1051,27 +1087,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					ids.Add(item.CharacterID);
 				}
 
-				/* Not fatal on its own: the next pump pulses again, and the stale window spans
-				 * several pumps. But a pulse that keeps failing lets this server's rows go stale and
-				 * be swept, and the waiters are then told they were removed — which should not be
-				 * the first anybody hears of it. */
+				/* The heartbeat and the read-back are one statement. A pulse that keeps failing lets
+				 * this server's rows go stale and be swept, and the waiters are then told they were
+				 * removed — which should not be the first anybody hears of it — so it is logged. */
 				var pulseResult = await queueService.PulseAsync(ids);
 				if (!pulseResult.IsSuccess)
 				{
-					await Log.Warning("InteractableSystem", $"Group finder could not pulse {ids.Count} queue rows: [{pulseResult.ErrorCode}] {pulseResult.ErrorMessage}");
-				}
-
-				var rowsResult = await queueService.FetchByCharactersAsync(ids);
-				if (!rowsResult.IsSuccess)
-				{
-					await Log.Warning("InteractableSystem", $"Group finder could not read its queue rows: [{rowsResult.ErrorCode}] {rowsResult.ErrorMessage}");
+					await Log.Warning("InteractableSystem", $"Group finder could not pulse and read its {ids.Count} queue rows: [{pulseResult.ErrorCode}] {pulseResult.ErrorMessage}");
 					return;
 				}
 
-				var rowsByCharacter = new Dictionary<long, GroupFinderQueueData>(rowsResult.Data.Count);
-				foreach (GroupFinderQueueData row in rowsResult.Data)
+				var rowsByCharacter = new Dictionary<long, GroupFinderPulseData>(pulseResult.Data.Count);
+				foreach (GroupFinderPulseData pulsed in pulseResult.Data)
 				{
-					rowsByCharacter[row.CharacterID] = row;
+					rowsByCharacter[pulsed.Row.CharacterID] = pulsed;
 				}
 
 				// Waiters grouped by what they are waiting for, in queue order within each group.
@@ -1079,7 +1108,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 				foreach (GroupFinderPumpItem item in items)
 				{
-					if (!rowsByCharacter.TryGetValue(item.CharacterID, out GroupFinderQueueData row))
+					if (!rowsByCharacter.TryGetValue(item.CharacterID, out GroupFinderPulseData pulsed))
 					{
 						/* No row. A sweep took it, or a server restart lost it. The widget must not
 						 * keep saying "waiting" about a queue the character is not in. */
@@ -1096,9 +1125,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						continue;
 					}
 
+					GroupFinderQueueData row = pulsed.Row;
 					if (row.Status == (int)GroupFinderQueueStatus.Matched)
 					{
-						await DispatchMatchedAsync(item.CharacterID, row.PartyID, row.InstanceID);
+						/* The membership came with the row, so a match waiting on its player — in
+						 * combat, dead, away from the door — costs no read of its own each pump. */
+						if (GroupFinderRules.IsMatchHonoured(row.PartyID, pulsed.MemberPartyID))
+						{
+							DispatchMatched(item.CharacterID, row.PartyID, row.InstanceID, row.PartyID > 0 ? (PartyRank)pulsed.MemberRank : PartyRank.Member);
+						}
+						else
+						{
+							await RemoveUnhonouredMatchAsync(item.CharacterID, row.PartyID, row.InstanceID);
+						}
 						continue;
 					}
 
@@ -1111,15 +1150,82 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					group.Add(item);
 				}
 
+				if (waitingByKey.Count == 0)
+				{
+					return;
+				}
+
+				/* One count for every key, per world server (in practice one: a scene server serves
+				 * one world). A count that fails forms nothing this pump — the forming decision needs
+				 * it — but late-joins and backfills, which do not, still run. */
+				var countsByWorld = new Dictionary<long, IReadOnlyDictionary<GroupFinderQueueKey, int>>();
+				var keysByWorld = new Dictionary<long, List<GroupFinderQueueKey>>();
+				bool anyArena = false;
 				foreach (KeyValuePair<(SceneType, string, int), List<GroupFinderPumpItem>> kvp in waitingByKey)
 				{
-					if (kvp.Key.Item1 == SceneType.PvP)
+					long world = kvp.Value[0].WorldServerID;
+					if (!keysByWorld.TryGetValue(world, out List<GroupFinderQueueKey> worldKeys))
 					{
-						await ProcessWaitingArenaGroupAsync(queueService, kvp.Key.Item2, kvp.Key.Item3, kvp.Value);
+						worldKeys = new List<GroupFinderQueueKey>();
+						keysByWorld[world] = worldKeys;
+					}
+					worldKeys.Add(new GroupFinderQueueKey((int)kvp.Key.Item1, kvp.Key.Item2, kvp.Key.Item3));
+					anyArena |= kvp.Key.Item1 == SceneType.PvP;
+				}
+				foreach (KeyValuePair<long, List<GroupFinderQueueKey>> kvp in keysByWorld)
+				{
+					var countResult = await queueService.CountWaitingAsync(kvp.Key, kvp.Value, GroupFinderStaleAfter);
+					if (countResult.IsSuccess)
+					{
+						countsByWorld[kvp.Key] = countResult.Data;
 					}
 					else
 					{
-						await ProcessWaitingGroupAsync(queueService, kvp.Key.Item2, kvp.Key.Item3, kvp.Value);
+						await Log.Warning("InteractableSystem", $"Group finder could not count the waiters of {kvp.Value.Count} queues on world {kvp.Key}; no group is formed there this pump: [{countResult.ErrorCode}] {countResult.ErrorMessage}");
+					}
+				}
+
+				/* Where an arena seat can be backfilled, read once and without locks. A key it does
+				 * not name skips the backfill transaction, which locks and scans and used to run for
+				 * every arena key on every pump. If the read fails, every key is tried as before:
+				 * this is a shortcut past the transaction, never a gate on it. */
+				Dictionary<long, HashSet<GroupFinderQueueKey>> openingsByWorld = null;
+				if (anyArena)
+				{
+					openingsByWorld = new Dictionary<long, HashSet<GroupFinderQueueKey>>();
+					foreach (long world in keysByWorld.Keys)
+					{
+						var openings = await queueService.FetchBackfillOpeningsAsync(world);
+						if (openings.IsSuccess)
+						{
+							openingsByWorld[world] = new HashSet<GroupFinderQueueKey>(openings.Data);
+						}
+						else
+						{
+							await Log.Warning("InteractableSystem", $"Arena: could not read where seats may be backfilled on world {world}; trying every arena this pump: [{openings.ErrorCode}] {openings.ErrorMessage}");
+						}
+					}
+				}
+
+				foreach (KeyValuePair<(SceneType, string, int), List<GroupFinderPumpItem>> kvp in waitingByKey)
+				{
+					long world = kvp.Value[0].WorldServerID;
+					var key = new GroupFinderQueueKey((int)kvp.Key.Item1, kvp.Key.Item2, kvp.Key.Item3);
+					int? waiting = countsByWorld.TryGetValue(world, out IReadOnlyDictionary<GroupFinderQueueKey, int> counts) &&
+						counts.TryGetValue(key, out int count)
+						? count
+						: (int?)null;
+
+					if (kvp.Key.Item1 == SceneType.PvP)
+					{
+						bool backfillOpen = openingsByWorld == null ||
+							!openingsByWorld.TryGetValue(world, out HashSet<GroupFinderQueueKey> open) ||
+							open.Contains(key);
+						await ProcessWaitingArenaGroupAsync(queueService, kvp.Key.Item2, kvp.Key.Item3, kvp.Value, waiting, backfillOpen);
+					}
+					else
+					{
+						await ProcessWaitingGroupAsync(queueService, kvp.Key.Item2, kvp.Key.Item3, kvp.Value, waiting);
 					}
 				}
 			}
@@ -1137,7 +1243,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// For one dungeon at one difficulty: fill open runs first, then try to form a group,
 		/// then tell whoever is still waiting how many are waiting.
 		/// </summary>
-		private async Task ProcessWaitingGroupAsync(IGroupFinderQueueService queueService, string sceneName, int difficulty, List<GroupFinderPumpItem> waiters)
+		/// <param name="waitingCount">
+		/// The live waiters under this key, counted by the pump for every key at once before any of
+		/// them was processed; null when that count failed, and then no group is formed this pump.
+		/// </param>
+		private async Task ProcessWaitingGroupAsync(IGroupFinderQueueService queueService, string sceneName, int difficulty, List<GroupFinderPumpItem> waiters, int? waitingCount)
 		{
 			if (waiters.Count == 0)
 			{
@@ -1231,7 +1341,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						{
 							if (groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry entry))
 							{
-								entry.NextBackfillAttemptUtc = DateTime.UtcNow.AddSeconds(groupFinderBackfillRetrySeconds);
+								entry.NextBackfillAttemptAt = MonotonicClock.NowSeconds + groupFinderBackfillRetrySeconds;
 							}
 						});
 					}
@@ -1243,18 +1353,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 			}
 
-			if (stillWaiting.Count == 0)
+			if (stillWaiting.Count == 0 || !waitingCount.HasValue)
 			{
 				return;
 			}
 
-			var countResult = await queueService.CountWaitingAsync(worldServerID, DbSceneType(SceneType.Group), sceneName, difficulty, GroupFinderStaleBefore);
-			if (!countResult.IsSuccess)
-			{
-				await Log.Warning("InteractableSystem", $"Group finder could not count the waiters for '{sceneName}' at difficulty {difficulty}; no group is formed this pump: [{countResult.ErrorCode}] {countResult.ErrorMessage}");
-				return;
-			}
-			int waiting = countResult.Data;
+			/* The count was taken before the late-joins above. Each one claimed a waiting row of
+			 * this key, so the count comes down by exactly the number placed. */
+			int waiting = Math.Max(0, waitingCount.Value - (waiters.Count - stillWaiting.Count));
 
 			if (waiting >= groupSize)
 			{
@@ -1263,7 +1369,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					sceneName,
 					difficulty,
 					groupSize,
-					GroupFinderStaleBefore,
+					GroupFinderStaleAfter,
 					(FishMMO.Database.Data.Enums.SceneType)(int)SceneType.Group,
 					(byte)PartyRank.Leader,
 					(byte)PartyRank.Member);
@@ -1283,7 +1389,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						$"Group finder formed party {match.PartyID} of {match.MemberCharacterIDs.Count} for '{sceneName}' at difficulty {difficulty}; instance {match.InstanceID}.");
 
 					/* This server's own members are moved now rather than on the next pump. The
-					 * other members' servers see the matched rows on theirs. */
+					 * other members' servers see the matched rows on theirs.
+					 *
+					 * Their ranks are the ones the transaction just wrote, so nothing is read: the
+					 * membership check a later pump makes exists for a match that has waited, and
+					 * this one has not. */
 					var placedHere = new HashSet<long>();
 					foreach (long memberID in match.MemberCharacterIDs)
 					{
@@ -1292,7 +1402,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 							if (waiter.CharacterID == memberID)
 							{
 								placedHere.Add(memberID);
-								await DispatchMatchedAsync(memberID, match.PartyID, match.InstanceID);
+								DispatchMatched(memberID, match.PartyID, match.InstanceID, memberID == match.LeaderCharacterID ? PartyRank.Leader : PartyRank.Member);
 								break;
 							}
 						}
@@ -1374,9 +1484,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			if (await partySystem.TryAddCharacterToPartyAsync(waiter.Connection, waiter.CharacterID, run.PartyID, waiter.HealthPCT) != PartyJoinOutcome.Joined)
 			{
 				/* A release that fails leaves the row matched to a run whose party refused them.
-				 * The next pump reads it as a match, and DispatchMatchedAsync — which checks the
-				 * membership a match names before moving anybody — takes them out of the queue
-				 * instead of moving them into somebody else's run as a stranger. */
+				 * The next pump reads it back as a match with the membership beside it, and
+				 * GroupFinderRules.IsMatchHonoured — which checks the membership a match names
+				 * before moving anybody — takes them out of the queue instead of moving them into
+				 * somebody else's run as a stranger. */
 				DatabaseResult<bool> release = await queueService.ReleaseClaimAsync(waiter.CharacterID, run.ID);
 				if (!release.IsSuccess)
 				{
@@ -1403,53 +1514,80 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// The rank is read here rather than carried on the queue row because it is the party's to
-		/// change: leadership may already have moved by the time a member on a slow server is
-		/// transferred, and what they are told on the way out should be what is true.
+		/// For a match this server has just made by a route that does not know the rank: the
+		/// late-join, where the party system may have repaired the party's leadership onto the
+		/// joiner. The pump's own read-back carries the membership with each matched row, and a
+		/// group the pump has just formed knows the ranks it wrote, so neither comes here.
 		/// </para>
 		/// <para>
-		/// The same read decides whether the match is honoured at all. A row matched into a party
-		/// the character is not in — a late-join whose claim could not be released after the
-		/// party refused them, or a member the group has since dropped — is not a transfer: moving
-		/// them would put a stranger in somebody else's run, with no leader able to remove them.
-		/// They are taken out of the queue and told. A read that fails decides nothing either way:
-		/// the row stays matched and the next pump reads it again.
+		/// The rank is read rather than assumed because it is the party's to change: what they
+		/// are told on the way in should be what is true. The same read decides whether the match
+		/// is honoured at all (<see cref="GroupFinderRules.IsMatchHonoured"/>). A read that fails
+		/// decides nothing either way: the row stays matched and the next pump's read-back
+		/// carries the membership.
 		/// </para>
 		/// </remarks>
 		private async Task DispatchMatchedAsync(long characterID, long partyID, long instanceID)
 		{
-			PartyRank rank = PartyRank.Member;
-			if (partyID > 0 && Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+			if (partyID <= 0)
 			{
-				DatabaseResult<CharacterPartyData?> membership = await charPartyService.FetchAsync(characterID);
-				if (membership.IsSuccess && membership.Data.HasValue && membership.Data.Value.PartyID == partyID)
-				{
-					rank = (PartyRank)membership.Data.Value.Rank;
-				}
-				else if (membership.IsSuccess)
-				{
-					await Log.Warning("InteractableSystem",
-						$"Group finder: character {characterID}'s row is matched into party {partyID} (instance {instanceID}), which they are not in; taking them out of the queue instead of moving them.");
-					await DeleteGroupFinderRowAsync(characterID);
-					TryEnqueueMainThread(() =>
-					{
-						if (groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry entry))
-						{
-							NetworkConnection conn = entry.Connection;
-							ForgetGroupFinderEntry(characterID);
-							SendGroupFinderRefusal(conn, GroupFinderRefusalReason.Removed, entry.Kind);
-						}
-					});
-					return;
-				}
-				else
-				{
-					await Log.Warning("InteractableSystem", $"Group finder could not read character {characterID}'s party membership before moving them; retrying next pump: [{membership.ErrorCode}] {membership.ErrorMessage}");
-					return;
-				}
+				DispatchMatched(characterID, partyID, instanceID, PartyRank.Member);
+				return;
 			}
 
+			if (!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService))
+			{
+				return;
+			}
+
+			DatabaseResult<CharacterPartyData?> membership = await charPartyService.FetchAsync(characterID);
+			if (!membership.IsSuccess)
+			{
+				await Log.Warning("InteractableSystem", $"Group finder could not read character {characterID}'s party membership before moving them; retrying next pump: [{membership.ErrorCode}] {membership.ErrorMessage}");
+				return;
+			}
+
+			long memberPartyID = membership.Data.HasValue ? membership.Data.Value.PartyID : 0;
+			if (GroupFinderRules.IsMatchHonoured(partyID, memberPartyID))
+			{
+				DispatchMatched(characterID, partyID, instanceID, (PartyRank)membership.Data.Value.Rank);
+				return;
+			}
+
+			await RemoveUnhonouredMatchAsync(characterID, partyID, instanceID);
+		}
+
+		/// <summary>
+		/// Hands a matched character whose rank is known to the main thread for the transfer.
+		/// </summary>
+		private void DispatchMatched(long characterID, long partyID, long instanceID, PartyRank rank)
+		{
 			TryEnqueueMainThread(() => HandleMatchedEntry(characterID, partyID, instanceID, rank));
+		}
+
+		/// <summary>
+		/// Takes a character whose row is matched into a party they are not in out of the queue,
+		/// and tells them.
+		/// </summary>
+		/// <remarks>
+		/// A late-join whose claim could not be released after the party refused them, or a member
+		/// the group has since dropped. Moving them would put a stranger in somebody else's run,
+		/// with no leader able to remove them.
+		/// </remarks>
+		private async Task RemoveUnhonouredMatchAsync(long characterID, long partyID, long instanceID)
+		{
+			await Log.Warning("InteractableSystem",
+				$"Group finder: character {characterID}'s row is matched into party {partyID} (instance {instanceID}), which they are not in; taking them out of the queue instead of moving them.");
+			await DeleteGroupFinderRowAsync(characterID);
+			TryEnqueueMainThread(() =>
+			{
+				if (groupFinderEntries.TryGetValue(characterID, out GroupFinderEntry entry))
+				{
+					NetworkConnection conn = entry.Connection;
+					ForgetGroupFinderEntry(characterID);
+					SendGroupFinderRefusal(conn, GroupFinderRefusalReason.Removed, entry.Kind);
+				}
+			});
 		}
 
 		/// <summary>
@@ -1463,12 +1601,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				return;
 			}
 
-			DateTime now = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 
 			if (entry.State != GroupFinderState.Matched)
 			{
 				entry.State = GroupFinderState.Matched;
-				entry.MatchedAtUtc = now;
+				entry.MatchedAt = now;
 				entry.MatchedPartyID = partyID;
 				entry.MatchedInstanceID = instanceID;
 				SendGroupFinderStatus(entry.Connection, entry, GroupFinderState.Matched, GroupFinderRefusalReason.None, entry.GroupSize);
@@ -1493,7 +1631,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				CharacterStateValidation.CanActOrMove(character) &&
 				IsNearEntrance(entry);
 
-			switch (GroupFinderRules.ResolveMatchedTransfer(canTransfer, (now - entry.MatchedAtUtc).TotalSeconds, groupFinderTransferGraceSeconds))
+			switch (GroupFinderRules.ResolveMatchedTransfer(canTransfer, now - entry.MatchedAt, groupFinderTransferGraceSeconds))
 			{
 				case GroupFinderRules.MatchedTransferAction.Wait:
 					return;

@@ -95,13 +95,18 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				/* Stamped by the database clock, as registration already stamps it and as the world
+				 * and scene pulses do. Every reader measures a pulse's age against the database's
+				 * now(); a stamp from this host's DateTime.UtcNow made the operator board's age for a
+				 * login server its host's clock skew plus the pulse, so a login host running a minute
+				 * slow read as dead on a board every other server was healthy on. */
 				var sql = $@"UPDATE {TableName}
-					SET last_pulse = {{0}}
-					WHERE id = {{1}}";
+					SET last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
+					WHERE id = {{0}}";
 
 				var affected = await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
-					new object[] { DateTime.UtcNow, serverId },
+					new object[] { serverId },
 					cancellationToken)
 					.ConfigureAwait(false);
 

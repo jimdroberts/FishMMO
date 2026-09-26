@@ -403,11 +403,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Connections whose character has been handed off, mapped to the UTC deadline by which
-		/// they must have disconnected on their own.
+		/// Connections whose character has been handed off, mapped to the deadline by which they
+		/// must have disconnected on their own, in <see cref="MonotonicClock"/> seconds: a local
+		/// duration, which a wall-clock step forward cut short for every connection at once.
 		/// </summary>
-		private readonly ConcurrentDictionary<int, DateTime> pendingTransferDisconnects =
-			new ConcurrentDictionary<int, DateTime>();
+		private readonly ConcurrentDictionary<int, double> pendingTransferDisconnects =
+			new ConcurrentDictionary<int, double>();
 
 		/// <summary>Grace period a client gets to tear down its scene and disconnect by itself.</summary>
 		private static readonly TimeSpan TransferDisconnectGrace = TimeSpan.FromSeconds(15);
@@ -425,7 +426,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-			pendingTransferDisconnects[conn.ClientId] = DateTime.UtcNow + TransferDisconnectGrace;
+			pendingTransferDisconnects[conn.ClientId] = MonotonicClock.NowSeconds + TransferDisconnectGrace.TotalSeconds;
 		}
 
 		/// <summary>
@@ -438,12 +439,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData);
 
 			foreach (var kvp in pendingTransferDisconnects)
 			{
-				if (nowUtc < kvp.Value)
+				if (now < kvp.Value)
 				{
 					continue;
 				}
@@ -559,12 +560,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			/* Flag the death before running anything else.
 			 *
-			 * CharacterDamageController.Kill guards re-entry with this exact flag, but sets
-			 * nothing itself — this handler is what makes that guard true, and it is invoked at
-			 * the very end of Kill. Anything side-effecting that runs before the flag is set is
-			 * therefore executing inside a window where a second Kill on the same character
-			 * would sail straight past the guard and recurse. Buff removal below is exactly
-			 * such a call: it invokes each buff's removal effects, which run game logic.
+			 * CharacterDamageController.Kill guards re-entry with this exact flag, and now sets
+			 * it itself before it dispatches OnKilled, so it is already set when this handler
+			 * runs. Setting it again here is a harmless backstop: nothing side-effecting may run
+			 * while it is clear, or a second Kill on the same character would sail straight past
+			 * the guard and recurse. Buff removal below is exactly such a call: it invokes each
+			 * buff's removal effects, which run game logic.
 			 *
 			 * Do NOT revive or teleport here — the player chooses Respawn or Resurrect. */
 			if (playerCharacter != null)
@@ -1115,7 +1116,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return;
 				}
 
-				if (DateTime.UtcNow >= offer.ExpiresUtc)
+				if (MonotonicClock.NowSeconds >= offer.ExpiresAt)
 				{
 					pendingResurrectOffers.Remove(player.ID);
 					return;
@@ -1170,8 +1171,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public long ResurrectorID;
 			/// <summary>Health the offer restores, as configured on the ability that made it.</summary>
 			public int Amount;
-			/// <summary>When the offer lapses if it is not answered.</summary>
-			public DateTime ExpiresUtc;
+			/// <summary>When the offer lapses if it is not answered, in <see cref="MonotonicClock"/> seconds.</summary>
+			public double ExpiresAt;
 		}
 
 		/// <summary>
@@ -1231,7 +1232,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				ResurrectorID = initiator.ID,
 				Amount = amount,
-				ExpiresUtc = DateTime.UtcNow + ResurrectOfferLifetime,
+				ExpiresAt = MonotonicClock.NowSeconds + ResurrectOfferLifetime.TotalSeconds,
 			};
 
 			Server.NetworkWrapper.Broadcast(player.Owner,
@@ -1295,11 +1296,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			List<long> expired = null;
 			foreach (var kvp in pendingResurrectOffers)
 			{
-				if (nowUtc >= kvp.Value.ExpiresUtc)
+				if (now >= kvp.Value.ExpiresAt)
 				{
 					(expired ??= new List<long>()).Add(kvp.Key);
 				}

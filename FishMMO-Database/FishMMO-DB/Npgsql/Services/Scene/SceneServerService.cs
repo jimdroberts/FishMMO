@@ -24,6 +24,42 @@ namespace FishMMO.Database.Npgsql.Services
 		{
 		}
 
+		/// <summary>
+		/// A scene server row's pulse age in seconds by the database clock, as <c>double precision</c>
+		/// and never negative. Expects the table to be reachable as <c>ss</c>.
+		/// </summary>
+		/// <remarks>
+		/// <c>last_pulse</c> is stamped by the database clock (see <see cref="PulseAsync"/>), so its age
+		/// is taken against the same clock, inside the statement that reads it. A reader that
+		/// subtracts it from its own <c>DateTime.UtcNow</c> is measuring its host's drift from the
+		/// database as much as the pulse, and liveness decisions made that way moved with every
+		/// host clock. See <see cref="SceneServerData.PulseAgeSeconds"/>.
+		/// </remarks>
+		private const string PulseAgeSecondsSql =
+			"GREATEST(0.0, EXTRACT(EPOCH FROM ((now() AT TIME ZONE 'UTC') - ss.last_pulse))::double precision)";
+
+		/// <summary>
+		/// The columns <see cref="ReadServerRow"/> maps, in its order, qualified by the alias <c>ss</c>.
+		/// </summary>
+		private const string ServerRowColumnsSql =
+			"ss.id, ss.name, ss.last_pulse, ss.address, ss.port, ss.character_count, ss.locked, " + PulseAgeSecondsSql;
+
+		/// <summary>
+		/// Maps one row laid out as <see cref="ServerRowColumnsSql"/>, starting at ordinal 0.
+		/// </summary>
+		private static SceneServerData ReadServerRow(System.Data.Common.DbDataReader reader)
+		{
+			return new SceneServerData(
+				id: reader.GetInt64(0),
+				name: reader.GetString(1),
+				lastPulse: DateTime.SpecifyKind(reader.GetDateTime(2), DateTimeKind.Utc),
+				address: reader.GetString(3),
+				port: reader.GetInt32(4),
+				characterCount: reader.GetInt32(5),
+				locked: reader.GetBoolean(6),
+				pulseAgeSeconds: reader.IsDBNull(7) ? 0.0 : reader.GetDouble(7));
+		}
+
 		/// <inheritdoc/>
 		public async Task<DatabaseResult<(long ServerId, SceneServerData ServerData)>> PersistAsync(
 			string name,
@@ -46,7 +82,7 @@ namespace FishMMO.Database.Npgsql.Services
 				 * this runs on every startup, so overwriting them meant a restart silently
 				 * undid the lock an operator set to make that restart safe. See the matching
 				 * note in WorldServerService.PersistAsync. */
-				var sql = $@"INSERT INTO {TableName} (name, address, port, character_count, locked)
+				var sql = $@"INSERT INTO {TableName} AS ss (name, address, port, character_count, locked)
 					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}})
 					ON CONFLICT (name)
 					DO UPDATE SET
@@ -54,23 +90,13 @@ namespace FishMMO.Database.Npgsql.Services
 						port = EXCLUDED.port,
 						character_count = EXCLUDED.character_count,
 						last_pulse = timezone('UTC', CURRENT_TIMESTAMP)
-					RETURNING id, name, time_created, last_pulse, address, port, character_count, locked";
+					RETURNING {ServerRowColumnsSql}";
 
 				return await ExecuteReturningAsync(
 					dbContext,
 					sql,
 					new object[] { name, address, (int)port, characterCount, locked },
-					reader => new SceneServerEntity
-					{
-						ID = reader.GetInt64(0),
-						Name = reader.GetString(1),
-						TimeCreated = reader.GetDateTime(2),
-						LastPulse = reader.GetDateTime(3),
-						Address = reader.GetString(4),
-						Port = reader.GetInt32(5),
-						CharacterCount = reader.GetInt32(6),
-						Locked = reader.GetBoolean(7),
-					},
+					ReadServerRow,
 					cancellationToken).ConfigureAwait(false);
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -91,7 +117,7 @@ namespace FishMMO.Database.Npgsql.Services
 			}
 
 			return DatabaseResult<(long ServerId, SceneServerData ServerData)>.Success(
-				(result.Data.ID, MapEntityToDto(result.Data)));
+				(result.Data.ID, result.Data));
 		}
 
 		/// <inheritdoc/>
@@ -115,7 +141,7 @@ namespace FishMMO.Database.Npgsql.Services
 					SET last_pulse = timezone('UTC', CURRENT_TIMESTAMP),
 						character_count = {{0}}
 					WHERE id = {{1}}
-					RETURNING locked, shutdown_at_utc";
+					RETURNING {ServerControlSql.Columns(null)}";
 
 				/* Nullable, so "no such row" is distinguishable from "row says unlocked".
 				 *
@@ -127,9 +153,7 @@ namespace FishMMO.Database.Npgsql.Services
 					dbContext,
 					sql,
 					new object[] { characterCount, serverId },
-					reader => (ServerControlState?)new ServerControlState(
-						reader.GetBoolean(0),
-						reader.IsDBNull(1) ? (DateTime?)null : reader.GetDateTime(1)),
+					reader => (ServerControlState?)ServerControlSql.Read(reader, 0),
 					cancellationToken).ConfigureAwait(false);
 
 				if (!state.HasValue)
@@ -207,6 +231,38 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
+		public async Task<DatabaseResult<DateTime>> SetShutdownInAsync(long serverId, int seconds, CancellationToken cancellationToken = default)
+		{
+			if (serverId <= 0)
+			{
+				return DatabaseResult<DateTime>.Failure(DatabaseErrorCodes.ValidationError, "Server ID must be greater than zero.");
+			}
+			if (seconds < 0)
+			{
+				// A deadline in the past is an immediate shutdown with no warning. See the callers.
+				return DatabaseResult<DateTime>.Failure(DatabaseErrorCodes.ValidationError, "The delay cannot be negative.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// The same statement as WorldServerService.SetShutdownInAsync, locking included.
+				DateTime? deadline = await ExecuteReturningOrDefaultAsync(
+					dbContext,
+					ServerControlSql.ScheduleIn(TableName),
+					new object[] { (double)seconds, serverId },
+					ServerControlSql.ReadScheduled,
+					cancellationToken).ConfigureAwait(false);
+
+				if (!deadline.HasValue)
+				{
+					throw new DatabaseEntityNotFoundException("SceneServer", serverId.ToString());
+				}
+
+				return deadline.Value;
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
 		public async Task<DatabaseResult> DeleteAsync(long serverId, CancellationToken cancellationToken = default)
 		{
 			if (serverId <= 0)
@@ -238,15 +294,22 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
-				var server = await dbContext.SceneServers
-					.AsNoTracking()
-					.FirstOrDefaultAsync(s => s.ID == serverId, cancellationToken)
-					.ConfigureAwait(false);
-				if (server == null)
+				// Raw SQL so the pulse age is taken by the database clock. See PulseAgeSecondsSql.
+				var sql = $@"SELECT {ServerRowColumnsSql}
+					FROM {TableName} AS ss
+					WHERE ss.id = {{0}}";
+
+				var rows = await ReadRowsAsync(
+					dbContext,
+					sql,
+					new object[] { serverId },
+					ReadServerRow,
+					cancellationToken).ConfigureAwait(false);
+				if (rows.Count == 0)
 				{
 					throw new DatabaseEntityNotFoundException("SceneServer", serverId.ToString());
 				}
-				return MapEntityToDto(server);
+				return rows[0];
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
@@ -275,12 +338,17 @@ namespace FishMMO.Database.Npgsql.Services
 
 				var result = await ExecuteReadAsync(async dbContext =>
 				{
-					var batchArray = batch.ToArray();
-					return await dbContext.SceneServers
-						.AsNoTracking()
-						.Where(s => batchArray.Contains(s.ID))
-						.ToListAsync(cancellationToken)
-						.ConfigureAwait(false);
+					// Raw SQL so each pulse age is taken by the database clock. See PulseAgeSecondsSql.
+					var sql = $@"SELECT {ServerRowColumnsSql}
+						FROM {TableName} AS ss
+						WHERE ss.id = ANY({{0}}::bigint[])";
+
+					return await ReadRowsAsync(
+						dbContext,
+						sql,
+						new object[] { batch.ToArray() },
+						ReadServerRow,
+						cancellationToken).ConfigureAwait(false);
 				}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 				if (!result.IsSuccess)
@@ -288,31 +356,10 @@ namespace FishMMO.Database.Npgsql.Services
 					return DatabaseResult<IReadOnlyList<SceneServerData>>.Failure(result.ErrorCode, result.ErrorMessage, result.IsTransient);
 				}
 
-				foreach (var entity in result.Data)
-				{
-					allResults.Add(MapEntityToDto(entity));
-				}
+				allResults.AddRange(result.Data);
 			}
 
 			return DatabaseResult<IReadOnlyList<SceneServerData>>.Success(allResults);
-		}
-
-		/// <summary>
-		/// Maps SceneServerEntity to SceneServerData DTO.
-		/// </summary>
-		/// <param name="entity">Scene server entity from database.</param>
-		/// <returns>Scene server data DTO.</returns>
-		private SceneServerData MapEntityToDto(SceneServerEntity entity)
-		{
-			return new SceneServerData(
-				id: entity.ID,
-				name: entity.Name,
-				lastPulse: entity.LastPulse,
-				address: entity.Address,
-				port: entity.Port,
-				characterCount: entity.CharacterCount,
-				locked: entity.Locked
-			);
 		}
 	}
 }

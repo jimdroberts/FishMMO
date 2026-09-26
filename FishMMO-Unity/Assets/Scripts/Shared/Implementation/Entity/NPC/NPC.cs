@@ -621,6 +621,8 @@ namespace FishMMO.Shared
 		/// script or adopted rather than spawned has no spawner, and the null-conditional this
 		/// replaced meant such an NPC's corpse never decayed at all — it sat in the world as an
 		/// immortal, AI-disabled, permanently lootable body that nothing would ever collect.
+		/// <para>The fallback pools the way the spawner does (<see cref="PersistentPool"/>): out of
+		/// the world scene, so the scene's unload does not destroy what the pool is holding.</para>
 		/// </remarks>
 		public void ReturnToPool()
 		{
@@ -637,9 +639,9 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (base.IsServerStarted && NetworkObject != null && NetworkObject.IsSpawned)
+			if (base.IsServerStarted)
 			{
-				NetworkManager.ServerManager.Despawn(NetworkObject, FishNet.Object.DespawnType.Pool);
+				PersistentPool.Despawn(NetworkManager, NetworkObject);
 			}
 		}
 
@@ -942,11 +944,12 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			if (character.NextInteractTime >= DateTime.UtcNow)
+			double now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+			if (character.NextInteractSeconds >= now)
 			{
 				return false;
 			}
-			character.NextInteractTime = DateTime.UtcNow.AddMilliseconds(CORPSE_INTERACT_RATE_LIMIT);
+			character.NextInteractSeconds = now + CORPSE_INTERACT_RATE_LIMIT / 1000.0;
 			return true;
 		}
 

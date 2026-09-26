@@ -49,8 +49,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>How many cooldown entries are kept before the lapsed ones are swept.</summary>
 		private const int MaxUnstuckCooldowns = 512;
 
-		/// <summary>When each character may next use <c>/unstuck</c>, by character id.</summary>
-		private readonly Dictionary<long, DateTime> nextUnstuckUtc = new Dictionary<long, DateTime>();
+		/// <summary>
+		/// When each character may next use <c>/unstuck</c>, by character id, in
+		/// <see cref="MonotonicClock"/> seconds: a cooldown is a local duration.
+		/// </summary>
+		private readonly Dictionary<long, double> nextUnstuckAt = new Dictionary<long, double>();
 
 		/// <summary>Handles <c>/unstuck</c> and <c>/stuck</c>.</summary>
 		/// <returns>Always <c>true</c>: the command is consumed either way, never echoed to chat.</returns>
@@ -82,10 +85,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return true;
 			}
 
-			DateTime now = DateTime.UtcNow;
-			if (nextUnstuckUtc.TryGetValue(character.ID, out DateTime next) && next > now)
+			double now = MonotonicClock.NowSeconds;
+			if (nextUnstuckAt.TryGetValue(character.ID, out double next) && next > now)
 			{
-				TimeSpan wait = next - now;
+				TimeSpan wait = TimeSpan.FromSeconds(next - now);
 				SendSystemMessage(conn, $"You can use /unstuck again in {(int)wait.TotalMinutes}m {wait.Seconds}s.");
 				return true;
 			}
@@ -104,7 +107,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (selfUnstuckCooldownSeconds > 0f)
 			{
 				SweepUnstuckCooldowns(now);
-				nextUnstuckUtc[character.ID] = now.AddSeconds(selfUnstuckCooldownSeconds);
+				nextUnstuckAt[character.ID] = now + selfUnstuckCooldownSeconds;
 			}
 
 			Log.Debug("CharacterSystem", $"{character.CharacterName} used /unstuck in '{character.CurrentSceneName()}' and was moved to {position}.");
@@ -166,15 +169,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>Drops lapsed cooldowns once there are many, so the map cannot grow for the life of the server.</summary>
-		private void SweepUnstuckCooldowns(DateTime now)
+		private void SweepUnstuckCooldowns(double now)
 		{
-			if (nextUnstuckUtc.Count < MaxUnstuckCooldowns)
+			if (nextUnstuckAt.Count < MaxUnstuckCooldowns)
 			{
 				return;
 			}
 
 			List<long> lapsed = new List<long>();
-			foreach (KeyValuePair<long, DateTime> pair in nextUnstuckUtc)
+			foreach (KeyValuePair<long, double> pair in nextUnstuckAt)
 			{
 				if (pair.Value <= now)
 				{
@@ -183,7 +186,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			for (int i = 0; i < lapsed.Count; ++i)
 			{
-				nextUnstuckUtc.Remove(lapsed[i]);
+				nextUnstuckAt.Remove(lapsed[i]);
 			}
 		}
 	}

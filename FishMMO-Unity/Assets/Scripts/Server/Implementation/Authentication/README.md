@@ -19,7 +19,7 @@
 
 ## Overview
 
-Server-side authentication with a bounded-channel architecture for high-throughput, non-blocking operation. Two authentication modes — **SRP-6a** (LoginServer) and **HMAC-signed token verification** (World/Scene servers) — share a common abstract base class (`BaseServerAuthenticator`) that routes FishNet lifecycle events to an engine-independent `BaseAuthenticatorCore<NetworkConnection>` in the `FishMMO-Auth.dll` shared library.
+Server-side authentication with a bounded-channel architecture for high-throughput, non-blocking operation. Two authentication modes — **SRP-6a** (LoginServer) and **HMAC-signed token verification** (World/Scene servers) — share a common abstract base class (`BaseServerAuthenticator`) that routes FishNet lifecycle events to an engine-independent `BaseAuthenticatorCore<NetworkConnection>` in the `FishMMO-ServerAuth.dll` library.
 
 ### Composition Architecture
 
@@ -40,7 +40,7 @@ TokenServerAuthenticator : BaseServerAuthenticator
 
 The Unity classes are **thin routing shells**: they register FishNet broadcast handlers, forward received messages to the core, supply DB callbacks via abstract method implementations, and marshal core-initiated broadcasts back to the FishNet main thread. All handshake, TTL sweep, channel, worker, rate-limit, and crypto orchestration logic lives in FishMMO-Auth.
 
-All cryptographic operations are delegated to three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped via `FishMMO-Auth.dll`):
+All cryptographic operations are delegated to three static service classes in the `FishMMO.Auth.Implementation` namespace (shipped in `FishMMO-AuthShared.dll`):
 
 - **`HandshakeService`** — X25519 ECDH key agreement, transcript-hash computation, and cookie HMAC generation/verification.
 - **`SrpService`** — Server-side SRP field encryption/decryption, fake SRP verifier generation, and all AES-GCM encrypt/decrypt for SRP broadcasts.
@@ -125,18 +125,19 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 - **Strict UTF-8 decoding** — All decrypted `byte[]` → `string` conversions use `UTF8Encoding(false, true)`. Invalid sequences trigger immediate buffer zeroing and disconnect.
 - **Buffer and credential zeroing** — Decrypted plaintext, symmetric keys, session prefixes, and HMAC keys are zeroed with `CryptographicOperations.ZeroMemory()` immediately after use.
 - **Constant-time comparison** — `CryptoHelper.FixedTimeEquals()` for timing-safe byte comparisons on proofs, cookies, and tokens.
-- **Per-IP handshake rate limiting** — 250 ms debounce per IP with bounded sweep cleanup to prevent X25519 CPU abuse.
-- **Global handshake rate cap** — Maximum 500 X25519 handshakes/second (wall-clock based) for botnet defence.
+- **Per-IP handshake rate limiting** — Two layers against X25519 CPU abuse. This directory's `HandshakeRateLimitInterval` admits one `ClientHandshake` broadcast per rate-limit key per 100 ms. The core then allows at most 8 completed key agreements per IP inside a 2 s window that opens at the first (`HandshakeIpWindowSeconds` / `HandshakeIpBurstLimit`, a `FixedWindowCounter`), so a household behind one NAT or a fast re-login is not refused while a sustained flood is.
+- **Global handshake rate cap** — Maximum 500 X25519 handshakes/second (monotonic-clock window) for botnet defence.
 - **Per-IP SRP verify debounce** — 1 s cooldown per IP before SRP verify channel ingress.
 - **Per-account verify debounce** — 2 s cooldown per account name before database lookup.
 - **Kick-request write debounce** — At most one `IKickRequestService.PersistAsync` per 10 s per account via `ExpiringKeyTracker<string>`.
-- **Stale-auth TTL sweep** — Periodic 1 s sweep disconnects and purges connections that exceed 15 s without completing authentication, with a 60 s hard deadline that cannot be extended.
-- **Pending auth connection cap** — Maximum 10,000 concurrent half-open auth connections to prevent memory exhaustion.
+- **Handshake timeout, then pending-auth limits** — A new connection has `authHandshakeTimeoutSeconds` (15 s) to complete its handshake. When the core completes the key agreement (`OnHandshakeReceived` returns true) the host ends that window and the core's pending-authentication limits take over, so exactly one limit bounds an unauthenticated connection at any moment. The handshake timeout used to run until authentication, which made it a limit on the whole sign-in and disconnected players still typing their two-factor code.
+- **Stale-auth sweep** — Machine work (SRP verify/proof, token checks, a code being verified) is dropped 15 s after its last progress, and progress stops extending one phase after 60 s. A player at the two-factor prompt is on a separate window instead: `TwoFactorWindowSeconds`, default 120 s, `AuthTwoFactorWindowSeconds` in the Login Server `.cfg`, kept within 30–600 s. Every prompt — the first and each re-prompt after a counted wrong code — gets the full window, and the 5-attempt cap bounds how many there can be. The two kinds live in two lists, each in deadline order, so the per-frame sweep reads only their heads (`PendingAuthTracker`, rules in `PendingAuthRules`).
+- **Pending auth connection cap** — `MaxPendingAuthConnections` (`AuthMaxPendingConnections` in the `.cfg`). On the Login Server it defaults to what the SRP verify and proof channels hold between them, 500 + 500 = **1,000** (`PendingAuthRules.DefaultLoginPendingCap`), and a handshake past it joins the login queue: past that point, admitting more connections only risks the channels refusing them with `ServerBusy`, while the queue keeps their place. At the old 10,000 the queue could never engage — pending sign-ins number about their arrival rate times how long each takes, and the 500/s handshake cap keeps that far below 10,000 unless the pipeline has stalled. World and Scene servers keep **10,000**: there it is only a memory ceiling (a stalled token check is dropped by the 15 s TTL, so 500/s × 15 s = 7,500 at most), and with no queue behind it a lower cap would only refuse arrivals.
 - **Fake SRP verifier for non-existent accounts** — Pre-computed dummy salt/verifier with per-username HMAC-SHA512 derived salts prevents username enumeration via timing or salt-reuse analysis.
 - **Deferred online check** — Account online-status check is deferred until after SRP proof to prevent account-existence enumeration.
 - **RejectAndPurge unified failure handling** — All failure paths use a shared helper to atomically notify, disconnect, and purge, preventing information leakage through inconsistent error timing.
 - **Error indistinguishability** — Most failure paths disconnect without protocol-level detail, preventing oracle attacks.
-- **Connection IP caching** — `LastSeenCacheTracker<int, string>` with 120 s TTL caches resolved IP strings to avoid repeated allocations on hot paths, and optionally stores real client IPs recovered from connection tokens (proxy deployments). Behind an L4 proxy, connection IP recovery requires the client to include a connection token validated via `IConnectionTokenService`; the recovered real IP is stored in the same cache for rate-limiting purposes.
+- **Connection IP caching** — `LastSeenCacheTracker<int, string>` with a 300 s TTL on the monotonic clock caches resolved IP strings to avoid repeated allocations on hot paths, and optionally stores real client IPs recovered from connection tokens (proxy deployments). Behind an L4 proxy, connection IP recovery requires the client to include a connection token validated via `IConnectionTokenService`; the recovered real IP is stored in the same cache for rate-limiting purposes.
 - **Hop-token minting** — `BaseServerAuthenticator` answers `RequestConnectionTokenBroadcast` with `ConnectionTokenBroadcast`, so a client can carry a verified real IP across a Login → World → Scene hop. The handler is registered with `requireAuthentication: true`, so an unauthenticated peer cannot use it as an IP oracle or a token faucet. `TryMintConnectionToken` signs `"{keyId:}{realIp}|{expiryUnix}"` with HMAC-SHA256 and emits `base64url(payload).base64url(signature)`, matching the IPFetch encoding, with a `MintedConnectionTokenTtlSeconds` (60 s) lifetime. The IP is the one this server resolved — never a client-supplied value — so a stolen token grants nothing beyond what the holder of that IP already has. Signing keys under 32 bytes are refused, and an ambiguous key map (no `"shared"` entry, more than one usable key) refuses to guess. A failed mint replies with an *empty* token rather than silence, so the waiting client fails fast instead of blocking on its own timeout.
 - **Per-connection token-mint debounce** — `ExpiringKeyTracker<int>` keyed on `conn.ClientId` admits one `RequestConnectionTokenBroadcast` per `TokenMintRateLimitDuration` (1 s). Excess requests are *dropped, not answered* — the reply is the cost being limited. Swept alongside the handshake limiter (`maxScan: 64`, `maxRemove: 16`) and removed on disconnect, because FishNet recycles ClientIds.
 - **Connection-token key refresh logs only changes** — `KeyRefreshLoop` reloads the signing-key map from the database every 60 s. `KeySetChanged` compares key *identifiers* only, never the secret bytes: a rotation issues a new key id, and touching secret material on a timer to answer a logging question is not worth it. A changed set logs at `Info` (that is the event that explains why tokens which verified a moment ago stopped); an unchanged refresh logs at `Debug`. This path used to report success at `Warning` on every pass — three roles produced over five hundred Warnings in three hours saying nothing had changed.
@@ -145,8 +146,11 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 - **Protocol version negotiation** — `CryptoHelper.NegotiateProtocolVersion` with version range binding in the ECDH transcript hash prevents downgrade attacks.
 - **TOTP two-factor authentication** — After SRP proof, accounts with 2FA enabled enter a TOTP verification phase. TOTP secrets are AES-256-GCM encrypted at rest with a server-side master key. Codes are verified with a ±1 step window and anti-replay via persisted last-used window.
 - **Recovery code login** — When the authenticator app is unavailable, users can submit a single-use recovery code (XXXXX-XXXXX hex format) instead of a 6-digit TOTP code. The code is verified against PBKDF2-SHA256 hashes via `ITwoFactorRecoveryCodeService` and consumed after use.
-- **Per-username TOTP brute-force protection** — Failed TOTP/recovery code attempts are tracked per username (lowercased, cross-connection). After 15 failures within a 30-minute window, further attempts are rejected until the lockout expires. A bounded sweep (64 max scan) evicts stale entries.
-- **Per-connection TOTP attempt cap** — Each connection is limited to 5 TOTP attempts via `TotpPendingState.Attempts`. Exceeding the cap disconnects the client.
+- **Per-username TOTP brute-force protection** — Failed TOTP/recovery code attempts are tracked per username (case-insensitive, cross-connection) in a `FixedWindowCounter`. After 15 failures within 5 minutes of the first, further attempts are answered `TwoFactorLocked` with the time left until that window closes. The sweep reads windows in the order they opened and removes up to 256 closed ones per pass, so it always reaches the oldest; a closed window never counts whether or not the sweep has reached it.
+- **Per-connection TOTP attempt cap** — Each connection is limited to 5 TOTP attempts via `TotpPendingState.Attempts`. The last allowed wrong code is answered `TwoFactorExpired` (not `TwoFactorInvalid`, which the client reads as "try again") and the connection is closed; a last code that could not be checked is answered `ServerBusy`. A code arriving past the cap is answered `TwoFactorExpired` too, and the in-memory per-username lockout is answered `TwoFactorLocked` with the time it has left — none of these ends a prompt without a word any more.
+- **Two-factor prompts end with an answer** — A prompt left unanswered for `TwoFactorWindowSeconds` is told `TwoFactorExpired` (reliable, sent before the disconnect, which flushes it) by the stale sweep, which now hands back the phase each overdue connection was in. The window can only run out while no code is being checked, so the client reads an unasked `TwoFactorExpired` as the time running out and one that answers its code as the attempts running out.
+- **Nothing is issued for a closed connection** — The SRP proof and a correct two-factor code both complete through `CompleteSignIn` on the main thread, which checks that the connection is still active and advances `SrpSuccess → Authenticated` before sending the proof and token and reporting `OnAuthenticationResult(conn, true)`. A connection that closed while its proof or code was being checked is purged instead (`AbandonSignIn`); the worker also checks before minting a token, so the only token that can be recorded for nobody is one minted in the instant the connection closed — never sent, never held. Token servers apply the same check before answering and before the renewal hook mints.
+- **Debounces and caches on the monotonic clock** — Every duration the authenticators time is measured on a monotonic clock: in FishMMO-Auth the SRP core's IP, account and kick-request debounces, its IP cache and the account manager's backstop (`NowSeconds`, the core's clock seam); in this directory the handshake, revocation and token-mint limiters and the real-IP caches, plus the World Server's login-attempt debounce and account creation's verify debounce and connection caches (`MonotonicClock`). On `DateTime.UtcNow` a host clock stepped back held every key inside its window for the size of the step. The redeemed-connection-token cache stays on the wall clock on purpose: it must outlive a wall-clock validity window written by another process.
 - **TOTP concurrency limiter** — A semaphore (`MaxConcurrentTotpVerifications = 4`) limits parallel TOTP/recovery code verifications to bound CPU cost from PBKDF2 operations.
 - **Email enumeration prevention** — For email-based login, unverified accounts receive the same fake SRP flow as non-existent accounts, preventing account-existence disclosure via the `AccountUnverified` response code. Username-based login still returns `AccountUnverified` for user-friendly UX.
 - **Unverified sign-in** — after a correct proof an unverified account is answered `AccountUnverified` whatever it owes, because any one code verifies it (`PhoneUnverified` is legacy and no longer sent). Before answering, the core keeps every owed channel alive: an expired or missing email code (`TryResendVerificationEmailIfExpiredAsync`), an expired or missing SMS code (`TryResendVerificationSmsIfExpiredAsync`), and a Discord code the account chose but was never issued (`TryIssueDiscordVerificationCodeAsync`; never re-issued). A wrong password triggers none of them. What is owed comes from `AccountVerificationRules` in `ServerAuthenticator.FetchAccountForLoginCoreAsync`; there is no grace period.
@@ -155,21 +159,21 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 
 - **FishNet** — Networking framework providing `Authenticator` base class, `NetworkConnection`, `NetworkManager`, and broadcast infrastructure.
 - **SecureRemotePassword** — SRP-6a library (2048-bit group, SHA-512 parameters).
-- **FishMMO-Auth.dll** — netstandard2.1 shared authentication library (auto-copied to `Assets/Dependencies/`). Provides:
-  - `FishMMO.Auth.Core`: enums (`AuthState`, `AccessLevel`, `ClientAuthenticationResult`), interfaces (`IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`), DTOs, and the `ArrivalOrderTracker` / `ExpiringKeyTracker` / `LastSeenCacheTracker` collections.
+- **FishMMO-Auth libraries** — netstandard2.1, built as three DLLs and auto-copied to `Assets/Dependencies/`: `FishMMO-AuthShared.dll` (the enums, DTOs, `ConnectionEncryptionData`, `CryptoHelper`, `ClientSrpData` and the three static services), `FishMMO-ServerAuth.dll` (the collections, interfaces, `PendingAuthRules`, account managers, authenticator cores, `AccountData`, `ServerSrpData` and the request structs) and `FishMMO-ClientAuth.dll` (the client's `ClientAuthenticatorCore`). Together they provide:
+  - `FishMMO.Auth.Core`: enums (`AuthState`, `AccessLevel`, `ClientAuthenticationResult`), interfaces (`IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`), DTOs, and the `ArrivalOrderTracker` / `ExpiringKeyTracker` / `LastSeenCacheTracker` / `FixedWindowCounter` / `PendingAuthTracker` collections (`FishMMO.Auth.Core.Collections`) with the `PendingAuthRules` they apply.
   - `FishMMO.Auth.Implementation`: abstract auth core classes (`BaseAuthenticatorCore<TConnection>`, `SrpAuthenticatorCore<TConnection>`, `TokenAuthenticatorCore<TConnection>`), generic account managers (`AccountManager<T>`, `SrpAccountManager<T>`, `TokenAccountManager<T>`), connection data types (`ConnectionEncryptionData`, `AccountData`, `ServerSrpData`), static crypto service classes (`HandshakeService`, `SrpService`, `TokenService`), `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, `StrictUtf8`, constant-time compare), and request structs (`SrpVerifyRequest`, `SrpProofRequest`).
 - **Database services** — `IAccountService` (fetch salt/verifier), `ICharacterService` (online check), `IKickRequestService` (kick persistence), `IAuthTokenService` (token hash CRUD), `ILoginServerSigningKeyService` (HMAC key fetch).
 - **FishMMO.Shared.Authentication** — Centralized validation rules (`IsAllowedUsername`, `IsAllowedPassword`).
 - **FishMMO.Logging.Log** — Structured async logging.
 - **.NET 6+** — `System.Threading.Channels`, `System.Security.Cryptography` (AES-GCM, X25519, HKDF, HMAC-SHA256/512).
-- **NTP** — Hosts MUST run NTP (or equivalent) to keep the clock monotonically accurate. Wall-clock TTL enforcement, hard deadlines, cookie expiration, and **TOTP verification windows** all use `DateTime.UtcNow`. Without NTP, TOTP codes may be rejected even when valid, and multi-server deployments will disagree on token expiration.
+- **NTP** — Hosts MUST run NTP (or equivalent). Instants shared with other processes — token expiry, cookie time buckets, database lock times and **TOTP verification windows** — use `DateTime.UtcNow`. Without NTP, TOTP codes may be rejected even when valid, and multi-server deployments will disagree on token expiration. Local durations (the pending-auth limits, the two-factor window, debounces, caches) are on a monotonic clock and are unaffected by clock steps.
 
 ## Installation / Build
 
-This module is an integrated part of the FishMMO Unity project. The server authenticator classes are compiled as part of the server assembly and depend on `FishMMO-Auth.dll` (auto-copied to `Assets/Dependencies/` by the FishMMO-Auth build) for all crypto service classes and core types.
+This module is an integrated part of the FishMMO Unity project. The server authenticator classes are compiled as part of the server assembly and depend on `FishMMO-AuthShared.dll` and `FishMMO-ServerAuth.dll` (auto-copied to `Assets/Dependencies/` by the FishMMO-Auth build) for all crypto service classes, core types and authenticator cores.
 
 1. Open the FishMMO-Unity project in Unity 6.3 LTS.
-2. Ensure FishNet, SecureRemotePassword, `FishMMO-Auth.dll`, and all database service assemblies are present in the project.
+2. Ensure FishNet, SecureRemotePassword, `FishMMO-AuthShared.dll`, `FishMMO-ServerAuth.dll`, and all database service assemblies are present in the project.
 3. The authenticator components (`ServerAuthenticator`, `TokenServerAuthenticator`) are attached to server prefabs and configured via the Unity Inspector.
 4. Build using IL2CPP scripting backend for production deployment.
 
@@ -198,7 +202,7 @@ These are the only configurable values that live in the Unity wrapper classes:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `maxMainThreadActionsPerUpdate` | 100 | Max queued main-thread actions drained per `Update` frame (`BaseServerAuthenticator`) |
-| `authHandshakeTimeoutSeconds` | 15 s | How long a newly-connected client has to send a valid `ClientHandshake` before disconnect (`BaseServerAuthenticator`) |
+| `authHandshakeTimeoutSeconds` | 15 s | How long a newly-connected client has to complete its `ClientHandshake` before disconnect (`BaseServerAuthenticator`). Ends when the handshake completes; the core's limits apply after that |
 | `tokenExpirationMinutes` | 10 min | Auth token expiration (`ServerAuthenticator` only) |
 | `renewalTokenExpirationMinutes` | 10 min | Lifetime of renewal-issued tokens (`TokenServerAuthenticator`) |
 | `renewalRefreshFraction` | 0.5 (`[Range(0.1, 0.9)]`) | Fraction of the token lifetime after which a connection's token is re-minted (`TokenServerAuthenticator`) |
@@ -223,13 +227,13 @@ The following constants are defined in `BaseAuthenticatorCore<TConnection>` and 
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `AuthStaleTtlSeconds` | 15 s | TTL for stale-auth sweep |
-| `AuthHardDeadlineSeconds` | 60 s | Absolute auth deadline (cannot be extended) |
-| *(no interval constant)* | every frame | `Core.Tick()` runs the stale-auth sweep each Unity frame; the caps below bound its cost |
-| `AuthSweepMaxScan` | 256 | Max entries scanned per stale-auth sweep |
-| `AuthSweepMaxRemovals` | 64 | Max entries purged per stale-auth sweep |
-| `MaxPendingAuthConnections` | 10,000 | Cap on concurrent half-open auth connections |
-| `HandshakeIpDebounceSeconds` | 0.25 s | Minimum interval between handshakes from same IP |
+| `AuthStaleTtlSeconds` | 15 s | Machine work is dropped this long after its last progress (`PendingAuthRules.ProgressTtlSeconds`) |
+| `AuthHardDeadlineSeconds` | 60 s | Progress stops extending an authenticating phase after this long (`PendingAuthRules.AuthenticatingCapSeconds`) |
+| `TwoFactorWindowSeconds` | 120 s | Time a player has to answer each two-factor prompt (a property; `AuthTwoFactorWindowSeconds` in the Login Server `.cfg`, clamped to 30–600 s). Not extended by anything but a counted code, whose check is machine work again |
+| *(no interval constant)* | every frame | `Core.Tick()` runs the stale-auth sweep each Unity frame. Authenticating entries and two-factor prompts are kept in two lists, each in the order it falls due, so the sweep reads only the two heads |
+| `AuthSweepMaxRemovals` | 64 | Max entries purged per stale-auth sweep; the rest stay at the heads for the next frame |
+| `MaxPendingAuthConnections` | 1,000 Login / 10,000 World, Scene | Cap on connections mid-authentication; a player at the two-factor prompt does not count, and the whole pending set, prompts included, is held to 10× the cap instead (`PendingAuthRules.AdmitsNewPending`) (a property; `AuthMaxPendingConnections` in the server `.cfg`). A connection leaves the count when it authenticates (`EndAuthTracking`, called from `BaseServerAuthenticator.OnAuthentication`). On the Login Server a handshake past the cap goes to `LoginQueueSystem`, and the unset default is `PendingAuthRules.DefaultLoginPendingCap(verify, proof)`, the two SRP channel capacities added; World and Scene servers default to `DefaultMaxPendingAuthConnections` |
+| `HandshakeIpWindowSeconds` / `HandshakeIpBurstLimit` | 2 s / 8 | At most 8 completed handshakes per IP inside a window opened by the first |
 | `MaxGlobalHandshakesPerSecond` | 500 | Global X25519 handshake rate cap |
 | `CookieTimeBucketSeconds` | 30 s | Handshake cookie validity window (max 2×) |
 
@@ -244,13 +248,13 @@ The following constants are defined in `BaseAuthenticatorCore<TConnection>` and 
 | `KickRequestDebounceSeconds` | 10 s | Per-account kick-request debounce |
 | `IpAuthAttemptDebounceSeconds` | 1 s | Per-IP SRP verify debounce |
 | `AccountVerifyDebounceSeconds` | 2 s | Per-account SRP verify debounce |
-| `ConnectionIpCacheTtlSeconds` | 120 s | IP cache entry TTL |
+| `ConnectionIpCacheTtlSeconds` | 300 s | IP cache entry TTL (monotonic clock) |
 | `MaxConcurrentTotpVerifications` | 4 | Semaphore limit for parallel TOTP/recovery verifications |
-| `MaxTotpAttempts` | 5 | Per-connection TOTP attempt cap (exceeding disconnects) |
+| `MaxTotpAttempts` | 5 | Per-connection TOTP attempt cap; the last wrong code is answered `TwoFactorExpired` and the connection closed |
 | `MaxTotpFailuresPerUsername` | 15 | Per-username failure threshold before lockout |
-| `TotpUsernameLockoutDuration` | 30 min | Lockout window for per-username failures |
+| `TotpUsernameLockoutDuration` | 5 min | Window, from the first failure, in which `MaxTotpFailuresPerUsername` failures lock the username |
 | `MaxTotpUsernameFailureEntries` | 10,000 | Hard cap on tracked username entries |
-| `TotpUsernameFailureSweepMaxScan` | 64 | Max entries scanned per sweep iteration |
+| `TotpUsernameFailureSweepMaxRemovals` | 256 | Max closed windows removed per sweep (head-first, oldest window first) |
 
 ### TokenAuthenticatorCore Constants (FishMMO-Auth)
 
@@ -318,10 +322,10 @@ authenticator.OnClientAuthenticationResult += (conn, authenticated) =>
 | SRP verify processing | Client receives `SrpVerifyResponseBroadcast` with encrypted salt and server ephemeral |
 | SRP proof accepted | Client receives `SrpSuccessBroadcast` with encrypted server proof and auth token |
 | Token auth accepted | Client receives `ClientAuthResultBroadcast` with `LoginSuccess` / `WorldLoginSuccess` / `SceneLoginSuccess` |
-| Stale auth sweep active | Log warnings for purged connections exceeding 15 s TTL |
+| Stale auth sweep active | Connections purged 15 s after their last progress; unanswered two-factor prompts told `TwoFactorExpired` and purged after `TwoFactorWindowSeconds`, logged at Debug ("two-factor prompt(s) went unanswered ... told TwoFactorExpired") |
 | Rate limiting active | `ServerBusy` result returned to rate-limited clients |
-| Global handshake cap | Silent drop (no disconnect) when rate exceeded; handshake counter resets each wall-clock second |
-| Pending auth cap | Log warning: `"Pending auth cap (10000) reached — handshake(s) dropped."` (rate-limited to 1 per 5 s) |
+| Global handshake cap | Silent drop (no disconnect) when rate exceeded; handshake counter resets each second on the monotonic clock |
+| Pending auth cap | Login Server: past the cap (1,000 by default) handshakes join the login queue. World/Scene: log warning `"Pending auth cap (10000) reached — handshake(s) dropped."` (rate-limited to 1 per 5 s) |
 | Main-thread back-pressure | Log warning: `"Main-thread queue back-pressure: N actions remain after draining 100."` |
 | Hop token minted | Debug log `"Hop token minted for conn=N len=... keys=K"`. Every Login→World and World→Scene hop mints one, so this is Debug on purpose — and it deliberately omits the client's address |
 | Hop token mint failed | Warning `"Hop token mint FAILED for conn=N — sending empty token."`; the client still receives a `ConnectionTokenBroadcast` with an empty token |
@@ -359,9 +363,10 @@ Client                              Server (Network Thread)
   │                                      │
   │── ClientHandshake ─────────────────► │  OnServerClientHandshakeReceived()
   │   { PublicKey, Cookie }              │    • Verify cookie (current + previous time bucket)
-  │                                      │    • Per-IP rate limit (0.25 s debounce)
+  │                                      │    • Per-IP burst limit (8 per 2 s window)
   │                                      │    • Global rate limit (500/s)
-  │                                      │    • Pending auth cap check (10,000)
+  │                                      │    • Pending auth cap check (1,000 Login /
+  │                                      │      10,000 World, Scene; Login → queue)
   │                                      │    • Version negotiation (min/max → agreed)
   │                                      │    • AddConnectionEncryptionData()
   │                                      │    • X25519 ECDH + transcript hash + HKDF-SHA256
@@ -412,12 +417,14 @@ Client                              Server
   │                                      │    • Deferred online check via ICharacterService.FetchManyAsync
   │                                      │    • Online → kick-request debounce + IKickRequestService.PersistAsync
   │                                      │    • TryLoginAsync() (virtual — subclass-specific)
+  │                                      │    • Connection closed meanwhile → purge, issue nothing
   │                                      │    • Generate HMAC-signed auth token (if signing key available)
   │                                      │    • Persist token hash via IAuthTokenService.IssueAsync
   │                                      │    • AES-GCM encrypt server proof + token
-  │◄── SrpSuccessBroadcast ──────────── │    • Enqueue → Main Thread Broadcast
+  │                                      │    • Enqueue CompleteSignIn → Main Thread:
+  │                                      │      still active? advance SrpSuccess → Authenticated
+  │◄── SrpSuccessBroadcast ──────────── │    • Broadcast
   │   { ServerProof (enc), Token (enc)} │    • OnAuthentication(conn, true)
-  │                                      │    • Advance SrpSuccess → Authenticated
   │                                      │    • ClearSrpState()
 ```
 
@@ -431,15 +438,17 @@ Client                              Server
   │◄── ClientAuthResultBroadcast ────── │  ProcessSrpProofAsync()
   │   { TwoFactorRequired }             │    • SRP proof valid, 2FA enabled
   │                                      │    • Create TotpPendingState (attempts, serverProof, accessLevel)
+  │                                      │    • BeginAwaitingTwoFactor: TwoFactorWindowSeconds (120 s) from now
   │                                      │    • State remains at SrpSuccess (not Authenticated)
   │                                      │
   │── TwoFactorVerifyBroadcast ────────► │  UDP Gate → totpSemaphore
   │   { Code (encrypted), Seq }          │    • Increment TotpPendingState.Attempts (volatile)
   │                                      │    • Acquire totpSemaphore (MaxConcurrent=4)
+  │                                      │    • ResumeAuthentication: the check is machine work (15 s TTL)
   │                                      │
   │                                      │  Worker: ProcessTwoFactorVerifyAsync()
   │                                      │    • Consume seq: AES-GCM decrypt code
-  │                                      │    • Per-username lockout check (15 failures / 30 min)
+  │                                      │    • Per-username lockout check (15 failures / 5 min)
   │                                      │    • Detect code format:
   │                                      │      ┌── 6-digit numeric → TOTP path
   │                                      │      │   • Decrypt TOTP secret with master key
@@ -451,12 +460,20 @@ Client                              Server
   │                                      │          • VerifyRecoveryCode (PBKDF2-SHA256)
   │                                      │          • ConsumeCodeAsync() on match
   │                                      │
-  │                                      │    • On failure: track per-username, send TwoFactorInvalid
-  │                                      │    • On success: SrpSuccess → Authenticated
+  │                                      │    • On failure: track per-username, re-prompt with a fresh
+  │                                      │      window (TwoFactorInvalid), or end with TwoFactorExpired
+  │                                      │      after the 5th (ServerBusy if it could not be checked)
+  │                                      │    • On success: connection closed meanwhile → purge, issue nothing
   │                                      │    • Encrypt server proof + generate auth token
-  │◄── SrpSuccessBroadcast ──────────── │    • Enqueue → Main Thread Broadcast
+  │                                      │    • CompleteSignIn (main thread): still active?
+  │                                      │      SrpSuccess → Authenticated
+  │◄── SrpSuccessBroadcast ──────────── │    • Broadcast
   │   { ServerProof (enc), Token (enc)} │    • OnAuthentication(conn, true)
   │                                      │    • ClearSrpState()
+  │                                      │
+  │  No code within TwoFactorWindowSeconds │
+  │◄── ClientAuthResultBroadcast ────── │  Stale sweep (main thread)
+  │   { TwoFactorExpired }              │    • reliable, then disconnect (flushes it) + purge
 ```
 
 ### Token Authentication (World/Scene Server)
@@ -526,7 +543,9 @@ also full. A deferred client keeps its connection and is told its position.
 ### Directory Tree
 
 ```
-# FishMMO-Auth (netstandard2.1 shared library — Assets/Dependencies/FishMMO-Auth.dll)
+# FishMMO-Auth: three netstandard2.1 libraries auto-copied to Assets/Dependencies/. The tree merges them by folder:
+# FishMMO-AuthShared.dll holds Core/Enums, ConnectionEncryptionData, ClientSrpData, CryptoHelper and Services;
+# FishMMO-ClientAuth.dll holds ClientAuthenticatorCore; everything else is in FishMMO-ServerAuth.dll.
 FishMMO-Auth/
 ├── Core/
 │   ├── Enums/
@@ -537,9 +556,13 @@ FishMMO-Auth/
 │   │   ├── IAccountManager.cs                 # Thread-safe account/connection state management
 │   │   ├── ISrpAccountManager.cs              # SRP-specific account manager (LoginServer)
 │   │   └── ITokenAccountManager.cs            # Token-specific account manager (World/Scene)
+│   ├── MonotonicClock.cs                      # Internal Stopwatch clock for local durations
+│   ├── PendingAuthRules.cs                    # PendingAuthPhase + the pending-auth time limits (pure)
 │   └── Collections/
 │       ├── ExpiringKeyTracker.cs              # Keyed debounce/rate-limit (head-first expiry queue)
+│       ├── FixedWindowCounter.cs              # Per-key count in a window opened by the first event (lockouts, IP burst)
 │       ├── LastSeenCacheTracker.cs            # Key/value cache with TTL by last-seen timestamp
+│       ├── PendingAuthTracker.cs              # Pending auths in two deadline-ordered lists (TTL / 2FA window)
 │       └── ArrivalOrderTracker.cs             # Oldest-first tracker for stale-connection sweeps
 │
 └── Implementation/
@@ -663,7 +686,8 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 | `NoCharacterSelected` | No selected character for world entry |
 | `AccountUnverified` | Account exists but email not verified (username login only) |
 | `TwoFactorRequired` | SRP proof valid; TOTP/recovery code required to complete login |
-| `TwoFactorInvalid` | TOTP code or recovery code verification failed |
+| `TwoFactorInvalid` | TOTP code or recovery code verification failed; another code may be sent |
+| `TwoFactorExpired` | The two-factor step ended without signing in and the connection is closing: the prompt's window ran out (arrives unasked) or the last allowed code was wrong (answers that code) |
 | `TokenInvalid` | Token HMAC verification failed or structure invalid |
 | `TokenExpired` | Token past expiration time |
 | `TokenRevoked` | Token revoked in database |
@@ -685,7 +709,7 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 | Email enumeration prevention | Unverified accounts on email login use fake SRP (same as non-existent) |
 | TOTP anti-replay | Persisted last-used window; conditional DB update rejects same-window reuse |
 | Recovery code one-time use | Matched code consumed via `ConsumeCodeAsync` immediately after verification |
-| Per-username TOTP lockout | 15 failures / 30 min cross-connection; bounded tracker with sweep |
+| Per-username TOTP lockout | 15 failures within 5 min of the first, cross-connection; fixed-window tracker, head-first sweep |
 | Cookie HMAC IP length prefix | 2-byte big-endian IP length prefix eliminates variable-length concatenation ambiguity |
 | Error indistinguishability | Generic failures, no protocol-level detail |
 
@@ -695,7 +719,7 @@ private sealed class ServerAuthenticatorCore : SrpAuthenticatorCore<NetworkConne
 |---------|--------|
 | **Client Disconnect** | `OnRemoteConnectionState` purges transient auth state + `AccountManager` data |
 | **Worker Shutdown** | `ShutdownWorkers()` → complete channel writers → cancel CTS → drain main-thread queue → clear shared state → zero HMAC key |
-| **Stale Auth Sweep** | Periodic 1 s sweep disconnects + purges half-open sessions (15 s TTL, 60 s hard deadline) |
+| **Stale Auth Sweep** | Per-frame head-only sweep disconnects + purges pending sessions: 15 s after last progress (60 s cap on extensions), or `TwoFactorWindowSeconds` (120 s) after an unanswered two-factor prompt |
 | **AccountManager Backstop** | `SweepUnauthenticatedConnections()` with oldest-first tracking purges stale SRP/encryption state |
 | **ExpiringKeyTracker Sweep** | `OnAuthSweep()` / `OnUpdate()` in subclasses evicts stale debounce/rate-limit entries |
 | **Token Renewal Sweep** | `TokenServerAuthenticator.SweepTokenRenewals()` (every 5 s) re-mints tokens due for refresh; entries are removed on `OnConnectionStopped` and cleared by `ShutdownWorkers()` |
@@ -754,7 +778,8 @@ closed connection cannot be delivered to its replacement.
 | `FishNet.Connection.NetworkConnection` | Connection type (`TConnection`) |
 | `System.Threading.Channels` | Bounded async producer-consumer queues |
 | `SecureRemotePassword` | SRP-6a library (2048-bit group, SHA-512) |
-| `FishMMO-Auth.dll` | Shared auth library: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, nonce builder, `StrictUtf8`, constant-time compare), `ConnectionEncryptionData`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, `AuthState`, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `AccessLevel`, `ClientAuthenticationResult`, `HandshakeService`, `SrpService`, `TokenService` |
+| `FishMMO-AuthShared.dll` | Shared auth library: `CryptoHelper` (AES-256-GCM, X25519 ECDH, HKDF-SHA256, `GcmNonceContext`, nonce builder, `StrictUtf8`, constant-time compare), `ConnectionEncryptionData`, `AuthState`, `AccessLevel`, `ClientAuthenticationResult`, `HandshakeService`, `SrpService`, `TokenService` |
+| `FishMMO-ServerAuth.dll` | Server auth library: the authenticator cores, account managers, `IAccountManager`, `ISrpAccountManager`, `ITokenAccountManager`, `ServerSrpData`, `SrpVerifyRequest`, `SrpProofRequest`, and the collections below |
 | `FishMMO.Shared.Authentication` | Centralized validation rules (`IsAllowedUsername`, `IsAllowedPassword`) |
 | `IAccountService` | Database: fetch account salt/verifier for SRP |
 | `ICharacterService` | Database: check online characters |
@@ -764,7 +789,8 @@ closed connection cannot be delivered to its replacement.
 | `ITwoFactorRecoveryCodeService` | Database: fetch unused recovery code hashes, consume used codes |
 | `ExpiringKeyTracker<T>` | Head-first expiry queue for bounded rate limiting |
 | `LastSeenCacheTracker<K, V>` | TTL cache with bounded sweep for IP/encryption caches |
-| `ArrivalOrderTracker<T>` *(in `FishMMO-Auth.dll` — `FishMMO.Auth.Core.Collections`)* | Oldest-first tracking for stale-connection sweeps |
+| `ArrivalOrderTracker<T>` *(in `FishMMO-ServerAuth.dll` — `FishMMO.Auth.Core.Collections`)* | Oldest-first tracking for stale-connection sweeps |
+| `PendingAuthTracker<T>` *(in `FishMMO-ServerAuth.dll` — `FishMMO.Auth.Core.Collections`)* | Connections between handshake and authentication, authenticating or awaiting a two-factor code; head-only sweep over two deadline-ordered lists. Its rules are `PendingAuthRules` (`FishMMO.Auth.Core`) |
 | `FishMMO.Logging.Log` | Structured async logging |
 
 ## License

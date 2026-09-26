@@ -1,36 +1,40 @@
 using FishNet.Connection;
 using FishNet.Transporting;
-using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using FishMMO.Database;
-using FishMMO.Database.Data;
-using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared.Core;
 using FishMMO.Shared;
-using FishMMO.Logging;
 
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
-	// Group-based async channel handlers: Party and Guild.
+	// Group channel handlers: Party and Guild.
 	public partial class ChatSystem
 	{
+		/* Local recipients come from this server's own trackers, on the main thread.
+		 *
+		 * Party and guild lines used to read the group's whole roster from the database on every
+		 * line — for a live line on the sender's server, and again for the pumped copy on EVERY
+		 * other scene server — only to test each member against CharactersByID and keep the ones
+		 * that were here. With twenty scene servers, three guild lines a second cost sixty roster
+		 * reads a second, almost all on servers hosting none of the guild (hot-path audit M17).
+		 *
+		 * The party and guild systems already track which members of each group are on this
+		 * server (PartyCharacterTracker, GuildCharacterTracker), because their own pumps need
+		 * exactly that. A group nobody here belongs to is now an empty lookup, and the pumped copy
+		 * of its line does not even reach this server: the pump only asks for groups tracked
+		 * here. Each candidate is still checked against the character's own controller, the one
+		 * authority on which group a character is in right now, so a tracker a pump behind a
+		 * leave cannot deliver a line to somebody who has left. */
+
 		/// <summary>
-		/// Handles party chat messages, querying party members asynchronously from the database
-		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
-		/// synchronous DB save — the async path persists the message itself.
+		/// Handles party chat: persists a live line for the other scene servers and delivers it to
+		/// this server's members of the party. Returns false so the caller does not persist it again.
 		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False — persistence is handled inside the async path.</returns>
+		/// <param name="sender">Player character sending the message, or null for a pumped line.</param>
+		/// <param name="msg">Chat broadcast message; its text starts with the party ID.</param>
+		/// <returns>False — persistence is handled here.</returns>
 		public bool OnPartyChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return false;
-			}
-
 			// get the party ID
 			string gid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long partyID))
@@ -39,117 +43,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			// Capture immutable data for the async path
-			long senderID = msg.SenderID;
-			ChatChannel channel = msg.Channel;
-			string characterName = sender?.CharacterName ?? string.Empty;
-			string accountName = sender?.Account ?? string.Empty;
-			long worldServerID = sender != null ? sender.WorldServerID : 0;
+			/* Persisted whatever the local delivery finds: the row is what carries the line to the
+			 * party's members on every other scene server, and it is the audit record that it was
+			 * said. Only live player messages: pumped ones are already persisted. */
+			if (sender != null)
+			{
+				EnqueuePersist(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, partyID + " " + trimmed, msg.ReceivedUtcTicks);
+			}
 
-			// Capture the receive timestamp ticks from the broadcast struct (stamped at the network boundary).
-			long receivedTicks = msg.ReceivedUtcTicks;
-
-			bool persist = sender != null;
-			EnqueuePersistence(() => OnPartyChatAsync(partyID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
-			return false; // suppress synchronous save — async path handles it
+			SendToLocalGroupMembers(partyID, isGuild: false, new ChatBroadcast()
+			{
+				Channel = msg.Channel,
+				SenderID = msg.SenderID,
+				Text = trimmed,
+			});
+			return false;
 		}
 
 		/// <summary>
-		/// Asynchronously fetches party members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message (unless called from the message pump) whether or not the lookup succeeds.
+		/// Handles guild chat: persists a live line for the other scene servers and delivers it to
+		/// this server's members of the guild. Returns false so the caller does not persist it again.
 		/// </summary>
-		/// <param name="partyID">Party identifier used to resolve recipients.</param>
-		/// <param name="senderID">Sender character identifier.</param>
-		/// <param name="channel">Chat channel to broadcast.</param>
-		/// <param name="trimmed">Message body without command prefix/party token.</param>
-		/// <param name="characterId">Sender character identifier used for persistence.</param>
-		/// <param name="characterName">Sender character name used for persistence.</param>
-		/// <param name="accountName">Sender account name used for persistence.</param>
-		/// <param name="worldServerId">Sender world server identifier.</param>
-		/// <param name="receivedTicks">UTC ticks when the server received the message, for legal audit persistence.</param>
-		/// <returns>Asynchronous party chat processing task.</returns>
-		private async Task OnPartyChatAsync(long partyID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist, long receivedTicks)
-		{
-			try
-			{
-				/* Persisted FIRST, and whatever the member lookup below does.
-				 *
-				 * The lookup only decides who on THIS scene server hears the line. The row is what
-				 * carries it to the party members on every other scene server — their pumps fetch
-				 * it and replay it — and it is the audit record that it was said. Persisting only
-				 * after a successful lookup meant a lookup that failed dropped the message from the
-				 * whole shard and from the log, with nothing to tell the sender or an operator.
-				 * Only live player messages: pump-sourced ones are already persisted. */
-				if (persist)
-				{
-					// Enqueue for batch DB persistence instead of per-message async write.
-					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, partyID + " " + trimmed, receivedTicks);
-				}
-
-				if (!TryGetDbService(out ICharacterPartyService partyService))
-				{
-					return;
-				}
-
-				DatabaseResult<IReadOnlyList<CharacterPartyData>> result = await partyService.FetchManyAsync(partyID);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("ChatSystem", $"OnPartyChatAsync could not read the members of party {partyID}; the line was not delivered on this scene server: [{result.ErrorCode}] {result.ErrorMessage}");
-					return;
-				}
-				if (result.Data == null || result.Data.Count < 1)
-				{
-					return;
-				}
-
-				IReadOnlyList<CharacterPartyData> members = result.Data;
-
-				// Marshal Broadcasts to main thread
-				TryEnqueueMainThread(() =>
-				{
-					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
-					{
-						return;
-					}
-
-					ChatBroadcast newMsg = new ChatBroadcast()
-					{
-						Channel = channel,
-						SenderID = senderID,
-						Text = trimmed,
-					};
-
-					foreach (CharacterPartyData member in members)
-					{
-						if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-						{
-							// broadcast to party member...
-							Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
-						}
-					}
-				});
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("ChatSystem", $"Error in OnPartyChatAsync (PartyID={partyID}, SenderID={senderID}): {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Handles guild chat messages, querying guild members asynchronously from the database
-		/// and marshalling Broadcasts back to the main thread. Returns false to suppress the
-		/// synchronous DB save — the async path persists the message itself.
-		/// </summary>
-		/// <param name="sender">Player character sending the message.</param>
-		/// <param name="msg">Chat broadcast message.</param>
-		/// <returns>False — persistence is handled inside the async path.</returns>
+		/// <param name="sender">Player character sending the message, or null for a pumped line.</param>
+		/// <param name="msg">Chat broadcast message; its text starts with the guild ID.</param>
+		/// <returns>False — persistence is handled here.</returns>
 		public bool OnGuildChat(IPlayerCharacter sender, ChatBroadcast msg)
 		{
-			if (Server?.Database?.ServiceRegistry == null)
-			{
-				return false;
-			}
-
 			// get the guild ID
 			string gid = ChatHelper.GetWordAndTrimmed(msg.Text, out string trimmed);
 			if (string.IsNullOrWhiteSpace(gid) || !long.TryParse(gid, out long guildID))
@@ -158,100 +77,95 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			// Capture immutable data for the async path
-			long senderID = msg.SenderID;
-			ChatChannel channel = msg.Channel;
-			string characterName = sender?.CharacterName ?? string.Empty;
-			string accountName = sender?.Account ?? string.Empty;
-			long worldServerID = sender != null ? sender.WorldServerID : 0;
+			// Persisted whatever the local delivery finds; see OnPartyChat.
+			if (sender != null)
+			{
+				EnqueuePersist(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, msg.Channel, guildID + " " + trimmed, msg.ReceivedUtcTicks);
+			}
 
-			// Capture the receive timestamp ticks from the broadcast struct (stamped at the network boundary).
-			long receivedTicks = msg.ReceivedUtcTicks;
-
-			bool persist = sender != null;
-			EnqueuePersistence(() => OnGuildChatAsync(guildID, senderID, channel, trimmed, senderID, characterName, accountName, worldServerID, persist, receivedTicks), senderID);
-			return false; // suppress synchronous save — async path handles it
+			SendToLocalGroupMembers(guildID, isGuild: true, new ChatBroadcast()
+			{
+				Channel = msg.Channel,
+				SenderID = msg.SenderID,
+				Text = trimmed,
+			});
+			return false;
 		}
 
 		/// <summary>
-		/// Asynchronously fetches guild members from the database, marshals Broadcasts to the main thread,
-		/// and persists the chat message (unless called from the message pump) whether or not the lookup succeeds.
+		/// Sends a line to every member of a party or guild who is on this scene server, in one
+		/// multicast. Main thread only.
 		/// </summary>
-		/// <param name="guildID">Guild identifier used to resolve recipients.</param>
-		/// <param name="senderID">Sender character identifier.</param>
-		/// <param name="channel">Chat channel to broadcast.</param>
-		/// <param name="trimmed">Message body without command prefix/guild token.</param>
-		/// <param name="characterId">Sender character identifier used for persistence.</param>
-		/// <param name="characterName">Sender character name used for persistence.</param>
-		/// <param name="accountName">Sender account name used for persistence.</param>
-		/// <param name="worldServerId">Sender world server identifier.</param>
-		/// <param name="receivedTicks">UTC ticks when the server received the message, for legal audit persistence.</param>
-		/// <returns>Asynchronous guild chat processing task.</returns>
-		private async Task OnGuildChatAsync(long guildID, long senderID, ChatChannel channel, string trimmed, long characterId, string characterName, string accountName, long worldServerId, bool persist, long receivedTicks)
+		/// <param name="groupID">The party or guild ID.</param>
+		/// <param name="isGuild">True for a guild, false for a party.</param>
+		/// <param name="relay">The line as members receive it.</param>
+		private void SendToLocalGroupMembers(long groupID, bool isGuild, ChatBroadcast relay)
 		{
+			if (groupID < 1 ||
+				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData) ||
+				!Server.DataContainerRegistry.TryGet<IChatSystemRuntimeData>(out var chatData) ||
+				chatData.ConnectionBroadcastSet == null)
+			{
+				return;
+			}
+
+			HashSet<long> memberIDs = null;
+			if (isGuild)
+			{
+				if (Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var guildData))
+				{
+					guildData.GuildCharacterTracker.TryGetValue(groupID, out memberIDs);
+				}
+			}
+			else if (Server.DataContainerRegistry.TryGet<IPartyCharacterMappingData>(out var partyData))
+			{
+				partyData.PartyCharacterTracker.TryGetValue(groupID, out memberIDs);
+			}
+
+			if (memberIDs == null || memberIDs.Count < 1)
+			{
+				return;
+			}
+
+			HashSet<NetworkConnection> recipients = chatData.ConnectionBroadcastSet;
+			recipients.Clear();
 			try
 			{
-				/* Persisted FIRST, and whatever the member lookup below does.
-				 *
-				 * The lookup only decides who on THIS scene server hears the line. The row is what
-				 * carries it to the guild members on every other scene server — their pumps fetch
-				 * it and replay it — and it is the audit record that it was said. Persisting only
-				 * after a successful lookup meant a lookup that failed dropped the message from the
-				 * whole shard and from the log, with nothing to tell the sender or an operator.
-				 * Only live player messages: pump-sourced ones are already persisted. */
-				if (persist)
+				foreach (long memberID in memberIDs)
 				{
-					// Enqueue for batch DB persistence instead of per-message async write.
-					EnqueuePersist(characterId, characterName, accountName, worldServerId, channel, guildID + " " + trimmed, receivedTicks);
-				}
-
-				if (!TryGetDbService(out ICharacterGuildService guildService))
-				{
-					return;
-				}
-
-				DatabaseResult<IReadOnlyList<CharacterGuildData>> result = await guildService.FetchManyAsync(guildID);
-				if (!result.IsSuccess)
-				{
-					await Log.Warning("ChatSystem", $"OnGuildChatAsync could not read the members of guild {guildID}; the line was not delivered on this scene server: [{result.ErrorCode}] {result.ErrorMessage}");
-					return;
-				}
-				if (result.Data == null || result.Data.Count < 1)
-				{
-					return;
-				}
-
-				IReadOnlyList<CharacterGuildData> members = result.Data;
-
-				// Marshal Broadcasts to main thread
-				TryEnqueueMainThread(() =>
-				{
-					if (!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var mappingData))
+					if (!mappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter character) ||
+						!IsInGroup(character, groupID, isGuild))
 					{
-						return;
+						continue;
 					}
+					AddRecipient(recipients, character);
+				}
 
-					ChatBroadcast newMsg = new ChatBroadcast()
-					{
-						Channel = channel,
-						SenderID = senderID,
-						Text = trimmed,
-					};
-
-					foreach (CharacterGuildData member in members)
-					{
-						if (mappingData.CharactersByID.TryGetValue(member.CharacterID, out IPlayerCharacter character))
-						{
-							// broadcast to guild member...
-							Server.NetworkWrapper.Broadcast(character.Owner, newMsg, true, Channel.Reliable);
-						}
-					}
-				});
+				if (recipients.Count > 0)
+				{
+					Server.NetworkWrapper.Broadcast(recipients, relay, true, Channel.Reliable);
+				}
 			}
-			catch (Exception ex)
+			finally
 			{
-				await Log.Error("ChatSystem", $"Error in OnGuildChatAsync (GuildID={guildID}, SenderID={senderID}): {ex}");
+				recipients.Clear();
 			}
+		}
+
+		/// <summary>
+		/// Whether a character's own controller says it is in the group right now.
+		/// </summary>
+		private static bool IsInGroup(IPlayerCharacter character, long groupID, bool isGuild)
+		{
+			if (character == null)
+			{
+				return false;
+			}
+			if (isGuild)
+			{
+				return character.TryGet(out IGuildController guildController) && guildController.ID == groupID;
+			}
+			return character.TryGet(out IPartyController partyController) && partyController.ID == groupID;
 		}
 	}
 }

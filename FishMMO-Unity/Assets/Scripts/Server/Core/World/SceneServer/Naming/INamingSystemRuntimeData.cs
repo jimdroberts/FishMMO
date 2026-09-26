@@ -1,38 +1,43 @@
 using System;
-using System.Collections.Concurrent;
+using FishNet.Connection;
 using FishMMO.Server.Core.Collections;
 
 namespace FishMMO.Server.Core.World.SceneServer
 {
 	/// <summary>
 	/// Runtime state for the naming system.
-	/// Tracks in-flight request gates, per-connection debounce, and sweep cadence.
+	/// Tracks lookups in flight with their waiting requesters, per-connection request budgets,
+	/// and sweep cadence.
 	/// </summary>
 	public interface INamingSystemRuntimeData : IRuntimeDataContainer
 	{
 		/// <summary>
-		/// In-flight character-name-by-id requests keyed by character identifier.
+		/// In-flight character-name-by-id lookups keyed by character identifier, each with every
+		/// connection waiting on it and the form it asked in. Main thread only.
 		/// </summary>
-		ConcurrentDictionary<long, byte> CharacterNameByIdInFlight { get; }
+		InFlightLookupTable<long, NamingWaiter<NetworkConnection>> CharacterNameByIdInFlight { get; }
 
 		/// <summary>
-		/// In-flight guild-name-by-id requests keyed by guild identifier.
+		/// In-flight guild-name-by-id lookups keyed by guild identifier, each with every connection
+		/// waiting on it and the form it asked in. Main thread only.
 		/// </summary>
-		ConcurrentDictionary<long, byte> GuildNameByIdInFlight { get; }
+		InFlightLookupTable<long, NamingWaiter<NetworkConnection>> GuildNameByIdInFlight { get; }
 
 		/// <summary>
-		/// In-flight character reverse-lookup requests keyed by lowercase character name.
+		/// In-flight character reverse lookups keyed by lowercase character name, each with every
+		/// connection waiting on it. Main thread only.
 		/// </summary>
-		ConcurrentDictionary<string, byte> CharacterByNameInFlight { get; }
+		InFlightLookupTable<string, NetworkConnection> CharacterByNameInFlight { get; }
 
 		/// <summary>
-		/// Per-connection request timestamp tracker used for request debouncing.
+		/// Per-connection request budgets, keyed by client ID. An entry idle past the cache TTL is
+		/// swept; by then its bucket would have refilled anyway.
 		/// </summary>
-		LastSeenCacheTracker<int, DateTime> ConnectionRequestTracker { get; }
+		LastSeenCacheTracker<int, NamingRequestBucket> ConnectionRequestBuckets { get; }
 
 		/// <summary>
-		/// Next UTC timestamp when cache sweep is allowed.
+		/// When the next cache sweep is allowed, in <see cref="MonotonicClock"/> seconds.
 		/// </summary>
-		DateTime NextCacheSweepUtc { get; set; }
+		double NextCacheSweepAt { get; set; }
 	}
 }

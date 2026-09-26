@@ -137,7 +137,7 @@ int main() {
 
     for (Cli* x : clis) { if (x->h) { wt_client_disconnect(x->h); } }
     pump(500);
-    for (Cli* x : clis) { wt_client_destroy(x->h); x->h = nullptr; }
+    for (Cli* x : clis) { wt_client_destroy(x->h); x->h = nullptr; delete x; }
     wt_server_stop(srv);
     wt_server_destroy(srv);
     clis.clear();
@@ -162,10 +162,12 @@ int main() {
     CHECK(wait_until(h->connected, 5000), "client H connects once F left the half-open state");
     for (Cli* x : clis) { if (x->h) wt_client_disconnect(x->h); }
     pump(500);
-    for (Cli* x : clis) { wt_client_destroy(x->h); x->h = nullptr; }
+    for (Cli* x : clis) { wt_client_destroy(x->h); x->h = nullptr; delete x; }
     wt_server_stop(srv);
     wt_server_destroy(srv);
     wt_deinit();
+    clis.clear();
     printf("\n%s (%d failures)\n", failures ? "E2E FAILED" : "E2E OK", failures);
+    fflush(stdout);   /* a sanitizer exit report must not swallow the verdict */
     return failures ? 1 : 0;
 }

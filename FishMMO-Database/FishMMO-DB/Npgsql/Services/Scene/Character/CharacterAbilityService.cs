@@ -63,7 +63,26 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<long>> PersistAsync(CharacterAbilityData abilityData, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<long>> PersistAsync(CharacterAbilityData abilityData, CancellationToken cancellationToken = default)
+			=> PersistOneAsync(abilityData, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<long>> PersistOwnedAsync(CharacterAbilityData abilityData, CharacterSessionLeaseData claim, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaim(claim, abilityData.CharacterID);
+			return invalid != null
+				? Task.FromResult(DatabaseResult<long>.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: PersistOneAsync(abilityData, claim, cancellationToken);
+		}
+
+		/// <summary>
+		/// The single-row write behind <see cref="PersistAsync(CharacterAbilityData, CancellationToken)"/> and
+		/// <see cref="PersistOwnedAsync(CharacterAbilityData, CharacterSessionLeaseData, CancellationToken)"/>.
+		/// </summary>
+		/// <param name="abilityData">The row.</param>
+		/// <param name="claim">The writer's claim, or null for the ungated write. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult<long>> PersistOneAsync(CharacterAbilityData abilityData, CharacterSessionLeaseData? claim, CancellationToken cancellationToken)
 		{
 			if (abilityData.CharacterID <= 0)
 			{
@@ -81,14 +100,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 			var result = await ExecuteTransactionAsync<long>(async dbContext =>
 			{
-				var isCharacterActive = await dbContext.Characters
-					.AsNoTracking()
-					.AnyAsync(c => c.ID == abilityData.CharacterID && !c.Deleted, cancellationToken)
-					.ConfigureAwait(false);
-				if (!isCharacterActive)
-				{
-					throw new DatabaseEntityNotFoundException("Character", abilityData.CharacterID.ToString());
-				}
+				/* The ownership gate, and the existence check it subsumes (the only check the ungated
+				 * write makes). An owned write holds the character's share lock from here to the
+				 * commit, so the release it would otherwise race waits behind it. See
+				 * CharacterWriteGate. */
+				await CharacterWriteGate.AdmitOneAsync(dbContext, abilityData.CharacterID, claim, cancellationToken).ConfigureAwait(false);
 
 				var now = DateTime.UtcNow;
 				var abilityEvents = abilityData.AbilityEvents?.ToArray() ?? Array.Empty<int>();
@@ -123,12 +139,31 @@ namespace FishMMO.Database.Npgsql.Services
 				}
 
 				return id;
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, operationName: claim.HasValue ? nameof(PersistOwnedAsync) : nameof(PersistAsync), cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<BulkWriteResult>> PersistAsync(IEnumerable<CharacterAbilityData> abilities, CancellationToken cancellationToken = default)
+			=> PersistBatchAsync(abilities, null, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult<BulkWriteResult>> PersistOwnedAsync(IEnumerable<CharacterAbilityData> abilities, IReadOnlyCollection<CharacterSessionLeaseData> claims, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaims(claims);
+			return invalid != null
+				? Task.FromResult(DatabaseResult<BulkWriteResult>.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: PersistBatchAsync(abilities, claims, cancellationToken);
+		}
+
+		/// <summary>
+		/// The batch write behind <see cref="PersistAsync(IEnumerable{CharacterAbilityData}, CancellationToken)"/> and
+		/// <see cref="PersistOwnedAsync"/>.
+		/// </summary>
+		/// <param name="abilities">Rows to write.</param>
+		/// <param name="claims">The writer's claims, or null for the ungated write. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterAbilityData> abilities, IReadOnlyCollection<CharacterSessionLeaseData>? claims, CancellationToken cancellationToken)
 		{
 			if (abilities == null || !abilities.Any())
 			{
@@ -185,27 +220,20 @@ namespace FishMMO.Database.Npgsql.Services
 			{
 				/* Both branches contribute. The batch is split by whether a row already has a
 				 * primary key, so neither statement alone describes what the caller asked for. */
-				BulkWriteResult outcome = new BulkWriteResult(suppliedRows, 0, 0);
 				var allCharacterIds = list.Select(a => a.CharacterID).Distinct().ToArray();
-				var activeCharacterIds = await dbContext.Characters
-					.AsNoTracking()
-					.Where(c => allCharacterIds.Contains(c.ID) && !c.Deleted)
-					.Select(c => c.ID)
-					.ToListAsync(cancellationToken)
-					.ConfigureAwait(false);
-				var activeCharacterIdSet = new HashSet<long>(activeCharacterIds);
-
-				if (activeCharacterIdSet.Count != allCharacterIds.Length)
-				{
-					var missingCharacterId = allCharacterIds.First(id => !activeCharacterIdSet.Contains(id));
-					throw new DatabaseEntityNotFoundException("Character", missingCharacterId.ToString(), "Character not found or deleted.");
-				}
+				/* The ownership gate, and the per-character existence check it subsumes: the rows of a
+				 * missing or deleted character, or — for an owned write — of one whose claim the writer
+				 * no longer holds, are left out and reported as Filtered rather than failing every other
+				 * character's rows with them. See CharacterWriteGate. */
+				CharacterWriteAdmission admission = await CharacterWriteGate.AdmitAsync(dbContext, allCharacterIds, claims, cancellationToken).ConfigureAwait(false);
+				int unownedRows = admission.CountUnowned(newItems, row => row.CharacterID) + admission.CountUnowned(existingItems, row => row.CharacterID);
+				BulkWriteResult outcome = new BulkWriteResult(suppliedRows, 0, 0, unownedRows);
 
 				var activeNewItems = newItems
-					.Where(a => activeCharacterIdSet.Contains(a.CharacterID))
+					.Where(a => admission.Admits(a.CharacterID))
 					.ToList();
 				var activeExistingItems = existingItems
-					.Where(a => activeCharacterIdSet.Contains(a.CharacterID))
+					.Where(a => admission.Admits(a.CharacterID))
 					.ToList();
 
 				if (activeExistingItems.Count > 0)
@@ -432,7 +460,31 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult> DeleteAbilityAsync(long characterId, long abilityId, long incomingVersion, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult> DeleteAbilityAsync(long characterId, long abilityId, long incomingVersion, CancellationToken cancellationToken = default)
+			=> DeleteAbilityCoreAsync(characterId, abilityId, incomingVersion, null, admitReleased: false, cancellationToken);
+
+		/// <inheritdoc/>
+		public Task<DatabaseResult> DeleteAbilityOwnedAsync(long characterId, long abilityId, long incomingVersion, CharacterSessionLeaseData claim, bool admitReleased = false, CancellationToken cancellationToken = default)
+		{
+			string? invalid = CharacterWriteGate.ValidateClaim(claim, characterId);
+			return invalid != null
+				? Task.FromResult(DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, invalid))
+				: DeleteAbilityCoreAsync(characterId, abilityId, incomingVersion, claim, admitReleased, cancellationToken);
+		}
+
+		/// <summary>
+		/// The delete behind <see cref="DeleteAbilityAsync"/> and <see cref="DeleteAbilityOwnedAsync"/>.
+		/// </summary>
+		/// <param name="characterId">The owning character.</param>
+		/// <param name="abilityId">The row identity.</param>
+		/// <param name="incomingVersion">The version ceiling the row must be at or below.</param>
+		/// <param name="claim">The writer's claim, or null for the ungated delete. See <see cref="CharacterWriteGate"/>.</param>
+		/// <param name="admitReleased">
+		/// With a claim, also admit a character that holds no claim at all — for a delete that undoes
+		/// the writer's own row. See <see cref="CharacterWriteGate.AdmitOwnOrReleasedAsync"/>.
+		/// </param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		private async Task<DatabaseResult> DeleteAbilityCoreAsync(long characterId, long abilityId, long incomingVersion, CharacterSessionLeaseData? claim, bool admitReleased, CancellationToken cancellationToken)
 		{
 			if (characterId <= 0)
 			{
@@ -460,7 +512,7 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid version. Version must be greater than 0.");
 			}
 
-			return await ExecuteWriteAsync(async dbContext =>
+			Func<NpgsqlDbContext, Task> delete = async dbContext =>
 			{
 				// A forgotten ability is removed outright rather than left as a tombstone. The upsert
 				// keys on (character_id, template_id) and only writes when the incoming version beats
@@ -493,7 +545,29 @@ namespace FishMMO.Database.Npgsql.Services
 						throw new StaleStateException("Ability delete rejected due to a stale Version.");
 					}
 				}
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+			};
+
+			if (!claim.HasValue)
+			{
+				return await ExecuteWriteAsync(delete, saveChanges: false, operationName: nameof(DeleteAbilityAsync), cancellationToken: cancellationToken).ConfigureAwait(false);
+			}
+
+			/* Owned: the gate and the delete in one transaction, so the claim it admits is held — under
+			 * the character's share lock — until the row is gone. A delete is naturally idempotent, so
+			 * the transaction's retry after a lost commit reply finds the row already gone and succeeds. */
+			CharacterSessionLeaseData held = claim.Value;
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				if (admitReleased)
+				{
+					await CharacterWriteGate.AdmitOwnOrReleasedAsync(dbContext, held, cancellationToken).ConfigureAwait(false);
+				}
+				else
+				{
+					await CharacterWriteGate.AdmitOneAsync(dbContext, characterId, held, cancellationToken).ConfigureAwait(false);
+				}
+				await delete(dbContext).ConfigureAwait(false);
+			}, saveChanges: false, operationName: nameof(DeleteAbilityOwnedAsync), cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

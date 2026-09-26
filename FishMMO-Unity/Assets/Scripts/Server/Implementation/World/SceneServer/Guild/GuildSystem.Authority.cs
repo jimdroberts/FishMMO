@@ -251,6 +251,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			};
 
 			long guildID = authority.GuildID;
+			long characterID = authority.CharacterID;
 
 			TryEnqueueMainThread(() =>
 			{
@@ -278,6 +279,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				guildController.LeaderRankOrder = broadcast.LeaderRankOrder;
 
 				Server.NetworkWrapper.Broadcast(conn, broadcast, true, Channel.Reliable);
+
+				/* This ladder came from a resolve of its own, which may be older or newer than the
+				 * one the update pump last delivered. Whatever the pump recorded this client as
+				 * holding no longer holds, so its next delivery sends the rank list again rather
+				 * than trusting a record this message may just have overwritten. */
+				guildRecipientBaselines.ForgetLadder(characterID);
 			});
 		}
 
@@ -288,17 +295,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <returns>Asynchronous publish task.</returns>
 		/// <remarks>
 		/// <para>
-		/// Called after any edit to the ladder. Each member still receives their OWN message,
-		/// because the message carries the recipient's permission mask and a shared copy would
-		/// tell every member they hold whatever the first member holds.
+		/// Called after any edit to the ladder. The standings are built from ONE snapshot — the
+		/// roster and the ladder, read once each — rather than by resolving every member
+		/// individually. Resolving is two reads per member, which made a rank edit in a guild with a
+		/// hundred members online cost two hundred round trips; and two hundred separate reads can
+		/// straddle a second edit, so half the guild would be sent one ladder and half another.
 		/// </para>
 		/// <para>
-		/// But the standings are built from ONE snapshot — the roster and the ladder, read once
-		/// each — rather than by resolving every member individually. Resolving is two reads per
-		/// member, which made a rank edit in a guild with a hundred members online cost two
-		/// hundred round trips; and two hundred separate reads can straddle a second edit, so
-		/// half the guild would be sent one ladder and half another. A snapshot costs two reads
-		/// and everybody sees the same ladder.
+		/// <b>One multicast per rank, not one message per member.</b> The message carries the
+		/// viewer's own rank and permission mask, so it is the same for everybody holding one rank:
+		/// members are grouped by the rank the snapshot gives them and each group is sent one copy,
+		/// serialised once — the update pump's delivery does the same, through the same
+		/// <see cref="DeliverRankListAudiences"/>. It used to be a separate main-thread hop, a
+		/// separate wire array and a separate send for every member.
+		/// </para>
+		/// <para>
+		/// <b>The ladder baseline is recorded, not forgotten.</b> The ladder read here becomes the
+		/// guild's delivered ladder (<see cref="AdvanceDeliveredLadder"/>), and each recipient is
+		/// recorded as holding its generation at their rank. So when the update pump then processes
+		/// the guild update this edit writes, a member who already holds that ladder is not sent it a
+		/// second time; the per-member send forgot every recipient's baseline instead, and the pump
+		/// sent the whole guild the same list again a second later. A member already holding this
+		/// generation at this rank is skipped here for the same reason.
 		/// </para>
 		/// </remarks>
 		private async Task PublishGuildRankLadderAsync(long guildID)
@@ -314,7 +332,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			List<(NetworkConnection conn, long characterID)> recipients = new List<(NetworkConnection, long)>();
+			/* Whether anybody here is owed the ladder at all, gathered on the main thread before the
+			 * reads: a guild with no member on this server costs nothing. */
+			bool anyLocalMember = false;
 
 			TaskCompletionSource<bool> gathered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -322,20 +342,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				try
 				{
-					if (Server != null &&
+					anyLocalMember = Server != null &&
 						Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) &&
-						Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData) &&
-						mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs))
-					{
-						foreach (long memberID in memberIDs)
-						{
-							if (characterMappingData.CharactersByID.TryGetValue(memberID, out IPlayerCharacter member) &&
-								member?.Owner != null)
-							{
-								recipients.Add((member.Owner, memberID));
-							}
-						}
-					}
+						mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs) &&
+						memberIDs.Count > 0;
 				}
 				finally
 				{
@@ -350,7 +360,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			await gathered.Task;
 
-			if (recipients.Count == 0)
+			if (!anyLocalMember)
 			{
 				return;
 			}
@@ -368,45 +378,89 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			byte leaderRankOrder = 0;
-			for (int i = 0; i < ladder.Count; ++i)
+			IReadOnlyList<CharacterGuildData> roster = membersResult.Data;
+			TryEnqueueMainThread(() => DeliverPublishedLadder(guildID, roster, ladder));
+		}
+
+		/// <summary>
+		/// Delivers a freshly read ladder to this server's members of a guild, one multicast per
+		/// rank. Main thread only.
+		/// </summary>
+		/// <param name="guildID">The guild.</param>
+		/// <param name="roster">The guild's membership rows, read with the ladder.</param>
+		/// <param name="ladder">The ladder.</param>
+		/// <remarks>
+		/// Every recipient is re-checked here, on delivery. The reads were asynchronous and a member
+		/// may have been kicked, or have left, while they were in flight; a ladder is harmless but
+		/// the VIEWER PERMISSIONS in it are not, and an ex-member must not be handed a mask. A local
+		/// member with no row in the roster was removed between the gather and the read, and gets
+		/// nothing: the update pump is already on its way to tell them they have left.
+		/// </remarks>
+		private void DeliverPublishedLadder(long guildID, IReadOnlyList<CharacterGuildData> roster, IReadOnlyList<GuildRankData> ladder)
+		{
+			if (Server == null ||
+				!Server.DataContainerRegistry.TryGet<IGuildCharacterMappingData>(out var mappingData) ||
+				!Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var characterMappingData))
 			{
-				if (ladder[i].RankOrder > leaderRankOrder)
-				{
-					leaderRankOrder = ladder[i].RankOrder;
-				}
+				return;
 			}
 
-			Dictionary<long, CharacterGuildData> membersByID = new Dictionary<long, CharacterGuildData>(membersResult.Data.Count);
-			for (int i = 0; i < membersResult.Data.Count; ++i)
+			/* A guild no longer tracked here has nobody here to deliver to, and recording its ladder
+			 * as delivered would leave a baseline behind for a guild nothing pumps. */
+			if (!mappingData.GuildCharacterTracker.TryGetValue(guildID, out HashSet<long> memberIDs) ||
+				memberIDs.Count < 1)
 			{
-				membersByID[membersResult.Data[i].CharacterID] = membersResult.Data[i];
+				return;
 			}
 
-			for (int i = 0; i < recipients.Count; ++i)
+			byte leaderRankOrder = LeaderRankOrderOf(ladder);
+			long generation = AdvanceDeliveredLadder(guildID, ladder, out GuildRankEntry[] rankEntries);
+
+			ReleaseGuildAudiences();
+			try
 			{
-				/* A tracked member with no roster row was removed between the gather and the
-				 * read. They get nothing: SendGuildRankList refuses a non-member standing, and
-				 * the update pump is already on its way to tell them they have left. */
-				if (!membersByID.TryGetValue(recipients[i].characterID, out CharacterGuildData membership) ||
-					membership.GuildID != guildID)
+				for (int i = 0; i < roster.Count; ++i)
 				{
-					continue;
+					CharacterGuildData membership = roster[i];
+					if (membership.GuildID != guildID ||
+						!memberIDs.Contains(membership.CharacterID) ||
+						!characterMappingData.CharactersByID.TryGetValue(membership.CharacterID, out IPlayerCharacter member) ||
+						member == null ||
+						!member.TryGet(out IGuildController guildController) ||
+						guildController.ID != guildID)
+					{
+						continue;
+					}
+
+					/* The server's own cache of this member's standing, refreshed from the same
+					 * snapshot the message carries. It is only ever a pre-filter — every operation
+					 * re-resolves before deciding — but inserting a rank RENUMBERS the ladder, so a
+					 * cache left on the pre-insert order would disagree with the panel the player is
+					 * looking at until the guild update pump next ran. */
+					guildController.RankOrder = membership.Rank;
+					guildController.Permissions = PermissionsForOrder(ladder, membership.Rank);
+					guildController.LeaderRankOrder = leaderRankOrder;
+
+					NetworkConnection owner = member.Owner;
+					if (owner == null || !owner.IsActive)
+					{
+						continue;
+					}
+
+					if (!guildRecipientBaselines.HasLadder(membership.CharacterID, guildID, generation, membership.Rank))
+					{
+						RankListAudience(membership.Rank).Add(owner, membership.CharacterID);
+					}
 				}
 
-				GuildAuthority authority = new GuildAuthority(
-					true,
-					guildID,
-					membership.CharacterID,
-					membership.Rank,
-					PermissionsForOrder(ladder, membership.Rank),
-					leaderRankOrder,
-					membership.Version,
-					ladder);
-
-				SendGuildRankList(recipients[i].conn, authority);
+				DeliverRankListAudiences(guildID, ladder, rankEntries, generation, leaderRankOrder);
+			}
+			finally
+			{
+				ReleaseGuildAudiences();
 			}
 		}
+
 		/// <summary>
 		/// The permission mask a ladder position holds, without a resolved standing to hand.
 		/// </summary>
@@ -427,6 +481,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			return GuildPermissions.None;
+		}
+
+		/// <summary>
+		/// The leader's seat on a ladder: the highest rank order that exists.
+		/// </summary>
+		/// <param name="ladder">The guild's rank rows.</param>
+		/// <returns>The highest rank order, or 0 for an empty or missing ladder.</returns>
+		internal static byte LeaderRankOrderOf(IReadOnlyList<GuildRankData> ladder)
+		{
+			byte leaderRankOrder = 0;
+			if (ladder != null)
+			{
+				for (int i = 0; i < ladder.Count; ++i)
+				{
+					if (ladder[i].RankOrder > leaderRankOrder)
+					{
+						leaderRankOrder = ladder[i].RankOrder;
+					}
+				}
+			}
+			return leaderRankOrder;
 		}
 
 		/// <summary>
@@ -524,23 +599,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Projects one full roster row for one class of recipient.
+		/// </summary>
+		/// <param name="fullRow">The row with its officer note, as <see cref="BuildRosterEntry"/> built it for an officer.</param>
+		/// <param name="includeOfficerNote">Whether the recipient may read officer notes.</param>
+		/// <returns>The row to send: unchanged for an officer, with the officer note emptied otherwise.</returns>
+		/// <remarks>
+		/// The pump builds each row ONCE, in the full projection, because that is the form its
+		/// delivered-roster baseline is kept in; the copy a recipient is sent is projected from it
+		/// here, so the full roster and a delta cannot apply the officer-note filter differently.
+		/// </remarks>
+		internal static GuildAddEntry ProjectRosterEntry(GuildAddEntry fullRow, bool includeOfficerNote)
+		{
+			if (!includeOfficerNote)
+			{
+				fullRow.OfficerNote = string.Empty;
+			}
+			return fullRow;
+		}
+
+		/// <summary>
 		/// Projects a whole roster onto the wire for one class of recipient.
 		/// </summary>
 		/// <param name="guildID">The guild every row belongs to, carried once on the payload.</param>
-		/// <param name="members">The guild's membership rows.</param>
+		/// <param name="fullRows">The guild's rows in the full projection.</param>
 		/// <param name="includeOfficerNotes">Whether the recipients may read officer notes.</param>
 		/// <returns>The roster broadcast.</returns>
 		/// <remarks>
-		/// Built twice per guild rather than once per member: there are exactly two versions of
-		/// this message — with officer notes and without — so a guild of a hundred needs two
-		/// arrays, not a hundred.
+		/// Built at most twice per guild rather than once per member: there are exactly two
+		/// versions of this message — with officer notes and without — so a guild of a hundred
+		/// needs two arrays, not a hundred.
 		/// </remarks>
-		private static GuildAddMultipleBroadcast BuildRoster(long guildID, IReadOnlyList<CharacterGuildData> members, bool includeOfficerNotes)
+		private static GuildAddMultipleBroadcast ProjectRoster(long guildID, GuildAddEntry[] fullRows, bool includeOfficerNotes)
 		{
-			GuildAddEntry[] entries = new GuildAddEntry[members?.Count ?? 0];
+			GuildAddEntry[] entries = new GuildAddEntry[fullRows?.Length ?? 0];
 			for (int i = 0; i < entries.Length; ++i)
 			{
-				entries[i] = BuildRosterEntry(members[i], includeOfficerNotes);
+				entries[i] = ProjectRosterEntry(fullRows[i], includeOfficerNotes);
 			}
 
 			return new GuildAddMultipleBroadcast()

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 using FishMMO.Shared;
 using UnityEngine;
 
@@ -76,6 +77,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <summary>See <see cref="ObjectSpawner.Spawnables"/>.</summary>
 		[SerializeReference, SubclassSelector]
 		public List<SpawnableSettings> Spawnables = new List<SpawnableSettings>();
+
+		/// <summary>
+		/// See <see cref="ObjectSpawner.Pack"/>. A table baked before packs existed has none, and
+		/// deserializes a disabled block, so its spawners run exactly as they did.
+		/// </summary>
+		public NPCPackSettings Pack = new NPCPackSettings();
 
 		/// <summary>Half of <see cref="BoundingBoxSize"/>.</summary>
 		public Vector3 BoundingBoxExtents => BoundingBoxSize * 0.5f;

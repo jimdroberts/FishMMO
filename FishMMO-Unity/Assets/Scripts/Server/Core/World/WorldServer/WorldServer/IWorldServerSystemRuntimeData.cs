@@ -28,11 +28,24 @@ namespace FishMMO.Server.Core.World.WorldServer
 		/// When this world stops, or <c>null</c> when no shutdown is scheduled.
 		/// </summary>
 		/// <remarks>
-		/// Also adopted from the row on every pulse, so a shutdown scheduled from anywhere — an
-		/// in-game <c>/admin shutdown</c>, the Discord bot, psql — reaches this process within
-		/// one pulse. Absolute UTC so every process serving this world counts down to the same
-		/// instant.
+		/// Also adopted from the row, so a shutdown scheduled from anywhere — an in-game
+		/// <c>/admin shutdown</c>, the Discord bot, psql — reaches this process within two pulses
+		/// (a pulse's reading is adopted on the next one). It says whether and when a shutdown is
+		/// scheduled; the countdown itself runs on <c>ShutdownCountdown</c>, from the seconds left
+		/// as the database measured them, so every process serving this world stops at the same
+		/// moment whatever its own clock says.
 		/// </remarks>
 		DateTime? ShutdownAtUtc { get; set; }
+
+		/// <summary>
+		/// Atomically transitions the pulse gate from idle to in-flight.
+		/// Returns true if this call won the race; false if a pulse is already in flight.
+		/// </summary>
+		bool TryBeginPulse();
+
+		/// <summary>
+		/// Atomically transitions the pulse gate from in-flight back to idle.
+		/// </summary>
+		void EndPulse();
 	}
 }

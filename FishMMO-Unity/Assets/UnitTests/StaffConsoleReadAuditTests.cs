@@ -100,7 +100,7 @@ namespace FishMMO.UnitTests
 			string code = SourceScanPins.ReadCode(StaffConsolePath);
 
 			SourceScanPins.HoldsAndFires("TryAuthorizeStaffRequest", code, GateFailure,
-				s => SourceScanPins.InsertBefore("long now = DateTime.UtcNow.Ticks;", ElevatedCall + "\n")(s.Replace(ElevatedCall, string.Empty)),
+				s => SourceScanPins.InsertBefore("long now = MonotonicClock.NowTicks;", ElevatedCall + "\n")(s.Replace(ElevatedCall, string.Empty)),
 				"the read is recorded before the throttle");
 			SourceScanPins.HoldsAndFires("TryAuthorizeStaffRequest", code, GateFailure,
 				SourceScanPins.Replace(ElevatedCall, string.Empty),
@@ -109,7 +109,7 @@ namespace FishMMO.UnitTests
 				SourceScanPins.RegexReplaceFirst(@"if \(!autoRefresh\)\s*\{\s*(ChatHelper\.ReportElevatedRequest\([^;]*;)\s*\}", "$1"),
 				"an automatic refresh is recorded anyway");
 			SourceScanPins.HoldsAndFires("TryAuthorizeStaffRequest", code, GateFailure,
-				SourceScanPins.InsertBefore("long now = DateTime.UtcNow.Ticks;", "if (autoRefresh) { return true; }\n"),
+				SourceScanPins.InsertBefore("long now = MonotonicClock.NowTicks;", "if (autoRefresh) { return true; }\n"),
 				"an automatic refresh skips the throttle");
 		}
 

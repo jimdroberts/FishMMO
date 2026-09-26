@@ -147,6 +147,26 @@ namespace FishMMO.Client
 		private bool authResultSeen;
 
 		/// <summary>
+		/// True from <c>TwoFactorRequired</c> until the two-factor step ends: signed in, refused,
+		/// cancelled, or the connection closed.
+		/// </summary>
+		/// <remarks>
+		/// The code has to travel on the connection the password was proven on, so this step
+		/// cannot outlive it the way the verification prompt does. When the prompt goes unanswered
+		/// for its window, or the attempts run out, the login server says so with
+		/// <c>TwoFactorExpired</c> before closing the connection (<see cref="OnTwoFactorExpired"/>).
+		/// A connection that closes during this step without any such answer — a dropped network, or
+		/// a server older than that result — still needs explaining, and <see cref="authResultSeen"/>
+		/// is already true by then, so the unexplained-disconnect notice stays silent. This is what
+		/// lets the Stopped handler say what happened instead of leaving a prompt on screen whose
+		/// answer could never be sent.
+		/// </remarks>
+		private bool twoFactorStepActive;
+
+		/// <summary>True while the two-factor code prompt itself is on screen.</summary>
+		private bool twoFactorPromptOpen;
+
+		/// <summary>
 		/// Resolves and caches visual elements and wires up button callbacks.
 		/// </summary>
 		public override void OnStarting()
@@ -349,6 +369,8 @@ namespace FishMMO.Client
 			{
 				// Read before SetSignInLocked below, which clears isAuthFlowActive.
 				bool droppedWithoutExplanation = isAuthFlowActive && !authResultSeen;
+				bool twoFactorStepCut = isAuthFlowActive && twoFactorStepActive;
+				twoFactorStepActive = false;
 
 				if (handshakeMessage != null)
 				{
@@ -363,6 +385,10 @@ namespace FishMMO.Client
 				if (droppedWithoutExplanation)
 				{
 					ShowUnexplainedDisconnect();
+				}
+				else if (twoFactorStepCut)
+				{
+					ShowTwoFactorStepEnded();
 				}
 			}
 		}
@@ -387,6 +413,52 @@ namespace FishMMO.Client
 			 * is raised on a path that has already disconnected — there is no second chance to
 			 * say it. See LoginNotice. */
 			LoginNotice.Show(message);
+		}
+
+		/// <summary>
+		/// Closes the two-factor prompt after its connection closed, and says why.
+		/// </summary>
+		/// <remarks>
+		/// The prompt used to stay up. A code typed into it went nowhere — the session keys went
+		/// with the connection — and thirty seconds later the reply watchdog reported that the
+		/// server had not responded, which sent the player looking for a network fault. The login
+		/// server now says when it stops waiting (<see cref="OnTwoFactorExpired"/>), so a close with
+		/// no answer during this step is the connection dropping, or a server older than that answer;
+		/// the message says so without claiming more.
+		/// </remarks>
+		private void ShowTwoFactorStepEnded()
+		{
+			CloseTwoFactorPrompt();
+
+			Show();
+			if (handshakeMessage != null)
+			{
+				handshakeMessage.text = "Sign-in ended at the two-factor step.";
+			}
+
+			LoginNotice.Show("Your sign-in ended before a two-factor code was accepted: " +
+				"the connection to the login server closed.\n\n" +
+				"Please check your connection and sign in again.");
+		}
+
+		/// <summary>
+		/// Takes the two-factor code prompt off the screen if it is up.
+		/// </summary>
+		/// <remarks>
+		/// Hide() on an armed dialog resolves it down its cancel path; that callback disconnects,
+		/// unlocks sign-in and shows this panel, all of which is harmless when the step has already
+		/// ended. It must run before a notice is raised: the shared dialog refuses an Open while
+		/// another question is on screen (see LoginNotice).
+		/// </remarks>
+		private void CloseTwoFactorPrompt()
+		{
+			if (twoFactorPromptOpen &&
+				UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox inputBox) &&
+				inputBox.Visible)
+			{
+				inputBox.Hide();
+			}
+			twoFactorPromptOpen = false;
 		}
 
 		/// <summary>
@@ -416,6 +488,12 @@ namespace FishMMO.Client
 
 			// The server answered, so whatever happens next has an explanation of its own.
 			authResultSeen = true;
+
+			// Every other answer ends the two-factor step with a message of its own.
+			if (result != ClientAuthenticationResult.TwoFactorRequired && result != ClientAuthenticationResult.TwoFactorInvalid)
+			{
+				twoFactorStepActive = false;
+			}
 
 			switch (result)
 			{
@@ -455,6 +533,9 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.TwoFactorInvalid:
 					OnTwoFactorInvalid();
 					break;
+				case ClientAuthenticationResult.TwoFactorExpired:
+					OnTwoFactorExpired(Client.LoginAuthenticator.LastResultAnsweredTwoFactorCode);
+					break;
 				case ClientAuthenticationResult.LoginSuccess:
 					OnLoginSuccess();
 					break;
@@ -490,6 +571,37 @@ namespace FishMMO.Client
 				case ClientAuthenticationResult.AccountDetailsInvalid:
 					break;
 			}
+		}
+
+		/// <summary>
+		/// Handles TwoFactorExpired: the login server has ended the two-factor step and is closing the
+		/// connection. Takes the prompt down, says which ending it was, and returns to the sign-in form.
+		/// </summary>
+		/// <remarks>
+		/// Both endings used to be a connection closing with nothing said, and the panel could only
+		/// guess between them and a dropped network. The server sends TwoFactorExpired for both; the
+		/// authenticator says whether it answered a code this client sent. The window can only run out
+		/// while no code is being checked, so an answer to a code means the attempts ran out, and an
+		/// unasked one means the time did. (A code sent in the window's last instant can cross the
+		/// expiry on the wire and read as the attempts; the advice is the same.) Neither names a number
+		/// the server may be configured differently for.
+		/// </remarks>
+		/// <param name="answeredCode">Whether the result answered a code this client sent.</param>
+		private void OnTwoFactorExpired(bool answeredCode)
+		{
+			CloseTwoFactorPrompt();
+			OnLoginAuthenticationDialog(DescribeTwoFactorExpiry(answeredCode));
+		}
+
+		/// <summary>The message for a two-factor step the login server ended. See <see cref="OnTwoFactorExpired"/>.</summary>
+		/// <param name="answeredCode">Whether the ending answered a code this client sent.</param>
+		private static string DescribeTwoFactorExpiry(bool answeredCode)
+		{
+			return answeredCode
+				? "That code was not accepted, and this sign-in has used all of its attempts.\n\n" +
+					"Please sign in again to get a new code prompt."
+				: "No two-factor code was entered in time, so this sign-in has ended.\n\n" +
+					"Please sign in again when you have your authenticator app or recovery codes to hand.";
 		}
 
 		/// <summary>
@@ -682,6 +794,7 @@ namespace FishMMO.Client
 		private void OnTwoFactorRequired()
 		{
 			SetSignInLocked(true);
+			twoFactorStepActive = true;
 			Hide();
 			OpenTotpDialog("Enter the 6-digit code from your authenticator app, or one of your recovery codes.");
 		}
@@ -710,11 +823,12 @@ namespace FishMMO.Client
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{
 				// Six digits submit themselves; a recovery code still takes Enter.
-				uiDialogInputBox.OpenCode(
+				twoFactorPromptOpen = uiDialogInputBox.OpenCode(
 					message,
 					TotpCodeLength,
 					(code) =>
 					{
+						twoFactorPromptOpen = false;
 						if (!string.IsNullOrWhiteSpace(code))
 						{
 							Client.LoginAuthenticator.SendTotpCode(code.Trim());
@@ -725,6 +839,9 @@ namespace FishMMO.Client
 					},
 					() =>
 					{
+						// Leaving the prompt is the player's own choice and needs no notice.
+						twoFactorPromptOpen = false;
+						twoFactorStepActive = false;
 						pendingVerifyUsername = null;
 						Client.ForceDisconnect();
 						SetSignInLocked(false);
@@ -1273,6 +1390,10 @@ namespace FishMMO.Client
 			"UICharacterCreate",
 			"UILoadingScreen",
 			"UIReconnectDisplay",
+			// Both queues' "wait ended" states sit on a stopped connection by design: the world
+			// queue's choice to queue again or go back, and the login queue's explanation, shown
+			// after QuitToLogin has torn the session down.
+			UITKWorldQueueDisplay.PanelName,
 			"UIDialogBox",
 			"UIDialogInputBox",
 			"UIOptions",

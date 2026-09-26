@@ -14,6 +14,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// </remarks>
 	public interface ICharacterKnownAbilityService :
 		IPersistManyAction<CharacterKnownAbilityData>,
+		IPersistManyOwnedAction<CharacterKnownAbilityData>,
 		IDeleteByKeyVersionedAction<long>,
 		IFetchCollectionByKeyAction<long, CharacterKnownAbilityData>
 	{

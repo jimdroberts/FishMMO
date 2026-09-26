@@ -109,6 +109,21 @@ namespace FishNet.Transporting.WebTransport.WebGL
 		/// non-WebGL stub below exposes the same signature.
 		/// </summary>
 		internal static void WASMFree(IntPtr ptr) => WTFree(ptr);
+
+		/// <summary>
+		/// Copies the browser's WebTransport statistics into <paramref name="values"/> (slots
+		/// named by <see cref="TransportTrafficMath.BrowserStats"/>) and returns the mask of
+		/// slots that were present, plus the API-present and live-sample bits.
+		/// </summary>
+		/// <remarks>
+		/// <c>getStats()</c> is asynchronous, so this returns the answers already received and
+		/// asks every live session for a fresh one: the figures are at most one call old.
+		/// Cumulative slots are summed over every session this page has opened, so a server hop
+		/// does not reset them. Returns 0 on a browser without <c>getStats()</c> (Chrome ships it
+		/// only behind a flag), which leaves the QUIC layer to the estimate model.
+		/// </remarks>
+		[DllImport("__Internal")]
+		internal static extern int WTGetStats(double[] values, int count);
 	}
 #else
 	/// <summary>
@@ -166,6 +181,9 @@ namespace FishNet.Transporting.WebTransport.WebGL
 
 		/// <summary>Stub — no-op on non-WebGL platforms.</summary>
 		internal static void WASMFree(IntPtr ptr) { /* no-op */ }
+
+		/// <summary>Stub — no browser statistics outside WebGL; the native counters are used instead.</summary>
+		internal static int WTGetStats(double[] values, int count) => 0;
 	}
 #endif
 }

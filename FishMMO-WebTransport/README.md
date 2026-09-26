@@ -168,8 +168,8 @@ match:
 
 | Side | Constant | File |
 |---|---|---|
-| Native | `WT_ABI_VERSION` = **3** | `src/webtransport_api.h` |
-| Managed | `WebTransportNative.ExpectedAbiVersion` = **3** | `../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Native/WebTransportNative.cs` |
+| Native | `WT_ABI_VERSION` = **4** | `src/webtransport_api.h` |
+| Managed | `WebTransportNative.ExpectedAbiVersion` = **4** | `../FishMMO-Unity/Assets/Plugins/FishNet/Plugins/WebTransport/Native/WebTransportNative.cs` |
 
 `WebTransportNative.EnsureInitialized` calls `wt_abi_version()` — safe before
 `wt_init()`, it touches no msquic state — and refuses to continue on a mismatch,
@@ -186,6 +186,7 @@ mismatch.
 | 1 | original surface up to `wt_server_set_allow_native_clients` |
 | 2 | `+ wt_server_set_limits` (2026-09-07) |
 | 3 | `+ wt_abi_version`, `wt_tls_provider`, `WT_ERR_TLS_BACKEND` (2026-09-09) |
+| 4 | `+ wt_get_global_counters`, `wt_client_get_connection_stats` (2026-09-25) |
 
 ## API
 
@@ -206,6 +207,8 @@ See [src/webtransport_api.h](src/webtransport_api.h) for the complete C API surf
 | `wt_error_string()` / `wt_version()` | Human-readable error message / library version string |
 | `wt_abi_version()` | `WT_ABI_VERSION` of the loaded binary — callable before `wt_init()` |
 | `wt_tls_provider()` | `"openssl"`, `"schannel"`, or `"unknown"` before `wt_init()` |
+| `wt_get_global_counters()` | msquic's process-wide counters (`QUIC_PARAM_GLOBAL_PERF_COUNTERS`) into the versioned `wt_global_counters_t`: UDP datagrams and payload bytes each way, msquic app bytes, connections created/active/connected, handshake failures, refusals (limits, load, ALPN), protocol errors, lost/dropped/undecryptable packets, stateless retries and resets. Never blocks; any thread |
+| `wt_client_get_connection_stats()` | the client connection's `QUIC_STATISTICS_V2` into the versioned `wt_connection_stats_t`: RTT (smoothed/min/max/variance), path MTU, congestion window, packets and bytes each way, suspected and spurious losses. **Blocks** until the connection's worker answers — call from the polling thread, at most about once a second. The handle stays open until an in-flight read returns, so a read racing `SHUTDOWN_COMPLETE` is safe |
 
 All functions return `WT_OK` (0) on success or a negative error code, from
 `WT_ERR_UNKNOWN` (-1) to `WT_ERR_TLS_BACKEND` (-8); `wt_error_string()` names
@@ -251,12 +254,19 @@ cmake -B build -DWT_STATIC_MSQUIC=ON -DWT_BUILD_TESTS=ON && cmake --build build
 
 bash tests/run_startup_e2e.sh build   # ABI, TLS provider, certificate-vs-backend failure; no certificates needed
 bash tests/run_limits_e2e.sh build    # the limits above on loopback: bucket, kick, both caps, a paced sender
+bash tests/run_stats_e2e.sh build     # statistics exports: counters move with traffic, struct contract, reads racing shutdown
+bash tests/run_race_e2e.sh build      # connection teardown vs application-thread calls: churn, parked first bytes, rescue
 bash tests/check_abi_version.sh       # native WT_ABI_VERSION == C# ExpectedAbiVersion
+
+bash tests/build_asan.sh              # AddressSanitizer build of the library + tests into build_asan/
+bash tests/run_race_e2e.sh build_asan # any e2e script takes it; a lost race is a report, not a flake
 ```
 
-`run_limits_e2e.sh` mints a throwaway CA and a `localhost` leaf in a temp
-directory and hands it to the test through `SSL_CERT_FILE`, because the native
-client validates TLS strictly.
+`run_limits_e2e.sh`, `run_stats_e2e.sh` and `run_race_e2e.sh` mint a throwaway CA and a `localhost`
+leaf in a temp directory and hand it to the test through `SSL_CERT_FILE`, because the native
+client validates TLS strictly. `build_asan.sh` compiles outside CMake on purpose: the CMake
+target writes the library into the Unity plugin folder, which an instrumented build must not
+overwrite.
 
 ## Platform Support
 
@@ -321,7 +331,7 @@ FishMMO-WebTransport/
 ├── rebuild_only.bat            cmd.exe wrapper for rebuild_only.ps1
 ├── README.md
 ├── src/                        C++ source (7 .cpp + 8 .h)
-└── tests/                      wt_limits_e2e, wt_startup_e2e, check_abi_version.sh (-DWT_BUILD_TESTS=ON)
+└── tests/                      wt_*_e2e tests, build_asan.sh, check_abi_version.sh (-DWT_BUILD_TESTS=ON)
 ```
 
 ### Generated, not tracked

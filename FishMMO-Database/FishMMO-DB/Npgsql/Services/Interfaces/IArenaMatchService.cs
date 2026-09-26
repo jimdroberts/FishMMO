@@ -65,15 +65,26 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<IReadOnlyList<long>>> FetchCharactersInLiveMatchesAsync(IReadOnlyList<long> characterIds, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Cancels matches that had not ended by <paramref name="createdBeforeUtc"/> and whose
+		/// Cancels matches older than <paramref name="olderThan"/> that have not ended and whose
 		/// instance no longer exists.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// A match whose instance failed to load, or whose hosting server died at any point, would
 		/// otherwise hold every seat's character out of both finders forever. Called from every
 		/// scene server's stale sweep, so it does not depend on the server that lost the match.
+		/// </para>
+		/// <para>
+		/// Aged by the database's clock, which also stamped the match's creation: the sweeping
+		/// server is rarely the one that formed the match. Served by the partial index on unfinished
+		/// matches, so a sweep reads the handful of matches still open, not the whole history.
+		/// </para>
 		/// </remarks>
-		Task<DatabaseResult<int>> CancelAbandonedAsync(DateTime createdBeforeUtc, int maxRows = 64, CancellationToken cancellationToken = default);
+		/// <param name="olderThan">How long a match must have existed before it can be judged abandoned.</param>
+		/// <param name="maxRows">Upper bound on matches cancelled in one call.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>Matches cancelled.</returns>
+		Task<DatabaseResult<int>> CancelAbandonedAsync(TimeSpan olderThan, int maxRows = 64, CancellationToken cancellationToken = default);
 
 		/// <summary>A character's most recent matches, newest first, each with their own seat.</summary>
 		Task<DatabaseResult<IReadOnlyList<ArenaHistoryData>>> FetchRecentForCharacterAsync(long characterId, int limit, CancellationToken cancellationToken = default);
@@ -96,8 +107,17 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <returns>True when the seat was vacated, the team had room, and the seat is theirs again.</returns>
 		Task<DatabaseResult<bool>> ReseatAsync(long matchId, long characterId, CancellationToken cancellationToken = default);
 
-		/// <summary>Opens (or closes, with null) the window during which vacated seats may be backfilled.</summary>
-		Task<DatabaseResult<bool>> SetBackfillWindowAsync(long matchId, DateTime? untilUtc, CancellationToken cancellationToken = default);
+		/// <summary>
+		/// Opens, for <paramref name="window"/> from now, the window during which vacated seats may
+		/// be backfilled; or closes it, with null.
+		/// </summary>
+		/// <remarks>
+		/// The end is stamped by the database's clock because it is read by the backfill
+		/// transactions of every other scene server, which compare it with the database's clock; a
+		/// moment computed by the hosting server would shift the window by the difference between
+		/// the two machines' clocks.
+		/// </remarks>
+		Task<DatabaseResult<bool>> SetBackfillWindowAsync(long matchId, TimeSpan? window, CancellationToken cancellationToken = default);
 
 		/// <summary>Writes the rating change each seat earned in a ranked match.</summary>
 		Task<DatabaseResult<int>> UpdateMemberRatingDeltasAsync(long matchId, IReadOnlyList<(long characterId, int ratingDelta)> deltas, CancellationToken cancellationToken = default);

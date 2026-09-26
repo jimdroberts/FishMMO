@@ -16,9 +16,30 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		ICountByKeyAction<long>,
 		IPersistAction<CharacterAbilityData, long>,
 		IPersistManyAction<CharacterAbilityData>,
+		IPersistManyOwnedAction<CharacterAbilityData>,
 		IDeleteByKeyVersionedAction<long>,
 		IFetchCollectionByKeyAction<long, CharacterAbilityData>
 	{
+		/// <summary>
+		/// Persists one ability row, and returns its identity, only while the writer still holds the
+		/// character's session claim.
+		/// </summary>
+		/// <remarks>
+		/// The single-row sibling of <see cref="IPersistManyOwnedAction{TItem}.PersistOwnedAsync"/>,
+		/// for a grant made while the character is resident: the claim is captured with the request
+		/// and checked, under the character's share lock, in the write's own transaction — see
+		/// <c>CharacterWriteGate</c>. The ungated <see cref="IPersistAction{T, TKey}.PersistAsync"/>
+		/// remains for writers that hold no claim by design.
+		/// </remarks>
+		/// <param name="abilityData">The row.</param>
+		/// <param name="claim">The claim the write was captured under. Must name the row's character.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// The row's identity. Fails with <see cref="DatabaseErrorCodes.Forbidden"/> when the claim is
+		/// no longer held, and with <see cref="DatabaseErrorCodes.NotFound"/> when the character is gone.
+		/// </returns>
+		Task<DatabaseResult<long>> PersistOwnedAsync(CharacterAbilityData abilityData, CharacterSessionLeaseData claim, CancellationToken cancellationToken = default);
+
 		/// <summary>
 		/// Deletes a single ability record for a character if <paramref name="incomingVersion"/> is newer.
 		/// </summary>
@@ -53,5 +74,34 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="incomingVersion">The authoritative, monotonic version for this delete. The row is removed when its own version is at or below this.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		Task<DatabaseResult> DeleteAbilityAsync(long characterId, long abilityId, long incomingVersion, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// <see cref="DeleteAbilityAsync"/>, admitted only while the writer still holds the
+		/// character's session claim.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The forget a resident character asks for. The claim is checked, under the character's
+		/// share lock, in the delete's own transaction — see <c>CharacterWriteGate</c>.
+		/// </para>
+		/// <para>
+		/// <paramref name="admitReleased"/> is for a delete that UNDOES a row the same writer wrote
+		/// under <paramref name="claim"/> (the grant's revoke): it is then also admitted while the
+		/// character holds no claim at all, released and not yet claimed again, because the
+		/// character may have left before the revoke could run and nobody has the row loaded. It is
+		/// still refused once another session holds the character.
+		/// </para>
+		/// </remarks>
+		/// <param name="characterId">The character that owns the ability.</param>
+		/// <param name="abilityId">The row identity, never the template id.</param>
+		/// <param name="incomingVersion">The version ceiling; the row is removed when its own version is at or below this.</param>
+		/// <param name="claim">The claim the delete was captured under. Must name <paramref name="characterId"/>.</param>
+		/// <param name="admitReleased">Also admit an unclaimed character. Only for undoing the writer's own row.</param>
+		/// <param name="cancellationToken">Token to cancel the operation.</param>
+		/// <returns>
+		/// Success when the row is gone. Fails with <see cref="DatabaseErrorCodes.Forbidden"/> when the
+		/// claim is not held (see <paramref name="admitReleased"/>).
+		/// </returns>
+		Task<DatabaseResult> DeleteAbilityOwnedAsync(long characterId, long abilityId, long incomingVersion, CharacterSessionLeaseData claim, bool admitReleased = false, CancellationToken cancellationToken = default);
 	}
 }

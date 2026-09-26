@@ -16,9 +16,14 @@ namespace FishMMO.Server.Core.World.SceneServer
 
 		/// <summary>
 		/// Per-connection channel switch cooldown tracker.
-		/// Maps client connection ID to the UTC time of their last channel switch.
+		/// Maps client connection ID to when it last attempted a channel switch, in seconds on
+		/// <see cref="MonotonicClock"/>.
 		/// </summary>
-		Dictionary<int, DateTime> ChannelSwitchCooldownByClientId { get; }
+		/// <remarks>
+		/// A duration's start, so not a wall-clock instant: a host clock stepped back would hold
+		/// every entry inside its cooldown until the clock caught up.
+		/// </remarks>
+		Dictionary<int, double> ChannelSwitchCooldownByClientId { get; }
 
 		/// <summary>
 		/// Time remaining (in seconds) until the next cooldown dictionary cleanup sweep.

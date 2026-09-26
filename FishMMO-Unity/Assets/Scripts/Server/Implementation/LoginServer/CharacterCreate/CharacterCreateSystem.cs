@@ -1088,8 +1088,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			// Debounce — reject if cooldown hasn't elapsed since the last completed request.
-			DateTime nowUtc = DateTime.UtcNow;
-			if (runtimeData.NextAllowedCreateUtcByClientId.TryGetValue(conn.ClientId, out DateTime nextAllowed) && nowUtc < nextAllowed)
+			double now = MonotonicClock.NowSeconds;
+			if (runtimeData.NextAllowedCreateSecondsByClientId.TryGetValue(conn.ClientId, out double nextAllowed) && now < nextAllowed)
 			{
 				return false;
 			}
@@ -1107,7 +1107,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedCreateUtcByClientId[conn.ClientId] = DateTime.UtcNow.AddMilliseconds(createRequestCooldownMilliseconds);
+				runtimeData.NextAllowedCreateSecondsByClientId[conn.ClientId] = MonotonicClock.NowSeconds + createRequestCooldownMilliseconds / 1000.0;
 			}
 		}
 
@@ -1119,7 +1119,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 			if (Server.DataContainerRegistry.TryGet<CharacterCreateSystemRuntimeData>(out var runtimeData))
 			{
 				runtimeData.InFlightRequests.TryRemove(conn.ClientId, out _);
-				runtimeData.NextAllowedCreateUtcByClientId.TryRemove(conn.ClientId, out _);
+				runtimeData.NextAllowedCreateSecondsByClientId.TryRemove(conn.ClientId, out _);
 			}
 		}
 

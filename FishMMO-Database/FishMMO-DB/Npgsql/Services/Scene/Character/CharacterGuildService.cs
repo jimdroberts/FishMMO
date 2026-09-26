@@ -385,21 +385,87 @@ namespace FishMMO.Database.Npgsql.Services
 			var result = await ExecuteReadAsync(async dbContext =>
 			{
 				var entities = await getGuildMembersQuery(dbContext, guildId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
-				var members = entities.Select(g => new CharacterGuildData(
-					id: g.ID,
-					version: g.Version,
-					characterID: g.CharacterID,
-					guildID: g.GuildID,
-					rank: g.Rank,
-					location: g.Location,
-					raceID: g.RaceID,
-					lastOnlineUtc: g.LastSaved,
-					publicNote: g.PublicNote,
-					officerNote: g.OfficerNote)).ToList();
+				var members = entities.Select(ToData).ToList();
 
 				return (IReadOnlyList<CharacterGuildData>)members;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterGuildData>>>> FetchManyAsync(long[] guildIds, CancellationToken cancellationToken = default)
+		{
+			long[] ids = guildIds == null ? Array.Empty<long>() : guildIds.Where(id => id > 0).Distinct().ToArray();
+			if (ids.Length == 0)
+			{
+				return DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<CharacterGuildData>>>.Success(
+					new Dictionary<long, IReadOnlyList<CharacterGuildData>>());
+			}
+
+			return await ExecuteReadAsync(async dbContext =>
+			{
+				/* The same projection as the single-guild compiled query, over guild_id = ANY(@ids).
+				 * The character join rides along exactly as it does there, so a bulk roster row and a
+				 * single-guild one cannot disagree about race or last-seen. */
+				var rows = await dbContext.CharacterGuilds
+					.AsNoTracking()
+					.Where(g => ids.Contains(g.GuildID))
+					.Select(g => new GuildMemberProjection
+					{
+						ID = g.ID,
+						Version = g.Version,
+						CharacterID = g.CharacterID,
+						GuildID = g.GuildID,
+						Rank = g.Rank,
+						Location = g.Location,
+						RaceID = g.Character.RaceID,
+						LastSaved = g.Character.LastSaved,
+						PublicNote = g.PublicNote,
+						OfficerNote = g.OfficerNote,
+					})
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+
+				// Every requested guild is present, so "read and empty" is distinguishable from "not read".
+				var grouped = new Dictionary<long, List<CharacterGuildData>>(ids.Length);
+				for (int i = 0; i < ids.Length; ++i)
+				{
+					grouped[ids[i]] = new List<CharacterGuildData>();
+				}
+				for (int i = 0; i < rows.Count; ++i)
+				{
+					if (grouped.TryGetValue(rows[i].GuildID, out List<CharacterGuildData> members))
+					{
+						members.Add(ToData(rows[i]));
+					}
+				}
+
+				var result = new Dictionary<long, IReadOnlyList<CharacterGuildData>>(grouped.Count);
+				foreach (KeyValuePair<long, List<CharacterGuildData>> entry in grouped)
+				{
+					result[entry.Key] = entry.Value;
+				}
+				return (IReadOnlyDictionary<long, IReadOnlyList<CharacterGuildData>>)result;
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Projects one roster row onto its data transfer shape. Shared by the single-guild and
+		/// bulk reads so the two cannot map a column differently.
+		/// </summary>
+		private static CharacterGuildData ToData(GuildMemberProjection g)
+		{
+			return new CharacterGuildData(
+				id: g.ID,
+				version: g.Version,
+				characterID: g.CharacterID,
+				guildID: g.GuildID,
+				rank: g.Rank,
+				location: g.Location,
+				raceID: g.RaceID,
+				lastOnlineUtc: g.LastSaved,
+				publicNote: g.PublicNote,
+				officerNote: g.OfficerNote);
 		}
 
 		/// <inheritdoc/>

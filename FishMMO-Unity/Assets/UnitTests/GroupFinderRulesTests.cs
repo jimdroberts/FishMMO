@@ -156,6 +156,28 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(GroupFinderRules.MatchedTransferAction.GiveUp, GroupFinderRules.ResolveMatchedTransfer(false, 60.0, 60.0));
 		}
 
+		// ── Honouring a match ───────────────────────────────────────────────
+
+		[Test]
+		public void MatchHonoured_StillInTheMatchedParty()
+		{
+			Assert.IsTrue(GroupFinderRules.IsMatchHonoured(matchedPartyID: 42, memberPartyID: 42));
+		}
+
+		[Test]
+		public void MatchHonoured_NotInThePartyOrInAnother_IsNot()
+		{
+			Assert.IsFalse(GroupFinderRules.IsMatchHonoured(matchedPartyID: 42, memberPartyID: 0), "dropped from the group, or a late-join the party refused");
+			Assert.IsFalse(GroupFinderRules.IsMatchHonoured(matchedPartyID: 42, memberPartyID: 7), "moving them would put a stranger in somebody else's run");
+		}
+
+		[Test]
+		public void MatchHonoured_NoParty_NothingToCheck()
+		{
+			Assert.IsTrue(GroupFinderRules.IsMatchHonoured(matchedPartyID: 0, memberPartyID: 0), "an arena seat forms no party");
+			Assert.IsTrue(GroupFinderRules.IsMatchHonoured(matchedPartyID: 0, memberPartyID: 7), "an arena waiter may be in a party of their own");
+		}
+
 		// ── Rules summary ───────────────────────────────────────────────────
 
 		[Test]

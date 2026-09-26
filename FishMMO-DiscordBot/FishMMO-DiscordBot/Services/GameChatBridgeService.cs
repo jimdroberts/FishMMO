@@ -1,11 +1,10 @@
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
-using FishMMO.Database.Npgsql;
-using FishMMO.Database.Npgsql.Entities;
+using FishMMO.Database;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Shared;
 
 namespace FishMMO.DiscordBot.Services
@@ -16,18 +15,13 @@ namespace FishMMO.DiscordBot.Services
 	/// </summary>
 	public class GameChatBridgeService
 	{
-		private readonly IServiceProvider serviceProvider;
+		private readonly IChatService chatService;
 		private readonly DynamicChannelManagerService dynamicChannelManager;
 		private readonly RateLimiterService rateLimiter;
 		private readonly BridgeBanService bridgeBanService;
 		private readonly AccountLinkingService accountLinkingService;
 		private readonly ILogger<GameChatBridgeService> logger;
 		private readonly int maxMessageLength;
-
-		/// <summary>
-		/// Byte value for the Discord chat channel type stored in the game database.
-		/// </summary>
-		private const byte DiscordChatChannelType = (byte)ChatChannel.Discord;
 
 		/// <summary>
 		/// Default cap on a bridged message body, matching <c>ChatBroadcast.MaxTextLength</c>.
@@ -46,13 +40,13 @@ namespace FishMMO.DiscordBot.Services
 		/// <summary>
 		/// Initializes a new instance of the <see cref="GameChatBridgeService"/> class.
 		/// </summary>
-		/// <param name="serviceProvider">Service provider for creating scoped database contexts.</param>
+		/// <param name="chatService">Chat persistence, shared with the scene servers so bridged rows are stamped by the same clock.</param>
 		/// <param name="dynamicChannelManager">Service managing dynamic Discord channels.</param>
 		/// <param name="rateLimiter">Per-user rate limiter.</param>
 		/// <param name="logger">Logger instance.</param>
 		/// <param name="configuration">Application configuration.</param>
 		public GameChatBridgeService(
-			IServiceProvider serviceProvider,
+			IChatService chatService,
 			DynamicChannelManagerService dynamicChannelManager,
 			RateLimiterService rateLimiter,
 			BridgeBanService bridgeBanService,
@@ -60,7 +54,7 @@ namespace FishMMO.DiscordBot.Services
 			ILogger<GameChatBridgeService> logger,
 			IConfiguration configuration)
 		{
-			this.serviceProvider = serviceProvider;
+			this.chatService = chatService;
 			this.dynamicChannelManager = dynamicChannelManager;
 			this.rateLimiter = rateLimiter;
 			this.bridgeBanService = bridgeBanService;
@@ -169,24 +163,26 @@ namespace FishMMO.DiscordBot.Services
 
 			try
 			{
-				using var scope = serviceProvider.CreateScope();
-				var dbContext = scope.ServiceProvider.GetRequiredService<NpgsqlDbContext>();
-
-				var chatEntity = new ChatEntity
+				/* Through the scene servers' own INSERT, not an entity of the bot's making.
+				 *
+				 * This wrote the row with time_created taken from THIS host's clock, and every scene
+				 * server's chat pump pages the table by that column. A bot host whose clock ran
+				 * behind the database stamped rows the pumps had already passed, and the line never
+				 * reached the game (hot-path audit H5). ChatService stamps every row with the
+				 * database clock, whoever writes it. */
+				DatabaseResult written = await chatService.PersistBridgedAsync(
+					worldId.Value,
+					sceneId.Value,
+					authorName,
+					$"{authorName} {content}",
+					DateTime.UtcNow);
+				if (!written.IsSuccess)
 				{
-					CharacterID = 0L,
-					CharacterName = authorName,
-					AccountName = "Discord",
-					WorldServerID = worldId.Value,
-					SceneServerID = sceneId.Value,
-					ServerReceivedTime = DateTime.UtcNow,
-					TimeCreated = DateTime.UtcNow,
-					Channel = DiscordChatChannelType,
-					Message = $"{authorName} {content}"
-				};
-
-				await dbContext.Chat.AddAsync(chatEntity);
-				await dbContext.SaveChangesAsync();
+					logger.LogError(
+						"Failed to bridge Discord message from {User} in channel {Channel}: [{ErrorCode}] {ErrorMessage}",
+						message.Author.Username, textChannel.Name, written.ErrorCode, written.ErrorMessage);
+					return BridgeResult.Error;
+				}
 
 				dynamicChannelManager.UpdateChannelActivity(textChannel.Guild.Id, worldId.Value, sceneId.Value);
 

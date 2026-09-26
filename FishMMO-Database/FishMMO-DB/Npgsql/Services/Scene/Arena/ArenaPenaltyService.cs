@@ -34,24 +34,25 @@ namespace FishMMO.Database.Npgsql.Services
 				return DatabaseResult<IReadOnlyList<ArenaPenaltyData>>.Success(Array.Empty<ArenaPenaltyData>());
 			}
 
-			var now = DateTime.UtcNow;
-
+			// Locks are stamped and compared on the database clock only, so hosts whose clocks disagree
+			// see the same lock for the same length.
 			var result = await ExecuteReadAsync<IReadOnlyList<ArenaPenaltyData>>(async dbContext =>
 			{
+				DateTime now = await ReadDatabaseUtcNowAsync(dbContext, cancellationToken).ConfigureAwait(false);
 				var rows = await dbContext.ArenaPenalties
 					.FromSqlRaw($@"SELECT * FROM {TableName} WHERE character_id = ANY({{0}}) AND locked_until_utc > {{1}}", ids, now)
 					.AsNoTracking()
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				return rows.Select(e => new ArenaPenaltyData(e.CharacterID, e.LockedUntilUtc, e.Reason)).ToList();
+				return rows.Select(e => new ArenaPenaltyData(e.CharacterID, e.LockedUntilUtc, (e.LockedUntilUtc - now).TotalSeconds, e.Reason)).ToList();
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 
 			return result;
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<bool>> SetAsync(long characterId, DateTime lockedUntilUtc, string reason, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<bool>> SetAsync(long characterId, TimeSpan lockDuration, string reason, CancellationToken cancellationToken = default)
 		{
 			if (characterId <= 0)
 			{
@@ -64,18 +65,23 @@ namespace FishMMO.Database.Npgsql.Services
 				reason = reason.Substring(0, 128);
 			}
 
-			var now = DateTime.UtcNow;
+			if (lockDuration <= TimeSpan.Zero)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Lock duration must be positive.");
+			}
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				// The lock ends a duration after the database's now, never at a host-clock instant: a
+				// host running fast or slow would otherwise lengthen or shorten every lock it wrote.
 				// The later of the two locks stands, so a second desertion cannot shorten the first.
 				var sql = $@"INSERT INTO {TableName} (character_id, locked_until_utc, reason, time_created)
-					VALUES ({{0}}, {{1}}, {{2}}, {{3}})
+					VALUES ({{0}}, {DatabaseUtcClockSql} + {{1}} * interval '1 second', {{2}}, {DatabaseUtcClockSql})
 					ON CONFLICT (character_id) DO UPDATE
 					SET locked_until_utc = GREATEST({TableName}.locked_until_utc, EXCLUDED.locked_until_utc),
 						reason = EXCLUDED.reason";
 
-				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { characterId, lockedUntilUtc, reason, now }, cancellationToken).ConfigureAwait(false);
+				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { characterId, lockDuration.TotalSeconds, reason }, cancellationToken).ConfigureAwait(false);
 				return true;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 

@@ -153,6 +153,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Whether an announced membership is a join: a guild the client did not already hold.
+		/// </summary>
+		/// <param name="heldGuildID">The guild the client holds now, or 0.</param>
+		/// <param name="announcedGuildID">The guild the server's join notice names.</param>
+		/// <returns>True when the notice moves the client into a guild it was not in.</returns>
+		/// <remarks>
+		/// Applied to the server's JOIN NOTICE only — the single <see cref="GuildAddBroadcast"/> the
+		/// create and join paths send — and never to a roster. See
+		/// <see cref="OnClientGuildAddMultipleBroadcastReceived"/> for why a roster cannot answer.
+		/// </remarks>
+		public static bool IsNewMembership(long heldGuildID, long announcedGuildID)
+		{
+			return announcedGuildID > 0 && heldGuildID != announcedGuildID;
+		}
+
+		/// <summary>
 		/// Clears every cached component of the character's guild standing.
 		/// </summary>
 		/// <remarks>
@@ -274,6 +290,7 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildRosterDeltaBroadcast>(OnClientGuildRosterDeltaBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 				ClientManager.RegisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
@@ -304,6 +321,7 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildRosterDeltaBroadcast>(OnClientGuildRosterDeltaBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
 				ClientManager.UnregisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
@@ -327,13 +345,31 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// When we add a new guild member to the guild.
+		/// The server's notice that we founded or joined a guild: our own row, alone.
 		/// </summary>
+		/// <remarks>
+		/// Sent only by the create and join paths, so this is the one message that announces a
+		/// join, and the join triggers fire from here — once, and only when the notice names a
+		/// guild we were not already in (<see cref="IsNewMembership"/>).
+		/// </remarks>
 		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg, Channel channel)
+		{
+			ApplyRosterRow(msg, isJoinNotice: true);
+		}
+
+		/// <summary>
+		/// Adopts one roster row: ours updates our own standing, and every row reaches the panel.
+		/// </summary>
+		/// <param name="msg">The row, with its guild.</param>
+		/// <param name="isJoinNotice">True for the server's join notice; false for a row of a roster.</param>
+		private void ApplyRosterRow(GuildAddBroadcast msg, bool isJoinNotice)
 		{
 			// if this is our own id
 			if (PlayerCharacter != null && msg.Member.CharacterID == Character.ID)
 			{
+				// Decided before the ID is overwritten: a join is a guild we did not already hold.
+				bool joined = isJoinNotice && IsNewMembership(ID, msg.GuildID);
+
 				ID = msg.GuildID;
 
 				/* The ladder position, stored as sent. It used to be cast to a GuildRank enum
@@ -344,7 +380,11 @@ namespace FishMMO.Shared
 				RankOrder = msg.Member.RankOrder;
 
 				IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
-				Character.Invoke(onGuildJoinTriggers, new GuildEventData(Character, ID, RankOrder, Permissions));
+
+				if (joined)
+				{
+					Character.Invoke(onGuildJoinTriggers, new GuildEventData(Character, ID, RankOrder, Permissions));
+				}
 			}
 
 			// update our Guild list with the new Guild member
@@ -352,8 +392,26 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// When we need to add guild members.
+		/// A whole roster: the one sent as a character loads on a scene server, and the update
+		/// pump's full delivery.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Never a join.</b> Our own row here adopts the guild and our rank, and fires nothing.
+		/// The rows used to go through the join notice's handler, so every roster fired the join
+		/// triggers for our own row — on every login and every zone change, since each loads the
+		/// character on a new scene server and the first thing it sends is this roster.
+		/// </para>
+		/// <para>
+		/// "Not already in that guild" cannot be read from here either. The guild ID is not sent to
+		/// its owner (the SyncVar excludes the owner), so a character that has just spawned holds 0
+		/// until its first roster arrives, and every roster after a load would look like a join. A
+		/// real join is announced by its own message, <see cref="OnClientGuildAddBroadcastReceived"/>.
+		/// The one join no notice announces is an application accepted while the applicant was
+		/// offline or on another scene server; they find the guild in this roster on their next
+		/// load, and it is presented as what it is by then — their membership, not an event.
+		/// </para>
+		/// </remarks>
 		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
 		{
 			HashSet<long> newIds = new HashSet<long>(msg.Members.Length);
@@ -369,11 +427,72 @@ namespace FishMMO.Shared
 			 * single-member add. */
 			foreach (GuildAddEntry entry in msg.Members)
 			{
-				OnClientGuildAddBroadcastReceived(new GuildAddBroadcast()
+				ApplyRosterRow(new GuildAddBroadcast()
 				{
 					GuildID = msg.GuildID,
 					Member = entry,
-				}, channel);
+				}, isJoinNotice: false);
+			}
+		}
+
+		/// <summary>
+		/// Applies the changes to our guild's roster since the last roster or delta.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Each upsert goes to the same <see cref="OnAddGuildMember"/> a full roster row does, and
+		/// every listener already treats that as add-or-update. Each removal goes to
+		/// <see cref="OnRemoveGuildMember"/>, as a kick does.
+		/// </para>
+		/// <para>
+		/// <b>Not routed through <see cref="ApplyRosterRow"/>.</b> That adopts the guild ID from our
+		/// own row, which a delta must never do — a delta is applied only to the guild we already
+		/// hold, and our row changing because we changed zone or were promoted is not a join. Here
+		/// our own row updates <see cref="RankOrder"/> and nothing else. Our own removal is never applied from a delta: leaving is announced by
+		/// <see cref="GuildLeaveBroadcast"/>, which clears the whole guild.
+		/// </para>
+		/// <para>
+		/// A delta for a guild other than the one we are in is stale — it was built before we left
+		/// or moved — and is ignored rather than written into the panel of the guild we are in.
+		/// </para>
+		/// </remarks>
+		public void OnClientGuildRosterDeltaBroadcastReceived(GuildRosterDeltaBroadcast msg, Channel channel)
+		{
+			if (PlayerCharacter == null || msg.GuildID < 1 || msg.GuildID != ID)
+			{
+				return;
+			}
+
+			if (msg.Upserts != null)
+			{
+				for (int i = 0; i < msg.Upserts.Length; ++i)
+				{
+					GuildAddEntry entry = msg.Upserts[i];
+					if (entry.CharacterID == Character.ID)
+					{
+						// Our own standing moved. The permission mask comes with GuildRankListBroadcast.
+						RankOrder = entry.RankOrder;
+					}
+
+					OnAddGuildMember?.Invoke(new GuildAddBroadcast()
+					{
+						GuildID = msg.GuildID,
+						Member = entry,
+					});
+				}
+			}
+
+			if (msg.Removals != null)
+			{
+				for (int i = 0; i < msg.Removals.Length; ++i)
+				{
+					if (msg.Removals[i] == Character.ID)
+					{
+						continue;
+					}
+
+					OnRemoveGuildMember?.Invoke(msg.Removals[i]);
+				}
 			}
 		}
 

@@ -272,10 +272,105 @@ var LibraryFishWebTransport = {
             return FishWebTransport._transports[index] || null;
         },
         _remove: function(index) {
+            var session = FishWebTransport._transports[index];
+            if (session) {
+                /* Its traffic stays in the page totals after it is gone. */
+                FishWebTransport._foldStats(session);
+            }
             delete FishWebTransport._transports[index];
             // Keep _lastErrors for one extra retrieval cycle so
             // WTGetLastErrorMessage can be called after _remove.
             // The next WTGetLastErrorMessage call cleans it up.
+        },
+
+        /* ── Traffic statistics (WTGetStats) ───────────────────────────
+         * WebTransport.getStats() is asynchronous and per session. Each
+         * WTGetStats call returns the answers already received and asks
+         * every live session for a fresh one, so what C# sees is at most one
+         * call old. Cumulative fields are summed over every session the page
+         * has opened: when a session goes away its last answer is folded into
+         * _statsCarried, so a server hop never resets the page's totals.
+         *
+         * Only fields the browser actually filled are reported (a bit per
+         * slot in the returned mask). Chrome ships getStats() only behind a
+         * flag and without byte counters; C# then estimates the QUIC layer
+         * from its own counters and labels it Estimated.
+         *
+         * Slot order is TransportTrafficMath.BrowserStats in C#. */
+        _STATS_FIELDS: ['bytesSent', 'bytesSentOverhead', 'bytesReceived',
+                        'packetsSent', 'packetsReceived', 'packetsLost'],
+        _STATS_RTT_FIELDS: ['smoothedRtt', 'minRtt', 'rttVariation'],
+        _statsCarried: [0, 0, 0, 0, 0, 0],
+        _statsCarriedMask: 0,
+        _statsApiSeen: false,
+
+        /** A usable counter: a finite, non-negative number. */
+        _statNumber: function(v) {
+            return typeof v === 'number' && isFinite(v) && v >= 0;
+        },
+
+        /** Ask one session for fresh statistics, unless a request is already out. */
+        _requestStats: function(session) {
+            if (!session || !session.wt || session._statsPending) return;
+            if (typeof session.wt.getStats !== 'function') return;
+            FishWebTransport._statsApiSeen = true;
+            session._statsPending = true;
+            var pending;
+            try {
+                pending = session.wt.getStats();
+            } catch (e) {
+                session._statsPending = false;
+                return;
+            }
+            Promise.resolve(pending).then(function(stats) {
+                session._statsPending = false;
+                if (!stats) return;
+                if (session._statsFolded) {
+                    /* The session went away while this answer was in flight:
+                     * add what it counted since the answer that was folded. */
+                    FishWebTransport._foldDelta(session, stats);
+                    return;
+                }
+                session._stats = stats;
+            }).catch(function() {
+                session._statsPending = false;
+            });
+        },
+
+        /** Move a departing session's last answer into the page totals. */
+        _foldStats: function(session) {
+            var FW = FishWebTransport;
+            var last = session._stats || null;
+            var folded = {};
+            if (last) {
+                for (var i = 0; i < FW._STATS_FIELDS.length; i++) {
+                    var v = last[FW._STATS_FIELDS[i]];
+                    if (FW._statNumber(v)) {
+                        FW._statsCarried[i] += v;
+                        FW._statsCarriedMask |= (1 << i);
+                        folded[FW._STATS_FIELDS[i]] = v;
+                    }
+                }
+            }
+            session._statsFolded = folded;
+            session._stats = null;
+        },
+
+        /** Add a late answer's growth over what was already folded. */
+        _foldDelta: function(session, stats) {
+            var FW = FishWebTransport;
+            var folded = session._statsFolded;
+            for (var i = 0; i < FW._STATS_FIELDS.length; i++) {
+                var name = FW._STATS_FIELDS[i];
+                var v = stats[name];
+                if (!FW._statNumber(v)) continue;
+                var before = FW._statNumber(folded[name]) ? folded[name] : 0;
+                if (v > before) {
+                    FW._statsCarried[i] += v - before;
+                    FW._statsCarriedMask |= (1 << i);
+                    folded[name] = v;
+                }
+            }
         },
         _add: function(session) {
             var idx = FishWebTransport._nextIndex++;
@@ -745,6 +840,63 @@ var LibraryFishWebTransport = {
     WTFree__deps: ['$FishWebTransport'],
     WTFree: function(ptr) {
         if (ptr) _free(ptr);
+    },
+
+    /** Write the page's WebTransport statistics into a C# double[]
+     *  (valuesPtr, count) and return the mask of slots present:
+     *    bit 0..5  bytesSent, bytesSentOverhead, bytesReceived,
+     *              packetsSent, packetsReceived, packetsLost
+     *              (summed over every session this page has opened)
+     *    bit 6..8  smoothedRtt, minRtt, rttVariation (ms, live session)
+     *    bit 16    the browser's WebTransport has getStats()
+     *    bit 17    a live session has answered at least once
+     *  Absent slots are written as NaN. See TransportTrafficMath.BrowserStats. */
+    WTGetStats__deps: ['$FishWebTransport'],
+    WTGetStats: function(valuesPtr, count) {
+        var FW = FishWebTransport;
+        var sums = FW._statsCarried.slice(0);
+        var mask = FW._statsCarriedMask;
+        var live = null;
+        for (var key in FW._transports) {
+            var session = FW._transports[key];
+            if (!session) continue;
+            FW._requestStats(session);
+            var stats = session._stats;
+            if (!stats) continue;
+            for (var i = 0; i < FW._STATS_FIELDS.length; i++) {
+                var v = stats[FW._STATS_FIELDS[i]];
+                if (FW._statNumber(v)) {
+                    sums[i] += v;
+                    mask |= (1 << i);
+                }
+            }
+            if (FW._isLive(session)) live = stats;
+        }
+        var out = [sums[0], sums[1], sums[2], sums[3], sums[4], sums[5], NaN, NaN, NaN];
+        for (var c = 0; c < FW._STATS_FIELDS.length; c++) {
+            if (!(mask & (1 << c))) out[c] = NaN;
+        }
+        if (live) {
+            mask |= (1 << 17);
+            for (var r = 0; r < FW._STATS_RTT_FIELDS.length; r++) {
+                var rv = live[FW._STATS_RTT_FIELDS[r]];
+                if (FW._statNumber(rv)) {
+                    out[6 + r] = rv;
+                    mask |= (1 << (6 + r));
+                }
+            }
+        }
+        if (FW._statsApiSeen) mask |= (1 << 16);
+        if (valuesPtr && count > 0) {
+            /* DataView: the managed array's data need not be 8-byte aligned
+             * for HEAPF64, and HEAPU8.buffer is current even after growth. */
+            var view = new DataView(HEAPU8.buffer);
+            var n = Math.min(count, out.length);
+            for (var j = 0; j < n; j++) {
+                view.setFloat64(valuesPtr + j * 8, out[j], true);
+            }
+        }
+        return mask;
     }
 };
 

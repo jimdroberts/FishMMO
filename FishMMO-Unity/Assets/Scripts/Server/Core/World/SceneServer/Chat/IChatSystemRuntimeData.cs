@@ -14,26 +14,18 @@ namespace FishMMO.Server.Core.World.SceneServer
 	public interface IChatSystemRuntimeData : IRuntimeDataContainer
 	{
 		/// <summary>
-		/// Timestamp of the last successful database fetch for chat messages.
-		/// </summary>
-		DateTime LastFetchTime { get; set; }
-
-		/// <summary>
-		/// Position (ID) of the last fetched chat message in the database.
-		/// </summary>
-		long LastFetchPosition { get; set; }
-
-		/// <summary>
-		/// Reusable scratch list for character broadcast iteration, avoiding per-message allocation.
+		/// Where the cross-server chat pump has got to: its trailing window, the rows it has
+		/// already handled in it, and when each relevance key became relevant here.
 		/// Only used from the main thread.
 		/// </summary>
-		List<IPlayerCharacter> CharacterBroadcastBuffer { get; }
+		ChatPumpCursor PumpCursor { get; }
 
 		/// <summary>
-		/// Reusable scratch list for connection broadcast iteration, avoiding per-message allocation.
-		/// Only used from the main thread.
+		/// Reusable recipient set for one multicast chat broadcast, so a line bound for many
+		/// players is serialised once instead of once per recipient. Filled, sent and cleared
+		/// within one call; never kept. Only used from the main thread.
 		/// </summary>
-		List<NetworkConnection> ConnectionBroadcastBuffer { get; }
+		HashSet<NetworkConnection> ConnectionBroadcastSet { get; }
 
 		/// <summary>
 		/// Atomically transitions the message pump from idle to in-flight.
@@ -155,6 +147,12 @@ namespace FishMMO.Server.Core.World.SceneServer
 		public readonly long ReceivedTicks;
 
 		/// <summary>
+		/// <see cref="MonotonicClock"/> seconds when the line was first queued. A retry keeps it, so
+		/// the persist-retry window is measured on a clock a host clock step cannot move.
+		/// </summary>
+		public readonly double QueuedAtSeconds;
+
+		/// <summary>
 		/// Initializes a new pending chat persist entry for batch DB persistence.
 		/// </summary>
 		/// <param name="characterId">The character identifier.</param>
@@ -164,9 +162,11 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="channel">The chat channel.</param>
 		/// <param name="message">The chat message content.</param>
 		/// <param name="receivedTicks">UTC timestamp in ticks when the message was received.</param>
+		/// <param name="queuedAtSeconds">When the line was first queued; NaN (the default) means now.</param>
 		public PendingChatPersist(long characterId, string characterName, string accountName,
-			long worldServerId, ChatChannel channel, string message, long receivedTicks)
+			long worldServerId, ChatChannel channel, string message, long receivedTicks, double queuedAtSeconds = double.NaN)
 		{
+			QueuedAtSeconds = double.IsNaN(queuedAtSeconds) ? MonotonicClock.NowSeconds : queuedAtSeconds;
 			CharacterId = characterId;
 			CharacterName = characterName;
 			AccountName = accountName;

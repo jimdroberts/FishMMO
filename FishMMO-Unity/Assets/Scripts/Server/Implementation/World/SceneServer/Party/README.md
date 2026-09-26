@@ -26,7 +26,7 @@ The implementation uses a split execution model:
 - **Async worker:** database reads/writes and party update marker persistence via `TryEnqueueAsyncWork`.
 - **Main-thread queue:** marshaling async completion actions back to Unity/FishNet-safe context via `IPartySystemMainThreadQueueData`.
 
-All party mutations emit a party update marker (`IPartyUpdateService.PersistAsync`) so that other scene servers can reconcile their local party lists during `FetchAndProcessPartyUpdatesAsync`. Pending invitations are tracked in a `LastSeenCacheTracker` with configurable TTL and bounded sweep. Per-connection ingress guards enforce debounce and in-flight exclusion across all seven party operations.
+All party mutations emit a party update marker (`IPartyUpdateService.PersistAsync`, stamped by the database clock) so that other scene servers can reconcile their local party lists during `FetchAndProcessPartyUpdatesAsync`; a marker the database refuses transiently is owed and retried from the periodic update. Pending invitations are tracked in a `LastSeenCacheTracker` with configurable TTL and bounded sweep. Per-connection ingress guards enforce debounce and in-flight exclusion across all seven party operations.
 
 ## Supported Platforms
 
@@ -44,11 +44,15 @@ All party mutations emit a party update marker (`IPartyUpdateService.PersistAsyn
 - Chat-based party invite commands (`/pi`, `/invite`) resolving targets by lowercase character name
 - Invitation flow with pending-invite tracking, TTL expiration, and bounded cleanup sweep
 - Accept/decline invitation with capacity checks and membership persistence
-- Party leave with automatic random leadership transfer when the leader departs
+- Party leave hands leadership on before the leaver's row is deleted, to the lowest-ID remaining member (an online one preferred while `transferLeadershipOnDisconnect` is on). `EnsurePartyLeadershipAsync` is the single place leadership is settled, and never at random: two scene servers repairing the same party must reach the same answer
 - Party deletion when the last member leaves
 - Leader-initiated member removal with rank validation
 - Leader-initiated rank transfer (promote member to leader, demote self to member) with rollback on partial failure
-- Periodic party update pump fetching database changes and broadcasting `PartyAddMultipleBroadcast` snapshots (one `PartyID` plus a `PartyAddEntry[]` of `CharacterID`, `Rank`, and a quantised `HealthPCT` byte) to local online members
+- Periodic party update pump fetching database changes and broadcasting `PartyAddMultipleBroadcast` snapshots (one `PartyID` plus a `PartyAddEntry[]` of `CharacterID`, `Rank`, and a quantised `HealthPCT` byte) to local online members, one multicast per party (`INetworkManagerWrapper.Broadcast(HashSet<NetworkConnection>, …)`, serialised once)
+- The pump's watermark follows `UpdatePumpWatermark`, the rule it shares with the guild pump: taken before the fetch is sent, less `partyUpdateClockSkewAllowanceSeconds`; an update whose roster could not be read holds the mark at its timestamp for up to the retry horizon (ten times the skew allowance, at least 60 s) and is then given up with an error; a processed-update record, kept for twice the horizon, lets updates still inside the window be skipped rather than re-read
+- Bulk reads: one `ICharacterPartyService.FetchManyAsync(long[])` roster query and one `FetchOnlineMemberIdsAsync(long[])` query per pump pass (and per leadership audit sweep), not one of each per changed party
+- Leadership repair: every party the pump reads is settled (no leader or two leaders → the lowest ID; a leader offline for `leadershipAbsenceGraceSeconds`, seen twice, is replaced when `transferLeadershipOnDisconnect` is on), a member's disconnect schedules a re-check after `leadershipRecheckDelaySeconds`, and a slow round-robin audit (`leadershipAuditIntervalSeconds`, `leadershipAuditPartiesPerSweep`) covers parties nothing announces, such as those on a scene server that died
+- Per-target invite cooldown (`perTargetInviteCooldownSeconds`), so one player cannot keep an invitation modal on another's screen
 - Removed-member detection via diff between cached and fetched member sets, with immediate `PartyLeaveBroadcast` dispatch
 - Per-connection ingress debounce and in-flight guard across all seven operations (`Create`, `Invite`, `AcceptInvite`, `DeclineInvite`, `Leave`, `Remove`, `ChangeRank`)
 - Bounded ingress guard sweep with configurable TTL, interval, and max removals
@@ -60,7 +64,7 @@ All party mutations emit a party update marker (`IPartyUpdateService.PersistAsyn
 - Vitals are grouped by **Unity scene handle**, not by scene server: one payload per scene group, so a player in a dungeon is never told the live health of a member standing in a city
 - Absence is the signal — a member on another scene server, in another scene, or offline is simply omitted, and the client greys them out by counting the pumps they were missing from. The recipient's own row is therefore always included even though the client ignores its values and derives its own bars from the local reconciled controller every tick
 - Quantised payload (`PartyVitalsQuantiser`): the three fractions travel as one byte each (0..255) and the meters as `ushort` points per second, replacing four bytes per value with one or two
-- The buff array — by far the largest part of the payload — is sent only when the visible set actually changed, gated by a per-character content signature (`ComputeObservedBuffSignature`, whole-second resolution so a falling duration does not report a change every pump); `PartyMemberVitalsEntry.BuffsChanged` says whether `Buffs` is authoritative, and the signature is dropped when the character leaves the scene server so their first payload back always carries the set
+- The buff array — by far the largest part of the payload — is sent only when some recipient does not already hold the current set. The set's signature (`ComputeObservedBuffSignature`) covers template, stacks and each buff's absolute expiry in whole seconds (`BuffExpirySecond`), not the time remaining, so a buff counting down does not re-send; the client counts down from the last array it was sent. Whether to send is decided per **recipient** (`ObservedBuffDeliveryLedger`): the array goes out when any recipient in the scene group was not last sent this member's signature, so a member joining the party or walking into the scene receives even a permanent buff. `PartyMemberVitalsEntry.BuffsChanged` says whether `Buffs` is authoritative. A recipient's record is forgotten when it disconnects and whenever the pump delivers it a roster or evicts it, because the client rebuilds member rows from a roster change
 - Buffs are read straight from `IBuffController.Buffs` at the server's current tick (`Buff.RemainingSeconds`), so nothing has to be re-based against the age of a push, and expired entries are dropped rather than sent as a zero-length bar; capped at `maxVitalsBuffsPerMember`
 - Per-encounter damage and healing meters in `PartyCombatMeterData`, fed by `ICharacterDamageController.OnDamaged` / `OnHealed`. Credit resolves to the controlling **player** (a `Pet`'s contribution counts for its `PetOwner`), unmetered characters are rejected early, and an encounter is defined purely by activity: `encounterTimeoutSeconds` of quiet starts a new one, with `meterMinimumWindowSeconds` as the divisor floor so an opening hit cannot divide by ~0
 - Optimistic concurrency via versioned `CharacterPartyData` for all membership mutations
@@ -101,10 +105,12 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `maxMainThreadActionsPerFrame` | int | 100 | Max party-system actions drained from main-thread queue per frame |
 | `maxPartySize` | int | 6 | Maximum number of members allowed in a party |
 | `updatePumpRate` | float | 1.0 | Periodic party update pump rate limit in seconds |
+| `partyUpdateClockSkewAllowanceSeconds` | float | 5.0 | Seconds the pump's watermark is held back for skew between this server's clock and the database's; also sets the retry horizon (10×, at least 60 s) |
 | `invitationTtlSeconds` | float | 45.0 | Invitation lifetime in seconds before automatic expiration |
 | `invitationSweepIntervalSeconds` | float | 1.0 | Seconds between bounded invitation cleanup sweeps |
 | `invitationSweepMaxScan` | int | 128 | Maximum invitation entries scanned per cleanup sweep |
 | `invitationSweepMaxRemove` | int | 128 | Maximum invitation entries removed per cleanup sweep |
+| `perTargetInviteCooldownSeconds` | float | 60.0 | Minimum seconds between invitations from the same inviter to the same target (0 disables) |
 | `ingressDebounceMilliseconds` | int | 100 | Minimum milliseconds between party requests per connection and operation |
 | `ingressSweepIntervalSeconds` | float | 5.0 | Seconds between bounded ingress guard cleanup sweeps |
 | `ingressEntryTtlSeconds` | float | 30.0 | Seconds before stale ingress guard entries are removed |
@@ -115,6 +121,12 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `meterSweepMaxScan` | int | 64 | Max combat meter entries scanned per sweep |
 | `meterSweepMaxRemove` | int | 64 | Max combat meter entries removed per sweep |
 | `maxVitalsBuffsPerMember` | int | 16 | Max buffs/debuffs sent per member on the vitals pump |
+| `transferLeadershipOnDisconnect` | bool | true | Move leadership to a logged-in member when the holder is not online anywhere |
+| `leadershipAuditIntervalSeconds` | float | 30.0 | Seconds between leadership audit sweeps (min 5) |
+| `leadershipAuditPartiesPerSweep` | int | 4 | Parties examined per audit sweep, round-robin |
+| `leadershipRecheckMaxPerTick` | int | 16 | Max scheduled leadership re-checks started per tick |
+| `leadershipRecheckDelaySeconds` | float | 5.0 | Seconds after a member disconnects before the party's leadership is re-examined |
+| `leadershipAbsenceGraceSeconds` | float | 45.0 | Seconds a leader must be continuously offline before leadership moves (min 10; must exceed the slowest scene load) |
 | `PartyCreateAchievementTemplate` | AchievementTemplate | — | Achievement template incremented when a party is created |
 | `PartyJoinAchievementTemplate` | AchievementTemplate | — | Achievement template incremented when a player joins a party |
 
@@ -130,7 +142,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | Thread | Work |
 |---|---|
 | Main thread | Request validation, ingress guards, invitation sweep, ingress sweep, combat meter sweep, controller/tracker updates, vitals pump, broadcast dispatch, queue drain |
-| Async worker | Database reads/writes (`CreatePartyAsync`, `ValidateAndSendPartyInviteAsync`, `AcceptPartyInviteAsync`, `LeavePartyAsync`, `RemovePartyMemberAsync`, `ChangePartyRankAsync`, `FetchAndProcessPartyUpdatesAsync`, `PersistPartyMemberAndNotifyAsync`, `PersistPartyUpdateAsync`) |
+| Async worker | Database reads/writes (`CreatePartyAsync`, `ValidateAndSendPartyInviteAsync`, `AcceptPartyInviteAsync`, `LeavePartyAsync`, `RemovePartyMemberAsync`, `ChangePartyRankAsync`, `FetchAndProcessPartyUpdatesAsync`, `AuditPartyLeadershipAsync`, `RetryPartyUpdateAnnouncementsAsync`, `PersistPartyMemberAndNotifyAsync`, `PersistPartyUpdateAsync`) |
 
 ## Usage Examples
 
@@ -184,7 +196,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 1. Validates requester is in a party.
 2. Enqueues `LeavePartyAsync`:
    - Fetches current members.
-   - If leader and others remain, randomly selects a new leader and persists rank update.
+   - If the leaver leads and others remain, settles leadership first (`EnsurePartyLeadershipAsync`: the lowest-ID online member, else the lowest-ID member).
    - Deletes the leaving member via versioned `DeleteAsync`.
    - If no members remain, deletes the party and its update marker; otherwise persists update marker.
    - Marshals to main thread: resets controller, removes tracker, broadcasts `PartyLeaveBroadcast`.
@@ -209,17 +221,21 @@ This is an integrated module within FishMMO. It is included as part of the serve
 
 ### Periodic Update Pump
 
-`OnPeriodicUpdate(deltaTime)` fires at `UpdatePumpRate` intervals:
+`OnPeriodicUpdate(deltaTime)` fires at `UpdatePumpRate` intervals. It first pushes vitals (below), prunes the runtime caches, drains due leadership re-checks and owed update announcements, and runs the leadership audit when due; then:
 1. Acquires pump lock via `TryBeginUpdatePump` (atomic compare-exchange).
-2. Snapshots tracked party IDs and last fetch time on main thread.
+2. Snapshots tracked party IDs and the watermark (`LastFetchTime`) on main thread.
 3. Enqueues `FetchAndProcessPartyUpdatesAsync`:
-   - Fetches party updates via `IPartyUpdateService.FetchAsync(partyIds, lastFetch)`.
-   - Fetches current members for each updated party.
+   - Takes the new mark **before** the fetch: now, less `partyUpdateClockSkewAllowanceSeconds` (`UpdatePumpWatermark.FetchStarted`). An update written while the round trip is in flight is therefore fetched again next pass, never skipped.
+   - Fetches party updates via `IPartyUpdateService.FetchAsync(partyIds, lastFetch)`; a failed fetch leaves the mark where it was.
+   - Keeps the newest update per party that the processed-update record does not already cover.
+   - Reads every such party's roster in one `ICharacterPartyService.FetchManyAsync(long[])`. A party whose roster did not come back holds the mark at its update (`UpdatePumpWatermark.Classify`/`Hold`) so the next pass retries it, until the update is older than the retry horizon, when it is given up with an error.
+   - Reads who is online in the same parties in one `FetchOnlineMemberIdsAsync(long[])`, settles each party's leadership (`RepairPartyLeadershipAsync`), and re-reads the rosters it changed.
    - Marshals to main thread:
-     - Updates `LastFetchTime`.
-     - Computes removed members (diff previous cached vs current) and sends `PartyLeaveBroadcast` to each.
+     - Moves `LastFetchTime` to the (possibly held) mark — also when nothing new was read, so the mark cannot freeze.
+     - `ApplyPartySnapshot` per party: computes removed members (diff previous cached vs current), untracks them, and for a removed member whose controller still names this party clears it and sends `PartyLeaveBroadcast`.
      - Refreshes `PartyMemberTracker` cache.
-     - Broadcasts `PartyAddMultipleBroadcast` snapshots (`PartyID` once, then a `PartyAddEntry` per member: `CharacterID`, `Rank`, quantised `HealthPCT`) to all local online members.
+     - Sends one `PartyAddMultipleBroadcast` (`PartyID` once, then a `PartyAddEntry` per member: `CharacterID`, `Rank`, quantised `HealthPCT`) to the local online members whose controller names this party, as one multicast, and forgets each of them in the buff ledger.
+   - Records each party whose snapshot was handed to the main thread as processed (only once the hand-off succeeded).
 4. Releases pump lock in `finally`.
 
 ### Live Member Vitals
@@ -234,16 +250,17 @@ database pump and of whether that pump is in flight:
    - `BuildObservedBuffs` copies `IBuffController.Buffs` at the current domain tick, dropping
      anything already expired and stopping at `maxVitalsBuffsPerMember`; a member with no buffs
      yields null rather than an empty array.
-   - `HasObservedBuffSetChanged` compares a signature of that set against the last one sent for
-     the character and sets `BuffsChanged`; unchanged sets travel as a null `Buffs`.
+   - `ObservedBuffDeliveryLedger.NeedsSend` asks whether any recipient in the group was not last
+     sent that set's signature; if so the array is included, `BuffsChanged` is set and every
+     recipient is recorded as holding it (`MarkSent`). Otherwise `Buffs` travels as null.
    - The three resource fractions go through `PartyVitalsQuantiser.FractionToByte`, and the
      meter sample (`IPartyCombatMeterData.GetSample`) through `RateToUInt16`.
-3. One `PartyMemberVitalsUpdateBroadcast` is sent to every member of the group, including the
-   one each row describes.
+3. One `PartyMemberVitalsUpdateBroadcast` goes to every member of the group, including the
+   one each row describes, as one multicast serialised once.
 
 Meters are fed outside this path, from `ICharacterDamageController.OnDamaged` / `OnHealed` via
 `RecordCombatMeterContribution`, and swept on a bounded cycle by `SweepCombatMeters`.
-`CharacterSystem_OnDisconnect` forgets both the character's meter and its buff signature, whether or not they were in a party.
+`CharacterSystem_OnDisconnect` forgets both the character's meter and its buff-ledger record as a recipient, whether or not they were in a party.
 
 ### Failure Semantics
 
@@ -269,7 +286,7 @@ Meters are fed outside this path, from `ICharacterDamageController.OnDamaged` / 
 | Decline invitation | Target sends `PartyDeclineInviteBroadcast`; confirm pending invitation is removed |
 | Invitation TTL expiry | Wait beyond `invitationTtlSeconds`; confirm expired invitations are swept and no longer accepted |
 | Party leave (member) | Member sends `PartyLeaveBroadcast`; confirm `PartyLeaveBroadcast` reply and tracker removal |
-| Party leave (leader) | Leader sends `PartyLeaveBroadcast` with other members present; confirm new leader is randomly assigned |
+| Party leave (leader) | Leader sends `PartyLeaveBroadcast` with other members present; confirm leadership passes to the lowest-ID online member before the leaver's row is deleted |
 | Party leave (last member) | Last member sends `PartyLeaveBroadcast`; confirm party and update marker are deleted |
 | Member removal | Leader sends `PartyRemoveBroadcast` for a member; confirm member is removed and update marker persisted |
 | Self-removal prevention | Leader sends `PartyRemoveBroadcast` targeting self; confirm request is rejected |
@@ -279,14 +296,17 @@ Meters are fed outside this path, from `ICharacterDamageController.OnDamaged` / 
 | Removed member detection | Remove a member on another server; confirm local server detects the diff and sends `PartyLeaveBroadcast` |
 | Vitals pump | Take damage in a party; confirm party members in the same scene receive `PartyMemberVitalsUpdateBroadcast` with a changed `HealthPCT` byte within one tick |
 | Cross-scene isolation | Put two party members in different scenes on one scene server; confirm neither appears in the other's vitals payload |
-| Buff gating | Hold a steady buff set; confirm entries arrive with `BuffsChanged = false` and a null `Buffs`, and that gaining or losing a buff sends the set again |
+| Buff gating | Hold a steady buff set, including a timed buff counting down; confirm entries arrive with `BuffsChanged = false` and a null `Buffs`, and that gaining, losing or refreshing a buff sends the set again |
+| Joiner receives buffs | With a member wearing a permanent buff, have another character join the party (or walk into their scene); confirm the joiner's first payload carries that member's buff array |
 | Buff signature reset | Move a member to another scene server and back; confirm their first payload carries the buff array again |
 | Combat meter | Deal damage through a pet; confirm the owner's `DamagePerSecond` moves, and that it returns to 0 after `encounterTimeoutSeconds` of quiet |
 | Ingress debounce | Send rapid consecutive party requests from the same connection; confirm excess requests are dropped |
 | Ingress in-flight guard | Send overlapping async party requests; confirm only one is processed at a time per operation type |
 | Ingress sweep | Wait for `ingressSweepIntervalSeconds`; confirm stale guard entries are cleaned up |
 | Character connect | Connect a character in a party; confirm tracker is updated and `PersistPartyMemberAndNotifyAsync` fires |
-| Character disconnect | Disconnect a character in a party; confirm tracker is updated, pending invitations cleared, and `PersistPartyUpdateAsync` fires |
+| Character disconnect | Disconnect a character in a party; confirm tracker is updated, pending invitations cleared, `PersistPartyUpdateAsync` fires, and a leadership re-check is scheduled |
+| Leader absence | Disconnect the leader and keep them offline; confirm leadership moves to an online member no sooner than `leadershipAbsenceGraceSeconds` later, and that zoning (a scene transfer) does not move it |
+| Pump watermark | Make a party's roster read fail on one server; confirm the update is re-read on later passes and given up with an error after the retry horizon, and that other parties' updates still arrive |
 | Tracker cleanup | Disconnect the last local member of a party; confirm both `PartyCharacterTracker` and `PartyMemberTracker` entries are removed |
 | Achievement trigger | Create or join a party with achievement templates assigned; confirm achievement controllers are incremented |
 | Main-thread queue drain | Confirm queued async results are dispatched on the main thread within `maxMainThreadActionsPerFrame` per frame |
@@ -371,7 +391,7 @@ OnServerPartyLeaveBroadcastReceived(conn, msg, channel)
        │
        ├─ ICharacterPartyService.FetchManyAsync (current members)
        ├─ If leader + others remain:
-       │    └─ Randomly select new leader → UpdateRankAsync
+       │    └─ EnsurePartyLeadershipAsync (lowest-ID online member) → UpdateRankAsync
        ├─ ICharacterPartyService.DeleteAsync (leaving member, versioned)
        ├─ If no remaining members:
        │    ├─ IPartyService.DeleteAsync
@@ -406,20 +426,28 @@ OnServerPartyChangeRankBroadcastReceived(conn, msg, channel)
 OnPeriodicUpdate(deltaTime)
 │
 ├─ 1. Check Initialized + Server started
-├─ 2. TryBeginUpdatePump (atomic lock)
-├─ 3. Snapshot partyIds + lastFetch on main thread
-└─ 4. TryEnqueueAsyncWork → FetchAndProcessPartyUpdatesAsync
+├─ 2. BroadcastPartyVitals, SweepPartyRuntimeCaches, DrainLeadershipRechecks,
+│     DrainPartyUpdateRetries, AuditPartyLeadership
+├─ 3. TryBeginUpdatePump (atomic lock)
+├─ 4. Snapshot partyIds + LastFetchTime on main thread
+└─ 5. TryEnqueueAsyncWork → FetchAndProcessPartyUpdatesAsync
        │
+       ├─ mark = UpdatePumpWatermark.FetchStarted(now, skew)   [before the fetch]
        ├─ IPartyUpdateService.FetchAsync(partyIds, lastFetch)
-       ├─ For each updated party: ICharacterPartyService.FetchManyAsync
+       ├─ Skip updates already in the processed-update record
+       ├─ ICharacterPartyService.FetchManyAsync(long[])        [one query, every changed party]
+       │    └─ roster missing → Classify/Hold: hold the mark (Retry) or give up (GiveUp)
+       ├─ FetchOnlineMemberIdsAsync(long[]) → RepairPartyLeadershipAsync per party
+       │    └─ repaired → FetchManyAsync(repaired) again
        └─ TryEnqueueMainThread
-              ├─ Update LastFetchTime
-              ├─ For each party:
-              │    ├─ Diff previous cached members vs current
-              │    ├─ Removed members → reset controller, Broadcast PartyLeaveBroadcast
-              │    ├─ Update PartyMemberTracker cache
-              │    └─ Build PartyAddMultipleBroadcast (PartyID + PartyAddEntry[])
-              └─ Broadcast PartyAddMultipleBroadcast to each local online member
+              ├─ LastFetchTime = mark
+              └─ ApplyPartySnapshot per party:
+                   ├─ Diff previous cached members vs current
+                   ├─ Removed members → untrack; controller still names this party →
+                   │    reset controller, forget in buff ledger, Broadcast PartyLeaveBroadcast
+                   ├─ Update PartyMemberTracker cache
+                   └─ One PartyAddMultipleBroadcast multicast to local members naming this party
+       ├─ Hand-off succeeded → MarkPartyUpdateProcessed per party read
        │
        └─ finally: EndUpdatePump
 ```
@@ -444,10 +472,14 @@ OnUpdate(deltaTime)
 ```
 Party/
 ├── PartySystem.cs                     # Core party orchestration, handlers, async persistence, and update pump
-├── PartySystemRuntimeData.cs          # Pending invitation map, last update fetch cursor, ingress guard, pump lock
+├── PartySystemRuntimeData.cs          # Pending invitations and invite cooldowns, update watermark and processed-update
+│                                      #   record, pump lock, mutation claims, removal markers, leader absences, ingress guard
 ├── PartySystemMainThreadQueueData.cs  # Per-system main-thread action queue container
 ├── PartyCharacterMappingData.cs       # Party online/cached membership trackers
 ├── PartyCombatMeterData.cs            # Per-encounter damage/healing meters keyed by character ID
+├── UpdatePumpWatermark.cs             # Pure watermark rule shared with the guild pump (fetch start, retry horizon,
+│                                      #   processed-record lifetime, Classify/Hold)
+├── ObservedBuffDeliveryLedger.cs      # Per-recipient record of the buff-set signature each was last sent
 └── README.md                          # System documentation
 ```
 

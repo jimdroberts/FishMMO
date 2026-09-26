@@ -40,8 +40,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public IPlayerCharacter Character;
 			/// <summary>Account that owns it, used to match a reconnecting player.</summary>
 			public string Account;
-			/// <summary>Hard deadline after which the body is removed regardless of combat state.</summary>
-			public DateTime ExpiresUtc;
+			/// <summary>
+			/// Hard deadline after which the body is removed regardless of combat state, in
+			/// <see cref="MonotonicClock"/> seconds. A local duration: on the wall clock a host
+			/// stepped forward ended every linger inside the step at once, and one stepped back held
+			/// every body in the world for the size of the step.
+			/// </summary>
+			public double ExpiresAt;
 		}
 
 		/// <summary>
@@ -175,7 +180,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Character = character,
 				Account = character.Account,
-				ExpiresUtc = DateTime.UtcNow + TimeSpan.FromSeconds(combatLogoutLingerSeconds),
+				ExpiresAt = MonotonicClock.NowSeconds + combatLogoutLingerSeconds,
 			};
 
 			lingeringCharacters[character.ID] = entry;
@@ -209,7 +214,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			List<long> finished = null;
 
 			foreach (var kvp in lingeringCharacters)
@@ -243,7 +248,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					 * window and any attack on it refreshes that window. */
 					reason = "combat ended";
 				}
-				else if (nowUtc >= entry.ExpiresUtc)
+				else if (now >= entry.ExpiresAt)
 				{
 					// Backstop for a body held in combat indefinitely by continued attacks, so a
 					// player cannot be pinned forever by someone chipping at them.
@@ -385,6 +390,71 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// Ends every linger on shutdown by capturing each body into the synchronous shutdown flush,
+		/// which then writes it and releases its claim, instead of through
+		/// <see cref="FinalizeCombatLinger"/>. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="FinalizeCombatLinger"/> hands the body's save and release to the async worker
+		/// pool, which teardown drains on a bounded budget and may abandon. The shutdown flush also
+		/// released the same claims from its own snapshot of <c>SessionTokens</c> — independently of
+		/// the pool's save — so a body's claim could be handed back while its rows were still
+		/// unwritten, and another server could load it without them. Captured here, a body's claim
+		/// is released by the flush only after its own writes, exactly like a connected character's.
+		/// </para>
+		/// <para>
+		/// The body is not despawned: the process is going down, and a connected character is not
+		/// despawned at shutdown either. Only the linger bookkeeping is dropped.
+		/// </para>
+		/// </remarks>
+		/// <param name="claims">The claims held before anything was released.</param>
+		/// <param name="inventorySystem">For the item flush, or null.</param>
+		/// <param name="entries">Destination for the captured bodies.</param>
+		/// <param name="captured">Receives the ids captured, so their claims are not released unwritten.</param>
+		private void CaptureLingeringBodiesForShutdown(
+			Dictionary<long, CharacterSessionInfo> claims,
+			ICharacterInventorySystem inventorySystem,
+			List<ShutdownFlushEntry> entries,
+			HashSet<long> captured)
+		{
+			if (lingeringCharacters.Count == 0)
+			{
+				return;
+			}
+
+			foreach (var kvp in lingeringCharacters)
+			{
+				IPlayerCharacter character = kvp.Value.Character;
+				if (character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+				{
+					// Nothing to write; its claim is released unwritten.
+					continue;
+				}
+
+				/* As SaveAndDespawnCharacter does before its snapshot: the body is leaving, so it is
+				 * no longer waiting to be reclaimed. A row that kept IsCombatLogged would make
+				 * AnyOnlineAsync ignore the character for good. */
+				character.DisableFlags(CharacterFlags.IsInCombat);
+				character.DisableFlags(CharacterFlags.IsCombatLogged);
+				character.DisableFlags(CharacterFlags.IsLoaded);
+
+				CharacterSessionInfo? ownership = claims != null && claims.TryGetValue(kvp.Key, out CharacterSessionInfo held)
+					? held
+					: (CharacterSessionInfo?)null;
+
+				if (TryCaptureShutdownEntry(character, ownership, inventorySystem, entries))
+				{
+					captured.Add(kvp.Key);
+				}
+			}
+
+			lingeringCharacters.Clear();
+			lingeringCharactersByAccount.Clear();
+			pendingLingerReasons.Clear();
+		}
+
+		/// <summary>
 		/// Reclaims a lingering body for a player who has just reconnected.
 		/// </summary>
 		/// <remarks>
@@ -462,12 +532,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			CharacterData charData = BuildCharacterData(character);
 			var subEntities = new SubEntitySnapshot();
-			AppendSubEntities(character, subEntities);
+			AppendDepartureSubEntities(character, subEntities, sessionInfo);
 
 			/* The body's items, captured before it is despawned and awaited before the reload
 			 * below re-reads the rows. Without this the reattach discarded every item change
 			 * whose write had failed while the body stood there. */
-			Func<Task> itemFlush = null;
+			Func<Task<ItemWriteOutcome>> itemFlush = null;
 			if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 			{
 				itemFlush = inventorySystem.CaptureDespawnFlush(character, sessionInfo);
@@ -485,10 +555,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Nothing will run the save or the load, so hand the claim back rather than
 				// leaving the character owned by a server that has forgotten about it.
 				Log.Error("CharacterSystem", $"Failed to enqueue reattach for character {characterID}; releasing its session.");
-				// The body's rows still have to land: sub-entities on their own lane, the item
-				// flush inside the pending release so it runs before the claim is handed back.
-				EnqueueSubEntitySaves(subEntities);
-				QueuePendingFlush(characterID, charData, new CharacterSessionInfo(heldToken, heldServerID), itemFlush);
+				// The body's rows still have to land, all of them inside the pending release so they
+				// run before the claim is handed back: they are ownership-gated, so after it they
+				// would be refused.
+				QueuePendingFlush(characterID, charData, new CharacterSessionInfo(heldToken, heldServerID), itemFlush, subEntities);
 				DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError);
 			}
 
@@ -534,13 +604,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			DispatchCharacterEvent(OnDespawnCharacter, null, character, nameof(OnDespawnCharacter));
 
-			if (character.NetworkObject.IsSpawned)
-			{
-				ServerManager.Despawn(character.NetworkObject, DespawnType.Pool);
-			}
-			else
+			// Out of the world scene, as every once-spawned character is pooled. See SaveAndDespawnCharacter.
+			if (!PersistentPool.Despawn(Server.NetworkWrapper.NetworkManager, character.NetworkObject))
 			{
 				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(character.NetworkObject, true);
+				PersistentPool.Keep(Server.NetworkWrapper.NetworkManager, character.NetworkObject);
 			}
 		}
 
@@ -554,7 +622,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long serverID,
 			CharacterData charData,
 			SubEntitySnapshot subEntities,
-			Func<Task> itemFlush,
+			Func<Task<ItemWriteOutcome>> itemFlush,
 			Guid heldToken)
 		{
 			// Ordering matters: the load below re-reads this row, so anything not written yet is
@@ -567,10 +635,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterSaveOutcome outcome = await SaveCharacterOutcomeAsync(charData, new CharacterSessionInfo(heldToken, serverID));
 
 			/* Refused because the claim is gone — and then nothing below may run. The body's
-			 * sub-entity tables carry no ownership check, so writing them would overwrite the
-			 * owner's state; and the load below skips the claim on the strength of the token it is
-			 * handed, so it would spawn a second live copy of a character another server is
-			 * running. The eviction has been requested and the token is somebody else's, so there
+			 * sub-entity writes would only be refused by their own ownership gate; and the load
+			 * below skips the claim on the strength of the token it is handed, so it would spawn a
+			 * second live copy of a character another server is running. The eviction has been requested and the token is somebody else's, so there
 			 * is nothing to release. The client goes back to the world server, which routes it to
 			 * the server that owns the character now. */
 			if (outcome == CharacterSaveOutcome.OwnershipLost)
@@ -586,21 +653,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				QueuePendingFlush(charData.ID, charData, null);
 			}
 
-			if (itemFlush != null)
+			ItemWriteOutcome itemOutcome = itemFlush != null
+				? await RunItemFlushWithRetryAsync(itemFlush, charData.ID)
+				: ItemWriteOutcome.Written;
+
+			if (itemOutcome == ItemWriteOutcome.NotOwned)
 			{
-				try
-				{
-					await itemFlush();
-				}
-				catch (Exception ex)
-				{
-					await Log.Error("CharacterSystem", $"ReattachAndLoadAsync: item flush failed for character {charData.ID}: {ex}");
-				}
+				// As for the row: another server owns the character, so nothing here may load it.
+				TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.SessionSuperseded));
+				return;
 			}
 
 			// Before the load below, like the character row above it: the load re-reads every
 			// one of these tables, and PetSystem restores the pet off the back of the spawn.
 			await SaveSubEntitiesSequentiallyAsync(subEntities, charData.ID);
+
+			/* The load re-reads the item rows, so it must not run over a flush that did not land:
+			 * it would restore the rows as they stood before the body's last changes, and the
+			 * reloaded character's first snapshot would then supersede the flush for good. The
+			 * connection is closed instead — not terminally, so the client reconnects — and the
+			 * flush goes to the retry queue with the claim, which is released only once the flush
+			 * lands. The reconnect claims afresh after that. */
+			if (itemOutcome == ItemWriteOutcome.Retry)
+			{
+				await Log.Warning("CharacterSystem",
+					$"ReattachAndLoadAsync: the item flush for character {charData.ID} has not landed; the reload is abandoned until it does.");
+				QueuePendingFlush(charData.ID, null, new CharacterSessionInfo(heldToken, serverID), itemFlush);
+				TryEnqueueMainThread(() => DisconnectWithNotice(conn, DisconnectNoticeReason.ServerError));
+				return;
+			}
 
 			// The character ID travels with the token: LoadCharacterAsync has to be able to hand
 			// this claim back on any path that abandons the load, including the ones that fail
@@ -627,20 +708,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		/// <param name="mappingData">Mapping data holding the session claims.</param>
 		/// <param name="characterData">Destination for the character rows.</param>
-		/// <param name="buffs">Destination for buff rows.</param>
-		/// <param name="attributes">Destination for attribute rows.</param>
-		/// <param name="abilities">Destination for ability rows.</param>
 		/// <param name="subEntities">Destination for every sub-entity row.</param>
-		private void AppendLingeringCharacterSnapshots(
+		/// <param name="now">Realtime seconds, for the fault report.</param>
+		/// <returns>How many bodies failed to capture and were skipped this pass.</returns>
+		private int AppendLingeringCharacterSnapshots(
 			ICharacterMappingData<NetworkConnection> mappingData,
 			List<(CharacterData Data, CharacterSessionInfo? Ownership)> characterData,
-			SubEntitySnapshot subEntities)
+			SubEntitySnapshot subEntities,
+			double now)
 		{
 			if (lingeringCharacters.Count == 0)
 			{
-				return;
+				return 0;
 			}
 
+			int failed = 0;
 			foreach (var kvp in lingeringCharacters)
 			{
 				IPlayerCharacter character = kvp.Value.Character;
@@ -650,13 +732,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					continue;
 				}
 
-				CharacterSessionInfo? ownership = mappingData.SessionTokens.TryGetValue(kvp.Key, out CharacterSessionInfo held)
-					? held
-					: (CharacterSessionInfo?)null;
-
-				characterData.Add((BuildCharacterData(character), ownership));
-				AppendSubEntities(character, subEntities);
+				// The same per-character capture, and the same skip-and-report, as a connected character.
+				if (!TryCapturePeriodicSnapshot(mappingData, character, characterData, subEntities, now))
+				{
+					++failed;
+				}
 			}
+			return failed;
 		}
 
 		/// <inheritdoc />
@@ -692,7 +774,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			CharacterData charData = BuildCharacterData(character);
 			var subEntities = new SubEntitySnapshot();
-			AppendSubEntities(character, subEntities);
+			/* A departure's capture, bar included: the owner has left, and the linger is the last the
+			 * body's bar changes. See AppendDepartureSubEntities. */
+			AppendDepartureSubEntities(character, subEntities, ownership);
 
 			if (!EnqueueAsyncWork(() => SaveCharacterAsync(charData, ownership)))
 			{
@@ -708,7 +792,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * behind the incremental writes it supersedes. */
 			if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 			{
-				Func<Task> itemFlush = inventorySystem.CaptureDespawnFlush(character, ownership);
+				/* The outcome is not needed here: the body stays resident, so a failure files a
+				 * reconcile that the periodic drain carries out for lingering bodies too. */
+				Func<Task<ItemWriteOutcome>> itemFlush = inventorySystem.CaptureDespawnFlush(character, ownership);
 				if (itemFlush != null)
 				{
 					EnqueuePersistence(itemFlush, character.ID);

@@ -143,7 +143,74 @@ namespace FishMMO.Shared
 		// ── World placement: owned by the world atlas ─────────────────
 
 		/// <summary>This scene's world atlas entry, or null when it has not been added to the atlas.</summary>
-		public WorldAtlasScene AtlasEntry => WorldAtlasScene.Find(gameObject.scene.name);
+		public WorldAtlasScene AtlasEntry => WorldAtlasScene.Find(OwnSceneName);
+
+		/// <summary>
+		/// The scene this component belongs to, resolved once rather than on every read.
+		/// </summary>
+		/// <remarks>
+		/// <para>The biome sampler asked <c>gameObject.scene</c> for every sample, and every property
+		/// here that consults the atlas asked it for the scene's name — two engine calls and a fresh
+		/// string each time, about ten times per biome sample, and weather exposure samples every
+		/// character every second on the server and the owning client alike. The answer cannot
+		/// change at runtime: nothing moves a settings object between scenes, and it goes with its
+		/// scene when that unloads. So it is read on first use and read again whenever the
+		/// component is enabled.</para>
+		///
+		/// <para>Outside play mode it is read live every time, exactly as before. A designer can drag
+		/// the object into another open scene, and edit-mode tools can hold a component whose
+		/// <c>OnEnable</c> never ran.</para>
+		/// </remarks>
+		public Scene OwnScene
+		{
+			get
+			{
+#if UNITY_EDITOR
+				if (!Application.isPlaying)
+				{
+					return gameObject.scene;
+				}
+#endif
+				if (ownScene.handle == 0)
+				{
+					ResolveOwnScene();
+				}
+				return ownScene;
+			}
+		}
+
+		/// <summary>The name of <see cref="OwnScene"/>, resolved with it.</summary>
+		private string OwnSceneName
+		{
+			get
+			{
+#if UNITY_EDITOR
+				if (!Application.isPlaying)
+				{
+					return gameObject.scene.name;
+				}
+#endif
+				if (ownScene.handle == 0)
+				{
+					ResolveOwnScene();
+				}
+				return ownSceneName;
+			}
+		}
+
+		/// <summary>
+		/// The resolved scene. A handle of 0 is no scene at all, and means "not resolved yet" — so a
+		/// value the editor's script reload wiped simply resolves again.
+		/// </summary>
+		private Scene ownScene;
+		private string ownSceneName;
+
+		/// <summary>Reads the scene this component is in, and its name.</summary>
+		private void ResolveOwnScene()
+		{
+			ownScene = gameObject.scene;
+			ownSceneName = ownScene.name;
+		}
 
 		/// <summary>
 		/// The planet or moon this scene stands on. Null means the home world. Its rotation and sun
@@ -188,7 +255,8 @@ namespace FishMMO.Shared
 
 		private void OnEnable()
 		{
-			byScene[gameObject.scene.handle] = this;
+			ResolveOwnScene();
+			byScene[ownScene.handle] = this;
 		}
 
 		private void OnDisable()

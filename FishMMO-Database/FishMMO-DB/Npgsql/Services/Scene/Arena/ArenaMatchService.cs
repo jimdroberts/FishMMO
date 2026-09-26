@@ -19,6 +19,17 @@ namespace FishMMO.Database.Npgsql.Services
 		private const int MaxBatchIds = 1024;
 
 		/// <summary>
+		/// The database's clock, as the naive-UTC timestamp these columns hold. See
+		/// <c>GroupFinderQueueService.DbNow</c> for why <c>now()</c> and not <c>clock_timestamp()</c>.
+		/// </summary>
+		private const string DbNow = "(now() AT TIME ZONE 'UTC')";
+
+		/// <summary>
+		/// "Not finished", verbatim as the partial index's filter so the sweep can use it.
+		/// </summary>
+		private static readonly string UnfinishedFilter = ArenaMatchEntityConfiguration.UnfinishedFilter;
+
+		/// <summary>
 		/// Initializes a new instance of ArenaMatchService.
 		/// </summary>
 		public ArenaMatchService(INpgsqlDbContextFactory dbContextFactory)
@@ -202,14 +213,12 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<int>> CancelAbandonedAsync(DateTime createdBeforeUtc, int maxRows = 64, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<int>> CancelAbandonedAsync(TimeSpan olderThan, int maxRows = 64, CancellationToken cancellationToken = default)
 		{
 			if (maxRows < 1)
 			{
 				maxRows = 1;
 			}
-
-			var now = DateTime.UtcNow;
 
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
@@ -217,26 +226,30 @@ namespace FishMMO.Database.Npgsql.Services
 
 				/* Not ended long after it formed, with no usable instance row left to play in: the
 				 * load failed, or the host died and its rows were reaped. Nothing will ever finish
-				 * it, and every seat is a character locked out of both finders. */
+				 * it, and every seat is a character locked out of both finders.
+				 *
+				 * The unfinished test is repeated on the UPDATE itself. The subquery picks the rows,
+				 * but a match its host moved to Ended in the meantime is re-checked only against the
+				 * outer WHERE after the row lock is granted, and without it that result would be
+				 * overwritten as Cancelled. */
 				var sql = $@"UPDATE {TableName}
-					SET status = {{1}}, time_ended = {{2}}
-					WHERE id IN (
-						SELECT am.id FROM {TableName} am
-						WHERE am.status < {{0}}
-							AND am.time_created < {{3}}
-							AND NOT EXISTS (SELECT 1 FROM {sceneTable} s WHERE s.id = am.instance_id AND s.scene_status IN ({{4}}, {{5}}, {{6}}))
-						ORDER BY am.time_created
-						LIMIT {{7}}
-					)";
+					SET status = {{0}}, time_ended = {DbNow}
+					WHERE {UnfinishedFilter}
+						AND id IN (
+							SELECT am.id FROM {TableName} am
+							WHERE am.{UnfinishedFilter}
+								AND am.time_created < {DbNow} - {{1}}
+								AND NOT EXISTS (SELECT 1 FROM {sceneTable} s WHERE s.id = am.instance_id AND s.scene_status IN ({{2}}, {{3}}, {{4}}))
+							ORDER BY am.time_created
+							LIMIT {{5}}
+						)";
 
 				return await dbContext.Database.ExecuteSqlRawAsync(
 					sql,
 					new object[]
 					{
-						(int)ArenaMatchStatus.Ended,
 						(int)ArenaMatchStatus.Cancelled,
-						now,
-						createdBeforeUtc,
+						olderThan,
 						(int)SceneStatus.Pending,
 						(int)SceneStatus.Loading,
 						(int)SceneStatus.Ready,
@@ -377,18 +390,24 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<bool>> SetBackfillWindowAsync(long matchId, DateTime? untilUtc, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<bool>> SetBackfillWindowAsync(long matchId, TimeSpan? window, CancellationToken cancellationToken = default)
 		{
 			if (matchId <= 0)
 			{
 				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "Match ID must be greater than zero.");
 			}
 
+			if (window.HasValue && window.Value < TimeSpan.Zero)
+			{
+				return DatabaseResult<bool>.Failure(DatabaseErrorCodes.ValidationError, "A backfill window cannot be negative.");
+			}
+
 			var result = await ExecuteWriteAsync(async dbContext =>
 			{
+				// A plain null closes the window; the cast gives the untyped null its type.
 				int affected = await dbContext.Database.ExecuteSqlRawAsync(
-					$@"UPDATE {TableName} SET backfill_until_utc = {{1}} WHERE id = {{0}} AND status < {{2}}",
-					new object[] { matchId, (object)untilUtc, (int)ArenaMatchStatus.Ended },
+					$@"UPDATE {TableName} SET backfill_until_utc = {DbNow} + {{1}}::interval WHERE id = {{0}} AND status < {{2}}",
+					new object[] { matchId, window.HasValue ? (object)window.Value : null, (int)ArenaMatchStatus.Ended },
 					cancellationToken).ConfigureAwait(false);
 				return affected > 0;
 			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);

@@ -59,6 +59,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		[SerializeField] private float waitingQueueTtlSeconds = 45.0f;
 
 		/// <summary>
+		/// Seconds an account's place in the open-world queue is held after its wait ended without
+		/// its say, for a reconnect or a "Try again" to resume. 0 holds nothing.
+		/// </summary>
+		/// <remarks>See <see cref="WorldQueuePlaceMemory"/>.</remarks>
+		[Tooltip("Seconds an account's place in the open-world queue is held after a disconnect or a stalled-line purge, so rejoining the same scene's queue resumes it. 0 disables.")]
+		[SerializeField] private float queuePlaceGraceSeconds = 60.0f;
+
+		/// <summary>
 		/// Seconds between stale waiting-queue purge sweeps.
 		/// </summary>
 		[Tooltip("Seconds between stale waiting-queue purge sweeps")]
@@ -136,23 +144,25 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private const int MaxOutstandingSceneLoads = 8;
 
 		/// <summary>
-		/// How many instance-queue connections one routing cycle processes concurrently.
+		/// How many instance-queue connections one routing batch takes on.
 		/// </summary>
 		/// <remarks>
-		/// Each one costs a main-thread dispatch and, when it is not debounced, several database
-		/// round trips. The queue can legitimately hold thousands, so this is what keeps a busy
-		/// cycle from monopolising the database connection pool.
+		/// A batch costs the same few batched reads and main-thread hops whatever its size (see
+		/// <see cref="ProcessInstanceBatchAsync"/>), so this bounds how much one batch holds and
+		/// how much main-thread work its outcome is, not how many round trips it makes. The queue
+		/// can legitimately hold thousands.
 		/// </remarks>
-		private const int InstanceRoutingBatchSize = 32;
+		private const int InstanceRoutingBatchSize = 256;
 
 		/// <summary>
 		/// How long an instance scene row may sit in a non-ready state before a character bound
 		/// to it is released and routed to the open world instead.
 		/// </summary>
 		/// <remarks>
-		/// Measured from the row's creation, so the decision survives the client's reconnect
-		/// cycle. See the use site in <see cref="ProcessInstanceConnectionAsync"/> for why a
-		/// per-connection timeout cannot do this job.
+		/// Measured from the row's creation, by the database clock that stamped it, so the decision
+		/// survives the client's reconnect cycle and no host clock can shift it. See
+		/// <see cref="WorldSceneRoutingRules.DecideInstanceRoute"/> for why a per-connection timeout
+		/// cannot do this job.
 		/// <para>
 		/// Comfortably above the scene server's own pending-scene timeout (60s) plus a cold
 		/// scene load, so a merely slow load is never mistaken for a dead one.
@@ -255,9 +265,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Authentication events
 			runtimeData.LoginAuthenticator.OnClientAuthenticationResult += Authenticator_OnClientAuthenticationResult;
 
+			// A player leaving the queue on purpose, as opposed to a dropped connection.
+			Server.NetworkWrapper?.RegisterBroadcast<WorldSceneQueueLeaveBroadcast>(OnWorldSceneQueueLeave, true);
+
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			instanceLookupDebounceSeconds = Mathf.Max(0.1f, instanceLookupDebounceSeconds);
 			waitingQueueTtlSeconds = Mathf.Max(5.0f, waitingQueueTtlSeconds);
+			queuePlaceGraceSeconds = Mathf.Max(0.0f, queuePlaceGraceSeconds);
+			queuePlaces.Clear();
+			queuePlaces.GraceSeconds = queuePlaceGraceSeconds;
 			waitingQueueSweepIntervalSeconds = Mathf.Max(1.0f, waitingQueueSweepIntervalSeconds);
 			debounceCleanupIntervalSeconds = Mathf.Max(5.0f, debounceCleanupIntervalSeconds);
 			debounceCleanupMaxScanPerSweep = Mathf.Max(1, debounceCleanupMaxScanPerSweep);
@@ -285,8 +301,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			combatLogoutRoutingDeferredSince.Clear();
 			queueReasonByClientId.Clear();
 			queueReasonByScene.Clear();
+			lastPlacementAtByScene.Clear();
 			waitingSinceByClientId.Clear();
 			routedLastCycleByScene.Clear();
+			queuePlaces.Clear();
+			openWorldPlaceByClientId.Clear();
+			leftQueueClientIds.Clear();
 
 			if (Server == null)
 			{
@@ -309,12 +329,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Drain any remaining queued main-thread actions
 			DrainMainThreadQueue(drainAll: true);
 			runtimeData.InstanceLookupDebounce?.Clear();
-			runtimeData.WaitingQueueEnteredUtcByClientId?.Clear();
+			runtimeData.WaitingQueueEnteredAtByClientId?.Clear();
 			runtimeData.AvailableSceneCache?.Clear();
 			runtimeData.SceneServerAddressCache?.Clear();
 
 			// Connection state events
 			UnsubscribeFromConnectionEvents();
+			Server.NetworkWrapper?.UnregisterBroadcast<WorldSceneQueueLeaveBroadcast>(OnWorldSceneQueueLeave);
 
 			// Authentication events
 			if (runtimeData.LoginAuthenticator != null)
@@ -442,6 +463,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		protected override void OnRemoteConnectionStopped(NetworkConnection conn)
 		{
 			worldResidencyDeadlineByClientId.TryRemove(conn.ClientId, out _);
+			leftQueueClientIds.Remove(conn.ClientId);
 
 			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 			{
@@ -451,7 +473,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Terminal: the wait is over however it ended. RemoveFromQueue deliberately leaves
 			// the wait clock alone so re-queue cycles do not reset the TTL, so it is cleared here.
-			ClearQueueTracking(conn.ClientId);
+			// A drop is not the player's choice, so an open-world place is held for a reconnect.
+			EndWaitKeepingPlace(conn.ClientId);
 		}
 
 		/// <summary>
@@ -465,13 +488,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			var serverManager = Server?.NetworkWrapper?.NetworkManager?.ServerManager;
 			Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData);
 
 			foreach (var kvp in worldResidencyDeadlineByClientId)
 			{
-				if (nowUtc < kvp.Value)
+				if (now < kvp.Value)
 				{
 					continue;
 				}
@@ -497,7 +520,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					(mappingData.OpenWorldConnectionScenes.ContainsKey(conn) ||
 					 mappingData.InstanceConnectionScenes.ContainsKey(conn)))
 				{
-					worldResidencyDeadlineByClientId[kvp.Key] = nowUtc.AddSeconds(WorldResidencyGraceSeconds);
+					worldResidencyDeadlineByClientId[kvp.Key] = now + WorldResidencyGraceSeconds;
 					continue;
 				}
 
@@ -532,6 +555,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				runtimeData.NextWaitingQueueSweep = waitingQueueSweepIntervalSeconds;
 				PurgeExpiredWaitingConnections(runtimeData);
 				SweepStrandedResidents();
+				queuePlaces.Sweep(MonotonicClock.NowSeconds);
 			}
 
 			runtimeData.NextQueuePositionUpdate -= deltaTime;
@@ -606,22 +630,15 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				}
 				await Task.WhenAll(sceneTasks);
 
-				/* Instance work is one task per waiting connection, and that is bounded only by
-				 * MAX_WAITING_QUEUE_SIZE (2500). Starting all of them at once puts up to that
-				 * many concurrent database round trips and main-thread dispatches in flight from
-				 * a single routing cycle, which saturates the connection pool for every other
-				 * system on this server at exactly the moment the queue says it is already
-				 * struggling. Batched for the same reason KickRequestSystem batches its
-				 * last-login lookups. */
+				/* Instance work is bounded only by MAX_WAITING_QUEUE_SIZE (2500). Each batch is a
+				 * fixed handful of batched reads and one main-thread hop each way, whatever its
+				 * size (see ProcessInstanceBatchAsync), and the batches run one after another so a
+				 * full queue never puts more than one batch's queries on the connection pool at
+				 * once. */
 				for (int start = 0; start < instanceConns.Count; start += InstanceRoutingBatchSize)
 				{
-					int end = Math.Min(start + InstanceRoutingBatchSize, instanceConns.Count);
-					var batch = new Task[end - start];
-					for (int i = start; i < end; ++i)
-					{
-						batch[i - start] = ProcessInstanceConnectionAsync(instanceConns[i]);
-					}
-					await Task.WhenAll(batch);
+					int count = Math.Min(InstanceRoutingBatchSize, instanceConns.Count - start);
+					await ProcessInstanceBatchAsync(instanceConns.GetRange(start, count), skipDebounce: false);
 				}
 
 				await UpdateConnectionCountAsync();
@@ -642,11 +659,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <summary>
 		/// Processes the queue for open world scenes, assigning connections to available scene instances.
 		/// <para>
-		/// Each waiting connection's character data is fetched to read their saved <c>SceneHandle</c>.
+		/// As many waiting connections as there are free slots are taken, oldest first, and their
+		/// character data is fetched in one read to learn each saved <c>SceneHandle</c>.
 		/// If a matching available instance exists with capacity, the character is routed there.
 		/// This enables channel switching: <c>SceneChannelSystem</c> sets the target handle before
 		/// disconnect, and this method honours that preference. If no match is found, the character
-		/// falls back to any available instance with capacity.
+		/// falls back to any available instance with capacity. Every placed character is bound to its
+		/// instance in one write before any client is sent on.
 		/// </para>
 		/// </summary>
 		/// <param name="sceneName">Name of the scene to process.</param>
@@ -835,7 +854,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			// Snapshot ALL waiting connections for this scene name on the main thread
+			/* Take only as many connections as there is room for.
+			 *
+			 * A pass cannot place more than the free capacity, and it used to snapshot and empty the
+			 * whole queue anyway: every waiting player's character row was read, and everyone it
+			 * could not place was put back one queued main-thread action at a time — 2,500 rows and
+			 * 2,490 re-queues every cycle to route ten. The rest now simply stay queued. See
+			 * WorldSceneRoutingRules.SelectForRouting for which ones are taken. */
+			int freeCapacity = 0;
+			for (int i = 0; i < instanceIDs.Count; ++i)
+			{
+				if (capacityByHandle.TryGetValue(instanceIDs[i], out int free) && free > 0)
+				{
+					freeCapacity += free;
+				}
+			}
+
 			List<(NetworkConnection conn, string accountName)> waitingConnections = new List<(NetworkConnection, string)>();
 
 			if (!await RunOnMainThreadAsync(() =>
@@ -850,32 +884,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					return;
 				}
 
-				// Copy to pre-sized list and clear set in bulk (avoids .ToList() allocation + per-element Remove)
-				var snapshot = new List<NetworkConnection>(connections.Count);
-				snapshot.AddRange(connections);
-				connections.Clear();
-
-				for (int i = 0; i < snapshot.Count; ++i)
-				{
-					NetworkConnection connection = snapshot[i];
-					mappingData.OpenWorldConnectionScenes.Remove(connection);
-
-					/* The wait clock deliberately survives this. Emptying the queue here is a
-					 * routing cycle, not a departure — anything not placed below is put straight
-					 * back — so clearing it restarted the TTL every cycle and the purge could
-					 * never fire. Only a connection that is genuinely leaving clears it. */
-					if (!IsValidConnection(connection, out string accountName))
-					{
-						ClearQueueTracking(connection.ClientId);
-						continue;
-					}
-
-					waitingConnections.Add((connection, accountName));
-				}
+				TakeOpenWorldConnectionsToRoute(connections, freeCapacity, mappingData, waitingConnections);
 			}))
 			{
 				return;
 			}
+
+			// Everything this pass decides is applied on the main thread in one action at the end.
+			var outcome = new RoutingOutcome();
 
 			// --- Fetch phase: batch-load character data before routing ---
 			var charDataByConn = new Dictionary<NetworkConnection, CharacterData>(waitingConnections.Count);
@@ -917,9 +933,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 					for (int i = 0; i < waitingConnections.Count; ++i)
 					{
-						RequeueOpenWorldConnection(waitingConnections[i].conn, sceneName, WorldSceneQueueReason.Capacity);
+						outcome.RequeueOpenWorld(waitingConnections[i].conn, sceneName, WorldSceneQueueReason.Capacity);
 					}
 
+					ApplyRoutingOutcome(outcome);
 					routedLastCycleByScene[sceneName] = 0;
 					return;
 				}
@@ -929,18 +946,18 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Pass 1: Preferred handle assignments via O(1) dictionary lookup.
 			// This supports channel switching: SceneChannelSystem updates the handle
 			// before disconnect so the world server routes back to the chosen channel.
-			// Preferred assignments never need a DB update (assignedHandle == charData.SceneHandle).
+			// Nothing is written or sent yet: every placement is collected, the character rows are
+			// bound in one statement below, and only then are the clients told where to go.
 			var unassigned = new List<(NetworkConnection conn, string accountName, CharacterData charData)>();
-			// Feeds the client-facing wait estimate. See routedLastCycleByScene.
-			int routedThisCycle = 0;
+			var assignments = new List<(NetworkConnection Conn, CharacterData Character, long Handle, ushort Port)>();
 			for (int i = 0; i < waitingConnections.Count; ++i)
 			{
 				var (conn, accountName) = waitingConnections[i];
 				if (!charDataByConn.TryGetValue(conn, out var charData))
 				{
-					/* The snapshot above emptied the queue, so falling through here dropped the
-					 * connection out of routing entirely: no scene assignment, no retry, and no
-					 * message. The client sat on the world server until the residency watchdog
+					/* The snapshot above took the connection off the queue, so falling through
+					 * here dropped it out of routing entirely: no scene assignment, no retry, and
+					 * no message. The client sat on the world server until the residency watchdog
 					 * disconnected it a minute and a half later, which the player experiences as
 					 * a loading screen that hangs and then throws them back to login.
 					 *
@@ -948,21 +965,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					 * server is chosen from it — so say so and disconnect now. The client's
 					 * reconnect loop retries from the world server, which re-reads the row; a
 					 * transient database failure therefore recovers in seconds instead of
-					 * ninety, and a genuinely missing selection fails fast the same way
-					 * FallbackToWorldSceneAsync already does. */
+					 * ninety, and a genuinely missing selection fails fast the same way the
+					 * instance route already does. */
 					await Log.Warning("WorldSceneSystem",
 						$"No selected character data for account '{accountName}' (conn {conn?.ClientId}); cannot route to a scene server.");
-					TryEnqueueMainThread(() =>
-					{
-						if (conn != null && conn.IsActive)
-						{
-							Kick(conn, "Failed to get selected character", DisconnectNoticeReason.CharacterUnavailable);
-						}
-						if (conn != null)
-						{
-							ClearQueueTracking(conn.ClientId);
-						}
-					});
+					outcome.Kick(conn, "Failed to get selected character", DisconnectNoticeReason.CharacterUnavailable);
 					continue;
 				}
 
@@ -985,8 +992,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				 * the character rather than kicking it for contention. */
 				if (!preferredAvailable && charData.Flags.IsFlagged(CharacterFlags.IsCombatLogged))
 				{
-					DateTime deferredSince = combatLogoutRoutingDeferredSince.GetOrAdd(charData.ID, _ => DateTime.UtcNow);
-					if ((DateTime.UtcNow - deferredSince).TotalSeconds < CombatLogoutRoutingGraceSeconds)
+					double deferredSince = combatLogoutRoutingDeferredSince.GetOrAdd(charData.ID, _ => MonotonicClock.NowSeconds);
+					if (MonotonicClock.NowSeconds - deferredSince < CombatLogoutRoutingGraceSeconds)
 					{
 						await Log.Debug("WorldSceneSystem",
 							$"Holding character {charData.ID} for scene handle {preferredHandle}: its combat-logout body lives there.");
@@ -996,8 +1003,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 						 * once the hold ends, the ordinary TTL starts counting from there. It
 						 * also reports its own reason, because "waiting for capacity" would be
 						 * a lie: the scene may be half empty and this character still cannot go
-						 * anywhere but the one instance holding its body. */
-						RequeueOpenWorldConnection(conn, sceneName,
+						 * anywhere but the one instance holding its body. The reason is also what
+						 * makes the next pass look at this connection whatever the capacity. */
+						outcome.RequeueOpenWorld(conn, sceneName,
 							WorldSceneQueueReason.CombatLogoutBody, restartWaitClock: true);
 						continue;
 					}
@@ -1027,35 +1035,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					serverInfoByHandle.TryGetValue(preferredHandle, out var prefServer))
 				{
 					capacityByHandle[preferredHandle] = prefRemaining - 1;
-
-					// After a World restart, the character's saved world_server_id or scene
-					// may be stale. Rebind to the current world instance before broadcasting
-					// so the Scene server accepts the connection (world+scene+handle must match).
-					// This mirrors the Pass 2 rebind logic below.
-					if (charData.SceneHandle != preferredHandle || charData.WorldServerID != worldServerID)
-					{
-						// Awaited, not fire-and-forget: BroadcastSceneConnect below sends the
-						// client straight to the Scene Server, which matches it on the
-						// (world_server_id, scene_name, scene_handle) tuple read back from this
-						// row. Racing the write against that lookup rebinds the character too
-						// late and the Scene Server rejects it as a mismatched scene handle.
-						DatabaseResult rebindResult = await charService.UpdateSceneAsync(charData.ID, worldServerID, sceneName, preferredHandle);
-						if (!rebindResult.IsSuccess)
-						{
-							/* For the same reason, a rebind that did not land must not be followed by
-							 * the connect: the Scene Server would read the stale tuple and refuse the
-							 * client, costing it a disconnect and a trip back through here. Give the
-							 * slot back and let the next pass try again. */
-							await Log.Warning("WorldSceneSystem", $"Pass1 rebind DB error (CharID={charData.ID}): [{rebindResult.ErrorCode}] {rebindResult.ErrorMessage}. Re-queuing for the next routing cycle.");
-							capacityByHandle[preferredHandle] = prefRemaining;
-							RequeueOpenWorldConnection(conn, sceneName);
-							continue;
-						}
-						await Log.Info("WorldSceneSystem", $"Pass1 rebind: Character {charData.ID} world={charData.WorldServerID}->{worldServerID} scene={charData.SceneHandle}->{preferredHandle}");
-					}
-
-					BroadcastSceneConnect(conn, prefServer);
-					routedThisCycle++;
+					assignments.Add((conn, charData, preferredHandle, prefServer));
 				}
 				else
 				{
@@ -1084,40 +1064,161 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					if (!capacityHeap.TryAssignFromTop(out long assignedHandle) ||
 						!serverInfoByHandle.TryGetValue(assignedHandle, out var serverPort))
 					{
-						// No capacity anywhere — re-queue for the next processing cycle. Routed
-						// through the shared helper so the wait keeps its TTL and the client is
-						// told why it is still waiting.
-						RequeueOpenWorldConnection(conn, sceneName, WorldSceneQueueReason.Capacity);
+						// No capacity anywhere — re-queue for the next processing cycle, so the wait
+						// keeps its TTL and the client is told why it is still waiting.
+						outcome.RequeueOpenWorld(conn, sceneName, WorldSceneQueueReason.Capacity);
 						continue;
 					}
 
-					// Fallback handles always differ from the character's saved handle
-					if (charData.SceneHandle != assignedHandle || charData.WorldServerID != worldServerID)
-					{
-						DatabaseResult updateResult = await charService.UpdateSceneAsync(charData.ID, worldServerID, sceneName, assignedHandle);
-						if (!updateResult.IsSuccess)
-						{
-							// As in Pass 1: without the rebind the Scene Server refuses the client,
-							// so wait a cycle rather than send it. The heap slot is simply spent for
-							// this pass; the next one rebuilds capacity from the scene rows.
-							await Log.Warning("WorldSceneSystem", $"UpdateSceneAsync DB error (CharID={charData.ID}): [{updateResult.ErrorCode}] {updateResult.ErrorMessage}. Re-queuing for the next routing cycle.");
-							RequeueOpenWorldConnection(conn, sceneName);
-							continue;
-						}
-					}
-
-					BroadcastSceneConnect(conn, serverPort);
-					routedThisCycle++;
+					assignments.Add((conn, charData, assignedHandle, serverPort));
 				}
 			}
+
+			/* Bind every placed character to its instance, in one statement, before any client is
+			 * told where to go.
+			 *
+			 * After a world restart every character's world_server_id is stale, so every one of them
+			 * needs this write; one awaited round trip each held this scene's task, and with it the
+			 * whole routing cycle, for seconds. The write still has to land before the connect:
+			 * the scene server matches the arriving client on the (world_server_id, scene_name,
+			 * scene_handle) it reads back from the row, and a client sent ahead of its rebind is
+			 * refused as a mismatched scene handle. So a character whose bind did not land is not
+			 * sent. It goes back on the queue for the next pass, and the slot it was given is
+			 * simply spent for this one. */
+			List<(long CharacterId, string SceneName, long SceneHandle)> binds = null;
+			for (int i = 0; i < assignments.Count; ++i)
+			{
+				var a = assignments[i];
+				if (WorldSceneRoutingRules.NeedsSceneBind(a.Character.WorldServerID, a.Character.SceneHandle, worldServerID, a.Handle))
+				{
+					(binds ??= new List<(long, string, long)>(assignments.Count)).Add((a.Character.ID, sceneName, a.Handle));
+				}
+			}
+
+			HashSet<long> bound = null;
+			if (binds != null)
+			{
+				DatabaseResult<IReadOnlyList<long>> bindResult = await charService.UpdateSceneBatchAsync(worldServerID, binds);
+				if (bindResult.IsSuccess)
+				{
+					bound = new HashSet<long>(bindResult.Data);
+					await Log.Info("WorldSceneSystem", $"Bound {bound.Count} of {binds.Count} character(s) to world server {worldServerID}, scene '{sceneName}'.");
+				}
+				else
+				{
+					await Log.Warning("WorldSceneSystem", $"Scene bind failed for {binds.Count} character(s) routed to '{sceneName}': [{bindResult.ErrorCode}] {bindResult.ErrorMessage}. Re-queuing them for the next routing cycle.");
+				}
+			}
+
+			// Feeds the client-facing wait estimate. See routedLastCycleByScene.
+			int routedThisCycle = 0;
+			for (int i = 0; i < assignments.Count; ++i)
+			{
+				var a = assignments[i];
+				if (WorldSceneRoutingRules.NeedsSceneBind(a.Character.WorldServerID, a.Character.SceneHandle, worldServerID, a.Handle) &&
+					(bound == null || !bound.Contains(a.Character.ID)))
+				{
+					if (bound != null)
+					{
+						// The statement ran and this row was not in it: missing or deleted, the
+						// per-row NotFound of the single-row write.
+						await Log.Warning("WorldSceneSystem", $"Scene bind wrote no row for character {a.Character.ID}. Re-queuing for the next routing cycle.");
+					}
+					outcome.RequeueOpenWorld(a.Conn, sceneName);
+					continue;
+				}
+
+				outcome.Connect(a.Conn, a.Port);
+				routedThisCycle++;
+			}
+
+			ApplyRoutingOutcome(outcome);
 
 			// Publish what this pass achieved so the position sweep can estimate a wait, and
 			// record that anything still queued is queued for capacity rather than for a load.
 			routedLastCycleByScene[sceneName] = routedThisCycle;
 			queueReasonByScene[sceneName] = WorldSceneQueueReason.Capacity;
+			if (routedThisCycle > 0)
+			{
+				lastPlacementAtByScene[sceneName] = MonotonicClock.NowSeconds;
+			}
 
 			// Clean up empty queue entries and request a new scene if connections are still waiting
 			await CleanupAndEnqueueNewSceneIfNeededAsync(sceneName, worldServerID, sceneService);
+		}
+
+		/// <summary>
+		/// Takes the connections one open-world routing pass will try to place off the scene's
+		/// waiting queue. Main thread only.
+		/// </summary>
+		/// <param name="connections">The scene's waiting set.</param>
+		/// <param name="freeCapacity">Free slots across the scene's routable instances.</param>
+		/// <param name="mappingData">Queue maps.</param>
+		/// <param name="taken">Receives each connection taken, with its account name.</param>
+		/// <remarks>See <see cref="WorldSceneRoutingRules.SelectForRouting{T}"/> for which are taken.</remarks>
+		private void TakeOpenWorldConnectionsToRoute(
+			HashSet<NetworkConnection> connections,
+			int freeCapacity,
+			IWorldSceneMappingData<NetworkConnection> mappingData,
+			List<(NetworkConnection conn, string accountName)> taken)
+		{
+			double now = MonotonicClock.NowSeconds;
+			var candidates = new List<WorldSceneRoutingRules.QueueCandidate<NetworkConnection>>(connections.Count);
+			List<NetworkConnection> gone = null;
+			foreach (NetworkConnection connection in connections)
+			{
+				if (connection == null || !connection.IsActive)
+				{
+					(gone ??= new List<NetworkConnection>()).Add(connection);
+					continue;
+				}
+
+				// The reporting clock, so the order matches the positions clients are told.
+				double waitingSince = waitingSinceByClientId.TryGetValue(connection.ClientId, out double since)
+					? since
+					: now;
+				bool held = queueReasonByClientId.TryGetValue(connection.ClientId, out WorldSceneQueueReason reason) &&
+					reason == WorldSceneQueueReason.CombatLogoutBody;
+				candidates.Add(new WorldSceneRoutingRules.QueueCandidate<NetworkConnection>(connection, waitingSince, connection.ClientId, held));
+			}
+
+			// A connection that has gone is dropped, as the whole-queue snapshot always did.
+			if (gone != null)
+			{
+				for (int i = 0; i < gone.Count; ++i)
+				{
+					NetworkConnection connection = gone[i];
+					connections.Remove(connection);
+					if (connection != null)
+					{
+						mappingData.OpenWorldConnectionScenes.Remove(connection);
+						// Gone without leaving: the connection dropped, so its place is held.
+						EndWaitKeepingPlace(connection.ClientId);
+					}
+				}
+			}
+
+			var selected = new List<NetworkConnection>(Math.Min(candidates.Count, freeCapacity + 1));
+			WorldSceneRoutingRules.SelectForRouting(candidates, freeCapacity, selected);
+
+			for (int i = 0; i < selected.Count; ++i)
+			{
+				NetworkConnection connection = selected[i];
+				connections.Remove(connection);
+				mappingData.OpenWorldConnectionScenes.Remove(connection);
+
+				/* The wait clock deliberately survives this. Taking a connection off the queue here
+				 * is a routing cycle, not a departure — anything not placed is put straight back —
+				 * so clearing it restarted the TTL every cycle and the purge could never fire. Only
+				 * a connection that is genuinely leaving clears it. */
+				if (!IsValidConnection(connection, out string accountName))
+				{
+					EndWaitKeepingPlace(connection.ClientId);
+					continue;
+				}
+
+				taken.Add((connection, accountName));
+			}
 		}
 
 		/// <summary>
@@ -1188,8 +1289,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Releases a character from an instance that cannot be entered, persists the change, and
-		/// routes it to the open world instead.
+		/// Releases a character from an instance that cannot be entered and persists the change.
+		/// The caller routes it to the open world.
 		/// </summary>
 		/// <remarks>
 		/// Every caller has established that the instance is gone or will never arrive: the row
@@ -1197,13 +1298,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <see cref="InstanceReadyGraceSeconds"/>. That conclusion covers the character's
 		/// combat-logout body too, which is why the flag is cleared here as well — see below.
 		/// </remarks>
-		private async Task ClearInstanceFlagAndFallbackAsync(
-			ICharacterService charService,
-			CharacterData charData,
-			int characterFlags,
-			NetworkConnection conn,
-			string accountName)
+		private async Task ReleaseFromInstanceAsync(ICharacterService charService, CharacterData charData)
 		{
+			int characterFlags = charData.Flags;
 			characterFlags.DisableBit(CharacterFlags.IsInInstance);
 
 			/* The body went with the instance, so the flag that says one is waiting must go too.
@@ -1229,265 +1326,436 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			DatabaseResult persistResult = await charService.PersistAsync(updatedChar);
 			if (!persistResult.IsSuccess)
 			{
-				await Log.Warning("WorldSceneSystem", $"ClearInstanceFlagAndFallbackAsync DB error (CharID={charData.ID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
+				await Log.Warning("WorldSceneSystem", $"ReleaseFromInstanceAsync DB error (CharID={charData.ID}): {persistResult.ErrorCode} - {persistResult.ErrorMessage}");
 			}
-			await FallbackToWorldSceneAsync(conn, accountName);
 		}
 
 		/// <summary>
-		/// Tries to process an Instance scene for the connection character otherwise falls back to the world scene.
-		/// <para>
-		/// The connection is removed from the instance queue immediately before async processing begins.
-		/// This prevents the connection from being re-processed on the next cycle or receiving erroneous
-		/// TTL kicks during the async window. If the instance is still loading, the connection is re-added
-		/// to the queue. On failure, the connection falls back to the world scene queue.
-		/// </para>
+		/// How many instance releases one batch persists at once.
 		/// </summary>
-		/// <param name="conn">Network connection to process.</param>
-		/// <param name="skipDebounce">When true, skips per-account debounce check because the caller already reserved the lookup window.</param>
-		private async Task ProcessInstanceConnectionAsync(NetworkConnection conn, bool skipDebounce = false)
+		/// <remarks>
+		/// Each is a full character write, one per character. They are rare — an instance has to be
+		/// gone — except after a world server restart, which deletes every scene row it owned and so
+		/// releases every instanced character at once. This keeps that from putting a whole batch's
+		/// writes on the connection pool together.
+		/// </remarks>
+		private const int MaxConcurrentInstanceReleases = 32;
+
+		/// <summary>
+		/// Routes a batch of connections waiting on the instance queue: to their instance's scene
+		/// server, back onto the queue, or to the open world.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The whole batch costs one main-thread hop to take it off the queue, one read of every
+		/// selected character, one read of every distinct instance, one read of every distinct
+		/// scene server, at most one bind write, and one main-thread action to apply what was
+		/// decided. It used to cost all of that per connection — a hop with its own timer, a
+		/// character read, a scene read and a scene-server read each, even for the members of one
+		/// party waiting on the same instance — so a scene server restart with 500 players in
+		/// dungeons put hundreds of single queries a second on the database for minutes.
+		/// </para>
+		/// <para>
+		/// A connection is taken off the queue before any database work and is always either sent
+		/// on, put back, moved to the open-world queue, or kicked. That prevents re-processing,
+		/// erroneous TTL kicks, and stale routing during the async window.
+		/// </para>
+		/// </remarks>
+		/// <param name="conns">Connections to route.</param>
+		/// <param name="skipDebounce">When true, skips the per-account debounce because the caller already reserved the lookup window.</param>
+		private async Task ProcessInstanceBatchAsync(List<NetworkConnection> conns, bool skipDebounce)
 		{
-			if (!TryGetDbService(out ICharacterService charService) ||
+			if (conns == null || conns.Count == 0 ||
+				!TryGetDbService(out ICharacterService charService) ||
 				!TryGetDbService(out ISceneService sceneService) ||
 				!TryGetDbService(out ISceneServerService sceneServerService))
 			{
 				return;
 			}
 
-			// Validate the connection and remove from instance queue immediately on main thread.
-			// This prevents re-processing, erroneous TTL kicks, and stale routing during the async window.
-			string accountName = null;
+			// Validate the connections and take them off the instance queue, in one main-thread hop.
+			var waiting = new List<(NetworkConnection Conn, string AccountName)>(conns.Count);
 			if (!await RunOnMainThreadAsync(() =>
 			{
-				if (!IsValidConnection(conn, out string acct))
+				Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData);
+				for (int i = 0; i < conns.Count; ++i)
 				{
-					Kick(conn, "Failed to get account name", DisconnectNoticeReason.ProtocolViolation, terminal: true);
-				}
-				else
-				{
-					accountName = acct;
-				}
+					NetworkConnection conn = conns[i];
+					if (conn == null)
+					{
+						continue;
+					}
 
-				// Remove from queue before async work to prevent re-processing on the next cycle
-				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
-				{
-					RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
+					if (!IsValidConnection(conn, out string acct))
+					{
+						Kick(conn, "Failed to get account name", DisconnectNoticeReason.ProtocolViolation, terminal: true);
+					}
+					else
+					{
+						waiting.Add((conn, acct));
+					}
+
+					// Remove from queue before async work to prevent re-processing on the next cycle
+					if (mappingData != null)
+					{
+						RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
+					}
 				}
 			}))
 			{
 				return;
 			}
 
-			if (string.IsNullOrEmpty(accountName))
+			if (waiting.Count == 0)
 			{
 				return;
 			}
 
-			if (!skipDebounce && !TryBeginInstanceLookup(accountName))
-			{
-				// Re-queue: instance lookup was rate-limited. The connection was
-				// already removed from the queue above; re-add it so the next
-				// processing cycle picks it up.
-				TryEnqueueMainThread(() =>
-				{
-					if (conn != null && conn.IsActive &&
-						Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var md))
-					{
-						AddToQueue(conn, 0L, md.WaitingInstanceConnections, md.InstanceConnectionScenes);
-					}
-				});
-				return;
-			}
-
+			var outcome = new RoutingOutcome();
 			try
 			{
-			// Get the selected character data (single-row fetch, includes flags and instance info)
-			var charResult = await charService.FetchByAccountAsync(accountName, selected: true);
-			if (!charResult.IsSuccess)
-			{
-				/* A failed read says nothing about the character, so it is not a reason to kick.
-				 * The open-world path learned the same lesson (see ProcessOpenWorldQueueAsync's
-				 * batch fetch): kicking here sent every reconnecting player back through the login
-				 * pipeline on a database hiccup. Wait a routing cycle instead. */
-				await Log.Warning("WorldSceneSystem", $"Selected character fetch failed for account '{accountName}': [{charResult.ErrorCode}] {charResult.ErrorMessage}. Re-queuing for the next routing cycle.");
-				RequeueInstanceConnection(conn, 0L);
-				return;
-			}
-			if (!charResult.Data.HasValue)
-			{
-				TryEnqueueMainThread(() => Kick(conn, "invalid character ID", DisconnectNoticeReason.CharacterUnavailable));
-				return;
-			}
-			var charData = charResult.Data.Value;
-			int characterFlags = charData.Flags;
-
-			// Bind the character to this world server before any routing decision.
-			// The instance path below broadcasts WorldSceneConnectBroadcast without touching
-			// the character row, so unlike the open-world path (which rebinds through
-			// UpdateSceneAsync) nothing else would refresh world_server_id here — and the
-			// Scene Server matches the arriving character on (world_server_id, scene,
-			// handle), rejecting it as mismatched when world_server_id is stale from a
-			// previous world instance or still 0 from character creation.
-			long currentWorldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
-			if (currentWorldServerID > 0 && charData.WorldServerID != currentWorldServerID)
-			{
-				DatabaseResult bindResult = await charService.UpdateSceneAsync(charData.ID, currentWorldServerID, charData.SceneName, charData.SceneHandle);
-				if (!bindResult.IsSuccess)
+				var lookups = new List<(NetworkConnection Conn, string AccountName)>(waiting.Count);
+				for (int i = 0; i < waiting.Count; ++i)
 				{
-					await Log.Warning("WorldSceneSystem", $"Failed to bind character {charData.ID} to world server {currentWorldServerID}: [{bindResult.ErrorCode}] {bindResult.ErrorMessage}");
-
-					/* Only the instance route depends on this write. A character headed for the open
-					 * world is rebound by that routing pass itself, so it loses nothing and goes on.
-					 * An instanced one would be sent to a scene server that has to refuse it for the
-					 * stale world_server_id, so it waits a routing cycle for the bind to land. */
-					if (characterFlags.IsFlagged(CharacterFlags.IsInInstance))
+					if (skipDebounce || TryBeginInstanceLookup(waiting[i].AccountName))
 					{
-						RequeueInstanceConnection(conn, 0L);
-						return;
+						lookups.Add(waiting[i]);
+					}
+					else
+					{
+						// Rate-limited. The connection was already taken off the queue above; put it
+						// back so the next processing cycle picks it up.
+						outcome.RequeueInstance(waiting[i].Conn, 0L);
 					}
 				}
-			}
 
-			if (!characterFlags.IsFlagged(CharacterFlags.IsInInstance))
-			{
-				await FallbackToWorldSceneAsync(conn, accountName);
-				return;
-			}
-
-			/* IsCombatLogged is deliberately NOT diverted here, unlike on the open-world path.
-			 *
-			 * That check exists because an open-world character's body can be left on a scene
-			 * instance other than the one the router would otherwise pick, and only the server
-			 * holding the body can hand it back. An instanced character has no such ambiguity:
-			 * its body is in its instance, on the scene server that hosts it, which is exactly
-			 * where the routing below sends it — and TryReattachLingeringCharacter reclaims the
-			 * body on arrival. Diverting to the open-world queue would send the client to a
-			 * server that does not hold the body, which then loses the claim race and kicks it
-			 * on every retry until the linger expires.
-			 *
-			 * If the instance is gone (its scene server died, taking the row with it) the fetch
-			 * below reports the row missing and the fallback clears the flag, which is the
-			 * correct outcome: the body went with the server. */
-
-			long instanceID = charData.InstanceID;
-			if (instanceID <= 0)
-			{
-				await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
-				return;
-			}
-
-			var sceneResult = await sceneService.FetchAsync(instanceID);
-			if (!sceneResult.IsSuccess)
-			{
-				/* Only a row that is actually missing releases the character. That includes the
-				 * row having been reaped by SweepStaleSceneRowsAsync, which is the ordinary end
-				 * state for an instance that never became ready.
-				 *
-				 * A read that merely failed is not that. Falling back on it persisted the cleared
-				 * instance and combat-logout flags for a character whose instance was alive, and
-				 * sent them to the open world while the instance's scene server still held their
-				 * body and session claim. Wait a routing cycle and ask again. */
-				if (!IsRowAbsent(sceneResult))
+				if (lookups.Count > 0)
 				{
-					await Log.Warning("WorldSceneSystem", $"Instance scene {instanceID} fetch failed for character {charData.ID}: [{sceneResult.ErrorCode}] {sceneResult.ErrorMessage}. Re-queuing for the next routing cycle.");
-					RequeueInstanceConnection(conn, instanceID);
-					return;
+					await RouteInstanceLookupsAsync(lookups, outcome, charService, sceneService, sceneServerService);
 				}
-				await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
-				return;
-			}
-
-			var sceneData = sceneResult.Data;
-			FishMMO.Shared.SceneStatus sceneStatus = (FishMMO.Shared.SceneStatus)sceneData.SceneStatus;
-			if (sceneStatus == FishMMO.Shared.SceneStatus.Ready)
-			{
-				// Ensure the Scene Server is running. "Registered" is not the same as "running":
-				// a crashed scene server's registration outlives it, so the pulse is what says.
-				var sceneServerResult = await sceneServerService.FetchAsync(sceneData.SceneServerID);
-
-				/* The branch below deletes the instance's scene row, so it may only be reached on an
-				 * answer: the registration is gone, or it is there and has stopped pulsing. A read
-				 * that failed answers neither. Treating it as "unreachable" deleted the row of a
-				 * live, populated instance — the scene server kept running it, but every other
-				 * member's next reconnect then found no row and was ejected too. */
-				if (!sceneServerResult.IsSuccess && !IsRowAbsent(sceneServerResult))
-				{
-					await Log.Warning("WorldSceneSystem", $"Scene server {sceneData.SceneServerID} fetch failed for instance {sceneData.ID}: [{sceneServerResult.ErrorCode}] {sceneServerResult.ErrorMessage}. Re-queuing for the next routing cycle.");
-					RequeueInstanceConnection(conn, sceneData.ID);
-					return;
-				}
-
-				// Live, not routable: a locked scene server still hands back the instances it is
-				// hosting. See IsSceneServerRoutable for why a lock must not evict from a dungeon.
-				if (sceneServerResult.IsSuccess && IsSceneServerLive(sceneServerResult.Data))
-				{
-					var sceneServer = sceneServerResult.Data;
-					/* Same helper as the open-world path. The hand-rolled copy that used to
-					 * live here checked only the instance queue for the re-queue race, never
-					 * sent the queue-position 0 that dismisses the wait dialog, and never
-					 * cleared the wait tracking — so an instance client that had been shown a
-					 * position kept its entry until it disconnected. */
-					BroadcastSceneConnect(conn, (ushort)sceneServer.Port);
-				}
-				else
-				{
-					// Scene server unreachable — delete stale scene entry and fall back
-					DatabaseResult deleteResult = await sceneService.DeleteAsync(sceneData.ID);
-					if (!deleteResult.IsSuccess)
-					{
-						await Log.Warning("WorldSceneSystem", $"ProcessInstanceConnectionAsync scene delete failed (SceneID={sceneData.ID}): {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
-					}
-					await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
-				}
-			}
-			else if (sceneStatus == FishMMO.Shared.SceneStatus.Pending ||
-					 sceneStatus == FishMMO.Shared.SceneStatus.Loading)
-			{
-				/* Bounded by the row's own age, not by the connection's wait.
-				 *
-				 * The queue TTL only ends one visit: the client is kicked, reconnects, still has
-				 * the instance flag, is queued again, and is kicked again — forever, because
-				 * nothing in that cycle ever looks at how long the instance itself has been
-				 * stuck. And it does get stuck: a row that no scene server ever dequeues stays
-				 * Pending indefinitely, and one whose scene server died between dequeue and load
-				 * stays Loading with scene_server_id still 0, so that server's own startup
-				 * cleanup does not match it either.
-				 *
-				 * Measuring the row instead makes the give-up decision survive the reconnect, so
-				 * a character can never be trapped by an instance that is not coming. */
-				double instanceAgeSeconds = (DateTime.UtcNow - sceneData.TimeCreated).TotalSeconds;
-				if (instanceAgeSeconds >= InstanceReadyGraceSeconds)
-				{
-					await Log.Warning("WorldSceneSystem",
-						$"Instance scene {sceneData.ID} ({sceneData.SceneName}) has been {sceneStatus} for {instanceAgeSeconds:F0}s; " +
-						$"releasing character {charData.ID} from it and routing to the open world.");
-					await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
-					return;
-				}
-
-				// Re-add to instance queue — scene is still loading
-				TryEnqueueMainThread(() =>
-				{
-					if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
-					{
-						AddToQueue(conn, sceneData.ID, mappingData.WaitingInstanceConnections, mappingData.InstanceConnectionScenes);
-					}
-				});
-			}
-			else
-			{
-				// Unknown or terminal scene status — fall back to world scene
-				await ClearInstanceFlagAndFallbackAsync(charService, charData, characterFlags, conn, accountName);
-			}
 			}
 			catch (Exception ex)
 			{
-				// Re-queue on unexpected async failure. The connection was removed
-				// from the instance queue before async work began. If anything
-				// throws during processing, re-add to the queue so the connection
-				// is not orphaned and will be retried on the next cycle.
-				await Log.Error("WorldSceneSystem", $"ProcessInstanceConnectionAsync error for {accountName}: {ex}");
-				RequeueInstanceConnection(conn, 0L);
+				/* Put back everything not yet decided. The connections were taken off the queue
+				 * before the async work began, so anything left undecided when this throws would
+				 * otherwise be orphaned; the next cycle retries it. */
+				await Log.Error("WorldSceneSystem", $"Instance routing failed for a batch of {waiting.Count} connection(s): {ex}");
+				for (int i = 0; i < waiting.Count; ++i)
+				{
+					if (!outcome.IsDecided(waiting[i].Conn))
+					{
+						outcome.RequeueInstance(waiting[i].Conn, 0L);
+					}
+				}
+			}
+
+			ApplyRoutingOutcome(outcome);
+		}
+
+		/// <summary>
+		/// Reads what a batch of instance-queue connections needs and decides each one. See
+		/// <see cref="ProcessInstanceBatchAsync"/>.
+		/// </summary>
+		private async Task RouteInstanceLookupsAsync(
+			List<(NetworkConnection Conn, string AccountName)> lookups,
+			RoutingOutcome outcome,
+			ICharacterService charService,
+			ISceneService sceneService,
+			ISceneServerService sceneServerService)
+		{
+			// Every selected character in the batch, in one read.
+			var accountNames = new List<string>(lookups.Count);
+			for (int i = 0; i < lookups.Count; ++i)
+			{
+				accountNames.Add(lookups[i].AccountName);
+			}
+
+			var charResult = await charService.FetchSelectedCharactersByAccountsAsync(accountNames);
+			if (!charResult.IsSuccess || charResult.Data == null)
+			{
+				/* A failed read says nothing about the characters, so it is not a reason to kick.
+				 * The open-world path learned the same lesson (see ProcessOpenWorldQueueAsync's
+				 * batch fetch): kicking here sent every reconnecting player back through the login
+				 * pipeline on a database hiccup. Wait a routing cycle instead. */
+				await Log.Warning("WorldSceneSystem", $"Selected character fetch failed for {lookups.Count} instance-queue connection(s): [{charResult.ErrorCode}] {charResult.ErrorMessage}. Re-queuing them for the next routing cycle.");
+				for (int i = 0; i < lookups.Count; ++i)
+				{
+					outcome.RequeueInstance(lookups[i].Conn, 0L);
+				}
+				return;
+			}
+
+			var charByAccount = new Dictionary<string, CharacterData>(charResult.Data.Count, StringComparer.OrdinalIgnoreCase);
+			foreach (CharacterData charData in charResult.Data)
+			{
+				if (charData.ID > 0)
+				{
+					charByAccount[charData.Account] = charData;
+				}
+			}
+
+			long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
+
+			var instanceBound = new List<(NetworkConnection Conn, CharacterData Character)>(lookups.Count);
+			var instanceIDs = new HashSet<long>();
+			var releases = new List<(NetworkConnection Conn, CharacterData Character)>();
+			for (int i = 0; i < lookups.Count; ++i)
+			{
+				var (conn, accountName) = lookups[i];
+				if (!charByAccount.TryGetValue(accountName, out CharacterData charData))
+				{
+					outcome.Kick(conn, "invalid character ID", DisconnectNoticeReason.CharacterUnavailable);
+					continue;
+				}
+
+				/* Not bound to an instance, so an open-world character: the open-world pass routes
+				 * it, and binds it to this world server itself when it places it. The scene it
+				 * waits for is on the row just read. The fallback used to read the row again to
+				 * find it, the fourth read of the same row in one login, and every one of these
+				 * characters was written a world bind here that only the instance route needs. */
+				if (!charData.Flags.IsFlagged(CharacterFlags.IsInInstance))
+				{
+					outcome.MoveToOpenWorld(conn, charData);
+					continue;
+				}
+
+				/* IsCombatLogged is deliberately NOT diverted here, unlike on the open-world path.
+				 *
+				 * That check exists because an open-world character's body can be left on a scene
+				 * instance other than the one the router would otherwise pick, and only the server
+				 * holding the body can hand it back. An instanced character has no such ambiguity:
+				 * its body is in its instance, on the scene server that hosts it, which is exactly
+				 * where the routing below sends it — and TryReattachLingeringCharacter reclaims the
+				 * body on arrival. Diverting to the open-world queue would send the client to a
+				 * server that does not hold the body, which then loses the claim race and kicks it
+				 * on every retry until the linger expires.
+				 *
+				 * If the instance is gone (its scene server died, taking the row with it) the read
+				 * below reports the row missing and the release clears the flag, which is the
+				 * correct outcome: the body went with the server. */
+				if (charData.InstanceID <= 0)
+				{
+					releases.Add((conn, charData));
+					continue;
+				}
+
+				instanceBound.Add((conn, charData));
+				instanceIDs.Add(charData.InstanceID);
+			}
+
+			// Every instance the batch is bound to, in one read: a party waiting on one dungeon is one row.
+			Dictionary<long, (SceneData Scene, double AgeSeconds)> sceneByID = null;
+			if (instanceIDs.Count > 0)
+			{
+				var sceneResult = await sceneService.FetchWithAgesAsync(instanceIDs);
+				if (sceneResult.IsSuccess && sceneResult.Data != null)
+				{
+					sceneByID = new Dictionary<long, (SceneData Scene, double AgeSeconds)>(sceneResult.Data.Count);
+					foreach (var row in sceneResult.Data)
+					{
+						sceneByID[row.Scene.ID] = row;
+					}
+				}
+				else
+				{
+					await Log.Warning("WorldSceneSystem", $"Instance scene fetch failed for {instanceIDs.Count} instance(s): [{sceneResult.ErrorCode}] {sceneResult.ErrorMessage}. Re-queuing their characters for the next routing cycle.");
+				}
+			}
+
+			/* And every scene server hosting a Ready one, in one read. "Registered" is not the same
+			 * as "running": a crashed scene server's registration outlives it, so the pulse is what
+			 * says. */
+			Dictionary<long, SceneServerData> serverByID = null;
+			bool serverReadFailed = false;
+			if (sceneByID != null)
+			{
+				var serverIDs = new List<long>();
+				var seenServers = new HashSet<long>();
+				foreach (var row in sceneByID.Values)
+				{
+					if ((FishMMO.Shared.SceneStatus)row.Scene.SceneStatus == FishMMO.Shared.SceneStatus.Ready &&
+						seenServers.Add(row.Scene.SceneServerID))
+					{
+						serverIDs.Add(row.Scene.SceneServerID);
+					}
+				}
+
+				if (serverIDs.Count > 0)
+				{
+					var serverResult = await sceneServerService.FetchSceneServersByIDsAsync(serverIDs);
+					if (serverResult.IsSuccess && serverResult.Data != null)
+					{
+						serverByID = new Dictionary<long, SceneServerData>(serverResult.Data.Count);
+						foreach (SceneServerData server in serverResult.Data)
+						{
+							serverByID[server.ID] = server;
+						}
+					}
+					else
+					{
+						serverReadFailed = true;
+						await Log.Warning("WorldSceneSystem", $"Scene server fetch failed for {serverIDs.Count} server(s) hosting instances: [{serverResult.ErrorCode}] {serverResult.ErrorMessage}. Re-queuing their characters for the next routing cycle.");
+					}
+				}
+			}
+
+			var connects = new List<(NetworkConnection Conn, CharacterData Character, ushort Port)>(instanceBound.Count);
+			HashSet<long> deadScenes = null;
+			for (int i = 0; i < instanceBound.Count; ++i)
+			{
+				var (conn, charData) = instanceBound[i];
+				long instanceID = charData.InstanceID;
+
+				var sceneLookup = WorldSceneRoutingRules.RowLookup.Failed;
+				FishMMO.Shared.SceneStatus status = default;
+				SceneData sceneData = default;
+				double ageSeconds = 0.0;
+				if (sceneByID != null)
+				{
+					if (sceneByID.TryGetValue(instanceID, out var row))
+					{
+						sceneLookup = WorldSceneRoutingRules.RowLookup.Found;
+						sceneData = row.Scene;
+						status = (FishMMO.Shared.SceneStatus)row.Scene.SceneStatus;
+						ageSeconds = row.AgeSeconds;
+					}
+					else
+					{
+						// Only a row that is actually missing releases the character. That includes
+						// the row having been reaped by SweepStaleSceneRowsAsync, which is the
+						// ordinary end state for an instance that never became ready.
+						sceneLookup = WorldSceneRoutingRules.RowLookup.Absent;
+					}
+				}
+
+				var serverLookup = WorldSceneRoutingRules.RowLookup.Absent;
+				bool serverLive = false;
+				ushort port = 0;
+				if (sceneLookup == WorldSceneRoutingRules.RowLookup.Found && status == FishMMO.Shared.SceneStatus.Ready)
+				{
+					if (serverReadFailed)
+					{
+						serverLookup = WorldSceneRoutingRules.RowLookup.Failed;
+					}
+					else if (serverByID != null && serverByID.TryGetValue(sceneData.SceneServerID, out SceneServerData server))
+					{
+						serverLookup = WorldSceneRoutingRules.RowLookup.Found;
+						// Live, not routable: a locked scene server still hands back the instances it
+						// is hosting. See IsSceneServerRoutable for why a lock must not evict from a dungeon.
+						serverLive = IsSceneServerLive(server);
+						port = (ushort)server.Port;
+					}
+				}
+
+				switch (WorldSceneRoutingRules.DecideInstanceRoute(sceneLookup, status, ageSeconds, serverLookup, serverLive, InstanceReadyGraceSeconds))
+				{
+					case WorldSceneRoutingRules.InstanceRoute.Connect:
+						connects.Add((conn, charData, port));
+						break;
+
+					case WorldSceneRoutingRules.InstanceRoute.WaitForLoad:
+					case WorldSceneRoutingRules.InstanceRoute.Retry:
+						outcome.RequeueInstance(conn, instanceID);
+						break;
+
+					case WorldSceneRoutingRules.InstanceRoute.Release:
+						if (sceneLookup == WorldSceneRoutingRules.RowLookup.Found &&
+							(status == FishMMO.Shared.SceneStatus.Pending || status == FishMMO.Shared.SceneStatus.Loading))
+						{
+							/* Bounded by the row's own age, measured by the database clock that
+							 * stamped it, so the give-up decision survives the reconnect and no host
+							 * clock can shift it. See WorldSceneRoutingRules.DecideInstanceRoute. */
+							await Log.Warning("WorldSceneSystem",
+								$"Instance scene {sceneData.ID} ({sceneData.SceneName}) has been {status} for {ageSeconds:F0}s; " +
+								$"releasing character {charData.ID} from it and routing to the open world.");
+						}
+						releases.Add((conn, charData));
+						break;
+
+					case WorldSceneRoutingRules.InstanceRoute.ReleaseDeletingScene:
+						// Scene server unreachable — delete the stale scene entry and fall back.
+						(deadScenes ??= new HashSet<long>()).Add(instanceID);
+						releases.Add((conn, charData));
+						break;
+				}
+			}
+
+			if (deadScenes != null)
+			{
+				DatabaseResult<int> deleteResult = await sceneService.DeleteManyAsync(deadScenes);
+				if (!deleteResult.IsSuccess)
+				{
+					await Log.Warning("WorldSceneSystem", $"Instance scene delete failed for {deadScenes.Count} scene(s) on stopped scene servers: {deleteResult.ErrorCode} - {deleteResult.ErrorMessage}");
+				}
+			}
+
+			/* Bind each character being sent to its instance to this world server first.
+			 *
+			 * The instance route sends the client straight to the scene server hosting the
+			 * instance, which matches the arriving character on (world_server_id, scene, handle)
+			 * and rejects it as mismatched when world_server_id is stale from a previous world
+			 * instance, or still 0 from character creation. Only this route needs the write, and
+			 * only once it is actually sending the client: an open-world character is bound by the
+			 * open-world pass when it is placed, and one waiting on a load or being released is not
+			 * going anywhere yet. It used to be written for every character this path read. A bind
+			 * that did not land holds the character for a routing cycle rather than sending it to
+			 * a scene server that has to refuse it. */
+			List<(long CharacterId, string SceneName, long SceneHandle)> binds = null;
+			for (int i = 0; i < connects.Count; ++i)
+			{
+				CharacterData charData = connects[i].Character;
+				if (WorldSceneRoutingRules.NeedsWorldBind(charData.WorldServerID, worldServerID))
+				{
+					(binds ??= new List<(long, string, long)>(connects.Count)).Add((charData.ID, charData.SceneName, charData.SceneHandle));
+				}
+			}
+
+			HashSet<long> bound = null;
+			if (binds != null)
+			{
+				DatabaseResult<IReadOnlyList<long>> bindResult = await charService.UpdateSceneBatchAsync(worldServerID, binds);
+				if (bindResult.IsSuccess)
+				{
+					bound = new HashSet<long>(bindResult.Data);
+				}
+				else
+				{
+					await Log.Warning("WorldSceneSystem", $"Failed to bind {binds.Count} instanced character(s) to world server {worldServerID}: [{bindResult.ErrorCode}] {bindResult.ErrorMessage}. Re-queuing them for the next routing cycle.");
+				}
+			}
+
+			for (int i = 0; i < connects.Count; ++i)
+			{
+				var (conn, charData, port) = connects[i];
+				if (WorldSceneRoutingRules.NeedsWorldBind(charData.WorldServerID, worldServerID) &&
+					(bound == null || !bound.Contains(charData.ID)))
+				{
+					if (bound != null)
+					{
+						await Log.Warning("WorldSceneSystem", $"World bind wrote no row for character {charData.ID}. Re-queuing for the next routing cycle.");
+					}
+					outcome.RequeueInstance(conn, 0L);
+					continue;
+				}
+
+				outcome.Connect(conn, port);
+			}
+
+			// Releases last: each is its own character write, and they are rare.
+			for (int start = 0; start < releases.Count; start += MaxConcurrentInstanceReleases)
+			{
+				int end = Math.Min(start + MaxConcurrentInstanceReleases, releases.Count);
+				var writes = new Task[end - start];
+				for (int i = start; i < end; ++i)
+				{
+					writes[i - start] = ReleaseFromInstanceAsync(charService, releases[i].Character);
+				}
+				await Task.WhenAll(writes);
+
+				for (int i = start; i < end; ++i)
+				{
+					outcome.MoveToOpenWorld(releases[i].Conn, releases[i].Character);
+				}
 			}
 		}
 
@@ -1507,31 +1775,26 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 
 			// Use cached count if still within TTL to avoid re-fetching all scene rows every cycle
-			TimeSpan countCacheTtl = TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds);
-			DateTime now = DateTime.UtcNow;
+			double countCacheTtlSeconds = sceneInstanceCacheTtlSeconds;
+			double now = MonotonicClock.NowSeconds;
 			int sceneCharacterCount;
 
-			if (countCacheTtl > TimeSpan.Zero &&
-				(now - runtimeData.CachedSceneCharacterCountUtc) < countCacheTtl)
+			if (countCacheTtlSeconds > 0.0 &&
+				now - runtimeData.CachedSceneCharacterCountAt < countCacheTtlSeconds)
 			{
 				sceneCharacterCount = runtimeData.CachedSceneCharacterCount;
 			}
 			else
 			{
 				long worldServerID = Server.DataContainerRegistry.TryGet<IWorldServerSystemRuntimeData>(out var worldData) ? worldData.ID : 0;
-				var scenesResult = await sceneService.FetchManyAsync(worldServerID);
+
+				// Summed by the database: every scene row used to come back here only to be added up.
+				var scenesResult = await sceneService.SumCharacterCountAsync(worldServerID);
 				if (scenesResult.IsSuccess)
 				{
-					sceneCharacterCount = 0;
-					if (scenesResult.Data != null)
-					{
-						foreach (var scene in scenesResult.Data)
-						{
-							sceneCharacterCount += scene.CharacterCount;
-						}
-					}
+					sceneCharacterCount = scenesResult.Data;
 					runtimeData.CachedSceneCharacterCount = sceneCharacterCount;
-					runtimeData.CachedSceneCharacterCountUtc = now;
+					runtimeData.CachedSceneCharacterCountAt = now;
 				}
 				else
 				{
@@ -1606,7 +1869,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			// Arm the residency watchdog: from here the client must be routed and gone.
 			worldResidencyDeadlineByClientId[conn.ClientId] =
-				DateTime.UtcNow.AddSeconds(WorldResidencyGraceSeconds);
+				MonotonicClock.NowSeconds + WorldResidencyGraceSeconds;
 
 			/* Rate-limited means "not yet", not "go away".
 			 *
@@ -1618,7 +1881,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			 * round trips through the login pipeline, with a "you are doing that too often"
 			 * notice for a player who did nothing but reconnect.
 			 *
-			 * Queue it instead. The routing cycle calls ProcessInstanceConnectionAsync for
+			 * Queue it instead. The routing cycle calls ProcessInstanceBatchAsync for
 			 * everything on this queue, and that applies the same debounce itself and puts the
 			 * connection back if it is still inside the window — so the limit is enforced exactly
 			 * as before, it just costs a wait rather than a session. The wait is bounded from both
@@ -1632,7 +1895,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			if (!TryEnqueueAsyncWork(() => ProcessInstanceConnectionAsync(conn, skipDebounce: true), conn.ClientId))
+			if (!TryEnqueueAsyncWork(() => ProcessInstanceBatchAsync(new List<NetworkConnection>(1) { conn }, skipDebounce: true), conn.ClientId))
 			{
 				Kick(conn, "Failed to enqueue instance connection processing", DisconnectNoticeReason.ServerError);
 			}
@@ -1710,9 +1973,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return false;
 			}
 
+			// On the monotonic clock: a debounce is a duration. See ExpiringKeyTracker.TryBegin(TKey, double, TimeSpan).
 			return runtimeData.InstanceLookupDebounce.TryBegin(
 				accountName,
-				DateTime.UtcNow,
+				MonotonicClock.NowSeconds,
 				TimeSpan.FromSeconds(instanceLookupDebounceSeconds));
 		}
 
@@ -1746,14 +2010,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			int budget = Math.Max(debounceCleanupMaxRemovalsPerSweep, tracker.Count);
 			int reclaimed = 0;
 
 			while (reclaimed < budget)
 			{
 				int removed = tracker.SweepExpired(
-					nowUtc,
+					now,
 					debounceCleanupMaxScanPerSweep,
 					debounceCleanupMaxRemovalsPerSweep);
 
@@ -1783,7 +2047,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			DateTime now = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			var staleConnections = new List<NetworkConnection>(waitingQueuePurgeMaxPerSweep);
 
 			CollectStaleQueuedConnections(runtimeData, mappingData.OpenWorldConnectionScenes.Keys, staleConnections, now, waitingQueuePurgeMaxPerSweep, mappingData);
@@ -1809,10 +2073,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				// Read before RemoveFromQueue below, which takes the connection out of the maps
 				// EffectiveQueueTtlSeconds needs to tell a scene-load wait from a capacity one.
 				bool shouldKick = false;
+				WorldSceneQueueReason purgedReason = WorldSceneQueueReason.Capacity;
 				if (conn.IsActive &&
-					runtimeData.WaitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
+					runtimeData.WaitingQueueEnteredAtByClientId.TryGetValue(conn.ClientId, out double queuedAt))
 				{
-					shouldKick = (now - queuedAt).TotalSeconds >= EffectiveQueueTtlSeconds(conn, mappingData);
+					shouldKick = IsQueueWaitExpired(conn, queuedAt, now, mappingData);
+					purgedReason = CurrentQueueReason(conn, mappingData);
 				}
 
 				RemoveFromQueue(conn, mappingData.OpenWorldConnectionScenes, mappingData.WaitingOpenWorldConnections);
@@ -1826,14 +2092,21 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					 * including this notice, which is the only thing that dismisses the
 					 * "waiting for a world slot" dialog. The client would otherwise be left
 					 * looking at a stale position until its own reconnect logic noticed.
-					 * LoginQueueSystem's purge closes the same way for the same reason. */
-					SendQueuePosition(conn, -1, 0, 0, WorldSceneQueueReason.Capacity);
+					 * LoginQueueSystem's purge closes the same way for the same reason.
+					 *
+					 * The reason is what the connection was waiting for when its time ran out,
+					 * so the client can say which wait failed: a full world and a zone that never
+					 * finished loading are different advice to the player. */
+					SendQueuePosition(conn, -1, 0, 0, purgedReason);
 					Log.Debug("WorldSceneSystem", $"World Scene System: {conn.ClientId} waiting queue TTL exceeded.");
 					conn.Disconnect(false);
 				}
 
-				// Terminal either way: purged, or already gone.
-				ClearQueueTracking(conn.ClientId);
+				/* Terminal either way: purged, or already gone. Neither was the player's choice,
+				 * so an open-world place is held for the grace window: the purge sends a player
+				 * back because the line stalled, and "Try again" should not cost them their place
+				 * in a line that was not moving for anyone. */
+				EndWaitKeepingPlace(conn.ClientId);
 			}
 		}
 
@@ -1882,18 +2155,71 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
+		/// Whether one waiting connection's wait has run out.
+		/// </summary>
+		/// <remarks>
+		/// An open-world wait is timed from the later of joining the queue and the scene's last
+		/// placement (<see cref="lastPlacementAtByScene"/>), so the TTL fires when the line has
+		/// stalled rather than while it is moving. The rule itself is
+		/// <see cref="WorldSceneRoutingRules.QueueWaitExpired"/>.
+		/// </remarks>
+		/// <param name="conn">The waiting connection.</param>
+		/// <param name="queuedAt">When it joined the queue (<see cref="MonotonicClock"/> seconds).</param>
+		/// <param name="now">The current <see cref="MonotonicClock"/> reading.</param>
+		/// <param name="mappingData">Queue maps, used to find which scene the connection waits on.</param>
+		private bool IsQueueWaitExpired(NetworkConnection conn, double queuedAt, double now, IWorldSceneMappingData<NetworkConnection> mappingData)
+		{
+			double? lastPlacementAt = null;
+			if (mappingData != null &&
+				mappingData.OpenWorldConnectionScenes.TryGetValue(conn, out string sceneName) &&
+				lastPlacementAtByScene.TryGetValue(sceneName, out double placedAt))
+			{
+				lastPlacementAt = placedAt;
+			}
+			return WorldSceneRoutingRules.QueueWaitExpired(queuedAt, lastPlacementAt, now, EffectiveQueueTtlSeconds(conn, mappingData));
+		}
+
+		/// <summary>
+		/// What a waiting connection is waiting for right now, as its position reports say.
+		/// </summary>
+		/// <remarks>
+		/// The same precedence <see cref="BroadcastQueuePositions"/> uses: a connection-specific
+		/// reason (the combat-logout hold) outranks its scene's, and the instance queue only ever
+		/// waits on a load. Read before the connection leaves the queue maps.
+		/// </remarks>
+		/// <param name="conn">The waiting connection.</param>
+		/// <param name="mappingData">Queue maps, used to find which scene the connection waits on.</param>
+		private WorldSceneQueueReason CurrentQueueReason(NetworkConnection conn, IWorldSceneMappingData<NetworkConnection> mappingData)
+		{
+			if (queueReasonByClientId.TryGetValue(conn.ClientId, out WorldSceneQueueReason perConn))
+			{
+				return perConn;
+			}
+
+			if (mappingData == null || mappingData.InstanceConnectionScenes.ContainsKey(conn))
+			{
+				return WorldSceneQueueReason.SceneLoading;
+			}
+
+			return mappingData.OpenWorldConnectionScenes.TryGetValue(conn, out string sceneName) &&
+				queueReasonByScene.TryGetValue(sceneName, out WorldSceneQueueReason sceneReason)
+				? sceneReason
+				: WorldSceneQueueReason.Capacity;
+		}
+
+		/// <summary>
 		/// Collects stale queued connections from a source set based on activity and queue age.
 		/// </summary>
 		/// <param name="runtimeData">Cached runtime data from the caller to avoid redundant TryGet.</param>
 		/// <param name="source">Source connection set snapshot input.</param>
 		/// <param name="staleConnections">Output list to append stale connections into.</param>
-		/// <param name="now">Current UTC timestamp used for TTL comparisons.</param>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading used for TTL comparisons.</param>
 		/// <param name="maxToCollect">Maximum stale connections to collect in this pass.</param>
 		private void CollectStaleQueuedConnections(
 			WorldSceneSystemRuntimeData runtimeData,
 			IEnumerable<NetworkConnection> source,
 			List<NetworkConnection> staleConnections,
-			DateTime now,
+			double now,
 			int maxToCollect,
 			IWorldSceneMappingData<NetworkConnection> mappingData)
 		{
@@ -1920,13 +2246,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					continue;
 				}
 
-				if (!runtimeData.WaitingQueueEnteredUtcByClientId.TryGetValue(conn.ClientId, out DateTime queuedAt))
+				if (!runtimeData.WaitingQueueEnteredAtByClientId.TryGetValue(conn.ClientId, out double queuedAt))
 				{
-					runtimeData.WaitingQueueEnteredUtcByClientId[conn.ClientId] = now;
+					runtimeData.WaitingQueueEnteredAtByClientId[conn.ClientId] = now;
 					continue;
 				}
 
-				if ((now - queuedAt).TotalSeconds >= EffectiveQueueTtlSeconds(conn, mappingData))
+				if (IsQueueWaitExpired(conn, queuedAt, now, mappingData))
 				{
 					staleConnections.Add(conn);
 				}
@@ -1934,71 +2260,157 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		}
 
 		/// <summary>
-		/// Fallbacks a connection to the world scene if instance scene assignment fails.
+		/// Moves a connection from the instance queue to the open-world queue for its scene. Main
+		/// thread only.
 		/// </summary>
 		/// <param name="conn">Network connection.</param>
-		/// <param name="accountName">Account name for the connection.</param>
-		private async Task FallbackToWorldSceneAsync(NetworkConnection conn, string accountName)
+		/// <param name="sceneName">Open-world scene it now waits for: the character's own scene, as read by the pass that decided this.</param>
+		private void MoveToOpenWorldQueueNow(NetworkConnection conn, string sceneName)
 		{
-			if (!TryGetDbService(out ICharacterService charService))
+			if (conn == null || !conn.IsActive || HasLeftQueue(conn))
 			{
 				return;
 			}
 
-			var fetchResult = await charService.FetchByAccountAsync(accountName, selected: true);
-			if (!fetchResult.IsSuccess)
+			bool queued = false;
+			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 			{
-				/* A failed read, not a missing character: put the connection back on the instance
-				 * queue, whose next pass re-reads the row and comes back here if it still belongs
-				 * in the open world. The queue TTL bounds the retries. */
-				await Log.Warning("WorldSceneSystem", $"Selected character fetch failed for account '{accountName}' during open-world fallback: [{fetchResult.ErrorCode}] {fetchResult.ErrorMessage}. Re-queuing for the next routing cycle.");
-				RequeueInstanceConnection(conn, 0L);
-				return;
+				RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
+				AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
+				// AddToQueue refuses, and kicks, when the queue is at its cap.
+				queued = mappingData.OpenWorldConnectionScenes.ContainsKey(conn);
 			}
-			if (!fetchResult.Data.HasValue)
+
+			/* A different queue, waiting on a different thing: start the expiry clock again.
+			 *
+			 * The clock deliberately survives a re-queue, because a routing cycle that puts
+			 * a connection straight back is the same wait continuing. This is not that. The
+			 * ordinary way to arrive here is having waited out InstanceReadyGraceSeconds
+			 * (180s) for an instance that never became ready — which already exceeds the
+			 * open-world TTL (45s), so the very next purge sweep kicked the character the
+			 * system had just gone to the trouble of rescuing, with "the world server could
+			 * not find room for your character". The instance wait is bounded by the scene
+			 * row's own age; the open-world wait it hands over to must be measured from
+			 * here.
+			 *
+			 * The stale per-connection reason goes too: whatever this client was previously
+			 * told it was waiting for, it is now waiting for open-world capacity. */
+			ResetQueueEntryTime(conn.ClientId);
+			queueReasonByClientId.TryRemove(conn.ClientId, out _);
+
+			/* This is where a connection joins an open-world line, so it is where a place held for
+			 * its account is taken back. Only the reporting clock moves: it is what the line is
+			 * ordered by. The expiry clock was just reset above and stays reset, because a
+			 * resumed place is a new visit to a line that may still be stalled, and timing it
+			 * from the old start would purge it on the next sweep. */
+			if (queued && Server.AccountManager.GetAccountNameByConnection(conn, out string accountName))
 			{
-				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene", DisconnectNoticeReason.CharacterUnavailable));
-				return;
+				ResumeOrBeginPlace(conn.ClientId, accountName, sceneName);
 			}
-			var selectedChar = fetchResult.Data.Value;
-			if (selectedChar.ID <= 0 || string.IsNullOrEmpty(selectedChar.SceneName))
-			{
-				TryEnqueueMainThread(() => Kick(conn, "Failed to get selected scene", DisconnectNoticeReason.CharacterUnavailable));
-				return;
-			}
-			string sceneName = selectedChar.SceneName;
-
-			TryEnqueueMainThread(() =>
-			{
-				if (conn == null || !conn.IsActive)
-				{
-					return;
-				}
-
-				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
-				{
-					RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
-					AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
-				}
-
-				/* A different queue, waiting on a different thing: start the expiry clock again.
-				 *
-				 * The clock deliberately survives a re-queue, because a routing cycle that puts
-				 * a connection straight back is the same wait continuing. This is not that. The
-				 * ordinary way to arrive here is having waited out InstanceReadyGraceSeconds
-				 * (180s) for an instance that never became ready — which already exceeds the
-				 * open-world TTL (45s), so the very next purge sweep kicked the character the
-				 * system had just gone to the trouble of rescuing, with "the world server could
-				 * not find room for your character". The instance wait is bounded by the scene
-				 * row's own age; the open-world wait it hands over to must be measured from
-				 * here.
-				 *
-				 * The stale per-connection reason goes too: whatever this client was previously
-				 * told it was waiting for, it is now waiting for open-world capacity. */
-				ResetQueueEntryTime(conn.ClientId);
-				queueReasonByClientId.TryRemove(conn.ClientId, out _);
-			});
 		}
+
+		/// <summary>
+		/// Records which account and scene an open-world wait belongs to, and resumes the place
+		/// that account holds in that scene's line, if any. Main thread only.
+		/// </summary>
+		/// <param name="clientId">The joining connection.</param>
+		/// <param name="accountName">Its account.</param>
+		/// <param name="sceneName">The open-world scene it now waits for.</param>
+		/// <remarks>
+		/// The record is what lets <see cref="EndWaitKeepingPlace"/> remember the place later: by
+		/// the time a connection is noticed gone the account manager may already have dropped it,
+		/// and a routing pass may have it off the queue maps. See <see cref="WorldQueuePlaceMemory"/>.
+		/// </remarks>
+		private void ResumeOrBeginPlace(int clientId, string accountName, string sceneName)
+		{
+			openWorldPlaceByClientId[clientId] = (accountName, sceneName);
+
+			double now = MonotonicClock.NowSeconds;
+			if (!queuePlaces.TryResume(accountName, sceneName, now, out double heldSince))
+			{
+				return;
+			}
+
+			double current = waitingSinceByClientId.TryGetValue(clientId, out double since) ? since : now;
+			if (heldSince < current)
+			{
+				waitingSinceByClientId[clientId] = heldSince;
+				Log.Debug("WorldSceneSystem",
+					$"World Scene System: {clientId} resumed its account's place in the '{sceneName}' queue ({now - heldSince:F0}s of waiting kept).");
+			}
+		}
+
+		/// <summary>
+		/// Ends a wait that ended without the player's say: remembers the open-world place for the
+		/// grace window, then drops the connection's tracking. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// For a dropped connection and a purged one. A connection that was routed, kicked for a
+		/// routing failure, or that left on purpose ends through <see cref="ClearQueueTracking"/>
+		/// and keeps nothing. A connection that was only ever on the instance queue has no
+		/// open-world place and keeps nothing either: an instance wait is for one instance to load,
+		/// and everyone waiting on it goes in together.
+		/// </remarks>
+		/// <param name="clientId">FishNet client ID.</param>
+		private void EndWaitKeepingPlace(int clientId)
+		{
+			if (openWorldPlaceByClientId.TryGetValue(clientId, out var place) &&
+				waitingSinceByClientId.TryGetValue(clientId, out double waitingSince))
+			{
+				queuePlaces.Remember(place.Account, place.SceneName, waitingSince, MonotonicClock.NowSeconds);
+			}
+			ClearQueueTracking(clientId);
+		}
+
+		/// <summary>
+		/// A player chose to leave the scene-routing queue. Their place goes with them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Sent by the client just before it closes the connection, which from here is otherwise
+		/// indistinguishable from a drop, and a drop keeps the place. See
+		/// <see cref="WorldSceneQueueLeaveBroadcast"/>.
+		/// </para>
+		/// <para>
+		/// The connection is also marked as leaving until it is gone. A routing pass may have it
+		/// off the queue maps right now, working asynchronously, and without the mark that pass
+		/// would put it back on a queue, or send it a scene server to connect to, in the half
+		/// second the client spends closing.
+		/// </para>
+		/// </remarks>
+		private void OnWorldSceneQueueLeave(NetworkConnection conn, WorldSceneQueueLeaveBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			if (conn == null)
+			{
+				return;
+			}
+
+			leftQueueClientIds.Add(conn.ClientId);
+
+			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+			{
+				RemoveFromQueue(conn, mappingData.OpenWorldConnectionScenes, mappingData.WaitingOpenWorldConnections);
+				RemoveFromQueue(conn, mappingData.InstanceConnectionScenes, mappingData.WaitingInstanceConnections);
+			}
+
+			string accountName = openWorldPlaceByClientId.TryGetValue(conn.ClientId, out var place)
+				? place.Account
+				: null;
+			if (accountName == null)
+			{
+				Server.AccountManager.GetAccountNameByConnection(conn, out accountName);
+			}
+			queuePlaces.Forget(accountName);
+
+			ClearQueueTracking(conn.ClientId);
+			Log.Debug("WorldSceneSystem", $"World Scene System: {conn.ClientId} left the queue.");
+		}
+
+		/// <summary>
+		/// Whether a connection has told this server it is leaving the queue. See
+		/// <see cref="OnWorldSceneQueueLeave"/>.
+		/// </summary>
+		private bool HasLeftQueue(NetworkConnection conn) => conn != null && leftQueueClientIds.Contains(conn.ClientId);
 
 		/// <summary>
 		/// Checks if a connection is valid and retrieves the account name.
@@ -2043,10 +2455,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// The world server is a router: a client authenticates, gets a
 		/// <see cref="WorldSceneConnectBroadcast"/>, and disconnects on its own to dial the
 		/// scene server. Every step in between can drop the client without leaving it anywhere
-		/// a sweep would find it — the routing snapshot empties the waiting queues before going
-		/// async, and both <see cref="BroadcastSceneConnect"/> and the instance path deliver
-		/// through <c>TryEnqueueMainThread</c>, which returns false and discards the action when
-		/// the main-thread queue is saturated. A connection lost that way is in no queue, so
+		/// a sweep would find it — a routing pass takes connections off the waiting queues before
+		/// going async, and delivers what it decided through <c>TryEnqueueMainThread</c> (see
+		/// <see cref="ApplyRoutingOutcome"/>), which returns false and discards the action when the
+		/// main-thread queue is saturated. A connection lost that way is in no queue, so
 		/// <see cref="PurgeExpiredWaitingConnections"/> never sees it, and it sits authenticated
 		/// on the world server forever with no scene and no error.
 		/// <para>
@@ -2055,9 +2467,14 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// the client back to its own reconnect loop, which returns to this world server and
 		/// tries again — the same recovery a dropped connection already gets.
 		/// </para>
+		/// <para>
+		/// Deadlines are <see cref="MonotonicClock"/> readings. On the wall clock, a host clock
+		/// stepped forward put every authenticated connection past its deadline at once, and the
+		/// next sweep disconnected the lot.
+		/// </para>
 		/// </remarks>
-		private readonly System.Collections.Concurrent.ConcurrentDictionary<int, DateTime> worldResidencyDeadlineByClientId =
-			new System.Collections.Concurrent.ConcurrentDictionary<int, DateTime>();
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<int, double> worldResidencyDeadlineByClientId =
+			new System.Collections.Concurrent.ConcurrentDictionary<int, double>();
 
 		/// <summary>
 		/// How long an authenticated connection may remain on the world server before it is
@@ -2076,12 +2493,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// instance was unavailable, keyed by character ID.
 		/// </summary>
 		/// <remarks>
-		/// Needed because the queue snapshot clears <c>WaitingQueueEnteredUtcByClientId</c> and
-		/// re-queuing resets it, so the queue's own timestamp cannot measure how long we have
+		/// Needed because the combat-logout hold restarts <c>WaitingQueueEnteredAtByClientId</c>
+		/// on every cycle it holds, so the queue's own timestamp cannot measure how long we have
 		/// been holding out for a specific scene instance.
+		/// <para>On <see cref="MonotonicClock"/>, like every other wait this system measures.</para>
 		/// </remarks>
-		private readonly System.Collections.Concurrent.ConcurrentDictionary<long, DateTime> combatLogoutRoutingDeferredSince =
-			new System.Collections.Concurrent.ConcurrentDictionary<long, DateTime>();
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<long, double> combatLogoutRoutingDeferredSince =
+			new System.Collections.Concurrent.ConcurrentDictionary<long, double>();
 
 		/// <summary>
 		/// How long to hold a combat-logged character waiting for its own scene instance before
@@ -2104,6 +2522,22 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			new System.Collections.Concurrent.ConcurrentDictionary<int, WorldSceneQueueReason>();
 
 		/// <summary>
+		/// When a routing pass last placed anyone waiting on a given open-world scene, as a
+		/// <see cref="MonotonicClock"/> reading. Written from the routing worker, read from the
+		/// main-thread sweep.
+		/// </summary>
+		/// <remarks>
+		/// The queue is first in, first out, and a capacity wait's TTL is measured from the later
+		/// of joining the queue and the scene's last placement (see <see cref="IsQueueWaitExpired"/>).
+		/// Measured from joining alone, a long queue purged players while the line ahead of them
+		/// was still moving, and "try again" put them at the back, so they cycled without ever
+		/// reaching the front. The purge exists to send players back to choose again when the
+		/// world is not draining, and a stalled line is exactly that.
+		/// </remarks>
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> lastPlacementAtByScene =
+			new System.Collections.Concurrent.ConcurrentDictionary<string, double>();
+
+		/// <summary>
 		/// Why clients waiting on a given open-world scene name are waiting, as of the last
 		/// routing pass. Written from the routing worker, read from the main-thread sweep.
 		/// </summary>
@@ -2124,8 +2558,8 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			new System.Collections.Concurrent.ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>Scratch list reused by the position sweep to avoid per-sweep allocation.</summary>
-		private readonly List<(NetworkConnection Conn, DateTime EnteredUtc)> queuePositionScratch =
-			new List<(NetworkConnection, DateTime)>();
+		private readonly List<(NetworkConnection Conn, double EnteredAt)> queuePositionScratch =
+			new List<(NetworkConnection, double)>();
 
 		/// <summary>
 		/// How long a connection must have been waiting before it is told it is waiting.
@@ -2214,7 +2648,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				return;
 			}
 
-			DateTime nowUtc = DateTime.UtcNow;
+			double now = MonotonicClock.NowSeconds;
 			float feedbackDelaySeconds = Math.Max(
 				QueueFeedbackDelayMinSeconds,
 				Math.Max(0.5f, runtimeData.WaitQueueRateSeconds) * QueueFeedbackDelayCycles);
@@ -2227,10 +2661,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					continue;
 				}
 				// The reporting clock, not the expiry clock — see waitingSinceByClientId.
-				DateTime enteredUtc = waitingSinceByClientId.TryGetValue(conn.ClientId, out DateTime waitingSince)
+				double enteredAt = waitingSinceByClientId.TryGetValue(conn.ClientId, out double waitingSince)
 					? waitingSince
-					: nowUtc;
-				queuePositionScratch.Add((conn, enteredUtc));
+					: now;
+				queuePositionScratch.Add((conn, enteredAt));
 			}
 
 			if (queuePositionScratch.Count == 0)
@@ -2241,7 +2675,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			// Ties broken by ClientId so the ordering is total and does not flip between sweeps.
 			queuePositionScratch.Sort((a, b) =>
 			{
-				int byTime = a.EnteredUtc.CompareTo(b.EnteredUtc);
+				int byTime = a.EnteredAt.CompareTo(b.EnteredAt);
 				return byTime != 0 ? byTime : a.Conn.ClientId.CompareTo(b.Conn.ClientId);
 			});
 
@@ -2252,7 +2686,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				int position = i + 1;
 
 				// Ranked, but not yet told. See QueueFeedbackDelayCycles.
-				if ((nowUtc - queuePositionScratch[i].EnteredUtc).TotalSeconds < feedbackDelaySeconds)
+				if (now - queuePositionScratch[i].EnteredAt < feedbackDelaySeconds)
 				{
 					continue;
 				}
@@ -2320,12 +2754,157 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		#endregion
 
 		/// <summary>
-		/// Puts a connection back on the open-world waiting queue for another routing pass.
+		/// What one routing pass decided for each connection it took off a queue, applied on the
+		/// main thread in one queued action by <see cref="ApplyRoutingOutcome"/>.
 		/// </summary>
 		/// <remarks>
-		/// The routing snapshot empties the queue, so any connection this pass declines to route
-		/// is dropped entirely — it would sit on the world server with no scene assignment and
-		/// no retry, which the client cannot recover from on its own.
+		/// Every connection a pass takes off a queue ends in exactly one of these: sent on, put back,
+		/// moved to the open-world queue, or kicked. Each used to be its own queued main-thread
+		/// action, so a pass paid a closure and a queue slot per connection — thousands for a full
+		/// queue that could place a handful. Filled on one worker, read on the main thread after it
+		/// has been handed over, never both at once.
+		/// </remarks>
+		private sealed class RoutingOutcome
+		{
+			public readonly List<(NetworkConnection Conn, ushort Port)> Connects = new List<(NetworkConnection, ushort)>();
+			public readonly List<(NetworkConnection Conn, long InstanceKey)> InstanceRequeues = new List<(NetworkConnection, long)>();
+			public readonly List<(NetworkConnection Conn, string SceneName, WorldSceneQueueReason? Reason, bool RestartWaitClock)> OpenWorldRequeues =
+				new List<(NetworkConnection, string, WorldSceneQueueReason?, bool)>();
+			public readonly List<(NetworkConnection Conn, string SceneName)> OpenWorldMoves = new List<(NetworkConnection, string)>();
+			public readonly List<(NetworkConnection Conn, string Reason, DisconnectNoticeReason Notice)> Kicks =
+				new List<(NetworkConnection, string, DisconnectNoticeReason)>();
+
+			private readonly HashSet<NetworkConnection> decided = new HashSet<NetworkConnection>();
+
+			/// <summary>Connections with an outcome recorded.</summary>
+			public int Count => decided.Count;
+
+			/// <summary>Whether a connection already has an outcome.</summary>
+			public bool IsDecided(NetworkConnection conn) => conn != null && decided.Contains(conn);
+
+			/// <summary>Send the client to a scene server. See <see cref="ApplySceneConnect"/>.</summary>
+			public void Connect(NetworkConnection conn, ushort port)
+			{
+				if (conn != null && decided.Add(conn))
+				{
+					Connects.Add((conn, port));
+				}
+			}
+
+			/// <summary>Put it back on the instance queue. See <see cref="RequeueInstanceNow"/>.</summary>
+			public void RequeueInstance(NetworkConnection conn, long instanceKey)
+			{
+				if (conn != null && decided.Add(conn))
+				{
+					InstanceRequeues.Add((conn, instanceKey));
+				}
+			}
+
+			/// <summary>Put it back on the open-world queue. See <see cref="RequeueOpenWorldNow"/>.</summary>
+			public void RequeueOpenWorld(NetworkConnection conn, string sceneName,
+				WorldSceneQueueReason? reason = null, bool restartWaitClock = false)
+			{
+				if (conn != null && decided.Add(conn))
+				{
+					OpenWorldRequeues.Add((conn, sceneName, reason, restartWaitClock));
+				}
+			}
+
+			/// <summary>
+			/// Move it to the open-world queue for its character's scene, or kick it when the
+			/// character names none. See <see cref="MoveToOpenWorldQueueNow"/>.
+			/// </summary>
+			public void MoveToOpenWorld(NetworkConnection conn, CharacterData character)
+			{
+				if (character.ID <= 0 || string.IsNullOrEmpty(character.SceneName))
+				{
+					Kick(conn, "Failed to get selected scene", DisconnectNoticeReason.CharacterUnavailable);
+					return;
+				}
+				if (conn != null && decided.Add(conn))
+				{
+					OpenWorldMoves.Add((conn, character.SceneName));
+				}
+			}
+
+			/// <summary>Disconnect it with a notice.</summary>
+			public void Kick(NetworkConnection conn, string reason, DisconnectNoticeReason notice)
+			{
+				if (conn != null && decided.Add(conn))
+				{
+					Kicks.Add((conn, reason, notice));
+				}
+			}
+		}
+
+		/// <summary>
+		/// Hands a routing pass's decisions to the main thread as one queued action.
+		/// </summary>
+		/// <remarks>
+		/// If the main-thread queue is saturated and refuses it, the connections are in no queue
+		/// and on their way nowhere, which is exactly the case the residency watchdog exists for:
+		/// it disconnects them into their clients' reconnect loops. See
+		/// <see cref="worldResidencyDeadlineByClientId"/>.
+		/// </remarks>
+		private void ApplyRoutingOutcome(RoutingOutcome outcome)
+		{
+			if (outcome == null || outcome.Count == 0)
+			{
+				return;
+			}
+
+			if (!TryEnqueueMainThread(() => ApplyRoutingOutcomeNow(outcome)))
+			{
+				Log.Warning("WorldSceneSystem",
+					$"The main-thread queue refused the routing outcome for {outcome.Count} connection(s); " +
+					"the residency watchdog will return them to their reconnect loops.");
+			}
+		}
+
+		/// <summary>Applies a routing pass's decisions. Main thread only.</summary>
+		private void ApplyRoutingOutcomeNow(RoutingOutcome outcome)
+		{
+			for (int i = 0; i < outcome.Kicks.Count; ++i)
+			{
+				var (conn, reason, notice) = outcome.Kicks[i];
+				if (conn.IsActive)
+				{
+					Kick(conn, reason, notice);
+				}
+				// Terminal: stop tracking the wait so a recycled ClientId cannot inherit it.
+				ClearQueueTracking(conn.ClientId);
+			}
+
+			for (int i = 0; i < outcome.InstanceRequeues.Count; ++i)
+			{
+				RequeueInstanceNow(outcome.InstanceRequeues[i].Conn, outcome.InstanceRequeues[i].InstanceKey);
+			}
+
+			for (int i = 0; i < outcome.OpenWorldRequeues.Count; ++i)
+			{
+				var (conn, sceneName, reason, restartWaitClock) = outcome.OpenWorldRequeues[i];
+				RequeueOpenWorldNow(conn, sceneName, reason, restartWaitClock);
+			}
+
+			for (int i = 0; i < outcome.OpenWorldMoves.Count; ++i)
+			{
+				MoveToOpenWorldQueueNow(outcome.OpenWorldMoves[i].Conn, outcome.OpenWorldMoves[i].SceneName);
+			}
+
+			for (int i = 0; i < outcome.Connects.Count; ++i)
+			{
+				ApplySceneConnect(outcome.Connects[i].Conn, outcome.Connects[i].Port);
+			}
+		}
+
+		/// <summary>
+		/// Puts a connection back on the open-world waiting queue for another routing pass. Main
+		/// thread only.
+		/// </summary>
+		/// <remarks>
+		/// A routing pass takes the connections it tries to place off the queue, so any it declines
+		/// to route has to be put back or it is dropped entirely — it would sit on the world server
+		/// with no scene assignment and no retry, which the client cannot recover from on its own.
 		/// </remarks>
 		/// <param name="conn">Connection to put back on the queue.</param>
 		/// <param name="sceneName">Open-world scene it is waiting for.</param>
@@ -2337,117 +2916,102 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// True only for a wait that is bounded by something other than the queue TTL — see
 		/// <see cref="ResetQueueEntryTime"/>.
 		/// </param>
-		private void RequeueOpenWorldConnection(NetworkConnection conn, string sceneName,
-			WorldSceneQueueReason? reason = null, bool restartWaitClock = false)
+		private void RequeueOpenWorldNow(NetworkConnection conn, string sceneName,
+			WorldSceneQueueReason? reason, bool restartWaitClock)
 		{
-			TryEnqueueMainThread(() =>
+			if (conn == null || !conn.IsActive || HasLeftQueue(conn))
 			{
-				if (conn == null || !conn.IsActive)
-				{
-					return;
-				}
-				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
-				{
-					AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
-				}
+				return;
+			}
+			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
+			{
+				AddToQueue(conn, sceneName, mappingData.WaitingOpenWorldConnections, mappingData.OpenWorldConnectionScenes);
+			}
 
-				if (reason.HasValue)
-				{
-					queueReasonByClientId[conn.ClientId] = reason.Value;
-				}
-				else
-				{
-					queueReasonByClientId.TryRemove(conn.ClientId, out _);
-				}
+			if (reason.HasValue)
+			{
+				queueReasonByClientId[conn.ClientId] = reason.Value;
+			}
+			else
+			{
+				queueReasonByClientId.TryRemove(conn.ClientId, out _);
+			}
 
-				// Ordered after AddToQueue, which records an arrival time only when there is not
-				// one already; the reset has to win over that.
-				if (restartWaitClock)
-				{
-					ResetQueueEntryTime(conn.ClientId);
-				}
-			});
+			// Ordered after AddToQueue, which records an arrival time only when there is not
+			// one already; the reset has to win over that.
+			if (restartWaitClock)
+			{
+				ResetQueueEntryTime(conn.ClientId);
+			}
 		}
 
 		/// <summary>
-		/// Puts a connection back on the instance waiting queue for another routing pass.
+		/// Puts a connection back on the instance waiting queue for another routing pass. Main
+		/// thread only.
 		/// </summary>
 		/// <remarks>
-		/// <see cref="ProcessInstanceConnectionAsync"/> takes the connection off the queue before
-		/// its database work, so a pass that cannot decide — a read that failed rather than
-		/// answered — has to put it back or the connection is dropped from routing entirely. The
-		/// wait clock survives the round trip (see <see cref="RemoveFromQueue"/>), so the queue
-		/// TTL still bounds how many passes a database outage can cost before the client is let go.
+		/// <see cref="ProcessInstanceBatchAsync"/> takes the connection off the queue before its
+		/// database work, so a pass that cannot decide — a read that failed rather than answered —
+		/// has to put it back or the connection is dropped from routing entirely. The wait clock
+		/// survives the round trip (see <see cref="RemoveFromQueue"/>), so the queue TTL still
+		/// bounds how many passes a database outage can cost before the client is let go.
 		/// </remarks>
 		/// <param name="conn">Connection to put back on the queue.</param>
 		/// <param name="instanceKey">Instance scene row it waits on, or 0 when not yet known.</param>
-		private void RequeueInstanceConnection(NetworkConnection conn, long instanceKey)
+		private void RequeueInstanceNow(NetworkConnection conn, long instanceKey)
 		{
-			TryEnqueueMainThread(() =>
+			if (conn != null && conn.IsActive && !HasLeftQueue(conn) &&
+				Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
 			{
-				if (conn != null && conn.IsActive &&
-					Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var mappingData))
-				{
-					AddToQueue(conn, instanceKey, mappingData.WaitingInstanceConnections, mappingData.InstanceConnectionScenes);
-				}
-			});
+				AddToQueue(conn, instanceKey, mappingData.WaitingInstanceConnections, mappingData.InstanceConnectionScenes);
+			}
 		}
 
 		/// <summary>
-		/// Whether a failed point read proves the row is not there, rather than saying nothing
-		/// about it.
-		/// </summary>
-		/// <remarks>
-		/// NotFound is the service's answer for a missing row, and ValidationError its answer for a
-		/// key that cannot name one. Anything else — a timeout, a dropped connection — is a read
-		/// that did not happen, and must not be acted on as though the row were gone.
-		/// </remarks>
-		private static bool IsRowAbsent<T>(DatabaseResult<T> result) =>
-			result.ErrorCode == DatabaseErrorCodes.NotFound ||
-			result.ErrorCode == DatabaseErrorCodes.ValidationError;
-
-		/// <summary>
-		/// Enqueues a race-guarded <see cref="WorldSceneConnectBroadcast"/> for a connection.
-		/// Skips the broadcast if the connection has been re-queued during async processing.
+		/// Sends a connection its <see cref="WorldSceneConnectBroadcast"/>, unless it has been
+		/// re-queued meanwhile. Main thread only.
 		/// </summary>
 		/// <param name="conn">Target network connection.</param>
 		/// <param name="port">Scene server port to broadcast (address is always GameHost).</param>
-		private void BroadcastSceneConnect(NetworkConnection conn, ushort port)
+		private void ApplySceneConnect(NetworkConnection conn, ushort port)
 		{
-			TryEnqueueMainThread(() =>
+			// A connection that has left the queue is closing; it is not sent anywhere.
+			if (conn == null || !conn.IsActive || HasLeftQueue(conn))
 			{
-				if (conn == null || !conn.IsActive)
-				{
-					return;
-				}
+				return;
+			}
 
-				/* Race guard: if the connection was re-queued during async work, skip stale
-				 * routing. Both queues are checked — a connection can be put back on either,
-				 * and routing one that is waiting on the other sends it somewhere the later
-				 * decision did not choose. */
-				if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var guardMd) &&
-					(guardMd.OpenWorldConnectionScenes.ContainsKey(conn) ||
-					 guardMd.InstanceConnectionScenes.ContainsKey(conn)))
-				{
-					return;
-				}
+			/* Race guard: if the connection was re-queued during async work, skip stale
+			 * routing. Both queues are checked — a connection can be put back on either,
+			 * and routing one that is waiting on the other sends it somewhere the later
+			 * decision did not choose. */
+			if (Server.DataContainerRegistry.TryGet<IWorldSceneMappingData<NetworkConnection>>(out var guardMd) &&
+				(guardMd.OpenWorldConnectionScenes.ContainsKey(conn) ||
+				 guardMd.InstanceConnectionScenes.ContainsKey(conn)))
+			{
+				return;
+			}
 
-				Log.Info("WorldSceneSystem", $"BroadcastSceneConnect conn={conn.ClientId} -> port={port}");
+			Log.Info("WorldSceneSystem", $"BroadcastSceneConnect conn={conn.ClientId} -> port={port}");
 
-				/* Position 0 first: the wait is over, and the client is about to tear this
-				 * connection down to hop. Sent before the connect broadcast so the wait dialog
-				 * is dismissed by the same message pass that starts the transition rather than
-				 * being left on screen over the loading overlay of the scene it is entering. */
-				SendQueuePosition(conn, 0, 0, 0, WorldSceneQueueReason.Capacity);
+			/* Position 0 first: the wait is over, and the client is about to tear this
+			 * connection down to hop. Sent before the connect broadcast so the wait dialog
+			 * is dismissed by the same message pass that starts the transition rather than
+			 * being left on screen over the loading overlay of the scene it is entering. */
+			SendQueuePosition(conn, 0, 0, 0, WorldSceneQueueReason.Capacity);
 
-				Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
-				{
-					Port = port,
-				});
-
-				// Terminal: routed. Stop tracking the wait so a recycled ClientId cannot inherit it.
-				ClearQueueTracking(conn.ClientId);
+			Server.NetworkWrapper.Broadcast(conn, new WorldSceneConnectBroadcast()
+			{
+				Port = port,
 			});
+
+			// Terminal: routed. Stop tracking the wait so a recycled ClientId cannot inherit it,
+			// and give up any place still held for the account: it has been placed.
+			if (openWorldPlaceByClientId.TryGetValue(conn.ClientId, out var place))
+			{
+				queuePlaces.Forget(place.Account);
+			}
+			ClearQueueTracking(conn.ClientId);
 		}
 
 		/// <summary>
@@ -2468,22 +3032,23 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <param name="clientId">FishNet client ID.</param>
 		private void RecordQueueEntryTime(int clientId)
 		{
+			double now = MonotonicClock.NowSeconds;
 			if (Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData) &&
-				runtimeData.WaitingQueueEnteredUtcByClientId != null &&
-				!runtimeData.WaitingQueueEnteredUtcByClientId.ContainsKey(clientId))
+				runtimeData.WaitingQueueEnteredAtByClientId != null &&
+				!runtimeData.WaitingQueueEnteredAtByClientId.ContainsKey(clientId))
 			{
-				runtimeData.WaitingQueueEnteredUtcByClientId[clientId] = DateTime.UtcNow;
+				runtimeData.WaitingQueueEnteredAtByClientId[clientId] = now;
 			}
 
 			// The reporting clock, which nothing may reset. See waitingSinceByClientId.
-			waitingSinceByClientId.TryAdd(clientId, DateTime.UtcNow);
+			waitingSinceByClientId.TryAdd(clientId, now);
 		}
 
 		/// <summary>
 		/// When each client first began waiting, for reporting rather than for expiry.
 		/// </summary>
 		/// <remarks>
-		/// Deliberately a second clock. <c>WaitingQueueEnteredUtcByClientId</c> answers "should
+		/// Deliberately a second clock. <c>WaitingQueueEnteredAtByClientId</c> answers "should
 		/// this wait be cut short", and the combat-logout hold restarts it every cycle precisely
 		/// so that it is not — which makes it useless for saying how long the player has been
 		/// waiting, and worse than useless for ranking, since a held connection would keep
@@ -2495,9 +3060,38 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <see cref="CombatLogoutRoutingGraceSeconds"/> for their own body was told nothing at
 		/// all — the exact silent wait this feedback exists to end.
 		/// </para>
+		/// <para>
+		/// Both clocks are <see cref="MonotonicClock"/> readings, never the wall clock: they time
+		/// waits, and a stepped host clock must not age every waiting connection at once.
+		/// </para>
 		/// </remarks>
-		private readonly System.Collections.Concurrent.ConcurrentDictionary<int, DateTime> waitingSinceByClientId =
-			new System.Collections.Concurrent.ConcurrentDictionary<int, DateTime>();
+		private readonly System.Collections.Concurrent.ConcurrentDictionary<int, double> waitingSinceByClientId =
+			new System.Collections.Concurrent.ConcurrentDictionary<int, double>();
+
+		/// <summary>
+		/// Places in the open-world queue held for accounts whose wait ended without their say.
+		/// Main thread only. See <see cref="WorldQueuePlaceMemory"/>.
+		/// </summary>
+		private readonly WorldQueuePlaceMemory queuePlaces = new WorldQueuePlaceMemory();
+
+		/// <summary>
+		/// The account and open-world scene of each connection waiting in the open-world queue,
+		/// from the moment it joins until its wait ends. Main thread only.
+		/// </summary>
+		/// <remarks>
+		/// Kept apart from the queue maps because it has to outlive them: a routing pass takes a
+		/// connection off the maps while it works, and the account manager may have forgotten a
+		/// dropped connection before this system hears of the drop. Either way the place is still
+		/// the account's. See <see cref="EndWaitKeepingPlace"/>.
+		/// </remarks>
+		private readonly Dictionary<int, (string Account, string SceneName)> openWorldPlaceByClientId =
+			new Dictionary<int, (string Account, string SceneName)>();
+
+		/// <summary>
+		/// Connections that have said they are leaving the queue and have not gone yet. Main
+		/// thread only. See <see cref="OnWorldSceneQueueLeave"/>.
+		/// </summary>
+		private readonly HashSet<int> leftQueueClientIds = new HashSet<int>();
 
 		/// <summary>
 		/// Restarts a client's queue-entry clock.
@@ -2514,9 +3108,9 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		private void ResetQueueEntryTime(int clientId)
 		{
 			if (Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData) &&
-				runtimeData.WaitingQueueEnteredUtcByClientId != null)
+				runtimeData.WaitingQueueEnteredAtByClientId != null)
 			{
-				runtimeData.WaitingQueueEnteredUtcByClientId[clientId] = DateTime.UtcNow;
+				runtimeData.WaitingQueueEnteredAtByClientId[clientId] = MonotonicClock.NowSeconds;
 			}
 		}
 
@@ -2534,10 +3128,11 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		{
 			if (Server.DataContainerRegistry.TryGet<WorldSceneSystemRuntimeData>(out var runtimeData))
 			{
-				runtimeData.WaitingQueueEnteredUtcByClientId?.Remove(clientId);
+				runtimeData.WaitingQueueEnteredAtByClientId?.Remove(clientId);
 			}
 			waitingSinceByClientId.TryRemove(clientId, out _);
 			queueReasonByClientId.TryRemove(clientId, out _);
+			openWorldPlaceByClientId.Remove(clientId);
 		}
 
 		/// <summary>
@@ -2637,29 +3232,13 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// </summary>
 		private void SweepSceneCaches(WorldSceneSystemRuntimeData runtimeData)
 		{
-			DateTime now = DateTime.UtcNow;
 			runtimeData.AvailableSceneCache?.SweepExpired(
-				now, TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds), 64, 32);
+				TimeSpan.FromSeconds(sceneInstanceCacheTtlSeconds), 64, 32);
 			runtimeData.SceneServerAddressCache?.SweepExpired(
-				now, TimeSpan.FromSeconds(sceneServerCacheTtlSeconds), 64, 32);
-			SweepCombatLogoutRoutingDeferrals(now);
+				TimeSpan.FromSeconds(sceneServerCacheTtlSeconds), 64, 32);
+			SweepCombatLogoutRoutingDeferrals(MonotonicClock.NowSeconds);
 		}
 
-		/// <summary>
-		/// Drops combat-logout routing deferrals that can no longer be acted on.
-		/// </summary>
-		/// <remarks>
-		/// Entries are normally removed the moment a character is routed or its grace expires,
-		/// but a player who gives up and closes the client mid-deferral leaves theirs behind with
-		/// nothing to clear it. Each is only a character ID and a timestamp, yet on a long-lived
-		/// world server the map would accumulate one per character that ever combat-logged and
-		/// walked away, and never shrink.
-		/// <para>
-		/// Anything older than twice the grace has already had its decision made — the routing
-		/// pass either honoured it or timed it out — so it cannot influence a future pass and is
-		/// safe to forget. A returning player simply starts a fresh deferral.
-		/// </para>
-		/// </remarks>
 		/// <summary>Countdown to the next stale scene-row sweep.</summary>
 		private float nextStaleSceneRowSweep = StaleSceneRowSweepIntervalSeconds;
 
@@ -2669,10 +3248,17 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 		/// <remarks>
 		/// A scene server deletes its registration only on a graceful shutdown, so the row's
 		/// existence proves nothing after a crash. See <see cref="SceneServerPulseStaleSeconds"/>.
+		/// <para>
+		/// Judged by the pulse's age as the database measured it when the row was read
+		/// (<see cref="SceneServerData.PulseAgeSeconds"/>), never by subtracting the stamped
+		/// <c>last_pulse</c> from this host's clock: that compared the database clock with this
+		/// one, so a world host running a minute fast routed nobody anywhere and one running a
+		/// minute slow kept routing players to a crashed scene server.
+		/// </para>
 		/// </remarks>
 		private static bool IsSceneServerLive(SceneServerData serverData)
 		{
-			return (DateTime.UtcNow - serverData.LastPulse).TotalSeconds < SceneServerPulseStaleSeconds;
+			return serverData.PulseAgeSeconds < SceneServerPulseStaleSeconds;
 		}
 
 		/// <summary>
@@ -2741,9 +3327,10 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 					return;
 				}
 
-				DateTime olderThanUtc = DateTime.UtcNow.AddSeconds(-StaleSceneRowGraceSeconds);
+				// An age, not an instant: the rows are stamped by the database clock, and the cutoff
+				// is taken from it too, so this host's clock cannot shift what counts as stale.
 				DatabaseResult<int> result = await sceneService.DeleteStaleUnreadyAsync(
-					worldServerID, olderThanUtc, StaleSceneRowMaxPerSweep);
+					worldServerID, StaleSceneRowGraceSeconds, StaleSceneRowMaxPerSweep);
 
 				if (!result.IsSuccess)
 				{
@@ -2764,10 +3351,12 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 				 * advertised as available, and clients sent there are refused — or, once a
 				 * replacement claims the same port, are accepted by a server that does not have
 				 * the scene and bounces them straight back here to be routed at the same row
-				 * again. Nothing in that cycle ages out, so it has to be broken from this end. */
-				DateTime pulseOlderThanUtc = DateTime.UtcNow.AddSeconds(-SceneServerPulseStaleSeconds);
+				 * again. Nothing in that cycle ages out, so it has to be broken from this end.
+				 *
+				 * The staleness window is handed to the database as an age, and the database
+				 * compares it with the clock that stamped each pulse. */
 				DatabaseResult<int> orphanResult = await sceneService.DeleteByStaleSceneServersAsync(
-					worldServerID, pulseOlderThanUtc, StaleSceneRowMaxPerSweep);
+					worldServerID, SceneServerPulseStaleSeconds, StaleSceneRowMaxPerSweep);
 
 				if (!orphanResult.IsSuccess)
 				{
@@ -2796,7 +3385,23 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 			}
 		}
 
-		private void SweepCombatLogoutRoutingDeferrals(DateTime nowUtc)
+		/// <summary>
+		/// Drops combat-logout routing deferrals that can no longer be acted on.
+		/// </summary>
+		/// <remarks>
+		/// Entries are normally removed the moment a character is routed or its grace expires,
+		/// but a player who gives up and closes the client mid-deferral leaves theirs behind with
+		/// nothing to clear it. Each is only a character ID and a timestamp, yet on a long-lived
+		/// world server the map would accumulate one per character that ever combat-logged and
+		/// walked away, and never shrink.
+		/// <para>
+		/// Anything older than twice the grace has already had its decision made — the routing
+		/// pass either honoured it or timed it out — so it cannot influence a future pass and is
+		/// safe to forget. A returning player simply starts a fresh deferral.
+		/// </para>
+		/// </remarks>
+		/// <param name="now">Current <see cref="MonotonicClock"/> reading.</param>
+		private void SweepCombatLogoutRoutingDeferrals(double now)
 		{
 			if (combatLogoutRoutingDeferredSince.IsEmpty)
 			{
@@ -2805,7 +3410,7 @@ namespace FishMMO.Server.Implementation.World.WorldServer
 
 			foreach (var kvp in combatLogoutRoutingDeferredSince)
 			{
-				if ((nowUtc - kvp.Value).TotalSeconds >= CombatLogoutRoutingGraceSeconds * 2.0)
+				if (now - kvp.Value >= CombatLogoutRoutingGraceSeconds * 2.0)
 				{
 					combatLogoutRoutingDeferredSince.TryRemove(kvp.Key, out _);
 				}

@@ -57,7 +57,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 - **Player dismissal** — clicking a buff icon on your own HUD strip removes the whole thing, stacks and all, through a server-validated request. Debuffs are excluded by construction (`CanBeDismissedByPlayer => !IsDebuff`), so the debuff strip has no click path at all. See [Dismissal](#dismissal)
 - **Observer buff strips with real timers** — `ObservedBuffEntry` carries stacks and seconds remaining in a seven-byte wire form over `CharacterBuffsBroadcast`, delta or full set
 - **Static events** — `OnAddBuff`, `OnRemoveBuff`, `OnAddDebuff`, `OnRemoveDebuff`, `OnBuffTick` for UI and other systems
-- **Database persistence** — Buffs are serialized/deserialized via payload methods for save/load
+- **Database persistence** — a character's buff set is saved whole with its character row (`CharacterData.Buffs`, in the row's transaction and under its version) and restored at login through `Apply(Buff)`. Permanent buffs are neither saved nor restored. See [Persistence](#persistence-db)
 
 ### Security Features
 
@@ -170,7 +170,7 @@ a panel forgot to wire a callback — see [Dismissal](#dismissal).
 
 ### Attribute Modification
 
-`AttributeBuffTemplate` is one of five concrete template types. It modifies character attributes and holds a `List<BuffAttributeTemplate> BonusAttributes` where each entry pairs a `CharacterAttributeTemplate Template` with an `int Value`.
+`AttributeBuffTemplate` is one of seven concrete template types. It modifies character attributes and holds a `List<BuffAttributeTemplate> BonusAttributes` where each entry pairs a `CharacterAttributeTemplate Template` with an `int Value`.
 
 Each hook **states the whole contribution** for the stack count that will be in effect once the
 hook returns, through `SetSource(ModifierSource.Buff(ID, entryIndex), Value * multiplier)`. It does
@@ -285,10 +285,11 @@ A player may click a buff off their own HUD strip. `BaseBuffTemplate.CanBeDismis
 The buff system is consumed by and interacts with:
 
 - **Ability System** — Abilities apply buffs/debuffs to targets through `ApplyBuffAction`, which calls `BuffController.Apply(template, PredictionTick, caster)` with the tick from the trigger's `TickEventData`. Server code holding a server tick uses `ApplyAuthoritative(template, serverTick, caster)` instead.
+- **Leash evade** — `ApplyBuffAction` refuses every debuff another character tries to put on an evading NPC (`CharacterEvade.RefusesBuff`: stun, root, mesmerize, slow and every other debuff, because a slow is only a negative attribute modifier and the buff model has no narrower category). Asked after the stacks are drawn and before the loot-contribution record. Environmental debuffs (weather exposure, buff volumes) and an NPC's own debuffs on itself are unaffected, and `Immortal` still takes debuffs as it always has.
 - **CharacterAttribute System** — `AttributeBuffTemplate` states attribute contributions through the attributed ledger (`SetSource` / `ClearSourceGroup`) on the `ExternalModifier` layer.
-- **CharacterDamageController** — `RemoveAll()` is called on kill to clear all non-permanent buffs.
+- **Death** — the scene server's kill handler (`CharacterSystem`) calls `RemoveAll(false)` on the dead character, clearing every non-permanent buff; the next save then drops their rows.
 - **Item System** — Items may apply buffs on use or equip.
-- **Database Layer** — Buffs are persisted and restored via `CharacterBuffData` DTO and loaded through `ReadPayload` → `Apply(Buff buff)`.
+- **Database Layer** — the buff set rides the character row as `CharacterBuffData` and is restored through `Apply(Buff buff)`; see [Persistence](#persistence-db).
 - **UI** — Buff icons, tooltips, and timers are driven by the `OnAddBuff`/`OnRemoveBuff`/`OnAddDebuff`/`OnRemoveDebuff`/`OnBuffTick` events.
 
 ### Notes
@@ -377,17 +378,39 @@ the same way an observed buff that ran out locally is. The window errs long for 
 `PredictedCombatEvents.ConfirmationWindowSeconds` does: dropping a buff the server did apply merely
 re-adds it on the next push, which flickers — worse than a phantom lingering a moment longer.
 
-#### Payload Serialization (Persistence / DB)
+#### Spawn payload
 
-For non-prediction code paths (DB save/load, character export) the
-controller still exposes `WritePayload` / `ReadPayload`:
+`WritePayload` / `ReadPayload` are the FishNet spawn payload, not persistence. The payload opens
+with the sender's current reference tick, then a block framed by its byte count and tagged with a
+shape: the **owner** gets its simulation (per buff: template ID, `ExpiryTick`, `NextTickTick`,
+`Stacks`, `TickCount`, `CumulativeTickMultiplier`, `RemainingCharges`), rebuilt into `Buff`s with
+their ticks translated into the receiver's domain and applied through `Apply(Buff buff)`; **every
+other connection** gets the observed display list, built by the same method the broadcast uses.
+`ReadPayload` checks the frame length against the bytes remaining and seeks to the frame's end
+whatever it consumed, so a bad block cannot desynchronise the behaviours packed after it. Live
+in-session sync is the reconcile (owner) and `CharacterBuffsBroadcast` (observers).
 
-- **WritePayload**: Writes `Int32(count)`, then for each buff: `Int32(templateID)`, `Single(remainingTime)`, `Single(tickTime)`, `Int32(stacks)`.
-- **ReadPayload**: Reads the payload and calls `Apply(Buff buff)` for each entry, which re-applies all attribute modifiers.
+#### Persistence (DB)
 
-These are only invoked outside the prediction pipeline (for example, when
-a character is loaded from the database). Live in-session sync uses
-reconcile exclusively.
+A character's buffs are saved as **one set with its character row**, never on their own:
+`CharacterSystem.CaptureBuffSet` converts each live buff's absolute ticks into remaining seconds and
+next-tick seconds, with its stacks and tick count, into `CharacterBuffData`, and the list travels as
+`CharacterData.Buffs`. The set replaces everything the database holds for the character, in the
+same transaction as the row and only when the row is written, so an empty set is a real answer: the
+rows of buffs that expired, were dismissed or were stripped on death are deleted. Every row carries
+the row's version; a `Buff` has no persistence version of its own, because a per-instance counter
+cannot order a set (a buff re-applied after it ended starts counting again). Remaining time is
+frozen while the character is offline.
+
+At login each row is rebuilt into a `Buff` against the loading server's tick and applied through
+`Apply(Buff buff)`.
+
+**Permanent buffs are neither saved nor restored** (`CharacterSystem.IsPersistedBuff`). They are
+the environment's — the weather-exposure buffs a `WeatherExposureController` or buff volume applies
+and removes every tick — so they come back on their own within a tick of the login. A saved one had
+no expiry to capture and was restored as a buff that expired on its first tick. Leaving them out of
+the set deletes any rows saved before the rule at the next save, and the load skips any it still
+finds until then.
 
 ## Operational Checks
 
@@ -402,7 +425,7 @@ reconcile exclusively.
 | Network sync (owner) | Apply buff on server | Buff appears on owning client on the next reconcile via `CharacterReconcileData.Buffs` |
 | Network sync (observer) | Apply buff on server with nearby observers | Buff appears on observers as an `ObservedBuffEntry` in `CharacterBuffsBroadcast` (delta, or full set when `ObservedBuffWillLapse`) — never through the reconcile |
 | Predicted cross-character buff | Predict a buff on another character the server then refuses | The entry is dropped ~3 s later by the observer tick sweep; a server message naming the template confirms it instead |
-| DB persistence | Save character with active buffs, reload | Buffs restored via `ReadPayload` → `Apply(Buff buff)` with correct stacks/time |
+| DB persistence | Save character with active buffs, reload | Buffs restored through `Apply(Buff buff)` with correct stacks/time; a buff that expired or was dismissed before the save does not return; a permanent buff is not saved and is re-applied by its own system |
 | FX instantiation | Apply buff with `FXPrefab` set | FX prefab spawned as child of `MeshRoot`; self-destroys after effect |
 | Modifier balance | Apply and fully remove a stacked buff | Net modifier change is zero (every `+V` paired with `-V`) |
 | Prediction reconcile | Simulate prediction mismatch | `RestoreFromReconcile(BuffReconcileEntry[])` corrects client buff state |
@@ -431,7 +454,7 @@ A buff enters the system through one of two `Apply` overloads on `BuffController
 |----------|------------|----------|
 | `Apply(BaseBuffTemplate, PredictionTick, ICharacter caster = null)` | Gameplay trigger (ability, item, region), predicted | Creates a new `Buff`, calls `buff.Apply(Character)`, handles stacking + FX. Marks the entry predicted-by-this-peer |
 | `ApplyAuthoritative(BaseBuffTemplate, uint serverTick, ICharacter caster = null)` | Server code holding a server tick | Maps the tick into the character's replicate domain through `ResolveAuthoritativeTick`, then applies. Confirms any predicted entry for that template |
-| `Apply(Buff buff, bool suppressFX = false)` | DB load / network payload (`ReadPayload`) | Receives pre-constructed `Buff` with existing `Stacks`, calls `buff.Apply(Character)` + re-applies stack modifiers without incrementing `Stacks` |
+| `Apply(Buff buff, bool suppressFX = false)` | DB load (`CharacterSystem`) / owner spawn payload (`ReadPayload`) | Receives pre-constructed `Buff` with existing `Stacks`, calls `buff.Apply(Character)` + re-applies stack modifiers without incrementing `Stacks` |
 
 **Application flow** (`Apply(BaseBuffTemplate, uint currentTick)`):
 
@@ -496,8 +519,6 @@ Remove(buffID)
 ```
 
 ### Stacking Model
-
-Each buff can have up to `Template.MaxStacks` stacks. The modifier accounting works as follows:
 
 Each buff can have up to `Template.MaxStacks` stacks. The ledger entry is **restated** at every
 transition, so the contribution is always exactly `(1 + Stacks) * Value` — the base application

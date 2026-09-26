@@ -137,6 +137,18 @@ typedef struct h3_stream_ctx_s {
     atomic_bool             freed;          /* CAS guard — prevents double-free when
                                                PEER_SEND_ABORTED and SHUTDOWN_COMPLETE
                                                both fire for the same stream */
+    bool                    replayed;       /* parked before SETTINGS and already handed
+                                               back to h3_server_process_data by
+                                               h3_server_replay_parked_streams (worker only) */
+    /* Stream-manager context this stream was handed to by the native rescue
+     * (h3_server_adopt_streams), or NULL.  The rescue runs on the application
+     * thread, where switching a live stream's msquic handler is not safe, so
+     * the handler stays h3_stream_cb and forwards every later event here
+     * (wt_stream_manager_stream_event).  Written once, under the session's
+     * H3_LOCK, together with the hand-over of the buffered bytes; read with
+     * atomic_ptr_load, and re-checked under H3_LOCK wherever h3_stream_cb
+     * would otherwise buffer or free. */
+    void*                   fwd;
 } h3_stream_ctx_t;
 
 /* ── HTTP/3 Session ─────────────────────────────────────────── */
@@ -253,6 +265,18 @@ typedef struct h3_session_s {
     atomic_bool              released;       /* owner intends to free;
                                              * new acquires fail after this */
 
+    /* Server: 1 once some path has claimed the right to complete the
+     * handshake (call on_ready) — a worker-side CONNECT or native fallback,
+     * or the application thread's native rescue.  Claimed with
+     * atomic_exchange; the loser does not complete, so a rescue and a
+     * worker-side completion can never both create a session. */
+    atomic_int               completing;
+    /* Server: set by h3_server_native_rescue (application thread) before it
+     * calls on_ready, so on_h3_session_ready hands the streams over with
+     * h3_server_adopt_streams instead of switching their handlers.  Read
+     * only on the thread that set it. */
+    bool                     poll_rescue;
+
     void*               parent_ptr;     /* wt_server_conn_t* or wt_client_s* */
 } h3_session_t;
 
@@ -293,7 +317,15 @@ void h3_server_request_settings_bootstrap(h3_session_t* h3);
 
 /**
  * Run deferred SETTINGS bootstrap if pending. Call from application poll
- * thread only (not from msquic stream/connection callbacks).
+ * thread only (not from msquic stream/connection callbacks), and only while
+ * holding the connection's application-thread gate (server.cpp
+ * conn_app_enter): the gate is what keeps @p h3 and the connection handle it
+ * opens the control stream on from being freed / closed by the connection's
+ * teardown during this call.
+ *
+ * Streams parked while SETTINGS were pending are NOT replayed here: the
+ * server control stream's START_COMPLETE replays them on the connection's
+ * QUIC worker (h3_server_replay_parked_streams in http3.cpp).
  */
 void h3_server_poll_deferred(h3_session_t* h3);
 
@@ -314,6 +346,13 @@ int h3_server_send_initial_settings(h3_session_t* h3);
 /**
  * Free the HTTP/3 session and all associated resources.
  * Aborts any in-progress handshake.
+ *
+ * Called once, from the connection's teardown after its SHUTDOWN_COMPLETE —
+ * on the QUIC worker, or (server) on the application thread when the
+ * teardown was deferred to it.  Safe on either: control-stream contexts are
+ * detached and claimed under the session lock (h3_send_only_claim), and the
+ * struct itself is freed only when the last h3_session_acquire reference is
+ * released.
  */
 void h3_session_free(h3_session_t* h3);
 
@@ -358,22 +397,49 @@ int h3_server_process_data(h3_session_t* h3, h3_stream_ctx_t* sctx);
  * handing @p sctx over as the native stream whose buffered bytes are replayed
  * into the stream manager by on_h3_session_ready.
  *
- * Called from two places:
- *  - h3_server_process_data, on the normal first-byte detection path;
- *  - the H3 handshake sweep in server.cpp, as a last resort for a native client
- *    whose first byte collided with one of H3's reserved values (0x00 control
- *    stream type, 0x01 HEADERS frame type) and was therefore misrouted into an
- *    H3 path that waits for elements a native client never sends.
+ * Called from h3_server_process_data on the connection's QUIC worker, on the
+ * normal first-byte detection path.  (The H3 sweep's last-resort rescue for a
+ * native client whose first byte collided with 0x00 / 0x01 runs on the
+ * application thread and uses h3_server_native_rescue instead.)
  *
- * Not thread-safe with respect to @p sctx: callers reaching it from outside the
- * stream's own RECEIVE callback must claim @p sctx under H3_LOCK first (see the
- * sweep in server.cpp). Invokes the on_ready callback, which may free @p sctx —
- * do not touch @p sctx after this returns.
+ * Claims the handshake's completion first; if the native rescue already has
+ * it, does nothing and returns 0.  Invokes the on_ready callback, which may
+ * free @p sctx — do not touch @p sctx after this returns.
  *
  * @return 1  = handshake complete (native)
+ *         0  = the native rescue is completing this handshake instead
  *        -1  = rejected (native clients not permitted by origin policy)
  */
 int h3_fallback_to_native_protocol(h3_session_t* h3, h3_stream_ctx_t* sctx);
+
+struct wt_stream_manager_s;
+
+/**
+ * Server, application thread: the native-protocol rescue, run by the H3
+ * handshake sweep at WT_H3_NATIVE_FALLBACK_MS for a handshake stalled on a
+ * native client whose first byte collided with an H3 value.  The caller must
+ * hold the connection's application-thread gate (server.cpp).
+ *
+ * Never reads a stream's buffer or context outside H3_LOCK, and never
+ * switches a stream's handler: it claims the completion, marks the stalled
+ * stream, and calls on_ready, whose on_h3_session_ready hands the streams to
+ * the new session with h3_server_adopt_streams.
+ *
+ * @return 1 = rescued, 0 = nothing to rescue (or a worker path completed the
+ *         handshake first), -1 = rejected by the native-client policy.
+ */
+WT_HIDDEN int h3_server_native_rescue(h3_session_t* h3);
+
+/**
+ * Server, application thread, from on_h3_session_ready during a native
+ * rescue: hand every stream still held by the handshake to @p mgr and
+ * complete the handshake, in one H3_LOCK section.  Each stream's buffered
+ * bytes are copied into the stream manager and its later events are
+ * forwarded by h3_stream_cb (see h3_stream_ctx_t.fwd); no handler is
+ * switched.  A stream the handshake creates after this is routed to the
+ * stream manager directly (h3_stream_ctx_create refuses it).
+ */
+WT_HIDDEN void h3_server_adopt_streams(h3_session_t* h3, struct wt_stream_manager_s* mgr);
 
 /**
  * Client-side: process received data on the CONNECT request stream.

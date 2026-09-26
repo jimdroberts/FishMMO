@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Concurrent;
+using FishNet.Connection;
 using FishMMO.Server.Core;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.Core.Collections;
@@ -7,35 +7,47 @@ using FishMMO.Server.Core.Collections;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// Runtime data container for naming request in-flight gates and debounce tracking.
+	/// Runtime data container for naming lookups in flight and per-connection request budgets.
 	/// </summary>
 	public class NamingSystemRuntimeData : RuntimeDataContainer, INamingSystemRuntimeData
 	{
-		/// <inheritdoc/>
-		public ConcurrentDictionary<long, byte> CharacterNameByIdInFlight { get; private set; }
+		/// <summary>
+		/// Most keys of one kind in flight at once. A request beyond it is not answered, as a
+		/// request beyond its connection's budget is not; the client asks again.
+		/// </summary>
+		public const int MaxInFlightLookups = 5000;
+
+		/// <summary>
+		/// Most connections waiting on one key. Far above any honest overlap: it bounds only what
+		/// one key can be made to cost.
+		/// </summary>
+		public const int MaxWaitersPerLookup = 256;
 
 		/// <inheritdoc/>
-		public ConcurrentDictionary<long, byte> GuildNameByIdInFlight { get; private set; }
+		public InFlightLookupTable<long, NamingWaiter<NetworkConnection>> CharacterNameByIdInFlight { get; private set; }
 
 		/// <inheritdoc/>
-		public ConcurrentDictionary<string, byte> CharacterByNameInFlight { get; private set; }
+		public InFlightLookupTable<long, NamingWaiter<NetworkConnection>> GuildNameByIdInFlight { get; private set; }
 
 		/// <inheritdoc/>
-		public LastSeenCacheTracker<int, DateTime> ConnectionRequestTracker { get; private set; }
+		public InFlightLookupTable<string, NetworkConnection> CharacterByNameInFlight { get; private set; }
 
 		/// <inheritdoc/>
-		public DateTime NextCacheSweepUtc { get; set; }
+		public LastSeenCacheTracker<int, NamingRequestBucket> ConnectionRequestBuckets { get; private set; }
+
+		/// <inheritdoc/>
+		public double NextCacheSweepAt { get; set; }
 
 		/// <summary>
 		/// Initializes all naming runtime trackers.
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
-			CharacterNameByIdInFlight = new ConcurrentDictionary<long, byte>();
-			GuildNameByIdInFlight = new ConcurrentDictionary<long, byte>();
-			CharacterByNameInFlight = new ConcurrentDictionary<string, byte>();
-			ConnectionRequestTracker = new LastSeenCacheTracker<int, DateTime>();
-			NextCacheSweepUtc = DateTime.UtcNow;
+			CharacterNameByIdInFlight = new InFlightLookupTable<long, NamingWaiter<NetworkConnection>>(MaxInFlightLookups, MaxWaitersPerLookup);
+			GuildNameByIdInFlight = new InFlightLookupTable<long, NamingWaiter<NetworkConnection>>(MaxInFlightLookups, MaxWaitersPerLookup);
+			CharacterByNameInFlight = new InFlightLookupTable<string, NetworkConnection>(MaxInFlightLookups, MaxWaitersPerLookup, StringComparer.Ordinal);
+			ConnectionRequestBuckets = new LastSeenCacheTracker<int, NamingRequestBucket>();
+			NextCacheSweepAt = MonotonicClock.NowSeconds;
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
@@ -47,8 +59,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterNameByIdInFlight?.Clear();
 			GuildNameByIdInFlight?.Clear();
 			CharacterByNameInFlight?.Clear();
-			ConnectionRequestTracker?.Clear();
-			NextCacheSweepUtc = DateTime.UtcNow;
+			ConnectionRequestBuckets?.Clear();
+			NextCacheSweepAt = MonotonicClock.NowSeconds;
 		}
 
 		/// <summary>
@@ -60,7 +72,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterNameByIdInFlight = null;
 			GuildNameByIdInFlight = null;
 			CharacterByNameInFlight = null;
-			ConnectionRequestTracker = null;
+			ConnectionRequestBuckets = null;
 		}
 	}
 }

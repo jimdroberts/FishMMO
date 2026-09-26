@@ -38,6 +38,60 @@ static void fire_disconnect(wt_server_conn_t* sconn, int err);
 static uint64_t rate_limiter_now_ms(void);
 static void wt_server_drain_pending_shutdowns(wt_server_s* server);
 static void wt_server_release_slot_accounting(wt_server_conn_t* conn);
+static void server_conn_teardown(wt_server_conn_t* sconn, HQUIC conn);
+static void server_disconnect_entered(wt_server_s* server, wt_server_conn_t* conn);
+
+/* ── Application-thread gate (see app_state in server.h) ──────────
+ * conn_app_enter / conn_app_exit bracket every application-thread use of a
+ * connection's h3_session, connection handle or session.  conn_app_retire
+ * is SHUTDOWN_COMPLETE's side of the same word. */
+
+/* Enter the gate.  Refused once the connection's shutdown has completed
+ * (or the slot is free), so no call can start on state whose teardown has
+ * been claimed.  Load the slot's fields only after this succeeds. */
+static bool conn_app_enter(wt_server_conn_t* c)
+{
+    int s = atomic_load(&c->app_state);
+    for (;;) {
+        if (s & WT_CONN_APP_CLOSED)
+            return false;
+        /* On failure s is refreshed with the current value. */
+        if (atomic_compare_exchange_strong(&c->app_state, &s, s + 1))
+            return true;
+    }
+}
+
+/* Leave the gate.  The last call out of a gate closed while it was inside
+ * inherits the teardown SHUTDOWN_COMPLETE parked for it.  A gate closed
+ * without a parked handle (a slot released before its connection was
+ * ever live) has nothing to hand over. */
+static void conn_app_exit(wt_server_conn_t* c)
+{
+    int prev = atomic_fetch_sub(&c->app_state, 1);
+    if ((prev & WT_CONN_APP_CLOSED) && (prev & WT_CONN_APP_USERS) == 1) {
+        HQUIC conn = (HQUIC)atomic_ptr_exchange(&c->app_deferred_conn, NULL);
+        if (conn) {
+            WT_LOG_INFO("Client %llu teardown running on the application thread "
+                        "(deferred by SHUTDOWN_COMPLETE)",
+                        (unsigned long long)c->id);
+            server_conn_teardown(c, conn);
+        }
+    }
+}
+
+/* Close the gate.  Returns true when no call is inside, i.e. the caller
+ * owns whatever teardown follows; false when the last call to leave will
+ * run it instead.  Exactly one side sees a given CLOSED transition with
+ * the user count it reports, so ownership is never shared. */
+static bool conn_app_retire(wt_server_conn_t* c)
+{
+    int s = atomic_load(&c->app_state);
+    while (!atomic_compare_exchange_strong(&c->app_state, &s,
+                                           s | WT_CONN_APP_CLOSED)) {
+        /* s refreshed; retry */
+    }
+    return (s & WT_CONN_APP_USERS) == 0;
+}
 
 #if defined(WT_PLATFORM_WINDOWS)
   #define WT_IP_LOCK(s)   EnterCriticalSection(&(s)->ip_conns_lock)
@@ -173,6 +227,10 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
                                 const char* path, const char* authority)
 {
     wt_server_conn_t* sconn = (wt_server_conn_t*)ctx;
+    /* Runs on the connection's worker (a stream callback), or on the
+     * application thread inside the connection's gate (the H3 sweep's
+     * native rescue); either way the teardown cannot free h3 under us. */
+    h3_session_t* h3s = (h3_session_t*)atomic_ptr_load(&sconn->h3_session);
 
     wt_session_t* session = (wt_session_t*)calloc(1, sizeof(wt_session_t));
     if (!session) {
@@ -216,8 +274,8 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
      * streams so the peer associates them with the WT session, and HTTP/3
      * Datagram framing (RFC 9297) on the unreliable channel for the same
      * reason. Native raw clients use neither. */
-    if (sconn->h3_session && sconn->h3_session->is_webtransport) {
-        uint64_t connect_stream_id = sconn->h3_session->connect_stream_id;
+    if (h3s && h3s->is_webtransport) {
+        uint64_t connect_stream_id = h3s->connect_stream_id;
         if (session->stream_mgr) {
             session->stream_mgr->use_wt_stream_header = true;
             session->stream_mgr->wt_session_id = connect_stream_id;
@@ -243,6 +301,18 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
                 (unsigned long long)sconn->id, path ? path : "/");
     fire_connect(sconn);
 
+    /* ── Native rescue (application thread) ───────────────────
+     * The two replay blocks below run on the connection's worker, inside
+     * an h3 stream callback: they read h3 stream buffers and switch
+     * stream handlers, which is only safe there.  When the H3 sweep's
+     * native rescue called us from the application thread, h3 hands the
+     * streams over itself, under its lock and without switching any
+     * handler, and completes the handshake. */
+    if (h3s && h3s->poll_rescue) {
+        h3_server_adopt_streams(h3s, session->stream_mgr);
+        return;
+    }
+
     /* ── CRITICAL: Native client data replay ──────────────────
      * If this session was created via native protocol detection
      * (first byte != 0x00), the first peer stream's data was
@@ -250,10 +320,10 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
      * existed. Accept the stream into the stream manager and
      * deliver the buffered data to prevent silent data loss on
      * the very first stream from a native client. */
-    if (sconn->h3_session && sconn->h3_session->native_stream_ctx) {
+    if (h3s && h3s->native_stream_ctx) {
         h3_stream_ctx_t* nsctx =
-            (h3_stream_ctx_t*)sconn->h3_session->native_stream_ctx;
-        sconn->h3_session->native_stream_ctx = NULL;
+            (h3_stream_ctx_t*)h3s->native_stream_ctx;
+        h3s->native_stream_ctx = NULL;
 
         if (nsctx->recv_buf && nsctx->recv_offset > 0 &&
             session->stream_mgr) {
@@ -301,8 +371,8 @@ static void on_h3_session_ready(void* ctx, HQUIC quic_conn,
      * recursive on this path).  The pattern matches the
      * native_stream_ctx replay above, which also does not hold
      * any lock during accept_stream. */
-    if (sconn->h3_session) {
-        h3_session_t* h3 = sconn->h3_session;
+    if (h3s) {
+        h3_session_t* h3 = h3s;
         H3_LOCK(h3);
 
         /* Count pending entries so we can pre-allocate. */
@@ -519,6 +589,11 @@ wt_server_s* wt_server_alloc_impl(
         free(srv);
         return NULL;
     }
+
+    /* A free slot's gate is closed: application-thread calls are refused
+     * until server_listener_cb opens it for a live connection. */
+    for (uint32_t i = 0; i <= srv->max_clients; i++)
+        atomic_init(&srv->connections[i].app_state, WT_CONN_APP_CLOSED);
 
     srv->h3_sweep_cursor = 1;
     wt_datagram_queue_init(&srv->dgram_queue);
@@ -990,6 +1065,73 @@ static void wt_server_drain_pending_shutdowns(wt_server_s* server)
     }
 }
 
+/* One connection's step of the H3 handshake sweep in wt_server_poll_impl:
+ * the native-protocol rescue at WT_H3_NATIVE_FALLBACK_MS and the disconnect
+ * at WT_H3_HANDSHAKE_TIMEOUT_MS.  Called inside the connection's gate, which
+ * keeps h3_session, the connection handle and the slot itself from being
+ * torn down while this runs. */
+static void h3_sweep_one(wt_server_s* server, wt_server_conn_t* c, uint64_t now)
+{
+    /* No H3 session (raw QUIC fallback already handled, or connection
+     * is in IDLE/HANDSHAKING before CONNECTED fires).  The per-connection
+     * deadline is only meaningful when an h3_session exists. */
+    h3_session_t* h3 = (h3_session_t*)atomic_ptr_load(&c->h3_session);
+    if (!h3) return;
+
+    /* Deadline of 0 means init race — shouldn't happen, but skip.
+     * Use atomic_load_u64 to prevent torn reads on 32-bit ARM — the
+     * QUIC CONNECTED callback thread writes this field concurrently. */
+    uint64_t deadline = atomic_load_u64(&c->h3_handshake_deadline_ms);
+    if (deadline == 0) return;
+
+    /* ── Native-protocol rescue ───────────────────────────────
+     * Runs at WT_H3_NATIVE_FALLBACK_MS, well before the
+     * disconnect deadline. A native client whose first byte
+     * collided with 0x00 (control stream type) or 0x01 (HEADERS
+     * frame type) has been misclassified as an H3 peer and is
+     * now waiting for elements it will never send; both collision
+     * paths latch peer_h3_seen, so gating on that flag would skip
+     * exactly the connections that need rescuing. Instead accept
+     * any stream that still holds buffered bytes and replay them
+     * as native data.
+     *
+     * A genuine browser mid-handshake is not harmed: its CONNECT
+     * completes within milliseconds of connecting, so it is
+     * already ESTABLISHED (session != NULL, skipped by the caller)
+     * long before this fires. If it somehow is not, the replay only
+     * costs it a connection that was failing anyway.
+     *
+     * h3_server_native_rescue owns the thread-safety of this: the gate
+     * held by our caller keeps the connection's teardown away, and the
+     * rescue touches the streams themselves only under H3_LOCK and never
+     * switches their handlers (see its comment in http3.cpp). */
+    if (now >= deadline - (WT_H3_HANDSHAKE_TIMEOUT_MS -
+                           WT_H3_NATIVE_FALLBACK_MS) &&
+        !atomic_load(&c->h3_native_fallback_tried))
+    {
+        atomic_store(&c->h3_native_fallback_tried, true);
+        if (h3_server_native_rescue(h3) != 0) {
+            WT_LOG_WARN("Client %llu H3 handshake stalled — replayed "
+                        "buffered bytes as native protocol",
+                        (unsigned long long)c->id);
+            return;
+        }
+    }
+
+    if (now < deadline) return;
+
+    /* Re-check session pointer AFTER the deadline check.
+     * The H3 handshake may have completed on a QUIC worker
+     * thread since the caller's NULL check.  Without this
+     * re-check, a client that completes the handshake in that
+     * narrow window would be spuriously disconnected. */
+    if (atomic_ptr_load(&c->session) != NULL) return;
+
+    WT_LOG_WARN("Client %llu H3 handshake timed out — disconnecting",
+                (unsigned long long)c->id);
+    wt_server_disconnect_impl(server, c->id);
+}
+
 void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
 {
     (void)timeout_us;
@@ -1035,88 +1177,12 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
             /* Already has a WT session — handshake completed normally. */
             if (atomic_ptr_load(&c->session) != NULL) continue;
 
-            /* No H3 session (raw QUIC fallback already handled, or connection
-             * is in IDLE/HANDSHAKING before CONNECTED fires).  The per-connection
-             * deadline is only meaningful when an h3_session exists. */
-            if (!c->h3_session) continue;
-
-            /* Deadline of 0 means init race — shouldn't happen, but skip.
-             * Use atomic_load_u64 to prevent torn reads on 32-bit ARM — the
-             * QUIC CONNECTED callback thread writes this field concurrently. */
-            uint64_t deadline = atomic_load_u64(&c->h3_handshake_deadline_ms);
-            if (deadline == 0) continue;
-
-            /* ── Native-protocol rescue ───────────────────────────────
-             * Runs at WT_H3_NATIVE_FALLBACK_MS, well before the
-             * disconnect deadline. A native client whose first byte
-             * collided with 0x00 (control stream type) or 0x01 (HEADERS
-             * frame type) has been misclassified as an H3 peer and is
-             * now waiting for elements it will never send; both collision
-             * paths latch peer_h3_seen, so gating on that flag would skip
-             * exactly the connections that need rescuing. Instead accept
-             * any stream that still holds buffered bytes and replay them
-             * as native data.
-             *
-             * A genuine browser mid-handshake is not harmed: its CONNECT
-             * completes within milliseconds of connecting, so it is
-             * already ESTABLISHED (session != NULL, skipped above) long
-             * before this fires. If it somehow is not, the replay only
-             * costs it a connection that was failing anyway.
-             *
-             * The candidate is claimed under H3_LOCK (marking it raw and
-             * publishing it as native_stream_ctx) and the callback is then
-             * invoked with the lock released: on_h3_session_ready unlinks
-             * the sctx from the same list and would otherwise re-enter this
-             * non-recursive mutex. */
-            if (now >= deadline - (WT_H3_HANDSHAKE_TIMEOUT_MS -
-                                   WT_H3_NATIVE_FALLBACK_MS) &&
-                !atomic_load(&c->h3_native_fallback_tried))
-            {
-                h3_session_t* h3 = c->h3_session;
-                h3_stream_ctx_t* claimed = NULL;
-
-                H3_LOCK(h3);
-                if (!h3->handshake_complete && !h3->native_stream_ctx) {
-                    for (h3_stream_ctx_t* ds = h3->stream_ctx_list;
-                         ds; ds = ds->next) {
-                        if (ds->quic_stream && ds->recv_offset > 0) {
-                            claimed = ds;
-                            break;
-                        }
-                    }
-                    if (claimed) {
-                        h3->native_stream_ctx = claimed;
-                        claimed->stream_type = -2;  /* mark as raw */
-                    }
-                }
-                H3_UNLOCK(h3);
-
-                atomic_store(&c->h3_native_fallback_tried, true);
-
-                if (claimed) {
-                    WT_LOG_WARN("Client %llu H3 handshake stalled — replaying "
-                                "buffered bytes as native protocol",
-                                (unsigned long long)c->id);
-                    /* Already claimed above, so this only runs the origin
-                     * gate and the on_ready/state transition. */
-                    (void)h3_fallback_to_native_protocol(h3, claimed);
-                    continue;
-                }
-            }
-
-            if (now < deadline) continue;
-
-            /* Re-check session pointer AFTER the deadline check.
-             * The H3 handshake may have completed on a QUIC worker
-             * thread between our earlier NULL check (line 536) and
-             * this point.  Without this re-check, a client that
-             * completes the handshake in that narrow window would be
-             * spuriously disconnected. */
-            if (atomic_ptr_load(&c->session) != NULL) continue;
-
-            WT_LOG_WARN("Client %llu H3 handshake timed out — disconnecting",
-                        (unsigned long long)c->id);
-            wt_server_disconnect_impl(server, c->id);
+            /* The sweep reads the connection's h3_session and may run the
+             * native rescue or a disconnect on it: hold the gate so the
+             * worker's teardown cannot free it under us. */
+            if (!conn_app_enter(c)) continue;
+            h3_sweep_one(server, c, now);
+            conn_app_exit(c);
         }
 
         /* Advance cursor for the next frame.  Wrap around to 1
@@ -1131,7 +1197,12 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
      * h3_server_send_initial_settings → h3_server_request_settings_bootstrap,
      * which sets settings_bootstrap_pending=1.  This poll loop opens the
      * server control stream and sends SETTINGS on the application thread,
-     * avoiding msquic re-entrancy that caused QuicOperationFree crashes. */
+     * avoiding msquic re-entrancy that caused QuicOperationFree crashes.
+     *
+     * Every connection's h3_session is read here on every poll, so each
+     * read is made inside the connection's gate: SHUTDOWN_COMPLETE used to
+     * free the session (and close the handle StreamOpen is given) while
+     * this loop was reading it. */
     for (uint32_t i = 1; i <= server->max_clients; i++) {
         wt_server_conn_t* c = &server->connections[i];
         if (!atomic_load(&c->in_use))
@@ -1145,9 +1216,12 @@ void wt_server_poll_impl(wt_server_s* server, int32_t timeout_us)
             wt_server_disconnect_impl(server, c->id);
             continue;
         }
-        if (!c->h3_session)
+        if (!conn_app_enter(c))
             continue;
-        h3_server_poll_deferred(c->h3_session);
+        h3_session_t* h3 = (h3_session_t*)atomic_ptr_load(&c->h3_session);
+        if (h3)
+            h3_server_poll_deferred(h3);
+        conn_app_exit(c);
     }
 
     wt_datagram_queue_drain(&server->dgram_queue,
@@ -1178,18 +1252,21 @@ int32_t wt_server_send_stream_impl(
             if (!atomic_load(&c->in_use) ||
                 (wt_connection_state_t)atomic_load(&c->state) != WT_CONN_STATE_CONNECTED)
                 continue;
+            /* Inside the gate the worker cannot close the connection or
+             * its stream handles under this send (see app_state). */
+            if (!conn_app_enter(c))
+                continue;
             wt_session_t* session = (wt_session_t*)atomic_ptr_load(&c->session);
-            if (!session || !wt_session_acquire(session))
-                continue;
-            /* Re-check after acquire — session pointer may have changed */
-            if (atomic_ptr_load(&c->session) != session ||
-                !atomic_load(&c->in_use)) {
+            if (session && wt_session_acquire(session)) {
+                /* Re-check after acquire — session pointer may have changed */
+                if (atomic_ptr_load(&c->session) == session &&
+                    atomic_load(&c->in_use)) {
+                    int32_t r = wt_session_send_stream(session, data, length);
+                    if (r != WT_OK) worst = r;
+                }
                 wt_session_release(session);
-                continue;
             }
-            int32_t r = wt_session_send_stream(session, data, length);
-            if (r != WT_OK) worst = r;
-            wt_session_release(session);
+            conn_app_exit(c);
         }
         return worst;
     }
@@ -1202,22 +1279,23 @@ int32_t wt_server_send_stream_impl(
         (wt_connection_state_t)atomic_load(&conn->state) != WT_CONN_STATE_CONNECTED)
         return WT_ERR_NOT_FOUND;
 
+    /* Inside the gate the worker cannot close the connection or its
+     * stream handles under this send (see app_state). */
+    if (!conn_app_enter(conn))
+        return WT_ERR_NOT_FOUND;
+    int32_t result = WT_ERR_NOT_FOUND;
     {
         wt_session_t* session = (wt_session_t*)atomic_ptr_load(&conn->session);
-        if (!session || !wt_session_acquire(session))
-            return WT_ERR_NOT_FOUND;
-
-        /* Re-check — session may have been nulled by SHUTDOWN_COMPLETE */
-        if (atomic_ptr_load(&conn->session) != session ||
-            !atomic_load(&conn->in_use)) {
+        if (session && wt_session_acquire(session)) {
+            /* Re-check — session may have been nulled by SHUTDOWN_COMPLETE */
+            if (atomic_ptr_load(&conn->session) == session &&
+                atomic_load(&conn->in_use))
+                result = wt_session_send_stream(session, data, length);
             wt_session_release(session);
-            return WT_ERR_NOT_FOUND;
         }
-
-        int32_t result = wt_session_send_stream(session, data, length);
-        wt_session_release(session);
-        return result;
     }
+    conn_app_exit(conn);
+    return result;
 }
 
 int32_t wt_server_send_datagram_impl(
@@ -1233,17 +1311,20 @@ int32_t wt_server_send_datagram_impl(
             if (!atomic_load(&c->in_use) ||
                 (wt_connection_state_t)atomic_load(&c->state) != WT_CONN_STATE_CONNECTED)
                 continue;
+            /* Inside the gate the worker cannot ConnectionClose the
+             * handle DatagramSend is given (see app_state). */
+            if (!conn_app_enter(c))
+                continue;
             wt_session_t* session = (wt_session_t*)atomic_ptr_load(&c->session);
-            if (!session || !wt_session_acquire(session))
-                continue;
-            if (atomic_ptr_load(&c->session) != session ||
-                !atomic_load(&c->in_use)) {
+            if (session && wt_session_acquire(session)) {
+                if (atomic_ptr_load(&c->session) == session &&
+                    atomic_load(&c->in_use)) {
+                    int32_t r = wt_session_send_datagram(session, data, length);
+                    if (r != WT_OK) worst = r;
+                }
                 wt_session_release(session);
-                continue;
             }
-            int32_t r = wt_session_send_datagram(session, data, length);
-            if (r != WT_OK) worst = r;
-            wt_session_release(session);
+            conn_app_exit(c);
         }
         return worst;
     }
@@ -1256,25 +1337,26 @@ int32_t wt_server_send_datagram_impl(
         (wt_connection_state_t)atomic_load(&conn->state) != WT_CONN_STATE_CONNECTED)
         return WT_ERR_NOT_FOUND;
 
+    /* Inside the gate the worker cannot ConnectionClose the handle
+     * DatagramSend is given (see app_state). */
+    if (!conn_app_enter(conn))
+        return WT_ERR_NOT_FOUND;
+    int32_t result = WT_ERR_NOT_FOUND;
     {
         wt_session_t* session = (wt_session_t*)atomic_ptr_load(&conn->session);
-        if (!session || !wt_session_acquire(session))
-            return WT_ERR_NOT_FOUND;
-
-        if (atomic_ptr_load(&conn->session) != session ||
-            !atomic_load(&conn->in_use)) {
+        if (session && wt_session_acquire(session)) {
+            /* Both browser and native sessions send real datagrams. Browser
+             * sessions previously rerouted onto the reliable stream because the
+             * datagrams lacked their RFC 9297 header and no browser could accept
+             * them; wt_session_send_datagram now adds it. */
+            if (atomic_ptr_load(&conn->session) == session &&
+                atomic_load(&conn->in_use))
+                result = wt_session_send_datagram(session, data, length);
             wt_session_release(session);
-            return WT_ERR_NOT_FOUND;
         }
-
-        /* Both browser and native sessions send real datagrams. Browser
-         * sessions previously rerouted onto the reliable stream because the
-         * datagrams lacked their RFC 9297 header and no browser could accept
-         * them; wt_session_send_datagram now adds it. */
-        int32_t result = wt_session_send_datagram(session, data, length);
-        wt_session_release(session);
-        return result;
     }
+    conn_app_exit(conn);
+    return result;
 }
 
 void wt_server_disconnect_impl(
@@ -1286,11 +1368,25 @@ void wt_server_disconnect_impl(
     wt_server_conn_t* conn = &server->connections[conn_id];
     if (!atomic_load(&conn->in_use)) return;
 
+    /* ConnectionShutdown below uses the connection handle, which the
+     * worker's teardown closes: hold the gate so it cannot run meanwhile
+     * (see app_state).  Refused = the shutdown already completed. */
+    if (!conn_app_enter(conn)) return;
+    server_disconnect_entered(server, conn);
+    conn_app_exit(conn);
+}
+
+/* wt_server_disconnect_impl's body, run inside the connection's gate.
+ * Also reached from a QUIC worker (on_h3_error); the gate is harmless
+ * there — the connection's own SHUTDOWN_COMPLETE cannot run concurrently
+ * with one of its callbacks. */
+static void server_disconnect_entered(wt_server_s* server, wt_server_conn_t* conn)
+{
     /* Atomically claim the shutdown — prevents double-increment
-     * if called twice for the same connection. */
-    HQUIC qconn = (HQUIC)atomic_ptr_load(&conn->quic_conn);
+     * if called twice for the same connection.  Exchange, not
+     * load-then-store: two callers must not both take the handle. */
+    HQUIC qconn = (HQUIC)atomic_ptr_exchange(&conn->quic_conn, NULL);
     if (!qconn) return;  /* already shutting down */
-    atomic_ptr_store(&conn->quic_conn, NULL);
 
     /* Check connection state before proceeding with ConnectionShutdown.
      * If the connection is still in IDLE state (never started handshaking),
@@ -1307,6 +1403,9 @@ void wt_server_disconnect_impl(
     wt_connection_state_t state = (wt_connection_state_t)atomic_load(&conn->state);
     if (state == WT_CONN_STATE_IDLE) {
         wt_server_release_slot_accounting(conn);
+        /* The slot goes back without a teardown: close its gate (nothing
+         * is parked, so our own conn_app_exit hands nothing over). */
+        (void)conn_app_retire(conn);
         atomic_store(&conn->in_use, false);
         /* conn->owner is validated non-NULL by the caller's in_use check.
          * It can ONLY become NULL during wt_server_free_impl, which runs
@@ -1658,8 +1757,9 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
      * bypass the deadline check. */
     atomic_store(&conn->state, WT_CONN_STATE_HANDSHAKING);
     atomic_ptr_store(&conn->quic_conn, event->NEW_CONNECTION.Connection);
-    conn->session = NULL;
-    conn->h3_session = NULL;
+    atomic_ptr_store(&conn->session, NULL);
+    atomic_ptr_store(&conn->h3_session, NULL);
+    atomic_ptr_store(&conn->app_deferred_conn, NULL);
     /* ── FIX: Reset H3 handshake deadline on slot recycling ──
      * Without this reset, a recycled slot retains the previous
      * occupant's h3_handshake_deadline_ms value.  On ARM (weak
@@ -1727,6 +1827,19 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
 
     atomic_fetch_add(&srv->connection_count, 1);
 
+    /* Open the application-thread gate (see app_state) now that every field
+     * above describes this connection, and before SetCallbackHandler: no
+     * SHUTDOWN_COMPLETE can close it before it is open.  Only the CLOSED
+     * bit is cleared — a count left by a call still leaving from an earlier
+     * occupancy stays balanced. */
+    {
+        int s = atomic_load(&conn->app_state);
+        while (!atomic_compare_exchange_strong(&conn->app_state, &s,
+                                               s & ~WT_CONN_APP_CLOSED)) {
+            /* s refreshed; retry */
+        }
+    }
+
     MsQuic->SetCallbackHandler((HQUIC)atomic_ptr_load(&conn->quic_conn),
                                 (void*)server_conn_cb, conn);
     status = MsQuic->ConnectionSetConfiguration((HQUIC)atomic_ptr_load(&conn->quic_conn),
@@ -1734,8 +1847,12 @@ server_listener_cb(HQUIC listener, void* ctx, QUIC_LISTENER_EVENT* event)
     if (QUIC_FAILED(status)) {
         WT_LOG_WARN("ConnectionSetConfiguration: 0x%x", status);
         /* Undo what we set up above; do NOT call ConnectionClose —
-         * msquic closes the handle when CONNECTION_REFUSED is returned. */
+         * msquic closes the handle when CONNECTION_REFUSED is returned.
+         * Close the gate again without a parked handle, so nothing inside
+         * it can inherit a teardown for a handle msquic owns. */
         wt_server_release_slot_accounting(conn);
+        (void)conn_app_retire(conn);
+        atomic_ptr_store(&conn->quic_conn, NULL);
         atomic_store(&conn->in_use, false);
         atomic_fetch_sub(&srv->connection_count, 1);
         return QUIC_STATUS_CONNECTION_REFUSED;
@@ -1818,6 +1935,242 @@ static void fire_disconnect(wt_server_conn_t* sconn, int err)
     }
 }
 
+/* Connection teardown, formerly the body of SHUTDOWN_COMPLETE: hand the
+ * session to the deferred-shutdown queue, free the h3_session, close the
+ * connection handle, release the slot, report the disconnect and signal
+ * completion to wt_server_free_impl.
+ *
+ * Runs exactly once per connection, after its SHUTDOWN_COMPLETE: on the
+ * QUIC worker inside that event when no application-thread call held the
+ * connection's gate, otherwise on the application thread when the last
+ * such call leaves it (conn_app_exit).  Either way nothing else is using the
+ * connection's handle or h3_session, and msquic delivers no further
+ * connection events.  Everything below is safe on either thread: the
+ * StreamClose / ConnectionClose calls block on the worker when made from
+ * the application thread, which is allowed after SHUTDOWN_COMPLETE, and the
+ * worker never waits on the application thread. */
+static void server_conn_teardown(wt_server_conn_t* sconn, HQUIC conn)
+{
+    /* Atomic load — no non-atomic guard (avoids torn read on ARM). */
+    {
+        /* Exchange, not load+store: wt_server_free_impl claims live sessions
+         * the same way during teardown, and a load-then-store here would let
+         * both sides take the same pointer and shut the session down twice. */
+        wt_session_t* old_session =
+            (wt_session_t*)atomic_ptr_exchange(&sconn->session, NULL);
+        if (old_session) {
+            /* ── FIX 27: Mark connection closed before ConnectionClose ─
+             * Must happen BEFORE ConnectionClose — after ConnectionClose
+             * the QUIC handle is invalid and any subsequent StreamShutdown
+             * from wt_session_shutdown would trigger quic_bugcheck. */
+            if (old_session->stream_mgr) {
+                wt_stream_manager_mark_conn_closed(old_session->stream_mgr);
+                /* Release any stream handles still open, in the one window
+                 * where it is both safe and possible — see
+                 * wt_stream_manager_close_streams. Marking conn_closed
+                 * above makes the per-stream handler skip its own
+                 * StreamClose, so without this nothing closes them and
+                 * MsQuicRegistrationClose hangs at server shutdown. */
+                wt_stream_manager_close_streams(old_session->stream_mgr);
+                /* Handles are dead from ConnectionClose (just below) on. */
+                wt_stream_manager_mark_handles_invalid(old_session->stream_mgr);
+            }
+
+            /* Defer shutdown to poll (application thread) to guarantee
+             * session free never races with in-flight sends.
+             * Use atomic_ptr_store because the poll thread reads this
+             * field without a lock. */
+            atomic_ptr_store(&sconn->pending_shutdown_session, old_session);
+        }
+    }
+
+    /* ── HTTP/3 Session Cleanup ──────────────────────────
+     * Free the h3_session if the handshake never completed.
+     * If h3_session->handshake_complete is true, the session was
+     * already transitioned to wt_session in on_h3_session_ready,
+     * and h3_session is safe to free (no pending streams).
+     * Nothing on the application thread can be reading it: the gate is
+     * closed and this teardown runs only once no call is inside. */
+    {
+        h3_session_t* h3 = (h3_session_t*)atomic_ptr_exchange(&sconn->h3_session, NULL);
+        if (h3)
+            h3_session_free(h3);
+    }
+
+    /* Never leave a closed handle in the slot: a stale one would be taken
+     * by a later wt_server_disconnect_impl once the slot is reused. */
+    atomic_ptr_store(&sconn->quic_conn, NULL);
+    MsQuic->ConnectionClose(conn);
+
+    bool was_in_use = atomic_load(&sconn->in_use);
+    if (was_in_use) {
+        wt_server_release_slot_accounting(sconn);
+        if (sconn->owner) {
+            atomic_fetch_sub(&sconn->owner->connection_count, 1);
+        }
+
+        atomic_store(&sconn->in_use, false);
+        atomic_store(&sconn->state, WT_CONN_STATE_CLOSED);
+    }
+
+    /* Enqueue for O(1) poll drain — the poll thread processes
+     * pending_shutdown_session safely on the application thread. */
+    if (sconn->owner && sconn->pending_shutdown_session) {
+        /* ── Consistent head/tail snapshot ──────────────────
+         * Load head and tail with a confirm-retry so a stale head
+         * (consumer advanced head between two separate atomic loads)
+         * doesn't cause a false "queue full" detection.  False
+         * overflow would trigger premature wt_session_shutdown on
+         * the callback thread, which is safe (the overflow path
+         * handles it) but wasteful.  One re-read eliminates nearly
+         * all false positives without risking livelock (monotonic
+         * head advances monotonically — each retry sees head >=
+         * the previous).
+         *
+         * Use subtraction-based full check with 64-bit counters to
+         * eliminate the ~5-day wraparound inherent in uint32_t.
+         * The ring buffer holds WT_MAX_CLIENTS entries; we reject
+         * when occupancy reaches WT_MAX_CLIENTS - 1 to leave one
+         * guard slot. */
+        uint64_t head = atomic_load_u64(&sconn->owner->pending_shutdown_head);
+        atomic_thread_fence(std::memory_order_acquire);
+        uint64_t tail = atomic_load_u64(
+            &sconn->owner->pending_shutdown_tail);
+        if ((tail - head) >= WT_MAX_CLIENTS - 1) {
+            /* Confirm: re-read head.  If the consumer advanced it,
+             * recompute occupancy with the fresh snapshot. */
+            uint64_t head2 = atomic_load_u64(
+                &sconn->owner->pending_shutdown_head);
+            if (head2 != head) {
+                head = head2;
+                atomic_thread_fence(std::memory_order_acquire);
+                tail = atomic_load_u64(
+                    &sconn->owner->pending_shutdown_tail);
+            }
+        }
+        if ((tail - head) >= WT_MAX_CLIENTS - 1) {
+            /* ── Queue full — bounded spin-retry ──────────────
+             * The poll thread drains entries every frame and should
+             * advance head within a few QUIC scheduler ticks. Spin
+             * for up to 100 iterations (~1ms on modern CPUs) waiting
+             * for a slot to open.  If the queue is still full after
+             * the spin, fall back to immediate shutdown on this
+             * thread as a last resort (see below).
+             *
+             * This retry eliminates the need for direct shutdown on
+             * the callback thread in normal operation — the queue
+             * only overflows under truly pathological conditions
+             * (4095 simultaneous disconnects with no poll calls). */
+            int spin_retries = 100;
+            uint64_t head_retry, tail_retry;
+            do {
+                /* Yield the CPU briefly — the poll thread needs
+                 * scheduler time to advance head. */
+#if defined(WT_PLATFORM_WINDOWS)
+                SwitchToThread();
+#else
+                sched_yield();
+#endif
+                head_retry = atomic_load_u64(
+                    &sconn->owner->pending_shutdown_head);
+                atomic_thread_fence(std::memory_order_acquire);
+                tail_retry = atomic_load_u64(
+                    &sconn->owner->pending_shutdown_tail);
+            } while ((tail_retry - head_retry) >= WT_MAX_CLIENTS - 1 &&
+                     --spin_retries > 0);
+
+            if ((tail_retry - head_retry) >= WT_MAX_CLIENTS - 1) {
+                WT_LOG_ERROR("Pending shutdown queue overflow after spin — "
+                             "freeing session for connection %llu immediately "
+                             "(tail %llu, head %llu)",
+                            (unsigned long long)sconn->id,
+                            (unsigned long long)tail_retry,
+                            (unsigned long long)head_retry);
+                /* ── Last-resort: Free session immediately ────
+                 * The queue is still full after yielding.  This
+                 * connection has no in-flight sends (SHUTDOWN_COMPLETE
+                 * already fired), so calling wt_session_shutdown
+                 * directly on the callback thread is safe.
+                 *
+                 * SAFETY: atomic_ptr_exchange atomically swaps
+                 * the pointer with NULL.  If poll() or
+                 * server_listener_cb is concurrently draining the
+                 * same slot, exactly one path receives the non-NULL
+                 * pointer and calls wt_session_shutdown.  This
+                 * guarantees no double-free. */
+                wt_session_t* overflow_session =
+                    (wt_session_t*)atomic_ptr_exchange(
+                        &sconn->pending_shutdown_session, NULL);
+                if (overflow_session) {
+                    wt_session_shutdown(overflow_session);
+                }
+            } else {
+                /* Spin succeeded — slot opened up. Enqueue normally. */
+                uint64_t claimed_tail = atomic_fetch_add_u64(
+                    &sconn->owner->pending_shutdown_tail, 1);
+                sconn->owner->pending_shutdown_queue[
+                    claimed_tail % WT_MAX_CLIENTS] = sconn->id;
+                atomic_thread_fence(std::memory_order_release);
+            }
+        } else {
+            /* Write data to the queue slot BEFORE publishing the new
+             * tail index.  The consumer reads tail then reads the slot;
+             * without this ordering the consumer could see the new tail
+             * but stale slot data on weakly-ordered architectures. */
+            /* Atomically claim a unique slot in the ring buffer.
+             * atomic_fetch_add prevents multiple QUIC threads from
+             * writing to the same slot — each call returns a
+             * unique position. */
+            uint64_t claimed_tail = atomic_fetch_add_u64(
+                &sconn->owner->pending_shutdown_tail, 1);
+            sconn->owner->pending_shutdown_queue[
+                claimed_tail % WT_MAX_CLIENTS] = sconn->id;
+            /* Release fence: ensures the slot write above is visible
+             * before the tail update observed by the consumer.
+             * Paired with the acquire fence in wt_server_poll_impl. */
+            atomic_thread_fence(std::memory_order_release);
+        }
+    }
+
+    /* ── FIX: UAF in SHUTDOWN_COMPLETE ─────────────────
+     * Fire the disconnect callback BEFORE signalling completion via
+     * pending_shutdowns.  If fire_disconnect were called AFTER the
+     * CAS decrement, the last SHUTDOWN_COMPLETE could decrement
+     * pending_shutdowns to 0, causing wt_server_free_impl's spin-wait
+     * to exit and free server->connections (and sconn) before this
+     * thread reaches fire_disconnect — a use-after-free.
+     *
+     * Re-entrancy note: if fire_disconnect's user callback calls
+     * wt_server_destroy → free_impl, the spin-wait will see
+     * pending_shutdowns > 0 and spin until this CAS decrement below
+     * runs.  After fire_disconnect returns, no further accesses to
+     * sconn or sconn->owner occur, so same-thread re-entrancy is safe.
+     * Cross-thread: wt_server_free_impl cannot proceed past its
+     * spin-wait until pending_shutdowns reaches 0, which happens
+     * AFTER this callback's CAS decrement — guaranteeing sconn
+     * remains valid through the entire fire_disconnect call. */
+    if (was_in_use)
+        fire_disconnect(sconn, 0);
+
+    /* Signal completion AFTER the disconnect callback.
+     * Use a CAS loop that decrements ONLY if > 0, eliminating the
+     * TOCTOU race between fetch_sub and the underflow-correction
+     * fetch_add that existed in the previous implementation.
+     * If pending_shutdowns is 0 (client-initiated disconnect or
+     * duplicate SHUTDOWN_COMPLETE), the CAS loop exits harmlessly
+     * without touching the counter. */
+    if (sconn->owner) {
+        unsigned int expected = atomic_load(
+            &sconn->owner->pending_shutdowns);
+        while (expected > 0) {
+            if (atomic_compare_exchange_strong(
+                    &sconn->owner->pending_shutdowns,
+                    &expected, expected - 1))
+                break;
+        }
+    }
+}
+
 static QUIC_STATUS QUIC_API
 server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
 {
@@ -1855,30 +2208,59 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * on_h3_session_ready fires when the WT session is established
          * (either immediately for native clients after the first byte
          *  check, or after HTTP/3 CONNECT for browser clients). */
-        sconn->h3_session = h3_session_create(
+        h3_session_t* h3 = h3_session_create(
             conn, true,  /* is_server */
             on_h3_session_ready, on_h3_error, sconn);
-        if (sconn->h3_session && sconn->owner) {
-            sconn->h3_session->max_stream_ctx =
-                sconn->owner->limits.max_h3_streams_per_conn;
-        }
 
-        /* ── FIX #3: Set H3 handshake deadline ─────────────────
-         * The QUIC idle timeout (120s) is far too long for the
-         * HTTP/3 handshake, which should complete in milliseconds.
-         * Without this deadline, an attacker can open thousands of
-         * QUIC connections that never send an H3 control stream,
-         * holding slots until the idle timeout fires. */
-        if (sconn->h3_session) {
-            /* Use atomic_store_u64 — the poll sweep reads this field
+        if (h3) {
+            /* Configure the session completely, THEN publish it: the poll
+             * thread reads sconn->h3_session (inside the gate) and must
+             * never see a half-initialised one. */
+            if (sconn->owner) {
+                h3->max_stream_ctx = sconn->owner->limits.max_h3_streams_per_conn;
+                /* Copy allowed origins from server config for CORS validation.
+                 * Empty allowed_origins = allow all (dev/testing default). */
+                if (sconn->owner->allowed_origins[0]) {
+                    strncpy(h3->allowed_origins, sconn->owner->allowed_origins,
+                            sizeof(h3->allowed_origins) - 1);
+                    h3->allowed_origins[sizeof(h3->allowed_origins) - 1] = '\0';
+                }
+                /* Copy expected :authority for CONNECT validation.
+                 * Empty = skip authority validation (backward compatible). */
+                if (sconn->owner->expected_authority[0]) {
+                    strncpy(h3->expected_authority, sconn->owner->expected_authority,
+                            sizeof(h3->expected_authority) - 1);
+                    h3->expected_authority[sizeof(h3->expected_authority) - 1] = '\0';
+                }
+                /* Propagate native-client policy from server config.
+                 * Default (from alloc) is true for backward compatibility. */
+                h3->allow_native_clients = sconn->owner->allow_native_clients;
+            }
+
+            /* ── FIX #3: Set H3 handshake deadline ─────────────────
+             * The QUIC idle timeout (120s) is far too long for the
+             * HTTP/3 handshake, which should complete in milliseconds.
+             * Without this deadline, an attacker can open thousands of
+             * QUIC connections that never send an H3 control stream,
+             * holding slots until the idle timeout fires.
+             * Use atomic_store_u64 — the poll sweep reads this field
              * from the application thread while the CONNECTED callback
              * writes it from a QUIC worker thread.  Plain uint64_t
-             * assignment tears on 32-bit ARM. */
+             * assignment tears on 32-bit ARM.  Stored before the session
+             * is published, so the sweep never sees a session without it. */
             atomic_store_u64(&sconn->h3_handshake_deadline_ms,
                 rate_limiter_now_ms() + WT_H3_HANDSHAKE_TIMEOUT_MS);
-        }
 
-        if (!sconn->h3_session) {
+            atomic_ptr_store(&sconn->h3_session, h3);
+
+            /* Schedule SETTINGS for poll thread (never StreamOpen here —
+             * connection/stream callbacks re-entering msquic caused
+             * QuicOperationFree double-fault / Login 255/EXCEPTION). */
+            h3_server_send_initial_settings(h3);
+            WT_LOG_INFO(
+                "H3: SETTINGS bootstrap scheduled for client %llu (poll thread)",
+                (unsigned long long)sconn->id);
+        } else {
             /* Fall back to raw QUIC (backward compatible) */
             WT_LOG_WARN("Failed to create HTTP/3 session for client %llu — falling back to raw QUIC",
                         (unsigned long long)sconn->id);
@@ -1906,39 +2288,6 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
             session->parent.server = sconn->owner;
             wt_session_wire_callbacks(session);
             fire_connect(sconn);
-        } else {
-            /* Copy allowed origins from server config for CORS validation.
-             * Empty allowed_origins = allow all (dev/testing default). */
-            if (sconn->owner && sconn->owner->allowed_origins[0]) {
-                strncpy(sconn->h3_session->allowed_origins,
-                        sconn->owner->allowed_origins,
-                        sizeof(sconn->h3_session->allowed_origins) - 1);
-                sconn->h3_session->allowed_origins[
-                    sizeof(sconn->h3_session->allowed_origins) - 1] = '\0';
-            }
-            /* Copy expected :authority for CONNECT validation.
-             * Empty = skip authority validation (backward compatible). */
-            if (sconn->owner && sconn->owner->expected_authority[0]) {
-                strncpy(sconn->h3_session->expected_authority,
-                        sconn->owner->expected_authority,
-                        sizeof(sconn->h3_session->expected_authority) - 1);
-                sconn->h3_session->expected_authority[
-                    sizeof(sconn->h3_session->expected_authority) - 1] = '\0';
-            }
-            /* Propagate native-client policy from server config.
-             * Default (from alloc) is true for backward compatibility. */
-            if (sconn->owner) {
-                sconn->h3_session->allow_native_clients =
-                    sconn->owner->allow_native_clients;
-            }
-
-            /* Schedule SETTINGS for poll thread (never StreamOpen here —
-             * connection/stream callbacks re-entering msquic caused
-             * QuicOperationFree double-fault / Login 255/EXCEPTION). */
-            h3_server_send_initial_settings(sconn->h3_session);
-            WT_LOG_INFO(
-                "H3: SETTINGS bootstrap scheduled for client %llu (poll thread)",
-                (unsigned long long)sconn->id);
         }
         /* When h3_session is created, peer streams drive protocol detection
          * (browser CONNECT vs native). Session init is deferred until
@@ -2000,11 +2349,16 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         int settings_sent = 0;
         int handshake_done = 0;
         int peer_h3 = 0;
-        if (sconn->h3_session) {
-            h3_state = (int)sconn->h3_session->server_state;
-            settings_sent = sconn->h3_session->server_settings_sent ? 1 : 0;
-            handshake_done = sconn->h3_session->handshake_complete ? 1 : 0;
-            peer_h3 = sconn->h3_session->peer_h3_seen ? 1 : 0;
+        {
+            /* Worker-side read: the teardown (which frees it) runs only
+             * after SHUTDOWN_COMPLETE, never alongside this event. */
+            h3_session_t* h3 = (h3_session_t*)atomic_ptr_load(&sconn->h3_session);
+            if (h3) {
+                h3_state = (int)h3->server_state;
+                settings_sent = h3->server_settings_sent ? 1 : 0;
+                handshake_done = h3->handshake_complete ? 1 : 0;
+                peer_h3 = h3->peer_h3_seen ? 1 : 0;
+            }
         }
         WT_LOG_WARN(
             "Client %llu TRANSPORT shutdown status=0x%x error=0x%llx (%s) "
@@ -2059,11 +2413,16 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
         int settings_sent = 0;
         int handshake_done = 0;
         int peer_h3 = 0;
-        if (sconn->h3_session) {
-            h3_state = (int)sconn->h3_session->server_state;
-            settings_sent = sconn->h3_session->server_settings_sent ? 1 : 0;
-            handshake_done = sconn->h3_session->handshake_complete ? 1 : 0;
-            peer_h3 = sconn->h3_session->peer_h3_seen ? 1 : 0;
+        {
+            /* Worker-side read: the teardown (which frees it) runs only
+             * after SHUTDOWN_COMPLETE, never alongside this event. */
+            h3_session_t* h3 = (h3_session_t*)atomic_ptr_load(&sconn->h3_session);
+            if (h3) {
+                h3_state = (int)h3->server_state;
+                settings_sent = h3->server_settings_sent ? 1 : 0;
+                handshake_done = h3->handshake_complete ? 1 : 0;
+                peer_h3 = h3->peer_h3_seen ? 1 : 0;
+            }
         }
         WT_LOG_WARN(
             "Client %llu PEER shutdown error=0x%llx (%s) "
@@ -2083,217 +2442,23 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
     }
 
     case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE: {
-        /* Atomic load — no non-atomic guard (avoids torn read on ARM). */
-        {
-            /* Exchange, not load+store: wt_server_free_impl claims live sessions
-             * the same way during teardown, and a load-then-store here would let
-             * both sides take the same pointer and shut the session down twice. */
-            wt_session_t* old_session =
-                (wt_session_t*)atomic_ptr_exchange(&sconn->session, NULL);
-            if (old_session) {
-                /* ── FIX 27: Mark connection closed before ConnectionClose ─
-                 * Must happen BEFORE ConnectionClose — after ConnectionClose
-                 * the QUIC handle is invalid and any subsequent StreamShutdown
-                 * from wt_session_shutdown would trigger quic_bugcheck. */
-                if (old_session->stream_mgr) {
-                    wt_stream_manager_mark_conn_closed(old_session->stream_mgr);
-                    /* Release any stream handles still open, in the one window
-                     * where it is both safe and possible — see
-                     * wt_stream_manager_close_streams. Marking conn_closed
-                     * above makes the per-stream handler skip its own
-                     * StreamClose, so without this nothing closes them and
-                     * MsQuicRegistrationClose hangs at server shutdown. */
-                    wt_stream_manager_close_streams(old_session->stream_mgr);
-                    /* Handles are dead from ConnectionClose (just below) on. */
-                    wt_stream_manager_mark_handles_invalid(old_session->stream_mgr);
-                }
-
-                /* Defer shutdown to poll (application thread) to guarantee
-                 * session free never races with in-flight sends.
-                 * Use atomic_ptr_store because the poll thread reads this
-                 * field without a lock. */
-                atomic_ptr_store(&sconn->pending_shutdown_session, old_session);
-            }
-        }
-
-        /* ── HTTP/3 Session Cleanup ──────────────────────────
-         * Free the h3_session if the handshake never completed.
-         * If h3_session->handshake_complete is true, the session was
-         * already transitioned to wt_session in on_h3_session_ready,
-         * and h3_session is safe to free (no pending streams). */
-        if (sconn->h3_session) {
-            h3_session_free(sconn->h3_session);
-            sconn->h3_session = NULL;
-        }
-
-        MsQuic->ConnectionClose(conn);
-
-        bool was_in_use = atomic_load(&sconn->in_use);
-        if (was_in_use) {
-            wt_server_release_slot_accounting(sconn);
-            if (sconn->owner) {
-                atomic_fetch_sub(&sconn->owner->connection_count, 1);
-            }
-
-            atomic_store(&sconn->in_use, false);
-            atomic_store(&sconn->state, WT_CONN_STATE_CLOSED);
-        }
-
-        /* Enqueue for O(1) poll drain — the poll thread processes
-         * pending_shutdown_session safely on the application thread. */
-        if (sconn->owner && sconn->pending_shutdown_session) {
-            /* ── Consistent head/tail snapshot ──────────────────
-             * Load head and tail with a confirm-retry so a stale head
-             * (consumer advanced head between two separate atomic loads)
-             * doesn't cause a false "queue full" detection.  False
-             * overflow would trigger premature wt_session_shutdown on
-             * the callback thread, which is safe (the overflow path
-             * handles it) but wasteful.  One re-read eliminates nearly
-             * all false positives without risking livelock (monotonic
-             * head advances monotonically — each retry sees head >=
-             * the previous).
-             *
-             * Use subtraction-based full check with 64-bit counters to
-             * eliminate the ~5-day wraparound inherent in uint32_t.
-             * The ring buffer holds WT_MAX_CLIENTS entries; we reject
-             * when occupancy reaches WT_MAX_CLIENTS - 1 to leave one
-             * guard slot. */
-            uint64_t head = atomic_load_u64(&sconn->owner->pending_shutdown_head);
-            atomic_thread_fence(std::memory_order_acquire);
-            uint64_t tail = atomic_load_u64(
-                &sconn->owner->pending_shutdown_tail);
-            if ((tail - head) >= WT_MAX_CLIENTS - 1) {
-                /* Confirm: re-read head.  If the consumer advanced it,
-                 * recompute occupancy with the fresh snapshot. */
-                uint64_t head2 = atomic_load_u64(
-                    &sconn->owner->pending_shutdown_head);
-                if (head2 != head) {
-                    head = head2;
-                    atomic_thread_fence(std::memory_order_acquire);
-                    tail = atomic_load_u64(
-                        &sconn->owner->pending_shutdown_tail);
-                }
-            }
-            if ((tail - head) >= WT_MAX_CLIENTS - 1) {
-                /* ── Queue full — bounded spin-retry ──────────────
-                 * The poll thread drains entries every frame and should
-                 * advance head within a few QUIC scheduler ticks. Spin
-                 * for up to 100 iterations (~1ms on modern CPUs) waiting
-                 * for a slot to open.  If the queue is still full after
-                 * the spin, fall back to immediate shutdown on this
-                 * thread as a last resort (see below).
-                 *
-                 * This retry eliminates the need for direct shutdown on
-                 * the callback thread in normal operation — the queue
-                 * only overflows under truly pathological conditions
-                 * (4095 simultaneous disconnects with no poll calls). */
-                int spin_retries = 100;
-                uint64_t head_retry, tail_retry;
-                do {
-                    /* Yield the CPU briefly — the poll thread needs
-                     * scheduler time to advance head. */
-#if defined(WT_PLATFORM_WINDOWS)
-                    SwitchToThread();
-#else
-                    sched_yield();
-#endif
-                    head_retry = atomic_load_u64(
-                        &sconn->owner->pending_shutdown_head);
-                    atomic_thread_fence(std::memory_order_acquire);
-                    tail_retry = atomic_load_u64(
-                        &sconn->owner->pending_shutdown_tail);
-                } while ((tail_retry - head_retry) >= WT_MAX_CLIENTS - 1 &&
-                         --spin_retries > 0);
-
-                if ((tail_retry - head_retry) >= WT_MAX_CLIENTS - 1) {
-                    WT_LOG_ERROR("Pending shutdown queue overflow after spin — "
-                                 "freeing session for connection %llu immediately "
-                                 "(tail %llu, head %llu)",
-                                (unsigned long long)sconn->id,
-                                (unsigned long long)tail_retry,
-                                (unsigned long long)head_retry);
-                    /* ── Last-resort: Free session immediately ────
-                     * The queue is still full after yielding.  This
-                     * connection has no in-flight sends (SHUTDOWN_COMPLETE
-                     * already fired), so calling wt_session_shutdown
-                     * directly on the callback thread is safe.
-                     *
-                     * SAFETY: atomic_ptr_exchange atomically swaps
-                     * the pointer with NULL.  If poll() or
-                     * server_listener_cb is concurrently draining the
-                     * same slot, exactly one path receives the non-NULL
-                     * pointer and calls wt_session_shutdown.  This
-                     * guarantees no double-free. */
-                    wt_session_t* overflow_session =
-                        (wt_session_t*)atomic_ptr_exchange(
-                            &sconn->pending_shutdown_session, NULL);
-                    if (overflow_session) {
-                        wt_session_shutdown(overflow_session);
-                    }
-                } else {
-                    /* Spin succeeded — slot opened up. Enqueue normally. */
-                    uint64_t claimed_tail = atomic_fetch_add_u64(
-                        &sconn->owner->pending_shutdown_tail, 1);
-                    sconn->owner->pending_shutdown_queue[
-                        claimed_tail % WT_MAX_CLIENTS] = sconn->id;
-                    atomic_thread_fence(std::memory_order_release);
-                }
-            } else {
-                /* Write data to the queue slot BEFORE publishing the new
-                 * tail index.  The consumer reads tail then reads the slot;
-                 * without this ordering the consumer could see the new tail
-                 * but stale slot data on weakly-ordered architectures. */
-                /* Atomically claim a unique slot in the ring buffer.
-                 * atomic_fetch_add prevents multiple QUIC threads from
-                 * writing to the same slot — each call returns a
-                 * unique position. */
-                uint64_t claimed_tail = atomic_fetch_add_u64(
-                    &sconn->owner->pending_shutdown_tail, 1);
-                sconn->owner->pending_shutdown_queue[
-                    claimed_tail % WT_MAX_CLIENTS] = sconn->id;
-                /* Release fence: ensures the slot write above is visible
-                 * before the tail update observed by the consumer.
-                 * Paired with the acquire fence in wt_server_poll_impl. */
-                atomic_thread_fence(std::memory_order_release);
-            }
-        }
-
-        /* ── FIX: UAF in SHUTDOWN_COMPLETE ─────────────────
-         * Fire the disconnect callback BEFORE signalling completion via
-         * pending_shutdowns.  If fire_disconnect were called AFTER the
-         * CAS decrement, the last SHUTDOWN_COMPLETE could decrement
-         * pending_shutdowns to 0, causing wt_server_free_impl's spin-wait
-         * to exit and free server->connections (and sconn) before this
-         * thread reaches fire_disconnect — a use-after-free.
-         *
-         * Re-entrancy note: if fire_disconnect's user callback calls
-         * wt_server_destroy → free_impl, the spin-wait will see
-         * pending_shutdowns > 0 and spin until this CAS decrement below
-         * runs.  After fire_disconnect returns, no further accesses to
-         * sconn or sconn->owner occur, so same-thread re-entrancy is safe.
-         * Cross-thread: wt_server_free_impl cannot proceed past its
-         * spin-wait until pending_shutdowns reaches 0, which happens
-         * AFTER this callback's CAS decrement — guaranteeing sconn
-         * remains valid through the entire fire_disconnect call. */
-        if (was_in_use)
-            fire_disconnect(sconn, 0);
-
-        /* Signal completion AFTER the disconnect callback.
-         * Use a CAS loop that decrements ONLY if > 0, eliminating the
-         * TOCTOU race between fetch_sub and the underflow-correction
-         * fetch_add that existed in the previous implementation.
-         * If pending_shutdowns is 0 (client-initiated disconnect or
-         * duplicate SHUTDOWN_COMPLETE), the CAS loop exits harmlessly
-         * without touching the counter. */
-        if (sconn->owner) {
-            unsigned int expected = atomic_load(
-                &sconn->owner->pending_shutdowns);
-            while (expected > 0) {
-                if (atomic_compare_exchange_strong(
-                        &sconn->owner->pending_shutdowns,
-                        &expected, expected - 1))
-                    break;
-            }
+        /* ── Teardown handoff (see app_state in server.h) ──────────
+         * Park the handle BEFORE closing the gate: from the moment CLOSED
+         * is set, the last application-thread call to leave may run the
+         * teardown and needs it.  Then close the gate.  With no call inside
+         * this worker owns the teardown and runs it now, exactly as before;
+         * with one inside, the teardown — including freeing h3_session and
+         * ConnectionClose — waits for that call to leave instead of
+         * pulling state out from under it.  msquic allows the handle to be
+         * closed after this event from any thread. */
+        atomic_ptr_store(&sconn->app_deferred_conn, conn);
+        if (conn_app_retire(sconn)) {
+            atomic_ptr_store(&sconn->app_deferred_conn, NULL);
+            server_conn_teardown(sconn, conn);
+        } else {
+            WT_LOG_INFO("Client %llu teardown deferred to an application-thread "
+                        "call still using the connection",
+                        (unsigned long long)sconn->id);
         }
         break;
     }
@@ -2305,13 +2470,14 @@ server_conn_cb(HQUIC conn, void* ctx, QUIC_CONNECTION_EVENT* event)
          * The h3_session inspects the first byte of the first bidi stream
          * to determine the client type, and calls on_h3_session_ready
          * when the session is established. */
-        if (sconn->h3_session && !sconn->h3_session->handshake_complete) {
+        h3_session_t* h3 = (h3_session_t*)atomic_ptr_load(&sconn->h3_session);
+        if (h3 && !h3->handshake_complete) {
             h3_stream_ctx_t* out_sctx = NULL;
             const bool is_uni =
                 (event->PEER_STREAM_STARTED.Flags &
                  QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL) != 0;
             int hr = h3_server_handle_stream(
-                sconn->h3_session,
+                h3,
                 event->PEER_STREAM_STARTED.Stream,
                 is_uni,
                 &out_sctx);

@@ -11,7 +11,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <remarks>
 	/// The rank rows are the authority for what a member may do. Nothing in this interface takes a
 	/// requester: authorisation is the server's job and it happens before these calls, against the
-	/// rows <see cref="FetchManyAsync"/> returns. A storage service that also decided permissions
+	/// rows <see cref="FetchManyAsync(long, CancellationToken)"/> returns. A storage service that also decided permissions
 	/// would be two responsibilities with one test surface.
 	/// </remarks>
 	public interface IGuildRankService
@@ -40,6 +40,19 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// <param name="cancellationToken">Cancellation token.</param>
 		/// <returns>The guild's rank ladder.</returns>
 		Task<DatabaseResult<IReadOnlyList<GuildRankData>>> FetchManyAsync(long guildId, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Fetches the rank ladders of several guilds in one query.
+		/// </summary>
+		/// <param name="guildIds">The guilds to read. Non-positive and repeated IDs are ignored.</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		/// <returns>
+		/// One entry per distinct requested guild, ALWAYS present, each ladder ordered by rank order
+		/// ascending exactly as <see cref="FetchManyAsync(long, CancellationToken)"/> orders it. A
+		/// guild with no rank rows maps to an empty list; seeding it is the caller's decision, as it
+		/// is for the single-guild read.
+		/// </returns>
+		Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<GuildRankData>>>> FetchManyAsync(long[] guildIds, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Updates one rank's name and permission mask.
