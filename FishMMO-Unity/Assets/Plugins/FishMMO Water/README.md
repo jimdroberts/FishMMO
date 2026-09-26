@@ -1,7 +1,8 @@
 # FishMMO Water
 
-An ocean surface for URP 17: Gerstner waves in world metres, shaded as water rather than as a
-tinted plane, and honest about what the render pipeline will and will not give it.
+An ocean for URP 17: an FFT sea in world metres that hands over to breakers of its own at the coast,
+shaded as water rather than as a tinted plane, and honest about what the render pipeline will and
+will not give it.
 
 Everything here works in **metres** — one Unity unit is one metre in FishMMO, and that is not a
 convention this plugin can ignore. Deep-water waves travel at `√(g/k)`, so a 64 m swell moves at
@@ -17,7 +18,13 @@ scale the dispersion is wrong and the sea moves like a bath.
 | `Scripts/WaterSurface.cs` | The component. Holds the sea level, follows the camera, publishes the waves, and turns off what the pipeline cannot support. |
 | `Shaders/FishWater.hlsl` | The wave sum, the ripple slopes and the one shared material constant buffer. |
 | `Shaders/FishWater.shader` | `FishMMO/Water/Ocean`. |
-| `Materials/OceanWater.mat` | The default open-sea material. |
+| `Scripts/WaterShoreField.cs` | The depth and distance-to-shore field, built from the scene's terrains at load. |
+| `Scripts/WaterShore.cs` | The swash up the beach, its clock (which the breakers keep time with) and the foam memory. |
+| `Scripts/WaterBreakers.cs`, `Scripts/WaterBreakLine.cs` | The breakers: the break line traced off the main thread, their sheet and their spray. |
+| `Shaders/FishWaterBreakerCommon.hlsl` | The one model of a breaker every pass that draws part of one reads. |
+| `Shaders/FishWaterShading.hlsl` | How the sea is lit and foamed — shared by the ocean and the breakers, so they cannot differ where they meet. |
+| `Shaders/FishWaterBreaker.shader`, `Shaders/FishWaterSpray.shader` | `FishMMO/Water/Breaker` and `FishMMO/Water/Spray`. |
+| `Materials/OceanWater.mat` | The default sea material — the breakers included. |
 
 ## Using it
 
@@ -39,10 +46,38 @@ bool submerged = water.IsSubmerged(transform.position);
 ```
 
 `HeightAt` evaluates the same sea the shader draws — the FFT spectrum's strongest components,
-summed on the CPU, with the same shoaling, tide and surf on top — so a boat sits in the trough a
-player can see. It is an inverse, not a lookup: waves move water sideways as well as up, so the
+summed on the CPU, with the same tide and the same fade over the shallows — so a boat sits in the
+trough a player can see. The breakers are not in it: inshore of the break line the sea is still
+water, and something floating there rides that. It is an inverse, not a lookup: waves move water sideways as well as up, so the
 piece of water that ends up above a given point started somewhere else. Three fixed-point
 iterations bring it within a centimetre.
+
+## Shores and breakers
+
+**The FFT cannot break a wave, so it does not try.** It is a single height field — one height per
+point of the sea — and a plunging wave has three: its back, its lip and the face under it. So the
+sea is a hybrid:
+
+1. **The shallows.** From the depth where the sea is whole to the depth where waves break, its
+   amplitude falls smoothly to nothing (`FishWaterCalm`). The break depth is the sea's significant
+   height over `WaterSurface.BreakingIndex` (0.78); the waves are whole from `ShallowsDepthRatio`
+   times that. Both follow the sea state and the tide.
+2. **The break line.** `WaterBreakers` traces the contour of that same depth in the same shore field,
+   and lays a sheet along it that the vertex shader raises, curls and lands from the shore's clock.
+   Its base is flat water exactly where the sea has gone flat, it is drawn with a copy of the sea's
+   material through the sea's own shading function, and its textures are read at the sea's own
+   points where they meet — so there is no seam to hide. The beach decides the breaker: spilling on
+   a gentle one, plunging on a steeper one, surging (no curl) on a steep one, none on a cliff.
+   Waves stand up in peaks a few tens of metres apart and the break peels outward from each one —
+   a straight beach would otherwise close out along its whole length at once, like a wall.
+3. **The impact zone.** Where a lip lands, spray and a splash are thrown and mist hangs downwind —
+   particles worked out on the GPU from the breaker they belong to, with no simulation state. The
+   bore then runs inshore as whitewater on the still sea, reaching the waterline as the swash
+   starts, and leaves foam the memory keeps for a few seconds. Out in the fade band the white caps
+   take a lower bar, following the crests the sea no longer shows.
+
+Look and size live on the ocean material under **Breakers** (height, barrel, whitewater, edge fade);
+reach, spacing and particle counts on `WaterBreakers`.
 
 ## URP settings this actually depends on
 
@@ -106,5 +141,8 @@ exists to show through.
   objects standing in the water are not reflected in it.
 - **One sea per scene.** The wave state is global, which is correct for an ocean and wrong for a
   lake at a different height beside it.
+- **The breakers stop at `WaterBreakers.Reach`** (700 m). Past it the sea's own whitewater carries
+  on alone. On WebGL, which has no threads, tracing the break line again is a hitch of a few tens of
+  milliseconds; lower the reach there.
 - **Cloud shadow is an input, not a lookup.** `WaterSurface.CloudShadow` is there for the weather
   system to drive; nothing drives it yet.

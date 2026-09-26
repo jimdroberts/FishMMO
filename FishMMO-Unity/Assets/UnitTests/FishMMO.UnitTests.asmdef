@@ -13,6 +13,7 @@
         "KinematicCharacterController",
         "Unity.TextMeshPro",
         "Unity.RenderPipelines.Universal.Runtime",
+        "FishMMO.Water",
         "Unity.Addressables",
         "FishMMO.Shared.Tools.Editor",
         "FishMMO.Shared.NameGenerator.Editor",

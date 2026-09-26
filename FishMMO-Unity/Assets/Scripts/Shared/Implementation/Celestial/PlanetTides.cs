@@ -119,11 +119,39 @@ namespace FishMMO.Shared.Celestial
 		public static double HeightMetres(SolarSystemProfile system, WorldBody body,
 			double hours, double latitudeDegrees, double longitudeDegrees)
 		{
+			return HeightMetres(system, body, hours, latitudeDegrees, longitudeDegrees, out _);
+		}
+
+		/// <summary>
+		/// How far the sea stands above mean level at a place, in metres — and the most it could
+		/// stand from mean level here, above or below, with every perturber where it is now.
+		/// </summary>
+		/// <param name="reachMetres">
+		/// A bound on the height's size at this place and time, never less than it: each perturber's
+		/// bulge times the most of it this latitude ever sees. Changes only as the perturbers move
+		/// north and south and nearer and further, so it is smooth, and dividing by it keeps the tide's
+		/// shape while fixing its size (WaterEnvironment).
+		/// </param>
+		/// <remarks>
+		/// <para>
+		/// Of one bulge a place sees <c>(3cos²θ − 1) / 2</c>. Its highest is when the perturber — or
+		/// the bulge opposite it — crosses the meridian, where θ is the latitude less the declination
+		/// (the near side) or plus it (the far side); its lowest is <c>−1/2</c>, with the perturber on
+		/// the horizon, or a little above that if it never sets. So its size never passes the larger
+		/// of <c>1/2</c> and that highest share, and the sum of those over every perturber bounds the
+		/// sum of the tides.
+		/// </para>
+		/// </remarks>
+		public static double HeightMetres(SolarSystemProfile system, WorldBody body,
+			double hours, double latitudeDegrees, double longitudeDegrees, out double reachMetres)
+		{
+			reachMetres = 0.0;
 			if (system == null || body == null || system.Bodies == null)
 			{
 				return 0.0;
 			}
 
+			double latitude = latitudeDegrees * Math.PI / 180.0;
 			double total = 0.0;
 			foreach (CelestialBody perturber in system.Bodies)
 			{
@@ -146,6 +174,11 @@ namespace FishMMO.Shared.Celestial
 				 * out of the altitude this project already computes for the sun. */
 				double cosTheta = Math.Sin(CelestialMath.Altitude(latitudeDegrees, declination, hourAngle));
 				total += bulge * (3.0 * cosTheta * cosTheta - 1.0) * 0.5;
+
+				double near = Math.Cos(latitude - declination);
+				double far = Math.Cos(latitude + declination);
+				double highest = (3.0 * Math.Max(near * near, far * far) - 1.0) * 0.5;
+				reachMetres += bulge * Math.Max(0.5, highest);
 			}
 			return total;
 		}

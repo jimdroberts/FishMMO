@@ -72,12 +72,120 @@ namespace FishMMO.Water
 		private Rect area;
 		private float deepest;
 		private WaterSurface surface;
+		private volatile Snapshot snapshot;
+		private int version;
 
 		/// <summary>The world-space rectangle the field covers.</summary>
 		public Rect Area => area;
 
 		/// <summary>Texels along each side of the field; 0 before it is built.</summary>
-		public int Resolution => field != null ? field.width : 0;
+		public int Resolution => snapshot != null ? snapshot.Resolution : 0;
+
+		/// <summary>
+		/// The field as last built, readable from any thread; null before the first build. A rebuild
+		/// replaces it whole, so a reader holding one keeps a consistent field however long it takes.
+		/// </summary>
+		public Snapshot Current => snapshot;
+
+		/// <summary>
+		/// The field's values exactly as the GPU has them — the same half floats — kept on the CPU for
+		/// buoyancy and for the break line, which is built on a worker thread where no Texture2D may be
+		/// touched.
+		/// </summary>
+		/// <remarks>
+		/// <b>Instead of the texture's own CPU copy, not as well as it.</b> The texture is uploaded and
+		/// made non-readable, so the field costs one copy in memory — 16 MB at 2048² — rather than two.
+		/// </remarks>
+		public sealed class Snapshot
+		{
+			/// <summary>R then G of every texel, row by row: depth at mean sea level, then signed distance to the mean waterline.</summary>
+			public readonly ushort[] Halves;
+			public readonly int Resolution;
+			/// <summary>The world rectangle covered; texel (x, y) is centred at its minimum plus (x + 0.5, y + 0.5) texels.</summary>
+			public readonly Rect Area;
+			public readonly float TexelMetres;
+			/// <summary>Counts builds, so anything made from the field knows when it is out of date.</summary>
+			public readonly int Version;
+
+			public Snapshot(ushort[] halves, int resolution, Rect area, float texelMetres, int version)
+			{
+				Halves = halves;
+				Resolution = resolution;
+				Area = area;
+				TexelMetres = texelMetres;
+				Version = version;
+			}
+
+			/// <summary>Metres of water over the ground at mean sea level, at a texel.</summary>
+			public float DepthAt(int x, int y) => HalfToFloat(Halves[(y * Resolution + x) * 2]);
+
+			/// <summary>
+			/// The field at a world point, filtered as the GPU filters it: bilinear between texel
+			/// centres, clamped at the edges. False off the field.
+			/// </summary>
+			public bool TrySample(Vector2 xz, out float depth, out float edgeDistance)
+			{
+				depth = OpenWaterDepth;
+				edgeDistance = 1000f;
+				if (Area.width < 1f || Area.height < 1f)
+				{
+					return false;
+				}
+				float u = (xz.x - Area.xMin) / Area.width;
+				float v = (xz.y - Area.yMin) / Area.height;
+				if (u < 0f || u > 1f || v < 0f || v > 1f)
+				{
+					return false;
+				}
+				float fx = u * Resolution - 0.5f;
+				float fy = v * Resolution - 0.5f;
+				int x0 = Mathf.FloorToInt(fx);
+				int y0 = Mathf.FloorToInt(fy);
+				float tx = fx - x0;
+				float ty = fy - y0;
+				int x1 = Mathf.Clamp(x0 + 1, 0, Resolution - 1);
+				int y1 = Mathf.Clamp(y0 + 1, 0, Resolution - 1);
+				x0 = Mathf.Clamp(x0, 0, Resolution - 1);
+				y0 = Mathf.Clamp(y0, 0, Resolution - 1);
+				depth = Bilinear(0, x0, y0, x1, y1, tx, ty);
+				edgeDistance = Bilinear(1, x0, y0, x1, y1, tx, ty);
+				return true;
+			}
+
+			private float Bilinear(int channel, int x0, int y0, int x1, int y1, float tx, float ty)
+			{
+				float a = HalfToFloat(Halves[(y0 * Resolution + x0) * 2 + channel]);
+				float b = HalfToFloat(Halves[(y0 * Resolution + x1) * 2 + channel]);
+				float c = HalfToFloat(Halves[(y1 * Resolution + x0) * 2 + channel]);
+				float d = HalfToFloat(Halves[(y1 * Resolution + x1) * 2 + channel]);
+				return Mathf.Lerp(Mathf.Lerp(a, b, tx), Mathf.Lerp(c, d, tx), ty);
+			}
+		}
+
+		/// <summary>
+		/// An IEEE half float's value, in plain managed arithmetic so it may run on any thread.
+		/// </summary>
+		public static float HalfToFloat(ushort half)
+		{
+			int sign = (half >> 15) & 1;
+			int exponent = (half >> 10) & 0x1F;
+			int mantissa = half & 0x3FF;
+			float value;
+			if (exponent == 0)
+			{
+				// Subnormal: mantissa × 2^-24.
+				value = mantissa * (1f / 16777216f);
+			}
+			else if (exponent == 31)
+			{
+				value = mantissa == 0 ? float.PositiveInfinity : float.NaN;
+			}
+			else
+			{
+				value = System.BitConverter.Int32BitsToSingle(((exponent - 15 + 127) << 23) | (mantissa << 13));
+			}
+			return sign != 0 ? -value : value;
+		}
 
 		/// <summary>
 		/// The field at a world point, on the CPU: metres of water over the ground at MEAN sea level
@@ -85,28 +193,19 @@ namespace FishMMO.Water
 		/// the field or before it is built.
 		/// </summary>
 		/// <remarks>
-		/// Read back from the texture's own CPU copy, which is kept — it is built with
-		/// <c>Apply(false, false)</c> — so buoyancy can ask the same field the shader shoals the sea
-		/// with, at no memory cost beyond what already exists.
+		/// The same half floats the shader shoals the sea with, filtered the same way, so buoyancy and
+		/// the break line ask exactly the field the GPU draws with.
 		/// </remarks>
 		public bool TrySample(Vector2 xz, out float depth, out float edgeDistance)
 		{
-			depth = OpenWaterDepth;
-			edgeDistance = 1000f;
-			if (field == null || area.width < 1f || area.height < 1f)
+			Snapshot current = snapshot;
+			if (current == null)
 			{
+				depth = OpenWaterDepth;
+				edgeDistance = 1000f;
 				return false;
 			}
-			float u = (xz.x - area.xMin) / area.width;
-			float v = (xz.y - area.yMin) / area.height;
-			if (u < 0f || u > 1f || v < 0f || v > 1f)
-			{
-				return false;
-			}
-			Color sample = field.GetPixelBilinear(u, v);
-			depth = sample.r;
-			edgeDistance = sample.g;
-			return true;
+			return current.TrySample(xz, out depth, out edgeDistance);
 		}
 
 		private void OnEnable()
@@ -119,18 +218,9 @@ namespace FishMMO.Water
 		{
 			// Leave the globals pointing at nothing, or the next scene reads this scene's beach.
 			Shader.SetGlobalVector(RectId, Vector4.zero);
-			if (field != null)
-			{
-				if (Application.isPlaying)
-				{
-					Destroy(field);
-				}
-				else
-				{
-					DestroyImmediate(field);
-				}
-				field = null;
-			}
+			Discard(field);
+			field = null;
+			snapshot = null;
 		}
 
 		private void OnValidate()
@@ -179,8 +269,9 @@ namespace FishMMO.Water
 			}
 			if (terrains.Count == 0)
 			{
-				// Open ocean with no ground in the scene: no shore, no shoaling, no surf.
+				// Open ocean with no ground in the scene: no shore, no shallows, no breakers.
 				Shader.SetGlobalVector(RectId, Vector4.zero);
+				snapshot = null;
 				return;
 			}
 
@@ -215,23 +306,6 @@ namespace FishMMO.Water
 			int resolution = Mathf.Clamp(Mathf.NextPowerOfTwo(wanted), 64,
 				Mathf.Clamp(Mathf.NextPowerOfTwo(MaximumResolution), 64, 4096));
 			TexelMetres = span / resolution;
-			if (field == null)
-			{
-				field = new Texture2D(resolution, resolution, TextureFormat.RGHalf, false, true)
-				{
-					name = "Shore depth",
-					wrapMode = TextureWrapMode.Clamp,
-					filterMode = FilterMode.Bilinear,
-					hideFlags = HideFlags.HideAndDontSave,
-				};
-			}
-			else if (field.width != resolution || field.format != TextureFormat.RGHalf)
-			{
-				/* Resized in place, never destroyed and recreated: this can run from OnValidate,
-				 * where Unity refuses DestroyImmediate — the same error the ocean mesh was logging
-				 * on every inspector edit, waiting here for the first time the resolution moved. */
-				field.Reinitialize(resolution, resolution, TextureFormat.RGHalf, false);
-			}
 
 			float sea = surface != null ? surface.MeanSeaLevel : transform.position.y;
 			var pixels = new Color[resolution * resolution];
@@ -266,8 +340,29 @@ namespace FishMMO.Water
 			 */
 			Distance(pixels, resolution, TexelMetres);
 
-			field.SetPixels(pixels);
-			field.Apply(false, false);
+			var halves = new ushort[resolution * resolution * 2];
+			for (int i = 0; i < pixels.Length; i++)
+			{
+				halves[i * 2] = Mathf.FloatToHalf(pixels[i].r);
+				halves[i * 2 + 1] = Mathf.FloatToHalf(pixels[i].g);
+			}
+
+			/* A new texture every build, uploaded and made non-readable: the CPU copy is the snapshot.
+			 * A texture that is no longer readable cannot be refilled, so the old one is thrown away —
+			 * which is safe here because nothing builds from OnValidate any more (it defers to the
+			 * editor's next tick) or from inside a render callback. */
+			Texture2D previous = field;
+			field = new Texture2D(resolution, resolution, TextureFormat.RGHalf, false, true)
+			{
+				name = "Shore depth",
+				wrapMode = TextureWrapMode.Clamp,
+				filterMode = FilterMode.Bilinear,
+				hideFlags = HideFlags.HideAndDontSave,
+			};
+			field.SetPixelData(halves, 0);
+			field.Apply(false, true);
+			Discard(previous);
+			snapshot = new Snapshot(halves, resolution, area, TexelMetres, ++version);
 
 			Shader.SetGlobalTexture(FieldId, field);
 			Shader.SetGlobalVector(RectId, new Vector4(area.xMin, area.yMin, area.width, area.height));
@@ -319,6 +414,22 @@ namespace FishMMO.Water
 				float texels = Mathf.Min(Mathf.Sqrt(wet ? toDry[i] : toWet[i]), resolution * 4f) - 0.5f;
 				float metres = Mathf.Max(0f, texels) * metresPerTexel;
 				pixels[i].g = wet ? metres : -metres;
+			}
+		}
+
+		private static void Discard(Object victim)
+		{
+			if (victim == null)
+			{
+				return;
+			}
+			if (Application.isPlaying)
+			{
+				Destroy(victim);
+			}
+			else
+			{
+				DestroyImmediate(victim);
 			}
 		}
 

@@ -44,9 +44,9 @@ float2 FishWaterShoreSample(float2 xz)
 float _FishWaterSwashSkew;       // 0 symmetric, 1 a fast rush and a long drain
 float4 _FishWaterWind;           // xy the direction the wind and the sea run toward
 
-// The clock, the period, the sea and the phase along the shore, shared with the surf train so the
-// swash and the waves that make it are one motion.
-#include "FishWaterSurf.hlsl"
+// The clock, the period, the sea and the phase along the shore, shared with the breakers so the
+// swash and the waves that make it are one motion — and the set a wave belongs to (FishWaterWaveShare).
+#include "FishWaterBreakerCommon.hlsl"
 
 /// <summary>
 /// The direction to the nearest shore from the field's distance channel, and how sure it is — worked
@@ -113,7 +113,7 @@ float FishWaterRunUpHere(float slope, float2 xz, float texelMetres)
 /// </remarks>
 /// <param name="runUp">This beach's run-up, from <see cref="FishWaterRunUp"/>.</param>
 /// <param name="along">A phase offset, in cycles: along the shore, and up the beach.</param>
-/// <param name="stretch">Which stretch of shore this is, so the waves of a group differ along it.</param>
+/// <param name="stretch">Where along the shore, in the shore's phase, so the waves of a group differ along it.</param>
 float FishWaterSwashFront(float runUp, float along, float stretch)
 {
 	// Added up on the CPU, not the clock over the period: that moved whenever the period did.
@@ -122,8 +122,7 @@ float FishWaterSwashFront(float runUp, float along, float stretch)
 	/* This wave's share of the full run-up: two thirds to four thirds, fixed for the whole wave —
 	 * and different on different stretches of shore, so one wave of a group floods this stretch
 	 * while the next one along barely wets its sand. */
-	float wave = floor(cycles);
-	float share = 0.65 + 0.7 * frac(sin(wave * 12.9898 + stretch * 4.1414 + 78.233) * 43758.5453);
+	float share = FishWaterWaveShare(floor(cycles), stretch);
 
 	// Rush up over the first part of the cycle, drain over the rest.
 	float rush = saturate(_FishWaterSwashSkew) * 0.5 + 0.12;
@@ -163,7 +162,7 @@ void FishWaterSwash(float rise, float runUp, float2 xz, out float sheet, out flo
 	// the top of a run-up is reached later than the bottom, which is what a swash looks like from
 	// the side.
 	float along = alongShore.x + saturate(rise / span) * 0.22;
-	float front = FishWaterSwashFront(span, along, floor(alongShore.x * 0.5));
+	float front = FishWaterSwashFront(span, along, alongShore.x);
 	highWater = front / span;
 
 	// Metres of water standing above this point.

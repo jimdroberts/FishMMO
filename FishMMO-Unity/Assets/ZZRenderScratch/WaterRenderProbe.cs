@@ -279,6 +279,7 @@ namespace FishMMO.RenderScratch
 			shore.Build();
 			// The shoreline itself: swash, edge foam and wet sand, as its own projected pass.
 			shoreline = waterHost.AddComponent<WaterShore>();
+			waterHost.AddComponent<WaterBreakers>();
 
 			/* Through the REAL driver. Earlier renders set each shot's wind straight onto the
 			 * surface and so bypassed the fetch, the sea state and the surf sizing entirely — every
@@ -336,6 +337,9 @@ namespace FishMMO.RenderScratch
 		/// </remarks>
 		/// <summary>Shared with the shore probe, which needs the same beach.</summary>
 		public static void BuildSeabedForProbe() => BuildSeabed();
+
+		/// <summary>A 1:10 beach instead of the gentle one, for probes that need plunging breakers.</summary>
+		public static bool SteepBeach;
 
 		private static void BuildSeabed()
 		{
@@ -439,8 +443,11 @@ namespace FishMMO.RenderScratch
 			}
 			else if (x < 420f)
 			{
-				// The beach: through the water line at about x = 250.
-				height = Mathf.Lerp(3f, -6f, Mathf.InverseLerp(120f, 420f, x));
+				// The beach: through the water line at about x = 250 — or 1:10 there for a steep one,
+				// where the breakers plunge instead of spilling.
+				height = SteepBeach
+					? Mathf.Clamp(-(x - 250f) / 10f, -6f, 3f)
+					: Mathf.Lerp(3f, -6f, Mathf.InverseLerp(120f, 420f, x));
 			}
 			else if (x < 1000f)
 			{

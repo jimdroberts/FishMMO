@@ -1,7 +1,15 @@
-// An ocean surface for URP: an FFT sea in world metres that fades out over a real sea bed where
-// the breakers (FishMMO/Water/Breaker) take over, shaded as water rather than as a tinted plane,
-// and honest about what the render pipeline will and will not give it.
-Shader "FishMMO/Water/Ocean"
+// The breakers: waves rising out of the still water at the break line, curling and landing, on a
+// sheet WaterBreakers lays along the contour where the ocean (FishMMO/Water/Ocean) has faded out.
+//
+// Its material is a hidden copy of the ocean's, refreshed every frame (WaterBreakers.SyncMaterials),
+// and it includes the ocean's own UnityPerMaterial block: one material authors the look of the whole
+// sea, breakers included, and the two can never be shaded differently where they meet.
+//
+// The Properties block below is the ocean's, copied, and it is NOT optional: a UnityPerMaterial member
+// that is not declared as a property is never filled from the material, and reads zero. The ocean lost
+// _FoamColor that way and drew its foam black for two days. FishWaterMaterialTests checks both lists
+// against the cbuffer.
+Shader "FishMMO/Water/Breaker"
 {
     Properties
     {
@@ -10,9 +18,6 @@ Shader "FishMMO/Water/Ocean"
         _DeepColor ("Deep", Color) = (0.06, 0.24, 0.35, 1)
         _ShoreColor ("Shore sediment", Color) = (0.55, 0.66, 0.52, 1)
         _ScatterColor ("Sub-surface scatter", Color) = (0.12, 0.45, 0.35, 1)
-        // In the cbuffer since the rebuild and missing from here since 2026-09-24, so every material
-        // read it as black: the white caps and the surf drew as dark lace. A UnityPerMaterial member
-        // that is not declared here is never filled from the material. FishWaterMaterialTests guards it.
         _FoamColor ("Foam", Color) = (0.95, 0.98, 1, 1)
         _WaterDensity ("Absorption per metre (RGB)", Vector) = (0.36, 0.12, 0.07, 0)
         _ShoreDepth ("Sediment reaches (m)", Range(0, 30)) = 2.0
@@ -73,52 +78,63 @@ Shader "FishMMO/Water/Ocean"
         Tags
         {
             "RenderType" = "Transparent"
-            "Queue" = "Transparent-100"
+            "Queue" = "Transparent-99"
             "RenderPipeline" = "UniversalPipeline"
             "IgnoreProjector" = "True"
         }
 
-        // Transparent-100: before everything that floats in or on the water, so spray, rain
-        // splashes and the weather's own transparent effects sort in front of the surface.
-        //
-        // No ZWrite, and deliberately NO ShadowCaster pass: water that casts a shadow darkens the
-        // sea bed it exists to show through.
-        Blend SrcAlpha OneMinusSrcAlpha
-        ZWrite Off
+        // Transparent-99: straight after the ocean (-100), over the still water it rises from, and
+        // before the spray (-95) and everything else afloat. A sheet, so both sides are drawn.
         Cull Off
+
+        // First its depth alone, so the barrel sorts itself: the lip hides the face behind it and
+        // the far side of the tube, which a blended sheet in one pass would draw in mesh order. URP
+        // draws SRPDefaultUnlit before UniversalForward for the same object.
+        Pass
+        {
+            Name "BreakerDepth"
+            Tags { "LightMode" = "SRPDefaultUnlit" }
+            ZWrite On
+            ColorMask 0
+
+            HLSLPROGRAM
+            #pragma vertex BreakerVertex
+            #pragma fragment BreakerDepthFragment
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "FishWaterBreakerPass.hlsl"
+            ENDHLSL
+        }
 
         Pass
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
+            Blend SrcAlpha OneMinusSrcAlpha
+            ZWrite Off
+            ZTest LEqual
 
             HLSLPROGRAM
-            #pragma vertex WaterVertex
-            #pragma fragment WaterFragment
+            #pragma vertex BreakerVertex
+            #pragma fragment BreakerFragment
             #pragma target 3.5
 
             #pragma multi_compile_fog
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
-
-            /* Set from C# against what the running URP asset actually provides, so a pipeline with
-             * no depth or no opaque copy never samples a texture that is not there. Sampling one
-             * URP has not bound is not an error and does not come back black — it returns whatever
-             * was last in that slot, so the water refracts the previous frame's buffers and foams
-             * in mid-air, on whichever quality tier nobody develops on.
-             *
-             * GLOBAL keywords, not shader_feature_local: the local form writes the answer into the
-             * material asset and leaves a modified .mat in the tree on whichever machine opened it. */
+            // The sea's own quality switches (WaterSurface.ApplyQuality): global, never material.
             #pragma multi_compile_fragment _ _WATER_DEPTH
             #pragma multi_compile_fragment _ _WATER_REFRACTION
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "FishWaterForwardPass.hlsl"
+            #include "FishWaterBreakerPass.hlsl"
             ENDHLSL
         }
     }
 
-    // No fallback. A fallback to Lit would quietly draw a grey plastic plane wherever this fails
-    // to compile, which is the failure that looks like a content bug for a week.
+    // No fallback, for the ocean's reason: a grey plastic sheet where this fails to compile would
+    // read as a content bug.
 }

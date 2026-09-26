@@ -58,6 +58,8 @@ namespace FishMMO.Water
 		[Header("Foam left behind")]
 		[Tooltip("Seconds the foam a wave strands on the sand takes to fade to about a third.")]
 		[Range(1f, 40f)] public float FoamLingers = 8f;
+		[Tooltip("Seconds the whitewater a breaker's bore leaves on the water takes to fade to about a third. Bubbles on moving water go faster than foam on sand.")]
+		[Range(0.5f, 20f)] public float WhitewaterLingers = 3.5f;
 		[Tooltip("The pass that keeps it. Referenced so a build includes it; found by name otherwise.")]
 		public Shader FoamMemoryShader;
 
@@ -88,9 +90,9 @@ namespace FishMMO.Water
 		private double clock;
 		private double lastRealtime = -1.0;
 
-		// ── The rhythm the sea's surf train keeps time with (FishWaterSurf.hlsl) ──
+		// ── The rhythm the breakers keep time with (FishWaterSurf.hlsl) ──
 
-		/// <summary>The shore's clock, in seconds: what the swash and the surf train both run on.</summary>
+		/// <summary>The shore's clock, in seconds: what the swash and the breakers both run on.</summary>
 		public double SurfClock => clock;
 
 		/// <summary>
@@ -129,8 +131,8 @@ namespace FishMMO.Water
 		private void OnDisable()
 		{
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
-			/* No shore keeping time any more: the sea's surf train goes back to its own clock. Left
-			 * set, it would run on a shore clock that no longer advances, and the surf would freeze. */
+			/* No shore keeping time any more: the breakers and their whitewater stop. Left set, they
+			 * would run on a shore clock that no longer advances, and freeze mid-break. */
 			Shader.SetGlobalFloat(PeriodId, 0f);
 			SurfPeriod = 0f;
 			ReleaseMemory();
@@ -355,6 +357,10 @@ namespace FishMMO.Water
 		/// </summary>
 		/// <remarks>
 		/// <para>
+		/// Two channels: R the foam the swash strands on the sand, G the whitewater the breakers' bores
+		/// leave on the water, which the ocean reads.
+		/// </para>
+		/// <para>
 		/// <b>Half float, not eight bits.</b> A fade is a multiply by a factor just under one, and an
 		/// eight-bit value times 0.998 rounds straight back to itself — the foam would never go. The
 		/// fixed step rate keeps the factor far enough from one for half float to resolve it at any
@@ -423,7 +429,8 @@ namespace FishMMO.Water
 				memoryMaterial.SetTexture(PreviousId, source);
 				memoryMaterial.SetVector(MemorySizeId, new Vector4(size, size, 1f / size, 1f / size));
 				memoryMaterial.SetVector(MemoryStepId, new Vector4(
-					Mathf.Exp(-(float)elapsed / Mathf.Max(0.1f, FoamLingers)), 1f, 0f, 0f));
+					Mathf.Exp(-(float)elapsed / Mathf.Max(0.1f, FoamLingers)), 1f,
+					Mathf.Exp(-(float)elapsed / Mathf.Max(0.1f, WhitewaterLingers)), 0f));
 
 				RenderTexture previous = RenderTexture.active;
 				Graphics.SetRenderTarget(target);
@@ -455,8 +462,8 @@ namespace FishMMO.Water
 		private static RenderTexture CreateMemory(int size)
 		{
 			GraphicsFormat format =
-				SystemInfo.IsFormatSupported(GraphicsFormat.R16_SFloat, GraphicsFormatUsage.Render) ? GraphicsFormat.R16_SFloat
-				: SystemInfo.IsFormatSupported(GraphicsFormat.R32_SFloat, GraphicsFormatUsage.Render) ? GraphicsFormat.R32_SFloat
+				SystemInfo.IsFormatSupported(GraphicsFormat.R16G16_SFloat, GraphicsFormatUsage.Render) ? GraphicsFormat.R16G16_SFloat
+				: SystemInfo.IsFormatSupported(GraphicsFormat.R32G32_SFloat, GraphicsFormatUsage.Render) ? GraphicsFormat.R32G32_SFloat
 				: GraphicsFormat.R16G16B16A16_SFloat;
 			var texture = new RenderTexture(size, size, 0, format)
 			{

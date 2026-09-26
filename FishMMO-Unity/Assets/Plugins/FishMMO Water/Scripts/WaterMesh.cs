@@ -32,16 +32,10 @@ namespace FishMMO.Water
 		/// <param name="rings">Rings of vertices. More is smoother wave motion at middle distance.</param>
 		/// <param name="segments">Vertices around each ring. More is a rounder horizon.</param>
 		/// <param name="waveHeadroom">The tallest wave, in metres, so the bounds still contain the sea.</param>
-		/// <param name="nearRadius">
-		/// Radius of the near field, in metres, whose rings are spaced EVENLY rather than
-		/// geometrically. Zero gives the plain geometric layout.
-		/// </param>
-		/// <param name="nearRingFraction">Share of the rings spent inside the near field.</param>
-		public static Mesh Build(float innerRadius, float outerRadius, int rings, int segments, float waveHeadroom,
-			float nearRadius = 0f, float nearRingFraction = 0.6f)
+		public static Mesh Build(float innerRadius, float outerRadius, int rings, int segments, float waveHeadroom)
 		{
 			var mesh = new Mesh { name = "FishMMO Ocean", hideFlags = HideFlags.HideAndDontSave };
-			Fill(mesh, innerRadius, outerRadius, rings, segments, waveHeadroom, nearRadius, nearRingFraction);
+			Fill(mesh, innerRadius, outerRadius, rings, segments, waveHeadroom);
 			return mesh;
 		}
 
@@ -56,7 +50,7 @@ namespace FishMMO.Water
 		/// native object is thrown away and re-registered with the renderer.
 		/// </remarks>
 		public static void Fill(Mesh mesh, float innerRadius, float outerRadius, int rings, int segments,
-			float waveHeadroom, float nearRadius = 0f, float nearRingFraction = 0.6f)
+			float waveHeadroom)
 		{
 			innerRadius = Mathf.Max(0.5f, innerRadius);
 			outerRadius = Mathf.Max(innerRadius * 2f, outerRadius);
@@ -68,34 +62,11 @@ namespace FishMMO.Water
 			// Centre, then ring by ring outward.
 			vertices[0] = Vector3.zero;
 
-			/* Two zones.
-			 *
-			 * Purely geometric rings put a constant number of rings per doubling of distance,
-			 * which is right for the far sea and wrong for the surf: a breaking wave is watched
-			 * from twenty to a hundred metres away, and geometric spacing there left vertices two
-			 * or three metres apart — measured, too coarse for a crest to curl at all. The same
-			 * wave model on a mesh six times denser curled into a full barrel. So the near field
-			 * gets evenly spaced rings, and only the sea beyond it grows geometrically.
-			 */
-			nearRadius = Mathf.Clamp(nearRadius, 0f, outerRadius * 0.5f);
-			int nearRings = nearRadius > innerRadius
-				? Mathf.Clamp(Mathf.RoundToInt(rings * Mathf.Clamp01(nearRingFraction)), 2, rings - 2)
-				: 0;
-			int farRings = rings - nearRings;
-			float farStart = nearRings > 0 ? nearRadius : innerRadius;
-			float growth = farRings > 1 ? Mathf.Pow(outerRadius / farStart, 1f / (farRings - 1)) : 1f;
-
+			// Each ring a fixed factor wider than the last, out to the edge.
+			float growth = Mathf.Pow(outerRadius / innerRadius, 1f / (rings - 1));
 			for (int ring = 0; ring < rings; ring++)
 			{
-				float radius;
-				if (ring < nearRings)
-				{
-					radius = Mathf.Lerp(innerRadius, nearRadius, ring / (float)(nearRings));
-				}
-				else
-				{
-					radius = farStart * Mathf.Pow(growth, ring - nearRings);
-				}
+				float radius = innerRadius * Mathf.Pow(growth, ring);
 				for (int segment = 0; segment < segments; segment++)
 				{
 					float angle = segment * Mathf.PI * 2f / segments;

@@ -2,19 +2,8 @@
 #define FISHMMO_WATER_WAVES_INCLUDED
 
 #include "FishWaterInput.hlsl"
-// The shore's clock and its phase along the beach: the surf train keeps time with the swash.
+// The shore's clock, the world's gravity and where the sea hands over to the breakers.
 #include "FishWaterSurf.hlsl"
-
-/// <summary>
-/// Surface gravity of the world this sea is on, in m/s². Driven from the celestial body.
-/// </summary>
-/// <remarks>
-/// Not a constant, and that is the point. Deep-water waves travel at sqrt(g/k), so on a moon at a
-/// sixth of a gravity the same swell moves at 40% of the speed and takes six times the wavelength
-/// to reach the same height. A sea that ran at 9.81 everywhere would look identical on every world
-/// in the system, which is the opposite of what this project is for.
-/// </remarks>
-float _FishWaterGravity;
 
 struct FishWaterSurface
 {
@@ -25,8 +14,10 @@ struct FishWaterSurface
 	/// Determinant of the horizontal displacement. At or below zero the surface would fold, which
 	/// is where a real wave breaks.
 	float jacobian;
-	/// How hard the shore is breaking the waves here: 0 open water, 1 full surf.
+	/// Whitewater from the breakers here, 0 to 1. Zero from the wave model; the fragment adds it.
 	float surf;
+	/// How much of the open sea's waves reach this depth: 1 offshore, 0 at the break line and inshore.
+	float calm;
 	/// Metres of water over the ground here. 1000 in open ocean.
 	float depth;
 };
@@ -115,6 +106,27 @@ float2 FishWaterShoreGradient(float2 xz)
 	return towardShore;
 }
 
+/// <summary>
+/// How much of the open sea's waves reach water this deep: 1 from the full-sea depth down, falling
+/// smoothly to 0 at the break depth, and 0 everywhere shallower.
+/// </summary>
+/// <remarks>
+/// <b>One published pair of depths, read by everything.</b> WaterSurface works them out once from
+/// the sea state and publishes them; this, its CPU copy in WaterSurface.Displace and the break line
+/// WaterBreakers lays its breakers along all read the same numbers. That is what makes the base of
+/// a breaker sit exactly where the sea has gone flat — by construction, not by tuning two things
+/// to agree. HLSL smoothstep; the C# copy is WaterSurface.Smoothstep, not Mathf.SmoothStep.
+/// </remarks>
+float FishWaterCalm(float depth)
+{
+	// Nothing publishing a break depth: the whole sea is open water.
+	if (_FishWaterBreakDepth.y <= _FishWaterBreakDepth.x)
+	{
+		return 1.0;
+	}
+	return smoothstep(_FishWaterBreakDepth.x, _FishWaterBreakDepth.y, depth);
+}
+
 /// <summary>How much of its height a wave keeps at this distance from the camera.</summary>
 /// <remarks>
 /// A correctness fix, not a saving. A wave whose crests are closer together on screen than a pixel
@@ -171,9 +183,6 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	FishWaterSurface surface;
 	surface.positionWS = flatPositionWS;
 	surface.depth = FishWaterSeabedDepth(flatPositionWS.xz);
-	// Which way the beach lies, and how sure that is. Zero out at sea, where there is no shore to roll toward.
-	float2 shoreward;
-	float shoreFacing = FishWaterShoreFacing(flatPositionWS.xz, shoreward);
 
 	float3 displacement = 0.0;
 	float2 slope = 0.0;
@@ -200,189 +209,32 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	displacement *= amplitudeScale;
 	slope *= amplitudeScale;
 
-	/* The shore.
+	/* ── The shallows: the sea fades out, it does not break ──
 	 *
-	 * The FFT is a deep-water model and knows nothing about a bottom, so shoaling, breaking and
-	 * swash are applied to its output: the height grows as the water shallows (Green's law), and
-	 * is then limited to what the depth can carry, which is what makes the wave rear up and
-	 * spill. The horizontal displacement is cut at the same time, because a wave that has run out
-	 * of water cannot keep throwing itself forward. */
+	 * The transform is a deep-water model and a single height field, and a height field cannot
+	 * curl. Everything once bolted onto its output to make it break — a shoaling gain of up to
+	 * twice its height, a depth limit, a sine surf train and a forward shear thrown into a barrel
+	 * — made no breaker, and made the open-sea waves near every coast look wrong. So the sea hands
+	 * over instead: from the depth where it is whole (_FishWaterBreakDepth.y) to the depth where
+	 * waves break (.x) its amplitude falls smoothly to nothing, and from the break line in the
+	 * water is still. The breakers (WaterBreakers) rise out of it there, their base laid along that
+	 * same contour from the same published depth, so the seam is at the one place where both are
+	 * exactly flat water.
+	 *
+	 * The FOLDING is not faded. It is the sea's own steepness, and the band where the waves are
+	 * being taken out is exactly where a real sea would be breaking — so the white caps there are
+	 * kept, and grow (the fragment lowers their threshold with 1 - calm), which is what hides the
+	 * waves going. */
+	surface.calm = FishWaterCalm(surface.depth);
+	displacement *= surface.calm;
+	slope *= surface.calm;
+
+	// The breakers' whitewater is laid by the fragment stage (FishWaterBreakerCommon.hlsl), not here.
 	surface.surf = 0.0;
-	if (surface.depth < 900.0)
-	{
-		/* Green's law, from where it applies: a wave keeps its height (it dips a few per cent) until
-		 * the water is about a twentieth of its deep-water wavelength deep, and only then grows as
-		 * depth^-1/4. The reference was half the middle cascade's tile, 59 m, so every wave grew from
-		 * 59 m of water — chop over a shoal 10 m down came out half as tall again as it should. The
-		 * sea's deep-water wavelength is _ShoreWaveLength (the environment sets it from the peak
-		 * period; 66 m at 8 m/s, so growth starts at about 3 m). */
-		float reference = max(0.5, 0.05 * max(4.0, _ShoreWaveLength));
-		float shallow = max(0.35, surface.depth);
-		float gain = clamp(pow(reference / shallow, 0.25), 1.0, 2.0);
-
-		float grown = abs(displacement.y) * gain;
-		float limit = max(0.0, surface.depth) * _ShoreBreak;
-		/* NO run-up here any more.
-		 *
-		 * The swash — the sheet that runs up the sand and drains back — belongs to the shore pass,
-		 * which owns the beach and can conform to it. Letting the ocean's surface rise above the
-		 * waterline instead made it poke through every dip in the sand independently and strand
-		 * disconnected puddles up the beach, because a displaced plane has no way to know that a
-		 * swash is ONE body of water. Here the sea simply converges on the waterline, and the
-		 * depth buffer hides whatever is under the ground.
-		 */
-		float allowed = limit;
-
-		surface.surf = saturate((grown - allowed) / max(0.05, grown));
-		float scale = grown > 1e-4 ? min(grown, allowed) / grown : 1.0;
-		displacement.y *= gain * scale;
-		// Shoreward crests keep their slope; the lateral throw dies with the depth.
-		// The lateral throw dies with the depth: a wave that has run out of water underneath it
-		// cannot keep hurling itself forward.
-		displacement.xz *= saturate(surface.depth * 0.5);
-		slope *= gain * scale;
-	}
-
-	/* ── The shore train: waves that roll in, rear up and pitch over ──
-	 *
-	 * The FFT is a deep-water model: it knows nothing about a bottom, so on its own the sea simply
-	 * gets shallower and flatter toward a beach. Everything recognisable about surf — the long
-	 * parallel lines arriving one after another, the face that steepens to vertical, the crest
-	 * that throws forward and curls — comes from the bottom, and has to be added against it.
-	 *
-	 * Fronts are lines of constant DISTANCE from the water's edge, so they arrive parallel to the
-	 * beach whatever the wind is doing, and they travel shoreward at the shallow-water speed.
-	 *
-	 * The barrel is a forward SHEAR, and it is the same mechanism that cusps a Gerstner crest:
-	 * displace the water toward the beach in proportion to how high it stands, and the front face
-	 * leans. Past the point where that lean exceeds the face's own slope the crest overhangs the
-	 * trough — which is a plunging breaker, drawn rather than faked. It is switched on by how hard
-	 * the wave is breaking, so it happens at the break line and nowhere else.
-	 */
-	if (surface.depth < 900.0 && _ShoreWaveHeight > 0.01 && dot(shoreward, shoreward) > 0.5)
-	{
-		float distance = FishWaterShoreDistance(flatPositionWS.xz);
-
-		/* ONE WAVE WITH THE SWASH.
-		 *
-		 * With a shore keeping time, the train runs on the shore's clock and period, and takes its
-		 * phase from the waterline this point faces — the phase the swash there runs on — so each
-		 * crest reaches the edge at the instant its swash begins to rush up the beach. They used to
-		 * keep separate clocks, and a wave rolled in, died at the waterline, and the run-up came at
-		 * some other moment: nothing ever broke onto the shore.
-		 *
-		 * And at the surf zone's own speed. Waves slow as the water shallows, to the shallow-water
-		 * speed sqrt(g·h); where these break, h is about H/0.78. Run at the deep-water speed, as it
-		 * was, the surf raced in at ten metres a second with its lines forty metres apart; at the
-		 * breaking depth's speed they come in at four or five and close up as they do on a beach.
-		 * The deep-water wavelength still decides where a wave first feels the bottom and how it
-		 * breaks: both are defined on it. */
-		float deepWavelength;
-		float wavelength;
-		float phase;
-		if (FishWaterSurfKeepsTime())
-		{
-			float period = max(0.5, _FishWaterSwashPeriod);
-			deepWavelength = max(4.0, _FishWaterSwashSea.y);
-			float breakingDepth = max(0.1, _FishWaterSwashSea.x) / 0.78;
-			wavelength = max(4.0, period * sqrt(max(0.05, _FishWaterGravity) * breakingDepth));
-			float2 waterline = flatPositionWS.xz + shoreward * max(0.0, distance);
-			// A crest (sin = 1) at the waterline when the shore's cycle there is a whole number.
-			phase = 6.2831853 * (FishWaterSurfCycles(waterline) + distance / wavelength) + 1.5707963;
-		}
-		else
-		{
-			// No shore to keep time with: the sea's own clock, at the deep-water speed.
-			deepWavelength = max(4.0, _ShoreWaveLength);
-			wavelength = deepWavelength;
-			float k0 = 6.2831853 / wavelength;
-			phase = k0 * distance + sqrt(max(0.05, _FishWaterGravity) * k0) * _FishWaterTime;
-		}
-		float k = 6.2831853 / wavelength;
-
-		/* The beach, measured over twenty metres across the shoreward direction: what decides both
-		 * whether a surf train forms at all and how its waves break. */
-		const float Span = 10.0;
-		float beachSlope = abs(FishWaterSeabedDepth(flatPositionWS.xz - shoreward * Span)
-			- FishWaterSeabedDepth(flatPositionWS.xz + shoreward * Span)) / (2.0 * Span);
-		/* Only a cliff turns the train away — a face steeper than about one in 1.6, where the waves
-		 * slap the rock and are thrown back. It faded from one in four, and a generated coast is
-		 * steep: measured on Cov Viaduct, the surf zone's median slope is one in three, so that
-		 * took most of the surf off most of the coast. A steep bank still has waves running at it;
-		 * what it must not have is a barrel thrown into it, and the surging test below sees to that. */
-		float reflective = smoothstep(0.6, 1.0, beachSlope);
-
-		// A wave feels the bottom from about half its deep-water wavelength of depth.
-		float feel = saturate(1.0 - surface.depth / (deepWavelength * 0.5));
-		// Green's law, then the depth limit that breaks it — on a shore the sea actually reaches.
-		float exposure = FishWaterShoreExposure(shoreward, shoreFacing);
-		float amplitude = _ShoreWaveHeight * (1.0 + feel * 1.6) * feel * (1.0 - reflective) * exposure;
-		/* The same breaking index as the rest of the sea (_ShoreBreak, crest height over depth). It
-		 * was 0.78 of the depth for this train's half-height — a wave twice as tall as the water can
-		 * carry, since the classic limit, 0.78, is for the WHOLE height, crest to trough. */
-		float limit = max(0.0, surface.depth) * _ShoreBreak;
-		float breaking = saturate((amplitude - limit) / max(0.05, amplitude));
-		amplitude = min(amplitude, limit);
-		// Gone by the waterline; the shore pass owns everything past it.
-		amplitude *= saturate(surface.depth * 1.2);
-
-		float s, c;
-		sincos(phase, s, c);
-		float crest = saturate(s);
-
-		displacement.y += amplitude * s;
-
-		/* Whether it plunges is decided by the BEACH, not by a slider.
-		 *
-		 * The Iribarren number, ξ = tan β / sqrt(H/L0), separates the breakers of a real surf zone:
-		 * below about 0.5 the wave SPILLS, its crest crumbling down its own face; between 0.5 and 3.3
-		 * it PLUNGES, throwing its lip out into a barrel; past about 3.3 it SURGES, running up the
-		 * face unbroken and sliding back — so a steep bank is never hit by a barrel of water thrown
-		 * horizontally into it. */
-		float waveHeight = max(0.05, amplitude * 2.0);
-		float iribarren = beachSlope / sqrt(max(1e-4, waveHeight / deepWavelength));
-		float plunging = smoothstep(0.35, 0.9, iribarren) * (1.0 - smoothstep(2.5, 3.5, iribarren));
-		float spilling = 1.0 - smoothstep(0.35, 0.9, iribarren);
-
-		/* The lean: a forward SHEAR of the crest, the mechanism that cusps a Gerstner crest — thrown
-		 * past the face in front of it, the crest overhangs the trough, which is a plunging breaker
-		 * drawn rather than faked. Only on the crest (cubed, so the lip goes over and the base stays)
-		 * and only once the wave is breaking.
-		 *
-		 * CALIBRATED so the slider means something. For a throw T·crest³ the front face stretches
-		 * by 1 - 3·T·k·s²·c, and s²·c peaks at 0.385: the face stands vertical at T = 0.138 of a
-		 * wavelength and overhangs past it. The throw used to be 0.11 of a wavelength times the
-		 * slider, whose 0.7 peaked at 56% of vertical on ANY wavelength — which is why nothing ever
-		 * barrelled. Now a lean of 1 is exactly vertical: a plunging wave is thrown past it by
-		 * _ShoreWavePitch, a spilling crest leans a third of the way — the forward roll of its white
-		 * water, not a curl — and a surging one not at all. */
-		float lean = _ShoreWavePitch * plunging + 0.33 * spilling;
-		float throwMetres = lean * breaking * crest * crest * crest * wavelength * 0.1378 * shoreFacing;
-		/* Never past the water's edge — nor more than halfway there. A lip is thrown ahead of its own
-		 * crest, not across the beach: around a small island the throw of every crest in the ring
-		 * closing on it, several metres, is more than the island is across, and the water from all
-		 * sides was thrown into its middle and out the other side — the surface crossed itself in a
-		 * star. Measured on a one-texel island of Cov Viaduct the surface folded thirty-six times over;
-		 * capped here, it no longer folds at all. Half the distance keeps the stretch across the
-		 * crest at least one half, however tightly the shore curves. */
-		throwMetres = min(throwMetres, 0.5 * max(0.0, distance));
-		displacement.xz += shoreward * throwMetres;
-		// Gradient of the added height along the shoreward direction.
-		slope += shoreward * (-k * amplitude * c);
-
-		surface.surf = max(surface.surf, breaking * crest * crest * _ShoreWaveFoam);
-	}
-
 	surface.positionWS += displacement;
 	surface.height = displacement.y;
 	surface.normalWS = normalize(float3(-slope.x, 1.0, -slope.y));
 	surface.jacobian = 1.0 - saturate(folding);
-
-	/* Surf only where the wave is up. The break test is true across the whole shallow zone, so
-	 * ungated it whitens the entire nearshore into a sheet; a surf zone is BANDS, because
-	 * breaking happens on the front of the crest and the troughs between are green water. */
-	float crestBand = saturate(surface.height / max(0.15, surface.depth * 0.30));
-	surface.surf *= crestBand * crestBand;
 	return surface;
 }
 

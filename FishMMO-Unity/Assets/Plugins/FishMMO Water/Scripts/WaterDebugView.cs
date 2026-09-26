@@ -2,8 +2,8 @@ namespace FishMMO.Water
 {
 	/// <summary>
 	/// The one term the ocean's "Show one term" setting draws on its own, opaque — for finding what a
-	/// finished image cannot say. The numbers are the forward pass's own (<c>_DebugView</c> in
-	/// FishWaterForwardPass.hlsl) and must stay in step with it.
+	/// finished image cannot say. The numbers are the shading's own (<c>_DebugView</c> in
+	/// FishWaterShading.hlsl, and FishWaterBreakerPass.hlsl for the last) and must stay in step with it.
 	/// </summary>
 	/// <remarks>
 	/// An enum type because the material's dropdown names it: Unity's <c>[Enum(...)]</c> drawer takes
@@ -25,5 +25,10 @@ namespace FishMMO.Water
 		BehindTheSurface = 10,
 		Reflection = 11,
 		Foam = 12,
+		/// <summary>
+		/// The breakers' sheet in flat magenta over the normally shaded sea, faded as it is drawn: where
+		/// the geometry actually is, which a sheet shaded exactly like the sea around it cannot show.
+		/// </summary>
+		BreakerSheet = 13,
 	}
 }

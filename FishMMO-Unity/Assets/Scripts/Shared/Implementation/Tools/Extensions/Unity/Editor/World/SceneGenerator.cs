@@ -341,6 +341,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The pass that keeps the foam the swash leaves on the sand.</summary>
 		public const string WaterFoamMemoryPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFoamMemory.shader";
+		/// <summary>The breakers' sheet, curling at the break line where the sea fades out.</summary>
+		public const string WaterBreakerPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterBreaker.shader";
+		/// <summary>The breakers' spray and mist.</summary>
+		public const string WaterSprayPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterSpray.shader";
 
 		/// <summary>
 		/// Puts the sea in the scene, at the height the planet says its sea level is.
@@ -424,7 +428,7 @@ namespace FishMMO.Shared.WorldDesign
 			surface.OuterRadius = Mathf.Clamp(diagonal * 2f, 4000f, 20000f);
 			surface.Rebuild();
 
-			/* The depth field the shoaling, the surf and the swash all read, and the driver that
+			/* The depth field the shallows, the breakers and the swash all read, and the driver that
 			 * connects the sea to the world's wind and moons. Both are wanted on every generated
 			 * scene: without the field a beach gets open-ocean waves that stop dead at the
 			 * waterline, and without the driver the sea runs on whatever the component was
@@ -433,6 +437,11 @@ namespace FishMMO.Shared.WorldDesign
 			host.AddComponent<WaterEnvironment>();
 			// Referenced so a build includes the pass that keeps the foam each wave strands.
 			host.AddComponent<WaterShore>().FoamMemoryShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterFoamMemoryPath);
+			/* The breakers: the sea fades out over the shallows and they rise at the break line. Their
+			 * shaders referenced for the same reason — a build includes nothing it finds by name. */
+			var breakers = host.AddComponent<WaterBreakers>();
+			breakers.BreakerShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterBreakerPath);
+			breakers.SprayShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterSprayPath);
 
 			result.SeaLevelY = host.transform.position.y;
 			result.HasWater = true;

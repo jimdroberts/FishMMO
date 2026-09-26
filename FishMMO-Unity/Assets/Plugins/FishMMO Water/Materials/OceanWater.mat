@@ -33,13 +33,15 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _BreakerCurl: 1
+    - _BreakerEdgeFade: 1.5
+    - _BreakerFoam: 1
+    - _BreakerHeight: 1
     - _Clarity: 0.4
     - _ClarityScale: 500
     - _EdgeFade: 0.5
-    - _FoamDistance: 1.1
     - _FoamScale: 9
     - _FoamSharpness: 0.28
-    - _GroupLength: 7
     - _MaxAlpha: 1
     - _NormalFadeDistance: 500
     - _NormalScaleA: 26
@@ -48,17 +50,11 @@ Material:
     - _ReflectionStrength: 0.85
     - _RefractionStrength: 0.5
     - _ScatterStrength: 1.8
-    - _ShoreBreak: 0.62
+    - _ShallowWhitecaps: 0.6
     - _ShoreDepth: 2
-    - _ShoreRefraction: 0.85
-    - _ShoreWaveLength: 40
-    - _ShoreWaveHeight: 1.1
-    - _ShoreWavePitch: 1.6
-    - _ShoreWaveFoam: 1.5
     - _Smoothness: 0.96
     - _SpecularStrength: 1.6
     - _SurfStrength: 1.4
-    - _SwashMetres: 0.35
     - _WaveFadeEnd: 4000
     - _WaveFadeStart: 900
     - _WaveSpeed: 1

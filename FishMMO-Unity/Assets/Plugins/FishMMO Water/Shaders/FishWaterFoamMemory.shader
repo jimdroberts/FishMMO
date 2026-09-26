@@ -10,6 +10,11 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
     // rectangle, where each step keeps what was there, faded, and adds whatever the swash is
     // laying now. The shore pass reads it back as the foam left on the sand.
     //
+    // The same goes for the water inshore of the break line: each breaker's bore leaves a smear of
+    // white behind it that is still breaking up when the next one comes through. R is the sand's,
+    // laid by the swash's lip; G the water's, laid by the bore's front, and it fades faster — bubbles
+    // on moving water burst in seconds. The ocean reads G.
+    //
     // It runs on the swash's clock, so it fades only while the world's time runs.
     SubShader
     {
@@ -28,7 +33,7 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
 
             Texture2D<float4> _FoamMemoryPrevious;
             float4 _FoamMemorySize;      // xy texels, zw one over them
-            float4 _FoamMemoryStep;      // x what is kept of the last step, y how strongly foam is laid
+            float4 _FoamMemoryStep;      // x what the sand keeps of the last step, y how strongly foam is laid, z what the water keeps
 
             float _FishWaterLevel;       // the sea's surface now, tide included
             float _FishWaterMeanLevel;   // the level the shore field was built against
@@ -52,7 +57,9 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
             {
                 // Read and written by index, so the rows line up on every API.
                 uint2 texel = uint2(input.positionCS.xy);
-                float kept = _FoamMemoryPrevious.Load(int3(texel, 0)).r * _FoamMemoryStep.x;
+                float2 previous = _FoamMemoryPrevious.Load(int3(texel, 0)).rg;
+                float kept = previous.r * _FoamMemoryStep.x;
+                float keptWater = previous.g * _FoamMemoryStep.z;
 
                 // The world point this texel covers: the memory spans the shore field exactly.
                 float2 uv = (float2(texel) + 0.5) * _FoamMemorySize.zw;
@@ -60,7 +67,7 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
                 float2 shore = FishWaterShoreSample(xz);
                 if (shore.y > 990.0)
                 {
-                    return float4(kept, 0.0, 0.0, 0.0);
+                    return float4(kept, keptWater, 0.0, 0.0);
                 }
 
                 /* The same swash the shore pass draws, in the same terms: a height above the sea as
@@ -69,11 +76,19 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
                  * the depth and the tide. */
                 float tide = _FishWaterLevel - _FishWaterMeanLevel;
                 float rise = -(shore.x + tide);
+
+                /* The water's: the front of the bore running in from the breakers, the same bore the
+                 * ocean draws, from the same breaker (FishWaterBoreFoam). */
+                float2 towardShore;
+                float confidence = FishWaterShoreFacingField(xz, _FishWaterShoreTexel, towardShore);
+                float laidWater = FishWaterBoreFoam(xz, -rise, shore.y, towardShore, confidence).y * _FoamMemoryStep.y;
+                float water = max(keptWater, laidWater);
+
                 float waveHeight = max(0.05, _FishWaterSwashSea.x);
                 // Too high or too deep for any swash to reach: only fade what is there.
                 if (rise > 2.0 * waveHeight * 1.35 * 1.3 + 0.05 || rise < -waveHeight)
                 {
-                    return float4(kept, 0.0, 0.0, 0.0);
+                    return float4(kept, water, 0.0, 0.0);
                 }
 
                 float slopeStep = max(4.0, _FishWaterShoreTexel * 4.0);
@@ -82,7 +97,7 @@ Shader "Hidden/FishMMO/Water/ShoreFoamMemory"
                 float slope = length(float2(depthEast - shore.x, depthNorth - shore.x)) / slopeStep;
 
                 float laid = FishWaterSwashFoamDeposit(rise, FishWaterRunUpHere(slope, xz, _FishWaterShoreTexel), xz) * _FoamMemoryStep.y;
-                return float4(max(kept, laid), 0.0, 0.0, 0.0);
+                return float4(max(kept, laid), water, 0.0, 0.0);
             }
             ENDHLSL
         }

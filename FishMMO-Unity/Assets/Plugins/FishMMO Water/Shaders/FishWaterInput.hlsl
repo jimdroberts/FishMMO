@@ -41,27 +41,25 @@ CBUFFER_START(UnityPerMaterial)
 
 	// ── Foam ──
 	half _FoamScale;
-	half _FoamDistance;
 	half _FoamSharpness;
 	half _SurfStrength;
 	half _SurfFoamOpacity;
 	half _SurfFoamVeil;
 	half _WhitecapThreshold;
+	half _ShallowWhitecaps;
 
 	// ── Shore ──
 	half _EdgeFade;
-	half _ShoreBreak;
-	half _SwashMetres;
-	half _ShoreRefraction;
-	half _ShoreWaveLength;
-	half _ShoreWaveHeight;
-	half _ShoreWavePitch;
-	half _ShoreWaveFoam;
+
+	// ── Breakers ── (drawn by FishMMO/Water/Breaker, whose material copies this one's)
+	half _BreakerHeight;
+	half _BreakerCurl;
+	half _BreakerFoam;
+	half _BreakerEdgeFade;
 
 	// ── Waves ──
 	half _WaveFadeStart;
 	half _WaveFadeEnd;
-	half _GroupLength;
 
 	// ── Variation ──
 	half _Clarity;
@@ -79,7 +77,8 @@ SAMPLER(sampler_FoamTexture);
 // ── Globals, set by WaterSurface ───────────────────────────────────────
 //
 // Arrays cannot be material properties, and there is one sea per scene whose crests every piece of
-// it must agree about. Globals do not disturb SRP batching — only material constants have to live
+// it must agree about. A second shader drawing part of the sea (the breakers) includes this whole
+// file, cbuffer and all, so its material is a copy of the ocean's and the two cannot drift apart. Globals do not disturb SRP batching — only material constants have to live
 // in the block above.
 
 /* The ocean, as three FFT cascades.
@@ -114,12 +113,18 @@ float _FishWaterWhitecap;
 
 // ── The shore ──────────────────────────────────────────────────────────
 //
-// R holds the metres of water over the ground: positive in the sea, negative on dry land. Built at
+// R holds the metres of water over the ground: positive in the sea, negative on dry land; G the
+// signed metres to the water's edge. Built at
 // load from the scene's terrains by WaterShoreField. A zero-width rect means no shore in this
 // scene — open ocean.
 TEXTURE2D(_FishWaterShore);
 SAMPLER(sampler_FishWaterShore);
 float4 _FishWaterShoreRect;   // xy world minimum, zw size
 float _FishWaterShoreTexel;    // metres per texel of the shore field
+
+/// The foam the shore keeps (WaterShore): R left on the sand by the swash, G left on the water by the
+/// breakers' whitewater. Over the shore field's rectangle. Read only while a shore keeps time.
+TEXTURE2D(_FishWaterFoamMemory);
+SAMPLER(sampler_FishWaterFoamMemory);
 
 #endif

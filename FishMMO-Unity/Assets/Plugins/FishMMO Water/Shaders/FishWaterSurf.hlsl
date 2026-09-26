@@ -1,15 +1,15 @@
 #ifndef FISHMMO_WATER_SURF_INCLUDED
 #define FISHMMO_WATER_SURF_INCLUDED
 
-// The rhythm of the shore, shared by the sea's surf train and the shore's swash so they are one wave.
+// The rhythm of the shore, shared by the breakers, their whitewater and the swash so they are one wave.
 //
-// ONE CLOCK. The surf ran on the sea's clock at a period of its own and the swash on the shore's,
-// with a phase along the beach the surf did not have — so a wave rolled in, died at the waterline,
-// and the run-up came at some unrelated moment. Nothing ever broke ONTO the shore. Both now read
-// this: a surf crest reaches the waterline at the instant the swash there begins to rush up.
+// ONE CLOCK. The surf once ran on the sea's clock at a period of its own and the swash on the
+// shore's, with a phase along the beach the surf did not have — so a wave rolled in, died at the
+// waterline, and the run-up came at some unrelated moment. Nothing ever broke ONTO the shore.
+// Everything now reads this: a breaker's whitewater reaches the waterline at the instant the swash
+// there begins to rush up (FishWaterBreakerCommon.hlsl).
 //
-// Everything here is arithmetic, no textures, because WaterSurface.cs carries the same functions
-// on the CPU for anything floating in the surf, and has to get the same answer.
+// Everything here is arithmetic, no textures.
 //
 // The includer declares _FishWaterWind first — the sea and the shore both already do.
 
@@ -17,6 +17,22 @@ float _FishWaterSwashPeriod;     // seconds between arriving waves; 0 when the s
 float _FishWaterShoreTime;       // the shore's clock, seconds
 float _FishWaterSwashCycles;     // which wave the shore is on: the swash's phase added up, wrapped at 1000
 float4 _FishWaterSwashSea;       // x significant wave height (m), y deep-water wavelength at the peak period (m)
+
+/// Where the open sea hands over to the breakers, from WaterSurface: x the break depth (m), where the
+/// sea's waves have faded to nothing and the breakers' base is laid; y the depth (m) from which the
+/// sea is whole; z the breakers' height (m); w unused. All zero with no shore: open water throughout.
+float4 _FishWaterBreakDepth;
+
+/// <summary>
+/// Surface gravity of the world this sea is on, in m/s². Driven from the celestial body.
+/// </summary>
+/// <remarks>
+/// Not a constant, and that is the point. Deep-water waves travel at sqrt(g/k), so on a moon at a
+/// sixth of a gravity the same swell moves at 40% of the speed and takes six times the wavelength
+/// to reach the same height. A sea that ran at 9.81 everywhere would look identical on every world
+/// in the system, which is the opposite of what this project is for.
+/// </remarks>
+float _FishWaterGravity;
 
 /// <summary>True when a shore is keeping time: the surf follows its clock rather than the sea's.</summary>
 bool FishWaterSurfKeepsTime()
@@ -26,7 +42,7 @@ bool FishWaterSurfKeepsTime()
 
 /// <summary>
 /// A number in [0, 1) from a cell, from integer arithmetic alone — sin() hashes differ between GPUs,
-/// and between a GPU and the CPU copy in WaterSurface.cs (SurfHash).
+/// and every pass that reads the shore's rhythm has to see the same one.
 /// </summary>
 float FishWaterSurfHash(int2 cell)
 {
@@ -55,6 +71,15 @@ float FishWaterSurfNoise(float2 xz, float cellMetres, int salt)
 }
 
 /// <summary>
+/// Where the peaks of the surf stand along a shore: 1 on a peak, 0 on the shoulders between them,
+/// a few tens of metres apart.
+/// </summary>
+float FishWaterSurfPeak(float2 xz)
+{
+	return FishWaterSurfNoise(xz, 38.0, 47);
+}
+
+/// <summary>
 /// How the waves at a point of the shore differ from the rest of it: x a phase offset in cycles, y a
 /// share of the beach's run-up.
 /// </summary>
@@ -69,8 +94,8 @@ float FishWaterSurfNoise(float2 xz, float cellMetres, int salt)
 /// </para>
 /// <para>
 /// So the phase leans along the direction the sea is running — about seventy metres of shore per
-/// wave — and wanders over a smooth field ninety metres across, and the run-up swells and shrinks
-/// over another thirty-five across.
+/// wave — wanders over a smooth field ninety metres across and peels away from the peaks
+/// (FishWaterSurfPeak), and the run-up swells and shrinks over another thirty-five across.
 /// </para>
 /// <para>
 /// <b>The lean runs DOWNWIND.</b> A wave running with the wind reaches the upwind end of a beach
@@ -84,7 +109,11 @@ float2 FishWaterAlongShore(float2 xz)
 	float2 direction = dot(wind, wind) > 1e-4 ? normalize(wind) : float2(0.0, 1.0);
 	float wander = FishWaterSurfNoise(xz, 90.0, 11);
 	float cusps = FishWaterSurfNoise(xz, 35.0, 29);
-	float phase = -dot(xz, direction) / 70.0 + wander * 1.6;
+	/* And the PEEL: a peak breaks first and its shoulders after it, up to two fifths of a wave later,
+	 * so the break runs outward along the crest from every peak at ten or twenty metres a second —
+	 * breaker and swash alike, since both read this. A seventh of a wave was tried and the whole line
+	 * still broke as one. A larger phase is further on, so the shoulders take it away. */
+	float phase = -dot(xz, direction) / 70.0 + wander * 1.6 - (1.0 - FishWaterSurfPeak(xz)) * 0.4;
 	return float2(phase, 0.7 + 0.6 * cusps);
 }
 

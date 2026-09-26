@@ -32,8 +32,6 @@ namespace FishMMO.Water
 		private static readonly int ShallowId = Shader.PropertyToID("_ShallowColor");
 		private static readonly int DeepId = Shader.PropertyToID("_DeepColor");
 		private static readonly int DensityId = Shader.PropertyToID("_WaterDensity");
-		private static readonly int SurfHeightId = Shader.PropertyToID("_ShoreWaveHeight");
-		private static readonly int SurfLengthId = Shader.PropertyToID("_ShoreWaveLength");
 
 		[Header("Celestial")]
 		[Tooltip("Take surface gravity from the body. It sets every wavelength and wave speed in the sea.")]
@@ -77,7 +75,7 @@ namespace FishMMO.Water
 		/// </remarks>
 		[Tooltip("Multiplies the open-ocean tide for this coast. 1 is mid-ocean; a funnelled estuary is 10 or more.")]
 		[Range(0f, 20f)] public float CoastalAmplification = 2.5f;
-		[Tooltip("The most the tide may move the sea, in metres, whatever the moons say.")]
+		[Tooltip("The most the tide may move the sea, in metres, whatever the moons say. A tide that would go further is scaled down whole, so it still comes in and goes out smoothly — never cut off.")]
 		[Range(0f, 30f)] public float MaximumTideMetres = 2.5f;
 
 		private WaterSurface surface;
@@ -284,20 +282,10 @@ namespace FishMMO.Water
 			 * is the real wind's. */
 			surface.WindSpeed = WaterSeaState.EquivalentWind(SignificantHeight, gravity);
 			surface.WindDirectionDegrees = windHeading;
+			/* The breakers are driven from this same sea rather than from numbers somebody typed: the
+			 * surface works out where they break from SignificantHeight, and the shore sets their
+			 * rhythm from PeakPeriod. */
 			surface.Rebuild();
-
-			/* The surf is driven from the same sea rather than being a number somebody typed.
-			 * Breakers stand at roughly the significant height offshore — the shader's own
-			 * shoaling grows them from there as the water shallows — and they arrive at the peak
-			 * period, so their spacing on the beach is the sea's own wavelength. */
-			if (meshRenderer != null)
-			{
-				block ??= new MaterialPropertyBlock();
-				meshRenderer.GetPropertyBlock(block);
-				block.SetFloat(SurfHeightId, SignificantHeight * 0.5f);
-				block.SetFloat(SurfLengthId, Mathf.Clamp(WaterSeaState.Wavelength(PeakPeriod, gravity), 6f, 160f));
-				meshRenderer.SetPropertyBlock(block);
-			}
 		}
 
 		/// <summary>
@@ -429,12 +417,41 @@ namespace FishMMO.Water
 			{
 				return 0f;
 			}
-			double equilibrium = PlanetTides.HeightMetres(system, body, hours, latitude, longitude);
-			/* Clamped, and the clamp is a level-design tool rather than a safety rail. The terrain
-			 * is fixed and the waterline is not: two metres of tide on a gentle beach moves the
-			 * shore tens of metres, and everything placed on dry sand is then in the sea. */
-			return Mathf.Clamp((float)equilibrium * Mathf.Max(0f, CoastalAmplification),
-				-MaximumTideMetres, MaximumTideMetres);
+			double equilibrium = PlanetTides.HeightMetres(system, body, hours, latitude, longitude, out double reach);
+			return ScaledTide(equilibrium, reach, CoastalAmplification, MaximumTideMetres);
+		}
+
+		/// <summary>
+		/// The tide at the coast, in metres: the equilibrium tide amplified for the coast, and scaled
+		/// down WHOLE when it could pass the most this scene allows.
+		/// </summary>
+		/// <param name="equilibrium">The open-ocean tide now (PlanetTides.HeightMetres).</param>
+		/// <param name="reach">The most that tide could stand from mean level here, with the perturbers where they are.</param>
+		/// <param name="amplification">How much the coast magnifies it.</param>
+		/// <param name="maximum">The most the tide may move the sea.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>Scaled, never clipped.</b> The limit is a level-design tool — the terrain is fixed and
+		/// the waterline is not, and two metres of tide on a gentle beach moves the shore tens of
+		/// metres — and it used to be a clamp. On Arthis, whose moon Helis orbits under fourteen of
+		/// its radii out, the equilibrium tide is ninety metres; amplified and clamped, the sea sat at
+		/// the top of the clamp for hours, fell five metres almost at once, sat at the bottom, and
+		/// jumped back — the whole sea visibly lurching with the moon. Divided by its own reach
+		/// instead, a tide of any size keeps its shape — two highs a moon-day, springs and neaps — and
+		/// its highest high water is the maximum. The reach moves only as the perturbers move north
+		/// and south and nearer and further, so the scale does too: slowly, and smoothly.
+		/// </para>
+		/// <para>
+		/// The clamp stays, and never binds: the reach bounds the tide, so it is only a guard.
+		/// </para>
+		/// </remarks>
+		public static float ScaledTide(double equilibrium, double reach, float amplification, float maximum)
+		{
+			double gain = System.Math.Max(0f, amplification);
+			double limit = System.Math.Max(0f, maximum);
+			double peak = reach * gain;
+			double scale = peak > limit && peak > 1e-9 ? limit / peak : 1.0;
+			return Mathf.Clamp((float)(equilibrium * gain * scale), -(float)limit, (float)limit);
 		}
 	}
 }

@@ -122,6 +122,174 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
+		/// <summary>
+		/// The breakers (2026-09-26): the sea fading out over the shallows and the sheet rising, curling
+		/// and landing at the break line, stepped through one wave from along the break line at water
+		/// level, from the beach, and from above where the seam would show. Plus a transect of the
+		/// CPU height, which must be still water inshore of the break line and the sea outside it.
+		/// </summary>
+		public static void RunBreakers() => RunBreakers(false);
+
+		/// <summary>The same on a 1:10 beach, where the Iribarren number says the waves plunge.</summary>
+		public static void RunBreakersSteep() => RunBreakers(true);
+
+		private static void RunBreakers(bool steep)
+		{
+			WaterRenderProbe.SteepBeach = steep;
+			string BreakerDirectory = steep ? BreakerDirectorySteep : BreakerDirectoryGentle;
+			bool depthWas = false, opaqueWas = false;
+			UniversalRenderPipelineAsset pipeline = null;
+			try
+			{
+				Directory.CreateDirectory(BreakerDirectory);
+				pipeline = GraphicsSettings.defaultRenderPipeline as UniversalRenderPipelineAsset
+					?? QualitySettings.renderPipeline as UniversalRenderPipelineAsset;
+				depthWas = pipeline.supportsCameraDepthTexture;
+				opaqueWas = pipeline.supportsCameraOpaqueTexture;
+				pipeline.supportsCameraDepthTexture = true;
+				pipeline.supportsCameraOpaqueTexture = true;
+
+				Build(out Camera camera, out WaterSurface water, out WaterShore shore, out Light sun);
+				sun.transform.rotation = Quaternion.Euler(28f, -60f, 0f);
+				WaterBreakers breakers = water.GetComponent<WaterBreakers>();
+				WaterShoreField field = water.GetComponent<WaterShoreField>();
+				if (steep)
+				{
+					/* A swell as well as the local sea: Hs about 1.4 m at about 8 s. On 1:10 that is an
+					 * Iribarren number near 0.9 — plunging, which is what this run is for. */
+					WaterEnvironment environment = water.GetComponent<WaterEnvironment>();
+					environment.SwellMetres = 1.2f;
+					environment.Apply();
+					Report.AppendLine($"steep: Hs {environment.SignificantHeight:0.00} m, Tp {environment.PeakPeriod:0.0} s");
+				}
+
+				// One frame publishes the sea state and the shore's rhythm; the break line is then traced off
+				// the main thread and lands on a later frame.
+				camera.transform.position = new Vector3(300f, 3f, -30f);
+				camera.transform.LookAt(new Vector3(320f, 0f, 10f));
+				var warm = new RenderTexture(64, 64, 24);
+				camera.targetTexture = warm;
+				for (int i = 0; i < 200 && !breakers.IsTraced; i++)
+				{
+					camera.Render();
+					System.Threading.Thread.Sleep(25);
+				}
+				camera.Render();
+				camera.targetTexture = null;
+				warm.Release();
+				UnityEngine.Object.DestroyImmediate(warm);
+
+				float period = Mathf.Max(0.5f, shore.SurfPeriod);
+				// Where the break line crosses z = 0, marching out from the waterline.
+				float breakX = 267f;
+				for (float x = 250f; x < 1200f; x += 0.25f)
+				{
+					if (field.TrySample(new Vector2(x, 0f), out float depth, out _) && depth + water.TideMetres >= water.BreakDepth)
+					{
+						breakX = x;
+						break;
+					}
+				}
+				float fullX = breakX;
+				for (float x = breakX; x < 2000f; x += 0.5f)
+				{
+					if (field.TrySample(new Vector2(x, 0f), out float depth, out _) && depth + water.TideMetres >= water.FullSeaDepth)
+					{
+						fullX = x;
+						break;
+					}
+				}
+				Report.AppendLine($"breakers: traced={breakers.IsTraced} points={breakers.LinePoints} period {period:0.00} s | " +
+					$"break depth {water.BreakDepth:0.00} m at x {breakX:0.0}, whole from {water.FullSeaDepth:0.00} m at x {fullX:0.0}, " +
+					$"breaker height {water.BreakerHeight:0.00} m");
+
+				/* The fade on the CPU: the spread of HeightAt across the shore at each distance out, over
+				 * a few instants — and, judged sample by sample from its own depth (the probe beach has
+				 * relief along the shore), the largest height anywhere the sea should be still water.
+				 * That one must be exactly nothing. */
+				float stillest = 0f;
+				int stillSamples = 0;
+				for (float x = breakX - 20f; x <= fullX + 60f; x += Mathf.Max(2f, (fullX + 80f - breakX) / 14f))
+				{
+					field.TrySample(new Vector2(x, 0f), out float depth, out _);
+					double sum = 0, sumSq = 0;
+					int n = 0;
+					for (int k = 0; k < 4; k++)
+					{
+						water.SetClock(11.0 + k * 1.7);
+						for (int z = -40; z <= 40; z += 5)
+						{
+							float h = water.HeightAt(new Vector3(x, 0f, z)) - water.SeaLevel;
+							sum += h;
+							sumSq += h * h;
+							n++;
+							field.TrySample(new Vector2(x, z), out float here, out _);
+							if (water.Calm(here + water.TideMetres) == 0f)
+							{
+								stillest = Mathf.Max(stillest, Mathf.Abs(h));
+								stillSamples++;
+							}
+						}
+					}
+					double mean = sum / n;
+					double spread = System.Math.Sqrt(System.Math.Max(0.0, sumSq / n - mean * mean));
+					Report.AppendLine($"  transect x {x,6:0.0} depth {depth,6:0.00} m calm {water.Calm(depth + water.TideMetres):0.000} height spread {spread:0.0000} m");
+				}
+				Report.AppendLine($"  inshore of the break line: largest |height| {stillest:0.000000} m over {stillSamples} samples (must be 0)");
+
+				// "profile" looks straight along the break line from just inshore of it, low: the
+				// cross-section in silhouette. Views marked sheet are captured twice, the second time with
+				// the sheet in flat magenta (WaterDebugView.BreakerSheet) to show where the geometry is.
+				float inshore = Mathf.Max(2f, water.BreakerHeight * 3f);
+				(string name, Vector3 at, Vector3 look, float fov, int frames, bool sheet)[] views =
+				{
+					("profile", new Vector3(breakX - inshore, 0.9f, -30f), new Vector3(breakX - inshore, 0.4f, 0f), 45f, 8, true),
+					("along", new Vector3(breakX - 7f, 1.6f, -32f), new Vector3(breakX + 3f, 0.8f, 14f), 50f, 4, false),
+					("beach", new Vector3(breakX - 26f, 2.4f, -4f), new Vector3(breakX + 8f, 0.4f, 2f), 55f, 4, false),
+					("above", new Vector3(breakX + 26f, 16f, -34f), new Vector3(breakX - 2f, 0f, 6f), 55f, 4, true),
+				};
+				foreach ((string name, Vector3 at, Vector3 look, float fov, int frames, bool sheet) in views)
+				{
+					camera.transform.position = at;
+					camera.transform.LookAt(look);
+					camera.fieldOfView = fov;
+					for (int frame = 0; frame < frames; frame++)
+					{
+						float t = frame / (float)frames * period;
+						water.SetClock(11.0 + t);
+						shore.SetClock(t);
+						Capture(camera, $"{name}-{frame}", $"t={t:0.0}s of {period:0.0}s", BreakerDirectory);
+						if (sheet)
+						{
+							water.Material.SetFloat("_DebugView", (float)WaterDebugView.BreakerSheet);
+							water.SetClock(11.0 + t);
+							shore.SetClock(t);
+							Capture(camera, $"{name}-{frame}-sheet", "the sheet in magenta", BreakerDirectory);
+							water.Material.SetFloat("_DebugView", 0f);
+						}
+					}
+				}
+
+				Finish(0, BreakerDirectory);
+			}
+			catch (Exception ex)
+			{
+				Report.AppendLine("EXCEPTION: " + ex);
+				Finish(3, BreakerDirectory);
+			}
+			finally
+			{
+				if (pipeline != null)
+				{
+					pipeline.supportsCameraDepthTexture = depthWas;
+					pipeline.supportsCameraOpaqueTexture = opaqueWas;
+				}
+			}
+		}
+
+		private const string BreakerDirectoryGentle = "/home/jim/Dev/FishMMO-Dev/WaterRenders/breakers";
+		private const string BreakerDirectorySteep = "/home/jim/Dev/FishMMO-Dev/WaterRenders/breakers-steep";
+
 		private static void Build(out Camera camera, out WaterSurface water, out WaterShore shore, out Light sun)
 		{
 			RenderSettings.skybox = AssetDatabase.GetBuiltinExtraResource<Material>("Default-Skybox.mat");
@@ -153,6 +321,7 @@ namespace FishMMO.RenderScratch
 			water.Rebuild();
 			waterHost.AddComponent<WaterShoreField>().Build();
 			shore = waterHost.AddComponent<WaterShore>();
+			waterHost.AddComponent<WaterBreakers>();
 			var environment = waterHost.AddComponent<WaterEnvironment>();
 			environment.DriveGravity = false;
 			environment.DriveColor = false;
@@ -174,7 +343,7 @@ namespace FishMMO.RenderScratch
 			camera.allowHDR = true;
 		}
 
-		private static void Capture(Camera camera, string name, string note)
+		private static void Capture(Camera camera, string name, string note, string directory = OutputDirectory)
 		{
 			var texture = new RenderTexture(Width, Height, 24, RenderTextureFormat.DefaultHDR) { antiAliasing = 1 };
 			camera.targetTexture = texture;
@@ -189,7 +358,7 @@ namespace FishMMO.RenderScratch
 			RenderTexture.active = active;
 			camera.targetTexture = null;
 
-			File.WriteAllBytes(Path.Combine(OutputDirectory, name + ".png"), readable.EncodeToPNG());
+			File.WriteAllBytes(Path.Combine(directory, name + ".png"), readable.EncodeToPNG());
 
 			Color[] pixels = readable.GetPixels();
 			int white = 0;
@@ -215,10 +384,10 @@ namespace FishMMO.RenderScratch
 			UnityEngine.Object.DestroyImmediate(texture);
 		}
 
-		private static void Finish(int code)
+		private static void Finish(int code, string directory = OutputDirectory)
 		{
 			Debug.Log("[WaterShoreProbe]\n" + Report);
-			File.WriteAllText(Path.Combine(OutputDirectory, "report.txt"), Report.ToString());
+			File.WriteAllText(Path.Combine(directory, "report.txt"), Report.ToString());
 			EditorApplication.Exit(code);
 		}
 	}

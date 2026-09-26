@@ -1,9 +1,10 @@
 ﻿<Solution>
   <Project Path="FishMMO.Client.csproj" />
   <Project Path="FishMMO.Shared.csproj" />
+  <Project Path="FishMMO.UnitTests.csproj" />
+  <Project Path="FishMMO.Client.GUI.Editor.csproj" />
   <Project Path="FishMMO.Server.csproj" />
   <Project Path="FishNet.Runtime.csproj" />
-  <Project Path="FishMMO.UnitTests.csproj" />
   <Project Path="KinematicCharacterController.csproj" />
   <Project Path="FishMMO.Shared.WorldSceneDetails.Editor.csproj" />
   <Project Path="FishMMO.Shared.Tools.Editor.csproj" />
@@ -32,7 +33,6 @@
   <Project Path="FishMMO.MockContent.Editor.csproj" />
   <Project Path="FishMMO.Shared.Biomes.Editor.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
-  <Project Path="FishMMO.Client.GUI.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.World.Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
