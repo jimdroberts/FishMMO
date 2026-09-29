@@ -237,10 +237,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public WeatherSceneMode WeatherMode => AtlasEntry != null ? AtlasEntry.EffectiveWeather : WeatherSceneMode.Auto;
 
-		/// <summary>The preset used when <see cref="WeatherMode"/> is Fixed.</summary>
-		public WeatherPreset FixedWeather => AtlasEntry != null ? AtlasEntry.FixedWeather : null;
-
-		public float FixedWeatherIntensity => AtlasEntry != null ? AtlasEntry.FixedWeatherIntensity : 1f;
+		/// <summary>What this scene is authored to add to its air, always. Zero adds nothing.</summary>
+		public AirOffsets AuthoredAir => AtlasEntry != null ? AtlasEntry.Air : default;
 
 		/// <summary>Whether the automatic director may start storm cells here. Admins can switch it at runtime.</summary>
 		public bool WeatherDirector => AtlasEntry == null || AtlasEntry.WeatherDirector;

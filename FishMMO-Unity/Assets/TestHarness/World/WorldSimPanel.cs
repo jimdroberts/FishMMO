@@ -49,17 +49,14 @@ namespace FishMMO.TestHarness.World
 		private Slider yearSlider;
 		private Slider transition;
 		private Button playButton;
-		private Toggle directToggle;
-		private VisualElement cloudSection;
+		private Toggle fieldToggle;
+		private VisualElement climateSection;
 		private VisualElement stats;
 
 		private readonly List<Button> bodyButtons = new List<Button>();
-		private readonly List<Button> presetButtons = new List<Button>();
 		private readonly List<Button> tierButtons = new List<Button>();
 		private readonly List<Button> tabButtons = new List<Button>();
 		private readonly List<VisualElement> tabPages = new List<VisualElement>();
-		private readonly Dictionary<WeatherChannel, Slider> channelSliders = new Dictionary<WeatherChannel, Slider>();
-		private readonly Dictionary<WeatherLayerKind, Slider> layerSliders = new Dictionary<WeatherLayerKind, Slider>();
 		/// <summary>The figures at the top, by name, so the refresh sets a value and never rebuilds a row.</summary>
 		private readonly Dictionary<string, Label> statValues = new Dictionary<string, Label>();
 		private float refresh;
@@ -274,8 +271,8 @@ namespace FishMMO.TestHarness.World
 			// focus from control to control, A and D change the slider it lands on. So after one
 			// click anywhere on the panel, flying the camera also walked the focus up out of the Run
 			// button into the clock's own sliders and scrubbed them — the rate, the year, the day,
-			// the hour — and on the weather tab dragged the channel sliders about, which turns the
-			// time-driven weather off altogether. The panel is a mouse panel. Navigation is refused
+			// the hour — and on the climate tab dragged what is added to the air about. The panel is a
+			// mouse panel. Navigation is refused
 			// on the way down, before any control sees it; typing in a value box is not navigation
 			// and is untouched.
 			panel.RegisterCallback<NavigationMoveEvent>(evt =>
@@ -325,9 +322,10 @@ namespace FishMMO.TestHarness.World
 			stats.Add(Card("Sun & sky", false,
 				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse"), ("sky.aurora", "Aurora")));
 			stats.Add(Card("Air — what drives the weather", true,
-				("air.pressure", "Pressure"), ("air.humidity", "Humidity"), ("air.instability", "Instability"), ("air.driver", "Driver")));
-			stats.Add(Card("Weather — what is shown", true,
-				("wx.source", "Source"), ("wx.timeline", "Timeline"), ("wx.falling", "Falling"), ("wx.fog", "Fog"),
+				("air.pressure", "Pressure"), ("air.humidity", "Humidity"), ("air.instability", "Instability"), ("air.added", "Added"),
+				("air.base", "Cloud base"), ("air.freezing", "Freezing level")));
+			stats.Add(Card("Weather — what the air does", true,
+				("wx.timeline", "Storms"), ("wx.falling", "Falling"), ("wx.fog", "Fog"),
 				("wx.wind", "Wind"), ("wx.temp", "Temperature"), ("wx.exposure", "Exposure")));
 			stats.Add(Card("Clouds — what is drawn", true,
 				("cl.bands", "Bands"), ("cl.shell", "Shell"), ("cl.resolution", "Resolution"), ("cl.steps", "Steps"),
@@ -345,7 +343,7 @@ namespace FishMMO.TestHarness.World
 
 			AddTab(tabBar, scroll, "Sky", BuildSkyTab);
 			AddTab(tabBar, scroll, "Weather", BuildWeatherTab);
-			AddTab(tabBar, scroll, "Clouds", BuildCloudTab);
+			AddTab(tabBar, scroll, "Climate", BuildClimateTab);
 			AddTab(tabBar, scroll, "Ground", BuildGroundTab);
 			ShowTab(0);
 
@@ -511,163 +509,53 @@ namespace FishMMO.TestHarness.World
 
 		private void BuildWeatherTab(VisualElement page)
 		{
-			page.Add(Heading("Presets"));
-			transition = LabeledSlider("Transition s", 0f, 60f, 5f, _ => { });
-			page.Add(transition);
-			var presets = Row(true);
-			foreach (WeatherPreset preset in Controller.Presets)
-			{
-				if (preset == null)
-				{
-					continue;
-				}
-				WeatherPreset captured = preset;
-				Button button = SmallButton(preset.ResolvedName, () =>
-				{
-					Controller.ApplyPreset(captured, transition.value);
-					SyncDirectToggle();
-				});
-				button.userData = preset;
-				presetButtons.Add(button);
-				presets.Add(button);
-			}
-			// Reset, not clear: every preset and hand-set layer fades out and the drifting field
-			// takes the sky back. A clear sky is the Clear preset, which overrides the field.
-			presets.Add(SmallButton("Reset to field", () =>
-			{
-				Controller.ClearAll(transition.value);
-				SyncChannelSliders();
-				SyncDirectToggle();
-			}));
-			page.Add(presets);
-
-			page.Add(Heading("Storm cells", "A cell starts upwind and drifts across the camera."));
+			// There is nothing here to ask for weather by name. The weather is the air's: the Climate
+			// tab adds to the air, and what the air then does is the weather. A storm is a physical
+			// event of a kind — it does to the air under it what that storm does — and what falls in
+			// it is that air's.
+			page.Add(Heading("Storms", "A storm of a kind starts upwind and drifts across the camera. What falls in it, and whether it thunders, is the air's."));
 			var cells = Row(true);
-			foreach (string name in new[] { "Thunderstorm", "Blizzard", "Sandstorm", "Hailstorm", "Ashfall", "Heavy Rain" })
+			foreach (StormKind kind in StormPhysics.Kinds)
 			{
-				WeatherPreset preset = Controller.Presets.Find(p => p != null && p.ResolvedName == name);
-				if (preset != null)
-				{
-					cells.Add(SmallButton(name, () => { Controller.SpawnCell(preset); SyncDirectToggle(); }));
-				}
+				StormKind captured = kind;
+				cells.Add(SmallButton(StormPhysics.NameOf(kind), () => Controller.SpawnCell(captured)));
 			}
 			page.Add(cells);
 
-			page.Add(Heading("Layers", "Laid on top of whatever preset is running."));
-			foreach (WeatherLayerKind kind in (WeatherLayerKind[])Enum.GetValues(typeof(WeatherLayerKind)))
+			page.Add(Heading("The air", "Where the air comes from."));
+			fieldToggle = LabeledToggle("Drifting weather", Controller.FieldDriven, v => Controller.FieldDriven = v,
+				"On, the air is the world's own weather — highs, lows and fronts drifting on the prevailing wind — plus what the Climate tab adds. Off, it is a still, ordinary air plus what is added: one air, held, for measuring what that air does.");
+			page.Add(fieldToggle);
+			transition = LabeledSlider("Transition s", 0f, 60f, 5f, _ => { });
+			page.Add(transition);
+			var reset = Row();
+			reset.Add(SmallButton("Reset", () =>
 			{
-				WeatherLayerKind captured = kind;
-				Slider slider = LabeledSlider(kind.ToString(), 0f, 1f, 0f, v =>
-				{
-					Controller.SetLayer(captured, v, 0.5f);
-					SyncDirectToggle();
-				});
-				layerSliders[kind] = slider;
-				page.Add(slider);
-			}
-
-			page.Add(Heading("Climate"));
-			page.Add(LabeledSlider("Temperature", -1f, 1f, Controller.Temperature, v => Controller.Temperature = v));
-			page.Add(LabeledToggle("Match to preset", Controller.MatchTemperature, v => Controller.MatchTemperature = v,
-				"Clicking a snow preset in a warm scene otherwise gives rain: falling snow turns to rain above freezing, and a snow layer does not apply outside its own range at all."));
-
-			// ── Driving the sky directly ──
-			// The model cannot be asked for "exactly this much cloud and this much aurora" — no
-			// preset lands on those numbers — and that is a thing worth being able to ask for. So
-			// the channels can be set straight, and the toggle says which of the two is running.
-			page.Add(Heading("Direct", "The model cannot be asked for exactly this much cloud and this much aurora, because no preset lands on those numbers. These set the channels straight. Applying a preset, a layer or a cell turns them back off."));
-			directToggle = LabeledToggle("Use these sliders", Controller.DriveWeatherDirectly,
-				v => Controller.DriveWeatherDirectly = v,
-				"On, these channels are the whole weather and the timeline above is ignored. Applying a preset, a layer or a cell turns it back off.");
-			page.Add(directToggle);
-			ChannelSlider(page, "Cloud cover", WeatherChannel.CloudCover);
-			ChannelSlider(page, "Cloud density", WeatherChannel.CloudDensity);
-			ChannelSlider(page, "Precipitation", WeatherChannel.Precipitation);
-			ChannelSlider(page, "Rain", WeatherChannel.RainWeight);
-			ChannelSlider(page, "Snow", WeatherChannel.SnowWeight);
-			ChannelSlider(page, "Fog", WeatherChannel.FogDensity);
-			ChannelSlider(page, "Lightning", WeatherChannel.LightningRate);
-			ChannelSlider(page, "Aurora", WeatherChannel.Aurora);
-			ChannelSlider(page, "Wind", WeatherChannel.WindSpeed);
-			var quick = Row();
-			quick.Add(SmallButton("Clear", () => SetDirect(WeatherFrame.Clear, 0.2f)));
-			quick.Add(SmallButton("Overcast", () => SetDirect(Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 0.9f), (WeatherChannel.FogDensity, 0.2f)), 0.1f)));
-			quick.Add(SmallButton("Storm", () => SetDirect(Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 1f), (WeatherChannel.Precipitation, 0.9f), (WeatherChannel.RainWeight, 1f), (WeatherChannel.LightningRate, 1f), (WeatherChannel.WindSpeed, 0.7f), (WeatherChannel.FogDensity, 0.4f)), 0.2f)));
-			quick.Add(SmallButton("Aurora night", () => SetDirect(Frame((WeatherChannel.Aurora, 1f), (WeatherChannel.CloudCover, 0.1f)), -0.7f)));
-			page.Add(quick);
+				Controller.ClearAll(transition.value);
+				BuildClimateSection();
+			}));
+			page.Add(reset);
+			page.Add(Small("Reset takes away everything added to the air, ends the storms and dries the ground."));
 		}
 
-		private void ChannelSlider(VisualElement page, string label, WeatherChannel channel)
+		// ── Climate ───────────────────────────────────────────────────
+
+		private void BuildClimateTab(VisualElement page)
 		{
-			Slider slider = LabeledSlider(label, 0f, 1f, Controller.SkyWeather[channel], v =>
-			{
-				WeatherFrame frame = Controller.SkyWeather;
-				frame[channel] = v;
-				// The setter turns direct mode on: moving one of these is a request to use them.
-				Controller.SkyWeather = frame;
-				SyncDirectToggle();
-			});
-			channelSliders[channel] = slider;
-			page.Add(slider);
+			climateSection = new VisualElement();
+			page.Add(climateSection);
+			BuildClimateSection();
 		}
 
-		private static WeatherFrame Frame(params (WeatherChannel channel, float value)[] values)
+		/// <summary>Draws the climate controls, and redraws them after a reset.</summary>
+		private void BuildClimateSection()
 		{
-			var frame = new WeatherFrame();
-			foreach ((WeatherChannel channel, float value) in values)
-			{
-				frame[channel] = value;
-			}
-			return frame;
-		}
-
-		private void SetDirect(WeatherFrame frame, float temperature)
-		{
-			Controller.SkyWeather = frame;
-			Controller.Temperature = temperature;
-			SyncChannelSliders();
-			SyncDirectToggle();
-		}
-
-		private void SyncChannelSliders()
-		{
-			WeatherFrame frame = Controller.SkyWeather;
-			foreach (KeyValuePair<WeatherChannel, Slider> pair in channelSliders)
-			{
-				pair.Value.SetValueWithoutNotify(frame[pair.Key]);
-			}
-		}
-
-		private void SyncDirectToggle()
-		{
-			directToggle?.SetValueWithoutNotify(Controller.DriveWeatherDirectly);
-		}
-
-		// ── Clouds ────────────────────────────────────────────────────
-
-		private void BuildCloudTab(VisualElement page)
-		{
-			cloudSection = new VisualElement();
-			page.Add(cloudSection);
-			BuildCloudSection();
-		}
-
-		/// <summary>Draws the cloud controls, and redraws them when the bands change.</summary>
-		private void BuildCloudSection()
-		{
-			if (cloudSection == null)
+			if (climateSection == null)
 			{
 				return;
 			}
-			cloudSection.Clear();
-			WeatherRenderProfile profile = Controller != null && Controller.Presentation != null ? Controller.Presentation.Profile : null;
-			profile = profile != null ? profile : WeatherRenderProfile.Active;
-			if (profile == null)
-			{
-				cloudSection.Add(Small("No weather render profile in the scene, so there is nothing to tune."));
-				return;
-			}
-			CloudControls.Build(cloudSection, profile, BuildCloudSection);
+			climateSection.Clear();
+			ClimateControls.Build(climateSection, () => Controller.Air, v => Controller.Air = v, Controller.Settings, BuildClimateSection);
 		}
 
 		// ── Ground ────────────────────────────────────────────────────
@@ -878,29 +766,20 @@ namespace FishMMO.TestHarness.World
 			WeatherSample sample = Controller.LastSample;
 			WeatherFrame shown = Controller.Presentation != null ? Controller.Presentation.Shown : sample.Frame;
 			WeatherDriver.Synoptic air = sample.Air;
-			if (Controller.DriveWeatherDirectly)
-			{
-				Stat("air.pressure", "—", "dim");
-				Stat("air.humidity", "—", "dim");
-				Stat("air.instability", "—", "dim");
-				Stat("air.driver", "off (sliders)", "warn");
-			}
-			else
 			{
 				string system = air.Pressure < -0.15f ? "low" : air.Pressure > 0.15f ? "high" : "slack";
 				Stat("air.pressure", $"{system} {air.Pressure.ToString("+0.00;-0.00", culture)}");
-				Stat("air.humidity", $"{(air.Humidity * 100f).ToString("0", culture)}%");
+				Stat("air.humidity", $"{(air.Humidity * 100f).ToString("0", culture)}% ({(sample.Column.RelativeHumidity * 100f).ToString("0", culture)}% RH)");
 				Stat("air.instability", $"{(air.Instability * 100f).ToString("0", culture)}%");
-				bool overridden = sample.DriverWeight < 0.999f;
-				Stat("air.driver", overridden ? $"{((1f - sample.DriverWeight) * 100f).ToString("0", culture)}% overridden" : "running",
-					overridden ? "warn" : "good");
+				Stat("air.added", sample.Offsets.IsZero ? "nothing" : sample.Offsets.ToString(), sample.Offsets.IsZero ? "dim" : "warn");
+				Stat("air.base", $"{sample.Column.Base.ToString("0", culture)} m");
+				Stat("air.freezing", $"{sample.Column.Freezing.ToString("0", culture)} m");
 			}
 
 			// The weather that is shown.
 			string falling = sample.Precipitation == PrecipitationKind.None ? "nothing" : sample.Precipitation.ToString().ToLowerInvariant();
 			float amount = shown[WeatherChannel.Precipitation];
-			Stat("wx.source", Controller.DriveWeatherDirectly ? "sliders" : Controller.ActivePreset != null ? Controller.ActivePreset.ResolvedName : "the field");
-			Stat("wx.timeline", $"{Controller.Timeline.Cells.Count} cell(s) · {Controller.Timeline.Layers.Count} layer(s)");
+			Stat("wx.timeline", Controller.Timeline.Cells.Count == 0 ? "none" : $"{Controller.Timeline.Cells.Count}", Controller.Timeline.Cells.Count == 0 ? "dim" : null);
 			Stat("wx.falling", sample.Precipitation == PrecipitationKind.None ? "nothing" : $"{falling} {amount.ToString("0.00", culture)}",
 				sample.Precipitation == PrecipitationKind.None ? "dim" : null);
 			float fog = WeatherFogPresenter.Amount(shown);
@@ -923,16 +802,10 @@ namespace FishMMO.TestHarness.World
 			if (coverLabel != null && activeTab == 3)
 			{
 				WeatherCover cover = Controller.Timeline.Cover;
-				coverLabel.text = (Controller.PresetTemperature.HasValue
-					? $"The preset moved the scene to {Controller.PresetTemperature.Value.ToString("0.00", culture)}°.\n"
-					: string.Empty)
-					+ $"snow {cover.Snow.ToString("0.00", culture)} · wet {cover.Wet.ToString("0.00", culture)} · "
+				coverLabel.text = $"snow {cover.Snow.ToString("0.00", culture)} · wet {cover.Wet.ToString("0.00", culture)} · "
 					+ $"ash {cover.Ash.ToString("0.00", culture)} · sand {cover.Sand.ToString("0.00", culture)}";
 			}
-			foreach (Button button in presetButtons)
-			{
-				button.EnableInClassList(ActiveClass, !Controller.DriveWeatherDirectly && ReferenceEquals(button.userData, Controller.ActivePreset));
-			}
+			fieldToggle?.SetValueWithoutNotify(Controller.FieldDriven);
 			int quality = QualitySettings.GetQualityLevel();
 			for (int i = 0; i < tierButtons.Count; i++)
 			{
@@ -959,8 +832,7 @@ namespace FishMMO.TestHarness.World
 				return;
 			}
 			CloudTierSettings tier = sky.CloudTier;
-			int bands = sky.CloudBands != null ? sky.CloudBands.Count : 0;
-			Stat("cl.bands", bands.ToString(culture));
+			Stat("cl.bands", sky.CloudBandCount.ToString(culture));
 			Stat("cl.shell", $"{sky.CloudShellBottom.ToString("0", culture)}–{sky.CloudShellTop.ToString("0", culture)} m");
 			Stat("cl.resolution", $"{(tier.Resolution * 100f).ToString("0", culture)}% of screen");
 			Stat("cl.steps", $"{tier.Steps} · detail {tier.Detail.ToString("0.0", culture)}");

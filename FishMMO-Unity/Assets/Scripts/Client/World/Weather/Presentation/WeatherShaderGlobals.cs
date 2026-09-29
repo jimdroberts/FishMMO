@@ -57,6 +57,9 @@ namespace FishMMO.Client
 			Vector2 wind = WindDirection(frame[WeatherChannel.WindHeading]);
 			Shader.SetGlobalVector(Wind, new Vector4(wind.x, wind.y, frame[WeatherChannel.WindSpeed], frame[WeatherChannel.WindGust]));
 			Shader.SetGlobalVector(Fog, new Vector4(frame[WeatherChannel.FogDensity], frame[WeatherChannel.FogHeight], frame[WeatherChannel.VolumetricFog], 0f));
+			// And the fog as the layer the fog passes draw, in metres and per metre: how thick, how deep,
+			// how lifted, and its structure carried along on the wind by this same clock.
+			FogLayerView.Publish(frame, time);
 			Shader.SetGlobalVector(Cover, new Vector4(cover.Snow, cover.Wet, cover.Ash, cover.Sand));
 			Shader.SetGlobalVector(Misc, new Vector4(frame[WeatherChannel.Aurora], temperature, shelter, time));
 			// What is falling, kind by kind. A surface needs to know: rain rings a puddle, hail does

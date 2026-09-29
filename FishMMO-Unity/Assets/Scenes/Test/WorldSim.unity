@@ -3017,45 +3017,30 @@ MonoBehaviour:
   SolarSystem: {fileID: 11400000, guid: a6376d356d9fe9d1b80f42ad5e90d4a5, type: 2}
   SkyProfiles:
   - {fileID: 11400000, guid: f912d7b5e0f01a262b3653ce45ad1fc6, type: 2}
-  Presets:
-  - {fileID: 11400000, guid: c85fa651fc7df2c4399c2beb345d509a, type: 2}
-  - {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
-  - {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
-  - {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
-  - {fileID: 11400000, guid: 77ceb35e60107d4bfb9d84311ed6d380, type: 2}
-  - {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
-  - {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
-  - {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
-  - {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
-  - {fileID: 11400000, guid: ade9a108bb77fdcc4a0f194c4f2f1972, type: 2}
-  - {fileID: 11400000, guid: 30c934f6fa91f8a34856ff851d8a619e, type: 2}
-  - {fileID: 11400000, guid: cd247f59315b9d16782275ef9077806c, type: 2}
-  - {fileID: 11400000, guid: 3fcc3b4cc1297b551b570f2672afc7e9, type: 2}
-  - {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
-  - {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
-  - {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
-  - {fileID: 11400000, guid: 34c72236249102d769568390b2af216c, type: 2}
-  - {fileID: 11400000, guid: 48dfb6c7fef4034188fa9261bde2de5b, type: 2}
-  - {fileID: 11400000, guid: b2be23afeaddac6faa373ee751e2d988, type: 2}
-  - {fileID: 11400000, guid: ddea45bbac4a2bf6f86fe2fa1e24707b, type: 2}
-  - {fileID: 11400000, guid: 6f63f0ccbfbfdc2e4bc4c4df3b494945, type: 2}
-  - {fileID: 11400000, guid: 076d8aba1b3aadb3d837c296a17a04a3, type: 2}
-  Templates:
-  - {fileID: 11400000, guid: ced6535dae5816bbb8591f387ddfec67, type: 2}
-  - {fileID: 11400000, guid: 128875fbb5365ef049c47eae96ec0aa0, type: 2}
-  - {fileID: 11400000, guid: 9a37d3ea163b41bc834a13ad562bb9d0, type: 2}
-  - {fileID: 11400000, guid: f2151e1631aaf21ea99031fa54937f64, type: 2}
-  - {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
-  - {fileID: 11400000, guid: 39707c4b75c193593be96cbd250f5aca, type: 2}
-  - {fileID: 11400000, guid: 00a91c9335a0f6193bc9c0daacf916d8, type: 2}
-  - {fileID: 11400000, guid: 7fb177e0c9fb8f17ba2452c257f23d4c, type: 2}
-  - {fileID: 11400000, guid: 484b236f93276f18a92cbcc4e021a9a8, type: 2}
-  - {fileID: 11400000, guid: d00fa0d9f95bbd677bbcdca4cecdd02e, type: 2}
-  - {fileID: 11400000, guid: a6a57c019710ab6feb91bab672f0081c, type: 2}
+  Substances:
+  - {fileID: 11400000, guid: f0b85f51486494308866cd4c17310040, type: 2}
+  - {fileID: 11400000, guid: 42d51c0440a3f3f6a94ec903d588068a, type: 2}
+  - {fileID: 11400000, guid: 650a350f65d0233c293db0c6239a31bf, type: 2}
+  - {fileID: 11400000, guid: cd6dc94049691b708a2fccd6d229997e, type: 2}
+  - {fileID: 11400000, guid: 69d00d6a2a8ea0f609aa70e570329c5b, type: 2}
+  - {fileID: 11400000, guid: 15d91d5ddf7fbb2f987e808890db2902, type: 2}
+  - {fileID: 11400000, guid: 0597f3731bd352a87be64c45180eed62, type: 2}
+  - {fileID: 11400000, guid: 43aa1a985dafd6fb3934b9a2f349ba62, type: 2}
+  - {fileID: 11400000, guid: 2da5565e3e920b12eb798f761d85c21c, type: 2}
+  - {fileID: 11400000, guid: a751240fb82250d31bc77c5ab4d8b7c9, type: 2}
+  - {fileID: 11400000, guid: a91d9900e22b3672b9a3da3744bcebc2, type: 2}
+  - {fileID: 11400000, guid: 3590a6594a5d3e356bbe132b617b15dc, type: 2}
+  - {fileID: 11400000, guid: 5c58fdebfaabbf1d3adf8408e487688f, type: 2}
   TimeScale: 0.05
   GroundTimeScale: 12
   TickRate: 30
-  StartPreset: 
+  StartAir:
+    Temperature: 0
+    Humidity: 0
+    Pressure: 0
+    Instability: 0
+    Wind: 0
+    Gravity: 0
 --- !u!4 &823413380
 Transform:
   m_ObjectHideFlags: 0

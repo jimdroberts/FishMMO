@@ -7,21 +7,23 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Starts a storm cell — weather in one place, drifting — rather than changing the whole sky.
+	/// Starts a storm — weather in one place, drifting — rather than changing the whole sky.
 	/// </summary>
 	/// <remarks>
-	/// The one to reach for most of the time. A cell has a centre, a radius and a velocity, so it
+	/// The one to reach for most of the time. A cell has a centre, a size and a velocity, so it
 	/// arrives, passes over and moves on, and everyone outside it sees a storm in the distance
-	/// instead of the weather simply being different now.
+	/// instead of the weather simply being different now. It is a physical storm of its kind: it
+	/// does to the air under it what that storm does, and what falls there comes from that air —
+	/// a thunderstorm in freezing air snows, a haboob over rock lifts nothing.
 	/// </remarks>
 	[Serializable]
 	public class SpawnStormCellAction : BaseAction
 	{
-		[Tooltip("The weather inside the cell. Without one this action does nothing.")]
-		public WeatherPreset Preset;
+		[Tooltip("What kind of storm.")]
+		public StormKind Kind = StormKind.Thunderstorm;
 
-		[Tooltip("How big it is, in metres.")]
-		[Min(1f)] public float RadiusMeters = 250f;
+		[Tooltip("How big it is, in metres. 0 lets the air where it starts decide.")]
+		[Min(0f)] public float RadiusMeters;
 
 		[Tooltip("Where it starts, relative to whoever set it off. Leave at zero to put it on top of them.")]
 		public Vector3 Offset;
@@ -29,8 +31,8 @@ namespace FishMMO.Shared
 		[Tooltip("Which way it drifts and how fast, in metres per second on the ground plane.")]
 		public Vector2 Velocity = new Vector2(6f, 0f);
 
-		[Tooltip("Seconds before it fades out. 0 leaves it to the server's own limit.")]
-		[Min(0f)] public float LifetimeSeconds = 180f;
+		[Tooltip("Seconds before it fades out. 0 lets the air where it starts decide.")]
+		[Min(0f)] public float LifetimeSeconds;
 
 		[Tooltip("Put it where the storm is heading FROM, so it blows in rather than appearing overhead. Metres upwind, along the velocity.")]
 		[Min(0f)] public float UpwindMeters = 400f;
@@ -38,10 +40,6 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
-			if (Preset == null)
-			{
-				return;
-			}
 			IWeatherService weather = WeatherActionGate.Resolve(initiator, eventData, out Scene scene);
 			if (weather == null)
 			{
@@ -52,14 +50,14 @@ namespace FishMMO.Shared
 
 			/* Started upwind, so it is seen coming. Dropped on top of the player instead, a storm
 			 * simply switches on overhead — which reads as a bug rather than as weather, and throws
-			 * away the one thing a cell has over a preset. */
+			 * away the one thing a cell has over a change to the whole sky. */
 			if (UpwindMeters > 0f && Velocity.sqrMagnitude > 1e-6f)
 			{
 				Vector2 heading = Velocity.normalized;
 				at -= new Vector3(heading.x, 0f, heading.y) * UpwindMeters;
 			}
 
-			weather.SpawnCell(scene, Preset, at, RadiusMeters, Velocity, LifetimeSeconds);
+			weather.SpawnCell(scene, Kind, at, RadiusMeters, Velocity, LifetimeSeconds);
 		}
 	}
 }

@@ -9,8 +9,11 @@ namespace FishMMO.Shared.Weather
 	{
 		/// <summary>Weather still shows outside, but nothing inside is exposed to it.</summary>
 		Shelter = 0,
-		/// <summary>Inside, the weather is always a preset (a volcano crater that is always ashfall).</summary>
-		Override = 1,
+		/// <summary>
+		/// Inside, the air is changed by <see cref="WeatherVolume.Air"/> — a crater hotter, a hollow
+		/// colder and damper — and the weather there is worked out from that air.
+		/// </summary>
+		Air = 1,
 		/// <summary>Inside, some kinds never happen (a city ward that keeps the rain out).</summary>
 		Suppress = 2,
 	}
@@ -32,12 +35,11 @@ namespace FishMMO.Shared.Weather
 		public Collider Shape;
 		[Tooltip("Shelter: how much it protects. 0.5 for a tree canopy, 1 for a building.")]
 		[Range(0f, 1f)] public float ShelterStrength = 1f;
-		[Tooltip("Override: the weather inside.")]
-		public WeatherPreset OverridePreset;
-		[Range(0f, 1f)] public float OverrideIntensity = 1f;
+		[Tooltip("Air: what is added to the air inside. The weather there follows from it.")]
+		public AirOffsets Air;
 		[Tooltip("Suppress: the kinds that never happen inside.")]
 		public WeatherKindMask Suppressed = WeatherKindMask.Precipitation;
-		[Tooltip("Higher wins when overrides overlap.")]
+		[Tooltip("Higher wins when air volumes overlap.")]
 		public int Priority;
 
 		private int registeredScene;
@@ -93,13 +95,13 @@ namespace FishMMO.Shared.Weather
 		public static IReadOnlyList<WeatherVolume> InScene(Scene scene) => byScene.TryGetValue(scene.handle, out List<WeatherVolume> list) ? list : empty;
 
 		/// <summary>
-		/// Applies every volume containing a point: the highest-priority override replaces the
-		/// frame, suppressions remove kinds, and the strongest shelter sets the exposure.
+		/// Applies every volume containing a point to its weather: suppressions remove kinds, and the
+		/// strongest shelter sets the exposure. What air volumes add is not applied here — it is added
+		/// to the air before the weather is worked out, by <see cref="OffsetsAt"/>.
 		/// </summary>
 		public static void Apply(Scene scene, Vector3 position, ref WeatherFrame frame, ref float shelter)
 		{
 			IReadOnlyList<WeatherVolume> volumes = InScene(scene);
-			WeatherVolume topOverride = null;
 			WeatherKindMask suppressed = WeatherKindMask.None;
 			for (int i = 0; i < volumes.Count; i++)
 			{
@@ -113,25 +115,33 @@ namespace FishMMO.Shared.Weather
 					case WeatherVolumeKind.Shelter:
 						shelter = Mathf.Max(shelter, v.ShelterStrength);
 						break;
-					case WeatherVolumeKind.Override:
-						if (v.OverridePreset != null && (topOverride == null || v.Priority > topOverride.Priority))
-						{
-							topOverride = v;
-						}
-						break;
 					case WeatherVolumeKind.Suppress:
 						suppressed |= v.Suppressed;
 						break;
 				}
 			}
-			if (topOverride != null)
-			{
-				frame = topOverride.OverridePreset.Evaluate(topOverride.OverrideIntensity);
-			}
 			if (suppressed != WeatherKindMask.None)
 			{
 				frame.Suppress(suppressed);
 			}
+		}
+
+		/// <summary>
+		/// What the air volumes containing a point add to its air: the highest-priority one's.
+		/// </summary>
+		public static AirOffsets OffsetsAt(Scene scene, Vector3 position)
+		{
+			IReadOnlyList<WeatherVolume> volumes = InScene(scene);
+			WeatherVolume top = null;
+			for (int i = 0; i < volumes.Count; i++)
+			{
+				WeatherVolume v = volumes[i];
+				if (v != null && v.Kind == WeatherVolumeKind.Air && (top == null || v.Priority > top.Priority) && v.Contains(position))
+				{
+					top = v;
+				}
+			}
+			return top != null ? top.Air : default;
 		}
 
 		/// <summary>

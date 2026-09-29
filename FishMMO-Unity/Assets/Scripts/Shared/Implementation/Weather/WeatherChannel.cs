@@ -27,8 +27,14 @@ namespace FishMMO.Shared.Weather
 		WindGust = 11,
 		/// <summary>Degrees the wind blows toward, 0..360. Blended as a vector with <see cref="WindSpeed"/>.</summary>
 		WindHeading = 12,
+		/// <summary>How much fog, 0..1: the light its drops take out of the air, by <c>AirPhysics.FogExtinction</c>.</summary>
 		FogDensity = 13,
+		/// <summary>How deep the fog lies: its top above the ground, 0..1 of <c>FogLayer.ChannelMetres</c>.</summary>
 		FogHeight = 14,
+		/// <summary>
+		/// How far the fog has lifted off the ground, 0 lying on it … 1 a sheet of stratus (<c>FogLayer.Lift</c>).
+		/// The name is older than the physics: the whole fog is drawn as a volume, and this is where its base is.
+		/// </summary>
 		VolumetricFog = 15,
 		/// <summary>
 		/// 0 none … 1 = a strike about every eight seconds, which is a severe storm. See
@@ -63,35 +69,11 @@ namespace FishMMO.Shared.Weather
 		Add = 4,
 	}
 
-	/// <summary>The basic kinds of weather a layer can be.</summary>
-	public enum WeatherLayerKind : byte
-	{
-		Clouds = 0,
-		Rain = 1,
-		Snow = 2,
-		Hail = 3,
-		Ash = 4,
-		Sand = 5,
-		Wind = 6,
-		Fog = 7,
-		Lightning = 8,
-		Aurora = 9,
-		/// <summary>
-		/// A layer that asks for nothing, at full strength. Every channel blends by taking the
-		/// greater, so a preset can only ever add to the drifting field — the field steps back by
-		/// the strongest layer's strength instead. A clear sky is therefore a layer too: one that
-		/// overrides the field and puts nothing in its place. "Clear" with a Clouds layer at zero
-		/// was skipped outright and cleared nothing.
-		/// </summary>
-		ClearSky = 10,
-	}
-
-	/// <summary>A set of <see cref="WeatherLayerKind"/>s.</summary>
+	/// <summary>A set of kinds of weather, for what a volume shelters from or suppresses.</summary>
 	[Flags]
 	public enum WeatherKindMask : ushort
 	{
 		None = 0,
-		// Bit n is WeatherLayerKind n.
 		Clouds = 1,
 		Rain = 2,
 		Snow = 4,
@@ -126,10 +108,8 @@ namespace FishMMO.Shared.Weather
 		Auto = 0,
 		/// <summary>No weather at all.</summary>
 		None = 1,
-		/// <summary>Biome background, storm cells and anything layered on top.</summary>
+		/// <summary>The scene's own weather: the air over it, and the storms that air makes.</summary>
 		Own = 2,
-		/// <summary>Always <see cref="WorldSceneSettings.FixedWeather"/>. Configured inside the scene (dungeons).</summary>
-		Fixed = 3,
 	}
 
 	/// <summary>The channel table: counts, blend rules and helpers.</summary>
@@ -145,22 +125,6 @@ namespace FishMMO.Shared.Weather
 		{
 			return channel >= WeatherChannel.RainWeight && channel <= WeatherChannel.SandWeight;
 		}
-
-		/// <summary>The type-weight channel a precipitating kind writes, or null.</summary>
-		public static WeatherChannel? TypeChannelOf(WeatherLayerKind kind)
-		{
-			switch (kind)
-			{
-				case WeatherLayerKind.Rain: return WeatherChannel.RainWeight;
-				case WeatherLayerKind.Snow: return WeatherChannel.SnowWeight;
-				case WeatherLayerKind.Hail: return WeatherChannel.HailWeight;
-				case WeatherLayerKind.Ash: return WeatherChannel.AshWeight;
-				case WeatherLayerKind.Sand: return WeatherChannel.SandWeight;
-				default: return null;
-			}
-		}
-
-		public static WeatherKindMask MaskOf(WeatherLayerKind kind) => (WeatherKindMask)(1 << (int)kind);
 
 		private static WeatherBlendRule[] BuildRules()
 		{

@@ -24,8 +24,11 @@ namespace FishMMO.Client
 		public WeatherCover Cover;
 		/// <summary>The weather without the storm cells: what the sky shows in the far distance.</summary>
 		public WeatherFrame Background;
-		/// <summary>How much of it the drifting field decided (1) against a preset or layer (0).</summary>
-		public float DriverWeight;
+		/// <summary>
+		/// Everything the weather at the viewer was worked out from: the air, its column, the world's
+		/// air and what was added to it. The sky draws its clouds from the same physics.
+		/// </summary>
+		public WeatherSample Sample;
 		public float Shelter;
 		/// <summary>Local temperature at the viewer, -1..1.</summary>
 		public float Temperature;
@@ -55,12 +58,6 @@ namespace FishMMO.Client
 	{
 		private static readonly List<IWeatherPresenter> presenters = new List<IWeatherPresenter>();
 
-		/// <summary>
-		/// When set, presenters are given this instead of the real weather. For the test scene and
-		/// photo mode; it never leaves the client and changes nothing on the server.
-		/// </summary>
-		public static WeatherFrame? LocalPreview;
-
 		/// <summary>The most recent frame at the viewer.</summary>
 		public static WeatherFrame LastFrame { get; internal set; }
 
@@ -89,12 +86,11 @@ namespace FishMMO.Client
 		{
 			LastFrame = frame;
 			LastContext = context;
-			WeatherFrame shown = LocalPreview ?? frame;
 			for (int i = presenters.Count - 1; i >= 0; i--)
 			{
 				try
 				{
-					presenters[i].Apply(shown, context);
+					presenters[i].Apply(frame, context);
 				}
 				catch (Exception ex)
 				{

@@ -131,26 +131,44 @@ namespace FishMMO.Shared.Weather
 			return Mathf.Lerp(Mathf.Lerp(a, b, tx), Mathf.Lerp(c, d, tx), ty);
 		}
 
+		private static int WrapCell(int cell, int period) => ((cell % period) + period) % period;
+
 		/// <summary>
-		/// The same noise on a lattice that repeats every <paramref name="period"/> cells, for the
-		/// one term the renderer also computes: a wrapping lattice is what lets the drift be wrapped
-		/// to a whole number of periods without the field noticing.
+		/// Gradient noise on a lattice that repeats every <paramref name="period"/> cells, centred on
+		/// 0.5 with the same spread as the value noise it replaced.
 		/// </summary>
-		private static float PeriodicNoise(double x, double y, int period, uint seed)
+		/// <remarks>
+		/// For the terms the renderer draws. Value noise can only peak and trough at its lattice
+		/// points, and its interpolation runs along the lattice's axes, so a sky cut from it has its
+		/// banks and lanes lined up with north and east: measured, its edges favour the two axes three
+		/// times over any other direction. Gradient noise has no such preference (1.2). Scaled by
+		/// 0.868 so two octaves of it have the 0.140 standard deviation the formation contrast was
+		/// calibrated against. <c>FishCloudPeriodicGradient</c> in FishCloudVolume.hlsl is its twin.
+		/// </remarks>
+		private static float PeriodicGradient(double x, double y, int period, uint seed)
 		{
 			double fx = System.Math.Floor(x), fy = System.Math.Floor(y);
 			int ix = (int)fx, iy = (int)fy;
 			float tx = (float)(x - fx), ty = (float)(y - fy);
-			tx = tx * tx * (3f - 2f * tx);
-			ty = ty * ty * (3f - 2f * ty);
-			int x0 = WrapCell(ix, period), x1 = WrapCell(ix + 1, period);
-			int y0 = WrapCell(iy, period), y1 = WrapCell(iy + 1, period);
-			float a = Hash(x0, y0, seed), b = Hash(x1, y0, seed);
-			float c = Hash(x0, y1, seed), d = Hash(x1, y1, seed);
-			return Mathf.Lerp(Mathf.Lerp(a, b, tx), Mathf.Lerp(c, d, tx), ty);
+			float sx = tx * tx * tx * (tx * (tx * 6f - 15f) + 10f);
+			float sy = ty * ty * ty * (ty * (ty * 6f - 15f) + 10f);
+			float n00 = GradientDot(ix, iy, tx, ty, period, seed);
+			float n10 = GradientDot(ix + 1, iy, tx - 1f, ty, period, seed);
+			float n01 = GradientDot(ix, iy + 1, tx, ty - 1f, period, seed);
+			float n11 = GradientDot(ix + 1, iy + 1, tx - 1f, ty - 1f, period, seed);
+			float a = n00 + (n10 - n00) * sx;
+			float b = n01 + (n11 - n01) * sx;
+			return 0.5f + (a + (b - a) * sy) * GradientSpread;
 		}
 
-		private static int WrapCell(int cell, int period) => ((cell % period) + period) % period;
+		/// <summary>What makes gradient noise as widely spread as the value noise the calibration was measured on.</summary>
+		private const float GradientSpread = 0.868f;
+
+		private static float GradientDot(int cx, int cy, float dx, float dy, int period, uint seed)
+		{
+			float angle = Hash(WrapCell(cx, period), WrapCell(cy, period), seed) * (Mathf.PI * 2f);
+			return Mathf.Cos(angle) * dx + Mathf.Sin(angle) * dy;
+		}
 
 		/// <summary>Two octaves, which is all a weather map needs: a system and the swell under it.</summary>
 		private static float Field(double xMetres, double yMetres, float scaleMetres, uint seed)
@@ -165,35 +183,84 @@ namespace FishMMO.Shared.Weather
 		/// Which way the air moves at a latitude, as a unit vector on the ground plane.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// This is where the planet's rotation reaches the weather. A spinning world sorts its winds
 		/// into bands — easterly trades near the equator, westerlies in the middle latitudes,
 		/// easterlies again at the poles — and that is why weather arrives from a reliable direction
 		/// and why it is a different direction at a different latitude. Modelling the bands rather
 		/// than picking a random heading per scene is what makes "the weather comes from the west
 		/// here" a thing a player can learn.
+		/// </para>
+		/// <para>
+		/// How wide the bands are is the world's, not ours (<see cref="WindBelts"/>): our thirty-degree
+		/// cells are what a day of twenty-four hours makes of a world our size. A faster, smaller
+		/// world packs more, narrower bands between equator and pole, and a slow one has a single cell
+		/// from one to the other. The north–south part of the flow follows the cell as well: toward
+		/// the equator in the trades and the polar easterlies, toward the pole in the westerlies —
+		/// the surface half of each overturning cell. It was a fixed poleward lean everywhere, which
+		/// is backwards for the trades.
+		/// </para>
 		/// </remarks>
-		public static Vector2 PrevailingWind(float latitudeDegrees)
+		public static Vector2 PrevailingWind(float latitudeDegrees, in WindBelts belts)
 		{
 			float absolute = Mathf.Abs(latitudeDegrees);
+			float cell = Mathf.Clamp(belts.CellDegrees, 1f, 90f);
+			int index = Mathf.Min((int)(absolute / cell), 1000);
+			float start = index * cell;
+			bool last = start + cell >= 90f - 1e-3f;
+			// Where in its cell this latitude is, 0 at the equatorward edge; the last cell runs to the pole.
+			float span = last ? Mathf.Max(1e-3f, 90f - start) : cell;
+			float t = Mathf.Clamp01((absolute - start) / span);
 			// +1 blows toward the east, -1 toward the west.
 			float eastward;
-			if (absolute < 30f)
+			// +1 toward the pole, -1 toward the equator.
+			float poleward;
+			if (index == 0)
 			{
-				eastward = -Mathf.Cos(absolute / 30f * Mathf.PI * 0.5f);       // trades: out of the east
+				// The Hadley cell's surface flow: out of the east, strongest at the equator.
+				eastward = -Mathf.Cos(Mathf.Clamp01(absolute / cell) * Mathf.PI * 0.5f);
+				poleward = -1f;
 			}
-			else if (absolute < 60f)
+			else if ((index & 1) == 1)
 			{
-				eastward = Mathf.Sin((absolute - 30f) / 30f * Mathf.PI);       // westerlies: out of the west
+				// An eddy-driven westerly belt, strongest in its middle.
+				eastward = Mathf.Sin(t * Mathf.PI);
+				poleward = 1f;
 			}
 			else
 			{
-				eastward = -Mathf.Sin((absolute - 60f) / 30f * Mathf.PI * 0.5f); // polar easterlies
+				// Easterlies again; the last band's strongest at the pole itself.
+				eastward = last ? -Mathf.Sin(t * Mathf.PI * 0.5f) : -Mathf.Sin(t * Mathf.PI);
+				poleward = -1f;
 			}
-			// A touch of poleward drift, so the bands are not perfectly zonal and fronts arrive at
-			// an angle rather than sliding along the horizon.
-			float poleward = Mathf.Sign(latitudeDegrees == 0f ? 1f : latitudeDegrees) * 0.25f;
-			var wind = new Vector2(eastward, poleward);
+			// A world that turns backwards turns every belt round with it.
+			eastward *= belts.Handedness;
+			var wind = new Vector2(eastward, Mathf.Sign(latitudeDegrees == 0f ? 1f : latitudeDegrees) * poleward * 0.25f);
 			return wind.sqrMagnitude < 1e-6f ? Vector2.right : wind.normalized;
+		}
+
+		/// <summary>The home world's belts: for callers with no body of their own to ask.</summary>
+		public static Vector2 PrevailingWind(float latitudeDegrees) => PrevailingWind(latitudeDegrees, WindBelts.Home);
+
+		/// <summary>
+		/// How strongly the upper air runs at a latitude, 0.25..1: highest under a westerly jet.
+		/// </summary>
+		/// <remarks>
+		/// A broad hump on each westerly belt's middle, falling to a quarter two cells away. With our
+		/// own thirty-degree cells it is exactly the hump on forty-five degrees the field was tuned
+		/// with; a world with more belts has more jets.
+		/// </remarks>
+		/// <summary>How strongly the upper air runs at a latitude, 0.25..1 (<see cref="JetBand"/>): where the jets are.</summary>
+		public static float JetStrength(float latitudeDegrees, in WindBelts belts) => JetBand(latitudeDegrees, belts);
+
+		private static float JetBand(float latitudeDegrees, in WindBelts belts)
+		{
+			float cell = Mathf.Clamp(belts.CellDegrees, 1f, 90f);
+			float absolute = Mathf.Abs(latitudeDegrees);
+			// The middles of the westerly belts sit at 1.5, 3.5, 5.5… cells.
+			float k = Mathf.Round((absolute / cell - 1.5f) / 2f);
+			float nearest = (1.5f + 2f * Mathf.Max(0f, k)) * cell;
+			return Mathf.Clamp(1f - Mathf.Abs(absolute - nearest) / (2f * cell), 0.25f, 1f);
 		}
 
 		/// <summary>
@@ -209,9 +276,9 @@ namespace FishMMO.Shared.Weather
 		/// exactly what it did. The wind that varies is <see cref="PrevailingSpeed"/>, which is
 		/// reported to the weather and never moves the field.
 		/// </remarks>
-		public static float AdvectionSpeed(uint worldSeed, float latitudeDegrees)
+		public static float AdvectionSpeed(uint worldSeed, float latitudeDegrees, in WindBelts belts)
 		{
-			float band = 1f - Mathf.Abs(Mathf.Abs(latitudeDegrees) - 45f) / 60f;
+			float band = JetBand(latitudeDegrees, belts);
 			// Seeded per latitude band, so one world's westerlies run faster than another's, and
 			// steady for ever within a world.
 			float place = Noise(latitudeDegrees * 0.05f, 61.3f, worldSeed ^ 0x3B9ACA07u);
@@ -226,13 +293,13 @@ namespace FishMMO.Shared.Weather
 		/// <see cref="AdvectionSpeed"/> on purpose: the large-scale march of the air is steady, while
 		/// the wind over any given spot is not, and only the steady part may move the field.
 		/// </remarks>
-		public static float PrevailingSpeed(uint worldSeed, float latitudeDegrees, double worldSeconds)
+		public static float PrevailingSpeed(uint worldSeed, float latitudeDegrees, double worldSeconds, in WindBelts belts)
 		{
 			// The jet is strongest in the middle latitudes, and the whole thing breathes over hours.
 			// The swell is centred so it can drop the wind as well as raise it: added only upward, as
 			// it was at first, the air never fell below about ten metres a second anywhere — a stiff
 			// breeze that never let up, which among other things made fog impossible to form.
-			float band = 1f - Mathf.Abs(Mathf.Abs(latitudeDegrees) - 45f) / 60f;
+			float band = JetBand(latitudeDegrees, belts);
 			float swell = Noise((float)(worldSeconds / 4800.0), 37.2f, worldSeed ^ 0xA136AAADu);
 			return Mathf.Lerp(1.5f, 18f, Mathf.Clamp01(band * 0.55f + (swell - 0.5f) * 0.7f));
 		}
@@ -255,9 +322,9 @@ namespace FishMMO.Shared.Weather
 		/// straight line without ever letting the two terms disagree about where the air is.
 		/// </para>
 		/// </remarks>
-		public static Vector2 Drift(uint worldSeed, float latitudeDegrees, double worldSeconds)
+		public static Vector2 Drift(uint worldSeed, float latitudeDegrees, double worldSeconds, in WindBelts belts)
 		{
-			DriftExact(worldSeed, latitudeDegrees, worldSeconds, out double x, out double y);
+			DriftExact(worldSeed, latitudeDegrees, worldSeconds, belts, out double x, out double y);
 			// Wrapped only so that it fits a float without losing metres. Anything that samples the
 			// field takes the exact one above; this is for readouts and for the renderer, which
 			// re-wraps it to each of its textures' own periods before it is used.
@@ -267,10 +334,10 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>The drift, exact, in double: what the field is sampled through.</summary>
-		public static void DriftExact(uint worldSeed, float latitudeDegrees, double worldSeconds, out double x, out double y)
+		public static void DriftExact(uint worldSeed, float latitudeDegrees, double worldSeconds, in WindBelts belts, out double x, out double y)
 		{
-			Vector2 direction = PrevailingWind(latitudeDegrees);
-			float speed = AdvectionSpeed(worldSeed, latitudeDegrees);
+			Vector2 direction = PrevailingWind(latitudeDegrees, belts);
+			float speed = AdvectionSpeed(worldSeed, latitudeDegrees, belts);
 			// The linear term grows without bound and is the whole reason this is a double: at a
 			// year in, single precision is already rounding it to sixteen metres.
 			double travelled = worldSeconds * speed;
@@ -332,8 +399,8 @@ namespace FishMMO.Shared.Weather
 		{
 			double x = driftedX / MesoscaleMetres, y = driftedY / MesoscaleMetres;
 			uint seed = worldSeed ^ MesoscaleSeedMix;
-			float n = PeriodicNoise(x, y, MesoscalePeriodTiles, seed) * 0.65f
-				+ PeriodicNoise(x * 2.3 + 11.7, y * 2.3 - 4.1, MesoscalePeriodTiles * 23 / 10, seed ^ 0x5BD1E995u) * 0.35f;
+			float n = PeriodicGradient(x, y, MesoscalePeriodTiles, seed) * 0.65f
+				+ PeriodicGradient(x * 2.3 + 11.7, y * 2.3 - 4.1, MesoscalePeriodTiles * 23 / 10, seed ^ 0x5BD1E995u) * 0.35f;
 			return Mathf.Clamp((n - 0.5f) * MesoscaleContrast(instability), -1f, 1f);
 		}
 
@@ -343,10 +410,16 @@ namespace FishMMO.Shared.Weather
 		/// back per sample, so the cover overhead is exactly the forecast and the cover elsewhere
 		/// follows the formations.
 		/// </summary>
+		public static float MesoscaleCoverAt(uint worldSeed, Vector2 positionMetres, double worldSeconds, float latitudeDegrees, float season01, in WindBelts belts)
+		{
+			Synoptic air = Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, 0.5f, belts);
+			return air.Mesoscale * MesoscaleAmplitude;
+		}
+
+		/// <summary>The same, on the home world's belts.</summary>
 		public static float MesoscaleCoverAt(uint worldSeed, Vector2 positionMetres, double worldSeconds, float latitudeDegrees, float season01)
 		{
-			Synoptic air = Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01);
-			return air.Mesoscale * MesoscaleAmplitude;
+			return MesoscaleCoverAt(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, WindBelts.Home);
 		}
 
 		// ── Columns ───────────────────────────────────────────────────
@@ -365,14 +438,60 @@ namespace FishMMO.Shared.Weather
 
 		/// <summary>
 		/// 0..1: how strongly a tower wants to stand at a drifted position. Sparse on purpose — most
-		/// of a sky is deck or heap and only the peaks of this go up. Computed identically by
+		/// of a sky is deck or heap and only some places go up. Computed identically by
 		/// <c>FishCloudTower</c> in FishCloudVolume.hlsl; change one and change the other.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// One candidate tower per lattice cell, at a hashed place within it, of a hashed size and
+		/// strength, falling away round a flat core. It was the peaks of a value-noise lattice, and
+		/// value noise can only peak AT its lattice points: every tower in the world stood on a
+		/// nine-kilometre square grid, with a squarish footprint, and neighbouring peaks ran together
+		/// into ridges along north and east. Nothing in the air is on a grid.
+		/// </para>
+		/// <para>
+		/// Sized to cover what the lattice did — a strong tower over 18% of the sky (was 19%), a mean
+		/// of 0.20 (was 0.19) — because the rain and the lightning were calibrated against it.
+		/// </para>
+		/// </remarks>
 		public static float Tower(uint worldSeed, double driftedX, double driftedY)
 		{
-			float n = PeriodicNoise(driftedX / TowerMetres, driftedY / TowerMetres, TowerPeriodTiles, worldSeed ^ TowerSeedMix);
-			return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.6f, 0.85f, n));
+			double x = driftedX / TowerMetres, y = driftedY / TowerMetres;
+			uint seed = worldSeed ^ TowerSeedMix;
+			double fx = System.Math.Floor(x), fy = System.Math.Floor(y);
+			int ix = (int)fx, iy = (int)fy;
+			float best = 0f;
+			for (int dy = -1; dy <= 1; dy++)
+			{
+				for (int dx = -1; dx <= 1; dx++)
+				{
+					int cx = ix + dx, cy = iy + dy;
+					int wx = WrapCell(cx, TowerPeriodTiles), wy = WrapCell(cy, TowerPeriodTiles);
+					float strength = Hash(wx, wy, seed);
+					strength = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((strength - TowerThreshold) / (0.85f - TowerThreshold)));
+					if (strength <= 0f)
+					{
+						continue;
+					}
+					float jitterX = 0.2f + 0.6f * Hash(wx, wy, seed ^ 0x68E31DA4u);
+					float jitterY = 0.2f + 0.6f * Hash(wx, wy, seed ^ 0xB5297A4Du);
+					float radius = TowerRadiusCells * (0.75f + 0.5f * Hash(wx, wy, seed ^ 0x1B56C4E9u));
+					float ox = (float)(x - (cx + jitterX)), oy = (float)(y - (cy + jitterY));
+					float d = Mathf.Sqrt(ox * ox + oy * oy) / radius;
+					float t = Mathf.Clamp01((d - TowerCore) / (1f - TowerCore));
+					float fall = 1f - t * t * (3f - 2f * t);
+					best = Mathf.Max(best, strength * fall);
+				}
+			}
+			return best;
 		}
+
+		/// <summary>The hash above which a cell has a tower at all.</summary>
+		private const float TowerThreshold = 0.55f;
+		/// <summary>A tower's radius, in cells, before its own ±25%.</summary>
+		private const float TowerRadiusCells = 0.65f;
+		/// <summary>The share of a tower's radius that is its flat core.</summary>
+		private const float TowerCore = 0.35f;
 
 		/// <summary>How much of a tower the air allows: none in stable air, most of the way in unstable.</summary>
 		public static float TowerGain(float instability) => Mathf.Lerp(0.05f, 0.6f, Mathf.Clamp01(instability));
@@ -408,6 +527,12 @@ namespace FishMMO.Shared.Weather
 			public float PolarDay;
 			/// <summary>How far the sun has stopped rising here: the polar night, in its winter.</summary>
 			public float PolarNight;
+			/// <summary>
+			/// How much of a rotating storm's updraught is here, 0..1: a supercell's mesocyclone,
+			/// whose spin lowers the pressure inside it and pulls the rising air up faster than its
+			/// buoyancy alone would.
+			/// </summary>
+			public float Mesocyclone;
 		}
 
 		/// <summary>
@@ -436,11 +561,10 @@ namespace FishMMO.Shared.Weather
 				case FishMMO.Shared.Celestial.AtmosphereKind.None:
 					return WeatherFrame.Clear;
 				case FishMMO.Shared.Celestial.AtmosphereKind.Thin:
-					frame[WeatherChannel.CloudCover] *= 0.45f;
+					frame[WeatherChannel.CloudCover] = CloudCoverUnder(frame[WeatherChannel.CloudCover], air);
 					frame[WeatherChannel.CloudDensity] *= 0.6f;
 					frame[WeatherChannel.Precipitation] *= 0.3f;
 					frame[WeatherChannel.FogDensity] *= 0.25f;
-					frame[WeatherChannel.VolumetricFog] *= 0.25f;
 					frame[WeatherChannel.LightningRate] *= 0.2f;
 					// An aurora is the upper air glowing, and there is less of it to glow.
 					frame[WeatherChannel.Aurora] *= 0.5f;
@@ -450,7 +574,7 @@ namespace FishMMO.Shared.Weather
 					return frame;
 				case FishMMO.Shared.Celestial.AtmosphereKind.Thick:
 					// Toward overcast, not merely more: a thick air's clear days are hazy ones.
-					frame[WeatherChannel.CloudCover] = 1f - (1f - Mathf.Clamp01(frame[WeatherChannel.CloudCover])) * 0.6f;
+					frame[WeatherChannel.CloudCover] = CloudCoverUnder(frame[WeatherChannel.CloudCover], air);
 					frame[WeatherChannel.CloudDensity] = Mathf.Clamp01(frame[WeatherChannel.CloudDensity] * 1.2f);
 					frame[WeatherChannel.Precipitation] = Mathf.Clamp01(frame[WeatherChannel.Precipitation] * 1.25f);
 					frame[WeatherChannel.FogDensity] = Mathf.Clamp01(Mathf.Max(frame[WeatherChannel.FogDensity] * 1.5f, 0.06f));
@@ -459,6 +583,21 @@ namespace FishMMO.Shared.Weather
 					return frame;
 				default:
 					return frame;
+			}
+		}
+
+		/// <summary>
+		/// Cloud cover in this much air: thin air holds little water and clouds over sparsely; a thick
+		/// one tends toward overcast.
+		/// </summary>
+		public static float CloudCoverUnder(float cover, FishMMO.Shared.Celestial.AtmosphereKind air)
+		{
+			switch (air)
+			{
+				case FishMMO.Shared.Celestial.AtmosphereKind.None: return 0f;
+				case FishMMO.Shared.Celestial.AtmosphereKind.Thin: return Mathf.Clamp01(cover) * 0.45f;
+				case FishMMO.Shared.Celestial.AtmosphereKind.Thick: return 1f - (1f - Mathf.Clamp01(cover)) * 0.6f;
+				default: return Mathf.Clamp01(cover);
 			}
 		}
 
@@ -478,13 +617,13 @@ namespace FishMMO.Shared.Weather
 		/// Samples the weather field. Pure: the same arguments give the same answer on any machine,
 		/// at any time, without having watched the weather get there.
 		/// </summary>
-		public static Synoptic Sample(uint worldSeed, Vector2 positionMetres, double worldSeconds, float latitudeDegrees, float season01, float localTime01 = 0.5f)
+		public static Synoptic Sample(uint worldSeed, Vector2 positionMetres, double worldSeconds, float latitudeDegrees, float season01, float localTime01, in WindBelts belts)
 		{
 			// The field is read at the place the air came from, so the whole pattern moves downwind:
 			// the same drift the clouds use, so what the sky shows and what the weather says are the
 			// same air rather than two systems that happen to be near each other. In double, and
 			// never wrapped: the field has no period to wrap to.
-			DriftExact(worldSeed, latitudeDegrees, worldSeconds, out double driftX, out double driftY);
+			DriftExact(worldSeed, latitudeDegrees, worldSeconds, belts, out double driftX, out double driftY);
 			double driftedX = positionMetres.x - driftX;
 			double driftedY = positionMetres.y - driftY;
 
@@ -498,25 +637,40 @@ namespace FishMMO.Shared.Weather
 			// Low pressure draws in damp air; a high dries it out.
 			float humidity = Mathf.Clamp01(0.5f - pressure * 0.45f + (Field(driftedX, driftedY, SystemMetres * 0.45f, worldSeed ^ 0x9E3779B9u) - 0.5f) * 0.3f);
 
-			// Summer is warmer and far more unstable than winter; a low brings cold air with it.
+			// Summer is far more unstable than winter: the ground heats the air from below.
 			float summer = Mathf.Sin(season01 * Mathf.PI * 2f - Mathf.PI * 0.5f) * 0.5f + 0.5f;
 			float hemisphere = latitudeDegrees < 0f ? 1f - summer : summer;
-			float temperature = Mathf.Clamp((hemisphere - 0.5f) * 0.8f - pressure * -0.15f - Mathf.Abs(latitudeDegrees) / 90f * 0.5f, -1f, 1f);
+
+			/* The air mass's own warmth, and nothing else. A high is subsiding air, warmed as it
+			 * comes down; and the systems carry warm and cold air masses about with them. The season
+			 * and the latitude are NOT here: the climate already has both — the sun's height at noon
+			 * for this latitude on this day — and this anomaly is added to the climate. It used to
+			 * carry its own seasonal swing and its own latitude cooling as well, so a pole was cooled
+			 * twice and every summer warmed twice. */
+			float airMass = Field(driftedX, driftedY, SystemMetres * 0.8f, worldSeed ^ 0x3C6EF372u);
+			float temperature = Mathf.Clamp(pressure * 0.15f + (airMass - 0.5f) * 0.8f, -1f, 1f);
 
 			float instability = Mathf.Clamp01((-pressure * 0.5f + 0.5f) * (0.45f + hemisphere * 0.55f) * (0.4f + humidity * 0.6f));
 
+			float tower = Tower(worldSeed, driftedX, driftedY);
 			return new Synoptic
 			{
 				Mesoscale = Mesoscale(worldSeed, driftedX, driftedY, instability),
-				Tower = Tower(worldSeed, driftedX, driftedY),
-				ColumnType = Mathf.Clamp01(BaseColumnType(instability) + Tower(worldSeed, driftedX, driftedY) * TowerGain(instability)),
+				Tower = tower,
+				ColumnType = Mathf.Clamp01(BaseColumnType(instability) + tower * TowerGain(instability)),
 				LocalTime01 = Mathf.Repeat(localTime01, 1f),
 				Pressure = pressure,
 				Humidity = humidity,
 				Temperature = temperature,
 				Instability = instability,
-				Wind = PrevailingWind(latitudeDegrees) * PrevailingSpeed(worldSeed, latitudeDegrees, worldSeconds),
+				Wind = PrevailingWind(latitudeDegrees, belts) * PrevailingSpeed(worldSeed, latitudeDegrees, worldSeconds, belts),
 			};
+		}
+
+		/// <summary>The same, on the home world's belts, for callers with no body to ask about.</summary>
+		public static Synoptic Sample(uint worldSeed, Vector2 positionMetres, double worldSeconds, float latitudeDegrees, float season01, float localTime01 = 0.5f)
+		{
+			return Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, localTime01, WindBelts.Home);
 		}
 
 		/// <summary>
@@ -664,15 +818,22 @@ namespace FishMMO.Shared.Weather
 		/// <para>
 		/// At the temperate zero the field was tuned at, this does nothing at all. Colder, the air
 		/// thins out toward a polar desert: little cloud, light dry snow, no convection to build a
-		/// storm on. Warmer, it carries more and is livelier — but only as far as there is water to
-		/// take up, which is <see cref="OverPlace"/>'s business and already says a hot dry world is dry.
+		/// storm on.
+		/// </para>
+		/// <para>
+		/// Warmer, it does nothing either. The humidity is how near saturation the air is, and warmth
+		/// raises what the air CAN hold, not how near it is: that is already the air column's, whose
+		/// dew point, moist lapse and water condensed per metre all rise with the warmth (Clausius and
+		/// Clapeyron) — more water, heavier rain, taller storms. It was scaled up here as well, a
+		/// quarter more at +1, which counted the warmth twice: every warm place came out muggy, and a
+		/// hot scene's sky could not break at all.
 		/// </para>
 		/// </remarks>
 		public static Synoptic InClimate(in Synoptic air, float temperature)
 		{
 			float t = Mathf.Clamp(temperature, -1f, 1f);
-			// 0.4 of the water at −1, all of it at 0, a quarter more at +1.
-			float carries = t < 0f ? Mathf.Lerp(1f, 0.4f, -t) : Mathf.Lerp(1f, 1.25f, t);
+			// 0.4 of the water at −1, all of it at 0 and above.
+			float carries = t < 0f ? Mathf.Lerp(1f, 0.4f, -t) : 1f;
 			if (Mathf.Approximately(carries, 1f))
 			{
 				return air;
@@ -690,63 +851,30 @@ namespace FishMMO.Shared.Weather
 
 		// ── What that looks like ──────────────────────────────────────
 
-		/// <summary>
-		/// How much cloud the field asks for here, and which way that is changing across the ground.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// A front is a gradient in cloud, not a level of it, and this is what lets the sky show that.
-		/// Cloud cover used to reach the renderer as one number for the whole sky, sampled where the
-		/// camera stood: when a front arrived the cut on the noise dropped everywhere at once and
-		/// cloud appeared in place across the entire sky, instead of coming in from upwind. The shape
-		/// drifted, so features moved — but the *amount* never travelled, which is what made it look
-		/// like the weather was materialising rather than arriving.
-		/// </para>
-		/// <para>
-		/// The gradient is measured, not assumed: two samples either side, far enough apart to read
-		/// the slope of a system and near enough to stay linear. A system is a hundred and forty-odd
-		/// kilometres across and the visible sky is forty, so a plane through the cover at the camera
-		/// is a good likeness over everything that can be seen.
-		/// </para>
-		/// </remarks>
-		public static void CoverField(uint worldSeed, Vector2 centreMetres, double worldSeconds,
-			float latitudeDegrees, float season01, float localTime01,
-			out float cover, out Vector2 gradientPerMetre)
-		{
-			// Far enough apart to read the slope of a system, close enough that the field is still
-			// straight between them.
-			const float Step = 4000f;
-			cover = CoverAt(worldSeed, centreMetres, worldSeconds, latitudeDegrees, season01, localTime01);
-			// The slope of the LARGE-SCALE field only — the systems and fronts — and never of the
-			// formations. This is a straight line standing in for a field, and the renderer adds
-			// the formations themselves on top of it, exactly, place by place. Fitted to a cover
-			// that already had them in it, the line carried their slope as well: counted twice, and
-			// the fitted half of it planar. A bank's edge made the line ten times steeper than any
-			// front, so the first eighth of the cover — where a band goes from nothing to its whole
-			// share — was crossed in two kilometres instead of twenty-five, along a dead straight
-			// line, and the cirrus ended on a ruled edge across the sky.
-			float east = SynopticCoverAt(worldSeed, centreMetres + new Vector2(Step, 0f), worldSeconds, latitudeDegrees, season01, localTime01);
-			float west = SynopticCoverAt(worldSeed, centreMetres - new Vector2(Step, 0f), worldSeconds, latitudeDegrees, season01, localTime01);
-			float north = SynopticCoverAt(worldSeed, centreMetres + new Vector2(0f, Step), worldSeconds, latitudeDegrees, season01, localTime01);
-			float south = SynopticCoverAt(worldSeed, centreMetres - new Vector2(0f, Step), worldSeconds, latitudeDegrees, season01, localTime01);
-			gradientPerMetre = new Vector2((east - west) / (2f * Step), (north - south) / (2f * Step));
-		}
-
 		/// <summary>The cloud cover the systems and fronts ask for at one point, with the formations left out.</summary>
 		public static float SynopticCoverAt(uint worldSeed, Vector2 positionMetres, double worldSeconds,
-			float latitudeDegrees, float season01, float localTime01)
+			float latitudeDegrees, float season01, float localTime01, in WindBelts belts)
 		{
-			Synoptic air = Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, localTime01);
+			Synoptic air = Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, localTime01, belts);
 			air.Mesoscale = 0f;
 			return Background(air)[WeatherChannel.CloudCover];
 		}
 
 		/// <summary>The field's cloud cover at one point.</summary>
 		public static float CoverAt(uint worldSeed, Vector2 positionMetres, double worldSeconds,
-			float latitudeDegrees, float season01, float localTime01)
+			float latitudeDegrees, float season01, float localTime01, in WindBelts belts)
 		{
-			Synoptic air = Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, localTime01);
+			Synoptic air = Sample(worldSeed, positionMetres, worldSeconds, latitudeDegrees, season01, localTime01, belts);
 			return Background(air)[WeatherChannel.CloudCover];
+		}
+
+		/// <summary>
+		/// The cloud cover the air mass asks for, before the formations put it in banks and lanes:
+		/// damp air clouds over, and a low — rising air — clouds over harder.
+		/// </summary>
+		public static float SynopticCloudCover(in Synoptic air)
+		{
+			return Mathf.Clamp01(air.Humidity * 1.15f - 0.18f + Mathf.Max(0f, -air.Pressure) * 0.45f);
 		}
 
 		/// <summary>
@@ -764,7 +892,7 @@ namespace FishMMO.Shared.Weather
 
 			// Cloud: damp air clouds over, and a low clouds over harder — and then the formations
 			// decide where in that sky the banks and the gaps are.
-			float cover = Mathf.Clamp01(air.Humidity * 1.15f - 0.18f + Mathf.Max(0f, -air.Pressure) * 0.45f + air.Mesoscale * MesoscaleAmplitude);
+			float cover = Mathf.Clamp01(SynopticCloudCover(air) + air.Mesoscale * MesoscaleAmplitude);
 			frame[WeatherChannel.CloudCover] = cover;
 			frame[WeatherChannel.CloudDensity] = Mathf.Clamp01(0.25f + cover * 0.5f + Mathf.Max(0f, -air.Pressure) * 0.35f);
 			// A damp low hangs its cloud base low; dry high air lifts it.
@@ -815,7 +943,9 @@ namespace FishMMO.Shared.Weather
 			// as the dawn; and light rain does not clear a fog, it only thins it.
 			float still = Mathf.Clamp01(1f - (air.Wind.magnitude - 4f) / 10f);
 			float dawn = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(air.LocalTime01 - 0.25f + 0.5f, 1f) - 0.5f) * 5f);
-			float night = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(air.LocalTime01 - 0.15f + 0.5f, 1f) - 0.5f) * 2.6f);
+			// Centred before dawn and gone by mid-morning: at 2.6 it reached from twenty past six in
+			// the evening to ten to one in the afternoon, a night's fog still hanging on at lunchtime.
+			float night = Mathf.Clamp01(1f - Mathf.Abs(Mathf.Repeat(air.LocalTime01 - 0.15f + 0.5f, 1f) - 0.5f) * 3.7f);
 			// The night is the sun's, not the clock's. Inside a polar circle the clock still goes
 			// round but the sun may not: in the summer it never sets, the ground never gets its hours
 			// of cooling, and there is no night for a fog to build through — and in the winter it
@@ -825,8 +955,13 @@ namespace FishMMO.Shared.Weather
 			float nightly = Mathf.Max(dawn, night * 0.7f);
 			nightly = Mathf.Lerp(nightly, 0f, Mathf.Clamp01(air.PolarDay));
 			nightly = Mathf.Lerp(nightly, 0.7f, Mathf.Clamp01(air.PolarNight));
+			// By day a fog needs the air itself all but saturated — a front's drizzle, a sea fog
+			// rolling in — since the sun has lifted the ground above the dew point. A floor of a fifth
+			// in any damp air gave every humid noon a mist of drops; what a humid noon has is haze, and
+			// the haze is the air's own (AirPhysics.HazeDistance), not drops.
+			float saturated = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.85f, 0.97f, air.Humidity));
 			frame[WeatherChannel.FogDensity] = Mathf.Clamp01((air.Humidity - 0.42f) / 0.3f) * Mathf.Clamp01(still * 1.3f)
-				* (0.2f + nightly * 0.8f) * (1f - precipitation * 0.7f);
+				* (0.2f * saturated + nightly * 0.8f) * (1f - precipitation * 0.7f);
 
 			// Lightning is the tower's: a strong convective column that is actually raining. Gated on
 			// instability alone, at 0.72, it could not fire — the field never gets there.

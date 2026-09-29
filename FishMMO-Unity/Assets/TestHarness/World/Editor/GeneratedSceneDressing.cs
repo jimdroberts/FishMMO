@@ -127,13 +127,12 @@ namespace FishMMO.TestHarness.World.Editor
 			controller.Settings = settings;
 			controller.DayNight = dayNight;
 			/* Cached on the component rather than loaded: the bed loads no addressables, so a
-			 * generated scene opened on its own would otherwise have no presets, no templates and
-			 * no solar system to stand in. */
+			 * generated scene opened on its own would otherwise have no substances to fall and no
+			 * solar system to stand in. */
 			controller.Profile = WeatherRenderAssets.Ensure();
 			controller.SolarSystem = WorldEditorAssets.FindFirst<SolarSystemProfile>();
 			controller.SkyProfiles = WorldEditorAssets.FindAll<SkyProfile>();
-			controller.Templates = WorldEditorAssets.FindAll<WeatherLayerTemplate>();
-			controller.Presets = WorldEditorAssets.FindAll<WeatherPreset>();
+			controller.Substances = WorldEditorAssets.FindAll<WeatherSubstance>();
 
 			UIDocument document = host.AddComponent<UIDocument>();
 			document.panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);

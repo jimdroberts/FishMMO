@@ -1,0 +1,321 @@
+// The storms' weather map (WeatherMap.cs) laid down on the GPU: one thread a texel, every storm whose
+// footprint reaches the cascade looped over, the same arithmetic as WeatherMap.Contribute.
+//
+// WHY. The map is rebuilt every 0.35 s (the fine cascade, 128², 94 m a texel) and every 1.5 s (the
+// coarse one, 160², 700 m), and at once whenever a storm is born or moves half a texel — on the World
+// Sim bed's fast clock that is every frame. On the CPU each rebuild evaluates every storm over every
+// texel it reaches, then converts all of them to half floats and uploads them: with one storm whose
+// anvil covers the fine map that is 16 384 evaluations, and a hurricane drawn at its real size — an
+// outer radius of hundreds of kilometres — reaches every texel of BOTH cascades, 41 984 of them, a
+// main-thread stall of several milliseconds each time. Here it is 656 groups of 64 threads, a few
+// microseconds of GPU, and no upload.
+//
+// WHAT COMES IN. Each storm is worked out once per build on the CPU exactly as before
+// (WeatherMap.Prepare: its anatomy in the air round the viewer, where it stands now, how grown it is)
+// and packed into FISH_STORM_FLOAT4S float4s (WeatherMap.PackStorm, which documents the layout). Only
+// storms whose footprint overlaps this cascade are sent — by footprint, never by centre: a hurricane's
+// centre is usually off both maps while its eyewall and rain bands lie across them.
+//
+// WHAT GOES OUT. The two textures, as WeatherMap.Texel packs them and FishStormAt (FishSkyCommon.hlsl)
+// reads them. The rain under a storm is not in them (the curtains ask the cells), so it is not worked
+// out here either: a storm's rain alone changes no channel of either texture.
+//
+// The CPU raster stays, as the fallback where this cannot run and as the reference: WeatherMap's
+// RasterPacked is this kernel's twin in C#, and the tests hold it to WeatherMap.SampleTexel.
+
+#pragma kernel Raster
+
+#define FISH_STORM_FLOAT4S 8
+
+StructuredBuffer<float4> _FishWeatherStorms;
+RWTexture2D<float4> _FishWeatherMapOutA;
+RWTexture2D<float4> _FishWeatherMapOutB;
+
+float4 _FishWeatherRaster;          // xy the cascade's corner (world x, z), z a texel (m), w how many storms
+float4 _FishWeatherRasterSize;      // x texels a side
+
+// How much nearer the centre a point of a storm with no anatomy stands in for (WeatherMap.CloudShieldScale).
+#define FISH_STORM_SHIELD_SCALE 0.55
+
+// GLSL/HLSL smoothstep, spelled out so the C# twin can be read against it line for line.
+float WmSmooth(float edge0, float edge1, float x)
+{
+    float t = saturate((x - edge0) / (edge1 - edge0));
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// One storm, unpacked (WeatherMap.PackStorm).
+struct WmStorm
+{
+    float2 centre;
+    float reach;
+    uint shape;             // StormCellShape: 0 disc, 1 front, 2 eyewall, 3 funnel
+    bool anatomy;
+    bool supercell;
+    float2 body;
+    float2 anvilCentre;
+    float2 forward;         // which way a front faces: its travel
+    float life;
+    float severity;
+    float peak;
+    float addedCover;
+    float radius;
+    float extent;
+    float halfLength;
+    float fallbackBase;
+    float fallbackTop;
+    float core;
+    float wallRadius;
+    float wallDrop;
+    float shelfWidth;
+    float shelfDrop;
+    float baseM;
+    float topM;
+    float anvilRadius;
+    float anvilTop;
+    float anvilBase;
+};
+
+WmStorm WmLoad(uint index)
+{
+    uint at = index * FISH_STORM_FLOAT4S;
+    float4 d0 = _FishWeatherStorms[at + 0];
+    float4 d1 = _FishWeatherStorms[at + 1];
+    float4 d2 = _FishWeatherStorms[at + 2];
+    float4 d3 = _FishWeatherStorms[at + 3];
+    float4 d4 = _FishWeatherStorms[at + 4];
+    float4 d5 = _FishWeatherStorms[at + 5];
+    float4 d6 = _FishWeatherStorms[at + 6];
+    float4 d7 = _FishWeatherStorms[at + 7];
+    WmStorm s;
+    s.centre = d0.xy;
+    s.reach = d0.z;
+    uint flags = (uint)(d0.w + 0.5);
+    s.anatomy = (flags & 1u) != 0u;
+    s.shape = (flags >> 1) & 7u;
+    s.supercell = (flags & 16u) != 0u;
+    s.body = d1.xy;
+    s.anvilCentre = d1.zw;
+    s.forward = d2.xy;
+    s.life = d2.z;
+    s.severity = d2.w;
+    s.peak = d3.x;
+    s.addedCover = d3.y;
+    s.radius = d3.z;
+    s.extent = d3.w;
+    s.halfLength = d4.x;
+    s.fallbackBase = d4.y;
+    s.fallbackTop = d4.z;
+    s.core = d4.w;
+    s.wallRadius = d5.x;
+    s.wallDrop = d5.y;
+    s.shelfWidth = d5.z;
+    s.shelfDrop = d5.w;
+    s.baseM = d6.x;
+    s.topM = d6.y;
+    s.anvilRadius = d6.z;
+    s.anvilTop = d6.w;
+    s.anvilBase = d7.x;
+    return s;
+}
+
+// How strongly a cell's shape covers a point, given as an offset from its centre: StormCell.Coverage.
+float WmCoverage(WmStorm s, float2 offset)
+{
+    if (s.shape == 1u)
+    {
+        // A front: sharp ahead, a long tail behind, soft ends along its line.
+        float2 along = float2(-s.forward.y, s.forward.x);
+        float across = dot(offset, s.forward);
+        float sideways = abs(dot(offset, along));
+        float reachAcross = across >= 0.0 ? s.radius * 0.45 : s.radius * 1.6;
+        float deep = 1.0 - WmSmooth(0.0, 1.0, abs(across) / max(1e-3, reachAcross));
+        float halfLine = max(s.radius, s.extent);
+        float lengthwise = 1.0 - WmSmooth(halfLine * 0.75, halfLine, sideways);
+        return deep * lengthwise;
+    }
+    float d = length(offset);
+    if (s.shape == 2u)
+    {
+        // A hurricane: calm but not empty in the eye, worst in the ring round it, decaying outward.
+        float eye = clamp(s.extent, 0.0, s.radius * 0.6);
+        if (d <= eye)
+        {
+            float t = eye > 1e-3 ? d / eye : 1.0;
+            return lerp(0.05, 1.0, WmSmooth(0.0, 1.0, t));
+        }
+        return 1.0 - WmSmooth(eye, s.radius, d);
+    }
+    if (s.shape == 3u)
+    {
+        // A tornado: all of it in the core, falling away steeply.
+        if (d <= s.radius)
+        {
+            return 1.0;
+        }
+        float falloff = 1.0 - WmSmooth(s.radius, max(s.extent, s.radius * 1.5), d);
+        return falloff * falloff;
+    }
+    return 1.0 - WmSmooth(s.radius * 0.55, s.radius, d);
+}
+
+// What one storm puts at one place: WeatherMap.Contribute, without the rain.
+//   c0 = cover, base (m), top (m), strength      c1 = anvil, anvil top (m), anvil depth (m), clearing
+bool WmContribute(WmStorm s, float2 p, float texel, out float4 c0, out float4 c1)
+{
+    c0 = float4(0.0, 0.0, 0.0, 0.0);
+    c1 = float4(0.0, 0.0, 0.0, 0.0);
+    float2 offset = p - s.centre;
+    if (dot(offset, offset) > s.reach * s.reach)
+    {
+        return false;
+    }
+    if (!s.anatomy)
+    {
+        // No cloud of its own: what its air adds to the open air's cloud, as a shield over it.
+        float shield = WmCoverage(s, offset * FISH_STORM_SHIELD_SCALE) * s.life * saturate(s.peak);
+        c0 = float4(s.addedCover * shield, s.fallbackBase, s.fallbackTop, 0.0);
+        return c0.x > 0.0;
+    }
+
+    // Stands as soon as it has begun, climbs as it matures, spreads its anvil only once it has
+    // reached the top of the weather.
+    float stands = WmSmooth(0.0, 0.35, s.life);
+    float climbed = lerp(0.35, 1.0, WmSmooth(0.0, 0.7, s.life));
+    float spread = WmSmooth(0.4, 0.9, s.life);
+    float depth = max(100.0, s.topM - s.baseM);
+    float cloud;
+    float baseHere = s.baseM;
+    float topHere;
+    float2 along = float2(-s.forward.y, s.forward.x);
+    if (s.shape == 1u)
+    {
+        // A squall line: towers along the gust front, the trailing stratiform behind, the shelf ahead.
+        float u = dot(offset, s.forward);
+        float v = abs(dot(offset, along));
+        float lengthwise = 1.0 - WmSmooth(0.75 * s.halfLength, s.halfLength, v);
+        float lead = 0.45 * s.radius;
+        float width = max(1.0, s.shelfWidth);
+        float back = lead - 2.0 * s.core;
+        cloud = WmSmooth(back, back + s.core, u) * (1.0 - WmSmooth(lead, lead + 0.3 * width, u)) * lengthwise;
+        topHere = s.baseM + depth * climbed * lerp(0.6, 1.0, WmSmooth(back, lead - 0.3 * s.core, u));
+        float x = (u - lead) / width;
+        float shelf = WmSmooth(-0.15, 0.05, x) * (1.0 - WmSmooth(0.85, 1.0, x)) * lengthwise;
+        if (shelf > 0.0)
+        {
+            float shelfFloor = s.baseM - s.shelfDrop;
+            float shelfTop = shelfFloor + max(80.0, (s.baseM + 0.5 * s.shelfDrop - shelfFloor) * (1.0 - saturate(x)));
+            float total = cloud + shelf;
+            baseHere = (cloud * s.baseM + shelf * shelfFloor) / total;
+            topHere = (cloud * topHere + shelf * shelfTop) / total;
+            cloud = max(cloud, shelf);
+        }
+    }
+    else
+    {
+        // A tower over the body, domed over its updraught, and a supercell's wall cloud under it.
+        float d = distance(p, s.body) / max(1.0, s.core);
+        cloud = 1.0 - WmSmooth(0.6, 1.0, d);
+        float2 updraught = s.supercell ? s.centre : s.body;
+        float du = min(1.0, distance(p, updraught) / max(1.0, s.core));
+        topHere = s.baseM + depth * climbed * (1.0 - 0.35 * du * du);
+        if (s.wallRadius > 0.0)
+        {
+            float inner = min(0.9, max(0.45, 0.75 * texel / s.wallRadius));
+            float wall = 1.0 - WmSmooth(inner, 1.0, length(offset) / s.wallRadius);
+            baseHere = s.baseM - s.wallDrop * wall;
+            cloud = max(cloud, wall);
+        }
+    }
+    float cover = cloud * stands;
+    float baseM = max(0.0, baseHere);
+    float topM = max(baseM + 100.0, topHere);
+    c0 = float4(cover, baseM, topM, s.severity * cover);
+
+    if (s.anvilRadius > 0.0 && spread > 0.0)
+    {
+        float da;
+        if (s.shape == 1u)
+        {
+            float2 o = p - s.anvilCentre;
+            float ua = dot(o, s.forward);
+            float va = max(0.0, abs(dot(o, along)) - s.halfLength);
+            da = sqrt(ua * ua + va * va) / s.anvilRadius;
+        }
+        else
+        {
+            da = distance(p, s.anvilCentre) / s.anvilRadius;
+        }
+        float thin = (1.0 - WmSmooth(0.3, 1.0, da)) * spread;
+        if (thin > 0.0)
+        {
+            c1.x = thin;
+            c1.y = s.anvilTop;
+            c1.z = (s.anvilTop - s.anvilBase) * thin;
+        }
+    }
+
+    if (s.shape == 2u)
+    {
+        // The eye: sinking air dissolves whatever cloud the air round it would make (StormCell.ClearingAt).
+        float eye = clamp(s.extent, 0.0, s.radius * 0.6);
+        if (s.life > 0.0 && eye > 1e-3)
+        {
+            c1.w = saturate(s.life * s.peak) * (1.0 - WmSmooth(eye * 0.6, eye * 1.05, length(offset)));
+        }
+    }
+    return c0.x > 0.0 || c1.x > 0.0 || c1.w > 0.0;
+}
+
+[numthreads(8, 8, 1)]
+void Raster(uint3 id : SV_DispatchThreadID)
+{
+    uint resolution = (uint)max(1.0, _FishWeatherRasterSize.x);
+    if (any(id.xy >= resolution))
+    {
+        return;
+    }
+    float texel = _FishWeatherRaster.z;
+    float2 p = _FishWeatherRaster.xy + (float2(id.xy) + 0.5) * texel;
+    uint count = (uint)max(0.0, _FishWeatherRaster.w + 0.5);
+
+    // WeatherMap.Accumulator: the more solid cloud wins, and its heights are weighed by how much of
+    // each storm is there, so a storm's base is its own where it stands alone and between the two
+    // where two overlap.
+    float cover = 0.0, baseSum = 0.0, topSum = 0.0, weight = 0.0;
+    float anvil = 0.0, anvilTopSum = 0.0, anvilWeight = 0.0, anvilDepth = 0.0;
+    float clearing = 0.0, strength = 0.0;
+    for (uint i = 0; i < count; i++)
+    {
+        float4 c0, c1;
+        if (!WmContribute(WmLoad(i), p, texel, c0, c1))
+        {
+            continue;
+        }
+        cover = max(cover, c0.x);
+        if (c0.x > 0.0)
+        {
+            baseSum += c0.x * c0.y;
+            topSum += c0.x * c0.z;
+            weight += c0.x;
+        }
+        anvil = max(anvil, c1.x);
+        if (c1.x > 0.0)
+        {
+            anvilTopSum += c1.x * c1.y;
+            anvilWeight += c1.x;
+            anvilDepth = max(anvilDepth, c1.z);
+        }
+        clearing = max(clearing, c1.w);
+        strength = max(strength, c0.w);
+    }
+
+    // WeatherMap.Texel: clamped, and the heights premultiplied by what they belong to.
+    cover = saturate(cover);
+    anvil = saturate(anvil);
+    float baseM = weight > 0.0 ? baseSum / weight : 0.0;
+    float topM = weight > 0.0 ? topSum / weight : 0.0;
+    float anvilTop = anvilWeight > 0.0 ? anvilTopSum / anvilWeight : 0.0;
+    _FishWeatherMapOutA[id.xy] = float4(cover, anvil, saturate(clearing), saturate(strength));
+    _FishWeatherMapOutB[id.xy] = float4(baseM * cover, topM * cover, anvilTop * anvil, anvilDepth);
+}

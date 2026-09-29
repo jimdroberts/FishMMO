@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Weather.WeatherSubstance
   DisplayName: Water Rain
   Description: Ordinary rain. The default every Earth-like world already assumes.
-  Tint: {r: 0.78, g: 0.83, b: 0.92, a: 1}
+  Tint: {r: 1, g: 1, b: 1, a: 1}
   FogColor: {r: 0.55, g: 0.6, b: 0.66, a: 1}
   FallSpeedScale: 1
   StretchScale: 1
@@ -24,4 +24,9 @@ MonoBehaviour:
   MeltsAbove: 2
   Breathable: 1
   Harshness: 0.1
+  Condenses: 1
+  Condensate: 0
+  Frozen: 0
+  GrainMetres: 0.001
+  GrainDensity: 1000
   AudioCue: 

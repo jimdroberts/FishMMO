@@ -544,12 +544,9 @@ namespace FishMMO.Shared
 			RegisterWorldDesignCategories();
 
 			// ── Weather ──
-			AddCategory<FishMMO.Shared.Weather.WeatherPreset>("Weather Presets", "Weather",
-				FishMMO.Shared.WorldDesign.WeatherContentGenerator.PresetsFolder,
-				"FishMMO/Weather/Preset");
-			AddCategory<FishMMO.Shared.Weather.WeatherLayerTemplate>("Weather Layers", "Weather",
-				FishMMO.Shared.WorldDesign.WeatherContentGenerator.LayersFolder,
-				"FishMMO/Weather/Layer Template");
+			AddCategory<FishMMO.Shared.Weather.WeatherSubstance>("Weather Substances", "Weather",
+				FishMMO.Shared.WorldDesign.WeatherContentGenerator.SubstancesFolder,
+				"FishMMO/Weather/Substance");
 			AddToolPageCategory(DashboardToolAttribute.Weather, "Weather");
 		}
 

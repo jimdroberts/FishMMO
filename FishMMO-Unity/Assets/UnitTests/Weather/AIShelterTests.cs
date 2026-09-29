@@ -183,14 +183,15 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void AVolumeThatIsNotShelterIsNeverMistakenForIt()
 		{
-			// An Override volume — a crater that is always ashfall — is emphatically not somewhere to
-			// go and stand in a storm.
+			// An air volume — a crater whose air is hotter and drier — is emphatically not somewhere
+			// to go and stand in a storm.
 			var host = new GameObject("Crater");
 			created.Add(host);
 			BoxCollider box = host.AddComponent<BoxCollider>();
 			box.size = Vector3.one * 8f;
 			WeatherVolume crater = host.AddComponent<WeatherVolume>();
-			crater.Kind = WeatherVolumeKind.Override;
+			crater.Kind = WeatherVolumeKind.Air;
+			crater.Air = new AirOffsets { Temperature = 30f, Humidity = -0.3f };
 			crater.ShelterStrength = 1f;     // set, and must still be ignored
 			crater.Shape = box;
 			WeatherVolumeRegistry.Add(host.scene.handle, crater);

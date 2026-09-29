@@ -50,10 +50,6 @@ namespace FishMMO.UnitTests.Weather
 		{
 			foreach (ScriptableObject asset in created)
 			{
-				if (asset is WeatherLayerTemplate template)
-				{
-					template.RemoveFromCache();
-				}
 				Object.DestroyImmediate(asset);
 			}
 			created.Clear();
@@ -992,31 +988,38 @@ namespace FishMMO.UnitTests.Weather
 
 		// ── Schedules ─────────────────────────────────────────────────
 
-		private WeatherTimeline LightningTimeline(float rate)
+		private static WeatherTimeline LightningTimeline() => new WeatherTimeline { TickDelta = TickDelta, Seed = 238 };
+
+		/// <summary>The weather at the viewer with the air's own thunder at a rate, and no storm cells.</summary>
+		private static WeatherSample Thundering(float rate)
 		{
-			var template = ScriptableObject.CreateInstance<WeatherLayerTemplate>();
-			template.name = "Test Lightning";
-			template.Kind = WeatherLayerKind.Lightning;
-			template.Channels.Add(new WeatherChannelCurve { Channel = WeatherChannel.LightningRate, Curve = AnimationCurve.Linear(0f, 0f, 1f, 1f), Scale = 1f });
-			template.AddToCache(template.name);
-			created.Add(template);
-			var timeline = new WeatherTimeline { TickDelta = TickDelta, Seed = 238 };
-			timeline.Layers.Add(new WeatherLayerEntry { Handle = 1, TemplateID = template.ID, From = rate, To = rate });
-			return timeline;
+			var background = new WeatherFrame();
+			background[WeatherChannel.LightningRate] = rate;
+			return new WeatherSample { Background = background, Frame = background };
+		}
+
+		/// <summary>Damp, unsettled air on our own world, for anything a storm has to be worked out in.</summary>
+		private static WeatherSample StormyAir()
+		{
+			PlanetAir planet = PlanetAir.Earthlike;
+			var air = new WeatherDriver.Synoptic { Humidity = 0.75f, Pressure = -0.4f, Instability = 0.5f, Wind = new Vector2(4f, 3f), LocalTime01 = 0.6f };
+			AirColumn column = AirColumn.Of(planet, 293f, air.Humidity, air.Pressure, air.Instability);
+			return new WeatherSample { Planet = planet, OpenAir = air, Air = air, OpenColumn = column, Column = column, Temperature = 0.6f };
 		}
 
 		[Test]
 		public void LightningIsTheSameForEveryoneAndAnyWindow()
 		{
-			WeatherTimeline timeline = LightningTimeline(1f);
+			WeatherTimeline timeline = LightningTimeline();
+			WeatherSample air = Thundering(1f);
 			var whole = new List<LightningStrike>();
 			var split = new List<LightningStrike>();
 			var again = new List<LightningStrike>();
-			SkySchedule.Lightning(timeline, 0, 1000.0, 1600.0, Vector3.zero, whole);
-			SkySchedule.Lightning(timeline, 0, 1000.0, 1600.0, Vector3.zero, again);
+			SkySchedule.Lightning(timeline, 0, 1000.0, 1600.0, Vector3.zero, whole, air);
+			SkySchedule.Lightning(timeline, 0, 1000.0, 1600.0, Vector3.zero, again, air);
 			for (double t = 1000.0; t < 1600.0; t += 0.37)
 			{
-				SkySchedule.Lightning(timeline, 0, t, Math.Min(1600.0, t + 0.37), Vector3.zero, split);
+				SkySchedule.Lightning(timeline, 0, t, Math.Min(1600.0, t + 0.37), Vector3.zero, split, air);
 			}
 			LogAssert.AreEqual(whole.Count, again.Count, "the same window gives the same strikes");
 			LogAssert.AreEqual(whole.Count, split.Count, "frame-sized windows give the same strikes as one big one");
@@ -1039,14 +1042,36 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
-		public void NoLightningLayerMeansNoStrikes()
+		public void AirThatDoesNotThunderStrikesNothing()
 		{
-			WeatherTimeline timeline = LightningTimeline(0f);
+			WeatherTimeline timeline = LightningTimeline();
 			var strikes = new List<LightningStrike>();
-			SkySchedule.Lightning(timeline, 0, 0.0, 600.0, Vector3.zero, strikes);
+			SkySchedule.Lightning(timeline, 0, 0.0, 600.0, Vector3.zero, strikes, Thundering(0f));
 			LogAssert.AreEqual(0, strikes.Count);
-			SkySchedule.Lightning(null, 0, 0.0, 600.0, Vector3.zero, strikes);
+			SkySchedule.Lightning(null, 0, 0.0, 600.0, Vector3.zero, strikes, Thundering(1f));
 			LogAssert.AreEqual(0, strikes.Count);
+		}
+
+		[Test]
+		public void AThunderstormStrikesWhereItStands()
+		{
+			// A storm cell thunders at the rate its kind makes in the air around it — not at a rate a
+			// preset wrote down — and its strikes land inside it.
+			var timeline = LightningTimeline();
+			timeline.SceneMode = WeatherSceneMode.Own;
+			timeline.Cells.Add(new StormCell
+			{
+				ID = 3, Kind = StormKind.Thunderstorm, Shape = StormCellShape.Disc, Seed = 7, OriginX = 2000f, OriginZ = 0f,
+				RadiusMeters = 600f, PeakIntensity = 1f, BirthTick = 0, MatureTick = 0, DecayTick = 1000000, DeathTick = 1000001,
+			});
+			var strikes = new List<LightningStrike>();
+			SkySchedule.Lightning(timeline, 10, 0.0, 1200.0, Vector3.zero, strikes, StormyAir());
+			LogAssert.IsTrue(strikes.Count > 0, "a thunderstorm in damp, unsettled air thunders");
+			foreach (LightningStrike strike in strikes)
+			{
+				float fromCentre = Vector2.Distance(new Vector2(strike.Ground.x, strike.Ground.z), new Vector2(2000f, 0f));
+				LogAssert.IsTrue(fromCentre <= 600f, $"struck {fromCentre:0} m from the storm's centre");
+			}
 		}
 
 		[Test]
@@ -1099,19 +1124,153 @@ namespace FishMMO.UnitTests.Weather
 
 		// ── Maps and textures ────────────────────────────────────────
 
-		[Test]
-		public void TheWeatherMapPacksCoverRainSnowAndStorm()
+		/// <summary>A timeline holding one storm of a kind, sized by its air, at the origin and at its peak.</summary>
+		private static WeatherTimeline OneStorm(StormKind kind, float radius, float extent, Vector2 velocity)
 		{
-			var frame = new WeatherFrame();
-			frame[WeatherChannel.CloudCover] = 0.6f;
-			frame[WeatherChannel.Precipitation] = 0.5f;
-			frame[WeatherChannel.SnowWeight] = 1f;
-			Color texel = WeatherMap.Sample(new WeatherTimeline(), frame, Vector3.zero, 0);
-			Assert.That(texel.r, Is.EqualTo(0.6f).Within(1e-4f));
-			Assert.That(texel.g, Is.EqualTo(0.5f).Within(1e-4f));
-			Assert.That(texel.b, Is.EqualTo(1f).Within(1e-4f), "all of it is snow");
-			Assert.That(texel.a, Is.EqualTo(frame.StormSeverity).Within(1e-4f));
-			LogAssert.AreEqual(0f, WeatherMap.Sample(null, new WeatherFrame(), Vector3.zero, 0).b, "no rain, no snow share");
+			var timeline = new WeatherTimeline { SceneMode = WeatherSceneMode.Own, TickDelta = TickDelta, LatitudeDegrees = 35f };
+			timeline.Cells.Add(new StormCell
+			{
+				ID = 1, Kind = kind, Shape = StormPhysics.ShapeOf(kind), OriginX = 0f, OriginZ = 0f,
+				VelocityX = velocity.x, VelocityZ = velocity.y, MotionTick = 10,
+				RadiusMeters = radius, ExtentMeters = extent, PeakIntensity = 1f, BirthTick = 0, MatureTick = 0, DecayTick = 1000000, DeathTick = 1000001,
+			});
+			return timeline;
+		}
+
+		[Test]
+		public void TheWeatherMapPacksAStormsCloudBaseAndAnvil()
+		{
+			// The map carries the storms, each laid out by its anatomy in the air round the viewer; the
+			// air's own cloud everywhere else the sky reads from the air itself.
+			WeatherSample air = StormyAir();
+			WeatherTimeline timeline = OneStorm(StormKind.Thunderstorm, 1500f, 0f, Vector2.zero);
+			var storms = new StormFrames(air);
+			StormAnatomy anatomy = StormAnatomy.Of(StormKind.Thunderstorm, air, Vector2.zero, timeline.LatitudeDegrees, 1500f);
+			LogAssert.IsTrue(anatomy.Valid && anatomy.AnvilRadius > 0f, "this air carries its storms to the tropopause");
+
+			WeatherMap.Texel heart = WeatherMap.SampleTexel(timeline, storms, Vector3.zero, 10);
+			LogAssert.IsTrue(heart.Cover > 0.9f, $"a storm's own cloud stands solid over it, got {heart.Cover:0.00}");
+			LogAssert.IsTrue(heart.Precipitation > 0.1f, $"and it rains, got {heart.Precipitation:0.00}");
+			LogAssert.IsTrue(heart.Strength > 0f, "and it is a storm");
+			LogAssert.AreEqual(0f, heart.Clearing, "a thunderstorm clears nothing: only an eye does");
+			LogAssert.IsTrue(Mathf.Abs(heart.Base - anatomy.BaseMetres) < 1f, $"its base is its own, {heart.Base:0} m, as its anatomy says ({anatomy.BaseMetres:0} m)");
+			LogAssert.IsTrue(heart.Base <= air.OpenColumn.Base, "lower than the open air's");
+			LogAssert.IsTrue(heart.Top > anatomy.BaseMetres + 0.8f * (anatomy.TopMetres - anatomy.BaseMetres), $"its tower climbs to the top of the weather over its updraught, got {heart.Top:0} m");
+
+			Color packed = WeatherMap.Sample(timeline, storms, Vector3.zero, 10);
+			LogAssert.AreEqual(heart.Cover, packed.r, "the first texture's texel: cover");
+			LogAssert.AreEqual(heart.Anvil, packed.g, "anvil");
+			LogAssert.AreEqual(heart.Strength, packed.a, "strength");
+			LogAssert.IsTrue(Mathf.Abs(heart.B.r - heart.Base * heart.Cover) < 1e-3f, "the heights go premultiplied, so the filter blends them honestly");
+
+			// The anvil streams downwind along the tropopause, well past the tower, and not upwind.
+			Vector2 downwind = air.OpenAir.Wind.normalized;
+			float past = anatomy.CoreRadius + 0.4f * anatomy.AnvilRadius;
+			WeatherMap.Texel lee = WeatherMap.SampleTexel(timeline, storms, new Vector3(downwind.x * past, 0f, downwind.y * past), 10);
+			LogAssert.AreEqual(0f, lee.Cover, "beyond the tower");
+			LogAssert.IsTrue(lee.Anvil > 0.5f, $"the anvil spreads downwind, got {lee.Anvil:0.00}");
+			LogAssert.IsTrue(Mathf.Abs(lee.AnvilTop - anatomy.AnvilTop) < 1f, "flat along its top");
+			LogAssert.IsTrue(lee.AnvilDepth > 0.5f * (anatomy.AnvilTop - anatomy.AnvilBase), "and deep");
+			WeatherMap.Texel windward = WeatherMap.SampleTexel(timeline, storms, new Vector3(-downwind.x * past, 0f, -downwind.y * past), 10);
+			LogAssert.AreEqual(0f, windward.Anvil, "the same distance upwind, none of it");
+			LogAssert.AreEqual(0f, windward.Precipitation, "and no rain");
+
+			LogAssert.AreEqual(0f, WeatherMap.SampleTexel(null, storms, Vector3.zero, 0).Cover, "no timeline, no storms");
+		}
+
+		[Test]
+		public void AHurricanesEyeClearsTheSkyOverIt()
+		{
+			var timeline = new WeatherTimeline { SceneMode = WeatherSceneMode.Own, TickDelta = TickDelta };
+			timeline.Cells.Add(new StormCell
+			{
+				ID = 1, Kind = StormKind.TropicalCyclone, Shape = StormCellShape.Eyewall, OriginX = 0f, OriginZ = 0f,
+				RadiusMeters = 2000f, ExtentMeters = 350f, PeakIntensity = 1f, BirthTick = 0, MatureTick = 0, DecayTick = 1000000, DeathTick = 1000001,
+			});
+			var storms = new StormFrames(StormyAir());
+			LogAssert.IsTrue(WeatherMap.Sample(timeline, storms, Vector3.zero, 10).b > 0.9f, "the eye is clear");
+			Color wall = WeatherMap.Sample(timeline, storms, new Vector3(800f, 0f, 0f), 10);
+			LogAssert.AreEqual(0f, wall.b, "the eyewall is not");
+			LogAssert.IsTrue(wall.r > 0.9f, "its cloud stands round the eye");
+			LogAssert.IsTrue(wall.a > 0.1f, "and it is the storm");
+		}
+
+		[Test]
+		public void ASupercellsTornadoHangsFromTheWallCloudTheMapDraws()
+		{
+			WeatherSample air = StormyAir();
+			var motion = new Vector2(8f, 4f);
+			WeatherTimeline timeline = OneStorm(StormKind.Supercell, 150f, 400f, motion);
+			var storms = new StormFrames(air);
+			StormAnatomy anatomy = StormAnatomy.Of(StormKind.Supercell, air, motion, timeline.LatitudeDegrees, 150f);
+
+			// The tornado's funnel is hung at the wall cloud's base over the cell: that is where the
+			// map must put the cloud's base, or the funnel hangs from nothing or from inside cloud.
+			WeatherMap.Texel tornado = WeatherMap.SampleTexel(timeline, storms, Vector3.zero, 10);
+			LogAssert.IsTrue(tornado.Cover > 0.9f, "the wall cloud is solid over the tornado");
+			LogAssert.IsTrue(Mathf.Abs(tornado.Base - anatomy.WallCloudBase) < 1f, $"at the wall cloud's base: {tornado.Base:0} m against {anatomy.WallCloudBase:0} m");
+
+			// Under the storm's body, away from the wall cloud, the base is the storm's own.
+			Vector2 inBody = anatomy.BodyOffset + anatomy.BodyOffset.normalized * (0.3f * anatomy.CoreRadius);
+			WeatherMap.Texel body = WeatherMap.SampleTexel(timeline, storms, new Vector3(inBody.x, 0f, inBody.y), 10);
+			LogAssert.IsTrue(body.Cover > 0.9f, "the body is solid");
+			LogAssert.IsTrue(Mathf.Abs(body.Base - anatomy.BaseMetres) < 1f, $"at the storm's base: {body.Base:0} m against {anatomy.BaseMetres:0} m");
+			LogAssert.IsTrue(tornado.Base < body.Base, "and the wall cloud hangs below it");
+
+			// Its rain and hail fall on the forward flank.
+			Vector2 flank = anatomy.BodyOffset + anatomy.RainOffset;
+			WeatherMap.Texel rain = WeatherMap.SampleTexel(timeline, storms, new Vector3(flank.x, 0f, flank.y), 10);
+			LogAssert.IsTrue(rain.Precipitation > 0.3f, $"it rains on the forward flank, got {rain.Precipitation:0.00}");
+			LogAssert.IsTrue(rain.Cover > 0.5f, "under the storm's own cloud");
+		}
+
+		[Test]
+		public void ASquallLinesShelfLeadsItBelowTheStormsBase()
+		{
+			WeatherSample air = StormyAir();
+			var motion = new Vector2(10f, 0f);
+			StormPhysics.Dimensions(StormKind.SquallLine, air.OpenColumn, 0.5f, 0.5f, out float depth, out float half, out _);
+			WeatherTimeline timeline = OneStorm(StormKind.SquallLine, depth, half, motion);
+			var storms = new StormFrames(air);
+			StormAnatomy anatomy = StormAnatomy.Of(StormKind.SquallLine, air, motion, timeline.LatitudeDegrees, depth);
+			float lead = 0.45f * depth;
+
+			// Ahead of the rain, the shelf: a wedge under the storm's base, far below its towers.
+			WeatherMap.Texel shelf = WeatherMap.SampleTexel(timeline, storms, new Vector3(lead + 0.5f * anatomy.ShelfWidth, 0f, 0f), 10);
+			LogAssert.IsTrue(shelf.Cover > 0.9f, $"the shelf is cloud, got {shelf.Cover:0.00}");
+			LogAssert.IsTrue(shelf.Base < anatomy.BaseMetres, $"hanging below the storm's base: {shelf.Base:0} m against {anatomy.BaseMetres:0} m");
+			LogAssert.IsTrue(shelf.Top < anatomy.BaseMetres + anatomy.ShelfDrop + 1f, $"a thin wedge, topping out at {shelf.Top:0} m");
+			LogAssert.AreEqual(0f, shelf.Precipitation, "and nothing falls from it: it leads the rain");
+
+			// Behind it, over the rain, the storm's own base and its towers.
+			WeatherMap.Texel line = WeatherMap.SampleTexel(timeline, storms, new Vector3(lead - 0.3f * anatomy.CoreRadius, 0f, 0f), 10);
+			LogAssert.IsTrue(Mathf.Abs(line.Base - anatomy.BaseMetres) < 1f, $"the storm's base over the line: {line.Base:0} m");
+			LogAssert.IsTrue(line.Top > anatomy.BaseMetres + 0.5f * (anatomy.TopMetres - anatomy.BaseMetres), "and its towers");
+
+			// Along the line it runs as far as the line does.
+			LogAssert.IsTrue(WeatherMap.SampleTexel(timeline, storms, new Vector3(0f, 0f, 0.6f * half), 10).Cover > 0.9f, "along its length");
+			LogAssert.AreEqual(0f, WeatherMap.SampleTexel(timeline, storms, new Vector3(0f, 0f, 1.2f * half), 10).Cover, "and no further");
+		}
+
+		[Test]
+		public void TheFineWeatherMapHandsOverToTheCoarseOneAndTheCoarseOneReachesTheHorizon()
+		{
+			var fine = new Rect(-0.5f * WeatherMap.DefaultSizeMeters, -0.5f * WeatherMap.DefaultSizeMeters, WeatherMap.DefaultSizeMeters, WeatherMap.DefaultSizeMeters);
+			var coarse = new Rect(-0.5f * WeatherMap.FarSizeMeters, -0.5f * WeatherMap.FarSizeMeters, WeatherMap.FarSizeMeters, WeatherMap.FarSizeMeters);
+			float half = 0.5f * WeatherMap.DefaultSizeMeters;
+			LogAssert.AreEqual(1f, WeatherMap.NearWeight(Vector2.zero, fine), "the fine map round the viewer");
+			LogAssert.AreEqual(1f, WeatherMap.NearWeight(new Vector2(0.5f * half, 0f), fine), "and out to half its width");
+			LogAssert.AreEqual(0f, WeatherMap.NearWeight(new Vector2(0.95f * half, 0f), fine), "handed over before its edge");
+			LogAssert.AreEqual(0f, WeatherMap.NearWeight(new Vector2(0.8f * half, 0.8f * half), fine), "a circle: its corners are never read, so no edge of it is a straight line");
+			float previous = 1f;
+			for (float r = 0f; r <= half; r += 50f)
+			{
+				float w = WeatherMap.NearWeight(new Vector2(r * 0.6f, r * 0.8f), fine);
+				LogAssert.IsTrue(w <= previous + 1e-6f, "handing over smoothly, never back");
+				previous = w;
+			}
+			LogAssert.AreEqual(1f, WeatherMap.FarWeight(new Vector2(44000f, 0f), coarse), "a storm's cloud is drawn as far as the sky draws cloud");
+			LogAssert.AreEqual(0f, WeatherMap.FarWeight(new Vector2(0.99f * 0.5f * WeatherMap.FarSizeMeters, 0f), coarse), "and fades out before the coarse map's edge");
 		}
 
 		[Test]

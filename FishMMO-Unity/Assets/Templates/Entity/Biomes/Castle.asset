@@ -161,13 +161,9 @@ MonoBehaviour:
       - Magnificent
       - Grim
       Description: "Stone fortification \u2014 battlements, towers, and echoing halls"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 0
-    CellsPerSquareKm: 0.4
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

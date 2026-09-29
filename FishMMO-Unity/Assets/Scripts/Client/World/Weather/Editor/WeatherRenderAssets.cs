@@ -147,6 +147,14 @@ namespace FishMMO.Client
 			if (profile.SkyBodyMaterial == null) profile.SkyBodyMaterial = skyBody;
 			if (profile.CurtainMaterial == null) profile.CurtainMaterial = curtain;
 			if (profile.BoltMaterial == null) profile.BoltMaterial = bolt;
+			// Tornadoes and dust devils: referenced here so a build includes their shaders. Vortex.mat and
+			// Vortex Debris.mat ship in the folder, since a player build never runs this and without them
+			// draws no tornado; ensured every time, like the materials above, so they are registered as
+			// addressables even once the profile already holds them.
+			Material vortex = EnsureMaterial("Vortex", VortexPresenter.FunnelShaderName);
+			Material vortexDebris = EnsureMaterial("Vortex Debris", VortexPresenter.DebrisShaderName);
+			if (profile.VortexMaterial == null) profile.VortexMaterial = vortex;
+			if (profile.VortexDebrisMaterial == null) profile.VortexDebrisMaterial = vortexDebris;
 			if (profile.CloudCookieMaterial == null) profile.CloudCookieMaterial = cookie;
 			if (profile.CloudMaterial == null) profile.CloudMaterial = clouds;
 			// The volumes the clouds are carved from, baked once and kept.

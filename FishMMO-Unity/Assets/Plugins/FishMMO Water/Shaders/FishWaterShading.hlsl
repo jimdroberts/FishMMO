@@ -432,13 +432,22 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	}
 
 	color = MixFog(color, fogFactor);
-	/* And the weather's fog, which the passes that draw it laid over the frame before the sea was
-	 * drawn: without this the sea stayed bright and clear through the thickest fog on the ground.
-	 * Only from above — from below, what lies between the eye and the surface is water. */
+	/* Then the weather's clouds and its fog, which the passes that draw them laid over the frame
+	 * before the sea was drawn, in the order they did: without them the sea painted over every cloud
+	 * between it and the camera — seen from any height, the water plane cut the clouds off — and
+	 * stayed bright and clear through the thickest fog on the ground. Only from above — from below,
+	 * what lies between the eye and the surface is water. */
 	if (!underwater)
 	{
-		half fogKeep;
-		color = FishWaterAirFog(color, positionWS, screenUV, fogKeep);
+		color = FishWaterBehindClouds(color, screenUV);
+		// The air's fog on top, only where the cloud buffer did not already carry it: once the cloud
+		// march draws the fog (_FishAirFogRange.z = 1), the buffer just laid over the sea holds it,
+		// and applying the analytic fog as well fogged the sea twice.
+		if (_FishAirFogRange.z < 0.5)
+		{
+			half fogKeep;
+			color = FishWaterAirFog(color, positionWS, screenUV, fogKeep);
+		}
 	}
 	return half4(color, alpha);
 }

@@ -86,12 +86,13 @@ Shader "FishMMO/Water/Caustics"
                     {
                         float3 positionWS = FishWaterSceneWorldPosition(input.screenUV, rawDepth);
                         light = FishWaterCausticLight(positionWS);
-                        /* This multiplies the frame as it stands, and the fog has already been laid
-                         * over it: scaled whole, the caustics would brighten the fog as well as the
-                         * sea bed under it. They fade by what the fog lets through instead. */
+                        /* This multiplies the frame as it stands, and the clouds and the fog have
+                         * already been laid over it: scaled whole, the caustics would brighten them as
+                         * well as the sea bed under them. They fade by what those let through instead. */
                         half fogKeep;
                         FishWaterAirFog(half3(0.0, 0.0, 0.0), positionWS, input.screenUV, fogKeep);
-                        light = 1.0 + (light - 1.0) * fogKeep;
+                        // And by what the clouds in front of it let through, which were laid there first.
+                        light = 1.0 + (light - 1.0) * fogKeep * FishWaterCloudsInFront(input.screenUV).a;
                     }
                 #endif
                 return half4(light, light, light, 1.0);

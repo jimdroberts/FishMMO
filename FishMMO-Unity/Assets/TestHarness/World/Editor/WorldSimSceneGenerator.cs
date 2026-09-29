@@ -33,12 +33,6 @@ namespace FishMMO.TestHarness.World.Editor
 		private const string MountainDataPath = GeneratedFolder + "/World Sim Mountain.asset";
 		private const string TerrainMaterialPath = "Assets/Prefabs/Client/Materials/Ground/Weather Terrain.mat";
 
-		private static readonly string[] PresetOrder =
-		{
-			"Clear", "Fair", "Overcast", "Mist", "Sprinkle", "Light Rain", "Medium Rain", "Heavy Rain", "Thunderstorm",
-			"Light Snow", "Heavy Snow", "Blizzard", "Hailstorm", "Ashfall", "Sandstorm", "Windy", "Aurora Night",
-		};
-
 		[DashboardTool(DashboardToolAttribute.Weather, "Generate World Sim scene", Section = "Test bed", Order = 10,
 			Tooltip = "Creates the weather content if missing and writes " + ScenePath + ": ground, terrain, a house, a pavilion, trees, landmarks and the world control panel.",
 			Confirm = "Generate the World Sim scene? The open scenes are closed (you are asked to save them first) and " + ScenePath + " is overwritten.")]
@@ -177,8 +171,7 @@ namespace FishMMO.TestHarness.World.Editor
 			controller.DayNight = dayNight;
 			controller.SolarSystem = WorldEditorAssets.FindFirst<SolarSystemProfile>();
 			controller.SkyProfiles = WorldEditorAssets.FindAll<SkyProfile>();
-			controller.Templates = WorldEditorAssets.FindAll<WeatherLayerTemplate>();
-			controller.Presets = OrderedPresets();
+			controller.Substances = WorldEditorAssets.FindAll<WeatherSubstance>();
 			UIDocument document = controllerObject.AddComponent<UIDocument>();
 			document.panelSettings = AssetDatabase.LoadAssetAtPath<PanelSettings>(PanelSettingsPath);
 			WorldSimPanel panel = controllerObject.AddComponent<WorldSimPanel>();
@@ -192,28 +185,6 @@ namespace FishMMO.TestHarness.World.Editor
 			AssetDatabase.SaveAssets();
 			Debug.Log($"[World Sim] Wrote {ScenePath}.");
 			return scene;
-		}
-
-		private static List<WeatherPreset> OrderedPresets()
-		{
-			var all = WorldEditorAssets.FindAll<WeatherPreset>();
-			var ordered = new List<WeatherPreset>();
-			foreach (string name in PresetOrder)
-			{
-				WeatherPreset preset = all.Find(p => p.ResolvedName == name);
-				if (preset != null)
-				{
-					ordered.Add(preset);
-				}
-			}
-			foreach (WeatherPreset preset in all)
-			{
-				if (!ordered.Contains(preset))
-				{
-					ordered.Add(preset);
-				}
-			}
-			return ordered;
 		}
 
 		/// <summary>

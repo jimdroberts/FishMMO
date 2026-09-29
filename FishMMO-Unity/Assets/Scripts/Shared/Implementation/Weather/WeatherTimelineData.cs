@@ -4,41 +4,6 @@ using UnityEngine;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// One scene-wide layer on the timeline: a template whose intensity moves from
-	/// <see cref="From"/> to <see cref="To"/> between two server ticks.
-	/// </summary>
-	[Serializable]
-	public struct WeatherLayerEntry
-	{
-		/// <summary>Stable per scene, so the API can retarget or remove it.</summary>
-		public ushort Handle;
-		public int TemplateID;
-		public float From;
-		public float To;
-		public uint StartTick;
-		public uint EndTick;
-		/// <summary>Drop the entry once the transition to <see cref="To"/> (zero) has finished.</summary>
-		public bool RemoveWhenDone;
-
-		public float IntensityAt(uint tick)
-		{
-			if (tick <= StartTick || EndTick <= StartTick)
-			{
-				return tick >= EndTick ? To : From;
-			}
-			if (tick >= EndTick)
-			{
-				return To;
-			}
-			float t = (tick - StartTick) / (float)(EndTick - StartTick);
-			return Mathf.Lerp(From, To, t * t * (3f - 2f * t));
-		}
-
-		/// <summary>True once a removal has finished and the entry can be forgotten.</summary>
-		public bool IsFinished(uint tick) => RemoveWhenDone && tick >= EndTick;
-	}
-
-	/// <summary>
 	/// The shape a storm cell covers the ground in.
 	/// </summary>
 	/// <remarks>
@@ -46,8 +11,8 @@ namespace FishMMO.Shared.Weather
 	/// Everything was a disc, which is right for a shower and wrong for most of the weather worth
 	/// seeing. A front is a LINE that arrives as a wall; a hurricane has a calm eye with its worst
 	/// weather in a ring around it; a tornado is a tiny violent core. None of those are a smooth
-	/// falloff from a centre, so the shape has to be part of the cell rather than something a
-	/// preset can imply.
+	/// falloff from a centre, so the shape has to be part of the cell rather than something its
+	/// kind is left to imply.
 	/// </para>
 	/// <para>
 	/// <b>A byte and one float</b> is the whole cost on the wire. The shapes share
@@ -90,15 +55,17 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// A moving storm: a preset over a shape that drifts with the wind, grows, matures and decays.
-	/// Motion and life are pure functions of the tick, so the network only hears about births,
-	/// edits and deaths.
+	/// A moving storm: a physical kind over a shape that drifts with the wind, grows, matures and
+	/// decays. Motion and life are pure functions of the tick, so the network only hears about
+	/// births, edits and deaths. What it does to the air under it is its kind's
+	/// (<see cref="StormPhysics.Perturb"/>); what falls there is then that air's.
 	/// </summary>
 	[Serializable]
 	public struct StormCell
 	{
 		public ushort ID;
-		public int PresetID;
+		/// <summary>What kind of storm this is.</summary>
+		public StormKind Kind;
 		public uint Seed;
 		/// <summary>World X/Z of the centre at <see cref="MotionTick"/>.</summary>
 		public float OriginX, OriginZ;
@@ -256,6 +223,30 @@ namespace FishMMO.Shared.Weather
 			return 1f - Mathf.SmoothStep(0f, 1f, outward);
 		}
 
+		/// <summary>How much of the cloud over a position this cell dissolves, 0..1: a hurricane's eye.</summary>
+		/// <remarks>
+		/// The eye is air sinking from the top of the storm, warmed by its own compression and dried
+		/// by it: whatever cloud the air round it would make, there is none in it, top to bottom —
+		/// which is why from inside an eye the sky overhead is clear, with the eyewall standing round
+		/// it like the walls of a stadium. Eased across its edge, so the wall's inner face is not a
+		/// cut. Zero for every other shape: a storm's own cloud is what the rest of them bring.
+		/// </remarks>
+		public float ClearingAt(Vector3 position, uint tick, double tickDelta)
+		{
+			if (Shape != StormCellShape.Eyewall || RadiusMeters <= 0f)
+			{
+				return 0f;
+			}
+			float envelope = EnvelopeAt(tick);
+			float eye = Mathf.Clamp(ExtentMeters, 0f, RadiusMeters * 0.6f);
+			if (envelope <= 0f || eye <= 1e-3f)
+			{
+				return 0f;
+			}
+			float distance = Vector2.Distance(new Vector2(position.x, position.z), CentreAt(tick, tickDelta));
+			return Mathf.Clamp01(envelope * PeakIntensity) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(eye * 0.6f, eye * 1.05f, distance)));
+		}
+
 		/// <summary>
 		/// A tornado: everything inside the core, falling away steeply to the edge of what it disturbs.
 		/// </summary>
@@ -353,27 +344,6 @@ namespace FishMMO.Shared.Weather
 
 		public bool IsDead(uint tick) => tick >= DeathTick;
 
-	}
-
-	/// <summary>A scene-wide climate shift moving from one value to another.</summary>
-	[Serializable]
-	public struct WeatherClimateEntry
-	{
-		public float FromTemperature, ToTemperature;
-		public float FromHumidity, ToHumidity;
-		public uint StartTick, EndTick;
-
-		public void At(uint tick, out float temperature, out float humidity)
-		{
-			float t = EndTick <= StartTick ? (tick >= EndTick ? 1f : 0f) : Mathf.Clamp01((tick - (float)StartTick) / (EndTick - StartTick));
-			if (tick < StartTick)
-			{
-				t = 0f;
-			}
-			t = t * t * (3f - 2f * t);
-			temperature = Mathf.Lerp(FromTemperature, ToTemperature, t);
-			humidity = Mathf.Lerp(FromHumidity, ToHumidity, t);
-		}
 	}
 
 	/// <summary>How much snow, water, ash and sand lies on exposed ground, 0..1 each.</summary>

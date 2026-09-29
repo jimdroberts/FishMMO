@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace FishMMO.Shared.Celestial
 {
@@ -846,6 +847,46 @@ namespace FishMMO.Shared.Celestial
 			double homeWater = system.HomeWorld != null ? system.HomeWorld.Water : 0.7;
 			double h = (body.Water - homeWater) * 1.2 - Math.Max(0.0, t) * 0.3;
 			humidity = (float)Math.Max(-1.0, Math.Min(1.0, h));
+		}
+
+		private static readonly Dictionary<(WorldBody, int), (float, float)> meanClimateCache = new Dictionary<(WorldBody, int), (float, float)>();
+
+		/// <summary>
+		/// The part of a body's climate offsets that is the season and the moment rather than the
+		/// place: the instantaneous offsets less their mean over the orbit.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A scene's climate is <see cref="MeanClimateOffsets"/> — the slow shape of the world the
+		/// terrain was built from — plus whatever the weather adds at runtime. The runtime share used
+		/// to be the WHOLE instantaneous offset, <see cref="ClimateOffsets"/>, so the body's distance
+		/// from its star, its greenhouse and above all its latitude cooling were counted twice: once
+		/// as the mean and again as the moment. The latitude term is calibrated to be applied once
+		/// (<see cref="LatitudeCooling"/>); at forty-five degrees the second copy took about half a
+		/// unit — sixteen kelvin — off every scene, so mid-latitudes snowed that should have rained.
+		/// What the moment adds to the mean is only how it differs from it: the season.
+		/// </para>
+		/// <para>
+		/// The mean is cached per body and latitude; nothing in it moves while the game runs.
+		/// </para>
+		/// </remarks>
+		public static void SeasonalClimateOffsets(SolarSystemProfile system, WorldBody body, double hours, double latitudeDegrees, out float temperature, out float humidity)
+		{
+			temperature = 0f;
+			humidity = 0f;
+			if (system == null || body == null)
+			{
+				return;
+			}
+			ClimateOffsets(system, body, hours, out float now, out float nowHumidity, latitudeDegrees);
+			var key = (body, (int)Math.Round(latitudeDegrees * 100.0));
+			if (!meanClimateCache.TryGetValue(key, out (float t, float h) mean))
+			{
+				MeanClimateOffsets(system, body, out mean.t, out mean.h, latitudeDegrees);
+				meanClimateCache[key] = mean;
+			}
+			temperature = now - mean.t;
+			humidity = nowHumidity - mean.h;
 		}
 
 		// ── Time conversions ───────────────────────────────────────────

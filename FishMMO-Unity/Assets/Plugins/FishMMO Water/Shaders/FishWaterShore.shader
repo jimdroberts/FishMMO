@@ -312,9 +312,13 @@ Shader "FishMMO/Water/Shore"
                     sheen = (sky * fresnel + mainLight.color * glint * sunFresnel * shadow) * gloss * fade;
                 }
 
-                /* Through the weather's fog, which was laid over the frame before this pass: the
-                 * band's own colour is hidden as the ground under it is, and its sheen — light it adds
-                 * — reaches the eye only as far as the fog lets it. */
+                /* Behind the weather's clouds and through its fog, both laid over the frame before
+                 * this pass, in that order: the band's own colour is hidden as the ground under it is,
+                 * and its sheen — light it adds — reaches the eye only as far as they let it. Without
+                 * the clouds, the swash drew its lines on the beach straight through them from above. */
+                float4 clouds = FishWaterCloudsInFront(input.screenUV);
+                color = color * clouds.a + clouds.rgb;
+                sheen *= clouds.a;
                 half fogKeep;
                 color = FishWaterAirFog(color, positionWS, input.screenUV, fogKeep);
                 sheen *= fogKeep;

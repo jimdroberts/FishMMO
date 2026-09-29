@@ -74,9 +74,13 @@ namespace FishMMO.Shared.Biomes
 		[Header("Naming")]
 		public BiomeNamingData Naming = new BiomeNamingData();
 
-		[Header("Weather")]
-		[Tooltip("Background weather, the storm cells this biome starts, and what it forbids. Empty uses the climate's default.")]
-		public BiomeWeatherProfile Weather = new BiomeWeatherProfile();
+		[Header("Ground, as the air meets it")]
+		[Tooltip("What the wind can lift off this ground once it blows hard enough: sand, dust, regolith. None for rock, soil, vegetation, ice and water. How hard it has to blow comes from the grain and the world's own gravity and air.")]
+		public WeatherSubstance LooseGround;
+		[Tooltip("What this ground puts into the air by itself — a volcano's ash, a geyser field's ice. None for nearly everything.")]
+		public WeatherSubstance Emits;
+		[Tooltip("How hard it does, 0..1: a steady trickle at a tenth, a vent that never stops at one. An eruption multiplies it.")]
+		[Range(0f, 1f)] public float EmissionRate;
 
 		[Header("Main Texture Layer")]
 		[Tooltip("Primary base texture that covers the majority of the biome.")]

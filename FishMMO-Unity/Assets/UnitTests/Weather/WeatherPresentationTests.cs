@@ -61,9 +61,11 @@ namespace FishMMO.UnitTests.Weather
 			FogState result = FogComposer.Compose(region, 0.5f, Color.blue, 0.06f, 40f);
 			LogAssert.IsTrue(result.Enabled);
 			LogAssert.AreEqual(FogMode.ExponentialSquared, result.Mode, "the region's fog mode is kept");
-			Assert.That(result.Density, Is.EqualTo(0.04f).Within(1e-5f));
+			// Extinctions add: the region's haze and the weather's drops each take their own share.
+			Assert.That(result.Density, Is.EqualTo(0.07f).Within(1e-5f));
 			Assert.That(result.Color.b, Is.EqualTo(0.5f).Within(1e-4f));
-			Assert.That(result.EndDistance, Is.EqualTo(170f).Within(1e-3f));
+			// And the view ends at whichever is nearer: the region's end or the weather's visibility.
+			Assert.That(result.EndDistance, Is.EqualTo(40f).Within(1e-3f));
 			LogAssert.IsTrue(result.StartDistance <= result.EndDistance);
 		}
 
@@ -73,9 +75,12 @@ namespace FishMMO.UnitTests.Weather
 			var region = new FogState { Enabled = false, Mode = FogMode.Linear, Color = Color.red, Density = 0f };
 			FogState result = FogComposer.Compose(region, 0.8f, Color.gray, 0.05f, 40f);
 			LogAssert.IsTrue(result.Enabled);
-			LogAssert.AreEqual(FogMode.ExponentialSquared, result.Mode);
+			// Beer and Lambert: light through a fog falls off exponentially, at the weather's own
+			// extinction, whatever share of the view it takes.
+			LogAssert.AreEqual(FogMode.Exponential, result.Mode);
 			LogAssert.AreEqual(Color.gray, result.Color);
-			Assert.That(result.Density, Is.EqualTo(0.04f).Within(1e-5f));
+			Assert.That(result.Density, Is.EqualTo(0.05f).Within(1e-5f));
+			Assert.That(result.EndDistance, Is.EqualTo(40f).Within(1e-3f));
 			LogAssert.IsFalse(FogComposer.Compose(region, 0f, Color.gray, 0.05f, 40f).Enabled, "and takes it away again");
 		}
 
@@ -83,7 +88,12 @@ namespace FishMMO.UnitTests.Weather
 		public void FogComesFromTheFogChannelAndFromWhatFalls()
 		{
 			Assert.That(WeatherFogPresenter.Amount(new WeatherFrame()), Is.EqualTo(0f));
-			Assert.That(WeatherFogPresenter.Amount(Frame((WeatherChannel.FogDensity, 0.5f))), Is.EqualTo(0.5f).Within(1e-5f));
+			// Physical: a half fog is a real fog, tens of drops a cubic centimetre, and hides nearly
+			// all of 250 m; a trace of one hides little; more fog never hides less.
+			float half = WeatherFogPresenter.Amount(Frame((WeatherChannel.FogDensity, 0.5f)));
+			float trace = WeatherFogPresenter.Amount(Frame((WeatherChannel.FogDensity, 0.05f)));
+			LogAssert.IsTrue(half > 0.9f && half <= 1f, $"a half fog hides most of 250 m, got {half:0.000}");
+			LogAssert.IsTrue(trace < half && trace < 0.5f, $"a trace of fog hides little, got {trace:0.000}");
 			float sand = WeatherFogPresenter.Amount(Frame((WeatherChannel.Precipitation, 1f), (WeatherChannel.SandWeight, 1f)));
 			float rain = WeatherFogPresenter.Amount(Frame((WeatherChannel.Precipitation, 1f), (WeatherChannel.RainWeight, 1f)));
 			LogAssert.IsTrue(sand > rain, $"a sandstorm hides more than rain ({sand:0.00} vs {rain:0.00})");
@@ -93,8 +103,11 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void FogTakesTheColourOfWhatFalls()
 		{
+			// Drops scatter every colour alike: a fog is white lit by whatever lights it, which with no
+			// sky to ask is a plain neutral grey.
 			Color mist = WeatherFogPresenter.ColorOf(Frame((WeatherChannel.FogDensity, 1f)), profile);
-			LogAssert.AreEqual(profile.MistColor, mist);
+			Assert.That(mist.r, Is.EqualTo(mist.g).Within(1e-5f));
+			Assert.That(mist.g, Is.EqualTo(mist.b).Within(1e-5f));
 			Color sand = WeatherFogPresenter.ColorOf(Frame((WeatherChannel.Precipitation, 1f), (WeatherChannel.SandWeight, 1f)), profile);
 			LogAssert.IsTrue(sand.r > sand.b, "sand fog is warm");
 			Color ash = WeatherFogPresenter.ColorOf(Frame((WeatherChannel.Precipitation, 1f), (WeatherChannel.AshWeight, 1f)), profile);

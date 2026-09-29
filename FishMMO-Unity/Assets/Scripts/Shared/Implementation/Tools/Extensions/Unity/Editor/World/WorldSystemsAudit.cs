@@ -405,9 +405,7 @@ namespace FishMMO.Shared.WorldDesign
 			WeatherSceneMode mode = entry != null ? entry.EffectiveWeather : WeatherSceneMode.Auto;
 			if (mode != WeatherSceneMode.Auto)
 			{
-				return mode == WeatherSceneMode.Fixed && (entry == null || entry.FixedWeather == null)
-					? WeatherSceneMode.None
-					: mode;
+				return mode;
 			}
 			if (body != null && !body.HasWeather)
 			{

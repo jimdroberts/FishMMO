@@ -82,4 +82,70 @@ half3 FishWaterAirFog(half3 color, float3 positionWS, float2 screenUV, out half 
 	return color;
 }
 
+// ── The clouds, likewise ────────────────────────────────────────────────
+//
+// The weather's clouds (FishCloudsFeature) are composited over the frame just before the transparent
+// queue as well, so the sea drawn after them painted over every cloud between the camera and the
+// water: from any height, the water plane cut the clouds off. The cloud pass leaves what it laid down
+// — the light the clouds scatter toward the eye, and how much they let through — in _FishCloudBuffer,
+// published for exactly this (the sky bodies put themselves back behind the clouds the same way), and
+// the water lays it back over itself.
+//
+// EXACT, not an estimate: each cloud ray was marched to the opaque world, which under the water is the
+// sea bed, and there are no clouds below sea level — so everything a ray gathered lies between the
+// camera and the water's surface, which is precisely what the water should be behind. In the frame the
+// fog passes come after the clouds, so the water takes the clouds first and the fog after them.
+
+TEXTURE2D(_FishCloudBuffer);
+SAMPLER(sampler_FishCloudBuffer);
+float4 _FishCloudBufferTexel;   // xy one over its size, zw its size
+float4 _FishCloudScreen;        // x 1 while the buffer holds this frame's clouds, else 0
+
+/// <summary>
+/// The clouds in front of a pixel: rgb the light they scatter toward the eye, a what they let through.
+/// Clear air — (0, 0, 0, 1) — with no clouds this frame.
+/// </summary>
+float4 FishWaterCloudsInFront(float2 screenUV)
+{
+	if (_FishCloudScreen.x < 0.5)
+	{
+		return float4(0.0, 0.0, 0.0, 1.0);
+	}
+	#if defined(_WATER_DEPTH)
+		/* The composite's own four taps, each weighed by whether it looks at the same thing
+		 * (FishClouds.shader). The clouds are marched at a fraction of the screen, and a texel that
+		 * straddles a headland's edge holds the open sea's long march: taken blindly, its light rims
+		 * the land. */
+		if (_FishCloudBufferTexel.z > 0.5)
+		{
+			float2 texel = _FishCloudBufferTexel.xy * 0.5;
+			float here = LinearEyeDepth(SampleSceneDepth(screenUV), _ZBufferParams);
+			float4 sum = 0.0;
+			float total = 0.0;
+			[unroll]
+			for (int t = 0; t < 4; t++)
+			{
+				float2 at = screenUV + float2(t == 0 || t == 2 ? -texel.x : texel.x, t < 2 ? -texel.y : texel.y);
+				float there = LinearEyeDepth(SampleSceneDepth(at), _ZBufferParams);
+				float weight = saturate(1.0 - abs(there - here) / max(12.0, here * 0.2));
+				weight = max(weight, saturate(min(there, here) / 4000.0));
+				sum += SAMPLE_TEXTURE2D_LOD(_FishCloudBuffer, sampler_FishCloudBuffer, at, 0) * weight;
+				total += weight;
+			}
+			if (total > 1e-3)
+			{
+				return sum / total;
+			}
+		}
+	#endif
+	return SAMPLE_TEXTURE2D_LOD(_FishCloudBuffer, sampler_FishCloudBuffer, screenUV, 0);
+}
+
+/// <summary>A surface seen through the clouds in front of it: its own light through them, theirs added.</summary>
+half3 FishWaterBehindClouds(half3 color, float2 screenUV)
+{
+	float4 clouds = FishWaterCloudsInFront(screenUV);
+	return color * clouds.a + clouds.rgb;
+}
+
 #endif

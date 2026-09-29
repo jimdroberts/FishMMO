@@ -344,7 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Add(AtlasProblemSeverity.Warning, $"{entry.SceneName}'s time zone ({entry.TimeZoneHours:+0;-0} h) is more than 6 hours from its longitude's ({AtlasGeometry.TimeZoneOf(entry.Longitude):+0;-0} h).", entry);
 				}
-				if (body != null && !body.HasWeather && (entry.Weather == WeatherSceneMode.Own || entry.Weather == WeatherSceneMode.Fixed))
+				if (body != null && !body.HasWeather && entry.Weather == WeatherSceneMode.Own)
 				{
 					Add(AtlasProblemSeverity.Info, $"{entry.SceneName} asks for weather, but {body.ResolvedName} has no air, so it gets none.", entry, 6);
 				}

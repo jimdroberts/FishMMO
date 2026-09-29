@@ -163,13 +163,9 @@ MonoBehaviour:
       - Exotic
       Description: "Shallow reef \u2014 brilliant colors, teeming life, delicate
         and dangerous"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: 9d2907f0fa5983d48ba75b0b05f509ed, type: 3}
     normalTexture: {fileID: 0}

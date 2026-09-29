@@ -91,6 +91,64 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void EasingTheSpaceNeverRaisesIt()
+		{
+			/* Eased along the line so neighbouring cross-sections do not tear the crest — but never
+			 * upward: a space raised past what was measured is a breaker thrown through its neighbour. */
+			var random = new System.Random(7);
+			for (int trial = 0; trial < 500; trial++)
+			{
+				int count = 3 + random.Next(120);
+				int radius = 1 + random.Next(8);
+				bool closed = random.Next(2) == 0;
+				var measured = new float[count];
+				float walk = 10f;
+				for (int i = 0; i < count; i++)
+				{
+					walk += (float)(random.NextDouble() - 0.5) * 2f;
+					measured[i] = Mathf.Max(0.25f, walk + (random.Next(12) == 0 ? (float)random.NextDouble() * 15f : 0f));
+				}
+				var eased = (float[])measured.Clone();
+				WaterBreakers.SmoothAlong(eased, closed, radius, true);
+				for (int i = 0; i < count; i++)
+				{
+					LogAssert.IsTrue(eased[i] <= measured[i] + 1e-4f,
+						$"trial {trial}: eased {eased[i]:0.000} above the measured {measured[i]:0.000} at {i}");
+				}
+			}
+		}
+
+		[Test]
+		public void ATightSpotIsKeptAndSpreadToItsNeighbours()
+		{
+			var space = new float[21];
+			for (int i = 0; i < space.Length; i++)
+			{
+				space[i] = 20f;
+			}
+			space[10] = 4f;
+			WaterBreakers.SmoothAlong(space, false, 4, true);
+			LogAssert.IsTrue(Mathf.Abs(space[10] - 4f) < 1e-4f, $"the tight spot must keep its 4 m, got {space[10]:0.00}");
+			LogAssert.IsTrue(space[6] > 4f && space[6] < 20f, $"its neighbours ease toward it, got {space[6]:0.00} four points off");
+			LogAssert.IsTrue(Mathf.Abs(space[0] - 20f) < 1e-4f, $"far from it, the space is its own again, got {space[0]:0.00}");
+		}
+
+		[Test]
+		public void TheRoomIsEasedIntoOneCrest()
+		{
+			// A kink in the room — where the distance field folds — spread over the crest, not a step in it.
+			var room = new float[21];
+			for (int i = 0; i < room.Length; i++)
+			{
+				room[i] = 5f;
+			}
+			room[10] = 15f;
+			WaterBreakers.SmoothAlong(room, false, 4, false);
+			LogAssert.IsTrue(room[10] < 8f && room[9] > 5f && room[11] > 5f,
+				$"the kink should be spread, got {room[9]:0.00} {room[10]:0.00} {room[11]:0.00}");
+		}
+
+		[Test]
 		public void ARidgeStopsTheMarch()
 		{
 			/* A sandbar with no bend to it: a straight ridge 0.5 m under at x = 90, deepening either side,

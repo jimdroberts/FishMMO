@@ -163,13 +163,9 @@ MonoBehaviour:
       - Isolated
       Description: "Deep ocean floor plains \u2014 featureless, silent, preserved
         in darkness"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: f86c769a177b3e84085abaa1ddeefdc6, type: 3}
     normalTexture: {fileID: 0}

@@ -10,9 +10,9 @@ namespace FishMMO.Shared.Weather
 	{
 		public WeatherFrame Frame;
 		/// <summary>
-		/// The weather here without the storm cells: the biome's own background and whatever scene
-		/// layers are running. The sky uses it for the far distance, where the weather map does not
-		/// reach — a cell overhead must not raise the coverage of the whole sky.
+		/// The weather here without the storm cells: what this air would do with no storm over it.
+		/// The sky uses it for the far distance, where the weather map does not reach — a cell
+		/// overhead must not raise the coverage of the whole sky.
 		/// </summary>
 		public WeatherFrame Background;
 		public BiomeTemplate Biome;
@@ -26,19 +26,26 @@ namespace FishMMO.Shared.Weather
 		/// snow, volcanic ash.
 		/// </summary>
 		/// <remarks>
-		/// Resolved from the layer templates and cell presets both peers already hold, so it costs
-		/// nothing on the wire. The client reads it for the colour, the sound and the cover it
-		/// leaves; the server for what it melts at and whether it can be breathed.
+		/// Worked out from the physics both peers share — what the world's clouds condense out of,
+		/// what the ground lets loose or puts out — so it costs nothing on the wire. The client reads
+		/// it for the colour, the sound and the cover it leaves; the server for what it melts at and
+		/// whether it can be breathed.
 		/// </remarks>
 		public WeatherSubstance Substance;
-		/// <summary>What the driver says the air is doing here: pressure, humidity, instability, wind.</summary>
+		/// <summary>The air here: pressure, humidity, instability, wind — storms and offsets included.</summary>
 		public WeatherDriver.Synoptic Air;
-		/// <summary>
-		/// How much of this weather the drifting field decided, 0..1. 1 is the field alone; 0 is a
-		/// preset or layer at full strength standing in for it. The sky scales the field's own
-		/// terms — the formations, the front's slope — by this, so a preset's sky is the preset's.
-		/// </summary>
-		public float DriverWeight;
+		/// <summary>The same air with no storm over it: what <see cref="Background"/> was worked out from.</summary>
+		public WeatherDriver.Synoptic OpenAir;
+		/// <summary>The air's vertical structure here: cloud base, freezing level, how far a cloud can grow.</summary>
+		public AirColumn Column;
+		/// <summary>The same with no storm over it: what a storm would form in.</summary>
+		public AirColumn OpenColumn;
+		/// <summary>The world's air this was worked out on, offsets to its pull included.</summary>
+		public PlanetAir Planet;
+		/// <summary>Everything added to the air here: the scene's authored offsets, the runtime ones and any volume's.</summary>
+		public AirOffsets Offsets;
+		/// <summary>What the ground here gives the air.</summary>
+		public GroundTraits Ground;
 
 		public PrecipitationKind Precipitation => Frame.DominantPrecipitation;
 		public float StormSeverity => Frame.StormSeverity;
@@ -62,26 +69,38 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// Samples a scene's weather at a position: biome background, scene layers and storm cells,
-	/// re-typed for the local temperature and shaped by weather volumes. A pure function of its
-	/// inputs, run identically on server and client.
+	/// Samples a scene's weather at a position, from its air: the drifting field over this place and
+	/// this world, what is added to it, and the storms it makes. A pure function of its inputs, run
+	/// identically on server and client.
 	/// </summary>
 	public static class WeatherField
 	{
-		/// <summary>The profile a biome uses: its own when authored, else the climate's default.</summary>
-		public static BiomeWeatherProfile ProfileFor(BiomeTemplate biome, WorldSceneSettings settings)
+		/// <summary>
+		/// The air over a place before anything local is done to it: the drifting field, or — with the
+		/// field switched off — a still, ordinary air, so that what is added to it is all there is.
+		/// </summary>
+		public static WeatherDriver.Synoptic OpenAirAt(WeatherTimeline timeline, Vector2 position, double worldSeconds, float season01, float localTime01, in WindBelts belts)
 		{
-			if (biome != null && biome.Weather != null && biome.Weather.IsAuthored)
+			if (timeline != null && timeline.Driver)
 			{
-				return biome.Weather;
+				return WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, timeline.LatitudeDegrees, season01, localTime01, belts);
 			}
-			ClimateSettings climate = settings != null ? settings.Climate : null;
-			return climate != null ? climate.DefaultWeather : null;
+			float latitude = timeline != null ? timeline.LatitudeDegrees : 0f;
+			return new WeatherDriver.Synoptic
+			{
+				Humidity = 0.5f,
+				Pressure = 0f,
+				Temperature = 0f,
+				Instability = 0.25f,
+				ColumnType = WeatherDriver.BaseColumnType(0.25f),
+				LocalTime01 = Mathf.Repeat(localTime01, 1f),
+				Wind = WeatherDriver.PrevailingWind(latitude, belts) * 6f,
+			};
 		}
 
 		public static WeatherSample Sample(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, uint tick)
 		{
-			var sample = new WeatherSample { Frame = WeatherFrame.Clear };
+			var sample = new WeatherSample { Frame = WeatherFrame.Clear, Background = WeatherFrame.Clear };
 			BiomeReading reading = BiomeSampler.Read(position, settings);
 			sample.Biome = reading.Biome;
 			sample.Temperature = reading.Climate.Temperature;
@@ -91,131 +110,90 @@ namespace FishMMO.Shared.Weather
 			WorldBody weatherBody = timeline != null && timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
 			FishMMO.Shared.Celestial.AtmosphereKind atmosphere = weatherBody != null ? weatherBody.Atmosphere : FishMMO.Shared.Celestial.AtmosphereKind.Standard;
 			bool airless = atmosphere == FishMMO.Shared.Celestial.AtmosphereKind.None;
-			if (timeline == null || mode == WeatherSceneMode.None || mode == WeatherSceneMode.Auto || airless)
+			if (timeline == null || mode != WeatherSceneMode.Own || airless)
 			{
 				return sample;
 			}
 
-			// A biome guessed from no terrain and no map (a scene built from meshes) is the sea
-			// floor by default; its "nothing falls here" must not silence the weather. Use the
-			// climate's default instead.
-			BiomeWeatherProfile profile = ProfileFor(reading.IsGrounded ? reading.Biome : null, settings);
-			var accumulator = new WeatherAccumulator();
-			if (mode == WeatherSceneMode.Own && timeline.Driver)
-			{
-				// What the weather is doing here and now, before anything the biome or a cell adds:
-				// the drifting field of highs and lows, worked out from the world clock. This is the
-				// part that actually makes weather happen — without it the background was one fixed
-				// frame per biome that never changed, and the sky only ever varied when a storm cell
-				// happened to pass. Both sides compute it from the same seed and the same clock, so
-				// it costs nothing on the wire and two machines never disagree.
-				// The season and the hour are worked out here, on both sides, from the clock anchor
-				// the server sent. Sending them instead would freeze them at whatever they were when
-				// the client joined.
-				double worldSeconds = timeline.WorldSecondsAt(tick);
-				double worldHours = worldSeconds / 3600.0;
-				SolarSystemProfile system = SolarSystemProfile.Active;
-				WorldBody sceneBody = weatherBody;
-				// The season of the body this scene is on, from where its sun stands — not the fraction
-				// of the home calendar gone. See CelestialMath.Season01.
-				float season01 = CelestialMath.Season01(system, sceneBody, worldHours);
-				float localTime01 = system != null && sceneBody != null
-					? (float)CelestialMath.LocalTime01(system, sceneBody, worldHours, timeline.LongitudeDegrees)
-					: 0.5f;
+			// Where and when. The season and the hour are worked out here, on both sides, from the
+			// clock anchor the server sent; sending them instead would freeze them at whatever they
+			// were when the client joined.
+			double worldSeconds = timeline.WorldSecondsAt(tick);
+			double worldHours = worldSeconds / 3600.0;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			float season01 = CelestialMath.Season01(system, weatherBody, worldHours);
+			float localTime01 = system != null && weatherBody != null
+				? (float)CelestialMath.LocalTime01(system, weatherBody, worldHours, timeline.LongitudeDegrees)
+				: 0.5f;
 
-				WeatherDriver.Synoptic air = WeatherDriver.Sample(
-					WeatherDriver.WorldSeed,
-					new Vector2(position.x, position.z),
-					worldSeconds,
-					timeline.LatitudeDegrees,
-					season01,
-					localTime01);
-				// Over this place: its biome's and its world's humidity lean on the air, so a desert
-				// stays mostly dry under a front that soaks the forest next door.
-				air = WeatherDriver.OverPlace(air, reading.Climate.Humidity);
-				// And how warm it is here — the biome, the latitude, the season and, most of all, how
-				// far this world is from its suns — decides how much water that air can carry at all.
-				air = WeatherDriver.InClimate(air, reading.Climate.Temperature);
-				// And how much of a day it is having. Toward the poles the sun stops setting for part
-				// of the year and stops rising for another, and the weather's daily rhythm is the sun's.
-				if (system != null && sceneBody != null)
+			// What is added to the air here: the scene's authored offsets, the runtime ones and any
+			// volume's. Their temperature is already in the climate reading (it is the climate's); a
+			// volume's is local, so it is added here.
+			AirOffsets volume = WeatherVolumeRegistry.OffsetsAt(scene, position);
+			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.AirAt(tick) + volume;
+			sample.Offsets = offsets;
+			sample.Temperature = Mathf.Clamp(sample.Temperature + volume.TemperatureScale, -1f, 1f);
+
+			PlanetAir planet = offsets.Apply(PlanetAir.For(system, weatherBody));
+			sample.Planet = planet;
+			WindBelts belts = WindBelts.For(planet);
+
+			// The air over this place.
+			WeatherDriver.Synoptic air = OpenAirAt(timeline, new Vector2(position.x, position.z), worldSeconds, season01, localTime01, belts);
+			// Over this place: its biome's and its world's humidity lean on the air, so a desert
+			// stays mostly dry under a front that soaks the forest next door.
+			air = WeatherDriver.OverPlace(air, reading.Climate.Humidity);
+			// And how warm it is here decides how much water that air can carry at all.
+			air = WeatherDriver.InClimate(air, reading.Climate.Temperature);
+			// And how much of a day it is having: toward the poles the sun stops setting for part of
+			// the year and stops rising for another, and the weather's daily rhythm is the sun's.
+			if (system != null && weatherBody != null)
+			{
+				double day = CelestialMath.SolarDayHours(system, weatherBody);
+				if (!double.IsInfinity(day) && day > 1e-6)
 				{
-					double day = CelestialMath.SolarDayHours(system, sceneBody);
-					if (!double.IsInfinity(day) && day > 1e-6)
-					{
-						air = WeatherDriver.UnderSun(air, (float)(CelestialMath.DaylightHours(system, sceneBody, worldHours, timeline.LatitudeDegrees) / day));
-					}
-				}
-				sample.Air = air;
-				// The field carries its own temperature anomaly on top of the biome's climate.
-				sample.Temperature = Mathf.Clamp(sample.Temperature + air.Temperature * 0.35f, -1f, 1f);
-				// A preset or a layer overrides the field rather than adding to it: everything
-				// blends by taking the greater, so at full weight the field would show through any
-				// weather that asked for less of something — Clear could never clear the sky. The
-				// field steps back by the strongest layer's strength and returns as it fades.
-				float driverWeight = 1f - timeline.OverrideAt(tick, sample.Temperature);
-				sample.DriverWeight = driverWeight;
-				if (driverWeight > 0f)
-				{
-					WeatherFrame natural = WeatherDriver.Background(air);
-					// The aurora is weather too, of a kind: the star's doing, the body's field's and its
-					// air's, at this latitude. How much of the star's output reaches this body stands in
-					// for how hard its wind blows here.
-					if (system != null && sceneBody != null)
-					{
-						float wind = (float)(CelestialMath.Insolation(system, sceneBody, worldHours) / System.Math.Max(1e-6, CelestialMath.MeanHomeInsolation(system)));
-						// At the MAGNETIC latitude: the ring is round the magnetic pole, which stands off
-						// the turning pole by the body's dipole tilt.
-						natural[WeatherChannel.Aurora] = WeatherDriver.Aurora(WeatherDriver.WorldSeed, worldSeconds, sceneBody.MagneticLatitude(timeline.LatitudeDegrees, timeline.LongitudeDegrees), season01, sceneBody.MagneticField, wind);
-					}
-					accumulator.Add(WeatherDriver.UnderAtmosphere(natural, atmosphere), driverWeight);
-					if (profile != null)
-					{
-						var biome = new WeatherAccumulator();
-						profile.AccumulateBackground(ref biome);
-						if (biome.HasAny)
-						{
-							accumulator.Add(WeatherDriver.UnderAtmosphere(biome.Resolve(), atmosphere), driverWeight);
-						}
-					}
+					air = WeatherDriver.UnderSun(air, (float)(CelestialMath.DaylightHours(system, weatherBody, worldHours, timeline.LatitudeDegrees) / day));
 				}
 			}
-			timeline.AccumulateSceneLayers(tick, ref accumulator, sample.Temperature);
-			// Everything but the cells is the background, and the sky needs it on its own.
-			sample.Background = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
+			air = offsets.Apply(air);
+			// The field carries its own air mass's warmth on top of the place's climate.
+			sample.Temperature = Mathf.Clamp(sample.Temperature + air.Temperature * 0.35f, -1f, 1f);
+			sample.OpenAir = air;
+
+			bool underWater = reading.IsGrounded && settings != null && settings.Climate != null && reading.Height < settings.Climate.WaterSurfaceHeight;
+			GroundTraits ground = GroundTraits.Of(reading.IsGrounded ? reading.Biome : null, underWater);
+			sample.Ground = ground;
+			float kelvin = planet.SurfaceKelvin(sample.Temperature);
+
+			// The weather this air makes with no storm over it.
+			AirColumn open = AirColumn.Of(planet, kelvin, air.Humidity, air.Pressure, air.Instability);
+			sample.OpenColumn = open;
+			sample.Background = WeatherPhysics.Frame(air, open, planet, ground, sample.Temperature, 1f, out _);
+			AddAurora(ref sample.Background, timeline, system, weatherBody, worldSeconds, worldHours, season01);
+			sample.Background = WeatherDriver.UnderAtmosphere(sample.Background, atmosphere);
 			StormsInHeavyRain(ref sample.Background, sample.Temperature);
-			if (mode == WeatherSceneMode.Own)
-			{
-				for (int i = 0; i < timeline.Cells.Count; i++)
-				{
-					StormCell cell = timeline.Cells[i];
-					float weight = cell.InfluenceAt(position, tick, timeline.TickDelta);
-					if (weight <= 0f)
-					{
-						continue;
-					}
-					WeatherPreset preset = WeatherPreset.Get<WeatherPreset>(cell.PresetID);
-					if (preset == null)
-					{
-						continue;
-					}
-					if (profile != null)
-					{
-						weight *= profile.SuitabilityOf(preset);
-						preset = profile.VariantOf(preset);
-					}
-					accumulator.Add(preset.Evaluate(), weight, preset.DominantSubstance());
-				}
-			}
 
-			sample.Substance = accumulator.Substance;
-			WeatherFrame frame = accumulator.HasAny ? accumulator.Resolve() : WeatherFrame.Clear;
-			frame.RetypeForTemperature(sample.Temperature);
-			StormsInHeavyRain(ref frame, sample.Temperature);
-			if (profile != null && profile.Forbidden != WeatherKindMask.None)
+			// The storms: each does to the air under it what its kind of storm does.
+			float emission = 1f;
+			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
-				frame.Suppress(profile.Forbidden);
+				StormCell cell = timeline.Cells[i];
+				float weight = cell.InfluenceAt(position, tick, timeline.TickDelta);
+				if (weight <= 0f)
+				{
+					continue;
+				}
+				air = StormPhysics.Perturb(air, cell.Kind, weight);
+				emission = Mathf.Max(emission, StormPhysics.EmissionBoost(cell.Kind, weight));
 			}
+			sample.Air = air;
+			AirColumn column = AirColumn.Of(planet, kelvin, air.Humidity, air.Pressure, air.Instability);
+			sample.Column = column;
+
+			WeatherFrame frame = WeatherPhysics.Frame(air, column, planet, ground, sample.Temperature, emission, out sample.Substance);
+			AddAurora(ref frame, timeline, system, weatherBody, worldSeconds, worldHours, season01);
+			frame = WeatherDriver.UnderAtmosphere(frame, atmosphere);
+			StormsInHeavyRain(ref frame, sample.Temperature);
 			float shelter = 0f;
 			WeatherVolumeRegistry.Apply(scene, position, ref frame, ref shelter);
 			frame.DeriveSurfaceRates();
@@ -225,18 +203,32 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
+		/// The aurora is weather too, of a kind: the star's doing, the body's field's and its air's, at
+		/// this latitude. How much of the star's output reaches this body stands in for how hard its
+		/// wind blows here.
+		/// </summary>
+		private static void AddAurora(ref WeatherFrame frame, WeatherTimeline timeline, SolarSystemProfile system, WorldBody body, double worldSeconds, double worldHours, float season01)
+		{
+			if (system == null || body == null)
+			{
+				return;
+			}
+			float wind = (float)(CelestialMath.Insolation(system, body, worldHours) / System.Math.Max(1e-6, CelestialMath.MeanHomeInsolation(system)));
+			// At the MAGNETIC latitude: the ring is round the magnetic pole, which stands off the
+			// turning pole by the body's dipole tilt.
+			frame[WeatherChannel.Aurora] = WeatherDriver.Aurora(WeatherDriver.WorldSeed, worldSeconds,
+				body.MagneticLatitude(timeline.LatitudeDegrees, timeline.LongitudeDegrees), season01, body.MagneticField, wind);
+		}
+
+		/// <summary>
 		/// Heavy rain thunders. Wherever rain or hail is coming down hard, whatever brought it — the
-		/// drifting field, a preset, a storm cell — there is a chance of lightning, rising with how
-		/// hard it falls.
+		/// drifting field, what was added to the air, a storm cell — there is a chance of lightning,
+		/// rising with how hard it falls.
 		/// </summary>
 		/// <remarks>
-		/// One rule on the resolved weather, instead of lightning being something only a preset with
-		/// a lightning layer could have: a Heavy Rain preset had none, so the heaviest rain in the
-		/// game was always silent. It replaced a scheme that looked for storm cells running into one
-		/// another — every pair of cells tested wherever the weather was sampled — which cost far
-		/// more than it gave. Rain and hail only: snow, ash and sand fall hard without thunder. The
-		/// background has not been retyped for the temperature where it falls, so that is done on a
-		/// copy here, or a blizzard's unretyped "rain" would thunder.
+		/// One rule on the resolved weather, so heavy rain is never silent whatever brought it. Rain
+		/// and hail only: snow, ash and sand fall hard without thunder. It is typed for the
+		/// temperature on a copy here, so a blizzard's untyped "rain" does not thunder.
 		/// </remarks>
 		public static void StormsInHeavyRain(ref WeatherFrame frame, float temperature)
 		{
@@ -263,7 +255,7 @@ namespace FishMMO.Shared.Weather
 			WeatherSceneMode mode = settings != null ? settings.WeatherMode : WeatherSceneMode.Auto;
 			if (mode != WeatherSceneMode.Auto)
 			{
-				return mode == WeatherSceneMode.Fixed && (settings == null || settings.FixedWeather == null) ? WeatherSceneMode.None : mode;
+				return mode;
 			}
 			if (settings == null)
 			{

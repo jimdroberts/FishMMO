@@ -24,7 +24,11 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #include "FishCloudVolume.hlsl"
 
             float4 _FishCloudMarchParams;   // x steps, y detail amount, z frame index, w max distance
+            float4 _FishCloudJitter;        // xy where inside its texel each ray looks this frame (texels, -0.5..0.5), zw this pass's size
             float4x4 _FishCloudInverseVP;
+            // The reconstruction options under trial (CloudOptions in FishCloudsFeature.cs; FishCloudResolve.hlsl
+            // declares the same for the steadying): w the rays' phase this frame, always set.
+            float4 _FishCloudOptions;
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -56,10 +60,28 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 return frac(magic.z * frac(dot(pixel + frame * 5.588238, magic.xy)));
             }
 
-            float4 Frag(Varyings input) : SV_Target
+            // Two targets: the clouds, and what the steadying needs to carry each texel's history
+            // with its own cloud (FishCloudResolve.hlsl, step 2).
+            struct MarchOutput
             {
-                float3 direction = RayFor(input.uv);
-                float rawDepth = SampleSceneDepth(input.uv);
+                float4 clouds : SV_Target0;     // rgb scattered light, a transmittance
+                float2 motion : SV_Target1;     // x the mean distance of what the ray saw (km), y its bands' mean wind gain
+            };
+
+            MarchOutput Frag(Varyings input)
+            {
+                // Not the middle of the texel: a different place inside it every frame. A texel
+                // here is two or three of the screen's pixels across, and a ray through its middle
+                // every frame can only ever say what the middle looks like — the steadying could
+                // average it for ever and never learn where inside the texel a cloud's edge falls,
+                // which is what drew every edge in blocks. Looked through at a new place each frame,
+                // the texel is a handful of exact answers for exact places on the screen, and pass 1
+                // reads each pixel off them with a tent over their TRUE places, so over the sixteen
+                // places the grid averages out of the picture. The ray and the depth it stops at both
+                // come from that place, so the answer is true of it.
+                float2 uv = input.uv + _FishCloudJitter.xy / max(1.0, _FishCloudJitter.zw);
+                float3 direction = RayFor(uv);
+                float rawDepth = SampleSceneDepth(uv);
                 float depth = LinearEyeDepth(rawDepth, _ZBufferParams);
                 // Nothing drawn means the sky: the clouds may run to the far end of the shell.
                 #if UNITY_REVERSED_Z
@@ -71,19 +93,66 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // times the draw distance: that figure is the deck's, and grows with height.
                 float maxDistance = isSky ? _FishCloudMarchParams.w * 4.6 : depth / max(1e-4, dot(direction, -UNITY_MATRIX_V[2].xyz));
 
-                float jitter = Jitter(input.uv * _ScreenParams.xy, _FishCloudMarchParams.z);
-                // The world is fogged by the pipeline already; the volume's ground fog is for the sky.
-                FishCloudGroundFogScale = isSky ? 1.0 : 0.0;
+                // Hashed on this pass's own pixel, which is a whole number: the noise is built to spread
+                // its values evenly over every three-by-three block of whole pixels, and that block is
+                // exactly the neighbourhood pass 1 clips the history to — so the spread of those nine
+                // rays is the ray-phase noise the clip must let through. Fed the screen position
+                // instead, the pixels were two and a half apart and the spread was lost.
+                //
+                // The spatial pattern moved on in time by one phase for the whole frame, worked out by
+                // the feature (CloudOptions.JitterPhase): the place's Bayer value over sixteen, so
+                // neighbouring places in a texel are far apart in phase and a cycle covers the step
+                // evenly, and golden-ratio from each cycle to the next, the sequence that stays as evenly
+                // spread as any however many have been taken. A texel's phase is thus a new one every
+                // frame, and the steadying's moving average over sixteen frames and more averages it out;
+                // held still, one pixel's phase stood in the picture as the woven rings of interleaved
+                // gradient noise. frac(u + c) of a uniform u is uniform, so every ray's phase still covers
+                // one full step evenly, which is what keeps the march unbiased.
+                float jitter = frac(Jitter(input.positionCS.xy, 0.0) + _FishCloudOptions.w);
+                // The render profile's diagnostics (Ray Jitter off, _FishCloudDiag.x): every sample at the
+                // middle of its step. The steps are laid out from the bands' edges and each cloud's own
+                // (FishCloudMarch), so what is left is smooth; bands that remain are undersampling.
+                jitter = _FishCloudDiag.x > 0.5 ? 0.5 : jitter;
+                // The light march's own phase for this pixel, independent of the ray's and moved on in
+                // time by the same phase (each place's phases the golden-ratio sequence). Not the same
+                // noise at another offset: interleaved gradient noise is linear in the pixel inside its
+                // frac, so an offset only adds a constant to it — the light's phase would have been the
+                // ray's, shifted. x is the R2 dither (a different linear form, as evenly spread over the
+                // screen), y the gradient noise with the axes swapped, for the cone's turn.
+                float2 texel = input.positionCS.xy;
+                float2 lightSeed = frac(float2(frac(dot(texel, float2(0.7548777, 0.5698403))), Jitter(texel.yx, 0.0))
+                    + _FishCloudOptions.w * float2(1.0, 1.6180340));
                 float cloudDistance;
-                float4 result = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, maxDistance, jitter,
-                    (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance);
-                // rgb scattered light, a transmittance. The distance rides along for reprojection.
-                return float4(result.rgb, result.a);
+                float2 cloudMotion;
+                float4 result = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, maxDistance, jitter, lightSeed,
+                    (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance, cloudMotion);
+                MarchOutput output;
+                output.clouds = float4(result.rgb, result.a);
+                // A debug view in place of the clouds (_FishCloudDiag.w, CloudDebugView), opaque.
+                if (_FishCloudDiag.w > 0.5)
+                {
+                    output.clouds = FishCloudMarchDebug;
+                }
+                // In kilometres, so a half float holds the farthest sky ray (4.6 × the draw distance,
+                // some 150 km) to a few metres at ten.
+                output.motion = float2(cloudMotion.x * 0.001, cloudMotion.y);
+                return output;
             }
             ENDHLSL
         }
 
-        // ── 1: steady it against the last frame ──
+        // ── 1: rebuild the clouds at the buffer's resolution, from this frame and the last ──
+        // The steadying (FishCloudResolve.hlsl): a temporal upsampler — a tent over this frame's texels,
+        // the history carried with each cloud's own drift, clipped to this frame's neighbourhood, and
+        // blended in as a moving average. This pass is the fallback: where the platform runs
+        // compute kernels well, FishCloudResolve.compute does the same arithmetic from groupshared
+        // memory and this pass is not drawn. It stays for WebGL, GLES and WebGPU until those are
+        // proven, and is exactly the reference the kernel is checked against — both call the same
+        // FishCloudResolve, so neither can drift from the other.
+        //
+        // Two targets: the clouds (rgb scattered light, a transmittance), and how many frames stand
+        // behind each pixel, so a pixel that has only just come into view takes this frame whole and one
+        // that has settled takes it as one part in sixteen.
         Pass
         {
             Name "CloudTemporal"
@@ -94,18 +163,17 @@ Shader "Hidden/FishMMO/Weather/Clouds"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
-
-            TEXTURE2D(_FishCloudCurrent);
-            SAMPLER(sampler_FishCloudCurrent);
-            TEXTURE2D(_FishCloudHistory);
-            SAMPLER(sampler_FishCloudHistory);
-            float4 _FishCloudCurrent_TexelSize;
-            float4x4 _FishCloudPreviousVP;
-            float4x4 _FishCloudInverseVP;
-            float4 _FishCloudTemporal;      // x blend, y valid history, z far distance
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            #include "FishCloudResolve.hlsl"
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+
+            struct Output
+            {
+                float4 clouds : SV_Target0;
+                float weight : SV_Target1;
+            };
 
             Varyings Vert(Attributes input)
             {
@@ -115,49 +183,57 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 return output;
             }
 
-            float4 Frag(Varyings input) : SV_Target
+            Output Frag(Varyings input)
             {
-                float4 current = SAMPLE_TEXTURE2D(_FishCloudCurrent, sampler_FishCloudCurrent, input.uv);
-                if (_FishCloudTemporal.y < 0.5)
+                float2 marched = max(1.0, _FishCloudJitter.zw);
+                float2 perTexel = _FishCloudUpsample.xy / marched;     // this pass's pixels to a marched texel
+                float rawHere = SampleSceneDepth(input.uv);
+                float here = LinearEyeDepth(rawHere, _ZBufferParams);
+                float3 camera = _WorldSpaceCameraPos.xyz;
+                float3 forward = -UNITY_MATRIX_V[2].xyz;
+                float3 direction = FishResolveRay(input.uv, camera);
+
+                Output output;
+                // Ground the camera looks down on from under the clouds has none in front of it:
+                // one depth read and a height, where the steadying would otherwise read thirty-odd
+                // textures to arrive at the same (0, 0, 0, 1).
+                if (FishResolveBelowClouds(rawHere, FishResolveSeen(here, camera, direction, forward)))
                 {
-                    return current;
-                }
-                // Clouds are far away, so reprojecting a point on the shell is close enough: take a
-                // direction, push it out to the layer, and ask where it was on the last frame.
-                float4 clip = float4(input.uv * 2.0 - 1.0, 1.0, 1.0);
-                #if UNITY_UV_STARTS_AT_TOP
-                    clip.y = -clip.y;
-                #endif
-                float4 world = mul(_FishCloudInverseVP, clip);
-                float3 direction = normalize(world.xyz / world.w - _WorldSpaceCameraPos.xyz);
-                // "point" is a reserved word in HLSL.
-                float3 onLayer = _WorldSpaceCameraPos.xyz + direction * _FishCloudTemporal.z;
-                float4 previous = mul(_FishCloudPreviousVP, float4(onLayer, 1.0));
-                float2 previousUV = previous.xy / max(1e-5, previous.w) * 0.5 + 0.5;
-                #if UNITY_UV_STARTS_AT_TOP
-                    previousUV.y = 1.0 - previousUV.y;
-                #endif
-                if (any(previousUV < 0.0) || any(previousUV > 1.0))
-                {
-                    return current;
+                    FishCloudResolved clear = FishResolveClear();
+                    output.clouds = clear.clouds;
+                    output.weight = clear.weight;
+                    return output;
                 }
 
-                float4 history = SAMPLE_TEXTURE2D(_FishCloudHistory, sampler_FishCloudHistory, previousUV);
-                // Clamp the history to what this frame's neighbourhood allows, or a turning camera
-                // smears the clouds.
-                float4 low = current, high = current;
-                [unroll] for (int x = -1; x <= 1; x++)
+                // This pixel on the grid the rays were cast on this frame. With the offset taken
+                // away, texel (i, j) looked through (i + 0.5, j + 0.5), so the nearest is the floor.
+                float2 onGrid = input.uv * marched - _FishCloudJitter.xy;
+                int2 nearest = (int2)floor(onGrid);
+                int2 last = (int2)marched - 1;
+                float4 values[9];
+                float theres[9];
+                float2 ats[9];
+                float2 motions[9];
+                [unroll] for (int y = -1; y <= 1; y++)
                 {
-                    [unroll] for (int y = -1; y <= 1; y++)
+                    [unroll] for (int x = -1; x <= 1; x++)
                     {
-                        float4 tap = SAMPLE_TEXTURE2D(_FishCloudCurrent, sampler_FishCloudCurrent,
-                            input.uv + float2(x, y) * _FishCloudCurrent_TexelSize.xy);
-                        low = min(low, tap);
-                        high = max(high, tap);
+                        int k = (y + 1) * 3 + (x + 1);
+                        int2 texel = clamp(nearest + int2(x, y), int2(0, 0), last);
+                        ats[k] = texel + 0.5;
+                        values[k] = LOAD_TEXTURE2D(_FishCloudCurrent, texel);
+                        motions[k] = LOAD_TEXTURE2D(_FishCloudCurrentMotion, texel).rg;
+                        // The depth where that ray actually went: the same read at the same place
+                        // the march made, so the two agree on what it stopped at.
+                        float2 sampleUV = (ats[k] + _FishCloudJitter.xy) / marched;
+                        theres[k] = LinearEyeDepth(SampleSceneDepth(sampleUV), _ZBufferParams);
                     }
                 }
-                history = clamp(history, low, high);
-                return lerp(current, history, _FishCloudTemporal.x);
+                FishCloudResolved resolved = FishCloudResolve(input.uv, rawHere, here, camera, direction, forward,
+                    onGrid, marched, perTexel, values, theres, ats, motions);
+                output.clouds = resolved.clouds;
+                output.weight = resolved.weight;
+                return output;
             }
             ENDHLSL
         }
@@ -178,7 +254,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
 
             TEXTURE2D(_FishCloudBuffer);
             SAMPLER(sampler_FishCloudBuffer);
-            float4 _FishCloudBuffer_TexelSize;
+            float4 _FishCloudComposite;     // xy one over the buffer's size, z 1 when the buffer is the screen's own size
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -193,14 +269,52 @@ Shader "Hidden/FishMMO/Weather/Clouds"
 
             float4 Frag(Varyings input) : SV_Target
             {
-                // Four taps, and each weighed by whether it is looking at the same thing this pixel
-                // is. The clouds are marched at two fifths of the screen and every ray stops at the
-                // world, so a low-resolution texel that straddles the edge of a post holds the sky
-                // ray's answer — a long march full of scattered light — while the pixels of the post
-                // itself hold almost none. Averaged blindly, that light was smeared back over the
-                // post: a white rim around everything, brightest against a dark scene. Comparing
-                // depths keeps each pixel to the taps that belong to it.
-                float2 texel = _FishCloudBuffer_TexelSize.xy * 0.5;
+                // Pass 1 already rebuilt the clouds pixel for pixel, each from the samples that looked
+                // at what that pixel looks at, so at the screen's own size there is nothing left to
+                // do but read it. Filtered again here it would only blur what it rebuilt.
+                float blur = _FishCloudComposite.w;
+                if (blur > 0.0)
+                {
+                    // Softened: a Gaussian of `blur` pixels over a three-by-three of bilinear taps (a
+                    // five-pixel support at one pixel), each weighed by whether it looks at the same
+                    // thing this pixel does, as the upscale below does — so the clouds lose their grain
+                    // and the world's edges keep theirs. Colour and transmittance share the weights: the
+                    // buffer is premultiplied, and a blur of it is still a cloud.
+                    // In SCREEN pixels, whatever size the buffer is (a large screen's is capped smaller).
+                    float2 step = (_ScreenParams.zw - 1.0) * blur;
+                    float hereDepth = LinearEyeDepth(SampleSceneDepth(input.uv), _ZBufferParams);
+                    float4 blurred = 0.0;
+                    float blurWeight = 0.0;
+                    [unroll] for (int by = -1; by <= 1; by++)
+                    {
+                        [unroll] for (int bx = -1; bx <= 1; bx++)
+                        {
+                            float2 at = input.uv + float2(bx, by) * step;
+                            float there = LinearEyeDepth(SampleSceneDepth(at), _ZBufferParams);
+                            float same = saturate(1.0 - abs(there - hereDepth) / max(12.0, hereDepth * 0.2));
+                            same = max(same, saturate(min(there, hereDepth) / 4000.0));
+                            // exp(−d²/2σ²) at a one-step spacing of σ: 1, 0.61, 0.37.
+                            float gauss = exp(-0.5 * (bx * bx + by * by));
+                            float weight = gauss * same;
+                            blurred += SAMPLE_TEXTURE2D_LOD(_FishCloudBuffer, sampler_FishCloudBuffer, at, 0) * weight;
+                            blurWeight += weight;
+                        }
+                    }
+                    return blurred / max(1e-4, blurWeight);
+                }
+                if (_FishCloudComposite.z > 0.5)
+                {
+                    return SAMPLE_TEXTURE2D_LOD(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv, 0);
+                }
+                // A buffer smaller than the screen (a very large one: the history is capped) is
+                // scaled up here. Four taps, and each weighed by whether it is looking at the same
+                // thing this pixel is. Every ray stops at the world, so a texel that straddles the
+                // edge of a post holds the sky ray's answer — a long march full of scattered light
+                // — while the pixels of the post itself hold almost none. Averaged blindly, that
+                // light was smeared back over the post: a white rim around everything, brightest
+                // against a dark scene. Comparing depths keeps each pixel to the taps that belong
+                // to it.
+                float2 texel = _FishCloudComposite.xy * 0.5;
                 float here = LinearEyeDepth(SampleSceneDepth(input.uv), _ZBufferParams);
                 float4 sum = 0.0;
                 float total = 0.0;
@@ -269,11 +383,13 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // gets from the sky is the ambient term's job, not the cookie's. How dark is the
                 // profile's shadow strength, which used to be handed to the presenter and then never
                 // read: the slider did nothing and the floor was a constant.
-                // A real optical depth, so the shadow of a heap is hard-edged and dark and the
-                // shadow of a wisp is faint — nothing softened, nothing floored. The strength is
-                // how dark the ground may go: at 1 a solid cloud's shadow is black and the ambient
-                // term is all that lights it, which is what a cloud shadow on a sunny day is.
-                float through = exp(-density);
+                // A real optical depth, so the shadow of a heap is hard-edged and the shadow of a
+                // wisp is faint. What gets through is the light that came straight through AND the
+                // light scattered through (FishCloudGroundTransmission, Eddington): e^−τ alone was
+                // only the first, and left the ground under any thick cloud black to the sun, when
+                // about 15 % of it comes through a cumulus and a few per cent through a storm.
+                // The strength is how much of that the cookie applies.
+                float through = FishCloudGroundTransmission(density, toSun.y, _FishCloudLight.z);
                 return saturate(lerp(1.0, through, saturate(_FishCloudShadowArea.y)));
             }
             ENDHLSL
@@ -582,6 +698,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             TEXTURE2D(_FishCloudShadowRaw);
             SAMPLER(sampler_FishCloudShadowRaw);
             float4 _FishCloudShadowRaw_TexelSize;
+            float _FishCloudShadowFarDim;    // 1 − what the light gets through the cloud past the window
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -611,7 +728,9 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 float shadow = sum / total;
                 float2 toEdge = min(input.uv, 1.0 - input.uv);
                 float inside = saturate(min(toEdge.x, toEdge.y) / 0.06);
-                return lerp(1.0, shadow, inside);
+                // Out to the average past the window, not to full sun: the light carries no other
+                // dimming for cloud, and the land beyond the window is under the same sky.
+                return lerp(1.0 - _FishCloudShadowFarDim, shadow, inside);
             }
             ENDHLSL
         }

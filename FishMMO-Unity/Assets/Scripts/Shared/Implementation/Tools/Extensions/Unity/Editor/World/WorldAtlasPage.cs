@@ -1026,6 +1026,11 @@ namespace FishMMO.Shared.WorldDesign
 			Pair(info, "Size", $"{entry.SizeKm.x:0.##} × {entry.SizeKm.y:0.##} km");
 			Pair(info, "Body", b != null ? $"{b.ResolvedName}, radius {AtlasModel.RadiusOf(b):0.#} km" : "(none)");
 			Pair(info, "Weather", $"{entry.EffectiveWeather}{(b != null && !b.HasWeather ? " — no air here, so none" : string.Empty)}");
+			// What the scene adds to the air is the only say it has in its weather, so show it when it says anything.
+			if (!entry.Air.IsZero)
+			{
+				Pair(info, "Air", entry.Air.ToString());
+			}
 			inspectorHost.Add(info);
 
 			// Teleporters leaving this scene.

@@ -15,12 +15,6 @@ MonoBehaviour:
   m_GroupName: Shared_Static_Permanent
   m_GUID: 23636b54ceb43a03f93abc3987c4632a
   m_SerializeEntries:
-  - m_GUID: 00a91c9335a0f6193bc9c0daacf916d8
-    m_Address: Lightning
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 00c000c4719048f68aa772f48e423911
     m_Address: Tutorial Spawners
     m_ReadOnly: 0
@@ -119,12 +113,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 070a580671acc704ba34689f4865bcf4
     m_Address: Summon Lesser Fire Elemental
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 076d8aba1b3aadb3d837c296a17a04a3
-    m_Address: Tundra Snow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -257,12 +245,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1247148bc7e74425b873bef11a31a14c
     m_Address: Dark Elf
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 128875fbb5365ef049c47eae96ec0aa0
-    m_Address: Aurora
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -777,12 +759,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2f1cd15b53b3db6fabaffecf6a143679
-    m_Address: Ashfall
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2fa87adc114046b2a2fd8fd41b30dc69
     m_Address: Plague Walker
     m_ReadOnly: 0
@@ -791,12 +767,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2fe739a3f4db463fbf30d79f492c5142
     m_Address: Dewling
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 30c934f6fa91f8a34856ff851d8a619e
-    m_Address: Heavy Snow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -867,12 +837,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 34c72236249102d769568390b2af216c
-    m_Address: Aurora Night
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 35ebcde9d35d4ef9995efb2b5d9c93b8
     m_Address: Giant Spider
     m_ReadOnly: 0
@@ -933,12 +897,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 39707c4b75c193593be96cbd250f5aca
-    m_Address: Hail
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a0f3726f3ed4bdea730b87dc25178e2
     m_Address: Mandrake
     m_ReadOnly: 0
@@ -987,12 +945,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3fcc3b4cc1297b551b570f2672afc7e9
-    m_Address: Hailstorm
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 40374016ce274a8cbd1c3afea98ff664
     m_Address: Griffin
     m_ReadOnly: 0
@@ -1007,12 +959,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 42f8d292196f42a7838c0bd80736fd00
     m_Address: Drake
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 44768a592a117f6c7b8e525962e9789b
-    m_Address: Soluris System - Beliaron Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1059,12 +1005,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 484b236f93276f18a92cbcc4e021a9a8
-    m_Address: Sand
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4873c6dd41384e18b19e300934d442b7
     m_Address: Bugbear
     m_ReadOnly: 0
@@ -1073,12 +1013,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 48d5a903fd5eb581ba5235f674695571
     m_Address: Dungeon Chest
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 48dfb6c7fef4034188fa9261bde2de5b
-    m_Address: Dune Sandstorm
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1311,12 +1245,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5832fa16c8f36bc318fed167a1ff7e1e
-    m_Address: Sandstorm
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 58b39b31950b4104c808244e14478bdb
     m_Address: Water Resistance
     m_ReadOnly: 0
@@ -1485,22 +1413,17 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6796b9cb7130cce6b8f45e1e1171525c
-    m_Address: Fog
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 67e5b419b5e646f4895935cf06fca178
     m_Address: StartScene B Fog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 68a32e3d41bd72f339cad877dfc35cb0
-    m_Address: Thunderstorm
+  - m_GUID: 69baeeda49ea89f268266955933d6961
+    m_Address: Weather Render Profile
     m_ReadOnly: 0
     m_SerializedLabels:
+    - Client_Static_Permanent
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69de0afedec049ceaa7dfafe0242db29
@@ -1557,12 +1480,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6f0565b36a2914f579ebce802a6472bc
-    m_Address: Fair
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6f2ef4376240b54438d797691a276175
     m_Address: Deep Ocean
     m_ReadOnly: 0
@@ -1577,12 +1494,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6f5b01e760d14a829d00f114dce05afc
     m_Address: Sprite
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6f63f0ccbfbfdc2e4bc4c4df3b494945
-    m_Address: Swamp Rain
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1653,12 +1564,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 77ceb35e60107d4bfb9d84311ed6d380
-    m_Address: Sprinkle
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 782ca4500bb24367945e5f4974825496
     m_Address: Swamp Cave
     m_ReadOnly: 0
@@ -1679,12 +1584,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7b0b28f4064e4de6982f3ad5758bd9f5
     m_Address: Snow Troll
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7b0d9996dc5b51f019a5142e2e3def52
-    m_Address: Soluris System - Galris Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1766,20 +1665,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7fb177e0c9fb8f17ba2452c257f23d4c
-    m_Address: Rain
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8021d6d8c60145cdbe41508116afce42
     m_Address: Wrathspawn
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 8059e3921abe69355873881d4f42a867
-    m_Address: Mist
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2042,12 +1929,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 94ae71e31834ad5e4bb8508bbd21ff3d
-    m_Address: Heavy Rain
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 94b859a041ce497ebbd44a6997e51ffc
     m_Address: Castle
     m_ReadOnly: 0
@@ -2120,12 +2001,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9a37d3ea163b41bc834a13ad562bb9d0
-    m_Address: ClearSky
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a571cab03b3f684da8436e4391abdbb
     m_Address: Lesser Fireball
     m_ReadOnly: 0
@@ -2152,12 +2027,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9be7cd235dd7492f846ab5842eaddd57
     m_Address: Explorers Leaderboard
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9c4d74db7c7266cdfb9907debaba310c
-    m_Address: Light Rain
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2276,12 +2145,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a6a57c019710ab6feb91bab672f0081c
-    m_Address: Wind
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
     m_Address: an orc mage
     m_ReadOnly: 0
@@ -2372,12 +2235,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ade9a108bb77fdcc4a0f194c4f2f1972
-    m_Address: Light Snow
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ae496bfb85924c32ac54f280410b25fc
     m_Address: Succubus
     m_ReadOnly: 0
@@ -2424,18 +2281,6 @@ MonoBehaviour:
     m_Address: Ethan.fbx
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b2be23afeaddac6faa373ee751e2d988
-    m_Address: Eruption Ashfall
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b3b00a0fbed363476a5f1d6ddccd20d7
-    m_Address: Medium Rain
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b3ba235619e24adb9e1f9fb3b22ff20e
     m_Address: Minotaur
@@ -2605,12 +2450,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c103e37c8b1ff77558752c23f9b7f594
-    m_Address: Soluris System - Peliareth Clouds
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c11d602f9d3b44b39559daf8e7eb6029
     m_Address: Common Titles
     m_ReadOnly: 0
@@ -2713,12 +2552,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c85fa651fc7df2c4399c2beb345d509a
-    m_Address: Clear
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c8d55dbf68d647a682a1dbbe2f722884
     m_Address: Name Grammar
     m_ReadOnly: 0
@@ -2755,12 +2588,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cd247f59315b9d16782275ef9077806c
-    m_Address: Blizzard
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cda9817140ba48c3baa959bef9cd47e0
     m_Address: Wasp Swarm
     m_ReadOnly: 0
@@ -2775,12 +2602,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ce974977ce1547809dbf333d6151459c
     m_Address: Giant Toad
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ced6535dae5816bbb8591f387ddfec67
-    m_Address: Ash
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2805,12 +2626,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d00db1805f33b104b8b2198459b0a45d
     m_Address: Lesser Fire Damage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: d00fa0d9f95bbd677bbcdca4cecdd02e
-    m_Address: Snow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3003,12 +2818,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dd7387a2a9a94ae1babebb4559702176
     m_Address: Pixie
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ddea45bbac4a2bf6f86fe2fa1e24707b
-    m_Address: Jungle Downpour
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3271,12 +3080,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ed642679c6a55880387e3a1cd071a3ce
-    m_Address: Windy
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ed8cbeaf068f477ba9e61e1497b66db3
     m_Address: Shade
     m_ReadOnly: 0
@@ -3321,12 +3124,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f1bedd6f4354a7e41be26aee87734d66
     m_Address: Orc
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f2151e1631aaf21ea99031fa54937f64
-    m_Address: Clouds
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3537,12 +3334,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe3425a466033e34ead49fcfc3204895
     m_Address: Small World Item
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: fec31e0ef91897198b223defb6beca6a
-    m_Address: Overcast
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

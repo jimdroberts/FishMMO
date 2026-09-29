@@ -98,41 +98,9 @@ MonoBehaviour:
       - Wide
       Description: Grass to the horizon in every direction, and nothing to break
         the wind.
-  Weather:
-    Background: []
-    CellSpawns:
-    - Preset: {fileID: 11400000, guid: 6f0565b36a2914f579ebce802a6472bc, type: 2}
-      Weight: 3
-    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
-      Weight: 2.5
-    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
-      Weight: 2
-    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
-      Weight: 2
-    - Preset: {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
-      Weight: 1.5
-    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
-      Weight: 1.2
-    - Preset: {fileID: 11400000, guid: 77ceb35e60107d4bfb9d84311ed6d380, type: 2}
-      Weight: 1.5
-    - Preset: {fileID: 11400000, guid: 3fcc3b4cc1297b551b570f2672afc7e9, type: 2}
-      Weight: 0.4
-    - Preset: {fileID: 11400000, guid: b32410dbffe52af2a92ded94d45f3861, type: 2}
-      Weight: 1
-    - Preset: {fileID: 11400000, guid: 5e2b4f36125896439879c0a36ecc3f25, type: 2}
-      Weight: 0.5
-    - Preset: {fileID: 11400000, guid: 9cf12cc653dc8f775a40cced4e1cf5cb, type: 2}
-      Weight: 0.12
-    Suitability:
-    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
-      Suitability: 0.5
-    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
-      Suitability: 0.35
-    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
-      Suitability: 0.4
-    Variants: []
-    Forbidden: 0
-    CellsPerSquareKm: 0.4
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

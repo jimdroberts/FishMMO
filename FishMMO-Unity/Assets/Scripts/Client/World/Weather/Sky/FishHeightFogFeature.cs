@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
@@ -7,26 +8,41 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Fog that lies in the low ground instead of filling the world evenly (P5).
+	/// The weather's fog layer, analytically: lying in the low ground with a top — the FALLBACK, where
+	/// the cloud march is not drawing the fog (P5).
 	/// </summary>
 	/// <remarks>
 	/// <para>
+	/// <b>The fog is the cloud march's now.</b> A fog is cloud whose base is the ground, and the march
+	/// walks it with the clouds (FishCloudVolume.hlsl): its banks, its billowed top, its drift, at every
+	/// distance, over the world and the sky alike. This pass drew the same layer as one smooth
+	/// trapezoid in altitude from the froxel volume's edge to the horizon — a flat, textureless wash
+	/// round every horizon, which was most of what anyone ever saw of a fog. It stands down whenever the
+	/// march has drawn the fog for the camera (<see cref="FogLayerView.MarchedThisFrame"/>), and draws
+	/// it where the march does not run: a renderer without the cloud feature, or a sky that has not
+	/// bound its volumes. It still hands the water its fog either way (below), which the march cannot:
+	/// the water is drawn after it.
+	/// </para>
+	/// <para>
 	/// Unity's built-in fog is a function of distance alone, so a valley floor and a ridge at the
-	/// same range are equally foggy. Mist pools; it does not hang at altitude. This pass reads the
-	/// world position behind each pixel out of the depth buffer and integrates an exponential
-	/// height falloff along the view ray, which is what fills a valley and leaves a ridge clear.
+	/// same range are equally foggy, a mist hides the sky as much as the ground and a mist, a fog and
+	/// a dense fog are three shades of one flat wash. A fog is a layer of chilled air on the ground
+	/// with a top (<see cref="FogLayer"/>). This pass reads the world position
+	/// behind each pixel out of the depth buffer and integrates that layer along the view ray, in
+	/// closed form (FishFogLayer.hlsl), and lights it as a fog is lit: the beam thrown forward round the
+	/// sun, the light the fog above has scattered arriving diffuse, the sky's own from all round.
 	/// </para>
 	/// <para>
-	/// <b>Analytic, not marched.</b> The integral has a closed form, so this is one full-screen pass
-	/// with no loop — a few instructions a pixel, against the cloud march's 28 to 72 samples. It
-	/// runs on every tier, including WebGL2, and it is the cheap half of P5's fog work; the froxel
-	/// volumetric path is separate and needs compute.
+	/// <b>As the fallback, it shares the fog with the froxel volume, and never draws the same fog twice.</b> Where
+	/// <see cref="FishVolumetricFogFeature"/> runs, it draws the layer from the camera to its far edge
+	/// with the fog's structure in it, and this pass starts there and carries the same layer on to the
+	/// horizon. Where it does not — WebGL2, which has no compute — this pass draws it all. The
+	/// pipeline's own distance fog leaves the fog's drops out wherever this pass is live
+	/// (<see cref="DrawsTheLayer"/>), and keeps only what is falling, which does fill the air evenly.
 	/// </para>
 	/// <para>
-	/// <b>It composes with the built-in fog rather than replacing it.</b> <c>FogComposer</c> still
-	/// owns distance fog and the sky colour; this adds the height term on top, driven by the same
-	/// <c>_FishWeatherFog</c> channels the rest of the weather presentation reads, so a mist layer
-	/// thickening puts fog in the hollows without anything else having to know.
+	/// Everything about the fog is the weather's: how thick, how deep, how lifted, how it drifts. There
+	/// is nothing to author here but the material.
 	/// </para>
 	/// </remarks>
 	public class FishHeightFogFeature : ScriptableRendererFeature
@@ -36,38 +52,44 @@ namespace FishMMO.Client
 		[Tooltip("The height-fog material. Left empty, the feature finds the shader itself.")]
 		public Material FogMaterial;
 
-		[Tooltip("Metres the fog thins over. Larger is a deeper, softer layer.")]
-		[Min(1f)] public float FalloffHeight = 60f;
-
-		[Tooltip("World Y the fog is thickest at. Usually the water line or the valley floor.")]
-		public float BaseHeight;
-
-		[Tooltip("How thick the fog can ever get. Below 1 always leaves something visible through it.")]
-		[Range(0f, 1f)] public float MaximumOpacity = 0.92f;
-
-		[Tooltip("How much brighter the fog is looking toward the sun. 0 is a flat grey sheet.")]
-		[Range(0f, 1f)] public float SunInscatter = 0.6f;
-
-		[Tooltip("Metres before the fog starts, so the camera is never inside a wall of it.")]
-		[Min(0f)] public float StartDistance = 4f;
-
-		[Tooltip("Metres the fog integrates to. Beyond this the sky keeps its own colour.")]
-		[Min(10f)] public float EndDistance = 1200f;
-
-		[Tooltip("Scales the weather's fog density into this pass. The built-in distance fog keeps its own.")]
-		[Range(0f, 0.2f)] public float DensityScale = 0.03f;
+		/// <summary>How far a ray into open sky is followed through the layer when the sky has no reach of its own to say, m.</summary>
+		public const float DefaultSkyDistance = 44000f;
 
 		private FogPass pass;
+
+		private static readonly HashSet<FishHeightFogFeature> live = new HashSet<FishHeightFogFeature>();
+
+		/// <summary>
+		/// Whether this pass can draw the fog's layer where the cloud march does not: a live, active
+		/// feature on the renderer, whose shader this machine can run. While it can — or while the march
+		/// draws it — the pipeline's distance fog leaves the fog's drops out (<see cref="FogLayerView.Drawn"/>).
+		/// </summary>
+		public static bool DrawsTheLayer
+		{
+			get
+			{
+				foreach (FishHeightFogFeature feature in live)
+				{
+					if (feature != null && feature.isActive && feature.Resolve() != null)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+		}
 
 		public override void Create()
 		{
 			pass = new FogPass
 			{
-				// After the opaque world and the clouds, before transparents: fog sits over the
-				// solid world, and water and glass are drawn through it rather than behind it.
+				// After the opaque world and the clouds, before transparents: fog sits over the solid
+				// world and the sky behind it, and water and glass are drawn through it rather than
+				// behind it. Before the froxel volume, which lies in front of what this draws.
 				renderPassEvent = RenderPassEvent.BeforeRenderingTransparents + 1,
 			};
 			pass.ConfigureInput(ScriptableRenderPassInput.Depth);
+			live.Add(this);
 		}
 
 		public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
@@ -81,7 +103,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			pass.Setup(material, this);
+			// An overlay draws into its base camera's frame, which the base has already fogged.
+			if (renderingData.cameraData.renderType == CameraRenderType.Overlay)
+			{
+				return;
+			}
+			pass.Setup(material);
 			renderer.EnqueuePass(pass);
 		}
 
@@ -92,7 +119,7 @@ namespace FishMMO.Client
 				return FogMaterial;
 			}
 			Shader shader = Shader.Find(ShaderName);
-			if (shader == null)
+			if (shader == null || !shader.isSupported)
 			{
 				return null;
 			}
@@ -102,6 +129,7 @@ namespace FishMMO.Client
 
 		protected override void Dispose(bool disposing)
 		{
+			live.Remove(this);
 			if (FogMaterial != null)
 			{
 				CoreUtils.Destroy(FogMaterial);
@@ -115,17 +143,16 @@ namespace FishMMO.Client
 			private const string PassName = "Fish Height Fog";
 
 			private static readonly int InverseVPId = Shader.PropertyToID("_FishFogInverseVP");
-			private static readonly int ParamsId = Shader.PropertyToID("_FishFogParams");
-			private static readonly int ColorId = Shader.PropertyToID("_FishFogColor");
-			private static readonly int SunId = Shader.PropertyToID("_FishFogSun");
-			private static readonly int SunColorId = Shader.PropertyToID("_FishFogSunColor");
 			private static readonly int RangeId = Shader.PropertyToID("_FishFogRange");
-			private static readonly int WeatherFogId = Shader.PropertyToID("_FishWeatherFog");
+			private static readonly int ForwardId = Shader.PropertyToID("_FishFogForward");
 
 			/* The same fog, published for TRANSPARENT surfaces. This pass fogs what is already in the
 			 * frame, before the transparent queue — so the sea, the shore and anything else drawn
-			 * after it came out perfectly clear through the thickest fog. They apply the same integral
-			 * themselves, at their own depth, from these. Density zero means no fog this frame. */
+			 * after it came out perfectly clear through the thickest fog. They apply it themselves, at
+			 * their own depth, from these (FishWaterFog.hlsl): an exponential falloff over the ground,
+			 * which is as much of the layer's shape as a surface drawn low on the water needs — its
+			 * extinction at the ground, falling off over the layer's depth. Density zero means no fog
+			 * this frame. */
 			public static readonly int AirParamsId = Shader.PropertyToID("_FishAirFogParams");
 			public static readonly int AirColorId = Shader.PropertyToID("_FishAirFogColor");
 			public static readonly int AirSunId = Shader.PropertyToID("_FishAirFogSun");
@@ -133,12 +160,10 @@ namespace FishMMO.Client
 			public static readonly int AirRangeId = Shader.PropertyToID("_FishAirFogRange");
 
 			private Material material;
-			private FishHeightFogFeature settings;
 
-			public void Setup(Material fogMaterial, FishHeightFogFeature feature)
+			public void Setup(Material fogMaterial)
 			{
 				material = fogMaterial;
-				settings = feature;
 			}
 
 			private class FogData
@@ -150,7 +175,7 @@ namespace FishMMO.Client
 			{
 				// No fog for transparents unless this pass finds some below.
 				Shader.SetGlobalVector(AirParamsId, Vector4.zero);
-				if (material == null || settings == null)
+				if (material == null)
 				{
 					return;
 				}
@@ -161,63 +186,56 @@ namespace FishMMO.Client
 					return;
 				}
 
-				/* The weather's own fog channels, which every other presenter reads too:
-				 * x density, y the layer's height, z the volumetric share. Nothing is added to the
-				 * wire or to the globals for this pass — it reads what is already there. */
-				Vector4 weatherFog = Shader.GetGlobalVector(WeatherFogId);
-				float density = weatherFog.x * settings.DensityScale;
-				if (density <= 1e-5f)
+				FogLayerView layer = FogLayerView.Current;
+				if (!layer.Visible)
 				{
 					// No fog worth drawing. Skipping the pass entirely is the point of checking.
 					return;
 				}
+				FogLayerView.Lighting lighting = FogLayerView.PublishLighting();
 
-				/* The authored falloff, stretched by the weather's fog height. A mist that the
-				 * forecast says is shallow should lie in the hollows; one it says is deep should
-				 * reach the ridges. */
-				float falloff = Mathf.Max(1f, settings.FalloffHeight * Mathf.Lerp(0.5f, 2f, Mathf.Clamp01(weatherFog.y)));
+				Camera camera = cameraData.camera;
+				Vector3 forward = camera.transform.forward;
+				// Where the froxel volume, if it runs for this camera, hands the fog over to this pass. Not
+				// when the cloud march has drawn the fog: the froxel volume stands down then too, and the
+				// water, which lays this fog over itself from the camera out, must not leave out the half
+				// kilometre the volume would have covered.
+				bool marched = FogLayerView.MarchedThisFrame;
+				float start = marched ? 0f : FishVolumetricFogFeature.ReachFor(camera);
+				SkySystem sky = SkySystem.Instance;
+				float skyDistance = sky != null ? Mathf.Max(1000f, sky.CloudFarDistance) : DefaultSkyDistance;
 
 				Matrix4x4 view = cameraData.GetViewMatrix();
 				Matrix4x4 projection = GL.GetGPUProjectionMatrix(cameraData.GetProjectionMatrix(), true);
 				material.SetMatrix(InverseVPId, (projection * view).inverse);
-				material.SetVector(ParamsId, new Vector4(density, falloff, settings.BaseHeight, settings.MaximumOpacity));
+				material.SetVector(RangeId, new Vector4(start, skyDistance, 0f, 0f));
+				material.SetVector(ForwardId, new Vector4(forward.x, forward.y, forward.z, 0f));
 
-				/* The sky's own fog colour, so the fog matches the air it is in: at sunset it goes
-				 * orange with the horizon instead of staying the grey it was at noon. */
-				material.SetVector(ColorId, RenderSettings.fogColor);
+				// For the water: the layer's extinction at the ground under the camera, falling off over
+				// its depth, lit as its middle is lit. A fog the wind has lifted has cleared off the water
+				// under it, all but a haze.
+				Vector3 eye = cameraData.worldSpaceCameraPos;
+				float ground = FogLayerView.GroundUnder(eye);
+				FogLayerView.Column column = layer.Over(ground, ground);
+				Color lit = layer.LightAt(ground + 0.5f * layer.Depth, column, lighting);
+				float onTheWater = layer.Extinction * (1f - 0.8f * Mathf.Clamp01(layer.Lift));
+				Shader.SetGlobalVector(AirParamsId, new Vector4(onTheWater, Mathf.Max(1f, layer.Depth), ground, 1f));
+				Shader.SetGlobalVector(AirColorId, lit);
+				Shader.SetGlobalVector(AirSunId, new Vector4(lighting.ToLight.x, lighting.ToLight.y, lighting.ToLight.z, 0.6f));
+				Shader.SetGlobalVector(AirSunColorId, lighting.LightColor);
+				// z: 1 when the cloud march has drawn the fog, so the cloud buffer the sea lays over itself
+				// (FishWaterBehindClouds) already holds this fog in front of it. A surface that lays that
+				// buffer over itself must then leave this fog out, or it takes the drops' light twice; one
+				// that does not (the shore, the spray) still needs it.
+				Shader.SetGlobalVector(AirRangeId, new Vector4(start, skyDistance, marched ? 1f : 0f, 0f));
 
-				SkySystem sky = SkySystem.Instance;
-				Light sun = sky != null ? sky.Sun : null;
-				bool hasSun = sun != null && settings.SunInscatter > 0.001f;
-				if (hasSun)
+				// The fog itself is the cloud march's, where it has run for this camera: it was recorded
+				// before this pass and has already drawn the layer, with its structure, all the way out.
+				// Drawn again here it would take the same drops' light twice.
+				if (marched)
 				{
-					Vector3 toLight = -sun.transform.forward;
-					material.SetVector(SunId, new Vector4(toLight.x, toLight.y, toLight.z, settings.SunInscatter));
-					Color lit = sun.color * Mathf.Max(0.05f, sun.intensity);
-					material.SetVector(SunColorId, new Vector4(lit.r, lit.g, lit.b, 0f));
-					material.EnableKeyword("FISH_FOG_SUN");
+					return;
 				}
-				else
-				{
-					material.DisableKeyword("FISH_FOG_SUN");
-				}
-
-				material.SetVector(RangeId, new Vector4(settings.StartDistance, settings.EndDistance, cameraData.worldSpaceCameraPos.y, 0f));
-
-				Shader.SetGlobalVector(AirParamsId, new Vector4(density, falloff, settings.BaseHeight, settings.MaximumOpacity));
-				Shader.SetGlobalVector(AirColorId, RenderSettings.fogColor);
-				if (hasSun)
-				{
-					Vector3 toLight = -sun.transform.forward;
-					Color lit = sun.color * Mathf.Max(0.05f, sun.intensity);
-					Shader.SetGlobalVector(AirSunId, new Vector4(toLight.x, toLight.y, toLight.z, settings.SunInscatter));
-					Shader.SetGlobalVector(AirSunColorId, new Vector4(lit.r, lit.g, lit.b, 0f));
-				}
-				else
-				{
-					Shader.SetGlobalVector(AirSunId, Vector4.zero);
-				}
-				Shader.SetGlobalVector(AirRangeId, new Vector4(settings.StartDistance, settings.EndDistance, 0f, 0f));
 
 				using (var builder = renderGraph.AddRasterRenderPass<FogData>(PassName, out FogData data))
 				{

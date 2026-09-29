@@ -38,12 +38,15 @@ Shader "FishMMO/Weather/Precipitation Splash"
             #pragma fragment Frag
             // Integer hashing wants shader model 4-class hardware: WebGL2 is, and so is everything else.
             #pragma target 3.5
+            // The cloud shadow cookie on the sun (CloudShadowPresenter), read in the vertex stage.
+            #pragma multi_compile _ _LIGHT_COOKIES
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             // The ground's own weather (and FishWeather.hlsl through it), so a ring goes exactly where
             // the ground draws a puddle.
             #include "FishSurface.hlsl"
+            #include "FishAmbient.hlsl"
 
             float4 _FishSplashOrigin;   // xyz camera, w time
             float4 _FishSplashParams;   // x radius, y density 0..1, z widest ring across (m), w lifetime seconds
@@ -111,6 +114,22 @@ Shader "FishMMO/Weather/Precipitation Splash"
                 float gather = FishSurfaceNoise(at.xz * 0.35);
                 float puddle = saturate((wet * 1.6 - 0.45 - gather * 0.8) * 3.0) * level;
                 return float3(top, max(onWater, step(0.35, puddle)), onWater);
+            }
+
+            /* The main light's cookie at a point, as FishPrecipitation reads it: the sun through the
+             * cloud over the splash. The light itself is the open sun with the cloud in view divided
+             * back out, for the cookie to carry. 1 with no cookie, when the light carries it. */
+            float3 SplashSunCookie(float3 positionWS)
+            {
+                #if defined(_LIGHT_COOKIES)
+                    if (IsMainLightCookieEnabled())
+                    {
+                        float2 uv = ComputeLightCookieUVDirectional(_MainLightWorldToLight, positionWS, float4(1.0, 1.0, 0.0, 0.0), URP_TEXTURE_WRAP_MODE_NONE);
+                        float4 c = SAMPLE_TEXTURE2D_LOD(_MainLightCookieTexture, sampler_MainLightCookieTexture, uv, 0);
+                        return IsMainLightCookieTextureRGBFormat() ? c.rgb : (IsMainLightCookieTextureAlphaFormat() ? c.aaa : c.rrr);
+                    }
+                #endif
+                return float3(1.0, 1.0, 1.0);
             }
 
             Varyings Vert(Attributes input)
@@ -189,12 +208,27 @@ Shader "FishMMO/Weather/Precipitation Splash"
                 float calm = 1.0 - smoothstep(0.08, 0.3, _FishOcclusionWater.z);
                 alive *= lerp(1.0, calm, landing.z);
 
-                /* Lit like the drops that made it: the sky's light from above and a little of the
-                 * main light, as FishPrecipitation lights them. It was the tint alone, unlit, so at
-                 * night every splash glowed a moonlit blue at full daytime brightness on black
-                 * ground. */
+                /* Lit as water is. A glint is drops thrown up, and a drop is a lens: it shows the
+                 * light behind it, the sky's grey-white and the sun only against the light, as
+                 * FishPrecipitation lights the rain (PrecipitationField.ClearDropSun). A ripple's
+                 * crest is the water's surface, and shows the sky it mirrors. The sun is the sun
+                 * through the cloud overhead: the main light with its cookie. It was the sky straight
+                 * up plus 0.35 of the light read bare, which under a storm is the open sun — orange
+                 * specks on dark ground at a low sun. (Before that it was the tint alone, unlit, and
+                 * at night every splash glowed a daytime blue.) */
                 Light mainLight = GetMainLight();
-                half3 light = SampleSH(half3(0.0, 1.0, 0.0)) + mainLight.color * 0.35;
+                float3 landed = float3(at.x, top, at.z);
+                float3 look = normalize(landed - _WorldSpaceCameraPos.xyz + float3(0.0, 1e-4, 0.0));
+                float3 light;
+                if (ripple)
+                {
+                    light = max(0.0, FishTrilight(float3(look.x, abs(look.y), look.z)));
+                }
+                else
+                {
+                    float3 sun = mainLight.color * SplashSunCookie(landed);
+                    light = max(0.0, FishTrilight(look)) + sun * max(0.0, dot(look, mainLight.direction));
+                }
 
                 /* Splashes that exist but are not wanted still cost a quad each, so they are
                  * collapsed to nothing and the rasteriser throws them away. */

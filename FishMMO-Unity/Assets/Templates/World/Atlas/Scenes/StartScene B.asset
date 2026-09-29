@@ -29,8 +29,13 @@ MonoBehaviour:
   Climate: {fileID: 0}
   BiomeMap: {fileID: 0}
   Weather: 0
-  FixedWeather: {fileID: 0}
-  FixedWeatherIntensity: 1
+  Air:
+    Temperature: 0
+    Humidity: 0
+    Pressure: 0
+    Instability: 0
+    Wind: 0
+    Gravity: 0
   WeatherDirector: 1
   MaxClients: 0
   RevealGrid: {x: 4, y: 4}

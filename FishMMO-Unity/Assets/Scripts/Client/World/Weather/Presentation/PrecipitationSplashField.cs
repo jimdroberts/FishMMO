@@ -132,12 +132,10 @@ namespace FishMMO.Client
 			block.SetVector(ParamsId, new Vector4(Radius, Mathf.Clamp01(rain * 1.4f), Size * dropScale, Lifetime));
 			block.SetVector(GlintId, new Vector4(GlintLifetime, GlintHeight * dropScale, GlintOpacity, RingOpacity));
 
-			Color tint = substance != null ? substance.Tint : new Color(0.82f, 0.88f, 0.96f);
-			if (SkySystem.Instance != null)
-			{
-				// Lit by this world's sky, like the drops that made them.
-				tint = SkySystem.Instance.InAir(tint);
-			}
+			/* Water is clear: the shader lights a splash with the scene's own sky and sun, which carry
+			 * this world's hue already. It was a pale blue passed through the air's hue as well
+			 * (SkySystem.InAir), which coloured it twice. A substance of its own colour keeps it. */
+			Color tint = substance != null ? substance.Tint : Color.white;
 			block.SetColor(ColorId, new Color(tint.r, tint.g, tint.b, 0.5f));
 
 			/* Dryness from the temperature. Nothing happens below the midpoint — a splash on cool

@@ -163,13 +163,9 @@ MonoBehaviour:
       - Indomitable
       Description: "Military stronghold \u2014 thick walls, arrowslits, siege-scarred
         stone"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 0
-    CellsPerSquareKm: 0.4
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

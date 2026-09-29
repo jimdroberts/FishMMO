@@ -24,7 +24,6 @@ namespace FishMMO.UnitTests.Weather
 		[TearDown]
 		public void TearDown()
 		{
-			WeatherLayerHandles.Clear();
 			WeatherQuery.Clear();
 		}
 
@@ -257,54 +256,6 @@ namespace FishMMO.UnitTests.Weather
 			 * lose a world's worth of creatures. */
 			var gate = new WeatherRespawnCondition();
 			Assert.That(gate.AllowWhenSceneHasNoWeather, Is.True);
-		}
-
-		// ---- layer handles: how an ECA action takes back the layer it put up ----
-
-		[Test]
-		public void ALayerIsRemovedByTheNameItsAuthorGaveIt()
-		{
-			/* A layer is removed by a handle the server allocated at runtime, and ECA actions cannot
-			 * pass a value from one to the next — each runs independently against the event. Naming
-			 * the layer at authoring time and looking its handle up by that name is what closes the
-			 * gap. */
-			var caster = new StubCharacter { ID = 1 };
-
-			WeatherLayerHandles.Remember(caster, "ritual-storm", 42);
-			Assert.That(WeatherLayerHandles.TryTake(caster, "ritual-storm", out ushort handle), Is.True);
-			Assert.That(handle, Is.EqualTo(42));
-
-			// Taken, not read: a handle is good for exactly one removal. Left behind, a second
-			// trigger would remove a layer the server has forgotten — or one whose number has since
-			// been handed to a different layer.
-			Assert.That(WeatherLayerHandles.TryTake(caster, "ritual-storm", out _), Is.False, "and only once");
-			Assert.That(WeatherLayerHandles.TrackedCharacters, Is.EqualTo(0), "the record is gone with it");
-		}
-
-		[Test]
-		public void OneCastersStormCannotBeCalledOffByAnother()
-		{
-			// Two players lighting the same brazier must each be able to put out their own.
-			var first = new StubCharacter { ID = 1 };
-			var second = new StubCharacter { ID = 2 };
-
-			WeatherLayerHandles.Remember(first, "brazier", 10);
-			WeatherLayerHandles.Remember(second, "brazier", 20);
-
-			Assert.That(WeatherLayerHandles.TryTake(second, "brazier", out ushort theirs), Is.True);
-			Assert.That(theirs, Is.EqualTo(20), "their own layer, not the other player's");
-			Assert.That(WeatherLayerHandles.TryTake(first, "brazier", out ushort mine), Is.True);
-			Assert.That(mine, Is.EqualTo(10));
-		}
-
-		[Test]
-		public void RemovingALayerNobodyPutUpIsNotAnError()
-		{
-			// How "stop the storm" is written for a storm that may not be running.
-			var caster = new StubCharacter { ID = 1 };
-			Assert.That(WeatherLayerHandles.TryTake(caster, "never-added", out _), Is.False);
-			Assert.That(WeatherLayerHandles.TryTake(null, "anything", out _), Is.False);
-			Assert.That(WeatherLayerHandles.TryTake(caster, "", out _), Is.False);
 		}
 
 		// ---- the authority gate in front of every weather action ----

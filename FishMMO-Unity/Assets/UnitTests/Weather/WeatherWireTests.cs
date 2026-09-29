@@ -90,7 +90,9 @@ namespace FishMMO.UnitTests.Weather
 			return new StormCell
 			{
 				ID = id,
-				PresetID = -123456789,
+				Kind = StormKind.TropicalCyclone,
+				Shape = StormCellShape.Eyewall,
+				ExtentMeters = 320f,
 				Seed = 4000000000u,
 				OriginX = 1234.5f,
 				OriginZ = -678.25f,
@@ -107,9 +109,15 @@ namespace FishMMO.UnitTests.Weather
 			};
 		}
 
-		private static WeatherLayerEntry Layer(ushort handle)
+		private static AirOffsetEntry Air()
 		{
-			return new WeatherLayerEntry { Handle = handle, TemplateID = 987654321, From = 0.1f, To = 0.75f, StartTick = 100, EndTick = 1450, RemoveWhenDone = true };
+			return new AirOffsetEntry
+			{
+				From = new AirOffsets { Temperature = -3.5f, Humidity = 0.1f, Pressure = -0.2f, Instability = 0.05f, Wind = 1.5f, Gravity = -0.25f },
+				To = new AirOffsets { Temperature = 12.25f, Humidity = -0.4f, Pressure = 0.6f, Instability = -0.3f, Wind = -4f, Gravity = 2f },
+				StartTick = 10,
+				EndTick = 910,
+			};
 		}
 
 		[Test]
@@ -120,15 +128,11 @@ namespace FishMMO.UnitTests.Weather
 				SceneName = "Tutorial Island",
 				Revision = 77,
 				Seed = 31337,
-				SceneMode = WeatherSceneMode.Fixed,
-				FixedPresetID = 5555,
-				FixedIntensity = 0.6f,
-				Climate = new WeatherClimateEntry { FromTemperature = -0.2f, ToTemperature = 0.3f, FromHumidity = 0.1f, ToHumidity = -0.4f, StartTick = 10, EndTick = 910 },
+				SceneMode = WeatherSceneMode.Own,
+				Air = Air(),
 				Cover = new WeatherCover { Snow = 0.1f, Wet = 0.2f, Ash = 0.3f, Sand = 0.4f },
 				CoverTick = 123456,
 			};
-			timeline.Layers.Add(Layer(1));
-			timeline.Layers.Add(Layer(2));
 			timeline.Cells.Add(Cell(9));
 
 			var copy = new WeatherTimeline();
@@ -138,13 +142,9 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.AreEqual(timeline.Revision, copy.Revision);
 			LogAssert.AreEqual(timeline.Seed, copy.Seed);
 			LogAssert.AreEqual(timeline.SceneMode, copy.SceneMode);
-			LogAssert.AreEqual(timeline.FixedPresetID, copy.FixedPresetID);
-			LogAssert.AreEqual(timeline.FixedIntensity, copy.FixedIntensity);
-			LogAssert.AreEqual(timeline.Climate, copy.Climate);
+			LogAssert.AreEqual(timeline.Air, copy.Air);
 			LogAssert.AreEqual(timeline.Cover, copy.Cover);
 			LogAssert.AreEqual(timeline.CoverTick, copy.CoverTick);
-			LogAssert.AreEqual(2, copy.Layers.Count);
-			LogAssert.AreEqual(Layer(2), copy.Layers[1]);
 			LogAssert.AreEqual(1, copy.Cells.Count);
 			LogAssert.AreEqual(Cell(9), copy.Cells[0]);
 		}
@@ -156,7 +156,7 @@ namespace FishMMO.UnitTests.Weather
 			var copy = new WeatherTimeline();
 			copy.Apply(back);
 			LogAssert.AreEqual("Empty", copy.SceneName);
-			LogAssert.AreEqual(0, copy.Layers.Count);
+			LogAssert.IsTrue(copy.Air.To.IsZero);
 			LogAssert.AreEqual(0, copy.Cells.Count);
 		}
 
@@ -167,12 +167,10 @@ namespace FishMMO.UnitTests.Weather
 			{
 				SceneName = "Dungeon",
 				Revision = 12,
-				Layers = new List<WeatherLayerEntry> { Layer(3) },
-				RemovedLayers = new List<ushort> { 4, 65535 },
 				Cells = new List<StormCell> { Cell(5) },
-				RemovedCells = new List<ushort> { 6 },
-				HasClimate = true,
-				Climate = new WeatherClimateEntry { ToTemperature = 0.5f, EndTick = 99 },
+				RemovedCells = new List<ushort> { 6, 65535 },
+				HasAir = true,
+				Air = Air(),
 				HasCover = true,
 				Cover = new WeatherCover { Wet = 1f },
 				CoverTick = 4321,
@@ -180,12 +178,10 @@ namespace FishMMO.UnitTests.Weather
 			WeatherDeltaBroadcast back = RoundTrip(delta);
 			LogAssert.AreEqual(delta.SceneName, back.SceneName);
 			LogAssert.AreEqual(delta.Revision, back.Revision);
-			CollectionAssert.AreEqual(delta.Layers, back.Layers);
-			CollectionAssert.AreEqual(delta.RemovedLayers, back.RemovedLayers);
 			CollectionAssert.AreEqual(delta.Cells, back.Cells);
 			CollectionAssert.AreEqual(delta.RemovedCells, back.RemovedCells);
-			LogAssert.IsTrue(back.HasClimate);
-			LogAssert.AreEqual(delta.Climate, back.Climate);
+			LogAssert.IsTrue(back.HasAir);
+			LogAssert.AreEqual(delta.Air, back.Air);
 			LogAssert.IsTrue(back.HasCover);
 			LogAssert.AreEqual(delta.Cover, back.Cover);
 			LogAssert.AreEqual(delta.CoverTick, back.CoverTick);

@@ -331,6 +331,10 @@ namespace FishMMO.UnitTests.WorldDesign
 
 			entry.Weather = WeatherSceneMode.Own;
 			LogAssert.AreEqual(WeatherSceneMode.Own, settings.WeatherMode, "an explicit mode beats the layer");
+
+			LogAssert.IsTrue(settings.AuthoredAir.IsZero, "a scene adds nothing to its air until it is authored to");
+			entry.Air = new AirOffsets { Temperature = -8f, Humidity = 0.1f };
+			LogAssert.AreEqual(entry.Air, settings.AuthoredAir, "what a scene adds to its air is its atlas entry's");
 		}
 
 		[Test]

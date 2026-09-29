@@ -116,26 +116,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Weather in {scene.name}: {timeline.SceneMode}, director {(weatherHost.IsDirectorEnabled(scene) ? "on" : "off")}, revision {timeline.Revision}.",
 			};
 			WeatherSample here = WeatherQuery.Sample(scene, character.Transform.position);
-			lines.Add($"Here: {here.Frame} temp {here.Temperature:+0.00;-0.00} {(here.IsSheltered ? "sheltered" : "exposed")}.");
-			WeatherCover cover = timeline.Cover;
-			timeline.ClimateAt(WeatherQuery.CurrentTick, out float shiftT, out float shiftH);
-			lines.Add($"Cover snow {cover.Snow:0.00} wet {cover.Wet:0.00} ash {cover.Ash:0.00} sand {cover.Sand:0.00}; scene shift T {shiftT:+0.00;-0.00} H {shiftH:+0.00;-0.00}.");
-
+			AirColumn column = here.Column;
+			WeatherDriver.Synoptic air = here.Air;
+			float heading = Mathf.Repeat(Mathf.Atan2(air.Wind.x, air.Wind.y) * Mathf.Rad2Deg, 360f);
+			lines.Add($"Air here: {column.SurfaceKelvin - 273.15f:0.0} °C, dew point {column.DewPointKelvin - 273.15f:0.0} °C ({column.RelativeHumidity * 100f:0}% RH), pressure {air.Pressure:+0.00;-0.00}, "
+				+ $"lapse {column.EnvironmentLapse * 1000f:0.0} K/km (moist {column.MoistLapse * 1000f:0.0}, dry {column.DryLapse * 1000f:0.0}), wind {air.Wind.magnitude:0.0} m/s toward {heading:0}°.");
+			string towers = column.Deep
+				? $"towers to {column.TowerCeiling:0} m (CAPE {column.Cape:0} J/kg, updraughts {column.Updraft:0} m/s)"
+				: "no deep convection";
+			lines.Add($"Column: base {column.Base:0} m, tops {column.Top:0} m, {towers}, lid {column.Cap:0} m, freezing {column.Freezing:0} m, ice {column.IceLevel:0} m, tropopause {column.Tropopause:0} m; {here.Planet.Condensate} clouds, g {here.Planet.Gravity:0.00} m/s².");
+			lines.Add($"Weather: {here.Frame} temp {here.Temperature:+0.00;-0.00} {(here.IsSheltered ? "sheltered" : "exposed")}{(here.Substance != null ? ", falling: " + here.Substance.ResolvedDisplayName : string.Empty)}.");
 			uint tick = WeatherQuery.CurrentTick;
-			foreach (WeatherLayerEntry entry in timeline.Layers)
-			{
-				WeatherLayerTemplate template = WeatherLayerTemplate.Get<WeatherLayerTemplate>(entry.TemplateID);
-				lines.Add($"Layer #{entry.Handle} {(template != null ? template.name : "?")} {entry.IntensityAt(tick):0.00} → {entry.To:0.00}{(entry.RemoveWhenDone ? " (removing)" : string.Empty)}");
-			}
+			WorldSceneSettings.TryGetForScene(scene, out WorldSceneSettings sceneSettings);
+			AirOffsets authored = sceneSettings != null ? sceneSettings.AuthoredAir : default;
+			lines.Add($"Added to the air — authored: {(authored.IsZero ? "nothing" : authored.ToString())}; runtime: {(timeline.AirAt(tick).IsZero ? "nothing" : timeline.AirAt(tick).ToString())}.");
+			WeatherCover cover = timeline.Cover;
+			lines.Add($"Cover snow {cover.Snow:0.00} wet {cover.Wet:0.00} ash {cover.Ash:0.00} sand {cover.Sand:0.00}.");
+
 			var cells = new List<StormCell>();
 			WeatherQuery.CellsWithin(scene, character.Transform.position, ReportCellRadiusMeters, cells);
 			Vector3 p = character.Transform.position;
 			foreach (StormCell cell in cells)
 			{
-				WeatherPreset preset = WeatherPreset.Get<WeatherPreset>(cell.PresetID);
 				Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
 				Vector2 offset = centre - new Vector2(p.x, p.z);
-				lines.Add($"Cell {cell.ID} {(preset != null ? preset.ResolvedName : "?")} {offset.magnitude:0} m {Compass(offset)}, radius {cell.RadiusMeters:0} m, strength {cell.EnvelopeAt(tick):0.00}");
+				lines.Add($"Cell {cell.ID} {StormPhysics.NameOf(cell.Kind)} {offset.magnitude:0} m {Compass(offset)}, radius {cell.RadiusMeters:0} m, strength {cell.EnvelopeAt(tick):0.00}");
 			}
 			int others = timeline.Cells.Count - cells.Count;
 			if (others > 0)

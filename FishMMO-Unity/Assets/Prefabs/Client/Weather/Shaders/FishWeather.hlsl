@@ -12,7 +12,9 @@ float4 _FishWeatherPrecip;
 float4 _FishWeatherMix;
 // xy wind direction on the ground plane (world x, z), z speed (0..1 = 0..30 m/s), w gust
 float4 _FishWeatherWind;
-// x fog density, y fog height, z volumetric fog, w unused
+// The fog channels as they come: x how much fog (0..1), y how deep it lies (0..1 of
+// FogLayer.ChannelMetres), z how far it has lifted off the ground (0..1), w unused. The fog passes read
+// it in metres and per metre from FishFogLayer.hlsl's _FishFogLayer instead.
 float4 _FishWeatherFog;
 // Surface cover: x snow, y wet, z ash, w sand
 float4 _FishWeatherCover;

@@ -283,6 +283,9 @@ namespace FishMMO.Water
 				int start = line.Points.Count;
 				float length = piece.Length;
 				float travelled = 0f;
+				var rooms = new float[count];
+				var confidences = new float[count];
+				var spaces = new float[count];
 				for (int i = 0; i < count; i++)
 				{
 					Vector2 here = piece.Points[i];
@@ -310,14 +313,86 @@ namespace FishMMO.Water
 					float confidence = Mathf.Clamp01((slope - 0.35f) / 0.4f);
 
 					float ends = piece.Closed ? 10000f : Mathf.Min(travelled, length - travelled);
-					float space = SpaceFor(shore, piece, i, here, shoreward, room, tide, texel);
+					rooms[i] = room;
+					confidences[i] = confidence;
+					spaces[i] = SpaceFor(shore, piece, i, here, shoreward, room, tide, texel);
 					line.Points.Add(here);
 					line.Shoreward.Add(shoreward);
-					line.Shore.Add(new Vector4(room, confidence, ends, space));
+					line.Shore.Add(new Vector4(0f, 0f, ends, 0f));
+				}
+
+				/* One crest, not a row of separate ones. Each point's room, confidence and space were
+				 * measured on their own, and they are noisy from one point to the next — the room kinks
+				 * where the distance field folds, the space stops in half-metre steps and the bend is
+				 * judged from six neighbours — so neighbouring cross-sections stood at slightly different
+				 * stages and widths and the crest came out torn. A real crest is one body of water whose
+				 * height and timing change over tens of metres, so these are eased along the line over
+				 * about a dozen metres. The space is never eased UPWARD: that would undo the limit that
+				 * keeps breakers from crossing. Separate lines are not blended with each other: they are
+				 * different waves, coming in from different directions. */
+				int radius = Mathf.Max(1, Mathf.RoundToInt(CrestCoherenceMetres / Mathf.Max(0.1f, spacing)));
+				SmoothAlong(rooms, piece.Closed, radius, false);
+				SmoothAlong(confidences, piece.Closed, radius, false);
+				SmoothAlong(spaces, piece.Closed, radius, true);
+				for (int i = 0; i < count; i++)
+				{
+					Vector4 at = line.Shore[start + i];
+					line.Shore[start + i] = new Vector4(rooms[i], confidences[i], at.z, spaces[i]);
 				}
 				line.Pieces.Add((start, count, piece.Closed));
 			}
 			return line;
+		}
+
+		/// <summary>Half the length over which one breaker's crest is taken to be one body of water, in metres.</summary>
+		private const float CrestCoherenceMetres = 6f;
+
+		/// <summary>
+		/// Eases a quantity measured at each point of a line over this many points either side: a
+		/// triangle-weighted mean, wrapping round a loop and held at an open line's ends. Any thread.
+		/// </summary>
+		/// <param name="neverRaise">
+		/// Never above the value measured at any point: the least within the window is taken first, and
+		/// only that eased. Every eased value is a mean of minimums over windows that each contain the
+		/// point, so none can exceed what was measured there — the property the space depends on.
+		/// </param>
+		public static void SmoothAlong(float[] values, bool closed, int radius, bool neverRaise)
+		{
+			int count = values.Length;
+			if (count < 2 || radius < 1)
+			{
+				return;
+			}
+			int Wrap(int i) => closed ? ((i % count) + count) % count : System.Math.Max(0, System.Math.Min(count - 1, i));
+
+			float[] source = values;
+			if (neverRaise)
+			{
+				source = new float[count];
+				for (int i = 0; i < count; i++)
+				{
+					float least = values[i];
+					for (int k = -radius; k <= radius; k++)
+					{
+						least = System.Math.Min(least, values[Wrap(i + k)]);
+					}
+					source[i] = least;
+				}
+			}
+
+			var eased = new float[count];
+			for (int i = 0; i < count; i++)
+			{
+				float sum = 0f, weights = 0f;
+				for (int k = -radius; k <= radius; k++)
+				{
+					float weight = radius + 1 - System.Math.Abs(k);
+					sum += source[Wrap(i + k)] * weight;
+					weights += weight;
+				}
+				eased[i] = sum / weights;
+			}
+			System.Array.Copy(eased, values, count);
 		}
 
 		/// <summary>

@@ -163,13 +163,9 @@ MonoBehaviour:
       - Suffocating
       Description: "Unfathomable depths \u2014 darkness beyond darkness, madness
         at the edge"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

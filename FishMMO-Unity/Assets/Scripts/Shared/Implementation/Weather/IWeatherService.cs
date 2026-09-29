@@ -25,22 +25,19 @@ namespace FishMMO.Shared.Weather
 	/// </remarks>
 	public interface IWeatherService
 	{
-		/// <summary>Replaces the scene's layers with a preset's, over a transition.</summary>
-		bool ApplyPreset(Scene scene, WeatherPreset preset, float intensity, float transitionSeconds);
+		/// <summary>
+		/// Moves what is added to the scene's air to new values over a transition. Additions, never a
+		/// replacement: all zero hands the scene back to its air as it is.
+		/// </summary>
+		bool SetAirOffsets(Scene scene, AirOffsets offsets, float transitionSeconds);
 
-		/// <summary>Adds a scene-wide layer. Returns its handle, or 0 when the scene has no weather.</summary>
-		ushort AddLayer(Scene scene, WeatherLayerTemplate template, float intensity, float transitionSeconds);
+		/// <summary>What is currently added to the scene's air at runtime (the authored offsets not included).</summary>
+		bool TryGetAirOffsets(Scene scene, out AirOffsets offsets);
 
-		bool SetLayerIntensity(Scene scene, ushort handle, float intensity, float transitionSeconds);
-
-		/// <summary>Fades a layer out, then forgets it.</summary>
-		bool RemoveLayer(Scene scene, ushort handle, float transitionSeconds);
-
-		/// <summary>Fades every scene layer out. Storm cells are left alone.</summary>
-		bool ClearLayers(Scene scene, float transitionSeconds);
-
-		/// <summary>Starts a storm cell. Returns its id, or 0.</summary>
-		ushort SpawnCell(Scene scene, WeatherPreset preset, Vector3 at, float radiusMeters, Vector2 velocity, float lifetimeSeconds);
+		/// <summary>Starts a storm of a kind. Returns its id, or 0.</summary>
+		/// <param name="radiusMeters">Its size; 0 or less lets the air there decide.</param>
+		/// <param name="lifetimeSeconds">How long it lasts; 0 or less lets the air there decide.</param>
+		ushort SpawnCell(Scene scene, StormKind kind, Vector3 at, float radiusMeters, Vector2 velocity, float lifetimeSeconds);
 
 		/// <summary>Sends a cell toward a point at a speed (m/s).</summary>
 		bool SteerCell(Scene scene, ushort id, Vector3 towards, float speed);
@@ -50,9 +47,6 @@ namespace FishMMO.Shared.Weather
 
 		/// <summary>Switches the automatic storm director for a scene.</summary>
 		bool SetDirector(Scene scene, bool enabled);
-
-		/// <summary>Moves the scene-wide climate shift to new values over a transition.</summary>
-		bool SetClimateOffset(Scene scene, float temperature, float humidity, float transitionSeconds);
 
 		bool TryGetTimeline(Scene scene, out WeatherTimeline timeline);
 

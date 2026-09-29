@@ -162,13 +162,9 @@ MonoBehaviour:
       - Putrid
       Description: "Underground swamp system \u2014 flooded tunnels, fungus, slimy
         walls"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

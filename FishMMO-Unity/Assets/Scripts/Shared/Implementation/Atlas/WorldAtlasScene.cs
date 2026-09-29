@@ -62,8 +62,8 @@ namespace FishMMO.Shared.Atlas
 		[Header("Weather")]
 		[Tooltip("Auto: the layer's default, and then dungeons get none and everything else its own.")]
 		public WeatherSceneMode Weather = WeatherSceneMode.Auto;
-		public WeatherPreset FixedWeather;
-		[Range(0f, 1f)] public float FixedWeatherIntensity = 1f;
+		[Tooltip("Added to this scene's air, always: extra cold or heat, damp or dryness, a higher or lower pressure, more or less stable air, more wind, more or less pull. The weather is then worked out from that air like anywhere else. All zero is the world as it is.")]
+		public AirOffsets Air;
 		[Tooltip("Let the automatic director start storm cells here.")]
 		public bool WeatherDirector = true;
 

@@ -14,6 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishCloudsFeature
   m_Active: 1
   CloudMaterial: {fileID: 2100000, guid: 77d2de1e9c99042cb99592565ec65216, type: 2}
+  ResolveCompute: {fileID: 7200000, guid: 3b2660716b1e3d805bd009750d8229fc, type: 3}
+  WeatherMapCompute: {fileID: 7200000, guid: bf9ab77ea08b4895b37b4a406d0a1a8f, type: 3}
 --- !u!114 &-1878332245247344467
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -134,7 +136,7 @@ MonoBehaviour:
   m_Name: Fish Volumetric Fog
   m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishVolumetricFogFeature
   m_Active: 1
-  Compute: {fileID: 0}
+  Compute: {fileID: 7200000, guid: 7c0b95a88fde244e0b836d5e7c694578, type: 3}
   ApplyMaterial: {fileID: 0}
   GridWidth: 160
   GridHeight: 90

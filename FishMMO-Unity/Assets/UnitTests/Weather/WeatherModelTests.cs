@@ -8,8 +8,9 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The weather model both sides evaluate: how layers blend, how a storm re-types with the
-	/// temperature, how cover builds and clears, and how the timeline moves between revisions.
+	/// The weather model both sides evaluate: how frames blend, how a storm re-types with the
+	/// temperature, how cover builds and clears, what is added to the air, and how the timeline
+	/// moves between revisions.
 	/// </summary>
 	/// <remarks>
 	/// Server and client run this code over the same data and the same tick. Anything here that is
@@ -29,10 +30,6 @@ namespace FishMMO.UnitTests.Weather
 		{
 			foreach (ScriptableObject asset in created)
 			{
-				if (asset is WeatherLayerTemplate template)
-				{
-					template.RemoveFromCache();
-				}
 				Object.DestroyImmediate(asset);
 			}
 			created.Clear();
@@ -46,17 +43,6 @@ namespace FishMMO.UnitTests.Weather
 				frame[channel] = value;
 			}
 			return frame;
-		}
-
-		private WeatherLayerTemplate CachedTemplate(string name, WeatherLayerKind kind, WeatherChannel channel)
-		{
-			var template = ScriptableObject.CreateInstance<WeatherLayerTemplate>();
-			template.name = name;
-			template.Kind = kind;
-			template.Channels.Add(new WeatherChannelCurve { Channel = channel, Curve = AnimationCurve.Linear(0f, 0f, 1f, 1f), Scale = 1f });
-			template.AddToCache(name);
-			created.Add(template);
-			return template;
 		}
 
 		// ── Blending ──────────────────────────────────────────────────
@@ -276,47 +262,74 @@ namespace FishMMO.UnitTests.Weather
 		// ── Timeline ──────────────────────────────────────────────────
 
 		[Test]
-		public void ALayerEasesBetweenItsTicks()
+		public void AddedAirEasesBetweenItsTicks()
 		{
-			var entry = new WeatherLayerEntry { From = 0f, To = 1f, StartTick = 100, EndTick = 200 };
-			LogAssert.AreEqual(0f, entry.IntensityAt(50));
-			LogAssert.AreEqual(0f, entry.IntensityAt(100));
-			Assert.That(entry.IntensityAt(150), Is.EqualTo(0.5f).Within(Tolerance));
-			LogAssert.AreEqual(1f, entry.IntensityAt(200));
-			LogAssert.AreEqual(1f, entry.IntensityAt(5000));
+			var entry = new AirOffsetEntry { From = default, To = new AirOffsets { Humidity = 0.4f, Temperature = -10f }, StartTick = 100, EndTick = 200 };
+			LogAssert.AreEqual(0f, entry.At(50).Humidity);
+			LogAssert.AreEqual(0f, entry.At(100).Humidity);
+			Assert.That(entry.At(150).Humidity, Is.EqualTo(0.2f).Within(Tolerance));
+			Assert.That(entry.At(150).Temperature, Is.EqualTo(-5f).Within(Tolerance));
+			LogAssert.AreEqual(0.4f, entry.At(200).Humidity);
+			LogAssert.AreEqual(0.4f, entry.At(5000).Humidity);
 
 			float last = 0f;
 			for (uint t = 100; t <= 200; t++)
 			{
-				float value = entry.IntensityAt(t);
-				LogAssert.IsTrue(value >= last, $"intensity must not fall on the way up (tick {t})");
+				float value = entry.At(t).Humidity;
+				LogAssert.IsTrue(value >= last, $"what is added must not fall on the way up (tick {t})");
 				last = value;
 			}
 		}
 
 		[Test]
-		public void AnInstantLayerJumps()
+		public void AnInstantChangeToTheAirJumps()
 		{
-			var entry = new WeatherLayerEntry { From = 0.2f, To = 0.9f, StartTick = 100, EndTick = 100 };
-			LogAssert.AreEqual(0.2f, entry.IntensityAt(99));
-			LogAssert.AreEqual(0.9f, entry.IntensityAt(100));
+			var entry = new AirOffsetEntry { From = new AirOffsets { Pressure = 0.2f }, To = new AirOffsets { Pressure = 0.9f }, StartTick = 100, EndTick = 100 };
+			LogAssert.AreEqual(0.2f, entry.At(99).Pressure);
+			LogAssert.AreEqual(0.9f, entry.At(100).Pressure);
 		}
 
 		[Test]
-		public void PruningForgetsFinishedRemovalsAndDeadCells()
+		public void AdditionsToTheAirAddScaleAndStayAdditions()
+		{
+			var a = new AirOffsets { Temperature = 5f, Humidity = 0.1f, Wind = 2f };
+			var b = new AirOffsets { Temperature = -3f, Pressure = 0.4f, Gravity = 1f };
+			AirOffsets sum = a + b;
+			LogAssert.AreEqual(2f, sum.Temperature);
+			LogAssert.AreEqual(0.1f, sum.Humidity);
+			LogAssert.AreEqual(0.4f, sum.Pressure);
+			LogAssert.AreEqual(2f, sum.Wind);
+			LogAssert.AreEqual(1f, sum.Gravity);
+			LogAssert.IsTrue(default(AirOffsets).IsZero, "nothing added is zero");
+			LogAssert.IsFalse(sum.IsZero);
+			Assert.That(new AirOffsets { Temperature = 33.1f }.TemperatureScale, Is.EqualTo(1f).Within(1e-3f), "the temperature is kelvin, the scale's unit is 33.1 of them");
+		}
+
+		[Test]
+		public void AdditionsChangeTheAirAndNeverReplaceIt()
+		{
+			var air = new WeatherDriver.Synoptic { Humidity = 0.5f, Pressure = 0.1f, Instability = 0.3f, Wind = new Vector2(3f, 4f) };
+			WeatherDriver.Synoptic changed = new AirOffsets { Humidity = 0.2f, Pressure = -0.5f, Instability = 0.1f, Wind = 5f }.Apply(air);
+			Assert.That(changed.Humidity, Is.EqualTo(0.7f).Within(Tolerance));
+			Assert.That(changed.Pressure, Is.EqualTo(-0.4f).Within(Tolerance));
+			Assert.That(changed.Instability, Is.EqualTo(0.4f).Within(Tolerance));
+			Assert.That(changed.Wind.magnitude, Is.EqualTo(10f).Within(1e-3f), "wind is added along the way it already blows");
+			Assert.That(Vector2.Angle(changed.Wind, air.Wind), Is.LessThan(0.01f));
+			WeatherDriver.Synoptic calmed = new AirOffsets { Wind = -20f }.Apply(air);
+			LogAssert.AreEqual(0f, calmed.Wind.magnitude, "a wind taken below nothing is calm, not blowing backwards");
+			WeatherDriver.Synoptic same = default(AirOffsets).Apply(air);
+			LogAssert.AreEqual(air.Humidity, same.Humidity);
+		}
+
+		[Test]
+		public void PruningForgetsDeadCells()
 		{
 			var timeline = new WeatherTimeline();
-			timeline.Layers.Add(new WeatherLayerEntry { Handle = 1, From = 1f, To = 0f, StartTick = 0, EndTick = 100, RemoveWhenDone = true });
-			timeline.Layers.Add(new WeatherLayerEntry { Handle = 2, From = 0f, To = 1f, StartTick = 0, EndTick = 100 });
 			timeline.Cells.Add(new StormCell { ID = 7, BirthTick = 0, MatureTick = 10, DecayTick = 20, DeathTick = 30 });
-
+			timeline.Cells.Add(new StormCell { ID = 8, BirthTick = 0, MatureTick = 10, DecayTick = 200, DeathTick = 300 });
 			timeline.Prune(50);
-			LogAssert.AreEqual(2, timeline.Layers.Count, "a removal is kept until it has faded out");
-			LogAssert.AreEqual(0, timeline.Cells.Count);
-
-			timeline.Prune(100);
-			LogAssert.AreEqual(1, timeline.Layers.Count);
-			LogAssert.AreEqual((ushort)2, timeline.Layers[0].Handle, "a finished fade-in is kept");
+			LogAssert.AreEqual(1, timeline.Cells.Count);
+			LogAssert.AreEqual((ushort)8, timeline.Cells[0].ID);
 		}
 
 		[Test]
@@ -329,35 +342,16 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
-		public void SceneLayersAreEvaluatedThroughTheirTemplates()
+		public void WhatTheGroundGivesUpFallsAsItsOwnKind()
 		{
-			WeatherLayerTemplate clouds = CachedTemplate("Test Clouds", WeatherLayerKind.Clouds, WeatherChannel.CloudCover);
-			WeatherLayerTemplate warmth = CachedTemplate("Test Warmth", WeatherLayerKind.Clouds, WeatherChannel.TemperatureOffset);
-			LogAssert.AreNotEqual(0, clouds.ID, "the template must be registered for the timeline to find it");
-
-			var timeline = new WeatherTimeline { TickDelta = TickDelta };
-			timeline.Layers.Add(new WeatherLayerEntry { Handle = 1, TemplateID = clouds.ID, From = 0f, To = 1f, StartTick = 0, EndTick = 100 });
-			timeline.Layers.Add(new WeatherLayerEntry { Handle = 2, TemplateID = warmth.ID, From = 0.25f, To = 0.25f, StartTick = 0, EndTick = 0 });
-			timeline.Layers.Add(new WeatherLayerEntry { Handle = 3, TemplateID = 12345, From = 1f, To = 1f });
-
-			var acc = new WeatherAccumulator();
-			timeline.AccumulateSceneLayers(50, ref acc);
-			WeatherFrame frame = acc.Resolve();
-			Assert.That(frame[WeatherChannel.CloudCover], Is.EqualTo(0.5f).Within(Tolerance));
-
-			timeline.Climate = new WeatherClimateEntry { FromTemperature = 0.1f, ToTemperature = 0.1f, FromHumidity = -0.2f, ToHumidity = -0.2f };
-			timeline.ClimateAt(50, out float temperature, out float humidity);
-			Assert.That(temperature, Is.EqualTo(0.35f).Within(Tolerance), "the climate shift and the layers' offsets add");
-			Assert.That(humidity, Is.EqualTo(-0.2f).Within(Tolerance));
-		}
-
-		[Test]
-		public void APrecipitatingLayerFallsAsItsOwnKind()
-		{
-			WeatherLayerTemplate snow = CachedTemplate("Test Snow", WeatherLayerKind.Snow, WeatherChannel.Precipitation);
-			WeatherFrame frame = snow.Evaluate(0.6f);
+			var sand = ScriptableObject.CreateInstance<WeatherSubstance>();
+			created.Add(sand);
+			sand.Cover = WeatherCoverKind.Sand;
+			WeatherFrame frame = WeatherPhysics.Falling(sand, 0.6f);
 			Assert.That(frame[WeatherChannel.Precipitation], Is.EqualTo(0.6f).Within(Tolerance));
-			LogAssert.AreEqual(1f, frame[WeatherChannel.SnowWeight]);
+			LogAssert.AreEqual(1f, frame[WeatherChannel.SandWeight]);
+			sand.Cover = WeatherCoverKind.Ash;
+			LogAssert.AreEqual(1f, WeatherPhysics.Falling(sand, 0.6f)[WeatherChannel.AshWeight]);
 		}
 
 		// ── Deltas ────────────────────────────────────────────────────
@@ -365,8 +359,7 @@ namespace FishMMO.UnitTests.Weather
 		private static WeatherTimeline TimelineAt(uint revision)
 		{
 			var timeline = new WeatherTimeline { SceneName = "Test", Revision = revision, TickDelta = TickDelta };
-			timeline.Layers.Add(new WeatherLayerEntry { Handle = 1, TemplateID = 10, To = 0.5f });
-			timeline.Cells.Add(new StormCell { ID = 1, PresetID = 20, DeathTick = 1000 });
+			timeline.Cells.Add(new StormCell { ID = 1, Kind = StormKind.Thunderstorm, DeathTick = 1000 });
 			return timeline;
 		}
 
@@ -378,28 +371,26 @@ namespace FishMMO.UnitTests.Weather
 			{
 				SceneName = "Test",
 				Revision = 5,
-				Layers = new List<WeatherLayerEntry> { new WeatherLayerEntry { Handle = 1, TemplateID = 10, To = 0.9f }, new WeatherLayerEntry { Handle = 2, TemplateID = 11, To = 1f } },
 				RemovedCells = new List<ushort> { 1 },
-				Cells = new List<StormCell> { new StormCell { ID = 2, PresetID = 21, DeathTick = 1000 } },
-				HasClimate = true,
-				Climate = new WeatherClimateEntry { ToTemperature = 0.4f },
+				Cells = new List<StormCell> { new StormCell { ID = 2, Kind = StormKind.Haboob, DeathTick = 1000 } },
+				HasAir = true,
+				Air = new AirOffsetEntry { To = new AirOffsets { Temperature = -4f } },
 			};
 			LogAssert.IsTrue(timeline.TryApply(delta));
 			LogAssert.AreEqual(5u, timeline.Revision);
-			LogAssert.AreEqual(2, timeline.Layers.Count);
-			LogAssert.AreEqual(0.9f, timeline.Layers[0].To, "an existing handle is edited in place");
 			LogAssert.AreEqual(1, timeline.Cells.Count);
 			LogAssert.AreEqual((ushort)2, timeline.Cells[0].ID);
-			LogAssert.AreEqual(0.4f, timeline.Climate.ToTemperature);
+			LogAssert.AreEqual(StormKind.Haboob, timeline.Cells[0].Kind);
+			LogAssert.AreEqual(-4f, timeline.Air.To.Temperature);
 		}
 
 		[Test]
 		public void ADuplicateDeltaIsHarmless()
 		{
 			WeatherTimeline timeline = TimelineAt(5);
-			var stale = new WeatherDeltaBroadcast { SceneName = "Test", Revision = 5, RemovedLayers = new List<ushort> { 1 } };
+			var stale = new WeatherDeltaBroadcast { SceneName = "Test", Revision = 5, RemovedCells = new List<ushort> { 1 } };
 			LogAssert.IsTrue(timeline.TryApply(stale), "an old delta needs no resync");
-			LogAssert.AreEqual(1, timeline.Layers.Count, "an old delta changes nothing");
+			LogAssert.AreEqual(1, timeline.Cells.Count, "an old delta changes nothing");
 			LogAssert.AreEqual(5u, timeline.Revision);
 		}
 
@@ -407,11 +398,11 @@ namespace FishMMO.UnitTests.Weather
 		public void AGapChangesNothingAndAsksForTheWholeTimeline()
 		{
 			WeatherTimeline timeline = TimelineAt(5);
-			var skipped = new WeatherDeltaBroadcast { SceneName = "Test", Revision = 7, RemovedLayers = new List<ushort> { 1 }, HasCover = true, Cover = new WeatherCover { Snow = 1f } };
+			var skipped = new WeatherDeltaBroadcast { SceneName = "Test", Revision = 7, RemovedCells = new List<ushort> { 1 }, HasCover = true, Cover = new WeatherCover { Snow = 1f } };
 			LogAssert.IsTrue(timeline.IsGap(skipped));
 			LogAssert.IsFalse(timeline.TryApply(skipped));
 			LogAssert.AreEqual(5u, timeline.Revision);
-			LogAssert.AreEqual(1, timeline.Layers.Count);
+			LogAssert.AreEqual(1, timeline.Cells.Count);
 			LogAssert.AreEqual(0f, timeline.Cover.Snow);
 		}
 
@@ -420,28 +411,27 @@ namespace FishMMO.UnitTests.Weather
 		{
 			WeatherTimeline source = TimelineAt(9);
 			source.Seed = 42;
-			source.SceneMode = WeatherSceneMode.Fixed;
-			source.FixedPresetID = 77;
-			source.FixedIntensity = 0.3f;
+			source.SceneMode = WeatherSceneMode.None;
+			source.Air = new AirOffsetEntry { From = new AirOffsets { Humidity = 0.1f }, To = new AirOffsets { Humidity = 0.3f }, StartTick = 10, EndTick = 20 };
 			source.Cover = new WeatherCover { Snow = 0.2f, Wet = 0.4f };
 			source.CoverTick = 1234;
 
 			WeatherTimeline target = TimelineAt(2);
-			target.Layers.Add(new WeatherLayerEntry { Handle = 99 });
+			target.Cells.Add(new StormCell { ID = 99 });
 			target.Apply(source.ToBroadcast());
 
 			LogAssert.AreEqual(9u, target.Revision);
 			LogAssert.AreEqual(42u, target.Seed);
-			LogAssert.AreEqual(WeatherSceneMode.Fixed, target.SceneMode);
-			LogAssert.AreEqual(77, target.FixedPresetID);
-			LogAssert.AreEqual(0.3f, target.FixedIntensity);
-			LogAssert.AreEqual(1, target.Layers.Count);
+			LogAssert.AreEqual(WeatherSceneMode.None, target.SceneMode);
+			LogAssert.AreEqual(0.3f, target.Air.To.Humidity);
+			LogAssert.AreEqual(20u, target.Air.EndTick);
+			LogAssert.AreEqual(1, target.Cells.Count);
 			LogAssert.AreEqual(0.2f, target.Cover.Snow);
 			LogAssert.AreEqual(1234u, target.CoverTick);
 
 			WeatherTimelineBroadcast copy = source.ToBroadcast();
-			copy.Layers.Clear();
-			LogAssert.AreEqual(1, source.Layers.Count, "the broadcast must not share the timeline's lists");
+			copy.Cells.Clear();
+			LogAssert.AreEqual(1, source.Cells.Count, "the broadcast must not share the timeline's lists");
 		}
 
 		// ── Storm cells ───────────────────────────────────────────────

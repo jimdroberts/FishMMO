@@ -7,16 +7,17 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Everything the cloud renderer knows about the sky it is drawing, in numbers: what each band
-	/// is doing, what the whole stack costs, and how much of the screen it actually ended up on.
+	/// Everything the cloud renderer knows about the sky it is drawing, in numbers: the air it was
+	/// worked out from, where that air puts each regime of cloud, what the whole sky costs, and how
+	/// much of the screen it actually ended up on.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// A slider tells you what you asked for. It does not tell you what you got, and with a noise
-	/// field cut by a threshold those are very different things — a coverage of 0.4 on a band whose
-	/// onset is 0.55 produces nothing at all, and nothing about the slider says so. These figures
-	/// close that gap: every band reports the coverage it was actually given, the cut that coverage
-	/// puts on the noise, and whether the result is empty.
+	/// A slider tells you what you added to the air. It does not tell you what the air did with it:
+	/// a few kelvin of cold can move the freezing level a kilometre, a little humidity can bring a
+	/// base down under a lid that was holding the sky clear. These figures close that gap — the air
+	/// in real units, the heights it condenses, freezes and stops at, and what each regime of cloud
+	/// is doing with that.
 	/// </para>
 	/// <para>
 	/// The one number that cannot be derived — how much of the sky the clouds cover once drawn — is
@@ -110,11 +111,11 @@ namespace FishMMO.Client
 		/// The cut the shader puts on the noise at a given coverage: the same curve as
 		/// FishCloudVolume.hlsl, so the panel reports the threshold the sky is actually drawn with.
 		/// </summary>
-		public static float ThresholdAt(VolumetricCloudSettings clouds, float coverage)
+		public static float ThresholdAt(float coverage)
 		{
 			float cover = Mathf.Clamp01(coverage);
 			float curve = cover * cover;
-			return Mathf.Lerp(clouds.CoverageCutClear, clouds.CoverageCutFull, cover) - clouds.CoverageBend * curve * curve;
+			return Mathf.Lerp(SkySystem.CloudCutClear, SkySystem.CloudCutFull, cover) - SkySystem.CloudCutBend * curve * curve;
 		}
 
 		/// <summary>
@@ -188,10 +189,10 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The whole-sky figures. Always the same figures in the same order, whatever they read.</summary>
-		public static void Sky(SkySystem sky, VolumetricCloudSettings clouds, List<Figure> into)
+		public static void Sky(SkySystem sky, List<Figure> into)
 		{
 			into.Clear();
-			if (sky == null || clouds == null)
+			if (sky == null)
 			{
 				into.Add(new Figure("Clouds", "State", "no sky system", Tone.Warn));
 				return;
@@ -202,80 +203,47 @@ namespace FishMMO.Client
 				return;
 			}
 			CloudTierSettings tier = sky.CloudTier;
-			var bands = sky.CloudBands;
-			int count = bands != null ? bands.Count : 0;
-			int active = 0;
-			float deepest = 0f;
-			var coverage = sky.CloudBandCoverage;
-			for (int i = 0; i < count && coverage != null && i < coverage.Count; i++)
-			{
-				if (coverage[i] > 0.001f && bands[i] != null && bands[i].Density > 0.001f)
-				{
-					active++;
-					deepest = Mathf.Max(deepest, bands[i].Thickness);
-				}
-			}
+			WeatherDriver.Synoptic air = sky.CloudViewerAir;
+			AirColumn column = sky.CloudViewerColumn;
 
-			// What the weather asked for.
-			into.Add(new Figure("Forecast", "Cover", Pct(sky.CloudCover)));
-			into.Add(new Figure("Forecast", "Precipitation", Pct(sky.CloudPrecipitation), sky.CloudPrecipitation <= 0.005f ? Tone.Dim : Tone.Plain));
-			into.Add(new Figure("Forecast", "Storm", Pct(sky.CloudStorm), sky.CloudStorm <= 0.005f ? Tone.Dim : Tone.Plain));
-			// The formations: how far the bank or gap the camera stands under has moved the cover
-			// from the sky's own figure. Zero with the sliders or a pinned preset, which have none.
-			float meso = sky.CloudMesoscaleAtCamera;
-			bool formed = Mathf.Abs(meso) > 0.0005f;
-			into.Add(new Figure("Forecast", "Here", formed ? $"{(meso >= 0f ? "in a bank" : "in a gap")} {meso * 100f:+0;-0}%" : "no formations",
-				formed ? Tone.Plain : Tone.Dim,
-				formed
-					? $"Cover here against the sky's mean. Masses every ~{WeatherDriver.MesoscaleMetres / 1000f:0} km, up to ±{WeatherDriver.MesoscaleAmplitude * 100f:0}%."
-					: "The channels or a preset decide the weather, and they have no banks or gaps."));
+			// The air overhead, at sea level, in the units a forecast uses.
+			into.Add(new Figure("Air", "Temperature", $"{column.SurfaceKelvin - 273.15f:0.0} °C"));
+			into.Add(new Figure("Air", "Dew point", $"{column.DewPointKelvin - 273.15f:0.0} °C", Tone.Plain, $"Relative humidity {Pct(column.RelativeHumidity)}."));
+			into.Add(new Figure("Air", "Pressure", air.Pressure >= 0.25f ? $"high {air.Pressure:+0.00}" : air.Pressure <= -0.25f ? $"low {air.Pressure:+0.00;-0.00}" : $"{air.Pressure:+0.00;-0.00}"));
+			into.Add(new Figure("Air", "Lapse", $"{column.EnvironmentLapse * 1000f:0.0} K/km", Tone.Plain,
+				$"The air cools this fast with height. Saturated air {column.MoistLapse * 1000f:0.0}, dry {column.DryLapse * 1000f:0.0}: between the two the air is conditionally unstable."));
+			into.Add(new Figure("Air", "Wind", $"{sky.CloudWindSpeed:0.0} m/s toward {Bearing(sky.CloudWind)}"));
+			into.Add(new Figure("Air", "Air climbs", $"{sky.CloudClimbHeight:0} m", Tone.Plain, "Ground lower than this the air goes over; higher, it flows round."));
+
+			// Where the air puts things.
+			bool free = column.Deep;
+			into.Add(new Figure("Column", "Cloud base", $"{column.Base:0} m", Tone.Plain, "Where rising air reaches its dew point: the flat underside of every low cloud."));
+			into.Add(new Figure("Column", "Tops", $"{column.Top:0} m", Tone.Plain, "Where an ordinary cloud here stops: a deck's top in settled air, a heap's in unsettled."));
+			into.Add(new Figure("Column", "Towers to", free ? $"{column.TowerCeiling:0} m" : "no deep convection",
+				free ? Tone.Good : Tone.Dim, free ? $"A lifted parcel rises on its own from {column.FreeConvection:0} m. CAPE {column.Cape:0} J/kg, updraughts {column.Updraft:0} m/s." : float.IsInfinity(column.FreeConvection) || column.FreeConvection >= Mathf.Min(column.Cap, column.Tropopause)
+					? "A lifted parcel never gets warmer than the air around it below the lid."
+					: $"A lifted parcel rises on its own from {column.FreeConvection:0} m but gains too little by it ({column.Cape:0} J/kg) to build a tower."));
+			into.Add(new Figure("Column", "Lid", column.Cap < column.Tropopause - 1f ? $"{column.Cap:0} m" : "none", Tone.Plain, "The inversion a high puts on the sky: nothing ordinary grows through it."));
+			into.Add(new Figure("Column", "Freezing level", $"{column.Freezing:0} m"));
+			into.Add(new Figure("Column", "Ice level", $"{column.IceLevel:0} m", Tone.Plain, "Where every drop freezes: cirrus lives above it."));
+			into.Add(new Figure("Column", "Tropopause", $"{column.Tropopause:0} m", Tone.Plain, "The top of the weather."));
+			into.Add(new Figure("Column", "Convection", Pct(column.Vigour), column.Vigour <= 0.01f ? Tone.Dim : Tone.Plain, "How heaped and bubbly the low cloud is: 0 a flat deck, 1 boiling towers."));
+			bool crossing = sky.CloudTowerAtCamera > 0.3f;
+			into.Add(new Figure("Column", "Tower overhead", crossing ? $"{Pct(sky.CloudTowerAtCamera)} — crossing now" : Pct(sky.CloudTowerAtCamera), crossing ? Tone.Warn : Tone.Plain));
+
+			// What the cloud does to the light, and what the wind does to the cloud.
+			into.Add(new Figure("Light", "Cloud here", sky.CloudOverheadDepth > 0.05f ? $"τ {sky.CloudOverheadDepth:0}" : "none", Tone.Plain,
+				"The optical depth of an ordinary low cloud over this air: the column's adiabatic water from its base to its top."));
+			into.Add(new Figure("Light", "Sky gets through", Pct(sky.CloudDiffuseOverhead), sky.CloudDiffuseOverhead < 0.1f ? Tone.Warn : Tone.Plain,
+				"All of it through the gaps; through the cloud, by diffusion, 1/(1 + ¾(1 − g)τ) — about 15% under a cumulus, a few per cent under a storm: dark grey, never Beer's black."));
+			into.Add(new Figure("Light", "Wind shear", $"{sky.CloudLeanShear * 1000f:0.0} m/s per km", Tone.Plain,
+				$"How fast the wind grows with height here. A heap leans about {Mathf.Rad2Deg * Mathf.Atan(sky.CloudLeanShear * Mathf.Max(100f, column.Top - column.Base) / (2f * Mathf.Max(CloudClimate.HeapUpdraught, column.Updraft))):0}° downwind; the drift of each layer is the world's own wind, which does not change with the weather."));
 
 			// What ended up on the screen.
 			into.Add(new Figure("On screen", "Solid cloud", MeasuredCover >= 0f ? Pct(MeasuredCover) : "measuring…", MeasuredCover >= 0f ? Tone.Plain : Tone.Dim));
 			into.Add(new Figure("On screen", "Any cloud", MeasuredAnyCloud >= 0f ? Pct(MeasuredAnyCloud) : "—", MeasuredAnyCloud >= 0f ? Tone.Plain : Tone.Dim));
-			float threshold = ThresholdAt(clouds, sky.CloudCover);
-			into.Add(new Figure("On screen", "Noise cut", threshold.ToString("0.000"), Tone.Plain, "Where the noise is cut at this cover. The field runs 0.33–0.76."));
-			into.Add(new Figure("On screen", "Field kept", Pct(FillForThreshold(threshold))));
-
-			// The stack.
-			into.Add(new Figure("Stack", "Bands drawing", $"{active} of {count}", active == 0 ? Tone.Dim : Tone.Plain));
-			into.Add(new Figure("Stack", "Shell", $"{sky.CloudShellBottom:0}–{sky.CloudShellTop:0} m"));
-			into.Add(new Figure("Stack", "Sky depth", $"{(sky.CloudShellTop - sky.CloudShellBottom) / 1000f:0.00} km"));
-			into.Add(new Figure("Stack", "Deepest band", $"{deepest:0} m", deepest <= 0f ? Tone.Dim : Tone.Plain));
-
-			// The columns: how far up the cloud of this sky gets. The same curve the shader uses.
-			float ColumnTop(float type)
-			{
-				float low = Mathf.Lerp(0.07f, 0.30f, Mathf.Clamp01(type * 2f));
-				return Mathf.Lerp(low, 1f, Mathf.Clamp01(type * 2f - 1f));
-			}
-			for (int i = 0; i < count; i++)
-			{
-				if (bands[i] == null || !bands[i].Column)
-				{
-					continue;
-				}
-				var bottoms = sky.CloudBandBottom;
-				float floor = bottoms != null && i < bottoms.Count && bottoms[i] > 0.001f ? bottoms[i] : bands[i].Bottom;
-				float depth = bands[i].Thickness;
-				bool towers = sky.CloudTowerGain >= 0.01f;
-				into.Add(new Figure("Columns", "Base", $"{floor:0} m"));
-				into.Add(new Figure("Columns", "Most cloud to", $"{floor + depth * ColumnTop(sky.CloudColumnType):0} m", Tone.Plain, $"Column type {sky.CloudColumnType:0.00}."));
-				into.Add(new Figure("Columns", "Towers to", towers ? $"{floor + depth * ColumnTop(Mathf.Clamp01(sky.CloudColumnType + sky.CloudTowerGain)):0} m" : "none",
-					towers ? Tone.Plain : Tone.Dim, towers ? null : "The field is not deciding the weather, so nothing grows a tower."));
-				// A tower is a few kilometres across and the bed's default clock carries the sky at a
-				// kilometre and a half a second: one crossing the camera is there and gone in two
-				// seconds, which looks like cloud swelling up and shrinking away. This says when.
-				bool crossing = sky.CloudTowerAtCamera > 0.3f;
-				into.Add(new Figure("Columns", "Tower overhead", crossing ? $"{Pct(sky.CloudTowerAtCamera)} — crossing now" : Pct(sky.CloudTowerAtCamera),
-					crossing ? Tone.Warn : Tone.Plain));
-				into.Add(new Figure("Columns", "Air climbs", $"{sky.CloudClimbHeight:0} m", Tone.Plain, "Ground lower than this the cloud goes over; higher, it goes round."));
-				break;
-			}
-
-			into.Add(new Figure("Air & light", "Wind", $"{sky.CloudWindSpeed:0.0} m/s"));
-			into.Add(new Figure("Air & light", "Toward", Bearing(sky.CloudWind)));
-			into.Add(new Figure("Air & light", "Sun", $"{Mathf.Asin(Mathf.Clamp(sky.CloudSunDirection.y, -1f, 1f)) * Mathf.Rad2Deg:0.0}° up"));
+			into.Add(new Figure("On screen", "Precipitation", Pct(sky.CloudPrecipitation), sky.CloudPrecipitation <= 0.005f ? Tone.Dim : Tone.Plain));
+			into.Add(new Figure("On screen", "Shell", $"{sky.CloudShellBottom:0}–{sky.CloudShellTop:0} m"));
 
 			into.Add(new Figure("Cost", "Steps", tier.Steps.ToString()));
 			into.Add(new Figure("Cost", "Buffer", BufferSize.x > 0 ? $"{(tier.Resolution * 100f):0}% · {BufferSize.x}×{BufferSize.y}" : $"{(tier.Resolution * 100f):0}%"));
@@ -285,64 +253,45 @@ namespace FishMMO.Client
 			into.Add(new Figure("Cost", "Shafts", SkySystem.DrawGodRays ? "on" : "off", SkySystem.DrawGodRays ? Tone.Plain : Tone.Warn));
 		}
 
-		/// <summary>One band's figures, for its foldout.</summary>
-		public static void Band(SkySystem sky, VolumetricCloudSettings clouds, int index, List<Figure> into)
+		/// <summary>One regime's figures, for its foldout.</summary>
+		public static void Band(SkySystem sky, int index, List<Figure> into)
 		{
 			into.Clear();
-			if (sky == null || clouds == null)
+			IReadOnlyList<CloudBand> bands = sky != null ? sky.CloudBands : null;
+			if (bands == null || index < 0 || index >= bands.Count)
 			{
 				return;
 			}
-			var bands = sky.CloudBands;
-			var coverage = sky.CloudBandCoverage;
-			if (bands == null || index >= bands.Count || bands[index] == null)
+			CloudBand band = bands[index];
+			const string Group = "This regime";
+			if (!band.Present)
 			{
+				into.Add(new Figure(Group, "State", band.Regime == CloudRegime.Ice ? "none — the ice level is above the tropopause" : "none — no room for it", Tone.Dim));
 				return;
 			}
-			CloudLayer band = bands[index];
-			float cover = coverage != null && index < coverage.Count ? coverage[index] : 0f;
-			// A band that follows the condensation level is not sitting where it was authored, so
-			// report where it actually is and by how much the weather has moved it.
-			var bottoms = sky.CloudBandBottom;
-			float floorNow = bottoms != null && index < bottoms.Count && bottoms[index] > 0.001f
-				? bottoms[index]
-				: band.Bottom;
-			float threshold = ThresholdAt(clouds, cover);
-			float fill = cover > 0.001f ? FillForThreshold(threshold) : 0f;
-			float density = band.Density * clouds.Density;
-			// Optical depth is what decides whether a band reads as haze or as a wall: a thin band
-			// at a high density and a deep one at a low density look nothing alike on the sliders
-			// and much alike in the sky.
-			float depth = density * band.Thickness * fill;
-			bool drawing = cover > 0.001f && density > 0.001f && fill > 0.005f;
-			string state = cover <= 0.001f
-				? (band.CoverageOnset > 0.001f && sky.CloudCover < band.CoverageOnset
-					? $"empty — waits for cover {band.CoverageOnset:0.00}"
-					: "empty")
-				: density <= 0.001f ? "empty — density 0"
-				: fill <= 0.005f ? "empty — cut above the field"
-				: "drawing";
-			float ceilingNow = floorNow + band.Thickness;
-			bool moved = Mathf.Abs(floorNow - band.Bottom) > 1f;
-			const string Group = "This band";
-
-			into.Add(new Figure(Group, "State", state, drawing ? Tone.Good : Tone.Dim));
-			into.Add(new Figure(Group, "Sky filled", Pct(fill), drawing ? Tone.Plain : Tone.Dim, $"Coverage asked {Pct(cover)}, which cuts the noise at {threshold:0.000}."));
-			into.Add(new Figure(Group, "Floor", $"{floorNow:0} m", Tone.Plain,
-				moved ? $"Authored at {band.Bottom:0} m; moved {floorNow - band.Bottom:+0;-0} m by the condensation level." : null));
-			into.Add(new Figure(Group, "Ceiling", $"{ceilingNow:0} m"));
-			into.Add(new Figure(Group, "Depth", $"{band.Thickness:0} m"));
-			into.Add(new Figure(Group, "Optical depth", depth.ToString("0"), Tone.Plain, $"Density {density:0.00} through the band's depth, over the share of sky it fills. Whether it reads as haze or as a wall."));
-			into.Add(new Figure(Group, "Tops", band.Convection > 0.001f
-				? $"{floorNow + band.Thickness * Mathf.Lerp(1f, 0.3f, band.Convection):0}–{ceilingNow:0} m"
-				: "level deck", band.Convection > 0.001f ? Tone.Plain : Tone.Dim,
-				band.Convection > 0.001f ? $"Flat base, lumpy tops (convection {band.Convection:0.00})." : "No convection: a flat top as well as a flat base."));
-			into.Add(new Figure(Group, "Drift", $"{sky.CloudWindSpeed * band.WindScale:0.0} m/s"));
-			into.Add(new Figure(Group, "Masses every", $"{band.NoiseScale:0} m", Tone.Plain,
-				band.Stretch > 1.01f ? $"Drawn out {band.Stretch:0.0}× downwind." : null));
-			into.Add(new Figure(Group, "Wisps every", $"{band.DetailScale:0} m"));
-			into.Add(new Figure(Group, "Carries rain", band.CarriesRain ? "yes" : "no", band.CarriesRain ? Tone.Plain : Tone.Dim));
-			into.Add(new Figure(Group, "Grows storms", band.GrowsStorms ? "yes" : "no", band.GrowsStorms ? Tone.Plain : Tone.Dim));
+			float threshold = ThresholdAt(band.Coverage);
+			float fill = band.Coverage > 0.001f ? FillForThreshold(threshold) : 0f;
+			bool drawing = band.MaxCoverage > 0.001f;
+			into.Add(new Figure(Group, "State", band.Coverage > 0.001f ? "overhead" : drawing ? "elsewhere in view" : "none in view", drawing ? Tone.Good : Tone.Dim));
+			into.Add(new Figure(Group, "Cover here", Pct(band.Coverage), band.Coverage > 0.001f ? Tone.Plain : Tone.Dim, $"The air asks for {Pct(band.Coverage)} overhead, which cuts the noise at {threshold:0.000} and keeps {Pct(fill)} of it. The most anywhere in view: {Pct(band.MaxCoverage)}."));
+			into.Add(new Figure(Group, "Shell", $"{band.Bottom:0}–{band.Top:0} m"));
+			if (band.Column)
+			{
+				into.Add(new Figure(Group, "Opacity", $"{band.Extinction * Mathf.Pow(300f, 2f / 3f) * 1000f:0.0}/km at 300 m", Tone.Plain,
+					"Extinction rises as the two-thirds power of the height above the base: grey and thin at the base, dense and bright at the crown."));
+			}
+			else
+			{
+				into.Add(new Figure(Group, "Opacity", $"{band.Extinction * 1000f:0.00}/km", Tone.Plain, $"Optical depth through it: {band.Extinction * (band.Top - band.Bottom):0.0}."));
+			}
+			into.Add(new Figure(Group, "Drops", band.DropletDiameter > 0f ? $"{band.DropletDiameter:0} µm" : "ice", Tone.Plain,
+				band.DropletDiameter > 0f
+					? $"Their mean diameter, from the water and how many drops share it: they throw light forward with a mean cosine of {band.Asymmetry:0.00}, a spike within a degree of the sun."
+					: $"Ice crystals scatter more broadly than drops: mean cosine {band.Asymmetry:0.00}."));
+			into.Add(new Figure(Group, "Drift", $"{sky.CloudScales.SteeringWind * band.WindScale:0.0} m/s", Tone.Plain,
+				$"{band.WindScale:0.00}× the column: the world's wind at this height against its wind at the base."));
+			into.Add(new Figure(Group, "Masses every", $"{band.NoiseScale:0} m", Tone.Plain, band.Stretch > 1.01f ? $"Drawn out {band.Stretch:0}× along the wind by its fall streaks: ice falling through the shear trails behind the head it fell from." : null));
+			into.Add(new Figure(Group, "Wisps every", $"{band.DetailScale:0} m", Tone.Plain, $"Mixing threshold {band.DetailStrength:0.00}: the share of dry air an edge takes before its drops are gone. Drier air frays an edge more."));
 		}
 
 		private static string Pct(float value) => $"{Mathf.Clamp01(value) * 100f:0}%";

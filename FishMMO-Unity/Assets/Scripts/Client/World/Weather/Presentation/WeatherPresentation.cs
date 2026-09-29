@@ -283,7 +283,12 @@ namespace FishMMO.Client
 				return;
 			}
 			WeatherSubstance falling = hasContext ? this.context.Substance : null;
-			precipitation.Render(shown, camera, currentTier, Profile, time, falling, Underfoot());
+			// The hail is as big as the air overhead grows it: the same stone the physics decided
+			// hail would land at all by.
+			float hailStone = hasContext
+				? WeatherPhysics.HailStoneMetres(this.context.Sample.Air, this.context.Sample.Column, this.context.Sample.Planet)
+				: 0f;
+			precipitation.Render(shown, camera, currentTier, Profile, time, falling, Underfoot(), hailStone);
 			// Where it lands. Needs the height map, so it draws nothing until that has been built.
 			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid,
 				hasContext ? this.context.Temperature : 0f, falling);

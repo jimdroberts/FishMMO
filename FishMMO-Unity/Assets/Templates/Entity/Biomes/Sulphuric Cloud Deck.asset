@@ -97,43 +97,9 @@ MonoBehaviour:
       - Drifting
       - Veiled
       Description: A permanent ceiling of acid that never once breaks.
-  Weather:
-    Background: []
-    CellSpawns:
-    - Preset: {fileID: 11400000, guid: b7a87b55f48688bc1ba42e2f9f63d6eb, type: 2}
-      Weight: 4
-    - Preset: {fileID: 11400000, guid: ac9d28f2c3b0ced8d8bfac69374a6e30, type: 2}
-      Weight: 3
-    Suitability:
-    - Preset: {fileID: 11400000, guid: 68a32e3d41bd72f339cad877dfc35cb0, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 94ae71e31834ad5e4bb8508bbd21ff3d, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: b3b00a0fbed363476a5f1d6ddccd20d7, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 9c4d74db7c7266cdfb9907debaba310c, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 77ceb35e60107d4bfb9d84311ed6d380, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 6f63f0ccbfbfdc2e4bc4c4df3b494945, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: cd247f59315b9d16782275ef9077806c, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 30c934f6fa91f8a34856ff851d8a619e, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: ade9a108bb77fdcc4a0f194c4f2f1972, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 3fcc3b4cc1297b551b570f2672afc7e9, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 5832fa16c8f36bc318fed167a1ff7e1e, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 48dfb6c7fef4034188fa9261bde2de5b, type: 2}
-      Suitability: 0
-    - Preset: {fileID: 11400000, guid: 8059e3921abe69355873881d4f42a867, type: 2}
-      Suitability: 0
-    Variants: []
-    Forbidden: 36
-    CellsPerSquareKm: 0.5
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 11400000, guid: 2da5565e3e920b12eb798f761d85c21c, type: 2}
+  EmissionRate: 0.08
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

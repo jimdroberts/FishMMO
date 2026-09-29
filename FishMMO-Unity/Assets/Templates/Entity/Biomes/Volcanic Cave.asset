@@ -163,13 +163,9 @@ MonoBehaviour:
       - Explosive
       Description: "Underground volcanic system \u2014 lava tubes, obsidian, choking
         heat"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

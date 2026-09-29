@@ -1,17 +1,30 @@
 Shader "Hidden/FishMMO/Weather/HeightFog"
 {
-    // Height fog: fog that lies in the low ground instead of filling the world evenly.
+    // The weather's fog layer, analytically: the fog lying in the low ground with a top, and not a
+    // wash filling the world evenly.
     //
     // Unity's built-in fog is a function of distance alone, so a valley and a mountaintop at the
-    // same range from the camera are equally foggy. That is the one thing everybody notices is
-    // wrong about it: mist pools, it does not hang at altitude. This pass reconstructs the world
-    // position behind every pixel from the depth buffer and integrates an exponential height
-    // falloff along the view ray, which is what makes a valley fill up and a ridge stand clear.
+    // same range from the camera are equally foggy, a mist hides the sky as much as the ground, and a
+    // mist, a fog and a dense fog are three shades of one flat grey. This pass reconstructs the world
+    // position behind every pixel from the depth buffer and integrates the fog layer
+    // (FishFogLayer.hlsl) along the view ray: a valley fills up and a ridge stands clear, a mist lies
+    // along the ground under an open sky, the horizon goes white inside a fog and its top shines.
     //
-    // ANALYTIC, not marched. The integral of exp(-y/H) along a straight ray has a closed form, so
-    // this costs one full-screen pass with no loop at all — a few instructions a pixel against the
-    // cloud march's twenty-eight to seventy-two samples. Volumetric fog (the froxel path) is a
-    // separate, later thing; this is the cheap half that works on every tier and on WebGL2.
+    // ANALYTIC, not marched. The layer's mean profile is a trapezoid in altitude, and the integral of
+    // anything that depends on altitude alone along a straight ray has a closed form — one full-screen
+    // pass with no loop, a few instructions a pixel against the cloud march's twenty-eight to
+    // seventy-two samples.
+    //
+    // THE FALLBACK. The fog is cloud whose base is the ground, and the cloud march draws it as one
+    // (FishCloudVolume.hlsl), with its banks, billowed top and drift at every distance. This pass
+    // draws the same layer only where that march has not run for the camera (FogLayerView.
+    // MarchedThisFrame): a renderer without the cloud feature, or a sky without its volumes. Drawn
+    // alone as it used to be, from the froxel volume's edge to 44 km, it was one smooth trapezoid —
+    // the textureless band round every horizon that was most of what a fog ever showed.
+    //
+    // WHAT IT COVERS, as the fallback. Where the froxel volume runs (compute: desktop and WebGPU) it
+    // draws the fog from the camera to its far edge, and this pass carries the same layer on from
+    // there to the horizon. Where it does not (WebGL2), this pass is the whole of it.
     SubShader
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
@@ -20,24 +33,24 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
         Pass
         {
             Name "FishHeightFog"
-            Blend One SrcAlpha   // rgb adds the fog's own light; alpha carries (1 - fog) to dim the scene
+            Blend One SrcAlpha   // rgb adds the fog's own light; alpha carries what it lets through
 
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma multi_compile_local_fragment _ FISH_FOG_SUN
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+            #include "FishFogLayer.hlsl"
 
             float4x4 _FishFogInverseVP;
-            float4   _FishFogParams;     // x density, y falloff height (m), z base height (m), w max opacity
-            float4   _FishFogColor;      // rgb fog colour, a unused
-            float4   _FishFogSun;        // xyz direction toward the light, w inscatter strength
-            float4   _FishFogSunColor;   // rgb the light's colour, a horizon bias
-            float4   _FishFogRange;      // x start distance, y end distance, z camera Y, w noise amount
+            // x the eye depth this pass starts at (m): the froxel volume's far edge where it runs, 0
+            // where it does not. y how far a ray into open sky is followed (m). zw unused.
+            float4   _FishFogRange;
+            // xyz the camera's forward, for turning that eye depth into a distance along each ray.
+            float4   _FishFogForward;
 
             // World position behind a pixel, from the depth buffer.
             float3 WorldAt(float2 uv, float rawDepth)
@@ -57,70 +70,79 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
                 return world.xyz / world.w;
             }
 
-            /* The integral of density * exp(-(y - base)/H) along the ray, in closed form.
-             *
-             * Writing the ray as y(t) = y0 + t*dy, the integral of exp(-(y - base)/H) dt from 0 to d
-             * is H/dy * exp(-(y0 - base)/H) * (1 - exp(-d*dy/H)). As dy goes to zero that form is
-             * 0/0, and a horizontal ray is the common case — anyone looking at the horizon — so the
-             * limit (d * exp(-(y0-base)/H)) is taken explicitly rather than left to the hardware to
-             * produce a NaN across the middle of the screen.
-             */
-            float FogAmount(float3 origin, float3 dir, float distance, float density, float falloff, float base)
+            /// Two columns of the layer as one: the layer as the ray finds it at each end, averaged.
+            FishFogColumn Between(FishFogColumn a, FishFogColumn b)
             {
-                float h = max(1.0, falloff);
-                float atOrigin = exp(-(origin.y - base) / h);
-                float dy = dir.y;
-                float integral;
-                if (abs(dy) < 1e-4)
-                {
-                    integral = distance * atOrigin;
-                }
-                else
-                {
-                    integral = (h / dy) * atOrigin * (1.0 - exp(-distance * dy / h));
-                }
-                return 1.0 - exp(-max(0.0, density * integral));
+                FishFogColumn c;
+                c.top = 0.5 * (a.top + b.top);
+                c.soft = 0.5 * (a.soft + b.soft);
+                c.baseSoft = 0.5 * (a.baseSoft + b.baseSoft);
+                c.base = min(0.5 * (a.base + b.base), c.top - c.soft - c.baseSoft);
+                c.hollow = 0.5 * (a.hollow + b.hollow);
+                return c;
             }
 
             float4 Frag(Varyings input) : SV_Target
             {
-                float2 uv = input.texcoord;
-                float rawDepth = SampleSceneDepth(uv);
-
-                float density = _FishFogParams.x;
-                if (density <= 1e-5)
+                float extinction = _FishFogLayer.x;
+                if (extinction <= 1e-7 || _FishFogLayer.y <= 0.0)
                 {
                     return float4(0.0, 0.0, 0.0, 1.0);
                 }
 
-                float3 world = WorldAt(uv, rawDepth);
+                float2 uv = input.texcoord;
+                float rawDepth = SampleSceneDepth(uv);
                 float3 camera = GetCameraPositionWS();
-                float3 toPixel = world - camera;
+                float3 toPixel = WorldAt(uv, rawDepth) - camera;
                 float distance = length(toPixel);
-                float3 dir = distance > 1e-5 ? toPixel / distance : float3(0.0, 0.0, 1.0);
+                float3 ray = distance > 1e-5 ? toPixel / distance : float3(0.0, 0.0, 1.0);
 
-                /* The sky is not "infinitely foggy". Depth is at the far plane where nothing was
-                 * drawn, and integrating to there would wall the horizon off behind solid fog. The
-                 * ray is clamped to the fog's own end distance, so the sky keeps its own colour and
-                 * the fog thickens toward it instead of replacing it. */
-                distance = min(distance, _FishFogRange.y);
-                distance = max(0.0, distance - _FishFogRange.x);
-
-                float fog = FogAmount(camera, dir, distance, density, _FishFogParams.y, _FishFogParams.z);
-                fog = min(fog, _FishFogParams.w);
-
-                float3 color = _FishFogColor.rgb;
-                #ifdef FISH_FOG_SUN
-                    /* Looking toward the sun through fog is brighter than looking away from it —
-                     * the light scatters forward. Without this the fog is a flat grey sheet and
-                     * reads as a screen effect rather than as air. */
-                    float toward = saturate(dot(dir, normalize(_FishFogSun.xyz)));
-                    float forward = pow(toward, 8.0) * _FishFogSun.w;
-                    color = lerp(color, _FishFogSunColor.rgb, saturate(forward));
+                /* Nothing drawn here: open sky. The ray is followed out to where the sky itself ends,
+                 * not to the far plane: a ray that climbs out of the layer has crossed all of it in
+                 * a few hundred metres and the sky shows through, and one that runs level inside it
+                 * never leaves, so the horizon goes to the fog's own colour — which is what a
+                 * horizon in a mist is. */
+                #if UNITY_REVERSED_Z
+                    bool sky = rawDepth <= 1e-6;
+                #else
+                    bool sky = rawDepth >= 1.0 - 1e-6;
                 #endif
+                if (sky)
+                {
+                    distance = _FishFogRange.y;
+                }
 
-                // rgb adds the fog's light, alpha keeps (1 - fog) of what was there.
-                return float4(color * fog, 1.0 - fog);
+                float along = 1.0 / max(0.05, dot(ray, _FishFogForward.xyz));
+                float start = _FishFogRange.x > 0.0 ? _FishFogRange.x * along : 0.0;
+                if (distance <= start)
+                {
+                    return float4(0.0, 0.0, 0.0, 1.0);
+                }
+
+                // The layer where this stretch starts and a few kilometres on, or where it ends if
+                // sooner: over the valley a ray runs down into, not only the hill it leaves from.
+                float3 from = camera + ray * start;
+                float3 to = camera + ray * min(distance, start + 3000.0);
+                FishFogColumn column = Between(FishFogColumnAt(from.xz), FishFogColumnAt(to.xz));
+
+                float path = FishFogPath(camera.y, ray.y, start, distance, column);
+                float transmittance = exp(-extinction * path);
+
+                // Lit as the fog this stretch crosses is lit: at the middle of the part of it that
+                // lies inside the layer, so a ray climbing out through the top sees the bright top.
+                float low = column.base - column.baseSoft;
+                float high = column.top + column.soft;
+                float lit = 0.5 * (clamp(camera.y + ray.y * start, low, high) + clamp(camera.y + ray.y * distance, low, high));
+                // And by the cloud over where that light mostly comes from: in-scattering weighted by
+                // what gets back to the eye, e^−τ, comes on average from one optical depth in (1/β),
+                // or the end of the stretch if it is nearer. The cloud's shadow there, as the ground
+                // there is lit (FishFogSunShare) — one read for the whole stretch, since this pass
+                // integrates it in closed form.
+                float3 litAt = camera + ray * min(distance, start + 1.0 / extinction);
+                float3 light = FishFogLight(lit, ray, column, extinction, 1.0, FishFogSunShare(litAt));
+
+                // rgb adds the fog's light, alpha keeps what it lets through.
+                return float4(light * (1.0 - transmittance), transmittance);
             }
             ENDHLSL
         }

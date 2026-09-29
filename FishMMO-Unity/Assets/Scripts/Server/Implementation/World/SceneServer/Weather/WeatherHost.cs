@@ -48,6 +48,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		public const int MaxCellsPerScene = 12;
 		/// <summary>Scenes smaller than this get no automatic storms.</summary>
 		public const float DirectorMinimumSquareKm = 2f;
+		/// <summary>
+		/// Storms a square kilometre carries when its air is as ready for them as air gets: the
+		/// director aims for this times the scene's area times how likely storms are there now.
+		/// </summary>
+		public const float StormsPerSquareKm = 0.5f;
 		/// <summary>How often surface cover is re-sent so clients' integration cannot drift far.</summary>
 		public const float CoverResyncSeconds = 30f;
 		/// <summary>How often each scene's pass runs.</summary>
@@ -72,7 +77,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			public WorldSceneSettings Settings;
 			public WeatherTimeline Timeline;
 			public DeterministicRNG Rng;
-			public ushort NextHandle = 1;
 			public ushort NextCellID = 1;
 			public bool Director;
 			public uint NextSpawnTick;
@@ -211,8 +215,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				Seed = seed,
 				SceneMode = mode,
 				TickDelta = networkManager.TimeManager.TickDelta,
-				FixedIntensity = settings.FixedWeatherIntensity,
-				FixedPresetID = CachedID(settings.FixedWeather),
 				CoverTick = NowTick,
 			};
 			var sw = new SceneWeather
@@ -237,23 +239,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			rotation.Add(sw);
 			WeatherQuery.Register(scene, timeline);
 			_ = Log.Debug("WeatherHost", $"Weather for {scene.name} (handle {scene.handle}): {mode}, director {(sw.Director ? "on" : "off")}.");
-		}
-
-		/// <summary>
-		/// The cache id of an asset referenced directly (for example by a scene). Registers it when
-		/// the addressable load has not, so the id the client receives resolves.
-		/// </summary>
-		private static int CachedID(WeatherPreset preset)
-		{
-			if (preset == null)
-			{
-				return 0;
-			}
-			if (preset.ID == 0)
-			{
-				preset.AddToCache(preset.name);
-			}
-			return preset.ID;
 		}
 
 		// ── Clients ───────────────────────────────────────────────────
@@ -351,14 +336,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			return ref sw.Pending;
 		}
 
-		private void QueueLayer(SceneWeather sw, WeatherLayerEntry entry)
-		{
-			sw.Timeline.UpsertLayer(entry);
-			ref WeatherDeltaBroadcast d = ref Pending(sw);
-			(d.Layers ??= new List<WeatherLayerEntry>()).RemoveAll(l => l.Handle == entry.Handle);
-			d.Layers.Add(entry);
-		}
-
 		private void QueueCell(SceneWeather sw, StormCell cell, bool isNew)
 		{
 			sw.Timeline.UpsertCell(cell);
@@ -371,12 +348,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			}
 		}
 
-		private void QueueClimate(SceneWeather sw, WeatherClimateEntry climate)
+		private void QueueAir(SceneWeather sw, AirOffsetEntry air)
 		{
-			sw.Timeline.Climate = climate;
+			sw.Timeline.Air = air;
 			ref WeatherDeltaBroadcast d = ref Pending(sw);
-			d.HasClimate = true;
-			d.Climate = climate;
+			d.HasAir = true;
+			d.Air = air;
 		}
 
 		private void QueueCover(SceneWeather sw)
@@ -564,17 +541,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		}
 
 		/// <summary>
-		/// Writes the scene's runtime climate offsets: the timeline's shift plus what the scene's
-		/// body gets from its star. The client runs the same sum.
+		/// Writes the scene's runtime climate offsets: the warmth added to its air — authored and at
+		/// runtime — plus its body's season. The client runs the same sum.
 		/// </summary>
 		private static void ApplyClimate(SceneWeather sw, uint tick, double worldHours)
 		{
-			sw.Timeline.ClimateAt(tick, out float temperature, out float humidity);
+			float temperature = (sw.Settings.AuthoredAir + sw.Timeline.AirAt(tick)).TemperatureScale;
+			float humidity = 0f;
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = SceneTime.BodyOf(sw.Settings);
 			if (system != null && body != null)
 			{
-				CelestialMath.ClimateOffsets(system, body, worldHours, out float bodyTemperature, out float bodyHumidity, sw.Settings.Latitude);
+				CelestialMath.SeasonalClimateOffsets(system, body, worldHours, sw.Settings.Latitude, out float bodyTemperature, out float bodyHumidity);
 				temperature += bodyTemperature;
 				humidity += bodyHumidity;
 			}
@@ -660,7 +638,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			}
 			WeatherTimeline timeline = sw.Timeline;
 
-			// Retire cells that left the scene or drifted over a biome they cannot live in.
+			// Retire cells that left the scene, or drifted into air that cannot keep them going.
 			int alive = 0;
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
@@ -680,10 +658,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				bool hostile = false;
 				if (!outside)
 				{
-					BiomeReading reading = BiomeSampler.Read(new Vector3(centre.x, 0f, centre.y), sw.Settings);
-					BiomeWeatherProfile profile = WeatherField.ProfileFor(reading.Biome, sw.Settings);
-					WeatherPreset preset = WeatherPreset.Get<WeatherPreset>(cell.PresetID);
-					hostile = profile != null && profile.SuitabilityOf(preset) < 0.25f;
+					/* A storm is kept going by the air it is in. One that drifts off the warm sea, out
+					 * of the unstable air or off the loose ground its kind needs has nothing left to
+					 * feed on, and dies back — it does not carry its weather into air that could not
+					 * have made it. */
+					WeatherSample there = WeatherField.Sample(timeline, sw.Settings, sw.Scene, new Vector3(centre.x, 0f, centre.y), now);
+					StormPhysics.Likelihood likely = StormPhysics.LikelihoodAt(there.OpenAir, there.OpenColumn, there.Ground, timeline.LatitudeDegrees);
+					hostile = likely.Of(cell.Kind) < 0.01f;
 				}
 				if (outside || hostile)
 				{
@@ -698,14 +679,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				return;
 			}
 			RefreshPrevailingWind(sw, area, now);
-			float density = AverageDensity(sw, area);
-			int target = Mathf.Min(MaxCellsPerScene, Mathf.RoundToInt(squareKm * density));
+			float likelihood = AverageLikelihood(sw, area, now);
+			int target = Mathf.Min(MaxCellsPerScene, Mathf.RoundToInt(squareKm * StormsPerSquareKm * likelihood));
 			if (alive >= target)
 			{
 				sw.NextSpawnTick = now + timeline.SecondsToTicks(sw.Rng.Range(30f, 90f));
 				return;
 			}
-			TrySpawnFromBiomes(sw, area, now);
+			TrySpawnFromAir(sw, area, now);
 			sw.NextSpawnTick = now + timeline.SecondsToTicks(sw.Rng.Range(60f, 240f));
 		}
 
@@ -722,9 +703,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		/// </para>
 		/// <para>
 		/// The driver has the real answer: trade winds, westerlies and polar easterlies by latitude,
-		/// leaning poleward, breathing over hours. <see cref="WeatherSample.Air"/> carries it
+		/// leaning poleward, breathing over hours. <see cref="WeatherSample.OpenAir"/> carries it
 		/// already, so this only has to ask — at the scene's centre, once per director pass, which is
 		/// every half minute or so. Weather turns slowly; it does not need asking more often.
+		/// </para>
+		/// <para>
+		/// The OPEN air, never <see cref="WeatherSample.Air"/>: that is the air with the storms over
+		/// the place in it, and a supercell's 45 m/s or a squall's gust front standing over the
+		/// scene's centre set the steering wind of every storm spawned after it.
 		/// </para>
 		/// <para>
 		/// Keeps the last good answer when the driver has nothing to say — a scene with no driver, or
@@ -736,7 +722,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		{
 			var centre = new Vector3(area.center.x, 0f, area.center.y);
 			WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, centre, now);
-			Vector2 wind = sample.Air.Wind;
+			Vector2 wind = sample.OpenAir.Wind;
 			if (wind.sqrMagnitude < 1e-4f)
 			{
 				return;
@@ -745,7 +731,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			sw.WindSpeedMetersPerSecond = wind.magnitude;
 		}
 
-		private static float AverageDensity(SceneWeather sw, Rect area)
+		/// <summary>How ready the scene's air is for storms, on average: a 3×3 of samples across it.</summary>
+		private static float AverageLikelihood(SceneWeather sw, Rect area, uint now)
 		{
 			float total = 0f;
 			int samples = 0;
@@ -754,42 +741,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				for (int z = 0; z < 3; z++)
 				{
 					var p = new Vector3(area.xMin + area.width * (x + 0.5f) / 3f, 0f, area.yMin + area.height * (z + 0.5f) / 3f);
-					BiomeWeatherProfile profile = WeatherField.ProfileFor(BiomeSampler.Read(p, sw.Settings).Biome, sw.Settings);
-					total += profile != null ? profile.CellsPerSquareKm : 0f;
+					WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, p, now);
+					total += StormPhysics.LikelihoodAt(sample.OpenAir, sample.OpenColumn, sample.Ground, sw.Timeline.LatitudeDegrees).Total;
 					samples++;
 				}
 			}
 			return samples > 0 ? total / samples : 0f;
 		}
 
-		private void TrySpawnFromBiomes(SceneWeather sw, Rect area, uint now)
+		/// <summary>
+		/// Starts a storm somewhere in the scene the air will support one: a point is tried, and kept
+		/// in proportion to how ready its air is; the kind is then picked in proportion to how likely
+		/// each kind is there, and sized from that air.
+		/// </summary>
+		private void TrySpawnFromAir(SceneWeather sw, Rect area, uint now)
 		{
 			const float PreferredDistanceFromPlayers = 600f;
 			for (int attempt = 0; attempt < 8; attempt++)
 			{
 				var p = new Vector3(sw.Rng.Range(area.xMin, area.xMax), 0f, sw.Rng.Range(area.yMin, area.yMax));
-				BiomeReading reading = BiomeSampler.Read(p, sw.Settings);
-				BiomeWeatherProfile profile = WeatherField.ProfileFor(reading.Biome, sw.Settings);
-				WeatherPreset preset = profile?.PickCellPreset(sw.Rng);
-				if (preset == null)
-				{
-					continue;
-				}
 				// Storms should roll in, not appear on top of someone: prefer spots out of sight.
 				if (attempt < 6 && NearestPlayerDistance(sw, p) < PreferredDistanceFromPlayers)
 				{
 					continue;
 				}
+				WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, p, now);
+				StormPhysics.Likelihood likely = StormPhysics.LikelihoodAt(sample.OpenAir, sample.OpenColumn, sample.Ground, sw.Timeline.LatitudeDegrees);
+				if (sw.Rng.Range(0f, 1f) >= Mathf.Clamp01(likely.Total))
+				{
+					continue;
+				}
+				StormKind kind = likely.Pick(sw.Rng.Range(0f, 1f));
 				float heading = (sw.WindHeadingDegrees + sw.Rng.Range(-35f, 35f)) * Mathf.Deg2Rad;
-				/* Carried by the wind that is actually blowing, not by a fixed 2–6 m/s. A cell moves
-				 * with the air it is in, so a stiff day drives weather across a scene in minutes and
-				 * a still one leaves it hanging about — which is most of what makes one day feel
-				 * different from another. Kept below the wind itself: a storm lags its steering flow. */
+				/* Carried by the wind that is actually blowing. A cell moves with the air it is in, so
+				 * a stiff day drives weather across a scene in minutes and a still one leaves it
+				 * hanging about. Kept below the wind itself: a storm lags its steering flow. */
 				float carried = Mathf.Clamp(sw.WindSpeedMetersPerSecond * 0.55f, 1.5f, 14f);
 				float speed = carried * sw.Rng.Range(0.75f, 1.25f);
-				float radius = sw.Rng.Range(preset.CellRadiusMeters.x, Mathf.Max(preset.CellRadiusMeters.x, preset.CellRadiusMeters.y));
-				float minutes = sw.Rng.Range(preset.DurationMinutes.x, Mathf.Max(preset.DurationMinutes.x, preset.DurationMinutes.y));
-				SpawnCellInternal(sw, preset, p, radius, new Vector2(Mathf.Sin(heading), Mathf.Cos(heading)) * speed, minutes * 60f, now);
+				StormPhysics.Dimensions(kind, sample.OpenColumn, sw.Rng.Range(0f, 1f), sw.Rng.Range(0f, 1f),
+					out float radius, out float extent, out float lifetime);
+				SpawnCellInternal(sw, kind, p, radius, extent, new Vector2(Mathf.Sin(heading), Mathf.Cos(heading)) * speed, lifetime, now);
 				return;
 			}
 		}
@@ -823,7 +814,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			return best;
 		}
 
-		private ushort SpawnCellInternal(SceneWeather sw, WeatherPreset preset, Vector3 at, float radius, Vector2 velocity, float lifetimeSeconds, uint now)
+		private ushort SpawnCellInternal(SceneWeather sw, StormKind kind, Vector3 at, float radius, float extent, Vector2 velocity, float lifetimeSeconds, uint now)
 		{
 			WeatherTimeline timeline = sw.Timeline;
 			uint birth = now + timeline.LeadTicks;
@@ -833,23 +824,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			var cell = new StormCell
 			{
 				ID = NextCellID(sw),
-				PresetID = CachedID(preset),
+				Kind = kind,
 				Seed = (uint)sw.Rng.Next(),
 				OriginX = at.x,
 				OriginZ = at.z,
 				VelocityX = velocity.x,
 				VelocityZ = velocity.y,
 				RadiusMeters = Mathf.Max(10f, radius),
-				/* The shape comes from the PRESET, not from whoever asked for the cell. A front is
-				 * a property of the weather, not of the call that spawned it, so an admin command,
-				 * an ECA action and the director all produce the same shape for the same preset. */
-				Shape = preset != null ? preset.CellShape : StormCellShape.Disc,
-				ExtentMeters = preset != null
-					? sw.Rng.Range(preset.CellExtentMeters.x, Mathf.Max(preset.CellExtentMeters.x, preset.CellExtentMeters.y))
-					: 0f,
+				/* The shape comes from the KIND, not from whoever asked for the cell. A squall line
+				 * is a line because of what it is, so an admin command, an ECA action and the director
+				 * all produce the same shape for the same kind of storm. */
+				Shape = StormPhysics.ShapeOf(kind),
+				ExtentMeters = Mathf.Max(0f, extent),
 				PeakIntensity = 1f,
 				// A wall wanders less than a shower: it is held in shape by the air pushing it.
-				MeanderMeters = Mathf.Max(10f, radius) * (preset != null && preset.CellShape == StormCellShape.Front ? 0.04f : 0.15f),
+				MeanderMeters = Mathf.Max(10f, radius) * (StormPhysics.ShapeOf(kind) == StormCellShape.Front ? 0.04f : 0.15f),
 				MotionTick = birth,
 				BirthTick = birth,
 				MatureTick = birth + timeline.SecondsToTicks(matureSeconds),
@@ -869,20 +858,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				if (id != 0 && !sw.Timeline.TryGetCell(id, out _))
 				{
 					return id;
-				}
-			}
-			return 0;
-		}
-
-		private static ushort NextHandle(SceneWeather sw)
-		{
-			for (int guard = 0; guard < 65535; guard++)
-			{
-				ushort handle = sw.NextHandle++;
-				if (sw.NextHandle == 0) sw.NextHandle = 1;
-				if (handle != 0 && !sw.Timeline.TryGetLayer(handle, out _))
-				{
-					return handle;
 				}
 			}
 			return 0;
@@ -922,113 +897,57 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 
 		public bool IsDirectorEnabled(Scene scene) => scenes.TryGetValue(scene.handle, out SceneWeather sw) && sw.Director;
 
-		public bool ApplyPreset(Scene scene, WeatherPreset preset, float intensity, float transitionSeconds)
+		public bool SetAirOffsets(Scene scene, AirOffsets offsets, float transitionSeconds)
 		{
-			if (preset == null || !TryGet(scene, out SceneWeather sw))
+			if (!scenes.TryGetValue(scene.handle, out SceneWeather sw))
 			{
 				return false;
 			}
-			// The weather going out holds on while the new weather rises: cloud and fog take the
-			// greater of the layers over them, so two straight ramps would cross halfway and the sky
-			// would pass through half-clear between one weather and the next.
-			ClearLayers(scene, transitionSeconds * (1f + WeatherTimeline.HandoverHold));
-			foreach (WeatherPresetLayer layer in preset.Layers)
-			{
-				if (layer?.Template != null)
-				{
-					AddLayer(scene, layer.Template, Mathf.Clamp01(layer.Intensity * intensity), transitionSeconds * (1f - WeatherTimeline.HandoverHold * 0.5f));
-				}
-			}
-			return true;
-		}
-
-		public ushort AddLayer(Scene scene, WeatherLayerTemplate template, float intensity, float transitionSeconds)
-		{
-			if (template == null || !TryGet(scene, out SceneWeather sw))
-			{
-				return 0;
-			}
-			if (template.ID == 0)
-			{
-				template.AddToCache(template.name);
-			}
 			uint start = NowTick + sw.Timeline.LeadTicks;
-			var entry = new WeatherLayerEntry
+			QueueAir(sw, new AirOffsetEntry
 			{
-				Handle = NextHandle(sw),
-				TemplateID = template.ID,
-				From = 0f,
-				To = Mathf.Clamp01(intensity),
+				From = sw.Timeline.Air.At(start),
+				To = offsets,
 				StartTick = start,
 				EndTick = start + sw.Timeline.SecondsToTicks(Mathf.Max(0f, transitionSeconds)),
-			};
-			if (entry.Handle == 0)
+			});
+			return true;
+		}
+
+		public bool TryGetAirOffsets(Scene scene, out AirOffsets offsets)
+		{
+			offsets = default;
+			if (!scenes.TryGetValue(scene.handle, out SceneWeather sw))
+			{
+				return false;
+			}
+			// Where it is heading, not where it is: a relative change stacks onto the settled value.
+			offsets = sw.Timeline.Air.To;
+			return true;
+		}
+
+		public ushort SpawnCell(Scene scene, StormKind kind, Vector3 at, float radiusMeters, Vector2 velocity, float lifetimeSeconds)
+		{
+			if (!TryGet(scene, out SceneWeather sw) || sw.Timeline.SceneMode != WeatherSceneMode.Own)
 			{
 				return 0;
 			}
-			QueueLayer(sw, entry);
-			return entry.Handle;
-		}
-
-		public bool SetLayerIntensity(Scene scene, ushort handle, float intensity, float transitionSeconds)
-		{
-			if (!TryGet(scene, out SceneWeather sw) || !sw.Timeline.TryGetLayer(handle, out int index))
+			uint now = NowTick;
+			// What is not asked for, the air where it starts decides.
+			WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, at, now);
+			StormPhysics.Dimensions(kind, sample.OpenColumn, sw.Rng.Range(0f, 1f), sw.Rng.Range(0f, 1f),
+				out float radius, out float extent, out float lifetime);
+			if (radiusMeters > 0f)
 			{
-				return false;
+				// Asked for a size: keep the kind's own proportions.
+				extent *= radiusMeters / Mathf.Max(1f, radius);
+				radius = radiusMeters;
 			}
-			WeatherLayerEntry entry = sw.Timeline.Layers[index];
-			uint start = NowTick + sw.Timeline.LeadTicks;
-			entry.From = entry.IntensityAt(start);
-			entry.To = Mathf.Clamp01(intensity);
-			entry.StartTick = start;
-			entry.EndTick = start + sw.Timeline.SecondsToTicks(Mathf.Max(0f, transitionSeconds));
-			entry.RemoveWhenDone = false;
-			QueueLayer(sw, entry);
-			return true;
-		}
-
-		public bool RemoveLayer(Scene scene, ushort handle, float transitionSeconds)
-		{
-			if (!SetLayerIntensity(scene, handle, 0f, transitionSeconds))
+			if (lifetimeSeconds > 0f)
 			{
-				return false;
+				lifetime = lifetimeSeconds;
 			}
-			SceneWeather sw = scenes[scene.handle];
-			sw.Timeline.TryGetLayer(handle, out int index);
-			WeatherLayerEntry entry = sw.Timeline.Layers[index];
-			entry.RemoveWhenDone = true;
-			QueueLayer(sw, entry);
-			return true;
-		}
-
-		public bool ClearLayers(Scene scene, float transitionSeconds)
-		{
-			if (!TryGet(scene, out SceneWeather sw))
-			{
-				return false;
-			}
-			var handles = new List<ushort>();
-			foreach (WeatherLayerEntry entry in sw.Timeline.Layers)
-			{
-				if (!entry.RemoveWhenDone)
-				{
-					handles.Add(entry.Handle);
-				}
-			}
-			foreach (ushort handle in handles)
-			{
-				RemoveLayer(scene, handle, transitionSeconds);
-			}
-			return true;
-		}
-
-		public ushort SpawnCell(Scene scene, WeatherPreset preset, Vector3 at, float radiusMeters, Vector2 velocity, float lifetimeSeconds)
-		{
-			if (preset == null || !TryGet(scene, out SceneWeather sw) || sw.Timeline.SceneMode != WeatherSceneMode.Own)
-			{
-				return 0;
-			}
-			return SpawnCellInternal(sw, preset, at, radiusMeters, velocity, Mathf.Max(30f, lifetimeSeconds), NowTick);
+			return SpawnCellInternal(sw, kind, at, radius, extent, velocity, Mathf.Max(30f, lifetime), now);
 		}
 
 		public bool SteerCell(Scene scene, ushort id, Vector3 towards, float speed)
@@ -1072,26 +991,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			}
 			sw.Director = enabled && sw.Timeline.SceneMode == WeatherSceneMode.Own;
 			return sw.Director == enabled;
-		}
-
-		public bool SetClimateOffset(Scene scene, float temperature, float humidity, float transitionSeconds)
-		{
-			if (!scenes.TryGetValue(scene.handle, out SceneWeather sw))
-			{
-				return false;
-			}
-			uint start = NowTick + sw.Timeline.LeadTicks;
-			sw.Timeline.Climate.At(start, out float fromT, out float fromH);
-			QueueClimate(sw, new WeatherClimateEntry
-			{
-				FromTemperature = fromT,
-				FromHumidity = fromH,
-				ToTemperature = Mathf.Clamp(temperature, -1f, 1f),
-				ToHumidity = Mathf.Clamp(humidity, -1f, 1f),
-				StartTick = start,
-				EndTick = start + sw.Timeline.SecondsToTicks(Mathf.Max(0f, transitionSeconds)),
-			});
-			return true;
 		}
 	}
 }

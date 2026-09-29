@@ -71,7 +71,7 @@ namespace FishMMO.Shared
 			{ DashboardToolAttribute.Maintenance, "One-off wiring passes, mock content and test scene generators. Most of these write assets or scenes." },
 			{ DashboardToolAttribute.AITools, "Repairs and migrations for NPC prefabs and AI assets." },
 			{ DashboardToolAttribute.WorldSceneDetails, "The world scene details cache is rebuilt by every build; rebuild it here after changing a world scene's settings." },
-			{ DashboardToolAttribute.Weather, "Weather content and textures. The generator creates layer templates and presets and fills every biome and climate weather profile nobody has authored; the baker writes the precipitation and noise textures." },
+			{ DashboardToolAttribute.Weather, "Weather content and textures. The generator creates the weather substances and gives every biome nobody has authored its ground — what the wind can lift off it and what it emits; the baker writes the precipitation and noise textures." },
 			{ DashboardToolAttribute.WorldMap, "World maps are build output. Client builds bake them, build, then remove them and rebuild the world scene details cache. A manual bake is for previewing; run Remove Baked Maps and rebuild World Scene Details before committing." },
 		};
 

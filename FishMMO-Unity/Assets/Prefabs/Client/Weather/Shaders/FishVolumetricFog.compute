@@ -1,79 +1,109 @@
-// Froxel volumetric fog: fog you can see light shafts inside, rather than a flat wash over the
-// screen (P5).
+// Froxel volumetric fog: the FALLBACK for the fog near the camera, where the cloud march is not drawing
+// it. The fog is cloud whose base is the ground, and the cloud march walks it like any other cloud
+// (FishCloudVolume.hlsl); this volume and the analytic pass beyond it (FishHeightFog.shader) draw the
+// same layer only on a renderer without the cloud feature, or before the sky has bound its volumes, and
+// stand down whenever the march has drawn it (FogLayerView.DrawnByClouds) — the same drops are never
+// drawn twice.
 //
 // The frustum is diced into a grid of voxels — froxels — that follow the camera, so the work is
 // fixed per frame and independent of how far anything is. Each froxel works out how much fog is in
 // it and how much light scatters out of it toward the viewer; a second pass walks each column from
 // the camera outward accumulating that light and the transmittance through it. The fullscreen apply
-// then just reads the volume at (uv, depth).
+// then just reads the volume at (uv, depth). Past the volume's far edge the analytic pass carries the
+// same layer on to the horizon, from the same FishFogLayer.hlsl.
 //
-// WHY THIS IS THE CHEAP PATH, despite the name. 160 x 90 x 64 is 921,600 froxels at one sample
-// each, about 1M samples a frame at a FIXED cost. The volumetric cloud march already running is
-// 3.6M samples on the cheapest tier and 37M on the highest, and it scales with screen resolution.
-// Volumetric fog is a third of the cheapest thing already shipping.
+// WHAT IS IN A FROXEL is FishFogDensity, the very function the march reads: the layer on the ground
+// with its smooth top, level over the pooled ground, lifted when the wind or the morning has lifted it,
+// with its banks read out of the sky's shape volume and carried on the wind. The only difference is the
+// mip: a froxel has no temporal averaging, so it reads the banks at its own size where the march reads
+// them whole. (Froxels are what Bauer 2019 and Hillaire 2015 use near the camera too, and both found
+// them unstable for anything fine — one more reason the fog now has nothing fine in it.)
 //
 // It needs compute, so it is WebGPU and desktop only. WebGL2 has no compute at all and falls back
-// to the analytic height fog, which is a full-screen pass with a closed-form integral and no loop.
+// to the analytic pass, which draws the same layer, without its structure, in closed form.
 
 #pragma kernel Scatter
 #pragma kernel Integrate
 
 #pragma multi_compile_local _ FISH_VOLFOG_SHADOWS
 
-#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#if defined(FISH_VOLFOG_SHADOWS)
+    // The main light's cascaded shadow map, so the beam is stopped where something stands in it: the
+    // shafts between trees, the dark wedge behind a wall. Hard shadows: a shaft is a froxel wide
+    // whatever the shadow map's own filtering. Its constants as plain globals rather than URP's
+    // LightShadows buffer, which a compute kernel is not handed.
+    #define _MAIN_LIGHT_SHADOWS_CASCADE
+    #define LIGHT_SHADOWS_NO_CBUFFER
+    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+#else
+    #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#endif
+#include "FishFogLayer.hlsl"
 
 // (scattered rgb, extinction) per froxel.
 RWTexture3D<float4> _FishVolFogScatter;
-// (accumulated in-scattered rgb, transmittance) per froxel.
+// (accumulated in-scattered rgb, transmittance) per froxel, to the middle of its slice.
 RWTexture3D<float4> _FishVolFogIntegrated;
 
 float4x4 _FishVolFogInverseVP;
 float4   _FishVolFogSize;      // xyz froxel counts, w unused
-float4   _FishVolFogParams;    // x density, y falloff height, z base height, w near plane
-float4   _FishVolFogRange;     // x near, y far, z depth curve exponent, w time
-float4   _FishVolFogAlbedo;    // rgb single-scattering albedo, a anisotropy g
-float4   _FishVolFogSunDir;    // xyz toward the light, w intensity
-float4   _FishVolFogSunColor;  // rgb light colour, a ambient floor
-float4   _FishVolFogCamera;    // xyz camera world position, w jitter
+float4   _FishVolFogRange;     // x near, y far (m of eye depth), z depth curve exponent, w a froxel's width per metre of depth
+float4   _FishVolFogCamera;    // xyz camera world position, w 1 when the shape volume is bound (0: an even fog)
+float4   _FishVolFogForward;   // xyz the camera's forward, w unused (it said whether the detail volume was bound, for the top's eddies: there are none)
 
-/* Froxel slices are spaced exponentially, not evenly. Fog matters most within a few tens of metres
- * and hardly changes out at the far plane, so even spacing spends most of its slices where nothing
- * is happening and leaves the near field — the part filling the screen — with almost none. */
+/* Froxel slices are spaced exponentially in eye depth, not evenly. Fog matters most within a few
+ * tens of metres and hardly changes out at the far plane, so even spacing spends most of its slices
+ * where nothing is happening and leaves the near field — the part filling the screen — with almost
+ * none. Eye depth, not distance along the ray: that is what the apply pass and the water look the
+ * volume up by, and a slice that meant distance here and depth there put the fog a fifth too near
+ * at the corners of the screen. */
 float SliceDistance(float slice01)
 {
-    /* Both bases clamped to what they already are for every valid input. slice01 is a position
-     * through the froxel volume and cannot leave 0..1 — the C# jitter is (frame x 0.618) % 1,
-     * so the shader's w - 0.5 keeps slice 0 at zero and above — and far / near is a ratio of two
-     * positive distances. The compiler cannot see either fact and warned (X3571) on every
-     * import that pow of a negative base is undefined; saying so explicitly costs nothing. */
+    /* Both bases clamped to what they already are for every valid input. slice01 cannot leave 0..1
+     * and far / near is a ratio of two positive distances. The compiler cannot see either fact and
+     * warned (X3571) on every import that pow of a negative base is undefined; saying so explicitly
+     * costs nothing. */
     float ratio = max(1e-4, _FishVolFogRange.y / max(1e-4, _FishVolFogRange.x));
     return _FishVolFogRange.x * pow(ratio, pow(saturate(slice01), _FishVolFogRange.z));
 }
 
-float3 FroxelWorld(uint3 id, float jitter)
+/// The unit ray through the middle of a froxel column, from the inverse view-projection.
+float3 FroxelRay(uint2 xy)
 {
-    float2 uv = (id.xy + 0.5) / _FishVolFogSize.xy;
-    float slice01 = (id.z + 0.5 + jitter) / _FishVolFogSize.z;
-    float distance = SliceDistance(slice01);
-
-    // A ray through this froxel's centre, from the inverse view-projection.
+    float2 uv = (xy + 0.5) / _FishVolFogSize.xy;
     float4 clip = float4(uv * 2.0 - 1.0, 0.5, 1.0);
     #if UNITY_UV_STARTS_AT_TOP
         clip.y = -clip.y;
     #endif
     float4 world = mul(_FishVolFogInverseVP, clip);
-    float3 farPoint = world.xyz / world.w;
-    float3 dir = normalize(farPoint - _FishVolFogCamera.xyz);
-    return _FishVolFogCamera.xyz + dir * distance;
+    return normalize(world.xyz / world.w - _FishVolFogCamera.xyz);
 }
 
-/// Henyey-Greenstein: how much light scatters toward the viewer at this angle. Forward-biased,
-/// which is what puts the glow around a light seen through fog.
-float HenyeyGreenstein(float cosAngle, float g)
+/// Metres along a column's ray for each metre of eye depth.
+float AlongRay(float3 ray)
 {
-    float gg = g * g;
-    float denominator = 1.0 + gg - 2.0 * g * cosAngle;
-    return (1.0 - gg) / (4.0 * PI * max(1e-4, denominator * sqrt(max(1e-4, denominator))));
+    return 1.0 / max(0.05, dot(ray, _FishVolFogForward.xyz));
+}
+
+/// The fog's extinction at a point, 1/m: the march's own (FishFogDensity) where the shape volume is
+/// bound, the same layer without its banks where it is not.
+float FogDensity(float3 world, float footprint, FishFogColumn column)
+{
+    if (_FishVolFogCamera.w < 0.5)
+    {
+        return _FishFogLayer.x * FishFogProfile(world.y, column);
+    }
+    return FishFogDensity(world, column, footprint);
+}
+
+/// How much of the light's beam reaches a point past whatever stands in its way.
+float FogShadow(float3 world)
+{
+    #if defined(FISH_VOLFOG_SHADOWS)
+        return MainLightRealtimeShadow(TransformWorldToShadowCoord(world));
+    #else
+        return 1.0;
+    #endif
 }
 
 [numthreads(8, 8, 4)]
@@ -84,26 +114,45 @@ void Scatter(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    // Jittered along the slice so banding between slices averages away over frames instead of
-    // standing as visible shells in the air.
-    float jitter = (_FishVolFogCamera.w - 0.5);
-    float3 world = FroxelWorld(id, jitter);
+    float3 ray = FroxelRay(id.xy);
+    float along = AlongRay(ray);
+    float nearDepth = SliceDistance(id.z / _FishVolFogSize.z);
+    float farDepth = SliceDistance((id.z + 1.0) / _FishVolFogSize.z);
+    // What one look has to stand for: the froxel's depth along the ray, or its width across it.
+    float footprint = max((farDepth - nearDepth) * along, farDepth * along * _FishVolFogRange.w);
 
-    // The same exponential height falloff the analytic pass uses, so the two agree about where fog
-    // lies and only differ in what they can do with it.
-    float height = exp(-(world.y - _FishVolFogParams.z) / max(1.0, _FishVolFogParams.y));
-    float density = max(0.0, _FishVolFogParams.x * height);
+    /* Two looks into the froxel's depth, averaged, rather than one jittered from frame to frame. The
+     * jitter only averages away under a temporal filter, which this volume does not have: with the
+     * fog's structure in it, it flickered. */
+    float3 camera = _FishVolFogCamera.xyz;
+    float3 a = camera + ray * (lerp(nearDepth, farDepth, 0.3) * along);
+    float3 b = camera + ray * (lerp(nearDepth, farDepth, 0.7) * along);
+    float3 middle = 0.5 * (a + b);
+    FishFogColumn column = FishFogColumnAt(middle.xz);
+    float density = 0.5 * (FogDensity(a, footprint, column) + FogDensity(b, footprint, column));
 
-    float3 toCamera = normalize(_FishVolFogCamera.xyz - world);
-    float cosAngle = dot(toCamera, normalize(_FishVolFogSunDir.xyz));
-    float phase = HenyeyGreenstein(cosAngle, _FishVolFogAlbedo.a);
-
-    float3 light = _FishVolFogSunColor.rgb * _FishVolFogSunDir.w * phase;
-    // An ambient floor, so fog in shadow is still lit by the sky rather than black.
-    light += _FishVolFogSunColor.rgb * _FishVolFogSunColor.a;
-
-    float3 scattered = light * _FishVolFogAlbedo.rgb * density;
+    float3 scattered = 0.0;
+    if (density > 0.0)
+    {
+        // Drops absorb next to nothing: what the fog takes out of the light it scatters.
+        // Lit by the light's average through the cloud (sunShare 1): this volume is handed its inputs
+        // one by one and has no cloud shadow, and it only draws where the cloud march — which the
+        // shadow is drawn from — does not run (FishFogSunShare).
+        scattered = FishFogLight(middle.y, ray, column, _FishFogLayer.x, FogShadow(middle), 1.0) * density;
+    }
     _FishVolFogScatter[id] = float4(scattered, density);
+}
+
+/// The light a stretch of constant fog scatters toward the eye, and what it lets through.
+void FogStretch(float4 froxel, float metres, out float3 light, out float transmittance)
+{
+    float extinction = max(1e-7, froxel.a);
+    transmittance = exp(-extinction * metres);
+    /* The analytic integral of in-scattering across the stretch, not scattered * length.
+     * Multiplying by the length over-brightens thick slices badly — and the slices get thicker
+     * with distance by construction here, so the error grows exactly where the fog should be
+     * settling down. */
+    light = froxel.rgb * (1.0 - transmittance) / extinction;
 }
 
 [numthreads(8, 8, 1)]
@@ -115,6 +164,7 @@ void Integrate(uint3 id : SV_DispatchThreadID)
         return;
     }
 
+    float along = AlongRay(FroxelRay(id.xy));
     float3 accumulated = 0.0;
     float transmittance = 1.0;
     float previous = 0.0;
@@ -122,24 +172,22 @@ void Integrate(uint3 id : SV_DispatchThreadID)
     for (uint z = 0; z < size.z; z++)
     {
         uint3 at = uint3(id.xy, z);
-        float4 slice = _FishVolFogScatter[at];
+        float4 froxel = _FishVolFogScatter[at];
 
-        float distance = SliceDistance((z + 1.0) / _FishVolFogSize.z);
-        float thickness = max(1e-4, distance - previous);
-        previous = distance;
+        /* Each froxel stores what lies between the camera and the MIDDLE of its slice — the depth its
+         * texel centre stands for — so a reader that samples the volume at a depth's own slice
+         * coordinate reads the fog to that depth, not to the slice's far edge half a slice on. */
+        float middle = SliceDistance((z + 0.5) / _FishVolFogSize.z);
+        float next = SliceDistance((z + 1.0) / _FishVolFogSize.z);
 
-        float extinction = max(1e-7, slice.a);
-        float sliceTransmittance = exp(-extinction * thickness);
+        float3 light;
+        float through;
+        FogStretch(froxel, max(0.0, middle - previous) * along, light, through);
+        _FishVolFogIntegrated[at] = float4(accumulated + light * transmittance, transmittance * through);
 
-        /* The analytic integral of in-scattering across the slice, not scattered * thickness.
-         * Multiplying by thickness over-brightens thick slices badly — and the slices get thicker
-         * with distance by construction here, so the error grows exactly where the fog should be
-         * settling down. */
-        float3 sliceScattering = slice.rgb * (1.0 - sliceTransmittance) / extinction;
-
-        accumulated += sliceScattering * transmittance;
-        transmittance *= sliceTransmittance;
-
-        _FishVolFogIntegrated[at] = float4(accumulated, transmittance);
+        FogStretch(froxel, max(1e-4, next - previous) * along, light, through);
+        accumulated += light * transmittance;
+        transmittance *= through;
+        previous = next;
     }
 }

@@ -162,23 +162,9 @@ MonoBehaviour:
       - Unstable
       Description: "Open volcanic landscape \u2014 lava flows, ash fields, toxic
         vents"
-  Weather:
-    Background:
-    - Template: {fileID: 11400000, guid: 6796b9cb7130cce6b8f45e1e1171525c, type: 2}
-      Intensity: 0.15
-    CellSpawns:
-    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
-      Weight: 4
-    - Preset: {fileID: 11400000, guid: fec31e0ef91897198b223defb6beca6a, type: 2}
-      Weight: 2
-    - Preset: {fileID: 11400000, guid: ed642679c6a55880387e3a1cd071a3ce, type: 2}
-      Weight: 1
-    Suitability: []
-    Variants:
-    - Preset: {fileID: 11400000, guid: 2f1cd15b53b3db6fabaffecf6a143679, type: 2}
-      Variant: {fileID: 11400000, guid: b2be23afeaddac6faa373ee751e2d988, type: 2}
-    Forbidden: 4
-    CellsPerSquareKm: 0.35
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 11400000, guid: a91d9900e22b3672b9a3da3744bcebc2, type: 2}
+  EmissionRate: 0.15
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: b0d499e08f7c81d489bd909435b0985b, type: 3}
     normalTexture: {fileID: 0}

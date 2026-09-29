@@ -24,13 +24,13 @@ MonoBehaviour:
     FallSpeed: {x: 4, y: 7}
     Sway: 0
     SwayFrequency: 1
-    Tint: {r: 0.75, g: 0.8, b: 0.9, a: 1}
+    Tint: {r: 1, g: 1, b: 1, a: 1}
     Alpha: 0.45
     Brightness: 1
     FogColor: {r: 0.55, g: 0.6, b: 0.66, a: 1}
   Snow:
     AtlasRow: 1
-    Size: {x: 0.03, y: 0.08}
+    Size: {x: 0.0004, y: 0.05}
     Stretch: 1
     FallSpeed: {x: 0.8, y: 1.4}
     Sway: 0.35
@@ -46,7 +46,7 @@ MonoBehaviour:
     FallSpeed: {x: 10, y: 16}
     Sway: 0
     SwayFrequency: 1
-    Tint: {r: 0.9, g: 0.95, b: 1, a: 1}
+    Tint: {r: 1, g: 1, b: 1, a: 1}
     Alpha: 0.95
     Brightness: 1
     FogColor: {r: 0.6, g: 0.64, b: 0.7, a: 1}
@@ -77,120 +77,49 @@ MonoBehaviour:
   SkyBodyMaterial: {fileID: 2100000, guid: 36c3ad97fcb382889903e8b5ad9c0e58, type: 2}
   CurtainMaterial: {fileID: 2100000, guid: a8061d0280b071f4e8dc1f2b753c048f, type: 2}
   BoltMaterial: {fileID: 2100000, guid: 9d7b4675c91149f25af0e2a82433630e, type: 2}
+  VortexMaterial: {fileID: 2100000, guid: 6a6c2906ba8343899d8bf8e92244d6c1, type: 2}
+  VortexDebrisMaterial: {fileID: 2100000, guid: 623fe745f8934c9188d434afd11249ac,
+    type: 2}
   CloudCookieMaterial: {fileID: 2100000, guid: bb1254a0f5ecb3b239b87631320dba90, type: 2}
   CloudShape: {fileID: 11700000, guid: 587eb95df510f9b08a4dd41eb07e4110, type: 2}
   CloudDetail: {fileID: 11700000, guid: 4b7ed807917a1943983786db26612d55, type: 2}
   Clouds:
-    Layers:
-    - Name: Weather
-      Bottom: 0
-      Top: 800
-      Column: 0
-      BaseFollowsCondensation: 0
-      NoiseScale: 2600
-      DetailScale: 180
-      DetailStrength: 0.6
-      Stretch: 1
-      BaseSoftness: 0.5
-      TopSoftness: 0.75
-      VerticalScale: 2
-      Convection: 0.35
-      Density: 0.55
-      CoverageBias: 0
-      CoverageScale: 0
-      CoverageOnset: 0
-      WindScale: 0.6
-      CarriesRain: 0
-      GrowsStorms: 0
-      ShadedTint: {r: 0.78, g: 0.82, b: 0.88, a: 1}
-    - Name: Cumulus
-      Bottom: 800
-      Top: 7800
-      Column: 1
-      BaseFollowsCondensation: 1
-      NoiseScale: 12000
-      DetailScale: 380
-      DetailStrength: 0.45
-      Stretch: 1
-      BaseSoftness: 0.06
-      TopSoftness: 0.65
-      VerticalScale: 2
-      Convection: 0.8
-      Density: 1
-      CoverageBias: 0
-      CoverageScale: 1
-      CoverageOnset: 0
-      WindScale: 1
-      CarriesRain: 1
-      GrowsStorms: 1
-      ShadedTint: {r: 0.62, g: 0.68, b: 0.82, a: 1}
-    - Name: Alto
-      Bottom: 3600
-      Top: 4600
-      Column: 0
-      BaseFollowsCondensation: 0
-      NoiseScale: 9000
-      DetailScale: 700
-      DetailStrength: 0.25
-      Stretch: 1
-      BaseSoftness: 0.3
-      TopSoftness: 0.4
-      VerticalScale: 2
-      Convection: 0.2
-      Density: 0.5
-      CoverageBias: 0
-      CoverageScale: 1
-      CoverageOnset: 0.55
-      WindScale: 1.7
-      CarriesRain: 0
-      GrowsStorms: 0
-      ShadedTint: {r: 0.66, g: 0.7, b: 0.8, a: 1}
-    - Name: Cirrus
-      Bottom: 7500
-      Top: 8600
-      Column: 0
-      BaseFollowsCondensation: 0
-      NoiseScale: 14000
-      DetailScale: 1200
-      DetailStrength: 0.2
-      Stretch: 8
-      BaseSoftness: 0.35
-      TopSoftness: 0.45
-      VerticalScale: 2
-      Convection: 0
-      Density: 0.18
-      CoverageBias: 0.3
-      CoverageScale: -0.35
-      CoverageOnset: 0
-      WindScale: 3
-      CarriesRain: 0
-      GrowsStorms: 0
-      ShadedTint: {r: 0.8, g: 0.84, b: 0.92, a: 1}
-    CurvatureRadiusKm: 6371
-    CoverageCutClear: 0.662
-    CoverageCutFull: 0.575
-    CoverageBend: 0.15
-    EdgeSoftness: 0.14
-    HazeDistance: 28000
-    ShapeWarp: 0.17
-    CoverageTilt: 0.6
-    DetailFadeStart: 2500
-    DetailFadeRange: 9000
-    Carve: 1
-    Density: 0.5
     LightSteps: 6
-    Powder: 0.7
-    ForwardScatter: 0.6
-    Ambient: 0.85
-    ShadedTint: {r: 0.62, g: 0.68, b: 0.82, a: 1}
-    ShadedTintStrength: 0.55
     MaxDistance: 44000
     TemporalBlend: 0.9
-    ShadowStrength: 0.8
     ShadowAreaMeters: 4000
-  MistColor: {r: 0.7, g: 0.73, b: 0.76, a: 1}
-  MaxFogDensity: 0.06
-  MinFogEndDistance: 40
+    Diagnostics:
+      Temporal: 0
+      HistoryFrames: 16
+      ClipGamma: 1.25
+      HistoryClip: 1
+      Kernel: 0
+      BlurPixels: 0.55
+      RayJitter: 1
+      StepScale: 1
+      DistanceStepGrowth: 1
+      MaxStepOpticalDepth: 1
+      MaxInCloudGrowth: 2
+      EarlyExit: 0.05
+      LightMarch: 1
+      LightMarchPhase: 1
+      DetailStrength: 1
+      DetailLodScale: 0.25
+      EdgeShellScale: 2
+      DetailStepFootprint: 1.25
+      MultipleScattering: 0.5
+      DropletSpike: 1
+      SkyAmbient: 1
+      GroundBounce: 1
+      DecorrelatedRayPhase: 1
+      LinearIntegration: 1
+      PerPixelLightPhase: 1
+      ResolvedCarve: 1
+      EvenLightReach: 1
+      HistoryResetChange: 0.1
+      FarSideFollowsLight: 1
+      DenseCloudEconomy: 1
+      DebugView: 0
   Performant:
     Particles: 3000
     BoxSize: 18
@@ -202,11 +131,14 @@ MonoBehaviour:
     Asteroids: 0
     ReflectionResolution: 64
     Curtains: 3
+    Vortices: 2
+    VortexParticles: 600
     CloudShadows: 0
-    CloudResolution: 0.25
+    CloudResolution: 0.17
     CloudSteps: 28
     CloudDetail: 0
     CloudTemporal: 1
+    CloudHistoryScale: 0
     GodRays: 0
     TerrainSnowDisplacement: 0
   Balanced:
@@ -220,11 +152,14 @@ MonoBehaviour:
     Asteroids: 1
     ReflectionResolution: 128
     Curtains: 6
+    Vortices: 3
+    VortexParticles: 1500
     CloudShadows: 1
-    CloudResolution: 0.4
+    CloudResolution: 0.25
     CloudSteps: 48
-    CloudDetail: 0.6
+    CloudDetail: 1
     CloudTemporal: 1
+    CloudHistoryScale: 0
     GodRays: 1
     TerrainSnowDisplacement: 0
   HighFidelity:
@@ -238,11 +173,14 @@ MonoBehaviour:
     Asteroids: 1
     ReflectionResolution: 256
     Curtains: 8
+    Vortices: 4
+    VortexParticles: 3000
     CloudShadows: 1
-    CloudResolution: 0.5
-    CloudSteps: 72
+    CloudResolution: 0.2
+    CloudSteps: 32
     CloudDetail: 1
     CloudTemporal: 1
+    CloudHistoryScale: 0
     GodRays: 1
     TerrainSnowDisplacement: 1
   OcclusionLayers:

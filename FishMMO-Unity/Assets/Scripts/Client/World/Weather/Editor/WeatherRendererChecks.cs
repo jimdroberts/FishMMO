@@ -37,8 +37,8 @@ namespace FishMMO.Client
 		private static readonly (System.Type Feature, string Name, string Draws)[] Passes =
 		{
 			(typeof(FishCloudsFeature), "Fish Clouds", "the volumetric clouds"),
-			(typeof(FishHeightFogFeature), "Fish Height Fog", "the fog lying in the low ground"),
-			(typeof(FishVolumetricFogFeature), "Fish Volumetric Fog", "the god rays and the light shafts"),
+			(typeof(FishHeightFogFeature), "Fish Height Fog", "the fog layer lying on the ground, out to the horizon"),
+			(typeof(FishVolumetricFogFeature), "Fish Volumetric Fog", "the fog near the camera, its banks, wisps and light shafts"),
 		};
 
 		private static void Inspect(List<WorldSystemProblem> into)

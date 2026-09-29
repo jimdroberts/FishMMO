@@ -39,9 +39,14 @@ namespace FishMMO.Client
 				}
 				if (existing != null)
 				{
+					bool changed = AssignComputes(existing);
 					if (existing.CloudMaterial != cloudMaterial && cloudMaterial != null)
 					{
 						existing.CloudMaterial = cloudMaterial;
+						changed = true;
+					}
+					if (changed)
+					{
 						EditorUtility.SetDirty(existing);
 					}
 					continue;
@@ -50,6 +55,7 @@ namespace FishMMO.Client
 				var created = ScriptableObject.CreateInstance<FishCloudsFeature>();
 				created.name = "Fish Clouds";
 				created.CloudMaterial = cloudMaterial;
+				AssignComputes(created);
 				AssetDatabase.AddObjectToAsset(created, data);
 				AssetDatabase.SaveAssets();
 
@@ -62,6 +68,40 @@ namespace FishMMO.Client
 				AssetDatabase.SaveAssets();
 			}
 			return added;
+		}
+
+		/// <summary>
+		/// Gives a cloud feature its compute kernels where it has none. The feature finds them by name
+		/// itself in the editor, but only the serialized reference ships: a build whose renderer never
+		/// had them assigned falls back to the fragment resolve and the CPU weather map for good.
+		/// </summary>
+		private static bool AssignComputes(FishCloudsFeature feature)
+		{
+			bool changed = false;
+			if (feature.ResolveCompute == null)
+			{
+				feature.ResolveCompute = FindCompute(FishCloudsFeature.ResolveComputeName);
+				changed |= feature.ResolveCompute != null;
+			}
+			if (feature.WeatherMapCompute == null)
+			{
+				feature.WeatherMapCompute = FindCompute(FishCloudsFeature.WeatherMapComputeName);
+				changed |= feature.WeatherMapCompute != null;
+			}
+			return changed;
+		}
+
+		private static ComputeShader FindCompute(string name)
+		{
+			foreach (string guid in AssetDatabase.FindAssets($"{name} t:ComputeShader"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				if (System.IO.Path.GetFileNameWithoutExtension(path) == name)
+				{
+					return AssetDatabase.LoadAssetAtPath<ComputeShader>(path);
+				}
+			}
+			return null;
 		}
 
 		/// <summary>

@@ -93,7 +93,7 @@ namespace FishMMO.Client
 			// Each row is advanced by how long it has been since its own turn came round.
 			float sweepSeconds = sinceRow * resolution / Mathf.Max(1, rows);
 
-			WeatherFrame sceneLayers = BaseFrame(timeline, settings, centre, tick);
+			WeatherFrame sceneLayers = BaseFrame(timeline, settings, centre, tick, storms);
 			float texel = TexelMeters;
 			for (int i = 0; i < rows; i++)
 			{
@@ -102,7 +102,7 @@ namespace FishMMO.Client
 				for (int x = 0; x < resolution; x++)
 				{
 					var position = new Vector3(corner.x + (x + 0.5f) * texel, 0f, corner.y + (y + 0.5f) * texel);
-					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, tick);
+					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, tick, storms);
 					int index = y * resolution + x;
 					frame.RetypeForTemperature(temperature);
 					frame.DeriveSurfaceRates();
@@ -175,14 +175,14 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			WeatherFrame sceneLayers = BaseFrame(timeline, settings, new Vector3(corner.x + size * 0.5f, 0f, corner.y + size * 0.5f), tick);
+			WeatherFrame sceneLayers = BaseFrame(timeline, settings, new Vector3(corner.x + size * 0.5f, 0f, corner.y + size * 0.5f), tick, storms);
 			float texel = TexelMeters;
 			for (int y = 0; y < resolution; y++)
 			{
 				for (int x = 0; x < resolution; x++)
 				{
 					var position = new Vector3(corner.x + (x + 0.5f) * texel, 0f, corner.y + (y + 0.5f) * texel);
-					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, tick);
+					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, tick, storms);
 					int index = y * resolution + x;
 					cover[index].Integrate(frame, temperature, seconds);
 					pixels[index] = Encode(cover[index]);
@@ -223,36 +223,37 @@ namespace FishMMO.Client
 		// ── Inside ─────────────────────────────────────────────────────
 
 		/// <summary>
-		/// The weather standing over one point: the scene's own layers, plus whatever storm cells
-		/// reach it. The biome's background is left out on purpose — it is the same everywhere the
-		/// eye can see from here, and the server's anchor already carries it.
+		/// The weather over the middle of the map without its storms: the air's own. The field turns
+		/// over across tens of kilometres and the map is a kilometre or two, so one reading at its
+		/// middle serves; the storms are then added point by point. Readies the storms' weather in
+		/// that same air.
 		/// </summary>
-		/// <summary>
-		/// Everything but the storm cells, at the middle of the map: the scene's own layers AND the
-		/// drifting field's weather. This used to be the scene layers alone, so the ground under a
-		/// field's rain never got wet on the map and nothing the field did — rain, snow, a clearing
-		/// sky — ever reached it; only presets and cells did. The field turns over across tens of
-		/// kilometres and the map is a kilometre or two, so one reading at its middle serves.
-		/// </summary>
-		private static WeatherFrame BaseFrame(WeatherTimeline timeline, WorldSceneSettings settings, Vector3 centre, uint tick)
+		private static WeatherFrame BaseFrame(WeatherTimeline timeline, WorldSceneSettings settings, Vector3 centre, uint tick, StormFrames storms)
 		{
 			if (timeline == null)
 			{
+				storms.Reset(default);
 				return WeatherFrame.Clear;
 			}
-			return WeatherField.Sample(timeline, settings, default, centre, tick).Background;
+			WeatherSample around = WeatherField.Sample(timeline, settings, default, centre, tick);
+			storms.Reset(around);
+			return around.Background;
 		}
 
-		private static WeatherFrame FrameAt(WeatherTimeline timeline, in WeatherFrame sceneLayers, Vector3 position, uint tick)
+		/// <summary>
+		/// The weather standing over one point: the air's own, plus what each storm reaching it makes
+		/// in that air.
+		/// </summary>
+		private static WeatherFrame FrameAt(WeatherTimeline timeline, in WeatherFrame open, Vector3 position, uint tick, StormFrames storms)
 		{
-			WeatherFrame frame = sceneLayers;
+			WeatherFrame frame = open;
 			if (timeline == null || timeline.SceneMode != WeatherSceneMode.Own)
 			{
 				frame.DeriveSurfaceRates();
 				return frame;
 			}
 			var accumulator = new WeatherAccumulator();
-			accumulator.Add(sceneLayers, 1f);
+			accumulator.Add(open, 1f);
 			bool any = false;
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
@@ -262,18 +263,15 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				WeatherPreset preset = WeatherPreset.Get<WeatherPreset>(cell.PresetID);
-				if (preset == null)
-				{
-					continue;
-				}
-				accumulator.Add(preset.Evaluate(), weight);
+				accumulator.Add(storms.Of(cell.Kind), weight);
 				any = true;
 			}
-			frame = any ? accumulator.Resolve() : sceneLayers;
+			frame = any ? accumulator.Resolve() : open;
 			frame.DeriveSurfaceRates();
 			return frame;
 		}
+
+		private readonly StormFrames storms = new StormFrames();
 
 		private static Color32 Encode(in WeatherCover c)
 		{

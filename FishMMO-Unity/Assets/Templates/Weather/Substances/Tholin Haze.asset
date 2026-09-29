@@ -24,4 +24,9 @@ MonoBehaviour:
   MeltsAbove: 2
   Breathable: 0
   Harshness: 0.5
+  Condenses: 0
+  Condensate: 0
+  Frozen: 0
+  GrainMetres: 0.000002
+  GrainDensity: 1400
   AudioCue: 

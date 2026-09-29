@@ -40,8 +40,14 @@ float4 _FishAuroraParams;   // x strength, y time
 float4 _FishAuroraA;
 float4 _FishAuroraB;
 float4 _FishRainbow;        // x strength
-float4 _FishWeatherMapRect; // xy corner (world x, z), zw size in metres
-float4 _FishWeatherMapParams; // x 1 when valid
+// The storms, from WeatherMap: the cloud each one makes, laid out by its anatomy, on two cascades — a
+// fine one of 12 km round the viewer and a coarse one of 112 km. See FishStormAt below for what each
+// channel holds.
+float4 _FishWeatherMapRect;    // the fine cascade: xy corner (world x, z), zw size in metres
+float4 _FishWeatherMapFarRect; // the coarse cascade: the same
+// x 1 when the fine cascade is there, y 1 when the coarse one is, z 1 when either holds any storm at
+// all (neither is read otherwise), w what an anvil's ice takes out of the light (1/m).
+float4 _FishWeatherMapParams;
 
 TEXTURECUBE(_FishStarCube);
 SAMPLER(sampler_FishStarCube);
@@ -56,6 +62,9 @@ TEXTURE2D(_FishWeatherNoise);
 SAMPLER(sampler_FishWeatherNoise);
 TEXTURE2D(_FishWeatherMap);
 SAMPLER(sampler_FishWeatherMap);
+TEXTURE2D(_FishWeatherMapB);
+TEXTURE2D(_FishWeatherMapFar);
+TEXTURE2D(_FishWeatherMapFarB);
 
 float FishNoise(float2 uv, int channel)
 {
@@ -63,23 +72,116 @@ float FishNoise(float2 uv, int channel)
     return channel == 0 ? n.r : channel == 1 ? n.g : n.b;
 }
 
-// The weather map at a world position: r cloud cover, g precipitation, b snow share, a storm.
+// ── The storms ────────────────────────────────────────────────────────
+// Both cascades carry the same two textures (WeatherMap, which must agree with this):
+//   A  r the storm's own cloud, 0..1 — its cumulonimbus, and the lowerings under and ahead of it
+//        (a supercell's wall cloud, a squall line's shelf)
+//      g its anvil, 0..1 of the anvil's full depth: thick over the storm, nothing at its edge
+//      b clearing, 0..1: sinking air (a hurricane's eye) dissolves whatever cloud the air makes
+//      a how much of a storm it is, 0..1: more water in its cloud
+//   B  r the storm's base above the ground (m) × A.r: flat under the tower, lowered under the wall
+//        cloud and the shelf
+//      g how high its cloud reaches (m) × A.r: its tower, domed over the updraught
+//      b the anvil's flat top (m) × A.g
+//      a how thick the anvil is here (m)
+// The heights are multiplied by the share they belong to so that the texture filter, and the blend
+// between the cascades, weigh them honestly across a storm's edge: a texel of storm next to a texel of
+// clear air filters to half a storm AT THE STORM'S BASE, not to a whole storm at half its base.
+
+// What a storm is at one place, unpacked.
+struct FishStorm
+{
+    float cover;        // how solid the storm's own cloud is here, 0..1
+    float anvil;        // how much of its anvil is here, 0..1
+    float clearing;     // how much of any cloud sinking air dissolves here, 0..1
+    float strength;     // how much of a storm it is here, 0..1
+    float baseM;        // its cloud base here (m): where cover is above 0
+    float topM;         // how high its cloud reaches here (m)
+    float anvilTopM;    // the anvil's flat top (m): where anvil is above 0
+    float anvilDepthM;  // how thick the anvil is here (m)
+};
+
+// How much of each cascade is read at a place: x the fine one, handed over to the coarse one across a
+// ring before its edge; y the coarse one, faded out across a ring before its own. Circles round each
+// map's middle, not its square: a square's edge is a straight line, and a straight line across the
+// sky is the one thing an eye finds at once. Twins: WeatherMap.NearWeight and FarWeight.
+float2 FishWeatherMapWeights(float2 xz)
+{
+    float2 w = float2(0.0, 0.0);
+    if (_FishWeatherMapParams.x > 0.5)
+    {
+        float r = length(xz - (_FishWeatherMapRect.xy + 0.5 * _FishWeatherMapRect.zw)) / max(1.0, 0.5 * _FishWeatherMapRect.z);
+        w.x = 1.0 - smoothstep(0.6, 0.9, r);
+    }
+    if (_FishWeatherMapParams.y > 0.5)
+    {
+        float r = length(xz - (_FishWeatherMapFarRect.xy + 0.5 * _FishWeatherMapFarRect.zw)) / max(1.0, 0.5 * _FishWeatherMapFarRect.z);
+        w.y = 1.0 - smoothstep(0.8, 0.97, r);
+    }
+    return w;
+}
+
+// The two texels at a place, the cascades blended: the coarse one where the fine one does not reach,
+// the fine one where it does, and between them both. Each cascade is only read where it is used, and
+// its heights only where it has a storm's cloud or anvil to give them to: most of a stormy sky is
+// still clear of any storm, and this is read for every sample the cloud march takes.
+void FishWeatherMapTexels(float2 xz, bool heights, out float4 a, out float4 b)
+{
+    a = float4(0.0, 0.0, 0.0, 0.0);
+    b = float4(0.0, 0.0, 0.0, 0.0);
+    if (_FishWeatherMapParams.z < 0.5)
+    {
+        return;
+    }
+    float2 w = FishWeatherMapWeights(xz);
+    if (w.x < 1.0 && w.y > 0.0)
+    {
+        float2 uv = saturate((xz - _FishWeatherMapFarRect.xy) / max(_FishWeatherMapFarRect.zw, 1.0));
+        float4 farA = SAMPLE_TEXTURE2D_LOD(_FishWeatherMapFar, sampler_FishWeatherMap, uv, 0);
+        a = farA * w.y;
+        if (heights && farA.r + farA.g > 0.0)
+        {
+            b = SAMPLE_TEXTURE2D_LOD(_FishWeatherMapFarB, sampler_FishWeatherMap, uv, 0) * w.y;
+        }
+    }
+    if (w.x > 0.0)
+    {
+        float2 uv = saturate((xz - _FishWeatherMapRect.xy) / max(_FishWeatherMapRect.zw, 1.0));
+        float4 nearA = SAMPLE_TEXTURE2D_LOD(_FishWeatherMap, sampler_FishWeatherMap, uv, 0);
+        a = lerp(a, nearA, w.x);
+        float4 nearB = float4(0.0, 0.0, 0.0, 0.0);
+        if (heights && nearA.r + nearA.g > 0.0)
+        {
+            nearB = SAMPLE_TEXTURE2D_LOD(_FishWeatherMapB, sampler_FishWeatherMap, uv, 0);
+        }
+        b = lerp(b, nearB, w.x);
+    }
+}
+
+// The storms at a world position.
+FishStorm FishStormAt(float2 xz)
+{
+    float4 a, b;
+    FishWeatherMapTexels(xz, true, a, b);
+    FishStorm storm;
+    storm.cover = saturate(a.r);
+    storm.anvil = saturate(a.g);
+    storm.clearing = saturate(a.b);
+    storm.strength = saturate(a.a);
+    storm.baseM = a.r > 1e-4 ? b.r / a.r : 0.0;
+    storm.topM = a.r > 1e-4 ? b.g / a.r : 0.0;
+    storm.anvilTopM = a.g > 1e-4 ? b.b / a.g : 0.0;
+    storm.anvilDepthM = max(0.0, b.a);
+    return storm;
+}
+
+// Only the first texture: r the storm's own cloud, g its anvil, b clearing, a strength. Half the reads,
+// for what needs to know where a storm's cloud is and not how high.
 float4 FishWeatherMapAt(float2 xz)
 {
-    float2 uv = (xz - _FishWeatherMapRect.xy) / max(_FishWeatherMapRect.zw, 1.0);
-    if (_FishWeatherMapParams.x < 0.5)
-    {
-        return float4(0, 0, 0, 0);
-    }
-    // The map only covers a square around the viewer. Fade it out over the outer tenth, or its
-    // edge draws a straight line across the sky where what it carries stops.
-    float2 toEdge = min(uv, 1.0 - uv);
-    float fade = saturate(min(toEdge.x, toEdge.y) / 0.1);
-    if (fade <= 0.0)
-    {
-        return float4(0, 0, 0, 0);
-    }
-    return SAMPLE_TEXTURE2D_LOD(_FishWeatherMap, sampler_FishWeatherMap, saturate(uv), 0) * fade;
+    float4 a, b;
+    FishWeatherMapTexels(xz, false, a, b);
+    return a;
 }
 
 // ── Rings ─────────────────────────────────────────────────────────────

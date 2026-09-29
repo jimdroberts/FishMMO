@@ -72,13 +72,18 @@ namespace FishMMO.Client
 		/// Strikes in [from, to) world seconds: from storm cells (at the cell) and from scene-wide
 		/// lightning (around the viewer). A rate of 1 is a strike about every two seconds.
 		/// </summary>
-		/// <param name="ambientRate">
-		/// The lightning rate of the weather at the viewer, storm cells left out. The schedule used
-		/// to read only the scene's layers and each cell's own preset, so lightning from anything
-		/// else — the drifting field's thunderstorms, heavy rain — was a number nothing ever struck
-		/// from: it could be calibrated for ever and never make a bolt or a clap of thunder.
+		/// <param name="around">
+		/// The weather at the viewer. Its storm-free lightning rate strikes around the viewer — the
+		/// field's own thunderstorms, heavy rain — and each storm cell strikes at the rate its kind of
+		/// storm makes in this air, at the cell.
 		/// </param>
-		public static void Lightning(WeatherTimeline timeline, uint tick, double from, double to, Vector3 viewer, List<LightningStrike> into, float ambientRate = 0f)
+		public static void Lightning(WeatherTimeline timeline, uint tick, double from, double to, Vector3 viewer, List<LightningStrike> into, in WeatherSample around)
+		{
+			Lightning(timeline, tick, from, to, viewer, into, around, null);
+		}
+
+		/// <summary>The same, reusing a caller's per-kind storm weather.</summary>
+		public static void Lightning(WeatherTimeline timeline, uint tick, double from, double to, Vector3 viewer, List<LightningStrike> into, in WeatherSample around, StormFrames storms)
 		{
 			if (timeline == null || to <= from)
 			{
@@ -87,10 +92,7 @@ namespace FishMMO.Client
 			long first = (long)Math.Floor(from / LightningSlotSeconds);
 			long last = (long)Math.Floor(to / LightningSlotSeconds);
 
-			var accumulator = new WeatherAccumulator();
-			timeline.AccumulateSceneLayers(tick, ref accumulator);
-			float sceneRate = accumulator.HasAny ? accumulator.Resolve()[WeatherChannel.LightningRate] : 0f;
-			sceneRate = Mathf.Max(sceneRate, Mathf.Clamp01(ambientRate));
+			float sceneRate = Mathf.Clamp01(around.Background[WeatherChannel.LightningRate]);
 			if (sceneRate > 0.001f)
 			{
 				for (long slot = first; slot <= last; slot++)
@@ -122,15 +124,11 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			storms ??= new StormFrames(around);
 			for (int c = 0; c < timeline.Cells.Count; c++)
 			{
 				StormCell cell = timeline.Cells[c];
-				WeatherPreset preset = WeatherPreset.Get<WeatherPreset>(cell.PresetID);
-				if (preset == null)
-				{
-					continue;
-				}
-				float rate = preset.Evaluate()[WeatherChannel.LightningRate] * cell.EnvelopeAt(tick) * cell.PeakIntensity;
+				float rate = storms.Of(cell.Kind)[WeatherChannel.LightningRate] * cell.EnvelopeAt(tick) * cell.PeakIntensity;
 				if (rate <= 0.001f)
 				{
 					continue;

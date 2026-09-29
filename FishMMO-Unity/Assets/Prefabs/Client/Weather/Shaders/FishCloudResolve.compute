@@ -1,0 +1,173 @@
+// The clouds' steadying as a compute kernel: FishClouds.shader pass 1's arithmetic, fed from
+// groupshared memory instead of from the textures, pixel by pixel.
+//
+// WHY. The fragment pass reads, for every pixel of the rebuilt buffer, its own depth, the nine marched
+// texels round it, their nine motions, the scene depth at each of those nine rays — the jittered places
+// the march looked through, scattered over the full-resolution depth texture — five bilinear taps of
+// history and one of its weight: 34 reads a pixel, the same whatever the tier. But neighbouring pixels
+// read nearly the same nine texels: an 8 × 8 group of pixels on Balanced (a marched texel is up to four
+// pixels across) needs only a 4 × 4 to 6 × 6 block of them, and each of those texels' depth — with its
+// linearisation — is the same number for every pixel that reads it. Loaded once per group into
+// groupshared memory (at most 36 texels × 3 reads over 64 pixels, under two reads a pixel), each pixel is
+// left with its own depth, the five history taps and the weight: 8 reads, not 34.
+//
+// AND SKIPS WHAT CANNOT MATTER. A group whose every marched texel came back exactly clear air
+// (0, 0, 0, 1) writes clear air (FishResolveClear): every estimate the pixel could be steadied toward is
+// that one value, and the clip would pull any history onto it — the same answer FishCloudResolve gives a
+// pixel whose own three-by-three is clear, so the two paths agree pixel for pixel. One read a pixel, its
+// depth. A pixel whose own ray ends below the lowest cloud there can be has nothing in front of it at all
+// (FishResolveBelowClouds): the same one read. From the ground on a clear day that is most of the screen.
+//
+// Runs where FishCloudsFeature.ComputeResolveSupported says so; everywhere else pass 1 does the same.
+
+#pragma kernel Resolve
+
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#include "FishCloudResolve.hlsl"
+
+// The camera's depth, raw, at the camera target's own size (_FishCloudResolveDepth.xy).
+Texture2D<float> _FishCloudDepth;
+RWTexture2D<float4> _FishCloudResolved;
+RWTexture2D<float> _FishCloudResolvedWeight;
+
+float4 _FishCloudResolveCamera;     // xyz the camera's world position (m)
+float4 _FishCloudResolveForward;    // xyz the camera's forward
+float4 _FishCloudResolveDepth;      // xy the depth texture's size in use (px)
+float4 _FishCloudResolveZ;          // this camera's _ZBufferParams: a kernel is handed no camera globals
+
+// Pixels a group rebuilds along each side, and the widest block of marched texels they can need.
+// The rebuilt buffer is never coarser than the march (FishCloudsFeature keeps it so, or runs pass 1),
+// so eight pixels span at most eight texels, plus one either side for the three-by-three: eleven.
+#define FISH_RESOLVE_GROUP 8
+#define FISH_RESOLVE_TILE 12
+#define FISH_RESOLVE_SLOTS (FISH_RESOLVE_TILE * FISH_RESOLVE_TILE)
+
+groupshared float4 tileValue[FISH_RESOLVE_SLOTS];
+groupshared float tileThere[FISH_RESOLVE_SLOTS];
+// Each texel's motion: the mean distance of what its ray saw (km) and its bands' mean wind gain.
+groupshared float2 tileMotion[FISH_RESOLVE_SLOTS];
+// 1 once any marched texel this group reads holds anything but clear air.
+groupshared uint tileBusy;
+// 1 when any pixel of the group needs the block at all: a group looking only at ground below the
+// clouds never loads it.
+groupshared uint tileNeeded;
+
+// The raw depth under a screen position, as SampleSceneDepth's point sampler finds it: the texel the
+// position falls in, clamped to the texture.
+float FishResolveDepthAt(float2 uv)
+{
+    int2 size = max(int2(1, 1), (int2)_FishCloudResolveDepth.xy);
+    int2 texel = clamp((int2)floor(uv * _FishCloudResolveDepth.xy), int2(0, 0), size - 1);
+    return _FishCloudDepth.Load(int3(texel, 0));
+}
+
+// The marched texel a rebuilt pixel is nearest on this frame's grid (FishClouds.shader pass 1's own).
+int2 FishResolveNearest(uint2 pixel, float2 marched)
+{
+    float2 uv = (float2(pixel) + 0.5) / max(1.0, _FishCloudUpsample.xy);
+    return (int2)floor(uv * marched - _FishCloudJitter.xy);
+}
+
+[numthreads(FISH_RESOLVE_GROUP, FISH_RESOLVE_GROUP, 1)]
+void Resolve(uint3 groupId : SV_GroupID, uint3 id : SV_DispatchThreadID, uint flat : SV_GroupIndex)
+{
+    float2 marched = max(1.0, _FishCloudJitter.zw);
+    int2 last = (int2)marched - 1;
+    uint2 size = (uint2)max(1.0, _FishCloudUpsample.xy);
+
+    // The block of marched texels this group reads: from one short of the first pixel's nearest to
+    // one past the last pixel's. The nearest texel only grows with the pixel, so every pixel's
+    // three-by-three lies inside it.
+    uint2 first = groupId.xy * FISH_RESOLVE_GROUP;
+    uint2 end = min(first + (FISH_RESOLVE_GROUP - 1), size - 1);
+    int2 tileMin = FishResolveNearest(first, marched) - 1;
+    int2 span = min(FishResolveNearest(end, marched) + 2 - tileMin, int2(FISH_RESOLVE_TILE, FISH_RESOLVE_TILE));
+
+    // This pixel first: its depth, its ray, and whether anything can stand in front of it at all.
+    bool inside = all(id.xy < size);
+    float2 uv = (float2(min(id.xy, size - 1)) + 0.5) / float2(size);
+    float rawHere = FishResolveDepthAt(uv);
+    float here = LinearEyeDepth(rawHere, _FishCloudResolveZ);
+    float3 camera = _FishCloudResolveCamera.xyz;
+    float3 forward = _FishCloudResolveForward.xyz;
+    float3 direction = FishResolveRay(uv, camera);
+    bool below = FishResolveBelowClouds(rawHere, FishResolveSeen(here, camera, direction, forward));
+
+    if (flat == 0)
+    {
+        tileBusy = 0u;
+        tileNeeded = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (inside && !below)
+    {
+        InterlockedOr(tileNeeded, 1u);
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // Each texel once: its value, the eye depth where its jittered ray actually went, and its motion.
+    for (uint slot = flat; slot < FISH_RESOLVE_SLOTS; slot += FISH_RESOLVE_GROUP * FISH_RESOLVE_GROUP)
+    {
+        int2 at = int2(slot % FISH_RESOLVE_TILE, slot / FISH_RESOLVE_TILE);
+        if (tileNeeded != 0u && at.x < span.x && at.y < span.y)
+        {
+            int2 texel = clamp(tileMin + at, int2(0, 0), last);
+            float4 value = LOAD_TEXTURE2D(_FishCloudCurrent, texel);
+            float2 sampleUV = (texel + 0.5 + _FishCloudJitter.xy) / marched;
+            float rawThere = FishResolveDepthAt(sampleUV);
+            float there = LinearEyeDepth(rawThere, _FishCloudResolveZ);
+            tileValue[slot] = value;
+            tileThere[slot] = there;
+            tileMotion[slot] = LOAD_TEXTURE2D(_FishCloudCurrentMotion, texel).rg;
+            if (any(value != float4(0.0, 0.0, 0.0, 1.0)))
+            {
+                InterlockedOr(tileBusy, 1u);
+            }
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    if (!inside)
+    {
+        return;
+    }
+
+    float2 perTexel = float2(size) / marched;
+    float2 onGrid = uv * marched - _FishCloudJitter.xy;
+    FishCloudResolved resolved;
+    if (below)
+    {
+        resolved = FishResolveClear();
+    }
+    else if (tileBusy == 0u)
+    {
+        resolved = FishResolveClear();
+    }
+    else
+    {
+        int2 nearest = (int2)floor(onGrid);
+        float4 values[9];
+        float theres[9];
+        float2 ats[9];
+        float2 motions[9];
+        [unroll] for (int y = -1; y <= 1; y++)
+        {
+            [unroll] for (int x = -1; x <= 1; x++)
+            {
+                int k = (y + 1) * 3 + (x + 1);
+                int2 wanted = nearest + int2(x, y);
+                int2 inTile = wanted - tileMin;
+                int index = inTile.y * FISH_RESOLVE_TILE + inTile.x;
+                values[k] = tileValue[index];
+                theres[k] = tileThere[index];
+                motions[k] = tileMotion[index];
+                // Where the texel it holds sits, clamped as the fragment pass clamps it: at the
+                // buffer's edge the same texel stands in for the ones past it.
+                ats[k] = clamp(wanted, int2(0, 0), last) + 0.5;
+            }
+        }
+        resolved = FishCloudResolve(uv, rawHere, here, camera, direction, forward, onGrid, marched, perTexel, values, theres, ats, motions);
+    }
+    _FishCloudResolved[id.xy] = resolved.clouds;
+    _FishCloudResolvedWeight[id.xy] = resolved.weight;
+}

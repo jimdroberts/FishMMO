@@ -11,22 +11,32 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// <c>/admin weather</c> and <c>/admin climate</c>: changing the weather of the scene the
-	/// administrator stands in.
+	/// <c>/admin weather</c>: changing the air of the scene the administrator stands in, and the
+	/// storms in it.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// Admin-only because weather changes gameplay (exposure buffs, spawns, ability modifiers).
 	/// Game masters have the read-only <c>/gm weather</c>. Every use is audited at the command gate.
+	/// </para>
+	/// <para>
+	/// There are no named weathers to ask for. The weather is worked out from the air, so the only
+	/// thing to change is the air — and only by adding to it: a few kelvin colder, a little damper, a
+	/// lower pressure, less stable. Whatever that air then does on this world is the weather. A
+	/// storm is a physical kind (a thunderstorm, a supercell, a haboob…) that does to the air under
+	/// it what that storm does.
+	/// </para>
 	/// </remarks>
 	public partial class SceneServerSystem
 	{
 		private static readonly string[] WeatherActionHelp =
 		{
-			"weather show — this scene's layers, nearby cells and the weather where you stand",
-			"weather preset <name> [intensity 0-1] [seconds] — replace the scene layers with a preset",
-			"weather layer add <template> [intensity] [seconds] | layer set <handle> <intensity> [seconds]",
-			"weather layer remove <handle> [seconds] | clear [seconds] — fade layers out",
-			"weather cell spawn <preset> [radius m] [minutes] — a storm at your position",
+			"weather show — this scene's air, what is added to it, nearby storms and the weather where you stand",
+			"weather air <key> <±value> [<key> <±value> …] [seconds] — SET what is added to this scene's air",
+			"weather air add <key> <±value> … [seconds] — add to what is already added | air clear [seconds]",
+			"  keys: temperature (K), humidity (0..1 scale), pressure (−1 low … +1 high), instability (0..1), wind (m/s), gravity (m/s²)",
+			"weather cell spawn <kind> [radius m] [minutes] — a storm at your position; omitted sizes come from the air",
+			"  kinds: thunderstorm, supercell (tornado), squall, hurricane, haboob, dustdevil, eruption",
 			"weather cell steer <id> [m/s] — send a cell toward you | cell retire <id> [seconds]",
 			"weather director on|off — the automatic storm director for this scene",
 			"Times: a bare number is seconds; 2m and 1h also work.",
@@ -40,16 +50,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				new OperatorCommand
 				{
 					Name = "weather", Category = "World",
-					Summary = "Shows or changes this scene's weather. /admin weather help lists the actions.",
-					Arguments = "action:Choice=show,preset,layer,cell,director,clear,help?;details:Text?",
+					Summary = "Shows this scene's air and weather, or adds to its air. /admin weather help lists the actions.",
+					Arguments = "action:Choice=show,air,cell,director,help?;details:Text?",
 					Run = RunAdminWeather,
-				},
-				new OperatorCommand
-				{
-					Name = "climate", Category = "World",
-					Summary = "Shifts this scene's temperature and humidity (-1..1) over a time.",
-					Arguments = "temperature:Number;humidity:Number;seconds:Word?",
-					Run = RunAdminClimate,
 				},
 				new OperatorCommand
 				{
@@ -83,11 +86,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			string[] words = SplitWords(rest);
 			switch (action)
 			{
-				case "preset":
-					AdminWeatherPreset(character, weather, scene, words);
-					return;
-				case "layer":
-					AdminWeatherLayer(character, weather, scene, words);
+				case "air":
+					AdminWeatherAir(character, weather, scene, words);
 					return;
 				case "cell":
 					AdminWeatherCell(character, weather, scene, words);
@@ -104,91 +104,98 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Reply(character, applied ? $"Storm director {(on.Value ? "on" : "off")} for {scene.name}." : "This scene has no weather of its own, so the director stays off.");
 					return;
 				}
-				case "clear":
-				{
-					float seconds = 30f;
-					if (words.Length > 0 && !TryParseWeatherSeconds(words[0], out seconds))
-					{
-						Reply(character, "Usage: /admin weather clear [seconds]");
-						return;
-					}
-					Reply(character, weather.ClearLayers(scene, seconds) ? $"Fading every scene layer out over {seconds:0}s. Storm cells are untouched." : "This scene has no weather.");
-					return;
-				}
 				default:
 					ReplyLines(character, WeatherActionHelp);
 					return;
 			}
 		}
 
-		private void AdminWeatherPreset(IPlayerCharacter character, IWeatherService weather, Scene scene, string[] words)
+		private void AdminWeatherAir(IPlayerCharacter character, IWeatherService weather, Scene scene, string[] words)
 		{
-			if (words.Length == 0 || !TryFindPreset(words[0], out WeatherPreset preset))
+			const string Usage = "Usage: /admin weather air [add] <key> <±value> … [seconds] | air clear [seconds]. Keys: temperature, humidity, pressure, instability, wind, gravity.";
+			if (words.Length == 0)
 			{
-				Reply(character, $"Usage: /admin weather preset <name> [intensity] [seconds]. Presets: {ListNames(AllPresets())}");
+				weather.TryGetAirOffsets(scene, out AirOffsets now);
+				Reply(character, $"Added to this scene's air at runtime: {now}. {Usage}");
 				return;
 			}
-			float intensity = 1f;
-			float seconds = preset.TransitionSeconds;
-			if (words.Length > 1 && !TryParseUnit(words[1], out intensity) || words.Length > 2 && !TryParseWeatherSeconds(words[2], out seconds))
+			float seconds = 30f;
+			if (words[0].Equals("clear", StringComparison.OrdinalIgnoreCase))
 			{
-				Reply(character, "Usage: /admin weather preset <name> [intensity 0-1] [seconds]");
+				if (words.Length > 1 && !TryParseWeatherSeconds(words[1], out seconds))
+				{
+					Reply(character, "Usage: /admin weather air clear [seconds]");
+					return;
+				}
+				Reply(character, weather.SetAirOffsets(scene, default, seconds)
+					? $"Handing {scene.name} back to its own air over {seconds:0}s."
+					: "This scene has no weather.");
 				return;
 			}
-			Reply(character, weather.ApplyPreset(scene, preset, intensity, seconds)
-				? $"{preset.ResolvedName} at {intensity:0.00} over {seconds:0}s."
+			bool relative = words[0].Equals("add", StringComparison.OrdinalIgnoreCase);
+			int start = relative ? 1 : 0;
+			if (!TryParseAirOffsets(words, start, out AirOffsets offsets, ref seconds, out string problem))
+			{
+				Reply(character, $"{problem} {Usage}");
+				return;
+			}
+			if (relative && weather.TryGetAirOffsets(scene, out AirOffsets current))
+			{
+				offsets = current + offsets;
+			}
+			Reply(character, weather.SetAirOffsets(scene, offsets, seconds)
+				? $"Air of {scene.name} now has added: {offsets} (over {seconds:0}s)."
 				: "This scene has no weather.");
 		}
 
-		private void AdminWeatherLayer(IPlayerCharacter character, IWeatherService weather, Scene scene, string[] words)
+		/// <summary>
+		/// Reads key/value pairs into offsets; a lone trailing word is the transition time.
+		/// </summary>
+		internal static bool TryParseAirOffsets(string[] words, int start, out AirOffsets offsets, ref float seconds, out string problem)
 		{
-			string verb = words.Length > 0 ? words[0].ToLowerInvariant() : string.Empty;
-			if (verb == "add")
+			offsets = default;
+			problem = null;
+			int i = start;
+			bool any = false;
+			while (i < words.Length)
 			{
-				if (words.Length < 2 || !TryFindTemplate(words[1], out WeatherLayerTemplate template))
+				string key = words[i].ToLowerInvariant();
+				if (i + 1 >= words.Length)
 				{
-					Reply(character, $"Usage: /admin weather layer add <template> [intensity] [seconds]. Templates: {ListNames(AllTemplates())}");
-					return;
+					// A lone last word is the time.
+					if (!TryParseWeatherSeconds(words[i], out seconds))
+					{
+						problem = $"'{words[i]}' is neither a key with a value nor a time.";
+						return false;
+					}
+					break;
 				}
-				float intensity = 1f;
-				float seconds = template.DefaultTransitionSeconds;
-				if (words.Length > 2 && !TryParseUnit(words[2], out intensity) || words.Length > 3 && !TryParseWeatherSeconds(words[3], out seconds))
+				if (!float.TryParse(words[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out float value))
 				{
-					Reply(character, "Usage: /admin weather layer add <template> [intensity 0-1] [seconds]");
-					return;
+					problem = $"'{words[i + 1]}' is not a number for {key}.";
+					return false;
 				}
-				ushort handle = weather.AddLayer(scene, template, intensity, seconds);
-				Reply(character, handle != 0 ? $"Layer #{handle} {template.name} to {intensity:0.00} over {seconds:0}s." : "This scene has no weather.");
-				return;
+				switch (key)
+				{
+					case "temperature": case "temp": case "t": offsets.Temperature = Mathf.Clamp(value, -150f, 150f); break;
+					case "humidity": case "hum": case "h": offsets.Humidity = Mathf.Clamp(value, -1f, 1f); break;
+					case "pressure": case "p": offsets.Pressure = Mathf.Clamp(value, -2f, 2f); break;
+					case "instability": case "i": offsets.Instability = Mathf.Clamp(value, -1f, 1f); break;
+					case "wind": case "w": offsets.Wind = Mathf.Clamp(value, -60f, 60f); break;
+					case "gravity": case "g": offsets.Gravity = Mathf.Clamp(value, -20f, 20f); break;
+					default:
+						problem = $"'{key}' is not something the air has.";
+						return false;
+				}
+				any = true;
+				i += 2;
 			}
-			if (verb == "set")
+			if (!any)
 			{
-				if (words.Length < 3 || !ushort.TryParse(words[1], out ushort handle) || !TryParseUnit(words[2], out float intensity))
-				{
-					Reply(character, "Usage: /admin weather layer set <handle> <intensity 0-1> [seconds]");
-					return;
-				}
-				float seconds = 30f;
-				if (words.Length > 3 && !TryParseWeatherSeconds(words[3], out seconds))
-				{
-					Reply(character, "Usage: /admin weather layer set <handle> <intensity 0-1> [seconds]");
-					return;
-				}
-				Reply(character, weather.SetLayerIntensity(scene, handle, intensity, seconds) ? $"Layer #{handle} to {intensity:0.00} over {seconds:0}s." : $"No layer #{handle} here.");
-				return;
+				problem = "Nothing to add.";
+				return false;
 			}
-			if (verb == "remove")
-			{
-				float seconds = 30f;
-				if (words.Length < 2 || !ushort.TryParse(words[1], out ushort handle) || words.Length > 2 && !TryParseWeatherSeconds(words[2], out seconds))
-				{
-					Reply(character, "Usage: /admin weather layer remove <handle> [seconds]");
-					return;
-				}
-				Reply(character, weather.RemoveLayer(scene, handle, seconds) ? $"Layer #{handle} fading out over {seconds:0}s." : $"No layer #{handle} here.");
-				return;
-			}
-			Reply(character, "Usage: /admin weather layer add|set|remove …  (/admin weather help)");
+			return true;
 		}
 
 		private void AdminWeatherCell(IPlayerCharacter character, IWeatherService weather, Scene scene, string[] words)
@@ -197,20 +204,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Vector3 here = character.Transform.position;
 			if (verb == "spawn")
 			{
-				if (words.Length < 2 || !TryFindPreset(words[1], out WeatherPreset preset))
+				if (words.Length < 2 || !StormPhysics.TryParse(words[1], out StormKind kind))
 				{
-					Reply(character, $"Usage: /admin weather cell spawn <preset> [radius m] [minutes]. Presets: {ListNames(AllPresets())}");
+					Reply(character, "Usage: /admin weather cell spawn <kind> [radius m] [minutes]. Kinds: thunderstorm, supercell, squall, hurricane, haboob, dustdevil, eruption.");
 					return;
 				}
-				float radius = Mathf.Max(preset.CellRadiusMeters.x, 250f);
-				float minutes = Mathf.Max(preset.DurationMinutes.x, 10f);
-				if (words.Length > 2 && !TryParsePositive(words[2], 10f, 10000f, out radius) || words.Length > 3 && !TryParsePositive(words[3], 1f, 720f, out minutes))
+				float radius = 0f;
+				float minutes = 0f;
+				if (words.Length > 2 && !TryParsePositive(words[2], 1f, 10000f, out radius) || words.Length > 3 && !TryParsePositive(words[3], 1f, 720f, out minutes))
 				{
-					Reply(character, "Usage: /admin weather cell spawn <preset> [radius 10-10000 m] [minutes 1-720]");
+					Reply(character, "Usage: /admin weather cell spawn <kind> [radius 1-10000 m] [minutes 1-720]");
 					return;
 				}
-				ushort id = weather.SpawnCell(scene, preset, here, radius, Vector2.zero, minutes * 60f);
-				Reply(character, id != 0 ? $"Cell {id} ({preset.ResolvedName}) over you, radius {radius:0} m, for {minutes:0} min. Steer it with /admin weather cell steer {id}." : "This scene has no storm cells (no weather, or fixed weather).");
+				ushort id = weather.SpawnCell(scene, kind, here, radius, Vector2.zero, minutes * 60f);
+				Reply(character, id != 0
+					? $"Cell {id} ({StormPhysics.NameOf(kind)}) over you{(radius > 0f ? $", radius {radius:0} m" : ", sized by the air")}{(minutes > 0f ? $", for {minutes:0} min" : string.Empty)}. Steer it with /admin weather cell steer {id}."
+					: "This scene has no weather of its own, so no storm cells.");
 				return;
 			}
 			if (verb == "steer")
@@ -238,32 +247,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Reply(character, "Usage: /admin weather cell spawn|steer|retire …  (/admin weather help)");
 		}
 
-		private void RunAdminClimate(IPlayerCharacter character, string arguments)
-		{
-			string[] words = SplitWords(arguments);
-			IWeatherService weather = WeatherService;
-			if (words.Length < 2
-				|| !float.TryParse(words[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float temperature)
-				|| !float.TryParse(words[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float humidity)
-				|| temperature < -1f || temperature > 1f || humidity < -1f || humidity > 1f)
-			{
-				Reply(character, "Usage: /admin climate <temperature -1..1> <humidity -1..1> [seconds]. 0 0 returns to normal.");
-				return;
-			}
-			float seconds = 600f;
-			if (words.Length > 2 && !TryParseWeatherSeconds(words[2], out seconds))
-			{
-				Reply(character, "Usage: /admin climate <temperature -1..1> <humidity -1..1> [seconds]");
-				return;
-			}
-			if (weather == null || character?.GameObject == null || !weather.SetClimateOffset(character.GameObject.scene, temperature, humidity, seconds))
-			{
-				Reply(character, "This scene has no weather.");
-				return;
-			}
-			Reply(character, $"Climate shift T {temperature:+0.00;-0.00} H {humidity:+0.00;-0.00} over {seconds:0}s for {character.GameObject.scene.name}.");
-		}
-
 		// ── Helpers ───────────────────────────────────────────────────
 
 		private static string[] SplitWords(string text)
@@ -281,76 +264,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
-		private static bool TryParseUnit(string word, out float value)
-		{
-			return float.TryParse(word, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0f && value <= 1f;
-		}
-
 		private static bool TryParsePositive(string word, float min, float max, out float value)
 		{
 			return float.TryParse(word, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= min && value <= max;
-		}
-
-		private static bool TryFindPreset(string word, out WeatherPreset preset)
-		{
-			string key = NameKey(word);
-			foreach (WeatherPreset candidate in AllPresets())
-			{
-				if (candidate != null && (NameKey(candidate.name) == key || NameKey(candidate.DisplayName) == key))
-				{
-					preset = candidate;
-					return true;
-				}
-			}
-			preset = null;
-			return false;
-		}
-
-		private static bool TryFindTemplate(string word, out WeatherLayerTemplate template)
-		{
-			string key = NameKey(word);
-			foreach (WeatherLayerTemplate candidate in AllTemplates())
-			{
-				if (candidate != null && (NameKey(candidate.name) == key || NameKey(candidate.Kind.ToString()) == key))
-				{
-					template = candidate;
-					return true;
-				}
-			}
-			template = null;
-			return false;
-		}
-
-		/// <summary>Every loaded preset. The cache is null until the first one loads.</summary>
-		private static IEnumerable<WeatherPreset> AllPresets()
-		{
-			Dictionary<int, WeatherPreset> cache = WeatherPreset.GetCache<WeatherPreset>();
-			return cache != null ? (IEnumerable<WeatherPreset>)cache.Values : Array.Empty<WeatherPreset>();
-		}
-
-		/// <summary>Every loaded layer template.</summary>
-		private static IEnumerable<WeatherLayerTemplate> AllTemplates()
-		{
-			Dictionary<int, WeatherLayerTemplate> cache = WeatherLayerTemplate.GetCache<WeatherLayerTemplate>();
-			return cache != null ? (IEnumerable<WeatherLayerTemplate>)cache.Values : Array.Empty<WeatherLayerTemplate>();
-		}
-
-		/// <summary>Lowercase letters only, so "Heavy Rain" and "heavyrain" match.</summary>
-		private static string NameKey(string text) => FishMMO.Shared.Biomes.BiomeClimateVariant.Normalize(text);
-
-		private static string ListNames<T>(IEnumerable<T> assets) where T : UnityEngine.Object
-		{
-			var names = new List<string>();
-			foreach (T asset in assets)
-			{
-				if (asset != null)
-				{
-					names.Add(asset.name.Replace(" ", string.Empty));
-				}
-			}
-			names.Sort(StringComparer.OrdinalIgnoreCase);
-			string joined = names.Count > 0 ? string.Join(", ", names) : "(none loaded)";
-			return OperatorCommandParsing.Truncate(joined, 60);
 		}
 	}
 }

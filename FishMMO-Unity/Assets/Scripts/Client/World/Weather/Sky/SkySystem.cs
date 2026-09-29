@@ -34,13 +34,6 @@ namespace FishMMO.Client
 		public const float WeatherMapRefreshSeconds = 0.35f;
 		public const int MaxSuns = 4;
 
-		/// <summary>
-		/// The lowest cloud-base reading taken as a real one. The weather's cloud-base channel runs
-		/// from about 0.8 (dry, high base) to 0.3 (damp, low base); anything under this is a frame
-		/// that never set the channel, not a cloud deck at ground level.
-		/// </summary>
-		public const float CondensationFloor = 0.2f;
-
 		private static readonly int ZenithId = Shader.PropertyToID("_FishSkyZenith");
 		private static readonly int HorizonId = Shader.PropertyToID("_FishSkyHorizon");
 		private static readonly int GroundId = Shader.PropertyToID("_FishSkyGround");
@@ -67,7 +60,7 @@ namespace FishMMO.Client
 		private static readonly int CloudWindId = Shader.PropertyToID("_FishCloudWind");
 		private static readonly int CloudLayerEId = Shader.PropertyToID("_FishCloudLayerE");
 		private static readonly int CloudLayerFId = Shader.PropertyToID("_FishCloudLayerF");
-		private static readonly int CloudLayerGId = Shader.PropertyToID("_FishCloudLayerG");
+		private static readonly int CloudShearId = Shader.PropertyToID("_FishCloudShear");
 		private static readonly int CloudMesoId = Shader.PropertyToID("_FishCloudMeso");
 		private static readonly int CloudMesoParamsId = Shader.PropertyToID("_FishCloudMesoParams");
 		private static readonly int CloudMesoSeedId = Shader.PropertyToID("_FishCloudMesoSeed");
@@ -90,6 +83,9 @@ namespace FishMMO.Client
 		private static readonly int CloudWindDirId = Shader.PropertyToID("_FishCloudWindDir");
 		private static readonly int CloudScreenId = Shader.PropertyToID("_FishCloudScreen");
 		private static readonly int CloudLightId = Shader.PropertyToID("_FishCloudLight");
+		private static readonly int AmbientSkyId = Shader.PropertyToID("_FishAmbientSky");
+		private static readonly int AmbientEquatorId = Shader.PropertyToID("_FishAmbientEquator");
+		private static readonly int AmbientGroundId = Shader.PropertyToID("_FishAmbientGround");
 		private static readonly int CloudTypeParamsId = Shader.PropertyToID("_FishCloudTypeParams");
 		private static readonly int CloudSunDirId = Shader.PropertyToID("_FishCloudSunDir");
 		private static readonly int CloudSunColorId = Shader.PropertyToID("_FishCloudSunColor");
@@ -99,9 +95,12 @@ namespace FishMMO.Client
 		private static readonly int CloudLayerBId = Shader.PropertyToID("_FishCloudLayerB");
 		private static readonly int CloudLayerCId = Shader.PropertyToID("_FishCloudLayerC");
 		private static readonly int CloudLayerDId = Shader.PropertyToID("_FishCloudLayerD");
-		private static readonly int CloudLayerTintId = Shader.PropertyToID("_FishCloudLayerTint");
+		private static readonly int CloudLayerSunId = Shader.PropertyToID("_FishCloudLayerSun");
+		private static readonly int CloudIceId = Shader.PropertyToID("_FishCloudIce");
+		private static readonly int CloudGroundId = Shader.PropertyToID("_FishCloudGround");
+		private static readonly int CloudAirExtinctionId = Shader.PropertyToID("_FishCloudAirExtinction");
+		private static readonly int CloudAerosolId = Shader.PropertyToID("_FishCloudAerosol");
 		private static readonly int CloudLayerCountId = Shader.PropertyToID("_FishCloudLayerCount");
-		private static readonly int CloudTintId = Shader.PropertyToID("_FishCloudTint");
 		private static readonly int CloudCoverageId = Shader.PropertyToID("_FishCloudCoverage");
 		private static readonly int CloudShapeTexId = Shader.PropertyToID("_FishCloudShape");
 		private static readonly int CloudDetailTexId = Shader.PropertyToID("_FishCloudDetail");
@@ -352,11 +351,11 @@ namespace FishMMO.Client
 		private Vector3 probeSun;
 		private Color lastAmbientSky, lastAmbientEquator, lastAmbientGround;
 		private float bodyTimer;
-		private float mapTimer;
 		private bool warnedCamera;
 		private SkyBodyMesh bodies;
 		private LightningPresenter lightning;
 		private CurtainPresenter curtains;
+		private VortexPresenter vortices;
 		private CloudShadowPresenter cloudShadows;
 		private CloudTerrainMap cloudTerrain;
 		private WeatherMap weatherMap;
@@ -364,7 +363,8 @@ namespace FishMMO.Client
 		private readonly Vector4[] layerB = new Vector4[MaxCloudLayers];
 		private readonly Vector4[] layerC = new Vector4[MaxCloudLayers];
 		private readonly Vector4[] layerD = new Vector4[MaxCloudLayers];
-		private readonly Vector4[] layerTint = new Vector4[MaxCloudLayers];
+		private readonly Vector4[] layerSun = new Vector4[MaxCloudLayers];
+		private readonly float[] layerSunHeight = new float[MaxCloudLayers];
 
 		/// <summary>
 		/// Draws every cloud as a wire box in the Scene and Game views (gizmos on). The test beds
@@ -388,52 +388,31 @@ namespace FishMMO.Client
 		public CelestialState State => cycle != null ? cycle.State : null;
 		public LightningPresenter Lightning => lightning;
 		public CurtainPresenter Curtains => curtains;
+		public VortexPresenter Vortices => vortices;
 		public SkyBodyMesh Bodies => bodies;
 		public WeatherMap Map => weatherMap;
 
 		/// <summary>The most bands the shader takes.</summary>
 		public const int MaxCloudLayers = 6;
 
-		/// <summary>The bands the sky is made of, as the renderer last saw them.</summary>
-		public IReadOnlyList<CloudLayer> CloudBands => ActiveCloudLayers;
+		/// <summary>The regimes the sky is made of, as the renderer last worked them out from the air.</summary>
+		public IReadOnlyList<CloudBand> CloudBands => cloudBands;
 
+		/// <summary>How many of <see cref="CloudBands"/> the air makes here and are drawn.</summary>
+		public int CloudBandCount => cloudBandCount;
 		/// <summary>
-		/// The bands being drawn: the stood-on body's own stack when it has one, the render profile's
-		/// otherwise. The same list the tools edit, so a band moved in the bed moves in the right asset.
+		/// Rebuilds the air over the whole visible sky on the next frame, whole: for when the air has
+		/// just changed all at once — an admin's instant change, a teleport, a test stage.
 		/// </summary>
-		public List<CloudLayer> ActiveCloudLayers
+		public void RebuildCloudAir()
 		{
-			get
-			{
-				CelestialState state = State;
-				WorldBody body = state != null ? state.Observer : null;
-				if (body != null && body.Clouds != null && body.Clouds.HasLayers)
-				{
-					return body.Clouds.Layers;
-				}
-				return cloudSettings != null ? cloudSettings.Layers : null;
-			}
+			cloudAir?.Invalidate();
+			// And the storms' cloud, which is worked out in that air.
+			weatherMap?.Invalidate();
 		}
 
-		/// <summary>The body whose cloud stack is in use, or null when it is the render profile's.</summary>
-		public WorldBody CloudStackOwner
-		{
-			get
-			{
-				CelestialState state = State;
-				WorldBody body = state != null ? state.Observer : null;
-				return body != null && body.Clouds != null && body.Clouds.HasLayers ? body : null;
-			}
-		}
-
-		/// <summary>How much of each band the weather is asking for, in band order.</summary>
-		public IReadOnlyList<float> CloudBandCoverage => layerCoverage;
-
-		/// <summary>
-		/// Where each band's floor ended up, in band order and in metres. A band that follows the
-		/// condensation level is not where it was authored, so this is what the sky is drawn with.
-		/// </summary>
-		public IReadOnlyList<float> CloudBandBottom => layerBottom;
+		/// <summary>The extremes of the air over the whole visible sky: where its cloud can be at all.</summary>
+		public CloudClimate.MapExtremes CloudMapExtremes => cloudAir != null ? cloudAir.Extremes : default;
 
 		/// <summary>
 		/// The state the bands were last built from: what the forecast asked for, and what the wind
@@ -442,22 +421,11 @@ namespace FishMMO.Client
 		/// </summary>
 		public float CloudCover => cloudBackgroundCover;
 		/// <summary>How much storm the sky is under, 0..1: what fills the bands that grow storms.</summary>
-		public float CloudStorm => cloudBackgroundStorm;
 		/// <summary>How much precipitation the sky is under, 0..1: what thickens the bands that carry rain.</summary>
 		public float CloudPrecipitation => cloudPrecipitation;
 		/// <summary>The wind the bands drift on: a unit direction on the ground plane.</summary>
 		public Vector2 CloudWind => cloudWind;
 
-		/// <summary>
-		/// Held true, the clouds take their wind from <see cref="CloudWindHeading"/> and
-		/// <see cref="CloudWindSpeed"/> instead of from the weather. The sim panels switch it so a
-		/// designer can point the sky where they want it; nothing in the game does.
-		/// </summary>
-		public static bool CloudWindOverride;
-		/// <summary>The direction that wind blows toward, in degrees clockwise from north.</summary>
-		public static float CloudWindHeadingOverride = 60f;
-		/// <summary>How fast it blows, in metres per second.</summary>
-		public static float CloudWindSpeedOverride = 8f;
 		/// <summary>How fast that wind runs at the ground, in metres per second. A band scales it.</summary>
 		public float CloudWindSpeed => cloudWindSpeed;
 		/// <summary>The direction the cloud light comes from.</summary>
@@ -497,6 +465,7 @@ namespace FishMMO.Client
 			bodies = bodies ?? new SkyBodyMesh();
 			lightning = lightning ?? new LightningPresenter();
 			curtains = curtains ?? new CurtainPresenter();
+			vortices = vortices ?? new VortexPresenter();
 			cloudShadows = cloudShadows ?? new CloudShadowPresenter();
 			weatherMap = weatherMap ?? new WeatherMap();
 			if (defaultSky == null)
@@ -522,6 +491,7 @@ namespace FishMMO.Client
 			}
 			lightning?.Dispose();
 			curtains?.Dispose();
+			vortices?.Dispose();
 			cloudShadows?.Dispose();
 			cloudTerrain?.Dispose();
 			cloudTerrain = null;
@@ -679,10 +649,17 @@ namespace FishMMO.Client
 			Vector3 viewer = camera != null ? camera.transform.position : Vector3.zero;
 			// With the lightning of the weather here — the field's storms and heavy rain — and not only
 			// the scene layers' and the cells'.
-			lightning.Update(timeline, tick, worldSeconds, viewer, camera, profile.BoltMaterial, context.Background[WeatherChannel.LightningRate]);
+			lightning.Update(timeline, tick, worldSeconds, viewer, camera, profile.BoltMaterial, context.Sample);
 			if (presentation != null)
 			{
 				presentation.LightningFlash = lightning.Flash;
+			}
+
+			// The storms' own cloud, before the bands are packed: the shells the march skips empty air
+			// by have to take in their bases, towers and anvils as they are now.
+			if (camera != null)
+			{
+				weatherMap.Update(timeline, viewer, tick, context.Sample, dt, WeatherMapRefreshSeconds);
 			}
 
 			SetGodRays(state, sample, weather, overcast, eclipse, tier, context);
@@ -692,13 +669,6 @@ namespace FishMMO.Client
 			FogComposer.SetSkyColor(Color.Lerp(sample.Fog, sample.Fog * 0.7f + new Color(0.25f, 0.26f, 0.28f) * 0.3f, overcast));
 			UpdateReflection(state, dt, tier);
 			CheckCamera(camera);
-
-			mapTimer -= dt;
-			if (mapTimer <= 0f && camera != null)
-			{
-				mapTimer = WeatherMapRefreshSeconds;
-				weatherMap.Build(timeline, viewer, tick);
-			}
 
 			bodyTimer -= dt;
 			if (bodyTimer <= 0f)
@@ -814,7 +784,11 @@ namespace FishMMO.Client
 			// From the body, not from the profile: a profile that forgot to say so gave an airless
 			// moon a blue noon.
 			float airless = state.Observer != null && !state.Observer.HasWeather ? 1f : 0f;
-			float fogBlend = Mathf.Clamp01((RenderSettings.fog ? 0.45f : 0f) + WeatherFogPresenter.Amount(weather) * 0.55f) * (1f - airless);
+			// Only the distance fog's share of the weather: the fog's own drops are drawn along the sky's
+			// rays by the cloud march, out to where the world curves from under them, and a band painted
+			// on the dome as well was a second fog at the horizon — flat, and as thick in a mist as in a
+			// dense fog (WeatherFogPresenter.UniformAmount).
+			float fogBlend = Mathf.Clamp01((RenderSettings.fog ? 0.45f : 0f) + WeatherFogPresenter.UniformAmount(weather, FogLayerView.Drawn) * 0.55f) * (1f - airless);
 			Shader.SetGlobalVector(ZenithId, sample.Zenith);
 			Shader.SetGlobalVector(HorizonId, sample.Horizon);
 			Shader.SetGlobalVector(GroundId, sample.Ground);
@@ -988,243 +962,214 @@ namespace FishMMO.Client
 		private static Color Mul(Color a, Color b) => new Color(a.r * b.r, a.g * b.g, a.b * b.b, a.a);
 
 		/// <summary>
-		/// Hands the cloud volume everything it needs: where the layer sits, what it is carved from,
-		/// which way the wind blows it, how it is lit, and how much cloud the weather asks for.
-		/// </summary>
-		/// <summary>
-		/// Hands the bands to the shader: where each one sits, how much of it the weather is asking
-		/// for, and what it is made of.
+		/// Hands the shader the clouds the air makes: three regimes — the column from the cloud base
+		/// up, the middle sheet, the high ice — each where the air puts it, and the air map that says
+		/// what each of them does place by place.
 		/// </summary>
 		/// <remarks>
-		/// The forecast is one number for the whole sky, and each band decides what that means for
-		/// it: the deck follows it directly, a sheet only arrives once a front has closed the sky
-		/// over, and cirrus thins as everything below thickens. A band can also be told to ignore
-		/// the forecast entirely, which is how the weather band at ground level stays empty until
-		/// there is fog to put in it.
+		/// <para>
+		/// Nothing here is authored. Where a cloud's base is, how high it can grow, whether it is a
+		/// deck or a heap or a tower, where the ice starts, how opaque a cloud is and how big its cells
+		/// are all follow from the air — its temperature, humidity, pressure pattern and stability —
+		/// on this world, with its pull, its air and its spin. The only way to change the sky is to
+		/// change the air.
+		/// </para>
+		/// <para>
+		/// Two kinds of number, kept apart. The shape and drift scales are the world's and are worked
+		/// out once from its average air: the noise is read at hundreds of kilometres of accumulated
+		/// drift divided by them, so a scale that moved with the weather would zoom and teleport the
+		/// whole sky. Heights, cover and opacity are the weather's and follow the air.
+		/// </para>
 		/// </remarks>
-		private void SetCloudLayers(WeatherRenderProfile profile, in WeatherFrame background, bool driverActive, float driverWeight, Vector2 axis, double driftX, double driftY)
+		private void SetCloudLayers(in WeatherContext context, Vector2 axis, double driftX, double driftY, float latitude, float season01, double worldSeconds, Vector3 viewerAt)
 		{
-			VolumetricCloudSettings clouds = profile.Clouds;
-			// The body's own stack where it has one: where a world's clouds stand is a fact about the
-			// world. Everything else in `clouds` is how they are drawn, and stays the profile's.
-			List<CloudLayer> bands = ActiveCloudLayers ?? clouds.Layers;
-			if (bands == null || bands.Count == 0)
+			WeatherTimeline timeline = context.Timeline;
+			WorldSceneSettings settings = context.Settings;
+			WeatherSample sample = context.Sample;
+			if (timeline == null || timeline.SceneMode != WeatherSceneMode.Own || !sample.Planet.HasAir || sample.Planet.Gravity <= 0f)
 			{
 				Shader.SetGlobalInt(CloudLayerCountId, 0);
+				CloudAirMap.Unpublish();
+				cloudBandCount = 0;
+				// No cloud of its own, but a fog can still lie here, and the march that draws it runs
+				// through the stack's shell: the fog's shell alone.
+				cloudTerrain ??= new CloudTerrainMap();
+				cloudTerrain.Update(viewerAt);
+				Vector2 alone = PublishFogShell();
+				bool fogAlone = alone.y > alone.x;
+				CloudShellBottom = fogAlone ? alone.x : 0f;
+				CloudShellTop = fogAlone ? alone.y : 0f;
+				Shader.SetGlobalVector(CloudLayerId, fogAlone
+					? new Vector4(alone.x, alone.y, Mathf.Max(10000f, sample.Planet.RadiusMetres), 0f)
+					: Vector4.zero);
 				return;
 			}
-
-			float cover = cloudBackgroundCover;
-			float fog = Mathf.Clamp01(background[WeatherChannel.FogDensity]);
-			CelestialState skyState = State;
-			float latitude = skyState != null ? (float)skyState.Latitude : 0f;
-			SolarSystemProfile solar = SolarSystemProfile.Active;
-			// The same season the weather field works out, by the same function: the clouds drawn and
-			// the weather sampled must never disagree about what time of year it is.
-			float season01 = CelestialMath.Season01(solar, skyState != null ? skyState.Observer : null, worldSeconds / 3600.0);
-			Camera viewCamera = TargetCamera != null ? TargetCamera : Camera.main;
-			Vector3 viewerAt = viewCamera != null ? viewCamera.transform.position : transform.position;
-
-			// The formations: where in this sky the banks and the gaps are. The shader computes the
-			// same term per sample from the same seed; what it needs from here is the drift the field
-			// is read through, wrapped to the lattice's own period so a float holds it, and the
-			// term's value at the camera — the cover the bands are given below was measured there
-			// and already contains it, so the shader takes it back out before adding its own.
-			// With the sliders or a pinned preset deciding the weather there are no formations: the
-			// sky is exactly what was asked for, which is what the probe's cloud stages check.
-			float mesoAtCamera = 0f;
-			float mesoContrast = 0f;
-			float mesoAmplitude = 0f;
-			// The cloud map's tall part: how far up the columns of this sky get. What the day starts
-			// every column at comes from the air when the field decides the weather and from the
-			// weather's own density channel when a preset or the sliders do — that channel has always
-			// been described as "flat stratus to heaped cumulus" and was uploaded for exactly this,
-			// and nothing in the shader ever read it. The towers belong to the field alone.
-			CloudTowerAtCamera = 0f;
-			// How hard the air resists being lifted, as the buoyancy frequency N (per second): about
-			// 0.02 for a very stable layer, 0.004 for unsettled air. With no field to say, ordinary.
-			float stability = 0.01f;
-			float presetType = Mathf.Clamp01(background[WeatherChannel.CloudDensity]) * 0.5f;
-			float columnType = presetType;
-			float towerGain = 0f;
-			double mesoPeriod = WeatherDriver.MesoscaleMetres * WeatherDriver.MesoscalePeriodTiles;
-			double mesoDriftX = driftX - System.Math.Floor(driftX / mesoPeriod) * mesoPeriod;
-			double mesoDriftY = driftY - System.Math.Floor(driftY / mesoPeriod) * mesoPeriod;
-			if (driverActive)
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			WorldBody body = timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+			// The world's own air for the scales — never an offset to it, which would move them.
+			PlanetAir plain = PlanetAir.For(system, body);
+			PlanetAir planet = sample.Planet;
+			WindBelts belts = WindBelts.For(plain);
+			if (!cloudScalesValid || cloudScalesBody != body || !Mathf.Approximately(cloudScalesLatitude, latitude))
 			{
-				WeatherDriver.Synoptic air = WeatherDriver.Sample(WeatherDriver.WorldSeed,
-					new Vector2(viewerAt.x, viewerAt.z), worldSeconds, latitude, season01, (float)(skyState != null ? skyState.LocalTime01 : 0.5));
-				mesoAmplitude = WeatherDriver.MesoscaleAmplitude * driverWeight * WeatherDriver.FormationScale(atmosphere);
-				mesoAtCamera = air.Mesoscale * mesoAmplitude;
-				mesoContrast = WeatherDriver.MesoscaleContrast(air.Instability);
-				columnType = Mathf.Lerp(presetType, WeatherDriver.BaseColumnType(air.Instability), driverWeight);
-				towerGain = WeatherDriver.TowerGain(air.Instability) * driverWeight;
-				CloudTowerAtCamera = air.Tower;
-				stability = Mathf.Lerp(0.02f, 0.004f, Mathf.Clamp01(air.Instability));
+				cloudScales = CloudClimate.ScalesFor(plain, latitude, WeatherDriver.WorldSeed);
+				cloudScalesBody = body;
+				cloudScalesLatitude = latitude;
+				cloudScalesValid = true;
 			}
-			cloudMesoscaleAtCamera = mesoAtCamera;
-			CloudColumnType = columnType;
-			CloudTowerGain = towerGain;
-			double towerPeriod = WeatherDriver.TowerMetres * WeatherDriver.TowerPeriodTiles;
-			Shader.SetGlobalVector(CloudColumnId, new Vector4(towerGain, WeatherDriver.TowerMetres, WeatherDriver.TowerPeriodTiles, columnType));
-			Shader.SetGlobalVector(CloudTowerDriftId, new Vector4(
-				(float)WrapMetres(driftX, towerPeriod), (float)WrapMetres(driftY, towerPeriod), Mathf.Max(0f, clouds.Carve), 0f));
-			Shader.SetGlobalInt(CloudTowerSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.TowerSeedMix)));
-			// What hangs below a column's base: the ground fog that rises into it, and the scud and
-			// rain haze under a wet one.
-			// From the frame the presentation is actually showing, which is eased, and not from the
-			// forecast, which is not: read off the forecast the fog in the sky cut in and out the
-			// instant a preset or a volume changed, while the fog on the ground eased in beside it.
-			Shader.SetGlobalVector(CloudSubId, new Vector4(shownFog, shownRain, 0f, 0f));
-			Shader.SetGlobalVector(CloudViewerId, new Vector4(viewerAt.x, viewerAt.y, viewerAt.z, 0f));
-			// The ground the clouds pass over: cloud gathers on the windward side of high terrain and
-			// clears in its lee, and the fog lies on the ground that is there. Rebuilt only when the
-			// viewer has moved a few hundred metres.
-			cloudTerrain ??= new CloudTerrainMap();
-			cloudTerrain.Update(viewerAt);
-			// Over, or round. The Froude number, U / (N h), says whether air meeting high ground
-			// climbs it or is split by it; U/N is the sky's half of that — how high this air can
-			// climb — and the shader sets it against the ground's height place by place. So a calm
-			// stable morning (2 m/s, N 0.02: a hundred metres) goes round every hill there is, and
-			// an unsettled windy afternoon (14 m/s, N 0.005: nearly three kilometres) pours over a
-			// mountain. The second figure is how far a blocked flow is turned aside.
-			CloudClimbHeight = Mathf.Max(1f, cloudWindSpeed) / Mathf.Max(0.001f, stability);
-			// 250 m, not 1800. The lookup is moved by this times the slope across the wind, and a
-			// displacement that changes faster than the distance it moves folds the field: at 1800 m
-			// the fold factor over the bed's mountain worked out at 9.7 — anything over about a half
-			// smears — and the sky overhead was concentric rings. What "going round" mostly looks
-			// like is the other half of it anyway: the layer is not lifted, so the cloud banks
-			// against the slopes at its own level and the summit stands clear.
-			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, 250f, 0f, 0f));
-			Shader.SetGlobalVector(CloudMesoId, new Vector4((float)mesoDriftX, (float)mesoDriftY, mesoAtCamera, mesoContrast));
+
+			// The air over the whole visible sky, place by place.
+			uint tick = (uint)context.Tick;
+			double worldHours = worldSeconds / 3600.0;
+			var inputs = new CloudAirMap.Inputs
+			{
+				Timeline = timeline,
+				Settings = settings,
+				Planet = planet,
+				Offsets = (settings != null ? settings.AuthoredAir : default) + timeline.AirAt(tick),
+				Atmosphere = body != null ? body.Atmosphere : AtmosphereKind.Standard,
+				Belts = belts,
+				WorldSeconds = worldSeconds,
+				Season01 = season01,
+				LocalTime01 = system != null && body != null ? (float)CelestialMath.LocalTime01(system, body, worldHours, timeline.LongitudeDegrees) : 0.5f,
+				Tick = tick,
+			};
+			if (system != null && body != null)
+			{
+				double day = CelestialMath.SolarDayHours(system, body);
+				if (!double.IsInfinity(day) && day > 1e-6)
+				{
+					inputs.DaylightShare = (float)(CelestialMath.DaylightHours(system, body, worldHours, timeline.LatitudeDegrees) / day);
+					inputs.HasDaylight = true;
+				}
+			}
+			cloudAir ??= new CloudAirMap();
+			cloudAir.Update(inputs, viewerAt, Time.deltaTime);
+			CloudAirMap.Probe(inputs, new Vector2(viewerAt.x, viewerAt.z), out WeatherDriver.Synoptic air, out AirColumn column);
+			CloudViewerAir = air;
+			CloudViewerColumn = column;
+			CloudClimate.Bands(cloudScales, planet, air, column, cloudAir.Extremes, cloudBands);
+
+			// The formations: where in this sky the banks and the gaps are, computed per sample in the
+			// shader from the same seed as the server's. The air map carries the systems' cover
+			// without them, so nothing is taken back out at the camera.
+			float mesoAmplitude = WeatherDriver.MesoscaleAmplitude * WeatherDriver.FormationScale(inputs.Atmosphere);
+			float mesoContrast = WeatherDriver.MesoscaleContrast(air.Instability);
+			double mesoPeriod = WeatherDriver.MesoscaleMetres * WeatherDriver.MesoscalePeriodTiles;
+			Shader.SetGlobalVector(CloudMesoId, new Vector4((float)WrapMetres(driftX, mesoPeriod), (float)WrapMetres(driftY, mesoPeriod), 0f, mesoContrast));
 			Shader.SetGlobalVector(CloudMesoParamsId, new Vector4(mesoAmplitude, WeatherDriver.MesoscaleMetres, WeatherDriver.MesoscalePeriodTiles, 0f));
 			Shader.SetGlobalInt(CloudMesoSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.MesoscaleSeedMix)));
+			// Where, within a sky, the air goes all the way up: the tower lattice, the server's twin.
+			// How far a tower can climb there is the air map's to say.
+			double towerPeriod = WeatherDriver.TowerMetres * WeatherDriver.TowerPeriodTiles;
+			Shader.SetGlobalVector(CloudColumnId, new Vector4(1f, WeatherDriver.TowerMetres, WeatherDriver.TowerPeriodTiles, 0f));
+			Shader.SetGlobalVector(CloudTowerDriftId, new Vector4(
+				(float)WrapMetres(driftX, towerPeriod), (float)WrapMetres(driftY, towerPeriod), 1f, 0f));
+			Shader.SetGlobalInt(CloudTowerSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.TowerSeedMix)));
+			CloudTowerAtCamera = air.Tower;
+
+			// What hangs below a column's base: the rain haze under a wet one, from the frame the
+			// presentation is actually showing, which is eased — at the extinction the world's own fog
+			// is given for what is falling. The column's ground fog (x, z) is gone: the fog is the fog
+			// layer's, walked by the march in a shell of its own (PublishFogShell).
+			Shader.SetGlobalVector(CloudSubId, new Vector4(0f, shownRain, 0f, shownFallingExtinction));
+			Shader.SetGlobalVector(CloudViewerId, new Vector4(viewerAt.x, viewerAt.y, viewerAt.z, 0f));
+			cloudTerrain ??= new CloudTerrainMap();
+			cloudTerrain.Update(viewerAt);
+			Vector2 fogShell = PublishFogShell();
+			bool fogDrawn = fogShell.y > fogShell.x;
+			// Over, or round: the Froude number U/(N h). N is the air's own buoyancy frequency,
+			// N² = (g/T)(Γd − Γ), from how much more slowly it cools with height than a dry parcel
+			// lifted through it would — a stable morning resists, an unsettled afternoon barely does.
+			float n2 = planet.Gravity / Mathf.Max(20f, column.SurfaceKelvin) * Mathf.Max(0f, column.DryLapse - column.EnvironmentLapse);
+			float buoyancy = Mathf.Max(0.002f, Mathf.Sqrt(n2));
+			CloudClimbHeight = Mathf.Max(1f, cloudWindSpeed) / buoyancy;
+			// 250 m, not more: the lookup is moved by this times the slope across the wind, and a
+			// displacement that changes faster than the distance it moves folds the field into rings.
+			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, 250f, 0f, 0f));
+
 			// The drift in the frame the noise is read in: along the axis and across it.
 			var across = new Vector2(-axis.y, axis.x);
 			double driftAlong = driftX * axis.x + driftY * axis.y;
 			double driftAcross = driftX * across.x + driftY * across.y;
 
-			// Which way the cloud is thickening across the ground. A front is a gradient, and without
-			// one the sky has a single cover everywhere: the cut drops all at once and cloud appears
-			// in place across the whole sky instead of arriving from upwind. Measured either side of
-			// the camera from the same field the weather comes from, so the sky thickens where the
-			// weather says it is thickening.
-			Vector2 coverGradient = Vector2.zero;
-			// Only when the drifting field is what is actually deciding the weather. With the sky on
-			// the panel's own sliders, or a scene pinned to a preset, the cover the renderer is given
-			// has nothing to do with the field — so tilting it by the field's slope lays a front
-			// across a sky that was never asked to have one, and the tilt is unrelated to anything
-			// the viewer set.
-			if (viewCamera != null && skyState != null && driverActive && clouds.CoverageTilt > 0.001f)
-			{
-				WeatherDriver.CoverField(WeatherDriver.WorldSeed, new Vector2(viewerAt.x, viewerAt.z), worldSeconds,
-					latitude, season01, (float)skyState.LocalTime01,
-					out float fieldCover, out coverGradient);
-				// The gradient belongs to the field's own cover; scale it by however much of that
-				// cover actually survived into the weather here, so a scene that damps the weather
-				// down damps the slope with it.
-				float scale = fieldCover > 0.01f ? Mathf.Clamp01(cover / fieldCover) : 1f;
-				coverGradient *= scale * clouds.CoverageTilt * driverWeight;
-			}
 			float lowest = float.MaxValue, highest = 0f;
-			int count = Mathf.Min(bands.Count, MaxCloudLayers);
-			if (layerCoverage.Length < count)
+			int count = 0;
+			// Where the storms' own cloud is (the weather map): their towers and lowered bases belong
+			// to the column, their anvils to the high ice. Each band keeps its own floor and top — its
+			// noise and its profile are laid out in them — and is handed a wider shell as well, which
+			// is what the march skips empty air by: a storm's base below the lowest base the air makes
+			// anywhere, its tower above the highest, and an anvil at the tropopause, were all air the
+			// march stepped straight over.
+			WeatherMap.Extremes storms = weatherMap != null ? weatherMap.StormExtremes : default;
+			for (int i = 0; i < CloudClimate.BandCount && count < MaxCloudLayers; i++)
 			{
-				layerCoverage = new float[count];
-			}
-			if (layerBottom.Length < count)
-			{
-				layerBottom = new float[count];
-			}
-			// How high air has to rise before it condenses, as the weather reports it: 1 is a high
-			// base on a dry warm day, 0 a low one when the air is already damp.
-			float condensation = Mathf.Clamp01(background[WeatherChannel.CloudBase]);
-			for (int i = 0; i < count; i++)
-			{
-				CloudLayer band = bands[i];
-				if (band == null)
+				CloudBand band = cloudBands[i];
+				bool anvils = band.Regime == CloudRegime.Ice && storms.Anvils;
+				if (!band.Present)
 				{
-					continue;
+					if (!anvils)
+					{
+						continue;
+					}
+					// No cirrus in this air, but a storm has driven its ice up to the tropopause all
+					// the same: the band stands where its anvils are, and its own cover stays what the
+					// air map says.
+					band.Bottom = storms.AnvilBottom;
+					band.Top = Mathf.Max(storms.AnvilBottom + 100f, storms.AnvilTop);
+					band.Thinnest = Mathf.Max(150f, 0.5f * storms.AnvilDepth);
+					band.Extinction = Mathf.Max(band.Extinction, 1e-6f);
 				}
-				// A band that sits on the ground is the weather's own: fog and mist fill it, not the
-				// cloud forecast, or a fair day would have a cloud deck at eye level.
-				bool ground = band.Bottom < 200f;
-				float coverage = ground
-					? Mathf.Clamp01(fog * band.CoverageScale + band.CoverageBias)
-					: band.CoverageFor(cover);
-				layerCoverage[i] = coverage;
-
-				// Where this band actually sits. A cloud's base is the height at which air rising
-				// off the ground has cooled to its dew point, and that height is not fixed: damp air
-				// condenses low and dry warm air condenses high, which is why a rainy deck hangs
-				// close over the hills and a fair-weather one rides well above them. The weather
-				// carries that height, and a band that follows it slides to it with its own
-				// thickness intact — the base moves, the depth does not.
-				float bottom = band.Bottom;
-				// The channel runs from about 0.8 on a dry fair day down to 0.3 under thick cloud.
-				// A frame that never set it at all reads as zero, and zero here does not mean "the
-				// lowest base there can be" — it means nobody said. Below the channel's own floor
-				// the band stays where it was authored, or a forecast that mentions only how much
-				// cloud there is would drag the deck down onto the hills.
-				if (band.BaseFollowsCondensation && condensation >= CondensationFloor)
+				float shellBottom = band.Bottom, shellTop = band.Top;
+				if (band.Column && storms.Any)
 				{
-					float dryness = Mathf.InverseLerp(0.3f, 0.8f, condensation);
-					float wanted = band.Bottom * Mathf.Lerp(0.65f, 1.3f, dryness);
-					// And with no cloud in the sky there is no condensation level to speak of, so
-					// the authored height stands until there is something to put at it.
-					bottom = Mathf.Lerp(band.Bottom, wanted, Mathf.Clamp01(cover / 0.15f));
+					shellBottom = Mathf.Min(shellBottom, storms.LowestFloor);
+					shellTop = Mathf.Max(shellTop, storms.HighestTop);
+					band.MaxCoverage = 1f;
 				}
-				float top = bottom + band.Thickness;
-				layerBottom[i] = bottom;
-				// A column is as deep as a tower and, most places, as thin as a deck. Its noise must
-				// turn over on the scale of a cloud, not of the band — tied to seven kilometres of
-				// band a deck would be one value floor to ceiling, the flat slab again — so its
-				// vertical tile follows its horizontal one instead.
-				float verticalScale = Mathf.Max(0.25f, band.VerticalScale);
-				if (band.Column)
+				if (anvils)
 				{
-					verticalScale = band.NoiseScale * 0.2f * verticalScale / Mathf.Max(1f, band.Thickness);
+					shellBottom = Mathf.Min(shellBottom, storms.AnvilBottom);
+					shellTop = Mathf.Max(shellTop, storms.AnvilTop);
+					band.MaxCoverage = 1f;
 				}
-
-				lowest = Mathf.Min(lowest, bottom);
-				highest = Mathf.Max(highest, top);
-				layerA[i] = new Vector4(bottom, top, coverage, band.Density);
-				layerB[i] = new Vector4(band.NoiseScale, band.DetailScale, band.DetailStrength, Mathf.Max(1f, band.Stretch));
-				// Rain in the units and 2 on top for a band that grows storms: the shader tests the 2,
-				// so a band that merely carries rain can no longer trip the storm test at half rain.
-				layerC[i] = new Vector4(band.WindScale, band.BaseSoftness, band.TopSoftness,
+				float thickness = Mathf.Max(1f, band.Top - band.Bottom);
+				float verticalScale = band.Column
+					? band.NoiseScale * 0.2f * band.VerticalScale / thickness
+					: band.VerticalScale;
+				lowest = Mathf.Min(lowest, shellBottom);
+				highest = Mathf.Max(highest, shellTop);
+				layerA[count] = new Vector4(band.Bottom, band.Top, band.MaxCoverage, band.Extinction);
+				layerB[count] = new Vector4(band.NoiseScale, band.DetailScale, band.DetailStrength, Mathf.Max(1f, band.Stretch));
+				// Rain in the units and 2 on top for the band that grows storms.
+				layerC[count] = new Vector4(band.WindScale, band.BaseSoftness, band.TopSoftness,
 					(band.CarriesRain ? cloudPrecipitation : 0f) + (band.GrowsStorms ? 2f : 0f));
-				// The band's own slope: how fast *this* band's coverage changes across the ground,
-				// which is the field's slope put through the band's own response to it.
-				float ahead = band.CoverageFor(Mathf.Clamp01(cover + 0.01f));
-				float behind = band.CoverageFor(Mathf.Clamp01(cover - 0.01f));
-				// Clamped: the clear-sky gate is steep just above nothing, and a formation put
-				// through an unclamped slope there would swing a band from empty to full.
-				float response = ground ? 0f : Mathf.Clamp((ahead - behind) / 0.02f, 0f, 2f);
-				// The slope of the SKY's cover, the same for every band: each band now answers the
-				// cover at a place with its own function, in the shader, rather than being handed the
-				// slope of that function at the camera and told to extrapolate.
-				Vector2 bandGradient = ground ? Vector2.zero : coverGradient;
-				layerD[i] = new Vector4(band.Convection, bandGradient.x, bandGradient.y, verticalScale);
+				// y, z the shell: the band's own floor and top, widened by its storms'.
+				layerD[count] = new Vector4(band.Convection, shellBottom, shellTop, verticalScale);
 				// This band's drift, wrapped to its own period so the float is exact and the wrap is
 				// invisible: 42 tiles along the wind (the warp's period, which the shape's and the
 				// lift's divide) stretched by the band's own stretch, 42 across, and the detail
-				// volume's single tile on the world axes. All in double until the last moment.
+				// volume's single tile — in the same wind frame, drawn out along it by the same stretch,
+				// so cirrus's fine structure is fibres along the wind like its shape and not round
+				// blobs on the world's axes (it used to be read on the world axes, unstretched). All in
+				// double until the last moment.
 				double scale = band.WindScale;
 				double alongPeriod = band.NoiseScale * Mathf.Max(1f, band.Stretch) * 42.0;
 				double acrossPeriod = band.NoiseScale * 42.0;
-				double detailPeriod = Mathf.Max(20f, band.DetailScale);
-				layerE[i] = new Vector4(
+				Vector2 detailPeriod = CloudClimate.DetailDriftPeriod(band.DetailScale, Mathf.Max(1f, band.Stretch));
+				layerE[count] = new Vector4(
 					(float)WrapMetres(driftAlong * scale, alongPeriod),
 					(float)WrapMetres(driftAcross * scale, acrossPeriod),
-					(float)WrapMetres(driftX * scale, detailPeriod),
-					(float)WrapMetres(driftY * scale, detailPeriod));
-				// z marks a column; w is the thinnest its cloud gets — the deck, seven hundredths of
-				// the band — which is what the march's stride must not be able to step over.
-				layerF[i] = new Vector4(response, ground ? 0f : 1f, band.Column ? 1f : 0f, band.Column ? band.Thickness * 0.07f : 0f);
-				layerG[i] = new Vector4(band.CoverageOnset, band.CoverageScale, band.CoverageBias, 0f);
-				Color tint = InCloudShade(band.ShadedTint);
-				layerTint[i] = new Vector4(tint.r, tint.g, tint.b, 1f);
+					(float)WrapMetres(driftAlong * scale, detailPeriod.x),
+					(float)WrapMetres(driftAcross * scale, detailPeriod.y));
+				// x which regime (the shader reads its cover from the air map by it), y the mean
+				// diameter of its drops (0 for ice: how it scatters), z 1 for the column, w the
+				// thinnest this regime's cloud gets, for the stride guard.
+				layerF[count] = new Vector4((int)band.Regime, band.DropletDiameter, band.Column ? 1f : 0f, band.Thinnest);
+				// Where this band's sun is worked out for (SetCloudLight, once the light is chosen): an
+				// ordinary cloud's middle for the column, the middle of a layer.
+				layerSunHeight[count] = band.Column ? 0.5f * (column.Base + Mathf.Max(column.Base, column.Top)) : 0.5f * (band.Bottom + band.Top);
+				count++;
 			}
 			for (int i = count; i < MaxCloudLayers; i++)
 			{
@@ -1234,35 +1179,94 @@ namespace FishMMO.Client
 				layerD[i] = Vector4.zero;
 				layerE[i] = Vector4.zero;
 				layerF[i] = Vector4.zero;
-				layerG[i] = Vector4.zero;
-				layerTint[i] = Vector4.one;
+				layerSunHeight[i] = 0f;
 			}
+			cloudBandCount = count;
 			Shader.SetGlobalVectorArray(CloudLayerAId, layerA);
 			Shader.SetGlobalVectorArray(CloudLayerBId, layerB);
 			Shader.SetGlobalVectorArray(CloudLayerCId, layerC);
 			Shader.SetGlobalVectorArray(CloudLayerDId, layerD);
 			Shader.SetGlobalVectorArray(CloudLayerEId, layerE);
 			Shader.SetGlobalVectorArray(CloudLayerFId, layerF);
-			Shader.SetGlobalVectorArray(CloudLayerGId, layerG);
-			Shader.SetGlobalVectorArray(CloudLayerTintId, layerTint);
 			Shader.SetGlobalInt(CloudLayerCountId, count);
 
-			// The shell the march runs through, and the deck a reprojection has to be right about.
-			CloudShellBottom = lowest == float.MaxValue ? 0f : lowest;
-			CloudShellTop = Mathf.Max(CloudShellBottom + 100f, highest);
-			// The depth a reprojection is right about: the deck, which is where most cloud is. A
-			// column's middle is kilometres above anything usually there.
-			CloudLayerCentre = bands.Count > 1
-				? (bands[1].Column ? bands[1].Bottom + 600f : (bands[1].Bottom + bands[1].Top) * 0.5f)
-				: (CloudShellBottom + CloudShellTop) * 0.5f;
-			// The bands curve down to the horizon over the radius of the world they are on. It was one
-			// number on the render profile — 6,371 km, our own — for every world: a moon a tenth the
-			// size had the home world's far, flat horizon, and its clouds ran out to it as though the
-			// ground did not fall away. The body's own radius is already known; the profile's figure is
-			// what is used when there is no body to ask.
-			CelestialState curved = State;
-			float radiusKm = curved != null && curved.Observer != null ? Mathf.Max(10f, curved.Observer.SkyRadiusKm) : clouds.CurvatureRadiusKm;
-			Shader.SetGlobalVector(CloudLayerId, new Vector4(CloudShellBottom, CloudShellTop, radiusKm * 1000f, cover));
+			// The wind with height over the viewer, for how far a cloud leans: the weather of the
+			// moment (WindProfile.Of), since a lean does not accumulate — unlike the drift, which is the
+			// world's and must never change with the weather. The cloud base tops the mixed layer; a
+			// heap rises at its own updraught, at least a fair-weather cumulus's; above the ordinary
+			// cloud top only towers stand, rising at a storm's (FishCloudLean). It was a lean of the
+			// carve alone, by two minutes of the gusting surface wind.
+			WindProfile windNow = WindProfile.Of(cloudWindSpeed, column, planet, latitude, belts);
+			CloudLeanShear = windNow.Shear;
+			float heapRise = Mathf.Max(CloudClimate.HeapUpdraught, column.Updraft);
+			Shader.SetGlobalVector(CloudShearId, new Vector4(windNow.Shear, heapRise, column.Base, Mathf.Max(column.Base, column.Top)));
+			// The ice: where every drop has frozen, what a storm's glaciated cloud takes out against its
+			// liquid, how fast cirrus ice falls on this world (its fall streaks), and the tropopause.
+			Shader.SetGlobalVector(CloudIceId, new Vector4(column.IceLevel, CloudClimate.GlaciatedRatio(cloudBands[0].DropletDiameter, planet),
+				cloudScales.IceFallSpeed, column.Tropopause));
+			// How much of the light falling on the cloud overhead reaches the viewer through it, by
+			// diffusion — for readouts, and for anything that must know how dark it is under the sky.
+			// Through the gaps everything, through the cloud what diffuses through it.
+			float overheadCover = Mathf.Clamp01(cloudBands[0].Coverage);
+			CloudOverheadDepth = CloudClimate.ColumnOpticalDepth(column, planet);
+			float diffuseThrough = CloudClimate.DiffuseTransmission(CloudOverheadDepth, cloudBands[0].Asymmetry);
+			CloudDiffuseOverhead = Mathf.Lerp(1f, diffuseThrough, overheadCover);
+			CloudOverheadCover = overheadCover;
+			CloudOverheadAsymmetry = cloudBands[0].Asymmetry;
+			// The sky's light under the deck: through the gaps all of it; through the cloud what
+			// diffuses through, and again what the ground sends back up and the base returns — the
+			// ground and the base are two mirrors facing, and the light between them sums as
+			// 1/(1 − ρ_ground·R_base), with R_base = 1 − T_d for a cloud that absorbs nothing. About a
+			// fifth more over land, nearly half again over snow, a few per cent over the sea.
+			float bounce = 1f / Mathf.Max(0.05f, 1f - CloudClimate.GroundAlbedo(planet) * (1f - diffuseThrough));
+			CloudSkyThrough = Mathf.Lerp(1f, diffuseThrough * bounce, overheadCover);
+
+			// The shell the march runs through, and the deck a reprojection has to be right about. Down
+			// to the ground when there is fog or rain haze under the base to draw; from the lowest
+			// storm base to the highest storm tower when there is a storm about (the bands' shells).
+			CloudShellBottom = CloudStackFloor(lowest, shownRain >= 0.01f, fogDrawn, fogShell.x);
+			CloudShellTop = Mathf.Max(Mathf.Max(CloudShellBottom + 100f, highest), fogDrawn ? fogShell.y : 0f);
+			CloudLayerCentre = column.Base + 600f;
+			// The bands curve down to the horizon over the radius of the world they are on.
+			float radiusMeters = Mathf.Max(10000f, planet.RadiusMetres);
+			Shader.SetGlobalVector(CloudLayerId, new Vector4(CloudShellBottom, CloudShellTop, radiusMeters, cloudBands[0].Coverage));
+		}
+
+		/// <summary>
+		/// Publishes where the cloud march walks the fog (<see cref="FogLayerView.Shell"/>) over the
+		/// ground the terrain map holds, and returns it: (0, −1) when there is no fog.
+		/// </summary>
+		private Vector2 PublishFogShell()
+		{
+			FogLayerView fog = FogLayerView.Current;
+			Vector2 shell = cloudTerrain != null
+				? fog.Shell(cloudTerrain.HighestGround, cloudTerrain.HighestPooled)
+				: new Vector2(0f, -1f);
+			bool on = shell.y > shell.x;
+			Shader.SetGlobalVector(FogLayerView.ShellId, on ? new Vector4(shell.x, shell.y, 1f, 0f) : Vector4.zero);
+			return shell;
+		}
+
+		/// <summary>
+		/// The floor of the shell the cloud march runs through, m: the lowest band anywhere in view, the
+		/// ground under a wet base whose rain haze reaches it, and the fog's own floor — sea level, under
+		/// every ground it can lie on — while there is a fog.
+		/// </summary>
+		/// <remarks>
+		/// With neither rain haze nor fog, nothing is under the lowest base, and the march starts there:
+		/// the whole of the air between the ground and the clouds is crossed in one step. A fog used to
+		/// take the floor to the ground and make every height under the cloud tops "possible", so every
+		/// ray walked the kilometre of empty air between a fog tens of metres deep and the deck; now the
+		/// fog has its own shell, and the air between is skipped.
+		/// </remarks>
+		/// <param name="lowestCloud">The lowest any band's shell reaches, m; float.MaxValue for none.</param>
+		/// <param name="rainHangs">Whether rain haze hangs under a wet base down to the ground.</param>
+		/// <param name="fogDrawn">Whether there is a fog for the march to walk.</param>
+		/// <param name="fogFloor">The fog's floor (<see cref="FogLayerView.Shell"/>), m.</param>
+		public static float CloudStackFloor(float lowestCloud, bool rainHangs, bool fogDrawn, float fogFloor)
+		{
+			float floor = rainHangs || lowestCloud == float.MaxValue ? 0f : Mathf.Max(0f, lowestCloud);
+			return fogDrawn ? Mathf.Min(floor, fogFloor) : floor;
 		}
 
 		/// <summary>A drift reduced to one period, in double, so that the float it becomes is exact.</summary>
@@ -1271,18 +1275,59 @@ namespace FishMMO.Client
 			return period <= 0.0 ? metres : metres - System.Math.Floor(metres / period) * period;
 		}
 
-		/// <summary>What every column starts from here: 0.1 a flat deck, 0.5 a heaped sky.</summary>
-		public float CloudColumnType { get; private set; }
 		/// <summary>0..1: how strongly a tower stands over the camera right now.</summary>
 		public float CloudTowerAtCamera { get; private set; }
-		/// <summary>How much of a tower the air allows on top of that, 0..0.6.</summary>
-		public float CloudTowerGain { get; private set; }
 
-		/// <summary>The formations' share of the cover at the camera, in cover units, for readouts.</summary>
-		public float CloudMesoscaleAtCamera => cloudMesoscaleAtCamera;
-		private float cloudMesoscaleAtCamera;
-		private float shownFog;
+		/// <summary>How fast the wind grows with height over the viewer now, (m/s) per m: what leans the clouds.</summary>
+		public float CloudLeanShear { get; private set; }
+
+		/// <summary>The optical depth of an ordinary low cloud over the viewer, as the air makes it.</summary>
+		public float CloudOverheadDepth { get; private set; }
+
+		/// <summary>
+		/// How much of the sky's light reaches the viewer through the low cloud overhead, 0..1: all of it
+		/// through the gaps, and through the cloud what diffuses through
+		/// (<see cref="CloudClimate.DiffuseTransmission"/>) — about 0.15 under a cumulus, a few hundredths
+		/// under a storm. What an exposure that adapts to the sky would read.
+		/// </summary>
+		public float CloudDiffuseOverhead { get; private set; } = 1f;
+
+		/// <summary>How much of the sky the low cloud covers over the viewer, 0..1.</summary>
+		public float CloudOverheadCover { get; private set; }
+
+		/// <summary>The low cloud's drops' asymmetry, g: how much of each bounce keeps going forward.</summary>
+		public float CloudOverheadAsymmetry { get; private set; } = 0.86f;
+
+		/// <summary>
+		/// How much of the sky's own light reaches the ground under the low cloud, 0..1 and a little
+		/// over: <see cref="CloudDiffuseOverhead"/> with the light the ground and the cloud base trade
+		/// between them. What the scene's ambient is scaled by.
+		/// </summary>
+		public float CloudSkyThrough { get; private set; } = 1f;
+
+		/// <summary>
+		/// How much of a sun or moon at an altitude reaches the ground, on average over the view: all of
+		/// it through the gaps, and through the low cloud what comes straight through and what is
+		/// scattered through (<see cref="CloudClimate.GroundTransmission"/>, the cloud shadow's own).
+		/// </summary>
+		public float CloudLightThrough(float altitudeDegrees)
+		{
+			float mu = Mathf.Max(0.05f, Mathf.Sin(Mathf.Max(0f, altitudeDegrees) * Mathf.Deg2Rad));
+			float through = CloudClimate.GroundTransmission(CloudOverheadDepth / mu, mu, CloudOverheadAsymmetry);
+			return Mathf.Lerp(1f, through, CloudOverheadCover);
+		}
+
+		/// <summary>The air over the viewer, at sea level, as the clouds were drawn from it.</summary>
+		public WeatherDriver.Synoptic CloudViewerAir { get; private set; }
+
+		/// <summary>The viewer's air column: cloud base, freezing level, how far a cloud can grow.</summary>
+		public AirColumn CloudViewerColumn { get; private set; }
+
+		/// <summary>The world's cloud scales: what its clouds are sized and moved by.</summary>
+		public CloudClimate.Scales CloudScales => cloudScales;
+
 		private float shownRain;
+		private float shownFallingExtinction;
 
 		/// <summary>The bottom and top of the whole stack of bands, in metres.</summary>
 		public float CloudShellBottom { get; private set; }
@@ -1290,20 +1335,73 @@ namespace FishMMO.Client
 
 		private readonly Vector4[] layerE = new Vector4[MaxCloudLayers];
 		private readonly Vector4[] layerF = new Vector4[MaxCloudLayers];
-		private readonly Vector4[] layerG = new Vector4[MaxCloudLayers];
-		private float[] layerCoverage = new float[MaxCloudLayers];
-		private float[] layerBottom = new float[MaxCloudLayers];
-		private VolumetricCloudSettings cloudSettings;
+		private readonly CloudBand[] cloudBands = new CloudBand[CloudClimate.BandCount];
+		private int cloudBandCount;
+		private CloudAirMap cloudAir;
+		private CloudClimate.Scales cloudScales;
+		private bool cloudScalesValid;
+		private WorldBody cloudScalesBody;
+		private float cloudScalesLatitude;
 		private float cloudBackgroundCover;
-		private float cloudBackgroundStorm;
 		private float cloudPrecipitation;
 		private Vector2 cloudWind = Vector2.up;
 		private float cloudWindSpeed = 6f;
 		private Vector3 cloudSunDirection = Vector3.up;
 
+		/// <summary>The renderer's own calibration of the baked shape noise: where its cut sits for a cover.</summary>
+		/// <remarks>
+		/// Not weather and not a setting: these describe the baked noise volume. It does not span
+		/// 0..1 — measured, it runs 0.33 to 0.76 about 0.57 — so the cut that keeps a given share of
+		/// it has to sit in that narrow window. Re-measure them (noisestats) if the volume is re-baked.
+		/// <para>
+		/// Both cuts rose by 0.020 (were 0.662 and 0.575) when a cloud's edge became a physical mixing
+		/// shell a hundred metres wide outside a cut that holds the cloud's whole water, instead of a
+		/// softness 0.14 of the noise wide (~800 m) inside it: the cut now marks where the visible edge
+		/// is. Calibrated on a CPU port of the density at the probe's own camera, with the tower
+		/// lattice's cover, so each sky keeps the old edge's "any cloud" share (the probe's floor): the
+		/// shift that does so is 0.0195 in dry air (RH 0.37), 0.023 at RH 0.64 and 0.029 at 0.9 — the
+		/// dry end is taken, so no sky has less cloud than it had and a humid one a little more, which
+		/// is what humid air does to an edge. (A first pass shifted them 0.0088 with the shell inside the
+		/// cut and lost every small cumulus in a dry sky — scattered fell from 7 % to 1 %.)
+		/// </para>
+		/// </remarks>
+		public const float CloudCutClear = 0.682f;
+		public const float CloudCutFull = 0.595f;
+		public const float CloudCutBend = 0.15f;
+		/// <summary>
+		/// How fast the baked shape noise changes across the ground, where the cut meets it: its median
+		/// gradient, 1.6 per tile (measured off the volume at mip 0, 1.67e-4 per metre on the 9.6 km
+		/// tile). What turns a mixing shell in metres into the noise's own units, softness = this × width
+		/// ÷ tile. Re-measure it with the cuts if the volume is re-baked.
+		/// </summary>
+		public const float CloudCutGradient = 1.605f;
+		/// <summary>
+		/// How much of a marched texel's cone the finest detail is drawn down to: half. The steadying
+		/// looks through a different place in each texel every frame and rebuilds the screen from sixteen
+		/// of them, so what is half a texel across still lands on the right pixels.
+		/// </summary>
+		public const float CloudDetailConeShare = 0.5f;
+		/// <summary>How far the shape lookup is bent so the noise does not visibly repeat.</summary>
+		public const float CloudShapeWarp = 0.17f;
+
+		private static readonly int CloudDiagId = Shader.PropertyToID("_FishCloudDiag");
+		private static readonly int CloudDiagLightId = Shader.PropertyToID("_FishCloudDiagLight");
+		private static readonly int CloudDiagScaleId = Shader.PropertyToID("_FishCloudDiagScale");
+		private static readonly int CloudStepTauId = Shader.PropertyToID("_FishCloudStepTau");
+		private static readonly int CloudFixId = Shader.PropertyToID("_FishCloudFix");
+		private static readonly int CloudFixBId = Shader.PropertyToID("_FishCloudFixB");
+
+		/// <summary>
+		/// The profile's cloud diagnostics this frame (<see cref="VolumetricCloudSettings.Diagnostics"/>),
+		/// for the cloud feature's reconstruction switches; never null.
+		/// </summary>
+		public VolumetricCloudDiagnostics CloudDiagnostics { get; private set; } = new VolumetricCloudDiagnostics();
+
 		private void SetCloudGlobals(CelestialState state, in SkySample sample, in WeatherFrame weather, in WeatherFrame background, WeatherRenderProfile profile, WeatherTierSettings tier, in WeatherContext context)
 		{
 			VolumetricCloudSettings clouds = profile.Clouds;
+			VolumetricCloudDiagnostics diagnostics = clouds.Diagnostics ?? (clouds.Diagnostics = new VolumetricCloudDiagnostics());
+			CloudDiagnostics = diagnostics;
 			cloudsReady = profile.CloudShape != null && profile.CloudDetail != null && cycle != null;
 			// Cleared here every frame, before anything renders, and raised again by the cloud
 			// feature only once it has actually published a buffer. The sky bodies attenuate
@@ -1316,54 +1414,54 @@ namespace FishMMO.Client
 				Resolution = tier.CloudResolution,
 				Steps = tier.CloudSteps,
 				Detail = tier.CloudDetail,
-				Temporal = tier.CloudTemporal,
+				Temporal = diagnostics.TemporalFor(tier.CloudTemporal),
 				TemporalBlend = clouds.TemporalBlend,
+				HistoryScale = tier.CloudHistoryScale,
 			};
 			CloudFarDistance = clouds.MaxDistance;
-			cloudSettings = clouds;
+			// The inspector's diagnostic switches, live every frame; all zeros is the clouds as they
+			// ship, so a shader that never sees these draws the default (VolumetricCloudDiagnostics).
+			Shader.SetGlobalVector(CloudDiagId, diagnostics.MarchVector);
+			Shader.SetGlobalVector(CloudDiagLightId, diagnostics.LightVector);
+			Shader.SetGlobalVector(CloudDiagScaleId, diagnostics.ScaleVector);
+			Shader.SetGlobalVector(CloudStepTauId, diagnostics.StepVector);
+			Shader.SetGlobalVector(CloudFixId, diagnostics.FixVector);
+			Shader.SetGlobalVector(CloudFixBId, diagnostics.FixVectorB);
 			if (!cloudsReady || airless)
 			{
-				// Nothing to march: make sure no stale coverage is left behind.
+				// Nothing to march: make sure no stale coverage is left behind — nor a fog the march is
+				// no longer there to draw (the fallback passes draw it: FogLayerView.DrawnByClouds).
 				Shader.SetGlobalVector(CloudLayerId, Vector4.zero);
+				Shader.SetGlobalInt(CloudLayerCountId, 0);
+				Shader.SetGlobalVector(FogLayerView.ShellId, Vector4.zero);
 				return;
 			}
 
 			Shader.SetGlobalTexture(CloudShapeTexId, profile.CloudShape);
 			Shader.SetGlobalTexture(CloudDetailTexId, profile.CloudDetail);
-			// The background forecast, NOT the weather where the camera happens to stand. A storm cell
-			// overhead must draw a cloud mass over *there*, through the weather map, and not raise
-			// the coverage of the whole sky: standing under a cell would otherwise put a lid on the
-			// world, which is exactly what it does not do.
-			float cover = Mathf.Clamp01(background[WeatherChannel.CloudCover]);
-			cloudBackgroundCover = cover;
-			// Rain is a low-deck business: the clouds that carry it are the thick ones down there.
+			// The background forecast, NOT the weather where the camera happens to stand: for the
+			// readouts and the sky's own brightness. The clouds themselves come from the air map.
+			cloudBackgroundCover = Mathf.Clamp01(background[WeatherChannel.CloudCover]);
 			cloudPrecipitation = Mathf.Clamp01(background[WeatherChannel.Precipitation]);
-			Shader.SetGlobalVector(CloudShapeParamsId,
-				new Vector4(clouds.DetailFadeStart, Mathf.Max(1f, clouds.DetailFadeRange), clouds.ShapeWarp, clouds.Density));
-			Shader.SetGlobalVector(CloudCoverageId, new Vector4(clouds.CoverageCutClear, clouds.EdgeSoftness, clouds.CoverageCutFull, clouds.CoverageBend));
-			// What the wind is doing to the clouds. The reported wind is what the panel shows and
-			// what the weather says; the *axis* the noise is drawn out along is a different thing and
-			// has to hold still. The lookup is rotated about the world origin on that axis, which is
-			// harmless only while the axis does not move: the reported heading turns whenever a cell
-			// drifts by or a layer fades in, and a sky read on it circled the scene every time. The
-			// steady prevailing wind at this latitude is the axis; a pinned preset's heading is
-			// constant anyway, and the panel's override moves only when the viewer moves it.
-			bool driverActive = context.Timeline != null && context.Timeline.Driver;
-			// How much of the sky the field owns right now. A preset at full strength owns all of
-			// it, and the field's own terms — the formations, the front's slope — have to step back
-			// with it or they are laid across a sky that was asked for exactly.
-			float driverWeight = driverActive ? Mathf.Clamp01(context.DriverWeight) : 0f;
-			driverActive = driverWeight > 0.001f;
+			// x how much of a marched texel's cone the finest detail is drawn down to: each octave of
+			// the eddies is drawn while the screen can resolve it and fades to its mean after, so the
+			// detail no longer has a fixed distance (it was faded out whole between 2.5 and 11.5 km,
+			// nearer than most of the clouds in view). y unused. Option C under trial raises the share to its
+			// footprint floor (CloudOptions.DetailConeShare, FishCloudsFeature.cs); off, it is the share as it was.
+			// The diagnostics' Detail LOD Scale multiplies it (1 as shipped).
+			Shader.SetGlobalVector(CloudShapeParamsId, new Vector4(FishCloudsFeature.Options.DetailConeShare(CloudDetailConeShare) * Mathf.Clamp(diagnostics.DetailLodScale, 0.25f, 8f), 0f, CloudShapeWarp, 1f));
+			// y how fast the noise changes across the ground at the cut, which turns the mixing shell's
+			// width in metres into the noise's units (it was a softness in those units, from humidity).
+			Shader.SetGlobalVector(CloudCoverageId, new Vector4(CloudCutClear, CloudCutGradient, CloudCutFull, CloudCutBend));
+			// The noise is drawn out along the steady prevailing wind of this latitude on this world —
+			// never the gusting one the weather reports: the lookup is rotated about the world origin
+			// on it, which is harmless only while it does not move.
 			float latitude = state != null ? (float)state.Latitude : 0f;
+			WorldBody body = context.Timeline != null && context.Timeline.BodyOverride != null ? context.Timeline.BodyOverride : SceneTime.BodyOf(context.Settings);
+			WindBelts belts = WindBelts.For(PlanetAir.For(SolarSystemProfile.Active, body));
 			Vector2 wind = WeatherShaderGlobals.WindDirection(weather[WeatherChannel.WindHeading]);
 			float speed = Mathf.Lerp(2f, 26f, weather[WeatherChannel.WindSpeed]);
-			Vector2 axis = driverActive ? WeatherDriver.PrevailingWind(latitude) : wind;
-			if (CloudWindOverride)
-			{
-				wind = WeatherShaderGlobals.WindDirection(CloudWindHeadingOverride);
-				axis = wind;
-				speed = CloudWindSpeedOverride;
-			}
+			Vector2 axis = WeatherDriver.PrevailingWind(latitude, belts);
 			if (axis.sqrMagnitude < 1e-6f)
 			{
 				axis = Vector2.up;
@@ -1371,21 +1469,26 @@ namespace FishMMO.Client
 			cloudWind = wind;
 			cloudWindSpeed = speed;
 			// Where the air has got to by now, worked out from the world clock rather than added up
-			// frame by frame. The accumulator this replaces made a cloud's position a record of the
-			// client's own frame times and join moment: two players stood side by side saw different
-			// skies, a hitch shifted one of them permanently, and a reconnect snapped the sky
-			// sideways. It is the same drift the weather field is sampled through, so the cloud
+			// frame by frame, and the same drift the weather field is sampled through, so the cloud
 			// overhead and the weather underneath are the same air. Exact, in double: each band
 			// wraps it to its own period on the way to the shader.
-			WeatherDriver.DriftExact(WeatherDriver.WorldSeed, latitude, worldSeconds, out double driftX, out double driftY);
-			cloudDrift = WeatherDriver.Drift(WeatherDriver.WorldSeed, latitude, worldSeconds);
+			WeatherDriver.DriftExact(WeatherDriver.WorldSeed, latitude, worldSeconds, belts, out double driftX, out double driftY);
+			cloudDrift = WeatherDriver.Drift(WeatherDriver.WorldSeed, latitude, worldSeconds, belts);
 			Shader.SetGlobalVector(CloudWindId, new Vector4(cloudDrift.x, cloudDrift.y, 2.5f, 1f));
 			Shader.SetGlobalVector(CloudWindDirId, new Vector4(axis.x, axis.y, speed, 0f));
-			shownFog = Mathf.Clamp01(weather[WeatherChannel.FogDensity]);
 			shownRain = Mathf.Clamp01(weather[WeatherChannel.Precipitation]);
+			shownFallingExtinction = AirPhysics.PrecipitationExtinction(shownRain, weather[WeatherChannel.RainWeight],
+				weather[WeatherChannel.SnowWeight], weather[WeatherChannel.HailWeight], weather[WeatherChannel.AshWeight], weather[WeatherChannel.SandWeight]);
+			SolarSystemProfile solar = SolarSystemProfile.Active;
+			float season01 = CelestialMath.Season01(solar, state != null ? state.Observer : null, worldSeconds / 3600.0);
+			Camera viewCamera = TargetCamera != null ? TargetCamera : Camera.main;
+			Vector3 viewerAt = viewCamera != null ? viewCamera.transform.position : transform.position;
 			// The bands themselves, and the shell they add up to.
-			SetCloudLayers(profile, background, driverActive, driverWeight, axis, driftX, driftY);
-			Shader.SetGlobalVector(CloudLightId, new Vector4(clouds.LightSteps, clouds.Powder, clouds.ForwardScatter, clouds.Ambient));
+			SetCloudLayers(context, axis, driftX, driftY, latitude, season01, worldSeconds, viewerAt);
+			PlanetAir planet = context.Sample.Planet;
+			// The light march's steps, and the column's drops' asymmetry for readers that want one
+			// figure; the march itself scatters by each band's own drops (FishCloudPhaseMie). y, the sky's
+			// share of the ambient, is set with the light below.
 
 			// What lights the clouds: the sun while it is up, the moon after it sets. A sun below
 			// the horizon must not keep lighting them, or a midnight sky glows like a sunset.
@@ -1396,6 +1499,7 @@ namespace FishMMO.Client
 			// The moon that is lighting the sky NOW, not the one with the biggest disc: the clouds have
 			// one light to be lit from, and with the big moon down it has to be the one that is up.
 			float moonLight = 0f;
+			bool moonLit = false;
 			int brightest = sunUp < 0.5f ? BrightestMoon(state, sample, 5f, out moonLight) : -1;
 			if (brightest >= 0)
 			{
@@ -1405,41 +1509,108 @@ namespace FishMMO.Client
 					lightDirection = moonBody.Direction;
 					lightColour = sample.MoonLight;
 					strength = Mathf.Max(sunUp, moonLight);
+					moonLit = true;
 				}
 			}
 			cloudSunDirection = lightDirection;
 			Shader.SetGlobalVector(CloudSunDirId, new Vector4(lightDirection.x, lightDirection.y, lightDirection.z, strength));
 			Shader.SetGlobalColor(CloudSunColorId, lightColour);
 
-			// The skylight a cloud sits in. With nothing above the horizon this is all a cloud has,
-			// so it keeps a floor of the night sky's own glow: an overcast night is dark, but it is
-			// still a sky with shapes in it, not a blank field.
-			Color ambient = Color.Lerp(sample.CloudShadow, sample.CloudLit, 0.35f) * clouds.Ambient;
+			// The sky's own light over a cloud: the upper hemisphere's radiance, in the units the world is
+			// lit in — what a white surface facing up shows under this sky, which is exactly the light
+			// that falls on a cloud's top (the march diffuses it down through the cloud). It was a mix
+			// of the sample's painted-by-fit cloud colours, lerp(shadow, lit, 0.35) × 0.85, which stood
+			// in for the light a cloud's inside never got. With nothing above the horizon it keeps a
+			// floor of the night sky's own glow: an overcast night is dark, but it is still a sky with
+			// shapes in it, not a blank field.
+			Color skyLight = sample.AmbientSky;
 			float night = 1f - Mathf.Clamp01(strength * 2f);
 			Color glow = (sample.AmbientSky * 1.2f + new Color(0.010f, 0.012f, 0.018f)) * night;
-			Shader.SetGlobalColor(CloudAmbientId, new Color(Mathf.Max(ambient.r, glow.r),
-				Mathf.Max(ambient.g, glow.g), Mathf.Max(ambient.b, glow.b), 1f));
+			skyLight = new Color(Mathf.Max(skyLight.r, glow.r), Mathf.Max(skyLight.g, glow.g), Mathf.Max(skyLight.b, glow.b), 1f);
+			Shader.SetGlobalColor(CloudAmbientId, skyLight);
+			// How much of that ambient is the sky's real light on a cloud (CloudClimate.SkyShareOfAmbient):
+			// the ambient is set to light a scene with no bounce light, half the sun at noon, and the real
+			// clear sky is under a fifth of it — at 1 the clouds' shaded sides and bases were lit two to
+			// three times over and thin cloud took the sky's colour. Times the diagnostics' Sky Ambient.
+			// Never under the night's own glow: the floor that keeps an overcast night a sky with shapes.
+			Color skyOnClouds = skyLight;
+			if (!moonLit)
+			{
+				float lightAltitude = Mathf.Asin(Mathf.Clamp(lightDirection.y, -1f, 1f)) * Mathf.Rad2Deg;
+				float share = CloudClimate.SkyShareOfAmbient(lightAltitude, Luminance(lightColour) * strength, Luminance(sample.AmbientSky), planet.AirRelative);
+				Color day = sample.AmbientSky * share;
+				skyOnClouds = new Color(Mathf.Max(day.r, glow.r), Mathf.Max(day.g, glow.g), Mathf.Max(day.b, glow.b), 1f);
+			}
+			float skyShare = Luminance(skyLight) > 1e-5f ? Mathf.Clamp01(Luminance(skyOnClouds) / Luminance(skyLight)) : 1f;
+			Shader.SetGlobalVector(CloudLightId, new Vector4(clouds.LightSteps, Mathf.Max(0.01f, skyShare), cloudBands[0].Asymmetry, 0f));
+			// The sun's light is what the air let through to the ground; the moon's is not drawn
+			// through the air at all (CloudClimate.LightGainAloft).
+			SetCloudLight(planet, lightDirection, lightColour * strength, skyOnClouds * Mathf.Clamp(diagnostics.SkyAmbient, 0f, 2f), !moonLit);
 
-			// What kind of sky this is. Flat stratus in still, damp weather; heaped cumulus as the
-			// cloud builds. The mid sheet arrives as the forecast closes over, and there is nearly
-			// always some cirrus up there — most of all in fair weather, when nothing hides it.
-			float density = Mathf.Clamp01(background[WeatherChannel.CloudDensity]);
-			float storm = Mathf.Clamp01(background.StormSeverity);
-			cloudBackgroundStorm = storm;
-			Shader.SetGlobalVector(CloudTypeParamsId, new Vector4(Mathf.Clamp01(density * 0.85f + 0.15f), storm, 0f, cloudPrecipitation));
+			// No storm is handed over for the sky as a whole. A storm is a cell and stands where the
+			// weather map puts it; the towers of an unstable day are the air map's. A scene-wide storm
+			// figure — which counted a plain wind as stormy — raised every column in view to the
+			// tropopause at once and closed a dry, windy sky into a grey veil thirteen kilometres deep.
+			Shader.SetGlobalVector(CloudTypeParamsId, new Vector4(0f, 0f, 0f, cloudPrecipitation));
 
-			// What distance does to a cloud: the air in front of it. Without this the far side of a
-			// sky is as white as the near side and the whole thing reads as a painted backdrop.
+			// What distance does to a cloud: the air in front of it — its molecules and the dust and
+			// salt in it, swollen by the humidity. Two e-foldings of that air is where the haze curve
+			// is at its strongest: about 26 km on an ordinary day under our own air.
 			Color haze = Color.Lerp(sample.Horizon, sample.Fog, 0.5f);
-			Shader.SetGlobalVector(CloudHazeId, new Vector4(haze.r, haze.g, haze.b, Mathf.Max(2000f, clouds.HazeDistance)));
+			float hazeDistance = AirPhysics.HazeDistance(planet.AirRelative, CloudViewerColumn.RelativeHumidity);
+			Shader.SetGlobalVector(CloudHazeId, new Vector4(haze.r, haze.g, haze.b, Mathf.Max(2000f, hazeDistance)));
+		}
 
-			// What an underside is made of. A fair-weather cloud's base is grey-blue skylight; a
-			// storm's is slate, and much less of anything.
-			// The profile's underside colour is a standard noon's; here it takes the hue of this
-			// world's skylight, so a dusty world's cloud bases are tan-shadowed and a dusk's are warm.
-			Color tint = InCloudShade(clouds.ShadedTint);
-			float tintStrength = Mathf.Clamp01(clouds.ShadedTintStrength + storm * 0.35f);
-			Shader.SetGlobalVector(CloudTintId, new Vector4(tint.r, tint.g, tint.b, tintStrength));
+		/// <summary>
+		/// The light around the clouds that is not the sky's: the sun each band sees, the ground under
+		/// them, and the air between them and the camera — all from this world's own air.
+		/// </summary>
+		/// <remarks>
+		/// <list type="bullet">
+		/// <item>Each band's sun is the ground's, raised by the air under the band
+		/// (<see cref="CloudClimate.SunGainAloft"/>): at noon a few per cent, at dusk several times in the
+		/// blue, so high cloud stays gold and white while the ground goes grey. A moon is the ground's
+		/// as it is: its light was never drawn through the air, so there is no reddening to take back
+		/// out (<see cref="CloudClimate.LightGainAloft"/>).</item>
+		/// <item>The open ground sends back its albedo (<see cref="CloudClimate.GroundAlbedo"/>) of the sun
+		/// and sky on it. That lights a cloud's base from below; the shader shades it by the cloud's
+		/// own cover over it. It is a radiance in the same units as the sky's (<c>_FishCloudAmbient</c>):
+		/// both are what a surface shows in the world's light units, the π of E = πL folded into the
+		/// light's intensity the way Unity's own lights fold it — a white surface facing up under a sky
+		/// of radiance L shows L, and one facing a light of intensity I shows I·cos. At night it is
+		/// several times the sky's own light because the moon lights the ground and the night sky has
+		/// next to none of its own, which is so; how much of it a base sees under a deck is the
+		/// shader's to shade.</item>
+		/// <item>The air between is this world's molecules — our own Rayleigh coefficients times how much
+		/// air it has, thinning over its own scale height — and its haze, from the same humidity-swollen
+		/// aerosol figure the sky's haze distance uses.</item>
+		/// </list>
+		/// </remarks>
+		/// <summary>A colour's luminance (Rec. 709).</summary>
+		private static float Luminance(Color c) => c.r * 0.2126f + c.g * 0.7152f + c.b * 0.0722f;
+
+		private void SetCloudLight(in PlanetAir planet, Vector3 lightDirection, Color light, Color skyLight, bool lightCrossedAir)
+		{
+			float humidity = CloudViewerColumn.RelativeHumidity;
+			float aerosol = CloudClimate.AerosolExtinction(planet.AirRelative, humidity);
+			float lightAltitude = Mathf.Asin(Mathf.Clamp(lightDirection.y, -1f, 1f)) * Mathf.Rad2Deg;
+			for (int i = 0; i < MaxCloudLayers; i++)
+			{
+				Vector3 gain = i < cloudBandCount ? CloudClimate.LightGainAloft(planet, aerosol, lightAltitude, layerSunHeight[i], lightCrossedAir) : Vector3.one;
+				layerSun[i] = new Vector4(gain.x, gain.y, gain.z, 1f);
+			}
+			Shader.SetGlobalVectorArray(CloudLayerSunId, layerSun);
+
+			float albedo = CloudClimate.GroundAlbedo(planet);
+			float onGround = Mathf.Max(0f, lightDirection.y);
+			Shader.SetGlobalVector(CloudGroundId, new Vector4(
+				albedo * (light.r * onGround + skyLight.r),
+				albedo * (light.g * onGround + skyLight.g),
+				albedo * (light.b * onGround + skyLight.b), albedo));
+
+			Vector3 air = CloudClimate.RayleighSeaLevel * Mathf.Max(0f, planet.AirRelative);
+			Shader.SetGlobalVector(CloudAirExtinctionId, new Vector4(air.x, air.y, air.z, Mathf.Max(100f, planet.ScaleHeight)));
+			Shader.SetGlobalVector(CloudAerosolId, new Vector4(aerosol, CloudClimate.AerosolScaleHeight(planet), 0f, 0f));
 		}
 
 		/// <summary>
@@ -1557,7 +1728,11 @@ namespace FishMMO.Client
 			float sunAltitude = state.Sun >= 0 ? state.SunAltitude : 50f;
 			// The light is dimmed as the eye would have it (an ordinary day until the last tenth), and
 			// goes out at totality: the sample's own intensity is already lerped to nought there.
-			float sunIntensity = sample.SunIntensity * (1f - eclipse * 0.9f) * (1f - overcast * 0.6f);
+			// Through the cloud by what the cloud lets through (CloudLightThrough) — the average over
+			// the view; the light that carries the cloud shadow has it put back below, since its cookie
+			// does the same thing patch by patch. It was × (1 − 0.6·overcast) on top of the cookie:
+			// the ground under a cloud was dimmed twice, and never lit by what diffuses through.
+			float sunIntensity = sample.SunIntensity * (1f - eclipse * 0.9f) * CloudLightThrough(sunAltitude);
 			sun.transform.rotation = LightRotation(sunDirection);
 			sun.color = Color.Lerp(sample.SunLight, new Color(0.8f, 0.85f, 1f), flash * 0.6f);
 			sun.intensity = sunIntensity + flash * 1.5f;
@@ -1583,7 +1758,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				float light = MoonLight(sample, body, 3f) * (1f - overcast * 0.7f);
+				float light = MoonLight(sample, body, 3f) * CloudLightThrough(body.AltitudeDegrees);
 				if (light > 0.001f)
 				{
 					moonOrder.Add((i, light));
@@ -1643,7 +1818,7 @@ namespace FishMMO.Client
 				float relative = primaryFlux > 1e-12f ? Mathf.Clamp(Flux(star) / primaryFlux, 0f, 2f) : 1f;
 				float own = blendTo != null ? Mathf.Max(0f, blendTo.SunIntensity.Evaluate(star.AltitudeDegrees)) : sample.SunIntensity;
 				companion.transform.rotation = LightRotation(star.Direction);
-				companion.intensity = own * relative * (1f - overcast * 0.6f);
+				companion.intensity = own * relative * CloudLightThrough(star.AltitudeDegrees);
 				companion.color = Mul(baseSunLight, ((StarBody)star.Body).SkyTint);
 				companion.shadows = LightShadows.None;
 				companion.enabled = star.AltitudeDegrees > -2f && companion.intensity > 0.001f;
@@ -1686,11 +1861,26 @@ namespace FishMMO.Client
 			}
 			RenderSettings.sun = leader != null ? leader : sun;
 
-			// The shadow is the volume's own, marched from the ground toward the light.
-			VolumetricCloudSettings cloudSettings = profile.Clouds;
+			// The shadow is the volume's own, marched from the ground toward the light: what the cloud
+			// lets through of it, straight and scattered, at full strength. What fills it besides is the
+			// sky's light, which the scene's ambient carries.
+			//
+			// The light that carries it is dimmed by the cookie alone, patch by patch, so the average
+			// it was given above comes off again; past the cookie's window the cookie fades to that
+			// average rather than to full sun, so the land beyond the window is neither sunlit under
+			// an overcast nor dimmed twice inside it.
+			Light shadowed = leader != null ? leader : sun;
+			bool cookie = tier.CloudShadows && DrawCloudShadows && profile.CloudMaterial != null && CloudsReady;
+			float far = 1f;
+			if (cookie && shadowed != null)
+			{
+				far = Mathf.Max(1e-3f, CloudLightThrough(Mathf.Asin(Mathf.Clamp(-shadowed.transform.forward.y, -1f, 1f)) * Mathf.Rad2Deg));
+				float flashPart = shadowed == sun ? flash * 1.5f : 0f;
+				shadowed.intensity = flashPart + (shadowed.intensity - flashPart) / far;
+			}
 			Vector3 viewer = TargetCamera != null ? TargetCamera.transform.position : transform.position;
-			cloudShadows.Update(leader != null ? leader : sun, profile.CloudMaterial, viewer, cloudSettings.ShadowAreaMeters,
-				cloudSettings.ShadowStrength, 8 * MaxCloudLayers, tier.CloudShadows && DrawCloudShadows);
+			cloudShadows.Update(shadowed, profile.CloudMaterial, viewer, profile.Clouds.ShadowAreaMeters,
+				1f, 8 * MaxCloudLayers, cookie, far);
 		}
 
 		/// <summary>A directional light shining along −direction.</summary>
@@ -1703,7 +1893,11 @@ namespace FishMMO.Client
 
 		private void ApplyAmbient(in SkySample sample, float overcast, float eclipse, float flash)
 		{
-			float dim = (1f - overcast * 0.3f) * (1f - eclipse * 0.8f);
+			// The sky's light through the cloud (CloudSkyThrough): under a deck the sky the ground sees
+			// is the cloud's base, lit by what diffuses through it. It was the clear sky's light ×
+			// (1 − 0.3·overcast), which left the ground under a bright overcast base seven times too
+			// dark for the sky over it. The sun's share of what comes through is in the sun's light.
+			float dim = CloudSkyThrough * (1f - eclipse * 0.8f);
 			Color flashColor = new Color(0.3f, 0.32f, 0.38f) * flash;
 			Color skyColor = sample.AmbientSky * dim + flashColor;
 			Color equator = sample.AmbientEquator * dim + flashColor * 0.6f;
@@ -1714,6 +1908,11 @@ namespace FishMMO.Client
 				RenderSettings.ambientSkyColor = skyColor;
 				RenderSettings.ambientEquatorColor = equator;
 				RenderSettings.ambientGroundColor = ground;
+				// The same trilight for what Graphics.RenderMesh draws (FishAmbient.hlsl): no light-probe
+				// coefficients reach such a draw, so SampleSH read zero there.
+				Shader.SetGlobalColor(AmbientSkyId, skyColor);
+				Shader.SetGlobalColor(AmbientEquatorId, equator);
+				Shader.SetGlobalColor(AmbientGroundId, ground);
 				lastAmbientSky = skyColor;
 				lastAmbientEquator = equator;
 				lastAmbientGround = ground;
@@ -1793,7 +1992,12 @@ namespace FishMMO.Client
 				if (presentation != null && presentation.HasContext)
 				{
 					curtains.Draw(presentation.Context.Timeline, (uint)presentation.Context.Tick, camera, profile.CurtainMaterial, profile, tier.Curtains, (float)(worldSeconds % 100000.0),
-						State != null ? State.Observer : null);
+						presentation.Context.Sample, State != null ? State.Observer : null, weatherMap);
+					// Tornadoes and dust devils, hung from the cloud base of the air they stand in.
+					// With the same context the weather map reads, so the funnel hangs from the very wall
+					// cloud the cloud shader draws.
+					vortices.Draw(presentation.Context, (uint)presentation.Context.Tick, camera, profile.VortexMaterial, profile.VortexDebrisMaterial,
+						profile.CloudShape, tier.Vortices, tier.VortexParticles, (float)(worldSeconds % 100000.0));
 				}
 				lightning.Draw(camera, profile.BoltMaterial);
 			}

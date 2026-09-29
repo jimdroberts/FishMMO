@@ -162,13 +162,9 @@ MonoBehaviour:
       - Storm-swept
       Description: "Underwater mountains \u2014 rising from the deep, teeming with
         life"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: d74297414c89f90408f6c1700ed4f57e, type: 3}
     normalTexture: {fileID: 0}

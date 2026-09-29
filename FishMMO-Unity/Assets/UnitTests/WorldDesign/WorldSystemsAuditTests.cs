@@ -412,19 +412,6 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
-		public void AFixedPresetWithNoPresetIsNoWeatherRatherThanBrokenWeather()
-		{
-			/* The same correction WeatherField.ResolveMode makes on the server: a scene set to
-			 * Fixed with nothing to fix it to would otherwise hold a mode it cannot satisfy. */
-			WorldBody body = Earthlike();
-			WorldAtlasScene entry = Placed("Meadow", body);
-			entry.Weather = WeatherSceneMode.Fixed;
-			entry.FixedWeather = null;
-
-			Assert.That(WorldSystemsAudit.ResolveMode(entry, body, false), Is.EqualTo(WeatherSceneMode.None));
-		}
-
-		[Test]
 		public void TheServerAgreesThatASceneWithNoSettingsHasNoWeather()
 		{
 			/* The audit copies the server's rule rather than calling it, because it has to answer

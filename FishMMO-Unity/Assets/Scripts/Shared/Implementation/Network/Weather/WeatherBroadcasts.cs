@@ -20,11 +20,9 @@ namespace FishMMO.Shared
 		public uint Revision;
 		public uint Seed;
 		public byte SceneMode;
-		public int FixedPresetID;
-		public float FixedIntensity;
-		public List<WeatherLayerEntry> Layers;
 		public List<StormCell> Cells;
-		public WeatherClimateEntry Climate;
+		/// <summary>What has been added to the scene's air at runtime.</summary>
+		public AirOffsetEntry Air;
 		public WeatherCover Cover;
 		/// <summary>The server tick <see cref="Cover"/> was measured at.</summary>
 		public uint CoverTick;
@@ -59,14 +57,11 @@ namespace FishMMO.Shared
 		public string SceneName;
 		/// <summary>Must be exactly one more than the revision the client holds.</summary>
 		public uint Revision;
-		/// <summary>Added or replaced layers, matched by handle.</summary>
-		public List<WeatherLayerEntry> Layers;
-		public List<ushort> RemovedLayers;
 		/// <summary>Added or replaced cells, matched by id.</summary>
 		public List<StormCell> Cells;
 		public List<ushort> RemovedCells;
-		public bool HasClimate;
-		public WeatherClimateEntry Climate;
+		public bool HasAir;
+		public AirOffsetEntry Air;
 		public bool HasCover;
 		public WeatherCover Cover;
 		public uint CoverTick;

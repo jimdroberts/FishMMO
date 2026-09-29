@@ -29,9 +29,11 @@ Shader "Hidden/FishMMO/Weather/VolumetricFogApply"
 
             float4 _FishVolFogRange;   // x near, y far, z depth curve exponent, w slices
 
-            // The inverse of the compute pass's exponential slice spacing: a distance back to the
+            // The inverse of the compute pass's exponential slice spacing: an eye depth back to the
             // 0..1 slice coordinate it was written at. The two MUST agree, or the fog sits at the
-            // wrong depth and objects swim in and out of it as they move.
+            // wrong depth and objects swim in and out of it as they move. Each texel holds the fog to
+            // the middle of its slice, which is exactly where its centre sits in this coordinate, so
+            // the filtering between two texels is the fog between their two depths.
             float SliceOf(float distance)
             {
                 float near = _FishVolFogRange.x;
@@ -47,9 +49,10 @@ Shader "Hidden/FishMMO/Weather/VolumetricFogApply"
                 float rawDepth = SampleSceneDepth(uv);
                 float eye = LinearEyeDepth(rawDepth, _ZBufferParams);
 
-                /* Nothing drawn here: the sky. Sampled at the far slice so distant fog still tints
-                 * the horizon, rather than skipped, which would leave a hard line where the terrain
-                 * ends and the sky begins. */
+                /* Nothing drawn here: the sky. Sampled at the far slice so the fog in front of it
+                 * still lies over it, rather than skipped, which would leave a hard line where the
+                 * terrain ends and the sky begins; the analytic pass has already laid the rest of the
+                 * layer, out to the horizon, under this. */
                 float slice = SliceOf(eye);
 
                 float4 fog = SAMPLE_TEXTURE3D_LOD(_FishVolFogVolume, sampler_FishVolFogVolume, float3(uv, slice), 0);

@@ -87,7 +87,14 @@ namespace FishMMO.Client
 			Apply();
 		}
 
-		/// <summary>The weather's share (0..1), its colour, the exponential density it adds and the linear end distance it pulls to.</summary>
+		/// <summary>
+		/// The weather's share (0..1), its colour, the extinction it adds (1/m, exponential fog) and
+		/// the visibility it pulls a linear fog's end to (m) — all of them the distance fog's part of the
+		/// weather only (WeatherFogPresenter.UniformExtinction): what is falling, and the fog's drops only
+		/// where nothing draws their layer. While the cloud march draws the fog, handed the drops here as
+		/// well they would take their light twice, once in the layer and again as a flat wash over
+		/// everything — and switch this fog on, which melts the sky's horizon into it.
+		/// </summary>
 		public static void SetWeather(float amount, Color color, float addedDensity, float endDistance)
 		{
 			weatherAmount = Mathf.Clamp01(amount);
@@ -117,18 +124,21 @@ namespace FishMMO.Client
 			FogState result = region;
 			if (!region.Enabled)
 			{
-				// No region fog: the weather's own, faded in from nothing.
+				// No region fog: the weather's own. Exponential, because light through a fog falls
+				// off exponentially with distance; the extinction is already the physical one, so it
+				// is used as it is and the share only decides the colour.
 				result.Enabled = true;
-				result.Mode = FogMode.ExponentialSquared;
+				result.Mode = FogMode.Exponential;
 				result.Color = color;
-				result.Density = addedDensity * amount;
+				result.Density = addedDensity;
 				result.StartDistance = 0f;
-				result.EndDistance = Mathf.Lerp(1000f, endDistance, amount);
+				result.EndDistance = endDistance;
 				return result;
 			}
 			result.Color = Color.Lerp(region.Color, color, amount);
-			result.Density = region.Density + addedDensity * amount;
-			result.EndDistance = Mathf.Min(region.EndDistance, Mathf.Lerp(region.EndDistance, endDistance, amount));
+			// Extinctions add: two things in the air each take their own share of the light.
+			result.Density = region.Density + addedDensity;
+			result.EndDistance = Mathf.Min(region.EndDistance, endDistance);
 			result.StartDistance = Mathf.Min(region.StartDistance, result.EndDistance * 0.5f);
 			return result;
 		}

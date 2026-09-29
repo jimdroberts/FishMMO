@@ -129,22 +129,38 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		public const double SubSolarExcess = 12.0;
 
-		/// <summary>Environmental lapse rate in kelvin per metre, by how much air there is to hold moisture.</summary>
+		/// <summary>Environmental lapse rate in kelvin per metre: the air's weight over its heat capacity, and how much of that its moisture takes back.</summary>
 		/// <remarks>
-		/// Dry air cools at the dry adiabat, about 9.8 K/km. Moist air releases latent heat as it
-		/// rises and cools more slowly, about 6.5 K/km on Earth and less in a thicker, wetter
-		/// atmosphere. An airless body has no air to cool at all, and gets the dry figure only so
-		/// that shaded high ground still reads colder than lit low ground.
+		/// <para>
+		/// Dry air cools at the dry adiabat, <c>g / cp</c> — 9.8 K/km under our own gravity. Moist
+		/// air releases latent heat as it rises and cools more slowly, about two thirds of that on
+		/// Earth (6.5 K/km) and less in a thicker, wetter atmosphere. An airless body has no air to
+		/// cool at all, and gets the dry figure only so that shaded high ground still reads colder
+		/// than lit low ground.
+		/// </para>
+		/// <para>
+		/// It was the Earth figures whatever the world, so a low-gravity world cooled with height as
+		/// fast as ours — faster than its own dry adiabat, which as a real atmosphere would be
+		/// overturning everywhere. The home world pulls at 0.56 g; its air cools at 3.7 K/km.
+		/// </para>
 		/// </remarks>
-		public static double LapseRatePerMetre(AtmosphereKind atmosphere)
+		public static double LapseRatePerMetre(AtmosphereKind atmosphere, float gravity, float specificHeat)
 		{
+			double dry = Math.Max(0.01, gravity) / Math.Max(1.0, specificHeat);
 			switch (atmosphere)
 			{
-				case AtmosphereKind.None: return 0.0098;
-				case AtmosphereKind.Thin: return 0.0098;
-				case AtmosphereKind.Thick: return 0.0050;
-				default: return 0.0065;
+				case AtmosphereKind.None: return dry;
+				case AtmosphereKind.Thin: return dry;
+				case AtmosphereKind.Thick: return dry * 0.434;
+				default: return dry * 0.665;
 			}
+		}
+
+		/// <summary>The lapse rate of a body's own air.</summary>
+		public static double LapseRatePerMetre(SolarSystemProfile system, WorldBody body)
+		{
+			FishMMO.Shared.Weather.PlanetAir air = FishMMO.Shared.Weather.PlanetAir.Compute(system, body);
+			return LapseRatePerMetre(body != null ? body.Atmosphere : AtmosphereKind.Standard, air.Gravity, air.SpecificHeat);
 		}
 
 		/// <summary>
@@ -297,7 +313,7 @@ namespace FishMMO.Shared.Biomes
 			 * number; DefaultLandmassHeightMetres is the height a Unity terrain is created with,
 			 * so a scene nobody has measured behaves as the editor's own default would. */
 			float span = landmassHeightMetres > 0f ? landmassHeightMetres : DefaultLandmassHeightMetres;
-			double lapse = LapseRatePerMetre(atmosphere) * span / KelvinPerUnit;
+			double lapse = LapseRatePerMetre(system, body) * span / KelvinPerUnit;
 
 			/* An airless world holds no moisture whatever its ocean was: it has none, or it is
 			 * frozen out. Otherwise humidity follows the ocean, since that is what evaporates. */

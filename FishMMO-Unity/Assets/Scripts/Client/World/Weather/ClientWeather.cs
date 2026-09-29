@@ -190,7 +190,7 @@ namespace FishMMO.Client
 			return camera != null ? camera.transform.position : Vector3.zero;
 		}
 
-		/// <summary>The scene's runtime climate: the timeline's shift plus the body's starlight, as the server computes it.</summary>
+		/// <summary>The scene's runtime climate: the warmth added to its air plus its body's season, as the server computes it.</summary>
 		private void ApplyClimate()
 		{
 			if (settings == null)
@@ -198,12 +198,13 @@ namespace FishMMO.Client
 				return;
 			}
 			uint tick = CurrentTick();
-			timeline.ClimateAt(tick, out float temperature, out float humidity);
+			float temperature = (settings.AuthoredAir + timeline.AirAt(tick)).TemperatureScale;
+			float humidity = 0f;
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = SceneTime.BodyOf(settings);
 			if (system != null && body != null && WorldClock.Shared.HasAnchor)
 			{
-				CelestialMath.ClimateOffsets(system, body, WorldClock.Shared.WorldHoursAt(tick), out float bt, out float bh, settings.Latitude);
+				CelestialMath.SeasonalClimateOffsets(system, body, WorldClock.Shared.WorldHoursAt(tick), settings.Latitude, out float bt, out float bh);
 				temperature += bt;
 				humidity += bh;
 			}
@@ -254,7 +255,7 @@ namespace FishMMO.Client
 				IsDaylight = SceneTime.IsDaylight(settings, hours),
 				Cover = timeline.Cover,
 				Background = sample.Background,
-				DriverWeight = sample.DriverWeight,
+				Sample = sample,
 				Shelter = sample.Shelter,
 				Temperature = sample.Temperature,
 				Substance = sample.Substance,

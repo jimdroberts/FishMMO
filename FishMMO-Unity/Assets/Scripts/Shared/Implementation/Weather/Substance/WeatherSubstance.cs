@@ -70,6 +70,22 @@ namespace FishMMO.Shared.Weather
 		[Tooltip("How harsh it is to stand in, 0..1, before any exposure state is authored. A guide for authoring, and readable by one.")]
 		[Range(0f, 1f)] public float Harshness;
 
+		[Header("What it is, physically")]
+		[Tooltip("Whether this is a world's cloud stuff coming down: rain, snow or hail of whatever its clouds condense out of. The weather picks it from the world's own condensate and whether it is frozen where it lands; nobody assigns it.")]
+		public bool Condenses;
+
+		[Tooltip("What it condenses out of, when it does.")]
+		public Condensate Condensate = Condensate.Water;
+
+		[Tooltip("Frozen (snow, hail, ice) rather than liquid. Chosen by the ground temperature against the condensate's own freezing point.")]
+		public bool Frozen;
+
+		[Tooltip("Grain diameter, metres, for loose ground: how big what the wind has to lift is. Sand is about 0.2 mm; dust finer; fine grains cling and need more wind again.")]
+		[Min(1e-7f)] public float GrainMetres = 1e-4f;
+
+		[Tooltip("Grain density, kg/m³: quartz sand is 2650, ice 920.")]
+		[Min(1f)] public float GrainDensity = 2500f;
+
 		[Header("Sound")]
 		[Tooltip("Audio cue name for this substance falling. Empty uses the kind's own cue.")]
 		public string AudioCue;

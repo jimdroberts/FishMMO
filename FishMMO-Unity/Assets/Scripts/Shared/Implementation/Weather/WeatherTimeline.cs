@@ -21,12 +21,13 @@ namespace FishMMO.Shared.Weather
 		public uint Revision;
 		public uint Seed;
 		public WeatherSceneMode SceneMode = WeatherSceneMode.Own;
-		public int FixedPresetID;
-		public float FixedIntensity = 1f;
 		public double TickDelta = 1.0 / 30.0;
-		public readonly List<WeatherLayerEntry> Layers = new List<WeatherLayerEntry>();
 		public readonly List<StormCell> Cells = new List<StormCell>();
-		public WeatherClimateEntry Climate;
+		/// <summary>
+		/// What has been added to this scene's air at runtime — by an admin, a script, the test bed —
+		/// moving from one value to another. On top of what the scene is authored with, never instead.
+		/// </summary>
+		public AirOffsetEntry Air;
 		public WeatherCover Cover;
 		public uint CoverTick;
 		/// <summary>
@@ -52,10 +53,9 @@ namespace FishMMO.Shared.Weather
 		/// Whether the drifting weather field runs in this scene.
 		/// </summary>
 		/// <remarks>
-		/// On for a living world. Off where the weather has to be exactly what was asked for and
-		/// nothing else: a scene pinned to a fixed preset, and the probe stages that check a preset
-		/// looks right — a driver quietly adding its own cloud to those would make them test the
-		/// weather of whatever moment they happened to run at.
+		/// On for a living world, which is every scene with weather. Off only where a caller wants the
+		/// air with no drifting field under it at all — a probe measuring what one air does, which
+		/// would otherwise be measuring the weather of whatever moment it ran at.
 		/// </remarks>
 		public bool Driver = true;
 
@@ -88,136 +88,13 @@ namespace FishMMO.Shared.Weather
 
 		// ── Evaluation ────────────────────────────────────────────────
 
-		/// <summary>Adds the scene-wide layers (and a fixed preset) to an accumulator.</summary>
-		/// <summary>
-		/// How long the weather going out should hold on while the weather coming in rises, as a
-		/// share of the transition.
-		/// </summary>
-		/// <remarks>
-		/// Cloud cover and fog blend by taking the greater of the layers over them. Fade one layer
-		/// out while another fades in and the two ramps cross halfway down, so a sky going from
-		/// overcast to storm passes through half-clear on the way — weather, then nothing, then
-		/// weather. Holding the outgoing layer up while the incoming one rises hands the sky over
-		/// instead: the greater of the two is always most of one of them.
-		/// </remarks>
-		public const float HandoverHold = 0.55f;
+		/// <summary>What has been added to the scene's air at runtime, at a tick.</summary>
+		public AirOffsets AirAt(uint tick) => Air.At(tick);
 
-		/// <summary>The window the weather going out fades over, given the whole transition.</summary>
-		public static void OutgoingWindow(uint now, uint end, out uint start, out uint finish)
-		{
-			uint span = end > now ? end - now : 0u;
-			start = now + (uint)(span * HandoverHold);
-			finish = end;
-		}
-
-		/// <summary>The window the weather coming in rises over. It starts at once and finishes early.</summary>
-		public static void IncomingWindow(uint now, uint end, out uint start, out uint finish)
-		{
-			uint span = end > now ? end - now : 0u;
-			start = now;
-			finish = now + (uint)(span * (1f - HandoverHold * 0.5f));
-		}
-
-		/// <summary>
-		/// Adds the scene's own layers to an accumulator.
-		/// </summary>
-		/// <param name="temperature">
-		/// The local temperature, or NaN not to care. A layer whose template says it only applies
-		/// within a range of temperatures is left out when the scene is outside it: snow does not
-		/// fall on the desert, whatever a script asks for. Callers that only want to know what the
-		/// scene was told — a map, the lightning schedule — pass NaN.
-		/// </param>
-		public void AccumulateSceneLayers(uint tick, ref WeatherAccumulator accumulator, float temperature = float.NaN)
-		{
-			if (SceneMode == WeatherSceneMode.Fixed)
-			{
-				WeatherPreset preset = FixedPresetID != 0 ? WeatherPreset.Get<WeatherPreset>(FixedPresetID) : null;
-				if (preset != null)
-				{
-					accumulator.Add(preset.Evaluate(FixedIntensity), 1f);
-				}
-			}
-			for (int i = 0; i < Layers.Count; i++)
-			{
-				WeatherLayerEntry entry = Layers[i];
-				float intensity = entry.IntensityAt(tick);
-				if (intensity <= 0f)
-				{
-					continue;
-				}
-				WeatherLayerTemplate template = WeatherLayerTemplate.Get<WeatherLayerTemplate>(entry.TemplateID);
-				if (template != null && (float.IsNaN(temperature) || template.AllowsTemperature(temperature)))
-				{
-					accumulator.Add(template.Evaluate(intensity), 1f, template.Substance);
-				}
-			}
-		}
-
-		/// <summary>
-		/// The strongest scene layer running at a tick, 0..1: how far the scene's own weather has
-		/// been overridden. A preset or a layer is a request for *this* weather, not for this weather
-		/// on top of whatever the field was doing — so the driver's background is weighted by one
-		/// minus this, and returns as the layer fades out.
-		/// </summary>
-		/// <remarks>
-		/// Every channel blends by taking the greater, so with the driver left at full weight a
-		/// preset could only ever add: Clear could not clear a cloudy field, an overcast's cover was
-		/// whichever of the two was larger, and the sky's formations went on being taken out at the
-		/// camera as if the field owned a cover the preset did. Layers the temperature rules out are
-		/// not counted, for the same reason they are not applied.
-		/// </remarks>
-		public float OverrideAt(uint tick, float temperature = float.NaN)
-		{
-			float strongest = SceneMode == WeatherSceneMode.Fixed && FixedPresetID != 0 ? 1f : 0f;
-			for (int i = 0; i < Layers.Count; i++)
-			{
-				WeatherLayerEntry entry = Layers[i];
-				float intensity = entry.IntensityAt(tick);
-				if (intensity <= strongest)
-				{
-					continue;
-				}
-				WeatherLayerTemplate template = WeatherLayerTemplate.Get<WeatherLayerTemplate>(entry.TemplateID);
-				if (template != null && (float.IsNaN(temperature) || template.AllowsTemperature(temperature)))
-				{
-					strongest = intensity;
-				}
-			}
-			return Mathf.Clamp01(strongest);
-		}
-
-		/// <summary>The scene-wide climate shift at a tick, including temperature/humidity channels from scene layers.</summary>
-		public void ClimateAt(uint tick, out float temperature, out float humidity)
-		{
-			Climate.At(tick, out temperature, out humidity);
-			var accumulator = new WeatherAccumulator();
-			AccumulateSceneLayers(tick, ref accumulator);
-			if (accumulator.HasAny)
-			{
-				WeatherFrame frame = accumulator.Resolve();
-				temperature += frame[WeatherChannel.TemperatureOffset];
-				humidity += frame[WeatherChannel.HumidityOffset];
-			}
-		}
-
-		/// <summary>Forgets finished removals and dead cells. Both sides run it, so they stay equal without messages.</summary>
+		/// <summary>Forgets dead cells. Both sides run it, so they stay equal without messages.</summary>
 		public void Prune(uint tick)
 		{
-			Layers.RemoveAll(l => l.IsFinished(tick));
 			Cells.RemoveAll(c => c.IsDead(tick));
-		}
-
-		public bool TryGetLayer(ushort handle, out int index)
-		{
-			for (index = 0; index < Layers.Count; index++)
-			{
-				if (Layers[index].Handle == handle)
-				{
-					return true;
-				}
-			}
-			index = -1;
-			return false;
 		}
 
 		public bool TryGetCell(ushort id, out int index)
@@ -231,11 +108,6 @@ namespace FishMMO.Shared.Weather
 			}
 			index = -1;
 			return false;
-		}
-
-		public void UpsertLayer(WeatherLayerEntry entry)
-		{
-			if (TryGetLayer(entry.Handle, out int i)) Layers[i] = entry; else Layers.Add(entry);
 		}
 
 		public void UpsertCell(StormCell cell)
@@ -253,11 +125,8 @@ namespace FishMMO.Shared.Weather
 				Revision = Revision,
 				Seed = Seed,
 				SceneMode = (byte)SceneMode,
-				FixedPresetID = FixedPresetID,
-				FixedIntensity = FixedIntensity,
-				Layers = new List<WeatherLayerEntry>(Layers),
 				Cells = new List<StormCell>(Cells),
-				Climate = Climate,
+				Air = Air,
 				Cover = Cover,
 				CoverTick = CoverTick,
 				// Where and when, so the client's driver computes the server's weather rather than
@@ -277,13 +146,9 @@ namespace FishMMO.Shared.Weather
 			Revision = msg.Revision;
 			Seed = msg.Seed;
 			SceneMode = (WeatherSceneMode)msg.SceneMode;
-			FixedPresetID = msg.FixedPresetID;
-			FixedIntensity = msg.FixedIntensity;
-			Layers.Clear();
-			if (msg.Layers != null) Layers.AddRange(msg.Layers);
 			Cells.Clear();
 			if (msg.Cells != null) Cells.AddRange(msg.Cells);
-			Climate = msg.Climate;
+			Air = msg.Air;
 			Cover = msg.Cover;
 			CoverTick = msg.CoverTick;
 			Generation++;
@@ -306,17 +171,6 @@ namespace FishMMO.Shared.Weather
 				return msg.Revision <= Revision;   // an old or duplicate delta is harmless; a gap is not
 			}
 			Revision = msg.Revision;
-			if (msg.RemovedLayers != null)
-			{
-				foreach (ushort handle in msg.RemovedLayers)
-				{
-					if (TryGetLayer(handle, out int i)) Layers.RemoveAt(i);
-				}
-			}
-			if (msg.Layers != null)
-			{
-				foreach (WeatherLayerEntry entry in msg.Layers) UpsertLayer(entry);
-			}
 			if (msg.RemovedCells != null)
 			{
 				foreach (ushort id in msg.RemovedCells)
@@ -328,9 +182,9 @@ namespace FishMMO.Shared.Weather
 			{
 				foreach (StormCell cell in msg.Cells) UpsertCell(cell);
 			}
-			if (msg.HasClimate)
+			if (msg.HasAir)
 			{
-				Climate = msg.Climate;
+				Air = msg.Air;
 			}
 			if (msg.HasCover)
 			{

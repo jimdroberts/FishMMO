@@ -161,13 +161,9 @@ MonoBehaviour:
       - Cold
       - Silent
       Description: "Natural underground \u2014 dripping, dark, vast echoing chambers"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 2800000, guid: e992be615149b0846884cc772e34ace5, type: 3}
     normalTexture: {fileID: 0}

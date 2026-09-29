@@ -163,13 +163,9 @@ MonoBehaviour:
       - Desolate
       Description: "Deepest underwater \u2014 crushing pressure, total darkness,
         ocean trenches"
-  Weather:
-    Background: []
-    CellSpawns: []
-    Suitability: []
-    Variants: []
-    Forbidden: 1023
-    CellsPerSquareKm: 0
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
   mainTextureLayer:
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}

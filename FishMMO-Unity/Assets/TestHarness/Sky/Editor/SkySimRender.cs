@@ -34,7 +34,286 @@ namespace FishMMO.TestHarness.Sky.Editor
 		/// Renders taken at the capture size before the pixels are read, so the clouds' temporal
 		/// history has something in it. Eight is a little past where the blend stops changing.
 		/// </summary>
-		private const int CaptureWarmFrames = 8;
+		/// <summary>
+		/// Renders at the capture's size before the still: the history is thrown away when the buffer
+		/// changes size, and every pixel is marched again once in sixteen frames
+		/// (CloudTierSettings.AutoPixelsPerTexel), so it takes a little over that to settle.
+		/// </summary>
+		public const int CaptureWarmFrames = 24;
+
+		/// <summary>The most warm frames the override may ask for: 1024 is the cloud feature's whole frame cycle (64 × 16).</summary>
+		private const int MaxWarmFrames = 1024;
+
+		/// <summary>
+		/// The warm frames a capture renders: <c>FISHMMO_CAPTURE_WARM_FRAMES</c> when it is a whole number
+		/// (0 to <see cref="MaxWarmFrames"/>), else <see cref="CaptureWarmFrames"/>. Twenty-four frames is
+		/// a cycle and a half of the clouds' sixteen places — about three samples' weight a pixel on
+		/// Balanced — so a still settled over more says how much of what it shows is settling.
+		/// </summary>
+		private static int WarmFrames()
+		{
+			if (CurrentSet?.Warm is int setWarm)
+			{
+				return setWarm;
+			}
+			string asked = Environment.GetEnvironmentVariable("FISHMMO_CAPTURE_WARM_FRAMES");
+			if (!string.IsNullOrEmpty(asked) && int.TryParse(asked.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int frames))
+			{
+				return Mathf.Clamp(frames, 0, MaxWarmFrames);
+			}
+			return CaptureWarmFrames;
+		}
+
+		/// <summary>
+		/// One trial of the cloud reconstruction in a <c>FISHMMO_OPTION_SETS</c> run: a name, the options
+		/// (CloudOptions letters), and optionally a quality level, a march-resolution scale and warm frames.
+		/// </summary>
+		private sealed class OptionSet
+		{
+			public string Name;
+			public string Letters = string.Empty;
+			public int? Quality;
+			public float Resolution = 1f;
+			public int? Warm;
+			/// <summary>False: the tier's temporal steadying off — each frame's march upsampled alone.</summary>
+			public bool? Temporal;
+			/// <summary>
+			/// Degrees of yaw the camera turns each warm frame, ending on the stage's own view: a still
+			/// taken out of a pan, so smearing and ghosting show, which a still camera hides.
+			/// </summary>
+			public float Pan;
+			/// <summary>Diagnostics: 1 draws cloud droplets without their diffraction spike (_FishCloudDebug.x).</summary>
+			public float NoSpike;
+			/// <summary>Diagnostics: 1 holds the light march's phase fixed (_FishCloudDebug.y).</summary>
+			public float FixedLight;
+		}
+
+		/// <summary>
+		/// <c>FISHMMO_OPTION_SETS</c>: the chosen stages rendered once per set, in ONE editor session — Unity's
+		/// start-up was most of every separate run. Sets are ';'-separated, each <c>name</c> or
+		/// <c>name@key=value,key=value</c> with keys <c>opt</c> (letters, '+'-joined), <c>quality</c>,
+		/// <c>res</c>, <c>warm</c>; a set named with only option letters (A, BD) uses them as its options.
+		/// Stills are named <c>SkySim-{set}-NN-{stage}.png</c> and each stage's frame cost at the set is
+		/// timed after its capture.
+		/// </summary>
+		private static List<OptionSet> optionSets;
+		private static int optionSetIndex;
+		private static readonly List<float> originalResolutions = new List<float>();
+		private static readonly List<bool> originalTemporal = new List<bool>();
+
+		private static OptionSet CurrentSet => optionSets != null && optionSetIndex < optionSets.Count ? optionSets[optionSetIndex] : null;
+
+		private static List<OptionSet> ParseOptionSets()
+		{
+			string raw = Environment.GetEnvironmentVariable("FISHMMO_OPTION_SETS");
+			if (string.IsNullOrWhiteSpace(raw))
+			{
+				return null;
+			}
+			var sets = new List<OptionSet>();
+			foreach (string entry in raw.Split(';'))
+			{
+				string trimmed = entry.Trim();
+				if (trimmed.Length == 0)
+				{
+					continue;
+				}
+				string[] head = trimmed.Split('@');
+				var set = new OptionSet { Name = head[0].Trim() };
+				if (System.Text.RegularExpressions.Regex.IsMatch(set.Name, "^[A-Da-d]+$"))
+				{
+					set.Letters = string.Join(",", set.Name.ToUpperInvariant().ToCharArray());
+				}
+				if (head.Length > 1)
+				{
+					foreach (string part in head[1].Split(','))
+					{
+						// On the first '=' only, so an option can carry its own value (opt=C=1).
+						string[] kv = part.Split(new[] { '=' }, 2);
+						if (kv.Length != 2)
+						{
+							continue;
+						}
+						string key = kv[0].Trim(), value = kv[1].Trim();
+						var inv = System.Globalization.CultureInfo.InvariantCulture;
+						switch (key)
+						{
+							case "opt": set.Letters = value.Replace('+', ','); break;
+							case "quality": if (int.TryParse(value, System.Globalization.NumberStyles.Integer, inv, out int q)) set.Quality = q; break;
+							case "res": if (float.TryParse(value, System.Globalization.NumberStyles.Float, inv, out float r)) set.Resolution = r; break;
+							case "warm": if (int.TryParse(value, System.Globalization.NumberStyles.Integer, inv, out int w)) set.Warm = Mathf.Clamp(w, 0, MaxWarmFrames); break;
+							case "temporal": set.Temporal = value != "0" && !value.Equals("false", StringComparison.OrdinalIgnoreCase); break;
+							case "pan": if (float.TryParse(value, System.Globalization.NumberStyles.Float, inv, out float pan)) set.Pan = pan; break;
+							case "nospike": set.NoSpike = value == "0" ? 0f : 1f; break;
+							case "fixedlight": set.FixedLight = value == "0" ? 0f : 1f; break;
+						}
+					}
+				}
+				sets.Add(set);
+			}
+			return sets.Count > 0 ? sets : null;
+		}
+
+		/// <summary>Puts the current set's options and march resolution on, from the profile's own values.</summary>
+		private static void ApplyOptionSet(WeatherRenderProfile profile)
+		{
+			OptionSet set = CurrentSet;
+			if (set == null || profile == null)
+			{
+				return;
+			}
+			var tiers = new[] { profile.Performant, profile.Balanced, profile.HighFidelity };
+			if (originalResolutions.Count == 0)
+			{
+				foreach (WeatherTierSettings tier in tiers)
+				{
+					originalResolutions.Add(tier.CloudResolution);
+					originalTemporal.Add(tier.CloudTemporal);
+				}
+			}
+			for (int i = 0; i < tiers.Length; i++)
+			{
+				tiers[i].CloudResolution = Mathf.Min(1f, originalResolutions[i] * set.Resolution);
+				tiers[i].CloudTemporal = set.Temporal ?? originalTemporal[i];
+			}
+			FishCloudsFeature.Options = CloudOptions.Parse(set.Letters, out _);
+			Shader.SetGlobalVector(CloudDebugId, new Vector4(set.NoSpike, set.FixedLight, 0f, 0f));
+		}
+
+		private static readonly int CloudDebugId = Shader.PropertyToID("_FishCloudDebug");
+
+		/// <summary>Where the frame-to-frame difference image of the stage being captured is written.</summary>
+		private static string flickerPath;
+
+		/// <summary>
+		/// The light the cloud march is handed, as the shader receives it: which way the light comes from
+		/// and how strong, its colour, the sky's light over a cloud, the ground's light under one, and
+		/// each band's gain on the light aloft. What decides whether a cloud is lit from above or below.
+		/// </summary>
+		private static string CloudLightReadout()
+		{
+			static string V(Vector4 v) => $"({v.x:0.000},{v.y:0.000},{v.z:0.000},{v.w:0.000})";
+			Vector4[] layerSun = Shader.GetGlobalVectorArray("_FishCloudLayerSun");
+			var bands = new List<string>();
+			for (int i = 0; layerSun != null && i < Mathf.Min(3, layerSun.Length); i++)
+			{
+				bands.Add(V(layerSun[i]));
+			}
+			return $"cloud light dir {V(Shader.GetGlobalVector("_FishCloudSunDir"))} colour {V(Shader.GetGlobalVector("_FishCloudSunColor"))} "
+				+ $"ambient {V(Shader.GetGlobalVector("_FishCloudAmbient"))} ground {V(Shader.GetGlobalVector("_FishCloudGround"))} "
+				+ $"band sun [{string.Join(" ", bands)}]";
+		}
+
+		/// <summary>
+		/// How much the frame changes from one render to the next with nothing moving, mean |Δ| per
+		/// channel in 0..255: the clouds' sparkle, which no still can show.
+		/// </summary>
+		private static float Flicker(Camera camera, RenderTexture target, Texture2D settled)
+		{
+			camera.Render();
+			RenderTexture.active = target;
+			var next = new Texture2D(Width, Height, TextureFormat.RGBA32, false);
+			next.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
+			next.Apply();
+			Color32[] a = settled.GetPixels32(), b = next.GetPixels32();
+			long sum = 0;
+			var diff = new Color32[a.Length];
+			for (int i = 0; i < a.Length; i++)
+			{
+				int d = Math.Abs(a[i].r - b[i].r) + Math.Abs(a[i].g - b[i].g) + Math.Abs(a[i].b - b[i].b);
+				sum += d;
+				// Where it changes, ×16 so a level's flicker reads.
+				byte v = (byte)Math.Min(255, d * 16 / 3);
+				diff[i] = new Color32(v, v, v, 255);
+			}
+			if (!string.IsNullOrEmpty(flickerPath))
+			{
+				next.SetPixels32(diff);
+				next.Apply();
+				File.WriteAllBytes(flickerPath, next.EncodeToPNG());
+			}
+			UnityEngine.Object.DestroyImmediate(next);
+			return sum / (3f * a.Length);
+		}
+
+		/// <summary>What the last stage set the cloud options to, so the log says it once and not every stage.</summary>
+		private static string cloudOptionsLogged;
+
+		/// <summary>
+		/// The cloud reconstruction options under trial (<see cref="CloudOptions"/>), from
+		/// <c>FISHMMO_CLOUD_OPTIONS</c> — the probe's to read, never the game's. Unset is every option off.
+		/// </summary>
+		private static void ApplyCloudOptions()
+		{
+			FishCloudsFeature.Options = CloudOptions.Parse(Environment.GetEnvironmentVariable("FISHMMO_CLOUD_OPTIONS"), out string ignored);
+			string said = FishCloudsFeature.Options + "|" + ignored;
+			if (said != cloudOptionsLogged)
+			{
+				cloudOptionsLogged = said;
+				Debug.Log($"[SkySimRender] cloud options: {FishCloudsFeature.Options}{(string.IsNullOrEmpty(ignored) ? "" : $" (not understood, ignored: {ignored})")}");
+			}
+		}
+
+		private static bool variantApplied;
+
+		/// <summary>
+		/// <c>FISHMMO_WEATHER_VARIANT</c> on the loaded render profile, applied once and never saved:
+		/// <c>res=</c> scales every tier's march resolution, <c>steps=</c> its march steps, <c>light=</c>
+		/// sets the light-march steps. A copy of WeatherSimProfile.ApplyVariant (the weather probe's
+		/// assembly is not referenced from this one): change both together.
+		/// </summary>
+		private static void ApplyVariant(WeatherRenderProfile profile)
+		{
+			string variant = Environment.GetEnvironmentVariable("FISHMMO_WEATHER_VARIANT");
+			if (variantApplied || profile == null || string.IsNullOrEmpty(variant))
+			{
+				return;
+			}
+			variantApplied = true;
+			foreach (string part in variant.Split(','))
+			{
+				string[] kv = part.Split('=');
+				if (kv.Length != 2 || !float.TryParse(kv[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float value))
+				{
+					continue;
+				}
+				foreach (WeatherTierSettings tier in new[] { profile.Performant, profile.Balanced, profile.HighFidelity })
+				{
+					switch (kv[0].Trim())
+					{
+						case "res": tier.CloudResolution *= value; break;
+						case "steps": tier.CloudSteps = Math.Max(4, (int)(tier.CloudSteps * value)); break;
+					}
+				}
+				if (kv[0].Trim() == "light")
+				{
+					profile.Clouds.LightSteps = Math.Max(1, (int)value);
+				}
+			}
+			Debug.Log($"[SkySimRender] render profile variant: {variant}");
+		}
+
+		/// <summary>
+		/// The quality level <c>FISHMMO_WEATHER_VARIANT</c>'s <c>quality=</c> asks every stage to render at,
+		/// or <paramref name="stageQuality"/> when it asks for none. A copy of WeatherSimProfile.VariantQuality.
+		/// </summary>
+		private static int VariantQuality(int stageQuality)
+		{
+			string variant = Environment.GetEnvironmentVariable("FISHMMO_WEATHER_VARIANT");
+			if (string.IsNullOrEmpty(variant))
+			{
+				return stageQuality;
+			}
+			foreach (string part in variant.Split(','))
+			{
+				string[] kv = part.Split('=');
+				if (kv.Length == 2 && kv[0].Trim() == "quality" && int.TryParse(kv[1].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int level))
+				{
+					return level;
+				}
+			}
+			return stageQuality;
+		}
 		private const string StateKey = "FishMMO.SkySimRender.Active";
 		private const string ReportKey = "FishMMO.SkySimRender.Report";
 		private const string FailuresKey = "FishMMO.SkySimRender.Failures";
@@ -75,14 +354,16 @@ namespace FishMMO.TestHarness.Sky.Editor
 			/// <summary>The most of the frame the clouds may cover. 0 means no ceiling.</summary>
 			public float CloudCoverCeiling;
 			/// <summary>
-			/// Runs the weather driver instead of the stage's channels: the sky is whatever the
-			/// drifting field says it is at a moment chosen so that the camera stands under a
-			/// half-cloudy sky. This is the stage that sees formations, since with the channels
-			/// driven straight there are none.
+			/// Runs the drifting weather field under the stage's air: the sky is whatever the field
+			/// says it is at a moment chosen so that the camera stands under a half-cloudy sky, plus
+			/// what the stage adds. Off, the air is a still, ordinary air plus what the stage adds,
+			/// which is one air held — what a stage measuring one sky wants.
 			/// </summary>
 			public bool Driver;
-			/// <summary>Applies this preset (by name) once the stage is set up, with no transition.</summary>
-			public string Preset;
+			/// <summary>A storm of this kind stood over the camera once the stage is set up.</summary>
+			public StormKind? Storm;
+			/// <summary>When set, the calendar is searched for a night the star's activity puts at least this much aurora overhead.</summary>
+			public float WantAurora;
 			/// <summary>
 			/// How unevenly the cloud must be spread across the sky: the spread of the cover between
 			/// the blocks of the frame. A noise field cut at one level is even everywhere and scores
@@ -124,8 +405,25 @@ namespace FishMMO.TestHarness.Sky.Editor
 			/// cannot be written down in advance.
 			/// </summary>
 			public Func<CelestialState, bool> Want;
-			public WeatherFrame Weather = WeatherFrame.Clear;
+			/// <summary>
+			/// What the stage adds to the air. There is no asking for a sky by its cover: a stage that
+			/// wants a quarter-covered sky asks for air dry enough to make one (a still standard air,
+			/// at half humidity and neutral pressure, clouds about two fifths of the sky over).
+			/// </summary>
+			public AirOffsets Air;
+			/// <summary>The scene's warmth on top of its climate, on the climate scale; added to the air as kelvin.</summary>
 			public float Temperature = 0.2f;
+		}
+
+		/// <summary>An addition to the air, for a stage.</summary>
+		/// <remarks>
+		/// The bed's own place is damp: its climate adds about a tenth to the still air's half
+		/// humidity before anything here does, so each stage's figure is a tenth under the
+		/// humidity its comment asks for.
+		/// </remarks>
+		private static AirOffsets AirOf(float humidity = 0f, float pressure = 0f, float instability = 0f, float wind = 0f)
+		{
+			return new AirOffsets { Humidity = humidity, Pressure = pressure, Instability = instability, Wind = wind };
 		}
 
 		private static readonly Stage[] Stages =
@@ -140,8 +438,12 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// Deep enough that the stars are out: a sun just under the horizon is still twilight.
 				CameraEuler = new Vector3(-20f, 180f, 0f), Want = state => state.SunAltitude < -12f,
 			},
-			new Stage { Name = "home-aurora", Latitude = 72f, Time = 0.0, Day = 355f, Sun = -1, ExpectAurora = true, ExpectStars = true, Temperature = -0.7f, CameraEuler = new Vector3(-30f, 0f, 0f), Weather = Frame((WeatherChannel.Aurora, 1f)) },
-			new Stage { Name = "home-storm-noon", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-20f, 180f, 0f), Weather = Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 1f), (WeatherChannel.Precipitation, 0.8f), (WeatherChannel.RainWeight, 1f), (WeatherChannel.LightningRate, 1f), (WeatherChannel.FogDensity, 0.3f)) },
+			// The aurora is the star's doing, not the air's: the night is searched for when the star's
+			// activity puts a bright one overhead, and the air is a dry, clear one.
+			new Stage { Name = "home-aurora", Latitude = 72f, Time = 0.0, Day = 355f, Sun = -1, ExpectAurora = true, ExpectStars = true, Temperature = -0.7f, CameraEuler = new Vector3(-30f, 0f, 0f), WantAurora = 0.6f, Air = AirOf(humidity: -0.3f, pressure: 0.5f) },
+			// A thunderstorm over the camera in damp, unsettled air: the tower, the rain and the
+			// lightning are the storm's and the air's, not written in.
+			new Stage { Name = "home-storm-noon", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-20f, 180f, 0f), Air = AirOf(humidity: 0.3f, pressure: -0.5f, instability: 0.4f), Storm = StormKind.Thunderstorm },
 			new Stage { Name = "moon-day", Body = "Moon 1", Time = 0.5, Sun = 1, ExpectBlackSky = true, ExpectStars = true, CameraEuler = new Vector3(-25f, 180f, 0f) },
 			new Stage { Name = "moon-night", Body = "Moon 1", Time = 0.0, Sun = -1, ExpectBlackSky = true, ExpectStars = true, CameraEuler = new Vector3(-30f, 0f, 0f) },
 			new Stage { Name = "home-moonlit", Time = 0.0, Sun = -1, ExpectMoon = true, ExpectStars = true, MoonDiscContrast = 0.004f },
@@ -157,7 +459,8 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// and 0.0035 of moon really does glow through one, as it does through thin overcast.
 				// 0.008 lets that be and still sits thirteen times under an ordering failure.
 				Name = "moon-behind-cloud", Time = 0.0, Sun = -1, ExpectMoon = true, MoonDiscCeiling = 0.008f,
-				Weather = Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 1f)),
+				// Air damp enough and low enough to close the sky over.
+				Air = AirOf(humidity: 0.45f, pressure: -0.4f),
 			},
 			new Stage { Name = "home-noon-performant", Time = 0.5, Sun = 1, Quality = 0, CameraEuler = new Vector3(-30f, 180f, 0f) },
 			new Stage
@@ -165,14 +468,14 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// A cloudy noon: the volume must really be in front of the sky.
 				// The sun is high, so the clouds' shadow on the ground has shape to check.
 				Name = "clouds-noon", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-22f, 150f, 0f), ExpectCloudCover = 0.15f, ExpectCloudShadow = true,
-				Weather = Frame((WeatherChannel.CloudCover, 0.7f), (WeatherChannel.CloudDensity, 0.6f)),
+				// About seven tenths of the sky: humidity 0.77.
+				Air = AirOf(humidity: 0.17f),
 			},
 			new Stage
 			{
 				// Looking up under a storm: the weather map's own square must not show as an edge.
 				Name = "night-storm-overhead", Time = 0.0, Sun = -1, CameraEuler = new Vector3(-62f, 25f, 0f), Temperature = 0.2f,
-				Weather = Frame((WeatherChannel.CloudCover, 0.75f), (WeatherChannel.CloudDensity, 0.8f), (WeatherChannel.Precipitation, 0.7f),
-					(WeatherChannel.RainWeight, 1f), (WeatherChannel.LightningRate, 0.8f)),
+				Air = AirOf(humidity: 0.25f, pressure: -0.3f, instability: 0.4f), Storm = StormKind.Thunderstorm,
 			},
 			new Stage
 			{
@@ -232,30 +535,32 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// notices when a coverage setting quietly fills the whole frame.
 				Name = "clouds-scattered", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-28f, 150f, 0f),
 				ExpectCloudCover = 0.05f, CloudCoverCeiling = 0.42f,
-				Weather = Frame((WeatherChannel.CloudCover, 0.25f), (WeatherChannel.CloudDensity, 0.5f)),
+				// A quarter of the sky: humidity 0.37.
+				Air = AirOf(humidity: -0.23f),
 			},
 			new Stage
 			{
 				// Half cloudy: the middle of the range, where a wrong curve hides best.
 				Name = "clouds-broken", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-28f, 150f, 0f),
 				ExpectCloudCover = 0.3f, CloudCoverCeiling = 0.85f,
-				Weather = Frame((WeatherChannel.CloudCover, 0.6f), (WeatherChannel.CloudDensity, 0.6f)),
+				// Six tenths of the sky: humidity 0.68.
+				Air = AirOf(humidity: 0.08f),
 			},
 			new Stage
 			{
 				// And an overcast must actually close over.
 				Name = "clouds-overcast", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-28f, 150f, 0f),
 				ExpectCloudCover = 0.7f,
-				Weather = Frame((WeatherChannel.CloudCover, 1f), (WeatherChannel.CloudDensity, 0.9f)),
+				// A closed sky: damp air in a low.
+				Air = AirOf(humidity: 0.45f, pressure: -0.4f),
 			},
 			new Stage
 			{
-				// The Clear preset over the driver's own half-cloudy sky. A preset is an override:
-				// the field steps back by the preset's strength, so Clear has to actually clear it.
-				// It used to be a Clouds layer at zero, skipped as nothing, over a field left at
-				// full weight — so it cleared nothing and the two systems fought.
-				Name = "preset-clear-over-driver", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-28f, 150f, 0f),
-				Driver = true, Preset = "Clear", CloudCoverCeiling = 0.02f,
+				// Dry, settled air over the driver's own half-cloudy sky: an addition that takes the
+				// water out and puts a high over it has to actually clear it — the base rises above the
+				// lid and there is nothing left to condense.
+				Name = "dry-high-over-driver", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-28f, 150f, 0f),
+				Driver = true, Air = AirOf(humidity: -0.6f, pressure: 1f), CloudCoverCeiling = 0.02f,
 			},
 			new Stage
 			{
@@ -272,7 +577,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// the tops take the sun's red long before anything on the ground does.
 				Name = "clouds-dawn", SunAltitudeWanted = 3f, CameraEuler = new Vector3(-8f, 90f, 0f), LookAt = "Sun",
 				ExpectCloudCover = 0.05f,
-				Weather = Frame((WeatherChannel.CloudCover, 0.55f), (WeatherChannel.CloudDensity, 0.6f)),
+				Air = AirOf(humidity: 0.04f),
 			},
 			new Stage
 			{
@@ -280,14 +585,14 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// ceiling painted on the sky. From up here their tops are below the horizon.
 				Name = "clouds-from-above", Time = 0.5, Sun = 1, CameraEuler = new Vector3(22f, 150f, 0f), CameraHeight = 3400f,
 				ExpectCloudCover = 0.05f,
-				Weather = Frame((WeatherChannel.CloudCover, 0.6f), (WeatherChannel.CloudDensity, 0.6f)),
+				Air = AirOf(humidity: 0.08f),
 			},
 			new Stage
 			{
 				// Broken cloud with the sun low: shafts, and the clouds' own shadow on the ground.
 				Name = "god-rays", SunAltitudeWanted = 14f, Sun = 1, LookAt = "Sun", ExpectGodRays = true,
 				CameraEuler = new Vector3(-4f, 90f, 0f),
-				Weather = Frame((WeatherChannel.CloudCover, 0.7f), (WeatherChannel.CloudDensity, 0.65f)),
+				Air = AirOf(humidity: 0.17f),
 			},
 			new Stage
 			{
@@ -295,18 +600,107 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// whole picture, and it has been lost more than once to a pass that meant well.
 				Name = "sunrise-glow", SunAltitudeWanted = 8f, Sun = 1, LookAt = "Sun", ExpectGodRays = true, CompareGlow = true,
 				CameraEuler = new Vector3(-4f, 90f, 0f),
-				Weather = Frame((WeatherChannel.CloudCover, 0.25f), (WeatherChannel.CloudDensity, 0.5f)),
+				Air = AirOf(humidity: -0.13f),
 			},
 			new Stage
 			{
 				Name = "sunrise-low", SunAltitudeWanted = 2f, Sun = 1, LookAt = "Sun", ExpectGodRays = true, CompareGlow = true,
 				CameraEuler = new Vector3(-4f, 90f, 0f),
-				Weather = Frame((WeatherChannel.CloudCover, 0.45f), (WeatherChannel.CloudDensity, 0.6f)),
+				Air = AirOf(humidity: 0.05f),
 			},
 			new Stage
 			{
+				// A shower in unsettled air with the sun out: damp, unstable, raining.
 				Name = "rainbow", SunAltitudeWanted = 20f, ExpectRainbow = true, LookAwayFromSun = true,
-				Weather = Frame((WeatherChannel.Precipitation, 0.35f), (WeatherChannel.RainWeight, 1f), (WeatherChannel.CloudCover, 0.35f)),
+				Air = AirOf(humidity: 0.16f, instability: 0.25f),
+			},
+
+			// ── The cloud the air makes ──
+			new Stage
+			{
+				// Fair-weather cumulus: a gently unstable afternoon under a high whose lid stops the
+				// heaps a couple of kilometres over their flat bases, with blue between. The bed's own
+				// place is hot and humid enough to build thunderstorms unaided, so it takes the lid.
+				Name = "cumulus-fair", Time = 0.55, Sun = 1, CameraEuler = new Vector3(-16f, 150f, 0f), Temperature = 0.3f,
+				ExpectCloudCover = 0.03f,
+				Air = AirOf(humidity: -0.15f, pressure: 0.75f, instability: 0.1f),
+			},
+			new Stage
+			{
+				// The same heaps with the sun behind them, a hand and a half up: what the drops' Mie
+				// phase function does. Thin edges toward the sun burn white — the silver lining —
+				// while the faces turned to the camera are the far side of the diffusion and go grey.
+				Name = "cumulus-backlit", SunAltitudeWanted = 25f, Sun = 1, LookAt = "Sun", Temperature = 0.3f,
+				ExpectCloudCover = 0.03f,
+				Air = AirOf(humidity: -0.15f, pressure: 0.75f, instability: 0.1f),
+			},
+			new Stage
+			{
+				// And with the sun at the camera's back: the sunlit faces the diffusion lights white,
+				// graded to grey flat bases, with the thin edges darker than the cores (the "powder"
+				// look, which here is only how little of a thin edge's light has scattered back out).
+				Name = "cumulus-sunlit", SunAltitudeWanted = 35f, Sun = 1, LookAwayFromSun = true, Temperature = 0.3f,
+				ExpectCloudCover = 0.03f,
+				Air = AirOf(humidity: -0.15f, pressure: 0.75f, instability: 0.1f),
+			},
+			new Stage
+			{
+				// Cirrus at dusk under a high: no low cloud under the lid, ice aloft drawn into fall
+				// streaks by the jet, and lit by a sun the air under it has not yet reddened — gold and
+				// white over a ground already in the orange light.
+				Name = "cirrus-dusk", SunAltitudeWanted = 2f, Sun = 1, LookAt = "Sun", Temperature = 0.1f,
+				Air = AirOf(humidity: 0.1f, pressure: 0.8f),
+			},
+			new Stage
+			{
+				// A stratus deck: damp, stable air under a high's lid. One flat grey sheet, low.
+				Name = "stratus-deck", Time = 0.5, Sun = 1, CameraEuler = new Vector3(-20f, 150f, 0f), Temperature = 0.15f,
+				ExpectCloudCover = 0.5f,
+				Air = AirOf(humidity: 0.4f, pressure: 0.35f, instability: -0.25f),
+			},
+			new Stage
+			{
+				// Cumulonimbus: hot, very unstable air, dry enough between the towers to see them —
+				// isolated towers breaking through toward the tropopause, seen from far enough off to see
+				// them whole. Damper air closes the whole sky into one convective mass.
+				Name = "cumulonimbus", Time = 0.62, Sun = 1, CameraEuler = new Vector3(-7f, 150f, 0f), Temperature = 0.45f,
+				ExpectCloudCover = 0.05f,
+				Air = AirOf(humidity: -0.15f, instability: 0.35f),
+			},
+			new Stage
+			{
+				// The same towers from twelve kilometres up: this world's air stands twice as tall as
+				// ours, and its towers climb past the height an airliner flies.
+				Name = "cumulonimbus-from-above", Time = 0.62, Sun = 1, CameraEuler = new Vector3(-2f, 150f, 0f), CameraHeight = 12000f, Temperature = 0.45f,
+				ExpectCloudCover = 0.05f,
+				Air = AirOf(humidity: -0.15f, instability: 0.35f),
+			},
+
+			// ── Fog: cloud whose base is the ground ──
+			// The weather probe's own fog recipe (WeatherSimRender "fog": calm, damp air under a high at
+			// dawn), seen the ways only a fog that is cloud can be seen. The fog is walked by the cloud
+			// march now: look for banks and a billowed top, not a flat wash, and for no band painted
+			// round the horizon over and above it.
+			new Stage
+			{
+				// From a rise four hundred metres over the plain: the fog lying in the low ground with a
+				// textured top, the mountain to the north standing out of it.
+				Name = "fog-from-above", Time = 0.27, CameraHeight = 400f, CameraEuler = new Vector3(12f, 0f, 0f), Temperature = -0.3f,
+				Air = AirOf(humidity: 0.15f, pressure: 0.9f, wind: -6f),
+			},
+			new Stage
+			{
+				// Standing in the same fog, looking along the ground at the mountain: denser and thinner
+				// banks near to hand, the mountain's foot swallowed and its upper slopes clear.
+				Name = "fog-inside", Time = 0.27, CameraEuler = new Vector3(-2f, 0f, 0f), Temperature = -0.3f,
+				Air = AirOf(humidity: 0.15f, pressure: 0.9f, wind: -6f),
+			},
+			new Stage
+			{
+				// A young mist a few tens of metres deep, from just over its top: patchy, its top in
+				// eddies, the sky open over it.
+				Name = "mist-top", Time = 0.27, CameraHeight = 70f, CameraEuler = new Vector3(6f, 20f, 0f), Temperature = -0.3f,
+				Air = AirOf(humidity: -0.03f, pressure: 0.9f, wind: -6f),
 			},
 		};
 
@@ -394,13 +788,42 @@ namespace FishMMO.TestHarness.Sky.Editor
 				double hours = (day + stage.Time) * dayHours;
 				float season = Mathf.Repeat((float)(hours / yearHours), 1f);
 				float cover = WeatherDriver.CoverAt(WeatherDriver.WorldSeed, new Vector2(at.x, at.z), hours * 3600.0,
-					stage.Latitude, season, (float)stage.Time);
+					stage.Latitude, season, (float)stage.Time, WindBelts.For(SolarSystemProfile.Active, controller.Body));
 				if (cover >= 0.4f && cover <= 0.7f)
 				{
 					return day;
 				}
 			}
 			Debug.LogWarning($"[SkySimRender] {stage.Name}: no half-cloudy day within a year; using day {stage.Day}.");
+			return stage.Day;
+		}
+
+		/// <summary>
+		/// The first night (within a year of the stage's) on which the star's activity puts at least
+		/// the stage's aurora overhead at its hour and latitude. Pure functions of the clock again.
+		/// </summary>
+		private static float FindAuroraNight(WorldSimController controller, Stage stage)
+		{
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			WorldBody body = controller.Body;
+			if (system == null || body == null)
+			{
+				return stage.Day;
+			}
+			double dayHours = CelestialMath.HomeSolarDayHours(system);
+			for (float d = 0f; d < 365f; d += 0.5f)
+			{
+				float day = stage.Day + d;
+				double hours = (day + stage.Time) * dayHours;
+				float season = CelestialMath.Season01(system, body, hours);
+				float wind = (float)(CelestialMath.Insolation(system, body, hours) / Math.Max(1e-6, CelestialMath.MeanHomeInsolation(system)));
+				float magnetic = body.MagneticLatitude(stage.Latitude, 0f);
+				if (WeatherDriver.Aurora(WeatherDriver.WorldSeed, hours * 3600.0, magnetic, season, body.MagneticField, wind) >= stage.WantAurora)
+				{
+					return day;
+				}
+			}
+			Debug.LogWarning($"[SkySimRender] {stage.Name}: no night with that much aurora within a year; using day {stage.Day}.");
 			return stage.Day;
 		}
 
@@ -438,16 +861,6 @@ namespace FishMMO.TestHarness.Sky.Editor
 		private static readonly List<string> report = new List<string>();
 		private static PanelSettings uiSettings;
 		private static RenderTexture uiTarget;
-
-		private static WeatherFrame Frame(params (WeatherChannel channel, float value)[] values)
-		{
-			var frame = new WeatherFrame();
-			foreach ((WeatherChannel channel, float value) in values)
-			{
-				frame[channel] = value;
-			}
-			return frame;
-		}
 
 		[DashboardTool(DashboardToolAttribute.UITests, "Render Sky Sim", Section = "Renders", Order = 22,
 			Tooltip = "Plays the Sky Sim scene through ten skies (home, poles, aurora, storm, an airless moon) and writes a PNG of each to PanelRenders/.")]
@@ -515,6 +928,8 @@ namespace FishMMO.TestHarness.Sky.Editor
 		{
 			outputDirectory = SessionState.GetString(StateKey, outputDirectory);
 			stageIndex = -1;
+			optionSets = ParseOptionSets();
+			optionSetIndex = 0;
 			failures = 0;
 			report.Clear();
 			SessionState.EraseString(ReportKey);
@@ -574,10 +989,21 @@ namespace FishMMO.TestHarness.Sky.Editor
 					stageIndex++;
 				}
 				skipped = false;
+				if (stageIndex >= Stages.Length && optionSets != null && optionSetIndex + 1 < optionSets.Count)
+				{
+					// The next set: the same stages again.
+					optionSetIndex++;
+					stageIndex = -1;
+					Debug.Log($"[SkySimRender] option set {CurrentSet.Name}");
+					return;
+				}
 				if (stageIndex >= Stages.Length)
 				{
 					EditorApplication.update -= Pump;
-					MeasureCost(controller);
+					if (optionSets == null)
+					{
+						MeasureCost(controller);
+					}
 					Save();
 					EditorApplication.ExitPlaymode();
 					return;
@@ -596,38 +1022,46 @@ namespace FishMMO.TestHarness.Sky.Editor
 
 		private static void Start(WorldSimController controller, Stage stage)
 		{
-			QualitySettings.SetQualityLevel(Mathf.Clamp(stage.Quality, 0, QualitySettings.names.Length - 1), true);
+			// FISHMMO_WEATHER_VARIANT's quality= renders every stage at one level, and its res= / steps=
+			// scale the profile (the cloud options' E: a denser march); FISHMMO_CLOUD_OPTIONS picks the
+			// cloud reconstruction options (A–D).
+			QualitySettings.SetQualityLevel(Mathf.Clamp(VariantQuality(stage.Quality), 0, QualitySettings.names.Length - 1), true);
+			ApplyVariant(controller.Profile != null ? controller.Profile : WeatherRenderProfile.Active);
+			ApplyCloudOptions();
+			if (CurrentSet != null)
+			{
+				QualitySettings.SetQualityLevel(Mathf.Clamp(CurrentSet.Quality ?? stage.Quality, 0, QualitySettings.names.Length - 1), true);
+				ApplyOptionSet(controller.Profile != null ? controller.Profile : WeatherRenderProfile.Active);
+			}
 			controller.Paused = true;
 			controller.Body = BodyNamed(controller, stage.Body);
 			controller.LargerThanLife = stage.LargerThanLife;
 			controller.Latitude = stage.Latitude;
 			controller.DayOfYear = stage.Want != null ? FindDay(controller, stage) : stage.Day;
-			controller.TimeOfDay = stage.SunAltitudeWanted.HasValue ? FindTime(controller, stage) : stage.Time;
+			// JumpTo, not TimeOfDay: the weather runs on the world's clock, which TimeOfDay alone
+			// leaves at the day's start.
+			controller.JumpTo(stage.SunAltitudeWanted.HasValue ? FindTime(controller, stage) : stage.Time);
 			// Every stage starts from an empty timeline. A layer left by the stage before used to
 			// blend in unseen; now that a layer overrides the drifting field, a leftover Clear from
 			// the preset stage silenced the driver stage that followed it and it drew no cloud.
 			controller.ClearAll(0f);
-			controller.SkyWeather = stage.Weather;
+			controller.FieldDriven = stage.Driver;
 			if (stage.Driver)
 			{
-				// After the channels, which switch the driver off: the driver decides now, on a day
-				// the field puts a half-cloudy sky over the camera.
+				// The driver decides, on a day the field puts a half-cloudy sky over the camera.
 				controller.DayOfYear = FindCloudyDay(controller, stage);
-				controller.DriveWeatherDirectly = false;
 			}
-			if (!string.IsNullOrEmpty(stage.Preset))
+			if (stage.WantAurora > 0f)
 			{
-				WeatherPreset preset = controller.Presets.Find(p => p != null && p.ResolvedName == stage.Preset);
-				if (preset == null)
-				{
-					Debug.LogWarning($"[SkySimRender] {stage.Name}: no preset named {stage.Preset} on the bed.");
-				}
-				else
-				{
-					controller.ApplyPreset(preset, 0f);
-				}
+				controller.DayOfYear = FindAuroraNight(controller, stage);
 			}
-			controller.Temperature = stage.Temperature;
+			AirOffsets air = stage.Air;
+			air.Temperature += stage.Temperature * (float)FishMMO.Shared.Biomes.ClimateModel.KelvinPerUnit;
+			controller.SetAir(air, 0f);
+			if (stage.Storm.HasValue)
+			{
+				controller.SpawnCell(stage.Storm.Value, 0f, 0f, overhead: true);
+			}
 			controller.Camera.transform.rotation = Quaternion.Euler(stage.CameraEuler);
 			// Every stage, not only the ones that ask: a height that is only ever raised stays raised,
 			// and every sky after the one shot from above the clouds was being shot from up there too.
@@ -697,7 +1131,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 
 		private static void Finish(WorldSimController controller, Stage stage)
 		{
-			string path = Path.Combine(outputDirectory, $"SkySim-{stageIndex:00}-{stage.Name}.png");
+			string path = Path.Combine(outputDirectory, CurrentSet != null ? $"SkySim-{CurrentSet.Name}-{stageIndex:00}-{stage.Name}.png" : $"SkySim-{stageIndex:00}-{stage.Name}.png");
 			if (stage.ExpectMoon)
 			{
 				// Look at the moon we picked the night for.
@@ -836,7 +1270,35 @@ namespace FishMMO.TestHarness.Sky.Editor
 				failures++;
 			}
 			string moon = state.Moon >= 0 ? $"moon {state.Bodies[state.Moon].AltitudeDegrees:0}° {(state.Bodies[state.Moon].Illumination * 100f):0}%" : "no moon";
-			report.Add($"{stage.Name}: {(problems.Count == 0 ? "PASS" : "FAIL " + string.Join("; ", problems))} — {controller.Body?.ResolvedName} at {controller.Latitude:0}°, shown aurora {controller.Presentation?.Shown[WeatherChannel.Aurora] ?? 0f:0.00}/rain {controller.Presentation?.Shown[WeatherChannel.Precipitation] ?? 0f:0.00}, day {Mathf.FloorToInt(controller.DayOfYear)}, {SceneTime.Format(state.LocalTime01)}, sun {altitude:0.0}°, stars {stars:0.00}, aurora {aurora:0.00}, eclipse {state.SolarEclipse:0.00}, rainbow {rainbow:0.00}, {moon}, {state.Bodies.Count} bodies, {quads} quads, {textured} textured, cloud cover {lastCloudCover * 100f:0}% solid / {lastCloudAny * 100f:0}% any (spread {lastCloudContrast:0.000}), moon disc {moonDisc:0.0000}, quality {QualitySettings.names[QualitySettings.GetQualityLevel()]} → {Path.GetFileName(path)}");
+			// What the physics made of the air: the column over the camera and each band's figures.
+			SkySystem skyNow = SkySystem.Instance;
+			var air = new System.Text.StringBuilder();
+			if (skyNow != null)
+			{
+				AirColumn viewer = skyNow.CloudViewerColumn;
+				air.Append($"; air: base {viewer.Base:0} m, top {viewer.Top:0} m, towers {viewer.TowerCeiling:0} m, lid {viewer.Cap:0} m, RH {viewer.RelativeHumidity:0.00}, allowed {viewer.LowCloudAllowed:0.00}, CAPE {viewer.Cape:0}");
+				CloudClimate.MapExtremes map = skyNow.CloudMapExtremes;
+				air.Append($"; map: low ≤{map.MaxLow:0.00}, mid ≤{map.MaxMid:0.00}, high ≤{map.MaxHigh:0.00}, lowest base {map.LowestBase:0} m, highest tower {map.HighestTower:0} m");
+				for (int b = 0; b < skyNow.CloudBandCount && b < skyNow.CloudBands.Count; b++)
+				{
+					CloudBand band = skyNow.CloudBands[b];
+					air.Append($"; {band.Name} {(band.Present ? "on" : "off")} {band.Bottom:0}-{band.Top:0} m cover {band.Coverage:0.00}/max {band.MaxCoverage:0.00}");
+				}
+			}
+			// The fog the frame being shown carries, what the driver asked for before the layer's physics
+			// had its say, and the layer the fog passes were handed. And the hour the WEATHER was worked
+			// out for, beside the sky's: the bed samples the weather on its own clock, and pinning the
+			// time of day moves only the sun (WorldSimController.TimeOfDay against ScrubTo).
+			WeatherFrame shownFrame = controller.Presentation != null ? controller.Presentation.Shown : WeatherFrame.Clear;
+			FogLayerView fogView = FogLayerView.Of(shownFrame);
+			WeatherSample sampled = controller.LastSample;
+			string seeing = fogView.Extinction > 1e-7f ? $"{3.912f / fogView.Extinction:0} m" : "unlimited";
+			air.Append($"; fog: shown {shownFrame[WeatherChannel.FogDensity]:0.000} (driver asked {WeatherDriver.Background(sampled.Air)[WeatherChannel.FogDensity]:0.000}), height {shownFrame[WeatherChannel.FogHeight]:0.000}, lift {shownFrame[WeatherChannel.VolumetricFog]:0.00}");
+			Vector4 fogShell = Shader.GetGlobalVector(FogLayerView.ShellId);
+			string drawer = FogLayerView.DrawnByClouds ? "the cloud march" : (FishHeightFogFeature.DrawsTheLayer ? "the fallback passes" : "nothing");
+			air.Append($"; fog layer {(fogView.Visible ? "visible" : "none")}: {fogView.Depth:0} m deep, lift {fogView.Lift:0.00}, extinction {fogView.Extinction:0.00e+0}/m (visibility {seeing}), drifting {fogView.WindSpeed:0.0} m/s, drawn by {drawer}, shell {(fogShell.z > 0.5f ? $"{fogShell.x:0}–{fogShell.y:0} m" : "off")}");
+			air.Append($"; weather at {SceneTime.Format(sampled.Air.LocalTime01)} (sky at {SceneTime.Format(state.LocalTime01)}), humidity {sampled.Air.Humidity:0.00} (RH {sampled.Column.RelativeHumidity:0.00}), wind {sampled.Air.Wind.magnitude:0.0} m/s, base {sampled.Column.Base:0} m");
+			report.Add($"{stage.Name}: {(problems.Count == 0 ? "PASS" : "FAIL " + string.Join("; ", problems))} — {controller.Body?.ResolvedName} at {controller.Latitude:0}°, shown aurora {controller.Presentation?.Shown[WeatherChannel.Aurora] ?? 0f:0.00}/rain {controller.Presentation?.Shown[WeatherChannel.Precipitation] ?? 0f:0.00}, day {Mathf.FloorToInt(controller.DayOfYear)}, {SceneTime.Format(state.LocalTime01)}, sun {altitude:0.0}°, stars {stars:0.00}, aurora {aurora:0.00}, eclipse {state.SolarEclipse:0.00}, rainbow {rainbow:0.00}, {moon}, {state.Bodies.Count} bodies, {quads} quads, {textured} textured, cloud cover {lastCloudCover * 100f:0}% solid / {lastCloudAny * 100f:0}% any (spread {lastCloudContrast:0.000}), moon disc {moonDisc:0.0000}, quality {QualitySettings.names[QualitySettings.GetQualityLevel()]}{air}; {CloudLightReadout()} → {Path.GetFileName(path)}");
 		}
 
 		/// <summary>
@@ -859,7 +1321,10 @@ namespace FishMMO.TestHarness.Sky.Editor
 			controller.Latitude = 20f;
 			controller.DayOfYear = 199f;
 			controller.TimeOfDay = 0.0;
-			controller.SkyWeather = WeatherFrame.Clear;
+			// A clear night: dry, settled air with the drifting field held still.
+			controller.ClearAll(0f);
+			controller.FieldDriven = false;
+			controller.SetAir(AirOf(humidity: -0.5f, pressure: 0.8f), 0f);
 			controller.Camera.transform.rotation = Quaternion.Euler(-30f, 180f, 0f);
 
 			var report = new SkyCostReport();
@@ -1302,18 +1767,49 @@ namespace FishMMO.TestHarness.Sky.Editor
 				// game never shows: one un-averaged march, with every ray's jitter still in it.
 				// Render a few times at this size first, so the history converges and the still is
 				// the sky as it is actually seen.
-				for (int warm = 0; warm < CaptureWarmFrames; warm++)
+				int warmFrames = WarmFrames();
+				float pan = CurrentSet?.Pan ?? 0f;
+				Quaternion view = camera.transform.rotation;
+				for (int warm = 0; warm < warmFrames; warm++)
 				{
+					if (pan != 0f)
+					{
+						// Turning into the stage's own view: the last warm frame is the view itself.
+						camera.transform.rotation = Quaternion.AngleAxis(-pan * (warmFrames - 1 - warm), Vector3.up) * view;
+					}
 					camera.Render();
 				}
+				camera.transform.rotation = view;
 				RenderTexture.active = target;
 				var image = new Texture2D(Width, Height, TextureFormat.RGBA32, false);
 				image.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
 				image.Apply();
 				lastCloudCover = MeasureCloudCover(image);
+				if (CurrentSet != null)
+				{
+					flickerPath = Path.Combine(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path) + "-flicker.png");
+					report.Add($"flicker {Path.GetFileNameWithoutExtension(path)}: {Flicker(camera, target, image):0.000} levels a frame");
+				}
 				OverlayPanel(controller, image);
 				File.WriteAllBytes(path, image.EncodeToPNG());
 				UnityEngine.Object.DestroyImmediate(image);
+				if (CurrentSet != null)
+				{
+					// This set's frame cost on this stage, settled, at the capture's size. ReadPixels
+					// waits for the GPU, so the last frame's work is inside the time.
+					const int timed = 16;
+					var watch = System.Diagnostics.Stopwatch.StartNew();
+					for (int i = 0; i < timed; i++)
+					{
+						camera.Render();
+					}
+					var sync = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+					RenderTexture.active = target;
+					sync.ReadPixels(new Rect(0, 0, 1, 1), 0, 0);
+					watch.Stop();
+					UnityEngine.Object.DestroyImmediate(sync);
+					report.Add($"cost {Path.GetFileNameWithoutExtension(path)}: {watch.Elapsed.TotalMilliseconds / timed:0.0} ms a frame");
+				}
 			}
 			finally
 			{

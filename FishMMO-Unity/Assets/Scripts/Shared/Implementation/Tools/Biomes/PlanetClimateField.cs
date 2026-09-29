@@ -128,7 +128,7 @@ namespace FishMMO.Shared.Biomes
 			 * with ice caps. */
 			field.MeanTemperature = (float)ClimateModel.ToScaleUnclamped(
 				ClimateModel.MeanSurfaceKelvin(insolation, atmosphere, water));
-			field.LapsePerMetre = (float)ClimateModel.LapseRatePerMetre(atmosphere) / (float)ClimateModel.KelvinPerUnit;
+			field.LapsePerMetre = (float)ClimateModel.LapseRatePerMetre(system, body) / (float)ClimateModel.KelvinPerUnit;
 
 			// The ends of the hypsometric curve, so a height can be placed against the world's own
 			// range rather than against a number chosen for an Earth-sized planet.
