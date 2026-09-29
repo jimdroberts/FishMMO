@@ -33,8 +33,24 @@ namespace FishMMO.Water
 		/// <summary>How many times the kept count is shortlisted on expected energy before choosing on the draw.</summary>
 		private const int ShortlistFactor = 4;
 
-		private const float Directionality = 4f;
-		private const float AgainstTheWind = 0.12f;
+		/// <summary>
+		/// How hard the waves line up with the wind: |cos θ|^8 (about s = 16 in the cos^2s(θ/2) form).
+		/// It was 4, with an eighth of the energy running against the wind — a third of the height:
+		/// waves crossing each other at every angle and meeting their own reflections, so the sea
+		/// heaved in round mounds that rose and fell in place instead of running in long crests. A
+		/// wind sea near its peak spreads about this much (Mitsuyasu, s 10–20), and next to none of it
+		/// runs upwind. Shared with FishWaterSpectrum.hlsl through WaterFFT.
+		/// </summary>
+		public const float Directionality = 8f;
+		/// <summary>The share of each direction's energy that runs against the wind (FishWaterSpectrum.hlsl).</summary>
+		public const float AgainstTheWind = 0.02f;
+		/// <summary>
+		/// Keeps the sea's height where it was calibrated (WaterSeaState): the directional term's integral
+		/// round the circle was 1.3195 at |cos|^4 with 0.12 upwind and is 0.8762 now, so the density is
+		/// raised by their ratio. The height and the peak are unchanged; only how the energy is spread
+		/// over direction moves. (FishWaterSpectrum.hlsl carries the same number.)
+		/// </summary>
+		public const float DirectionalNormalisation = 1.5059f;
 
 		// Per component, all cascades end to end.
 		private readonly float[] kx;
@@ -281,7 +297,7 @@ namespace FishMMO.Water
 			}
 			float length = windSpeed * windSpeed / gravity;
 			float along = (wx * windX + wz * windZ) / magnitude;
-			float directional = Mathf.Pow(Mathf.Abs(along), Directionality);
+			float directional = Mathf.Pow(Mathf.Abs(along), Directionality) * DirectionalNormalisation;
 			if (along < 0f)
 			{
 				directional *= AgainstTheWind;

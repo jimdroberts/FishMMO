@@ -121,7 +121,9 @@ Shader "FishMMO/Water/Spray"
                 float2 alongShore = float2(shoreward.y, -shoreward.x);
                 float2 breakXZ = station.xy + alongShore * (r.z - 0.5) * _FishWaterBreakLineInfo.w;
 
-                FishWaterBreakerState breaker = FishWaterBreakerAt(breakXZ, shoreward, stationShore.x, stationShore.y,
+                float room = stationShore.x;
+                FishWaterBreakerFollow(breakXZ, shoreward, room);
+                FishWaterBreakerState breaker = FishWaterBreakerAt(breakXZ, shoreward, room, stationShore.y,
                     _BreakerHeight, _BreakerCurl, stationShore.w);
                 if (breaker.height < 0.05)
                 {

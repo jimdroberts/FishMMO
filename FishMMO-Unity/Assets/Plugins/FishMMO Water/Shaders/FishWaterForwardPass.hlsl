@@ -43,7 +43,15 @@ Varyings WaterVertex(Attributes input)
 
 	float distanceToCamera = distance(flatWS, _WorldSpaceCameraPos);
 	float fade = FishWaterAmplitudeFade(distanceToCamera);
-	FishWaterSurface surface = FishWaterDisplace(flatWS, fade, 0.0);
+	/* How far this vertex is from its neighbours (WaterSurface: the ring's radius times the ring gap),
+	 * so a cascade whose waves the vertices are too far apart to carry is left to the normals. They were
+	 * all kept, "because the geometry must not shrink": 27 m waves on vertices three to seven metres
+	 * apart from forty metres out — two to four a wave — and the disc slides with the camera, so each
+	 * vertex sampled a different part of each wave from frame to frame and the surface between them
+	 * changed shape: the sea wiggled whenever the camera moved, most when it strafed, which slides the
+	 * vertices round every ring. The fragment still shades every cascade the pixel can resolve. */
+	float vertexGap = _FishWaterMeshSpacing.x * max(length(input.positionOS.xz), _FishWaterMeshSpacing.y);
+	FishWaterSurface surface = FishWaterDisplace(flatWS, fade, vertexGap);
 
 	output.positionWS = surface.positionWS;
 	output.flatXZ = flatWS.xz;

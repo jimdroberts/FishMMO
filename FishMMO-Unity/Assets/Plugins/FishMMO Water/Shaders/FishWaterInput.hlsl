@@ -97,6 +97,9 @@ SAMPLER(sampler_FishWaterDisplacement0);
 
 /// The three patch sizes in metres, and w the vertical scale.
 float4 _FishWaterPatch;
+// How far apart the ocean mesh's vertices are: x the gap as a share of a ring's radius, y the inner
+// radius (WaterSurface). Zero unset: the vertex stage then keeps every cascade.
+float4 _FishWaterMeshSpacing;
 
 float _FishWaterLevel;
 /// The level with no tide on it: what the shore field was built against.

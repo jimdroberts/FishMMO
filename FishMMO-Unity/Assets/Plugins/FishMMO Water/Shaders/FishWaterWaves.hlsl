@@ -168,9 +168,9 @@ void FishWaterCascade(Texture2D displacementMap, Texture2D derivativeMap, float2
 /// <param name="flatPositionWS">The undisplaced point; Y is the still-water level.</param>
 /// <param name="amplitudeScale">Distance fade, from <see cref="FishWaterAmplitudeFade"/>.</param>
 /// <param name="footprintMetres">
-/// How much ground one pixel covers. A cascade whose tile is finer than the footprint cannot be
-/// resolved and is faded out rather than point-sampled into aliasing; the vertex stage passes zero
-/// and keeps them all, because the geometry must not shrink.
+/// How much ground one pixel covers — or, in the vertex stage, how far apart the vertices are. A
+/// cascade whose tile is finer than the footprint cannot be resolved and is faded out rather than
+/// point-sampled into aliasing: by the pixel for the shading, by the vertex spacing for the geometry.
 /// </param>
 /// <remarks>
 /// <b>This replaces a sum of six Gerstner waves.</b> Six components cannot look like an ocean —

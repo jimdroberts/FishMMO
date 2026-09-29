@@ -176,6 +176,7 @@ namespace FishMMO.Water
 		private double lastRealtime = -1.0;
 		private int builtRings, builtSegments;
 		private float builtInner, builtOuter;
+		private static readonly int MeshSpacingId = Shader.PropertyToID("_FishWaterMeshSpacing");
 		private bool reported;
 		private WaterFFT fft;
 		private float builtWind = -1f;
@@ -755,6 +756,15 @@ namespace FishMMO.Water
 			// The level the shore field was built against, so the shore can follow the tide off it.
 			Shader.SetGlobalFloat(MeanLevelId, position.y);
 			Shader.SetGlobalFloat(TimeId, (float)clock);
+			/* How far apart the mesh's vertices are, for the vertex stage to leave out the waves they cannot
+			 * carry (FishWaterDisplace): the gap between rings is their radius times (growth − 1), and round
+			 * a ring 2πr / segments; the wider of the two, from the inner radius out. */
+			if (builtRings > 1 && builtSegments > 0 && builtInner > 0f)
+			{
+				float growth = Mathf.Pow(builtOuter / builtInner, 1f / (builtRings - 1));
+				float gap = Mathf.Max(growth - 1f, 2f * Mathf.PI / builtSegments);
+				Shader.SetGlobalVector(MeshSpacingId, new Vector4(gap, builtInner, 0f, 0f));
+			}
 			Shader.SetGlobalFloat(CloudShadowId, Mathf.Clamp01(CloudShadow));
 
 			// The ripples run with the wind, so the fragment stage needs it too.

@@ -406,7 +406,7 @@ namespace FishMMO.Water
 			passes.SetFloat("_LoopPeriod", LoopPeriod);
 			passes.SetFloat(SeedValueId, Seed + (uint)cascade * 7919u);
 			passes.SetFloat("_SmallWave", PatchMetres[cascade] / Size * 2f);
-			passes.SetFloat("_Directionality", 4f);
+			passes.SetFloat("_Directionality", WaterSpectrum.Directionality);
 			float low = 2f * Mathf.PI / PatchMetres[cascade];
 			float high = cascade == Cascades - 1 ? 1e6f : 2f * Mathf.PI / PatchMetres[cascade + 1];
 			passes.SetFloat("_MinWaveNumber", low);
@@ -429,7 +429,7 @@ namespace FishMMO.Water
 			 * classic FFT ocean artefact: a surface that sparkles with detail finer than its own
 			 * resolution. */
 			compute.SetFloat("_SmallWave", PatchMetres[cascade] / Size * 2f);
-			compute.SetFloat("_Directionality", 4f);
+			compute.SetFloat("_Directionality", WaterSpectrum.Directionality);
 
 			/* The band this cascade owns. The boundaries sit at the crossover wavenumbers between
 			 * neighbouring patch sizes, so between them the three cascades partition the spectrum

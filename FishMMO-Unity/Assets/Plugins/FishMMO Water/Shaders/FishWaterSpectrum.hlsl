@@ -107,12 +107,16 @@ float Phillips(float2 k)
 		float L = _WindSpeed * _WindSpeed / max(0.05, _Gravity);
 
 		float2 kn = k * rsqrt(k2);
-		float directional = pow(abs(dot(kn, _WindDirection)), _Directionality);
+		/* |cos|^8 (WaterSpectrum.Directionality), raised by 1.5059 so the height the sea was calibrated
+		 * to is unchanged (WaterSpectrum.DirectionalNormalisation). It was |cos|^4 with 0.12 of the
+		 * energy running upwind: crossing waves and their own counter-running copies, a sea of round
+		 * mounds rising and falling in place rather than long crests running with the wind. */
+		float directional = pow(abs(dot(kn, _WindDirection)), _Directionality) * 1.5059;
 		// Waves running against the wind exist but are far weaker; killing them outright makes a
-		// surface that is suspiciously one-way.
+		// surface that is suspiciously one-way. A fiftieth, as a wind sea has.
 		if (dot(kn, _WindDirection) < 0.0)
 		{
-			directional *= 0.12;
+			directional *= 0.02;
 		}
 
 		spectrum = _Amplitude * exp(-1.0 / (k2 * L * L)) / k4 * directional;

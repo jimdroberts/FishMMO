@@ -87,6 +87,7 @@ namespace FishMMO.Water
 		private MeshRenderer breakerRenderer;
 		private Mesh breakerMesh;
 		private Material breakerMaterial;
+		private static readonly int BreakerShiftId = Shader.PropertyToID("_FishWaterBreakerShift");
 		private GameObject sprayHost;
 		private MeshRenderer sprayRenderer;
 		private Mesh sprayMesh;
@@ -204,14 +205,18 @@ namespace FishMMO.Water
 
 			/* Traced again once the contour has moved: the camera has gone a quarter of the reach, the
 			 * terrain was rebuilt, or the tide or the sea have moved the depth the line follows by more
-			 * than two centimetres — on a gentle beach that is a metre sideways, and the sheet's base
-			 * would sit on sea that was not yet quite still. */
+			 * than a quarter of a metre. In between, the sheet's base follows the contour in the vertex
+			 * shader, moved along the way in by the depth it has shifted over the beach's own slope
+			 * (_FishWaterBreakerShift). It was traced again every two centimetres — a metre sideways
+			 * on a gentle beach, so a tide coming in or a sea getting up snapped every breaker along
+			 * the coast to a new line, re-measured, every few seconds: the twitch. */
 			var centre = new Vector2(camera.transform.position.x, camera.transform.position.z);
 			float depth = surface.BreakDepth - surface.TideMetres;
 			bool stale = drawn == null
 				|| drawn.FieldVersion != shore.Version
-				|| Mathf.Abs(drawn.Depth - depth) > 0.02f
+				|| Mathf.Abs(drawn.Depth - depth) > 0.25f
 				|| (drawn.Centre - centre).sqrMagnitude > Reach * Reach * 0.0625f;
+			Shader.SetGlobalFloat(BreakerShiftId, drawn != null ? drawn.Depth - depth : 0f);
 			if (stale && building == null)
 			{
 				float reach = Reach, spacing = Spacing, shortest = ShortestLine, breakDepth = surface.BreakDepth;

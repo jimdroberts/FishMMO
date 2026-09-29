@@ -65,6 +65,8 @@ struct FishWaterBreakerState
 	/// Periods the whitewater takes from where the lip lands to the water's edge — often more than one:
 	/// across a wide surf zone the bores of several waves are running in at once.
 	float arrival;
+	/// Metres the wave's back runs out behind its crest, seaward: its foot may lie past the break line.
+	float backReach;
 };
 
 /// <summary>A point of a breaker's cross-section.</summary>
@@ -106,6 +108,21 @@ float FishWaterWaveShare(float wave, float along)
 }
 
 /// <summary>How fast the whitewater bore runs inshore, m/s: the shallow-water speed at the break depth.</summary>
+// Metres the depth the break line follows has fallen since it was traced (WaterBreakers).
+float _FishWaterBreakerShift;
+
+/// Where the break line is NOW. It was traced at one depth; the tide and the sea have moved the depth it
+/// follows since (_FishWaterBreakerShift, metres shallower), and the beach's own slope here — the break
+/// depth over the room to the waterline — says how far along the way in that puts it. Followed
+/// smoothly, so the line is traced again only every quarter metre of depth (it was every two
+/// centimetres, and each new trace snapped every breaker along the coast at once).
+void FishWaterBreakerFollow(inout float2 breakXZ, float2 shoreward, inout float room)
+{
+	float shift = clamp(_FishWaterBreakerShift * room / max(0.05, _FishWaterBreakDepth.x), -0.3 * room, 0.3 * room);
+	breakXZ += shoreward * shift;
+	room = max(0.25, room - shift);
+}
+
 float FishWaterBoreSpeed()
 {
 	return sqrt(max(0.05, _FishWaterGravity) * max(0.05, _FishWaterBreakDepth.x));
@@ -192,6 +209,17 @@ FishWaterBreakerState FishWaterBreakerAt(float2 breakXZ, float2 shoreward, float
 	// A wave squeezed into a tight bend has no room to throw a barrel: it spills instead.
 	b.curl *= smoothstep(0.15, 0.5, squeeze);
 	b.landing = (FISH_BREAKER_BIRTH + b.travel * FISH_BREAKER_LAND + FISH_BREAKER_REACH) * b.scaleX;
+	/* How far the wave's BACK runs out behind the crest, seaward, m. A breaking wave is a long swell with
+	 * a steep front: its back falls away over about a third of the shallow-water wavelength (T·√(gh)) —
+	 * ten metres behind a metre-high crest on an eight-second sea — at four to seven degrees. The back
+	 * used to run only from the break line to the crest, 1.4 heights at the start, so the whole wave was
+	 * a ridge two or three metres wide standing on flat water, 11–18 degrees at the back and, squeezed,
+	 * over 30: a fin. Only as far seaward as the open sea is still nearly flat under it — the first
+	 * 13.5 % of its fade, where the FFT is at 5 % of its height — so the foot never cuts through a moving
+	 * sea: on a steep beach that is a few metres and the wave stays steep, as a steep beach's are. */
+	float breakFull = max(breakDepth * 1.05, _FishWaterBreakDepth.y);
+	float stillFlat = 0.135 * (breakFull - breakDepth) * b.room / breakDepth;
+	b.backReach = min(0.35 * b.period * b.boreSpeed * squeeze, stillFlat);
 	/* Not clamped. It was held to 0.6 of a period, so on a gentle beach — thirty metres of surf zone,
 	 * a bore at three metres a second — each wave's whitewater died a quarter of the way in and the
 	 * rest of the surf zone was dead-flat glass. A bore takes as many periods as it takes; the phase
@@ -205,10 +233,11 @@ FishWaterBreakerState FishWaterBreakerAt(float2 breakXZ, float2 shoreward, float
 	float peak = FishWaterSurfPeak(waterline);
 	float cycles = _FishWaterSwashCycles + along.x + FISH_BREAKER_LAND + b.arrival;
 	b.t = frac(cycles);
-	/* And squeezed nearly flat it does not stand up at all: a wave with no room to break in fades
-	 * rather than becoming a thin sliver of water on edge. */
+	/* And squeezed, it stands up less: a wave with no room to break in fades rather than becoming a
+	 * thin sliver of water on edge. From three quarters of its room down, not two fifths: squeezed to
+	 * 0.43 it kept its full height at under half its width, a fin 33 degrees at the back. */
 	b.height = average * lerp(0.4, 1.2, peak) * FishWaterWaveShare(floor(cycles), along.x)
-		* smoothstep(0.1, 0.4, squeeze);
+		* smoothstep(0.15, 0.75, squeeze);
 	return b;
 }
 
@@ -298,16 +327,20 @@ FishWaterBreakerPoint FishWaterBreakerProfile(FishWaterBreakerState b, int branc
 
 	if (branch == 0)
 	{
-		// The back: level out of the still water, steepening under the crest only as a wave throws.
-		float shoulder = lerp(0.4, lerp(0.36, 0.14, amount), progress) * crestMetres;
+		// The back: level out of the still water, steepening under the crest only as a wave throws. Its
+		// foot is seaward of the break line when the wave is long (b.backReach), and it fades in over the
+		// first part of it, where it lies on the sea's own nearly flat water.
+		float foot = min(0.0, crestMetres - b.backReach);
+		float back = crestMetres - foot;
+		float shoulder = lerp(0.4, lerp(0.36, 0.14, amount), progress) * back;
 		float2 tangent;
-		float2 q = FishWaterBezier(float2(0.0, 0.0), float2(0.35 * crestMetres, 0.0),
+		float2 q = FishWaterBezier(float2(foot, 0.0), float2(foot + 0.35 * back, 0.0),
 			float2(crestMetres - shoulder, heightMetres), crest, p, tangent);
 		o.position = q;
 		o.tangent = tangent;
 		o.flatX = q.x;
 		o.foam = churned * smoothstep(0.45, 1.0, p);
-		o.edge = smoothstep(0.0, edgeMetres, q.x);
+		o.edge = smoothstep(foot, foot + edgeMetres - 0.3 * foot, q.x);
 	}
 	else if (branch == 1)
 	{

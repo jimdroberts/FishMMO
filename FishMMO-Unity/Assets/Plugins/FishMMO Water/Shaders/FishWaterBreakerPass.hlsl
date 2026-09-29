@@ -49,7 +49,9 @@ BreakerVaryings BreakerVertex(BreakerAttributes input)
 	float2 shoreward = input.normalOS.xz;
 	shoreward = dot(shoreward, shoreward) > 1e-8 ? normalize(shoreward) : float2(0.0, 1.0);
 
-	FishWaterBreakerState breaker = FishWaterBreakerAt(breakXZ, shoreward, input.shore.x, input.shore.y,
+	float room = input.shore.x;
+	FishWaterBreakerFollow(breakXZ, shoreward, room);
+	FishWaterBreakerState breaker = FishWaterBreakerAt(breakXZ, shoreward, room, input.shore.y,
 		_BreakerHeight, _BreakerCurl, input.shore.w);
 	int branch = (int)(input.profile.y + 0.5);
 	FishWaterBreakerPoint section = FishWaterBreakerProfile(breaker, branch, input.profile.x, max(0.05, _BreakerEdgeFade));

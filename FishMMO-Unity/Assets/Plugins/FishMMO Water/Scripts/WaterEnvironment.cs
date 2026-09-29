@@ -85,6 +85,7 @@ namespace FishMMO.Water
 		private float windSpeed;
 		private float windHeading;
 		private bool primed;
+		private bool seaPrimed;
 		private float fetchHeading = float.NaN;
 		private WorldBody fetchBody;
 
@@ -111,6 +112,7 @@ namespace FishMMO.Water
 			surface = GetComponent<WaterSurface>();
 			meshRenderer = GetComponent<MeshRenderer>();
 			primed = false;
+			seaPrimed = false;
 			settings = null;
 		}
 
@@ -262,7 +264,7 @@ namespace FishMMO.Water
 			/* Swell from weather elsewhere, combined in quadrature because the two are independent
 			 * wave fields and it is their ENERGIES that add. Without it an offshore wind leaves a
 			 * mirror-flat sea, and no real coast is ever that. */
-			SignificantHeight = Mathf.Sqrt(local * local + SwellMetres * SwellMetres);
+			float height = Mathf.Sqrt(local * local + SwellMetres * SwellMetres);
 			/* Energy-weighted between the local sea and the swell, not the longer of the two.
 			 * Taking the maximum handed a gale's short, steep chop the swell's lazy seven-second
 			 * period — the long rolling lines of a calm day under a storm — even though the local
@@ -273,9 +275,26 @@ namespace FishMMO.Water
 			float localEnergy = local * local;
 			float swellEnergy = SwellMetres * SwellMetres;
 			float energy = localEnergy + swellEnergy;
-			PeakPeriod = energy > 1e-6f
+			float period = energy > 1e-6f
 				? (localEnergy * localPeriod + swellEnergy * SwellPeriod) / energy
 				: SwellPeriod;
+			/* Eased as the wind is, because the fetch is not: it is re-measured in one go whenever the
+			 * wind swings twelve degrees, and the sea it gave stepped with it. Every breaker along the
+			 * coast takes its place in its cycle from the period and the height (the bore's run in,
+			 * up to six waves long, FishWaterBreakerAt), so a step of a few per cent moved them all
+			 * through a tenth of a wave in one frame — a twitch — and the break line was traced again. */
+			if (!seaPrimed || WindOverride >= 0f)
+			{
+				SignificantHeight = height;
+				PeakPeriod = period;
+				seaPrimed = true;
+			}
+			else
+			{
+				float step = Mathf.Clamp01(Time.deltaTime * Responsiveness);
+				SignificantHeight = Mathf.Lerp(SignificantHeight, height, step);
+				PeakPeriod = Mathf.Lerp(PeakPeriod, period, step);
+			}
 
 			/* The FFT is handed the wind that would raise THIS sea if it were developed, so its
 			 * height and its peak wavelength both come out consistent with the fetch. The direction
