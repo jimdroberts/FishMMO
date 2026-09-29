@@ -157,7 +157,7 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(top, Is.EqualTo(130f).Within(0.1f));
 			Assert.That(lift * FogLayer.LiftedBase * top, Is.EqualTo(200f * (1f - 100f / 130f)).Within(0.5f), "its base where the stirred air's spread runs out");
 			LogAssert.AreEqual(0f, mixedOut);
-			// A sheet thinner than a lifted layer is drawn keeps the light it takes: thinned by the 7/3 law.
+			// A sheet thinner than a lifted layer is drawn keeps the light it takes: thinned by the cube law (AirPhysics.FogExponent).
 			FogLayer.Stirred(100f, 1000f, 200f, 200f, out top, out lift, out mixedOut);
 			float sheet = 200f - 200f * (1f - 100f / 1000f);
 			float drawn = top * (1f - FogLayer.LiftedBase);

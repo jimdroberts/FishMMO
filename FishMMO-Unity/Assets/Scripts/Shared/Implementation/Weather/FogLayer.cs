@@ -182,7 +182,7 @@ namespace FishMMO.Shared.Weather
 		/// A sheet is drawn as a lifted layer, whose base stands at most <see cref="LiftedBase"/> of the
 		/// way up. One thinner than that — the chill lowering the underside of the stirred air's own cloud
 		/// a little, just under the cloud base — is drawn where it is, as thick as a lifted layer is, and
-		/// its fog thinned to keep the light it takes: a fog's extinction goes as the 7/3 power of the
+		/// its fog thinned to keep the light it takes: a fog's extinction goes as the cube (AirPhysics.FogExponent) of the
 		/// channel (<see cref="AirPhysics.FogExtinction"/>).
 		/// </para>
 		/// </remarks>
@@ -208,7 +208,7 @@ namespace FishMMO.Shared.Weather
 			float highestBase = LiftedBase * top;
 			lift = Mathf.Clamp01(condenses / Mathf.Max(1e-3f, highestBase));
 			float drawn = top - highestBase;
-			mixedOut = sheet < drawn ? 1f - Mathf.Pow(sheet / drawn, 3f / 7f) : 0f;
+			mixedOut = sheet < drawn ? 1f - Mathf.Pow(sheet / drawn, 1f / AirPhysics.FogExponent) : 0f;
 		}
 
 		/// <summary>

@@ -129,8 +129,11 @@ namespace FishMMO.UnitTests.Weather
 			float dense = 3.912f / AirPhysics.FogExtinction(1f);
 			float thick = 3.912f / AirPhysics.FogExtinction(0.5f);
 			float mist = 3.912f / AirPhysics.FogExtinction(0.16f);
-			Assert.That(dense, Is.InRange(30f, 120f), "visibility in a dense fog");
-			Assert.That(thick, Is.InRange(150f, 600f), "visibility in a thick fog");
+			// The densest fog there is: a few tens of metres at most, the world gone past a stone's throw.
+			Assert.That(dense, Is.InRange(10f, 30f), "visibility in the densest fog");
+			Assert.That(thick, Is.InRange(100f, 250f), "visibility in a thick fog");
+			float denseClass = 3.912f / AirPhysics.FogExtinction(0.75f);
+			Assert.That(denseClass, Is.InRange(25f, 60f), "visibility in a dense fog (under 50 m)");
 			// The humid noon's background: a mist the sky shows through, not a white-out.
 			Assert.That(mist, Is.InRange(2000f, 8000f), "visibility in a mist");
 			LogAssert.AreEqual(0f, AirPhysics.FogExtinction(0f));

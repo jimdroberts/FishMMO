@@ -315,6 +315,10 @@ namespace FishMMO.Client
 		[Range(0.25f, 4f)] public float EdgeShellScale = 1f;
 		[Tooltip("Draw no eddy finer than the march's step can resolve along the ray, nor an edge sharper than it (1: the step itself; 0: the old way, the pixel's cone only). A ray samples once a step, so eddies finer than two steps and an edge sharper than one came out as a coin toss per sample — grain the frames could not average away, which is what a finer Step Scale was curing. Those octaves are drawn as their average instead, so the clouds keep their size; a finer Step Scale brings them back. Lower draws finer eddies than the step can hold, and grainier.")]
 		[Range(0f, 2f)] public float DetailStepFootprint = 1f;
+		[Tooltip("How much of the eddies and the cauliflower a cloud's BASE keeps (0.35). A cumulus's base is flat and smooth — it is where the rising air reaches its condensation level, one height across the whole cloud — and the turrets and ragged edges are its upper parts. Only the pattern is eased: the cloud keeps its size. 1 is the same pattern all the way up, as it was.")]
+		[Range(0f, 1f)] public float BaseDetail = 0.35f;
+		[Tooltip("How far up a cloud its base's smoothing reaches, as a share of the cloud's height (0.3): the pattern comes back in full over this much of it.")]
+		[Range(0.05f, 1f)] public float BaseSmoothHeight = 0.3f;
 
 		[Header("Lighting")]
 		[Tooltip("How strong the sun's light diffused through the cloud is (1 is the physics: the white of a cumulus's lit side, and the 10–20 % that gets through to a thick cloud's base). 0 leaves single scattering, the sky and the ground. See Far Side Follows Light (Fixes under trial) for where it flows; turn this down if the clouds still look lit from within.")]
@@ -387,6 +391,9 @@ namespace FishMMO.Client
 		/// base, y dense cloud and its haze walked as they were.
 		/// </summary>
 		public Vector4 FixVectorB => new Vector4(FarSideFollowsLight ? 0f : 1f, DenseCloudEconomy ? 0f : 1f, 0f, 0f);
+
+		/// <summary>A cloud's smooth base (<c>_FishCloudBase</c>): x 1 − Base Detail, y Base Smooth Height.</summary>
+		public Vector4 BaseVector => new Vector4(1f - Mathf.Clamp01(BaseDetail), Mathf.Clamp(BaseSmoothHeight, 0.05f, 1f), 0f, 0f);
 
 		/// <summary>Whether the clouds are steadied, given what the tier says.</summary>
 		public bool TemporalFor(bool tier) => Temporal == CloudTemporalOverride.Default ? tier : Temporal == CloudTemporalOverride.On;

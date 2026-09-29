@@ -111,8 +111,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 623fe745f8934c9188d434afd11249ac
+    m_Address: Vortex Debris
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 695281b44bcf6b527b3fb26e0dc8d4b5
     m_Address: Precipitation Atlas
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6a6c2906ba8343899d8bf8e92244d6c1
+    m_Address: Vortex
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

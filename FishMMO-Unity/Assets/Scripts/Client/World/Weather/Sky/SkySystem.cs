@@ -1390,6 +1390,7 @@ namespace FishMMO.Client
 		private static readonly int CloudStepTauId = Shader.PropertyToID("_FishCloudStepTau");
 		private static readonly int CloudFixId = Shader.PropertyToID("_FishCloudFix");
 		private static readonly int CloudFixBId = Shader.PropertyToID("_FishCloudFixB");
+		private static readonly int CloudBaseId = Shader.PropertyToID("_FishCloudBase");
 
 		/// <summary>
 		/// The profile's cloud diagnostics this frame (<see cref="VolumetricCloudSettings.Diagnostics"/>),
@@ -1427,6 +1428,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(CloudStepTauId, diagnostics.StepVector);
 			Shader.SetGlobalVector(CloudFixId, diagnostics.FixVector);
 			Shader.SetGlobalVector(CloudFixBId, diagnostics.FixVectorB);
+			Shader.SetGlobalVector(CloudBaseId, diagnostics.BaseVector);
 			if (!cloudsReady || airless)
 			{
 				// Nothing to march: make sure no stale coverage is left behind — nor a fog the march is

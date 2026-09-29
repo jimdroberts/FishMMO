@@ -31,6 +31,9 @@ namespace FishMMO.Water
 		private static readonly int RectId = Shader.PropertyToID("_FishWaterShoreRect");
 		private static readonly int RangeId = Shader.PropertyToID("_FishWaterShoreRange");
 		private static readonly int TexelId = Shader.PropertyToID("_FishWaterShoreTexel");
+		private static readonly int OpenSeaId = Shader.PropertyToID("_FishWaterOpenSea");
+		private static readonly int OpenSeaRectId = Shader.PropertyToID("_FishWaterOpenSeaRect");
+		private static readonly int OpenSeaTidesId = Shader.PropertyToID("_FishWaterOpenSeaTides");
 
 		/// <summary>
 		/// How many metres one texel should cover.
@@ -59,6 +62,21 @@ namespace FishMMO.Water
 		/// <summary>Metres a texel actually covers, once the scene has been measured.</summary>
 		public float TexelMetres { get; private set; }
 
+		/// <summary>
+		/// The narrowest gap, in metres, the sea's waves come through: water joined to the open sea only by
+		/// narrower ones is sheltered — a lagoon, a pool behind a bar — and lies still (<see cref="OpenSeaAt"/>).
+		/// </summary>
+		[Tooltip("The narrowest gap (m) the sea's swell comes through. Water joined to the open sea only by narrower gaps — pools, lagoons behind bars — lies still: no waves, surf or breakers.")]
+		[Range(4f, 100f)] public float ShelterGap = 16f;
+
+		/// <summary>The least water, in metres, over a way in for the sea's waves to come through it.</summary>
+		[Tooltip("The least water (m) over a way in for the swell to come through it. A pool whose way to the sea is shallower than this — at the tide of the moment — lies still.")]
+		[Range(0.1f, 3f)] public float ShelterDepth = 0.5f;
+
+		/// <summary>The highest the tide rises, m over mean sea level: ground under it can be a way in once covered.</summary>
+		[Tooltip("The highest the tide rises (m over mean sea level). Ground under it — a bar dry at mean tide — is a way in for the swell once the tide covers it.")]
+		[Range(0f, 15f)] public float HighestTide = 3f;
+
 		[Tooltip("Rebuild when the terrain changes. Off is one build at load, which is all a shipped scene needs.")]
 		public bool RebuildOnValidate = true;
 
@@ -69,6 +87,7 @@ namespace FishMMO.Water
 		private const float OpenWaterDepth = 400f;
 
 		private Texture2D field;
+		private Texture2D openSea;
 		private Rect area;
 		private float deepest;
 		private WaterSurface surface;
@@ -106,14 +125,64 @@ namespace FishMMO.Water
 			public readonly float TexelMetres;
 			/// <summary>Counts builds, so anything made from the field knows when it is out of date.</summary>
 			public readonly int Version;
+			/// <summary>
+			/// The tide, in metres over mean sea level, at which each cell of the open-sea map has a way in from
+			/// the open sea deep enough for its waves (<see cref="OpenSea"/>); null when there is none. Row-major,
+			/// <see cref="OpenResolution"/> a side.
+			/// </summary>
+			public readonly float[] JoinTide;
+			/// <summary>
+			/// How much of the swell the narrowest gap on each cell's way in lets through, 0..1, at each of
+			/// <see cref="ShelterTides"/> of <see cref="HighestTide"/>, three to a cell (<see cref="OpenSea"/>).
+			/// </summary>
+			public readonly float[] Shelter;
+			public readonly int OpenResolution;
+			/// <summary>The highest tide the gap floods were run up to, m.</summary>
+			public readonly float HighestTide;
 
-			public Snapshot(ushort[] halves, int resolution, Rect area, float texelMetres, int version)
+			public Snapshot(ushort[] halves, int resolution, Rect area, float texelMetres, int version,
+				float[] joinTide = null, float[] shelter = null, int openResolution = 0, float highestTide = 0f)
 			{
+				HighestTide = highestTide;
 				Halves = halves;
 				Resolution = resolution;
 				Area = area;
 				TexelMetres = texelMetres;
 				Version = version;
+				JoinTide = joinTide;
+				Shelter = shelter;
+				OpenResolution = joinTide != null && shelter != null ? openResolution : 0;
+			}
+
+			/// <summary>
+			/// How open to the sea's waves the water at a point is at a tide, 0..1: 1 joined to the open sea by a
+			/// way in deep and wide enough, 0 in a pool or a lagoon cut off from it. FishWaterOpenSea, line for line.
+			/// </summary>
+			public float OpenSeaAt(Vector2 xz, float tide)
+			{
+				if (OpenResolution < 2 || Area.width < 1f)
+				{
+					return 1f;
+				}
+				float u = (xz.x - Area.xMin) / Area.width;
+				float v = (xz.y - Area.yMin) / Area.height;
+				if (u < 0f || u > 1f || v < 0f || v > 1f)
+				{
+					return 1f;
+				}
+				int n = OpenResolution;
+				float fx = u * n - 0.5f, fy = v * n - 0.5f;
+				int x0 = Mathf.Clamp(Mathf.FloorToInt(fx), 0, n - 1), y0 = Mathf.Clamp(Mathf.FloorToInt(fy), 0, n - 1);
+				int x1 = Mathf.Min(x0 + 1, n - 1), y1 = Mathf.Min(y0 + 1, n - 1);
+				float tx = Mathf.Clamp01(fx - Mathf.Floor(fx)), ty = Mathf.Clamp01(fy - Mathf.Floor(fy));
+				float joins = Mathf.Lerp(Mathf.Lerp(JoinTide[y0 * n + x0], JoinTide[y0 * n + x1], tx),
+					Mathf.Lerp(JoinTide[y1 * n + x0], JoinTide[y1 * n + x1], tx), ty);
+				float shelter = ShelterAt(Level(0), Level(1), Level(2), tide, HighestTide);
+				return OpenFromJoin(tide, joins) * shelter;
+
+				float Level(int k) => Mathf.Lerp(
+					Mathf.Lerp(Shelter[(y0 * n + x0) * 3 + k], Shelter[(y0 * n + x1) * 3 + k], tx),
+					Mathf.Lerp(Shelter[(y1 * n + x0) * 3 + k], Shelter[(y1 * n + x1) * 3 + k], tx), ty);
 			}
 
 			/// <summary>Metres of water over the ground at mean sea level, at a texel.</summary>
@@ -165,6 +234,9 @@ namespace FishMMO.Water
 		/// <summary>
 		/// An IEEE half float's value, in plain managed arithmetic so it may run on any thread.
 		/// </summary>
+		/// <summary>How open water is at a tide, from the tide its way in needs: over ±15 cm of tide.</summary>
+		public static float OpenFromJoin(float tide, float joinTide) => Mathf.Clamp01((tide - joinTide) / 0.3f + 0.5f);
+
 		public static float HalfToFloat(ushort half)
 		{
 			int sign = (half >> 15) & 1;
@@ -196,6 +268,13 @@ namespace FishMMO.Water
 		/// The same half floats the shader shoals the sea with, filtered the same way, so buoyancy and
 		/// the break line ask exactly the field the GPU draws with.
 		/// </remarks>
+		/// <summary>How open to the sea's waves the water at a point is at a tide (<see cref="Snapshot.OpenSeaAt"/>); 1 before a build.</summary>
+		public float OpenSeaAt(Vector2 xz, float tide)
+		{
+			Snapshot current = snapshot;
+			return current != null ? current.OpenSeaAt(xz, tide) : 1f;
+		}
+
 		public bool TrySample(Vector2 xz, out float depth, out float edgeDistance)
 		{
 			Snapshot current = snapshot;
@@ -218,8 +297,11 @@ namespace FishMMO.Water
 		{
 			// Leave the globals pointing at nothing, or the next scene reads this scene's beach.
 			Shader.SetGlobalVector(RectId, Vector4.zero);
+			Shader.SetGlobalVector(OpenSeaRectId, Vector4.zero);
 			Discard(field);
 			field = null;
+			Discard(openSea);
+			openSea = null;
 			snapshot = null;
 		}
 
@@ -271,6 +353,7 @@ namespace FishMMO.Water
 			{
 				// Open ocean with no ground in the scene: no shore, no shallows, no breakers.
 				Shader.SetGlobalVector(RectId, Vector4.zero);
+				Shader.SetGlobalVector(OpenSeaRectId, Vector4.zero);
 				snapshot = null;
 				return;
 			}
@@ -339,6 +422,9 @@ namespace FishMMO.Water
 			 * distance is smooth through the edge and stays smooth at any resolution.
 			 */
 			Distance(pixels, resolution, TexelMetres);
+			int openResolution = Mathf.Min(resolution, 1024);
+			OpenSea(pixels, resolution, TexelMetres, openResolution, ShelterGap * 0.5f, ShelterDepth, HighestTide,
+				out float[] joinTide, out float[] shelter);
 
 			var halves = new ushort[resolution * resolution * 2];
 			for (int i = 0; i < pixels.Length; i++)
@@ -362,7 +448,34 @@ namespace FishMMO.Water
 			field.SetPixelData(halves, 0);
 			field.Apply(false, true);
 			Discard(previous);
-			snapshot = new Snapshot(halves, resolution, area, TexelMetres, ++version);
+			snapshot = new Snapshot(halves, resolution, area, TexelMetres, ++version, joinTide, shelter, openResolution, HighestTide);
+
+			// The tide each place's way in needs and how much its narrowest gap lets through (OpenSea), for the
+			// shaders to hold against the tide now.
+			Texture2D previousOpen = openSea;
+			openSea = new Texture2D(openResolution, openResolution, TextureFormat.RGBAHalf, false, true)
+			{
+				name = "Open sea",
+				wrapMode = TextureWrapMode.Clamp,
+				filterMode = FilterMode.Bilinear,
+				hideFlags = HideFlags.HideAndDontSave,
+			};
+			// r the tide the way in needs, gba how much its narrowest gap lets through at the mean tide, half
+			// the highest and the highest (ShelterTides).
+			var openHalves = new ushort[joinTide.Length * 4];
+			for (int i = 0; i < joinTide.Length; i++)
+			{
+				openHalves[i * 4] = Mathf.FloatToHalf(Mathf.Clamp(joinTide[i], -60000f, 60000f));
+				openHalves[i * 4 + 1] = Mathf.FloatToHalf(shelter[i * 3]);
+				openHalves[i * 4 + 2] = Mathf.FloatToHalf(shelter[i * 3 + 1]);
+				openHalves[i * 4 + 3] = Mathf.FloatToHalf(shelter[i * 3 + 2]);
+			}
+			openSea.SetPixelData(openHalves, 0);
+			openSea.Apply(false, true);
+			Discard(previousOpen);
+			Shader.SetGlobalTexture(OpenSeaId, openSea);
+			Shader.SetGlobalVector(OpenSeaRectId, new Vector4(area.xMin, area.yMin, area.width, area.height));
+			Shader.SetGlobalFloat(OpenSeaTidesId, Mathf.Max(0f, HighestTide));
 
 			Shader.SetGlobalTexture(FieldId, field);
 			Shader.SetGlobalVector(RectId, new Vector4(area.xMin, area.yMin, area.width, area.height));
@@ -415,6 +528,242 @@ namespace FishMMO.Water
 				float metres = Mathf.Max(0f, texels) * metresPerTexel;
 				pixels[i].g = wet ? metres : -metres;
 			}
+		}
+
+		/// <summary>The tides, as shares of the highest, the gap flood is run at (<see cref="OpenSea"/>): mean, half, highest.</summary>
+		public static readonly float[] ShelterTides = { 0f, 0.5f, 1f };
+
+		/// <summary>
+		/// How the open sea's waves reach each place, on a grid of <paramref name="openResolution"/> a side
+		/// sampled from the field's: <paramref name="joinTide"/> the tide, in metres over mean sea level, at
+		/// which there is a way in from the open sea deep enough for them (<paramref name="clearance"/> of
+		/// water), and <paramref name="shelter"/> how much of them the narrowest gap on the way in lets
+		/// through, 0..1 — none through a gap under <paramref name="halfGap"/>, all through one three times
+		/// as wide — at each of <see cref="ShelterTides"/> of <paramref name="highestTide"/>, three to a cell.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why.</b> Everything the shore does — the fade of the sea's waves, the breakers, the bore, the
+		/// swash — was worked out from the depth and the distance to the nearest shore alone, so a pool in the
+		/// middle of an island or a lagoon behind a bar surfed like an open beach. Swell only reaches water
+		/// joined to the open sea through a gap it can pass; a pool cut off from it lies still.
+		/// </para>
+		/// <para>
+		/// <b>Floods out from the open sea</b> — the field's border, open water past the terrain — each
+		/// taking the best way in to every place (a priority flood, as depressions are filled in terrain
+		/// hydrology, settling a place only when it comes off the queue, since a step's cost depends on the
+		/// way it is taken). The tide flood keeps the lowest water level the way in needs: its worst point,
+		/// where the water must stand to be deep enough. The gap floods keep the widest the way in's narrowest
+		/// point is — the distance to the nearest dry land, which along a channel is its half-width — at three
+		/// tides, since a bar or a rim the tide covers is no wall; the shaders blend them by the tide.
+		/// </para>
+		/// <para>
+		/// <b>The final approach is free.</b> A step heading in toward the shore — nearer dry land than the
+		/// last by a clear margin — is not a gap and not a sill: it only has to be wet. Without that, the last
+		/// metres of every open beach, shallow and near the shore, read as a narrow, shallow way in, and the
+		/// swash of every beach would have been stilled.
+		/// </para>
+		/// <para>
+		/// Checked (WaterOpenSeaTests) on a synthetic coast: the open sea and a beach to its waterline are open
+		/// at any tide they are wet; a pool in an island is still until the tide tops its rim; a lagoon behind a
+		/// six-metre channel is sheltered at any tide; one behind a bar dry at mean tide opens once the tide is
+		/// over it; a sixteen-metre creek lets some of the swell in.
+		/// </para>
+		/// </remarks>
+		public static void OpenSea(Color[] pixels, int resolution, float texelMetres, int openResolution,
+			float halfGap, float clearance, float highestTide, out float[] joinTide, out float[] shelter)
+		{
+			int n = openResolution;
+			float stride = resolution / (float)n;
+			float cellMetres = texelMetres * stride;
+			var depth = new float[n * n];
+			var edge = new float[n * n];
+			for (int y = 0; y < n; y++)
+			{
+				int fy = Mathf.Clamp((int)((y + 0.5f) * stride), 0, resolution - 1);
+				for (int x = 0; x < n; x++)
+				{
+					int fx = Mathf.Clamp((int)((x + 0.5f) * stride), 0, resolution - 1);
+					Color here = pixels[fy * resolution + fx];
+					depth[y * n + x] = here.r;
+					edge[y * n + x] = here.g;
+				}
+			}
+			// Nearer dry land than the last by this much is heading in toward the shore.
+			float margin = 0.3f * cellMetres;
+
+			// The tide flood: the lowest level at which the way in is deep enough.
+			joinTide = Flood(n, true, (from, cell) =>
+			{
+				float wet = -depth[cell];
+				if (from < 0)
+				{
+					return clearance - depth[cell];
+				}
+				return edge[cell] < edge[from] - margin ? wet : Mathf.Max(wet, clearance - depth[cell]);
+			});
+
+			// The gap floods: the widest the way in's narrowest point is, at each tide.
+			int tides = ShelterTides.Length;
+			shelter = new float[n * n * tides];
+			var shore = new float[n * n];
+			for (int level = 0; level < tides; level++)
+			{
+				float tide = ShelterTides[level] * Mathf.Max(0f, highestTide);
+				// How far each place is from dry land at this tide, m.
+				for (int i = 0; i < shore.Length; i++)
+				{
+					shore[i] = depth[i] + tide > 0f ? Far : 0f;
+				}
+				SquaredDistance(shore, n);
+				for (int i = 0; i < shore.Length; i++)
+				{
+					shore[i] = Mathf.Max(0f, Mathf.Min(Mathf.Sqrt(shore[i]), n * 4f) - 0.5f) * cellMetres;
+				}
+				float[] gap = Flood(n, false, (from, cell) =>
+				{
+					if (depth[cell] + tide <= 0f)
+					{
+						return 0f;
+					}
+					if (from < 0 || shore[cell] < shore[from] - margin)
+					{
+						return float.MaxValue;
+					}
+					return shore[cell];
+				});
+				for (int i = 0; i < gap.Length; i++)
+				{
+					float t = Mathf.Clamp01((gap[i] - 0.5f * halfGap) / Mathf.Max(0.01f, halfGap));
+					shelter[i * tides + level] = t * t * (3f - 2f * t);
+				}
+			}
+		}
+
+		/// <summary>
+		/// How much of the swell a place's narrowest gap lets through at a tide, from the gap floods at
+		/// <see cref="ShelterTides"/> (the mean tide's, half the highest's and the highest's): the nearest two
+		/// blended, and the mean tide's below it. FishWaterOpenSea, line for line.
+		/// </summary>
+		public static float ShelterAt(float mean, float half, float high, float tide, float highestTide)
+		{
+			float x = highestTide > 0.01f ? Mathf.Clamp01(tide / highestTide) * 2f : 0f;
+			return x <= 1f ? Mathf.Lerp(mean, half, x) : Mathf.Lerp(half, high, x - 1f);
+		}
+
+		/// <summary>
+		/// A priority flood from the grid's border: every cell takes the best way in, where a way's value is
+		/// the worst of its steps — the highest (<paramref name="lowest"/>, taking the lowest such way) or the
+		/// narrowest (taking the widest). <paramref name="step"/> says what entering a cell costs, from the
+		/// cell it is entered from (−1 on the border). A cell is settled when it comes off the queue, not when
+		/// it is first reached: the cost depends on the way a step is taken, so the first neighbour to reach a
+		/// cell is not always the best one.
+		/// </summary>
+		private static float[] Flood(int n, bool lowest, System.Func<int, int, float> step)
+		{
+			float worst = lowest ? float.MaxValue : float.MinValue;
+			var value = new float[n * n];
+			for (int i = 0; i < value.Length; i++)
+			{
+				value[i] = worst;
+			}
+			var done = new bool[n * n];
+			var keys = new List<float>(n * 8);
+			var cells = new List<int>(n * 8);
+			void Push(float v, int index)
+			{
+				keys.Add(lowest ? v : -v);
+				cells.Add(index);
+				int i = keys.Count - 1;
+				while (i > 0)
+				{
+					int parent = (i - 1) >> 1;
+					if (keys[parent] <= keys[i])
+					{
+						break;
+					}
+					(keys[parent], keys[i]) = (keys[i], keys[parent]);
+					(cells[parent], cells[i]) = (cells[i], cells[parent]);
+					i = parent;
+				}
+			}
+			int Pop()
+			{
+				int top = cells[0];
+				int lastIndex = keys.Count - 1;
+				keys[0] = keys[lastIndex];
+				cells[0] = cells[lastIndex];
+				keys.RemoveAt(lastIndex);
+				cells.RemoveAt(lastIndex);
+				int i = 0;
+				while (true)
+				{
+					int left = 2 * i + 1, right = left + 1, best = i;
+					if (left < keys.Count && keys[left] < keys[best])
+					{
+						best = left;
+					}
+					if (right < keys.Count && keys[right] < keys[best])
+					{
+						best = right;
+					}
+					if (best == i)
+					{
+						break;
+					}
+					(keys[best], keys[i]) = (keys[i], keys[best]);
+					(cells[best], cells[i]) = (cells[i], cells[best]);
+					i = best;
+				}
+				return top;
+			}
+			bool Better(float a, float b) => lowest ? a < b : a > b;
+			for (int i = 0; i < n; i++)
+			{
+				foreach (int cell in new[] { i, (n - 1) * n + i, i * n, i * n + n - 1 })
+				{
+					float v = step(-1, cell);
+					if (Better(v, value[cell]))
+					{
+						value[cell] = v;
+						Push(v, cell);
+					}
+				}
+			}
+			while (keys.Count > 0)
+			{
+				int index = Pop();
+				if (done[index])
+				{
+					continue;
+				}
+				done[index] = true;
+				float level = value[index];
+				int cx = index % n, cy = index / n;
+				for (int k = 0; k < 4; k++)
+				{
+					int nx = cx + (k == 0 ? 1 : k == 1 ? -1 : 0);
+					int ny = cy + (k == 2 ? 1 : k == 3 ? -1 : 0);
+					if (nx < 0 || ny < 0 || nx >= n || ny >= n)
+					{
+						continue;
+					}
+					int neighbour = ny * n + nx;
+					if (done[neighbour])
+					{
+						continue;
+					}
+					float cost = step(index, neighbour);
+					// A way is as good as its worst step.
+					float v = lowest ? Mathf.Max(level, cost) : Mathf.Min(level, cost);
+					if (Better(v, value[neighbour]))
+					{
+						value[neighbour] = v;
+						Push(v, neighbour);
+					}
+				}
+			}
+			return value;
 		}
 
 		private static void Discard(Object victim)

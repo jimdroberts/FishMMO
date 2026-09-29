@@ -175,10 +175,37 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// The scenes on a body whose terrain was cut from its globe, and so pin its radius.
+		/// </summary>
+		/// <remarks>
+		/// A generated scene's ground is the ground under its rectangle at the radius it was cut
+		/// at. Grow the globe and the rectangle shrinks onto a smaller patch of planet while the
+		/// terrain keeps the old one, so the map and the ground disagree again, which is exactly
+		/// the bug that cutting at the atlas radius fixed.
+		/// </remarks>
+		public List<WorldAtlasScene> CutScenes(WorldBody body)
+		{
+			var cut = new List<WorldAtlasScene>();
+			foreach (WorldAtlasScene entry in On(body, null))
+			{
+				if (entry.CutRadiusKm > 0f)
+				{
+					cut.Add(entry);
+				}
+			}
+			return cut;
+		}
+
 		/// <summary>Settles an Auto body's radius. Returns true when it changed.</summary>
+		/// <remarks>
+		/// Never while any scene's terrain was cut from this globe (<see cref="CutScenes"/>): an
+		/// automatic change nobody asked for would silently put every generated scene out of step
+		/// with the map. Growing it by hand still works, and says which scenes need re-cutting.
+		/// </remarks>
 		public bool SettleRadius(WorldBody body)
 		{
-			if (body == null || body.RadiusMode != AtlasRadiusMode.Auto)
+			if (body == null || body.RadiusMode != AtlasRadiusMode.Auto || CutScenes(body).Count > 0)
 			{
 				return false;
 			}

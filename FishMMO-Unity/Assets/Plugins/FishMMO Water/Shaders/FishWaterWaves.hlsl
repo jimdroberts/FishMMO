@@ -206,8 +206,12 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	FishWaterCascade(_FishWaterDisplacement2, _FishWaterDerivatives2, flatPositionWS.xz,
 		_FishWaterPatch.z, resolved.z, displacement, slope, folding);
 
-	displacement *= amplitudeScale;
-	slope *= amplitudeScale;
+	/* Only where the open sea's waves can reach, at this tide: a pool or a lagoon cut off from it lies
+	 * still, its folding (and so its white caps) with it (FishWaterOpenSea). */
+	float openSea = FishWaterOpenSea(flatPositionWS.xz);
+	displacement *= amplitudeScale * openSea;
+	slope *= amplitudeScale * openSea;
+	folding *= openSea;
 
 	/* ── The shallows: the sea fades out, it does not break ──
 	 *

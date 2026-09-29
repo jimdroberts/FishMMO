@@ -37,6 +37,12 @@ namespace FishMMO.Shared.WorldDesign
 		public bool HasWater;
 		/// <summary>World Y of the sea's surface when there is one: always 0, sea level being the datum.</summary>
 		public float SeaLevelY;
+		/// <summary>The atlas radius the scene was cut at, in km.</summary>
+		public double RadiusKm;
+		/// <summary>Scene metres per metre of the planet's own altitude.</summary>
+		public float VerticalScale;
+		/// <summary>Where the scene and terrain it replaced were copied to, when it was a re-cut.</summary>
+		public string BackupFolder;
 
 		public static SceneGenerationResult Failed(string problem) => new SceneGenerationResult { Problem = problem };
 	}
@@ -139,24 +145,52 @@ namespace FishMMO.Shared.WorldDesign
 				return SceneGenerationResult.Failed("A scene has to stand on a celestial body. Choose one on the atlas first.");
 			}
 
-			string nameProblem = SceneGeneration.NameProblem(request.SceneName, ExistingSceneNames());
+			/* Paths, so the body and layer can be found again. Clearing a re-cut's old terrain
+			 * refreshes the asset database, and opening the new scene in Single mode (what a batch
+			 * editor always does) unloads unused assets. Either can leave the objects held here
+			 * fake-null, and the planet then silently answers for a default Earth-like world:
+			 * the first re-cut of Cov Viaduct wrote every tile flat at the floor of its bounds. */
+			string bodyPath = AssetDatabase.GetAssetPath(request.Body);
+			string layerPath = request.Layer != null ? AssetDatabase.GetAssetPath(request.Layer) : null;
+
+			List<string> existingNames = ExistingSceneNames();
+			string scenePath = $"{WorldFolder(request.Body)}/{request.SceneName}.unity";
+			string terrainFolder = TerrainFolder(request.Body, request.SceneName);
+			if (request.ReplaceExisting)
+			{
+				// Only this scene may already exist, and only where the generator put it.
+				existingNames.RemoveAll(n => string.Equals(n, request.SceneName, StringComparison.OrdinalIgnoreCase));
+				if (!File.Exists(scenePath))
+				{
+					return SceneGenerationResult.Failed($"'{scenePath}' does not exist, so there is nothing to re-cut. Only scenes the generator made can be re-cut.");
+				}
+			}
+
+			string nameProblem = SceneGeneration.NameProblem(request.SceneName, existingNames);
 			if (nameProblem != null)
 			{
 				return SceneGenerationResult.Failed(nameProblem);
 			}
 
-			string scenePath = $"{WorldFolder(request.Body)}/{request.SceneName}.unity";
-			if (File.Exists(scenePath))
+			if (!request.ReplaceExisting)
 			{
-				return SceneGenerationResult.Failed($"'{scenePath}' already exists.");
-			}
-			string terrainFolder = TerrainFolder(request.Body, request.SceneName);
-			if (AssetDatabase.IsValidFolder(terrainFolder))
-			{
-				return SceneGenerationResult.Failed($"'{terrainFolder}' already exists. Move or delete it first — this never writes over anything.");
+				if (File.Exists(scenePath))
+				{
+					return SceneGenerationResult.Failed($"'{scenePath}' already exists.");
+				}
+				if (AssetDatabase.IsValidFolder(terrainFolder))
+				{
+					return SceneGenerationResult.Failed($"'{terrainFolder}' already exists. Move or delete it first — this never writes over anything.");
+				}
 			}
 
-			var result = new SceneGenerationResult { Plan = SceneGeneration.PlanTiles(request.SizeKm) };
+			var result = new SceneGenerationResult
+			{
+				Plan = SceneGeneration.PlanTiles(request.SizeKm),
+				RadiusKm = request.ResolvedRadiusKm,
+				VerticalScale = request.VerticalScale,
+			};
+
 			TerrainTilePlan plan = result.Plan;
 
 			/* Bounded before anything is created, because every tile has to share one height range
@@ -169,9 +203,6 @@ namespace FishMMO.Shared.WorldDesign
 			result.BaseAltitudeMetres = SceneGeneration.AltitudeMetres(request, 0f, 0f);
 			float relief = Mathf.Max(SceneGeneration.MinimumTerrainHeightMetres, highest - lowest);
 
-			WorldEditorAssets.EnsureFolder(WorldFolder(request.Body));
-			WorldEditorAssets.EnsureFolder(terrainFolder);
-
 			/* Unity refuses to add a scene additively while an UNTITLED scene is open, which is
 			 * exactly what a freshly launched editor has — and what a batch editor always has. So
 			 * the untitled case makes the new scene the only one instead; there is nothing open
@@ -182,9 +213,32 @@ namespace FishMMO.Shared.WorldDesign
 				return SceneGenerationResult.Failed("Cancelled while saving open scenes; nothing was generated.");
 			}
 
+			/* Only now, after the last chance to cancel, is anything removed or created: a re-cut
+			 * cancelled at the save prompt must leave the old scene exactly as it was. */
+			if (request.ReplaceExisting)
+			{
+				string refusal = ClearForRecut(scenePath, terrainFolder, request.SceneName, out result.BackupFolder);
+				if (refusal != null)
+				{
+					return SceneGenerationResult.Failed(refusal);
+				}
+			}
+
+			WorldEditorAssets.EnsureFolder(WorldFolder(request.Body));
+			WorldEditorAssets.EnsureFolder(terrainFolder);
+
 			bool untitled = string.IsNullOrEmpty(EditorSceneManager.GetActiveScene().path);
 			NewSceneMode mode = untitled ? NewSceneMode.Single : NewSceneMode.Additive;
 			Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, mode);
+			if (!Revive(request, bodyPath, layerPath))
+			{
+				if (mode == NewSceneMode.Additive)
+				{
+					EditorSceneManager.CloseScene(scene, true);
+				}
+				return SceneGenerationResult.Failed($"'{bodyPath}' could not be loaded again after opening the new scene; nothing was written." +
+					(result.BackupFolder != null ? $" The old scene is in '{result.BackupFolder}'." : string.Empty));
+			}
 			try
 			{
 				var terrains = new Terrain[plan.CountX, plan.CountZ];
@@ -298,7 +352,6 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			data.SetHeights(0, 0, heights);
-
 			string dataPath = $"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} {tx}_{tz}.asset";
 			AssetDatabase.CreateAsset(data, dataPath);
 			result.Wrote.Add(dataPath);
@@ -642,6 +695,106 @@ namespace FishMMO.Shared.WorldDesign
 				new Vector3(plan.WidthMetres, top - bottom, plan.DepthMetres);
 		}
 
+		/// <summary>
+		/// Cuts a generated scene's terrain from the globe again, where its atlas entry says it is.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// For scenes cut before the generator changed. It is a fresh generation into the same
+		/// scene file, so the scene keeps its asset GUID and anything added to it by hand since is
+		/// lost. That is why the old scene and terrain are copied to
+		/// <c>Library/FishMMO/RecutBackups</c> first, and why a scene that is open in the editor is
+		/// refused rather than closed.
+		/// </para>
+		/// </remarks>
+		public static SceneGenerationResult Recut(WorldAtlasScene entry, bool fineDetail = true)
+		{
+			if (entry == null || entry.Body == null)
+			{
+				return SceneGenerationResult.Failed("Only a scene placed on a body can be re-cut.");
+			}
+			return Generate(new SceneGenerationRequest
+			{
+				SceneName = entry.SceneName,
+				Body = entry.Body,
+				Layer = entry.Layer,
+				Latitude = entry.Latitude,
+				Longitude = entry.Longitude,
+				SizeKm = entry.SizeKm,
+				HeadingDegrees = entry.HeadingDegrees,
+				FineDetail = fineDetail,
+				ReplaceExisting = true,
+			});
+		}
+
+		/// <summary>
+		/// Re-attaches the request's body and layer if a refresh or an asset unload left them
+		/// fake-null. False when the body cannot be found at all.
+		/// </summary>
+		private static bool Revive(SceneGenerationRequest request, string bodyPath, string layerPath)
+		{
+			if (request.Body == null && !string.IsNullOrEmpty(bodyPath))
+			{
+				request.Body = AssetDatabase.LoadAssetAtPath<WorldBody>(bodyPath);
+			}
+			if (request.Layer == null && !string.IsNullOrEmpty(layerPath))
+			{
+				request.Layer = AssetDatabase.LoadAssetAtPath<WorldAtlasLayer>(layerPath);
+			}
+			return request.Body != null;
+		}
+
+		/// <summary>True when a scene looks like the generator's: its terrain folder sits beside it.</summary>
+		public static bool IsGenerated(WorldAtlasScene entry)
+		{
+			return entry != null && entry.Body != null
+				&& File.Exists($"{WorldFolder(entry.Body)}/{entry.SceneName}.unity")
+				&& AssetDatabase.IsValidFolder(TerrainFolder(entry.Body, entry.SceneName));
+		}
+
+		/// <summary>Where re-cuts copy what they replace.</summary>
+		public const string RecutBackupRoot = "Library/FishMMO/RecutBackups";
+
+		/// <summary>
+		/// Copies a generated scene and its terrain aside, then removes the terrain so it can be
+		/// written again. Returns why it refused, or null.
+		/// </summary>
+		private static string ClearForRecut(string scenePath, string terrainFolder, string sceneName, out string backupFolder)
+		{
+			backupFolder = null;
+			for (int i = 0; i < EditorSceneManager.sceneCount; i++)
+			{
+				Scene open = EditorSceneManager.GetSceneAt(i);
+				if (open.IsValid() && string.Equals(open.path, scenePath, StringComparison.OrdinalIgnoreCase))
+				{
+					return $"'{sceneName}' is open in the editor. Close it first: a re-cut replaces the whole scene, and closing it for you could lose unsaved work.";
+				}
+			}
+
+			backupFolder = $"{RecutBackupRoot}/{WorldEditorAssets.Sanitize(sceneName)} {DateTime.Now:yyyy-MM-dd HHmmss}";
+			Directory.CreateDirectory(backupFolder);
+			File.Copy(scenePath, $"{backupFolder}/{Path.GetFileName(scenePath)}");
+			if (File.Exists(scenePath + ".meta"))
+			{
+				File.Copy(scenePath + ".meta", $"{backupFolder}/{Path.GetFileName(scenePath)}.meta");
+			}
+			if (Directory.Exists(terrainFolder))
+			{
+				string terrainCopy = $"{backupFolder}/{Path.GetFileName(terrainFolder)}";
+				Directory.CreateDirectory(terrainCopy);
+				foreach (string file in Directory.GetFiles(terrainFolder))
+				{
+					File.Copy(file, $"{terrainCopy}/{Path.GetFileName(file)}");
+				}
+				if (!AssetDatabase.DeleteAsset(terrainFolder))
+				{
+					return $"'{terrainFolder}' could not be removed; nothing was changed. A copy is in '{backupFolder}'.";
+				}
+			}
+			Debug.Log($"[Scene generator] Re-cutting '{sceneName}': the old scene and terrain were copied to '{backupFolder}'.");
+			return null;
+		}
+
 		/// <summary>Gives the body a base climate if it has none and the project has exactly one.</summary>
 		private static void EnsureBodyClimate(WorldBody body)
 		{
@@ -681,6 +834,8 @@ namespace FishMMO.Shared.WorldDesign
 			entry.Longitude = request.Longitude;
 			entry.HeadingDegrees = request.HeadingDegrees;
 			entry.SizeKm = new Vector2(result.Plan.WidthMetres / 1000f, result.Plan.DepthMetres / 1000f);
+			// What pins the body's atlas radius from now on: see AtlasModel.CutScenes.
+			entry.CutRadiusKm = (float)result.RadiusKm;
 			// Placed, because the rectangle IS the placement. Everything else on the entry keeps
 			// its default: climate, biome map and client cap are overrides, and empty means
 			// "whatever my body and my layer say".

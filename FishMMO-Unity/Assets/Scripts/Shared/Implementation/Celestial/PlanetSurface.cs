@@ -65,6 +65,84 @@ namespace FishMMO.Shared.Celestial
 		private const float WarpStrength = 0.28f;
 		private const float WarpFrequency = 1.5f;
 
+		/// <summary>How wide the continent field's rounding is where it saturates, in its own 0..1 units.</summary>
+		/// <remarks>
+		/// <para>
+		/// The field used to be hard-clamped to 0..1, which leaves a kink where it reaches the
+		/// clamp: full slope on one side, dead flat on the other. Seen from orbit that kink is a
+		/// contour line thousands of kilometres long. A scene samples less than a hundredth of a
+		/// field that smooth, so across a scene the contour is a straight line, and the kink
+		/// became a ruler-straight cliff running the whole width of the terrain.
+		/// </para>
+		/// <para>
+		/// A C1 knee removes the kink without moving anything that matters: the field only changes
+		/// within this distance of 0 and 1, far from the 0.5 coastline. Measured on Arthis, 99.8%
+		/// of the globe kept its land or sea.
+		/// </para>
+		/// </remarks>
+		private const float ContinentKnee = 0.12f;
+
+		/// <summary>
+		/// The share of full mountain uplift that deep continental interiors keep.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>This used to be an accident.</b> Uplift was written
+		/// <c>Mathf.SmoothStep(0.15f, 0.95f, edge)</c>, meant as a smoothstep between those edges.
+		/// Unity's <c>SmoothStep</c> takes (from, to, t) and interpolates between the first two, so
+		/// the call returned 0.15 in the deepest interior and 0.95 at the coast, not 0 and 1.
+		/// </para>
+		/// <para>
+		/// Fixing only the call gave interiors no mountains at all and dropped an Earth-like
+		/// world's 99th-percentile land from 3.2 km to 1.4 km: flatter worlds, where the goal was
+		/// taller mountains. So the floor stays, stated on purpose, at a share where interior
+		/// ranges still rise well above the shield around them.
+		/// </para>
+		/// </remarks>
+		private const float InteriorUplift = 0.2f;
+
+		/// <summary>
+		/// A clamp to 0..1 with its corners rounded over <paramref name="knee"/> either side, so
+		/// the result's slope never jumps.
+		/// </summary>
+		public static float SoftClamp01(float value, float knee)
+		{
+			if (knee <= 0f)
+			{
+				return Mathf.Clamp01(value);
+			}
+			if (value <= -knee)
+			{
+				return 0f;
+			}
+			if (value < knee)
+			{
+				return (value + knee) * (value + knee) / (4f * knee);
+			}
+			if (value <= 1f - knee)
+			{
+				return value;
+			}
+			if (value < 1f + knee)
+			{
+				float rest = 1f + knee - value;
+				return 1f - rest * rest / (4f * knee);
+			}
+			return 1f;
+		}
+
+		/// <summary>
+		/// A smoothstep between two edges, 0..1.
+		/// </summary>
+		/// <remarks>
+		/// <b>Not <c>Mathf.SmoothStep</c>.</b> Unity's interpolates between its first two arguments
+		/// by the third, which is how mountain uplift came to be written wrongly here.
+		/// </remarks>
+		private static float Smooth(float edge0, float edge1, float x)
+		{
+			return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(edge0, edge1, x));
+		}
+
 		private const float MountainFrequency = 6.0f;
 		private const int MountainOctaves = 5;
 
@@ -79,6 +157,13 @@ namespace FishMMO.Shared.Celestial
 		/// removes them is weather, plate tectonics and volcanism — so an airless body keeps every
 		/// impact it has ever taken, which is why the Moon is covered in them and Earth has about
 		/// two hundred left. A thin atmosphere erodes slowly; anything thicker erases them.
+		/// <para>
+		/// <b>A standard atmosphere keeps none.</b> It used to keep 5%, meant as Earth's surviving
+		/// two hundred. But the field is uniform, so 5% was not a few scattered craters, it was a
+		/// faint copy of the whole bombardment everywhere at once. From orbit that did not show.
+		/// Cut into a scene, every mountain came out ringed with circular rims hundreds of metres
+		/// high.
+		/// </para>
 		/// </remarks>
 		public static float CrateringOf(AtmosphereKind atmosphere)
 		{
@@ -86,7 +171,6 @@ namespace FishMMO.Shared.Celestial
 			{
 				case AtmosphereKind.None: return 1f;
 				case AtmosphereKind.Thin: return 0.45f;
-				case AtmosphereKind.Standard: return 0.05f;
 				default: return 0f;
 			}
 		}
@@ -127,14 +211,15 @@ namespace FishMMO.Shared.Celestial
 
 			// Continents: the slow shape of the world, and the only term that decides land from sea.
 			float continent = Fbm(warped * ContinentFrequency, ContinentOctaves, seed);
-			continent = Mathf.Clamp01(0.5f + (continent - 0.5f) * ContinentContrast);
+			continent = SoftClamp01(0.5f + (continent - 0.5f) * ContinentContrast, ContinentKnee);
 
 			/* Mountains ride the continents and are tallest near their edges. That is where they
 			 * are on a real world too: ranges stand along convergent margins — the Andes, the
 			 * Rockies, the Cascades — because that is where one plate is being driven under
-			 * another, while continental interiors are old, eroded and flat. */
+			 * another. Interiors keep a floor of uplift, because they are not all shield: the
+			 * Urals, the Altai and the Tian Shan stand thousands of kilometres from any coast. */
 			float edge = 1f - Mathf.Abs(continent - 0.5f) * 2f;
-			float uplift = Mathf.SmoothStep(0f, 1f, continent) * Mathf.SmoothStep(0.15f, 0.95f, edge);
+			float uplift = Mathf.SmoothStep(0f, 1f, continent) * Mathf.Lerp(InteriorUplift, 1f, Smooth(0.15f, 0.95f, edge));
 			float mountains = Ridged(warped * MountainFrequency, MountainOctaves, seed ^ 0xD00DFEEDu);
 
 			float detail = Fbm(p * DetailFrequency, DetailOctaves, seed ^ 0xFACEB00Cu) - 0.5f;
@@ -361,9 +446,89 @@ namespace FishMMO.Shared.Celestial
 		/// </remarks>
 		public static float ReliefMetres(WorldBody body)
 		{
-			float radiusKm = body != null && body.SkyRadiusKm > 0.01f ? body.SkyRadiusKm : EarthRadiusKm;
+			return ReliefMetresForRadius(body != null && body.SkyRadiusKm > 0.01f ? body.SkyRadiusKm : EarthRadiusKm);
+		}
+
+		/// <summary>The relief a body of this radius has, in metres. See <see cref="ReliefMetres"/>.</summary>
+		public static float ReliefMetresForRadius(float radiusKm)
+		{
+			radiusKm = Mathf.Max(0.01f, radiusKm);
 			float reliefKm = EarthReliefMetres / 1000f * Mathf.Pow(radiusKm / EarthRadiusKm, ReliefRadiusExponent);
 			return Mathf.Min(reliefKm, radiusKm * MaximumReliefFraction) * 1000f;
+		}
+
+		// ── The world a scene is cut from ─────────────────────────────
+
+		/// <summary>
+		/// The radius a scene's kilometres are laid over the globe at.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The atlas radius, not the sky radius.</b> A body has two: <c>SkyRadiusKm</c> is the
+		/// physical planet, which decides how it looks in somebody else's sky, how hard its tides
+		/// pull and how much relief it has. <c>AtlasRadiusKm</c> is the world the game is played
+		/// on, the globe the atlas draws scenes on, sized so that scenes cover a real share of it.
+		/// </para>
+		/// <para>
+		/// Scenes were cut on the sky radius while the atlas drew them on the atlas radius. On
+		/// Arthis that is 3583 km against 30: a rectangle drawn over 12° of coast and mountains
+		/// produced a scene of the single point at its centre, magnified 119 times. The ground
+		/// was a shallow shelf with 10 m islands under a rectangle the globe showed as 61% land
+		/// reaching 1.8 km. Cut at the atlas radius, a scene is exactly the ground the rectangle
+		/// covers.
+		/// </para>
+		/// </remarks>
+		public static double SceneRadiusKm(WorldBody body)
+		{
+			return body != null ? Math.Max(1.0, body.AtlasRadiusKm) : EarthRadiusKm;
+		}
+
+		/// <summary>
+		/// How much taller the game world's relief is than a body of its radius would have.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A scene lays hundreds of real kilometres into a few, so real heights cannot come with
+		/// them: at full height a mountain range that rises over 50 km rises over 400 m, and
+		/// measured on Arthis 30% of the ground came out steeper than 45°. Scaled exactly with the
+		/// kilometres, the same range is a 60 m hill and everything is flat.
+		/// </para>
+		/// <para>
+		/// The middle is the relief a body of the atlas radius would have (relief ∝ radius^0.36,
+		/// the same law as everything else), times this. At 2, measured on Arthis (a 30 km atlas,
+		/// so a scale of 0.36): its highest mountain scenes stand 0.9–2.6 km with a median slope
+		/// of 36° and 29% of the ground steeper than 45° — alpine — while foothills run at 19°
+		/// and a coast at 10°. At 1.5 mountains read as hills; at 2.5 they were a third cliff
+		/// before the interior uplift raised them further.
+		/// </para>
+		/// </remarks>
+		public const float SceneReliefExaggeration = 2f;
+
+		/// <summary>
+		/// Metres in a scene per metre of the planet's altitude. Never more than one: a scene is
+		/// the planet's own ground, exaggerated against its kilometres, never taller than it.
+		/// </summary>
+		public static float SceneVerticalScale(WorldBody body, double sceneRadiusKm)
+		{
+			float planet = ReliefMetres(body);
+			float world = ReliefMetresForRadius((float)sceneRadiusKm) * SceneReliefExaggeration;
+			return planet > 0f ? Mathf.Clamp(world / planet, 0f, 1f) : 1f;
+		}
+
+		/// <summary>
+		/// How rugged the ground is at an altitude, 0 on the shore to 1 in high mountains.
+		/// </summary>
+		/// <param name="altitudeMetres">The planet's altitude, in its own metres.</param>
+		/// <param name="relief">The body's relief, from <see cref="ReliefMetres"/>.</param>
+		/// <remarks>
+		/// High ground is broken ground. Coastal plains are old sediment and wear flat; uplands are
+		/// being lifted faster than they wear, so hills there are taller and ridges sharper. This
+		/// is what lets local detail make a lowland gentle and the foothills below a range steep,
+		/// using nothing but what the planet already knows about where the range is.
+		/// </remarks>
+		public static float Ruggedness(float altitudeMetres, float relief)
+		{
+			return altitudeMetres > 0f ? Smooth(0.03f, 0.4f, altitudeMetres / Mathf.Max(1f, SummitMetres(relief))) : 0f;
 		}
 
 		/// <summary>
@@ -413,11 +578,31 @@ namespace FishMMO.Shared.Celestial
 			 * took nearly a whole unit of temperature off it, and a temperate world came out a
 			 * snowball with ice to the equator.
 			 */
+			/* Not clamped at the top. The profile's Highest is the highest of 8192 samples, and the
+			 * real field goes higher between them. Clamped, every summit above that sample came out
+			 * as a flat table at exactly the same altitude, which nobody sees on a globe and which is
+			 * the first thing anybody sees standing on the mountain. */
 			float top = Mathf.Max(1e-4f, profile.Highest - profile.SeaLevel);
-			float x = Mathf.Clamp01(above / top);
+			float x = Mathf.Max(0f, above / top);
 			float shaped = LandShoreSlope * x + (1f - LandShoreSlope) * Mathf.Pow(x, LandHypsometry);
-			return shaped * top / profile.Range * relief;
+			return shaped * SummitMetres(relief);
 		}
+
+		/// <summary>Earth's highest summit as a share of its relief: Everest, 8848 m, of 20 km.</summary>
+		/// <remarks>
+		/// <para>
+		/// <b>A world's summit is Earth's share of its relief, not whatever its seed happened to reach.</b>
+		/// Land used to be scaled by how much of the field's range stood above the sea, which
+		/// varies from seed to seed. On an Earth-like body it came to a fifth of the relief, so the
+		/// highest mountain on the planet was 4.2 km. The ocean floor was already given Earth's
+		/// shape by area, and this is the same move for the land: a fixed share, so every seed
+		/// has Everest-proportioned peaks.
+		/// </para>
+		/// </remarks>
+		public const float EarthSummitFraction = 8848f / EarthReliefMetres;
+
+		/// <summary>How high a body's highest ground stands above its sea, in metres.</summary>
+		public static float SummitMetres(float relief) => relief * EarthSummitFraction;
 
 
 		/// <summary>
@@ -553,11 +738,19 @@ namespace FishMMO.Shared.Celestial
 		/// How much of the land curve stays linear, which is what keeps a slope at the shore.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// The linear part sets the derivative near sea level and the power part sets the mean.
-		/// Measured: 0.30 gives a mean land elevation of about 840 m — Earth's — with a median
-		/// around 500 m and thirteen times the local relief the pure power curve left.
+		/// </para>
+		/// <para>
+		/// 0.20 since summits were fixed at Earth's share of the relief
+		/// (<see cref="EarthSummitFraction"/>). That roughly doubled the height of the top of the
+		/// curve, and with the old 0.30 the whole of the land rose with it. Measured over 60,000
+		/// points on five seeds: mean land 1.0–1.3 km (Earth: 840 m) and summits of 7–11 km
+		/// (Earth: 8.8), where the old curve's summits were 4–5 km. A little more mountainous than
+		/// Earth, on purpose: mountains are what a scene cut from a world is for.
+		/// </para>
 		/// </remarks>
-		public const float LandShoreSlope = 0.30f;
+		public const float LandShoreSlope = 0.20f;
 
 		/// <summary>The altitude above sea level at a latitude and longitude, in metres.</summary>
 		public static float AltitudeMetresAt(uint seed, WorldBody body, double latitudeDegrees, double longitudeDegrees)
@@ -633,8 +826,12 @@ namespace FishMMO.Shared.Celestial
 						/* A bowl with a rim: parabolic floor, and a ring of ejecta thrown up just
 						 * outside it. Real craters look like this because the material removed from
 						 * the middle has to land somewhere. */
+						/* The rim is faded to nothing at the crater's edge. The Gaussian is still
+						 * about 4% of its peak at t = 1, where the crater stops being counted, so
+						 * every crater ended in a small step: invisible on a globe, but a ring-shaped
+						 * cliff once a scene magnifies it. */
 						float bowl = -(1f - t * t);
-						float rim = Mathf.Exp(-((t - 0.86f) * (t - 0.86f)) / 0.006f) * 0.55f;
+						float rim = Mathf.Exp(-((t - 0.86f) * (t - 0.86f)) / 0.006f) * 0.55f * (1f - Smooth(0.92f, 1f, t));
 						float shape = bowl + rim;
 
 						// The deepest wins, so a newer crater cuts through an older one instead of
@@ -648,65 +845,92 @@ namespace FishMMO.Shared.Celestial
 
 		// ── Local detail ──────────────────────────────────────────────
 
-		/// <summary>
-		/// How far apart the coarsest local detail features are, in metres.
-		/// </summary>
+		/// <summary>How far apart the coarsest rolling hills are, in metres.</summary>
 		/// <remarks>
-		/// 500, not 900. A scene is two to five kilometres across, so at 900 m the whole of it held
-		/// about three undulations and read as flat — the planet function is continent-scale and
-		/// contributes almost nothing over that distance, so local detail is nearly all the relief
-		/// a scene has.
+		/// The planet itself now reaches down to features about 1.7 km across in a scene cut at
+		/// the atlas radius, so local detail only has to supply what is smaller than that: the
+		/// hills and gullies somebody walks over.
 		/// </remarks>
 		public const float DetailFeatureMetres = 500f;
 
-		/// <summary>Local detail height as a fraction of the body's total relief.</summary>
+		/// <summary>How far apart local ridges are, in metres.</summary>
+		public const float RidgeFeatureMetres = 1100f;
+
+		/// <summary>Rolling hills on the flattest ground, as a share of the scene's relief.</summary>
 		/// <remarks>
-		/// Proportional rather than absolute so a small moon is not given Earth-sized hills: at
-		/// 1% of a 20 km relief is about 200 m of local shape on an Earth-like world, and a few
-		/// metres on a 5 km rock — a small body genuinely is smoother.
+		/// About 8 m on Arthis: a lowland is not a table, but its undulations are gentle.
 		/// </remarks>
-		public const float DetailReliefFraction = 0.010f;
+		public const float LowlandHillFraction = 0.0014f;
+
+		/// <summary>Rolling hills in the mountains, as a share of the scene's relief. About 60 m on Arthis.</summary>
+		public const float UplandHillFraction = 0.0103f;
+
+		/// <summary>Sharp-crested ridges in the mountains, as a share of the scene's relief. About 220 m on Arthis.</summary>
+		/// <remarks>
+		/// Ridged noise rather than more of the same hills, because mountains are not rounded:
+		/// they are crests and the gullies between them. Only high ground gets it (see
+		/// <see cref="Ruggedness"/>), which is what makes the foothills of a range steeper than a
+		/// coastal plain.
+		/// </remarks>
+		public const float RidgeFraction = 0.038f;
+
+		/// <summary>The mean of five octaves of <see cref="Ridged"/>, measured over 40,000 samples: what is subtracted to centre it.</summary>
+		private const float RidgedMean = 0.583f;
 
 		/// <summary>
-		/// Metre-scale ground shape for a point inside a scene, averaging to zero.
+		/// The most local detail can move the ground either way, in metres.
+		/// </summary>
+		/// <param name="sceneReliefMetres">The scene's relief: the body's relief times <see cref="SceneVerticalScale"/>.</param>
+		/// <remarks>
+		/// Exact, not an estimate: the hills are <c>(Fbm − 0.5) × 2</c> of at most the upland
+		/// amplitude, and <c>Fbm</c> is bounded to 0 … 1; the ridges are <c>Ridged − 0.583</c>,
+		/// bounded to −0.583 … 0.417. So the result cannot leave this at any point on any world,
+		/// which is what lets a scene's height range be bounded without sampling every point of
+		/// it — a range that is merely sampled is a range some peak between the samples falls
+		/// outside, and the terrain then flattens that peak.
+		/// </remarks>
+		public static float LocalDetailAmplitudeMetres(float sceneReliefMetres)
+		{
+			return sceneReliefMetres * (UplandHillFraction + RidgeFraction * RidgedMean);
+		}
+
+		/// <summary>
+		/// Metre-scale ground shape for a point inside a scene, in scene metres.
 		/// </summary>
 		/// <param name="seed">The body's terrain seed, mixed with whatever identifies the scene.</param>
 		/// <param name="eastMetres">Metres east of the scene's centre.</param>
 		/// <param name="northMetres">Metres north of the scene's centre.</param>
-		/// <param name="body">The body, for how much relief it has to spend. Null is Earth-like.</param>
+		/// <param name="sceneReliefMetres">The scene's relief, which the amplitudes are shares of.</param>
+		/// <param name="ruggedness">0 on flat low ground to 1 in mountains, from <see cref="Ruggedness"/>.</param>
 		/// <remarks>
 		/// <para>
 		/// In scene-local metres, not on the unit sphere, and that is a numerical necessity rather
-		/// than a convenience. A feature 500 m across on an Earth-sized globe is a frequency of
-		/// about 80,000 on the unit sphere; a float at that magnitude has a spacing of 0.008, so
-		/// the fractional part the interpolation needs would be quantised into visible steps. In
-		/// local metres the coordinates stay small and every bit of the mantissa does useful work.
+		/// than a convenience. A feature 500 m across on the globe is a frequency far past what a
+		/// float can interpolate on the unit sphere: the fractional part the noise needs would be
+		/// quantised into visible steps. In local metres the coordinates stay small and every bit
+		/// of the mantissa does useful work.
 		/// </para>
 		/// <para>
-		/// It averages to zero, so it roughens the ground without moving it: the scene still sits
-		/// at the altitude the globe says it does, and the coastline is still where the map shows.
+		/// It is centred on zero, so it roughens the ground without moving it: the scene still sits
+		/// at the altitude the globe says, and the coastline is still where the map shows it.
 		/// </para>
 		/// </remarks>
-		/// <summary>
-		/// The most local detail can move the ground either way, in metres.
-		/// </summary>
-		/// <remarks>
-		/// Exact, not an estimate: <see cref="LocalDetailMetres"/> is <c>(Fbm − 0.5) × 2 ×
-		/// amplitude</c> and <c>Fbm</c> is bounded to 0 … 1, so the result cannot leave
-		/// ±amplitude at any point on any world. That is what lets a scene's height range be
-		/// bounded without sampling every point of it — and a range that is merely sampled is a
-		/// range some peak between the samples falls outside, which the terrain then flattens.
-		/// </remarks>
-		public static float LocalDetailAmplitudeMetres(WorldBody body) => ReliefMetres(body) * DetailReliefFraction;
-
-		public static float LocalDetailMetres(uint seed, float eastMetres, float northMetres, WorldBody body)
+		public static float LocalDetailMetres(uint seed, float eastMetres, float northMetres, float sceneReliefMetres, float ruggedness)
 		{
-			float amplitude = LocalDetailAmplitudeMetres(body);
-			var p = new Vector3(eastMetres / DetailFeatureMetres, 0.37f, northMetres / DetailFeatureMetres);
+			ruggedness = Mathf.Clamp01(ruggedness);
 			/* Six octaves, so the finest features are about fifteen metres across: a scene needs
-			 * shape at the scale somebody walks over, not only at the scale they see from a ridge.
-			 * Centred on zero, because Fbm runs 0..1 and this must not raise the ground. */
-			return (Fbm(p, 6, seed ^ 0x5CE4E7A1u) - 0.5f) * 2f * amplitude;
+			 * shape at the scale somebody walks over, not only at the scale they see from a ridge. */
+			var p = new Vector3(eastMetres / DetailFeatureMetres, 0.37f, northMetres / DetailFeatureMetres);
+			float hills = (Fbm(p, 6, seed ^ 0x5CE4E7A1u) - 0.5f) * 2f
+				* Mathf.Lerp(LowlandHillFraction, UplandHillFraction, ruggedness);
+
+			float ridges = 0f;
+			if (ruggedness > 0f)
+			{
+				var q = new Vector3(eastMetres / RidgeFeatureMetres, 0.61f, northMetres / RidgeFeatureMetres);
+				ridges = (Ridged(q, 5, seed ^ 0x2F1D6E3Bu) - RidgedMean) * RidgeFraction * ruggedness;
+			}
+			return (hills + ridges) * sceneReliefMetres;
 		}
 
 		/// <summary>

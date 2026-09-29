@@ -9,9 +9,42 @@
 // Everything now reads this: a breaker's whitewater reaches the waterline at the instant the swash
 // there begins to rush up (FishWaterBreakerCommon.hlsl).
 //
-// Everything here is arithmetic, no textures.
+// Everything here is arithmetic but the open-sea map (FishWaterOpenSea).
 //
 // The includer declares _FishWaterWind first — the sea and the shore both already do.
+
+// The tide each place joins the open sea at, m over mean sea level (WaterShoreField.JoinTides), and the
+// tide now: water the sea's waves cannot reach at this tide — a pool, a lagoon behind a bar — lies still.
+TEXTURE2D(_FishWaterOpenSea);
+SAMPLER(sampler_FishWaterOpenSea);
+float4 _FishWaterOpenSeaRect;    // xy world minimum, zw size; z under 1: no map, all of it open sea
+float _FishWaterTide;            // metres over mean sea level now
+float _FishWaterOpenSeaTides;    // the highest tide the map's gaps were measured up to, m
+
+/// <summary>
+/// How open to the sea's waves the water at a point is, 0..1, at the tide of the moment: 1 where a way in
+/// from the open sea is deep enough now and wide enough, 0 in a pool or a lagoon cut off from it — opening
+/// as the tide rises over its sill and closing as it falls — and less behind a narrow gap.
+/// WaterShoreField.Snapshot.OpenSeaAt, line for line.
+/// </summary>
+float FishWaterOpenSea(float2 xz)
+{
+	if (_FishWaterOpenSeaRect.z < 1.0)
+	{
+		return 1.0;
+	}
+	float2 uv = (xz - _FishWaterOpenSeaRect.xy) / _FishWaterOpenSeaRect.zw;
+	if (any(uv < 0.0) || any(uv > 1.0))
+	{
+		return 1.0;
+	}
+	// r the tide the way in needs; gba how much of the swell its narrowest gap lets through at the mean
+	// tide, half the highest and the highest (WaterShoreField.ShelterTides), blended by the tide now.
+	float4 open = SAMPLE_TEXTURE2D_LOD(_FishWaterOpenSea, sampler_FishWaterOpenSea, uv, 0);
+	float x = _FishWaterOpenSeaTides > 0.01 ? saturate(_FishWaterTide / _FishWaterOpenSeaTides) * 2.0 : 0.0;
+	float shelter = x <= 1.0 ? lerp(open.g, open.b, x) : lerp(open.b, open.a, x - 1.0);
+	return saturate((_FishWaterTide - open.r) / 0.3 + 0.5) * saturate(shelter);
+}
 
 float _FishWaterSwashPeriod;     // seconds between arriving waves; 0 when the scene has no shore
 float _FishWaterShoreTime;       // the shore's clock, seconds

@@ -244,10 +244,15 @@ namespace FishMMO.Shared.Weather
 		/// <remarks>
 		/// The channel is how much fog, 0..1. A fog forms as the air nears saturation, and the nearer
 		/// it gets the more of its haze grains swell into drops and the more water each holds: the
-		/// drops' number goes as the channel and their water as its cube. A full fog is 0.3 g/m³ in
-		/// two hundred drops a cubic centimetre, about 60 m of visibility; half the channel is a thick
-		/// fog of some 300 m; the humid noon's sixth is a mist you see four kilometres through. With
-		/// the number fixed at a full fog's, that sixth came to 700 m and hid the whole sky.
+		/// drops' number goes as the channel to the 1.5 and their water as its 3.75, so the extinction
+		/// goes as its cube (<see cref="FogExponent"/>). A full fog is the densest there is — 1.1 g/m³ in
+		/// seven hundred drops a cubic centimetre, a sea fog or a valley's thickest, about 17 m of
+		/// visibility; three quarters is a dense fog of some 40 m; half a thick fog of 140 m; a third
+		/// the edge of fog, a kilometre; the humid noon's sixth still a mist you see four kilometres
+		/// through. It was 0.3 g/m³ in two hundred drops at the top, so the thickest fog the weather
+		/// could make was 60 m and half the channel 300 m: moderate fog, which barely touches ground
+		/// fifty metres off while the horizon goes white — fog that never seemed to reach the camera.
+		/// (Visibility classes: dense fog under 50 m, thick under 200, moderate to 500, fog to 1 km.)
 		/// </remarks>
 		public static float FogExtinction(float fog01)
 		{
@@ -256,8 +261,15 @@ namespace FishMMO.Shared.Weather
 			{
 				return 0f;
 			}
-			return DropletExtinction(3e-4f * f * f * f, Mathf.Max(1e6f, 2e8f * f), 1000f);
+			return DropletExtinction(1.1e-3f * Mathf.Pow(f, 3.75f), Mathf.Max(1e6f, 7e8f * Mathf.Pow(f, 1.5f)), 1000f);
 		}
+
+		/// <summary>
+		/// The power of the fog channel a fog's extinction goes as (<see cref="FogExtinction"/>): drops'
+		/// number as f^1.5 and water as f^3.75 give n^⅓·W^⅔ = f^3. What a thinned fog keeps is worked
+		/// back through it (FogLayer.Stirred).
+		/// </summary>
+		public const float FogExponent = 3f;
 
 		/// <summary>
 		/// What falling precipitation takes out of the view, 1/m, from the precipitation channel and

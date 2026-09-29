@@ -26,13 +26,36 @@ namespace FishMMO.Shared.WorldDesign
 		/// Whether to add finer octaves on top of the planet's own shape.
 		/// </summary>
 		/// <remarks>
-		/// The planet function is continent-scale: sampled across a few kilometres it is very
-		/// smooth, so a scene cut straight from it reads as gentle rolling ground wherever it is.
-		/// The extra octaves are the same function at higher frequency, so they cost nothing to
-		/// store and the scene still agrees with the globe about where the mountain is — they only
-		/// decide what the mountain looks like close up.
+		/// The planet's finest features are about 1.7 km across in a scene cut at the atlas
+		/// radius, so without these the ground is right in shape but smooth underfoot. They are
+		/// centred on zero and follow the planet's own ruggedness, so the scene still agrees with
+		/// the globe about where the mountain is — they only decide what it looks like close up.
 		/// </remarks>
 		public bool FineDetail = true;
+
+		/// <summary>
+		/// The radius the scene's kilometres are laid over the globe at. Zero means the body's
+		/// atlas radius now, which is what the rectangle was drawn on.
+		/// </summary>
+		/// <remarks>
+		/// Only set by something re-cutting a scene that was first cut at a different radius.
+		/// </remarks>
+		public double RadiusKm;
+
+		/// <summary>
+		/// True only when re-cutting a scene the generator made: its own name, scene file and
+		/// terrain folder are expected to exist and are replaced. See <see cref="SceneGenerator.Recut"/>.
+		/// </summary>
+		public bool ReplaceExisting;
+
+		/// <summary>The radius actually used: <see cref="RadiusKm"/>, or the body's atlas radius.</summary>
+		public double ResolvedRadiusKm => RadiusKm > 0.0 ? RadiusKm : PlanetSurface.SceneRadiusKm(Body);
+
+		/// <summary>Scene metres per metre of the planet's own altitude.</summary>
+		public float VerticalScale => PlanetSurface.SceneVerticalScale(Body, ResolvedRadiusKm);
+
+		/// <summary>The scene's relief budget in metres: the body's relief at <see cref="VerticalScale"/>.</summary>
+		public float SceneReliefMetres => PlanetSurface.ReliefMetres(Body) * VerticalScale;
 
 		public AtlasFootprint Footprint => new AtlasFootprint
 		{
@@ -211,16 +234,23 @@ namespace FishMMO.Shared.WorldDesign
 		// ── How high the ground is ────────────────────────────────────
 
 		/// <summary>
-		/// The altitude, in metres above the body's sea level, at a point inside a scene.
+		/// The altitude, in scene metres above the body's sea level, at a point inside a scene.
 		/// </summary>
 		/// <param name="request">The scene being cut.</param>
-		/// <param name="eastMetres">Metres east of the scene's centre.</param>
-		/// <param name="northMetres">Metres north of the scene's centre.</param>
+		/// <param name="eastMetres">Metres along the scene's +X from its centre: east, at a heading of 0.</param>
+		/// <param name="northMetres">Metres along the scene's +Z from its centre: north, at a heading of 0.</param>
 		/// <remarks>
-		/// The point is carried back onto the globe and the planet is asked, so the scene and the
-		/// world map cannot disagree: a coastline on the globe is the coastline underfoot. The
-		/// finer octaves are added afterwards and average to nothing, so they roughen the ground
-		/// without moving it.
+		/// <para>
+		/// The point is carried back onto the globe at the <b>atlas</b> radius — the globe the
+		/// rectangle was drawn on — and the planet is asked, so the scene is exactly the ground the
+		/// rectangle covers and a coastline on the globe is the coastline underfoot.
+		/// </para>
+		/// <para>
+		/// The planet's altitude is then brought to scene height by
+		/// <see cref="PlanetSurface.SceneVerticalScale"/>, and the finer octaves are added on top:
+		/// gentle on low ground, broken and ridged on high ground. They are centred on zero, so
+		/// they roughen the ground without moving it.
+		/// </para>
 		/// </remarks>
 		public static float AltitudeMetres(SceneGenerationRequest request, float eastMetres, float northMetres)
 		{
@@ -228,29 +258,51 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return 0f;
 			}
-			double radiusKm = request.Body != null ? Math.Max(0.001, request.Body.SkyRadiusKm) : PlanetSurface.EarthRadiusKm;
-			Vector3 direction = AtlasGeometry.Offset(request.Latitude, request.Longitude, eastMetres / 1000.0, northMetres / 1000.0, radiusKm).ToVector3();
-
-			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
-			float altitude = PlanetSurface.AltitudeMetres(seed, request.Body, direction);
+			float planet = PlanetAltitudeMetres(request, eastMetres, northMetres);
+			float altitude = planet * request.VerticalScale;
 			if (request.FineDetail)
 			{
 				/* Mixed with the scene's name so two scenes cut from nearby ground do not get the
 				 * same hills, and so re-generating one scene cannot change another. */
+				uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
 				uint detailSeed = seed ^ unchecked((uint)(request.SceneName ?? string.Empty).GetDeterministicHashCode());
-				altitude += PlanetSurface.LocalDetailMetres(detailSeed, eastMetres, northMetres, request.Body);
+				float ruggedness = PlanetSurface.Ruggedness(planet, PlanetSurface.ReliefMetres(request.Body));
+				altitude += PlanetSurface.LocalDetailMetres(detailSeed, eastMetres, northMetres, request.SceneReliefMetres, ruggedness);
 			}
 			return altitude;
 		}
 
+		/// <summary>
+		/// The planet's own altitude under a point of the scene, in the planet's metres: what the
+		/// globe says, before the scene's vertical scale or any local detail.
+		/// </summary>
+		public static float PlanetAltitudeMetres(SceneGenerationRequest request, float eastMetres, float northMetres)
+		{
+			if (request == null)
+			{
+				return 0f;
+			}
+			/* Through the footprint, so the heading turns the ground exactly as the atlas turns
+			 * the rectangle. With a heading of 0 the scene's +X is east and +Z north. */
+			Vector3 direction = AtlasGeometry.SceneToUnit(request.Footprint,
+				eastMetres / 1000.0, northMetres / 1000.0, request.ResolvedRadiusKm).ToVector3();
+			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
+			return PlanetSurface.AltitudeMetres(seed, request.Body, direction);
+		}
+
 		/// <summary>One sample of the planet's own shape per this many metres, when bounding a scene.</summary>
 		/// <remarks>
-		/// The planet term is continent-scale — its finest feature spans hundreds of kilometres —
-		/// so 250 m is far finer than it needs and a 20 km scene still costs under seven thousand
-		/// samples. Clamped below so a small scene is not bounded from a handful of points.
+		/// Cut at the atlas radius, the planet's finest mountain octave is about 1.7 km across in a
+		/// scene, so a sample every 40 m sees every peak it has to within a few metres, and
+		/// <see cref="BoundsMarginFraction"/> covers the rest. A 20 km scene costs 250,000 samples,
+		/// a fraction of the millions the heightmap itself takes.
 		/// </remarks>
-		public const float BoundsSampleMetres = 250f;
+		public const float BoundsSampleMetres = 40f;
 		private const int MinimumBoundsSteps = 96;
+		private const int MaximumBoundsSteps = 512;
+
+		/// <summary>Slack added to the sampled planet range, as a share of it, for peaks between samples.</summary>
+		public const float BoundsMarginFraction = 0.02f;
 
 		/// <summary>
 		/// The lowest and highest ground a scene can possibly have, in metres above the body's sea
@@ -291,7 +343,7 @@ namespace FishMMO.Shared.WorldDesign
 			float halfDepth = plan.DepthMetres * 0.5f;
 			int steps = Mathf.Clamp(
 				Mathf.CeilToInt(Mathf.Max(plan.WidthMetres, plan.DepthMetres) / BoundsSampleMetres),
-				MinimumBoundsSteps, 512);
+				MinimumBoundsSteps, MaximumBoundsSteps);
 
 			// The planet's own shape only: local detail is added back as an exact bound below, and
 			// sampling it here would understate it however fine the grid was.
@@ -318,9 +370,15 @@ namespace FishMMO.Shared.WorldDesign
 				request.FineDetail = fineDetail;
 			}
 
+			/* The planet term was sampled, not bounded, so it gets slack for whatever stands
+			 * between the samples; Tighten() takes it back once the real ground is on disk. */
+			float margin = (highest - lowest) * BoundsMarginFraction + 1f;
+			lowest -= margin;
+			highest += margin;
+
 			if (fineDetail)
 			{
-				float amplitude = PlanetSurface.LocalDetailAmplitudeMetres(request.Body);
+				float amplitude = PlanetSurface.LocalDetailAmplitudeMetres(request.SceneReliefMetres);
 				lowest -= amplitude;
 				highest += amplitude;
 			}

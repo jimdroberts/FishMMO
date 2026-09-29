@@ -332,7 +332,9 @@ namespace FishMMO.Water
 			}
 
 			uint seed = body.ResolvedTerrainSeed;
-			double radiusKm = Mathf.Max(1f, body.SkyRadiusKm);
+			/* The atlas radius, the globe scenes are cut from: a kilometre of fetch is a kilometre
+			 * of the sea the scene's own coast faces, measured on the same ground. */
+			double radiusKm = PlanetSurface.SceneRadiusKm(body);
 			double latitude = scene.Latitude * Mathf.Deg2Rad;
 			double longitude = scene.Longitude * Mathf.Deg2Rad;
 			// Upwind: the heading is where the wind blows TOWARD.

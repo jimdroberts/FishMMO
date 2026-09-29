@@ -491,7 +491,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			Debug.Log($"[World atlas] Generated '{sceneName}': {plan}, {result.ReliefMetres:0} m of relief, " +
+			Debug.Log($"[World atlas] Generated '{sceneName}': {plan}, cut at {result.RadiusKm:0.##} km with a vertical scale of {result.VerticalScale:0.###}, {result.ReliefMetres:0} m of relief, " +
 				$"standing at {result.BaseAltitudeMetres:0} m above sea level (its ground floor is {result.GroundAltitudeMetres:0} m).\n  "
 				+ string.Join("\n  ", result.Wrote));
 			/* Said in so many words when the whole cut is sea floor. A kilometre of water reads as
@@ -512,6 +512,60 @@ namespace FishMMO.Shared.WorldDesign
 
 			model.Reload();
 			RefreshGlobe();
+		}
+
+		/// <summary>Cuts a generated scene's terrain from the globe again, after asking.</summary>
+		private void RecutScene(WorldAtlasScene entry)
+		{
+			if (!EditorUtility.DisplayDialog("Re-cut terrain",
+				$"Generate \"{entry.SceneName}\" again from the globe, where its rectangle is now?\n\n" +
+				"The scene file is replaced, so anything added to it by hand is lost. The old scene and terrain are copied to " +
+				$"{SceneGenerator.RecutBackupRoot} first.", "Re-cut", "Cancel"))
+			{
+				return;
+			}
+			SceneGenerationResult result;
+			try
+			{
+				EditorUtility.DisplayProgressBar("Re-cut terrain", $"Generating {entry.SceneName}...", 0.5f);
+				result = SceneGenerator.Recut(entry);
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+			if (!result.Success)
+			{
+				EditorUtility.DisplayDialog("Re-cut terrain", result.Problem, "OK");
+				return;
+			}
+			Debug.Log($"[World atlas] Re-cut '{entry.SceneName}': {result.Plan}, {result.ReliefMetres:0} m of relief from {result.GroundAltitudeMetres:0} m, " +
+				$"cut at {result.RadiusKm:0.##} km with a vertical scale of {result.VerticalScale:0.###}. The old scene is in '{result.BackupFolder}'.");
+			model.Reload();
+			RefreshGlobe();
+		}
+
+		/// <summary>Writes the globe/cut/terrain comparison for a scene and shows the folder.</summary>
+		private void SnapshotScene(WorldAtlasScene entry)
+		{
+			SceneCutSnapshot.Report report;
+			try
+			{
+				EditorUtility.DisplayProgressBar("Snapshot", $"Comparing {entry.SceneName} with the globe...", 0.5f);
+				report = SceneCutSnapshot.Write(entry);
+			}
+			finally
+			{
+				EditorUtility.ClearProgressBar();
+			}
+			if (report.Problem != null && report.Wrote.Count == 0)
+			{
+				EditorUtility.DisplayDialog("Snapshot", report.Problem, "OK");
+				return;
+			}
+			Debug.Log($"[World atlas] Snapshot of '{entry.SceneName}': terrain differs from the cut by {report.MeanDifferenceMetres:0.00} m on average, " +
+				$"{report.LargestDifferenceMetres:0.00} m at most.\n  " + string.Join("\n  ", report.Wrote));
+			EditorUtility.RevealInFinder(report.Folder);
 		}
 
 		/// <summary>A name nothing is using yet, so the prompt opens on something workable.</summary>
@@ -1090,6 +1144,11 @@ namespace FishMMO.Shared.WorldDesign
 			Line(inspectorHost, "Click a scene to edit it. With nothing selected, these are the body's globe settings.", 0.75f);
 			var info = new VisualElement();
 			Pair(info, "Radius now", $"{AtlasModel.RadiusOf(body):0.##} km ({body.RadiusMode})");
+			int cutScenes = model.CutScenes(body).Count;
+			if (cutScenes > 0)
+			{
+				Pair(info, "Radius locked", $"{cutScenes} scene(s) had their terrain cut from this globe, so Auto no longer changes the radius.");
+			}
 			Pair(info, "Auto would use", $"{Mathf.Max(body.MinimumRadiusKm, model.RequiredRadius(body)):0.##} km (minimum {body.MinimumRadiusKm:0.#} km, at most {body.MaxCoveragePercent:0}% of each layer covered, no scene wider than {AtlasGeometry.MaxSceneArcDegrees:0}°)");
 			Pair(info, "Scenes placed", model.On(body, null).Count.ToString());
 			if (model.System != null)
@@ -1279,7 +1338,11 @@ namespace FishMMO.Shared.WorldDesign
 				EditorUtility.DisplayDialog("Nothing overlaps", $"No scenes overlap on {body.ResolvedName}.", "OK");
 				return;
 			}
-			if (!EditorUtility.DisplayDialog("Grow the body", $"Raise {body.ResolvedName}'s minimum radius until no scenes overlap? Scenes keep their latitude and longitude, so they spread apart.", "Grow", "Cancel"))
+			List<WorldAtlasScene> cut = model.CutScenes(body);
+			string cutWarning = cut.Count > 0
+				? $"\n\n{cut.Count} scene(s) had their terrain cut from this globe at {AtlasModel.RadiusOf(body):0.##} km. A bigger globe puts a smaller patch of planet under each rectangle, so their terrain will no longer match the map until they are re-cut."
+				: string.Empty;
+			if (!EditorUtility.DisplayDialog("Grow the body", $"Raise {body.ResolvedName}'s minimum radius until no scenes overlap? Scenes keep their latitude and longitude, so they spread apart.{cutWarning}", "Grow", "Cancel"))
 			{
 				return;
 			}
@@ -1524,6 +1587,11 @@ namespace FishMMO.Shared.WorldDesign
 				menu.AddItem(new GUIContent("Ping scene asset"), false, () => { if (path != null) EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<SceneAsset>(path)); });
 				menu.AddItem(new GUIContent("Select atlas entry"), false, () => Selection.activeObject = captured);
 				menu.AddItem(new GUIContent("Render preview"), false, () => { selected = captured; RenderPreviews(true); });
+				if (SceneGenerator.IsGenerated(captured))
+				{
+					menu.AddItem(new GUIContent("Re-cut terrain from the globe…"), false, () => RecutScene(captured));
+				}
+				menu.AddItem(new GUIContent("Snapshot: globe vs terrain"), false, () => SnapshotScene(captured));
 				menu.AddSeparator(string.Empty);
 				menu.AddItem(new GUIContent("Turn 90°"), false, () => { selected = captured; Turn(90f); });
 				menu.AddItem(new GUIContent("Turn 15°"), false, () => { selected = captured; Turn(15f); });

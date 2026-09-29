@@ -107,6 +107,8 @@ MonoBehaviour:
       DetailLodScale: 0.25
       EdgeShellScale: 2
       DetailStepFootprint: 1.25
+      BaseDetail: 0
+      BaseSmoothHeight: 0.3
       MultipleScattering: 0.5
       DropletSpike: 1
       SkyAmbient: 1

@@ -195,6 +195,57 @@ namespace FishMMO.UnitTests.Celestial
 		}
 
 		[Test]
+		public void SummitsAreNotCutFlatAboveTheSurveyedHighest()
+		{
+			/* The profile's highest point is the highest of 8192 samples; the field goes higher
+			 * between them. Clamped there, every true summit was a flat table. */
+			PlanetSurface.PlanetProfile profile = PlanetSurface.ProfileOf(Seed, body);
+			float relief = PlanetSurface.ReliefMetres(body);
+			float atSurvey = PlanetSurface.AltitudeFromHeight(profile.Highest, profile, relief);
+			float above = PlanetSurface.AltitudeFromHeight(profile.Highest + 0.01f, profile, relief);
+			Assert.That(above, Is.GreaterThan(atSurvey + 1f));
+		}
+
+		[Test]
+		public void AnEarthlikeWorldHasEverestProportionedSummits()
+		{
+			/* The land used to scale by how much of the field's range happened to stand above the
+			 * sea, which put this world's summit near 4 km. It is Earth's share of the relief now. */
+			PlanetSurface.PlanetProfile profile = PlanetSurface.ProfileOf(Seed, body);
+			float relief = PlanetSurface.ReliefMetres(body);
+			Assert.That(PlanetSurface.AltitudeFromHeight(profile.Highest, profile, relief),
+				Is.EqualTo(8848f).Within(1f), "the surveyed summit of an Earth-sized world is Everest's height");
+		}
+
+		[Test]
+		public void TheSoftClampHasNoKink()
+		{
+			/* A hard clamp on the continent field left a kink along a contour that a scene sees as
+			 * a ruler-straight cliff. The knee must be continuous in value and slope. */
+			const float Knee = 0.12f;
+			const float Step = 1e-4f;
+			foreach (float edge in new[] { -Knee, Knee, 1f - Knee, 1f + Knee })
+			{
+				float below = PlanetSurface.SoftClamp01(edge - Step, Knee);
+				float at = PlanetSurface.SoftClamp01(edge, Knee);
+				float above = PlanetSurface.SoftClamp01(edge + Step, Knee);
+				Assert.That(Mathf.Abs(above - at - (at - below)), Is.LessThan(Step * 0.05f), $"the slope jumps at {edge}");
+			}
+			Assert.That(PlanetSurface.SoftClamp01(0.5f, Knee), Is.EqualTo(0.5f), "the middle, where coastlines are, is untouched");
+			Assert.That(PlanetSurface.SoftClamp01(-1f, Knee), Is.EqualTo(0f));
+			Assert.That(PlanetSurface.SoftClamp01(2f, Knee), Is.EqualTo(1f));
+		}
+
+		[Test]
+		public void AStandardAtmosphereKeepsNoCraters()
+		{
+			/* The field is uniform, so keeping 5% of it was a faint copy of the whole bombardment
+			 * everywhere, which a scene cut from a mountain showed as rings of rims. */
+			Assert.That(PlanetSurface.CrateringOf(AtmosphereKind.Standard), Is.EqualTo(0f));
+			Assert.That(PlanetSurface.CrateringOf(AtmosphereKind.None), Is.EqualTo(1f));
+		}
+
+		[Test]
 		public void TheSeaFloorMeetsTheShoreWithoutAStep()
 		{
 			/* Land and sea floor are two curves joined at the water line. A join with a step in it

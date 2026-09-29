@@ -146,6 +146,10 @@ float4 _FishCloudFix;
 // instead of measuring it along the light's own way through the cloud (FishCloudFarDepth); y 1 walks
 // dense cloud and the haze under it as it used to (see `economy` in FishCloudMarch).
 float4 _FishCloudFixB;
+// A cloud's smooth base (the profile's Base Detail and Base Smooth Height): x 1 − how much of the
+// eddies' and the cauliflower's pattern the base keeps, y how far up the cloud that eases off, as a
+// share of its height. All zeros: none, the pattern the same all the way up.
+float4 _FishCloudBase;
 // What the march hands pass 0 in place of the clouds when _FishCloudDiag.w asks for a debug view.
 static float4 FishCloudMarchDebug = float4(0.0, 0.0, 0.0, 1.0);
 
@@ -732,6 +736,20 @@ float FishCloudExpectedEdgeWater(float inside, float reach, float ramp)
     return (FishCloudEdgeRamp(1.0 + (inside + reach) / r) - FishCloudEdgeRamp(1.0 + (inside - reach) / r)) * r / (2.0 * reach);
 }
 
+/// How much of the eddies' and the cauliflower's PATTERN a point keeps by how far up its cloud it is
+/// (0 at the base, 1 at the top): a cumulus's base is flat and smooth — it is where rising air reaches
+/// its condensation level, one height across the cloud — and the turrets and the ragged edges are its
+/// upper parts, where the bubbles overshoot and mix. Only the pattern: what it averages to is kept
+/// everywhere (FishCloudExpectedEdgeWater, the carve's mean), so a smoothed base is not a smaller one.
+float FishCloudBaseKeep(float height01)
+{
+    if (_FishCloudBase.y <= 0.0)
+    {
+        return 1.0;
+    }
+    return lerp(1.0 - saturate(_FishCloudBase.x), 1.0, smoothstep(0.0, _FishCloudBase.y, saturate(height01)));
+}
+
 /// Which way the eddies carve, −1 (wisps: the outside air engulfed, the cloud left as filaments) low in
 /// the cloud to +1 (billows: bubbles pushed out) from a third of the way up. Twin of CloudClimate.EddyPolarity.
 float FishCloudEddyPolarity(float height01)
@@ -1198,7 +1216,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
                 float carveShown = _FishCloudFix.z > 0.5
                     ? lerp(1.0, 0.35, saturate((footprint - 25.0) / 20.0))
                     : lerp(1.0, 0.35, smoothstep(0.5, 1.0, footprint / (max(1.0, b.x) / 20.0)));
-                erode = lerp(erode, (1.0 - billows) * carveScale, carveShown);
+                erode = lerp(erode, (1.0 - billows) * carveScale, carveShown * FishCloudBaseKeep(hIn));
             }
             inside -= erode * FISH_CLOUD_CARVE_DEPTH / shellNoise;
             if (inside <= outermost)
@@ -1226,7 +1244,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // over many frames, and until then it is a coin toss per sample: the grain a finer Step Scale
         // cured. It is drawn as its average instead, which keeps the cloud its size.
         float3 resolved = FishCloudDetailResolved(max(FishCloudDetailCone, FishCloudDetailAlong), b.y);
-        float pattern = detailAmount * resolved.x;
+        float pattern = detailAmount * resolved.x * FishCloudBaseKeep(hIn);
         if (pattern > 0.001 && inside < FISH_CLOUD_EDDY_REACH)
         {
             // Carried by the same wind as its band, in the band's own frame, drawn out along the wind

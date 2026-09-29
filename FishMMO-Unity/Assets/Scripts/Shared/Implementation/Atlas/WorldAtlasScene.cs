@@ -41,6 +41,9 @@ namespace FishMMO.Shared.Atlas
 		public float HeadingDegrees;
 		[Tooltip("The scene's size in km (X, Z), read from its boundaries by the designer.")]
 		public Vector2 SizeKm = new Vector2(1f, 1f);
+		[Tooltip("The atlas radius, in km, this scene's terrain was cut from the globe at. 0: its terrain was not generated. " +
+			"While any scene on a body has one, the body's atlas radius stays put, because moving it would move the globe out from under the terrain.")]
+		public float CutRadiusKm;
 
 		[Header("Time")]
 		public bool OverrideTimeZone;

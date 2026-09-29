@@ -177,6 +177,7 @@ namespace FishMMO.Water
 		private int builtRings, builtSegments;
 		private float builtInner, builtOuter;
 		private static readonly int MeshSpacingId = Shader.PropertyToID("_FishWaterMeshSpacing");
+		private static readonly int TideId = Shader.PropertyToID("_FishWaterTide");
 		private bool reported;
 		private WaterFFT fft;
 		private float builtWind = -1f;
@@ -454,8 +455,9 @@ namespace FishMMO.Water
 			{
 				spectrum.Sample(flat.x, flat.y, out h, out dx, out dz);
 			}
-			// Faded with distance, then out over the shallows to flat water at the break line.
-			float scale = fade * Calm(Depth(flat));
+			// Faded with distance, then out over the shallows to flat water at the break line, and none
+			// at all in water the open sea's waves cannot reach at this tide (a pool, a lagoon).
+			float scale = fade * Calm(Depth(flat)) * (shoreField != null ? shoreField.OpenSeaAt(flat, TideMetres) : 1f);
 			height = h * scale;
 			moved = new Vector2(dx, dz) * scale;
 		}
@@ -753,6 +755,7 @@ namespace FishMMO.Water
 			Shader.SetGlobalVectorArray(MotionId, packedMotion);
 			Shader.SetGlobalFloat(CountId, liveWaves);
 			Shader.SetGlobalFloat(LevelId, position.y + TideMetres);
+			Shader.SetGlobalFloat(TideId, TideMetres);
 			// The level the shore field was built against, so the shore can follow the tide off it.
 			Shader.SetGlobalFloat(MeanLevelId, position.y);
 			Shader.SetGlobalFloat(TimeId, (float)clock);

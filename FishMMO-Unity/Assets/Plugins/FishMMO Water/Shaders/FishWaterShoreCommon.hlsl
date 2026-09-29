@@ -94,7 +94,8 @@ float FishWaterRunUpHere(float slope, float2 xz, float texelMetres)
 {
 	float2 towardShore;
 	float confidence = FishWaterShoreFacingField(xz, texelMetres, towardShore);
-	return FishWaterRunUp(slope) * FishWaterShoreExposure(towardShore, confidence);
+	// And none where the open sea's waves cannot reach at this tide: a pool's edge has no swash.
+	return FishWaterRunUp(slope) * FishWaterShoreExposure(towardShore, confidence) * FishWaterOpenSea(xz);
 }
 
 /// <summary>

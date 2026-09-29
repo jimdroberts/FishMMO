@@ -238,6 +238,8 @@ FishWaterBreakerState FishWaterBreakerAt(float2 breakXZ, float2 shoreward, float
 	 * 0.43 it kept its full height at under half its width, a fin 33 degrees at the back. */
 	b.height = average * lerp(0.4, 1.2, peak) * FishWaterWaveShare(floor(cycles), along.x)
 		* smoothstep(0.15, 0.75, squeeze);
+	// None where the open sea's waves cannot reach at this tide: a lagoon's or a pool's shore has no surf.
+	b.height *= FishWaterOpenSea(breakXZ);
 	return b;
 }
 
@@ -453,7 +455,8 @@ float3 FishWaterBoreFoam(float2 xz, float depth, float edge, float2 shoreward, f
 	 * to one side, or a long way off — and the "breaker" it found was somewhere arbitrary, drawing
 	 * lines of foam from waves that do not exist. A beach flatter than about one in eighty, and the
 	 * ridge between two shores where the way in flips, are both that. */
-	float plausible = (1.0 - smoothstep(55.0, 85.0, room / breakDepth)) * saturate(confidence * 1.5);
+	float plausible = (1.0 - smoothstep(55.0, 85.0, room / breakDepth)) * saturate(confidence * 1.5)
+		* FishWaterOpenSea(xz);
 	if (plausible <= 0.0)
 	{
 		return 0.0;

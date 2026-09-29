@@ -242,7 +242,85 @@ namespace FishMMO.UnitTests.WorldDesign
 			float fromScene = SceneGeneration.AltitudeMetres(request, 0f, 0f);
 			float fromGlobe = PlanetSurface.AltitudeMetresAt(body.ResolvedTerrainSeed, body, 24.0, -57.0);
 
-			Assert.That(fromScene, Is.EqualTo(fromGlobe).Within(1f));
+			// In scene metres: the globe's altitude brought to the scene's vertical scale.
+			Assert.That(fromScene, Is.EqualTo(fromGlobe * request.VerticalScale).Within(1f));
+		}
+
+		[Test]
+		public void TheSceneIsTheGroundUnderTheRectangleTheAtlasDrew()
+		{
+			/* The bug this pins: the atlas drew the rectangle on a 30 km globe, and the generator
+			 * laid the same kilometres over the 6371 km planet. The scene was the single point at
+			 * the rectangle's centre, magnified two hundred times, and never the ground the map
+			 * showed. A corner of the scene must be the globe at the corner of the rectangle, at
+			 * the ATLAS radius. */
+			body.RadiusMode = AtlasRadiusMode.Manual;
+			body.ManualRadiusKm = 30f;
+			var request = Request("Cut", 24.0, -57.0, surface, 6f);
+			request.FineDetail = false;
+
+			double atlasRadius = body.AtlasRadiusKm;
+			Assert.That(request.ResolvedRadiusKm, Is.EqualTo(atlasRadius), "a scene is cut at the atlas radius");
+
+			foreach (Vector2 corner in new[] { new Vector2(-3f, -3f), new Vector2(3f, 3f), new Vector2(3f, -3f) })
+			{
+				Vector3 direction = AtlasGeometry.SceneToUnit(request.Footprint, corner.x, corner.y, atlasRadius).ToVector3();
+				float fromGlobe = PlanetSurface.AltitudeMetres(body.ResolvedTerrainSeed, body, direction) * request.VerticalScale;
+				float fromScene = SceneGeneration.AltitudeMetres(request, corner.x * 1000f, corner.y * 1000f);
+				Assert.That(fromScene, Is.EqualTo(fromGlobe).Within(1f), $"the scene's corner at {corner} km is not the globe's");
+			}
+		}
+
+		[Test]
+		public void AScenesHeadingTurnsItsGroundWithIt()
+		{
+			/* The atlas turns a rectangle by its heading, so the ground has to turn with it: at 90°
+			 * the scene's +Z faces east, so a point 1 km up the scene is 1 km east on the globe. */
+			var north = Request("Cut", 10.0, 20.0, surface, 4f);
+			north.FineDetail = false;
+			var east = Request("Cut", 10.0, 20.0, surface, 4f);
+			east.FineDetail = false;
+			east.HeadingDegrees = 90f;
+
+			Assert.That(SceneGeneration.AltitudeMetres(east, 0f, 1000f),
+				Is.EqualTo(SceneGeneration.AltitudeMetres(north, 1000f, 0f)).Within(0.5f));
+		}
+
+		[Test]
+		public void SceneReliefIsExaggeratedAgainstItsKilometresButNeverTallerThanThePlanet()
+		{
+			/* Scaled exactly with the kilometres a mountain range is a 60 m hill; at full height it
+			 * is a wall. The scene sits between: taller than the kilometres alone would give it,
+			 * and never taller than the planet's own ground. */
+			body.RadiusMode = AtlasRadiusMode.Manual;
+			body.ManualRadiusKm = 30f;
+			float scale = PlanetSurface.SceneVerticalScale(body, body.AtlasRadiusKm);
+			float kilometresOnly = body.AtlasRadiusKm / body.SkyRadiusKm;
+
+			Assert.That(scale, Is.GreaterThan(kilometresOnly * 5f), "mountains must not flatten to hills");
+			Assert.That(scale, Is.LessThanOrEqualTo(1f), "a scene is never taller than its planet");
+		}
+
+		[Test]
+		public void MountainsAreRougherThanLowlands()
+		{
+			/* Local detail follows the planet's ruggedness: gentle on a coastal plain, broken and
+			 * ridged in the mountains, and never outside the bound the heightmap is sized by. */
+			const float Relief = 5000f;
+			float bound = PlanetSurface.LocalDetailAmplitudeMetres(Relief);
+			float flatSpread = 0f, ruggedSpread = 0f;
+			for (float x = -2000f; x <= 2000f; x += 37f)
+			{
+				for (float z = -2000f; z <= 2000f; z += 41f)
+				{
+					float flat = PlanetSurface.LocalDetailMetres(7u, x, z, Relief, 0f);
+					float rugged = PlanetSurface.LocalDetailMetres(7u, x, z, Relief, 1f);
+					flatSpread = Mathf.Max(flatSpread, Mathf.Abs(flat));
+					ruggedSpread = Mathf.Max(ruggedSpread, Mathf.Abs(rugged));
+					Assert.That(Mathf.Abs(rugged), Is.LessThanOrEqualTo(bound + 1e-3f), "local detail left its bound");
+				}
+			}
+			Assert.That(ruggedSpread, Is.GreaterThan(flatSpread * 5f), $"mountains {ruggedSpread:0} m against lowland {flatSpread:0} m");
 		}
 
 		[Test]
