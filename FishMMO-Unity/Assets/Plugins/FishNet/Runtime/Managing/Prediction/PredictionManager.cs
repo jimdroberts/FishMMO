@@ -548,13 +548,16 @@ namespace FishNet.Managing.Predicting
         /// </summary>
         internal void ReconcileToStates()
         {
-            if (!_networkManager.IsClientStarted)
+            //FISHMMO EDIT: guard a NetworkManager that failed or has not finished initializing (Addressables 2.7.4 NRE).
+            if (_networkManager == null || !_networkManager.IsClientStarted)
                 return;
 
             if (_reconcileStates.Count == 0)
                 return;
 
             TimeManager tm = _networkManager.TimeManager;
+            if (tm == null) //FISHMMO EDIT: see the guard above.
+                return;
             uint localTick = tm.LocalTick;
             uint lastLocalTickCompleted = localTick;
 

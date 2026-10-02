@@ -30,11 +30,11 @@ namespace FishNet.Utility.Performance
                     result = _byteArrays.Dequeue();
             }
 
-            int doubleMinimumLength = minimumLength * 2;
+            //FISHMMO EDIT: allocate exactly minimumLength rather than double it.
             if (result == null)
-                result = new byte[doubleMinimumLength];
+                result = new byte[minimumLength];
             else if (result.Length < minimumLength)
-                Array.Resize(ref result, doubleMinimumLength);
+                Array.Resize(ref result, minimumLength);
 
             return result;
         }
