@@ -3,6 +3,7 @@ using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using GameKit.Dependencies.Utilities;
+using Unity.Profiling;
 using UnityEngine;
 
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -57,6 +58,13 @@ namespace FishNet.Component.Transforming
         /// BasicTickSmoother for this script.
         /// </summary>
         private LocalTransformTickSmoother _tickSmoother;
+        #endregion
+        
+        #region Private Profiler Markers
+        
+        private static readonly ProfilerMarker _pm_OnPreTick = new("MonoTickSmoother._timeManager_OnPreTick()");
+        private static readonly ProfilerMarker _pm_OnPostTick = new("MonoTickSmoother._timeManager_OnPostTick()");
+        
         #endregion
 
         private void OnEnable()
@@ -136,7 +144,10 @@ namespace FishNet.Component.Transforming
         /// </summary>
         private void _timeManager_OnPreTick()
         {
-            _tickSmoother.OnPreTick();
+            using (_pm_OnPreTick.Auto())
+            {
+                _tickSmoother.OnPreTick();
+            }
         }
 
         /// <summary>
@@ -144,7 +155,10 @@ namespace FishNet.Component.Transforming
         /// </summary>
         private void _timeManager_OnPostTick()
         {
-            _tickSmoother.OnPostTick();
+            using (_pm_OnPostTick.Auto())
+            {
+                _tickSmoother.OnPostTick();
+            }
         }
     }
 }

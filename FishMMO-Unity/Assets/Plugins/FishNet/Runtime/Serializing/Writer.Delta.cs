@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using FishNet.CodeGenerating;
@@ -9,8 +9,6 @@ using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Serializing.Helping;
 using GameKit.Dependencies.Utilities;
-// FISHMMO EDIT: RingBuffer for the self-contained delta replicate writer below.
-using GameKit.Dependencies.Utilities.Types;
 using UnityEngine;
 
 namespace FishNet.Serializing
@@ -187,35 +185,19 @@ namespace FishNet.Serializing
         /// </summary>
         private void WriteDeltaSingle(UDeltaPrecisionType dpt, float value, bool unsigned)
         {
-            /* FISHMMO EDIT: round, do not floor.
-             *
-             * This quantises the MAGNITUDE of a difference, and flooring it biased every delta
-             * toward the previous value — the error never cancelled, it accumulated. A character at
-             * 5 m/s and tick rate 30 loses 0.00066 m per tick per axis, so by the 29th tick before
-             * the next absolute snapshot the reader's position trails the server's by about 1.9 cm,
-             * then snaps forward. Rounding halves that (measured 1.9 cm -> 0.97 cm over 29 ticks)
-             * and removes the guarantee that the error points the same way. It does not eliminate
-             * it: a constant per-tick difference rounds identically every tick, so some bias
-             * survives, and the once-per-second absolute snapshot is still what bounds it.
-             *
-             * Cannot overflow the chosen width: GetDeltaPrecisionType selects UInt8 only while the
-             * scaled value is strictly below byte.MaxValue, and UInt16 likewise, so the rounded
-             * result is at most the maximum the width holds. The clamps below make that a property
-             * of this method rather than of a threshold defined elsewhere. */
-            double scaled = value * DOUBLE_ACCURACY;
             if (dpt.FastContains(UDeltaPrecisionType.UInt8))
             {
                 if (unsigned)
-                    WriteUInt8Unpacked((byte)Math.Min(byte.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
+                    WriteUInt8Unpacked((byte)Math.Floor(value * DOUBLE_ACCURACY));
                 else
-                    WriteInt8Unpacked((sbyte)Math.Min(sbyte.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
+                    WriteInt8Unpacked((sbyte)Math.Floor(value * DOUBLE_ACCURACY));
             }
             else if (dpt.FastContains(UDeltaPrecisionType.UInt16))
             {
                 if (unsigned)
-                    WriteUInt16Unpacked((ushort)Math.Min(ushort.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
+                    WriteUInt16Unpacked((ushort)Math.Floor(value * DOUBLE_ACCURACY));
                 else
-                    WriteInt16Unpacked((short)Math.Min(short.MaxValue, Math.Round(scaled, MidpointRounding.AwayFromZero)));
+                    WriteInt16Unpacked((short)Math.Floor(value * DOUBLE_ACCURACY));
             }
             // Anything else is unpacked.
             else
@@ -336,7 +318,7 @@ namespace FishNet.Serializing
             }
             else
             {
-                NetworkManagerExtensions.LogError($"Unhandled precision type of {dpt}.");
+                NetworkManager.LogError($"Unhandled precision type of {dpt}.");
             }
         }
 
@@ -455,7 +437,7 @@ namespace FishNet.Serializing
             }
             else
             {
-                NetworkManagerExtensions.LogError($"Unhandled precision type of {dpt}.");
+                NetworkManager.LogError($"Unhandled precision type of {dpt}.");
             }
         }
 
@@ -542,10 +524,6 @@ namespace FishNet.Serializing
         public bool WriteDeltaTransformProperties(TransformProperties valueA, TransformProperties valueB, DeltaSerializerOption option = DeltaSerializerOption.Unset)
         {
             int startPosition = Position;
-            /* FISHMMO EDIT: remember Length too. Skip() grows Length and nothing shrinks it, so
-             * rewinding Position alone left the placeholder byte inside GetArraySegment() as
-             * trailing garbage whenever this was the last thing written into the writer. */
-            int startLength = Length;
             Skip(1);
 
             byte allFlags = 0;
@@ -565,7 +543,6 @@ namespace FishNet.Serializing
             else
             {
                 Position = startPosition;
-                Length = startLength;
                 return false;
             }
         }
@@ -591,17 +568,7 @@ namespace FishNet.Serializing
         /// </summary>
         private bool IsQuaternionChanged(Quaternion valueA, Quaternion valueB)
         {
-            /* FISHMMO EDIT: 0.0025 was coarse enough to lose a slow turn entirely.
-             *
-             * The caller advances its baseline to valueB whether or not anything was written (see
-             * Reconcile_Send), so a change below this threshold is not deferred — it is DISCARDED,
-             * and the next comparison starts from the new value. A player turning slower than about
-             * 0.29 degrees per tick therefore never had its rotation sent at all, and the owner was
-             * reconciled to an increasingly stale heading until the once-per-second absolute
-             * snapshot corrected it with a visible snap. The threshold now sits just under the
-             * codec's own resolution, so the only changes dropped are ones the wire could not have
-             * represented anyway. */
-            const float minimumChange = 0.0001f;
+            const float minimumChange = 0.0025f;
 
             if (Mathf.Abs(valueA.x - valueB.x) > minimumChange)
                 return true;
@@ -625,8 +592,6 @@ namespace FishNet.Serializing
             byte allFlags = 0;
 
             int startPosition = Position;
-            // FISHMMO EDIT: see WriteDeltaTransformProperties -- rewind Length with Position.
-            int startLength = Length;
             Skip(1);
 
             if (WriteUDeltaSingle(valueA.x, valueB.x))
@@ -641,7 +606,6 @@ namespace FishNet.Serializing
             }
 
             Position = startPosition;
-            Length = startLength;
             return false;
         }
 
@@ -651,8 +615,6 @@ namespace FishNet.Serializing
             byte allFlags = 0;
 
             int startPosition = Position;
-            // FISHMMO EDIT: see WriteDeltaTransformProperties -- rewind Length with Position.
-            int startLength = Length;
             Skip(1);
 
             if (WriteUDeltaSingle(valueA.x, valueB.x))
@@ -669,7 +631,6 @@ namespace FishNet.Serializing
             }
 
             Position = startPosition;
-            Length = startLength;
             return false;
         }
 
@@ -791,85 +752,6 @@ namespace FishNet.Serializing
         /// </summary>
         internal void WriteDeltaReconcile<T>(T lastReconcile, T value, DeltaSerializerOption option = DeltaSerializerOption.Unset) => WriteDelta(lastReconcile, value, option);
 
-        /* FISHMMO EDIT: self-contained delta replicate.
-         *
-         * The two WriteDeltaReplicate overloads further down take `List<T>` / `BasicQueue<T>` where
-         * T : IReplicateData, but the prediction call sites now hold
-         * RingBuffer<ReplicateDataContainer<T>> and BasicQueue<ReplicateDataContainer<T>>. They no
-         * longer compile against their own callers and are left untouched; these two are the
-         * replacements, and they differ from upstream in one deliberate way.
-         *
-         * Upstream encoded entry 0 against the entry BEFORE the window -- data the reader may never
-         * have seen. Replicates are sent on Channel.Unreliable and carry RedundancyCount past
-         * inputs precisely so a dropped packet does not cost the inputs it contained; chaining
-         * across packets throws that away, because one loss leaves the reader without the baseline
-         * the next packet was encoded against and every entry after it decodes to garbage.
-         *
-         * So each packet is self-contained: entry 0 is written absolutely, entries 1..n-1 are
-         * deltas against the entry before them WITHIN this packet. Losing a packet costs exactly
-         * that packet. The saving is barely affected because the bytes being saved are the
-         * redundancy entries, which are near-identical to their neighbours by construction --
-         * measured 85B -> 51B for a three-entry walking packet.
-         *
-         * Note the baselines here are the writer's exact values while the reader's are its decoded
-         * ones, so any LOSSY field codec would drift across entries within a packet -- bounded to
-         * n-1 steps and reset by the absolute entry 0 of every packet. Neither replicate type in
-         * this project has such a field today: CharacterReplicateData is two quantised move axes, a
-         * packed aim direction, flags and an ability id, all exact on the wire, and KCCPlatform's
-         * replicate is empty. The caveat is here for the next type, not for a current one. */
-        internal void WriteDeltaReplicate<T>(RingBuffer<ReplicateDataContainer<T>> values, int offset) where T : IReplicateData, new()
-        {
-            int collectionCount = values.Count;
-            byte count = (byte)(collectionCount - offset);
-            WriteUInt8Unpacked(count);
-
-            bool first = true;
-            T prev = default;
-            for (int i = offset; i < collectionCount; i++)
-            {
-                ReplicateDataContainer<T> container = values[i];
-                WriteDeltaReplicateEntry(container, ref prev, ref first);
-            }
-        }
-
-        /// <summary>
-        /// Writes a self-contained delta replicate from a queue. See the note on the RingBuffer overload.
-        /// </summary>
-        internal void WriteDeltaReplicate<T>(BasicQueue<ReplicateDataContainer<T>> values, int redundancyCount) where T : IReplicateData, new()
-        {
-            int collectionCount = values.Count;
-            byte count = (byte)redundancyCount;
-            WriteUInt8Unpacked(count);
-
-            bool first = true;
-            T prev = default;
-            for (int i = collectionCount - redundancyCount; i < collectionCount; i++)
-            {
-                ReplicateDataContainer<T> container = values[i];
-                WriteDeltaReplicateEntry(container, ref prev, ref first);
-            }
-        }
-
-        /// <summary>
-        /// Writes one replicate entry: the first absolutely, the rest as a delta against the one
-        /// before it, each followed by its channel. Mirrors WriteReplicateDataContainer's framing.
-        /// </summary>
-        private void WriteDeltaReplicateEntry<T>(ReplicateDataContainer<T> container, ref T prev, ref bool first) where T : IReplicateData, new()
-        {
-            if (first)
-            {
-                Write<T>(container.Data);
-                first = false;
-            }
-            else
-            {
-                WriteDelta(prev, container.Data, DeltaSerializerOption.RootSerialize);
-            }
-
-            WriteChannel(container.Channel);
-            prev = container.Data;
-        }
-
         /// <summary>
         /// Writes a delta replicate using a list.
         /// </summary>
@@ -937,23 +819,7 @@ namespace FishNet.Serializing
 
             if (del == null)
             {
-                /* FISHMMO EDIT: warning, not error -- see issue #159.
-                 *
-                 * This sits on the per-tick prediction path, so a single unregistered type logs
-                 * once per tick for as long as the scene is loaded. Measured at 14,442 occurrences
-                 * in a four-minute session, each carrying a full Unity stack trace: roughly 13 log
-                 * lines apiece, and most of a 10 MB log that then hid everything else in it.
-                 *
-                 * LevelLoggingConfiguration is set to Error in all three modes (headless, GUI and
-                 * development), and CanLog compares (byte)Warning(2) <= (byte)Error(1), so at the
-                 * configured level this now costs nothing at all. Raising the level to Warning
-                 * brings it back when somebody is actually looking for it.
-                 *
-                 * Severity, not a throttle: a missing delta serializer is a developer-time
-                 * omission, not a runtime failure the operator can act on. The guard against
-                 * shipping one is DeltaSerializerRegistrationTests, which fails the build rather
-                 * than waiting for somebody to read a log. */
-                NetworkManager.LogWarning($"Write delta method not found for {typeof(T).FullName}. Use a supported type or create a custom serializer.");
+                NetworkManager.LogError($"Write delta method not found for {typeof(T).FullName}. Use a supported type or create a custom serializer.");
 
                 return false;
             }

@@ -11,7 +11,7 @@ namespace FishNet.Object.Prediction
 {
     [Preserve]
     [DefaultWriter]
-    public static class PredictionigidbodySerializers
+    public static class PredictionRigidbodySerializers
     {
         [DefaultWriter]
         public static void WriteEntryData(this Writer w, PredictionRigidbody.EntryData value)
@@ -41,8 +41,15 @@ namespace FishNet.Object.Prediction
                     w.WriteVector3(data.Position);
                     w.WriteInt32((byte)data.Mode);
                     break;
+                case PredictionRigidbody.ForceApplicationType.MovePosition:
+                    w.WriteVector3(data.Position);
+                    break;
+                case PredictionRigidbody.ForceApplicationType.MoveRotation:
+                    w.WriteUInt8Unpacked((byte)data.RotationPacking);
+                    w.WriteQuaternion(data.Rotation, data.RotationPacking);
+                    break;
                 default:
-                    NetworkManagerExtensions.LogError($"ForceApplicationType of {appType} is not supported.");
+                    w.NetworkManager.LogError($"ForceApplicationType of {appType} is not supported.");
                     break;
             }
         }
@@ -78,8 +85,15 @@ namespace FishNet.Object.Prediction
                     data.Position = r.ReadVector3();
                     data.Mode = (ForceMode)r.ReadInt32();
                     break;
+                case PredictionRigidbody.ForceApplicationType.MovePosition:
+                    data.Position = r.ReadVector3();
+                    break;
+                case PredictionRigidbody.ForceApplicationType.MoveRotation:
+                    AutoPackType apt = (AutoPackType)r.ReadUInt8Unpacked();
+                    data.Rotation = r.ReadQuaternion(apt);
+                    break;
                 default:
-                    NetworkManagerExtensions.LogError($"ForceApplicationType of {appType} is not supported.");
+                    r.NetworkManager.LogError($"ForceApplicationType of {appType} is not supported.");
                     break;
             }
 
@@ -90,8 +104,10 @@ namespace FishNet.Object.Prediction
         [DefaultWriter]
         public static void WritePredictionRigidbody(this Writer w, PredictionRigidbody pr)
         {
-            w.Write(pr.Rigidbody.GetState());
-            w.WriteList(pr.GetPendingForces());
+            w.Write(pr.Rigidbody.GetState(pr.RotationPacking));
+            /* This used to write pr.GetPendingForces() but is no longer needed, assuming the user properly
+             * reconciles everything that modifies the predictionRigidbody. */
+            w.WriteList<PredictionRigidbody.EntryData>(null);
         }
 
         [DefaultReader]
@@ -138,9 +154,29 @@ namespace FishNet.Object.Prediction
             public ForceMode Mode;
             public Vector3 Vector3Force;
             public Vector3 Position;
+            public Quaternion Rotation;
+            [ExcludeSerialization]
+            public readonly AutoPackType RotationPacking;
             public float FloatForce;
             public float Radius;
             public float UpwardsModifier;
+
+            /// <summary>
+            /// Used for MovePosition.
+            /// </summary>
+            public AllForceData(Vector3 position) : this()
+            {
+                Position = position;
+            }
+
+            /// <summary>
+            /// Used for MoveRotation.
+            /// </summary>
+            public AllForceData(Quaternion rotation, AutoPackType rotationPacking) : this()
+            {
+                Rotation = rotation;
+                RotationPacking = rotationPacking;
+            }
 
             /// <summary>
             /// Used for Force and Torque.
@@ -185,12 +221,14 @@ namespace FishNet.Object.Prediction
         [System.Flags]
         public enum ForceApplicationType : byte
         {
-            AddForceAtPosition = 1,
-            AddExplosiveForce = 2,
-            AddForce = 4,
-            AddRelativeForce = 8,
-            AddTorque = 16,
-            AddRelativeTorque = 32
+            AddForceAtPosition = 1 << 0,
+            AddExplosiveForce = 1 << 1,
+            AddForce = 1 << 2,
+            AddRelativeForce = 1 << 3,
+            AddTorque = 1 << 4,
+            AddRelativeTorque = 1 << 5,
+            MovePosition = 1 << 6,
+            MoveRotation = 1 << 7,
         }
 
         [UseGlobalCustomSerializer]
@@ -230,6 +268,11 @@ namespace FishNet.Object.Prediction
         /// </summary>
         [System.NonSerialized]
         internal RigidbodyState RigidbodyState;
+        /// <summary>
+        /// How much to pack rotation.
+        /// </summary>
+        [ExcludeSerialization]
+        internal AutoPackType RotationPacking = AutoPackType.Packed;
         #endregion
 
         #region Private
@@ -250,6 +293,7 @@ namespace FishNet.Object.Prediction
         {
             if (_pendingForces != null)
                 CollectionCaches<EntryData>.StoreAndDefault(ref _pendingForces);
+
             Rigidbody = null;
         }
 
@@ -257,9 +301,11 @@ namespace FishNet.Object.Prediction
         /// Rigidbody which force is applied.
         /// </summary>
         /// <param name = "rb"></param>
-        public void Initialize(Rigidbody rb)
+        public void Initialize(Rigidbody rb, AutoPackType rotationPacking = AutoPackType.Packed)
         {
             Rigidbody = rb;
+            RotationPacking = rotationPacking;
+
             if (_pendingForces == null)
                 _pendingForces = CollectionCaches<EntryData>.RetrieveList();
             else
@@ -311,18 +357,42 @@ namespace FishNet.Object.Prediction
         /// </summary>
         public void Velocity(Vector3 force)
         {
+            #if UNITY_6000_1_OR_NEWER
             Rigidbody.linearVelocity = force;
-            RemoveForces(true);
+            #else
+            Rigidbody.velocity = force;
+            #endif
+            RemoveForces(nonAngular: true);
         }
 
         /// <summary>
-        /// Sets angularVelocity while clearning pending forces.
+        /// Sets angularVelocity while clearing pending forces.
         /// Simulate should still be called normally.
         /// </summary>
         public void AngularVelocity(Vector3 force)
         {
             Rigidbody.angularVelocity = force;
-            RemoveForces(false);
+            RemoveForces(nonAngular: false);
+        }
+
+        /// <summary>
+        /// Moves the kinematic Rigidbody towards position.
+        /// </summary>
+        /// <param name="position">Next position.</param>
+        public void MovePosition(Vector3 position)
+        {
+            EntryData fd = new(ForceApplicationType.MovePosition, new(position));
+            _pendingForces.Add(fd);
+        }
+
+        /// <summary>
+        /// Moves the kinematic Rigidbody towards rotation.
+        /// </summary>
+        /// <param name="position">Next position.</param>
+        public void MoveRotation(Quaternion rotation)
+        {
+            EntryData fd = new(ForceApplicationType.MoveRotation, new(rotation, RotationPacking));
+            _pendingForces.Add(fd);
         }
 
         /// <summary>
@@ -353,22 +423,37 @@ namespace FishNet.Object.Prediction
                     case ForceApplicationType.AddForceAtPosition:
                         Rigidbody.AddForceAtPosition(data.Vector3Force, data.Position, data.Mode);
                         break;
+                    case ForceApplicationType.MovePosition:
+                        Rigidbody.MovePosition(data.Position);
+                        break;
+                    case ForceApplicationType.MoveRotation:
+                        Rigidbody.MoveRotation(data.Rotation);
+                        break;
                 }
             }
             _pendingForces.Clear();
         }
 
         /// <summary>
-        /// Manually clears pending forces.
+        /// Clears current and pending forces for velocity and angularVelocity.
         /// </summary>
-        /// <param name = "velocity">True to clear velocities, false to clear angular velocities.</param>
-        public void ClearPendingForces(bool velocity)
+        public void ClearVelocities()
         {
-            RemoveForces(velocity);
+            Velocity(Vector3.zero);
+            AngularVelocity(Vector3.zero);
         }
 
         /// <summary>
-        /// Clears pending velocity and angular velocity forces.
+        /// Clears pending forces for velocity, or angular velocity.
+        /// </summary>
+        /// <param name = "nonAngular">True to clear pending velocity forces, false to clear pending angularVelocity forces.</param>
+        public void ClearPendingForces(bool nonAngular)
+        {
+            RemoveForces(nonAngular);
+        }
+
+        /// <summary>
+        /// Clears pending forces for velocity and angularVelocity.
         /// </summary>
         public void ClearPendingForces()
         {
@@ -381,11 +466,13 @@ namespace FishNet.Object.Prediction
         public void Reconcile(PredictionRigidbody pr)
         {
             _pendingForces.Clear();
+            
             if (pr._pendingForces != null)
             {
                 foreach (EntryData item in pr._pendingForces)
                     _pendingForces.Add(new(item));
             }
+            
             // Set state.
             Rigidbody.SetState(pr.RigidbodyState);
 
@@ -395,27 +482,29 @@ namespace FishNet.Object.Prediction
         /// <summary>
         /// Removes forces from pendingForces.
         /// </summary>
-        /// <param name = "velocity">True to remove if velocity, false if to remove angular velocity.</param>
-        private void RemoveForces(bool velocity)
+        /// <param name = "nonAngular">True to remove if velocity, false if to remove angular velocity.</param>
+        private void RemoveForces(bool nonAngular)
         {
             if (_pendingForces.Count > 0)
             {
                 ForceApplicationType velocityApplicationTypes = ForceApplicationType.AddRelativeForce | ForceApplicationType.AddForce | ForceApplicationType.AddExplosiveForce;
 
-                List<EntryData> newDatas = CollectionCaches<EntryData>.RetrieveList();
+                List<EntryData> datasToKeep = CollectionCaches<EntryData>.RetrieveList();
                 foreach (EntryData item in _pendingForces)
                 {
-                    if (VelocityApplicationTypesContains(item.Type) == !velocity)
-                        newDatas.Add(item);
+                    if (VelocityApplicationTypesContains(item.Type) == !nonAngular || item.Type == ForceApplicationType.MovePosition || item.Type == ForceApplicationType.MoveRotation)
+                        datasToKeep.Add(item);
                 }
                 // Add back to _pendingForces if changed.
-                if (newDatas.Count != _pendingForces.Count)
+                if (datasToKeep.Count != _pendingForces.Count)
                 {
                     _pendingForces.Clear();
-                    foreach (EntryData item in newDatas)
+                    
+                    foreach (EntryData item in datasToKeep)
                         _pendingForces.Add(item);
                 }
-                CollectionCaches<EntryData>.Store(newDatas);
+                
+                CollectionCaches<EntryData>.Store(datasToKeep);
 
                 bool VelocityApplicationTypesContains(ForceApplicationType apt)
                 {

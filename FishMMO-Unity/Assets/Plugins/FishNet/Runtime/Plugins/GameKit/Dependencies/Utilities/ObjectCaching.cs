@@ -1,7 +1,11 @@
+using System;
+using System.Collections.Concurrent;
 using GameKit.Dependencies.Utilities.Types;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using UnityEngine;
 
+// ReSharper disable ThreadStaticFieldHasInitializesr
 namespace GameKit.Dependencies.Utilities
 {
     /// <summary>
@@ -27,6 +31,23 @@ namespace GameKit.Dependencies.Utilities
     public static class ResettableCollectionCaches<T1, T2> where T1 : IResettable, new() where T2 : IResettable, new()
     {
         /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static ResettableCollectionCaches()
+        {
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
+
+        /// <summary>
         /// Retrieves a collection.
         /// </summary>
         /// <returns></returns>
@@ -40,8 +61,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref Dictionary<T1, T2> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -50,17 +74,21 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(Dictionary<T1, T2> value)
         {
-            if (value == null)
-                return;
-
-            foreach (KeyValuePair<T1, T2> kvp in value)
+            lock (_lock)
             {
-                ResettableObjectCaches<T1>.Store(kvp.Key);
-                ResettableObjectCaches<T2>.Store(kvp.Value);
-            }
+                if (value == null)
+                    return;
 
-            value.Clear();
-            CollectionCaches<T1, T2>.Store(value);
+                foreach (KeyValuePair<T1, T2> kvp in value)
+                {
+                    ResettableObjectCaches<T1>.Store(kvp.Key);
+                    ResettableObjectCaches<T2>.Store(kvp.Value);
+                }
+
+                value.Clear();
+
+                CollectionCaches<T1, T2>.Store(value);
+            }
         }
     }
 
@@ -70,6 +98,23 @@ namespace GameKit.Dependencies.Utilities
     public static class ResettableT1CollectionCaches<T1, T2> where T1 : IResettable, new()
     {
         /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static ResettableT1CollectionCaches()
+        {
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
+
+        /// <summary>
         /// Retrieves a collection.
         /// </summary>
         /// <returns></returns>
@@ -83,8 +128,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref Dictionary<T1, T2> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -93,14 +141,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(Dictionary<T1, T2> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            foreach (T1 item in value.Keys)
-                ResettableObjectCaches<T1>.Store(item);
+                foreach (T1 item in value.Keys)
+                    ResettableObjectCaches<T1>.Store(item);
 
-            value.Clear();
-            CollectionCaches<T1, T2>.Store(value);
+                value.Clear();
+                CollectionCaches<T1, T2>.Store(value);
+            }
         }
     }
 
@@ -110,6 +161,23 @@ namespace GameKit.Dependencies.Utilities
     public static class ResettableT2CollectionCaches<T1, T2> where T2 : IResettable, new()
     {
         /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static ResettableT2CollectionCaches()
+        {
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
+
+        /// <summary>
         /// Retrieves a collection.
         /// </summary>
         /// <returns></returns>
@@ -123,8 +191,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref Dictionary<T1, T2> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -133,14 +204,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(Dictionary<T1, T2> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            foreach (T2 item in value.Values)
-                ResettableObjectCaches<T2>.Store(item);
+                foreach (T2 item in value.Values)
+                    ResettableObjectCaches<T2>.Store(item);
 
-            value.Clear();
-            CollectionCaches<T1, T2>.Store(value);
+                value.Clear();
+                CollectionCaches<T1, T2>.Store(value);
+            }
         }
     }
 
@@ -153,17 +227,40 @@ namespace GameKit.Dependencies.Utilities
         /// Cache for ResettableRingBuffer.
         /// </summary>
         private static readonly Stack<ResettableRingBuffer<T>> _resettableRingBufferCache = new();
+        /// <summary>
+        /// Maximum number of entries allowed for the cache.
+        /// </summary>
+        private const int MAXIMUM_CACHE_COUNT = 50;
+        /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static ResettableCollectionCaches()
+        {
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
 
         /// <summary>
         /// Retrieves a collection.
         /// </summary>
         public static ResettableRingBuffer<T> RetrieveRingBuffer()
         {
-            ResettableRingBuffer<T> result;
-            if (!_resettableRingBufferCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                ResettableRingBuffer<T> result;
+                if (!_resettableRingBufferCache.TryPop(out result))
+                    result = new();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -211,8 +308,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref ResettableRingBuffer<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -222,11 +322,16 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "count">Number of entries in the array from the beginning.</param>
         public static void Store(ResettableRingBuffer<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.ResetState();
-            _resettableRingBufferCache.Push(value);
+                value.ResetState();
+
+                if (_resettableRingBufferCache.Count < MAXIMUM_CACHE_COUNT)
+                    _resettableRingBufferCache.Push(value);
+            }
         }
 
         /// <summary>
@@ -238,8 +343,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref T[] value, int count)
         {
-            Store(value, count);
-            value = default;
+            lock (_lock)
+            {
+                Store(value, count);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -249,13 +357,16 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "count">Number of entries in the array from the beginning.</param>
         public static void Store(T[] value, int count)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            for (int i = 0; i < count; i++)
-                ResettableObjectCaches<T>.Store(value[i]);
+                for (int i = 0; i < count; i++)
+                    ResettableObjectCaches<T>.Store(value[i]);
 
-            CollectionCaches<T>.Store(value, count);
+                CollectionCaches<T>.Store(value, count);
+            }
         }
 
         /// <summary>
@@ -266,8 +377,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref List<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -276,14 +390,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(List<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            for (int i = 0; i < value.Count; i++)
-                ResettableObjectCaches<T>.Store(value[i]);
+                for (int i = 0; i < value.Count; i++)
+                    ResettableObjectCaches<T>.Store(value[i]);
 
-            value.Clear();
-            CollectionCaches<T>.Store(value);
+                value.Clear();
+                CollectionCaches<T>.Store(value);
+            }
         }
 
         /// <summary>
@@ -294,8 +411,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref SortedSet<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -304,14 +424,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(SortedSet<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            foreach (T item in value)
-                ResettableObjectCaches<T>.Store(item);
+                foreach (T item in value)
+                    ResettableObjectCaches<T>.Store(item);
 
-            value.Clear();
-            CollectionCaches<T>.Store(value);
+                value.Clear();
+                CollectionCaches<T>.Store(value);
+            }
         }
 
         /// <summary>
@@ -322,8 +445,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref HashSet<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -332,14 +458,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(HashSet<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            foreach (T item in value)
-                ResettableObjectCaches<T>.Store(item);
+                foreach (T item in value)
+                    ResettableObjectCaches<T>.Store(item);
 
-            value.Clear();
-            CollectionCaches<T>.Store(value);
+                value.Clear();
+                CollectionCaches<T>.Store(value);
+            }
         }
 
         /// <summary>
@@ -350,8 +479,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref Queue<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -360,14 +492,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(Queue<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            foreach (T item in value)
-                ResettableObjectCaches<T>.Store(item);
+                foreach (T item in value)
+                    ResettableObjectCaches<T>.Store(item);
 
-            value.Clear();
-            CollectionCaches<T>.Store(value);
+                value.Clear();
+                CollectionCaches<T>.Store(value);
+            }
         }
 
         /// <summary>
@@ -378,8 +513,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref BasicQueue<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -388,14 +526,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(BasicQueue<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            while (value.TryDequeue(out T result))
-                ResettableObjectCaches<T>.Store(result);
+                while (value.TryDequeue(out T result))
+                    ResettableObjectCaches<T>.Store(result);
 
-            value.Clear();
-            CollectionCaches<T>.Store(value);
+                value.Clear();
+                CollectionCaches<T>.Store(value);
+            }
         }
     }
 
@@ -405,13 +546,33 @@ namespace GameKit.Dependencies.Utilities
     public static class ResettableObjectCaches<T> where T : IResettable, new()
     {
         /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static ResettableObjectCaches()
+        {
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
+
+        /// <summary>
         /// Retrieves an instance of T.
         /// </summary>
         public static T Retrieve()
         {
-            T result = ObjectCaches<T>.Retrieve();
-            result.InitializeState();
-            return result;
+            lock (_lock)
+            {
+                T result = ObjectCaches<T>.Retrieve();
+                result.InitializeState();
+                return result;
+            }
         }
 
         /// <summary>
@@ -422,8 +583,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref T value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -432,11 +596,14 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(T value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.ResetState();
-            ObjectCaches<T>.Store(value);
+                value.ResetState();
+                ObjectCaches<T>.Store(value);
+            }
         }
     }
     #endregion
@@ -451,6 +618,26 @@ namespace GameKit.Dependencies.Utilities
         /// Cache for dictionaries.
         /// </summary>
         private static readonly Stack<Dictionary<T1, T2>> _dictionaryCache = new();
+        /// <summary>
+        /// Maximum number of entries allowed for the cache.
+        /// </summary>
+        private const int MAXIMUM_CACHE_COUNT = 50;
+        /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static CollectionCaches()
+        {
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
 
         /// <summary>
         /// Retrieves a collection.
@@ -458,11 +645,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static Dictionary<T1, T2> RetrieveDictionary()
         {
-            Dictionary<T1, T2> result;
-            if (!_dictionaryCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                Dictionary<T1, T2> result;
+                if (!_dictionaryCache.TryPop(out result))
+                    result = new();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -473,8 +663,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref Dictionary<T1, T2> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -483,18 +676,22 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(Dictionary<T1, T2> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.Clear();
-            _dictionaryCache.Push(value);
+                value.Clear();
+                if (_dictionaryCache.Count < MAXIMUM_CACHE_COUNT)
+                    _dictionaryCache.Push(value);
+            }
         }
     }
 
     /// <summary>
     /// Caches collections of a single generic.
     /// </summary>
-    public static class CollectionCaches<T>
+    public static partial class CollectionCaches<T>
     {
         /// <summary>
         /// Cache for arrays.
@@ -520,6 +717,26 @@ namespace GameKit.Dependencies.Utilities
         /// Cache for hashset.
         /// </summary>
         private static readonly Stack<HashSet<T>> _hashSetCache = new();
+        /// <summary>
+        /// Maximum number of entries allowed for the cache.
+        /// </summary>
+        private const int MAXIMUM_CACHE_COUNT = 50;
+        /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static CollectionCaches()
+        {
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
 
         /// <summary>
         /// Retrieves a collection.
@@ -527,11 +744,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static T[] RetrieveArray()
         {
-            T[] result;
-            if (!_arrayCache.TryPop(out result))
-                result = new T[0];
+            lock (_lock)
+            {
+                T[] result;
+                if (!_arrayCache.TryPop(out result))
+                    result = new T[0];
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -540,11 +760,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static List<T> RetrieveList()
         {
-            List<T> result;
-            if (!_listCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                List<T> result;
+                if (!_listCache.TryPop(out result))
+                    result = new();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -553,11 +776,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static SortedSet<T> RetrieveSortedSet()
         {
-            SortedSet<T> result;
-            if (!_sortedSetCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                SortedSet<T> result;
+                if (!_sortedSetCache.TryPop(out result))
+                    result = new();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -566,11 +792,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static Queue<T> RetrieveQueue()
         {
-            Queue<T> result;
-            if (!_queueCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                Queue<T> result;
+                if (!_queueCache.TryPop(out result))
+                    result = new();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -579,11 +808,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static BasicQueue<T> RetrieveBasicQueue()
         {
-            BasicQueue<T> result;
-            if (!_basicQueueCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                BasicQueue<T> result;
+                if (!_basicQueueCache.TryPop(out result))
+                    result = new();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -592,12 +824,15 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static Queue<T> RetrieveQueue(T entry)
         {
-            Queue<T> result;
-            if (!_queueCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                Queue<T> result;
+                if (!_queueCache.TryPop(out result))
+                    result = new();
 
-            result.Enqueue(entry);
-            return result;
+                result.Enqueue(entry);
+                return result;
+            }
         }
 
         /// <summary>
@@ -606,12 +841,15 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static List<T> RetrieveList(T entry)
         {
-            List<T> result;
-            if (!_listCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                List<T> result;
+                if (!_listCache.TryPop(out result))
+                    result = new();
 
-            result.Add(entry);
-            return result;
+                result.Add(entry);
+                return result;
+            }
         }
 
         /// <summary>
@@ -620,11 +858,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static HashSet<T> RetrieveHashSet()
         {
-            HashSet<T> result;
-            if (!_hashSetCache.TryPop(out result))
-                result = new();
+            lock (_lock)
+            {
+                HashSet<T> result;
+                if (!_hashSetCache.TryPop(out result))
+                    result = new();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -633,12 +874,15 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static HashSet<T> RetrieveHashSet(T entry)
         {
-            HashSet<T> result;
-            if (!_hashSetCache.TryPop(out result))
-                return new();
+            lock (_lock)
+            {
+                HashSet<T> result;
+                if (!_hashSetCache.TryPop(out result))
+                    return new();
 
-            result.Add(entry);
-            return result;
+                result.Add(entry);
+                return result;
+            }
         }
 
         /// <summary>
@@ -650,8 +894,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref T[] value, int count)
         {
-            Store(value, count);
-            value = default;
+            lock (_lock)
+            {
+                Store(value, count);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -661,13 +908,17 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "count">Number of entries in the array from the beginning.</param>
         public static void Store(T[] value, int count)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            for (int i = 0; i < count; i++)
-                value[i] = default;
+                for (int i = 0; i < count; i++)
+                    value[i] = default;
 
-            _arrayCache.Push(value);
+                if (_arrayCache.Count < MAXIMUM_CACHE_COUNT)
+                    _arrayCache.Push(value);
+            }
         }
 
         /// <summary>
@@ -678,8 +929,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref List<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -688,11 +942,16 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(List<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.Clear();
-            _listCache.Push(value);
+                value.Clear();
+
+                if (_listCache.Count < MAXIMUM_CACHE_COUNT)
+                    _listCache.Push(value);
+            }
         }
 
         /// <summary>
@@ -703,8 +962,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref SortedSet<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -713,11 +975,16 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(SortedSet<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.Clear();
-            _sortedSetCache.Push(value);
+                value.Clear();
+
+                if (_sortedSetCache.Count < MAXIMUM_CACHE_COUNT)
+                    _sortedSetCache.Push(value);
+            }
         }
 
         /// <summary>
@@ -728,8 +995,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref Queue<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -738,11 +1008,16 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(Queue<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.Clear();
-            _queueCache.Push(value);
+                value.Clear();
+
+                if (_queueCache.Count < MAXIMUM_CACHE_COUNT)
+                    _queueCache.Push(value);
+            }
         }
 
         /// <summary>
@@ -753,8 +1028,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref BasicQueue<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -763,11 +1041,16 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(BasicQueue<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.Clear();
-            _basicQueueCache.Push(value);
+                value.Clear();
+
+                if (_basicQueueCache.Count < MAXIMUM_CACHE_COUNT)
+                    _basicQueueCache.Push(value);
+            }
         }
 
         /// <summary>
@@ -778,8 +1061,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref HashSet<T> value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -788,11 +1074,16 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value">Value to store.</param>
         public static void Store(HashSet<T> value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            value.Clear();
-            _hashSetCache.Push(value);
+                value.Clear();
+
+                if (_hashSetCache.Count < MAXIMUM_CACHE_COUNT)
+                    _hashSetCache.Push(value);
+            }
         }
     }
 
@@ -805,6 +1096,29 @@ namespace GameKit.Dependencies.Utilities
         /// Stack to use.
         /// </summary>
         private static readonly Stack<T> _stack = new();
+        /// <summary>
+        /// Maximum number of entries allowed for the cache.
+        /// </summary>
+        private const int MAXIMUM_CACHE_COUNT = 50;
+        /// <summary>
+        /// Thread lock object.
+        /// </summary>
+        private static object _lock = new();
+
+        static ObjectCaches()
+        {
+            /* Initializes lock if not already -- this covers
+             * the rare chance a thread other than Unity accesses
+             * this class first. */
+            if (_lock == null)
+                _lock = new();
+        }
+
+        // /// <summary>
+        // /// Forces _lock to initialize on the Unity main thread.
+        // /// </summary>
+        // [RuntimeInitializeOnLoadMethod]
+        // private static void InitializeLockObject() => _lock = new();
 
         /// <summary>
         /// Returns a value from the stack or creates an instance when the stack is empty.
@@ -812,11 +1126,14 @@ namespace GameKit.Dependencies.Utilities
         /// <returns></returns>
         public static T Retrieve()
         {
-            T result;
-            if (!_stack.TryPop(out result))
-                result = new(); // Activator.CreateInstance<T>();
+            lock (_lock)
+            {
+                T result;
+                if (!_stack.TryPop(out result))
+                    result = new(); // Activator.CreateInstance<T>();
 
-            return result;
+                return result;
+            }
         }
 
         /// <summary>
@@ -827,8 +1144,11 @@ namespace GameKit.Dependencies.Utilities
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void StoreAndDefault(ref T value)
         {
-            Store(value);
-            value = default;
+            lock (_lock)
+            {
+                Store(value);
+                value = default;
+            }
         }
 
         /// <summary>
@@ -837,10 +1157,14 @@ namespace GameKit.Dependencies.Utilities
         /// <param name = "value"></param>
         public static void Store(T value)
         {
-            if (value == null)
-                return;
+            lock (_lock)
+            {
+                if (value == null)
+                    return;
 
-            _stack.Push(value);
+                if (_stack.Count < MAXIMUM_CACHE_COUNT)
+                    _stack.Push(value);
+            }
         }
     }
     #endregion

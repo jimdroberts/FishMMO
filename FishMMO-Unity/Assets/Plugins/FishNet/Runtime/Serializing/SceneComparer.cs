@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using FishNet.Utility.Extension;
+using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 
 namespace FishNet.Serializing.Helping
@@ -7,12 +8,12 @@ namespace FishNet.Serializing.Helping
     {
         public override bool Equals(Scene a, Scene b)
         {
-            return a.handle == b.handle;
+            return a.GetRawHandle() == b.GetRawHandle();
         }
 
         public override int GetHashCode(Scene obj)
         {
-            return obj.handle;
+            return obj.GetRawHandle().GetHashCode();
         }
     }
 }

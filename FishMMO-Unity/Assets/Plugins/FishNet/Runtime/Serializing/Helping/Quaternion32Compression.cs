@@ -118,11 +118,9 @@ namespace FishNet.Serializing.Helping
 
         private static float ScaleToFloat(uint v)
         {
-            float unscaled = v * Maximum / IntScale;
-
-            if (unscaled > Maximum)
-                unscaled -= Maximum * 2;
-            return unscaled;
+            // Values above IntScale are two's-complement negatives produced by ScaleToUint's mask.
+            int signed = v > IntScale ? (int)v - (IntMask + 1) : (int)v;
+            return signed * Maximum / IntScale;
         }
 
         /// <summary>
@@ -135,7 +133,7 @@ namespace FishNet.Serializing.Helping
             bool largestIsNegative = axesFlippingEnabled ? false : reader.ReadBoolean();
             uint compressed = reader.ReadUInt32Unpacked();
 
-            var largestComponentType = (ComponentType)(compressed >> LargestComponentShift);
+            ComponentType largestComponentType = (ComponentType)(compressed >> LargestComponentShift);
             uint integerA = (compressed >> AShift) & IntMask;
             uint integerB = (compressed >> BShift) & IntMask;
             uint integerC = compressed & IntMask;

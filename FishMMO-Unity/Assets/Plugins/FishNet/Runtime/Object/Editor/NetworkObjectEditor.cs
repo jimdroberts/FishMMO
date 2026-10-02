@@ -15,10 +15,13 @@ namespace FishNet.Object.Editing
         private SerializedProperty _initializeOrder;
         private SerializedProperty _preventDespawnOnDisconnect;
         private SerializedProperty _defaultDespawnType;
+        private SerializedProperty _useLevelOfDetail;
         private SerializedProperty _enablePrediction;
         private SerializedProperty _enableStateForwarding;
         private SerializedProperty _networkTransform;
         private SerializedProperty _predictionType;
+        private SerializedProperty _localReconcileCorrectionType;
+        private SerializedProperty _localLevelOfDetailCalculationType;
         private SerializedProperty _graphicalObject;
         private SerializedProperty _detachGraphicalObject;
         private SerializedProperty _ownerSmoothedProperties;
@@ -43,11 +46,14 @@ namespace FishNet.Object.Editing
             _initializeOrder = serializedObject.FindProperty(nameof(_initializeOrder));
             _preventDespawnOnDisconnect = serializedObject.FindProperty(nameof(_preventDespawnOnDisconnect));
             _defaultDespawnType = serializedObject.FindProperty(nameof(_defaultDespawnType));
-
+            _useLevelOfDetail = serializedObject.FindProperty(nameof(_useLevelOfDetail));
+            
             _enablePrediction = serializedObject.FindProperty(nameof(_enablePrediction));
             _enableStateForwarding = serializedObject.FindProperty(nameof(_enableStateForwarding));
             _networkTransform = serializedObject.FindProperty(nameof(_networkTransform));
             _predictionType = serializedObject.FindProperty(nameof(_predictionType));
+            _localReconcileCorrectionType = serializedObject.FindProperty(nameof(_localReconcileCorrectionType));
+            _localLevelOfDetailCalculationType = serializedObject.FindProperty(nameof(_localLevelOfDetailCalculationType));
             _graphicalObject = serializedObject.FindProperty(nameof(_graphicalObject));
             _detachGraphicalObject = serializedObject.FindProperty(nameof(_detachGraphicalObject));
 
@@ -95,8 +101,16 @@ namespace FishNet.Object.Editing
                 EditorGUILayout.PropertyField(_initializeOrder);
                 EditorGUILayout.PropertyField(_preventDespawnOnDisconnect);
                 EditorGUILayout.PropertyField(_defaultDespawnType);
-            }
 
+                bool isPlaying = Application.isPlaying;
+                if (isPlaying)
+                    GUI.enabled = false;
+                
+                EditorGUILayout.PropertyField(_useLevelOfDetail, new GUIContent("* Use Level of Detail"));
+                
+                GUI.enabled = true;
+            }
+ 
             void ShowPredictionTab()
             {
                 SaveTabIndex();
@@ -104,7 +118,17 @@ namespace FishNet.Object.Editing
                 if (_enablePrediction.boolValue == true)
                 {
                     EditorGUI.indentLevel++;
+                    EditorGUILayout.PropertyField(_localLevelOfDetailCalculationType);
                     EditorGUILayout.PropertyField(_predictionType);
+                    
+                    bool isRigidbodyPredictionType = _predictionType.intValue == (int)NetworkObject.PredictionType.Rigidbody2D || _predictionType.intValue == (int)NetworkObject.PredictionType.Rigidbody;
+                    if (isRigidbodyPredictionType)
+                    {
+                        EditorGUI.indentLevel++;
+                        EditorGUILayout.PropertyField(_localReconcileCorrectionType);
+                        EditorGUI.indentLevel--;
+                    }
+                    
                     EditorGUILayout.PropertyField(_enableStateForwarding);
                     if (_enableStateForwarding.boolValue == false)
                     {

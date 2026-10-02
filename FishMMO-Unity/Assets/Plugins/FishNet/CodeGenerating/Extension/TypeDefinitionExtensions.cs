@@ -51,10 +51,7 @@ namespace FishNet.CodeGenerating.Extension
                     ExplicitThis = baseMd.ExplicitThis
                 };
                 foreach (ParameterDefinition pd in baseMd.Parameters)
-                {
-                    session.ImportReference(pd.ParameterType);
-                    baseMr.Parameters.Add(pd);
-                }
+                    baseMr.Parameters.Add(pd.CloneImported(session, baseMr));
             }
             else
             {
@@ -154,30 +151,15 @@ namespace FishNet.CodeGenerating.Extension
                 };
                 md.Body.InitLocals = methodTemplate.Body.InitLocals;
 
-                if (copyParameters)
-                {
-                    /* FISHMMO EDIT (issue #229): a template that lives in another module (e.g. a
-                     * NetworkBehaviour base method) must have its parameters cloned with imported types,
-                     * never re-parented; see MethodDefinitionExtensions.CreateParameters for why. Same-module
-                     * templates keep the original re-parenting behaviour, which callers rely on. */
-                    if (methodTemplate.Module != td.Module)
-                    {
-                        md.CreateParameters(session, methodTemplate);
-                    }
-                    else
-                    {
-                        foreach (ParameterDefinition pd in methodTemplate.Parameters)
-                        {
-                            session.ImportReference(pd.ParameterType.CachedResolve(session));
-                            md.Parameters.Add(pd);
-                        }
-                    }
-                }
-
                 foreach (GenericParameter item in methodTemplate.GenericParameters)
                 {
-                    session.ImportReference(item);
-                    md.GenericParameters.Add(item);
+                    md.GenericParameters.Add(new(item.Name, md) { Attributes = item.Attributes });
+                }
+
+                if (copyParameters)
+                {
+                    foreach (ParameterDefinition pd in methodTemplate.Parameters)
+                        md.Parameters.Add(pd.CloneImported(session, md));
                 }
 
                 td.Methods.Add(md);

@@ -39,14 +39,14 @@ namespace FishNet.Object
             get => _componentIndexCache;
             private set => _componentIndexCache = value;
         }
-#if UNITY_EDITOR
+        #if UNITY_EDITOR
         /// <summary>
         /// NetworkObject automatically added or discovered during edit time.
         /// </summary>
         [SerializeField]
         [HideInInspector]
         private NetworkObject _addedNetworkObject;
-#endif
+        #endif
         /// <summary>
         /// Cache of the TransportManager.
         /// </summary>
@@ -66,14 +66,14 @@ namespace FishNet.Object
         /// <summary>
         /// True if initialized at some point asServer.
         /// </summary>
+        #pragma warning disable CS0414 // Field is assigned but its value is never used
         private bool _initializedOnceServer;
-#pragma warning disable CS0414
         /// <summary>
         /// True if initialized at some point not asServer.
         /// </summary>
         private bool _initializedOnceClient;
-#pragma warning restore CS0414
-#if !UNITY_SERVER
+        #pragma warning restore CS0414 // Field is assigned but its value is never used
+        #if !UNITY_SERVER
         /// <summary>
         /// </summary>
         private NetworkTrafficStatistics _networkTrafficStatistics;
@@ -81,7 +81,7 @@ namespace FishNet.Object
         /// Name of this NetworkBehaviour.
         /// </summary>
         private string _typeName = string.Empty;
-#endif
+        #endif
         #endregion
 
         #region Consts.
@@ -101,7 +101,21 @@ namespace FishNet.Object
         /// <returns></returns>
         public override string ToString()
         {
-            return $"Name [{gameObject.name}] ComponentId [{ComponentIndex}] NetworkObject Name [{_networkObjectCache.name}] NetworkObject Id [{_networkObjectCache.ObjectId}]";
+            string networkObjectName;
+            int networkObjectId;
+            
+            if (_networkObjectCache == null)
+            {
+                networkObjectName = "Null";
+                networkObjectId = Object.NetworkObject.UNSET_OBJECTID_VALUE;
+            }
+            else
+            {
+                networkObjectName = _networkObjectCache.name;
+                networkObjectId = _networkObjectCache.ObjectId;
+            }
+            
+            return $"Name [{gameObject.name}] ComponentId [{ComponentIndex}] NetworkObject Name [{networkObjectName}] NetworkObject Id [{networkObjectId}]";
         }
 
         [MakePublic]
@@ -115,17 +129,17 @@ namespace FishNet.Object
         /// </summary>
         internal void InitializeEarly(NetworkObject nob, bool asServer)
         {
-#if DEVELOPMENT && !UNITY_SERVER
+            #if DEVELOPMENT && !UNITY_SERVER
             if (_typeName == string.Empty)
                 _typeName = GetType().Name;
-#endif
+            #endif
 
             _transportManagerCache = nob.TransportManager;
             SyncTypes_Preinitialize(asServer);
 
-#if DEVELOPMENT && !UNITY_SERVER
+            #if DEVELOPMENT && !UNITY_SERVER
             nob.NetworkManager.StatisticsManager.TryGetNetworkTrafficStatistics(out _networkTrafficStatistics);
-#endif
+            #endif
             
             if (asServer)
             {
@@ -134,9 +148,6 @@ namespace FishNet.Object
             }
             else
             {
-                if (!_initializedOnceClient && nob.EnablePrediction && _usesPrediction)
-                    nob.RegisterPredictionBehaviourOnce(this);
-
                 _initializedOnceClient = true;
             }
         }
@@ -184,22 +195,22 @@ namespace FishNet.Object
         #region Editor.
         protected virtual void Reset()
         {
-#if UNITY_EDITOR
+            #if UNITY_EDITOR
             if (Application.isPlaying)
                 return;
 
             TryAddNetworkObject();
-#endif
+            #endif
         }
 
         protected virtual void OnValidate()
         {
-#if UNITY_EDITOR
+            #if UNITY_EDITOR
             if (Application.isPlaying)
                 return;
 
             TryAddNetworkObject();
-#endif
+            #endif
         }
 
         /// <summary>
@@ -211,7 +222,6 @@ namespace FishNet.Object
             ResetState_Prediction(asServer);
             ClearReplicateCache();
             ClearBuffedRpcs();
-            _observersRpcSettled = true; //FISHMMO EDIT: a respawned object starts from a reliable baseline.
         }
 
         /// <summary>
@@ -219,22 +229,13 @@ namespace FishNet.Object
         /// </summary>
         private NetworkObject TryAddNetworkObject()
         {
-#if UNITY_EDITOR
+            #if UNITY_EDITOR
             if (Application.isPlaying)
                 return _addedNetworkObject;
-
-            /* FISHMMO EDIT: a cached owner is only trusted when it sits in this behaviour's own
-             * hierarchy. Paste Component Values, EditorUtility.CopySerialized and SerializedObject
-             * migrations copy this hidden field between prefabs verbatim, leaving it pointing at
-             * ANOTHER asset's NetworkObject. Unity reports nothing, the stock code returned the
-             * stale value forever, and the affected NPC could not be damaged (PR #212). */
-            if (_addedNetworkObject != null && !IsInOwnHierarchy(_addedNetworkObject))
-                _addedNetworkObject = null;
 
             if (_addedNetworkObject != null)
             {
                 AlertToDuplicateNetworkObjects(_addedNetworkObject.transform);
-                SyncNetworkObjectCache(); //FISHMMO EDIT
                 return _addedNetworkObject;
             }
 
@@ -264,30 +265,7 @@ namespace FishNet.Object
             }
 
             AlertToDuplicateNetworkObjects(_addedNetworkObject.transform);
-            SyncNetworkObjectCache(); //FISHMMO EDIT
             return _addedNetworkObject;
-
-            //FISHMMO EDIT: keep the runtime cache on the same object as the discovered owner, so a
-            // foreign or missing cache is repaired the moment Unity validates the component.
-            void SyncNetworkObjectCache()
-            {
-                if (_networkObjectCache == null || !IsInOwnHierarchy(_networkObjectCache))
-                    _networkObjectCache = _addedNetworkObject;
-            }
-
-            //FISHMMO EDIT: true when nob is on this transform or one of its ancestors. Works for
-            // prefab assets, prefab stages and scene objects alike, and is false for any object in
-            // a different asset because that asset's transforms are never on this chain.
-            bool IsInOwnHierarchy(NetworkObject nob)
-            {
-                Transform target = nob.transform;
-                for (Transform t = transform; t != null; t = t.parent)
-                {
-                    if (t == target)
-                        return true;
-                }
-                return false;
-            }
 
             // Removes duplicate network objects from t.
             void AlertToDuplicateNetworkObjects(Transform t)
@@ -307,9 +285,9 @@ namespace FishNet.Object
                         Debug.LogError($"Object {t.name} in scene {sceneName} has multiple NetworkObject components. Please remove the extra component(s) to prevent errors.{useMenu}");
                 }
             }
-#else
+            #else
             return null;
-#endif
+            #endif
         }
         #endregion
     }

@@ -375,10 +375,10 @@ namespace FishNet.Managing.Server
                     NetworkManager.TransportManager.SendToClient((byte)Channel.Reliable, _writer.GetArraySegment(), nc);
 
 
-#if DEVELOPMENT && !UNITY_SERVER
+                    #if DEVELOPMENT && !UNITY_SERVER
                     if (NetworkTrafficStatistics != null)
                         NetworkTrafficStatistics.AddOutboundPacketIdData(PacketId.BulkSpawnOrDespawn, string.Empty, _writer.Length, gameObject: null, asServer: true);
-#endif
+                    #endif
 
                     _writer.Clear();
 
@@ -399,36 +399,36 @@ namespace FishNet.Managing.Server
                 return;
             _writer.Clear();
 
-#if DEVELOPMENT && !UNITY_SERVER
+            #if DEVELOPMENT && !UNITY_SERVER
             PacketId trafficPacketId;
-#endif
+            #endif
             conn.UpdateHashGridPositions(!timedOnly);
             // If observer state changed then write changes.
             ObserverStateChange osc = nob.RebuildObservers(conn, timedOnly);
             if (osc == ObserverStateChange.Added)
             {
                 WriteSpawn(nob, _writer, conn);
-#if DEVELOPMENT && !UNITY_SERVER
+                #if DEVELOPMENT && !UNITY_SERVER
                 trafficPacketId = PacketId.ObjectSpawn;
-#endif
+                #endif
             }
             else if (osc == ObserverStateChange.Removed)
             {
                 nob.InvokeOnServerDespawn(conn);
                 WriteDespawn(nob, nob.GetDefaultDespawnType(), _writer);
-#if DEVELOPMENT && !UNITY_SERVER
+                #if DEVELOPMENT && !UNITY_SERVER
                 trafficPacketId = PacketId.ObjectDespawn;
-#endif
+                #endif
             }
             else
             {
                 return;
             }
 
-#if DEVELOPMENT && !UNITY_SERVER
+            #if DEVELOPMENT && !UNITY_SERVER
             if (NetworkTrafficStatistics != null)
                 NetworkTrafficStatistics.AddOutboundPacketIdData(trafficPacketId, string.Empty, _writer.Length, gameObject: null, asServer: true);
-#endif
+            #endif
 
             NetworkManager.TransportManager.SendToClient((byte)Channel.Reliable, _writer.GetArraySegment(), conn);
 
@@ -459,6 +459,7 @@ namespace FishNet.Managing.Server
 
             // If observer state changed then write changes.
             ObserverStateChange osc = nob.RebuildObservers(conn, timedOnly);
+
             if (osc == ObserverStateChange.Added)
             {
                 WriteSpawn(nob, _writer, conn);
@@ -478,9 +479,21 @@ namespace FishNet.Managing.Server
              * This is to ensure runtime children have visibility updated
              * in relation to parent.
              *
+             * This has to be done recursively to support children with
+             * nested NetworkObjects.
+             *
              * If here there is change. */
             foreach (NetworkBehaviour item in nob.RuntimeChildNetworkBehaviours)
                 RebuildObservers(item.NetworkObject, conn, addedNobs, timedOnly);
+
+            List<NetworkObject> nestedNetworkObjects = nob.GetNetworkObjects(GetNetworkObjectOption.AllNested);
+            if (nestedNetworkObjects != null)
+            {
+                foreach (NetworkObject nestedNetworkObject in nestedNetworkObjects)
+                    RebuildObservers(nestedNetworkObject, conn, addedNobs, timedOnly);
+
+                CollectionCaches<NetworkObject>.Store(nestedNetworkObjects);
+            }
         }
     }
 }

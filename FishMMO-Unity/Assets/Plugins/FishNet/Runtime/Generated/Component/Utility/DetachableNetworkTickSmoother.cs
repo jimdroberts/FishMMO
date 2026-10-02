@@ -5,6 +5,7 @@ using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Utility.Extension;
 using GameKit.Dependencies.Utilities;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace FishNet.Component.Transforming
@@ -96,6 +97,8 @@ namespace FishNet.Component.Transforming
         /// Cached TickDelta of the TimeManager.
         /// </summary>
         private float _tickDelta;
+        
+        private static readonly ProfilerMarker _pm_OnPostTick = new("DetachableNetworkTickSmoother._timeManager_OnPostTick()");
         #endregion
 
         private void Awake()
@@ -113,12 +116,12 @@ namespace FishNet.Component.Transforming
             bool error = false;
             if (transform.parent == null)
             {
-                NetworkManagerExtensions.LogError($"{GetType().Name} on gameObject {gameObject.name} requires a parent to detach from.");
+                NetworkManager.LogError($"{GetType().Name} on gameObject {gameObject.name} requires a parent to detach from.");
                 error = true;
             }
             if (_followObject == null)
             {
-                NetworkManagerExtensions.LogError($"{GetType().Name} on gameObject {gameObject}, root {transform.root} requires followObject to be set.");
+                NetworkManager.LogError($"{GetType().Name} on gameObject {gameObject}, root {transform.root} requires followObject to be set.");
                 error = true;
             }
 
@@ -170,18 +173,21 @@ namespace FishNet.Component.Transforming
         /// </summary>
         private void _timeManager_OnPostTick()
         {
-            if (!_initialized)
-                return;
+            using (_pm_OnPostTick.Auto())
+            {
+                if (!_initialized)
+                    return;
 
-            _postTickFollowObjectWorldProperties.Update(_followObject);
-            // Unset values if not following the transform property.
-            if (!_synchronizePosition)
-                _postTickFollowObjectWorldProperties.Position = transform.position;
-            if (!_synchronizeRotation)
-                _postTickFollowObjectWorldProperties.Rotation = transform.rotation;
-            if (!_synchronizeScale)
-                _postTickFollowObjectWorldProperties.Scale = transform.localScale;
-            SetMoveRates();
+                _postTickFollowObjectWorldProperties.Update(_followObject);
+                // Unset values if not following the transform property.
+                if (!_synchronizePosition)
+                    _postTickFollowObjectWorldProperties.Position = transform.position;
+                if (!_synchronizeRotation)
+                    _postTickFollowObjectWorldProperties.Rotation = transform.rotation;
+                if (!_synchronizeScale)
+                    _postTickFollowObjectWorldProperties.Scale = transform.localScale;
+                SetMoveRates();
+            }
         }
 
         /// <summary>

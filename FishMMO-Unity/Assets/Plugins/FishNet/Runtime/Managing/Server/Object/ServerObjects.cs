@@ -388,14 +388,14 @@ namespace FishNet.Managing.Server
             foreach (NetworkObject nob in nobs)
             {
                 nob.SetIsNestedThroughTraversal();
-                nob.UnsetInitializedValuesSet();
+                nob.UnsetHasBeenInitialized();
             }
 
             // Initialize sceneNobs cache, but do not invoke callbacks till next frame.
             foreach (NetworkObject nob in nobs)
             {
                 if (nob.IsSceneObject && !nob.IsNested)
-                    nob.SetInitializedValues(parentNob: null, force: false);
+                    nob.SetInitializedValues(parentNob: null, ignoreSerializedTimestamp: false);
             }
         }
 
@@ -544,7 +544,7 @@ namespace FishNet.Managing.Server
                 NetworkManager.LogError($"Specified networkObject is null.");
                 return;
             }
-
+            
             if (!NetworkManager.ServerManager.Started)
             {
                 // Neither server nor client are started.

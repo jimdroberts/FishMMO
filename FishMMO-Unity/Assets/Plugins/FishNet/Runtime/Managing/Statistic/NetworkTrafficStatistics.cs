@@ -2,9 +2,12 @@
 #define DEVELOPMENT
 #endif
 using System;
+using System.Collections.Generic;
 using FishNet.Editing;
+using FishNet.Editing.NetworkProfiler;
 using FishNet.Transporting;
 using GameKit.Dependencies.Utilities;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace FishNet.Managing.Statistic
@@ -13,7 +16,7 @@ namespace FishNet.Managing.Statistic
     public partial class NetworkTrafficStatistics
     {
         #region Types.
-        public enum EnabledMode
+        public enum EnabledMode : byte
         {
             /// <summary>
             /// Not enabled.
@@ -27,6 +30,10 @@ namespace FishNet.Managing.Statistic
             /// Enabled for release and development.
             /// </summary>
             Release = 2,
+            /// <summary>
+            /// Enable for release, development, and headless.
+            /// </summary>
+            Headless = 3,
         }
         #endregion
 
@@ -102,6 +109,14 @@ namespace FishNet.Managing.Statistic
         /// Size suffixes as text.
         /// </summary>
         private static readonly string[] _sizeSuffixes = { "B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
+        /// <summary>
+        /// True if initialized.
+        /// </summary>
+        private bool _initializedOnce;
+        #endregion
+
+        #region Private Profiler Markers
+        private static readonly ProfilerMarker _pm_OnPreTick = new("NetworkTrafficStatistics.TimeManager_OnPreTick()");
         #endregion
 
         #region Consts.
@@ -113,6 +128,15 @@ namespace FishNet.Managing.Statistic
 
         internal void InitializeOnce_Internal(NetworkManager manager)
         {
+            if (_initializedOnce)
+                return;
+
+            /* Only subscribe if enabled. Always unsubscribe even if not enabled -- doing so is safe. */
+            if (!IsEnabled())
+                return;
+
+            manager.TimeManager.OnPreTick += TimeManager_OnPreTick;
+
             _networkManager = manager;
 
             /* Do not bother caching once destroyed. Losing a single instance of each
@@ -121,7 +145,7 @@ namespace FishNet.Managing.Statistic
             _serverTraffic = ResettableObjectCaches<BidirectionalNetworkTraffic>.Retrieve();
             _clientTraffic = ResettableObjectCaches<BidirectionalNetworkTraffic>.Retrieve();
 
-            manager.TimeManager.OnPreTick += TimeManager_OnPreTick;
+            _initializedOnce = true;
         }
 
         /// <summary>
@@ -129,22 +153,25 @@ namespace FishNet.Managing.Statistic
         /// </summary>
         private void TimeManager_OnPreTick()
         {
-            /* Since we are sending last ticks data at the end of the tick,
-             * the tick used will always be 1 less than current tick. */
-            long trafficTick = _networkManager.TimeManager.LocalTick - 1;
-            //Invalid tick.
-            if (trafficTick <= 0)
-                return;
+            using (_pm_OnPreTick.Auto())
+            {
+                /* Since we are sending last ticks data at the end of the tick,
+                 * the tick used will always be 1 less than current tick. */
+                long trafficTick = _networkManager.TimeManager.LocalTick - 1;
+                //Invalid tick.
+                if (trafficTick <= 0)
+                    return;
 
-            if (_networkManager.IsClientStarted || _networkManager.IsServerStarted)
-                OnNetworkTraffic?.Invoke((uint)trafficTick, _serverTraffic, _clientTraffic);
+                if (_networkManager.IsClientStarted || _networkManager.IsServerStarted)
+                    OnNetworkTraffic?.Invoke((uint)trafficTick, _serverTraffic, _clientTraffic);
 
-            /* It's important to remember that after actions are invoked
-             * the traffic stat fields are reset. Each listener should use
-             * the MultiwayTrafficCollection.Clone method to get a copy,
-             * and should cache that copy when done. */
-            _clientTraffic.Reinitialize();
-            _serverTraffic.Reinitialize();
+                /* It's important to remember that after actions are invoked
+                 * the traffic stat fields are reset. Each listener should use
+                 * the MultiwayTrafficCollection.Clone method to get a copy,
+                 * and should cache that copy when done. */
+                _clientTraffic.Reinitialize();
+                _serverTraffic.Reinitialize();
+            }
         }
 
         /// <summary>
@@ -163,7 +190,8 @@ namespace FishNet.Managing.Statistic
             if (bytes <= 0)
                 return;
 
-            GetBidirectionalNetworkTraffic(asServer).OutboundTraffic.AddPacketIdData(typeSource, details, (ulong)bytes, gameObject);
+            if (TryGetBidirectionalNetworkTraffic(asServer, out BidirectionalNetworkTraffic networkTraffic))
+                networkTraffic.OutboundTraffic.AddPacketIdData(typeSource, details, (ulong)bytes, gameObject);
         }
 
         /// <summary>
@@ -176,7 +204,8 @@ namespace FishNet.Managing.Statistic
             else if (bytes <= 0)
                 return;
 
-            GetBidirectionalNetworkTraffic(asServer).OutboundTraffic.AddSocketData(bytes);
+            if (TryGetBidirectionalNetworkTraffic(asServer, out BidirectionalNetworkTraffic networkTraffic))
+                networkTraffic.OutboundTraffic.AddSocketData(bytes);
         }
 
         /// <summary>
@@ -186,8 +215,9 @@ namespace FishNet.Managing.Statistic
         {
             if (bytes <= 0)
                 return;
- 
-            GetBidirectionalNetworkTraffic(asServer).InboundTraffic.AddPacketIdData(typeSource, details, (ulong)bytes, gameObject);
+
+            if (TryGetBidirectionalNetworkTraffic(asServer, out BidirectionalNetworkTraffic networkTraffic))
+                networkTraffic.InboundTraffic.AddPacketIdData(typeSource, details, (ulong)bytes, gameObject);
         }
 
         /// <summary>
@@ -200,50 +230,35 @@ namespace FishNet.Managing.Statistic
             else if (bytes <= 0)
                 return;
 
-            GetBidirectionalNetworkTraffic(asServer).InboundTraffic.AddSocketData(bytes);
+            if (TryGetBidirectionalNetworkTraffic(asServer, out BidirectionalNetworkTraffic networkTraffic))
+                networkTraffic.InboundTraffic.AddSocketData(bytes);
         }
 
         /// <summary>
         /// Gets current statistics for server or client.
         /// </summary>
-        private BidirectionalNetworkTraffic GetBidirectionalNetworkTraffic(bool asServer) => asServer ? _serverTraffic : _clientTraffic;
+        private bool TryGetBidirectionalNetworkTraffic(bool asServer, out BidirectionalNetworkTraffic networkTraffic)
+        {
+            networkTraffic = asServer ? _serverTraffic : _clientTraffic;
 
-        // Attribution: https:// stackoverflow.com/questions/14488796/does-net-provide-an-easy-way-convert-bytes-to-kb-mb-gb-etc
+            return networkTraffic != null;
+        }
+
         /// <summary>
         /// Formats passed in bytes value to the largest possible data type with 2 decimals.
         /// </summary>
         public static string FormatBytesToLargest(float bytes)
         {
-            int decimalPlaces = 2;
-            if (bytes < 1f || float.IsInfinity(bytes) || float.IsNaN(bytes))
-                return ReturnZero();
+            string[] units = { "B", "kB", "MB", "GB", "TB", "PB" };
+            int unitIndex = 0;
 
-            string ReturnZero()
+            while (bytes >= 1024 && unitIndex < units.Length - 1)
             {
-                decimalPlaces = 0;
-                return string.Format("{0:n" + decimalPlaces + "} B/s", 0);
+                bytes /= 1024;
+                unitIndex++;
             }
 
-            // mag is 0 for bytes, 1 for KB, 2, for MB, etc.
-            int mag = (int)Math.Log(bytes, 1024);
-
-            // 1L << (mag * 10) == 2 ^ (10 * mag) 
-            // [i.e. the number of bytes in the unit corresponding to mag]
-            decimal adjustedSize = (decimal)bytes / (1L << (mag * 10));
-
-            // make adjustment when the value is large enough that
-            // it would round up to 1000 or more
-            if (Math.Round(adjustedSize, decimalPlaces) >= 1000)
-            {
-                mag += 1;
-                adjustedSize /= 1024;
-            }
-
-            // Don't show decimals for bytes.
-            if (mag == 0)
-                decimalPlaces = 0;
-
-            return string.Format("{0:n" + decimalPlaces + "} {1}", adjustedSize, _sizeSuffixes[mag]);
+            return $"{bytes:0.00} {units[unitIndex]}";
         }
 
         /// <summary>
@@ -251,21 +266,26 @@ namespace FishNet.Managing.Statistic
         /// </summary>
         public bool IsEnabled()
         {
+            if (_enableMode == EnabledMode.Disabled)
+                return false;
+
+            int modeValue = (int)_enableMode;
+
             //Never enabled for server builds.
-#if UNITY_SERVER
-            return false;
-#endif
+            #if UNITY_SERVER
+            return modeValue >= (int)EnabledMode.Headless;
+            #endif
 
             if (_enableMode == EnabledMode.Disabled)
                 return false;
 
             // If not in dev mode then return true if to run in release.
-#if !DEVELOPMENT
-            return _enableMode == EnabledMode.Release;
+            #if !DEVELOPMENT
+            return modeValue >= (int)EnabledMode.Release;
             // Always run in dev mode if not disabled.
-#else
+            #else
             return true;
-#endif
+            #endif
         }
     }
 }

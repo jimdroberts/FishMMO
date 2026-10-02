@@ -1,13 +1,9 @@
 using FishNet.Managing;
-using FishNet.Managing.Logging;
 using LiteNetLib;
 using LiteNetLib.Layers;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-using UnityEngine;
 
 namespace FishNet.Transporting.Tugboat.Client
 {
@@ -85,7 +81,7 @@ namespace FishNet.Transporting.Tugboat.Client
         /// <summary>
         /// Threaded operation to process client actions.
         /// </summary>
-        private void ThreadedSocket()
+        private void StartSocket()
         {
             EventBasedNetListener listener = new();
             listener.NetworkReceiveEvent += Listener_NetworkReceiveEvent;
@@ -94,7 +90,7 @@ namespace FishNet.Transporting.Tugboat.Client
 
             NetManager = new(listener, _packetLayer, false);
             NetManager.DontRoute = ((Tugboat)Transport).DontRoute;
-            NetManager.MtuOverride = _mtu + NetConstants.FragmentedHeaderTotalSize;
+            NetManager.MtuOverride = _mtu;// + NetConstants.FragmentedHeaderTotalSize;
 
             UpdateTimeout(_timeout);
 
@@ -121,7 +117,9 @@ namespace FishNet.Transporting.Tugboat.Client
             _address = address;
 
             ResetQueues();
-            Task.Run(ThreadedSocket);
+            
+            StartSocket();
+            //Task.Run(StartSocket);
 
             return true;
         }

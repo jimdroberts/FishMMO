@@ -1,7 +1,9 @@
-﻿using FishNet.Managing.Predicting;
+﻿#if !FISHNET_THREADED_TICKSMOOTHERS
+using FishNet.Managing.Predicting;
 using FishNet.Managing.Timing;
 using FishNet.Object;
 using GameKit.Dependencies.Utilities;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace FishNet.Component.Transforming.Beta
@@ -25,7 +27,7 @@ namespace FishNet.Component.Transforming.Beta
         private InitializationSettings _initializationSettings = new();
         /// <summary>
         /// </summary>
-        private MovementSettings _ownerMovementSettings = new();
+        private MovementSettings _controllerMovementSettings = new();
         /// <summary>
         /// </summary>
         private MovementSettings _spectatorMovementSettings = new();
@@ -61,15 +63,18 @@ namespace FishNet.Component.Transforming.Beta
         /// True if initialized.
         /// </summary>
         private bool _isInitialized;
+        private static readonly ProfilerMarker _pm_OnUpdate = new("TickSmootherController.TimeManager_OnUpdate()");
+        private static readonly ProfilerMarker _pm_OnPreTick = new("TickSmootherController.TimeManager_OnPreTick()");
+        private static readonly ProfilerMarker _pm_OnPostTick = new("TickSmootherController.TimeManager_OnPostTick()");
         #endregion
 
-        public void Initialize(InitializationSettings initializationSettings, MovementSettings ownerSettings, MovementSettings spectatorSettings)
+        public void Initialize(InitializationSettings initializationSettings, MovementSettings controllerSettings, MovementSettings spectatorSettings)
         {
             _initializingNetworkBehaviour = initializationSettings.InitializingNetworkBehaviour;
             _graphicalTransform = initializationSettings.GraphicalTransform;
 
             _initializationSettings = initializationSettings;
-            _ownerMovementSettings = ownerSettings;
+            _controllerMovementSettings = controllerSettings;
             _spectatorMovementSettings = spectatorSettings;
 
             _initializedOffline = initializationSettings.InitializingNetworkBehaviour == null;
@@ -97,7 +102,7 @@ namespace FishNet.Component.Transforming.Beta
 
             RetrieveSmoothers();
 
-            UniversalSmoother.Initialize(_initializationSettings, _ownerMovementSettings, _spectatorMovementSettings);
+            UniversalSmoother.Initialize(_initializationSettings, _controllerMovementSettings, _spectatorMovementSettings);
 
             UniversalSmoother.StartSmoother();
 
@@ -140,12 +145,18 @@ namespace FishNet.Component.Transforming.Beta
 
         public void TimeManager_OnUpdate()
         {
-            UniversalSmoother.OnUpdate(Time.deltaTime);
+            using (_pm_OnUpdate.Auto())
+            {
+                UniversalSmoother.OnUpdate(Time.deltaTime);
+            }
         }
 
         public void TimeManager_OnPreTick()
         {
-            UniversalSmoother.OnPreTick();
+            using (_pm_OnPreTick.Auto())
+            {
+                UniversalSmoother.OnPreTick();
+            }
         }
 
         /// <summary>
@@ -153,8 +164,11 @@ namespace FishNet.Component.Transforming.Beta
         /// </summary>
         public void TimeManager_OnPostTick()
         {
-            if (_timeManager != null)
-                UniversalSmoother.OnPostTick(_timeManager.LocalTick);
+            using (_pm_OnPostTick.Auto())
+            {
+                if (_timeManager != null)
+                    UniversalSmoother.OnPostTick(_timeManager.LocalTick);
+            }
         }
 
         private void PredictionManager_OnPostReplicateReplay(uint clientTick, uint serverTick)
@@ -241,7 +255,7 @@ namespace FishNet.Component.Transforming.Beta
                 return;
             _subscribed = subscribe;
 
-            bool adaptiveIsOff = _ownerMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off && _spectatorMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off;
+            bool adaptiveIsOff = _controllerMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off && _spectatorMovementSettings.AdaptiveInterpolationValue == AdaptiveInterpolationType.Off;
 
             if (subscribe)
             {
@@ -275,7 +289,7 @@ namespace FishNet.Component.Transforming.Beta
         public void ResetState()
         {
             _initializationSettings = default;
-            _ownerMovementSettings = default;
+            _controllerMovementSettings = default;
             _spectatorMovementSettings = default;
 
             _destroyed = false;
@@ -292,3 +306,4 @@ namespace FishNet.Component.Transforming.Beta
         public void InitializeState() { }
     }
 }
+#endif

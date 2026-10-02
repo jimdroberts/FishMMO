@@ -1,8 +1,7 @@
-﻿using FishNet.Editing;
+﻿using FishNet.Editing.NetworkProfiler;
 using FishNet.Managing;
 using FishNet.Managing.Statistic;
 using FishNet.Managing.Timing;
-using GameKit.Dependencies.Utilities;
 using GameKit.Dependencies.Utilities.Types;
 using UnityEngine;
 
@@ -37,21 +36,31 @@ namespace FishNet.Component.Utility
             public void AddIn(ulong value) => _in.Add(value);
             public void AddOut(ulong value) => _out.Add(value);
 
-            public ulong GetAverage(bool inAverage)
+            public float GetAverage(bool inBuffer)
             {
-                RingBuffer<ulong> buffer = inAverage ? _in : _out;
+                RingBuffer<ulong> buffer = GetBuffer(inBuffer);
 
-                int count = buffer.Count;
-                if (count == 0)
+                int bufferCount = buffer.Count;
+                if (bufferCount == 0)
                     return 0;
+                
+                ulong total = GetTotal(inBuffer);
+                return (float)total / bufferCount;
+            }
 
+            public ulong GetTotal(bool inBuffer)
+            {
+                RingBuffer<ulong> buffer = GetBuffer(inBuffer);
+                
                 ulong total = 0;
                 foreach (ulong v in buffer)
                     total += v;
-
-                return total / (uint)count;
+                
+                return total;
             }
-
+            
+            private RingBuffer<ulong> GetBuffer(bool inBuffer) => inBuffer ? _in : _out;
+            
             public void ResetState()
             {
                 _in.Clear();
@@ -67,7 +76,7 @@ namespace FishNet.Component.Utility
         #endregion
 
         #region Public.
-#if UNITY_EDITOR || !UNITY_SERVER
+        #if UNITY_EDITOR || !UNITY_SERVER
         /// <summary>
         /// Averages for client.
         /// </summary>
@@ -76,7 +85,7 @@ namespace FishNet.Component.Utility
         /// Averages for server.
         /// </summary>
         public InOutAverage ServerAverages { get; private set; }
-#endif
+        #endif
         #endregion
 
         #region Serialized.
@@ -142,7 +151,7 @@ namespace FishNet.Component.Utility
         public void SetShowIncoming(bool value) => _showIncoming = value;
         #endregion
 
-#if UNITY_EDITOR || !UNITY_SERVER
+        #if UNITY_EDITOR || !UNITY_SERVER
 
         #region Private.
         /// <summary>
@@ -178,14 +187,14 @@ namespace FishNet.Component.Utility
         private void Start()
         {
             // Requires a UI, so exit if server build.
-#if UNITY_SERVER
+            #if UNITY_SERVER
             return;
-#endif
+            #endif
             // If release build, check if able to run in release.
-#if !DEVELOPMENT_BUILD && !UNITY_EDITOR
+            #if !DEVELOPMENT_BUILD && !UNITY_EDITOR
             if (!_runInRelease)
                 return;
-#endif
+            #endif
 
             // Not enabled.
             if (!InstanceFinder.NetworkManager.StatisticsManager.TryGetNetworkTrafficStatistics(out _networkTrafficStatistics))
@@ -200,7 +209,7 @@ namespace FishNet.Component.Utility
             SetSecondsAveraged(_secondsAveraged);
 
             _networkTrafficStatistics.OnNetworkTraffic += NetworkTrafficStatistics_OnNetworkTraffic;
-            
+
             _initialized = true;
         }
 
@@ -223,7 +232,11 @@ namespace FishNet.Component.Utility
             if (seconds <= 0)
                 seconds = 1;
 
-            uint ticks = manager.TimeManager.TimeToTicks(seconds, TickRounding.RoundUp);
+            //Convert to milliseconds.
+            long ms = seconds * 1000;
+            
+            uint ticks = manager.TimeManager.TimeToTicks(ms, TickRounding.RoundUp);
+            
             // Should not ever be possible.
             if (ticks <= 0)
                 ticks = 60;
@@ -231,7 +244,7 @@ namespace FishNet.Component.Utility
             ClientAverages = new((int)ticks);
             ServerAverages = new((int)ticks);
         }
-        
+
         /// <summary>
         /// Called when new traffic statistics are received.
         /// </summary>
@@ -239,37 +252,38 @@ namespace FishNet.Component.Utility
         {
             if (!_initialized)
                 return;
- 
+
             ServerAverages.AddIn(serverTraffic.InboundTraffic.Bytes);
             ServerAverages.AddOut(serverTraffic.OutboundTraffic.Bytes);
 
             ClientAverages.AddIn(clientTraffic.InboundTraffic.Bytes);
+             
             ClientAverages.AddOut(clientTraffic.OutboundTraffic.Bytes);
             
             if (Time.time < _nextServerTextUpdateTime)
                 return;
+
             _nextServerTextUpdateTime = Time.time + _updateInterval;
 
             string nl = System.Environment.NewLine;
             string result = string.Empty;
-            
+
             if (_showIncoming)
-                result += $"Server In: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: true))}/s{nl}";
+                result += $"Server In: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetTotal(inBuffer: true))}/s{nl}";
             if (_showOutgoing)
-                result += $"Server Out: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: false))}/s{nl}";
+                result += $"Server Out: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetTotal(inBuffer: false))}/s{nl}";
 
             _serverText = result;
-            
+
             result = string.Empty;
 
             if (_showIncoming)
-                result += $"Client In: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: true))}/s{nl}";
+                result += $"Client In: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetTotal(inBuffer: true))}/s{nl}";
             if (_showOutgoing)
-                result += $"Client Out: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: false))}/s{nl}";
+                result += $"Client Out: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetTotal(inBuffer: false))}/s{nl}";
 
             _clientText = result;
         }
-
 
         /// <summary>
         /// Called when client network traffic is updated.
@@ -290,9 +304,9 @@ namespace FishNet.Component.Utility
             string result = string.Empty;
 
             if (_showIncoming)
-                result += $"Client In: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: true))}/s{nl}";
+                result += $"Client In: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inBuffer: true))}/s{nl}";
             if (_showOutgoing)
-                result += $"Client Out: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inAverage: false))}/s{nl}";
+                result += $"Client Out: {NetworkTrafficStatistics.FormatBytesToLargest(ClientAverages.GetAverage(inBuffer: false))}/s{nl}";
 
             _clientText = result;
         }
@@ -316,9 +330,9 @@ namespace FishNet.Component.Utility
             string result = string.Empty;
 
             if (_showIncoming)
-                result += $"Server In: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: true))}/s{nl}";
+                result += $"Server In: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inBuffer: true))}/s{nl}";
             if (_showOutgoing)
-                result += $"Server Out: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inAverage: false))}/s{nl}";
+                result += $"Server Out: {NetworkTrafficStatistics.FormatBytesToLargest(ServerAverages.GetAverage(inBuffer: false))}/s{nl}";
 
             _serverText = result;
         }
@@ -400,6 +414,6 @@ namespace FishNet.Component.Utility
                 ClientAverages.ResetState();
             }
         }
-#endif
+        #endif
     }
 }

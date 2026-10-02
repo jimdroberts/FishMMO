@@ -1,8 +1,4 @@
-﻿using System;
-// FISHMMO EDIT: List/CollectionCaches/Channel for the self-contained delta replicate reader below.
-using System.Collections.Generic;
-using FishNet.Transporting;
-using GameKit.Dependencies.Utilities;
+using System;
 using FishNet.CodeGenerating;
 using System.Runtime.CompilerServices;
 using FishNet.Managing;
@@ -397,51 +393,6 @@ namespace FishNet.Serializing
         internal T ReadDeltaReconcile<T>(T lastReconcile) => ReadDelta(lastReconcile);
 
         /// <summary>
-        /// Reads a self-contained delta replicate written by
-        /// <see cref="Writer.WriteDeltaReplicate{T}(GameKit.Dependencies.Utilities.RingBuffer{FishNet.Object.Prediction.ReplicateDataContainer{T}}, int)"/>.
-        /// </summary>
-        /// <remarks>
-        /// FISHMMO EDIT. Mirrors <c>Reader.ReadReplicate</c> exactly -- same count byte, same tick
-        /// back-dating, same container construction -- differing only in that entries after the
-        /// first are deltas against the entry before them within this packet. The overload BELOW
-        /// this one is upstream's, which returns an int and takes a <c>ref T[]</c>; the prediction call
-        /// site needs a <c>List&lt;ReplicateDataContainer&lt;T&gt;&gt;</c>, which is one of the
-        /// reasons that overload no longer compiles against its own caller.
-        /// </remarks>
-        internal List<ReplicateDataContainer<T>> ReadDeltaReplicate<T>(uint tick) where T : IReplicateData, new()
-        {
-            List<ReplicateDataContainer<T>> collection = CollectionCaches<ReplicateDataContainer<T>>.RetrieveList();
-
-            // Number of entries written.
-            int count = (int)ReadUInt8Unpacked();
-            if (count <= 0)
-            {
-                NetworkManager.Log($"Replicate count cannot be 0 or less.");
-                // Purge remaining and return default.
-                Position += Remaining;
-                return collection;
-            }
-
-            /* Back-date the tick so entries are stamped oldest to newest, exactly as
-             * ReadReplicate does. Past replicates cannot skip ticks for this to hold. */
-            tick -= (uint)(count - 1);
-
-            T prev = default;
-            for (int i = 0; i < count; i++)
-            {
-                // First entry is absolute so the packet stands alone on a lossy channel; the rest
-                // are deltas against the entry before them. See Writer.WriteDeltaReplicate.
-                T data = i == 0 ? Read<T>() : ReadDelta(prev);
-                Channel c = ReadChannel();
-
-                collection.Add(new(data, c, tick + (uint)i, isCreated: true));
-                prev = data;
-            }
-
-            return collection;
-        }
-
-        /// <summary>
         /// Reads a replicate.
         /// </summary>
         internal int ReadDeltaReplicate<T>(T lastReadReplicate, ref T[] collection, uint tick) where T : IReplicateData
@@ -504,23 +455,7 @@ namespace FishNet.Serializing
 
             if (del == null)
             {
-                /* FISHMMO EDIT: warning, not error -- see issue #159.
-                 *
-                 * This sits on the per-tick prediction path, so a single unregistered type logs
-                 * once per tick for as long as the scene is loaded. Measured at 14,442 occurrences
-                 * in a four-minute session, each carrying a full Unity stack trace: roughly 13 log
-                 * lines apiece, and most of a 10 MB log that then hid everything else in it.
-                 *
-                 * LevelLoggingConfiguration is set to Error in all three modes (headless, GUI and
-                 * development), and CanLog compares (byte)Warning(2) <= (byte)Error(1), so at the
-                 * configured level this now costs nothing at all. Raising the level to Warning
-                 * brings it back when somebody is actually looking for it.
-                 *
-                 * Severity, not a throttle: a missing delta serializer is a developer-time
-                 * omission, not a runtime failure the operator can act on. The guard against
-                 * shipping one is DeltaSerializerRegistrationTests, which fails the build rather
-                 * than waiting for somebody to read a log. */
-                NetworkManager.LogWarning($"Read delta method not found for {typeof(T).FullName}. Use a supported type or create a custom serializer.");
+                NetworkManager.LogError($"Read delta method not found for {typeof(T).FullName}. Use a supported type or create a custom serializer.");
                 return default;
             }
             else

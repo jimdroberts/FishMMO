@@ -692,7 +692,7 @@ namespace FishNet.CodeGenerating.Helping
             // Fall through, no matches.
             return false;
         }
-        
+
         /// <summary>
         /// Returns if fieldDef has a NonSerialized attribute.
         /// </summary>
@@ -896,27 +896,14 @@ namespace FishNet.CodeGenerating.Helping
         /// </summary>
         public ParameterDefinition CreateParameter(MethodDefinition methodDef, ParameterDefinition parameterTypeDef)
         {
-            // FISHMMO EDIT (issue #229): use the imported type (the original discarded it) and seal the attribute list.
-            TypeReference parameterTypeRef = ImportReference(parameterTypeDef.ParameterType);
+            ImportReference(parameterTypeDef.ParameterType);
 
             int currentCount = methodDef.Parameters.Count;
             string name = parameterTypeDef.Name + currentCount;
-            ParameterDefinition parameterDef = new(name, parameterTypeDef.Attributes, parameterTypeRef);
-            SealCustomAttributes(parameterDef);
+            ParameterDefinition parameterDef = new(name, parameterTypeDef.Attributes, parameterTypeDef.ParameterType);
             methodDef.Parameters.Add(parameterDef);
 
             return parameterDef;
-        }
-
-        /// <summary>
-        /// FISHMMO EDIT (issue #229): materialises a freshly created parameter's custom attribute list while its
-        /// row id is still 0. Cecil reads a parameter's attributes lazily through parameterType.Module using the
-        /// parameter's CURRENT token, and the writer assigns the final token before it checks HasCustomAttributes,
-        /// so an unsealed parameter would pick up whatever attributes the original image stored at that row.
-        /// </summary>
-        public static void SealCustomAttributes(ParameterDefinition parameterDef)
-        {
-            _ = parameterDef.CustomAttributes;
         }
 
         /// <summary>
@@ -931,7 +918,6 @@ namespace FishNet.CodeGenerating.Helping
             if (string.IsNullOrEmpty(name))
                 name = parameterTypeRef.Name + currentCount;
             ParameterDefinition parameterDef = new(name, attributes, parameterTypeRef);
-            SealCustomAttributes(parameterDef); // FISHMMO EDIT (issue #229)
             if (index == -1)
                 methodDef.Parameters.Add(parameterDef);
             else
@@ -1272,28 +1258,33 @@ namespace FishNet.CodeGenerating.Helping
                     foreach (FieldDefinition fieldDef in dataTr.FindAllSerializableFields(Session, null, WriterProcessor.EXCLUDED_ASSEMBLY_PREFIXES))
                     {
                         FieldReference fr = ImportReference(fieldDef);
-                        MethodDefinition recursiveMd = CreateEqualityComparer(fieldDef.FieldType);
+                        TypeReference fieldTypeRef = ImportReference(fieldDef.FieldType);
+                        MethodDefinition recursiveMd = CreateEqualityComparer(fieldTypeRef);
+
                         if (recursiveMd == null)
                             break;
+
                         processor.Append(GetLoadParameterInstruction(comparerMd, v0Pd));
                         processor.Emit(OpCodes.Ldfld, fr);
                         processor.Append(GetLoadParameterInstruction(comparerMd, v1Pd));
                         processor.Emit(OpCodes.Ldfld, fr);
-                        FinishTypeReferenceCompare(fieldDef.FieldType);
+                        FinishTypeReferenceCompare(fieldTypeRef);
                     }
 
                     // Properties.
                     foreach (PropertyDefinition propertyDef in dataTr.FindAllSerializableProperties(Session, null, WriterProcessor.EXCLUDED_ASSEMBLY_PREFIXES))
                     {
                         MethodReference getMr = Module.ImportReference(propertyDef.GetMethod);
-                        MethodDefinition recursiveMd = CreateEqualityComparer(getMr.ReturnType);
+                        MethodDefinition recursiveMd = CreateEqualityComparer(ImportReference(getMr.ReturnType));
+
                         if (recursiveMd == null)
                             break;
+
                         processor.Append(GetLoadParameterInstruction(comparerMd, v0Pd));
                         processor.Emit(OpCodes.Call, getMr);
                         processor.Append(GetLoadParameterInstruction(comparerMd, v1Pd));
                         processor.Emit(OpCodes.Call, getMr);
-                        FinishTypeReferenceCompare(propertyDef.PropertyType);
+                        FinishTypeReferenceCompare(ImportReference(propertyDef.PropertyType));
                     }
 
                     // Return true;
