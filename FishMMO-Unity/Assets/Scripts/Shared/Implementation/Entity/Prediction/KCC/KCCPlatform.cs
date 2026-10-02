@@ -88,7 +88,6 @@ namespace FishMMO.Shared
 			{
 				Position = position;
 				GoalIndex = goalIndex;
-				Sequence = 0;
 				tick = 0;
 			}
 
@@ -101,24 +100,6 @@ namespace FishMMO.Shared
 			/// Index into the goals list indicating which waypoint the platform is moving toward.
 			/// </summary>
 			public byte GoalIndex;
-
-			/// <summary>
-			/// Server-side send counter, stamped by <c>Server_SendReconcileRpc</c> through
-			/// <c>ReconcileSequenceStamper</c> on every reconcile actually written, wrapping at 255.
-			/// </summary>
-			/// <remarks>
-			/// The delta chain's loss detector, the same one <c>CharacterReconcileData.Sequence</c>
-			/// carries and for the same reason: reconciles ride the unreliable state datagram and
-			/// each delta is difference-encoded against the previous state the server SENT, so a
-			/// lost datagram would otherwise have every later delta decode against a baseline this
-			/// client never received — a deck standing in the wrong place, and every rider's
-			/// footing with it, for up to a second until the periodic absolute snapshot. The reader
-			/// requires <c>prev.Sequence + 1</c> and rejects the packet otherwise; a loss then costs
-			/// "no correction until the next snapshot", which for a deterministic platform is no
-			/// visible cost at all. This matters MORE here than on a character: the platform is the
-			/// one object whose reconcile fans out to every observer.
-			/// </remarks>
-			public byte Sequence;
 
 			private uint tick;
 

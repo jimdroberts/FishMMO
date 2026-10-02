@@ -496,8 +496,8 @@ namespace FishMMO.Shared
 				{
 					controllers[i].OnCreateReconcile(ref data);
 				}
-				// CharacterReconcileData.Sequence is stamped by FishNet when the reconcile is actually
-				// written (ReconcileSequenceStamper), so a tick whose send is skipped does not count.
+				// FishNet decides full vs delta and names the delta's baseline when the reconcile is
+				// actually written, so a tick whose send is skipped does not disturb the delta baseline.
 				Reconcile(data);
 			}
 		}
