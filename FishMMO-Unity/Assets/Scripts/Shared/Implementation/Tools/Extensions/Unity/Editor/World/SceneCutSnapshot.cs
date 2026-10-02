@@ -48,6 +48,7 @@ namespace FishMMO.Shared.WorldDesign
 			public float LowestMetres, HighestMetres;
 			public float MeanDifferenceMetres, LargestDifferenceMetres;
 			public float LandShareCut, LandShareTerrain;
+			public float BackdropReachMetres;
 			public string Problem;
 		}
 
@@ -165,6 +166,31 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					report.Wrote.Add(topDown);
 				}
+
+				// ── 5, 6. The backdrop around it, from above and from the edge looking out ──
+				SceneBackdrop backdrop = null;
+				foreach (GameObject root in opened.GetRootGameObjects())
+				{
+					backdrop = root.GetComponentInChildren<SceneBackdrop>(true);
+					if (backdrop != null)
+					{
+						break;
+					}
+				}
+				if (backdrop != null)
+				{
+					report.BackdropReachMetres = backdrop.ReachMetres;
+					string wide = CaptureBackdrop(opened, plan, backdrop, width, highest, folder);
+					if (wide != null)
+					{
+						report.Wrote.Add(wide);
+					}
+					string horizons = CaptureHorizons(opened, plan, backdrop, folder);
+					if (horizons != null)
+					{
+						report.Wrote.Add(horizons);
+					}
+				}
 			}
 			else
 			{
@@ -186,6 +212,7 @@ namespace FishMMO.Shared.WorldDesign
 				$"{entry.SceneName} on {entry.Body.ResolvedName}, {entry.Latitude:0.####}°, {entry.Longitude:0.####}°, {plan}\n" +
 				$"cut at atlas radius {request.ResolvedRadiusKm:0.##} km (sky radius {entry.Body.SkyRadiusKm:0} km), vertical scale {request.VerticalScale:0.####}\n" +
 				$"cut: {lowest:0.0} .. {highest:0.0} m, {report.LandShareCut:P1} land\n" +
+				$"backdrop: {(report.BackdropReachMetres > 0f ? $"reaches {report.BackdropReachMetres:0} m past the edge" : "none")}\n" +
 				(hasTerrain
 					? $"terrain: {report.LandShareTerrain:P1} land; differs from the cut by {report.MeanDifferenceMetres:0.00} m on average, {report.LargestDifferenceMetres:0.00} m at most\n"
 					: "terrain: none\n"));
@@ -246,7 +273,8 @@ namespace FishMMO.Shared.WorldDesign
 					return false;
 				}
 				Debug.Log($"[Cut snapshot] Re-cut '{sceneName}': {result.Plan}, {result.ReliefMetres:0} m of relief, floor at {result.GroundAltitudeMetres:0} m, " +
-					$"radius {result.RadiusKm:0.##} km, vertical scale {result.VerticalScale:0.####}, backup in '{result.BackupFolder}'.");
+					$"radius {result.RadiusKm:0.##} km, vertical scale {result.VerticalScale:0.####}, " +
+					$"backdrop {result.BackdropReachMetres:0} m past the edge ({result.BackdropVertices} vertices), backup in '{result.BackupFolder}'.");
 				entry = Reload(entryPath, bodyPath);
 			}
 
@@ -472,9 +500,151 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static string CaptureTopDown(Scene scene, TerrainTilePlan plan, int width, int height, float highest, string folder)
 		{
+			float cameraHeight = Mathf.Max(highest, 0f) + 2000f;
+			return Capture(scene, width, height, $"{folder}/4 terrain top-down.png", Color.black, camera =>
+			{
+				camera.transform.position = new Vector3(0f, cameraHeight, 0f);
+				camera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+				camera.orthographic = true;
+				camera.orthographicSize = plan.DepthMetres * 0.5f;
+				camera.aspect = plan.WidthMetres / plan.DepthMetres;
+				camera.nearClipPlane = 1f;
+				camera.farClipPlane = cameraHeight + 20000f;
+			});
+		}
+
+		/// <summary>
+		/// The scene and its whole backdrop from overhead, with the scene's edge outlined: the
+		/// check that the backdrop surrounds the scene and meets it at the edge.
+		/// </summary>
+		private static string CaptureBackdrop(Scene scene, TerrainTilePlan plan, SceneBackdrop backdrop, int width, float highest, string folder)
+		{
+			float extentX = plan.WidthMetres * 0.5f + backdrop.ReachMetres;
+			float extentZ = plan.DepthMetres * 0.5f + backdrop.ReachMetres;
+			int height = Mathf.Max(16, Mathf.RoundToInt(width * extentZ / extentX));
+			float cameraHeight = Mathf.Max(highest, 0f) + 6000f;
+			string path = $"{folder}/5 backdrop top-down.png";
+			string written = Capture(scene, width, height, path, Color.black, camera =>
+			{
+				camera.transform.position = new Vector3(0f, cameraHeight, 0f);
+				camera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+				camera.orthographic = true;
+				camera.orthographicSize = extentZ;
+				camera.aspect = extentX / extentZ;
+				camera.nearClipPlane = 1f;
+				camera.farClipPlane = cameraHeight + 20000f;
+			}, image =>
+			{
+				// The scene's own rectangle, in yellow.
+				int x0 = Mathf.RoundToInt((extentX - plan.WidthMetres * 0.5f) / (2f * extentX) * (width - 1));
+				int x1 = Mathf.RoundToInt((extentX + plan.WidthMetres * 0.5f) / (2f * extentX) * (width - 1));
+				int z0 = Mathf.RoundToInt((extentZ - plan.DepthMetres * 0.5f) / (2f * extentZ) * (height - 1));
+				int z1 = Mathf.RoundToInt((extentZ + plan.DepthMetres * 0.5f) / (2f * extentZ) * (height - 1));
+				var yellow = new Color(1f, 0.85f, 0.1f);
+				for (int x = x0; x <= x1; x++)
+				{
+					image.SetPixel(x, z0, yellow);
+					image.SetPixel(x, z1, yellow);
+				}
+				for (int z = z0; z <= z1; z++)
+				{
+					image.SetPixel(x0, z, yellow);
+					image.SetPixel(x1, z, yellow);
+				}
+			});
+			return written;
+		}
+
+		/// <summary>
+		/// Four views out to the horizon, one from just inside each edge looking out, side by side:
+		/// what a player standing near the edge of the playable area actually sees.
+		/// </summary>
+		private static string CaptureHorizons(Scene scene, TerrainTilePlan plan, SceneBackdrop backdrop, string folder)
+		{
+			const int ViewWidth = 768, ViewHeight = 432;
+			float inset = Mathf.Min(300f, Mathf.Min(plan.WidthMetres, plan.DepthMetres) * 0.2f);
+			float halfW = plan.WidthMetres * 0.5f, halfD = plan.DepthMetres * 0.5f;
+			var views = new (string Name, Vector3 At, float Heading)[]
+			{
+				("north", new Vector3(0f, 0f, halfD - inset), 0f),
+				("east", new Vector3(halfW - inset, 0f, 0f), 90f),
+				("south", new Vector3(0f, 0f, -halfD + inset), 180f),
+				("west", new Vector3(-halfW + inset, 0f, 0f), 270f),
+			};
+			var sky = new Color(0.55f, 0.70f, 0.88f);
+			var strip = new Texture2D(ViewWidth * 2, ViewHeight * 2, TextureFormat.RGB24, false);
+			bool any = false;
+			for (int i = 0; i < views.Length; i++)
+			{
+				var view = views[i];
+				float ground = GroundAt(scene, view.At.x, view.At.z);
+				// Eye height above the ground, or above the sea if the ground is under it.
+				float eye = Mathf.Max(ground, 0f) + 40f;
+				string path = $"{folder}/6 horizon {view.Name}.png";
+				string written = Capture(scene, ViewWidth, ViewHeight, path, sky, camera =>
+				{
+					camera.transform.position = new Vector3(view.At.x, eye, view.At.z);
+					camera.transform.rotation = Quaternion.Euler(4f, view.Heading, 0f);
+					camera.orthographic = false;
+					camera.fieldOfView = 50f;
+					camera.aspect = ViewWidth / (float)ViewHeight;
+					camera.nearClipPlane = 0.5f;
+					camera.farClipPlane = backdrop.FarPlaneMetres;
+				});
+				if (written == null)
+				{
+					continue;
+				}
+				var image = new Texture2D(2, 2);
+				if (image.LoadImage(File.ReadAllBytes(written)))
+				{
+					strip.SetPixels((i % 2) * ViewWidth, (i < 2 ? 1 : 0) * ViewHeight, ViewWidth, ViewHeight, image.GetPixels());
+					any = true;
+				}
+				Object.DestroyImmediate(image);
+			}
+			string result = null;
+			if (any)
+			{
+				strip.Apply(false, false);
+				result = $"{folder}/6 horizons.png";
+				File.WriteAllBytes(result, strip.EncodeToPNG());
+			}
+			Object.DestroyImmediate(strip);
+			return result;
+		}
+
+		/// <summary>Terrain height under a scene point, in world Y; 0 if no tile covers it.</summary>
+		private static float GroundAt(Scene scene, float x, float z)
+		{
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				foreach (Terrain tile in root.GetComponentsInChildren<Terrain>(true))
+				{
+					if (tile == null || tile.terrainData == null)
+					{
+						continue;
+					}
+					Vector3 origin = tile.GetPosition(), size = tile.terrainData.size;
+					if (x >= origin.x && x <= origin.x + size.x && z >= origin.z && z <= origin.z + size.z)
+					{
+						return origin.y + tile.SampleHeight(new Vector3(x, 0f, z));
+					}
+				}
+			}
+			return 0f;
+		}
+
+		/// <summary>
+		/// Renders one picture of a scene with a plain sun and no fog, then restores everything it
+		/// touched. Null when there is no graphics device or the render fails.
+		/// </summary>
+		private static string Capture(Scene scene, int width, int height, string path, Color background,
+			Action<Camera> place, Action<Texture2D> annotate = null)
+		{
 			if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
 			{
-				Debug.LogWarning("[Cut snapshot] No graphics device, so no overhead picture. Run without -nographics (under xvfb-run when headless).");
+				Debug.LogWarning("[Cut snapshot] No graphics device, so no rendered pictures. Run without -nographics (under xvfb-run when headless).");
 				return null;
 			}
 
@@ -495,33 +665,26 @@ namespace FishMMO.Shared.WorldDesign
 				sun.shadows = LightShadows.None;
 				sunObject.transform.rotation = Quaternion.Euler(50f, 135f, 0f);
 
-				float cameraHeight = Mathf.Max(highest, 0f) + 2000f;
 				Camera camera = cameraObject.AddComponent<Camera>();
-				camera.transform.position = new Vector3(0f, cameraHeight, 0f);
-				camera.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-				camera.orthographic = true;
-				camera.orthographicSize = plan.DepthMetres * 0.5f;
-				camera.aspect = plan.WidthMetres / plan.DepthMetres;
-				camera.nearClipPlane = 1f;
-				camera.farClipPlane = cameraHeight + 20000f;
 				camera.clearFlags = CameraClearFlags.SolidColor;
-				camera.backgroundColor = Color.black;
+				camera.backgroundColor = background;
 				camera.enabled = false;
 				camera.targetTexture = target;
+				place(camera);
 				camera.Render();
 
 				RenderTexture.active = target;
 				var image = new Texture2D(width, height, TextureFormat.RGB24, false);
 				image.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
+				annotate?.Invoke(image);
 				image.Apply();
-				string path = $"{folder}/4 terrain top-down.png";
 				File.WriteAllBytes(path, image.EncodeToPNG());
 				Object.DestroyImmediate(image);
 				return path;
 			}
 			catch (Exception ex)
 			{
-				Debug.LogWarning($"[Cut snapshot] The overhead picture failed: {ex.Message}");
+				Debug.LogWarning($"[Cut snapshot] '{Path.GetFileName(path)}' failed: {ex.Message}");
 				return null;
 			}
 			finally

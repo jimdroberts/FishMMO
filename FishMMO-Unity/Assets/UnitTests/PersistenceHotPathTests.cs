@@ -371,14 +371,19 @@ namespace FishMMO.UnitTests
 			var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 			var order = new List<int>();
 			var otherLaneRan = new ManualResetEventSlim(false);
+			var firstHoldsTheSlot = new ManualResetEventSlim(false);
 			var allDone = new CountdownEvent(3);
 
 			LogAssert.IsTrue(worker.Enqueue(async () =>
 			{
+				firstHoldsTheSlot.Set();
 				await release.Task;
 				lock (order) { order.Add(1); }
 				allDone.Signal();
 			}, 42), "the first item fills the only slot and the whole allowance");
+			// Lane work is handed to the thread pool, so wait until the first item has actually taken
+			// the slot; otherwise the lane-99 item below can reach the free slot first and run legally.
+			LogAssert.IsTrue(firstHoldsTheSlot.Wait(5000), "the first item starts and holds the only slot");
 
 			LogAssert.IsFalse(worker.Enqueue(() => Task.CompletedTask, 43), "ordinary work is refused over the cap");
 

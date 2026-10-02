@@ -42,6 +42,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private ClientCombatDisplay combatDisplay;
 		private ClientNameplateDisplay nameplateDisplay;
+		private ClientBoundaryWarning boundaryWarning;
 
 		/// <summary>Writes what observed characters are casting onto their nameplates.</summary>
 		private ClientCastNameplateDisplay castNameplateDisplay;
@@ -373,6 +374,10 @@ namespace FishMMO.Client
 			this.nameplateDisplay = new ClientNameplateDisplay();
 			this.nameplateDisplay.Initialize();
 
+			// The shattered glass on the scene boundary as the player nears it.
+			this.boundaryWarning = new ClientBoundaryWarning();
+			this.boundaryWarning.Initialize();
+
 			this.castNameplateDisplay = new ClientCastNameplateDisplay();
 			this.castNameplateDisplay.Initialize(NetworkManager);
 
@@ -408,6 +413,7 @@ namespace FishMMO.Client
 			 * own. Same reason it is driven from here: the sweep has no other caller. */
 			nameplateDisplay?.Tick();
 			castNameplateDisplay?.Tick();
+			boundaryWarning?.Tick();
 			weather?.Tick(Time.deltaTime);
 
 			TickDeathDialogFallback();
@@ -444,6 +450,7 @@ namespace FishMMO.Client
 			this.audioListener = null;
 			this.combatDisplay?.Shutdown();
 			this.nameplateDisplay?.Shutdown();
+			this.boundaryWarning?.Shutdown();
 			this.castNameplateDisplay?.Shutdown();
 			this.weather?.Shutdown();
 			this.fogManager?.Shutdown();

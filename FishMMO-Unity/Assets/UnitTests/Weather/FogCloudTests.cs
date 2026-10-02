@@ -76,7 +76,9 @@ namespace FishMMO.UnitTests.Weather
 			float mist = 3.912f / FogLayerView.Of(FogFrame(0.16f)).Extinction;
 			float dense = 3.912f / FogLayerView.Of(FogFrame(1f)).Extinction;
 			Assert.That(mist, Is.InRange(1000f, 10000f), "a mist: kilometres of visibility");
-			Assert.That(dense, Is.InRange(30f, 150f), "a dense fog: tens of metres");
+			// AirPhysics.FogExtinction: a full fog is the densest there is (1.1 g/m³), about 17 m;
+			// the visibility class "dense fog" is anything under 50 m.
+			Assert.That(dense, Is.InRange(10f, 50f), "a full fog is a dense fog: under fifty metres");
 		}
 
 		// ── The shell ─────────────────────────────────────────────────

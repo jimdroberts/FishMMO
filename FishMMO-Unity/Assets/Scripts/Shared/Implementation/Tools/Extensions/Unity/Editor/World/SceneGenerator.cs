@@ -43,6 +43,10 @@ namespace FishMMO.Shared.WorldDesign
 		public float VerticalScale;
 		/// <summary>Where the scene and terrain it replaced were copied to, when it was a re-cut.</summary>
 		public string BackupFolder;
+		/// <summary>How far the client-only backdrop reaches past the scene's edge, in metres.</summary>
+		public float BackdropReachMetres;
+		/// <summary>How many vertices the backdrop's meshes hold.</summary>
+		public int BackdropVertices;
 
 		public static SceneGenerationResult Failed(string problem) => new SceneGenerationResult { Problem = problem };
 	}
@@ -266,9 +270,17 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 
+				/* The ground past the scene's edge, out to the horizon: client-only, built from the
+				 * same request so it meets the terrain at the edge. Before the sea, because a scene
+				 * of dry land can still look out over a coast, and that sea has to be drawn. */
+				SceneBackdropResult backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder);
+				result.Wrote.AddRange(backdrop.Wrote);
+				result.BackdropReachMetres = backdrop.ReachMetres;
+				result.BackdropVertices = backdrop.Vertices;
+
 				// The sea first: the boundary has to reach its surface, which on a scene cut from
 				// the sea floor is far above the highest ground.
-				AddWater(scene, plan, request, lowest, result);
+				AddWater(scene, plan, request, lowest, backdrop, result);
 				AddBoundary(scene, plan, lowest, relief, result.HasWater);
 
 				// The same components the audit adds to a scene somebody forgot to finish.
@@ -314,6 +326,8 @@ namespace FishMMO.Shared.WorldDesign
 			 * The same rule the audit applies: only when the project has exactly one authored
 			 * climate, because with several, which to use is somebody's decision. */
 			EnsureBodyClimate(request.Body);
+			// Every generated scene has a boundary, so the client needs the glass that shows it.
+			BoundaryGlassAssets.Ensure();
 			AssetDatabase.SaveAssets();
 			AssetDatabase.Refresh();
 			WorldAtlasScene.EditorLookup.Invalidate();
@@ -422,7 +436,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </para>
 		/// </remarks>
 		private static void AddWater(Scene scene, TerrainTilePlan plan, SceneGenerationRequest request,
-			float groundAltitudeMetres, SceneGenerationResult result)
+			float groundAltitudeMetres, SceneBackdropResult backdrop, SceneGenerationResult result)
 		{
 			if (request.Layer != null && request.Layer.Underground)
 			{
@@ -433,8 +447,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			// The scene's floor is above the water line, so the sea is not in this scene.
-			if (groundAltitudeMetres >= 0f)
+			// Neither the scene nor the ground it looks out over reaches the water line.
+			bool backdropReachesSea = backdrop != null && backdrop.Vertices > 0 && backdrop.LowestMetres < 0f;
+			if (groundAltitudeMetres >= 0f && !backdropReachesSea)
 			{
 				return;
 			}
@@ -478,7 +493,15 @@ namespace FishMMO.Shared.WorldDesign
 			 * camera's far plane the rings are drawn and clipped. The diagonal is what a viewer at
 			 * one corner has to see across. */
 			float diagonal = Mathf.Sqrt(plan.WidthMetres * plan.WidthMetres + plan.DepthMetres * plan.DepthMetres);
-			surface.OuterRadius = Mathf.Clamp(diagonal * 2f, 4000f, 20000f);
+			/* And at least to the backdrop's far corner, or its seas end in a ring of bare sea
+			 * floor ten kilometres out. */
+			float backdropCorner = 0f;
+			if (backdrop != null && backdrop.Vertices > 0)
+			{
+				float bx = plan.WidthMetres * 0.5f + backdrop.ReachMetres, bz = plan.DepthMetres * 0.5f + backdrop.ReachMetres;
+				backdropCorner = Mathf.Sqrt(bx * bx + bz * bz) * 1.05f;
+			}
+			surface.OuterRadius = Mathf.Clamp(Mathf.Max(diagonal * 2f, backdropCorner), 4000f, 30000f);
 			surface.Rebuild();
 
 			/* The depth field the shallows, the breakers and the swash all read, and the driver that

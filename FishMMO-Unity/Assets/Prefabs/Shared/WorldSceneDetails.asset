@@ -28,7 +28,7 @@ MonoBehaviour:
     - MaxClients: 6
       SceneTransitionImage: {fileID: 21300000, guid: 41f73c28208285445b37a7980665ead3,
         type: 3}
-      MapDefinition: {fileID: 11400000, guid: 3dc63eeaffbdc6354ab7ed4a13598902, type: 2}
+      MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
@@ -57,7 +57,7 @@ MonoBehaviour:
     - MaxClients: 200
       SceneTransitionImage: {fileID: 21300000, guid: 5c2d23be0cbdd4048a53de5b3b050809,
         type: 3}
-      MapDefinition: {fileID: 11400000, guid: 0c122a6fc7151921198b330a6062ad91, type: 2}
+      MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys:
         - East A
@@ -83,18 +83,18 @@ MonoBehaviour:
           Rotation: {x: -0, y: 0.47907484, z: -0, w: 0.87777406}
       Teleporters:
         m_keys:
-        - Tutorial Spawners
         - Tutorial Regions
         - Tutorial SpawnPoints
+        - Tutorial Spawners
         - Start Scene B 1
         m_values:
-        - ToScene: Tutorial Spawners
-          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
-          ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: Tutorial Regions
           ToPosition: {x: -4.2100005, y: 0.1, z: 0}
           ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: Tutorial SpawnPoints
+          ToPosition: {x: -4.2100005, y: 0.1, z: 0}
+          ToRotation: {x: -0, y: -0, z: -0, w: 1}
+        - ToScene: Tutorial Spawners
           ToPosition: {x: -4.2100005, y: 0.1, z: 0}
           ToRotation: {x: -0, y: -0, z: -0, w: 1}
         - ToScene: StartScene B
@@ -122,7 +122,7 @@ MonoBehaviour:
     - MaxClients: 200
       SceneTransitionImage: {fileID: 21300000, guid: af9d2e8814f76f4498e2ed07cc8191ef,
         type: 3}
-      MapDefinition: {fileID: 11400000, guid: f711f7b4688b93ba9b55fa54a0d28be9, type: 2}
+      MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys:
         - Spire
@@ -136,12 +136,12 @@ MonoBehaviour:
           - {fileID: 11400000, guid: f1bedd6f4354a7e41be26aee87734d66, type: 2}
       RespawnPositions:
         m_keys:
-        - Respawn 1
         - Respawn 2
+        - Respawn 1
         m_values:
-        - Position: {x: 0, y: 2, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: 224.6, y: 2, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 0, y: 2, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
@@ -165,41 +165,41 @@ MonoBehaviour:
         - BoundaryOrigin: {x: 0, y: 73.09101, z: 0}
           BoundarySize: {x: 1000, y: 146.18202, z: 1000}
       Waypoints:
-        m_keys: 0100000000000000
+        m_keys: 0000000001000000
         m_values:
-        - Index: 1
-          Name: Far Field Waypoint
-          Description: 
-          Position: {x: 227.60004, y: 0.33828163, z: 3.0000305}
-          Icon: {fileID: 0}
         - Index: 0
           Name: Village Waypoint
           Description: 
           Position: {x: 3.0000305, y: 0.009815216, z: 3.0000305}
           Icon: {fileID: 0}
+        - Index: 1
+          Name: Far Field Waypoint
+          Description: 
+          Position: {x: 227.60004, y: 0.33828163, z: 3.0000305}
+          Icon: {fileID: 0}
     - MaxClients: 6
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 11400000, guid: e3bad5de02b940f2e86e55ea6dae371d, type: 2}
+      MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
       RespawnPositions:
         m_keys:
         - SpawnPosition
-        - Team1_B
         - Team2_B
-        - Team1_A
         - Team2_A
+        - Team1_A
+        - Team1_B
         m_values:
         - Position: {x: 14.458, y: 4.4215527, z: -5.458}
           Rotation: {x: 0, y: 0.45196772, z: 0, w: 0.89203435}
-        - Position: {x: 13, y: 4.4215527, z: -8.5}
-          Rotation: {x: 0, y: 0, z: 0, w: 1}
         - Position: {x: 17, y: 4.4215527, z: -2.5}
+          Rotation: {x: 0, y: 0, z: 0, w: 1}
+        - Position: {x: 15.5, y: 4.4215527, z: -2.5}
           Rotation: {x: 0, y: 0, z: 0, w: 1}
         - Position: {x: 11.5, y: 4.4215527, z: -8.5}
           Rotation: {x: 0, y: 0, z: 0, w: 1}
-        - Position: {x: 15.5, y: 4.4215527, z: -2.5}
+        - Position: {x: 13, y: 4.4215527, z: -8.5}
           Rotation: {x: 0, y: 0, z: 0, w: 1}
       Teleporters:
         m_keys: []
@@ -215,18 +215,18 @@ MonoBehaviour:
         m_values: []
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 11400000, guid: ed970d4b4b8c97da5826dd03fc9b0642, type: 2}
+      MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
       RespawnPositions:
         m_keys:
-        - Respawn Position A
         - Respawn Position B
+        - Respawn Position A
         m_values:
-        - Position: {x: 15, y: 1.5, z: 0}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: -15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: 15, y: 1.5, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
@@ -246,22 +246,22 @@ MonoBehaviour:
         m_values: []
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 11400000, guid: d36a87a6804fa30808e05fd788359eef, type: 2}
+      MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys:
-        - Spawn Point C
-        - Spawn Point A
-        - Spawn Point D
         - Spawn Point B
+        - Spawn Point C
+        - Spawn Point D
+        - Spawn Point A
         m_values:
+        - SpawnerName: Spawn Point B
+          SceneName: Tutorial SpawnPoints
+          Position: {x: -15, y: 1.5, z: 0}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+          AllowedRaces: []
         - SpawnerName: Spawn Point C
           SceneName: Tutorial SpawnPoints
           Position: {x: 0, y: 1.5, z: 15}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
-          AllowedRaces: []
-        - SpawnerName: Spawn Point A
-          SceneName: Tutorial SpawnPoints
-          Position: {x: 15, y: 1.5, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
         - SpawnerName: Spawn Point D
@@ -269,22 +269,22 @@ MonoBehaviour:
           Position: {x: 0, y: 1.5, z: -15}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
-        - SpawnerName: Spawn Point B
+        - SpawnerName: Spawn Point A
           SceneName: Tutorial SpawnPoints
-          Position: {x: -15, y: 1.5, z: 0}
+          Position: {x: 15, y: 1.5, z: 0}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
           AllowedRaces: []
       RespawnPositions:
         m_keys:
         - Character Respawn Position C
-        - Character Respawn Position B
         - Character Respawn Position A
+        - Character Respawn Position B
         m_values:
         - Position: {x: -8, y: 1.5, z: 8}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
-        - Position: {x: -8, y: 1.5, z: -8}
-          Rotation: {x: -0, y: -0, z: -0, w: 1}
         - Position: {x: 8, y: 1.5, z: -8}
+          Rotation: {x: -0, y: -0, z: -0, w: 1}
+        - Position: {x: -8, y: 1.5, z: -8}
           Rotation: {x: -0, y: -0, z: -0, w: 1}
       Teleporters:
         m_keys:
@@ -304,7 +304,7 @@ MonoBehaviour:
         m_values: []
     - MaxClients: 200
       SceneTransitionImage: {fileID: 0}
-      MapDefinition: {fileID: 11400000, guid: 5fa030eb79490d01599b5879c8c8f26d, type: 2}
+      MapDefinition: {fileID: 0}
       InitialSpawnPositions:
         m_keys: []
         m_values: []
@@ -349,8 +349,8 @@ MonoBehaviour:
         m_keys:
         - Scene Boundary
         m_values:
-        - BoundaryOrigin: {x: 0, y: -29.65149, z: 0}
-          BoundarySize: {x: 6500, y: 1400, z: 5416.667}
+        - BoundaryOrigin: {x: 0, y: -126.50928, z: 0}
+          BoundarySize: {x: 6500, y: 4276.407, z: 5416.667}
       Waypoints:
         m_keys: 
         m_values: []

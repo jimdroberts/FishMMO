@@ -34,12 +34,24 @@ namespace FishMMO.Shared.WorldDesign
 			WorldEditorAssets.EnsureFolder(Folder);
 			return new[]
 			{
-				Layer("Generated Sand", new Color(0.76f, 0.70f, 0.50f)),
-				Layer("Generated Grass", new Color(0.29f, 0.45f, 0.22f)),
-				Layer("Generated Rock", new Color(0.45f, 0.42f, 0.38f)),
-				Layer("Generated Snow", new Color(0.95f, 0.96f, 0.98f)),
+				Layer("Generated Sand", Colours[Sand]),
+				Layer("Generated Grass", Colours[Grass]),
+				Layer("Generated Rock", Colours[Rock]),
+				Layer("Generated Snow", Colours[Snow]),
 			};
 		}
+
+		/// <summary>
+		/// Each layer's flat colour, in layer order. Shared with the backdrop's colour bake, so the
+		/// ground past the scene's edge is painted with exactly the colours inside it.
+		/// </summary>
+		public static readonly Color[] Colours =
+		{
+			new Color(0.76f, 0.70f, 0.50f),
+			new Color(0.29f, 0.45f, 0.22f),
+			new Color(0.45f, 0.42f, 0.38f),
+			new Color(0.95f, 0.96f, 0.98f),
+		};
 
 		/// <summary>Indices into <see cref="Ensure"/>'s array, so the splatting reads as words.</summary>
 		public const int Sand = 0;

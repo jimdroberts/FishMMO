@@ -96,11 +96,22 @@ namespace FishMMO.UnitTests
 		/// Image assertions need a graphics device; under <c>-nographics</c> the baker writes the
 		/// definitions and skips the photographs, and this test checks only the definitions.
 		/// </remarks>
+		/// <summary>The saved, empty scene the bake test starts from; deleted when it finishes.</summary>
+		private const string StartScenePath = "Assets/WorldMapBakeTestStart.unity";
+
 		[Test]
 		public void ClientBuildBake_GivesEveryWorldSceneAMap_AndCleansUpAfterItself()
 		{
 			Assume.That(!AssetDatabase.IsValidFolder(WorldMapDefinition.BakedDirectory),
 				"A bake is already present; remove it (FishMMO Dashboard → World → World Map → Remove Baked Maps) before running this.");
+
+			/* Bake from a saved, empty scene. The baker adds its holder scene additively, which Unity
+			 * refuses while any untitled (never saved) scene is open, and earlier fixtures can leave the
+			 * runner with one. A scene saved to a temporary path is closed and reopened by the baker like
+			 * any open scene, and is deleted again below. */
+			UnityEngine.SceneManagement.Scene start = UnityEditor.SceneManagement.EditorSceneManager.NewScene(
+				UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+			UnityEditor.SceneManagement.EditorSceneManager.SaveScene(start, StartScenePath);
 
 			bool canCapture = SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
 			try
@@ -150,6 +161,9 @@ namespace FishMMO.UnitTests
 			{
 				WorldMapBaker.CleanBakedMaps();
 				WorldSceneDetailsCacheBuilder.Rebuild();
+				UnityEditor.SceneManagement.EditorSceneManager.NewScene(
+					UnityEditor.SceneManagement.NewSceneSetup.EmptyScene, UnityEditor.SceneManagement.NewSceneMode.Single);
+				AssetDatabase.DeleteAsset(StartScenePath);
 			}
 
 			Assert.IsFalse(AssetDatabase.IsValidFolder(WorldMapDefinition.BakedDirectory), "The bake folder must be gone after cleanup.");

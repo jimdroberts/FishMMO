@@ -38,8 +38,10 @@ namespace FishMMO.UnitTests
 			Assert.IsTrue(library.Contains("FishCoverAt"), "the surfaces must read the cover map");
 			// The surfaces read the occlusion map themselves rather than through FishSkyOpen, because
 			// a surface needs a softer answer than a raindrop does — but read it they must, or snow
-			// settles under roofs.
-			Assert.IsTrue(library.Contains("FishSkyOcclusionHeight"), "cover must stop at a roof, which is what the occlusion map is for");
+			// settles under roofs. They read the ground layer (FishSkyOcclusionGround) and handle the
+			// sea separately through FishWaterOpen, so the sea bed holds no cover past the map's edge.
+			Assert.IsTrue(library.Contains("FishSkyOcclusionGround"), "cover must stop at a roof, which is what the occlusion map is for");
+			Assert.IsTrue(library.Contains("FishWaterOpen"), "nothing settles under the sea");
 			Assert.IsTrue(library.Contains("FishSurfaceExposure"), "the one place that decides whether the sky reaches a surface is gone");
 			Assert.IsTrue(library.Contains("FishDitherClip"), "the day/night dissolve lives here");
 		}
