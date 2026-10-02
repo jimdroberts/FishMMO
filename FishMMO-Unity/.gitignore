@@ -104,9 +104,16 @@ crashlytics-build.properties
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientTerrainArrays.asset*
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientTerrainArrays_*
 
-# Procedural biome art payload: every generated texture and mesh, and the record of what generated them.
-# Build output, rebuilt per machine (on editor load and before every build) by BiomeArtGenerator; each
-# file's GUID is derived from its path, so the COMMITTED wrappers beside it (Generated/TerrainLayers,
-# Materials, Prefabs and ProceduralArtLedger.json) resolve on any clone once it has been generated.
-/[Aa]ssets/Prefabs/Shared/Biomes/Generated/Payload/
-/[Aa]ssets/Prefabs/Shared/Biomes/Generated/Payload.meta
+# Procedural biome art: NOTHING generated is committed. Generated/ holds the payload (textures, meshes),
+# the wrappers built on it (terrain layers, materials, prefabs) and the generator's record; TerrainLayers/Built/
+# holds the layers BiomeTerrainLayers builds from loose biome textures (the TerrainLayers folder holds only
+# that, so its .meta goes too). All of it is build output, rebuilt per machine on editor load and first in
+# every build. Every file's GUID is derived from its path (ProceduralArtPayload.GuidFor) and every object ID
+# from what the object is (ProceduralArtFileIds for prefabs), so committed scenes, terrain data and biomes
+# that reference generated art resolve on any clone once it has generated. Replace generated art through
+# Assets/LOCAL (BiomeLocalArt sidecars) or by pointing a slot or rule at a non-generated asset.
+/[Aa]ssets/Prefabs/Shared/Biomes/Generated/
+/[Aa]ssets/Prefabs/Shared/Biomes/Generated.meta
+/[Aa]ssets/Prefabs/Shared/Biomes/TerrainLayers/Built/
+/[Aa]ssets/Prefabs/Shared/Biomes/TerrainLayers/Built.meta
+/[Aa]ssets/Prefabs/Shared/Biomes/TerrainLayers.meta
