@@ -7,10 +7,12 @@ namespace FishNet.Editing.Beta
     public class BetaModeMenu : MonoBehaviour
     {
         #region const.
+        private const string NETWORKTRANSFORM_POSITION_PACKING_DEFINE = "FISHNET_NETWORKTRANSFORM_POSITION_PACKING";
         private const string STABLE_RECURSIVE_DESPAWNS_DEFINE = "FISHNET_STABLE_RECURSIVE_DESPAWNS";
         private const string THREADED_TICKSMOOTHERS_DEFINE = "FISHNET_THREADED_TICKSMOOTHERS";
         private const string THREADED_COLLIDER_ROLLBACK_DEFINE = "FISHNET_THREADED_COLLIDER_ROLLBACK";
         private const string ANIMATOR_CHANNEL_DEFINE = "FISHNET_ANIMATOR_CHANNEL";
+        private const string DELTA_PREDICTION_DEFINE = "FISHNET_DELTA_PREDICTION";
         #endregion
 
         
@@ -30,6 +32,25 @@ namespace FishNet.Editing.Beta
         }
         #endregion
         
+        #region Beta Delta Prediction
+        /* Content: Delta Prediction
+         *      Replicates and reconciles are written as deltas for types which have delta serializers registered.
+         *      This changes what is sent over the network, so the define is set for every build target: a server and its clients must be built with the same setting. */
+        #if FISHNET_DELTA_PREDICTION
+        [MenuItem("Tools/Fish-Networking/Beta/Disable Delta Prediction", false, -1101)]
+        private static void DisableBetaDeltaPrediction() => SetBetaDeltaPrediction(useStable: true);
+        #else
+        [MenuItem("Tools/Fish-Networking/Beta/Enable Delta Prediction", false, -1101)]
+        private static void EnableBetaDeltaPrediction() => SetBetaDeltaPrediction(useStable: false);
+        #endif
+        private static void SetBetaDeltaPrediction(bool useStable)
+        {
+            bool result = DeveloperMenu.RemoveOrAddDefineForAllBuildTargets(DELTA_PREDICTION_DEFINE, removeDefine: useStable);
+            if (result)
+                Debug.LogWarning($"Beta Delta Prediction is now {GetBetaEnabledText(useStable)} for all build targets. Servers and clients must be built with the same setting.");
+        }
+        #endregion
+
         #region Beta Recursive Despawns
         #if FISHNET_STABLE_RECURSIVE_DESPAWNS
         [MenuItem("Tools/Fish-Networking/Beta/Enable Recursive Despawns", false, -1101)]
@@ -97,6 +118,25 @@ namespace FishNet.Editing.Beta
             bool result = DeveloperMenu.RemoveOrAddDefine(THREADED_COLLIDER_ROLLBACK_DEFINE, removeDefine: useStable);
             if (result)
                 Debug.LogWarning($"Beta Threaded Collider Rollbacks are now {GetBetaEnabledText(useStable)}.");
+        }
+        #endregion
+
+        #region Beta NetworkTransform Position Packing
+        /* Content: NetworkTransform Position Packing
+         *      Adds Position Packing Bits and Position Compression Scale to NetworkTransform, so positions can be packed into 24 bits or at a scale other than 100.
+         *      This changes what is sent over the network, so the define is set for every build target: a server and its clients must be built with the same setting. */
+        #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+        [MenuItem("Tools/Fish-Networking/Beta/Disable NetworkTransform Position Packing", false, -1101)]
+        private static void DisableBetaNetworkTransformPositionPacking() => SetBetaNetworkTransformPositionPacking(useStable: true);
+        #else
+        [MenuItem("Tools/Fish-Networking/Beta/Enable NetworkTransform Position Packing", false, -1101)]
+        private static void EnableBetaNetworkTransformPositionPacking() => SetBetaNetworkTransformPositionPacking(useStable: false);
+        #endif
+        private static void SetBetaNetworkTransformPositionPacking(bool useStable)
+        {
+            bool result = DeveloperMenu.RemoveOrAddDefineForAllBuildTargets(NETWORKTRANSFORM_POSITION_PACKING_DEFINE, removeDefine: useStable);
+            if (result)
+                Debug.LogWarning($"Beta NetworkTransform Position Packing is now {GetBetaEnabledText(useStable)} for all build targets. Servers and clients must be built with the same setting.");
         }
         #endregion
 

@@ -255,7 +255,8 @@ namespace FishNet.Managing.Transporting
                 }
 
                 _lowestMtus[i] = channelLowest;
-                _lowestMtu = Mathf.Min(allLowest, channelLowest);
+                allLowest = Mathf.Min(allLowest, channelLowest);
+                _lowestMtu = allLowest;
             }
         }
 
@@ -342,6 +343,11 @@ namespace FishNet.Managing.Transporting
         /// </summary>
         private void InitializeToServerBundles()
         {
+            // Replace any existing bundles so they use the current MTU reserve.
+            foreach (PacketBundle pb in _toServerBundles)
+                pb.Dispose();
+            _toServerBundles.Clear();
+
             /* For ease of use FishNet will always have
              * only two channels, reliable and unreliable.
              * Even if the transport only supports reliable
@@ -380,7 +386,7 @@ namespace FishNet.Managing.Transporting
         /// <param name = "value">Value to use.</param>
         public void SetMTUReserve(int value)
         {
-            if ((_networkManager != null && _networkManager.IsClientStarted) || _networkManager.IsServerStarted)
+            if (_networkManager != null && (_networkManager.IsClientStarted || _networkManager.IsServerStarted))
             {
                 _networkManager.LogError($"A custom MTU reserve cannot be set after the server or client have been started or connected.");
                 return;
@@ -393,7 +399,9 @@ namespace FishNet.Managing.Transporting
             }
 
             _customMtuReserve = value;
-            InitializeToServerBundles();
+            // Before initialization the bundles do not exist yet; InitializeOnce_Internal creates them with this value.
+            if (_networkManager != null)
+                InitializeToServerBundles();
         }
 
         /// <summary>
@@ -580,7 +588,7 @@ namespace FishNet.Managing.Transporting
         /// <summary>
         /// Gets the channelId to use, returning a fallback Id if the provided channelId is not supported.
         /// </summary>
-        private byte GetFallbackChannelIdAsNeeded(byte channelId) => channelId > _toServerBundles.Count ? (byte)Channel.Reliable : channelId;
+        private byte GetFallbackChannelIdAsNeeded(byte channelId) => channelId >= CHANNEL_COUNT ? (byte)Channel.Reliable : channelId;
 
         /// <summary>
         /// Splits data going to which is too large to fit within the transport MTU.
@@ -638,6 +646,19 @@ namespace FishNet.Managing.Transporting
             WriterPool.Store(splitWriter);
 
             return SPLIT_SENT_VALUE;
+        }
+
+        /// <summary>
+        /// Returns the most split messages a client may send for a single packet.
+        /// </summary>
+        internal int GetMaximumClientSplitMessageCount()
+        {
+            int maximumSegmentLength = _maximumSplitPacketSegmentLength;
+            if (maximumSegmentLength <= 0)
+                return 0;
+
+            //Clients will not send a split where messageCount * maximumSegmentLength exceeds _maximumClientPacketSize.
+            return (int)Math.Ceiling((double)_maximumClientPacketSize / maximumSegmentLength);
         }
 
         /// <summary>

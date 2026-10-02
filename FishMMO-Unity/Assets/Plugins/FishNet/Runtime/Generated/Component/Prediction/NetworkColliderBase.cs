@@ -30,10 +30,10 @@ namespace FishNet.Component.Prediction
         [SerializeField]
         protected float AdditionalSize = 0.1f;
         /// <summary>
-        /// Layers to trace on. This is used when value is not nothing.
+        /// Layers to trace on. When nothing, the layers which interact with this gameObject's layer in the collision matrix are used.
         /// </summary>
         [FormerlySerializedAs("_layers")]
-        [Tooltip("Layers to trace on. This is used when value is not nothing.")]
+        [Tooltip("Layers to trace on. When nothing, the layers which interact with this gameObject's layer in the collision matrix are used.")]
         [SerializeField]
         protected LayerMask Layers = (LayerMask)0;
         /// <summary>
@@ -61,6 +61,21 @@ namespace FishNet.Component.Prediction
         /// </summary>
         [HideInInspector]
         protected bool IsStopping;
+
+        /// <summary>
+        /// Returns the layers to trace on. When nothing, the layers which interact with this gameObject's layer are used.
+        /// </summary>
+        public LayerMask GetLayers() => Layers;
+
+        /// <summary>
+        /// Sets the layers to trace on. Use nothing to trace on the layers which interact with this gameObject's layer.
+        /// </summary>
+        public void SetLayers(LayerMask value)
+        {
+            Layers = value;
+            // Forces interactable layers to be rebuilt from the gameObject's layer should value be nothing.
+            _lastGameObjectLayer = -1;
+        }
 
         protected virtual void Awake()
         {
@@ -147,12 +162,17 @@ namespace FishNet.Component.Prediction
                 if (_lastGameObjectLayer != currentLayer)
                 {
                     _lastGameObjectLayer = currentLayer;
-                    InteractableLayers = GameKit.Dependencies.Utilities.Layers.GetInteractableLayersValue(currentLayer);
+                    InteractableLayers = GetInteractableLayersValue(currentLayer);
                 }
             }
 
             return true;
         }
+
+        /// <summary>
+        /// Returns the layers which interact with layer in the collision matrix. Used when Layers is nothing.
+        /// </summary>
+        protected virtual int GetInteractableLayersValue(int layer) => GameKit.Dependencies.Utilities.Layers.GetInteractableLayersValue(layer);
 
         /// <summary>
         /// Implement collider checking logic within this method.
