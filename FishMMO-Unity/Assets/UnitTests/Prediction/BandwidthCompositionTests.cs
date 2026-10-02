@@ -227,16 +227,11 @@ namespace FishMMO.UnitTests
 			d.Equipment = new[] { new EquipmentReconcileEntry { TemplateID = 5, Slot = 1, Seed = 77, ItemID = 900 }, new EquipmentReconcileEntry { TemplateID = 6, Slot = 2, Seed = 78, ItemID = 901 } };
 			d.Attributes = new AttributeReconcileEntry[24];
 			for (int i = 0; i < d.Attributes.Length; i++) d.Attributes[i] = new AttributeReconcileEntry { TemplateID = 100 + i, Value = 10 + i, ExternalModifier = 0 };
-			d.Sequence = 7;
 			return d;
 		}
 
-		private static CharacterReconcileData Next(CharacterReconcileData prev)
-		{
-			CharacterReconcileData n = prev;
-			n.Sequence = unchecked((byte)(prev.Sequence + 1));
-			return n;
-		}
+		/// <summary>The next tick's reconcile; nothing moves unless the caller moves it (there is no chain counter any more).</summary>
+		private static CharacterReconcileData Next(CharacterReconcileData prev) => prev;
 
 		[Test]
 		public void Reconcile_ServerToOwner()
@@ -252,7 +247,6 @@ namespace FishMMO.UnitTests
 			walking.MotorState.Rotation = Quaternion.Euler(0f, 42f, 0f);
 			// Combat: walking + health/stamina changing + a cast in progress + rng advanced.
 			CharacterReconcileData combat = Next(walking);
-			combat.Sequence = Next(prev).Sequence;
 			combat.ResourceState.Health -= 37f;
 			combat.ResourceState.Stamina -= 4.2f;
 			combat.AbilityID = 8_842_001_337L;
@@ -261,10 +255,12 @@ namespace FishMMO.UnitTests
 			combat.RngS0 ^= 0x5555; combat.RngS1 ^= 0x3333; combat.RngS2 ^= 0x0F0F; combat.RngS3 ^= 0xF0F0;
 			combat.Cooldowns = new[] { new CooldownReconcileEntry { AbilityID = 42, StartTick = 100, DurationTicks = 60 }, new CooldownReconcileEntry { AbilityID = 8_842_001_337L, StartTick = 118, DurationTicks = 30 } };
 
-			Record("rec.deltaIdle", Bytes(w => w.WriteDelta(prev, idle, DeltaSerializerOption.RootSerialize)));
-			Record("rec.deltaWalking", Bytes(w => w.WriteDelta(prev, walking, DeltaSerializerOption.RootSerialize)));
-			Record("rec.deltaCombat", Bytes(w => w.WriteDelta(prev, combat, DeltaSerializerOption.RootSerialize)));
-			Record("rec.absolute", Bytes(w => w.WriteDelta(prev, walking, DeltaSerializerOption.FullSerialize)));
+			/* As FishNet's delta prediction writes them: its one-byte header, then a delta against the
+			 * last FULL reconcile (prev here), or the regular serializer for the full reconcile itself. */
+			Record("rec.deltaIdle", DeltaReconcileWire.Bytes(prev, idle, fullSerialize: false));
+			Record("rec.deltaWalking", DeltaReconcileWire.Bytes(prev, walking, fullSerialize: false));
+			Record("rec.deltaCombat", DeltaReconcileWire.Bytes(prev, combat, fullSerialize: false));
+			Record("rec.absolute", DeltaReconcileWire.Bytes(prev, walking, fullSerialize: true));
 			Record("rec.absoluteHz", 1.0);
 			Record("rec.hz", TickRate);
 			Record("rec.attributeCount", prev.Attributes.Length);
@@ -282,12 +278,17 @@ namespace FishMMO.UnitTests
 				FishNet.Component.Transforming.NetworkTransform nt = go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
 				Type ntType = typeof(FishNet.Component.Transforming.NetworkTransform);
 				ntType.GetField("_cachedTransform", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(nt, go.transform);
+				/* Measure what FishMMO ships: every NT prefab sets FishNet's position-packing beta to
+				 * 24-bit axes at scale 100, while a component added in code gets FishNet's 16-bit default. */
+				FieldInfo packingBits = ntType.GetField("_positionPackingBits", BindingFlags.Instance | BindingFlags.NonPublic);
+				LogAssert.IsNotNull(packingBits, "NetworkTransform._positionPackingBits must exist (FISHNET_NETWORKTRANSFORM_POSITION_PACKING).");
+				packingBits.SetValue(nt, Enum.Parse(packingBits.FieldType, "TwentyFour"));
 				Type changedDelta = ntType.GetNestedType("ChangedDelta", BindingFlags.NonPublic);
 				MethodInfo serialize = ntType.GetMethod("SerializeChanged", BindingFlags.Instance | BindingFlags.NonPublic);
 				PooledWriter writer = WriterPool.Retrieve();
 				try
 				{
-					serialize.Invoke(nt, new[] { Enum.ToObject(changedDelta, changedMask), writer });
+					serialize.Invoke(nt, new[] { Enum.ToObject(changedDelta, changedMask), writer, null });
 					return writer.Length;
 				}
 				finally { writer.Store(); }

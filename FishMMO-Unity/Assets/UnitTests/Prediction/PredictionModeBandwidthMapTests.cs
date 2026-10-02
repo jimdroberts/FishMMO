@@ -48,7 +48,7 @@ namespace FishMMO.UnitTests
 	{
 		// ── Design parameters, from the project's own configuration ──────────
 		// TickRate 30 and stateInterpolation 2: Assets/Scenes/Server/SceneServer.unity.
-		// RedundancyCount = stateInterpolation + 1: PredictionManager.cs:234.
+		// RedundancyCount = stateInterpolation + 1: PredictionManager.RedundancyCount.
 		private const int TickRate = 30;
 		private const int RedundancyCount = 3;
 
@@ -111,13 +111,14 @@ namespace FishMMO.UnitTests
 		{
 			CharacterReconcileData a = BaseReconcile();
 			CharacterReconcileData b = a;
-			b.Sequence = unchecked((byte)(a.Sequence + 1));
 			b.MotorState.Position += new Vector3(1f, 0f, 0f);
 
 			int delta = Bytes(w => w.WriteDelta(a, b, DeltaSerializerOption.RootSerialize));
-			int absolute = Bytes(w => w.WriteDelta(a, b, DeltaSerializerOption.FullSerialize));
+			int absolute = Bytes(w => w.Write(b));
 
 			LogAssert.IsTrue(delta > 0, "CharacterReconcileData delta wrote zero bytes — GenericDeltaWriter is not registered.");
+			LogAssert.IsTrue(DeltaReconcileWire.HasDeltaSerializers<CharacterReconcileData>(),
+				"FishNet takes the delta path only with BOTH a delta writer and reader registered.");
 			LogAssert.IsTrue(absolute > delta, "The absolute snapshot must be larger than a one-field delta.");
 
 			CharacterReplicateData r0 = Input(1f, 0f, 1, Vector3.forward, 1, 0, 100);
@@ -289,17 +290,11 @@ namespace FishMMO.UnitTests
 			{
 				d.Attributes[i] = new AttributeReconcileEntry { TemplateID = 100 + i, Value = 10 + i, ExternalModifier = 0 };
 			}
-			d.Sequence = 7;
 			return d;
 		}
 
-		/// <summary>Clones the arrays so a mutation does not alias the baseline's reference.</summary>
-		private static CharacterReconcileData NextTick(CharacterReconcileData prev)
-		{
-			CharacterReconcileData n = prev;
-			n.Sequence = unchecked((byte)(prev.Sequence + 1));
-			return n;
-		}
+		/// <summary>The next tick's reconcile; nothing moves unless the caller moves it (there is no chain counter any more).</summary>
+		private static CharacterReconcileData NextTick(CharacterReconcileData prev) => prev;
 
 		private static CharacterReconcileData Detach(CharacterReconcileData d)
 		{
@@ -310,15 +305,19 @@ namespace FishMMO.UnitTests
 			return d;
 		}
 
+		/// <summary>
+		/// One delta reconcile as FishNet's delta prediction sends it: its one-byte header, then the
+		/// delta against the last FULL reconcile (<paramref name="prev"/>).
+		/// </summary>
 		private static int Delta(CharacterReconcileData prev, CharacterReconcileData next)
-			=> Bytes(w => w.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize));
+			=> DeltaReconcileWire.Bytes(prev, next, fullSerialize: false);
 
 		[Test]
 		public void Reconcile_Scenarios()
 		{
 			CharacterReconcileData prev = BaseReconcile();
 
-			// Idle: standing still, full resources, nothing casting. Only the sequence byte moves.
+			// Idle: standing still, full resources, nothing casting. Header and flags word only.
 			CharacterReconcileData idle = NextTick(prev);
 
 			// Walking: motor position, velocity and rotation, plus a regen pulse landing.
@@ -379,8 +378,9 @@ namespace FishMMO.UnitTests
 			Record("rec.deltaWalkingRegenPulse", Delta(prev, walkingRegen));
 			Record("rec.deltaCombat", Delta(prev, combat));
 			Record("rec.deltaBurst", Delta(prev, burst));
-			Record("rec.absolute", Bytes(w => w.WriteDelta(prev, walking, DeltaSerializerOption.FullSerialize)));
-			Record("rec.absoluteBurst", Bytes(w => w.WriteDelta(prev, burst, DeltaSerializerOption.FullSerialize)));
+			// A full reconcile: FishNet's header, then the regular serializer.
+			Record("rec.absolute", DeltaReconcileWire.Bytes(prev, walking, fullSerialize: true));
+			Record("rec.absoluteBurst", DeltaReconcileWire.Bytes(prev, burst, fullSerialize: true));
 			Record("rec.absoluteHz", 1.0);
 			Record("rec.hz", TickRate);
 			Record("rec.attributeCount", prev.Attributes.Length);
@@ -397,6 +397,8 @@ namespace FishMMO.UnitTests
 		public void Reconcile_PerControllerAblation()
 		{
 			CharacterReconcileData prev = BaseReconcile();
+			// The no-change floor: FishNet's header plus the flags word. The key predates the removal
+			// of the chain sequence byte and is kept so the calculator that reads it still finds it.
 			int floor = Delta(prev, NextTick(prev));
 			Record("rec.ablation.floorSequenceOnly", floor);
 
@@ -501,12 +503,17 @@ namespace FishMMO.UnitTests
 					go.AddComponent<FishNet.Component.Transforming.NetworkTransform>();
 				Type ntType = typeof(FishNet.Component.Transforming.NetworkTransform);
 				ntType.GetField("_cachedTransform", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(nt, go.transform);
+				/* Measure what FishMMO ships: every NT prefab sets FishNet's position-packing beta to
+				 * 24-bit axes at scale 100, while a component added in code gets FishNet's 16-bit default. */
+				FieldInfo packingBits = ntType.GetField("_positionPackingBits", BindingFlags.Instance | BindingFlags.NonPublic);
+				LogAssert.IsNotNull(packingBits, "NetworkTransform._positionPackingBits must exist (FISHNET_NETWORKTRANSFORM_POSITION_PACKING).");
+				packingBits.SetValue(nt, Enum.Parse(packingBits.FieldType, "TwentyFour"));
 				Type changedDelta = ntType.GetNestedType("ChangedDelta", BindingFlags.NonPublic);
 				MethodInfo serialize = ntType.GetMethod("SerializeChanged", BindingFlags.Instance | BindingFlags.NonPublic);
 				PooledWriter writer = WriterPool.Retrieve();
 				try
 				{
-					serialize.Invoke(nt, new[] { Enum.ToObject(changedDelta, changedMask), writer });
+					serialize.Invoke(nt, new[] { Enum.ToObject(changedDelta, changedMask), writer, null });
 					return writer.Length;
 				}
 				finally { writer.Store(); }

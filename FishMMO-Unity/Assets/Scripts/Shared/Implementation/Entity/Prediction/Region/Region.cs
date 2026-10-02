@@ -225,7 +225,7 @@ namespace FishMMO.Shared
 		/// Handles a collider Enter. Recorded while reconciling/teleporting; otherwise raises Enter
 		/// unless a child region owns the character, and pairs an Exit on every ancestor that had entered.
 		/// </summary>
-		private void NetworkCollider_OnEnter(Collider other)
+		private void NetworkCollider_OnEnter(Collider other, uint tick)
 		{
 			IPlayerCharacter character = Resolve(other);
 			if (character == null)
@@ -238,12 +238,19 @@ namespace FishMMO.Shared
 				Parent?.OnDescendantTookOwnership(character);
 				Fire(OnRegionEnter, character);
 			}
+
+			/* FishNet 4.7 no longer raises OnStay on the tick a collider enters (unless the
+			 * trigger's InvokeStayOnEnter is set, which no region authors); 4.6 always did, and
+			 * region Stay triggers were written against that. Raise it here so the first Stay
+			 * still lands on the entry tick. ShouldStay applies the same effective-member and
+			 * suppression gate as a polled Stay. */
+			NetworkCollider_OnStay(other, tick);
 		}
 
 		/// <summary>
 		/// Handles a collider Stay. Only forwarded for effective members and never during replay/teleport.
 		/// </summary>
-		private void NetworkCollider_OnStay(Collider other)
+		private void NetworkCollider_OnStay(Collider other, uint tick)
 		{
 			IPlayerCharacter character = Resolve(other);
 			if (character == null)
@@ -260,7 +267,7 @@ namespace FishMMO.Shared
 		/// Handles a collider Exit. Recorded while reconciling/teleporting; otherwise raises Exit only
 		/// when an Enter was raised earlier, then offers the character back to the parent.
 		/// </summary>
-		private void NetworkCollider_OnExit(Collider other)
+		private void NetworkCollider_OnExit(Collider other, uint tick)
 		{
 			IPlayerCharacter character = Resolve(other);
 			if (character == null)

@@ -1,5 +1,11 @@
+using System;
+using System.Reflection;
 using NUnit.Framework;
 using FishMMO.Shared.Weather;
+using FishNet.Managing.Client;
+using FishNet.Managing.Predicting;
+using FishNet.Transporting;
+using UnityEngine;
 
 namespace FishMMO.UnitTests.Weather
 {
@@ -170,6 +176,110 @@ namespace FishMMO.UnitTests.Weather
 
 			// And it really does fail when the two clocks disagree, or it would be worthless.
 			Assert.That(WeatherExposureTick.ReplayAgrees(ClientStateTick, ServerStateTick, ClientStateTick + 1, ServerStateTick + 2), Is.False);
+		}
+	}
+
+	/// <summary>
+	/// FishNet 4.7 clears <c>PredictionManager.ClientStateTick</c>/<c>ServerStateTick</c> after every
+	/// reconcile. <see cref="WeatherExposureTick.ReconcilePairing"/> keeps the last pairing so a live
+	/// tick maps through the same offset its replay will use, and forgets it when the connection stops.
+	/// </summary>
+	[TestFixture]
+	public class WeatherExposureReconcilePairingTests
+	{
+		private GameObject gameObject;
+		private PredictionManager predictionManager;
+		private ClientManager clientManager;
+
+		[SetUp]
+		public void SetUp()
+		{
+			WeatherExposureTick.ReconcilePairing.Clear();
+			gameObject = new GameObject("ReconcilePairingTest");
+			predictionManager = gameObject.AddComponent<PredictionManager>();
+			clientManager = gameObject.AddComponent<ClientManager>();
+		}
+
+		[TearDown]
+		public void TearDown()
+		{
+			WeatherExposureTick.ReconcilePairing.Clear();
+			if (gameObject != null)
+			{
+				UnityEngine.Object.DestroyImmediate(gameObject);
+			}
+		}
+
+		/// <summary>Raises a field-like event the way its owner would.</summary>
+		private static void Raise(object owner, string eventName, params object[] args)
+		{
+			FieldInfo field = owner.GetType().GetField(eventName, BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.That(field, Is.Not.Null, $"{owner.GetType().Name}.{eventName} must be a field-like event.");
+			Delegate handler = (Delegate)field.GetValue(owner);
+			Assert.That(handler, Is.Not.Null, $"nothing subscribed to {owner.GetType().Name}.{eventName}");
+			handler.DynamicInvoke(args);
+		}
+
+		private void Pairing(out uint clientStateTick, out uint serverStateTick)
+		{
+			WeatherExposureTick.ReconcilePairing.Get(predictionManager, clientManager, out clientStateTick, out serverStateTick);
+		}
+
+		[Test]
+		public void BeforeAnyReconcile_ThereIsNoPairing()
+		{
+			Pairing(out uint client, out uint server);
+			Assert.That(client, Is.EqualTo(WeatherExposureTick.Unset));
+			Assert.That(server, Is.EqualTo(WeatherExposureTick.Unset));
+		}
+
+		[Test]
+		public void TheLastReconcilesPairing_OutlivesTheReconcile_SoLivePredictionMatchesReplay()
+		{
+			const uint clientStateTick = 640u;
+			const uint serverStateTick = 1_250_000u;
+
+			Pairing(out _, out _); // subscribes, as the first Resolve on a client would
+			Raise(predictionManager, "OnPreReconcile", clientStateTick, serverStateTick);
+
+			// After the reconcile: FishNet 4.7 has reset its own state ticks to UNSET_TICK.
+			Assert.That(predictionManager.ClientStateTick, Is.EqualTo(WeatherExposureTick.Unset),
+				"precondition: the PredictionManager does not hold the pairing outside a reconcile");
+			Pairing(out uint client, out uint server);
+			Assert.That(client, Is.EqualTo(clientStateTick));
+			Assert.That(server, Is.EqualTo(serverStateTick));
+
+			// A live tick predicted forward lands where the next replay of that tick will.
+			uint inputTick = clientStateTick + 7u;
+			uint live = WeatherExposureTick.Resolve(false, WeatherExposureTick.Unset, 99u, client, server, inputTick);
+			Assert.That(WeatherExposureTick.ReplayAgrees(clientStateTick, serverStateTick, inputTick, live), Is.True);
+			Assert.That(live, Is.EqualTo(serverStateTick + 7u));
+		}
+
+		[Test]
+		public void ANewerReconcile_ReplacesThePairing()
+		{
+			Pairing(out _, out _);
+			Raise(predictionManager, "OnPreReconcile", 100u, 5_000u);
+			Raise(predictionManager, "OnPreReconcile", 130u, 5_031u);
+
+			Pairing(out uint client, out uint server);
+			Assert.That(client, Is.EqualTo(130u));
+			Assert.That(server, Is.EqualTo(5_031u));
+		}
+
+		[Test]
+		public void StoppingTheClientConnection_ForgetsThePairing()
+		{
+			Pairing(out _, out _);
+			Raise(predictionManager, "OnPreReconcile", 640u, 1_250_000u);
+
+			// LocalTick restarts at zero on the next connection, so the old offset must not survive it.
+			Raise(clientManager, "OnClientConnectionState", new ClientConnectionStateArgs(LocalConnectionState.Stopped, 0));
+
+			Pairing(out uint client, out uint server);
+			Assert.That(client, Is.EqualTo(WeatherExposureTick.Unset));
+			Assert.That(server, Is.EqualTo(WeatherExposureTick.Unset));
 		}
 	}
 }

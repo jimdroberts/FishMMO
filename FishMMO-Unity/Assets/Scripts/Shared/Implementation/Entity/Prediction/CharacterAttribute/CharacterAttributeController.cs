@@ -1600,7 +1600,8 @@ namespace FishMMO.Shared
 		/// is queued, and before the owner's first input arrives it stamps those ticks with an
 		/// <em>estimate</em> of where the owner's clock is. An estimate is the wrong thing to anchor a
 		/// high-water mark on: it sits ahead of the real ticks that follow, and if it is ever taken
-		/// from the wrong clock — see the FISHMMO EDIT in <c>GetDefaultedLastReplicateTick</c> — it
+		/// from the wrong clock — as FishNet 4.6 did from the server-wide <c>LastPacketTick</c>, before
+		/// 4.7 seeded it from the owner's own connection (<c>ReplicateDefaultData</c>) — it
 		/// leaves <see cref="lastProcessedRegenTick"/> and <see cref="nextRegenTick"/> so far ahead
 		/// that no real input ever reaches them again, and the owner is stuck with whatever it had.
 		/// </para>

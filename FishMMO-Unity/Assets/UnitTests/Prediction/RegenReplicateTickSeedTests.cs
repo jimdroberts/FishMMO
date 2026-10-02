@@ -25,8 +25,10 @@ namespace FishMMO.UnitTests
 	/// through the reconcile. A freshly started server with one client never shows it.
 	/// </para>
 	/// <para>
-	/// Two things pin the fix: the vendored FishNet edit that seeds from the OWNER's per-connection
-	/// tick, and the controller rule that a replicate without real input cannot anchor the schedule.
+	/// Two things pin the fix: FishNet seeding default-data replicates from the OWNER's per-connection
+	/// tick (a FishMMO edit on 4.6.12; upstream since 4.7 via <c>NetworkConnection.ReplicateTick</c> /
+	/// <c>PacketTick</c>), and the controller rule that a replicate without real input cannot anchor
+	/// the schedule.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -181,21 +183,33 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(File.Exists(path),
 				$"Vendored FishNet file not found at {path}; the default-data replicate tick is seeded there.");
 
+			/* FishNet 4.7 (upstream) seeds the server's default-data replicates in the local
+			 * function ReplicateDefaultData:
+			 *     if (IsServerStarted)
+			 *         estimatedTick = Owner.ReplicateTick.IsUnset ? Owner.PacketTick.Value() + ... : Owner.ReplicateTick.Value();
+			 * i.e. from the OWNER's connection, which superseded FishMMO's 4.6.12 edit to
+			 * GetDefaultedLastReplicateTick. Pin the server branch to the per-connection ticks. */
 			string source = File.ReadAllText(path);
-			int seedIndex = source.IndexOf("uint GetDefaultedLastReplicateTick()", StringComparison.Ordinal);
-			LogAssert.IsTrue(seedIndex >= 0, "GetDefaultedLastReplicateTick is missing from the vendored FishNet.");
+			int seedIndex = source.IndexOf("void ReplicateDefaultData()", StringComparison.Ordinal);
+			LogAssert.IsTrue(seedIndex >= 0, "ReplicateDefaultData is missing from the vendored FishNet.");
 
-			int returnIndex = source.IndexOf("return _lastOrderedReplicatedTick;", seedIndex, StringComparison.Ordinal);
-			LogAssert.IsTrue(returnIndex >= 0, "GetDefaultedLastReplicateTick no longer returns _lastOrderedReplicatedTick.");
+			int useIndex = source.IndexOf("ReplicateDataContainer<T>.GetDefault(estimatedTick)", seedIndex, StringComparison.Ordinal);
+			LogAssert.IsTrue(useIndex >= 0, "ReplicateDefaultData no longer builds its default data from estimatedTick.");
 
-			string body = source.Substring(seedIndex, returnIndex - seedIndex);
-			LogAssert.IsTrue(body.Contains("Owner.PacketTick.Value("),
-				"GetDefaultedLastReplicateTick (FISHMMO EDIT) no longer seeds from the owner's per-connection " +
-				"PacketTick. TimeManager.LastPacketTick keeps the highest tick any connection ever sent, so every " +
-				"login after a server's first (relog, character switch, scene transfer, second player) is stamped " +
+			string body = source.Substring(seedIndex, useIndex - seedIndex);
+			int serverIndex = body.IndexOf("if (IsServerStarted)", StringComparison.Ordinal);
+			LogAssert.IsTrue(serverIndex >= 0, "ReplicateDefaultData no longer has a server branch.");
+			int elseIndex = body.IndexOf("else", serverIndex, StringComparison.Ordinal);
+			string serverBranch = elseIndex > serverIndex ? body.Substring(serverIndex, elseIndex - serverIndex) : body.Substring(serverIndex);
+
+			LogAssert.IsTrue(serverBranch.Contains("Owner.ReplicateTick") && serverBranch.Contains("Owner.PacketTick.Value("),
+				"FishNet's server-side default-data replicate tick no longer comes from the owner's per-connection " +
+				"ReplicateTick/PacketTick. TimeManager.LastPacketTick keeps the highest tick any connection ever sent, so every " +
+				"login after a server's first (relog, character switch, scene transfer, second player) would be stamped " +
 				"with an earlier session's clock: regeneration stops for the session and pre-replicate " +
-				"buff/cooldown ticks are translated by a garbage offset. " +
-				"Re-apply the edit after a FishNet upgrade.");
+				"buff/cooldown ticks are translated by a garbage offset.");
+			LogAssert.IsFalse(serverBranch.Contains("LastPacketTick"),
+				"The server branch must not seed from the TimeManager-wide LastPacketTick (any connection's clock).");
 		}
 	}
 }

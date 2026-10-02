@@ -39,7 +39,7 @@ namespace FishMMO.Shared
 	/// <b>Owner.</b> The owner never counts. Its own character is at distance zero from itself and
 	/// would have pinned every object at full rate; more to the point a server-authoritative
 	/// transform with SendToOwner off does not send to its owner at all
-	/// (<see cref="NetworkBehaviour.ExcludeOwnerFromUnbufferedObserversRpcs"/>).
+	/// (<c>NetworkBehaviour.ExcludeOwnerFromUnbufferedObserversRpcs</c>, internal to FishNet).
 	/// </para>
 	/// <para>
 	/// <b>Hysteresis.</b> Bands are evaluated on a slow timer and each observer holds its band

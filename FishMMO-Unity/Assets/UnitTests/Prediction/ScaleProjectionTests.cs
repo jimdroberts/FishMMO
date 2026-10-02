@@ -174,6 +174,11 @@ namespace FishMMO.UnitTests
 				FieldInfo cached = ntType.GetField("_cachedTransform", BindingFlags.Instance | BindingFlags.NonPublic);
 				LogAssert.IsNotNull(cached, "NetworkTransform._cachedTransform must exist; the measurement depends on it.");
 				cached.SetValue(nt, go.transform);
+				/* Measure what FishMMO ships: every NT prefab sets FishNet's position-packing beta to
+				 * 24-bit axes at scale 100, while a component added in code gets FishNet's 16-bit default. */
+				FieldInfo packingBits = ntType.GetField("_positionPackingBits", BindingFlags.Instance | BindingFlags.NonPublic);
+				LogAssert.IsNotNull(packingBits, "NetworkTransform._positionPackingBits must exist (FISHNET_NETWORKTRANSFORM_POSITION_PACKING).");
+				packingBits.SetValue(nt, Enum.Parse(packingBits.FieldType, "TwentyFour"));
 
 				Type changedDelta = ntType.GetNestedType("ChangedDelta", BindingFlags.NonPublic);
 				LogAssert.IsNotNull(changedDelta, "NetworkTransform.ChangedDelta must exist.");
@@ -186,7 +191,7 @@ namespace FishMMO.UnitTests
 				PooledWriter writer = WriterPool.Retrieve();
 				try
 				{
-					serialize.Invoke(nt, new[] { changed, writer });
+					serialize.Invoke(nt, new[] { changed, writer, null });
 					return writer.Length;
 				}
 				finally

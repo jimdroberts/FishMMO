@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests
 	/// to send its ObserversRpc to the owner every tick; the owner's handler returned on its first
 	/// line. That is ~630 B/s per moving player for nothing. The fix is a virtual on
 	/// NetworkBehaviour that NetworkTransform overrides, consulted where FishNet builds the RPC
-	/// exclusion list (FISHMMO EDIT in <c>NetworkBehaviour.SendObserversRpc</c>). Half of it is
+	/// exclusion list (upstream FishNet PR 19 in <c>NetworkBehaviour.SendObserversRpc</c>). Half of it is
 	/// asserted through the live property, the other half at source level because the send path
 	/// needs a spawned object.
 	/// </para>
@@ -49,8 +49,21 @@ namespace FishMMO.UnitTests
 			f.SetValue(target, value);
 		}
 
+		/// <summary>
+		/// <c>NetworkBehaviour.ExcludeOwnerFromUnbufferedObserversRpcs</c> is <c>internal</c> upstream
+		/// (FishNet PR "skip owner-discarded NetworkTransform updates"), so it is read through the base
+		/// property; reflection on the base PropertyInfo still dispatches to the override.
+		/// </summary>
+		private static bool ExcludesOwner(NetworkBehaviour behaviour)
+		{
+			PropertyInfo p = typeof(NetworkBehaviour).GetProperty("ExcludeOwnerFromUnbufferedObserversRpcs",
+				BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+			LogAssert.IsNotNull(p, "NetworkBehaviour.ExcludeOwnerFromUnbufferedObserversRpcs must exist.");
+			return (bool)p.GetValue(behaviour);
+		}
+
 		[Test]
-		public void NetworkTransform_ExcludesItsOwner_OnlyWhenServerAuthoritativeWithoutSendToOwner()
+		public void NetworkTransform_ExcludesItsOwner_ExactlyWhenTheOwnerDiscardsTheUpdate()
 		{
 			GameObject go = new GameObject("OwnerExclusionProbe");
 			try
@@ -61,21 +74,26 @@ namespace FishMMO.UnitTests
 				// The authored configuration on every player prefab.
 				SetPrivate(nt, "_clientAuthoritative", false);
 				SetPrivate(nt, "_sendToOwner", false);
-				LogAssert.IsTrue(nt.ExcludeOwnerFromUnbufferedObserversRpcs,
+				LogAssert.IsTrue(ExcludesOwner(nt),
 					"A server-authoritative transform that does not send to its owner must exclude the owner " +
 					"at the send, not discard on receipt.");
 
 				// The owner explicitly wants updates (a spectator camera on its own character).
 				SetPrivate(nt, "_sendToOwner", true);
-				LogAssert.IsFalse(nt.ExcludeOwnerFromUnbufferedObserversRpcs,
+				LogAssert.IsFalse(ExcludesOwner(nt),
 					"SendToOwner on must keep the owner in the send.");
 
-				// Client authoritative: the owner is the source and is excluded by the RPC itself,
-				// but this hook must not claim it (the relay path has its own rules).
+				// Client authoritative: the server relays the owner's own data and the owner's
+				// handler returns on it (ObserversUpdateClientAuthoritativeTransform's second guard),
+				// so upstream excludes the owner here too, whatever SendToOwner says. FishMMO's 4.6
+				// fork left this case alone; FishMMO authors no client-authoritative transform.
 				SetPrivate(nt, "_clientAuthoritative", true);
 				SetPrivate(nt, "_sendToOwner", false);
-				LogAssert.IsFalse(nt.ExcludeOwnerFromUnbufferedObserversRpcs,
-					"A client-authoritative transform must not use the server-authoritative owner exclusion.");
+				LogAssert.IsTrue(ExcludesOwner(nt),
+					"A client-authoritative transform's owner discards the relay, so it must be excluded.");
+				SetPrivate(nt, "_sendToOwner", true);
+				LogAssert.IsTrue(ExcludesOwner(nt),
+					"SendToOwner does not stop a client-authoritative owner discarding its own relayed data.");
 			}
 			finally
 			{
@@ -90,7 +108,7 @@ namespace FishMMO.UnitTests
 			try
 			{
 				NetworkBehaviour other = go.AddComponent<NetworkTransformDistanceLod>();
-				LogAssert.IsFalse(other.ExcludeOwnerFromUnbufferedObserversRpcs,
+				LogAssert.IsFalse(ExcludesOwner(other),
 					"The default must be false: only a behaviour whose owner provably discards the RPC may opt in, " +
 					"or the owner silently stops receiving things it needs.");
 			}
@@ -113,7 +131,7 @@ namespace FishMMO.UnitTests
 			int next = source.IndexOf("internal void SendTargetRpc(", send, StringComparison.Ordinal);
 			string body = source.Substring(send, next > send ? next - send : source.Length - send);
 
-			LogAssert.IsTrue(body.Contains("!bufferLast && !excludeOwner && ExcludeOwnerFromUnbufferedObserversRpcs && Owner.IsValid"),
+			LogAssert.IsTrue(body.Contains("!bufferLast && !excludeOwner && Owner.IsValid && ExcludeOwnerFromUnbufferedObserversRpcs"),
 				"SendObserversRpc must add the owner to the exclusion list when the behaviour opts in, " +
 				"guarded on !bufferLast (the owner needs buffered interval / SendToOwner changes) and " +
 				"Owner.IsValid (an owner that disconnected mid-tick).");
@@ -148,16 +166,34 @@ namespace FishMMO.UnitTests
 			int next = source.IndexOf("internal void SendTargetRpc(", send, StringComparison.Ordinal);
 			string body = source.Substring(send, next > send ? next - send : source.Length - send);
 
-			int latch = body.IndexOf("bool firstSinceReliable = _observersRpcSettled;", StringComparison.Ordinal);
-			int guard = body.IndexOf("if (sendFilter != null && !firstSinceReliable)", StringComparison.Ordinal);
-			int rearm = body.IndexOf("_observersRpcSettled = true;", StringComparison.Ordinal);
+			/* Upstream (FishNet PR "observer send filter") moved the filter loop out of
+			 * SendObserversRpc into AddFilteredObserversToNetworkConnectionCache, called for
+			 * unbuffered sends only and before the transport send. */
+			int filterCall = body.IndexOf("AddFilteredObserversToNetworkConnectionCache(channel);", StringComparison.Ordinal);
+			int unbuffered = body.IndexOf("if (!bufferLast)", StringComparison.Ordinal);
 			int sendToClients = body.IndexOf("SendToClients(", StringComparison.Ordinal);
+			LogAssert.IsTrue(filterCall >= 0 && unbuffered >= 0 && unbuffered < filterCall,
+				"SendObserversRpc must consult the filter for unbuffered sends only.");
+			LogAssert.IsTrue(filterCall < sendToClients, "The filter must run before the packet is handed to the transport.");
 
-			LogAssert.IsTrue(latch >= 0, "SendObserversRpc must read the settled latch before consulting the filter.");
-			LogAssert.IsTrue(guard > latch, "The filter loop must be skipped on the first unreliable send after a reliable one.");
-			LogAssert.IsTrue(rearm > guard && rearm < sendToClients,
-				"An unbuffered reliable send must re-arm the latch, in the same decision block, before the transport send.");
-			LogAssert.IsTrue(body.Contains("_observersRpcSettled = false;"), "An unreliable send must clear the latch.");
+			int helper = source.IndexOf("private void AddFilteredObserversToNetworkConnectionCache(Channel channel)", StringComparison.Ordinal);
+			LogAssert.IsTrue(helper >= 0, "AddFilteredObserversToNetworkConnectionCache must exist.");
+			int helperEnd = source.IndexOf("\n        /// <summary>", helper, StringComparison.Ordinal);
+			string filter = source.Substring(helper, helperEnd > helper ? helperEnd - helper : source.Length - helper);
+
+			int reliable = filter.IndexOf("if (channel != Channel.Unreliable)", StringComparison.Ordinal);
+			int rearm = filter.IndexOf("_observersRpcSettled = true;", StringComparison.Ordinal);
+			int latch = filter.IndexOf("bool settled = _observersRpcSettled;", StringComparison.Ordinal);
+			int clear = filter.IndexOf("_observersRpcSettled = false;", StringComparison.Ordinal);
+			int guard = filter.IndexOf("if (filter == null || settled)", StringComparison.Ordinal);
+			int loop = filter.IndexOf("filter.ShouldSend(", StringComparison.Ordinal);
+
+			LogAssert.IsTrue(reliable >= 0 && rearm > reliable && rearm < latch,
+				"An unbuffered reliable send must re-arm the latch and skip the filter.");
+			LogAssert.IsTrue(latch >= 0, "The settled latch must be read before consulting the filter.");
+			LogAssert.IsTrue(clear > latch, "An unreliable send must clear the latch.");
+			LogAssert.IsTrue(guard > clear && loop > guard,
+				"The filter loop must be skipped on the first unreliable send after a reliable one.");
 
 			string resetPath = Path.Combine(Directory.GetCurrentDirectory(),
 				"Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.cs");

@@ -250,6 +250,22 @@ namespace FishMMO.Shared
 					{
 						nt = prefab.AddComponent<NetworkTransform>();
 						addedTransform = true;
+
+						/* FishNet's position-packing beta defaults a new component to 16-bit axes
+						 * (+/-327 m packed, floats beyond). Every FishMMO NetworkTransform packs 24-bit
+						 * at scale 100 (NetworkTransformPrecisionTests pins it), so author that here. */
+						SerializedObject ntSo = new SerializedObject(nt);
+						SerializedProperty packingBits = ntSo.FindProperty("_positionPackingBits");
+						SerializedProperty packingScale = ntSo.FindProperty("_positionCompressionScale");
+						if (packingBits != null)
+						{
+							packingBits.enumValueIndex = 1; // PositionPackingBits.TwentyFour
+						}
+						if (packingScale != null)
+						{
+							packingScale.floatValue = 100f;
+						}
+						ntSo.ApplyModifiedPropertiesWithoutUndo();
 					}
 
 					bool addedLod = false;

@@ -188,7 +188,7 @@ namespace FishMMO.UnitTests
 			 * intrinsic to being a platform and the failure is silent. */
 			string platformSource = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
-			LogAssert.IsTrue(platformSource.Contains("platformCollider.QueryLayers |= required"),
+			LogAssert.IsTrue(platformSource.Contains("platformCollider.SetLayers(authored | required)"),
 				"KCCPlatform.Awake must force the Player layer into its rider volume's query " +
 				"layers — scene data authored without it silently breaks platform riding.");
 			LogAssert.IsTrue(platformSource.Contains("Constants.Layers.Index.Player"),
@@ -196,21 +196,22 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void QueryLayers_IsExposedOnNetworkColliderBase_AndRoundTrips()
+		public void Layers_AreExposedOnNetworkColliderBase_AndRoundTrip()
 		{
-			/* The setter is a tagged FISHMMO EDIT inside FishNet's NetworkColliderBase. A FishNet
-			 * upgrade that wipes it makes KCCPlatform.Awake stop compiling loudly — but this test
-			 * documents WHY the edit exists so it is re-applied rather than deleted: game code
-			 * must be able to guarantee its query layers (see the riding regression above). */
+			/* GetLayers/SetLayers on FishNet's NetworkColliderBase came upstream with the
+			 * empty-layers PR (FishNet #1093), replacing FishMMO's old QueryLayers edit. A FishNet
+			 * upgrade that loses them makes KCCPlatform.Awake stop compiling loudly — but this test
+			 * documents WHY the API matters: game code must be able to guarantee its query layers
+			 * (see the riding regression above). */
 			GameObject go = new GameObject("QueryLayersProbe");
 			try
 			{
 				FishNet.Component.Prediction.NetworkCollision collision =
 					go.AddComponent<FishNet.Component.Prediction.NetworkCollision>();
-				collision.QueryLayers = (LayerMask)1;
-				collision.QueryLayers |= (LayerMask)(1 << 6);
-				LogAssert.AreEqual(65, (int)collision.QueryLayers,
-					"QueryLayers must read back exactly what was composed into it.");
+				collision.SetLayers((LayerMask)1);
+				collision.SetLayers(collision.GetLayers() | (1 << 6));
+				LogAssert.AreEqual(65, (int)collision.GetLayers(),
+					"GetLayers must read back exactly what was composed into it.");
 			}
 			finally
 			{

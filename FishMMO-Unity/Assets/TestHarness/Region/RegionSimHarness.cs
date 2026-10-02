@@ -201,11 +201,9 @@ namespace FishMMO.TestHarness
 			 * derives its mask from the physics matrix row of its OWN layer — and Region.Awake
 			 * moves the region onto IgnoreRaycast, whose row excludes the walker's layer here, so
 			 * the trigger polls forever and sees nobody. Shipped region objects author Layers in
-			 * the scene file; the harness authors it by reflection (protected field). */
+			 * the scene file; the harness sets them through NetworkColliderBase.SetLayers. */
 			NetworkTrigger trigger = go.AddComponent<NetworkTrigger>();
-			typeof(FishNet.Component.Prediction.NetworkColliderBase)
-				.GetField("Layers", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-				.SetValue(trigger, (LayerMask)~0);
+			trigger.SetLayers((LayerMask)~0);
 			NetworkObject nob = go.AddComponent<NetworkObject>();
 
 			Region region = go.AddComponent<Region>();
@@ -226,6 +224,13 @@ namespace FishMMO.TestHarness
 				region.OnRegionEnter.Add(enterTrigger);
 			}
 
+			/* FishNet 4.7 no longer initializes a NetworkObject from its own Awake: one that was
+			 * neither registered as a prefab nor set up as a scene object logs "expected to be
+			 * initialized" and stays unusable. 4.6's Awake called SetInitializedValues(null)
+			 * itself; do the same here, while the object is still inactive so the Awake that
+			 * SetActive triggers finds it initialized. Internal upstream, hence reflection. */
+			InitializeRuntimeNetworkObject(nob);
+
 			go.SetActive(true);
 			networkManager.ServerManager.Spawn(nob, null, gameObject.scene);
 
@@ -242,6 +247,24 @@ namespace FishMMO.TestHarness
 			enters[region] = 0;
 			exits[region] = 0;
 			return region;
+		}
+
+		/// <summary>
+		/// Runs FishNet's <c>NetworkObject.SetInitializedValues(null, false)</c> on a NetworkObject
+		/// built at runtime, which FishNet 4.7 only does for registered prefabs and scene objects.
+		/// </summary>
+		private static void InitializeRuntimeNetworkObject(NetworkObject nob)
+		{
+			System.Reflection.MethodInfo init = typeof(NetworkObject).GetMethod("SetInitializedValues",
+				System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+				null, new[] { typeof(NetworkObject), typeof(bool) }, null);
+			if (init == null)
+			{
+				Debug.LogError("[RegionSim] NetworkObject.SetInitializedValues(NetworkObject, bool) not found; " +
+					"runtime regions cannot be initialized on this FishNet version.");
+				return;
+			}
+			init.Invoke(nob, new object[] { null, false });
 		}
 
 		private void Update()

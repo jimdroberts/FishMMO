@@ -735,14 +735,14 @@ namespace FishMMO.Client
 			/* Naming the destination turns an anonymous wait into a legible one. The player
 			 * already knows they clicked something; the useful fact is where they are going,
 			 * and it costs nothing since the lookup data is in hand. */
-			SetHint(string.IsNullOrWhiteSpace(sld.Name) ? null : $"Entering {sld.Name}");
+			SetHint(string.IsNullOrWhiteSpace(sld.FullName) ? null : $"Entering {sld.FullName}");
 
 			// Details is an Inspector reference and the overlay must survive it being unset:
 			// an NRE here escapes into FishNet's SceneManager event invocation, which aborts
 			// the remaining OnLoadStart subscribers mid-transition.
 			if (Details != null &&
 				Details.Scenes != null &&
-				Details.Scenes.TryGetValue(sld.Name, out WorldSceneDetails details) &&
+				Details.Scenes.TryGetValue(sld.FullName, out WorldSceneDetails details) &&
 				details.SceneTransitionImage != null)
 			{
 				SetLoadingImage(details.SceneTransitionImage);

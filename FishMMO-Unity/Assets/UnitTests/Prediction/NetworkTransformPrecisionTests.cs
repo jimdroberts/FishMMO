@@ -13,8 +13,10 @@ using NT = FishNet.Component.Transforming.NetworkTransform;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Covers position packing on <see cref="NT"/>: 24-bit integers of scaled units (FISHMMO EDIT)
-	/// where FishNet ships 16-bit ones.
+	/// Covers position packing on <see cref="NT"/>: 24-bit integers of scaled units where FishNet
+	/// ships 16-bit ones — FishNet's <c>FISHNET_NETWORKTRANSFORM_POSITION_PACKING</c> beta (upstream
+	/// PR "NetworkTransform position packing"), configured per transform as
+	/// <c>_positionPackingBits: TwentyFour</c> and <c>_positionCompressionScale: 100</c>.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -38,6 +40,8 @@ namespace FishMMO.UnitTests
 		private const int POSITION_XYZ = 1 | 2 | 4;
 		/// <summary>The value on every FishMMO prefab, and FishNet's stock: centimetre grid.</summary>
 		private const float PROJECT_MULTIPLIER = 100f;
+		/// <summary><c>NetworkTransform.PositionPackingBits.TwentyFour</c> as Unity serializes it.</summary>
+		private const int PROJECT_PACKING_BITS = 1;
 		/// <summary>Half a step is 5 mm; float error at a few km adds a couple of millimetres.</summary>
 		private const float HALF_STEP_TOLERANCE = 0.0075f;
 		/// <summary>One wire grid step: a send is scheduled once an axis has moved a whole cell.</summary>
@@ -53,7 +57,12 @@ namespace FishMMO.UnitTests
 			go.transform.localPosition = position;
 			NT nt = go.AddComponent<NT>();
 			NtType.GetField("_cachedTransform", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(nt, go.transform);
-			NtType.GetField("_positionMultiplier", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(nt, multiplier);
+			/* Both fields exist only with FISHNET_NETWORKTRANSFORM_POSITION_PACKING defined, which
+			 * FishMMO requires; a missing field fails here rather than silently testing 16-bit. */
+			FieldInfo bits = NtType.GetField("_positionPackingBits", BindingFlags.Instance | BindingFlags.NonPublic);
+			Assert.IsNotNull(bits, "NetworkTransform._positionPackingBits is missing: is FISHNET_NETWORKTRANSFORM_POSITION_PACKING defined?");
+			bits.SetValue(nt, Enum.Parse(bits.FieldType, "TwentyFour"));
+			NtType.GetField("_positionCompressionScale", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(nt, multiplier);
 			/* DeserializePacket reads NetworkManager, which dereferences the NetworkObject cache.
 			 * That cache is only populated during spawn, so an unspawned component throws before
 			 * reaching any of the logic under test. Adding the component auto-adds a NetworkObject;
@@ -72,7 +81,8 @@ namespace FishMMO.UnitTests
 			PooledWriter writer = WriterPool.Retrieve();
 			try
 			{
-				serialize.Invoke(nt, new[] { Enum.ToObject(changedDelta, changedMask), writer });
+				// The third parameter (TransformData dataToUpdate, optional) is FishNet 4.7's; null skips the update.
+				serialize.Invoke(nt, new[] { Enum.ToObject(changedDelta, changedMask), writer, null });
 				ArraySegment<byte> seg = writer.GetArraySegment();
 				byte[] copy = new byte[seg.Count];
 				Array.Copy(seg.Array, seg.Offset, copy, 0, seg.Count);
@@ -214,8 +224,8 @@ namespace FishMMO.UnitTests
 			foreach (string path in NetworkTransformPrefabs())
 			{
 				checkedCount++;
-				Match multiplier = Regex.Match(File.ReadAllText(path), @"_positionMultiplier:\s*([0-9.]+)");
-				Assert.IsTrue(multiplier.Success, $"{Path.GetFileName(path)} has no _positionMultiplier.");
+				Match multiplier = Regex.Match(File.ReadAllText(path), @"_positionCompressionScale:\s*([0-9.]+)");
+				Assert.IsTrue(multiplier.Success, $"{Path.GetFileName(path)} has no _positionCompressionScale.");
 				float gridStep = 1f / float.Parse(multiplier.Groups[1].Value, CultureInfo.InvariantCulture);
 
 				Assert.LessOrEqual(gridStep, walkingTick / 4f,
@@ -373,9 +383,9 @@ namespace FishMMO.UnitTests
 				string text = File.ReadAllText(path);
 				checkedCount++;
 				string name = Path.GetFileName(path);
-				Match multiplier = Regex.Match(text, @"_positionMultiplier:\s*([0-9.]+)");
+				Match multiplier = Regex.Match(text, @"_positionCompressionScale:\s*([0-9.]+)");
 				Match sensitivity = Regex.Match(text, @"_positionSensitivity:\s*([0-9.]+)");
-				Assert.IsTrue(multiplier.Success, $"{name} has no _positionMultiplier.");
+				Assert.IsTrue(multiplier.Success, $"{name} has no _positionCompressionScale.");
 				Assert.IsTrue(sensitivity.Success, $"{name} has no _positionSensitivity.");
 
 				float gridStep = 1f / float.Parse(multiplier.Groups[1].Value, CultureInfo.InvariantCulture);
@@ -393,9 +403,11 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// Every NetworkTransform in the project must carry the project multiplier. The 24-bit
-		/// form reaches the whole map at 100, so there is no longer any reason for a prefab to
-		/// deviate — and a coarser value silently brings the walking stutter back.
+		/// Every NetworkTransform in the project must carry the project multiplier and the 24-bit
+		/// width. The 24-bit form reaches the whole map at 100, so there is no longer any reason for
+		/// a prefab to deviate — and a coarser value silently brings the walking stutter back. The
+		/// width matters as much: FishNet's default is Sixteen, so a prefab that never serialized
+		/// the field packs only within +/-327 m and sends floats beyond it.
 		/// </summary>
 		[Test]
 		public void EveryNetworkTransformPrefab_CarriesTheProjectMultiplier()
@@ -405,8 +417,11 @@ namespace FishMMO.UnitTests
 			foreach (string path in NetworkTransformPrefabs())
 			{
 				checkedCount++;
-				StringAssert.Contains("_positionMultiplier: 100\n", File.ReadAllText(path).Replace("\r\n", "\n"),
+				string text = File.ReadAllText(path).Replace("\r\n", "\n");
+				StringAssert.Contains($"_positionCompressionScale: {PROJECT_MULTIPLIER}\n", text,
 					$"{Path.GetFileName(path)} has a NetworkTransform without the project position multiplier (100).");
+				StringAssert.Contains($"_positionPackingBits: {PROJECT_PACKING_BITS}\n", text,
+					$"{Path.GetFileName(path)} has a NetworkTransform that does not pack positions in 24 bits (TwentyFour = 1).");
 			}
 
 			Assert.AreEqual(10, checkedCount, "Expected ten NetworkTransform prefabs; the set changed.");

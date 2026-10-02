@@ -264,12 +264,13 @@ namespace FishMMO.Shared
 				if (Constants.Layers.Index.Player >= 0)
 				{
 					LayerMask required = 1 << Constants.Layers.Index.Player;
-					if ((platformCollider.QueryLayers & required) != required)
+					LayerMask authored = platformCollider.GetLayers();
+					if ((authored & required) != required)
 					{
 						Log.Debug("KCCPlatform",
-							$"'{name}' rider volume layers 0x{(int)platformCollider.QueryLayers:X} " +
+							$"'{name}' rider volume layers 0x{(int)authored:X} " +
 							"did not include the Player layer; correcting.");
-						platformCollider.QueryLayers |= required;
+						platformCollider.SetLayers(authored | required);
 					}
 				}
 			}
@@ -295,7 +296,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when a collider enters the platform trigger. Sets this platform on the player.
 		/// </summary>
-		private void PlatformCollider_OnEnter(Collider other)
+		private void PlatformCollider_OnEnter(Collider other, uint tick)
 		{
 			if (other.TryGetComponent(out KCCPlayer player))
 			{
@@ -316,7 +317,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when a collider exits the platform trigger. Clears the platform from the player.
 		/// </summary>
-		private void PlatformCollider_OnExit(Collider other)
+		private void PlatformCollider_OnExit(Collider other, uint tick)
 		{
 			if (other.TryGetComponent(out KCCPlayer player))
 			{
