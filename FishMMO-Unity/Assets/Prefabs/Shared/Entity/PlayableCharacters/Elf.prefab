@@ -291,6 +291,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 1
   _predictionType: 0
@@ -308,7 +311,7 @@ MonoBehaviour:
   _teleportThreshold: 8
   <PrefabId>k__BackingField: 7
   <SpawnableCollectionId>k__BackingField: 0
-  <AssetPathHash>k__BackingField: 18219764458084893172
+  <AssetPathHash>k__BackingField: 12883261317742136631
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
@@ -349,6 +352,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!114 &961999050755331747
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -951,6 +955,7 @@ MonoBehaviour:
     Scale: 0
   _positionPackingBits: 1
   _positionCompressionScale: 100
+  _useScaledTime: 1
   _interpolation: 2
   _extrapolation: 2
   _enableTeleport: 0
