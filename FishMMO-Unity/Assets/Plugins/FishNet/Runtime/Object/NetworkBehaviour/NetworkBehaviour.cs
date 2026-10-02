@@ -247,6 +247,7 @@ namespace FishNet.Object
             if (_addedNetworkObject != null)
             {
                 AlertToDuplicateNetworkObjects(_addedNetworkObject.transform);
+                FillNetworkObjectCache(); //FISHMMO EDIT
                 return _addedNetworkObject;
             }
 
@@ -276,7 +277,17 @@ namespace FishNet.Object
             }
 
             AlertToDuplicateNetworkObjects(_addedNetworkObject.transform);
+            FillNetworkObjectCache(); //FISHMMO EDIT
             return _addedNetworkObject;
+
+            /* FISHMMO EDIT: upstream only discards a foreign cache (fix/networkbehaviour-foreign-owner-cache);
+             * FishMMO also fills an empty cache from the discovered owner, as its 4.6.12 edit did, so edit-mode
+             * code and tests that read NetworkObject before runtime initialization see the right object. */
+            void FillNetworkObjectCache()
+            {
+                if (_networkObjectCache == null)
+                    _networkObjectCache = _addedNetworkObject;
+            }
 
             // Returns true if t is this transform or one of its parents.
             bool IsSelfOrParent(Transform t)

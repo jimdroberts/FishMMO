@@ -17,13 +17,10 @@ namespace FishMMO.UnitTests
 	/// never touches <c>_networkObjectCache</c> in the editor at all. Paste Component Values,
 	/// <c>EditorUtility.CopySerialized</c> and SerializedObject migrations copy both hidden fields
 	/// verbatim between prefabs, so one paste left three NPC prefabs owned by the orc mage for
-	/// five months (PR #212). <c>NetworkBehaviour.TryAddNetworkObject</c> (FishMMO's 4.6.12 edit,
-	/// upstream since the "foreign owner cache" FishNet PR) rejects an owner that is not on this
-	/// transform's ancestor chain and re-finds it. Upstream DISCARDS a foreign
-	/// <c>_networkObjectCache</c> (null, the state of a never-initialized prefab) rather than copying
-	/// the discovered owner into it as the 4.6 edit did; runtime initialization
-	/// (<c>NetworkObject.SetInitializedValues</c>) assigns it as usual. These tests plant the fault
-	/// the way a paste does, bypassing validation, and then invoke OnValidate exactly as Unity would.
+	/// five months (PR #212). The tagged edit in <c>NetworkBehaviour.TryAddNetworkObject</c>
+	/// rejects an owner that is not on this transform's ancestor chain and keeps the runtime
+	/// cache on the discovered owner. These tests plant the fault the way a paste does, bypassing
+	/// validation, and then invoke OnValidate exactly as Unity would.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -80,7 +77,7 @@ namespace FishMMO.UnitTests
 			OnValidate.Invoke(nb, null);
 
 			LogAssert.AreSame(ownNob, Added(nb), "_addedNetworkObject rebinds to the owner in this hierarchy");
-			LogAssert.IsNull(CacheField.GetValue(nb), "the foreign _networkObjectCache is discarded (runtime initialization sets it)");
+			LogAssert.AreSame(ownNob, nb.NetworkObject, "_networkObjectCache follows it");
 		}
 
 		[Test]
@@ -94,7 +91,7 @@ namespace FishMMO.UnitTests
 			OnValidate.Invoke(nb, null);
 
 			LogAssert.AreSame(ownNob, Added(nb), "an ancestor's NetworkObject is the owner");
-			LogAssert.IsNull(CacheField.GetValue(nb), "the foreign cache is discarded");
+			LogAssert.AreSame(ownNob, nb.NetworkObject, "cache matches");
 		}
 
 		[Test]
@@ -110,17 +107,15 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void OnValidateNeverLeavesAForeignCache_EvenWhenTheOwnerIsHealthy()
+		public void OnValidateFillsAMissingCacheFromTheOwner()
 		{
-			// Only the cache was pasted: the owner reference is local, the cache names another asset.
 			NetworkBehaviour nb = own.AddComponent<EmptyNetworkBehaviour>();
 			AddedField.SetValue(nb, ownNob);
-			CacheField.SetValue(nb, otherNob);
+			CacheField.SetValue(nb, null);
 
 			OnValidate.Invoke(nb, null);
 
-			LogAssert.AreSame(ownNob, Added(nb), "a local owner is untouched");
-			LogAssert.IsNull(CacheField.GetValue(nb), "a cache naming another hierarchy is discarded on its own too");
+			LogAssert.AreSame(ownNob, nb.NetworkObject, "a null cache is filled from the discovered owner");
 		}
 	}
 }
