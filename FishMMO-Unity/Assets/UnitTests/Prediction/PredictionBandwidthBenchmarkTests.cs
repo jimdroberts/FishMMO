@@ -20,23 +20,26 @@ namespace FishMMO.UnitTests
 	/// NUnit output so they can be lifted straight from a test run as evidence.
 	/// </para>
 	/// <para>
-	/// <b>The "FishNet" column is the one that matters.</b> FishNet does not pass
-	/// <see cref="DeltaSerializerOption.Unset"/>. <c>NetworkBehaviour.GetDeltaSerializeOption</c>
-	/// returns <see cref="DeltaSerializerOption.FullSerialize"/> on the tick an observer is added
-	/// and on every tick where <c>localTick % tickRate == 0</c> — once per second — and
-	/// <see cref="DeltaSerializerOption.RootSerialize"/> otherwise. So a second of traffic is one
-	/// full serialize plus <see cref="ServerTickRate"/> - 1 root serializes, and that is what the
-	/// per-second column models.
+	/// <b>How FishNet drives these.</b> With delta prediction on (<c>FISHNET_DELTA_PREDICTION</c>,
+	/// feat/delta-prediction-beta) FishNet passes <see cref="DeltaSerializerOption.RootSerialize"/>
+	/// to the delta writers and never <see cref="DeltaSerializerOption.FullSerialize"/>: a full
+	/// reconcile — the first, one per observer added, and one at least every second — goes through
+	/// the REGULAR serializer behind a one-byte header, as does the first entry of every replicate
+	/// packet. So the per-type rows model a second of traffic as one regular-serializer write plus
+	/// <see cref="ServerTickRate"/> - 1 root deltas of the scenario's one-tick change.
 	/// </para>
 	/// <para>
-	/// <b>Which of these are live.</b> Delta reconcile is enabled — see the FISHMMO EDIT markers in
-	/// <c>NetworkBehaviour.Prediction.cs</c> — so <see cref="CharacterReconcileData"/> and the three
+	/// <b>The per-type rows understate reconcile.</b> A delta reconcile is written against the last
+	/// FULL reconcile, up to a second old, not against the previous tick, so it carries up to a
+	/// second's change. <c>Benchmark_CharacterReconcileData_OnTheWire</c> runs the real FishNet
+	/// header code over two seconds of walking and is the reconcile number to use.
+	/// </para>
+	/// <para>
+	/// <b>Which of these are live.</b> All of them: <see cref="CharacterReconcileData"/> and the three
 	/// types nested inside it (<see cref="KinematicCharacterMotorState"/>,
 	/// <see cref="CharacterTransientGroundingReport"/>, <see cref="CharacterAttributeResourceState"/>)
-	/// ship over the delta path and their rows are the real saving.
-	/// <see cref="CharacterReplicateData"/> is live too: upstream's delta replicate branch no longer
-	/// compiled against the current <c>ReplicateDataContainer&lt;T&gt;</c> containers, so it was
-	/// replaced with a self-contained encoding — see <c>Writer.WriteDeltaReplicate</c>.
+	/// ship over the delta reconcile path, and <see cref="CharacterReplicateData"/> over FishNet's
+	/// self-contained delta replicate packet — see <c>Writer.WriteDeltaReplicate</c>.
 	/// </para>
 	/// <para>
 	/// <b>Do not read the per-type replicate row as the cost of replicate.</b> A real replicate
@@ -47,10 +50,9 @@ namespace FishMMO.UnitTests
 	/// entry and is the number to use.
 	/// </para>
 	/// <para>
-	/// The <c>FullSer</c> column for <see cref="CharacterReconcileData"/> is larger than the full
-	/// serializer by one byte because a full serialize is written as an absolute snapshot plus a
-	/// mode byte. That is deliberate: a difference-encoded payload cannot bootstrap a peer that has
-	/// no baseline. See <c>CharacterReconcileDataDeltaSerializer.WriteDelta</c>.
+	/// The <c>Root</c> and <c>FullSer</c> columns for <see cref="CharacterReconcileData"/> include
+	/// FishNet's one-byte reconcile header; the other types ride inside it or inside a replicate
+	/// packet and have none of their own.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -92,8 +94,8 @@ namespace FishMMO.UnitTests
 			public int FullPerSecond => Full * ServerTickRate;
 
 			/// <summary>
-			/// Bytes per second as FishNet would drive the delta path: one FullSerialize per second,
-			/// RootSerialize on every other tick.
+			/// Bytes per second as FishNet drives the delta path: one regular-serializer write per
+			/// second, RootSerialize on every other tick.
 			/// </summary>
 			public int DeltaPerSecond => FullSer + (Root * (ServerTickRate - 1));
 
@@ -164,18 +166,26 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// Measures one type/scenario across the full serializer and all three delta options,
-		/// records it for the summary table, and returns it.
+		/// Measures one type/scenario across the full serializer and the delta path, records it for
+		/// the summary table, and returns it.
 		/// </summary>
-		private static Row Measure<T>(string type, string scenario, T prev, T next)
+		/// <param name="reconcileRoot">
+		/// True for a root reconcile type: Root and FullSer are then measured through FishNet's real
+		/// delta reconcile writer, header included.
+		/// </param>
+		private static Row Measure<T>(string type, string scenario, T prev, T next, bool reconcileRoot = false)
 		{
 			Row row = new Row(
 				type,
 				scenario,
 				Bytes(w => w.Write(next)),
 				Bytes(w => w.WriteDelta(prev, next, DeltaSerializerOption.Unset)),
-				Bytes(w => w.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize)),
-				Bytes(w => w.WriteDelta(prev, next, DeltaSerializerOption.FullSerialize)));
+				reconcileRoot
+					? DeltaReconcileWire.Bytes(prev, next, fullSerialize: false)
+					: Bytes(w => w.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize)),
+				reconcileRoot
+					? DeltaReconcileWire.Bytes(prev, next, fullSerialize: true)
+					: Bytes(w => w.Write(next)));
 
 			Results.Add(row);
 
@@ -291,18 +301,13 @@ namespace FishMMO.UnitTests
 			walking.Position = standing.Position + new Vector3(0.12f, 0f, 0.04f);
 			walking.BaseVelocity = new Vector3(3.6f, 0f, 1.2f);
 			walking.Rotation = Quaternion.Euler(0f, 22f, 0f);
-			/* Floor lowered from 75% to 72% on 2026-08-28, deliberately and once.
+			/* Floor lowered from 75% to 72% on 2026-08-28 for the motor state's leading mode byte.
+			 * The byte is gone on FishNet's delta prediction (a root's full reconcile is now FishNet's
+			 * job), so this scenario clears the floor by more than it used to; the floor was left
+			 * where it was rather than raised on an unmeasured guess.
 			 *
-			 * KinematicCharacterMotorStateDeltaSerializer now writes a leading mode byte and routes
-			 * FullSerialize through an absolute snapshot, because the type declares IReconcileData
-			 * and so advertises that it can be a root reconcile — and a root whose "full" payload is
-			 * still a difference against a baseline the receiver may not hold is the exact bug the
-			 * mode byte exists to prevent. The byte is unreachable overhead today (the type is only
-			 * ever nested, and its parent never passes anything but Unset down), which is why the
-			 * cost shows up here as pure loss: one byte on a ~22 byte delta.
-			 *
-			 * If this floor needs to move again, check that it is a real regression first — the
-			 * message below names the usual cause, and it is still the right thing to look at. */
+			 * If this floor needs to move, check that it is a real regression first — the message
+			 * below names the usual cause, and it is still the right thing to look at. */
 			AssertSaving(Measure("KinematicCharacterMotorState", "walking", standing, walking), 72.0);
 
 			KinematicCharacterMotorState jumping = walking;
@@ -313,8 +318,8 @@ namespace FishMMO.UnitTests
 			jumping.GroundingStatus.FoundAnyGround = false;
 			jumping.GroundingStatus.IsStableOnGround = false;
 			jumping.GroundingStatus.GroundNormal = Vector3.zero;
-			// Lowered from 70% with the walking floor above, and for the same one reason: the mode
-			// byte. See the note there before moving either again.
+			// Lowered from 70% with the walking floor above, for the mode byte that is now gone.
+			// See the note there before moving either.
 			AssertSaving(Measure("KinematicCharacterMotorState", "jumping", walking, jumping), 66.0);
 		}
 
@@ -349,14 +354,14 @@ namespace FishMMO.UnitTests
 		public void Benchmark_CharacterReconcileData()
 		{
 			CharacterReconcileData idle = MakeReconcileData();
-			AssertSaving(Measure("CharacterReconcileData", "idle", idle, idle), 90.0);
+			AssertSaving(Measure("CharacterReconcileData", "idle", idle, idle, reconcileRoot: true), 90.0);
 
 			CharacterReconcileData walking = CloneArrays(idle);
 			walking.MotorState.Position = idle.MotorState.Position + new Vector3(0.12f, 0f, 0.04f);
 			walking.MotorState.BaseVelocity = new Vector3(3.6f, 0f, 1.2f);
 			walking.MotorState.Rotation = Quaternion.Euler(0f, 22f, 0f);
 			walking.ResourceState.Health = idle.ResourceState.Health - 1f;
-			Row walkRow = Measure("CharacterReconcileData", "walking", idle, walking);
+			Row walkRow = Measure("CharacterReconcileData", "walking", idle, walking, reconcileRoot: true);
 			AssertSaving(walkRow, 78.0);
 
 			CharacterReconcileData combat = CloneArrays(walking);
@@ -372,7 +377,7 @@ namespace FishMMO.UnitTests
 			combat.RngS1 = 0x5678EF01;
 			combat.RngS2 = 0x9ABC2345;
 			combat.RngS3 = 0xDEF06789;
-			Row combatRow = Measure("CharacterReconcileData", "combat", walking, combat);
+			Row combatRow = Measure("CharacterReconcileData", "combat", walking, combat, reconcileRoot: true);
 			AssertSaving(combatRow, 58.0);
 
 			/* The scaling headline. Reconcile is the dominant prediction payload and it is sent per
@@ -393,6 +398,70 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(deltaKbPerSec < fullKbPerSec,
 				"The reconcile projection must show a reduction, or the delta path buys nothing at scale.");
+		}
+
+		// ── CharacterReconcileData as FishNet actually sends it ──────────────
+
+		/// <summary>
+		/// Reconcile bytes per second for a character walking and turning, through FishNet's real
+		/// delta reconcile header code: every delta against the last full reconcile (up to a second
+		/// old), one full reconcile per second, header included.
+		/// </summary>
+		/// <param name="chainedPerSecond">
+		/// For comparison only: the same ticks written against the PREVIOUS tick, which is what the
+		/// 4.6.12 fork did (plus its mode and sequence bytes, not counted here). Smaller, but after any
+		/// lost datagram every later delta is unusable until the next full reconcile.
+		/// </param>
+		private static int WalkingReconcileBytesPerSecond(out int chainedPerSecond)
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate);
+			CharacterReconcileData authoritative = MakeReconcileData();
+			CharacterReconcileData previous = authoritative;
+			int chained = 0;
+
+			// Two seconds; the second (ticks 31..60) is the steady state that is reported.
+			int steadyBytes = 0;
+			for (uint tick = 1; tick <= ServerTickRate * 2; tick++)
+			{
+				CharacterReconcileData next = CloneArrays(authoritative);
+				next.MotorState.Position += new Vector3(0.12f, 0f, 0.04f);
+				next.MotorState.BaseVelocity = new Vector3(3.6f, 0f, 1.2f);
+				next.MotorState.Rotation = Quaternion.Euler(0f, 20f + tick * 1.2f, 0f);
+				next.ResourceState.Stamina = Mathf.Max(0f, authoritative.ResourceState.Stamina - 0.4f);
+				authoritative = next;
+
+				int before = server.TotalBytes;
+				server.Send(authoritative, tick, out bool full);
+				if (tick > ServerTickRate)
+				{
+					steadyBytes += server.TotalBytes - before;
+					chained += full
+						? server.TotalBytes - before
+						: DeltaReconcileWire.Bytes(previous, authoritative, fullSerialize: false);
+				}
+				previous = authoritative;
+			}
+
+			chainedPerSecond = chained;
+			return steadyBytes;
+		}
+
+		[Test]
+		public void Benchmark_CharacterReconcileData_OnTheWire()
+		{
+			int perSecond = WalkingReconcileBytesPerSecond(out int chainedPerSecond);
+			int fullPerSecond = Bytes(w => w.Write(MakeReconcileData())) * ServerTickRate;
+			double saving = (1.0 - (double)perSecond / fullPerSecond) * 100.0;
+
+			TestContext.WriteLine(
+				$"MEASURE CharacterReconcileData on the wire, walking+turning, tickRate={ServerTickRate}: " +
+				$"{perSecond}B/s ({perSecond / (double)ServerTickRate:F1}B/reconcile, header and one full reconcile included) " +
+				$"vs regular serializer {fullPerSecond}B/s, saving {saving:F1}%; " +
+				$"chained-to-previous would be {chainedPerSecond}B/s but loses every delta after a lost datagram");
+
+			LogAssert.IsTrue(perSecond < fullPerSecond,
+				$"Delta reconcile must beat the regular serializer on the wire ({perSecond}B/s vs {fullPerSecond}B/s), " +
+				"or FISHNET_DELTA_PREDICTION buys nothing for reconcile.");
 		}
 
 		// ── Real packet shapes, per entity per observer ──────────────────────
@@ -501,25 +570,16 @@ namespace FishMMO.UnitTests
 			double replicateSaving = (1.0 - (double)replicateDeltaPerSec / replicateFullPerSec) * 100.0;
 			double replicateChainedSaving = (1.0 - (double)replicateChainedPerSec / replicateFullPerSec) * 100.0;
 
-			// Reconcile, walking, as measured by the per-type benchmark — this one IS live.
-			CharacterReconcileData reconcilePrev = MakeReconcileData();
-			CharacterReconcileData reconcileNext = CloneArrays(reconcilePrev);
-			reconcileNext.MotorState.Position += new Vector3(0.12f, 0f, 0.04f);
-			reconcileNext.MotorState.BaseVelocity = new Vector3(3.6f, 0f, 1.2f);
-			reconcileNext.MotorState.Rotation = Quaternion.Euler(0f, 22f, 0f);
-			reconcileNext.ResourceState.Health -= 1f;
-
-			int reconcileFull = Bytes(w => w.Write(reconcileNext));
-			int reconcileRoot = Bytes(w => w.WriteDelta(reconcilePrev, reconcileNext, DeltaSerializerOption.RootSerialize));
-			int reconcileFullSer = Bytes(w => w.WriteDelta(reconcilePrev, reconcileNext, DeltaSerializerOption.FullSerialize));
+			// Reconcile, walking, as FishNet's delta prediction sends it.
+			int reconcileFull = Bytes(w => w.Write(MakeReconcileData()));
 			int reconcileFullPerSec = reconcileFull * ServerTickRate;
-			int reconcileDeltaPerSec = reconcileFullSer + (reconcileRoot * (ServerTickRate - 1));
+			int reconcileDeltaPerSec = WalkingReconcileBytesPerSecond(out _);
 
-			// Today: reconcile is on delta, replicate is still on the full serializer.
+			// Reconcile on delta, replicate on the full serializer.
 			int todayPerSec = reconcileDeltaPerSec + replicateFullPerSec;
 			// Before this work: both on the full serializer.
 			int beforePerSec = reconcileFullPerSec + replicateFullPerSec;
-			// If delta replicate were also enabled.
+			// Both on delta: what FISHNET_DELTA_PREDICTION ships.
 			int bothPerSec = reconcileDeltaPerSec + replicateDeltaPerSec;
 
 			TestContext.WriteLine();
@@ -632,15 +692,9 @@ namespace FishMMO.UnitTests
 			int replicateFull = FullReplicatePacket(packet);
 			int replicateDelta = DeltaReplicatePacketSelfContained(packet);
 
-			CharacterReconcileData reconcilePrev = MakeReconcileData();
-			CharacterReconcileData reconcileNext = CloneArrays(reconcilePrev);
-			reconcileNext.MotorState.Position += new Vector3(0.12f, 0f, 0.04f);
-			reconcileNext.MotorState.BaseVelocity = new Vector3(3.6f, 0f, 1.2f);
-			reconcileNext.MotorState.Rotation = Quaternion.Euler(0f, 22f, 0f);
-			reconcileNext.ResourceState.Health -= 1f;
-
-			int reconcileFull = Bytes(w => w.Write(reconcileNext));
-			int reconcileDelta = Bytes(w => w.WriteDelta(reconcilePrev, reconcileNext, DeltaSerializerOption.RootSerialize));
+			int reconcileFull = Bytes(w => w.Write(MakeReconcileData()));
+			// Average per reconcile over a steady second on the wire: header, deltas against the last full, one full.
+			int reconcileDelta = (WalkingReconcileBytesPerSecond(out _) + ServerTickRate - 1) / ServerTickRate;
 
 			TestContext.WriteLine();
 			TestContext.WriteLine("FRAMED WIRE COST — payload + FishNet RPC header + QUIC/UDP/IP (WebTransport, HTTP/3)");

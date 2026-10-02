@@ -120,14 +120,16 @@ namespace FishMMO.Shared
 			 * fields can still be skipped. This is exactly how FishNet's own composite writers behave
 			 * (see Writer.WriteDeltaVector3, which emits an all-unset flags byte and returns true).
 			 *
-			 * `fullSerialize` means the receiver's previous value cannot be trusted — a new observer,
-			 * or the periodic resend — so every field must go out regardless of whether it changed.
+			 * `fullSerialize` means every field goes out regardless of whether it changed — still as
+			 * a delta against prev, since FishNet's primitives are difference-based. FishNet itself
+			 * never asks for it: the first replicate entry of a packet (and a full reconcile) uses the
+			 * regular serializer instead.
 			 *
 			 * Treating RootSerialize as "write everything" cost most of the compression: FishNet passes
-			 * RootSerialize for every reconcile that is not a periodic full resend, and for every
-			 * replicate entry after the first, so the common case was writing a full snapshot plus a
-			 * flags word. Nested primitives are handed Unset unless this is a full serialize, for the
-			 * same reason — FishNet's scalar delta writers always emit when handed a non-Unset option. */
+			 * RootSerialize for every replicate entry after the first in a packet, and for every delta
+			 * reconcile, so the common case was writing a full snapshot plus a flags word. Nested
+			 * primitives are handed Unset unless this is a full serialize, for the same reason —
+			 * FishNet's scalar delta writers always emit when handed a non-Unset option. */
 			bool fullSerialize = option.FastContains(DeltaSerializerOption.FullSerialize);
 			bool mustEmit = option != DeltaSerializerOption.Unset;
 			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
@@ -267,8 +269,9 @@ namespace FishMMO.Shared
 	/// followed by delta-encoded values for only the changed fields.
 	/// When the grounding status is stable and unchanged this writer declines entirely and sends
 	/// NOTHING — the parent's flags word records its absence. It only emits a bitmask when something
-	/// changed, or when a caller forces it, and nothing forces it today: the root reconcile routes
-	/// FullSerialize through its own absolute path and passes Unset down here.
+	/// changed, or when a caller forces it, and nothing forces it today: FishNet writes a full
+	/// reconcile with the regular serializer and hands the delta writers only RootSerialize, which
+	/// the root reconcile turns into Unset for its fields.
 	/// </para>
 	/// </summary>
 	public static class CharacterTransientGroundingReportDeltaSerializer
@@ -556,8 +559,8 @@ namespace FishMMO.Shared
 		public static void WriteKinematicCharacterMotorState(this Writer writer, KinematicCharacterMotorState value)
 		{
 			writer.WriteVector3(value.Position);
-			/* 64-bit packing. This is the once-per-second full snapshot the delta chain resets to,
-			 * and the owner REPLAYS from it: KCCController.UpdateRotation slerps from
+			/* 64-bit packing. This is the full reconcile every following delta is written against
+			 * (FishNet writes one at least once a second), and the owner REPLAYS from it: KCCController.UpdateRotation slerps from
 			 * Motor.TransientRotation, so an error injected here decays over several ticks rather
 			 * than being overwritten, and Motor.CharacterUp — derived from this rotation — is the
 			 * basis the movement input is projected onto. The 32-bit form measured 0.43 degrees
@@ -632,27 +635,14 @@ namespace FishMMO.Shared
 			bool mustEmit = option != DeltaSerializerOption.Unset;
 			DeltaSerializerOption fieldOption = fullSerialize ? option : DeltaSerializerOption.Unset;
 
-			/* Leading mode byte, and an absolute snapshot on FullSerialize.
-			 *
-			 * This type declares IReconcileData, so it advertises that it can be a ROOT reconcile —
-			 * and the project rule for a root is that FullSerialize must produce a payload a peer
-			 * holding no baseline can decode. FishNet's scalar deltas are difference-based, so
-			 * "every field present" is not that. Today it is only ever nested inside
-			 * CharacterReconcileData, whose serializer routes FullSerialize through its own absolute
-			 * path and never passes anything but Unset down here, so the branch below is unreachable
-			 * in production. It exists so that promoting this type to a root cannot silently ship the
-			 * exact bug the mode byte was invented to prevent. One byte per reconcile, to the owner
-			 * only. */
-			int modePos = writer.Position;
-			int modeLength = writer.Length;
-			if (fullSerialize)
-			{
-				writer.WriteUInt8Unpacked(MODE_FULL_SNAPSHOT);
-				WriteKinematicCharacterMotorState(writer, next);
-				return true;
-			}
-			writer.WriteUInt8Unpacked(MODE_DELTA);
-
+			/* No mode byte. The fork led with one and wrote an absolute snapshot on FullSerialize, so
+			 * that promoting this type to a ROOT reconcile could not ship a "full" payload that still
+			 * needed the reader's baseline. FishNet now owns that case for every root: a full
+			 * reconcile goes through the REGULAR serializer (WriteKinematicCharacterMotorState) behind
+			 * its own header, and the delta writer is only handed RootSerialize. FullSerialize here
+			 * means every field present, still relative to prev, exactly as FishNet's own composite
+			 * delta writers treat it. Nested inside CharacterReconcileData it is only ever handed
+			 * Unset. One byte saved on every reconcile whose motor moved. */
 			int flagPos = writer.Position;
 			int startLength = writer.Length;
 			writer.WriteUInt16(0);
@@ -734,17 +724,10 @@ namespace FishMMO.Shared
 			 * does Length = Max(Length, Position) — and GetArraySegment sends 0..Length, so
 			 * restoring Position alone left this placeholder's bytes inside the sent segment
 			 * as trailing garbage whenever nothing was written after it. */
-			// Back past the mode byte too, so "bytes iff true" still holds.
-			writer.Position = modePos;
-			writer.Length = modeLength;
+			writer.Position = flagPos;
+			writer.Length = startLength;
 			return false;
 		}
-
-		/// <summary>Leading byte: the payload is a delta against the reader's previous snapshot.</summary>
-		private const byte MODE_DELTA = 0;
-
-		/// <summary>Leading byte: the payload is an absolute snapshot. See <see cref="WriteDelta"/>.</summary>
-		private const byte MODE_FULL_SNAPSHOT = 1;
 
 		/// <summary>
 		/// Delta reader for <see cref="KinematicCharacterMotorState"/>.
@@ -758,13 +741,6 @@ namespace FishMMO.Shared
 			Reader reader,
 			KinematicCharacterMotorState prev)
 		{
-			// Mode first — see WriteDelta. An absolute snapshot ignores prev entirely.
-			byte mode = reader.ReadUInt8Unpacked();
-			if (mode == MODE_FULL_SNAPSHOT)
-			{
-				return ReadKinematicCharacterMotorState(reader);
-			}
-
 			ushort flags = reader.ReadUInt16();
 			KinematicCharacterMotorState result = prev;
 

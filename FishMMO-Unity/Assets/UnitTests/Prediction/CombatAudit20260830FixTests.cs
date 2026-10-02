@@ -414,36 +414,35 @@ namespace FishMMO.UnitTests
 		#region F5 — one character's delta-chain break cannot silence another's.
 
 		/// <summary>
-		/// The chain-break report is throttled by a count, not latched and cleared by any character's
-		/// next good packet.
+		/// The reconcile delta serializers keep no state of their own.
 		/// </summary>
 		/// <remarks>
-		/// The delta reader is a static registered against the type: it sees every character's
-		/// reconciles and <c>ReadDelta</c> receives only a reader and the previous state, so it has
-		/// no identity to attribute a gap to. The boolean latch therefore coupled unrelated objects —
-		/// one character's break claimed the single report and ANY character's next good delta
-		/// cleared it, so in a busy scene a real gap was usually swallowed by a neighbour.
+		/// <para>
+		/// F5 was about a static on the delta reader: it is registered against the type, sees every
+		/// character's reconciles and receives only a reader and a baseline, so it has no identity to
+		/// attribute a lost state update to. Its boolean latch coupled unrelated characters, and the
+		/// fix was a counting throttle.
+		/// </para>
+		/// <para>
+		/// On FishNet's delta prediction there is nothing left to report from there: loss detection
+		/// moved into FishNet, per <c>NetworkBehaviour</c> (the full-reconcile id in its header), and
+		/// a delta it cannot use is discarded there. The lesson F5 taught still holds and is what this
+		/// pins: a static on a shared serializer cannot know whose state it is reading, so these
+		/// serializers must not carry mutable static state at all.
+		/// </para>
 		/// </remarks>
 		[Test]
-		public void ChainBreakReporting_IsNotLatchedAcrossCharacters()
+		public void ReconcileDeltaSerializers_KeepNoStaticState()
 		{
-			Type serializer = typeof(CharacterReconcileDataDeltaSerializer);
-
-			LogAssert.IsNull(serializer.GetField("chainBreakLogged", Any),
-				"The boolean latch must be gone: it let one character's recovery decide whether " +
-				"another character's lost state update was ever reported.");
-
-			FieldInfo counter = serializer.GetField("chainBreaksSinceReport", Any);
-			LogAssert.IsNotNull(counter,
-				"A counting throttle replaces it, so the first gap always reports and a storm is " +
-				"still bounded.");
-			LogAssert.AreEqual(typeof(int), counter.FieldType, "...counted, not latched.");
-
-			FieldInfo interval = serializer.GetField("CHAIN_BREAK_REPORT_INTERVAL", Any);
-			LogAssert.IsNotNull(interval, "The throttle interval must be named rather than inline.");
-			LogAssert.IsTrue((int)interval.GetValue(null) > 1,
-				"An interval of one is no throttle at all on a channel that can drop many packets " +
-				"in a row.");
+			foreach (Type serializer in new[] { typeof(CharacterReconcileDataDeltaSerializer), typeof(KCCPlatformReconcileDataDeltaSerializer) })
+			{
+				foreach (FieldInfo field in serializer.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+				{
+					LogAssert.IsTrue(field.IsLiteral || field.IsInitOnly,
+						$"{serializer.Name}.{field.Name} is mutable static state on a serializer shared by every " +
+						"character. Loss detection is FishNet's, per behaviour; see the remarks.");
+				}
+			}
 		}
 
 		#endregion

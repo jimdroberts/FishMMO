@@ -297,8 +297,10 @@ namespace FishMMO.UnitTests
 				Seed = 13,
 				PackedFlagsAndSlot = CharacterReconcileData.Pack(3, 5),
 				RngS0 = 1, RngS1 = 2, RngS2 = 3, RngS3 = 4,
-				Sequence = 9,
+				ChargedHoldTicks = 9,
 				Cooldowns = new[] { new CooldownReconcileEntry { AbilityID = 1, StartTick = 2, DurationTicks = 3 } },
+				// The last field in the frame; the fixtures that predate it left it null.
+				Exposure = new[] { new ExposureReconcileEntry { TemplateID = 2, Level = 4000 } },
 			};
 
 			Writer writer = new Writer();
@@ -311,7 +313,9 @@ namespace FishMMO.UnitTests
 
 			LogAssert.AreEqual(data.AbilityID, read.AbilityID, "AbilityID survives the frame.");
 			LogAssert.AreEqual(data.Seed, read.Seed, "Seed survives the frame.");
-			LogAssert.AreEqual(data.Sequence, read.Sequence, "The chain sequence survives the frame.");
+			LogAssert.AreEqual(data.ChargedHoldTicks, read.ChargedHoldTicks, "The charged-hold counter survives the frame.");
+			LogAssert.IsTrue(read.Exposure != null && read.Exposure.Length == 1 && read.Exposure[0].Equals(data.Exposure[0]),
+				"The exposure array, last in the frame, survives it.");
 			LogAssert.AreEqual(1, read.Cooldowns.Length, "The cooldown array survives the frame.");
 
 			LogAssert.AreEqual(SnapshotSentinel, reader.ReadInt32(),

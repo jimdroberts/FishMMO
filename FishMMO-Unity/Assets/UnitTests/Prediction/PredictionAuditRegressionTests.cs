@@ -47,9 +47,8 @@ namespace FishMMO.UnitTests
 		}
 
 		[TearDown]
-		public void ClearGuard()
+		public void TearDownLedger()
 		{
-			ReconcileDeltaGuard.ConsumeRejection();
 			DisposeLedgerFixture();
 		}
 
@@ -61,7 +60,6 @@ namespace FishMMO.UnitTests
 			data.MotorState.BaseVelocity = new Vector3(1f, 0f, 0f);
 			data.MotorState.TimeSinceJumpRequested = float.MaxValue;
 			data.ResourceState.Health = 100;
-			data.Sequence = 5;
 			return data;
 		}
 
@@ -79,7 +77,6 @@ namespace FishMMO.UnitTests
 			CharacterReconcileData prev = BaseReconcile();
 			CharacterReconcileData next = prev;
 			next.MotorState.Position += new Vector3(0.1f, 0f, 0f);
-			next.Sequence = unchecked((byte)(prev.Sequence + 1));
 
 			Writer writer = new Writer();
 			LogAssert.IsTrue(writer.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize),
@@ -109,120 +106,143 @@ namespace FishMMO.UnitTests
 		}
 
 		// ── 2. The chain sequence counted reconciles CREATED, not SENT ──
+		/*
+		 * The 4.6.12 fork chained every delta onto the previous reconcile and numbered them, and the
+		 * defect pinned here was numbering at creation instead of at send. FishNet's delta prediction
+		 * (FISHNET_DELTA_PREDICTION) removed the chain: each delta is written against the last FULL
+		 * reconcile and FishNet's header names which one. The tests below pin the replacement — that
+		 * a skipped send cannot break anything, that FishMMO kept no counter of its own, and that the
+		 * FishNet wiring and the build define it depends on are in place.
+		 */
 
 		/// <summary>
-		/// Models the FishMMO edit in <c>Server_SendReconcileRpc</c>: the sequence is stamped on
-		/// the reconcile at the moment it is written. Ticks whose send is skipped (no resends left,
-		/// which happens after any &gt;RedundancyCount-tick input gap and at every spawn) must not
-		/// advance it, or the reader rejects the next delta as a lost datagram and the owner goes
-		/// uncorrected until the next whole-second snapshot.
+		/// Ticks whose send is skipped (no resends left: after any input gap longer than
+		/// RedundancyCount, and at every spawn) cost nothing. A delta is written against the full
+		/// reconcile, not against the last reconcile sent, so there is nothing for a gap to break.
 		/// </summary>
 		[Test]
-		public void SendTimeSequence_SurvivesSkippedSends()
+		public void SkippedSends_DoNotDisturbTheDeltas()
 		{
-			Func<CharacterReconcileData, byte, CharacterReconcileData> stamp =
-				ReconcileSequenceStamper<CharacterReconcileData>.Stamp;
-			LogAssert.IsNotNull(stamp, "RegisterSerializers must install the send-time sequence stamper.");
-
-			CharacterReconcileData serverBaseline = default;
-			CharacterReconcileData clientBaseline = default;
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(30);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
 			CharacterReconcileData authoritative = BaseReconcile();
-			byte sendSequence = 0;
-
-			ArraySegment<byte> Send(CharacterReconcileData data, DeltaSerializerOption option)
-			{
-				sendSequence = unchecked((byte)(sendSequence + 1));
-				data = stamp(data, sendSequence);
-				Writer w = new Writer();
-				w.WriteDelta(serverBaseline, data, option);
-				serverBaseline = data;
-				return w.GetArraySegment();
-			}
-
-			CharacterReconcileData Receive(ArraySegment<byte> payload)
-			{
-				Reader r = new Reader(payload, null);
-				CharacterReconcileData d = r.ReadDelta(clientBaseline);
-				LogAssert.IsFalse(ReconcileDeltaGuard.ConsumeRejection(), "The delta must not be rejected.");
-				LogAssert.AreEqual(0, r.Remaining, "Exact consumption.");
-				clientBaseline = d;
-				return d;
-			}
+			uint tick = 0;
 
 			// Spawn: five reconciles are created before the owner's first input arrives, none sent.
 			for (int i = 0; i < 5; i++)
 			{
+				tick++;
 				authoritative.MotorState.Position += Vector3.forward;
 			}
-			// First delta ever sent (RootSerialize: the spawn-tick FullSerialize was itself skipped).
-			Receive(Send(authoritative, DeltaSerializerOption.RootSerialize));
-			LogAssert.AreEqual(1, (int)clientBaseline.Sequence, "First sent reconcile carries sequence 1.");
 
-			// Steady state, then a 6-tick input gap during which nothing is sent.
+			void SendAndCheck(string context)
+			{
+				LogAssert.IsTrue(client.Receive(server.Send(authoritative, tick), tick, out CharacterReconcileData received),
+					$"{context}: the reconcile must be usable");
+				LogAssert.IsTrue((received.MotorState.Position - authoritative.MotorState.Position).magnitude < 0.05f,
+					$"{context}: decoded {received.MotorState.Position}, server holds {authoritative.MotorState.Position}");
+			}
+
+			tick++;
+			authoritative.MotorState.Position += Vector3.forward;
+			SendAndCheck("first reconcile ever sent");
+
 			for (int i = 0; i < 3; i++)
 			{
+				tick++;
 				authoritative.MotorState.Position += Vector3.forward;
-				Receive(Send(authoritative, DeltaSerializerOption.RootSerialize));
+				SendAndCheck($"steady state {i}");
 			}
+
+			// A six-tick input gap during which nothing is sent.
 			for (int i = 0; i < 6; i++)
 			{
+				tick++;
 				authoritative.MotorState.Position += Vector3.forward;
 			}
-			CharacterReconcileData resumed = Receive(Send(authoritative, DeltaSerializerOption.RootSerialize));
-			LogAssert.IsTrue((resumed.MotorState.Position - authoritative.MotorState.Position).magnitude < 0.05f,
-				"After a send gap the next delta must decode against the baseline both sides still hold.");
+			tick++;
+			authoritative.MotorState.Position += Vector3.forward;
+			SendAndCheck("after a send gap");
 		}
 
-		/// <summary>
-		/// The negative control: numbering at creation (what the producer used to do) makes the
-		/// reader reject the first delta after a skipped send even though both baselines agree.
-		/// </summary>
+		/// <summary>FishMMO keeps no chain counter: the producer does not number reconciles and the payload has no field for it.</summary>
 		[Test]
-		public void CreationTimeSequence_IsRejectedAfterASkippedSend()
-		{
-			CharacterReconcileData serverBaseline = default;
-			CharacterReconcileData clientBaseline = default;
-			CharacterReconcileData authoritative = BaseReconcile();
-			byte created = 0;
-
-			for (int i = 0; i < 3; i++)
-			{
-				authoritative.MotorState.Position += Vector3.forward;
-				authoritative.Sequence = unchecked((byte)(++created));
-				Writer w = new Writer();
-				w.WriteDelta(serverBaseline, authoritative, DeltaSerializerOption.RootSerialize);
-				serverBaseline = authoritative;
-				clientBaseline = new Reader(w.GetArraySegment(), null).ReadDelta(clientBaseline);
-				LogAssert.IsFalse(ReconcileDeltaGuard.ConsumeRejection());
-			}
-
-			// One created-but-unsent reconcile.
-			authoritative.MotorState.Position += Vector3.forward;
-			authoritative.Sequence = unchecked((byte)(++created));
-
-			authoritative.MotorState.Position += Vector3.forward;
-			authoritative.Sequence = unchecked((byte)(++created));
-			Writer w2 = new Writer();
-			w2.WriteDelta(serverBaseline, authoritative, DeltaSerializerOption.RootSerialize);
-			new Reader(w2.GetArraySegment(), null).ReadDelta(clientBaseline);
-			LogAssert.IsTrue(ReconcileDeltaGuard.ConsumeRejection(),
-				"Creation-time numbering reads a skipped send as a lost datagram — the defect the send-time stamp removes.");
-		}
-
-		/// <summary>The producer no longer numbers reconciles; FishNet does at send time.</summary>
-		[Test]
-		public void Producer_DoesNotStampTheSequence_AndTheSendPathDoes()
+		public void NoProjectSideChainCounter_Remains()
 		{
 			LogAssert.IsNull(typeof(CharacterPredictionController).GetField("reconcileSequence", Any),
 				"CharacterPredictionController must not keep its own reconcile sequence counter.");
+			LogAssert.IsNull(typeof(CharacterReconcileData).GetField("Sequence", Any),
+				"CharacterReconcileData.Sequence was the fork's chain counter; FishNet's delta header replaced it and a " +
+				"field nothing stamps would ride every full reconcile as a constant.");
+			LogAssert.IsNull(typeof(CharacterReconcileDataDeltaSerializer).GetMethod("StampSequence", Any),
+				"The send-time stamper hook (ReconcileSequenceStamper) does not exist on FishNet's delta prediction.");
+		}
 
-			string path = Path.Combine(Application.dataPath,
-				"Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.Prediction.cs");
-			string source = File.ReadAllText(path);
-			int stamp = source.IndexOf("ReconcileSequenceStamper<T>.Stamp(reconcileData", StringComparison.Ordinal);
-			int write = source.IndexOf("methodWriter.WriteDeltaReconcile(lastReconcileData, reconcileData", StringComparison.Ordinal);
-			LogAssert.IsTrue(stamp >= 0 && write > stamp,
-				"Server_SendReconcileRpc must stamp the sequence immediately before writing the delta (FISHMMO EDIT).");
+		/// <summary>
+		/// Server_SendReconcileRpc and Reconcile_Reader_Remote take FishNet's delta path, and
+		/// GetDeltaSerializeOption is the real one.
+		/// </summary>
+		/// <remarks>
+		/// Upstream ships GetDeltaSerializeOption hard-coded to FullSerialize and the delta call sites
+		/// under a define. Neither shows up in a compile or in any serializer test: reconcile just
+		/// quietly goes back to the full serializer every tick, about six times the bytes. The
+		/// mirrors in ReconcileDeltaChainTests copy this code, so this also tells them when to change.
+		/// </remarks>
+		[Test]
+		public void DeltaReconcile_IsWiredThroughFishNet()
+		{
+			string source = File.ReadAllText(Path.Combine(Application.dataPath,
+				"Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.Prediction.cs")).Replace("\r\n", "\n");
+
+			int write = source.IndexOf("Reconcile_WriteDelta(methodWriter, ref lastReconcileData, reconcileData);", StringComparison.Ordinal);
+			LogAssert.IsTrue(write >= 0, "Server_SendReconcileRpc no longer writes reconciles through Reconcile_WriteDelta.");
+			LogAssert.IsTrue(source.LastIndexOf("#if FISHNET_DELTA_PREDICTION", write, StringComparison.Ordinal) > source.LastIndexOf("#endif", write, StringComparison.Ordinal),
+				"The delta reconcile write must sit inside #if FISHNET_DELTA_PREDICTION.");
+			LogAssert.IsTrue(source.Contains("if (!Reconcile_ReadDelta(reader, out T newData))"),
+				"Reconcile_Reader_Remote no longer reads through Reconcile_ReadDelta, the guard that discards a delta against a lost full reconcile.");
+
+			int option = source.IndexOf("private DeltaSerializerOption GetDeltaSerializeOption()", StringComparison.Ordinal);
+			LogAssert.IsTrue(option >= 0, "GetDeltaSerializeOption is gone.");
+			// To the method's final return; the body is mostly comments, so no fixed window is safe.
+			int end = source.IndexOf("return DeltaSerializerOption.RootSerialize;", option, StringComparison.Ordinal);
+			LogAssert.IsTrue(end > option, "GetDeltaSerializeOption no longer ends by returning RootSerialize.");
+			string body = source.Substring(option, end - option);
+			int brace = body.IndexOf('{');
+			string firstStatement = body.Substring(brace + 1).TrimStart().Split('\n')[0].Trim();
+			LogAssert.IsFalse(firstStatement.StartsWith("return DeltaSerializerOption.FullSerialize", StringComparison.Ordinal),
+				"GetDeltaSerializeOption returns FullSerialize before any of its logic (upstream's stub): every reconcile goes out in full.");
+			LogAssert.IsTrue(body.Contains("ObserverAddedTick"),
+				"GetDeltaSerializeOption must send a full reconcile to a newly added observer.");
+		}
+
+		/// <summary>
+		/// FISHNET_DELTA_PREDICTION is set for every build target. It changes the wire format, so a
+		/// server and a client built with different settings misread every reconcile and replicate,
+		/// and nothing detects it at runtime.
+		/// </summary>
+		[Test]
+		public void DeltaPredictionDefine_IsSetForEveryBuildTarget()
+		{
+#if !FISHNET_DELTA_PREDICTION
+			LogAssert.Fail("This assembly was compiled without FISHNET_DELTA_PREDICTION; FishMMO runs delta prediction on every build.");
+#endif
+			string settings = File.ReadAllText(Path.Combine(Application.dataPath, "../ProjectSettings/ProjectSettings.asset")).Replace("\r\n", "\n");
+			int start = settings.IndexOf("  scriptingDefineSymbols:\n", StringComparison.Ordinal);
+			LogAssert.IsTrue(start >= 0, "ProjectSettings has no scriptingDefineSymbols block.");
+
+			int targets = 0;
+			foreach (string line in settings.Substring(start + "  scriptingDefineSymbols:\n".Length).Split('\n'))
+			{
+				if (!line.StartsWith("    ", StringComparison.Ordinal))
+				{
+					break;
+				}
+				targets++;
+				string[] defines = line.Substring(line.IndexOf(':') + 1).Trim().Split(';');
+				LogAssert.IsTrue(Array.IndexOf(defines, "FISHNET_DELTA_PREDICTION") >= 0,
+					$"Build target '{line.Trim()}' lacks FISHNET_DELTA_PREDICTION: its builds would not read the other builds' reconciles.");
+			}
+			LogAssert.IsTrue(targets > 0, "No build targets listed under scriptingDefineSymbols.");
 		}
 
 		// ── 3. TargetOrdering used the per-process instance id as a cross-peer sort key ──
@@ -1071,11 +1091,16 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The motor state declares IReconcileData, so its delta must be able to produce a payload a
-		/// peer with no baseline can decode.
+		/// The motor state declares IReconcileData, so as a ROOT reconcile its full form must be
+		/// decodable by a peer with no baseline.
 		/// </summary>
+		/// <remarks>
+		/// The fork guaranteed this with a mode byte inside the delta serializer. FishNet's delta
+		/// prediction now writes a full reconcile with the REGULAR serializer behind its header, so the
+		/// property is FishNet's and the mode byte is gone; this checks the property, not the means.
+		/// </remarks>
 		[Test]
-		public void MotorStateDelta_FullSerialize_IsAbsolute()
+		public void MotorStateFullReconcile_IsDecodableWithoutABaseline()
 		{
 			KinematicCharacterMotorState baseline = default;
 			baseline.Rotation = Quaternion.identity;
@@ -1085,16 +1110,18 @@ namespace FishMMO.UnitTests
 			KinematicCharacterMotorState next = baseline;
 			next.Position = new Vector3(121f, 8f, -39f);
 
+			LogAssert.IsTrue(DeltaReconcileWire.HasDeltaSerializers<KinematicCharacterMotorState>(),
+				"The motor state must have both delta serializers for this to exercise the delta path.");
 			Writer writer = new Writer();
-			LogAssert.IsTrue(writer.WriteDelta(baseline, next, DeltaSerializerOption.FullSerialize),
-				"FullSerialize always writes.");
+			DeltaReconcileWire.Write(writer, baseline, next, 1, fullSerialize: true);
 
 			// A peer holding NOTHING must still decode it.
 			Reader reader = new Reader(writer.GetArraySegment(), null);
-			KinematicCharacterMotorState decoded = reader.ReadDelta<KinematicCharacterMotorState>(default);
+			KinematicCharacterMotorState decoded = DeltaReconcileWire.Read<KinematicCharacterMotorState>(reader, default, out bool isFull, out _);
+			LogAssert.IsTrue(isFull, "Written as a full reconcile.");
 			LogAssert.AreEqual(0, reader.Remaining, "Consumed exactly.");
 			LogAssert.IsTrue((decoded.Position - next.Position).magnitude < 0.05f,
-				"A full serialize must be decodable from an empty baseline, not relative to one.");
+				"A full reconcile must be decodable from an empty baseline, not relative to one.");
 		}
 
 		/// <summary>

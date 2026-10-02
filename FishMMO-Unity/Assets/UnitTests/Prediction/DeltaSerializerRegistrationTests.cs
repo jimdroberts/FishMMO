@@ -10,16 +10,16 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Fails the build when a prediction type has no delta serializer, which is the condition
-	/// FishNet used to report at runtime.
+	/// Fails the build when a prediction type has no delta serializer pair.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Issue #159 was a type with no delta serializer, and the only thing that reported it was a
-	/// per-tick log line — 14,442 of them in four minutes, each with a stack trace. That message is
-	/// now a warning, and the project logs at Error, so nothing announces this at runtime any more.
-	/// This fixture is what replaces it: the same omission now fails here, before it ships, and
-	/// names the type.
+	/// Issue #159 was a type with no delta serializer, and on the 4.6.12 fork the only thing that
+	/// reported it was a per-tick log line — 14,442 of them in four minutes, each with a stack
+	/// trace. FishNet's delta prediction (<c>FISHNET_DELTA_PREDICTION</c>) instead writes a type
+	/// without BOTH a delta writer and a delta reader with its regular serializer, silently and
+	/// correctly — which is exactly why an omission now costs bandwidth with nothing to say so.
+	/// This fixture is what reports it: the omission fails here, before it ships, and names the type.
 	/// </para>
 	/// <para>
 	/// Discovered by reflection rather than from a hand-maintained list, because a list would have
@@ -90,10 +90,45 @@ namespace FishMMO.UnitTests
 			}
 
 			LogAssert.IsTrue(missing.Count == 0,
-				"Every [Replicate]/[Reconcile] payload type needs a delta serializer, or FishNet "
-				+ "logs on every tick that serializes one and sends nothing (issue #159). Missing:\n  "
+				"Every [Replicate]/[Reconcile] payload type needs a delta writer AND reader, or FishNet "
+				+ "sends it with the full serializer on every tick (issue #159 was the same omission). Missing:\n  "
 				+ string.Join("\n  ", missing)
 				+ $"\nChecked {predictionTypes.Count} type(s).");
+		}
+
+		/// <summary>Used only by the registration-order test below, so its static registry starts empty.</summary>
+		private struct DeltaFirstProbe
+		{
+			public int Value;
+		}
+
+		/// <summary>
+		/// A custom delta serializer must survive a custom regular serializer registered after it.
+		/// </summary>
+		/// <remarks>
+		/// <c>GenericWriter&lt;T&gt;.SetWrite</c> / <c>GenericReader&lt;T&gt;.SetRead</c> tested
+		/// <c>HasCustomSerializer</c> without the negation, so registering the regular serializer
+		/// second nulled the CUSTOM delta serializer instead of a generated one, and the delta's
+		/// <c>HasCustomSerializer</c> then refused it a second time. Every FishMMO hook registers
+		/// regular-then-delta, which is all that masked it, and <c>[RuntimeInitializeOnLoadMethod]</c>
+		/// callbacks have no defined order across classes. Fixed in FishNet by feat/delta-prediction-beta
+		/// (PR #1095, commit 5); this pins it so a FishNet update that loses the fix fails here.
+		/// </remarks>
+		[Test]
+		public void CustomDeltaSerializer_SurvivesARegularSerializerRegisteredAfterIt()
+		{
+			Func<Writer, DeltaFirstProbe, DeltaFirstProbe, DeltaSerializerOption, bool> deltaWrite = (writer, prev, next, option) => true;
+			Func<Reader, DeltaFirstProbe, DeltaFirstProbe> deltaRead = (reader, prev) => prev;
+
+			GenericDeltaWriter<DeltaFirstProbe>.SetWrite(deltaWrite);
+			GenericDeltaReader<DeltaFirstProbe>.SetRead(deltaRead);
+			GenericWriter<DeltaFirstProbe>.SetWrite((writer, value) => writer.WriteInt32(value.Value));
+			GenericReader<DeltaFirstProbe>.SetRead(reader => new DeltaFirstProbe { Value = reader.ReadInt32() });
+
+			LogAssert.IsTrue(GenericDeltaWriter<DeltaFirstProbe>.Write == deltaWrite,
+				"Registering the regular writer after the custom delta writer discarded the delta writer.");
+			LogAssert.IsTrue(GenericDeltaReader<DeltaFirstProbe>.Read == deltaRead,
+				"Registering the regular reader after the custom delta reader discarded the delta reader.");
 		}
 
 		/// <summary>

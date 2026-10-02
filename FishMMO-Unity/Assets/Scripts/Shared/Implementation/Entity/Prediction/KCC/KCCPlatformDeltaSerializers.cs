@@ -1,5 +1,4 @@
 ﻿using FishNet.Serializing;
-using FishMMO.Logging;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -8,11 +7,13 @@ namespace FishMMO.Shared
 	/// Delta serializers for <see cref="KCCPlatform.ReplicateData"/>.
 	/// </summary>
 	/// <remarks>
-	/// Without these FishNet has no delta method for the type and logs
-	/// <c>"Write delta method not found"</c> on every tick it serializes one. A platform is a
-	/// <c>TickNetworkBehaviour</c> that ticks whether or not anybody is near it, so that is a
-	/// permanent error stream for as long as the scene is loaded — 9,627 of them, each with a full
-	/// stack trace, in a four-minute session before this existed.
+	/// On the 4.6.12 fork a type without these logged <c>"Write delta method not found"</c> on
+	/// every tick it serialized one — 9,627 errors with stack traces in a four-minute session,
+	/// because a platform ticks whether or not anybody is near it. FishNet's delta prediction now
+	/// writes a type without both delta serializers with its regular serializer instead, so they are
+	/// no longer what stops an error stream; they are kept so the platform's replicate packet takes
+	/// the same delta path as every other prediction type, and DeltaSerializerRegistrationTests
+	/// can keep requiring a delta pair for every <c>[Replicate]</c>/<c>[Reconcile]</c> payload.
 	/// </remarks>
 	public static class KCCPlatformReplicateDataDeltaSerializer
 	{
@@ -53,11 +54,12 @@ namespace FishMMO.Shared
 		/// Delta writer. There are no fields to compare, so this writes nothing.
 		/// </summary>
 		/// <remarks>
-		/// Both of FishNet's call sites — <c>WriteDeltaReplicateEntry</c> and
-		/// <c>WriteDeltaReconcile</c> — discard this return value, so it steers nothing today. It
-		/// reports "emitted" whenever the caller asked for an emission, which is the answer that
-		/// stays correct if a future call site does start reading it: the reader consumes nothing
-		/// either way, so writer and reader agree at zero bytes.
+		/// The one deliberate exception to "always write something at RootSerialize". That rule
+		/// exists so FishNet's unconditional <c>ReadDelta</c> at the root stays aligned with the
+		/// writer, and a payload of zero bytes meets it trivially: the reader consumes nothing
+		/// either, whatever its baseline. FishNet's call site (<c>WriteDeltaReplicateDataContainer</c>)
+		/// discards the return value; it reports "emitted" whenever the caller asked for an emission,
+		/// the answer that stays correct if a future call site starts reading it.
 		/// </remarks>
 		internal static bool WriteDelta(
 			Writer writer,
@@ -89,11 +91,6 @@ namespace FishMMO.Shared
 		/// <summary>Bit flag for GoalIndex changes.</summary>
 		private const byte GOAL_INDEX_BIT = 1 << 1;
 
-		/// <summary>Leading byte: the payload is a delta against the reader's baseline.</summary>
-		private const byte MODE_DELTA = 0;
-		/// <summary>Leading byte: the payload is an absolute snapshot and ignores the baseline.</summary>
-		private const byte MODE_FULL_SNAPSHOT = 1;
-
 		/// <summary>
 		/// Writes every field of <see cref="KCCPlatform.ReconcileData"/>.
 		/// </summary>
@@ -105,9 +102,6 @@ namespace FishMMO.Shared
 		{
 			writer.WriteVector3(value.Position);
 			writer.WriteUInt8Unpacked(value.GoalIndex);
-			// Chain sequence — see KCCPlatform.ReconcileData.Sequence. Carried by the absolute form
-			// too, so the snapshot that repairs a broken chain also re-seats the counter.
-			writer.WriteUInt8Unpacked(value.Sequence);
 		}
 
 		/// <summary>
@@ -117,9 +111,7 @@ namespace FishMMO.Shared
 		{
 			Vector3 position = reader.ReadVector3();
 			byte goalIndex = reader.ReadUInt8Unpacked();
-			KCCPlatform.ReconcileData result = new KCCPlatform.ReconcileData(position, goalIndex);
-			result.Sequence = reader.ReadUInt8Unpacked();
-			return result;
+			return new KCCPlatform.ReconcileData(position, goalIndex);
 		}
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -129,22 +121,7 @@ namespace FishMMO.Shared
 			GenericReader<KCCPlatform.ReconcileData>.SetRead(ReadKCCPlatformReconcileData);
 			GenericDeltaWriter<KCCPlatform.ReconcileData>.SetWrite(WriteDelta);
 			GenericDeltaReader<KCCPlatform.ReconcileData>.SetRead(ReadDelta);
-			/* Stamped by FishNet at SEND time (FISHMMO EDIT in Server_SendReconcileRpc), not when
-			 * the reconcile is created — see CharacterReconcileDataDeltaSerializer for why. */
-			FishNet.Object.ReconcileSequenceStamper<KCCPlatform.ReconcileData>.Stamp = StampSequence;
 		}
-
-		/// <summary>Writes the send-time chain number into the reconcile. See <see cref="RegisterSerializers"/>.</summary>
-		internal static KCCPlatform.ReconcileData StampSequence(KCCPlatform.ReconcileData data, byte sequence)
-		{
-			data.Sequence = sequence;
-			return data;
-		}
-
-		/// <summary>Delta packets rejected for a broken chain since the last report (a counting throttle; see the character serializer).</summary>
-		private static int chainBreaksSinceReport;
-		/// <summary>One report, then one per this many further rejections.</summary>
-		private const int CHAIN_BREAK_REPORT_INTERVAL = 256;
 
 		/// <summary>
 		/// Delta writer: a one-byte field mask, then only the fields that changed.
@@ -161,57 +138,36 @@ namespace FishMMO.Shared
 			KCCPlatform.ReconcileData next,
 			DeltaSerializerOption option)
 		{
-			/* A full serialize is written as an ABSOLUTE snapshot, not as a delta against prev.
+			/* FishNet writes the platform's FULL reconciles — the first, one per observer added, and
+			 * one at least every second — with the regular serializer above, and every other one
+			 * through here as a delta against the last full reconcile as readers decoded it. That is
+			 * what the fork's mode byte and chain sequence used to provide: a client connecting to a
+			 * platform that has ticked since scene load (every client) is bootstrapped by the full
+			 * reconcile sent when it was added as an observer, a delta against a full reconcile the
+			 * client lost is discarded by FishNet rather than decoded against the wrong baseline, and
+			 * WriteDeltaVector3's quantisation cannot accumulate because no delta builds on another.
+			 * This is the one reconcile written once and sent to EVERY observer (since issue #228 the
+			 * platform forwards state), so those properties matter more here than anywhere else.
 			 *
-			 * FishNet's scalar delta primitives are difference-based — WriteDifference8_16_32 writes
-			 * valueB - valueA, and WriteUDeltaSingle a quantised float difference — so a payload is
-			 * only decodable by a peer holding the same baseline the writer used. Forcing every
-			 * field through them does not produce a self-contained payload; it just guarantees
-			 * every field is present, still relative to a baseline the receiver may not have.
-			 *
-			 * This IS on the wire (since issue #228 the platform forwards state), and it is the one
-			 * reconcile in the project written once and sent to EVERY observer, so a mistake here
-			 * misplaces a deck under everyone standing on it.
-			 *
-			 * That matters more here than anywhere else. A platform is a scene object that starts
-			 * ticking when the scene loads and never stops, so EVERY client connects to a chain
-			 * already far from its starting baseline: without this branch a joining client decodes
-			 * the platform at roughly the world origin and stays there, and PerformReconcile
-			 * assigns transform.position directly. It also bounds the quantisation error that
-			 * WriteUDeltaSingle accumulates — the writer diffs its exact values while the reader
-			 * accumulates decoded ones, so without a periodic absolute resync the two drift apart
-			 * for the lifetime of the scene.
-			 *
-			 * FishNet emits FullSerialize on the tick an observer is added and once per second
-			 * thereafter (GetDeltaSerializeOption), so this doubles as the bootstrap and the repair.
-			 * The mode byte is what lets ReadDelta tell the two forms apart, since delta readers
-			 * receive no DeltaSerializerOption. This mirrors CharacterReconcileDataDeltaSerializer,
-			 * which carries the same branch for the same reason. */
-			if (option.FastContains(DeltaSerializerOption.FullSerialize))
-			{
-				writer.WriteUInt8Unpacked(MODE_FULL_SNAPSHOT);
-				WriteKCCPlatformReconcileData(writer, next);
-				return true;
-			}
-
-			writer.WriteUInt8Unpacked(MODE_DELTA);
-			/* The chain sequence rides every delta, outside the flags word, so the reader can
-			 * verify its baseline BEFORE it decodes anything against it. */
-			writer.WriteUInt8Unpacked(next.Sequence);
+			 * FullSerialize, which FishNet no longer passes here, forces both fields out — still
+			 * relative to prev, since the primitives are difference-based. */
+			DeltaSerializerOption fieldOption = option.FastContains(DeltaSerializerOption.FullSerialize)
+				? option
+				: DeltaSerializerOption.Unset;
 
 			byte flags = 0;
 			int flagPos = writer.Position;
 			writer.WriteUInt8Unpacked(0);
 
-			/* Unset, not the incoming option: these helpers emit unconditionally when handed
-			 * anything else, which would put every field on the wire every tick and cost the whole
-			 * saving. The flags word is what tells the reader which fields are actually present. */
-			if (writer.WriteDeltaVector3(prev.Position, next.Position, DeltaSerializerOption.Unset))
+			/* Unset unless forced: these helpers emit unconditionally when handed anything else,
+			 * which would put every field on the wire every tick and cost the whole saving. The flags
+			 * word is what tells the reader which fields are actually present. */
+			if (writer.WriteDeltaVector3(prev.Position, next.Position, fieldOption))
 			{
 				flags |= POSITION_BIT;
 			}
 
-			if (writer.WriteDeltaUInt8(prev.GoalIndex, next.GoalIndex, DeltaSerializerOption.Unset))
+			if (writer.WriteDeltaUInt8(prev.GoalIndex, next.GoalIndex, fieldOption))
 			{
 				flags |= GOAL_INDEX_BIT;
 			}
@@ -221,13 +177,12 @@ namespace FishMMO.Shared
 			 * This is a root type, not a field nested inside another struct. The nested serializers
 			 * beside this one may write nothing and return false, because their parent records that
 			 * in its own mask and the reader knows to skip them. Nothing plays that role here:
-			 * ReadDelta unconditionally reads a mode byte and then a mask byte, so a writer that
-			 * emitted zero bytes would desynchronise the stream.
+			 * ReadDelta unconditionally reads a mask byte, so a writer that emitted zero bytes would
+			 * desynchronise the stream.
 			 *
-			 * Today it could not happen anyway — GetDeltaSerializeOption only ever returns
-			 * FullSerialize or RootSerialize, never Unset — but a correctness argument that rests
-			 * on a caller's current behaviour is one upgrade away from being wrong, and the cost of
-			 * not relying on it is one byte.
+			 * Today it could not happen anyway — FishNet only ever passes RootSerialize here — but a
+			 * correctness argument that rests on a caller's current behaviour is one upgrade away
+			 * from being wrong, and the cost of not relying on it is one byte.
 			 *
 			 * Insert rather than seek-write-seek: the Insert* helpers are fixed width and cannot
 			 * silently change size, whereas a packed backfill could overrun the placeholder and
@@ -240,26 +195,15 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Delta reader: reads the mask and rebuilds only the fields it names.
 		/// </summary>
+		/// <remarks>
+		/// Consumes the same bytes whatever <paramref name="prev"/> is — the mask alone decides what
+		/// is read — because FishNet decodes, then discards, a delta against a full reconcile this
+		/// client does not hold.
+		/// </remarks>
 		internal static KCCPlatform.ReconcileData ReadDelta(
 			Reader reader,
 			KCCPlatform.ReconcileData prev)
 		{
-			/* Mode first — see WriteDelta. A full snapshot is absolute and self-contained, so prev
-			 * is deliberately ignored; a delta is relative to prev. */
-			byte mode = reader.ReadUInt8Unpacked();
-			if (mode == MODE_FULL_SNAPSHOT)
-			{
-				return ReadKCCPlatformReconcileData(reader);
-			}
-			if (mode != MODE_DELTA)
-			{
-				Log.Error("KCCPlatformReconcileDataDeltaSerializer",
-					$"ReadDelta: unknown payload mode {mode}. The reconcile stream is corrupt; " +
-					"returning the previous snapshot unchanged.");
-				return prev;
-			}
-
-			byte sequence = reader.ReadUInt8Unpacked();
 			byte flags = reader.ReadUInt8Unpacked();
 
 			// Fields the mask does not name are unchanged, so they carry forward from prev.
@@ -271,30 +215,7 @@ namespace FishMMO.Shared
 				? reader.ReadDeltaUInt8(prev.GoalIndex)
 				: prev.GoalIndex;
 
-			if (sequence != unchecked((byte)(prev.Sequence + 1)))
-			{
-				/* The baseline this delta was built against is not the one this peer holds — a
-				 * state datagram was lost or reordered. The payload has been consumed above to keep
-				 * the shared state reader aligned, but the result is discarded and FishNet is told
-				 * not to reconcile from it (ReconcileDeltaGuard). The baseline stays where it is and
-				 * every further delta is rejected the same way until the next absolute snapshot —
-				 * at most one second — re-seats the chain. For a deterministic platform that costs
-				 * nothing visible: the client copy keeps stepping exactly as the server does. */
-				if (chainBreaksSinceReport % CHAIN_BREAK_REPORT_INTERVAL == 0)
-				{
-					Log.Debug("KCCPlatformReconcileDataDeltaSerializer",
-						$"ReadDelta: reconcile sequence {sequence} does not follow baseline {prev.Sequence}; " +
-						"a state update was lost. Ignoring platform reconciles until the next absolute snapshot. " +
-						$"(Reported once per {CHAIN_BREAK_REPORT_INTERVAL} rejections across all platforms.)");
-				}
-				unchecked { ++chainBreaksSinceReport; }
-				FishNet.Object.ReconcileDeltaGuard.RejectLastRead();
-				return prev;
-			}
-
-			KCCPlatform.ReconcileData result = new KCCPlatform.ReconcileData(position, goalIndex);
-			result.Sequence = sequence;
-			return result;
+			return new KCCPlatform.ReconcileData(position, goalIndex);
 		}
 	}
 }

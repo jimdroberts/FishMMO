@@ -152,5 +152,52 @@ namespace FishMMO.UnitTests
 				Assert.AreEqual(0, reader.Remaining);
 			}
 		}
+
+		/// <summary>
+		/// A small turn must survive the delta quaternion codec, including from identity.
+		/// </summary>
+		/// <remarks>
+		/// FishNet's <c>QuaternionDeltaPrecisionCompression</c> omitted the component that CHANGED
+		/// the most and rebuilt it from the other three with a square root. A yaw from identity
+		/// changes y the most while y is near zero, and w barely moves at the codec's precision, so
+		/// y came back as sqrt(1 - w^2) of an unchanged w: a half-degree turn decoded as no turn.
+		/// The motor rotation in the reconcile delta (<c>KCCPredictionDeltaSerializers</c>) uses this
+		/// codec. Smallest-three omits the largest-magnitude component (FishNet PR #1095,
+		/// feat/delta-prediction-beta); this pins it so a FishNet update that loses the fix fails here.
+		/// </remarks>
+		[Test]
+		public void DeltaQuaternion_SmallTurn_SurvivesTheDeltaCodec()
+		{
+			Quaternion[] starts =
+			{
+				Quaternion.identity,
+				Quaternion.Euler(12f, 200f, 0f),
+				Quaternion.Euler(-30f, 355f, 12f),
+			};
+			Vector3[] axes = { Vector3.up, Vector3.right, Vector3.forward };
+			float[] degrees = { 0.5f, 1f, 2f, 5f };
+
+			foreach (Quaternion start in starts)
+			{
+				foreach (Vector3 axis in axes)
+				{
+					foreach (float angle in degrees)
+					{
+						Quaternion next = start * Quaternion.AngleAxis(angle, axis);
+
+						Writer writer = new Writer();
+						Assert.IsTrue(writer.WriteDeltaQuaternion(start, next),
+							$"A {angle} degree turn about {axis} from {start.eulerAngles} was not written at all.");
+
+						Reader reader = new Reader(writer.GetArraySegment(), null);
+						Quaternion decoded = reader.ReadDeltaQuaternion(start);
+
+						Assert.Less(Quaternion.Angle(next, decoded), 0.05f,
+							$"A {angle} degree turn about {axis} from {start.eulerAngles} decoded {Quaternion.Angle(start, decoded):F3} degrees from the start.");
+						Assert.AreEqual(0, reader.Remaining);
+					}
+				}
+			}
+		}
 	}
 }

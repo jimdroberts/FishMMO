@@ -222,30 +222,33 @@ Unified per-tick authoritative state struct.
 | `Attributes`        | `AttributeReconcileEntry[]`       | Attribute  | Non-resource attribute snapshots (`Value` + `ExternalModifier`), sorted by `TemplateID` — bit 9 |
 | `RngS0`–`RngS3`     | `uint` × 4                        | Ability    | Full xoshiro128** RNG internal state — bit 8 |
 | `ChargedHoldTicks`  | `uint`                            | Ability    | Ticks a charged ability has been held past full charge — bit 11 |
-| `Sequence`          | `byte`                            | —          | Server-side send counter, stamped at SEND time. The delta chain's loss detector; rides outside the flags word. |
+| `Exposure`          | `ExposureReconcileEntry[]`        | Weather    | Weather exposure levels (16-bit quantised), sorted by `TemplateID` — bit 12; null when the character has no exposure states |
 
-Twelve of the sixteen bitmask bits are in use. **When adding a field, take the next bit and update
-`WriteDelta`, `ReadDelta` and `DrainDeltaPayload` in lock-step** — all three read the same fields
-in the same order, and a field added to one of them only silently misaligns every field after it.
+Thirteen of the sixteen bitmask bits are in use. **When adding a field, take the next bit and update
+`WriteDelta` and `ReadDelta` in lock-step**, and append it to `WriteCharacterReconcileData` /
+`ReadCharacterReconcileData` — they handle the same fields in the same order, and a field added to
+one of them only silently misaligns every field after it.
 
-#### The delta chain and its loss detector
+#### Delta reconcile on FishNet's delta prediction
 
-Reconciles ride the unreliable `StateUpdate` datagram, and FishNet's scalar delta primitives are
-*difference*-based: the writer emits `next - prev` and the reader adds it onto ITS previous value.
-A payload is therefore only decodable by a peer holding the same baseline the writer used, so a
-single lost datagram used to leave every later delta decoding against a baseline the client never
-received — a wrong position applied to the owner for up to a second.
+Delta reconcile runs on FishNet's delta prediction (`FISHNET_DELTA_PREDICTION`, set for every build
+target — it changes the wire format). FishNet writes a one-byte header on every reconcile: a full
+flag and a 7-bit id of a full reconcile.
 
-`Sequence` closes that. The reader requires `prev.Sequence + 1` and rejects the packet otherwise,
-so a loss costs "no correction until the next snapshot" rather than "a wrong correction for up to a
-second". It is stamped when the reconcile is actually *written*, not when it is created:
-`CreateReconcile` runs every tick but the send is skipped when no resends remain, and a counter
-that advanced on unsent states would read as a lost datagram.
+- A **full** reconcile — the first one, one per observer added, and one at least every
+  `min(TickRate, 60)` ticks — is written with the **regular** serializer, `WriteCharacterReconcileData`.
+  It is what a late-joining observer bootstraps from, and the periodic resync.
+- Every other reconcile is a **delta against the last full reconcile** (as readers decoded it), not
+  against the previous reconcile, written by `WriteDelta` with `RootSerialize`. A lost delta costs only
+  itself; a lost full reconcile costs the deltas written against it, which FishNet discards (it holds
+  no full reconcile with their id) rather than decoding against the wrong baseline, until the next full one.
 
-A `FullSerialize` is written as an **absolute snapshot**, not as a delta — that is what makes it
-usable by a peer with no baseline (a late-joining observer), and because FishNet emits one about
-once per second it doubles as a periodic resync that repairs drift rather than letting it
-accumulate.
+Loss detection is therefore FishNet's, per behaviour. The 4.6.12 fork chained every delta onto the
+previous reconcile and needed a `Sequence` counter, a send-time stamper hook and an absolute-snapshot
+mode byte to survive loss; all three are gone. The contract the delta serializers keep: bytes iff they
+return true; always write something at `RootSerialize`; consume the same bytes whatever the baseline
+(a discarded delta is still decoded, to keep the state reader aligned); never modify the baseline,
+which serves every delta for up to a second.
 
 Delta serialized with a bitmask + per-field delta encoding. Array fields use index-delta compression with reference-equality shortcutting.
 

@@ -75,7 +75,7 @@ namespace FishMMO.UnitTests
 				}
 			}
 			LogAssert.IsNotNull(WriteQueueOverload,
-				"Writer.WriteDeltaReplicate(BasicQueue, int) must exist — the FISHMMO EDIT overload.");
+				"Writer.WriteDeltaReplicate(BasicQueue, int) must exist — FishNet delta prediction (feat/delta-prediction-beta).");
 
 			foreach (MethodInfo m in typeof(Reader).GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
 			{
@@ -90,7 +90,7 @@ namespace FishMMO.UnitTests
 				}
 			}
 			LogAssert.IsNotNull(ReadOverload,
-				"Reader.ReadDeltaReplicate<T>(uint) must exist — the FISHMMO EDIT overload.");
+				"Reader.ReadDeltaReplicate<T>(uint) must exist — FishNet delta prediction (feat/delta-prediction-beta).");
 		}
 
 		/// <summary>Builds a BasicQueue&lt;ReplicateDataContainer&lt;CharacterReplicateData&gt;&gt; holding the given inputs.</summary>

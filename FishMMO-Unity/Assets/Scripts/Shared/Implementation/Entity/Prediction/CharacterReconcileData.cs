@@ -172,31 +172,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		public uint RngS3;
 
-		/// <summary>
-		/// Server-side send counter, one increment per reconcile actually WRITTEN by
-		/// <c>Server_SendReconcileRpc</c> (stamped there through <c>ReconcileSequenceStamper</c>),
-		/// wrapping at 255. Reconciles that are created but not sent do not advance it.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// The delta chain's loss detector. Reconciles ride the unreliable <c>StateUpdate</c>
-		/// datagram and each delta is encoded against the previous state the server SENT. A lost
-		/// datagram used to leave every later delta decoding against a baseline the client never
-		/// received — a wrong position applied to the owner for up to a second, until the periodic
-		/// absolute snapshot. The reader now requires <c>prev.Sequence + 1</c> and rejects the
-		/// packet otherwise, so a loss costs "no correction until the next snapshot" instead of
-		/// "a wrong correction for up to a second". Only a datagram loss (or a client-side state
-		/// drop) can break the chain: the server's baseline and this counter both advance only on
-		/// states that were written.
-		/// </para>
-		/// <para>
-		/// A counter rather than a fingerprint of the previous state, because FishNet's Vector3
-		/// delta quantises to a millimetre and the two sides' baselines legitimately drift apart
-		/// by rounding between absolute snapshots — any hash of float fields would fire
-		/// constantly. One byte, sent in both the delta and the absolute form.
-		/// </para>
-		/// </remarks>
-		public byte Sequence;
+		/* No chain sequence. The 4.6.12 fork chained each delta reconcile onto the previous one and
+		 * carried a send-time counter here so the reader could detect a lost datagram. FishNet's
+		 * delta prediction (FISHNET_DELTA_PREDICTION) writes deltas against the last FULL reconcile
+		 * behind its own header, and discards a delta whose full reconcile this peer does not hold;
+		 * see CharacterReconcileDataDeltaSerializer. */
 
 		/// <summary>
 		/// Extracts the activation flags from the lower 16 bits of <see cref="PackedFlagsAndSlot"/>.

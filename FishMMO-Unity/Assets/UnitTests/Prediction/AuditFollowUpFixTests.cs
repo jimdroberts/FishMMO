@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using FishMMO.Shared;
 using FishNet.Serializing;
@@ -18,6 +20,30 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class AuditFollowUpFixTests
 	{
+		/// <summary>
+		/// The reconcile serializers register from <c>[RuntimeInitializeOnLoadMethod]</c>, which never
+		/// fires in EditMode. Without this the F1 delta assertions only passed when another fixture
+		/// happened to register them first; run alone, <c>ReadDelta</c> had no reader and returned default.
+		/// </summary>
+		[OneTimeSetUp]
+		public void RegisterProductionSerializers()
+		{
+			Type[] serializerTypes =
+			{
+				typeof(CharacterReconcileDataDeltaSerializer),
+				typeof(CharacterTransientGroundingReportDeltaSerializer),
+				typeof(KinematicCharacterMotorStateDeltaSerializer),
+				typeof(CharacterAttributeResourceStateSerializer),
+			};
+			foreach (Type serializerType in serializerTypes)
+			{
+				MethodInfo register = serializerType.GetMethod("RegisterSerializers",
+					BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+				LogAssert.IsNotNull(register, $"{serializerType.Name} must expose a RegisterSerializers hook.");
+				register.Invoke(null, null);
+			}
+		}
+
 		#region F1 — the charged hold counter survives a reconcile.
 
 		/// <summary>
@@ -44,7 +70,6 @@ namespace FishMMO.UnitTests
 			CharacterReconcileData previous = default;
 			CharacterReconcileData next = default;
 			next.ChargedHoldTicks = 17u;
-			next.Sequence = 1;
 
 			// Absolute form.
 			Writer absoluteWriter = new Writer();
@@ -77,10 +102,8 @@ namespace FishMMO.UnitTests
 		{
 			CharacterReconcileData previous = default;
 			previous.ChargedHoldTicks = 9u;
-			previous.Sequence = 4;
 
 			CharacterReconcileData next = previous;
-			next.Sequence = 5;
 			next.RemainingTicks = 3u;
 
 			Writer writer = new Writer();

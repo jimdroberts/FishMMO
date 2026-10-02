@@ -9,22 +9,22 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Delta chain coverage for the moving platform's prediction structs, mirroring
-	/// <see cref="ReconcileDeltaChainTests"/>.
+	/// Delta reconcile coverage for the moving platform's prediction structs, mirroring
+	/// <see cref="ReconcileDeltaChainTests"/> and using its FishNet wire harness.
 	/// </summary>
 	/// <remarks>
 	/// The platform is the case where a late peer is the rule rather than the exception: it is a
 	/// scene object that starts ticking when the scene loads and keeps ticking whether or not
-	/// anybody is near it, so every client that connects afterwards begins observing a chain that
-	/// is already far from its starting baseline. A reconcile encoding that is only decodable by a
-	/// peer holding the writer's baseline therefore fails for essentially every client, which is
-	/// what makes the absolute-snapshot path load-bearing here rather than a corner case.
+	/// anybody is near it, so every client that connects afterwards starts observing a platform
+	/// whose state is far from default. It is also the one reconcile fanned out to every observer
+	/// (since issue #228 the platform forwards state), so a lost or misapplied state stands every
+	/// rider's deck in the wrong place.
 	/// </remarks>
 	[TestFixture]
 	public class KCCPlatformDeltaChainTests
 	{
 		/// <summary>Server tick rate, matching <c>TimeManager._tickRate</c> on the scene server.</summary>
-		private const int ServerTickRate = 30;
+		private const ushort ServerTickRate = 30;
 
 		/// <summary>Distance the platform travels per tick, matching a slow moving platform.</summary>
 		private const float MoveRatePerTick = 0.12f;
@@ -45,57 +45,9 @@ namespace FishMMO.UnitTests
 				LogAssert.IsNotNull(register, $"{serializerType.Name} must expose a RegisterSerializers hook.");
 				register.Invoke(null, null);
 			}
-		}
 
-		/// <summary>
-		/// The option <c>NetworkBehaviour.GetDeltaSerializeOption</c> returns for a given tick.
-		/// </summary>
-		private static DeltaSerializerOption OptionForTick(uint localTick, bool observerAddedThisTick = false)
-		{
-			if (observerAddedThisTick)
-			{
-				return DeltaSerializerOption.FullSerialize;
-			}
-			return localTick % ServerTickRate == 0
-				? DeltaSerializerOption.FullSerialize
-				: DeltaSerializerOption.RootSerialize;
-		}
-
-		/// <summary>Models <c>Reconcile_Send</c>: write against the baseline, then advance it.</summary>
-		/// <summary>The server's send counter, advanced only by <see cref="ServerSend"/> — the
-		/// same rule Server_SendReconcileRpc follows (stamped when WRITTEN, never when merely built).</summary>
-		private byte serverSequence;
-
-		[SetUp]
-		public void ResetChain()
-		{
-			serverSequence = 0;
-			// A rejection latched by an earlier test must not leak into this one.
-			FishNet.Object.ReconcileDeltaGuard.ConsumeRejection();
-		}
-
-		private ArraySegment<byte> ServerSend(
-			ref KCCPlatform.ReconcileData serverBaseline,
-			KCCPlatform.ReconcileData next,
-			DeltaSerializerOption option)
-		{
-			next = KCCPlatformReconcileDataDeltaSerializer.StampSequence(next, unchecked(++serverSequence));
-			Writer writer = new Writer();
-			writer.WriteDelta(serverBaseline, next, option);
-			serverBaseline = next;
-			return writer.GetArraySegment();
-		}
-
-		/// <summary>Models <c>Reconcile_Reader</c>: decode against the baseline, then advance it.</summary>
-		private static KCCPlatform.ReconcileData ClientReceive(
-			ref KCCPlatform.ReconcileData clientBaseline,
-			ArraySegment<byte> payload)
-		{
-			Reader reader = new Reader(payload, null);
-			KCCPlatform.ReconcileData newData = reader.ReadDelta(clientBaseline);
-			LogAssert.AreEqual(0, reader.Remaining, "A reconcile payload must be consumed exactly.");
-			clientBaseline = newData;
-			return newData;
+			LogAssert.IsTrue(DeltaReconcileWire.HasDeltaSerializers<KCCPlatform.ReconcileData>(),
+				"KCCPlatform.ReconcileData must have a delta writer AND reader, or FishNet never takes the delta path and these tests prove nothing.");
 		}
 
 		/// <summary>One tick of platform motion: a step along one axis, cycling the goal index.</summary>
@@ -107,152 +59,176 @@ namespace FishMMO.UnitTests
 			return new KCCPlatform.ReconcileData(position, goalIndex);
 		}
 
+		private static bool ReconcileEquals(KCCPlatform.ReconcileData expected, KCCPlatform.ReconcileData actual)
+		{
+			return Vector3.Distance(expected.Position, actual.Position) <= 0.05f && expected.GoalIndex == actual.GoalIndex;
+		}
+
 		private static void AssertReconcileEquals(
 			KCCPlatform.ReconcileData expected,
 			KCCPlatform.ReconcileData actual,
 			string because)
 		{
 			/* Position rides FishNet's quantised float delta writer, so it is compared with the
-			 * same 0.05 tolerance ReconcileDeltaChainTests uses for the character motor state.
-			 * The tolerance is not slack: the per-tick quantisation error is ~0.001, so a chain
-			 * that never resynchronised would exceed it well inside these 60 ticks. Passing is
-			 * what shows the periodic absolute snapshot is bounding the drift. */
+			 * same 0.05 tolerance ReconcileDeltaChainTests uses for the character motor state. Every
+			 * delta is written against the last full reconcile rather than the previous delta, so
+			 * the quantisation error is one step's (~0.0005 per axis) and cannot accumulate. */
 			LogAssert.IsTrue(
 				Vector3.Distance(expected.Position, actual.Position) <= 0.05f,
 				$"{because}: position expected {expected.Position:F4} but decoded {actual.Position:F4}");
 			LogAssert.AreEqual(expected.GoalIndex, actual.GoalIndex, $"{because}: goal index");
 		}
 
+		private static KCCPlatform.ReconcileData Start() => new KCCPlatform.ReconcileData(new Vector3(12f, 3f, -40f), 0);
+
 		[Test]
-		public void Chain_SixtyTicks_ClientTracksServerExactly()
+		public void Chain_SixtyTicks_ClientTracksServer()
 		{
-			KCCPlatform.ReconcileData serverBaseline = default;
-			KCCPlatform.ReconcileData clientBaseline = default;
-			KCCPlatform.ReconcileData authoritative = new KCCPlatform.ReconcileData(new Vector3(12f, 3f, -40f), 0);
+			DeltaReconcileSender<KCCPlatform.ReconcileData> server = new DeltaReconcileSender<KCCPlatform.ReconcileData>(ServerTickRate);
+			DeltaReconcileReceiver<KCCPlatform.ReconcileData> client = new DeltaReconcileReceiver<KCCPlatform.ReconcileData>();
+			KCCPlatform.ReconcileData authoritative = Start();
 
 			for (uint tick = 1; tick <= ServerTickRate * 2; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
-				ArraySegment<byte> payload = ServerSend(ref serverBaseline, authoritative, OptionForTick(tick));
-				KCCPlatform.ReconcileData received = ClientReceive(ref clientBaseline, payload);
+				LogAssert.IsTrue(client.Receive(server.Send(authoritative, tick), tick, out KCCPlatform.ReconcileData received), $"tick {tick}");
 				AssertReconcileEquals(authoritative, received, $"tick {tick}");
 			}
+
+			TestContext.WriteLine(
+				$"MEASURE platform chain of {server.SentCount} reconciles: {server.TotalBytes}B total, " +
+				$"{server.TotalBytes / (double)server.SentCount:F1}B/reconcile (header and {server.FullCount} full reconciles included)");
+		}
+
+		/// <summary>The negative control: decoded against the wrong full reconcile, a platform delta is wrong.</summary>
+		[Test]
+		public void Delta_DecodedAgainstTheWrongFull_IsWrong()
+		{
+			DeltaReconcileSender<KCCPlatform.ReconcileData> server = new DeltaReconcileSender<KCCPlatform.ReconcileData>(ServerTickRate);
+			KCCPlatform.ReconcileData authoritative = Advance(Start(), 1);
+			server.Send(authoritative, 1);
+			authoritative = Advance(authoritative, 2);
+			ArraySegment<byte> delta = server.Send(authoritative, 2);
+
+			Reader reader = new Reader(delta, null);
+			KCCPlatform.ReconcileData decoded = DeltaReconcileWire.Read(reader, default(KCCPlatform.ReconcileData), out bool isFull, out _);
+			LogAssert.IsFalse(isFull, "Tick 2 is a delta.");
+			LogAssert.IsFalse(ReconcileEquals(authoritative, decoded),
+				"Decoded against an empty baseline the delta must come out wrong — near the world origin, which is where a " +
+				"late-joining client used to see the deck. If it does not, the payload is not delta-encoded.");
 		}
 
 		[Test]
-		public void LateObserver_ReceivesAbsoluteSnapshot_AndJoinsTheChain()
+		public void LateObserver_IsBootstrappedByTheFullReconcileSentWhenItIsAdded()
 		{
-			KCCPlatform.ReconcileData serverBaseline = default;
-			KCCPlatform.ReconcileData existingClient = default;
-			KCCPlatform.ReconcileData authoritative = new KCCPlatform.ReconcileData(new Vector3(12f, 3f, -40f), 0);
+			DeltaReconcileSender<KCCPlatform.ReconcileData> server = new DeltaReconcileSender<KCCPlatform.ReconcileData>(ServerTickRate);
+			KCCPlatform.ReconcileData authoritative = Start();
 
-			// The platform has been ticking since the scene loaded; its baseline is far from default.
+			// The platform has been ticking since the scene loaded, observed by nobody.
 			for (uint tick = 1; tick <= 45; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
-				ArraySegment<byte> payload = ServerSend(ref serverBaseline, authoritative, OptionForTick(tick));
-				ClientReceive(ref existingClient, payload);
+				server.Send(authoritative, tick);
 			}
 
-			/* A client connects here holding nothing. FishNet passes FullSerialize on the tick an
-			 * observer is added, but its scalar delta writers are difference-based, so "every field
-			 * present" is not the same as "decodable from an empty baseline". */
-			KCCPlatform.ReconcileData lateObserver = default;
+			// A client connects; it is added as an observer on tick 46.
+			DeltaReconcileReceiver<KCCPlatform.ReconcileData> late = new DeltaReconcileReceiver<KCCPlatform.ReconcileData>();
+			server.ObserverAddedTick = 46;
 			authoritative = Advance(authoritative, 46);
-			ArraySegment<byte> spawnPayload = ServerSend(ref serverBaseline, authoritative,
-				OptionForTick(46, observerAddedThisTick: true));
-
-			KCCPlatform.ReconcileData bootstrapped = ClientReceive(ref lateObserver, spawnPayload);
-
+			ArraySegment<byte> joinPayload = server.Send(authoritative, 46, out bool joinWasFull);
+			LogAssert.IsTrue(joinWasFull, "An observer added since the last full reconcile must get a full one.");
+			LogAssert.IsTrue(late.Receive(joinPayload, 46, out KCCPlatform.ReconcileData bootstrapped), "A full reconcile is always usable.");
 			AssertReconcileEquals(authoritative, bootstrapped,
-				"a late observer must decode the absolute snapshot exactly, from an empty baseline");
+				"a late observer must decode the full reconcile exactly, from an empty baseline");
 
-			for (uint tick = 47; tick <= 60; tick++)
+			for (uint tick = 47; tick <= 80; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
-				ArraySegment<byte> payload = ServerSend(ref serverBaseline, authoritative, OptionForTick(tick));
-				KCCPlatform.ReconcileData received = ClientReceive(ref lateObserver, payload);
+				LogAssert.IsTrue(late.Receive(server.Send(authoritative, tick), tick, out KCCPlatform.ReconcileData received), $"tick {tick}");
 				AssertReconcileEquals(authoritative, received, $"late observer at tick {tick}");
 			}
 		}
 
 		[Test]
-		public void StaleBaseline_IsRepairedByTheNextAbsoluteSnapshot()
+		public void DriftedBaseline_IsRepairedByTheNextFull()
 		{
-			KCCPlatform.ReconcileData serverBaseline = default;
-			KCCPlatform.ReconcileData authoritative = new KCCPlatform.ReconcileData(new Vector3(12f, 3f, -40f), 0);
+			DeltaReconcileSender<KCCPlatform.ReconcileData> server = new DeltaReconcileSender<KCCPlatform.ReconcileData>(ServerTickRate);
+			DeltaReconcileReceiver<KCCPlatform.ReconcileData> client = new DeltaReconcileReceiver<KCCPlatform.ReconcileData>();
+			KCCPlatform.ReconcileData authoritative = Start();
 
 			for (uint tick = 1; tick <= 20; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
-				ServerSend(ref serverBaseline, authoritative, OptionForTick(tick));
+				client.Receive(server.Send(authoritative, tick), tick, out _);
 			}
 
-			// A client whose baseline drifted for any reason at all.
-			KCCPlatform.ReconcileData drifted = new KCCPlatform.ReconcileData(new Vector3(-999f, 77f, 5f), 3);
+			// A client whose full reconcile drifted for any reason at all.
+			client.CorruptHeldFull(_ => new KCCPlatform.ReconcileData(new Vector3(-999f, 77f, 5f), 3));
 
-			// The next periodic full serialize must repair it outright.
-			authoritative = Advance(authoritative, ServerTickRate);
-			ArraySegment<byte> payload = ServerSend(ref serverBaseline, authoritative,
-				OptionForTick(ServerTickRate));
-			KCCPlatform.ReconcileData repaired = ClientReceive(ref drifted, payload);
+			for (uint tick = 21; tick <= ServerTickRate + 1; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				ArraySegment<byte> payload = server.Send(authoritative, tick, out bool full);
+				client.Receive(payload, tick, out KCCPlatform.ReconcileData received);
+				if (full)
+				{
+					AssertReconcileEquals(authoritative, received, "the periodic full reconcile must repair a drifted baseline");
+				}
+				else
+				{
+					LogAssert.IsFalse(ReconcileEquals(authoritative, received),
+						$"tick {tick}: against the drifted baseline the delta is expected to be wrong, or this test proves nothing");
+				}
+			}
 
-			AssertReconcileEquals(authoritative, repaired,
-				"the periodic absolute snapshot must repair a drifted baseline");
+			authoritative = Advance(authoritative, ServerTickRate + 2);
+			LogAssert.IsTrue(client.Receive(server.Send(authoritative, ServerTickRate + 2), ServerTickRate + 2, out KCCPlatform.ReconcileData after), "after the repair");
+			AssertReconcileEquals(authoritative, after, "the first delta after the repair");
 		}
 
-		/// <summary>
-		/// A lost state datagram must not have the next delta decoded against a baseline this
-		/// client never received — the chain is rejected until the periodic absolute snapshot.
-		/// </summary>
-		/// <remarks>
-		/// The platform is the one reconcile fanned out to every observer over the unreliable
-		/// channel, so this is the case that matters most: before the sequence guard a single lost
-		/// packet stood the client's deck in the wrong place — and every rider's footing with it —
-		/// for up to a second.
-		/// </remarks>
+		/// <summary>A lost delta costs only itself; a lost full reconcile costs its deltas, discarded rather than misapplied.</summary>
 		[Test]
-		public void LostDatagram_RejectsTheChain_UntilTheNextAbsoluteSnapshot()
+		public void LostDatagrams_AreDiscardedNotMisapplied()
 		{
-			KCCPlatform.ReconcileData serverBaseline = default;
-			KCCPlatform.ReconcileData client = default;
-			KCCPlatform.ReconcileData authoritative = new KCCPlatform.ReconcileData(new Vector3(12f, 3f, -40f), 0);
+			DeltaReconcileSender<KCCPlatform.ReconcileData> server = new DeltaReconcileSender<KCCPlatform.ReconcileData>(ServerTickRate);
+			DeltaReconcileReceiver<KCCPlatform.ReconcileData> client = new DeltaReconcileReceiver<KCCPlatform.ReconcileData>();
+			KCCPlatform.ReconcileData authoritative = Start();
 
-			// Ticks 1..10 arrive; tick 30 is the next periodic snapshot.
-			for (uint tick = 1; tick <= 10; tick++)
+			// Ticks 1..30, with delta 11 lost: 12..30 still decode against full 1.
+			for (uint tick = 1; tick <= ServerTickRate; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
-				ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
-				LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), $"tick {tick} must be accepted");
+				ArraySegment<byte> payload = server.Send(authoritative, tick);
+				if (tick == 11)
+				{
+					continue;
+				}
+				LogAssert.IsTrue(client.Receive(payload, tick, out KCCPlatform.ReconcileData received),
+					$"tick {tick}: a lost delta must not cost the deltas after it");
+				AssertReconcileEquals(authoritative, received, $"tick {tick}");
 			}
-			KCCPlatform.ReconcileData lastGood = client;
+			KCCPlatform.ReconcileData lastGood = client.HeldFull;
 
-			// Tick 11 is written by the server but never reaches this client.
-			authoritative = Advance(authoritative, 11);
-			ServerSend(ref serverBaseline, authoritative, OptionForTick(11));
-
-			// Ticks 12..29 arrive and must every one be rejected, leaving the baseline untouched.
-			for (uint tick = 12; tick < ServerTickRate; tick++)
+			// Tick 31, the next full reconcile, is lost: 32..60 are discarded.
+			authoritative = Advance(authoritative, ServerTickRate + 1);
+			server.Send(authoritative, ServerTickRate + 1, out bool lostWasFull);
+			LogAssert.IsTrue(lostWasFull, "Tick 31 must be the periodic full reconcile.");
+			for (uint tick = ServerTickRate + 2; tick <= ServerTickRate * 2; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
-				KCCPlatform.ReconcileData received = ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
-				LogAssert.IsTrue(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(),
-					$"tick {tick}: a delta after a lost datagram must be rejected, not decoded against the wrong baseline");
-				LogAssert.IsTrue(received.Position == lastGood.Position && received.GoalIndex == lastGood.GoalIndex,
-					$"tick {tick}: a rejected delta must leave the client's baseline exactly where it was");
+				LogAssert.IsFalse(client.Receive(server.Send(authoritative, tick), tick, out _),
+					$"tick {tick}: a delta against a lost full reconcile must be discarded, not decoded against the wrong baseline");
+				LogAssert.IsTrue(client.HeldFull.Position == lastGood.Position && client.HeldFull.GoalIndex == lastGood.GoalIndex,
+					$"tick {tick}: a discarded delta must leave the client's full reconcile exactly where it was");
 			}
 
-			// The periodic absolute snapshot re-seats the chain and everything after it decodes.
-			authoritative = Advance(authoritative, ServerTickRate);
-			KCCPlatform.ReconcileData repaired = ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(ServerTickRate)));
-			LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), "the absolute snapshot must be accepted");
-			AssertReconcileEquals(authoritative, repaired, "the absolute snapshot must repair the chain");
-			for (uint tick = ServerTickRate + 1; tick <= ServerTickRate + 10; tick++)
+			// Tick 61 re-seats it.
+			for (uint tick = ServerTickRate * 2 + 1; tick <= ServerTickRate * 2 + 10; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
-				KCCPlatform.ReconcileData received = ClientReceive(ref client, ServerSend(ref serverBaseline, authoritative, OptionForTick(tick)));
-				LogAssert.IsFalse(FishNet.Object.ReconcileDeltaGuard.ConsumeRejection(), $"tick {tick} must be accepted after the repair");
-				AssertReconcileEquals(authoritative, received, $"tick {tick} after the repair");
+				LogAssert.IsTrue(client.Receive(server.Send(authoritative, tick), tick, out KCCPlatform.ReconcileData received),
+					$"tick {tick} after the next full reconcile");
+				AssertReconcileEquals(authoritative, received, $"tick {tick} after the next full reconcile");
 			}
 		}
 

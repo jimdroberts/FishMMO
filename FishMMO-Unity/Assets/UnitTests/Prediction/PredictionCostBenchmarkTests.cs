@@ -287,7 +287,6 @@ namespace FishMMO.UnitTests
 			CharacterReconcileData next = BuildReconcile(2, 3, 6, 8);
 			next.MotorState.Position += new Vector3(0.12f, 0f, 0.04f);
 			next.RemainingTicks = 13;
-			next.Sequence = unchecked((byte)(prev.Sequence + 1)); // delta chain continuity
 
 			int deltaBytes = 0;
 			double writeMicros = MicrosPerOp(() =>

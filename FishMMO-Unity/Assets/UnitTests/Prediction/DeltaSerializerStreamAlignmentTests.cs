@@ -49,8 +49,7 @@ namespace FishMMO.UnitTests
 		/// <c>GenericDeltaWriter&lt;T&gt;.Write</c> is still null and <c>Writer.WriteDelta</c> would
 		/// return false without writing anything — which looks exactly like "nothing changed" and
 		/// would quietly pass a test that asserts nothing. Invoking the real registration methods
-		/// keeps these tests exercising production registration order: the full serializer must be
-		/// registered before the delta one, or <c>GenericWriter.SetWrite</c> clears the delta hook.
+		/// keeps these tests exercising production registration (full serializer, then delta).
 		/// </remarks>
 		[OneTimeSetUp]
 		public void RegisterProductionSerializers()
@@ -221,7 +220,6 @@ namespace FishMMO.UnitTests
 					next.AbilityID = prev.AbilityID + 3;
 					next.RemainingTicks = prev.RemainingTicks + 11;
 					next.PackedFlagsAndSlot = prev.PackedFlagsAndSlot ^ 0x5A;
-				next.Sequence = unchecked((byte)(prev.Sequence + 1)); // delta chain continuity
 
 					Writer writer = new Writer();
 					bool wrote = writer.WriteDelta(prev, next, DeltaSerializerOption.Unset);
@@ -352,8 +350,8 @@ namespace FishMMO.UnitTests
 		public void ReconcileFull_RoundTrip_PreservesEveryFieldAndConsumesExactly()
 		{
 			Run(nameof(ReconcileFull_RoundTrip_PreservesEveryFieldAndConsumesExactly),
-				"The full reconcile serializer is the live path — FishNet gates both delta reconcile and " +
-				"delta replicate behind #if DO_NOT_USE — so its write/read ordering must match exactly.",
+				"The full reconcile serializer is what FishNet's delta prediction sends as every FULL reconcile " +
+				"(the baseline every delta is decoded against), so its write/read ordering must match exactly.",
 				() =>
 				{
 					CharacterReconcileData value = MakeReconcileData();
@@ -373,6 +371,12 @@ namespace FishMMO.UnitTests
 					{
 						new AttributeReconcileEntry { TemplateID = 1, Value = 10, ExternalModifier = 2 },
 					};
+					value.Exposure = new[]
+					{
+						new ExposureReconcileEntry { TemplateID = 4, Level = ExposureReconcileEntry.Quantise(0.6f) },
+						new ExposureReconcileEntry { TemplateID = 9, Level = 17 },
+					};
+					value.ChargedHoldTicks = 21;
 
 					Writer writer = new Writer();
 					writer.WriteCharacterReconcileData(value);
@@ -395,10 +399,54 @@ namespace FishMMO.UnitTests
 					LogAssert.AreEqual(1, result.Attributes.Length, "Attributes must survive the full round-trip.");
 					LogAssert.IsTrue(value.Equipment[0].Equals(result.Equipment[0]), "The equipment entry must match field for field.");
 					LogAssert.IsTrue(value.Attributes[0].Equals(result.Attributes[0]), "The attribute entry must match field for field.");
+					LogAssert.AreEqual(value.ChargedHoldTicks, result.ChargedHoldTicks, "ChargedHoldTicks must survive the full round-trip.");
+					LogAssert.AreEqual(2, result.Exposure?.Length ?? 0, "Exposure must survive the full round-trip.");
+					LogAssert.IsTrue(value.Exposure[0].Equals(result.Exposure[0]) && value.Exposure[1].Equals(result.Exposure[1]),
+						"The exposure entries must match field for field.");
 
 					LogAssert.AreEqual(Sentinel, reader.ReadInt32(),
 						"The full reconcile reader must land exactly where the writer finished.");
 					LogAssert.AreEqual(0, reader.Remaining, "The full reconcile must not leave unread bytes behind.");
+				});
+		}
+
+		/// <summary>
+		/// A character with no weather exposure states still writes a framed, exactly-consumed full
+		/// reconcile.
+		/// </summary>
+		/// <remarks>
+		/// <c>WeatherExposureController.CreateReconcileSnapshot</c> returns null when a character has
+		/// no exposure states (and a character without the controller never sets the field), and
+		/// <c>ExposureReconcileEntry.WriteArrayDelta</c> declines when both arrays are null. The full
+		/// writer used to pass it straight through, so it wrote NOTHING for the array while the reader
+		/// always reads a two-byte header: every full reconcile of such a character read past its own
+		/// frame, logged a misread, and decoded whatever followed as exposure. These fixtures never set
+		/// Exposure, which is how weather P4 broke them.
+		/// </remarks>
+		[Test]
+		public void ReconcileFull_WithoutExposureStates_IsFramedAndConsumedExactly()
+		{
+			Run(nameof(ReconcileFull_WithoutExposureStates_IsFramedAndConsumedExactly),
+				"A null exposure array must still be written as an empty array, not as nothing.",
+				() =>
+				{
+					CharacterReconcileData value = MakeReconcileData();
+					value.Exposure = null;
+					value.ChargedHoldTicks = 5;
+
+					Writer writer = new Writer();
+					writer.WriteCharacterReconcileData(value);
+					const int Sentinel = 0x0E70;
+					writer.WriteInt32(Sentinel);
+
+					Reader reader = new Reader(writer.GetArraySegment(), null);
+					CharacterReconcileData result = reader.ReadCharacterReconcileData();
+
+					LogAssert.IsNull(result.Exposure, "No exposure states round-trip as null.");
+					LogAssert.AreEqual(5u, result.ChargedHoldTicks, "The field before Exposure must be intact.");
+					LogAssert.AreEqual(Sentinel, reader.ReadInt32(),
+						"A full reconcile without exposure states must end exactly where its writer finished.");
+					LogAssert.AreEqual(0, reader.Remaining, "Nothing may be left unread.");
 				});
 		}
 
