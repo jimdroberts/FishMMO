@@ -283,6 +283,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Transport: {fileID: 6776049994790379670}
+  _maximumClientPacketSize: 65536
   _intermediateLayer: {fileID: 0}
   _latencySimulator:
     _enabled: 0

@@ -228,5 +228,99 @@ namespace FishMMO.UnitTests
 					$"{signature} must trace sends through TraceHandshakePacket, not Debug.Log");
 			}
 		}
+
+		// ── Split message count (FishNet, upstream PR #1088) ─────────────
+
+		/// <summary>The four scenes that carry a NetworkManager: three servers and the client.</summary>
+		private static readonly string[] NetworkScenes =
+		{
+			"Assets/Scenes/Server/LoginServer.unity",
+			"Assets/Scenes/Server/WorldServer.unity",
+			"Assets/Scenes/Server/SceneServer.unity",
+			"Assets/Scenes/Client/ClientPostboot.unity",
+		};
+
+		/// <summary>
+		/// The bytes one client-to-server message may span when split. The largest message the server
+		/// accepts is a mail send (body 4000 + subject 200 UTF-16 units, up to 3 UTF-8 bytes each,
+		/// ~12.6 KB) or an account creation (~13 KB); 64 KiB is about five times that.
+		/// </summary>
+		private const uint ClientPacketBytes = 64 * 1024;
+
+		/// <summary>The serialized _maximumClientPacketSize of the scene's TransportManager.</summary>
+		private static uint SceneMaximumClientPacketSize(string scenePath)
+		{
+			string meta = ReadSource("Assets/Plugins/FishNet/Runtime/Managing/Transporting/TransportManager.cs.meta");
+			Match guid = Regex.Match(meta, @"^guid: ([0-9a-f]{32})$", RegexOptions.Multiline);
+			LogAssert.IsTrue(guid.Success, "TransportManager.cs.meta must declare a guid");
+
+			string scene = ReadSource(scenePath);
+			string script = $"m_Script: {{fileID: 11500000, guid: {guid.Groups[1].Value}, type: 3}}";
+			string manager = null;
+			foreach (string document in Regex.Split(scene, @"^(?=--- !u!)", RegexOptions.Multiline))
+			{
+				if (!document.Contains(script))
+				{
+					continue;
+				}
+				LogAssert.IsNull(manager, $"{scenePath} must carry one TransportManager");
+				manager = document;
+			}
+			LogAssert.IsNotNull(manager, $"{scenePath} must carry a TransportManager");
+
+			Match size = Regex.Match(manager, @"^  _maximumClientPacketSize: (\d+)$", RegexOptions.Multiline);
+			LogAssert.IsTrue(size.Success,
+				$"{scenePath}'s TransportManager must serialize _maximumClientPacketSize (FishNet's default is 20480)");
+			return uint.Parse(size.Groups[1].Value);
+		}
+
+		[Test]
+		public void ClientSplitCount_IsValidatedBeforeTheSplitBufferIsSized()
+		{
+			/* The server reads a split's message count from the client, before authentication, and
+			 * used to reserve count * 1500 bytes for it: one header could allocate ~2 GB. FishNet now
+			 * kicks a count above ceil(MaximumClientPacketSize / segment length) BEFORE a split reader
+			 * is retrieved, and caps a client sender's reservation at MaximumClientPacketSize. */
+			string serverCode = CodeOnly(ReadSource("Assets/Plugins/FishNet/Runtime/Managing/Server/ServerManager.cs"));
+			string parse = MethodBody(serverCode, "private void ParseReceived(ServerReceivedDataArgs args)");
+			int check = parse.IndexOf("GetMaximumClientSplitMessageCount()", StringComparison.Ordinal);
+			int reader = parse.IndexOf("TryGetSplitReader(", StringComparison.Ordinal);
+			LogAssert.IsTrue(check >= 0, "ParseReceived must bound the client's split count");
+			LogAssert.IsTrue(reader > check, "the split count must be checked before a split reader is retrieved and sized");
+			LogAssert.IsTrue(Regex.IsMatch(parse.Substring(check, reader - check), @"KickReason\.UnusualActivity[\s\S]*?return;"),
+				"an out-of-range split count must kick and stop parsing");
+
+			string bufferCode = CodeOnly(ReadSource("Assets/Plugins/FishNet/Runtime/Connection/NetworkConnection.Buffer.cs"));
+			string getReader = MethodBody(bufferCode, "internal bool TryGetSplitReader(int expectedMessages, out SplitReader splitReader)");
+			LogAssert.IsTrue(Regex.IsMatch(getReader, @"\.Initialize\([^;]*MaximumClientPacketSize,\s*isSenderClient:\s*true"),
+				"a client's split reader must be given MaximumClientPacketSize as its byte cap");
+
+			string splitCode = CodeOnly(ReadSource("Assets/Plugins/FishNet/Runtime/Managing/Transporting/SplitReader.cs"));
+			string initialize = MethodBody(splitCode, "public void Initialize(NetworkManager networkManager, uint maximumClientBytes, bool isSenderClient, int expectedMessages)");
+			LogAssert.IsTrue(Regex.IsMatch(initialize, @"isSenderClient\s*&&\s*estimatedBufferSize\s*>\s*maximumClientBytes[\s\S]*?EnsureBufferCapacity\("),
+				"the reservation must be capped at the client byte limit before the buffer is sized");
+
+			/* The bound and the sender share one value: the client refuses to send a split the
+			 * server would kick for, so a legitimate client is never disconnected by the clamp. */
+			string transportCode = CodeOnly(ReadSource("Assets/Plugins/FishNet/Runtime/Managing/Transporting/TransportManager.cs"));
+			string bound = MethodBody(transportCode, "internal int GetMaximumClientSplitMessageCount()");
+			LogAssert.IsTrue(Regex.IsMatch(bound, @"Math\.Ceiling\(\(double\)_maximumClientPacketSize\s*/\s*maximumSegmentLength\)"),
+				"the accepted split count must derive from _maximumClientPacketSize");
+			string send = MethodBody(transportCode, "private int SendSplitMessage(NetworkConnection conn, byte channelId, ArraySegment<byte> segment, DataOrderType orderType)");
+			LogAssert.IsTrue(Regex.IsMatch(send, @"conn\s*==\s*null\s*&&\s*messageCount\s*\*\s*maximumSegmentLength\s*>\s*_maximumClientPacketSize[\s\S]*?return SPLIT_ERROR_VALUE;"),
+				"SendSplitMessage must refuse a client split larger than _maximumClientPacketSize");
+
+			/* FishNet's default (20480) is serialized per scene, so every network scene sets it, and
+			 * the client must agree with the servers or the clamp kicks what the client sends. */
+			foreach (string scene in NetworkScenes)
+			{
+				LogAssert.AreEqual(ClientPacketBytes, SceneMaximumClientPacketSize(scene),
+					$"{scene} must set TransportManager._maximumClientPacketSize to {ClientPacketBytes}");
+			}
+
+			/* Headroom over the largest legitimate client message (a mail). */
+			LogAssert.IsTrue(ClientPacketBytes >= 4 * (4000 + 200) * 3,
+				"_maximumClientPacketSize must keep several times the largest legitimate client message");
+		}
 	}
 }

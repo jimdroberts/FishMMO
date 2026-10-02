@@ -1529,7 +1529,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 9107823737704557377
+  SceneId: 9107823737704557377
   SerializedTransformProperties:
     Position: {x: -107.76, y: 1.15, z: 49.37}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -3755,7 +3755,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 9107823740297206992
+  SceneId: 9107823740297206992
   SerializedTransformProperties:
     Position: {x: -2.5, y: 11.9, z: 21.6}
     Rotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
@@ -4408,7 +4408,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
-      propertyPath: <SceneId>k__BackingField
+      propertyPath: SceneId
       value: 527433691
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135807, guid: 8056196aa1ba4f2f8e10f6616eacd914,
@@ -5092,7 +5092,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 9107823739802487902
+  SceneId: 9107823739802487902
   SerializedTransformProperties:
     Position: {x: 0, y: 73.09101, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -5205,7 +5205,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135806, guid: 8056196aa1ba4f2f8e10f6616eacd914,
         type: 3}
-      propertyPath: <SceneId>k__BackingField
+      propertyPath: SceneId
       value: 4286570475
       objectReference: {fileID: 0}
     - target: {fileID: 4131707743960135807, guid: 8056196aa1ba4f2f8e10f6616eacd914,
@@ -6175,7 +6175,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 9107823739561630215
+  SceneId: 9107823739561630215
   SerializedTransformProperties:
     Position: {x: -107.76, y: 1.15, z: 44.43}
     Rotation: {x: 0, y: 0, z: 0, w: 1}

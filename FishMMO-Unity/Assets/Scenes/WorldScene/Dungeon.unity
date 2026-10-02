@@ -794,7 +794,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 7921816913954269079
+  SceneId: 7921816913954269079
   SerializedTransformProperties:
     Position: {x: -77.96, y: 9.92, z: 92.11}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -3516,7 +3516,7 @@ MonoBehaviour:
   <PrefabId>k__BackingField: 0
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 0
-  <SceneId>k__BackingField: 7921816912420623170
+  SceneId: 7921816912420623170
   SerializedTransformProperties:
     Position: {x: 0, y: 36.39718, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
