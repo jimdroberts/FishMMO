@@ -94,3 +94,19 @@ crashlytics-build.properties
 /[Aa]ssets/Prefabs/Shared/PlanetSurfaces.meta
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientPlanetSurfaces.asset*
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientPlanetSurfaces_*
+
+# Baked terrain texture arrays: build output, rebuilt per machine from each scene's terrain layers and
+# whatever LOCAL art overrides them (licensed art must never be committed, even baked). The editor
+# rebakes a scene whose arrays are missing or stale when it opens it; a client build bakes every world
+# scene and registers the sets in their addressable group, which it removes again afterwards.
+/[Aa]ssets/Prefabs/Client/TerrainArrays/
+/[Aa]ssets/Prefabs/Client/TerrainArrays.meta
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientTerrainArrays.asset*
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientTerrainArrays_*
+
+# Procedural biome art payload: every generated texture and mesh, and the record of what generated them.
+# Build output, rebuilt per machine (on editor load and before every build) by BiomeArtGenerator; each
+# file's GUID is derived from its path, so the COMMITTED wrappers beside it (Generated/TerrainLayers,
+# Materials, Prefabs and ProceduralArtLedger.json) resolve on any clone once it has been generated.
+/[Aa]ssets/Prefabs/Shared/Biomes/Generated/Payload/
+/[Aa]ssets/Prefabs/Shared/Biomes/Generated/Payload.meta
