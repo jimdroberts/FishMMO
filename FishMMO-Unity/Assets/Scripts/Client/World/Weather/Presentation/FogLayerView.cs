@@ -167,6 +167,23 @@ namespace FishMMO.Client
 		/// <summary>The layer being shown now, as last published.</summary>
 		public static FogLayerView Current { get; private set; }
 
+		/// <summary>
+		/// Puts <paramref name="view"/> in as <see cref="Current"/> without publishing it, and returns
+		/// the layer it replaced, for the caller to put back.
+		/// </summary>
+		/// <remarks>
+		/// For a one-frame editor capture (the world map bake) that must render with no fog and leave
+		/// everything as it found it. <see cref="Publish"/> would also move the banks' drift and the
+		/// presentation clock this view keeps, which nothing could put back; the fog passes only ask
+		/// <see cref="Current"/> whether there is a layer to draw, so swapping it is the whole of it.
+		/// </remarks>
+		public static FogLayerView ReplaceCurrent(FogLayerView view)
+		{
+			FogLayerView was = Current;
+			Current = view;
+			return was;
+		}
+
 		/// <summary>What the last published layer's banks are doing: xy drift (m), z their turn, w 0 (it was the wisps' turn: there are none).</summary>
 		public static Vector4 Motion { get; private set; }
 

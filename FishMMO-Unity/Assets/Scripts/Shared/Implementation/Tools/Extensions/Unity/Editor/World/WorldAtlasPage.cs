@@ -6,6 +6,7 @@ using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 
 namespace FishMMO.Shared.WorldDesign
@@ -498,8 +499,16 @@ namespace FishMMO.Shared.WorldDesign
 			 * pale blue on the globe and can carry a name like "Shallow ...", and the terrain alone
 			 * does not say how far under the surface it is. */
 			float highestGround = result.GroundAltitudeMetres + result.ReliefMetres;
-			string sea = !result.HasWater
-				? "\nNo sea: this scene's lowest ground is above the body's water line."
+			/* Lava first: a lava world has no sea, and "No sea" read as if the scene had been left with
+			 * nothing in its low ground. Said with its height, because lava lakes do not stand at y = 0. */
+			string sea = result.HasLava
+				? highestGround < result.SeaLevelY
+					? $"\nAll of it lies under lava, whose surface is at y = {result.SeaLevelY:0} m."
+					: $"\nLava stands in its low ground, at y = {result.SeaLevelY:0} m; y is metres above the body's datum."
+				: !result.HasWater
+				? SurfaceLiquids.For(SolarSystemProfile.Resolve(body), body) == SurfaceLiquid.Lava
+					? "\nNo lava: this scene's lowest ground is above the level the body's lava stands at."
+					: "\nNo sea: this scene's lowest ground is above the body's water line."
 				: highestGround < 0f
 					? $"\nAll of it is sea floor, {-highestGround:0} to {-result.GroundAltitudeMetres:0} m under the surface at y = 0."
 					: "\nThe sea is at y = 0, where this body's water line falls; y is metres above sea level.";

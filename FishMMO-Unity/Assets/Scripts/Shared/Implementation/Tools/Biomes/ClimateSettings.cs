@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Shared.Biomes
@@ -25,7 +26,58 @@ namespace FishMMO.Shared.Biomes
 	public class ClimateSettings : CachedScriptableObject<ClimateSettings>, ICachedObject
 	{
 		/// <summary>Elevation-tier boundaries WorldEditor generates with: 0, 8 cut-offs, 1.</summary>
+		/// <remarks>
+		/// On a body these are normalised heights, and each stands for the altitude in
+		/// <see cref="TierEdgeMetres"/> at the same index (<see cref="PlanetClimateField.HeightOfAltitude"/>):
+		/// tier 0 abyssal and hadal floor, 1 slope and rise, 2 continental shelf, 3 shore, 4 lowland and
+		/// plateau, 5 highland, 6 mountain, 7 alpine, 8 nival. A biome's height band is its tier's
+		/// span of these numbers, so they stay the scale every biome is authored on.
+		/// </remarks>
 		public static readonly float[] DefaultElevationBoundaries = { 0f, 0.2f, 0.35f, 0.42f, 0.45f, 0.6f, 0.75f, 0.9f, 0.95f, 1f };
+
+		/// <summary>
+		/// The altitude each of the ten tier boundaries stands at on a body, in metres on Earth's scale
+		/// (a body's own metres divided by its relief over Earth's): the deepest trench, then the edges
+		/// of the abyssal zone, the shelf, the water line, the shore, the lowland, the highland, the
+		/// mountains and the alpine band, then the summit.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Landform bands, not life zones.</b> Treeline and snowline move with latitude by thousands
+		/// of metres — the treeline stands at 4 km in the Andes and at sea level in the Arctic — and the
+		/// climate field already does that by cooling with altitude at the body's own lapse rate. So
+		/// the tiers say only where the ground stands, and every edge is a landform edge:
+		/// </para>
+		/// <list type="bullet">
+		/// <item><b>−4000 / −200:</b> the abyssal zone and the shelf break (ETOPO1; see
+		/// <see cref="PlanetClimateField.AbyssalMetres"/>, <see cref="PlanetClimateField.ShelfEdgeMetres"/>).</item>
+		/// <item><b>30, the shore:</b> beaches, dune ridges, salt marsh, mangrove and estuary flats.
+		/// The low-elevation coastal zone is usually drawn at 10 m (McGranahan, Balk and Anderson 2007,
+		/// 2.2% of Earth's land); storm ridges and foredunes stand to a few tens of metres. The
+		/// generated land rises from the sea more steeply than Earth's coastal plains (0.6% of it is
+		/// under 10 m), so 30 m is where the same 2% of land falls in the band.</item>
+		/// <item><b>1500, lowland and plateau:</b> below about 1.5 km, ground counts as mountain only
+		/// for its local relief (the UNEP-WCMC mountain classes 5 and 6 need steep slopes or 300 m of
+		/// local relief; Kapos et al. 2000), and a globe sample is tens of kilometres across with
+		/// no relief to judge. So everything below is plain, plateau or low hill, whose cover the
+		/// climate decides: the African and Brazilian plateaus are savanna at 1–1.5 km.</item>
+		/// <item><b>2500, highland:</b> classes 4 and 5, 1.5–2.5 km, mountainous with any slope at
+		/// all: high plateaus, basins and the foothills.</item>
+		/// <item><b>3500, mountain; 4500, alpine; summit, nival:</b> classes 3, 2 and 1, which are
+		/// mountain by altitude alone.</item>
+		/// </list>
+		/// <para>
+		/// Measured on an Earth-like body (200,000 points): shore 2.0% of land, lowland 77%,
+		/// highland 15%, mountain 4.2%, alpine 1.0%, nival 1.0%. Under the old fractions of the summit
+		/// the same body was 33% coast, 62% tier 4 and 4% highland.
+		/// </para>
+		/// <para>
+		/// The two ends are the deepest knot of <see cref="PlanetSurface.OceanKnotDepthMetres"/> and
+		/// Earth's summit (<see cref="PlanetSurface.EarthSummitFraction"/>); on a body the summit is its
+		/// own highest ground.
+		/// </para>
+		/// </remarks>
+		public static readonly float[] TierEdgeMetres = { -10911f, -4000f, -200f, 0f, 30f, 1500f, 2500f, 3500f, 4500f, 8848f };
 
 		private static ClimateSettings derived;
 

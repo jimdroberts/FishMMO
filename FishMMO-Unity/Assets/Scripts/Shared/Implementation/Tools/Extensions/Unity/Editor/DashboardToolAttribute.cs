@@ -42,8 +42,11 @@ namespace FishMMO.Shared
 		/// <summary>Weather → Weather Tools: content generation and texture bakes.</summary>
 		public const string Weather = "Weather Tools";
 
+		/// <summary>Biomes → Biome Tools: procedural biome art and its assignment to biomes.</summary>
+		public const string Biomes = "Biome Tools";
+
 		/// <summary>Every page a tool may name.</summary>
-		public static readonly string[] Pages = { Validate, UnitTests, UITests, Maintenance, AITools, WorldSceneDetails, SpawnTables, WorldMap, Weather };
+		public static readonly string[] Pages = { Validate, UnitTests, UITests, Maintenance, AITools, WorldSceneDetails, SpawnTables, WorldMap, Weather, Biomes };
 
 		/// <summary>The dashboard page (sidebar entry) the button appears on.</summary>
 		public string Page { get; }
@@ -62,6 +65,12 @@ namespace FishMMO.Shared
 
 		/// <summary>When set, a confirmation dialog with this text is shown before the tool runs.</summary>
 		public string Confirm { get; set; }
+
+		/// <summary>
+		/// True for a tool that only means anything in play mode (a runtime diagnostic or toggle). Tools are
+		/// otherwise locked while playing, since most write assets or scenes.
+		/// </summary>
+		public bool AllowInPlayMode { get; set; }
 
 		/// <param name="page">One of the page constants.</param>
 		/// <param name="label">The button text.</param>

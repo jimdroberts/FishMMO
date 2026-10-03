@@ -5,6 +5,9 @@
 #define FISHMMO_WEATHER_LIT_FORWARD_PASS_INCLUDED
 
 #include "FishSurface.hlsl"
+// ── FishMMO edit: the instanced tree channels' per-instance LOD cross-fade (contract in the file). ──
+#include "FishLodFade.hlsl"
+#include "FishGroundColour.hlsl"
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
@@ -265,6 +268,8 @@ void LitPassFragment(
 #ifdef LOD_FADE_CROSSFADE
     LODFadeCrossFade(input.positionCS);
 #endif
+    // ── FishMMO edit: per-instance LOD fade (_FishLodFade), apart from unity_LODFade above. ──
+    FishLodFadeClip(input.positionCS);
 
     InputData inputData;
     InitializeInputData(input, surfaceData.normalTS, inputData);
@@ -279,6 +284,20 @@ void LitPassFragment(
         FishWeatherSurface(inputData.positionWS, surfaceData.albedo, weathered, surfaceData.smoothness, surfaceData.metallic, surfaceData.occlusion);
         inputData.normalWS = normalize(lerp(inputData.normalWS, weathered, _FishWeatherAmount));
     }
+#if defined(FISH_INDIRECT_INSTANCED)
+    // ── FishMMO edit: distant terrain rocks settle into the landscape (FishGroundColour.hlsl). Only the
+    // GPU-instanced twin (terrain rocks, boulders, formations, cliff rocks): buildings and props drawn with
+    // this shader keep their own colour at any distance. ──
+    {
+        float distanceFar, distanceFlatten;
+        float3 distanceTarget;
+        half4 distancePull;
+        FishDistanceBlend(inputData.positionWS, distanceFar, distanceFlatten, distanceTarget, distancePull);
+        inputData.normalWS = normalize(lerp(inputData.normalWS, distanceTarget, distanceFlatten));
+        surfaceData.albedo = lerp(surfaceData.albedo, distancePull.rgb, distancePull.a);
+        surfaceData.smoothness *= (half)(1.0 - distanceFar);
+    }
+#endif
 
 #if defined(_DBUFFER)
     ApplyDecalToSurfaceData(input.positionCS, surfaceData, inputData);

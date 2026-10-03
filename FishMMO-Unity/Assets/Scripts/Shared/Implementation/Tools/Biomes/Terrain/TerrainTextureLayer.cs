@@ -20,6 +20,24 @@ namespace FishMMO.Shared.Biomes
 	[Serializable]
 	public class TerrainTextureLayer
 	{
+		[Header("Terrain Layer")]
+		/// <remarks>
+		/// <para>
+		/// The one place a layer's art is swapped. Generated ground textures arrive as
+		/// <see cref="TerrainLayer"/> assets and are assigned here; replacing them with bought or
+		/// painted art is assigning a different asset, and no generator ever writes over a layer
+		/// whose asset is not one it made.
+		/// </para>
+		/// <para>
+		/// A TerrainLayer rather than more fields because it already carries everything the ground
+		/// shader reads — normal scale, tile offset and the mask and diffuse remaps — and because
+		/// it is what Unity's own terrain tools paint with, so a designer touching up a generated
+		/// scene by hand paints with exactly the layers the generator used.
+		/// </para>
+		/// </remarks>
+		[Tooltip("The layer's art. When set, this asset IS the layer: its textures, tiling, normal scale and remaps are what the ground draws, and the texture and material fields below are ignored. Leave empty to have one built from those fields.")]
+		public TerrainLayer terrainLayer;
+
 		[Header("Textures")]
 		public Texture2D albedoTexture;
 		public Texture2D normalTexture;
@@ -63,7 +81,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Prefab spawn rules that become active wherever this texture dominates.")]
 		public List<PrefabSpawnRule> prefabSpawnRules = new List<PrefabSpawnRule>();
 
-		/// <summary>True when the layer has a texture to paint with.</summary>
-		public bool HasAlbedo => albedoTexture != null;
+		/// <summary>True when the layer has a texture to paint with, from its terrain layer or its own field.</summary>
+		public bool HasAlbedo => (terrainLayer != null && terrainLayer.diffuseTexture != null) || albedoTexture != null;
 	}
 }

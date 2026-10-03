@@ -159,7 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static SolarSystemProfile CreateExampleSystem()
 		{
-			SolarSystemProfile existing = FindFirst<SolarSystemProfile>();
+			SolarSystemProfile existing = SolarSystemProfile.Resolve();
 			return existing != null ? existing : CreateExampleSystem(UniqueSystemName("Solar System"));
 		}
 

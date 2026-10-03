@@ -409,10 +409,14 @@ namespace FishMMO.Water
 				? BiomeWorldConditions.For(system, body)
 				: BiomeWorldConditions.Earthlike;
 
-			// Productivity: warm and wet is green soup, cold and barren is blue glass.
+			/* Productivity: warm and wet is green soup, cold and barren is blue glass. Measured against
+			 * an Earth-like world, because the conditions' temperature is absolute (0 at freezing) and
+			 * these weights were set when it read 0 at the home world's own warmth: taken raw, every
+			 * temperate sea would have read a fifth greener than it was tuned to. */
+			float warmth = conditions.MeanTemperature - BiomeWorldConditions.Earthlike.MeanTemperature;
 			float productivity = conditions.Atmosphere == AtmosphereKind.None
 				? 0f
-				: Mathf.Clamp01(0.45f + conditions.MeanTemperature * 0.45f + (conditions.Water - 0.5f) * 0.4f);
+				: Mathf.Clamp01(0.45f + warmth * 0.45f + (conditions.Water - 0.5f) * 0.4f);
 
 			/* Absorption per metre, per channel. Red goes first in any water; what productivity
 			 * changes is the green and blue — clear ocean lets blue run for tens of metres, a

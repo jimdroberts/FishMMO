@@ -81,7 +81,8 @@ namespace FishMMO.TestHarness.World.Editor
 			 * a seabed a kilometre down sees nothing of the sky this bed exists to show. */
 			var standing = new Vector3(0f, 0f, -sized.DepthMetres * 0.25f);
 			float ground = GroundHeight(scene, standing);
-			float underfoot = result != null && result.HasWater ? Mathf.Max(ground, result.SeaLevelY) : ground;
+			// On the lava, too, rather than on the floor of the basin it fills.
+			float underfoot = result != null && (result.HasWater || result.HasLava) ? Mathf.Max(ground, result.SeaLevelY) : ground;
 			host.transform.position = new Vector3(standing.x, underfoot + 1.8f, standing.z);
 			host.transform.rotation = Quaternion.Euler(4f, 0f, 0f);
 			return camera;
@@ -130,7 +131,7 @@ namespace FishMMO.TestHarness.World.Editor
 			 * generated scene opened on its own would otherwise have no substances to fall and no
 			 * solar system to stand in. */
 			controller.Profile = WeatherRenderAssets.Ensure();
-			controller.SolarSystem = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			controller.SolarSystem = SolarSystemProfile.Resolve();
 			controller.SkyProfiles = WorldEditorAssets.FindAll<SkyProfile>();
 			controller.Substances = WorldEditorAssets.FindAll<WeatherSubstance>();
 

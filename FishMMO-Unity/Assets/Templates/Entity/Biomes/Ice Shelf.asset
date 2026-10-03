@@ -1,0 +1,405 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b10de7e3a4c14e1f8a9d5c2b6f7e8a01, type: 3}
+  m_Name: Ice Shelf
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Biomes.BiomeTemplate
+  DisplayName: Ice Shelf
+  Description: 'A frozen sea: flat shelf ice to the horizon, pressure ridges and
+    refrozen leads'
+  BiomeColorId: {r: 0.55, g: 0.8, b: 0.92, a: 1}
+  GizmoColor: {r: 0.55, g: 0.8, b: 0.92, a: 1}
+  ElevationTier: 3
+  MinHeight: 0.42
+  MaxHeight: 0.45
+  MinTemperature: -1
+  MaxTemperature: -0.4
+  MinHumidity: -1
+  MaxHumidity: 1
+  SelectionWeight: 1.05
+  Atmosphere: 15
+  RequiresLiquidWater: 0
+  Requires: 1
+  ClimateVariants: []
+  Naming:
+    Phonology:
+      Onsets:
+      - Shel
+      - Pack
+      - Flo
+      - Ber
+      - Lea
+      - Pol
+      - Ny
+      - Rime
+      - Sas
+      - Gri
+      Nuclei:
+      - a
+      - e
+      - i
+      - ei
+      - ae
+      - ou
+      Codas:
+      - shelf
+      - floe
+      - pack
+      - lead
+      - ridge
+      - sheet
+      - rime
+      - berg
+      Middles:
+      - an
+      - or
+      - el
+      - is
+      - ur
+      SyllMin: 2
+      SyllMax: 3
+      DungeonSuffixes:
+      - Grotto
+      - Vault
+      - Hollow
+      - Fissure
+      - Chamber
+      - Gallery
+      - Shaft
+      - Crevasse
+      DungeonPrefixes:
+      - The Frozen
+      - The Groaning
+      - The Endless
+      - The Pale
+      - The Drowned
+      - The Cracking
+      - The Still
+      - The Sunken
+      POISuffixes:
+      - Shelf
+      - Floe
+      - Ridge
+      - Lead
+      - Pack
+      - Front
+      Adjectives:
+      - Frozen
+      - Groaning
+      - Endless
+      - Pale
+      - Cracking
+      - Still
+      Description: A sea frozen flat to the horizon, its ridges groaning as the shelf
+        shifts.
+  LooseGround: {fileID: 0}
+  Emits: {fileID: 0}
+  EmissionRate: 0
+  mainTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: fc082ef1154ea0e68f8ae5413672d4f6,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules:
+    - stableGuid: 0d4033c61fcf4a47ae1c8073f4ad31f7
+      enableSpawning: 1
+      ruleName: Ice boulders
+      prefabs:
+      - {fileID: 8983910596027029550, guid: 85bef3906322dbb42138f6c74eb0e7d1, type: 3}
+      - {fileID: 4612059859564407113, guid: 6c803dc8b898d5439a8df8056c82f65a, type: 3}
+      - {fileID: 5650050524073198592, guid: 675ec38d89a87d7b034e514d1256377f, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.03
+      maxPerChunk: 5000
+      minSpacing: 3.5
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 50
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.6, y: 1.6}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 33497
+      clusterMetres: 8
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.6
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      specFingerprint: 39e6309e52a6d759
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: 04a5e6275b1c4c55aa7ee0afdb6300b9
+      enableSpawning: 1
+      ruleName: Seracs
+      prefabs:
+      - {fileID: 7618679922985676339, guid: e31f230b46531f4aba25ac2ef9409b4d, type: 3}
+      - {fileID: 7407860085233026412, guid: a817e40653b59f6714a417263abd0ab5, type: 3}
+      - {fileID: 8779928909376059236, guid: c7b0b6e1a0a6bf41accefaba54e97524, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.005
+      maxPerChunk: 500
+      minSpacing: 20
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.7, y: 1.15}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 59710
+      clusterMetres: 30
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.3
+      clusterScaleBias: 0.6
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0.4
+      specFingerprint: ad58b947a3a675c2
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+  detailTextureLayers:
+  - terrainLayer: {fileID: 8574412962073106934, guid: 8707952cea16a0d8eeaad09b7fe18293,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  - terrainLayer: {fileID: 8574412962073106934, guid: afdee67e2d4c80cf77b9981f0b67f9ae,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 96
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  roadTextureLayer:
+    terrainLayer: {fileID: 0}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  smallPathTextureLayer:
+    terrainLayer: {fileID: 0}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  cliffTextureLayers:
+  - terrainLayer: {fileID: 8574412962073106934, guid: fc082ef1154ea0e68f8ae5413672d4f6,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 1
+    slopeRange:
+      min: 38
+      max: 90
+    slopeFalloff: 10
+    prefabSpawnRules: []
+    minCliffAngle: 38
+    maxCliffAngle: 90
+    cliffSlopeFalloff: 10
+    useCliffHeightConstraint: 0
+    cliffHeightRange:
+      min: 0.2
+      max: 1
+  riverbedTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: fc082ef1154ea0e68f8ae5413672d4f6,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  lakebedTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: fc082ef1154ea0e68f8ae5413672d4f6,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []

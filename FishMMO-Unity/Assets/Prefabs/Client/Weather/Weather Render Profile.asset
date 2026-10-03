@@ -52,7 +52,7 @@ MonoBehaviour:
     FogColor: {r: 0.6, g: 0.64, b: 0.7, a: 1}
   Ash:
     AtlasRow: 3
-    Size: {x: 0.08, y: 0.14}
+    Size: {x: 0.003, y: 0.01}
     Stretch: 1
     FallSpeed: {x: 0.4, y: 0.8}
     Sway: 0.5
@@ -63,7 +63,7 @@ MonoBehaviour:
     FogColor: {r: 0.42, g: 0.4, b: 0.38, a: 1}
   Sand:
     AtlasRow: 4
-    Size: {x: 0.1, y: 0.18}
+    Size: {x: 0.012, y: 0.03}
     Stretch: 3
     FallSpeed: {x: 0.5, y: 1}
     Sway: 0.2
@@ -80,6 +80,7 @@ MonoBehaviour:
   VortexMaterial: {fileID: 2100000, guid: 6a6c2906ba8343899d8bf8e92244d6c1, type: 2}
   VortexDebrisMaterial: {fileID: 2100000, guid: 623fe745f8934c9188d434afd11249ac,
     type: 2}
+  PlumeMaterial: {fileID: 2100000, guid: 4a09c2dcd4df4128917c0b15564b7211, type: 2}
   CloudCookieMaterial: {fileID: 2100000, guid: bb1254a0f5ecb3b239b87631320dba90, type: 2}
   CloudShape: {fileID: 11700000, guid: 587eb95df510f9b08a4dd41eb07e4110, type: 2}
   CloudDetail: {fileID: 11700000, guid: 4b7ed807917a1943983786db26612d55, type: 2}
@@ -97,7 +98,7 @@ MonoBehaviour:
       BlurPixels: 0.55
       RayJitter: 1
       StepScale: 1
-      DistanceStepGrowth: 1
+      DistanceStepGrowth: 0
       MaxStepOpticalDepth: 1
       MaxInCloudGrowth: 2
       EarlyExit: 0.05
@@ -108,7 +109,7 @@ MonoBehaviour:
       EdgeShellScale: 2
       DetailStepFootprint: 1.25
       BaseDetail: 0
-      BaseSmoothHeight: 0.3
+      BaseSmoothHeight: 1
       MultipleScattering: 0.5
       DropletSpike: 1
       SkyAmbient: 1
@@ -189,3 +190,109 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 129
   Audio: {fileID: 11400000, guid: 53fa60808c930f3baaf43eed7423bc2a, type: 2}
+  TerrainInstancingCompute: {fileID: 7200000, guid: 803d643f92cf7e0b3b8408315368d371,
+    type: 3}
+  VegetationIndirectShader: {fileID: 4800000, guid: cd73c4ae024445f4ae5906f81f9924cb,
+    type: 3}
+  WeatherLitIndirectShader: {fileID: 4800000, guid: 4b173f2533cf4a9bb0ef6cb07f841651,
+    type: 3}
+  IndirectShaderVariants: {fileID: 20000000, guid: c70d2379ad1c35a697cf43231aa510e2,
+    type: 2}
+  GroundRootBlend: 1
+  GroundPlantBlend: 0.9
+  GroundBlendHeight: 0.8
+  GroundBladeDetail: 0.25
+  GroundCrownStart: 1.5
+  GroundCrownEnd: 3
+  DistanceBlendStart: 80
+  DistanceBlendEnd: 600
+  DistanceNormalFlatten: 0.6
+  DistanceGroundPull: 0.35
+  GrassBladesCompute: {fileID: 7200000, guid: 8bd7189a93a941d9b60c4f759d719be6, type: 3}
+  GrassBladesShader: {fileID: 4800000, guid: 713c81c490c74311b936e0315f3029c4, type: 3}
+  Grass:
+    Enabled: 1
+    PrototypePrefixes:
+    - Detail_Grass
+    Types:
+    - Prefix: Detail_Grass
+      Density: 1
+      Stiffness: 1
+      Width: 1
+      ClumpPull: 0.12
+      Bend: 0.4
+      HeightScale: 1
+    - Prefix: Detail_GrassLush
+      Density: 1
+      Stiffness: 0.9
+      Width: 1
+      ClumpPull: 0.1
+      Bend: 0.45
+      HeightScale: 1
+    - Prefix: Detail_GrassDry
+      Density: 0.8
+      Stiffness: 1.3
+      Width: 0.85
+      ClumpPull: 0.15
+      Bend: 0.25
+      HeightScale: 1
+    - Prefix: Detail_GrassTall
+      Density: 0.75
+      Stiffness: 0.7
+      Width: 1.15
+      ClumpPull: 0.12
+      Bend: 0.55
+      HeightScale: 1
+    - Prefix: Detail_GrassTuft
+      Density: 0.85
+      Stiffness: 1.6
+      Width: 0.9
+      ClumpPull: 0.3
+      Bend: 0.3
+      HeightScale: 1
+    Rings:
+    - {x: 8, y: 1600}
+    - {x: 20, y: 480}
+    - {x: 50, y: 110}
+    - {x: 120, y: 22}
+    - {x: 300, y: 4.5}
+    Fullness: 0.35
+    WidenExponent: 0.5
+    MaxWiden: 6
+    Lod0Distance: 12
+    Lod1Distance: 45
+    ShadowDistance: 18.14
+    BladeCap: 2500000
+    DistanceFadeBand: 0.12
+    BladeWidth: 0.012
+    ClumpMetres: 0.7
+    ClumpFacing: 0.45
+    ClumpHeightVariation: 0.3
+    MaxLean: 0.5
+    NormalRounding: 38
+    RootOcclusion: 0.35
+    Translucency: 0.6
+    Smoothness: 0.3
+    Specular: 0.6
+    RootGroundBlend: 0.85
+    RootGroundHeight: 0.3
+    GroundHueTint: 0.25
+    TerrainTextureTint: 0.85
+    TerrainTextureBrightness: 0.85
+    TerrainTextureRoot: 0.9
+    TerrainTextureFootprint: 0.25
+    WindStrength: 1.6
+    GustWaveMetres: 14
+    Flutter: 0.04
+    IdleBreeze: 0.06
+    MaxWindBendDegrees: 75
+    GustSharpness: 3
+    GustSpeed: 1
+    GustSheen: 0.45
+    WindCalmStart: 15
+    WindCalmEnd: 80
+    FarWind: 0.2
+    FarBlendStart: 30
+    FarBlendEnd: 0.75
+    FarGroundPull: 0.8
+    FarNormalFlatten: 0.9

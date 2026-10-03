@@ -26,6 +26,7 @@ MonoBehaviour:
   SelectionWeight: 0
   Atmosphere: 12
   RequiresLiquidWater: 1
+  Requires: 0
   ClimateVariants: []
   Naming:
     Phonology:
@@ -166,6 +167,8 @@ MonoBehaviour:
   Emits: {fileID: 0}
   EmissionRate: 0
   mainTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: 3101de0762abbbbde0a0d2d15866b249,
+      type: 2}
     albedoTexture: {fileID: 2800000, guid: 4201eec06e10cfa499e99f76d465f474, type: 3}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -187,9 +190,196 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
-    prefabSpawnRules: []
-  detailTextureLayers: []
+    prefabSpawnRules:
+    - stableGuid: af73b3b04f2e4e6da94e699870e3c134
+      enableSpawning: 1
+      ruleName: 'Trees: Oak'
+      prefabs:
+      - {fileID: 6230501179755798689, guid: 4ccf17bb127a8e1cfc899527e99cf2ee, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.02
+      maxPerChunk: 20000
+      minSpacing: 10
+      minTextureWeight: 0.5
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.15}
+      heightScaleRange: {x: 0.8, y: 1.3}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 32078
+      clusterMetres: 15
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.4
+      sinkRange: {x: 0.05, y: 0.15}
+      sinkSlopeFactor: 0.3
+      specFingerprint: 3f55ba92347b06bd
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+  detailTextureLayers:
+  - terrainLayer: {fileID: 8574412962073106934, guid: 41f6eb1d8712e8d73accf8b30ec56aca,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 32
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules:
+    - stableGuid: b8b557d53cc54b569969c5631af88d83
+      enableSpawning: 1
+      ruleName: GrassLush
+      prefabs:
+      - {fileID: 8643539247241336480, guid: 4cea75a0c18e66e3847d7c62470d5b5e, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 1
+      carpetCoverage: 0.8660254
+      carpetClumpMetres: 18
+      carpetClumpFloor: 0.45310888
+      carpetWeightRamp: 0.3
+      densityPer100m2: 30
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.25
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 29839
+      clusterMetres: 0
+      clusterSize: 0
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      sinkRange: {x: 0.02, y: 0.05}
+      sinkSlopeFactor: 0
+      specFingerprint: 5eeb36caf34a440d
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+  - terrainLayer: {fileID: 8574412962073106934, guid: 9b15394da2e5e39f99a90bfccc952e14,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules:
+    - stableGuid: 184773de553d4c43a60a9f22bcc4d0f2
+      enableSpawning: 1
+      ruleName: GrassDry
+      prefabs:
+      - {fileID: 5976203677322230215, guid: 6aa7a4ed80a054757ee10d708c8c4a78, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 1
+      carpetCoverage: 0.70710677
+      carpetClumpMetres: 18
+      carpetClumpFloor: 0.39748737
+      carpetWeightRamp: 0.3
+      densityPer100m2: 20
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.25
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 28241
+      clusterMetres: 0
+      clusterSize: 0
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      sinkRange: {x: 0.02, y: 0.05}
+      sinkSlopeFactor: 0
+      specFingerprint: e32a01c222d070ad
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 1, g: 0.97, b: 0.9, a: 1}
+      detailDryColor: {r: 0.85, g: 0.78, b: 0.62, a: 1}
+      detailInstancesPerSpawn: 255
   roadTextureLayer:
+    terrainLayer: {fileID: 0}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -213,6 +403,7 @@ MonoBehaviour:
     slopeFalloff: 5
     prefabSpawnRules: []
   smallPathTextureLayer:
+    terrainLayer: {fileID: 0}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -235,8 +426,41 @@ MonoBehaviour:
       max: 90
     slopeFalloff: 5
     prefabSpawnRules: []
-  cliffTextureLayers: []
+  cliffTextureLayers:
+  - terrainLayer: {fileID: 8574412962073106934, guid: b460e0b7c7d15dda82b56be3ce4cb55f,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 1
+    slopeRange:
+      min: 42
+      max: 90
+    slopeFalloff: 10
+    prefabSpawnRules: []
+    minCliffAngle: 42
+    maxCliffAngle: 90
+    cliffSlopeFalloff: 10
+    useCliffHeightConstraint: 0
+    cliffHeightRange:
+      min: 0.2
+      max: 1
   riverbedTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: 681250d76f3d5f0051f9560a9508f439,
+      type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -260,6 +484,8 @@ MonoBehaviour:
     slopeFalloff: 5
     prefabSpawnRules: []
   lakebedTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: 5806dadc18f33441edaabda730fc11bd,
+      type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}

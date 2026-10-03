@@ -68,7 +68,7 @@ namespace FishMMO.Shared.WorldDesign
 			// biome registry the resolver reads is filled by the same pass.
 			NamingTemplateEditorLoader.EnsureLoaded();
 
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve(body);
 			PlanetClimateField field = PlanetClimateField.For(system, body);
 			BiomeTemplate biome = field.BiomeAt(latitude, longitude, out PlanetSurfacePoint point);
 

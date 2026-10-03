@@ -57,7 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 		public void Reload()
 		{
 			Atlas = WorldEditorAssets.FindFirst<WorldAtlas>();
-			System = Atlas != null && Atlas.SolarSystem != null ? Atlas.SolarSystem : WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			System = Atlas != null && Atlas.SolarSystem != null ? Atlas.SolarSystem : SolarSystemProfile.Resolve();
 			Entries.Clear();
 			Entries.AddRange(WorldEditorAssets.FindAll<WorldAtlasScene>());
 			BySceneName.Clear();

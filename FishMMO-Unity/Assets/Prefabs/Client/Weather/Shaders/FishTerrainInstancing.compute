@@ -1,0 +1,322 @@
+// GPU culling for the instanced terrain trees and details (TerrainGpuRenderer, FishMMO.Client/World/Terrain).
+//
+// Per camera, three kernels in order:
+//   FishClearCounts   zero every slot's counter
+//   FishCull          one thread per instance of the CPU's visible-chunk work items: draw-distance cull,
+//                     distance thinning (grass: a hashed share of the instances, by world position so
+//                     the same plants stay, falling with distance and dither-faded at its edge),
+//                     LOD pick with the cross-fade band (the same rule as TerrainTreeMath.SelectLodFaded),
+//                     camera-frustum test (main view) and sun-swept frustum test within the shadow distance
+//                     (shadow view); appends {index, lodFade} into the slot (model, level, view)
+//   FishFinalize      writes each indirect command's instanceCount = min(count, capacity)
+//
+// And, before them when instances changed, FishCopyInstances: copies a freshly created upload buffer into
+// _FishInstances on the GPU. The CPU never writes the instance buffer itself while it is in use: on
+// OpenGL (NVIDIA) a SetBufferData into the multi-MB buffer the previous frames' culling still reads
+// stalled the frame 50-90 ms waiting for the GPU, every few chunk builds.
+//
+// A slot never overflows: an append past the slot's capacity is discarded (the atomic's return value is
+// checked), and the command's count is clamped to the capacity. Capacity per level and view = the
+// prototype's resident instances: an instance appears at most once per level per view, even inside a
+// fade band (where it is in two different levels).
+//
+// Portable to Vulkan, D3D11/12, Metal and WebGPU: no wave intrinsics; atomics only on a
+// RWByteAddressBuffer; no readbacks.
+
+#pragma kernel FishClearCounts
+#pragma kernel FishCull
+#pragma kernel FishFinalize
+#pragma kernel FishCopyInstances
+#pragma kernel FishArgsFence
+
+struct FishInstance { float4 row0; float4 row1; float4 row2; };            // 48 bytes
+struct FishVisible { uint index; float lodFade; };                          // 8 bytes
+struct FishModel                                                            // 80 bytes
+{
+    float4 transitions;
+    float4 fadeWidths;
+    float3 localReference;
+    float size;
+    float3 sphereCentre;
+    float sphereRadius;
+    uint levelCount;
+    uint slotBase;
+    uint shadowMask;
+    uint padding;
+};
+struct FishWork { uint start; uint count; uint model; uint padding; float drawDistance; float lodBias; float thinStart; float thinKeep; }; // 32 bytes
+
+// The share of the thinning band an instance fades across (dithered, so a plant thins out and back in
+// without popping as the camera moves).
+#define FISH_THIN_BAND 0.08
+
+StructuredBuffer<FishInstance> _FishInstances;
+StructuredBuffer<FishModel> _FishModels;
+StructuredBuffer<FishWork> _FishWork;
+StructuredBuffer<uint2> _FishSlots;          // x base in _FishVisibleOut, y capacity
+StructuredBuffer<uint> _FishArgSlots;        // the slot each indirect command draws
+RWByteAddressBuffer _FishCounts;             // one uint per slot
+RWStructuredBuffer<FishVisible> _FishVisibleOut;
+RWByteAddressBuffer _FishArgs;               // IndirectDrawIndexedArgs, 5 uints per command
+
+float4 _FishCameraPosition;                  // xyz
+float4 _FishPlanes[6];                       // xyz normal, w distance: inside when dot(n, p) + w >= 0
+float4 _FishLight;                           // xyz the sun's direction of travel, w the shadow distance (0: no shadows)
+float4 _FishLod;                             // x screen factor, y orthographic (0/1), z maximum LOD level
+uint _FishSlotCount;
+uint _FishWorkCount;
+uint _FishArgCount;
+
+float3 FishTransformPoint(FishInstance i, float3 p)
+{
+    float4 q = float4(p, 1.0);
+    return float3(dot(i.row0, q), dot(i.row1, q), dot(i.row2, q));
+}
+
+bool FishSphereVisible(float3 c, float r)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        inside = inside && dot(_FishPlanes[k].xyz, c) + _FishPlanes[k].w >= -r;
+    }
+    return inside;
+}
+
+// The sphere swept along the light by length l: outside a plane only when both ends are.
+bool FishSweptSphereVisible(float3 c, float r, float3 d, float l)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        float d0 = dot(_FishPlanes[k].xyz, c) + _FishPlanes[k].w;
+        float d1 = d0 + dot(_FishPlanes[k].xyz, d) * l;
+        inside = inside && max(d0, d1) >= -r;
+    }
+    return inside;
+}
+
+int FishSelectLod(float rh, FishModel m, int maxLod)
+{
+    int count = (int)m.levelCount;
+    int found = -1;
+    [unroll] for (int i = 0; i < 4; i++)
+    {
+        if (found < 0 && i < count && rh >= m.transitions[i])
+        {
+            found = i;
+        }
+    }
+    return found < 0 ? -1 : min(max(found, maxLod), count - 1);
+}
+
+// TerrainTreeMath.SelectLodFaded: the primary level (−1 culled) with its fade, and the partner (−1 none).
+int FishSelectLodFaded(float rh, FishModel m, int maxLod, out float fade, out int partner, out float partnerFade)
+{
+    fade = 0.0;
+    partner = -1;
+    partnerFade = 0.0;
+    int lod = FishSelectLod(rh, m, maxLod);
+    int result = lod;
+    if (lod >= 0)
+    {
+        float t = m.transitions[lod];
+        float w = m.fadeWidths[lod];
+        if (w > 0.0 && rh < t + w)
+        {
+            int next = lod + 1 < (int)m.levelCount ? lod + 1 : -1;
+            float f = 1.0 - (rh - t) / w;
+            if (f >= 1.0)
+            {
+                result = next;               // exactly at the transition: wholly the next level (or culled)
+            }
+            else if (f > 0.0)
+            {
+                fade = -f;
+                if (next >= 0)
+                {
+                    partner = next;
+                    partnerFade = f;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+uint FishHash(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+// How much of this instance distance thinning fades out: 0 kept whole, (0, 1) dithered, >= 1 culled.
+// The share kept is 1 to thinStart, then falls linearly to thinKeep at the draw distance; an instance is
+// kept while its hash (by world position: stable across chunk rebuilds) is under that share.
+// One return: HLSLcc (glcore) warns "potentially uninitialized" on an early return from a value function.
+float FishThinFade(FishWork w, float3 position, float d)
+{
+    float fade = 0.0;
+    if (w.thinKeep < 1.0 && d > w.thinStart)
+    {
+        float t = saturate((d - w.thinStart) / max(1e-3, w.drawDistance - w.thinStart));
+        float keep = lerp(1.0, w.thinKeep, t);
+        float h = (float)(FishHash(asuint(position.x) ^ FishHash(asuint(position.z))) & 0xFFFFFFu) / 16777216.0;
+        fade = saturate(1.0 - (keep - h) / FISH_THIN_BAND);   // 1 (culled) once h reaches keep
+    }
+    return fade;
+}
+
+void FishEmit(uint slot, uint index, float fade)
+{
+    uint at;
+    _FishCounts.InterlockedAdd(slot * 4, 1, at);
+    uint2 s = _FishSlots[slot];
+    if (at < s.y)
+    {
+        FishVisible v;
+        v.index = index;
+        v.lodFade = fade;
+        _FishVisibleOut[s.x + at] = v;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishClearCounts(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _FishSlotCount)
+    {
+        _FishCounts.Store(id.x * 4, 0);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint item = group.x + group.y * 65535;
+    if (item >= _FishWorkCount)
+    {
+        return;
+    }
+    FishWork work = _FishWork[item];
+    if (thread.x >= work.count)
+    {
+        return;
+    }
+    uint index = work.start + thread.x;
+    FishInstance inst = _FishInstances[index];
+    FishModel m = _FishModels[work.model];
+
+    float3 position = float3(inst.row0.w, inst.row1.w, inst.row2.w);
+    float3 eye = _FishCameraPosition.xyz;
+    float3 toEye = position - eye;
+    if (dot(toEye, toEye) > work.drawDistance * work.drawDistance)
+    {
+        return;
+    }
+    float thin = FishThinFade(work, position, sqrt(dot(toEye, toEye)));
+    if (thin >= 1.0)
+    {
+        return;
+    }
+
+    float sx = length(float3(inst.row0.x, inst.row1.x, inst.row2.x));
+    float sy = length(float3(inst.row0.y, inst.row1.y, inst.row2.y));
+    float sz = length(float3(inst.row0.z, inst.row1.z, inst.row2.z));
+    float factor = _FishLod.x * work.lodBias;
+    float worldSize = m.size * max(sx, sy);
+    float rh = _FishLod.y > 0.5
+        ? worldSize * factor
+        : worldSize * factor / max(1e-4, distance(FishTransformPoint(inst, m.localReference), eye));
+
+    float fade, partnerFade;
+    int partner;
+    int lod = FishSelectLodFaded(rh, m, (int)_FishLod.z, fade, partner, partnerFade);
+    if (lod < 0)
+    {
+        return;
+    }
+    if (thin > 0.0 && partner < 0)
+    {
+        fade = -max(-fade, thin);   // a single fading-out level (grass): the stronger of the two fades
+    }
+
+    float3 centre = FishTransformPoint(inst, m.sphereCentre);
+    float radius = m.sphereRadius * max(sx, max(sy, sz));
+    if (FishSphereVisible(centre, radius))
+    {
+        FishEmit(m.slotBase + (uint)lod * 2, index, fade);
+        if (partner >= 0)
+        {
+            FishEmit(m.slotBase + (uint)partner * 2, index, partnerFade);
+        }
+    }
+
+    float shadowDistance = _FishLight.w;
+    uint casts = m.shadowMask & ((1u << (uint)lod) | (partner >= 0 ? (1u << (uint)partner) : 0u));
+    if (shadowDistance > 0.0 && casts != 0 && distance(centre, eye) <= shadowDistance + radius)
+    {
+        float3 d = _FishLight.xyz;
+        float down = max(-d.y, 0.1);
+        float l = min(shadowDistance, 2.0 * radius / down);
+        if (FishSweptSphereVisible(centre, radius, d, l))
+        {
+            if ((m.shadowMask & (1u << (uint)lod)) != 0)
+            {
+                FishEmit(m.slotBase + (uint)lod * 2 + 1, index, fade);
+            }
+            if (partner >= 0 && (m.shadowMask & (1u << (uint)partner)) != 0)
+            {
+                FishEmit(m.slotBase + (uint)partner * 2 + 1, index, partnerFade);
+            }
+        }
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishFinalize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _FishArgCount)
+    {
+        return;
+    }
+    uint slot = _FishArgSlots[id.x];
+    uint count = _FishCounts.Load(slot * 4);
+    _FishArgs.Store((id.x * 5 + 1) * 4, min(count, _FishSlots[slot].y));
+}
+
+StructuredBuffer<FishInstance> _FishUpload;
+RWStructuredBuffer<FishInstance> _FishInstancesOut;
+uint _FishUploadSource;
+uint _FishUploadDestination;
+uint _FishUploadCount;
+
+[numthreads(64, 1, 1)]
+void FishCopyInstances(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _FishUploadCount)
+    {
+        _FishInstancesOut[_FishUploadDestination + id.x] = _FishUpload[_FishUploadSource + id.x];
+    }
+}
+
+/* OpenGL: makes Unity issue GL_COMMAND_BARRIER_BIT before the indirect draws (the same fix as FishGrassBlades.compute
+ * FishGrassArgsFence). Unity's GLES device marks a barrier pending only when a buffer is BOUND after a write
+ * (GfxDeviceGLES::SetComputeBuffer); DrawBuffersIndirect never checks the args buffer's own write stamp. So
+ * FishFinalize's args got their command barrier only every other frame, and the draws read them mid-write: the cliff
+ * rocks flickered on OpenGL only. Binding the args here right after FishFinalize makes the barrier pending. */
+ByteAddressBuffer _FishArgsFence;
+
+[numthreads(1, 1, 1)]
+void FishArgsFence(uint3 id : SV_DispatchThreadID)
+{
+    // Never true (instance counts are capped): only the bindings matter.
+    if (_FishArgsFence.Load(4) == 0xFFFFFFFFu)
+    {
+        _FishCounts.Store(0, 0u);
+    }
+}

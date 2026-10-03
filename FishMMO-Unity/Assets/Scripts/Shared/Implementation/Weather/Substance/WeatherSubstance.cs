@@ -86,6 +86,9 @@ namespace FishMMO.Shared.Weather
 		[Tooltip("Grain density, kg/m³: quartz sand is 2650, ice 920.")]
 		[Min(1f)] public float GrainDensity = 2500f;
 
+		[Tooltip("Thrown up by vents: when a biome emits it, it rises in a plume over the vent and falls out of that plume, downwind (VolcanicPlume), rather than out of the air everywhere over the biome. On for volcanic ash and cryovolcanic tephra; off for what wind lifts off the ground or a haze that settles everywhere — sulphur dust off a sulphur flat, tholin. Sulphur flats are deposits, not vents: marking their dust vented put eruption columns over every one.")]
+		public bool Vented;
+
 		[Header("Sound")]
 		[Tooltip("Audio cue name for this substance falling. Empty uses the kind's own cue.")]
 		public string AudioCue;

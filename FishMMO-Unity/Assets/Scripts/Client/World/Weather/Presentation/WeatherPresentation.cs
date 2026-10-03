@@ -69,6 +69,8 @@ namespace FishMMO.Client
 			var go = new GameObject("Weather Presentation");
 			DontDestroyOnLoad(go);
 			WeatherPresentation presentation = go.AddComponent<WeatherPresentation>();
+			// The volcanic plumes the ash falls from, and the fountains over an airless world's vents.
+			go.AddComponent<VolcanicPlumePresenter>();
 			SkySystem.Ensure(go);
 			return presentation;
 		}
@@ -290,8 +292,10 @@ namespace FishMMO.Client
 				: 0f;
 			precipitation.Render(shown, camera, currentTier, Profile, time, falling, Underfoot(), hailStone);
 			// Where it lands. Needs the height map, so it draws nothing until that has been built.
+			// The rain's own substance only: a volcano's ash winning the frame's one substance used to
+			// stop the rain beside it splashing at all.
 			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid,
-				hasContext ? this.context.Temperature : 0f, falling);
+				hasContext ? this.context.Temperature : 0f, PrecipitationField.SubstanceOf(WeatherChannel.RainWeight, falling));
 		}
 
 		/// <summary>

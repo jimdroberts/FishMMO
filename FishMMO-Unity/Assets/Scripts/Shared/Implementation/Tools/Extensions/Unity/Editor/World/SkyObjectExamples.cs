@@ -28,7 +28,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The Solar System page's "Add example sky objects" button.</summary>
 		public static void AddFromDashboard()
 		{
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve();
 			if (system == null)
 			{
 				Debug.LogWarning("[Sky objects] No solar system yet. Press New on the Solar System page first.");

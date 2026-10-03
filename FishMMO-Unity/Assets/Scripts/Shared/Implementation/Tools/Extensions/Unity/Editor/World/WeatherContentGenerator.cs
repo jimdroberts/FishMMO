@@ -228,6 +228,18 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (WeatherSubstance existing in WorldEditorAssets.FindAll<WeatherSubstance>())
 			{
 				result[existing.name] = existing;
+				/* Registered here too, not only when created: every substance made before creation
+				 * registered had no Addressables entry, so a running game never cached one and
+				 * WeatherPhysics.PrecipitateOf found no condensate on any world. Only the missing ones,
+				 * so the group file does not churn on every run. Guarded by
+				 * WeatherSubstanceAddressablesTests. */
+				string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(existing));
+				var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+				if (settings != null && !string.IsNullOrEmpty(guid) && settings.FindAssetEntry(guid) == null)
+				{
+					WorldEditorAssets.RegisterAddressable(existing);
+					report.Substances++;
+				}
 			}
 			foreach (SubstanceSpec spec in Substances)
 			{

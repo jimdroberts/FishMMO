@@ -18,7 +18,7 @@ scale the dispersion is wrong and the sea moves like a bath.
 | `Scripts/WaterSurface.cs` | The component. Holds the sea level, follows the camera, publishes the waves, and turns off what the pipeline cannot support. |
 | `Shaders/FishWater.hlsl` | The wave sum, the ripple slopes and the one shared material constant buffer. |
 | `Shaders/FishWater.shader` | `FishMMO/Water/Ocean`. |
-| `Scripts/WaterShoreField.cs` | The depth and distance-to-shore field, built from the scene's terrains at load. |
+| `Scripts/WaterShoreField.cs` | The depth and distance-to-shore field, built from the scene's terrains: cached under `Library/FishMMO/ShoreField` in the editor, embedded in the scene by a player build (`Editor/WaterShoreFieldBuildEmbed.cs`), built live off the main thread otherwise. |
 | `Scripts/WaterShore.cs` | The swash up the beach, its clock (which the breakers keep time with) and the foam memory. |
 | `Scripts/WaterBreakers.cs`, `Scripts/WaterBreakLine.cs` | The breakers: the break line traced off the main thread, their sheet and their spray. |
 | `Shaders/FishWaterBreakerCommon.hlsl` | The one model of a breaker every pass that draws part of one reads. |

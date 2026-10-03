@@ -115,6 +115,48 @@ float2 FishRippleSlope(float3 worldPos, float time, float strength)
     return slope * strength * 0.35;
 }
 
+// ── Shared pieces of a weathered surface ───────────────────────────────
+
+// Damp: water darkens what it soaks into and makes it shine, without changing its shape. The ground
+// and the foliage both use this, so a wet leaf and the wet ground under it darken alike.
+void FishDampen(float wet, inout half3 albedo, inout half smoothness)
+{
+    albedo *= lerp(1.0, 0.62, wet * 0.85);
+    smoothness = lerp(smoothness, 0.75, wet * 0.6);
+}
+
+// Which cover lies deepest here and what it looks like: its depth (0..1), colour and sheen. Snow,
+// ash and sand settle the same way and differ only in colour and in how they take light; a world
+// does not have two of them at once, so the deepest one speaks for all three.
+void FishCoverLook(float4 here, out float depth, out half3 colour, out half coverSmoothness)
+{
+    float snow = saturate(here.x);
+    float ash = saturate(here.z);
+    float sand = saturate(here.w);
+    depth = max(snow, max(ash, sand));
+    colour = half3(0.92, 0.94, 0.98);      // snow
+    coverSmoothness = 0.35;
+    if (ash >= snow && ash >= sand)
+    {
+        colour = half3(0.22, 0.21, 0.20);  // ash
+        coverSmoothness = 0.12;
+    }
+    else if (sand >= snow && sand >= ash)
+    {
+        colour = half3(0.76, 0.66, 0.45);  // sand
+        coverSmoothness = 0.2;
+    }
+}
+
+// How much of the cover settles on a surface with this normal: deeper cover reaches further up a
+// slope, and its edge wanders instead of ringing the world at one height.
+float FishCoverAmount(float depth, float3 worldPos, float3 normalWS)
+{
+    float drift = FishSurfaceNoise(worldPos.xz * 0.6) * 0.25;
+    float facing = FishCoverFacing(normalWS, worldPos, lerp(0.75, 0.15, saturate(depth + drift)));
+    return saturate(facing * (depth * 1.4 - 0.1));
+}
+
 // ── The surface itself ─────────────────────────────────────────────────
 
 /// <summary>What the weather leaves on a surface, applied in place.</summary>
@@ -145,8 +187,7 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
         float puddle = saturate((wet * 1.6 - 0.45 - gather * 0.8) * 3.0) * level;
 
         // Damp ground: darker, smoother, the same shape.
-        albedo *= lerp(1.0, 0.62, wet * 0.85);
-        smoothness = lerp(smoothness, 0.75, wet * 0.6);
+        FishDampen(wet, albedo, smoothness);
 
         // A puddle is water, not wet ground: flat, mirror-smooth, and it hides what is under it.
         albedo = lerp(albedo, albedo * 0.35, puddle);
@@ -165,29 +206,13 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
     // ── Cover ──
     // Snow, ash and sand settle the same way and differ only in colour and in how they take light,
     // so one blend does all three, using whichever is deepest.
-    float snow = saturate(here.x);
-    float ash = saturate(here.z);
-    float sand = saturate(here.w);
-    float depth = max(snow, max(ash, sand));
+    float depth;
+    half3 colour;
+    half coverSmoothness;
+    FishCoverLook(here, depth, colour, coverSmoothness);
     if (depth > 0.001)
     {
-        half3 colour = half3(0.92, 0.94, 0.98);      // snow
-        half coverSmoothness = 0.35;
-        if (ash >= snow && ash >= sand)
-        {
-            colour = half3(0.22, 0.21, 0.20);        // ash
-            coverSmoothness = 0.12;
-        }
-        else if (sand >= snow && sand >= ash)
-        {
-            colour = half3(0.76, 0.66, 0.45);        // sand
-            coverSmoothness = 0.2;
-        }
-        // Deeper cover reaches further up a slope, and its edge wanders instead of ringing the
-        // world at one height.
-        float drift = FishSurfaceNoise(worldPos.xz * 0.6) * 0.25;
-        float facing = FishCoverFacing(normalWS, worldPos, lerp(0.75, 0.15, saturate(depth + drift)));
-        float amount = saturate(facing * (depth * 1.4 - 0.1));
+        float amount = FishCoverAmount(depth, worldPos, normalWS);
         if (amount > 0.001)
         {
             albedo = lerp(albedo, colour, amount);
@@ -195,6 +220,42 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
             metallic = lerp(metallic, 0.0, amount);
             // Enough of it, and the shape underneath stops showing through.
             normalWS = normalize(lerp(normalWS, float3(0, 1, 0), amount * saturate(depth * 0.8)));
+        }
+    }
+}
+
+/// <summary>
+/// What the weather leaves on foliage — leaves, grass, bark, cards — applied in place: the same
+/// cover and the same damp as the ground (FishCoverLook, FishDampen, FishCoverAmount), so a meadow
+/// and the grass standing in it whiten and darken together. No standing water and no ripples: a leaf
+/// does not hold a puddle, and a card whose normal is bent skyward for soft lighting would otherwise
+/// grow one on every blade.
+/// </summary>
+/// `cover` returns how much cover settled, so the caller can thin or bury what lies under it.
+void FishWeatherFoliage(float3 worldPos, inout half3 albedo, inout half3 normalWS, inout half smoothness, out float cover)
+{
+    cover = 0.0;
+    float exposure = FishSurfaceExposure(worldPos);
+    float4 here = FishCoverAt(worldPos);
+
+    // Leaves shed water faster than ground soaks it: damp, at most two thirds as dark.
+    float wet = saturate(here.y) * exposure * 0.65;
+    if (wet > 0.001)
+    {
+        FishDampen(wet, albedo, smoothness);
+    }
+
+    float depth;
+    half3 colour;
+    half coverSmoothness;
+    FishCoverLook(here, depth, colour, coverSmoothness);
+    if (depth > 0.001)
+    {
+        cover = FishCoverAmount(depth, worldPos, normalWS);
+        if (cover > 0.001)
+        {
+            albedo = lerp(albedo, colour, cover);
+            smoothness = lerp(smoothness, coverSmoothness, cover);
         }
     }
 }

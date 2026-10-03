@@ -5,16 +5,80 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>Which Unity terrain channel a spawn rule writes to.</summary>
+	/// <remarks>
+	/// Collision follows the channel and the prefab, never a flag: detail layers have no colliders
+	/// at all, which is what makes them cheap enough to scatter by the hundred thousand, and a tree
+	/// instance collides exactly when its prefab carries a collider. A large prop that should be
+	/// seen from far off but walked through is a tree-channel rule whose prefab has none.
+	/// </remarks>
 	public enum PrefabSpawnChannel
 	{
+		/// <summary>Grass, flowers, pebbles, twigs: instanced meshes, no colliders, drawn to the detail distance.</summary>
 		DetailLayer = 0,
+		/// <summary>Trees, boulders, large props: LOD'd, billboarded, colliding when the prefab has a collider.</summary>
 		TreeInstance = 1,
+	}
+
+	/// <summary>How a detail-layer rule fills its ground.</summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Scattered</b> is point sampling: each detail cell either gets the rule or not, by a draw
+	/// against <see cref="PrefabSpawnRule.densityPer100m2"/>. Right for things that are counted —
+	/// flowers, stones, twigs, a fern here and there — and wrong for ground cover: at the 8–30 per
+	/// 100 m² a lawn would need to stay affordable, five to twenty cells in a hundred get a tuft and
+	/// the rest are bare, which reads as speckle, and the hard <see cref="PrefabSpawnRule.minTextureWeight"/>
+	/// cut leaves a bald line wherever two textures blend.
+	/// </para>
+	/// <para>
+	/// <b>Carpet</b> is continuous coverage: every cell of the rule's ground gets a share of the cell,
+	/// rising smoothly with the texture's weight and swelling and thinning in world-space swathes, so
+	/// grass is a turf with thicker and thinner patches rather than a scatter of tufts. Unity's
+	/// coverage mode then draws as many instances in a cell as that share times the prototype's
+	/// density (and the quality preset's density scale), so how much it costs to draw is a draw
+	/// setting, not a property of the bake.
+	/// </para>
+	/// </remarks>
+	public enum DetailPlacement
+	{
+		/// <summary>Point sampling by density: flowers, debris, stones.</summary>
+		Scattered = 0,
+		/// <summary>Continuous coverage: grass, moss, low ground cover.</summary>
+		Carpet = 1,
 	}
 
 	/// <summary>
 	/// Where and how densely a set of prefabs is scattered wherever its texture layer dominates.
 	/// Field names match the WorldEditor asset layout so exported biome templates load unchanged.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Carpet coverage is its own field.</b> <see cref="carpetCoverage"/> is a 0–1 share of a
+	/// detail cell rather than a reuse of <see cref="detailInstancesPerSpawn"/>: that field is a byte
+	/// floored at 64 (a quarter cell) because it is what one accepted Scattered sample writes, and a
+	/// sparse carpet — desert tufts — needs to go well below a quarter. Each field means one thing.
+	/// </para>
+	/// <para>
+	/// <b>Ground sink.</b> <see cref="sinkRange"/> and <see cref="sinkSlopeFactor"/> push an instance
+	/// into the ground so it reads as bedded rather than set down: a boulder resting on its lowest
+	/// point floats everywhere else, and on a slope its downhill edge stands proud by the footprint
+	/// radius times the slope's tangent. Tree instances are lowered by the scatter itself; a detail
+	/// layer has no per-instance height in Unity, so for details the values are data the vegetation
+	/// material reads (the generator writes them there), never applied by the scatter.
+	/// </para>
+	/// <para>
+	/// <b>Groups.</b> Nothing in nature is scattered evenly: flowers come in patches, stones in
+	/// piles, trees in groves. With <see cref="clusterMetres"/> set, a point-sampled rule's chance is
+	/// multiplied by a world-space group field whose average is 1 — so the rule's density is still
+	/// what it says, only gathered — and a tree's size leans larger toward a group's heart. A carpet
+	/// ignores it; its swathes are <see cref="carpetClumpMetres"/>.
+	/// </para>
+	/// <para>
+	/// <b>The spec fingerprint.</b> A rule the Biome Art authoring tool created carries a hidden hash
+	/// of the values it wrote. While the rule still hashes to it, nobody has tuned it, and a later run
+	/// may bring it up to date with the spec; once anything differs it is somebody's work and the tool
+	/// never touches it again. A rule made by hand has no fingerprint at all.
+	/// </para>
+	/// </remarks>
 	[Serializable]
 	public class PrefabSpawnRule
 	{
@@ -29,21 +93,35 @@ namespace FishMMO.Shared.Biomes
 		public GameObject[] prefabs = new GameObject[0];
 
 		[Header("Spawn Channel")]
-		[Tooltip("Choose whether this rule writes to Unity detail layers or tree instances.")]
+		[Tooltip("Detail layers: instanced, no colliders, faded out at the detail distance. Tree instances: LOD'd and billboarded, and they collide when the prefab has a collider.")]
 		public PrefabSpawnChannel spawnChannel = PrefabSpawnChannel.DetailLayer;
+		[Tooltip("Detail layers only. VertexLit draws the mesh as it is; Grass bends it in the terrain's wind.")]
+		public DetailRenderMode detailRenderMode = DetailRenderMode.VertexLit;
+
+		[Header("Detail Placement")]
+		[Tooltip("Detail layers only. Scattered: each detail cell gets the rule or not by a density draw — flowers, stones, debris. Carpet: every cell of the rule's ground gets a continuous share of coverage that rises with the texture's weight and swells and thins in swathes — grass, moss, low cover. Tree instances are always scattered.")]
+		public DetailPlacement detailPlacement = DetailPlacement.Scattered;
+		[Tooltip("Carpet only. Share of a detail cell covered where everything favours the rule (its ground at full weight, its biome alone, the thickest part of a swathe). 1 = the whole cell. Unity draws coverage × the prototype's density, thinned by the quality preset's density scale.")]
+		[Range(0f, 1f)] public float carpetCoverage = 0.85f;
+		[Tooltip("Carpet only. Size in metres of the thicker and thinner swathes the coverage swells and thins in. Larger is broader, calmer patches; smaller is busier.")]
+		[Range(2f, 200f)] public float carpetClumpMetres = 16f;
+		[Tooltip("Carpet only. Coverage at the thinnest part of a swathe, as a share of the thickest. 1 = no swathes at all (even turf); 0.5 = thinning to half; 0 = bare between clumps.")]
+		[Range(0f, 1f)] public float carpetClumpFloor = 0.45f;
+		[Tooltip("Carpet only. Width of the soft edge around Min Texture Weight: coverage rises smoothly from none at minTextureWeight − width/2 (never below weight 0) to full at minTextureWeight + width/2, so grass thins across a texture blend instead of stopping at a line.")]
+		[Range(0.01f, 1f)] public float carpetWeightRamp = 0.25f;
 
 		[Header("Density & Limits")]
-		[Tooltip("Expected prefab count per 100 square meters of dominant texture.")]
+		[Tooltip("Scattered only. Expected prefab count per 100 square meters of dominant texture.")]
 		[Range(0f, 50f)] public float densityPer100m2 = 0.5f;
-		[Tooltip("Absolute safety cap per terrain chunk. 0 = unlimited (not recommended).")]
+		[Tooltip("Scattered only (a carpet is not counted per instance). Cap per terrain tile, on top of the tile's own budget. 0 = no cap of the rule's own — right for grass, which at one-metre detail cells covers far more than 10,000 cells of a tile; keep a cap for trees.")]
 		[Min(0)] public int maxPerChunk = 10000;
-		[Tooltip("Minimum spacing in meters between spawned prefabs.")]
+		[Tooltip("Scattered only. Minimum spacing in meters between spawned prefabs.")]
 		[Range(0f, 50f)] public float minSpacing = 2f;
 
 		[Header("Texture Weight")]
-		[Tooltip("Require the target texture weight to exceed this threshold in the alphamap to consider spawning.")]
+		[Tooltip("Scattered: the target texture's alphamap weight must reach this for a cell to be considered. Carpet: the middle of the soft edge (see Carpet Weight Ramp).")]
 		[Range(0f, 1f)] public float minTextureWeight = 0.45f;
-		[Tooltip("Optional multiplier applied to the computed spawn probability.")]
+		[Tooltip("Optional multiplier applied to the computed spawn probability (Scattered) or coverage (Carpet, capped at a full cell).")]
 		[Range(0.1f, 5f)] public float spawnProbabilityMultiplier = 1f;
 
 		[Header("Height Constraint")]
@@ -70,6 +148,27 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Seed offset applied on top of the global prefab seed to keep results deterministic per rule.")]
 		public int seedOffset = 0;
 
+		[Header("Grouping")]
+		[Tooltip("Scattered rules and trees only. Radius in metres of the groups instances gather in — a patch of flowers, a rock pile, a grove. 0 = no groups: an even scatter. The rule's density is the average over the ground, so groups move instances together rather than adding any.")]
+		[Range(0f, 60f)] public float clusterMetres = 0f;
+		[Tooltip("How many instances (detail cells, for a detail rule) an average group holds. Sets how far apart group centres stand from the rule's density, so a sparse rule still gathers into real groups rather than groups of one, and widens the group to fit that many at the rule's spacing. 0 = use Cluster Spacing instead.")]
+		[Range(0f, 100f)] public float clusterSize = 0f;
+		[Tooltip("Only when Cluster Size is 0. Distance between group centres, as a multiple of the group radius. Larger is fewer, denser groups with more bare ground between them.")]
+		[Range(2f, 10f)] public float clusterSpacing = 4f;
+		[Tooltip("Share of the density scattered evenly between groups, so a few strays stand apart. 1 = no groups at all.")]
+		[Range(0f, 1f)] public float clusterBackground = 0.2f;
+		[Tooltip("Trees only (Unity sizes details itself). How much larger instances stand toward a group's heart and smaller at its fringe, as a share of the scale range.")]
+		[Range(0f, 1f)] public float clusterScaleBias = 0.5f;
+
+		[Header("Ground Sink")]
+		[Tooltip("Metres each instance is pushed into the ground, drawn per instance between min and max, so it reads as bedded rather than set down. Trees: applied by the scatter. Details: carried to the vegetation material, which applies it (Unity has no per-instance detail height).")]
+		public Vector2 sinkRange = Vector2.zero;
+		[Tooltip("Extra sink on a slope, as a share of footprint radius × tan(slope): at 1 the downhill edge of the footprint meets the ground. The radius is the prefab's horizontal bounds times the instance's width scale. Slopes past 60° count as 60°.")]
+		[Range(0f, 1f)] public float sinkSlopeFactor = 0f;
+
+		[SerializeField, HideInInspector]
+		private string specFingerprint = string.Empty;
+
 		[Header("Detail Rendering")]
 		[Tooltip("Controls how widely detail prototypes spread noise across the terrain patch.")]
 		[Range(0.05f, 5f)] public float detailNoiseSpread = 0.5f;
@@ -77,10 +176,26 @@ namespace FishMMO.Shared.Biomes
 		public Color detailHealthyColor = new Color(0.9f, 0.95f, 0.9f, 1f);
 		[Tooltip("Tint applied when the detail patch is considered dry.")]
 		public Color detailDryColor = new Color(0.75f, 0.7f, 0.55f, 1f);
-		[Tooltip("How many instances are written into the detail map for every accepted spawn sample.")]
+		[Tooltip("Scattered only. How much of a detail cell an accepted sample covers, out of 255 (a full cell). Terrain detail density and quality settings thin it from there without a re-bake.")]
 		[Range(64, 255)] public int detailInstancesPerSpawn = 64;
 
 		public string StableGuid => stableGuid;
+
+		/// <summary>
+		/// The authoring tool's hash of the values it last wrote; empty for a rule made by hand.
+		/// See the class remarks.
+		/// </summary>
+		public string SpecFingerprint
+		{
+			get => specFingerprint ?? string.Empty;
+			set => specFingerprint = value ?? string.Empty;
+		}
+
+		/// <summary>True when the rule fills a detail layer as a continuous carpet; tree rules never do.</summary>
+		public bool IsCarpet => spawnChannel == PrefabSpawnChannel.DetailLayer && detailPlacement == DetailPlacement.Carpet;
+
+		/// <summary>True when a point-sampled rule gathers into groups (<see cref="clusterMetres"/>); a carpet has its own swathes instead.</summary>
+		public bool IsClustered => !IsCarpet && clusterMetres > 0f && clusterBackground < 1f;
 
 		public bool HasValidPrefabs()
 		{

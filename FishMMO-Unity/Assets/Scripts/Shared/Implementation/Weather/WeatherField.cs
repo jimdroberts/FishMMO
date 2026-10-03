@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using UnityEngine;
@@ -98,6 +99,8 @@ namespace FishMMO.Shared.Weather
 			};
 		}
 
+		[System.ThreadStatic] private static List<VolcanicPlume.Plume> plumeScratch;
+
 		public static WeatherSample Sample(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, uint tick)
 		{
 			var sample = new WeatherSample { Frame = WeatherFrame.Clear, Background = WeatherFrame.Clear };
@@ -165,10 +168,18 @@ namespace FishMMO.Shared.Weather
 			sample.Ground = ground;
 			float kelvin = planet.SurfaceKelvin(sample.Temperature);
 
+			// The plumes over the scene's vents and its eruptions, leaning on this wind: what falls out
+			// of them here falls out of the plume the sky draws (VolcanicPlume, VolcanicVents).
+			var position2 = new Vector2(position.x, position.z);
+			List<VolcanicPlume.Plume> plumes = plumeScratch ??= new List<VolcanicPlume.Plume>();
+			VolcanicVents.Plumes(timeline, settings, tick, planet, air.Wind, position2, plumes);
+			float steadyFallout = VolcanicVents.FalloutAt(plumes, position2, false, out WeatherSubstance steadySubstance);
+			float fallout = VolcanicVents.FalloutAt(plumes, position2, true, out WeatherSubstance falloutSubstance);
+
 			// The weather this air makes with no storm over it.
 			AirColumn open = AirColumn.Of(planet, kelvin, air.Humidity, air.Pressure, air.Instability);
 			sample.OpenColumn = open;
-			sample.Background = WeatherPhysics.Frame(air, open, planet, ground, sample.Temperature, 1f, out _);
+			sample.Background = WeatherPhysics.Frame(air, open, planet, ground, sample.Temperature, 1f, steadyFallout, steadySubstance, out _);
 			AddAurora(ref sample.Background, timeline, system, weatherBody, worldSeconds, worldHours, season01);
 			sample.Background = WeatherDriver.UnderAtmosphere(sample.Background, atmosphere);
 			StormsInHeavyRain(ref sample.Background, sample.Temperature);
@@ -190,7 +201,7 @@ namespace FishMMO.Shared.Weather
 			AirColumn column = AirColumn.Of(planet, kelvin, air.Humidity, air.Pressure, air.Instability);
 			sample.Column = column;
 
-			WeatherFrame frame = WeatherPhysics.Frame(air, column, planet, ground, sample.Temperature, emission, out sample.Substance);
+			WeatherFrame frame = WeatherPhysics.Frame(air, column, planet, ground, sample.Temperature, emission, fallout, falloutSubstance, out sample.Substance);
 			AddAurora(ref frame, timeline, system, weatherBody, worldSeconds, worldHours, season01);
 			frame = WeatherDriver.UnderAtmosphere(frame, atmosphere);
 			StormsInHeavyRain(ref frame, sample.Temperature);

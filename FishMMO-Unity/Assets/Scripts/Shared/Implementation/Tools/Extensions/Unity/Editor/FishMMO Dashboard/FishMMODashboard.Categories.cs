@@ -246,6 +246,7 @@ namespace FishMMO.Shared
 			AddCategory<FishMMO.Shared.Biomes.SceneBiomeMap>("Scene Biome Maps", "Biomes",
 				"Assets/Templates/Entity/Biomes/Maps",
 				"FishMMO/Biomes/Scene Biome Map");
+			AddToolPageCategory(DashboardToolAttribute.Biomes, "Biomes");
 
 			// ── Naming ── (race naming lives on the Race templates above)
 			AddCategory<FishMMO.Shared.NameGeneration.NameModifierTemplate>("Name Modifiers", "Naming",

@@ -40,6 +40,11 @@ namespace FishMMO.Shared.Weather
 		public float EmissionRate;
 		/// <summary>Whether this is open water, which is what a hurricane feeds on and where nothing blows up off the ground.</summary>
 		public bool Water;
+		/// <summary>
+		/// Whether what it emits comes out of vents (<see cref="WeatherSubstance.Vented"/>): then it
+		/// falls out of the vents' plumes, downwind (<see cref="VolcanicVents"/>), not here.
+		/// </summary>
+		public bool Vented;
 
 		/// <summary>The traits of a biome's ground, and whether the point is under the water line.</summary>
 		public static GroundTraits Of(BiomeTemplate biome, bool underWater)
@@ -53,6 +58,7 @@ namespace FishMMO.Shared.Weather
 				Loose = biome.LooseGround,
 				Emits = biome.Emits,
 				EmissionRate = Mathf.Clamp01(biome.EmissionRate),
+				Vented = biome.Emits != null && biome.Emits.Vented,
 			};
 		}
 	}
@@ -169,13 +175,26 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
+		/// Whether a world has the air for a storm of any kind at all: something to lift, to carry
+		/// what falls and to hold it up.
+		/// </summary>
+		/// <remarks>
+		/// An airless body has none, so every kind is refused there — an eruption included. What a
+		/// vent throws up on a world with no air flies on a ballistic arc and lands round the vent
+		/// (Io's plumes); it is the vent's own effect and never weather, which is air carrying it.
+		/// A storm cell asked for by name is refused rather than spawned and drawn as nothing: a cell
+		/// that exists but does nothing is still a slot, a timeline entry and a spawn event.
+		/// </remarks>
+		public static bool CanForm(in PlanetAir planet) => planet.HasAir && planet.Gravity > 0f;
+
+		/// <summary>
 		/// The weather at the heart of a storm of this kind, in the air of a place: what that storm
 		/// does to that air, at full strength, and what the air then does.
 		/// </summary>
 		public static WeatherFrame PeakFrame(StormKind kind, in WeatherSample around, out WeatherSubstance substance)
 		{
 			substance = null;
-			if (!around.Planet.HasAir || around.Planet.Gravity <= 0f)
+			if (!CanForm(around.Planet))
 			{
 				return WeatherFrame.Clear;
 			}
@@ -475,6 +494,18 @@ namespace FishMMO.Shared.Weather
 		public static WeatherFrame Frame(in WeatherDriver.Synoptic air, in AirColumn column, in PlanetAir planet, in GroundTraits ground,
 			float temperatureScale, float emissionBoost, out WeatherSubstance substance)
 		{
+			return Frame(air, column, planet, ground, temperatureScale, emissionBoost, 0f, null, out substance);
+		}
+
+		/// <summary>
+		/// The weather of an air over a ground, on a world, with the ash falling out of the plumes
+		/// overhead or upwind (<see cref="VolcanicVents.FalloutAt"/>).
+		/// </summary>
+		/// <param name="fallout">How hard the plumes' fallout comes down here, 0..1.</param>
+		/// <param name="falloutSubstance">What it is; null for plain ash.</param>
+		public static WeatherFrame Frame(in WeatherDriver.Synoptic air, in AirColumn column, in PlanetAir planet, in GroundTraits ground,
+			float temperatureScale, float emissionBoost, float fallout, WeatherSubstance falloutSubstance, out WeatherSubstance substance)
+		{
 			var accumulator = new WeatherAccumulator();
 
 			// The water cycle: cloud, rain, hail, fog, lightning and wind from the air.
@@ -511,6 +542,14 @@ namespace FishMMO.Shared.Weather
 			// into stratus once the wind is turbulent right through it or the morning sun warms the
 			// ground under it (FogLayer). Its depth and its lift ride in the fog channels.
 			FogLayer.Of(air, column, planet, weather[WeatherChannel.FogDensity], weather[WeatherChannel.CloudCover]).WriteTo(ref weather);
+			// Any condensate but water is typed here, by its own freezing point, before anything
+			// else joins it: the background comes out of the driver as "rain", and nitrogen below
+			// 63 K or methane below 91 K falls as snow — it was drawn as rain streaks tinted like
+			// snow, and wetted the ground. Water is typed at the end, by the scale's freezing band.
+			if (planet.Condensate != Condensate.Water)
+			{
+				TypeCondensate(ref weather, column.SurfaceKelvin < AirPhysics.FreezingKelvin(planet.Condensate));
+			}
 			accumulator.Add(weather, 1f, PrecipitateOf(planet, column.SurfaceKelvin));
 
 			// What the wind lifts off the ground.
@@ -527,8 +566,9 @@ namespace FishMMO.Shared.Weather
 				}
 			}
 
-			// What the ground puts out by itself.
-			if (ground.Emits != null && ground.EmissionRate > 0f)
+			// What the ground puts out by itself — unless it comes out of vents, when it rises in their
+			// plumes and falls out of those, downwind, instead (below).
+			if (ground.Emits != null && ground.EmissionRate > 0f && !ground.Vented)
 			{
 				float amount = Mathf.Clamp01(ground.EmissionRate * Mathf.Max(0f, emissionBoost));
 				if (amount > 0.001f)
@@ -537,10 +577,16 @@ namespace FishMMO.Shared.Weather
 				}
 			}
 
+			// What falls out of the plumes overhead and upwind: only with air to hold a plume up.
+			if (fallout > 0.001f && VolcanicPlume.CanRise(planet))
+			{
+				accumulator.Add(FallingFrom(falloutSubstance, Mathf.Clamp01(fallout)), 1f, falloutSubstance);
+			}
+
 			substance = accumulator.Substance;
 			WeatherFrame frame = accumulator.Resolve();
-			// Water is typed here by the scale's own freezing band. Any other condensate carried its
-			// substance in already, frozen or not, from its own freezing point.
+			// Water is typed here by the scale's own freezing band. Any other condensate was typed
+			// above, by its own freezing point, and carried its substance in with it.
 			if (planet.Condensate == Condensate.Water)
 			{
 				frame.RetypeForTemperature(temperatureScale);
@@ -662,14 +708,56 @@ namespace FishMMO.Shared.Weather
 			var frame = new WeatherFrame();
 			frame[WeatherChannel.Precipitation] = Mathf.Clamp01(amount);
 			frame[WeatherChannel.DropSize] = 0.3f;
+			frame[ChannelOf(substance)] = 1f;
+			return frame;
+		}
+
+		/// <summary>A plume's fallout: its substance falling, or plain ash when it has none.</summary>
+		public static WeatherFrame FallingFrom(WeatherSubstance substance, float amount)
+		{
+			if (substance != null)
+			{
+				return Falling(substance, amount);
+			}
+			var frame = new WeatherFrame();
+			frame[WeatherChannel.Precipitation] = Mathf.Clamp01(amount);
+			frame[WeatherChannel.DropSize] = 0.3f;
+			frame[WeatherChannel.AshWeight] = 1f;
+			return frame;
+		}
+
+		/// <summary>
+		/// The precipitation channel a substance falls in: sand, ash and snow by what they leave on
+		/// the ground, anything liquid (or unknown) as rain.
+		/// </summary>
+		/// <remarks>
+		/// One answer for both ends: <see cref="Falling"/> puts a substance in this channel, and the
+		/// presentation dresses only this channel in the substance's colour and speed. A frame
+		/// carries one substance, and wearing it on every kind drew rain grey under a volcano's ash
+		/// and sand-coloured in a haboob.
+		/// </remarks>
+		public static WeatherChannel ChannelOf(WeatherSubstance substance)
+		{
 			switch (substance != null ? substance.Cover : WeatherCoverKind.None)
 			{
-				case WeatherCoverKind.Sand: frame[WeatherChannel.SandWeight] = 1f; break;
-				case WeatherCoverKind.Ash: frame[WeatherChannel.AshWeight] = 1f; break;
-				case WeatherCoverKind.Snow: frame[WeatherChannel.SnowWeight] = 1f; break;
-				default: frame[WeatherChannel.RainWeight] = 1f; break;
+				case WeatherCoverKind.Sand: return WeatherChannel.SandWeight;
+				case WeatherCoverKind.Ash: return WeatherChannel.AshWeight;
+				case WeatherCoverKind.Snow: return WeatherChannel.SnowWeight;
+				default: return WeatherChannel.RainWeight;
 			}
-			return frame;
+		}
+
+		/// <summary>
+		/// Types a condensate's precipitation by whether it is frozen where it lands: all of the
+		/// liquid share to snow below its freezing point, all of the frozen share to rain above it.
+		/// Hail is left as hail; it is the updraught's and survives the fall or does not
+		/// (<see cref="HailStoneMetres"/>).
+		/// </summary>
+		public static void TypeCondensate(ref WeatherFrame frame, bool frozen)
+		{
+			float fluid = frame[WeatherChannel.RainWeight] + frame[WeatherChannel.SnowWeight];
+			frame[WeatherChannel.RainWeight] = frozen ? 0f : fluid;
+			frame[WeatherChannel.SnowWeight] = frozen ? fluid : 0f;
 		}
 	}
 }

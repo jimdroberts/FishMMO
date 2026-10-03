@@ -1,3 +1,16 @@
+// Per-instance LOD fade (FishLodFade.hlsl): `_FishLodFade`, an instanced float in its own
+// instancing buffer (FishLodFadeProps, INSTANCING_ON variants only — UnityPerMaterial and the SRP
+// Batcher are untouched). Set by TerrainTreeInstancing (FishMMO.Client/World/Terrain) as a
+// MaterialPropertyBlock float array, one entry per RenderMeshInstanced instance. 0 = fully drawn
+// (default; every other draw); +f = fading in, draws share f; -f = fading out, draws exactly the
+// complement of +f. The two levels of a transition get +f and -f. Read in ForwardLit (the forked
+// pass) and, through small wrappers around URP's own fragments (FishWeatherLitFadeWrappers.hlsl),
+// ShadowCaster, GBuffer, DepthOnly, DepthNormals, MotionVectors and XRMotionVectors — independent of
+// LOD_FADE_CROSSFADE / unity_LODFade, which LODGroup renderers keep using.
+//
+// FishMMO/Weather Lit Indirect (FishWeatherLitIndirect.shader) is this shader for GPU-driven draws:
+// same Properties, same passes, same pass files, plus procedural instancing. Keep the two in step —
+// IndirectShaderTests compares them.
 Shader "FishMMO/Weather Lit"
 {
     Properties
@@ -206,7 +219,7 @@ Shader "FishMMO/Weather Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex ShadowPassVertex
-            #pragma fragment ShadowPassFragment
+            #pragma fragment FishShadowPassFragment
 
             // -------------------------------------
             // Material Keywords
@@ -232,6 +245,9 @@ Shader "FishMMO/Weather Lit"
             // Includes
             #include "FishWeatherLitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
+            // FishMMO edit: the per-instance LOD fade, ahead of URP's own fragment (FishWeatherLitFadeWrappers.hlsl).
+            #define FISH_LIT_WRAP_SHADOW
+            #include "FishWeatherLitFadeWrappers.hlsl"
             ENDHLSL
         }
 
@@ -261,7 +277,7 @@ Shader "FishMMO/Weather Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex LitGBufferPassVertex
-            #pragma fragment LitGBufferPassFragment
+            #pragma fragment FishLitGBufferPassFragment
 
             // -------------------------------------
             // Material Keywords
@@ -321,6 +337,9 @@ Shader "FishMMO/Weather Lit"
             #include "FishWeatherLitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitGBufferPass.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutputFormat.hlsl"
+            // FishMMO edit: the per-instance LOD fade, ahead of URP's own fragment (FishWeatherLitFadeWrappers.hlsl).
+            #define FISH_LIT_WRAP_GBUFFER
+            #include "FishWeatherLitFadeWrappers.hlsl"
             ENDHLSL
         }
 
@@ -344,7 +363,7 @@ Shader "FishMMO/Weather Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex DepthOnlyVertex
-            #pragma fragment DepthOnlyFragment
+            #pragma fragment FishDepthOnlyFragment
 
             // -------------------------------------
             // Material Keywords
@@ -364,6 +383,9 @@ Shader "FishMMO/Weather Lit"
             // Includes
             #include "FishWeatherLitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
+            // FishMMO edit: the per-instance LOD fade, ahead of URP's own fragment (FishWeatherLitFadeWrappers.hlsl).
+            #define FISH_LIT_WRAP_DEPTH
+            #include "FishWeatherLitFadeWrappers.hlsl"
             ENDHLSL
         }
 
@@ -387,7 +409,7 @@ Shader "FishMMO/Weather Lit"
             // -------------------------------------
             // Shader Stages
             #pragma vertex DepthNormalsVertex
-            #pragma fragment DepthNormalsFragment
+            #pragma fragment FishDepthNormalsFragment
 
             // -------------------------------------
             // Material Keywords
@@ -414,6 +436,9 @@ Shader "FishMMO/Weather Lit"
             // Includes
             #include "FishWeatherLitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitDepthNormalsPass.hlsl"
+            // FishMMO edit: the per-instance LOD fade, ahead of URP's own fragment (FishWeatherLitFadeWrappers.hlsl).
+            #define FISH_LIT_WRAP_DEPTHNORMALS
+            #include "FishWeatherLitFadeWrappers.hlsl"
             ENDHLSL
         }
 
@@ -504,8 +529,21 @@ Shader "FishMMO/Weather Lit"
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY
 
+            // FishMMO edit: URP's ObjectMotionVectors.hlsl names its own entry points, so it is
+            // included plainly (Unity ignores the pragma lines of a plain include) and its pragmas
+            // are repeated here with the fragment swapped for the LOD-fade wrapper below.
+            #pragma target 3.5
+            #pragma vertex vert
+            #pragma fragment FishMotionVectorsFragment
+            #pragma multi_compile_instancing
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
+            #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
+
             #include "FishWeatherLitInput.hlsl"
-            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ObjectMotionVectors.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ObjectMotionVectors.hlsl"
+            // FishMMO edit: the per-instance LOD fade, ahead of URP's own fragment (FishWeatherLitFadeWrappers.hlsl).
+            #define FISH_LIT_WRAP_MOTIONVECTORS
+            #include "FishWeatherLitFadeWrappers.hlsl"
             ENDHLSL
         }
 
@@ -530,8 +568,21 @@ Shader "FishMMO/Weather Lit"
             #pragma shader_feature_local_vertex _ADD_PRECOMPUTED_VELOCITY
             #define APPLICATION_SPACE_WARP_MOTION 1
 
+            // FishMMO edit: URP's ObjectMotionVectors.hlsl names its own entry points, so it is
+            // included plainly (Unity ignores the pragma lines of a plain include) and its pragmas
+            // are repeated here with the fragment swapped for the LOD-fade wrapper below.
+            #pragma target 3.5
+            #pragma vertex vert
+            #pragma fragment FishMotionVectorsFragment
+            #pragma multi_compile_instancing
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl"
+            #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
+
             #include "FishWeatherLitInput.hlsl"
-            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ObjectMotionVectors.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ObjectMotionVectors.hlsl"
+            // FishMMO edit: the per-instance LOD fade, ahead of URP's own fragment (FishWeatherLitFadeWrappers.hlsl).
+            #define FISH_LIT_WRAP_MOTIONVECTORS
+            #include "FishWeatherLitFadeWrappers.hlsl"
             ENDHLSL
         }
     }

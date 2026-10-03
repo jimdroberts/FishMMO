@@ -93,6 +93,31 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void TheInstancedLodFade_IsReadInEveryPassThatWritesDepth()
+		{
+			// The instanced tree channels cross-fade LOD levels through _FishLodFade. A pass that does
+			// not read it keeps drawing both levels there, which shows as doubled shadows or depth.
+			string lodFade = Read(Shaders + "FishLodFade.hlsl");
+			StringAssert.Contains("UNITY_INSTANCING_BUFFER_START(FishLodFadeProps)", lodFade, "the fade must live in its own instancing buffer");
+			StringAssert.Contains("UNITY_DEFINE_INSTANCED_PROP(float, _FishLodFade)", lodFade, "the renderer sets this name");
+			StringAssert.Contains("UNITY_INSTANCING_ENABLED", lodFade, "the buffer must exist only in the instanced variants, or the SRP batcher layout changes");
+
+			string litInput = Read(LitInput);
+			Assert.IsFalse(litInput.Contains("_FishLodFade"), "the per-instance fade must stay out of UnityPerMaterial");
+
+			string lit = Read(LitShader);
+			foreach (string entry in new[] { "FishShadowPassFragment", "FishLitGBufferPassFragment", "FishDepthOnlyFragment", "FishDepthNormalsFragment", "FishMotionVectorsFragment" })
+			{
+				StringAssert.Contains("#pragma fragment " + entry, lit, $"{entry} is no longer the pass's fragment, so that pass ignores the LOD fade");
+			}
+			StringAssert.Contains("FishLodFadeClip(", Read(LitPass), "the forward pass ignores the LOD fade");
+
+			string vegetation = Read(Shaders + "FishVegetationPasses.hlsl");
+			int calls = vegetation.Split(new[] { "FishLodFadeClip(" }, System.StringSplitOptions.None).Length - 1;
+			Assert.AreEqual(3, calls, "forward, depth-normals and the shared shadow/depth fragment each read the LOD fade");
+		}
+
+		[Test]
 		public void TheCoverMap_IsBuiltAndPublishedForTheSurfaces()
 		{
 			string map = Read("Assets/Scripts/Client/World/Weather/Presentation/WeatherCoverMap.cs");

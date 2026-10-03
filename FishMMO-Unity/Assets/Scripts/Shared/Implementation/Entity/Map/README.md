@@ -64,6 +64,18 @@ a headless server where no map exists.
 The bake needs a graphics device. Under `-nographics` everything except the photograph is still
 written, and the world map falls back to markers over a plain background.
 
+**Every photograph is taken at the same moment, so an unchanged scene bakes the same map in every
+build:** local solar noon on the first equinox of the scene's body's year (`WorldMapCaptureMoment`),
+weather cleared (no cloud, cloud shadow, fog, precipitation, snow or wet cover; foliage in its
+healthy colours), and full detail (trees at LOD0, no terrain billboards or base map —
+`WorldMapDetailOverride`). The sun, ambient light and weather globals belong to the client, so the
+client's weather editor registers them through `WorldMapBaker.CaptureStaging`
+(`Client/World/Weather/Editor/WorldMapCaptureSky.cs`); a scene with no `WorldDayNightCycle` keeps
+its own lighting, as it does in the game. Everything is put back the moment the pixels are read.
+Grass and other detail layers do not appear (Unity draws them to 250 m at most and the camera is
+further away); the ground texture carries their colour. A server-subtarget editor has no client
+staging and bakes the scenes as saved.
+
 **None of this is required for a scene to work.** With no definition at all, bounds come from the
 scene's `SceneBoundary`, the minimap renders normally, and the world map draws markers and fog over
 the background colour. A scene author who never opens the baker gets a working map, just not a
@@ -173,6 +185,9 @@ Map/
 ├── MapBoundsResolver.cs         # Definition → SceneBoundary → terrain fallback chain
 └── Editor/
     ├── WorldMapBaker.cs         # FishMMO Dashboard → World → World Map → Bake Maps / Remove Baked Maps
+    ├── WorldMapCaptureMoment.cs # The fixed capture moment: local solar noon on the equinox
+    ├── WorldMapCaptureContext.cs # The scene, its place and moment, handed to every staging hook
+    ├── WorldMapDetailOverride.cs # Full detail (LOD bias, terrain distances) for the shot, restored after
     └── FishMMO.Shared.Map.Editor.asmdef
 ```
 

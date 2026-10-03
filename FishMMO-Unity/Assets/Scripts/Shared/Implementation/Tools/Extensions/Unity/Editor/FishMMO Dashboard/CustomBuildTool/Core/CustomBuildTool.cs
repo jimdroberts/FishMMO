@@ -80,9 +80,14 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 						EditorUserBuildSettings.standaloneBuildSubtarget = StandaloneBuildSubtarget.Player;
 					}
 
+					// Procedural art first: the arrays and maps below read it, and both players reference it.
+					GenerateBiomeArt();
 					// Before the bundles: a server built from stale tables spawns the wrong things, or nothing.
 					BakeSpawnTables();
 					BakeWorldMaps(customBuildType);
+
+					// Last before the bundles: only the generated art everything above reaches.
+					RegisterGeneratedArt();
 
 					Log.Debug("BuildLogger", "Configuring addressables...");
 					bool isWebGL = buildTarget == BuildTarget.WebGL;
@@ -104,6 +109,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 					// CRITICAL: Always restore settings, even if build fails
 					Log.Debug("BuildLogger", "Restoring build configuration...");
 					configurator.Restore();
+					RemoveGeneratedArtGroup();
 					CleanWorldMaps(customBuildType);
 				}
 			}
@@ -246,6 +252,27 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				return;
 			}
 
+			/* Terrain arrays first: the world maps below photograph the ground, and must see the
+			 * array-textured terrain rather than grey. Their own try, so a failed array bake never
+			 * costs the build its maps. The baked folder is a per-machine cache and stays after the
+			 * build; only its addressable group is removed again (CleanWorldMaps). */
+			FishMMO.Shared.WorldDesign.TerrainArrayAutoBake.BuildRunning = true;
+			try
+			{
+				Log.Debug("BuildLogger", "Baking terrain arrays...");
+				var arrayLog = new List<string>();
+				int arrays = FishMMO.Shared.WorldDesign.TerrainArrayBaker.BakeForBuild(arrayLog);
+				foreach (string line in arrayLog)
+				{
+					Log.Debug("BuildLogger", line);
+				}
+				Log.Debug("BuildLogger", $"Baked {arrays} scene(s) of terrain arrays.");
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"Terrain array bake failed; generated ground draws plain grey in this build: {ex.Message}");
+			}
+
 			try
 			{
 				Log.Debug("BuildLogger", "Baking planet surfaces...");
@@ -259,6 +286,77 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			catch (Exception ex)
 			{
 				Log.Warning("BuildLogger", $"World map or planet surface bake failed; the build continues without those images: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Generates the procedural biome art — payload (textures, meshes), wrappers (terrain layers,
+		/// materials, prefabs) and the terrain layers built from loose biome textures, all gitignored
+		/// and rebuilt on every machine — when any of it is missing or was made by other generator code,
+		/// for client AND server builds alike, before anything else is baked or built.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Committed scenes, terrain data and biomes reference generated art by path-derived GUIDs and
+		/// deterministic object IDs (<see cref="FishMMO.Shared.WorldDesign.ProceduralArtPayload"/>), so
+		/// a clone that never opened the editor would otherwise build trees with no prefabs and ground
+		/// with no layers. Servers need it too: their terrain keeps its tree prototypes for the
+		/// colliders, and those prefabs pull in their meshes and materials (phase two would swap them
+		/// for collider-only proxies). Order: this, then the terrain arrays (which read the ground
+		/// textures), then the world maps (which photograph the arrays).
+		/// </para>
+		/// <para>
+		/// Generated art left from before deterministic IDs is migrated first (references rewritten,
+		/// backed up under Library/FishMMO). Anything generated that is still missing or mis-addressed
+		/// afterwards stops the build, because a player with invisible trees is not worth shipping.
+		/// </para>
+		/// </remarks>
+		/// <exception cref="InvalidOperationException">The generated art could not be brought up to date.</exception>
+		private static void GenerateBiomeArt()
+		{
+			Log.Debug("BuildLogger", "Checking procedural biome art...");
+			var log = new List<string>();
+			try
+			{
+				FishMMO.Shared.WorldDesign.BiomeArtGenerator.EnsureCurrentForBuild(log);
+			}
+			finally
+			{
+				foreach (string line in log)
+				{
+					Log.Debug("BuildLogger", line);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Registers the generated biome art the build reaches in its build-time group, and nothing else:
+		/// generated art never sits in a committed group, and a placeholder nothing uses never ships
+		/// (<see cref="FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup"/>). Removed again by
+		/// <see cref="RemoveGeneratedArtGroup"/> whether or not the build succeeds.
+		/// </summary>
+		private static void RegisterGeneratedArt()
+		{
+			Log.Debug("BuildLogger", "Registering the generated biome art the build reaches...");
+			var log = new List<string>();
+			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveCommittedEntries(log);
+			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RegisterReachable(log);
+			foreach (string line in log)
+			{
+				Log.Debug("BuildLogger", line);
+			}
+		}
+
+		/// <summary>Removes the generated art's build-time group, leaving the project as it was found.</summary>
+		private static void RemoveGeneratedArtGroup()
+		{
+			try
+			{
+				FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveGroup();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"Removing the '{FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.GroupName}' addressable group failed; remove it by hand in the Addressables Groups window: {ex.Message}");
 			}
 		}
 
@@ -317,6 +415,20 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 
 			try
 			{
+				Log.Debug("BuildLogger", "Removing the terrain arrays' addressable group (the baked arrays stay as the editor's cache)...");
+				FishMMO.Shared.WorldDesign.TerrainArrayBaker.RemoveBuildGroup();
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"Removing the '{TerrainArraySet.AddressableGroupName}' addressable group failed; remove it by hand in the Addressables Groups window: {ex.Message}");
+			}
+			finally
+			{
+				FishMMO.Shared.WorldDesign.TerrainArrayAutoBake.BuildRunning = false;
+			}
+
+			try
+			{
 				Log.Debug("BuildLogger", "Removing baked planet surfaces...");
 				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.CleanBakedSurfaces();
 
@@ -353,8 +465,10 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				// assets, not code — the Server/Player distinction doesn't affect bundle content.
 				// Building with Server subtarget causes SBP failures.
 				configurator.Configure(StandaloneBuildSubtarget.Player, buildTarget);
+				GenerateBiomeArt();
 				BakeSpawnTables();
 				BakeWorldMaps(customBuildType);
+				RegisterGeneratedArt();
 				addressableManager.BuildAddressablesWithExclusions(excludeGroups, enableCrcForRemoteLoading, useUnityWebRequestForLocal);
 			}
 			catch (System.Exception ex)
@@ -364,6 +478,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 			finally
 			{
 				configurator.Restore();
+				RemoveGeneratedArtGroup();
 				CleanWorldMaps(customBuildType);
 			}
 

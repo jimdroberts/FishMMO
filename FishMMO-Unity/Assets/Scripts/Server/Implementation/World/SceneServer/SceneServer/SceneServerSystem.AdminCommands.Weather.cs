@@ -219,7 +219,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ushort id = weather.SpawnCell(scene, kind, here, radius, Vector2.zero, minutes * 60f);
 				Reply(character, id != 0
 					? $"Cell {id} ({StormPhysics.NameOf(kind)}) over you{(radius > 0f ? $", radius {radius:0} m" : ", sized by the air")}{(minutes > 0f ? $", for {minutes:0} min" : string.Empty)}. Steer it with /admin weather cell steer {id}."
-					: "This scene has no weather of its own, so no storm cells.");
+					: "No storm cells here: this scene has no weather of its own, or its world has no air to make one.");
 				return;
 			}
 			if (verb == "steer")

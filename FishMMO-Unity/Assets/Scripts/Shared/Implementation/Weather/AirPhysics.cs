@@ -133,6 +133,13 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
+		/// The mean surface temperature past which water condenses nowhere in a greenhouse atmosphere,
+		/// K: a runaway greenhouse, its clouds acid. Also the hottest a world can be and keep a sea
+		/// (<c>BiomeWorldConditions.HasLiquidWater</c>).
+		/// </summary>
+		public const double RunawayGreenhouseKelvin = 400.0;
+
+		/// <summary>
 		/// What condenses in a world's sky, from how warm its ground is on average.
 		/// </summary>
 		/// <remarks>
@@ -143,7 +150,7 @@ namespace FishMMO.Shared.Weather
 		/// </remarks>
 		public static Condensate CondensateFor(double meanSurfaceKelvin)
 		{
-			if (meanSurfaceKelvin >= 400.0) return Condensate.SulphuricAcid;
+			if (meanSurfaceKelvin >= RunawayGreenhouseKelvin) return Condensate.SulphuricAcid;
 			if (meanSurfaceKelvin >= 190.0) return Condensate.Water;
 			if (meanSurfaceKelvin >= 130.0) return Condensate.Ammonia;
 			if (meanSurfaceKelvin >= 72.0) return Condensate.Methane;
@@ -158,6 +165,28 @@ namespace FishMMO.Shared.Weather
 			float t = Mathf.Max(1f, kelvin);
 			float exponent = LatentHeat(c) / VapourGasConstant(c) * (1f / FreezingKelvin(c) - 1f / t);
 			return TriplePressure(c) * Mathf.Exp(Mathf.Clamp(exponent, -80f, 30f));
+		}
+
+		/// <summary>
+		/// Where the condensate boils under this pressure, K: the saturation curve read the other way.
+		/// At or below its triple-point pressure there is no liquid at all and this returns the triple
+		/// point, so "warmer than freezing and cooler than boiling" holds nowhere.
+		/// </summary>
+		/// <remarks>
+		/// The same Clausius–Clapeyron curve as <see cref="SaturationPressure"/>, so the weather's
+		/// vapour and a world's oceans boil at one temperature. Water at one atmosphere comes out at
+		/// 368 K against a true 373 (the curve holds the latent heat constant); at Mars's 600 Pa it
+		/// has no liquid phase, which is why Mars has none.
+		/// </remarks>
+		public static float BoilingKelvin(float pressure, Condensate c)
+		{
+			float triple = TriplePressure(c);
+			if (pressure <= triple)
+			{
+				return FreezingKelvin(c);
+			}
+			float inverse = 1f / FreezingKelvin(c) - VapourGasConstant(c) / LatentHeat(c) * Mathf.Log(pressure / triple);
+			return inverse > 1e-6f ? 1f / inverse : float.MaxValue;
 		}
 
 		/// <summary>How many kilograms of vapour a kilogram of saturated air holds.</summary>
@@ -439,23 +468,9 @@ namespace FishMMO.Shared.Weather
 				air.GasConstant = 287.05f;
 			}
 
-			double insolation = system != null ? CelestialMath.Insolation(system, body, 0.0) : 1.0;
-			// The mean over the orbit, not the moment: this is what the world is, not what it is doing.
-			if (system != null)
-			{
-				double period = CelestialMath.OrbitHours(system, body);
-				if (!double.IsInfinity(period) && !double.IsNaN(period) && period > 0.0)
-				{
-					double sum = 0.0;
-					const int Samples = 8;
-					for (int i = 0; i < Samples; i++)
-					{
-						sum += CelestialMath.Insolation(system, body, period * i / Samples);
-					}
-					insolation = sum / Samples;
-				}
-			}
-			double mean = ClimateModel.MeanSurfaceKelvin(insolation, kind, body.Water);
+			// The mean over the orbit, not the moment: this is what the world is, not what it is
+			// doing. The one absolute temperature the climate field and the world's conditions read.
+			double mean = ClimateModel.MeanSurfaceKelvin(system, body);
 			double greenhouse = ClimateModel.Greenhouse(kind, body.Water);
 			double equilibrium = Math.Max(20.0, mean - greenhouse);
 			air.MeanSurfaceKelvin = (float)mean;

@@ -6,6 +6,8 @@ using FishMMO.Client;
 using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
+using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.TestHarness.World
 {
@@ -585,6 +587,11 @@ namespace FishMMO.TestHarness.World
 			var direction = new Vector2(Mathf.Sin(angle), Mathf.Cos(angle));
 			uint now = Tick;
 			WeatherSample here = WeatherField.Sample(timeline, Settings, gameObject.scene, at, now);
+			// The game's rule (WeatherHost.SpawnCell): no air, no storm of any kind.
+			if (!StormPhysics.CanForm(here.Planet))
+			{
+				return;
+			}
 			StormPhysics.Dimensions(kind, here.OpenColumn, 0.5f, 0.5f, out float airRadius, out float extent, out float life);
 			if (radius > 0f)
 			{
@@ -596,8 +603,9 @@ namespace FishMMO.TestHarness.World
 			}
 			float reach = Mathf.Max(radius, extent);
 			float distance = overhead ? 0f : reach * 1.5f;
-			if (overhead)
+			if (overhead || kind == StormKind.Eruption)
 			{
+				// Nor does a vent travel: an eruption stays put and its plume is what the wind carries.
 				speed = 0f;
 			}
 			// Long enough to cross the camera and go, and no longer than the storm would live.
@@ -696,7 +704,19 @@ namespace FishMMO.TestHarness.World
 		{
 			Cache();
 			ComposeHours();
-			Body = body != null ? body : SolarSystemProfile.Active != null ? SolarSystemProfile.Active.HomeWorld : null;
+			/* Stands where the scene stands: on its own body, at its own place on the atlas. It used
+			 * to start on the home world at 25° whatever scene it was dressed into, so a generated
+			 * scene on an airless moon was simulated under the home world's wet air — rain and snow
+			 * on Seli Waste. Only the bed's own scene, which has no atlas entry, starts at the
+			 * defaults. */
+			WorldAtlasScene placed = Settings != null ? Settings.AtlasEntry : null;
+			Body = body != null ? body : ScenePlacementClimate.ResolveBody(SolarSystemProfile.Active, placed);
+			if (placed != null && placed.Placed)
+			{
+				latitude = (float)placed.EffectiveSunLatitude;
+				longitude = (float)placed.TimeLongitude;
+				heading = placed.HeadingDegrees;
+			}
 			Latitude = latitude;
 			Longitude = longitude;
 			Heading = heading;
@@ -754,8 +774,8 @@ namespace FishMMO.TestHarness.World
 		}
 
 		/// <summary>
-		/// Puts the solar system, its bodies, the calendar, the sky profiles and the weather
-		/// substances in the cache the game would have loaded them into. Anything already cached (a
+		/// Puts the solar system, its bodies, the calendar, the sky profiles, the weather substances
+		/// and the scene's atlas entry in the cache the game would have loaded them into. Anything already cached (a
 		/// running client) is left be.
 		/// </summary>
 		private void Cache()
@@ -793,6 +813,19 @@ namespace FishMMO.TestHarness.World
 					substance.AddToCache(substance.name);
 					registered.Add(substance);
 				}
+			}
+			/* And the scene's atlas entry, which is where its body, its place, its biome map and its
+			 * authored air live. The game finds it among the addressables it loaded; the bed loads
+			 * none, so WorldAtlasScene.Find answered null in play, the scene read as unplaced, and its
+			 * weather fell back to the home world. */
+			WorldAtlasScene entry = null;
+#if UNITY_EDITOR
+			entry = WorldAtlasScene.EditorLookup.Find(gameObject.scene.name);
+#endif
+			if (entry != null && WorldAtlasScene.Find(entry.SceneName) == null)
+			{
+				entry.AddToCache(entry.name);
+				registered.Add(entry);
 			}
 			Bodies.Clear();
 			SolarSystemProfile system = SolarSystemProfile.Active;

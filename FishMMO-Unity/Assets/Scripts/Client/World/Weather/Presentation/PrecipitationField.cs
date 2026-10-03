@@ -321,6 +321,13 @@ namespace FishMMO.Client
 			/// <summary>Shed by a cloud, so it falls only under one and as hard as the cloud is thick. Not sand: the wind lifts that off the ground.</summary>
 			public bool FromCloud;
 			/// <summary>
+			/// Its cloud is a volcanic plume, not the water cloud the sky's map holds: the weather's own
+			/// amount here is already the plume's fallout at the viewer (VolcanicVents.FalloutAt), so
+			/// the particles are counted by that and not gated again by the water cloud overhead —
+			/// which blanked a plume's ash under a clear sky it had drifted over.
+			/// </summary>
+			public bool FromPlume;
+			/// <summary>
 			/// A clear drop, seen THROUGH: a lens showing the light behind it (<see cref="ClearDropSun"/>).
 			/// Everything else is an opaque grain, seen by the light on its face (<see cref="GrainSun"/>).
 			/// </summary>
@@ -419,6 +426,30 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>The substance a kind is drawn as: the frame's, when that is what this kind is; else none (the kind's own look).</summary>
+		public static WeatherSubstance SubstanceOf(WeatherChannel kind, WeatherSubstance substance)
+		{
+			return substance != null && WeatherPhysics.ChannelOf(substance) == kind ? substance : null;
+		}
+
+		/// <summary>
+		/// How much bigger than the look's size a kind's particles are drawn for how hard it falls
+		/// and how stormy it is: rain's drops only.
+		/// </summary>
+		/// <remarks>
+		/// A downpour is made of bigger drops than a drizzle, and a thunderstorm's of bigger again,
+		/// because the updraught holds a drop up until it has grown. Nothing like that holds for a
+		/// grain: ash is the size the eruption broke it to and sand the size the ground is, however
+		/// thick the fall. Ash and sand took rain's law, up to five times over, and a heavy ashfall
+		/// was drawn in grey blobs the size of a hand. Hail and snow size themselves.
+		/// </remarks>
+		/// <param name="heavy">How hard it falls, 0..1, already shaped (amount^1.5).</param>
+		/// <param name="storm">How stormy, 0..1, from the lightning.</param>
+		public static float GrowthOf(WeatherChannel kind, float heavy, float storm)
+		{
+			return kind == WeatherChannel.RainWeight ? (0.85f + 2.3f * Mathf.Clamp01(heavy)) * (1f + 0.6f * Mathf.Clamp01(storm)) : 1f;
+		}
+
 		/// <summary>How a kind of precipitation falls: the spread of speeds in one shower, and its drag.</summary>
 		public static FallTraits TraitsOf(WeatherChannel kind)
 		{
@@ -437,7 +468,7 @@ namespace FishMMO.Client
 				// Hail runs from peas to walnuts, and its speed goes as the root of its size.
 				case WeatherChannel.HailWeight: return new FallTraits { Spread = new Vector2(0.6f, 1.4f), FromCloud = true };
 				// Ash settles out of the plume overhead; sand is lifted off the ground by the wind.
-				case WeatherChannel.AshWeight: return new FallTraits { Spread = new Vector2(0.5f, 1.5f), Fine = true, FromCloud = true };
+				case WeatherChannel.AshWeight: return new FallTraits { Spread = new Vector2(0.5f, 1.5f), Fine = true, FromCloud = true, FromPlume = true };
 				case WeatherChannel.SandWeight: return new FallTraits { Spread = new Vector2(0.5f, 1.5f), Fine = true };
 				default: return new FallTraits { Spread = new Vector2(0.5f, 1.5f) };
 			}
@@ -654,7 +685,9 @@ namespace FishMMO.Client
 			float tileMip = profile.PrecipitationAtlas != null ? Mathf.Log(Mathf.Max(1f, profile.PrecipitationAtlas.width / (float)AtlasColumns), 2f) : 0f;
 			foreach ((WeatherChannel kind, float amount) in drawn)
 			{
-				PrecipitationLook look = profile.LookOf(kind).As(substance);
+				// The substance dresses only the kind it falls as (WeatherPhysics.ChannelOf): the frame
+				// carries one, and a volcano's ash worn by the rain beside it drew the rain grey.
+				PrecipitationLook look = profile.LookOf(kind).As(SubstanceOf(kind, substance));
 				FallTraits traits = TraitsOf(kind);
 				// How much faster than on our own world it all happens here.
 				float pace = SurfacePhysics.TerminalSpeedScale(gravity, air, traits.Fine);
@@ -669,7 +702,7 @@ namespace FishMMO.Client
 				// Heavier rain reads as longer streaks: stretch follows the fall speed.
 				float heavy = Mathf.Pow(Mathf.Clamp01(amount), 1.5f);
 				float storm = Mathf.Clamp01(frame[WeatherChannel.LightningRate] * 1.5f);
-				float growth = (0.85f + 2.3f * heavy) * (1f + 0.6f * storm);
+				float growth = GrowthOf(kind, heavy, storm);
 				// The streak's length is size times stretch, so it grew with the drops — three times
 				// as long as well as three times as wide, which was a curtain of rods. The width is
 				// the drop's; the length grows only as the square root of it.
@@ -752,7 +785,7 @@ namespace FishMMO.Client
 					block.SetVector(MotionId, new Vector4(exposure, 0f, 0f, 0f));
 					block.SetVector(FallId, fall);
 					block.SetVector(TravelId, new Vector4((float)moved.X, (float)moved.Fall, (float)moved.Z, 0f));
-					block.SetVector(SpreadId, new Vector4(traits.Spread.x, traits.Spread.y, traits.FromCloud ? 1f : 0f, traits.Clear ? 1f : 0f));
+					block.SetVector(SpreadId, new Vector4(traits.Spread.x, traits.Spread.y, traits.FromCloud && !traits.FromPlume ? 1f : 0f, traits.Clear ? 1f : 0f));
 					block.SetVector(ShapeId, new Vector4(shown, size, stretch, look.AtlasRow));
 					block.SetVector(GrainId, grain);
 					block.SetVector(TileId, new Vector4(tileMip, SubPixelSigma, MinQuadPixels, ResolvedFromPixels));

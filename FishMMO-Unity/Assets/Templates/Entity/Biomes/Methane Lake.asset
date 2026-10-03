@@ -17,15 +17,16 @@ MonoBehaviour:
   BiomeColorId: {r: 0.45, g: 0.42, b: 0.3, a: 1}
   GizmoColor: {r: 0.45, g: 0.42, b: 0.3, a: 1}
   ElevationTier: 2
-  MinHeight: 0.1
-  MaxHeight: 0.4
+  MinHeight: 0
+  MaxHeight: 0.42
   MinTemperature: -1
   MaxTemperature: -0.65
-  MinHumidity: 0.4
+  MinHumidity: -1
   MaxHumidity: 1
   SelectionWeight: 1
   Atmosphere: 14
   RequiresLiquidWater: 0
+  Requires: 32
   ClimateVariants: []
   Naming:
     Phonology:
@@ -101,6 +102,8 @@ MonoBehaviour:
   Emits: {fileID: 11400000, guid: a751240fb82250d31bc77c5ab4d8b7c9, type: 2}
   EmissionRate: 0.08
   mainTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: 8707952cea16a0d8eeaad09b7fe18293,
+      type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -123,8 +126,33 @@ MonoBehaviour:
       max: 90
     slopeFalloff: 5
     prefabSpawnRules: []
-  detailTextureLayers: []
+  detailTextureLayers:
+  - terrainLayer: {fileID: 8574412962073106934, guid: fc082ef1154ea0e68f8ae5413672d4f6,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
   roadTextureLayer:
+    terrainLayer: {fileID: 0}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -148,6 +176,7 @@ MonoBehaviour:
     slopeFalloff: 5
     prefabSpawnRules: []
   smallPathTextureLayer:
+    terrainLayer: {fileID: 0}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -170,8 +199,41 @@ MonoBehaviour:
       max: 90
     slopeFalloff: 5
     prefabSpawnRules: []
-  cliffTextureLayers: []
+  cliffTextureLayers:
+  - terrainLayer: {fileID: 8574412962073106934, guid: fc082ef1154ea0e68f8ae5413672d4f6,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 1
+    slopeRange:
+      min: 42
+      max: 90
+    slopeFalloff: 10
+    prefabSpawnRules: []
+    minCliffAngle: 42
+    maxCliffAngle: 90
+    cliffSlopeFalloff: 10
+    useCliffHeightConstraint: 0
+    cliffHeightRange:
+      min: 0.2
+      max: 1
   riverbedTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: fb49651c9085a3a3003c4aad3e6079f9,
+      type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -195,6 +257,8 @@ MonoBehaviour:
     slopeFalloff: 5
     prefabSpawnRules: []
   lakebedTextureLayer:
+    terrainLayer: {fileID: 8574412962073106934, guid: fb49651c9085a3a3003c4aad3e6079f9,
+      type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}

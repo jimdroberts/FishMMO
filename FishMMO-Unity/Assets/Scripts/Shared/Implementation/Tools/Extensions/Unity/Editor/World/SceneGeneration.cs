@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Atlas;
 using FishMMO.Shared.Celestial;
 
@@ -54,6 +55,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Scene metres per metre of the planet's own altitude.</summary>
 		public float VerticalScale => PlanetSurface.SceneVerticalScale(Body, ResolvedRadiusKm);
 
+		/// <summary>Scene metres per metre of crater depth: craters keep their own proportions (<see cref="PlanetSurface.SceneCraterScale"/>).</summary>
+		public float CraterScale => PlanetSurface.SceneCraterScale(Body, ResolvedRadiusKm);
+
 		/// <summary>The scene's relief budget in metres: the body's relief at <see cref="VerticalScale"/>.</summary>
 		public float SceneReliefMetres => PlanetSurface.ReliefMetres(Body) * VerticalScale;
 
@@ -64,6 +68,29 @@ namespace FishMMO.Shared.WorldDesign
 			SizeKm = SizeKm,
 			HeadingDegrees = HeadingDegrees,
 		};
+
+		/// <summary>
+		/// True when the body's seas are frozen through, so the generator lays an ice shelf where
+		/// the sea would be. See <see cref="SceneGeneration.IceShelfMetres"/>.
+		/// </summary>
+		/// <remarks>
+		/// Resolved once per request: <see cref="SceneGeneration.AltitudeMetres"/> asks it for every
+		/// one of the millions of heights a scene is written from.
+		/// </remarks>
+		public bool FrozenSeas
+		{
+			get
+			{
+				if (frozenSeas == null)
+				{
+					frozenSeas = Body != null
+						&& BiomeWorldConditions.For(SolarSystemProfile.Resolve(Body), Body).IsFrozenThrough;
+				}
+				return frozenSeas.Value;
+			}
+		}
+
+		[System.NonSerialized] private bool? frozenSeas;
 	}
 
 	/// <summary>How a scene's terrain is cut into Unity terrains.</summary>
@@ -258,8 +285,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return 0f;
 			}
-			float planet = PlanetAltitudeMetres(request, eastMetres, northMetres);
-			float altitude = planet * request.VerticalScale;
+			/* The planet's ground and its craters come to scene height apart: the ground by the vertical
+			 * scale, the craters with the kilometres (CraterScale), or every crater would be a pit about
+			 * as deep as it is wide. */
+			PlanetAltitudeParts(request, eastMetres, northMetres, out float planet, out float uncratered);
+			float altitude = uncratered * request.VerticalScale + (planet - uncratered) * request.CraterScale;
 			if (request.FineDetail)
 			{
 				/* Mixed with the scene's name so two scenes cut from nearby ground do not get the
@@ -269,7 +299,52 @@ namespace FishMMO.Shared.WorldDesign
 				float ruggedness = PlanetSurface.Ruggedness(planet, PlanetSurface.ReliefMetres(request.Body));
 				altitude += PlanetSurface.LocalDetailMetres(detailSeed, eastMetres, northMetres, request.SceneReliefMetres, ruggedness);
 			}
+			if (request.FrozenSeas)
+			{
+				altitude = Mathf.Max(altitude, IceShelfMetres(request, eastMetres, northMetres));
+			}
 			return altitude;
+		}
+
+		/// <summary>Height of a frozen sea's surface above the datum, in scene metres, before its ridges.</summary>
+		/// <remarks>Sea ice floats with about a tenth of its thickness showing; a metre is a thick shelf's freeboard.</remarks>
+		public const float IceFreeboardMetres = 1f;
+
+		/// <summary>How high the tallest pressure ridges stand above the shelf, in scene metres.</summary>
+		public const float IceRidgeMetres = 1.5f;
+
+		/// <summary>Metres between neighbouring pressure ridges, roughly.</summary>
+		public const float IceRidgeSpacingMetres = 90f;
+
+		/// <summary>
+		/// The surface of a frozen-through sea at a point of the scene: a shelf just above the datum,
+		/// crossed by pressure ridges.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why the ground and not a surface over it.</b> A world frozen through (Galris, a Europa)
+		/// has no sea under its ice in any sense a player meets: the shell is kilometres thick. A
+		/// water or lava plane at the datum is a liquid's renderer and collider; laying the ice as
+		/// terrain instead gives it collision, footing, painting and scatter for nothing, and it is
+		/// what the scene would be if it were sculpted by hand. Without it the seas came out as empty
+		/// basins once the water test stopped calling a frozen world wet.
+		/// </para>
+		/// <para>
+		/// <b>Ridges, not noise.</b> Ice under stress buckles along lines where floes were pushed
+		/// together, so the relief is a few long crests over flat pans rather than bumps everywhere:
+		/// a ridged noise, sharpened so most of the shelf stays flat.
+		/// </para>
+		/// </remarks>
+		public static float IceShelfMetres(SceneGenerationRequest request, float eastMetres, float northMetres)
+		{
+			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
+			float offset = (seed & 0xFFFF) * 0.173f;
+			float u = eastMetres / IceRidgeSpacingMetres + offset;
+			float v = northMetres / IceRidgeSpacingMetres - offset;
+			float ridge = 1f - Mathf.Abs(Mathf.PerlinNoise(u, v) * 2f - 1f);
+			// Cubed: a crest where the noise crosses its middle, flat pan everywhere else.
+			ridge = ridge * ridge * ridge;
+			return IceFreeboardMetres + ridge * IceRidgeMetres;
 		}
 
 		/// <summary>
@@ -288,6 +363,20 @@ namespace FishMMO.Shared.WorldDesign
 				eastMetres / 1000.0, northMetres / 1000.0, request.ResolvedRadiusKm).ToVector3();
 			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
 			return PlanetSurface.AltitudeMetres(seed, request.Body, direction);
+		}
+
+		/// <summary><see cref="PlanetAltitudeMetres"/> with and without the body's craters (<see cref="PlanetSurface.AltitudeParts"/>).</summary>
+		public static void PlanetAltitudeParts(SceneGenerationRequest request, float eastMetres, float northMetres, out float withCraters, out float withoutCraters)
+		{
+			if (request == null)
+			{
+				withCraters = withoutCraters = 0f;
+				return;
+			}
+			Vector3 direction = AtlasGeometry.SceneToUnit(request.Footprint,
+				eastMetres / 1000.0, northMetres / 1000.0, request.ResolvedRadiusKm).ToVector3();
+			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
+			PlanetSurface.AltitudeParts(seed, request.Body, direction, out withCraters, out withoutCraters);
 		}
 
 		/// <summary>One sample of the planet's own shape per this many metres, when bounding a scene.</summary>

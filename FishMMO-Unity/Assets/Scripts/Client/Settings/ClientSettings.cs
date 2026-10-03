@@ -213,6 +213,9 @@ namespace FishMMO.Client
 		/// <summary>Configuration key for how far world labels are drawn, in metres.</summary>
 		public const string WorldLabelDistanceKey = "WorldLabels.Distance";
 
+		/// <summary>Grass and small-detail draw distance, metres (<see cref="ClientGrassSettings"/>).</summary>
+		public const string GrassDistanceKey = "Grass.Distance";
+
 		/// <summary>Configuration key for world label opacity, 0 to 1.</summary>
 		public const string WorldLabelOpacityKey = "WorldLabels.Opacity";
 

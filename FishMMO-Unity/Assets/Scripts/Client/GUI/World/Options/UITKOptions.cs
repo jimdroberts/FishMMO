@@ -98,6 +98,8 @@ namespace FishMMO.Client
 		private const string QUALITY_DROPDOWN_NAME = "quality-dropdown";
 		private const string ANISOTROPIC_DROPDOWN_NAME = "anisotropic-dropdown";
 		private const string ANTIALIASING_DROPDOWN_NAME = "antialiasing-dropdown";
+		private const string GRASS_DISTANCE_SLIDER_NAME = "grass-distance-slider";
+		private const string GRASS_DISTANCE_VALUE_NAME = "grass-distance-value";
 		private const string FRAMERATE_DROPDOWN_NAME = "framerate-dropdown";
 		private const string GRAPHICS_HINT_NAME = "options-graphics-hint";
 		private const string CLOSE_BUTTON_NAME = "options-close-btn";
@@ -428,6 +430,8 @@ namespace FishMMO.Client
 		private DropdownField qualityDropdown;
 		private DropdownField anisotropicDropdown;
 		private DropdownField antialiasingDropdown;
+		private Slider grassDistanceSlider;
+		private Label grassDistanceValueLabel;
 		private DropdownField frameRateDropdown;
 		private Label graphicsHint;
 		private Button screenApplyButton;
@@ -618,6 +622,8 @@ namespace FishMMO.Client
 			qualityDropdown = Root.Q<DropdownField>(QUALITY_DROPDOWN_NAME);
 			anisotropicDropdown = Root.Q<DropdownField>(ANISOTROPIC_DROPDOWN_NAME);
 			antialiasingDropdown = Root.Q<DropdownField>(ANTIALIASING_DROPDOWN_NAME);
+			grassDistanceSlider = Root.Q<Slider>(GRASS_DISTANCE_SLIDER_NAME);
+			grassDistanceValueLabel = Root.Q<Label>(GRASS_DISTANCE_VALUE_NAME);
 			frameRateDropdown = Root.Q<DropdownField>(FRAMERATE_DROPDOWN_NAME);
 			graphicsHint = Root.Q<Label>(GRAPHICS_HINT_NAME);
 			screenApplyButton = Root.Q<Button>(SCREEN_APPLY_NAME);
@@ -683,6 +689,7 @@ namespace FishMMO.Client
 			InitializeAnisotropicFiltering();
 			InitializeBrightness();
 			InitializeAntialiasing();
+			InitializeGrassDistance();
 			InitializeLookSensitivity();
 			InitializeFrameRateLimit();
 			InitializeVSync();
@@ -1368,6 +1375,36 @@ namespace FishMMO.Client
 			"Per Texture",
 			"Forced",
 		};
+
+		/// <summary>
+		/// Binds the grass distance slider to <see cref="ClientGrassSettings"/>.
+		/// </summary>
+		/// <remarks>
+		/// A performance control, so it sits with the graphics rows rather than the world label
+		/// ones. The terrain detail renderer listens to <see cref="ClientGrassSettings.OnChanged"/>
+		/// and rebuilds its chunks to the new distance; resident instances grow with its square.
+		/// </remarks>
+		private void InitializeGrassDistance()
+		{
+			if (grassDistanceSlider == null)
+			{
+				return;
+			}
+
+			grassDistanceSlider.lowValue = ClientGrassSettings.MinimumDistance;
+			grassDistanceSlider.highValue = ClientGrassSettings.MaximumDistance;
+
+			float distance = ClientGrassSettings.Distance;
+			grassDistanceSlider.SetValueWithoutNotify(distance);
+			UpdateMetreLabel(grassDistanceValueLabel, distance);
+
+			grassDistanceSlider.RegisterValueChangedCallback((evt) =>
+			{
+				float value = Mathf.Round(evt.newValue);
+				ClientGrassSettings.SetDistance(value);
+				UpdateMetreLabel(grassDistanceValueLabel, value);
+			});
+		}
 
 		/// <summary>
 		/// Binds the quality dropdown to the levels this build ships with.

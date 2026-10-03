@@ -44,7 +44,7 @@ namespace FishMMO.Client
 		private static void Inspect(List<WorldSystemProblem> into)
 		{
 			var missing = new List<string>();
-			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+			foreach (string guid in CloudRendererSetup.ProjectRenderers())
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
 				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);

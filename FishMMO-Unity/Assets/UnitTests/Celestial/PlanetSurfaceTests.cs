@@ -246,6 +246,53 @@ namespace FishMMO.UnitTests.Celestial
 		}
 
 		[Test]
+		public void CratersInAScene_KeepTheirOwnProportions_NotTheMountainsLift()
+		{
+			// Orreth: a 2,297 km airless moon on a 10 km atlas.
+			var moon = ScriptableObject.CreateInstance<WorldBody>();
+			try
+			{
+				moon.Atmosphere = AtmosphereKind.None;
+				moon.SkyRadiusKm = 2296.686f;
+				float vertical = PlanetSurface.SceneVerticalScale(moon, 10.0);
+				float craters = PlanetSurface.SceneCraterScale(moon, 10.0);
+				Assert.That(craters, Is.EqualTo(10f / 2296.686f * PlanetSurface.SceneCraterExaggeration).Within(1e-6f),
+					"craters shrink with the kilometres (times the exaggeration), so a crater keeps its depth-to-width");
+				Assert.That(craters, Is.LessThanOrEqualTo(vertical), "never deeper than the ground they are cut in");
+				Assert.That(vertical / craters, Is.GreaterThan(10f),
+					"with the vertical scale every crater came out about as deep as it was wide");
+			}
+			finally
+			{
+				Object.DestroyImmediate(moon);
+			}
+		}
+
+		[Test]
+		public void AVolcanicWorldPavesOverItsCraters_AColdOneKeepsThem()
+		{
+			/* Io has no impact craters: its volcanoes resurface it faster than anything hits it. A world with
+			 * lava lakes must have none, or a lake could stand in a crater the scene draws shallower. */
+			var cold = ScriptableObject.CreateInstance<WorldBody>();
+			var hot = ScriptableObject.CreateInstance<WorldBody>();
+			try
+			{
+				cold.Atmosphere = hot.Atmosphere = AtmosphereKind.None;
+				cold.MagneticField = hot.MagneticField = 0f;
+				cold.SkyRadiusKm = 1737f;   // the Moon: cold inside
+				hot.SkyRadiusKm = 6371f;    // Earth-sized: fully active, from size alone
+				Assert.That(PlanetSurface.CrateringOf(cold), Is.EqualTo(1f), "a dead moon keeps every crater");
+				Assert.That(PlanetSurface.CrateringOf(hot), Is.EqualTo(0f), "a world past the lava-lake heat keeps none");
+				Assert.That(PlanetSurface.CrateringOf((WorldBody)null), Is.EqualTo(0f));
+			}
+			finally
+			{
+				Object.DestroyImmediate(cold);
+				Object.DestroyImmediate(hot);
+			}
+		}
+
+		[Test]
 		public void TheSeaFloorMeetsTheShoreWithoutAStep()
 		{
 			/* Land and sea floor are two curves joined at the water line. A join with a step in it

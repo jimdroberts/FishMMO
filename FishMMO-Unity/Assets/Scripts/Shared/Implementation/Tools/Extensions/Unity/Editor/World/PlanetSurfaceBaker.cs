@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.AddressableAssets;
@@ -145,7 +146,7 @@ namespace FishMMO.Shared.WorldDesign
 			 *
 			 * Resolved once, in the shared field, so the picture, the ground a scene is cut from
 			 * and the name that scene is given all come from the same arithmetic. */
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve(body);
 			PlanetClimateField climate = PlanetClimateField.For(system, body);
 
 			uint seed = climate.Seed;
@@ -155,6 +156,23 @@ namespace FishMMO.Shared.WorldDesign
 			// What the world makes for itself: lava on a tormented moon, a fractured shell on a
 			// frozen one. Nothing to do with how far it sits from its star.
 			float internalHeat = climate.InternalHeat;
+
+			/* Land is painted with the biome the scene generator would paint there, so the globe,
+			 * a scene's biome map and the ground underfoot all show the same place the same way.
+			 * Asked of the same field the generator asks, from the same height and altitude this
+			 * bake already has, so it costs the resolver and the moisture walk and nothing more. A biome with no art of
+			 * its own keeps the physical shading below rather than a placeholder's flat colour. */
+			BiomeGroundColours.ClearCache();
+			BiomeTerrainLayers.ClearCache();
+			var palette = new BiomePalette();
+			bool hasOcean = body.Water > 0f;
+
+			/* Where rock stands molten: the same decision, and the same level, the scene generator puts a
+			 * lava surface at (SurfaceLiquids), tested against the same altitude it compares the terrain
+			 * with — so a scene cut from the globe finds lava exactly where the globe shows it. A world
+			 * above the melting point of rock was drawn as blue sea here whenever it had any water at all,
+			 * while every scene cut from it was a magma ocean. */
+			bool hasLava = SurfaceLiquids.For(system, body, out float lavaLevelMetres) == SurfaceLiquid.Lava;
 
 			int height = Width / 2;
 			var texture = new Texture2D(Width, height, TextureFormat.RGBA32, false);
@@ -167,7 +185,40 @@ namespace FishMMO.Shared.WorldDesign
 			 * the previous row and the previous pixel gives the gradient for free, where sampling
 			 * the function again would have tripled the cost of the slowest bodies. */
 			var previousRow = new float[Width];
+			var previousRowAltitudes = new float[Width];
 			bool hasPreviousRow = false;
+
+			/* The row, taken in two passes. The first samples the ground and shades the slope; it
+			 * also records each pixel's altitude and whether it is open sea, which is exactly what
+			 * the moisture walk upwind asks of every other pixel on the same circle of latitude.
+			 * The second resolves the biomes with that walk reading the row instead of the noise:
+			 * eight lookups a pixel rather than eight surface samples. */
+			var rowHeights = new float[Width];
+			var rowAltitudes = new float[Width];
+			var rowTemperatures = new float[Width];
+			var rowSlopes = new float[Width];
+			var rowSteepness = new float[Width];
+			var moistureAltitudes = new float[Width];
+			var moistureOceans = new bool[Width];
+			var rowTerrain = new MoistureRowTerrain(moistureAltitudes, moistureOceans);
+			// The same sea test PlanetMoistureTerrain makes: a dry world's low ground is lowland, not sea.
+			bool hasSea = profile.OceanFloor != null;
+
+			/* Land is finished in a third pass over the whole image, because blending a border needs
+			 * the biomes on the rows below as well as above. These hold what that pass reads: which
+			 * biome each land pixel is (0 for a pixel already finished — sea, frozen sea, lava), its
+			 * own colour before relief, and the inputs to its variation. About 55 MB at this
+			 * resolution, for the length of one body's bake. */
+			int pixelCount = Width * height;
+			var land = new LandPixels(pixelCount);
+
+			// Metres per pixel, for the slope rock shows on: the body's real size, which its relief is scaled from.
+			double radiusMetres = (body.SkyRadiusKm > 0.01f ? body.SkyRadiusKm : PlanetSurface.EarthRadiusKm) * 1000.0;
+			float northMetres = (float)(System.Math.PI * radiusMetres / height);
+			float equatorMetres = (float)(2.0 * System.Math.PI * radiusMetres / Width);
+			float earthScale = Mathf.Max(1e-3f, relief / PlanetSurface.EarthReliefMetres);
+			// Greener where wet, browner where dry, only where something grows.
+			bool living = climate.Conditions.HasLiquidWater;
 
 			for (int y = 0; y < height; y++)
 			{
@@ -177,14 +228,15 @@ namespace FishMMO.Shared.WorldDesign
 				double latitude = 90.0 - (y + 0.5) * 180.0 / height;
 				int row = y * Width;
 				float previousHeight = 0f;
+				float previousAltitude = 0f;
 				bool hasPreviousHeight = false;
 				for (int x = 0; x < Width; x++)
 				{
 					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
 					float h = PlanetSurface.HeightAt(seed, latitude, longitude, cratering);
-					/* Temperature here: the globe's mean, cooled toward the pole by the sun's noon
-					 * altitude, and cooled again by how far above sea level the ground stands. The
-					 * same three terms the running game uses. */
+					/* Temperature here: the ground under the star at noon, cooled toward the pole by
+					 * the sun's noon altitude, and cooled again by how far above sea level the ground
+					 * stands. The same three terms the running game uses. */
 					// The same helper the terrain generator uses, so the picture and the ground
 					// agree about how high a continent is.
 					float altitude = PlanetSurface.AltitudeFromHeight(h, profile, relief);
@@ -204,16 +256,96 @@ namespace FishMMO.Shared.WorldDesign
 					 * nothing there is worth that, so the shading simply stops. */
 					float cosLat = Mathf.Max(0.3f, Mathf.Cos((float)latitude * Mathf.Deg2Rad));
 					float polarFade = 1f - Smooth(72f, 86f, Mathf.Abs((float)latitude));
-					float slope = ((east / cosLat) * 0.7f + north * 0.7f) * polarFade;
+
+					// The same neighbours in metres over metres, for where rock shows through.
+					float eastGrade = hasPreviousHeight ? (altitude - previousAltitude) / (equatorMetres * cosLat) : 0f;
+					float northGrade = hasPreviousRow ? (altitude - previousRowAltitudes[x]) / northMetres : 0f;
 
 					previousHeight = h;
+					previousAltitude = altitude;
 					hasPreviousHeight = true;
-					previousRow[x] = h;
-
-					pixels[row + x] = Shade(h, profile, body, temperature, slope, internalHeat, direction, seed,
-						SeaDepth01(-altitude / (relief / PlanetSurface.EarthReliefMetres)));
+					rowHeights[x] = h;
+					rowAltitudes[x] = altitude;
+					rowTemperatures[x] = temperature;
+					rowSlopes[x] = ((east / cosLat) * 0.7f + north * 0.7f) * polarFade;
+					rowSteepness[x] = Mathf.Sqrt(eastGrade * eastGrade + northGrade * northGrade) * polarFade;
+					moistureOceans[x] = hasSea && h <= profile.SeaLevel;
+					moistureAltitudes[x] = moistureOceans[x] ? 0f : altitude;
 				}
+
+				for (int x = 0; x < Width; x++)
+				{
+					// The surface field's own height and altitude: never a biome selection's moved one.
+					float h = rowHeights[x];
+					float altitude = rowAltitudes[x];
+					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
+
+					switch (Classify(hasLava, lavaLevelMetres, hasOcean, profile.SeaLevel, h, altitude))
+					{
+						// Molten ground first: no biome lives under lava, and no sea is drawn over it.
+						case GlobePixel.Lava:
+							pixels[row + x] = Lava(direction, seed);
+							continue;
+						case GlobePixel.Sea:
+							pixels[row + x] = Shade(h, profile, body, rowTemperatures[x], rowSlopes[x], internalHeat, direction, seed,
+								SeaDepth01(-altitude / (relief / PlanetSurface.EarthReliefMetres)));
+							continue;
+					}
+
+					BiomeTemplate biome = climate.BiomeAt(latitude, direction, h, altitude, rowTerrain, out PlanetSurfacePoint point);
+					int i = row + x;
+					BiomePalette.Entry entry = palette.Of(biome);
+					land.Ids[i] = entry.Id;
+					if (entry.HasArt)
+					{
+						land.Bases[i] = entry.Main;
+						land.Cliffs[i] = entry.Cliff;
+						land.Art[i] = true;
+					}
+					else
+					{
+						// A biome with no art of its own keeps the physical shading rather than a placeholder's flat colour.
+						Color shaded = ShadeColour(h, profile, body, rowTemperatures[x], internalHeat, direction, seed, 0f);
+						land.Bases[i] = shaded;
+						land.Cliffs[i] = shaded;
+					}
+					land.Slopes[i] = rowSlopes[x];
+					land.Steepness[i] = rowSteepness[x];
+					land.EarthAltitudes[i] = altitude / earthScale;
+					land.Humidities[i] = point.Climate.Humidity;
+				}
+
+				// This row is the next one's northern neighbour.
+				(previousRow, rowHeights) = (rowHeights, previousRow);
+				(previousRowAltitudes, rowAltitudes) = (rowAltitudes, previousRowAltitudes);
 				hasPreviousRow = true;
+			}
+
+			/* Land, finished: each pixel's colour blended with the biomes around it, varied within its
+			 * own biome, and only then lit. Sea, frozen sea and lava were finished above and are never
+			 * read or written here. */
+			for (int y = 0; y < height; y++)
+			{
+				double latitude = 90.0 - (y + 0.5) * 180.0 / height;
+				// A pixel's width in equator pixels, so the blend reaches as far east-west as north-south.
+				float stretch = Mathf.Clamp(1f / Mathf.Cos((float)latitude * Mathf.Deg2Rad), 1f, MaxBlendStretch);
+				int row = y * Width;
+				for (int x = 0; x < Width; x++)
+				{
+					int i = row + x;
+					if (land.Ids[i] == 0)
+					{
+						continue;
+					}
+					double longitude = (x + 0.5) * 360.0 / Width - 180.0;
+					Vector3 direction = PlanetSurface.Direction(latitude, longitude);
+					BorderWarp(seed, direction, out float warpX, out float warpY);
+					LandBlend blend = BlendAcrossBiomes(land.Ids, land.Bases, land.Cliffs, land.Art, Width, height, x, y,
+						x + warpX * stretch, y + warpY, stretch);
+					Color colour = Vary(blend, land.EarthAltitudes[i], land.Humidities[i], living, land.Steepness[i], Mottle(seed, direction));
+					pixels[i] = Relief(colour, land.Slopes[i], body);
+				}
 			}
 
 			texture.SetPixels32(pixels);
@@ -445,6 +577,38 @@ namespace FishMMO.Shared.WorldDesign
 		private static Color32 Shade(float h, PlanetSurface.PlanetProfile profile, WorldBody body, float temperature,
 			float slope, float internalHeat, Vector3 direction, uint seed, float seaDepth01)
 		{
+			/* Relief shading, last, over whatever the ground turned out to be.
+			 *
+			 * Height alone cannot show a crater: its floor and the plain outside it are at similar
+			 * heights, so both come out the same colour and the rim between them vanishes. What
+			 * makes any planetary map legible is the SLOPE — a light from one side, brightening
+			 * what faces it and darkening what turns away. Strongest on airless ground, which has
+			 * no water, no vegetation and no weather to tell one place from another. */
+			/* Large, because the gradient is per PIXEL. Two neighbouring texels are about a fifth
+			 * of a degree apart on the globe, so even a crater wall is a height difference of
+			 * roughly a thousandth — at any sane-looking multiplier the shading is a couple of
+			 * percent and may as well not be there. The clamp is what keeps it from tearing. */
+			/* Measured, not guessed, and twice wrong before this.
+			 *
+			 * The first pass used 26 and I called it invisible without checking that the bake had
+			 * actually finished — it had not. The second used 520, which pins every pixel against
+			 * one clamp or the other and turns a moon into an engraving. A crater field has hard
+			 * edges, so the step between neighbouring texels is far larger than a smooth heightmap's
+			 * and needs a far smaller multiplier, not a larger one. */
+			return Relief(ShadeColour(h, profile, body, temperature, internalHeat, direction, seed, seaDepth01), slope, body);
+		}
+
+		/// <summary>
+		/// The physical colour of the ground or sea at a point, before relief: what the globe shows where
+		/// no biome has art, and every sea.
+		/// </summary>
+		/// <remarks>
+		/// Split from <see cref="Shade"/> so a land pixel's own colour can be blended with its neighbours'
+		/// before it is lit; the relief must come last, or the blend would smear the slope light too.
+		/// </remarks>
+		private static Color ShadeColour(float h, PlanetSurface.PlanetProfile profile, WorldBody body, float temperature,
+			float internalHeat, Vector3 direction, uint seed, float seaDepth01)
+		{
 			bool hasOcean = body.Water > 0f;
 			bool airless = body.Atmosphere == AtmosphereKind.None;
 			Color colour;
@@ -481,7 +645,10 @@ namespace FishMMO.Shared.WorldDesign
 					 * this used to say. Europa is airless and made of ice; the Moon is airless and
 					 * made of rock; Io is airless and made of sulphur and lava. What separates them
 					 * is water and internal heat, not air. */
-					bool icy = body.Water > 0.05f && temperature <= -0.35f;
+					// The world conditions' own ice test, point by point: whenever the world is an
+					// ice world (BiomeWorldConditions.IsIceWorld) every point passes it, so the globe
+					// is ice exactly where Europa's biomes are chosen and the lava lakes are not.
+					bool icy = BiomeWorldConditions.IsIceAt(body.Water, temperature);
 
 					if (icy)
 					{
@@ -512,11 +679,14 @@ namespace FishMMO.Shared.WorldDesign
 						Color sulphur = Color.Lerp(new Color(0.78f, 0.66f, 0.28f), new Color(0.86f, 0.52f, 0.22f), vents);
 						colour = Color.Lerp(basalt, sulphur, Smooth(0.52f, 0.78f, vents) * Mathf.Clamp01(internalHeat));
 
-						// Molten ground glows in the lowest places, where the crust is thinnest.
-						if (internalHeat > 0.8f)
+						/* Molten ground glows in the lowest places, where the crust is thinnest. The
+						 * threshold and the fade are SurfaceLiquids', which also stands the lava lakes
+						 * at the middle of this fade: below it the bake draws the lakes themselves
+						 * (Lava), so what is left of the fade is the hot ground around them. */
+						if (internalHeat >= SurfaceLiquids.LavaLakeHeat)
 						{
 							colour = Color.Lerp(colour, new Color(0.95f, 0.35f, 0.10f),
-								Smooth(0.14f, 0f, above) * 0.8f);
+								Smooth(2f * SurfaceLiquids.LavaLakeLevel, 0f, above) * 0.8f);
 						}
 					}
 					else
@@ -545,24 +715,32 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			/* Relief shading, last, over whatever the ground turned out to be.
-			 *
-			 * Height alone cannot show a crater: its floor and the plain outside it are at similar
-			 * heights, so both come out the same colour and the rim between them vanishes. What
-			 * makes any planetary map legible is the SLOPE — a light from one side, brightening
-			 * what faces it and darkening what turns away. Strongest on airless ground, which has
-			 * no water, no vegetation and no weather to tell one place from another. */
-			/* Large, because the gradient is per PIXEL. Two neighbouring texels are about a fifth
-			 * of a degree apart on the globe, so even a crater wall is a height difference of
-			 * roughly a thousandth — at any sane-looking multiplier the shading is a couple of
-			 * percent and may as well not be there. The clamp is what keeps it from tearing. */
-			/* Measured, not guessed, and twice wrong before this.
-			 *
-			 * The first pass used 26 and I called it invisible without checking that the bake had
-			 * actually finished — it had not. The second used 520, which pins every pixel against
-			 * one clamp or the other and turns a moon into an engraving. A crater field has hard
-			 * edges, so the step between neighbouring texels is far larger than a smooth heightmap's
-			 * and needs a far smaller multiplier, not a larger one. */
+			return colour;
+		}
+
+		/// <summary>
+		/// Molten rock seen from orbit: a pixel is kilometres across, so the crust plates and the glowing
+		/// seams between them average out, and what is left is how much of the melt is crusted over.
+		/// </summary>
+		/// <remarks>
+		/// Rafts of cooled crust drift on a lava sea in fields far larger than a pixel, so a low-frequency
+		/// field decides how crusted each place is: dim red-brown where the rafts have closed up, the
+		/// incandescent orange of open melt where they have parted. Flat, so no relief shading — a liquid
+		/// has no slope to light.
+		/// </remarks>
+		private static Color32 Lava(Vector3 direction, uint seed)
+		{
+			float rafts = PlanetSurface.FieldNoiseAt(seed ^ 0x1A7A5u,
+				new Vector3(direction.x * 9f, direction.y * 9f, direction.z * 9f), 4);
+			Color crusted = new Color(0.30f, 0.10f, 0.05f);
+			Color open = new Color(0.95f, 0.40f, 0.12f);
+			Color colour = Color.Lerp(crusted, open, Smooth(0.35f, 0.75f, rafts));
+			return new Color32((byte)(colour.r * 255f), (byte)(colour.g * 255f), (byte)(colour.b * 255f), 255);
+		}
+
+		/// <summary>The relief shading every land colour gets, biome or physical, as a finished pixel.</summary>
+		private static Color32 Relief(Color colour, float slope, WorldBody body)
+		{
 			float strength = body.Atmosphere == AtmosphereKind.None ? 14f : 9f;
 			colour *= Mathf.Clamp(1f + slope * strength, 0.6f, 1.45f);
 
@@ -571,6 +749,384 @@ namespace FishMMO.Shared.WorldDesign
 				(byte)(Mathf.Clamp01(colour.g) * 255f),
 				(byte)(Mathf.Clamp01(colour.b) * 255f),
 				255);
+		}
+
+		// ── Land: what a pixel is, its biome borders, its variation ────
+
+		/// <summary>What a globe pixel is, decided from the surface field alone.</summary>
+		public enum GlobePixel : byte
+		{
+			Land,
+			Sea,
+			Lava,
+		}
+
+		/// <summary>
+		/// Lava, sea or land, from the surface field's own raw height and altitude.
+		/// </summary>
+		/// <param name="hasLava">Whether the body's rock stands molten anywhere (<see cref="SurfaceLiquids"/>).</param>
+		/// <param name="lavaLevelMetres">The level the lava stands at, in the body's metres.</param>
+		/// <param name="hasOcean">Whether the body has a sea.</param>
+		/// <param name="seaLevel">The sea level on the raw surface field.</param>
+		/// <param name="height">The raw surface field at the pixel.</param>
+		/// <param name="altitudeMetres">The pixel's altitude, from <see cref="PlanetSurface.AltitudeFromHeight"/>.</param>
+		/// <remarks>
+		/// <b>Never from a biome selection.</b> The scene generator stands its sea and its lava at these
+		/// physical levels, so the globe's shores have to be decided from the same real height and
+		/// altitude or the globe and the scenes cut from it would disagree about where a coast is. The
+		/// biome choice moves its own copy of the height about to blur landform borders
+		/// (<see cref="PlanetClimateField.SelectionPoint"/>); nothing here ever sees that copy.
+		/// </remarks>
+		public static GlobePixel Classify(bool hasLava, float lavaLevelMetres, bool hasOcean, float seaLevel, float height, float altitudeMetres)
+		{
+			if (hasLava && altitudeMetres < lavaLevelMetres)
+			{
+				return GlobePixel.Lava;
+			}
+			if (hasOcean && height <= seaLevel)
+			{
+				return GlobePixel.Sea;
+			}
+			return GlobePixel.Land;
+		}
+
+		/// <summary>A land pixel's colours once its neighbours' biomes are blended in.</summary>
+		public struct LandBlend
+		{
+			/// <summary>The ground: biome art's mean colour, or the physical shading where a biome has none.</summary>
+			public Color Ground;
+
+			/// <summary>The bare rock the ground gives way to on steep slopes.</summary>
+			public Color Cliff;
+
+			/// <summary>How much of the blend is biome art, 0…1: the share the variation applies to.</summary>
+			public float Art;
+		}
+
+		/// <summary>Half-width of the border blend, in pixels at the equator.</summary>
+		public const int BlendReachPixels = 2;
+
+		/// <summary>
+		/// The blend's Gaussian radius, in pixels at the equator: about 20 km on an Earth-sized body.
+		/// </summary>
+		/// <remarks>
+		/// A border fades over three or four pixels — soft at the globe's own scale, where an ecotone
+		/// tens of kilometres deep is exactly that wide — without smearing biomes that are only a few
+		/// pixels across into their neighbours.
+		/// </remarks>
+		public const float BlendSigmaPixels = 1f;
+
+		/// <summary>The most the blend widens east-west toward the poles, in pixels per equator pixel.</summary>
+		/// <remarks>
+		/// An equirectangular pixel narrows with the cosine of the latitude, so the blend steps further
+		/// east-west to reach the same distance on the ground; capped where the cosine runs out, near 83°.
+		/// </remarks>
+		public const float MaxBlendStretch = 8f;
+
+		/// <summary>How far the blend's centre is pushed about, in pixels at the equator.</summary>
+		/// <remarks>
+		/// A plain blur of a smooth border is a smooth soft border. Moving the point the neighbourhood is
+		/// read around by a field of a few pixels' scale makes the soft edge ragged and lets the two
+		/// biomes reach into each other — the interlocking a real ecotone has at the scale a pixel
+		/// cannot resolve.
+		/// </remarks>
+		public const float BorderWarpPixels = 1.5f;
+
+		/// <summary>
+		/// Frequency of the border warp on the unit sphere: cells of about 8 and 4 pixels on a
+		/// 2048-wide bake, finer than most of the selection noise's meanders (<see cref="PlanetClimateField.SelectionNoiseFrequency"/>).
+		/// </summary>
+		/// <remarks>
+		/// Measured: at 60 the warp moved by 0.27 of its range per pixel, 0.4 px of centre shift per
+		/// pixel stepped — steep enough in places for the read-around point to fold back on itself
+		/// and scatter specks. At 40 it moves about two thirds of that, and the ragged edge stays an edge.
+		/// </remarks>
+		public const float BorderWarpFrequency = 40f;
+
+		private static readonly float[] BlendWeights = BuildBlendWeights();
+
+		private static float[] BuildBlendWeights()
+		{
+			int side = BlendReachPixels * 2 + 1;
+			var weights = new float[side * side];
+			int k = 0;
+			for (int dy = -BlendReachPixels; dy <= BlendReachPixels; dy++)
+			{
+				for (int dx = -BlendReachPixels; dx <= BlendReachPixels; dx++, k++)
+				{
+					weights[k] = Mathf.Exp(-(dx * dx + dy * dy) / (2f * BlendSigmaPixels * BlendSigmaPixels));
+				}
+			}
+			return weights;
+		}
+
+		/// <summary>
+		/// A land pixel's ground and rock colours blended with the land around it, weighted by distance.
+		/// </summary>
+		/// <param name="ids">Each pixel's biome, 0 for a pixel that is not land (sea, frozen sea, lava).</param>
+		/// <param name="bases">Each land pixel's own ground colour.</param>
+		/// <param name="cliffs">Each land pixel's own rock colour.</param>
+		/// <param name="art">Whether each land pixel's colour is biome art rather than the physical shading.</param>
+		/// <param name="width">Image width; the image wraps east-west.</param>
+		/// <param name="height">Image height; rows are clamped at the poles.</param>
+		/// <param name="x">The pixel's column.</param>
+		/// <param name="y">The pixel's row.</param>
+		/// <param name="centreX">The column the neighbourhood is read around: <paramref name="x"/>, warped.</param>
+		/// <param name="centreY">The row the neighbourhood is read around: <paramref name="y"/>, warped.</param>
+		/// <param name="stretch">Pixels per equator pixel east-west (1 / cos latitude, capped).</param>
+		/// <remarks>
+		/// <para>
+		/// <b>Only across biomes.</b> A neighbour of the pixel's own biome contributes the pixel's own
+		/// colours, so nothing inside a biome is blurred — the physical shading of a biome without art
+		/// keeps its detail — and a pixel whose whole neighbourhood is one biome comes back exactly
+		/// as it went in.
+		/// </para>
+		/// <para>
+		/// <b>Never across a coast.</b> Sea, frozen sea and lava neighbours are skipped, so a coastline
+		/// stays exactly where the surface field puts it, as the scenes cut from the globe have it.
+		/// </para>
+		/// <para>Allocation-free: at most 25 lookups, and none when they all agree.</para>
+		/// </remarks>
+		public static LandBlend BlendAcrossBiomes(ushort[] ids, Color32[] bases, Color32[] cliffs, bool[] art, int width, int height,
+			int x, int y, float centreX, float centreY, float stretch)
+		{
+			int self = y * width + x;
+			ushort own = ids[self];
+			Color ownGround = bases[self];
+			Color ownCliff = cliffs[self];
+			float ownArt = art[self] ? 1f : 0f;
+
+			Color ground = Color.clear;
+			Color cliff = Color.clear;
+			float artShare = 0f;
+			float total = 0f;
+			bool mixed = false;
+			int k = 0;
+			for (int dy = -BlendReachPixels; dy <= BlendReachPixels; dy++)
+			{
+				int sy = Mathf.Clamp(Mathf.RoundToInt(centreY + dy), 0, height - 1);
+				for (int dx = -BlendReachPixels; dx <= BlendReachPixels; dx++, k++)
+				{
+					int sx = Mathf.RoundToInt(centreX + dx * stretch) % width;
+					if (sx < 0)
+					{
+						sx += width;
+					}
+					int sample = sy * width + sx;
+					ushort id = ids[sample];
+					if (id == 0)
+					{
+						continue;
+					}
+					float weight = BlendWeights[k];
+					if (id == own)
+					{
+						ground += ownGround * weight;
+						cliff += ownCliff * weight;
+						artShare += ownArt * weight;
+					}
+					else
+					{
+						mixed = true;
+						ground += (Color)bases[sample] * weight;
+						cliff += (Color)cliffs[sample] * weight;
+						artShare += art[sample] ? weight : 0f;
+					}
+					total += weight;
+				}
+			}
+
+			if (!mixed || total <= 0f)
+			{
+				return new LandBlend { Ground = ownGround, Cliff = ownCliff, Art = ownArt };
+			}
+			return new LandBlend { Ground = ground / total, Cliff = cliff / total, Art = artShare / total };
+		}
+
+		/// <summary>The border warp at a point, each axis −1…1 × <see cref="BorderWarpPixels"/>.</summary>
+		private static void BorderWarp(uint seed, Vector3 direction, out float x, out float y)
+		{
+			x = SignedField(seed ^ 0x6A2D4E1Bu, direction, BorderWarpFrequency, 2) * BorderWarpPixels;
+			y = SignedField(seed ^ 0x19C3F57Du, direction, BorderWarpFrequency, 2) * BorderWarpPixels;
+		}
+
+		/// <summary>Frequency of the colour mottle on the unit sphere: about 210, 105 and 52 km cells on an Earth-sized body.</summary>
+		public const float MottleFrequency = 30f;
+
+		/// <summary>How far the mottle moves a land pixel's brightness, either way.</summary>
+		/// <remarks>
+		/// Four percent: enough that a biome hundreds of kilometres across is not one flat swatch — soil,
+		/// stand age and old fire scars vary over exactly that range — and too little to read as a
+		/// pattern of its own.
+		/// </remarks>
+		public const float MottleStrength = 0.04f;
+
+		/// <summary>The low-frequency brightness variation at a point, −1…1.</summary>
+		private static float Mottle(uint seed, Vector3 direction)
+		{
+			return SignedField(seed ^ 0x4F0771E5u, direction, MottleFrequency, 3);
+		}
+
+		/// <summary>A field noise as −1…1, stretched as the selection noise is (fBm does not fill its range).</summary>
+		private static float SignedField(uint seed, Vector3 direction, float frequency, int octaves)
+		{
+			float n = PlanetSurface.FieldNoise(seed, direction, frequency, octaves);
+			return Mathf.Clamp((n - 0.5f) * 2f * PlanetClimateField.SelectionNoiseStretch, -1f, 1f);
+		}
+
+		/// <summary>Earth metres at which ground reads fully "high": the alpine edge, where vegetation thins out.</summary>
+		public const float HighGroundMetres = 4500f;
+
+		/// <summary>Brightness of the lowest and the highest ground, against the biome's mean colour.</summary>
+		/// <remarks>
+		/// Low ground is wetter, more vegetated and darker; high ground drier, thinner-soiled and paler
+		/// — so a highland biome shades up toward its summits instead of being one flat colour over
+		/// kilometres of height. Measured Earth-like land: median 712 m, 90th percentile 2.1 km, so most
+		/// ground sits near the low end and the paling shows on the ranges.
+		/// </remarks>
+		public const float LowGroundBrightness = 0.96f;
+		public const float HighGroundBrightness = 1.08f;
+
+		/// <summary>How much of its colour the highest ground loses toward grey.</summary>
+		public const float HighGroundDesaturation = 0.2f;
+
+		/// <summary>The multiplier a fully wet pixel's ground takes: a little greener.</summary>
+		public static readonly Color WetTint = new Color(0.94f, 1.03f, 0.94f, 1f);
+
+		/// <summary>The multiplier a fully dry pixel's ground takes: a little browner.</summary>
+		public static readonly Color DryTint = new Color(1.05f, 1f, 0.9f, 1f);
+
+		/// <summary>The slope, metres per metre between neighbouring pixels, at which rock starts to show.</summary>
+		/// <remarks>
+		/// Measured on a 2048-wide bake: Earth-like land has a median of 0.006, a 90th percentile of
+		/// 0.018 and a 99th of 0.036; Arthis 0.006 / 0.015 / 0.028. A pixel is about 20 km, so these are
+		/// the mean grades of whole massif flanks. Rock starts at 0.015 (the steepest seventh of an
+		/// Earth-like world's land) and is full at 0.06, which on Earth-like ground only the steepest
+		/// fronts approach. Small moons are far steeper at their finer pixels (crater walls: a 90th
+		/// percentile of 0.05–0.1) and show their rock there, as the Moon's bright crater walls do.
+		/// </remarks>
+		public const float RockSteepnessStart = 0.015f;
+
+		/// <summary>The slope at which a biome's rock shows at full share. See <see cref="RockSteepnessStart"/>.</summary>
+		public const float RockSteepnessFull = 0.06f;
+
+		/// <summary>The most of a pixel's colour that is rock: a 20 km pixel is never all cliff.</summary>
+		public const float RockShare = 0.5f;
+
+		/// <summary>
+		/// A land pixel's colour varied within its biome: paler and greyer high, darker low, greener
+		/// where wet and browner where dry, rock on steep ground, a faint mottle — all before relief.
+		/// </summary>
+		/// <param name="blend">The pixel's blended colours.</param>
+		/// <param name="earthAltitudeMetres">Its altitude in Earth metres (the body's metres over its relief scale).</param>
+		/// <param name="humidity">Its honest humidity, −1…1.</param>
+		/// <param name="living">Whether the world has liquid water: green and brown are a statement about vegetation.</param>
+		/// <param name="steepness">Its slope in metres per metre.</param>
+		/// <param name="mottle">The low-frequency variation there, −1…1.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>Every term is a smooth function of the ground, never of the biome's own envelope</b>, so
+		/// two biomes meeting at a border take the same variation on both sides and the border does not
+		/// come back as a step in brightness.
+		/// </para>
+		/// <para>
+		/// <b>Only on biome art.</b> The physical shading already varies with altitude and temperature,
+		/// so the variation is scaled by the blend's art share and a biome without art is left alone.
+		/// </para>
+		/// </remarks>
+		public static Color Vary(in LandBlend blend, float earthAltitudeMetres, float humidity, bool living, float steepness, float mottle)
+		{
+			Color colour = blend.Ground;
+			if (blend.Art > 0f)
+			{
+				float high = Smooth(0f, HighGroundMetres, earthAltitudeMetres);
+				float luma = colour.r * 0.299f + colour.g * 0.587f + colour.b * 0.114f;
+				Color varied = Color.Lerp(colour, new Color(luma, luma, luma, 1f), HighGroundDesaturation * high);
+				varied *= Mathf.Lerp(LowGroundBrightness, HighGroundBrightness, high);
+				if (living)
+				{
+					float wet = Mathf.Clamp(humidity, -1f, 1f);
+					varied *= wet >= 0f ? Color.Lerp(Color.white, WetTint, wet) : Color.Lerp(Color.white, DryTint, -wet);
+				}
+				varied = Color.Lerp(varied, blend.Cliff, Smooth(RockSteepnessStart, RockSteepnessFull, steepness) * RockShare);
+				varied *= 1f + MottleStrength * mottle;
+				colour = Color.Lerp(colour, varied, blend.Art);
+			}
+			colour.a = 1f;
+			return colour;
+		}
+
+		/// <summary>Each biome's colours, read once per bake, and the small ID the border blend compares.</summary>
+		private sealed class BiomePalette
+		{
+			/// <summary>One biome's colours. ID 0 is reserved for "not land".</summary>
+			public readonly struct Entry
+			{
+				public readonly ushort Id;
+				public readonly bool HasArt;
+				public readonly Color32 Main;
+				public readonly Color32 Cliff;
+
+				public Entry(ushort id, bool hasArt, Color32 main, Color32 cliff)
+				{
+					Id = id;
+					HasArt = hasArt;
+					Main = main;
+					Cliff = cliff;
+				}
+			}
+
+			private readonly Dictionary<BiomeTemplate, Entry> entries = new Dictionary<BiomeTemplate, Entry>();
+			private Entry none;
+			private bool hasNone;
+			private ushort next;
+
+			/// <summary>The entry for a biome, reading its art the first time it is seen. Null is a biome of its own.</summary>
+			public Entry Of(BiomeTemplate biome)
+			{
+				if (biome == null)
+				{
+					if (!hasNone)
+					{
+						none = new Entry(++next, false, default, default);
+						hasNone = true;
+					}
+					return none;
+				}
+				if (!entries.TryGetValue(biome, out Entry entry))
+				{
+					bool hasArt = BiomeGroundColours.TryMainColour(biome, BiomeTerrainLayers.Resolve, out Color main);
+					Color cliff = hasArt ? BiomeGroundColours.CliffColour(biome, BiomeTerrainLayers.Resolve) : default;
+					entry = new Entry(++next, hasArt, main, cliff);
+					entries[biome] = entry;
+				}
+				return entry;
+			}
+		}
+
+		/// <summary>The whole image's land, as the finishing pass reads it.</summary>
+		private sealed class LandPixels
+		{
+			public readonly ushort[] Ids;
+			public readonly Color32[] Bases;
+			public readonly Color32[] Cliffs;
+			public readonly bool[] Art;
+			public readonly float[] Slopes;
+			public readonly float[] Steepness;
+			public readonly float[] EarthAltitudes;
+			public readonly float[] Humidities;
+
+			public LandPixels(int count)
+			{
+				Ids = new ushort[count];
+				Bases = new Color32[count];
+				Cliffs = new Color32[count];
+				Art = new bool[count];
+				Slopes = new float[count];
+				Steepness = new float[count];
+				EarthAltitudes = new float[count];
+				Humidities = new float[count];
+			}
 		}
 	}
 }

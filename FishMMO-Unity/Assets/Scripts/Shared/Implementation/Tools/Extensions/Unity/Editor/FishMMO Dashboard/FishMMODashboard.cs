@@ -99,6 +99,8 @@ namespace FishMMO.Shared
 
 			FishMMO.Shared.WorldMaps.WorldMapBaker.BusyChanged -= RefreshToolButtons;
 			FishMMO.Shared.WorldMaps.WorldMapBaker.BusyChanged += RefreshToolButtons;
+			FishMMO.Shared.WorldDesign.BiomeArtGenerator.BusyChanged -= RefreshToolButtons;
+			FishMMO.Shared.WorldDesign.BiomeArtGenerator.BusyChanged += RefreshToolButtons;
 
 			SetStatus(FishMMO.Shared.WorldMaps.WorldMapBaker.IsBusy ? "Baking world maps…" : "Ready");
 		}

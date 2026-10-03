@@ -25,6 +25,13 @@ namespace FishMMO.Client
 		/// to tell a greasy ashfall from a dry scouring sandstorm.
 		/// </summary>
 		public static readonly int Mix2 = Shader.PropertyToID("_FishWeatherMix2");
+		/// <summary>
+		/// The season where the camera is: x the local year phase (<see cref="LocalPhase"/>), y local
+		/// summer -1..1 (<see cref="LocalSummer"/>), z the climate's humidity offset from its mean
+		/// (negative is drought), w how strongly the year swings here (0 when unknown). Foliage reads
+		/// it to dry, brown, turn and drop its leaves.
+		/// </summary>
+		public static readonly int Season = Shader.PropertyToID("_FishSeason");
 
 		/// <summary>The wind's ground-plane direction (world x, z) for a heading in degrees.</summary>
 		public static Vector2 WindDirection(float headingDegrees)
@@ -69,10 +76,56 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(Mix2, new Vector4(frame[WeatherChannel.AshWeight], frame[WeatherChannel.SandWeight], 0f, 0f));
 		}
 
+		/// <summary>
+		/// How far into summer a place is, -1 deep winter .. 1 high summer, from the body's year phase
+		/// and the latitude.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="FishMMO.Shared.Celestial.CelestialMath.Season01"/> is the northern season (it follows the sun's
+		/// declination), so the south has it reversed; and the swing fades toward the equator, where
+		/// the year brings wet and dry spells rather than summer and winter. Inverse of the weather
+		/// driver's own curve, <c>sin(season · 2π − π/2)</c>, so foliage and weather agree on when
+		/// summer is.
+		/// </remarks>
+		public static float LocalSummer(float season01, float latitudeDegrees)
+		{
+			float north = Mathf.Sin(season01 * Mathf.PI * 2f - Mathf.PI * 0.5f);
+			float hemisphere = latitudeDegrees < 0f ? -1f : 1f;
+			return north * hemisphere * SeasonStrength(latitudeDegrees);
+		}
+
+		/// <summary>The local year phase: the body's season, turned half a year round in the south.</summary>
+		public static float LocalPhase(float season01, float latitudeDegrees)
+		{
+			return Mathf.Repeat(season01 + (latitudeDegrees < 0f ? 0.5f : 0f), 1f);
+		}
+
+		/// <summary>How strongly the year swings here, 0 on the equator .. 1 from the tropics outward.</summary>
+		public static float SeasonStrength(float latitudeDegrees) => Mathf.Clamp01(Mathf.Abs(latitudeDegrees) / 23.5f);
+
+		/// <summary>Publishes the season. Season changes over days, so once a climate tick is plenty.</summary>
+		/// <remarks>
+		/// x the local year phase (0 midwinter, 0.5 midsummer, 0.75 autumn), y local summer -1..1,
+		/// z the humidity offset from the climate's mean, w the swing's strength — never quite 0 once
+		/// set, so a shader can tell an equatorial scene (no seasons) from no season known.
+		/// </remarks>
+		public static void ApplySeason(float season01, float latitudeDegrees, float humidityOffset)
+		{
+			Shader.SetGlobalVector(Season, new Vector4(LocalPhase(season01, latitudeDegrees), LocalSummer(season01, latitudeDegrees),
+				Mathf.Clamp(humidityOffset, -1f, 1f), Mathf.Max(0.001f, SeasonStrength(latitudeDegrees))));
+		}
+
+		/// <summary>No season known: foliage shows its healthy colours.</summary>
+		public static void ClearSeason()
+		{
+			Shader.SetGlobalVector(Season, Vector4.zero);
+		}
+
 		/// <summary>Calm, dry, clear.</summary>
 		public static void Clear()
 		{
 			Apply(WeatherFrame.Clear, default, 0f, 0f, 0f, 0f);
+			ClearSeason();
 		}
 	}
 }

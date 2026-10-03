@@ -79,6 +79,32 @@ namespace FishMMO.Shared.WorldMaps
 		/// </remarks>
 		private static readonly string[] CaptureLayerNames = { "Default", "Ground", "Water" };
 
+		/// <summary>
+		/// Work that sets the scene's look up for the photograph and takes it down again, contributed
+		/// by assemblies this one cannot see. Each hook is called right before the capture renders and
+		/// returns something to dispose straight after it (or null for nothing to undo).
+		/// </summary>
+		/// <remarks>
+		/// <para><b>Why a hook.</b> Every map is photographed at one fixed moment with the weather
+		/// cleared (<see cref="WorldMapCaptureMoment"/>), so the same scene bakes the same map in
+		/// every build. But the sun, the ambient light and the weather's shader globals belong to the
+		/// client's sky and weather, and this assembly is shared: it builds in a server-subtarget
+		/// editor, where the client is compiled out. So the client's weather editor registers the
+		/// lighting here, the same way the test harness dresses generated scenes
+		/// (<c>SceneGenerator.Dress</c>). A server-subtarget editor has no hooks and the bake still
+		/// runs — a client build is never made from it, and its maps are lit as the scenes were
+		/// saved.</para>
+		/// <para><b>Contract.</b> A hook must change only what it puts back when disposed, must not
+		/// save or dirty anything on disk, and must not move the camera. Hooks are disposed in the
+		/// reverse of the order they ran, so a later hook can rely on an earlier one's state, and
+		/// every hook is disposed even when another throws.</para>
+		/// </remarks>
+		public static readonly List<Func<WorldMapCaptureContext, IDisposable>> CaptureStaging =
+			new List<Func<WorldMapCaptureContext, IDisposable>>();
+
+		/// <summary>Set once a bake has said it has no staging hooks, so it says so once and not per scene.</summary>
+		private static bool reportedNoStaging;
+
 		/// <summary>True while a bake is running. Tools that touch the bake must wait for it.</summary>
 		public static bool IsBusy => job != null;
 
@@ -232,6 +258,7 @@ namespace FishMMO.Shared.WorldMaps
 			}
 
 			Directory.CreateDirectory(OutputDirectory);
+			reportedNoStaging = false;
 
 			var bake = new BakeJob();
 			bake.Scenes.AddRange(scenes);
@@ -445,7 +472,7 @@ namespace FishMMO.Shared.WorldMaps
 				return true;
 			}
 
-			CaptureImage(definition);
+			CaptureImage(scene, settings, definition);
 
 			EditorUtility.SetDirty(definition);
 			AssetDatabase.SaveAssetIfDirty(definition);
@@ -497,8 +524,21 @@ namespace FishMMO.Shared.WorldMaps
 		/// <summary>
 		/// Photographs the scene from overhead and writes the image beside the definition.
 		/// </summary>
+		/// <param name="scene">The open, active scene.</param>
+		/// <param name="settings">The scene's settings.</param>
 		/// <param name="definition">The definition being baked.</param>
-		private static void CaptureImage(WorldMapDefinition definition)
+		/// <remarks>
+		/// <para><b>One moment, clear weather, full detail.</b> The photograph is taken at local solar
+		/// noon on the equinox with the weather cleared (<see cref="CaptureStaging"/>), and with every
+		/// level-of-detail rule held at full detail (<see cref="WorldMapDetailOverride"/>), so an
+		/// unchanged scene bakes the same map in every build. All of it is put back the moment the
+		/// pixels are read, before anything else runs.</para>
+		/// <para><b>Nothing waits for a frame.</b> <c>camera.Render()</c> is synchronous, and in edit
+		/// mode no sky system, weather presenter or day/night cycle runs at all, so nothing would
+		/// apply a change "next frame" anyway: each stage writes the lights, ambient and globals
+		/// itself, directly, before the render.</para>
+		/// </remarks>
+		private static void CaptureImage(Scene scene, WorldSceneSettings settings, WorldMapDefinition definition)
 		{
 			if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
 			{
@@ -521,6 +561,7 @@ namespace FishMMO.Shared.WorldMaps
 
 			RenderTexture target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
 			RenderTexture previousActive = RenderTexture.active;
+			Texture2D image = null;
 
 			/* Fog is disabled around the capture and restored afterwards. This is a global setting
 			 * and mutating it is normally something to avoid — but here it is one editor-only
@@ -548,15 +589,33 @@ namespace FishMMO.Shared.WorldMaps
 				camera.enabled = false;
 				camera.targetTexture = target;
 
-				camera.Render();
+				image = new Texture2D(width, height, TextureFormat.RGB24, false);
+				// Everything that is set up for the photograph is taken down again in this block's
+				// finally, straight after the pixels are read, in the reverse of the order it went up.
+				var staged = new List<IDisposable>();
+				try
+				{
+					// The furthest anything in the frame can be: straight down to the bottom of the
+					// view, out to a corner of the rectangle.
+					float reach = camera.farClipPlane + 0.5f * Mathf.Sqrt(rect.width * rect.width + rect.height * rect.height);
+					staged.Add(WorldMapDetailOverride.Apply(scene, reach, camera.orthographicSize));
 
-				RenderTexture.active = target;
-				Texture2D image = new Texture2D(width, height, TextureFormat.RGB24, false);
-				image.ReadPixels(new Rect(0.0f, 0.0f, width, height), 0, 0);
-				image.Apply();
+					Stage(WorldMapCaptureContext.For(scene, settings, camera), staged);
+
+					BindTerrainArrays(scene);
+
+					camera.Render();
+
+					RenderTexture.active = target;
+					image.ReadPixels(new Rect(0.0f, 0.0f, width, height), 0, 0);
+					image.Apply();
+				}
+				finally
+				{
+					Unstage(staged);
+				}
 
 				byte[] png = image.EncodeToPNG();
-				Object.DestroyImmediate(image);
 
 				string imagePath = WorldMapDefinition.BakedImagePath(definition.SceneName);
 				File.WriteAllBytes(imagePath, png);
@@ -575,8 +634,88 @@ namespace FishMMO.Shared.WorldMaps
 
 				target.Release();
 				Object.DestroyImmediate(target);
+				if (image != null)
+				{
+					Object.DestroyImmediate(image);
+				}
 				Object.DestroyImmediate(cameraObject);
 			}
+		}
+
+		/// <summary>
+		/// Runs every <see cref="CaptureStaging"/> hook, adding what each returns to
+		/// <paramref name="staged"/> as it goes, so that whatever has run is undone even if a later
+		/// hook throws.
+		/// </summary>
+		/// <remarks>
+		/// A hook that throws is reported and skipped, not allowed to fail the bake: the map is then
+		/// photographed without that hook's part (lit as the scene was saved, say), which is a worse
+		/// map but still a map, and the build log says why.
+		/// </remarks>
+		private static void Stage(WorldMapCaptureContext context, List<IDisposable> staged)
+		{
+			if (CaptureStaging.Count == 0)
+			{
+				if (!reportedNoStaging)
+				{
+					reportedNoStaging = true;
+					Debug.LogWarning("[WorldMapBaker] No capture staging is registered (a server-subtarget editor has no client sky or weather), so maps are photographed as the scenes were saved: no fixed noon sun and no weather clearing. Bake from a client-target editor for the deterministic maps a client build ships.");
+				}
+				return;
+			}
+			if (context.HasSky && !context.Hours.HasValue)
+			{
+				Debug.LogWarning($"[WorldMapBaker] Scene '{context.Scene.name}' is not placed in a solar system (no atlas body, or no system asset), so its map has no equinox noon to be lit at; the sky's fallback sun is used.");
+			}
+			foreach (Func<WorldMapCaptureContext, IDisposable> hook in CaptureStaging)
+			{
+				try
+				{
+					IDisposable undo = hook(context);
+					if (undo != null)
+					{
+						staged.Add(undo);
+					}
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"[WorldMapBaker] A capture staging hook threw while preparing '{context.Scene.name}'; the map is photographed without it: {ex}");
+				}
+			}
+		}
+
+		/// <summary>Disposes everything <see cref="Stage"/> set up, last first. Every one is disposed, whatever throws.</summary>
+		private static void Unstage(List<IDisposable> staged)
+		{
+			for (int i = staged.Count - 1; i >= 0; i--)
+			{
+				try
+				{
+					staged[i].Dispose();
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"[WorldMapBaker] Restoring after a map capture threw; an editor setting may be left changed until the next domain reload: {ex}");
+				}
+			}
+			staged.Clear();
+		}
+
+		/// <summary>
+		/// Pushes the scene's baked terrain texture arrays to its terrains, now, so the capture that
+		/// follows draws them. The single place the bake binds terrain art.
+		/// </summary>
+		/// <remarks>
+		/// The binder pushes when it enables, which opening the scene has already done; but a set baked
+		/// since then, or one written while this scene was opening, would otherwise be drawn as it was.
+		/// <see cref="TerrainArrayBinder"/> compiles to its fields alone in a server-subtarget editor,
+		/// where there is nothing to bind.
+		/// </remarks>
+		private static void BindTerrainArrays(Scene scene)
+		{
+#if !UNITY_SERVER
+			TerrainArrayBinder.BindAll(scene);
+#endif
 		}
 
 		/// <summary>

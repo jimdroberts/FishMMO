@@ -15,8 +15,44 @@ MonoBehaviour:
   m_GroupName: Shared_Static_Permanent
   m_GUID: 23636b54ceb43a03f93abc3987c4632a
   m_SerializeEntries:
+  - m_GUID: 0000dcf078b2e49537af1fcaa7244eca
+    m_Address: Archer Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 007828afd8e4b8e90fe39339ccac966e
+    m_Address: Formation_Basalt_Fallen_1_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 00c000c4719048f68aa772f48e423911
     m_Address: Tutorial Spawners
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 01776db50585d08a43c9cf07670e37ec
+    m_Address: Formation_Limestone_Pavement_1_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 01a8042eefb9fd59c8ee0a704dc473be
+    m_Address: Mock Interrupt Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 01d005c509f2116a5f395097861a66c1
+    m_Address: Ground_GrassMeadow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0208c03b367363bbfb3cba175da7929f
+    m_Address: Mock Consumable Minor Healing
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -105,6 +141,30 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0577494f0a2a126c40b697fd1c227a58
+    m_Address: Detail_GrassDry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 058614efbf99a42def91c5ec8451d56e
+    m_Address: Boulder_Grey_Slab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0597f3731bd352a87be64c45180eed62
+    m_Address: Regolith Dust
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 05a98e1fc1294cfa3e973dbe375f41ef
+    m_Address: Formation_Granite_Perched_0_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 06b1cff6f7a24b5196821c4439378f49
     m_Address: Sabre Cat
     m_ReadOnly: 0
@@ -117,14 +177,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 07d0a5b3f65e989778996ececdbd2d92
+    m_Address: Lava Tube
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 080b37dd1751f0b0707431f47328229a
+    m_Address: Formation_Limestone_Block_3_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0892f64b2462ac94db21d06df7047e06
     m_Address: Armor
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 08b030e493f302546af15e93d7a0afa8
+    m_Address: Chilled
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0932ae2dfc174cfc82d3bca83d973f66
     m_Address: Swamp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 093d7d1acaf86f8d0c3daa97ba8cb489
+    m_Address: Formation_Sandstone_Block_3
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -153,8 +237,62 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 09a9bc0202b9fa0c00a34dbe2b88d766
+    m_Address: Formation_Granite_Tor_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 09bda9a19ac9efd16a8d80db9758312f
+    m_Address: Boulder_Slab_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0a45324fc4ef46e5bf058abd2434582b
     m_Address: Test Arena
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a6aa6eb1dcea50a25afa70dbe803610
+    m_Address: Teleporter Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a77c59663600d1e0aa9d801c8f297f6
+    m_Address: Radiation Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0a9592a8c940053275728b8ee9a93820
+    m_Address: Boulder_Slab_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0abe9137cceb5fe83026def40795bdc0
+    m_Address: Pet Balanced Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0b101d0f035c9ed29a39bb2627f8ec55
+    m_Address: Mock Cone Blast
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0bc4d4222dbab9c8ed921e9a12e29ff8
+    m_Address: Formation_Basalt_Block_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0bcc87011181df0da5d0047f916455cd
+    m_Address: Formation_Limestone_Pinnacle_1_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -165,8 +303,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c39557b693745e2beec1872fdcbde2e
+    m_Address: Waypoint Travel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0d1614bd5e4149dfbc05906dbbd0928d
     m_Address: Void Spawn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d4cbb49a14dfb6c8985875e72fc8e93
+    m_Address: Regolith Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d58008a9e582b08aa50c366d56358d5
+    m_Address: Mock Destroy FX Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d828995fe34964588633b8f4eb7d917
+    m_Address: Formation_Sandstone_Block_2_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -177,8 +339,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0dabf71b8f6cb005673002d47253891c
+    m_Address: Formation_Basalt_Fallen_0_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0e01f46d9bb24a2ba4828bfab23ba866
     m_Address: Thornbeast
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e2680ffcd15eccbf452fe24b0a7581d
+    m_Address: Formation_Basalt_Block_3_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -195,6 +369,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0ef971633d11f474d94efe1ea839c942
+    m_Address: Mock Hitscan Beam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0f039b78e79b60234ad1537c9a9aea84
     m_Address: Dungeon
     m_ReadOnly: 0
@@ -207,8 +387,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0faff60beeee1f12c81253e164be3c5e
+    m_Address: Banker Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0fb543b99c4f69c95af454a64f030675
+    m_Address: Formation_Granite_Perched_0_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0fb93731778021200229aec97b9a8b45
+    m_Address: Healer Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0fbfa8b68911e1c4fa66d6b57fcab6a2
     m_Address: Minor Increase Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0fe68e731aa7de2336dada7ebccbf3b7
+    m_Address: Formation_Limestone_Pavement_0_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 105d161059bb803b532437c20cf91aba
+    m_Address: Formation_Granite_Tor_2_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -221,6 +431,30 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 10c3969643cf4153b3fa042fe9c9fd28
     m_Address: Wolffolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 10eca95c3e421113ba1d7f80af3bc13e
+    m_Address: Soaked
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1126c468bf5b9ed065d46f376ff8b317
+    m_Address: Formation_Limestone_Pinnacle_2_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1131aa5377e19ec030d6ba5d5dae3e27
+    m_Address: Merchant Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 115f3bc6de0f13e80c3c970ef71bdd68
+    m_Address: Formation_Basalt_Fallen_2_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -243,8 +477,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 123f9e9f91fed25921ffd0eadc6f77e2
+    m_Address: Formation_Sandstone_Tilted_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1247148bc7e74425b873bef11a31a14c
     m_Address: Dark Elf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 12ae2940abc890b82b1cdbf7b01b980c
+    m_Address: Ice Shelf
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -297,11 +543,11 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1543472ad0644ec4fbae5c4413d88243
-    m_Address: MainBootstrap
+  - m_GUID: 155ec26bfae141ad8af762f8d250e094
+    m_Address: Count Monster Kill
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Scene_Shared
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1563782e7dbd4c02a14b54153be23169
     m_Address: Beastman
@@ -315,8 +561,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1571ed350a2f38af674914ea830a9b70
+    m_Address: Tree_Oak_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1597aec168eeeb5d78080a56745906ae
+    m_Address: Tholin Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 15a71776a1f5e4245841b3301c881f80
     m_Address: Attack Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15d640c1e1c5b8f882f4a8565e46545a
+    m_Address: Enemy - Rogue
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15d91d5ddf7fbb2f987e808890db2902
+    m_Address: Nitrogen Snow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -327,8 +597,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1616cafa86e9e003a05f5151feb6821e
+    m_Address: Detail_Reeds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1620b8e92153a6fc6907418be87a52e1
     m_Address: Mock Nearest Strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 163d9cb7422d64e62a8422f978cd94cd
+    m_Address: Rocks_Small
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -351,8 +633,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16ccb56e669f4d3f09a7f1e7effee560
+    m_Address: Formation_Basalt_Fallen_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 16d741bfb13647cfa2b7f5df134e91d9
     m_Address: Spiderkin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 16db9fa5fc6fbaed98b9faa1afe2b5ec
+    m_Address: Runaway Greenhouse Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1757dc64dd69b9d99a412c94d95b7d03
+    m_Address: Nitrogen Ice Field
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1780296eb2b255779b267ea4bd8fd4ac
+    m_Address: Detail_ShrubDry
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -375,6 +681,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 19a585d2758a90e44d57d73827dcbcbd
+    m_Address: Enemy - Defender
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ab8069820abc0b45ad5dd91bc796d4c
     m_Address: Highborn Nations
     m_ReadOnly: 0
@@ -389,6 +701,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1b6705215f2f41db96eafd71c88f5824
     m_Address: Bog Giant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1bbe266772376ef4bd102e83f2732ff9
+    m_Address: Formation_Limestone_Pinnacle_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1bc668641b106ad2310e88d17fe209f8
+    m_Address: Enemy - Healer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -459,8 +783,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1cdee3b0c0359357742549c89d2c5373
+    m_Address: Tree_Oak_Billboard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1d04c3ae71a447e2aafaa282353727bb
     m_Address: Catfolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d10f337581c5f444da1242bbcbcae76
+    m_Address: Ground_Sand
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -479,6 +815,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ef8b8b1693b44e5a8d5810d1dfe7f37
     m_Address: Draconic Titles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1f056302a57810f9a8b37fc68f17cf04
+    m_Address: Pet - Defender
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -513,6 +855,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 20cc7c745dc246aa6df4b50bbfe09383
+    m_Address: Formation_Limestone_Block_1_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 20e5bd4e8ce1460eb80fef7bd641e060
     m_Address: PvP Rank
     m_ReadOnly: 0
@@ -543,6 +891,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21f5295ef43df59222f6277d5102e1ea
+    m_Address: Formation_Granite_Tor_1_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 21ffa9ba4c587a345b5b5f727ab20c42
     m_Address: Rocky Coast
     m_ReadOnly: 0
@@ -555,8 +909,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2230f5b7b4be8ed8964e27f85ffc173f
+    m_Address: Ground_CliffRock
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 227021df2b20bff40ab713a1a868b1d3
     m_Address: Health Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22ada2cd43c7cc5fd72bdebffe7d7275
+    m_Address: Enemy - Caster
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22aecfac1dca3ee7754e4507bee473fa
+    m_Address: Tree_Palm_Billboard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -597,6 +969,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23fab518843ac25c03488d568bf860ab
+    m_Address: Pet Melee Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2453d93ac8d44114bbb19a5a4db9c96a
     m_Address: Fishfolk
     m_ReadOnly: 0
@@ -621,8 +999,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 24d817278c2dc3a3fa35ffad826a94b3
+    m_Address: Formation_Basalt_Fallen_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 24e045bcfb3323140bf382e6e635ae7d
     m_Address: Glacier
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 25512e6c2a1f1b1ebefd41af73c3ed95
+    m_Address: Formation_Basalt_Fallen_3_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -635,6 +1025,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 25b2912dd9cd4ecfb7bbe73a27b5b476
     m_Address: Kelp Lurker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2651c85903d94974e6e6e2bac6576e61
+    m_Address: Healer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -657,14 +1053,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 273e86af0e66c364fb1d24cf57fde088
+    m_Address: Campfire Warmth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2767bd947c0c0e89d97a609c45aa8a0e
     m_Address: Fire Impact FX Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 278cce3def35369c0b8ce0279d00e172
+    m_Address: Ground_Sandstone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 27c4f240152242b4fb7dec2f5368445c
     m_Address: Sprint Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 27ef0d5fdc9bafb92d84df551e194170
+    m_Address: Formation_Granite_Perched_2_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2842bb07aab4444261adb2748101aa4c
+    m_Address: Formation_Granite_Perched_2_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -717,6 +1137,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2a892a1baf484ac1a85cf0535e66932b
+    m_Address: Detail_GrassTuft
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a9915922f5a42b194cbd2e087d53ed8
     m_Address: Bog Wyrm
     m_ReadOnly: 0
@@ -735,8 +1161,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2bd0895600ce38e6227fbd6837a3683c
+    m_Address: Pet - Healer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2bf706412b8762f93c3905a0d66b4fd9
+    m_Address: Formation_Granite_Perched_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2ce4d12b80ddd9f4ca8a389e6c91c7e3
     m_Address: HumanAbilityCrafter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2cff740eb84c4560d005e0beb0538567
+    m_Address: Detail_Coral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2d0e9c5b1900b51141dd2f7aaf2de811
+    m_Address: Formation_Sandstone_Tilted_0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -747,14 +1197,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2da5565e3e920b12eb798f761d85c21c
+    m_Address: Sulphur Dust
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2dc5449539d44c2dbc4d5a6f36380f1d
     m_Address: Doppelganger
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2dd35c0e41ae12f598e16423b8fc87d0
+    m_Address: Mock Absorb Shield
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2e669850a4855b9438e174f70db28d9a
     m_Address: Punch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2e9768318dc5f8ad682acb3ade8da6af
+    m_Address: Mock Knockback Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2f47dc92033251b54a879858d4fd58dd
+    m_Address: Mock Direct Heal Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -767,6 +1241,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2fe739a3f4db463fbf30d79f492c5142
     m_Address: Dewling
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2ffcbd5a90e285c41fea29043531c58f
+    m_Address: Formation_Basalt_Fallen_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3039a7d15cdf80ce2b2c97aa02aa723b
+    m_Address: Rille
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3101de0762abbbbde0a0d2d15866b249
+    m_Address: Ground_Soil
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -795,14 +1287,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 323c73c04a475d1a386f9b6fbf22fe07
+    m_Address: Mock Cleanse Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3243c87cb242a03478e9ee038f7873ed
     m_Address: Elf
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 32e64645d85534a6261e4e6c723dd59b
+    m_Address: Formation_Basalt_Fallen_0_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 335c46c3e1940fa41a866740a873f64a
     m_Address: GeneralGoods
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 337905e94985bbdbe2b966ffe4ff368c
+    m_Address: Formation_Granite_Tor_0_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -825,14 +1335,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 345dc0cc5023fc0d057e94821e3b8143
+    m_Address: Boulder_Grey_Round
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 34647e48cd749f04eb768bb8a41a47ad
     m_Address: StartScene A Fog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 349664a4754107069f5c5fc72c71e8fe
+    m_Address: Formation_Limestone_Pinnacle_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 34c406c0db334cf2915acea7df6aa769
     m_Address: Ashen Dead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3576905253887f79c0c20f6838f1616a
+    m_Address: Formation_Granite_Perched_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3590a6594a5d3e356bbe132b617b15dc
+    m_Address: Water Rain
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -855,6 +1389,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 36ffc773df7e677d46d6958c8baa7820
+    m_Address: Aggressive Melee Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 37011cbeeab6d57bea1f4ee8a9fdb70a
     m_Address: Soluris System - Orreth
     m_ReadOnly: 0
@@ -873,6 +1413,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 37cbd762e3fa649fe2769be20784ab69
+    m_Address: Formation_Limestone_Pavement_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 37e9f0b2c22f93b7d905f6bbfdecda48
+    m_Address: Formation_Basalt_Fallen_1_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3852a4063401fbc949f2d9ac83a2b7be
     m_Address: Orc Firebolt
     m_ReadOnly: 0
@@ -885,8 +1437,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 38f384db404edebeb657a6a6e30a092a
+    m_Address: Detail_Coral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 39089a04f7b94e49aec4df4469a3a243
     m_Address: Devil
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 39142884ca68b0fa35672660bd0f3de4
+    m_Address: Formation_Limestone_Block_2_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -909,8 +1473,56 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a47bfdfe4a28b54ad97103597b09921
+    m_Address: Formation_Limestone_Pavement_0_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b1405c322d7a2744a16faa08683d319
+    m_Address: Basic Patrol State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b2d945a1203968bd94c61681fe9add0
+    m_Address: Formation_Granite_Perched_1_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b8c8231877b56b84ad6b95da9552d60
+    m_Address: Formation_Granite_Tor_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3bbd523bf7bf5320ca7fbea45874b7ce
+    m_Address: Mock Fireball Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c
+    m_Address: Civilian - Townsfolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3c42f120216f44b28833de1504676c31
     m_Address: Ghost
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c51ee343ddb2c121347b1deb2bdab3b
+    m_Address: Formation_Limestone_Pavement_2_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3cc987611ed47b384fafc62bf9ac20b9
+    m_Address: Detail_ShrubSmall
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -927,8 +1539,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3d64f6001123c693185e0f314deaf6ee
+    m_Address: Mock Point Blank Nova
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3dd24d27fad4b54e8bffb2b3c47197e5
     m_Address: Mock Piercing Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3dd3f343cc5a2a257932168ebc1ce294
+    m_Address: Mock Stun Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e6d862f9e74489f4f19c2b6881a9415
+    m_Address: Formation_Sandstone_Tilted_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e7b0ed763a5ddadd901af1cc12f95d9
+    m_Address: Sulphuric Cloud Deck
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -945,6 +1581,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3fbf5984eeb392ae001d086d5b409f94
+    m_Address: Formation_Granite_Tor_1_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 40374016ce274a8cbd1c3afea98ff664
     m_Address: Griffin
     m_ReadOnly: 0
@@ -957,8 +1599,74 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 40a579b3b5b829d5db7a64e04422a066
+    m_Address: Windburnt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 41f6eb1d8712e8d73accf8b30ec56aca
+    m_Address: Ground_Grass
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4216030132c9d35b1d7db4ecc0eec1e0
+    m_Address: Formation_Limestone_Pinnacle_1_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 42d51c0440a3f3f6a94ec903d588068a
+    m_Address: Ammonia Hail
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 42f8d292196f42a7838c0bd80736fd00
     m_Address: Drake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4309ac96576cac0277c5f220a221a5a2
+    m_Address: Companion AI LOD
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4340a6920e76af2d42d3bb76b6583a0a
+    m_Address: Formation_Granite_Perched_3_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 43aa1a985dafd6fb3934b9a2f349ba62
+    m_Address: Silicate Sand
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 43f12c48ed5edafc5897984eba77bf88
+    m_Address: Formation_Sandstone_Tilted_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44524127545d94f1cfc1e09ae7ed2207
+    m_Address: Formation_Limestone_Pavement_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4479b2adba9b198baec65df5d0dae4fb
+    m_Address: Formation_Limestone_Pinnacle_3_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44b8cb2bd5ddf128193d20ef4d056a91
+    m_Address: Boulder_Round_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -987,6 +1695,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 465a80330e07fde1ba55ca3c67ff2696
+    m_Address: Boulder_Sandstone_Spire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4689f14e17de9c19f5ab5e2f64222034
+    m_Address: Pet - Melee
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 46fda489d651ce854212da0c1d2f31ef
+    m_Address: Formation_Granite_Tor_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 478cad40b8d299546bc9c5aa6eb8d056
     m_Address: Scrubland
     m_ReadOnly: 0
@@ -995,6 +1721,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 47a314e5ec0d4d37955c95120444a08a
     m_Address: Storm Elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 482871fdcfae2231d0dbc5d03e62747f
+    m_Address: Formation_Limestone_Pavement_2_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1011,8 +1743,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4874ec9448c23d961f599c7112c4d4eb
+    m_Address: Formation_Limestone_Pavement_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48b14e1e427f84424022f31273cb39e6
+    m_Address: Boulder_Spire_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 48d5a903fd5eb581ba5235f674695571
     m_Address: Dungeon Chest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48dbdfbf875d44c85882b85120765e3d
+    m_Address: Mock Direct Heal
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1041,6 +1791,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 494dff4bda77d7d078a0cba79cc00394
+    m_Address: Mock Attribute Tick Armor Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 49db2bc4e07ba3e829ff499ebf213bfe
+    m_Address: Detail_Fern
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4a7063529ee215d4a915672973d299db
     m_Address: Test Leggings
     m_ReadOnly: 0
@@ -1053,8 +1815,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b156d689fcdef6b84e05d2d112c321b
+    m_Address: Detail_FlowersWarm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b5c7f379033ce27c2487579df700602
+    m_Address: Rogue Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b922d140aed1f65c83bc7eabe278553
+    m_Address: Boulder_Spire_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b9d74821b7a7f3d9af3473d83eb5753
+    m_Address: Ground_Regolith
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4c0c4075c47e4140a6d5acf2e3046e29
     m_Address: Swamp Ruins
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4c63a85f61ef54698276e81e76a0ae07
+    m_Address: Tree_Acacia_Billboard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1067,6 +1859,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4c9ab230786e4f8787c8e1f133eeaa78
     m_Address: Mantisfolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4ccf17bb127a8e1cfc899527e99cf2ee
+    m_Address: Tree_Oak
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4cea75a0c18e66e3847d7c62470d5b5e
+    m_Address: Detail_GrassLush
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4d2365d4764e196d50dd0e9f4a48dfd1
+    m_Address: Ground_Pebbles
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1101,8 +1911,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e8785ae92c4425f95b4d8c76aabed83
+    m_Address: Arena Objective Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4fa55572805d163e449011393565e636
+    m_Address: Formation_Sandstone_Tilted_2_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4fd5e122dbb2a514a80632382993abb0
+    m_Address: Formation_Basalt_Fallen_0_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4fec6d640c1147642be17ff51ea55eae
     m_Address: Oasis
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5012855ca92376a9cdb1426f14b015e9
+    m_Address: Formation_Basalt_Block_0_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 502fdc54c601326af98bbf803b544f56
+    m_Address: Mock Forking Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1113,14 +1953,50 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5083f57163d8b26f08e6fe595c15972a
+    m_Address: Formation_Limestone_Pinnacle_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 50e0664cd237f87e9a85b5b71b83d9da
+    m_Address: Peat Bog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 519ad2c26141259488b7233901e4d46d
     m_Address: FactionMatrix
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51a5246fe3203c9eaa1836e90bf55192
+    m_Address: Mock Consumable Self Heal Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51b34fc30bb0c7f4285b68cd98ce77e2
+    m_Address: Formation_Sandstone_Block_2_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 51cae398dc9f4938a62d419d696eb152
     m_Address: Wildblood
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51f855b3de8e6644eb22eee716657935
+    m_Address: Basic Idle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5267db0b28ad69638ce4a4904601e534
+    m_Address: Tree_Palm_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1143,6 +2019,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52f28517760597d658b581a404304ae8
+    m_Address: Mock Stun Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 531387250e89b9ed487b9938ad724a29
+    m_Address: Mock Heal Over Time Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 53179656825a40d983673a7d8afa7dee
     m_Address: Lava Elemental
     m_ReadOnly: 0
@@ -1155,8 +2043,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 533ddb9bdb34b7440a63e47f786a58ab
+    m_Address: Basic PetIdle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 534422377d351f2e3937e87597ef9617
+    m_Address: Mock Debuff Slow Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5354bfec9033eea6f930810c7e60c731
     m_Address: Soluris System - Fenirreth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 53cfad24f934c99a410e6e726e3ae395
+    m_Address: Formation_Limestone_Block_0_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1165,11 +2071,30 @@ MonoBehaviour:
     m_Address: Weather Audio Profile
     m_ReadOnly: 0
     m_SerializedLabels:
+    - Client_Dynamic
     - Client_Static_Permanent
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 54077f011c3d2cb83ae660b586c30b24
+    m_Address: Mock Dispel Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 54289926029243edb820a4761fd60d94
     m_Address: Duskherald
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5435c7b5acb4a682d3b8bfcf36c3be57
+    m_Address: Formation_Basalt_Block_1_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 543cf5032ac024bc15bde6b8c382e0a5
+    m_Address: Detail_FlowersMeadow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1200,6 +2125,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 558258f511eba114fb9daedea1d4dcc9
     m_Address: Healing Received
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5586bdbd20966fa70cf7eeeeef71f151
+    m_Address: Ground_Basalt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1246,8 +2177,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 57b295f2b21979138ef5e8e80ddc8231
+    m_Address: Formation_Limestone_Block_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 57e3deafbe964f359ba1369fb8d10a26
+    m_Address: Arena Board Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5806dadc18f33441edaabda730fc11bd
+    m_Address: Ground_Mud
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 58182b0d5fc345a495f9af4b8da6abcc
     m_Address: Bog Mummy
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 58563ca24ce4a1a66fd66dc3db48e667
+    m_Address: Detail_GrassTall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5899517cb0158aef98141abd0d8e2536
+    m_Address: Mock Projectile Impact Damage Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1258,8 +2219,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 59280b63f83c3c10bc51f35c4e128267
+    m_Address: Ground_Coral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5932768e87354e33abb039ee66ea5dfc
     m_Address: Ashen
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 598c9c85c3ecfb26ff1ed2f52fe4f4c0
+    m_Address: Defender Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 599e4e5be8619ef4380b3ed1f426b7e0
+    m_Address: Mock Self Armor Buff
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1282,6 +2261,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5ab08d91d26e259328288439498bdbd2
+    m_Address: Detail_Rocks_Grey
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b56c55d686ceac4cac2a744a5bf0951
+    m_Address: Basic Retreat State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b5b7b0373c04d03883dd27456c8459a
     m_Address: Arena Rating Leaderboard
     m_ReadOnly: 0
@@ -1290,6 +2281,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b82e5b68a0eef3f0853e75b4255f9ac
     m_Address: Soluris System - Orirvar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5c58fdebfaabbf1d3adf8408e487688f
+    m_Address: Water Snow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1308,6 +2305,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5e8f915a81604ce0ab4ffb3f0c40fc9d
     m_Address: Hill Giant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e90db80c72ecc506bc4335aea174a1c
+    m_Address: Formation_Sandstone_Block_2_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1396,6 +2399,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 61998152931854e3cd1e9b5edd59bef6
+    m_Address: Formation_Sandstone_Block_1_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 628fe87f664e5783a2ea13da979a75d7
+    m_Address: Determined Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 63a449f014c04b7bb951c1ffed165a29
     m_Address: Duskdancer
     m_ReadOnly: 0
@@ -1408,8 +2423,50 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 63d5d87eb2bd348f959d6845ef54f522
+    m_Address: Formation_Limestone_Block_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 63fd4b18917945c1aa9e52aab9126194
     m_Address: Stormcalled
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 650a350f65d0233c293db0c6239a31bf
+    m_Address: Cryo Tephra
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 655842f11b38276f48a7bdf9ad7ad87c
+    m_Address: Mock Fork On Hit Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 656c60de4d5e69741abd0e3b08f082da
+    m_Address: Methane Lake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 65f2a8b5f3bac86cb96a7c115de010b3
+    m_Address: Molten Surface
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 66fb7a602b1b4672d4bc75bf3d20ff6c
+    m_Address: Formation_Sandstone_Block_3_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6732fe5e26ff94bad836f6f865ed99a2
+    m_Address: Formation_Basalt_Block_2_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1426,8 +2483,40 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 681250d76f3d5f0051f9560a9508f439
+    m_Address: Ground_Gravel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69baeeda49ea89f268266955933d6961
+    m_Address: Weather Render Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    - Client_Static_Permanent
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69d00d6a2a8ea0f609aa70e570329c5b
+    m_Address: Methane Drizzle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69de0afedec049ceaa7dfafe0242db29
     m_Address: Basic Physical Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 69f098a22f40fa8a7715ae0024681cee
+    m_Address: Formation_Granite_Tor_2_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6a4b672f33b568ba0bf5eb4c1d168650
+    m_Address: Boulder_Slab_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1438,8 +2527,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6a7b0ab822c981c91d8d91c69a0409f4
+    m_Address: Formation_Limestone_Pinnacle_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6aa7a4ed80a054757ee10d708c8c4a78
+    m_Address: Detail_GrassDry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6adb32216c83abd8bb770d018b8e9bfa
+    m_Address: Mock Furthest Snipe
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6b5f145ed34168d4b98f1410bd41b3ed
     m_Address: Alpine Meadow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b8888b444483d66ff4a112e0075fb67
+    m_Address: Formation_Basalt_Fallen_2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1450,14 +2563,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c212da2a06b429ca2989b3de112e7d1
+    m_Address: Ground_Ash
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6d4e3a268d204f568650de84362ba314
     m_Address: Thistlekin
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d7d49c80e3864917cc1797f701c26b1
+    m_Address: Formation_Sandstone_Block_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6dfdb28d2366490c9cf53c3d6e870bf9
     m_Address: Chimera
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6e3ad7203cc1883b54173ebc6f0e8e18
+    m_Address: Boulder_Round_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1498,8 +2629,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6f65fd31ee0b84eb913a1631ae865bab
+    m_Address: Dungeon Entrance Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6f8938bbed1286347b54bf3f4889f32a
     m_Address: Elf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6fc3329cd21567e74a206e38935e6671
+    m_Address: Impact Basin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6fe2945888b8154da84f854d580b107d
+    m_Address: Mock Debuff Slow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1528,8 +2677,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70c71496d20542886f0af8d7d44bdb1c
+    m_Address: Detail_ShrubDry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 71c115edb2136dc4881ecdb89029b200
     m_Address: Underwater Canyon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 72c7f9f9b4dc293f0f3ad8d06be0c230
+    m_Address: Formation_Limestone_Pinnacle_3_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1540,14 +2701,92 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 73a7958e684533c2eda07647b1de2903
+    m_Address: Tree_Palm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 73b2eb4c518b7f6fefdc8ff6212baa82
+    m_Address: Ground_CrackedEarth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 73bb6b8a44154b2d8481bf5b24fa1893
     m_Address: Hydra
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 73c8631c2f6724334b6b555a7b3c76ab
+    m_Address: Mock Interrupt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 747ef34d240a2ced1fe479360aeb0b43
+    m_Address: Detail_FlowersWarm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 74ceaf12f19d84df8c5b72a2122f661d
+    m_Address: Formation_Limestone_Block_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 74ff90bda539a33c568b6e1f8a0bb109
+    m_Address: Formation_Granite_Tor_2_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 75091a5d14c7e50679909c32e082af45
+    m_Address: Boulder_Limestone_Round
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 754040fc65cc43cf1a070758aca4a4ba
+    m_Address: Tree_Acacia_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 75434cbb6816c5dca86d7ebfd24009b9
+    m_Address: Sulphur Flats
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7581b4a389400c0ae2a0a83c6e2321c1
+    m_Address: Formation_Limestone_Block_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 758c5d3fcaec03665d8a228792848420
+    m_Address: Formation_Sandstone_Block_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7647a27884a3c45bdaff23be8cafdb05
+    m_Address: Geyser Basin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7703fa3a9f5544d7b7e44f39c2d6c081
     m_Address: Bog Goblin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 779d453b23ed195aec4b52ae765caace
+    m_Address: Formation_Sandstone_Tilted_2_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1564,8 +2803,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 77d3ed89369c3c0e8bb9db906b308bb9
+    m_Address: Formation_Granite_Perched_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 77f2e71269bd990b139bae119622c9a5
+    m_Address: Ability Crafter Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 782b351352c8d2b9b584e82c22d3dcf6
+    m_Address: Shared Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 782ca4500bb24367945e5f4974825496
     m_Address: Swamp Cave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 782d800db2a3229799240ec2a1911257
+    m_Address: Mock Absorb Shield Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 787e95cdae6aeae449997a800bc88ef7
+    m_Address: Mock Damage Over Time Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1578,6 +2847,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7a95d76fb5a74d4a9b7821ff7cb0ee87
     m_Address: Drowned One
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a9b618ab081359ee98257f925cfba96
+    m_Address: Ground_Sulphur
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1618,6 +2893,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c8337299754b7fd04e54964b911ae42
+    m_Address: Shared Patrol State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c8e30ce227f45ef95d170f43329b628
     m_Address: Serpentfolk
     m_ReadOnly: 0
@@ -1630,10 +2911,22 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d102c0fbc52633331eb86ffae340020
+    m_Address: Formation_Basalt_Fallen_2_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7d40862968a2aed4f859067648b24444
     m_Address: Assets/DefaultPrefabObjects.asset
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d7c73381d0e7f4b5530f072f05cf0fa
+    m_Address: Crowd Controller Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7d912d81ccd28a041aeb98853a79cccb
     m_Address: Self Minor Armor
@@ -1643,6 +2936,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7e2c085140d6878d9b3e877468fec17f
     m_Address: Tideborn Restorative
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e681c1777be805533ab67f8cda89adf
+    m_Address: Boulder_Sandstone_Slab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7eab2880f8bd515669132b5e348f0059
+    m_Address: Mock Damage Over Time Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7ec3a0cf0c56af8a8ddbc2b208914294
+    m_Address: Formation_Granite_Perched_1_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1665,14 +2976,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7fab98e41b8abd02efb6a2186e224faa
+    m_Address: Archer Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8021d6d8c60145cdbe41508116afce42
     m_Address: Wrathspawn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8056196aa1ba4f2f8e10f6616eacd914
+    m_Address: Waypoint
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 806e118c585a0f971e054f4730bb520b
+    m_Address: Rogue Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8087c1187c7741ffb3156ae60999e7f9
     m_Address: Mindreaver
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 80df7855cb7a41368435f295dcc7434d
+    m_Address: Detail_Kelp
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1685,6 +3020,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82ab480977a62c6e1a003b21c5d4044f
     m_Address: Codex of the Burning Sphere
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82b83e1c445811210a83a1199be53bad
+    m_Address: Mock Hitscan Bullet Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1707,6 +3048,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 834da249e8a98f584b4227b5ee9f7455
+    m_Address: Formation_Sandstone_Block_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8353bd635f2fd582dac35da97561f170
+    m_Address: Mock Cone Damage Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 83cdff2fdaa883eaaab7bcea92295f40
+    m_Address: Tidal Fracture
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 840ab52aad01472dea4e8c66d23487a8
     m_Address: Mock Threat Pulse
     m_ReadOnly: 0
@@ -1725,14 +3084,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 84aa96a77e35171d16fb592f8fc7e5ed
+    m_Address: Pet Loyal Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 84bf0c4c94f3b4b0ce3b3063eba102cd
+    m_Address: Formation_Granite_Tor_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 84dd468bbc38d51ae499f02d0a016987
+    m_Address: Formation_Basalt_Block_3_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 855e432552c248888375538351f95908
     m_Address: Hellborn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 85802b58f1689ee682dfd120e37932ba
+    m_Address: Tree_Acacia_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 859b2f6f5d624abf80a3057174829aa2
     m_Address: Nightmare
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 85db702470012fa7609315f2caf3b01b
+    m_Address: Formation_Granite_Tor_1_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1749,8 +3138,56 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86a5d7685403ecd6890fb5d93f28bb98
+    m_Address: Mock Channeled Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8751b24bf85f92efad896766fd2ace5e
+    m_Address: Combat Flee State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8766246d673041191a07889157e01b58
     m_Address: Mock Random Bolts
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 87a9412b48601f80058e5d5779367f78
+    m_Address: Formation_Basalt_Fallen_2_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 87bd0c23528df05478c9d9c23b961a97
+    m_Address: Cube
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 87c4d5e9d1ae793507a641ee406032e3
+    m_Address: Formation_Granite_Tor_0_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8826418043782208cd28659d845a0410
+    m_Address: Detail_GrassLush
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 889272059f0d037e798d077a3cad029f
+    m_Address: Salt Flat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 890ef34a12ea4c250b518f9db1afb292
+    m_Address: Formation_Granite_Perched_2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1779,8 +3216,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 89ea209c5e4ec2f62ecdb55bfcdc177d
+    m_Address: Ground_Limestone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8a24237090e0f5a45a5ea60c0137f86e
     m_Address: Tier1 Sword Attack Speed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a6915836749a01333e29a4e009c4fde
+    m_Address: Pet Archer Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1833,8 +3282,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e6693df7caffc283c78beb378717d89
+    m_Address: Formation_Limestone_Pavement_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8f29be85f37948819e8941bc866690b6
     m_Address: Volcanic Cave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8f32ac1f15ee4a928ab2289d38f797fb
+    m_Address: Waypoint Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8f3c7a5711a00ec97a92344329471885
+    m_Address: Formation_Sandstone_Tilted_0_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1857,6 +3324,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fea2bfc9cc7e67021f4258b5a5feaf9
+    m_Address: Brute Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9018bf3f57b34f6cab56c1bb65fce964
     m_Address: Sporeling
     m_ReadOnly: 0
@@ -1875,6 +3348,30 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90b51210c46f889fab3a3a7a9be6404b
+    m_Address: Mock Charge Marker Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 911dc5a3779423bde3fa63bf2d5151f8
+    m_Address: Formation_Basalt_Block_3_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9124ebcb2c61069e9a6891cf5fa3643c
+    m_Address: Mock Chain Damage Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 915bf5f6fc485ebb2912543aea781533
+    m_Address: Mock Single Target Damage Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 918465a8c94e4c6f9efd59093029d945
     m_Address: Spirit
     m_ReadOnly: 0
@@ -1883,6 +3380,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 91a181372c9d49b78fedca7ea6a96ab9
     m_Address: Grave Moth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 91c7118f9393089de217ee418f7d3d3d
+    m_Address: Formation_Limestone_Pavement_1_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1911,8 +3414,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93603a1e9687cd0eb19317f4779ca141
+    m_Address: Boulder_Spire_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93f114be71e8057ab1006aec9afc37a2
+    m_Address: Bindstone Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 93f5daffd06e4f2cb1898ae8bc2e21f3
     m_Address: Cloud Giant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93fb2e9d657c108f5e209832010309be
+    m_Address: Defender Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1959,8 +3480,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95f4190e4464622be9fec7d541e287f8
+    m_Address: Mock Furthest Target Damage Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95ff40fe5eb69c773a90e94219cf89b9
+    m_Address: Mock Pierce On Hit Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 970d2a4d7efe92faa9c4dfd7d00abf4c
     m_Address: Scroll of Lesser Fireball
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9719e9e40aceba66ec7be64832c17593
+    m_Address: Formation_Basalt_Fallen_3_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1977,8 +3516,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 981218c27f282fe423a954a7d0bd7262
+    m_Address: Pet Defender Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 981ccbfcf1adc4a56a367c343a05319c
     m_Address: Orc Slam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 982740fa41da53eb0b34f5bc943809e1
+    m_Address: Detail_Reeds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 98372f94db25110c6171d2b90964252e
+    m_Address: Formation_Limestone_Pavement_1_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 988df4650cb35eeb083fed48ac5260b5
+    m_Address: Dense Population AI LOD
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9942c46eca6f4a126362e1c3aabfb4a5
+    m_Address: Tree_Palm_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2019,14 +3588,62 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9aba919bd30d1000c475c9ea9e79df40
+    m_Address: Formation_Limestone_Pinnacle_0_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ac234842ad51b3fbb1ed5c7598ba571
+    m_Address: Pet Healer Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b15394da2e5e39f99a90bfccc952e14
+    m_Address: Ground_GrassDry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9b689d2b035944f195603caf11fc9522
     m_Address: Seraph
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b76883ea2936b51418f17820bfc578c
+    m_Address: Caster Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9bb05c6e8c2d8d85a93596bf96753889
+    m_Address: Formation_Basalt_Block_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9be7cd235dd7492f846ab5842eaddd57
     m_Address: Explorers Leaderboard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9ccd625de7509191fb1e5b3b257484a2
+    m_Address: Subsurface Ocean Vent
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d80c3316f36b00f8ad83b5d6c94a1b8
+    m_Address: Formation_Limestone_Pinnacle_0_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9dcf71aba6e8ad4a80e9f4022cc46278
+    m_Address: Formation_Limestone_Block_2_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2039,6 +3656,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9efed37356794b99b8070a7b3f15091b
     m_Address: Willow Witch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9f3296eca6f1d97a5bbebc50756af659
+    m_Address: Ice Geyser Field
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9f3c734559d040f90b155ae1ad52324c
+    m_Address: Formation_Basalt_Block_1_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2067,6 +3696,11 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a019b5968f742afcb8bbda15f5f34ded
+    m_Address: Generated Grass
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a0258e4cf8c8d294588e4067f9eaffbe
     m_Address: Scree
     m_ReadOnly: 0
@@ -2085,8 +3719,50 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a147728b9035421915a6cfa441838351
+    m_Address: Shared Idle State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a188e3de8a5794043903352f3ce4a57d
+    m_Address: Basic Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a2f8b3c0011b85b63bc0918dc598a5ed
+    m_Address: Detail_FlowersMeadow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a430aa685be0808b753ab5067c4e1da2
+    m_Address: Formation_Limestone_Pinnacle_2_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a43cf695455ed88d86823b48e60ddf7c
+    m_Address: Formation_Basalt_Fallen_1_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a47362a68057487686e885cd84b35238
+    m_Address: Formation_Limestone_Block_1_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a4d8278c839b407dba6b461ed4b7ad42
     m_Address: Ashenfolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a4e7c324c4896a028eb1714c42f92c79
+    m_Address: Combat Flank State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2105,6 +3781,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a53448f955c4060a08fde3dc7e2d59a3
     m_Address: Soluris System - Beliaron
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a59ba425a452a532c7be62858db91009
+    m_Address: Boulder_Limestone_Spire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a5c244f1e7a8eab8894266f8ad2d4f83
+    m_Address: Formation_Sandstone_Tilted_3_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2145,8 +3833,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a69941977c4353aba368485fa32984a0
+    m_Address: Formation_Sandstone_Block_0_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
     m_Address: an orc mage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a74343c1e5d25ecd2a42503ad6dd1663
+    m_Address: Mock Damage Over Time
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a751240fb82250d31bc77c5ab4d8b7c9
+    m_Address: Tholin Haze
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2163,6 +3869,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a84d0dae5896e3dc09216006d7c56576
+    m_Address: Mock Minor Armor Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a85d1368011a475b94ed5eba33ff393f
     m_Address: Duergar
     m_ReadOnly: 0
@@ -2175,8 +3887,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a91d9900e22b3672b9a3da3744bcebc2
+    m_Address: Volcanic Ash
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a94b344b8c1a49954b87be475ebeb78a
     m_Address: Minor Mana Potion
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a98d6af3fd3110867bfcfd20eacfcbea
+    m_Address: Formation_Sandstone_Tilted_0_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2195,6 +3919,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: aa1a0008ce274868a9dfaf12d38ba417
     m_Address: Cyclops
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aaade1fe5738f5c7c9c604a82c9f4a07
+    m_Address: Pet - Caster
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2229,14 +3959,56 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: acce2c15167bca3468900e3963385b1e
+    m_Address: Basic GetBehind State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: acd7d4cddc0244d983c9397254bf1d71
     m_Address: Lionfolk
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad5f609ec61a9b9bd9093dd26990f482
+    m_Address: Mock Chain Lightning
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: adc536c308fe97a1b6dd7ffc8b521562
+    m_Address: Boulder_Round_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: adc970007212faf8da1045f674727021
+    m_Address: Container Open
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ae3f91470a183af7a803ef3887bcb727
+    m_Address: Mock Line Lance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ae496bfb85924c32ac54f280410b25fc
     m_Address: Succubus
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af5ca3927add4dd0594aa10c585672f4
+    m_Address: Combat Strafe State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af8ddf5b53c37ead7985bdb4c4dea749
+    m_Address: Hypothermic
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2271,6 +4043,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b18c1f382075707857385e1e77297036
+    m_Address: Detail_GrassTall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b1b0ada2796be4c4ca8c95734c884fc2
     m_Address: Minor Increase Armor Event
     m_ReadOnly: 0
@@ -2282,8 +4060,50 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b29459fa1d0e54e9ee3d60ec7447b312
+    m_Address: Detail_Fern
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2a901597667e3b33abe6c8444b63d5c
+    m_Address: Detail_Rocks_Basalt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b32b91b8a3545fb4d8b9105322527fb0
+    m_Address: Mock Cleanse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b348a99b5bd7906f081a9dd324f5ecd5
+    m_Address: Mock Block Guard Buff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3695d08040c2e32332ef59d022264e8
+    m_Address: Formation_Limestone_Pinnacle_0_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b38303e17b56f239d5b65493c5077e23
+    m_Address: Enemy - Pathetic Critter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b3ba235619e24adb9e1f9fb3b22ff20e
     m_Address: Minotaur
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3cd782e7ec43b4b7b5d6955a61954bd
+    m_Address: Mock Threat Pulse Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2294,8 +4114,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b436e68ffee0c031a85f6580edd2a5bf
+    m_Address: Karst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b446111f8be61c5cabadc68e48bfe226
+    m_Address: Formation_Sandstone_Tilted_2_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b460e0b7c7d15dda82b56be3ce4cb55f
+    m_Address: Ground_Rock
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b49b15e64d664505b90412570309e091
     m_Address: Phantom
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b4bee0c12e3b92c48b285850bd5d47c1
+    m_Address: Basic Wander State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2318,8 +4162,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b646a6d9bc4f07d428f12e255af67366
+    m_Address: Basic ReturnHome State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b64d9b9e63fd40bda1b6cf0a7a537a01
     m_Address: Beast Titles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b68edd86da6412f8c3d6c67a4ea1a94f
+    m_Address: Formation_Sandstone_Block_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b77a50b289c9ad9e498c5c67bb8cb25d
+    m_Address: Formation_Sandstone_Tilted_3_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2330,8 +4192,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b80bc0482ed9646928250918c4f9a266
+    m_Address: Enemy - Brute
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b84f263b6aaadc40b9179f69c75abdf0
+    m_Address: Shared ReturnHome State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b87875a136904711b8349ab3e07dc843
     m_Address: Bone Wyrm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b8869335cad1814377b65f1f7b10b246
+    m_Address: Formation_Granite_Tor_0_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2354,6 +4234,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b930ff8a9c81416f4c72b8aaefa67c3a
+    m_Address: Formation_Basalt_Block_2_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b9b7db46ef4a400e8ca4c9b844760dcf
+    m_Address: Enemy Caster Aim Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ba22cd4baf335c87c8bc0f51a901cf7b
+    m_Address: Soaked
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ba66e72b420547018235e010aacbed7a
     m_Address: Lizardfolk
     m_ReadOnly: 0
@@ -2366,8 +4264,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: babbc8c3c5e7b832171b19e2ee95a096
+    m_Address: Formation_Basalt_Block_2_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bb04c58701877ded790a830f7cf4a6b6
     m_Address: Soluris System - Taldor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bb0ae43dffda32580c997677cd023680
+    m_Address: Raging Personality
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2378,8 +4288,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bbf20e633656abba4caa127bcc03acaf
+    m_Address: Formation_Limestone_Block_0_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bc000dd2493d4cbf399632910437f8bc
     m_Address: Soluris System - Arthis
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc2e5541ac2ab322b30eb82484c32756
+    m_Address: Formation_Limestone_Block_2_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2398,6 +4320,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bca6ce198c394e49a1fcc2dcfe36f2e2
     m_Address: Carrion Bloat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bcae7eecd89ea05c35af33cb3c3cc1a0
+    m_Address: Formation_Limestone_Block_1_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2432,8 +4360,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bd663c781351766ddbb65be6d3962765
+    m_Address: Mock Projectile Move Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: be0d7e356418d3da70f90e2954c52f47
+    m_Address: Formation_Sandstone_Tilted_1_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: be2f4833d770099f2fb9a66541ec48d2
+    m_Address: Crowd Controller Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bf4b6a909e9372f52a1c59e5c4bd7840
+    m_Address: Formation_Sandstone_Tilted_3_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bf885e1abe304d3ba5a841222f4f93a9
     m_Address: Mummy
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bfb81bf76967bb24098b2eb22e2a386e
+    m_Address: Basic Orbit State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2444,8 +4402,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bfe078adfc3a3867791d70c33343ae91
+    m_Address: Mock Random Target Damage Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c03b3addd5a9a75bd9d5533cffe9eb55
+    m_Address: Mock Hitscan Beam Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c0995f0c2a12473f98ec02da0c96ca1b
     m_Address: Merfolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c0a6b5cb5391647a7b45feccc953cd6e
+    m_Address: Mock Taunt Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2458,6 +4434,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c130ce8bfcff4be3b795de3f452772f2
     m_Address: Headless Rider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c13f87a554ee370b9e73b73d79536e6d
+    m_Address: Formation_Limestone_Block_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c144c9d4bcbaf93599517f087c32618d
+    m_Address: Formation_Basalt_Fallen_3_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2480,8 +4468,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c186b4a36b23546702410959444f0c8a
+    m_Address: Formation_Limestone_Pinnacle_1_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c187672f40922c9edb6117dd0c3b243c
     m_Address: Dungeon Chest Container
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1b394c50e981f8e9846e6ae76fd46d9
+    m_Address: Pet - Archer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2492,8 +4492,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c20dbf1bff80bf4f5e1162f997c1d965
+    m_Address: Formation_Granite_Tor_3_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c22e53f1996e9e345a80e0a3c32833b4
     m_Address: Estuary
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c24c215584ead18fc55357c6795f5281
+    m_Address: Detail_ShrubSmall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c29928174537ffbcf83f1c7ea6eb39c8
+    m_Address: Mock Deflect Stance Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2510,6 +4528,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c47bc815eee5671ef6c3b054ba8accd5
+    m_Address: Enemy - Crowd Controller
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c4eb5f1a4b50f884c92f82a0e7ad26f3
     m_Address: Physical Damage
     m_ReadOnly: 0
@@ -2522,14 +4546,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c57fc9605d246bb61336e4e6e7a5d027
+    m_Address: Formation_Sandstone_Block_3_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c65820fa7c86766fc27d4c1b3802b95a
+    m_Address: Formation_Limestone_Pinnacle_2_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c66ed2b42bcd6b14194a796e70a740e0
     m_Address: Assets/Prefabs/LevelLoggingConfiguration.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c6e6a087f84ec7afc97fd2c567d9eb11
+    m_Address: World Item Pickup
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c70f6d8041358ed41bfaf8483b590e34
     m_Address: Disable Fog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c74ce792532e809e917c6c9a3799d008
+    m_Address: Formation_Granite_Perched_3_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2552,6 +4600,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c8197597f11bb6c7d48bfbf1a193605d
+    m_Address: Formation_Granite_Perched_1_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c81c44db3f783e326751117eb2ce50a5
+    m_Address: Formation_Basalt_Block_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c8b301ae436fbe6ed3362eab8474d064
+    m_Address: Formation_Granite_Perched_2_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c8d55dbf68d647a682a1dbbe2f722884
     m_Address: Name Grammar
     m_ReadOnly: 0
@@ -2570,6 +4636,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ca181bdfbe96d1b5bb20ba12b8e38239
+    m_Address: Cryovolcanic Plain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: caecdd9c9304489abf57d5f5050ef93d
     m_Address: Ratfolk
     m_ReadOnly: 0
@@ -2584,6 +4656,36 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cb59ad7dc19adac4286eff2a66fd3b7a
     m_Address: Cooldown Reduction
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb7473dde6a389f684e5e790b5eda8f0
+    m_Address: Combat Orbit State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cc73251be3bca9ff2cec8c3450ababbd
+    m_Address: Formation_Sandstone_Block_0_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cc9f9750de3ef1894be1c490036613ef
+    m_Address: Formation_Basalt_Block_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cd6dc94049691b708a2fccd6d229997e
+    m_Address: Irradiated Dust
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cd98f591a3445c5a50a6e478001853a1
+    m_Address: Standard AI LOD
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2612,8 +4714,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cf04608b814a50c9bb937866dad5d00c
+    m_Address: Chilled
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cf35623aec811e7249a7527b8f6b4c65
+    m_Address: Hypothermic
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cf6695c0536344e083dd0a871b0c7304
     m_Address: Earth Elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfb923ff685794269056d51a4ae2e4b5
+    m_Address: Critter Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2626,6 +4746,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d00db1805f33b104b8b2198459b0a45d
     m_Address: Lesser Fire Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d01dc045aa37e14f50e4c2c9d1927b06
+    m_Address: Enemy - Raging Beast
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2644,6 +4770,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d0c938b40047485b9f34956a35ac38a0
     m_Address: Redcap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d143d7217aecd0321b2d18d5a15e5c17
+    m_Address: Mock Absorb Shield Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d15674c7fc56c2159932966e27bfcf17
+    m_Address: Formation_Sandstone_Tilted_0_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2678,6 +4816,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d29dfe975d6d5e0df7b72ae7c111c5de
+    m_Address: Ground_Clay
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d2d341cf3e915c88359d5a0015688f31
+    m_Address: Formation_Granite_Tor_3_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d2d8552fe0c745e781147ec772115f6e
     m_Address: Soulbroker
     m_ReadOnly: 0
@@ -2702,14 +4852,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d40a0f3dda7b80b129274be26a950681
+    m_Address: Dust Sea
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d4194c9fc4a87c84cbdde10c40a67656
     m_Address: Test Boots
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4277052c9ff566e093c700f1fc9dd8c
+    m_Address: Enemy - Archer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d4412c27f6244b92a453ccfbeb688a87
     m_Address: Jungle Ruins
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4efc9c8c3f6449381934629f939d755
+    m_Address: Formation_Granite_Perched_1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2756,8 +4924,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d755916898b9fe8d796f30627e81c3f8
+    m_Address: Steppe
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d76417c7c24ac4f7e381dd390a1acc71
+    m_Address: Formation_Limestone_Pavement_2_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d7cfca8d8ec83e2aa9e313854d8bdd11
+    m_Address: Mock Slow Debuff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d7d701201e0782a48b10f6acf2656544
     m_Address: Fire Resistance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d821d4f4f560539ba889e64332e67a34
+    m_Address: Pet Rogue Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2774,8 +4966,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d969a90dba082326212cda8c3c45b76d
+    m_Address: Formation_Sandstone_Block_0_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d97113ec4434e01d96b5331f8a4a651d
+    m_Address: Formation_Limestone_Pavement_3_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d9be0f02ed6d9cb21bb01d1c04d30ed3
+    m_Address: Mock Spawn Multiply Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: da0784a63e774c6583670b281a304ae3
     m_Address: Undead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: da9cc4b1e0b7e851d95965a23b838218
+    m_Address: Bamboo Forest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: daf8d0eb1f0040e0a81c4744abd7e031
+    m_Address: Premade Lesser Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: db3c602142fd9500324a596a4ac8541f
+    m_Address: Formation_Sandstone_Tilted_1_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2804,6 +5032,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dc8c4fe3aa6bd1e4cbdac9e43b854d6a
+    m_Address: Formation_Basalt_Block_0_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dc9a6782d4e4d93429c32f72d519a817
     m_Address: Forest
     m_ReadOnly: 0
@@ -2828,6 +5062,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ded2117ceb81012698104c27531c62db
+    m_Address: Mock Knockback Impact Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: def2a16b772d487db05ef395d2ca8134
     m_Address: Glimmerling
     m_ReadOnly: 0
@@ -2836,6 +5076,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: df79c6fb87b84576a987639703bcc8f5
     m_Address: Forgekin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: df79f743556971aa785f17e911525518
+    m_Address: Mock Line Damage Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2882,8 +5128,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e104c34faa16622bc33889b0c4991e34
+    m_Address: Melee Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e10c7ebd0e2c04df927734788ad7f9e4
+    m_Address: Pet - Rogue
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e12eb10ab959f2d892aaa4517bb0dbb2
+    m_Address: Ground_SandBeach
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1af9aa2bcef87ba0912e264ad3da1c1
+    m_Address: Tree_Acacia
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e1d7a3c833fc4c429ebcf16586d3e4e1
     m_Address: Cave Drake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e2232cdd6365050cd936b07d7f186c95
+    m_Address: Formation_Basalt_Block_1_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2900,8 +5176,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e2d00a4cebcdfa583a193855c90f4cec
+    m_Address: Formation_Limestone_Pavement_0_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e2f4c9fa92644ac898eea4770fda7c9e
     m_Address: Deep Gnome
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e320e55d6c61d0e68bbdff9fa2f97e35
+    m_Address: Mock Deflect Stance Buff
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2924,8 +5212,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e367a61b4631c0ec6bc797f032fef31f
+    m_Address: Mock Pre Spawn Cost Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e37548aba1d69c14cb2bd288e7882f76
     m_Address: DungeonFog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3877322db15f6e018eafd9e705d2efa
+    m_Address: Baoakraal Hyena-den
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2948,6 +5248,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3e5fd0affd66b13599673486c0aed99
+    m_Address: Mock Hitscan Bullet
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e3e8b717b5d803248a6ff39ab30aa577
     m_Address: Mana Regeneration
     m_ReadOnly: 0
@@ -2960,6 +5266,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e44fb83268c5970a9182d915e579dad7
+    m_Address: Caster Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e48c22ecb1287cf4185c17311214bc8a
     m_Address: Punch
     m_ReadOnly: 0
@@ -2968,6 +5280,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e51ab0951a0991649933710345a96e34
     m_Address: Wind Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e521d78872722e0fa0dffc108597bf53
+    m_Address: Formation_Basalt_Block_0_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e557be921ffadc5f2b39c4cded06c0a7
+    m_Address: Enemy - Melee
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3008,6 +5332,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e7e5ae42e23e436a881abe7e07dc62a0
+    m_Address: Detail_Pebbles_Grey
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e7f6212025f0c8deaa4c92384d43648c
+    m_Address: Formation_Limestone_Block_3_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e8b43f7fbfba4b5c886a4b6e0f56883c
     m_Address: Frozen Dead
     m_ReadOnly: 0
@@ -3044,14 +5380,50 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ebd101f82d3a597c1f2af54475da8abe
+    m_Address: Ground_Silt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ec195f4536024b189145c327661c5c48
     m_Address: Thunder Lizard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ec2054b3a84c52311a47b23114504552
+    m_Address: Mock Self Armor Buff Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ec2c7f76f8cc6882bd8988523ee17713
+    m_Address: Formation_Sandstone_Block_1_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ec7b272bdce4793b33a289a462164232
+    m_Address: Tree_Oak_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ec922487d2754e3e8ff896e7df229daa
     m_Address: Sea Hag
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ecd31ff07e929f6ee0b89178e183cb54
+    m_Address: Pet Caster Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ece3653d73abb0de45a541460f43b287
+    m_Address: Formation_Granite_Tor_3
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3092,6 +5464,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef6b85adbf897e285ef080ecd2a7123a
+    m_Address: Formation_Limestone_Block_0_LOD0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef7add5a8fbd55099f81ccd6b5b75599
+    m_Address: Boulder_Sandstone_Round
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: efbdd45dd1adc6b4e828526c3e28fdf0
     m_Address: Death Damage
     m_ReadOnly: 0
@@ -3110,6 +5494,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f0b85f51486494308866cd4c17310040
+    m_Address: Acid Rain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f1139061597f19bd1f45e83df1d5c388
+    m_Address: Detail_GrassTuft
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f118dd940836bff463b1f0d2f663bed6
+    m_Address: Detail_Kelp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f1417dc26537352919d05f1d27dd4075
     m_Address: Soluris System - Helatha
     m_ReadOnly: 0
@@ -3118,6 +5520,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f1941d962178df9b590a6d102a3faa55
     m_Address: Tutorial SpawnPoints
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f1b19a1d5177ab1705c4b851d58ea1f2
+    m_Address: Formation_Sandstone_Tilted_1_LOD1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3140,14 +5548,14 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f382d90751b078548b47500f1817ff29
-    m_Address: Minor Increase Move Speed
+  - m_GUID: f31f7444f35b6ffee4ed41a0418e0b05
+    m_Address: Pathetic Personality
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f40c33a0e0045b5a0b8180d66fa7b8fd
-    m_Address: Cov Viaduct
+  - m_GUID: f382d90751b078548b47500f1817ff29
+    m_Address: Minor Increase Move Speed
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3188,6 +5596,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f5b1bcb5c5de2a877d9877e43907f58d
+    m_Address: Pet Follow State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f60462e4dead3c2c37d469032833272f
+    m_Address: Ground_Lava
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f606cca1668747899fa55bb104a074b3
     m_Address: Elephantfolk
     m_ReadOnly: 0
@@ -3200,8 +5620,19 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f68036067d8480b78bb042099cdedea7
+    m_Address: Generated Sand
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f69ceb06ce90da94fbf1cbff95f3b7f0
     m_Address: an orc
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6c158c543ed1d4407a358f2f1304e79
+    m_Address: Formation_Granite_Perched_0_LOD0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3230,8 +5661,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f76620cbc89bc311bb15acacfa242554
+    m_Address: Formation_Limestone_Pavement_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f795a206c140498b849eb633836ec427
     m_Address: Ghoul
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f7e6c2c54ccd4d803d28c1a0ffc9a639
+    m_Address: Formation_Limestone_Pinnacle_0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3302,6 +5745,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fac5d1080314dd2768e69611fe181bad
+    m_Address: Mock Nearest Target Damage Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fb7cc60e1bf84b058130bb5d89d290bf
     m_Address: Nixie
     m_ReadOnly: 0
@@ -3326,6 +5775,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fca5688b4c453ed8e1dccf199fcd45d6
+    m_Address: Formation_Limestone_Pavement_3_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fcb385802b73f6dbea289f5510eed315
+    m_Address: Mock Deflect Stance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fd78749b970946afb18b811128565ade
     m_Address: Batfolk
     m_ReadOnly: 0
@@ -3334,6 +5795,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: fe3425a466033e34ead49fcfc3204895
     m_Address: Small World Item
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fecf98fe464b99b2d0d0d543d90cf0d0
+    m_Address: Formation_Sandstone_Block_1_LOD2
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3350,8 +5817,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ff8aec295fee2115954b05f2d6fef1d6
+    m_Address: Pebbles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ffa3526f3f634c34891d4419dab88371
     m_Address: ItemAttributeDatabase
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ffdfee25096d5c769f84d5a4f6e91773
+    m_Address: Balanced Personality
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

@@ -67,6 +67,22 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Needs liquid water on the surface. Off for deserts, regolith and anything cryogenic — a methane lake is not water.")]
 		public bool RequiresLiquidWater;
 
+		/// <remarks>
+		/// <para>
+		/// What the biome needs of the WORLD, which neither the climate envelope nor the two fields
+		/// above can say: an ice moon's vents and a polar sea read the same temperature and the same
+		/// humidity, and only "is this world's water frozen through and heated from below" tells
+		/// them apart. Every flag is a predicate on <see cref="BiomeWorldConditions"/> derived from
+		/// the body itself — see <see cref="BiomeWorldRequirement"/> for what each one tests and why.
+		/// </para>
+		/// <para>
+		/// None, the default, asks nothing. An Earth biome never needs a flag; an alien one carries
+		/// the flags that make it alien, and is then never chosen on a world that is not.
+		/// </para>
+		/// </remarks>
+		[Tooltip("What this biome needs of the world itself, every flag ticked must hold: an ice world, cryovolcanism, tidal heating, a methane sky, no liquid water anywhere... Nothing for an Earth biome.")]
+		public BiomeWorldRequirement Requires = BiomeWorldRequirement.None;
+
 		[Header("Climate variants")]
 		[Tooltip("How this biome reads under different climates. Empty uses the scene's default variants.")]
 		public List<BiomeClimateVariant> ClimateVariants = new List<BiomeClimateVariant>();

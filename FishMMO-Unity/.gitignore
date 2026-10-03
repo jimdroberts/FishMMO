@@ -117,3 +117,7 @@ crashlytics-build.properties
 /[Aa]ssets/Prefabs/Shared/Biomes/TerrainLayers/Built/
 /[Aa]ssets/Prefabs/Shared/Biomes/TerrainLayers/Built.meta
 /[Aa]ssets/Prefabs/Shared/Biomes/TerrainLayers.meta
+# Generated biome art's Addressables group exists only while a build runs (ProceduralArtBuildGroup):
+# only the generated assets the build reaches are registered in it, and it is removed afterwards.
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Generated_Biome_Art.asset*
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/Generated_Biome_Art_*

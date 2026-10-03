@@ -7,13 +7,21 @@ namespace FishMMO.Shared.Biomes
 	/// <summary>
 	/// Chooses the biome for a set of conditions from the registered templates' data — the
 	/// replacement for WorldEditor's hand-written decision tree. A biome is eligible when its
-	/// elevation tier matches; among eligible biomes, one whose climate envelope contains the
-	/// reading beats one whose envelope does not, the more central reading wins, and the
-	/// <see cref="BiomeTemplate.SelectionWeight"/> scales the score. Ties break on key order,
-	/// so the result is deterministic for every peer that holds the same templates.
+	/// elevation tier matches, or when it is an any-elevation biome (tier
+	/// <see cref="AnyElevationTier"/>) whose height band holds the point; among eligible biomes,
+	/// one whose climate envelope contains the reading beats one whose envelope does not, the more
+	/// central reading wins, and the <see cref="BiomeTemplate.SelectionWeight"/> scales the score.
+	/// Ties break on key order, so the result is deterministic for every peer that holds the same
+	/// templates.
 	/// </summary>
 	public static class BiomeResolver
 	{
+		/// <summary>
+		/// The tier of a biome that can appear at any elevation: channels, fractures, anything that
+		/// cuts ground of every height rather than belonging to one landform band.
+		/// </summary>
+		public const int AnyElevationTier = 9;
+
 		/// <summary>The biome for a height and climate reading, or null when no selectable biome is registered.</summary>
 		public static BiomeTemplate Select(float height, ClimateSample sample)
 		{
@@ -91,16 +99,37 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// Pass 0: tier matches. Pass 1: the biome's height band contains the height (tier 9
-		/// "anywhere" biomes and hand-tuned bands). Pass 2: anything selectable, so a sparse
-		/// biome set still answers.
+		/// Pass 0: the tier matches, or the biome is an any-elevation one whose height band holds the
+		/// point. Pass 1: the biome's height band contains the height (hand-tuned bands that claim
+		/// ground below their tier). Pass 2: anything selectable, so a sparse biome set still answers.
 		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Any-elevation biomes compete in every tier (2026-10-02).</b> They used to be offered
+		/// only in pass 1, so on a world with a biome for every tier they could never win however
+		/// well they fit — Io, the most tidally flexed body there is, drew tidal fractures only on
+		/// the 2% of its ground no other biome claimed — and on a world without one they won the
+		/// whole tier whatever its climate. Now they stand beside each tier's own biomes and win on
+		/// climate fit and weight like any of them: a fracture that fits beats a mountain biome whose
+		/// envelope the cold moon falls outside, and loses to a plain that fits better or weighs more.
+		/// Their weights are tuned for that (<c>BiomeSpecTable</c>), below the native biomes they
+		/// share a reading with, so they take the ground no native fits rather than flood a world.
+		/// </para>
+		/// <para>
+		/// <b>Their height band is read.</b> A band of 0–1, the default, is every height; a narrower
+		/// one keeps a channel off the summits. It used to be ignored, so a tier-9 band said nothing.
+		/// </para>
+		/// <para>
+		/// Two integer compares and one band test per biome: the resolver stays allocation-free and
+		/// runs per character per second and some two million times a globe bake.
+		/// </para>
+		/// </remarks>
 		private static bool Eligible(BiomeTemplate biome, float height, int elevationTier, int pass)
 		{
 			switch (pass)
 			{
-				case 0: return biome.ElevationTier == elevationTier;
-				case 1: return biome.ElevationTier == 9 || biome.ContainsHeight(height);
+				case 0: return biome.ElevationTier == elevationTier || (biome.ElevationTier == AnyElevationTier && biome.ContainsHeight(height));
+				case 1: return biome.ContainsHeight(height);
 				default: return true;
 			}
 		}
@@ -118,14 +147,18 @@ namespace FishMMO.Shared.Biomes
 			return weight * closeness * 0.5f;
 		}
 
-		/// <summary>Every selectable biome whose tier matches, for tools that list what a height could become.</summary>
+		/// <summary>
+		/// Every selectable biome that competes in a tier — its own and the any-elevation ones — for
+		/// tools that list what a height could become.
+		/// </summary>
+		/// <remarks>Any-elevation biomes are listed whatever their height band, since a tier spans many heights.</remarks>
 		public static List<BiomeTemplate> CandidatesForTier(int elevationTier)
 		{
 			var result = new List<BiomeTemplate>();
 			IReadOnlyList<BiomeTemplate> candidates = BiomeRegistry.Selectable;
 			for (int i = 0; i < candidates.Count; i++)
 			{
-				if (candidates[i].ElevationTier == elevationTier)
+				if (candidates[i].ElevationTier == elevationTier || candidates[i].ElevationTier == AnyElevationTier)
 				{
 					result.Add(candidates[i]);
 				}

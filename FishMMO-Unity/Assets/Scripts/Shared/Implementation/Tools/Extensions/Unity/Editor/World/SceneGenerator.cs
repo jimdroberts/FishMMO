@@ -35,8 +35,13 @@ namespace FishMMO.Shared.WorldDesign
 		public float GroundAltitudeMetres;
 		/// <summary>True when the scene reaches the body's water line and was given a sea.</summary>
 		public bool HasWater;
-		/// <summary>World Y of the sea's surface when there is one: always 0, sea level being the datum.</summary>
+		/// <summary>
+		/// World Y of the liquid's surface when there is one: 0 for a sea or a magma ocean, sea level being
+		/// the datum; lower for an Io's lava lakes.
+		/// </summary>
 		public float SeaLevelY;
+		/// <summary>True when the scene reaches the body's lava and was given a lava surface (at <see cref="SeaLevelY"/>).</summary>
+		public bool HasLava;
 		/// <summary>The atlas radius the scene was cut at, in km.</summary>
 		public double RadiusKm;
 		/// <summary>Scene metres per metre of the planet's own altitude.</summary>
@@ -47,6 +52,12 @@ namespace FishMMO.Shared.WorldDesign
 		public float BackdropReachMetres;
 		/// <summary>How many vertices the backdrop's meshes hold.</summary>
 		public int BackdropVertices;
+		/// <summary>Which biome lies where, baked for the runtime. Null when no biome fitted the scene.</summary>
+		public SceneBiomeMap BiomeMap;
+		/// <summary>The biomes the scene resolved and how much of it each covers, e.g. "Forest 62%, Alpine 38%".</summary>
+		public string BiomeSummary;
+		/// <summary>Things a person should know about the ground that did not stop generation: missing art, dropped layers.</summary>
+		public readonly List<string> Notes = new List<string>();
 
 		public static SceneGenerationResult Failed(string problem) => new SceneGenerationResult { Problem = problem };
 	}
@@ -262,18 +273,25 @@ namespace FishMMO.Shared.WorldDesign
 				relief = Tighten(terrains, ref lowest, relief);
 				result.ReliefMetres = relief;
 				result.GroundAltitudeMetres = lowest;
-				foreach (Terrain terrain in terrains)
+
+				/* The biomes, from the finished ground: which lies where, the textures that say so,
+				 * and the map the runtime reads. The flat bands only where no biome fits at all —
+				 * no template registered, or none this world allows — so the scene still reads. */
+				if (!PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out Func<float, float, float, float, Color> groundColour))
 				{
-					if (terrain != null && terrain.terrainData != null)
+					foreach (Terrain terrain in terrains)
 					{
-						Paint(terrain.terrainData, relief);
+						if (terrain != null && terrain.terrainData != null)
+						{
+							Paint(terrain.terrainData, relief);
+						}
 					}
 				}
 
 				/* The ground past the scene's edge, out to the horizon: client-only, built from the
 				 * same request so it meets the terrain at the edge. Before the sea, because a scene
 				 * of dry land can still look out over a coast, and that sea has to be drawn. */
-				SceneBackdropResult backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder);
+				SceneBackdropResult backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder, groundColour);
 				result.Wrote.AddRange(backdrop.Wrote);
 				result.BackdropReachMetres = backdrop.ReachMetres;
 				result.BackdropVertices = backdrop.Vertices;
@@ -281,7 +299,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The sea first: the boundary has to reach its surface, which on a scene cut from
 				// the sea floor is far above the highest ground.
 				AddWater(scene, plan, request, lowest, backdrop, result);
-				AddBoundary(scene, plan, lowest, relief, result.HasWater);
+				AddBoundary(scene, plan, lowest, relief, result.HasWater || result.HasLava ? result.SeaLevelY : (float?)null);
 
 				// The same components the audit adds to a scene somebody forgot to finish.
 				bool wantsSky = request.Layer == null || !request.Layer.Underground;
@@ -397,6 +415,12 @@ namespace FishMMO.Shared.WorldDesign
 			return terrain;
 		}
 
+		/// <summary>
+		/// How far, in screen pixels, a generated terrain's drawn surface may stray from its true
+		/// shape. See the remarks where <see cref="PaintBiomes"/> applies it.
+		/// </summary>
+		public const float TerrainPixelError = 2f;
+
 		/// <summary>The ocean material every generated scene shares.</summary>
 		public const string WaterMaterialPath = "Assets/Plugins/FishMMO Water/Materials/OceanWater.mat";
 
@@ -412,6 +436,8 @@ namespace FishMMO.Shared.WorldDesign
 		public const string WaterBreakerPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterBreaker.shader";
 		/// <summary>The breakers' spray and mist.</summary>
 		public const string WaterSprayPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterSpray.shader";
+		/// <summary>Molten rock, for a volcanic body's lava lakes or a world above the melting point of rock.</summary>
+		public const string LavaMaterialPath = "Assets/Plugins/FishMMO Water/Materials/Lava.mat";
 
 		/// <summary>
 		/// Puts the sea in the scene, at the height the planet says its sea level is.
@@ -442,21 +468,28 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
-			if (!BiomeWorldConditions.For(system, request.Body).HasLiquidWater)
+			SolarSystemProfile system = SolarSystemProfile.Resolve(request.Body);
+			/* What stands in the low ground: a sea, lava, or nothing (SurfaceLiquids). A sea and a magma
+			 * ocean stand at the datum, y = 0; an Io's lava lakes lower, in the pits where its globe draws
+			 * them glowing — in the planet's metres, so brought to this scene's heights by its vertical
+			 * scale, exactly as the terrain is. */
+			SurfaceLiquid liquid = SurfaceLiquids.For(system, request.Body, out float levelMetres);
+			if (liquid == SurfaceLiquid.None)
 			{
 				return;
 			}
-			// Neither the scene nor the ground it looks out over reaches the water line.
-			bool backdropReachesSea = backdrop != null && backdrop.Vertices > 0 && backdrop.LowestMetres < 0f;
-			if (groundAltitudeMetres >= 0f && !backdropReachesSea)
+			bool lava = liquid == SurfaceLiquid.Lava;
+			float level = levelMetres * request.VerticalScale;
+			// Neither the scene nor the ground it looks out over reaches the liquid.
+			bool backdropReachesSea = backdrop != null && backdrop.Vertices > 0 && backdrop.LowestMetres < level;
+			if (groundAltitudeMetres >= level && !backdropReachesSea)
 			{
 				return;
 			}
 
-			var host = new GameObject("Water");
+			var host = new GameObject(lava ? "Lava" : "Water");
 			SceneManager.MoveGameObjectToScene(host, scene);
-			host.transform.position = Vector3.zero;
+			host.transform.position = new Vector3(0f, level, 0f);
 
 			host.AddComponent<MeshFilter>();
 			var renderer = host.AddComponent<MeshRenderer>();
@@ -502,7 +535,36 @@ namespace FishMMO.Shared.WorldDesign
 				backdropCorner = Mathf.Sqrt(bx * bx + bz * bz) * 1.05f;
 			}
 			surface.OuterRadius = Mathf.Clamp(Mathf.Max(diagonal * 2f, backdropCorner), 4000f, 30000f);
+			if (lava)
+			{
+				/* Lava draws its own material on the same disc. The ocean's stays assigned, so flipping
+				 * Liquid back to Water in the inspector gives a working sea. */
+				surface.Liquid = WaterLiquid.Lava;
+				// Fumes need air to hang in: none over an Io, a haze under thin air (SurfaceLiquids.FumeDensity).
+				surface.LavaFumes = SurfaceLiquids.FumeDensity(request.Body != null ? request.Body.Atmosphere : AtmosphereKind.Standard);
+				// The glow-and-fume pass, found by name in the editor, referenced so a build includes it.
+				surface.LavaLightShader = Shader.Find(WaterSurface.LavaLightShaderName);
+				surface.LavaMaterial = AssetDatabase.LoadAssetAtPath<Material>(LavaMaterialPath);
+				if (surface.LavaMaterial != null)
+				{
+					renderer.sharedMaterial = surface.LavaMaterial;
+				}
+				else
+				{
+					Debug.LogWarning($"[Scene generator] '{LavaMaterialPath}' is missing, so '{request.SceneName}' has a " +
+						"lava surface with no material. Assign one on its Lava object.", host);
+				}
+			}
 			surface.Rebuild();
+
+			result.SeaLevelY = level;
+			if (lava)
+			{
+				/* None of the sea's own systems: no shore field (a beach), no environment (wind, tide,
+				 * colour), no swash and no breakers. Lava has none of them. */
+				result.HasLava = true;
+				return;
+			}
 
 			/* The depth field the shallows, the breakers and the swash all read, and the driver that
 			 * connects the sea to the world's wind and moons. Both are wanted on every generated
@@ -518,8 +580,9 @@ namespace FishMMO.Shared.WorldDesign
 			var breakers = host.AddComponent<WaterBreakers>();
 			breakers.BreakerShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterBreakerPath);
 			breakers.SprayShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterSprayPath);
+			// Icebergs and sea ice where the climate makes them (IcePlacer; liquid water only, lava returned above).
+			result.Notes.AddRange(IcePlacer.Place(scene, request, host, host.GetComponent<WaterShoreField>(), SceneSeed(request), plan).Notes);
 
-			result.SeaLevelY = host.transform.position.y;
 			result.HasWater = true;
 		}
 
@@ -621,6 +684,227 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
+		/// Paints the scene with its biomes and bakes its biome map. False, having written nothing,
+		/// when no biome fits anywhere in it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>From the finished heightmap.</b> Tighten() has run, so the ground the biome field
+		/// reads is the ground on disk — local detail included — and a ridge colder than the globe
+		/// can show is painted as the ridge it is.
+		/// </para>
+		/// <para>
+		/// <b>The map is written beside the terrain</b> and assigned to the atlas entry, which is
+		/// where <see cref="WorldSceneSettings.BiomeMap"/> looks first. Without it the runtime chose
+		/// a biome from height normalised over the scene's own relief, so the lowest point of every
+		/// scene read as sea floor and the highest as a summit whatever their real altitude, and
+		/// weather, naming and exposure could disagree with the ground they stood on.
+		/// </para>
+		/// </remarks>
+		/// <param name="groundColour">
+		/// The biomes' colour at (east, north, altitude, steepness) out to the horizon, for the
+		/// backdrop; null when this returns false.
+		/// </param>
+		/// <remarks>
+		/// Also what the Repaint Biomes tool runs on a scene that already exists, so a designer can
+		/// sculpt the ground and then have it re-dressed without re-cutting it: everything here reads
+		/// the heights on disk and writes only layers, alphamaps, details, trees and the map.
+		/// </remarks>
+		/// <param name="scope">
+		/// Whether LOCAL art may be referenced by what is written; null decides it from the scene and its
+		/// tiles (<see cref="LocalArtScope.For"/>), which is committed-only for every scene outside
+		/// Assets/LOCAL. Every reference this writes — palette layers, scatter prototypes, cliff
+		/// materials — goes through it; the terrain arrays resolve textures LOCAL-first on their own.
+		/// </param>
+		internal static bool PaintBiomes(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan, Terrain[,] terrains,
+			string terrainFolder, SceneGenerationResult result, out Func<float, float, float, float, Color> groundColour,
+			LocalArtScope scope = null)
+		{
+			groundColour = null;
+			SolarSystemProfile system = SolarSystemProfile.Resolve(request.Body);
+			var tiles = new List<Terrain>();
+			foreach (Terrain terrain in terrains)
+			{
+				if (terrain != null && terrain.terrainData != null)
+				{
+					tiles.Add(terrain);
+				}
+			}
+
+			SceneBiomeField field = SceneBiomeField.Build(request, plan, (east, north) => GroundAltitude(terrains, plan, east, north), system);
+			if (field.Biomes.Count == 0)
+			{
+				result.Notes.Add("No biome fits anywhere in this scene (none registered, or none this world allows); it is painted with the plain height bands.");
+				return false;
+			}
+
+			scope ??= LocalArtScope.For(scene, tiles);
+			if (scope.AllowsLocal)
+			{
+				result.Notes.Add($"Painted with {scope.Reason}.");
+			}
+
+			BiomeTerrainLayers.ClearCache();
+			SceneTerrainPalette palette = SceneTerrainPalette.Build(field, scope.PaletteResolver(BiomeTerrainLayers.Resolve), BiomeTerrainLayers.Placeholder);
+			if (palette.Layers.Count == 0)
+			{
+				result.Notes.Add("None of this scene's biomes has any terrain art; it is painted with the plain height bands.");
+				return false;
+			}
+
+			PlanetClimateField climate = PlanetClimateField.For(system, request.Body);
+			float verticalScale = request.VerticalScale > 1e-6f ? request.VerticalScale : 1f;
+			var options = new BiomeSplatOptions
+			{
+				// Planet-relative, so a layer's height band means the same height in every scene.
+				NormalizedHeight = (x, y, z) => climate.HeightOfAltitude(y / verticalScale),
+				HasLiquidWater = climate.Conditions.HasLiquidWater,
+				Seed = SceneSeed(request),
+			};
+			BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);
+
+			/* The ground's renderer: the array terrain material on every tile and the binder that
+			 * feeds it the scene's arrays. Coverage decides which biome's LOCAL art wins a layer
+			 * several biomes share. The arrays themselves are build output, baked when the scene
+			 * is first saved — a scene being generated has no saved name to bake under yet. */
+			TerrainArraySetupResult arrays = TerrainArraySetup.Apply(scene, tiles, palette, field.Coverage());
+			result.Wrote.AddRange(arrays.Wrote);
+			result.Notes.AddRange(arrays.LocalConflicts);
+			result.Notes.AddRange(arrays.Notes);
+
+			/* Details and trees, from the alphamaps just written: every rule is gated on its own
+			 * layer's weight there and on its biome's reach, so what grows is exactly what the
+			 * ground says grows. Baked into the terrain data like the heights — committed, editable
+			 * by hand, and the trees' colliders are the server's as well as the client's. */
+			TerrainScatterReport scatter = TerrainScatter.Scatter(tiles, palette, field, options.Seed,
+				new TerrainScatterOptions { NormalizedHeight = options.NormalizedHeight, Prefabs = scope.ScatterPrefabs, HasLiquidWater = options.HasLiquidWater });
+			result.Notes.AddRange(scatter.InvalidPrefabs);
+			result.Notes.AddRange(scatter.BudgetCaps);
+			result.Notes.AddRange(scatter.Warnings);
+
+			/* The ground drawn close to its true shape, so what stands on it stays standing on it.
+			 * Trees, rocks and cliff pieces are placed at the exact surface height; the terrain's own
+			 * level of detail then simplifies the drawn surface until it may be heightmapPixelError
+			 * screen pixels off. At Unity's default of 5 that is metres on generated hills, so a trunk
+			 * seemed to sink as the camera backed off and rise as it came close — the ground moving,
+			 * not the tree. 2 keeps the error under what the bases are sunk by at any distance the
+			 * trees are drawn; instancing is what makes that much terrain detail cheap, and both
+			 * terrain shaders carry the instanced (per-pixel normal) variants. */
+			foreach (Terrain tile in tiles)
+			{
+				tile.heightmapPixelError = TerrainPixelError;
+				tile.drawInstanced = true;
+			}
+
+			/* Cliffs of large rocks on the steep ground the cliff layers were just painted on, talus cones
+			 * raised below them, each rock a server-kept collider with a client-only visual. Here and
+			 * not after PaintBiomes returns, so a repaint (BiomeRepaintTool) re-places them on sculpted
+			 * ground too; the placer replaces its own root (and lowers its old cones), never duplicates
+			 * it. Granite weathers rounder where the climate is warm and wet: the placer reads it here. */
+			CliffPlacerOptions cliffOptions = scope.CliffOptions() ?? new CliffPlacerOptions();
+			if (request.Body != null)
+			{
+				ScenePlacementClimate placement = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
+				cliffOptions.ClimateAt = p =>
+				{
+					ClimateSample sample = placement.SampleAt(p, out _);
+					return new Vector2(sample.Temperature, sample.Humidity);
+				};
+			}
+			CliffPlacerReport cliffs = CliffPlacer.Place(scene, tiles, palette, field, options.Seed, options.NormalizedHeight, cliffOptions);
+			result.Notes.AddRange(cliffs.Notes);
+
+			result.BiomeSummary = Summarise(field);
+			foreach (SceneTerrainPalette.Entry entry in palette.Entries)
+			{
+				if (entry.Placeholder)
+				{
+					result.Notes.Add($"{entry.Biome.ResolvedDisplayName} has no main terrain art; a plain placeholder stands in.");
+				}
+			}
+			foreach (string dropped in palette.Dropped)
+			{
+				result.Notes.Add($"Left out: {dropped}.");
+			}
+			if (splat.Unreached > 0)
+			{
+				result.Notes.Add($"{splat.Unreached:N0} texels were reached by no biome and took the first layer.");
+			}
+
+			/* Rewritten in place when it exists, so a repaint keeps the map's GUID and every
+			 * reference to it; created beside the terrain otherwise. */
+			string mapPath = $"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Biome Map.asset";
+			var map = AssetDatabase.LoadAssetAtPath<SceneBiomeMap>(mapPath);
+			if (map != null)
+			{
+				field.WriteTo(map);
+				EditorUtility.SetDirty(map);
+			}
+			else
+			{
+				map = ScriptableObject.CreateInstance<SceneBiomeMap>();
+				field.WriteTo(map);
+				AssetDatabase.CreateAsset(map, mapPath);
+			}
+			result.Wrote.Add(mapPath);
+			result.BiomeMap = map;
+
+			/* The backdrop's own field, out to the horizon: the ground past the edge is the same
+			 * planet, so it is asked the same question, at the backdrop's own (planet + local
+			 * detail) heights rather than the terrain's, which end at the scene's edge. */
+			float reach = SceneBackdropBuilder.ReachFor(request);
+			if (reach > 1f)
+			{
+				SceneBiomeField horizon = SceneBiomeField.Build(request, plan.WidthMetres + 2f * reach, plan.DepthMetres + 2f * reach,
+					(east, north) => SceneGeneration.AltitudeMetres(request, east, north), system);
+				var colours = new BiomeGroundColours(horizon, BiomeTerrainLayers.Resolve, BiomeTerrainLayers.Placeholder);
+				groundColour = (east, north, altitude, steepness) =>
+					colours.At(east, north, steepness, climate.HeightOfAltitude(altitude / verticalScale));
+			}
+
+			Debug.Log($"[Scene generator] '{request.SceneName}' biomes: {result.BiomeSummary}; {palette.Layers.Count} terrain layer(s); splat {splat}.\n{scatter}");
+			return true;
+		}
+
+		/// <summary>Scene metres above sea level of the generated ground at a scene position.</summary>
+		private static float GroundAltitude(Terrain[,] terrains, TerrainTilePlan plan, float east, float north)
+		{
+			int tx = Mathf.Clamp(Mathf.FloorToInt((east + plan.WidthMetres * 0.5f) / plan.TileMetres), 0, plan.CountX - 1);
+			int tz = Mathf.Clamp(Mathf.FloorToInt((north + plan.DepthMetres * 0.5f) / plan.TileMetres), 0, plan.CountZ - 1);
+			Terrain terrain = terrains[tx, tz];
+			if (terrain == null)
+			{
+				return 0f;
+			}
+			// SampleHeight is relative to the tile's own position, which stands at its altitude.
+			return terrain.SampleHeight(new Vector3(east, 0f, north)) + terrain.transform.position.y;
+		}
+
+		/// <summary>The scene's own seed: its body's terrain seed mixed with its name, as local detail does.</summary>
+		private static uint SceneSeed(SceneGenerationRequest request)
+		{
+			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
+			return seed ^ unchecked((uint)(request.SceneName ?? string.Empty).GetDeterministicHashCode());
+		}
+
+		private static string Summarise(SceneBiomeField field)
+		{
+			float[] share = field.Coverage();
+			var order = new List<int>();
+			for (int i = 0; i < share.Length; i++)
+			{
+				order.Add(i);
+			}
+			order.Sort((a, b) => share[b].CompareTo(share[a]));
+			var parts = new List<string>();
+			foreach (int i in order)
+			{
+				parts.Add($"{field.Biomes[i].ResolvedDisplayName} {Mathf.RoundToInt(share[i] * 100f)}%");
+			}
+			return string.Join(", ", parts);
+		}
+
+		/// <summary>
 		/// Paints the tile with the plain colour bands, so the ground can be read.
 		/// </summary>
 		/// <remarks>
@@ -687,7 +971,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <param name="lowest">World Y of the lowest ground, which is its altitude.</param>
 		/// <param name="relief">Metres from the lowest ground to the highest.</param>
-		/// <param name="hasSea">True when the scene was given a sea, whose surface is at y = 0.</param>
+		/// <param name="liquidY">World Y of the sea's or the lava's surface when the scene was given one; null when it was not.</param>
 		/// <remarks>
 		/// <para>
 		/// <c>WorldSceneDetailsCacheReader</c> refuses a scene with no <c>IBoundary</c> outright —
@@ -701,13 +985,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// <para>
 		/// <b>The highest surface can be the sea.</b> Sized from the ground alone, a scene cut from
 		/// a kilometre down had its ceiling 250 m under the water: nobody could swim up to the
-		/// surface, and a boat could not be in the scene at all.
+		/// surface, and a boat could not be in the scene at all. The same holds for a magma ocean,
+		/// whose surface also stands at the datum.
 		/// </para>
 		/// </remarks>
-		private static void AddBoundary(Scene scene, TerrainTilePlan plan, float lowest, float relief, bool hasSea)
+		private static void AddBoundary(Scene scene, TerrainTilePlan plan, float lowest, float relief, float? liquidY)
 		{
 			float margin = relief * 0.5f + 500f;
-			float surface = hasSea ? Mathf.Max(lowest + relief, 0f) : lowest + relief;
+			float surface = liquidY.HasValue ? Mathf.Max(lowest + relief, liquidY.Value) : lowest + relief;
 			float bottom = lowest - margin;
 			float top = surface + margin;
 
@@ -859,9 +1144,15 @@ namespace FishMMO.Shared.WorldDesign
 			entry.SizeKm = new Vector2(result.Plan.WidthMetres / 1000f, result.Plan.DepthMetres / 1000f);
 			// What pins the body's atlas radius from now on: see AtlasModel.CutScenes.
 			entry.CutRadiusKm = (float)result.RadiusKm;
-			// Placed, because the rectangle IS the placement. Everything else on the entry keeps
-			// its default: climate, biome map and client cap are overrides, and empty means
-			// "whatever my body and my layer say".
+			/* The generated biome map, unless somebody has assigned their own: the field is an
+			 * override, and a hand-painted map is a decision. A re-cut deletes the old generated
+			 * map with the terrain folder, so its reference reads null here and is replaced. */
+			if (entry.BiomeMap == null && result.BiomeMap != null)
+			{
+				entry.BiomeMap = result.BiomeMap;
+			}
+			// Placed, because the rectangle IS the placement. Climate and client cap keep their
+			// defaults: they are overrides, and empty means "whatever my body and my layer say".
 			entry.Placed = true;
 
 			EditorUtility.SetDirty(entry);

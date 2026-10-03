@@ -345,8 +345,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// <b>It asks the same question the biome resolver does.</b> The temperature at a radius is
 		/// <see cref="CelestialMath.TemperatureAtDistance"/>, the same fourth-root-of-insolation the
 		/// climate offsets use, so a ring's colour and a world's actual biomes cannot disagree. The
-		/// goldilocks band is not a separate calculation either: it is exactly where that
-		/// temperature falls inside the range <c>BiomeWorldConditions.HasLiquidWater</c> accepts.
+		/// goldilocks band is not a separate calculation either: it is
+		/// <c>BiomeWorldConditions.HoldsLiquidWater</c>, the liquid-water test itself, asked of a
+		/// world with air like ours and the home world's ocean at that distance, from the absolute
+		/// temperature the climate field uses — so it moves when the star is brightened, as a real
+		/// habitable zone does.
 		/// </para>
 		/// <para>
 		/// Drawn as filled arcs from the outside in, so each ring covers the one beyond it and the
@@ -372,7 +375,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				float t = CelestialMath.TemperatureAtDistance(System, au);
-				bool liquid = t > LiquidWaterMin && t < LiquidWaterMax;
+				bool liquid = FishMMO.Shared.Biomes.BiomeWorldConditions.HoldsLiquidWater(AbsoluteAt(au), AtmosphereKind.Standard);
 
 				if (ShowHeatMap)
 				{
@@ -411,8 +414,27 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>The same thresholds <c>BiomeWorldConditions.HasLiquidWater</c> uses.</summary>
-		private const float LiquidWaterMin = -0.75f, LiquidWaterMax = 0.85f;
+		/// <summary>
+		/// The edges of <c>BiomeWorldConditions.HoldsLiquidWater</c> under air like ours, as mean
+		/// temperatures on the climate scale: the warmest ground just at freezing, and the boiling
+		/// point of the oceans.
+		/// </summary>
+		private static readonly float LiquidWaterMin = FishMMO.Shared.Biomes.BiomeWorldConditions.FreezingTemperature
+			- FishMMO.Shared.Biomes.BiomeWorldConditions.WarmestExcess;
+		private static readonly float LiquidWaterMax = (float)FishMMO.Shared.Biomes.ClimateModel.ToScaleUnclamped(
+			FishMMO.Shared.Biomes.BiomeWorldConditions.LiquidCeilingKelvin(AtmosphereKind.Standard));
+
+		/// <summary>
+		/// The mean surface temperature (climate scale, unclamped) of a world with air like ours and
+		/// the home world's ocean, at this distance from the system's centre.
+		/// </summary>
+		private float AbsoluteAt(double au)
+		{
+			float water = System != null && System.HomeWorld != null ? System.HomeWorld.Water : 0.7f;
+			double kelvin = FishMMO.Shared.Biomes.ClimateModel.MeanSurfaceKelvin(
+				CelestialMath.InsolationAtDistance(System, au), AtmosphereKind.Standard, water);
+			return (float)FishMMO.Shared.Biomes.ClimateModel.ToScaleUnclamped(kelvin);
+		}
 
 		/// <summary>Frozen blue through temperate green to scorched red; the liquid band brightened.</summary>
 		private static Color HeatColor(float t, bool liquid)
@@ -452,8 +474,7 @@ namespace FishMMO.Shared.WorldDesign
 		private double EdgeAu(double outer, float temperature)
 		{
 			double lo = outer / 5000.0, hi = outer;
-			if (CelestialMath.TemperatureAtDistance(System, lo) < temperature ||
-				CelestialMath.TemperatureAtDistance(System, hi) > temperature)
+			if (AbsoluteAt(lo) < temperature || AbsoluteAt(hi) > temperature)
 			{
 				// The whole disc is on one side of it: no edge to draw.
 				return 0.0;
@@ -461,7 +482,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int i = 0; i < 40; i++)
 			{
 				double mid = (lo + hi) * 0.5;
-				if (CelestialMath.TemperatureAtDistance(System, mid) > temperature)
+				if (AbsoluteAt(mid) > temperature)
 				{
 					lo = mid;
 				}

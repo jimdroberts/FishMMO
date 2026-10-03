@@ -30,4 +30,5 @@ MonoBehaviour:
   Frozen: 0
   GrainMetres: 0.00005
   GrainDensity: 2800
+  Vented: 0
   AudioCue: 

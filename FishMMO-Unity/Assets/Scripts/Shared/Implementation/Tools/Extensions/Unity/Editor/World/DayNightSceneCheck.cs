@@ -148,7 +148,7 @@ namespace FishMMO.Shared.WorldDesign
 			var problems = new List<string>();
 			HashSet<string> paths = DirectoryExtensions.GetAllFiles(Constants.Configuration.WorldScenePath, ".unity");
 			sceneCount = paths.Count;
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve();
 			WorldAtlas atlas = WorldEditorAssets.FindFirst<WorldAtlas>();
 			if (system == null)
 			{

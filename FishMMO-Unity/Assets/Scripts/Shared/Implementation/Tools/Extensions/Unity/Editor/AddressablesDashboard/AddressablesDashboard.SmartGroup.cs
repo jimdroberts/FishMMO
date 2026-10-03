@@ -537,6 +537,11 @@ namespace FishMMO.Shared
 			// Guarantee all required project directories exist before scanning.
 			EnsureProjectDirectories();
 
+			/* Generated biome art is build output: it is registered at build time, and only what the build
+			 * reaches (ProceduralArtBuildGroup). Whatever an earlier Smart Group put in the committed groups
+			 * comes out here, and the scan below skips it. */
+			FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.RemoveCommittedEntries(null);
+
 			// Discover candidate assets
 			var candidates = new List<string>();
 			foreach (string dir in SmartGroupScanDirectories)
@@ -551,6 +556,9 @@ namespace FishMMO.Shared
 					if (!AddressableExtensions.Contains(ext)) continue;
 
 					string normalized = path.Replace('\\', '/');
+
+					// Generated biome art never goes in a committed group (ProceduralArtBuildGroup).
+					if (FishMMO.Shared.WorldDesign.ProceduralArtBuildGroup.IsGenerated(normalized)) continue;
 
 					// Skip excluded directories
 					bool excluded = false;

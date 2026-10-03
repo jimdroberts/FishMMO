@@ -15,6 +15,18 @@ MonoBehaviour:
   m_GroupName: Scene_Shared
   m_GUID: 78ff5ab0fb2e04bf384d2bb38bea229a
   m_SerializeEntries:
+  - m_GUID: 1543472ad0644ec4fbae5c4413d88243
+    m_Address: MainBootstrap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 281f8763085371bc096a40c05b078e04
+    m_Address: WorldSim
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 372294cecb987eb418c8609b8fb4d289
     m_Address: Test Dungeon
     m_ReadOnly: 0
@@ -51,6 +63,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a47b11ff0cd05e735af9ac470b463348
+    m_Address: RegionSim
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b6a7b407afcf0a14e9b034d20ed554c8
     m_Address: Tutorial SpawnPoints
     m_ReadOnly: 0
@@ -63,8 +81,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c3f7f35295862928c98a14ef55691e63
+    m_Address: InteractableSim
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c43b6eb487815084ca437ada41086fa4
     m_Address: Dungeon/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dbe5e535a84be2c5bb53ddda0ff50677
+    m_Address: PlatformSim
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ddbfc3c417398fc05b32c828a316a13c
+    m_Address: CombatSim
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared

@@ -9,7 +9,11 @@ namespace FishMMO.Shared.Biomes
 		public BiomeTemplate Biome;
 		public BiomeClimateVariant Variant;
 		public ClimateSample Climate;
-		/// <summary>Normalised terrain height the reading was taken at, when a terrain was found.</summary>
+		/// <summary>
+		/// Normalised height the reading was taken at: planet-relative in a scene cut from the globe
+		/// (<see cref="PlanetClimateField.HeightOfAltitude"/> of the ground's altitude, what its biomes
+		/// were painted from), else the terrain's height over the scene's landmass.
+		/// </summary>
 		public float Height;
 		/// <summary>True when the biome came from the scene's baked map rather than being chosen from height and climate.</summary>
 		public bool FromMap;
@@ -49,7 +53,6 @@ namespace FishMMO.Shared.Biomes
 			var reading = new BiomeReading();
 
 			SceneBiomeMap map = settings != null ? settings.BiomeMap : null;
-			float latitude = map != null ? map.Latitude01(worldPosition) : 0.5f;
 
 			/* Measured within this scene's own terrains. Scene servers load world scenes
 			 * additively and every scene is built around its own origin, so their terrains overlap
@@ -58,10 +61,12 @@ namespace FishMMO.Shared.Biomes
 			 * scene once (WorldSceneSettings.OwnScene) rather than this asking the engine on every
 			 * sample. */
 			Scene scene = settings != null ? settings.OwnScene : default;
-			if (TrySampleTerrainHeight(worldPosition, scene, out float height))
+			Vector3 ground = worldPosition;
+			if (TrySampleTerrainHeight(worldPosition, scene, out float height, out float groundY))
 			{
 				reading.Height = height;
 				reading.HeightKnown = true;
+				ground.y = groundY;
 			}
 			else if (map != null && map.Contains(worldPosition))
 			{
@@ -69,9 +74,20 @@ namespace FishMMO.Shared.Biomes
 				reading.Height = 0.5f;
 			}
 
-			reading.Climate = settings != null
-				? settings.SampleClimate(reading.Height, latitude)
-				: DefaultClimate(reading.Height, latitude);
+			/* At the position, not at a latitude fraction across the map: a scene cut from the globe
+			 * evaluates its body's climate field at each point's true place and at the ground's true
+			 * altitude — the ground's, not the character's, because that is what the biome under it
+			 * was painted from — and hands back the planet-relative height the generator chose the
+			 * tier by, so a biome chosen here falls in the same tier as the painted one. */
+			if (settings != null)
+			{
+				reading.Climate = settings.SampleClimateAt(ground, reading.Height, out float resolverHeight);
+				reading.Height = resolverHeight;
+			}
+			else
+			{
+				reading.Climate = DefaultClimate(reading.Height);
+			}
 
 			if (map != null)
 			{
@@ -134,7 +150,14 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		public static bool TrySampleTerrainHeight(Vector3 worldPosition, Scene scene, out float normalizedHeight)
 		{
+			return TrySampleTerrainHeight(worldPosition, scene, out normalizedHeight, out _);
+		}
+
+		/// <summary>The same, and the ground's world Y — which in a scene cut from the globe is its altitude in scene metres.</summary>
+		public static bool TrySampleTerrainHeight(Vector3 worldPosition, Scene scene, out float normalizedHeight, out float worldY)
+		{
 			normalizedHeight = 0f;
+			worldY = worldPosition.y;
 			SceneTerrainExtent.Tile[] tiles = SceneTerrainExtent.TilesOf(scene, out SceneTerrainExtent extent);
 			for (int i = 0; i < tiles.Length; i++)
 			{
@@ -151,7 +174,7 @@ namespace FishMMO.Shared.Biomes
 				}
 				// SampleHeight is relative to the tile's own transform, so the tile's origin puts
 				// it back into world space before the landmass normalises it.
-				float worldY = terrain.SampleHeight(worldPosition) + tile.Origin.y;
+				worldY = terrain.SampleHeight(worldPosition) + tile.Origin.y;
 				normalizedHeight = extent.Found ? extent.Normalize(worldY)
 					: tile.Size.y > 0f ? Mathf.Clamp01((worldY - tile.Origin.y) / tile.Size.y) : 0f;
 				return true;
@@ -159,7 +182,7 @@ namespace FishMMO.Shared.Biomes
 			return false;
 		}
 
-		private static ClimateSample DefaultClimate(float height, float latitude)
+		private static ClimateSample DefaultClimate(float height)
 		{
 			float temperature = Mathf.Clamp(-height * 0.8f, -1f, 1f);
 			return new ClimateSample

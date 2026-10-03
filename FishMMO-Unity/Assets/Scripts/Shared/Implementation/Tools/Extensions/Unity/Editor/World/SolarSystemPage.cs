@@ -268,7 +268,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The active system, when the atlas names one: with several in the project "the first found"
 			// is whichever the asset database lists first.
 			Atlas.WorldAtlas openingAtlas = WorldEditorAssets.FindFirst<Atlas.WorldAtlas>();
-			SetProfile(openingAtlas != null && openingAtlas.SolarSystem != null ? openingAtlas.SolarSystem : WorldEditorAssets.FindFirst<SolarSystemProfile>());
+			SetProfile(openingAtlas != null && openingAtlas.SolarSystem != null ? openingAtlas.SolarSystem : SolarSystemProfile.Resolve());
 		}
 
 		// ── Layout helpers ──

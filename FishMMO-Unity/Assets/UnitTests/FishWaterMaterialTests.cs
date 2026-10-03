@@ -102,5 +102,92 @@ namespace FishMMO.UnitTests
 			string missing = string.Join(", ", PerMaterial(spray).Where(m => !declared.Contains(m)));
 			LogAssert.IsTrue(missing.Length == 0, "FishMMO/Water/Spray reads these but never declares them, so they are zero: " + missing);
 		}
+
+		/// <summary>The names of a shader's texture properties (2D, 3D, Cube, 2DArray).</summary>
+		private static HashSet<string> TextureProperties(string shader)
+		{
+			return new HashSet<string>(Regex.Matches(shader,
+				@"^\s*(?:\[[^\]]*\]\s*)*(_\w+)\s*\(\s*""[^""]*""\s*,\s*(?:2D|3D|Cube|2DArray)\s*\)", RegexOptions.Multiline)
+				.Cast<Match>().Select(m => m.Groups[1].Value));
+		}
+
+		/// <summary>
+		/// The lava's constant buffer and its non-texture Properties are the same list both ways: a
+		/// property outside the buffer is one the SRP Batcher cannot carry and one inside it that is not a
+		/// property reads zero — a zero melt temperature is a lake with no glow at all. Its textures (the
+		/// baked crust) are properties outside the buffer, as textures are, and each must be declared in
+		/// the header: a texture property nothing samples is a material slot that does nothing.
+		/// </summary>
+		[Test]
+		public void TheLavaDeclaresExactlyItsConstants()
+		{
+			string header = Read("FishLava.hlsl");
+			List<string> members = PerMaterial(header);
+			LogAssert.IsTrue(members.Count > 10, $"the scan found only {members.Count} constants; its pattern is stale");
+			string shader = Read("FishLava.shader");
+			HashSet<string> textures = TextureProperties(shader);
+			LogAssert.IsTrue(textures.Count == 2, $"expected the two baked crust maps, found {textures.Count} textures; the scan or the shader is stale");
+			HashSet<string> declared = Properties(shader);
+			declared.ExceptWith(textures);
+			string missing = string.Join(", ", members.Where(m => !declared.Contains(m)));
+			string extra = string.Join(", ", declared.Where(p => !members.Contains(p)));
+			LogAssert.IsTrue(missing.Length == 0, "FishMMO/Water/Lava reads these but never declares them, so they are zero: " + missing);
+			LogAssert.IsTrue(extra.Length == 0, "FishMMO/Water/Lava declares these outside its UnityPerMaterial: " + extra);
+			string undeclared = string.Join(", ", textures.Where(t => !header.Contains("TEXTURE2D(" + t + ")")));
+			LogAssert.IsTrue(undeclared.Length == 0, "FishMMO/Water/Lava has texture properties its header never declares: " + undeclared);
+		}
+
+		/// <summary>
+		/// The baked crust maps are committed and wired into the lava material, so the lava draws its
+		/// crust detail without anyone having to bake first. A missing map falls back to a flat normal
+		/// and a white mask — a crust with no detail and no torn borders, which is easy to miss.
+		/// </summary>
+		[Test]
+		public void TheLavaMaterialCarriesTheBakedCrust()
+		{
+			string folder = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Plugins/FishMMO Water/");
+			string material = File.ReadAllText(folder + "Materials/Lava.mat");
+			foreach (string map in new[] { "LavaCrustNormal", "LavaCrustMask" })
+			{
+				string meta = folder + "Textures/" + map + ".png.meta";
+				LogAssert.IsTrue(File.Exists(meta), map + ".png is not in the plugin's Textures folder; run FishMMO/Water/Bake Lava Textures");
+				string guid = Regex.Match(File.ReadAllText(meta), @"^guid:\s*(\w+)", RegexOptions.Multiline).Groups[1].Value;
+				LogAssert.IsTrue(guid.Length == 32 && material.Contains("guid: " + guid), "Lava.mat does not reference " + map + ".png");
+			}
+		}
+
+		/// <summary>
+		/// The lava's glow-and-fume pass includes the lava's constant buffer whole and its material is
+		/// copied from the lava's (WaterSurface.UpdateLavaLight), so it must declare exactly the lava's
+		/// properties — the breakers' rule, for the same reason.
+		/// </summary>
+		[Test]
+		public void TheLavaLightDeclaresExactlyTheLavasProperties()
+		{
+			HashSet<string> lava = Properties(Read("FishLava.shader"));
+			HashSet<string> light = Properties(Read("FishLavaLight.shader"));
+			string missing = string.Join(", ", lava.Where(p => !light.Contains(p)));
+			string extra = string.Join(", ", light.Where(p => !lava.Contains(p)));
+			LogAssert.IsTrue(missing.Length == 0, "FishMMO/Water/Lava Light is missing the lava's: " + missing);
+			LogAssert.IsTrue(extra.Length == 0, "FishMMO/Water/Lava Light declares what the lava does not, which nothing copies: " + extra);
+			LogAssert.IsTrue(Read("FishLavaLight.hlsl").Contains("#include \"FishLava.hlsl\""),
+				"the light pass must take the lava's constant buffer from its header, not declare its own");
+		}
+
+		/// <summary>
+		/// Every pass of the lava reaches its constant buffer through the one header, so the SRP Batcher
+		/// sees one layout — and every pass that draws depth places the surface with the same function.
+		/// </summary>
+		[Test]
+		public void EveryLavaPassSharesOneHeader()
+		{
+			string shader = Read("FishLava.shader");
+			int passes = Regex.Matches(shader, @"^\s*Pass\s*$", RegexOptions.Multiline).Count;
+			int includes = Regex.Matches(shader, "#include \"FishLavaPasses.hlsl\"").Count;
+			LogAssert.IsTrue(passes == 3, $"expected ForwardLit, DepthOnly and DepthNormals, found {passes} passes");
+			LogAssert.IsTrue(includes == passes, $"{passes} passes but {includes} include FishLavaPasses.hlsl");
+			LogAssert.IsTrue(!shader.Contains("CBUFFER_START"), "FishLava.shader declares a constant buffer of its own; it belongs in FishLava.hlsl");
+			LogAssert.IsTrue(!shader.Contains("\"ShadowCaster\""), "a flat opaque sheet can only shadow what it hides");
+		}
 	}
 }

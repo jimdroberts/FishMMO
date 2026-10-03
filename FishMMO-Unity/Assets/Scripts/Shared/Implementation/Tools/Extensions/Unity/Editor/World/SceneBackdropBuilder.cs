@@ -95,8 +95,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <param name="floorMetres">Altitude of the scene's terrain floor, which its colour bands are measured from.</param>
 		/// <param name="reliefMetres">The scene's terrain height span, which its colour bands are measured against.</param>
+		/// <param name="groundColour">
+		/// The ground's colour at (east, north, altitude in scene metres, steepness in degrees) — the
+		/// scene's biomes, so the horizon carries the ground the scene is painted with. Null paints
+		/// the plain height bands, which is what a scene no biome fitted is painted with too.
+		/// </param>
 		public static SceneBackdropResult Build(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan,
-			float floorMetres, float reliefMetres, string folder)
+			float floorMetres, float reliefMetres, string folder, System.Func<float, float, float, float, Color> groundColour = null)
 		{
 			var result = new SceneBackdropResult();
 			float reach = ReachFor(request);
@@ -111,7 +116,7 @@ namespace FishMMO.Shared.WorldDesign
 			float halfD = plan.DepthMetres * 0.5f;
 			string stem = $"{folder}/{WorldEditorAssets.Sanitize(request.SceneName)} Backdrop";
 
-			Material material = BakeMaterial(request, halfW, halfD, reach, floorMetres, reliefMetres, stem, result);
+			Material material = BakeMaterial(request, halfW, halfD, reach, floorMetres, reliefMetres, stem, result, groundColour);
 
 			var root = new GameObject("Backdrop");
 			SceneManager.MoveGameObjectToScene(root, scene);
@@ -283,7 +288,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// highest point reads as snow, which is what a range that much higher would carry.
 		/// </remarks>
 		private static Material BakeMaterial(SceneGenerationRequest request, float halfW, float halfD, float reach,
-			float floorMetres, float reliefMetres, string stem, SceneBackdropResult result)
+			float floorMetres, float reliefMetres, string stem, SceneBackdropResult result,
+			System.Func<float, float, float, float, Color> groundColour)
 		{
 			float extentX = halfW + reach, extentZ = halfD + reach;
 			int width = AlbedoResolution;
@@ -324,6 +330,13 @@ namespace FishMMO.Shared.WorldDesign
 					float gradient = Mathf.Sqrt(Sq(east / (2f * texelX)) + Sq(north / (2f * texelZ)));
 					float steepness = Mathf.Atan(gradient) * Mathf.Rad2Deg;
 
+					if (groundColour != null)
+					{
+						float wx = -extentX + (x + 0.5f) * texelX;
+						float wz = -extentZ + (z + 0.5f) * texelZ;
+						pixels[z * width + x] = groundColour(wx, wz, h, steepness);
+						continue;
+					}
 					GeneratedTerrainLayers.Weights(Mathf.Clamp01((h - floorMetres) / relief), steepness, weights);
 					Color colour = Color.black;
 					for (int i = 0; i < 4; i++)

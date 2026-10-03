@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Biomes;
 
 namespace FishMMO.Shared.Celestial
 {
@@ -176,6 +177,41 @@ namespace FishMMO.Shared.Celestial
 		}
 
 		/// <summary>
+		/// How much of a body's cratering survives: its air (<see cref="CrateringOf(AtmosphereKind)"/>)
+		/// and its volcanism together.
+		/// </summary>
+		/// <remarks>
+		/// An airless world only keeps its craters if nothing paves them over. Io is airless and has
+		/// no impact craters at all: its volcanoes resurface it faster than anything hits it, and its
+		/// lowlands are lava lakes, not basins. Europa's young ice is nearly as clean. The Moon and
+		/// Mercury, cold inside, keep everything. So the record fades out as internal heat rises from
+		/// <see cref="ResurfacingStartHeat"/> to <see cref="SurfaceLiquids.LavaLakeHeat"/>, the heat at
+		/// which lava stands open: a world with lava lakes has none, so a lake can never sit in a crater
+		/// that a scene, which draws craters at their own proportions, would draw shallower than the globe.
+		/// </remarks>
+		public static float CrateringOf(WorldBody body)
+		{
+			if (body == null)
+			{
+				return 0f;
+			}
+			float fromAir = CrateringOf(body.Atmosphere);
+			if (fromAir <= 0f)
+			{
+				return 0f;
+			}
+			float heat = ClimateModel.InternalHeat(null, body);
+			return fromAir * (1f - Smooth(ResurfacingStartHeat, SurfaceLiquids.LavaLakeHeat, heat));
+		}
+
+		/// <summary>Internal heat below which a world keeps every crater; the Moon is about 0.16.</summary>
+		/// <remarks>
+		/// Above the 0.55 a magnetic field alone gives a world (ClimateModel.InternalHeat), so a cold moon
+		/// with a field authored on it still keeps its craters; only real volcanism erases them.
+		/// </remarks>
+		public const float ResurfacingStartHeat = 0.6f;
+
+		/// <summary>
 		/// Normalised height in a direction from the body's centre: 0 the deepest trench, 1 the
 		/// highest summit.
 		/// </summary>
@@ -199,7 +235,21 @@ namespace FishMMO.Shared.Celestial
 		public static float Height(uint seed, Vector3 direction)
 		{
 			Vector3 p = direction.sqrMagnitude > 1e-12f ? direction.normalized : Vector3.up;
+			float continent = Continent(seed, p, out Vector3 warped, out float uplift);
+			float mountains = Ridged(warped * MountainFrequency, MountainOctaves, seed ^ 0xD00DFEEDu);
 
+			float detail = Fbm(p * DetailFrequency, DetailOctaves, seed ^ 0xFACEB00Cu) - 0.5f;
+
+			float height = continent * 0.62f + mountains * uplift * 0.33f + detail * 0.05f;
+			return Mathf.Clamp01(height);
+		}
+
+		/// <summary>
+		/// The continent term and the mountain uplift it allows, shared by <see cref="Height"/> and
+		/// <see cref="CoarseHeight"/> so the two cannot disagree about where a coast is.
+		/// </summary>
+		private static float Continent(uint seed, Vector3 p, out Vector3 warped, out float uplift)
+		{
 			/* Dragged sideways before the continents are drawn. Undragged fBm gives blobs with
 			 * smooth, rounded coasts; warping the input by another noise field is what produces
 			 * inlets, peninsulas and the ragged edges a real coast has. */
@@ -207,7 +257,7 @@ namespace FishMMO.Shared.Celestial
 				Noise(p * WarpFrequency, seed ^ 0x1A2B3C4Du) - 0.5f,
 				Noise(p * WarpFrequency, seed ^ 0x5E6F7A8Bu) - 0.5f,
 				Noise(p * WarpFrequency, seed ^ 0x9CADBEEFu) - 0.5f);
-			Vector3 warped = p + warp * WarpStrength;
+			warped = p + warp * WarpStrength;
 
 			// Continents: the slow shape of the world, and the only term that decides land from sea.
 			float continent = Fbm(warped * ContinentFrequency, ContinentOctaves, seed);
@@ -219,13 +269,55 @@ namespace FishMMO.Shared.Celestial
 			 * another. Interiors keep a floor of uplift, because they are not all shield: the
 			 * Urals, the Altai and the Tian Shan stand thousands of kilometres from any coast. */
 			float edge = 1f - Mathf.Abs(continent - 0.5f) * 2f;
-			float uplift = Mathf.SmoothStep(0f, 1f, continent) * Mathf.Lerp(InteriorUplift, 1f, Smooth(0.15f, 0.95f, edge));
-			float mountains = Ridged(warped * MountainFrequency, MountainOctaves, seed ^ 0xD00DFEEDu);
+			uplift = Mathf.SmoothStep(0f, 1f, continent) * Mathf.Lerp(InteriorUplift, 1f, Smooth(0.15f, 0.95f, edge));
+			return continent;
+		}
 
-			float detail = Fbm(p * DetailFrequency, DetailOctaves, seed ^ 0xFACEB00Cu) - 0.5f;
+		/// <summary>How many of the mountain octaves <see cref="CoarseHeight"/> keeps.</summary>
+		public const int CoarseMountainOctaves = 2;
 
-			float height = continent * 0.62f + mountains * uplift * 0.33f + detail * 0.05f;
-			return Mathf.Clamp01(height);
+		/// <summary>
+		/// What the mountain octaves <see cref="CoarseHeight"/> leaves out add on average, in the
+		/// ridged field's own 0..1 units.
+		/// </summary>
+		/// <remarks>
+		/// Measured over 50,000 Fibonacci points at the mountain frequency (the moisture harness,
+		/// 2026-10-02): the full five-octave ridged field minus its first two octaves averages
+		/// 0.1212. Adding it back keeps the coarse ground at the real ground's mean height, so the
+		/// coarse coastline lies on the real one rather than seaward of every mountainous coast —
+		/// without it 6.9% of an Earth-like globe changed between land and sea.
+		/// </remarks>
+		public const float CoarseRidgeResidual = 0.121f;
+
+		/// <summary>
+		/// The surface field with only its continent-scale and mountain-range-scale terms: the
+		/// ground as seen from a few hundred kilometres away.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>For anything that asks about the ground many times per point.</b> Moisture walks
+		/// thousands of kilometres upwind of every point it is asked about, sampling the ground as
+		/// it goes, and it only needs to know whether that ground is sea or land and how high the
+		/// ranges in the way stand — features hundreds of kilometres across. <see cref="Height"/>
+		/// spends fourteen noise evaluations a point, six of them on the fine mountain octaves and
+		/// the hill-scale detail, none of which an air mass crossing a continent can feel. This
+		/// spends eight.
+		/// </para>
+		/// <para>
+		/// The continent term is the SAME function <see cref="Height"/> uses, so the coasts agree;
+		/// the mountain octaves kept are exactly <see cref="Height"/>'s first two, normalised as
+		/// the full field normalises them, with the mean of the rest added back. Detail is left
+		/// out entirely: it is centred on zero, so leaving it out moves nothing on average.
+		/// Craters are left out too — nothing that needs this has air over a cratered surface.
+		/// </para>
+		/// </remarks>
+		public static float CoarseHeight(uint seed, Vector3 direction)
+		{
+			Vector3 p = direction.sqrMagnitude > 1e-12f ? direction.normalized : Vector3.up;
+			float continent = Continent(seed, p, out Vector3 warped, out float uplift);
+			float mountains = Ridged(warped * MountainFrequency, CoarseMountainOctaves, MountainOctaves, seed ^ 0xD00DFEEDu)
+				+ CoarseRidgeResidual;
+			return Mathf.Clamp01(continent * 0.62f + mountains * uplift * 0.33f);
 		}
 
 		/// <summary>Normalised height at a latitude and longitude in degrees.</summary>
@@ -366,8 +458,7 @@ namespace FishMMO.Shared.Celestial
 		/// <summary>A body's profile, with its own cratering taken into account.</summary>
 		public static PlanetProfile ProfileOf(uint seed, WorldBody body)
 		{
-			return Profile(seed, body != null ? body.Water : 0.7f,
-				body != null ? CrateringOf(body.Atmosphere) : 0f);
+			return Profile(seed, body != null ? body.Water : 0.7f, CrateringOf(body));
 		}
 
 		/// <summary>Forgets every cached profile. For tests and for tools that change a seed.</summary>
@@ -516,6 +607,32 @@ namespace FishMMO.Shared.Celestial
 		}
 
 		/// <summary>
+		/// Metres in a scene per metre of crater depth: the craters keep their own proportions.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A crater is a shape, not relief. Its depth is a fixed share of its width: about a fifth for a
+		/// small bowl, a twentieth for a 100 km crater, a fiftieth for a basin (Pike 1977, from lunar
+		/// craters). A scene shrinks the planet's kilometres by the atlas radius over the sky radius
+		/// (about 1/60 for a 1,700 km moon on a 30 km atlas) but its heights only by
+		/// <see cref="SceneVerticalScale"/> (about 0.36), so a crater cut with the ground came out about as
+		/// deep as it was wide: every crater a pit. Scaled with the kilometres instead, a crater is the
+		/// shape it is on the globe; times <see cref="SceneCraterExaggeration"/>, the same lift the
+		/// mountains get, so the scale reads, kept within the range real craters span.
+		/// </para>
+		/// <para>Never more than the vertical scale: a crater is never deeper than the ground it is cut in.</para>
+		/// </remarks>
+		public static float SceneCraterScale(WorldBody body, double sceneRadiusKm)
+		{
+			float sky = body != null && body.SkyRadiusKm > 0.01f ? body.SkyRadiusKm : EarthRadiusKm;
+			float horizontal = (float)(sceneRadiusKm / sky) * SceneCraterExaggeration;
+			return Mathf.Min(horizontal, SceneVerticalScale(body, sceneRadiusKm));
+		}
+
+		/// <summary>How much deeper than their true proportion a scene draws craters (as <see cref="SceneReliefExaggeration"/> does mountains).</summary>
+		public const float SceneCraterExaggeration = 2f;
+
+		/// <summary>
 		/// How rugged the ground is at an altitude, 0 on the shore to 1 in high mountains.
 		/// </summary>
 		/// <param name="altitudeMetres">The planet's altitude, in its own metres.</param>
@@ -539,8 +656,24 @@ namespace FishMMO.Shared.Celestial
 		/// <param name="direction">Where on the globe.</param>
 		public static float AltitudeMetres(uint seed, WorldBody body, Vector3 direction)
 		{
-			float cratering = body != null ? CrateringOf(body.Atmosphere) : 0f;
-			return AltitudeFromHeight(Height(seed, direction, cratering), ProfileOf(seed, body), ReliefMetres(body));
+			return AltitudeFromHeight(Height(seed, direction, CrateringOf(body)), ProfileOf(seed, body), ReliefMetres(body));
+		}
+
+		/// <summary>
+		/// <see cref="AltitudeMetres"/> with and without the body's craters, in the planet's metres, from
+		/// one sample of the field. Their difference is what the craters add at this point (negative in a
+		/// bowl, positive on a rim), which a scene scales on its own (<see cref="SceneCraterScale"/>).
+		/// </summary>
+		public static void AltitudeParts(uint seed, WorldBody body, Vector3 direction, out float withCraters, out float withoutCraters)
+		{
+			float cratering = CrateringOf(body);
+			PlanetProfile profile = ProfileOf(seed, body);
+			float relief = ReliefMetres(body);
+			float height = Height(seed, direction);
+			withoutCraters = AltitudeFromHeight(height, profile, relief);
+			withCraters = cratering > 0.001f
+				? AltitudeFromHeight(Mathf.Clamp01(height + Craters(direction.normalized, seed ^ 0x0C0FFEE1u) * cratering * CraterDepth), profile, relief)
+				: withoutCraters;
 		}
 
 		/// <summary>
@@ -762,12 +895,40 @@ namespace FishMMO.Shared.Celestial
 
 		/// <summary>The crater sizes drawn, largest first, as frequencies on the unit sphere.</summary>
 		/// <remarks>
+		/// <para>
 		/// Three sizes, because an impact record is scale-free: a few basins, many craters, and
-		/// countless small ones. Each is a third the depth of the one above so the big features
-		/// still read from orbit while the small ones give the surface its texture.
+		/// countless small ones. On a Moon-sized body they are basins of 230–480 km, craters of
+		/// 95–195 km and 40–85 km.
+		/// </para>
+		/// <para>
+		/// <b>Depth follows the measured law, not the size.</b> A complex crater's depth grows only as
+		/// its diameter to the 0.3 (lunar d ≈ 1.04·D^0.301 km, Pike 1977), so a 60 km crater is 3.6 km
+		/// deep, a 150 km one 4.8 km and a basin 5–6 km: nearly the same. The weights below give
+		/// those on a Moon (relief 12.5 km, <see cref="CraterDepth"/> 0.5). They used to fall by a
+		/// third per size, which made the smaller craters a third of their real depth while the
+		/// basins were right. Crater widths grow with the radius and depths with D^0.3, close to the
+		/// relief law's radius^0.36, so the same shares hold on any body.
+		/// </para>
 		/// </remarks>
 		private static readonly float[] CraterFrequencies = { 4.5f, 11f, 26f };
-		private static readonly float[] CraterWeights = { 1f, 0.45f, 0.18f };
+		private static readonly float[] CraterWeights = { 1f, 0.77f, 0.58f };
+
+		/// <summary>
+		/// Each size's shape: the flat floor's share of the radius and the central peak's height as a
+		/// share of the depth.
+		/// </summary>
+		/// <remarks>
+		/// Craters this big are all complex: the floor rebounds flat after the impact and a central
+		/// peak rises where the rock sprang back. Basins are wide and flat-floored with the peak
+		/// collapsed into a low inner ring; the smaller complex craters have narrower floors and the
+		/// tallest peaks (about a third of the depth, as Tycho's and Copernicus's are).
+		/// </remarks>
+		private static readonly float[] CraterFloors = { 0.48f, 0.36f, 0.24f };
+		private static readonly float[] CraterPeaks = { 0f, 0.28f, 0.34f };
+
+		/// <summary>The rim crest's position (share of the radius) and height (share of the depth).</summary>
+		/// <remarks>Rim height grows as D^0.4 against depth's D^0.3, so it is about 0.35–0.4 of the depth over these sizes (Pike 1977).</remarks>
+		private const float RimCrest = 0.86f, RimHeight = 0.38f;
 
 		/// <summary>
 		/// A crater field on the sphere, roughly -1..0.3: bowls with raised rims.
@@ -783,13 +944,13 @@ namespace FishMMO.Shared.Celestial
 			float total = 0f;
 			for (int octave = 0; octave < CraterFrequencies.Length; octave++)
 			{
-				total += Crater(p * CraterFrequencies[octave], seed + (uint)octave * 0x7F4A7C15u) * CraterWeights[octave];
+				total += Crater(p * CraterFrequencies[octave], seed + (uint)octave * 0x7F4A7C15u, CraterFloors[octave], CraterPeaks[octave]) * CraterWeights[octave];
 			}
 			return total;
 		}
 
-		/// <summary>One scale of craters: the deepest cut from any nearby impact.</summary>
-		private static float Crater(Vector3 p, uint seed)
+		/// <summary>One scale of craters: the deepest cut from any nearby impact. <paramref name="floor"/> and <paramref name="peak"/> as <see cref="CraterFloors"/> and <see cref="CraterPeaks"/>.</summary>
+		private static float Crater(Vector3 p, uint seed, float floor, float peak)
 		{
 			int bx = Mathf.FloorToInt(p.x), by = Mathf.FloorToInt(p.y), bz = Mathf.FloorToInt(p.z);
 			float deepest = 0f;
@@ -830,9 +991,13 @@ namespace FishMMO.Shared.Celestial
 						 * about 4% of its peak at t = 1, where the crater stops being counted, so
 						 * every crater ended in a small step: invisible on a globe, but a ring-shaped
 						 * cliff once a scene magnifies it. */
-						float bowl = -(1f - t * t);
-						float rim = Mathf.Exp(-((t - 0.86f) * (t - 0.86f)) / 0.006f) * 0.55f * (1f - Smooth(0.92f, 1f, t));
-						float shape = bowl + rim;
+						/* A complex crater: a flat floor out to `floor`, walls rising to the rim, and a
+						 * central peak. The walls are the old parabola, run from the floor's edge. */
+						float u = t <= floor ? 0f : (t - floor) / (1f - floor);
+						float bowl = -(1f - u * u);
+						float rebound = peak > 0f ? peak * Mathf.Exp(-(t * t) / 0.012f) : 0f;
+						float rim = Mathf.Exp(-((t - RimCrest) * (t - RimCrest)) / 0.006f) * RimHeight * (1f - Smooth(0.92f, 1f, t));
+						float shape = bowl + rebound + rim;
 
 						// The deepest wins, so a newer crater cuts through an older one instead of
 						// the two averaging into a shallow dish.
@@ -1082,6 +1247,34 @@ namespace FishMMO.Shared.Celestial
 				weight = Mathf.Clamp01(n * 2f);
 				sum += n * amplitude;
 				total += amplitude;
+				q *= 2.07f;
+				amplitude *= 0.5f;
+			}
+			return total > 0f ? Mathf.Clamp01(sum / total) : 0f;
+		}
+
+		/// <summary>
+		/// The first <paramref name="octaves"/> of a <paramref name="normaliseOctaves"/>-octave
+		/// ridged field, divided by the FULL field's total so each kept octave weighs exactly what
+		/// it weighs in the full field.
+		/// </summary>
+		private static float Ridged(Vector3 p, int octaves, int normaliseOctaves, uint seed)
+		{
+			float total = 0f, a = 0.5f;
+			for (int i = 0; i < normaliseOctaves; i++)
+			{
+				total += a;
+				a *= 0.5f;
+			}
+			float sum = 0f, amplitude = 0.5f, weight = 1f;
+			Vector3 q = p;
+			for (int i = 0; i < octaves; i++)
+			{
+				float n = 1f - Mathf.Abs(Noise(q, seed + (uint)i * 0x9E3779B1u) * 2f - 1f);
+				n *= n;
+				n *= weight;
+				weight = Mathf.Clamp01(n * 2f);
+				sum += n * amplitude;
 				q *= 2.07f;
 				amplitude *= 0.5f;
 			}

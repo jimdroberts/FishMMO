@@ -37,6 +37,30 @@ namespace FishMMO.Shared.Weather
 			Handedness = handedness < 0f ? -1f : 1f;
 		}
 
+		/// <summary>
+		/// Which cell a latitude is in, and how far across it.
+		/// </summary>
+		/// <param name="latitudeDegrees">Either hemisphere; the belts are mirrored.</param>
+		/// <param name="t">0 at the cell's equatorward edge, 1 at its poleward edge.</param>
+		/// <param name="last">True for the last cell, which runs on to the pole rather than stopping a cell's width out.</param>
+		/// <returns>The cell index: 0 the Hadley cell, then alternating westerly (odd) and easterly (even) belts.</returns>
+		/// <remarks>
+		/// The one place a latitude is placed in its belt, so the wind (<see cref="WeatherDriver.PrevailingWind(float, in WindBelts)"/>)
+		/// and the rain the belts bring (<see cref="Biomes.MoistureModel.Circulation"/>) cannot disagree
+		/// about where a belt ends.
+		/// </remarks>
+		public int Locate(float latitudeDegrees, out float t, out bool last)
+		{
+			float absolute = Mathf.Abs(latitudeDegrees);
+			float cell = Mathf.Clamp(CellDegrees, 1f, 90f);
+			int index = Mathf.Min((int)(absolute / cell), 1000);
+			float start = index * cell;
+			last = start + cell >= 90f - 1e-3f;
+			float span = last ? Mathf.Max(1e-3f, 90f - start) : cell;
+			t = Mathf.Clamp01((absolute - start) / span);
+			return index;
+		}
+
 		/// <summary>Our own belts: thirty-degree cells.</summary>
 		public static WindBelts Earthlike => new WindBelts(30f, 1f);
 

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -16,11 +15,27 @@ namespace FishMMO.Client
 	/// </remarks>
 	public static class CloudRendererSetup
 	{
+		/// <summary>
+		/// The guids of the project's own renderer assets — under Assets/ only.
+		/// </summary>
+		/// <remarks>
+		/// An unscoped FindAssets also returns URP's package-internal default renderer
+		/// (Library/PackageCache/…/Runtime/Data/UniversalRendererData.asset). Features written into
+		/// that file outlive the scripts they name: when the weather overlay feature was removed its
+		/// sub-object stayed behind as a null list entry, and URP logged "UniversalRendererData is
+		/// missing RendererFeatures" on every load of it — each domain reload, each scene recut, each
+		/// click on the console entry. Never touch package assets.
+		/// </remarks>
+		internal static string[] ProjectRenderers()
+		{
+			return AssetDatabase.FindAssets("t:UniversalRendererData", new[] { "Assets" });
+		}
+
 		/// <summary>Adds the cloud feature to every renderer that has none. Returns how many were changed.</summary>
 		public static int EnsureFeature(Material cloudMaterial)
 		{
 			int added = 0;
-			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+			foreach (string guid in ProjectRenderers())
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
 				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
@@ -29,13 +44,25 @@ namespace FishMMO.Client
 					continue;
 				}
 				FishCloudsFeature existing = null;
+				bool unresolved = false;
 				foreach (ScriptableRendererFeature feature in data.rendererFeatures)
 				{
-					if (feature is FishCloudsFeature clouds)
+					if (feature == null)
+					{
+						unresolved = true;
+					}
+					else if (feature is FishCloudsFeature clouds)
 					{
 						existing = clouds;
 						break;
 					}
+				}
+				if (existing == null && unresolved)
+				{
+					/* A null in the list is a feature that did not resolve (a script mid-compile, or one
+					 * deleted), which may be this one: adding a cloud feature now could save a second one
+					 * into the asset. Judged again on the next call. */
+					continue;
 				}
 				if (existing != null)
 				{
@@ -116,26 +143,13 @@ namespace FishMMO.Client
 		public static int EnsureHeightFog()
 		{
 			int added = 0;
-			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+			foreach (string guid in ProjectRenderers())
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
 				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
-				if (data == null)
+				if (data == null || Has<FishHeightFogFeature>(data) != false)
 				{
-					continue;
-				}
-				bool present = false;
-				foreach (ScriptableRendererFeature feature in data.rendererFeatures)
-				{
-					if (feature is FishHeightFogFeature)
-					{
-						present = true;
-						break;
-					}
-				}
-				if (present)
-				{
-					continue;
+					continue;   // present, or not resolved yet (a null in the list): never add a second one
 				}
 
 				var created = ScriptableObject.CreateInstance<FishHeightFogFeature>();
@@ -165,26 +179,13 @@ namespace FishMMO.Client
 		public static int EnsureVolumetricFog()
 		{
 			int added = 0;
-			foreach (string guid in AssetDatabase.FindAssets("t:UniversalRendererData"))
+			foreach (string guid in ProjectRenderers())
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
 				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
-				if (data == null)
+				if (data == null || Has<FishVolumetricFogFeature>(data) != false)
 				{
-					continue;
-				}
-				bool present = false;
-				foreach (ScriptableRendererFeature feature in data.rendererFeatures)
-				{
-					if (feature is FishVolumetricFogFeature)
-					{
-						present = true;
-						break;
-					}
-				}
-				if (present)
-				{
-					continue;
+					continue;   // present, or not resolved yet (a null in the list): never add a second one
 				}
 				var created = ScriptableObject.CreateInstance<FishVolumetricFogFeature>();
 				created.name = "Fish Volumetric Fog";
@@ -199,6 +200,24 @@ namespace FishMMO.Client
 				AssetDatabase.SaveAssets();
 			}
 			return added;
+		}
+
+		/// <summary>
+		/// True when the renderer has a feature of this type, false when it surely has none, null when it
+		/// cannot tell: a null entry is a feature that did not resolve (mid-compile, deleted), which may be it.
+		/// </summary>
+		private static bool? Has<T>(ScriptableRendererData data) where T : ScriptableRendererFeature
+		{
+			bool unresolved = false;
+			foreach (ScriptableRendererFeature feature in data.rendererFeatures)
+			{
+				if (feature is T)
+				{
+					return true;
+				}
+				unresolved |= feature == null;
+			}
+			return unresolved ? (bool?)null : false;
 		}
 
 		/// <summary>

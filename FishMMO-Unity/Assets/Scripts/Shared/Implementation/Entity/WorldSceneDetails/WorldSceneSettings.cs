@@ -266,10 +266,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// The climate at a normalised height and latitude right now: the climate asset's reading
-		/// plus this scene's runtime offsets.
-		/// </summary>
-		/// <summary>
 		/// How much colder or wetter this scene's world is than the home world, from where it sits.
 		/// </summary>
 		/// <remarks>
@@ -286,9 +282,10 @@ namespace FishMMO.Shared
 		/// The same, at a point across the scene's own biome map.
 		/// </summary>
 		/// <param name="latitude01">
-		/// 0 at the map's north edge, 1 at its south, 0.5 at the scene's own latitude. Spread over
-		/// <see cref="ClimateSettings.MapLatitudeSpanDegrees"/>, so one map can run from forest to
-		/// tundra across its width.
+		/// 0 at the map's south edge, 1 at its north (<see cref="SceneBiomeMap.Latitude01"/>), 0.5
+		/// at the scene's own latitude. Spread over <see cref="ClimateSettings.MapLatitudeSpanDegrees"/>,
+		/// so one hand-painted map can run from forest to tundra across its width. A scene cut from
+		/// the globe does not use this: see <see cref="SampleClimateAt"/>.
 		/// </param>
 		public void CelestialOffsets(float latitude01, out float temperature, out float humidity)
 		{
@@ -321,17 +318,175 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>What this scene's world physically offers, for the biome resolver.</summary>
+		/// <remarks>
+		/// <para>
+		/// A placed scene takes it from its placement's climate field — the very conditions the
+		/// generator filtered its biomes by — so a biome chosen at runtime passes exactly the gate the
+		/// painted one did.
+		/// </para>
+		/// <para>
+		/// Cached either way in play. Working the conditions out walks the body's orbit eight times,
+		/// and the biome sampler reads this per character per second; the answer only changes when the
+		/// body or the system does, which is compared on each read. Outside play mode it is read live,
+		/// since a designer may be editing the body.
+		/// </para>
+		/// </remarks>
 		public BiomeWorldConditions WorldConditions
 		{
 			get
 			{
+				ScenePlacementClimate placement = PlacementClimate;
+				if (placement != null)
+				{
+					return placement.Conditions;
+				}
 				WorldBody body = Body;
-				return body == null
-					? BiomeWorldConditions.Earthlike
-					: BiomeWorldConditions.For(SolarSystemProfile.Active, body);
+				if (body == null)
+				{
+					return BiomeWorldConditions.Earthlike;
+				}
+				SolarSystemProfile system = SolarSystemProfile.Active;
+#if UNITY_EDITOR
+				// Outside play mode a designer may be editing the body itself; read it live.
+				if (!Application.isPlaying)
+				{
+					return BiomeWorldConditions.For(system, body);
+				}
+#endif
+				if (!conditionsCached || !ReferenceEquals(conditionsBody, body) || !ReferenceEquals(conditionsSystem, system))
+				{
+					conditions = BiomeWorldConditions.For(system, body);
+					conditionsBody = body;
+					conditionsSystem = system;
+					conditionsCached = true;
+				}
+				return conditions;
 			}
 		}
 
+		[System.NonSerialized] private BiomeWorldConditions conditions;
+		[System.NonSerialized] private WorldBody conditionsBody;
+		[System.NonSerialized] private SolarSystemProfile conditionsSystem;
+		[System.NonSerialized] private bool conditionsCached;
+
+		/// <summary>
+		/// The climate at a position in this scene right now. See <see cref="SampleClimateAt(Vector3, float, out float)"/>.
+		/// </summary>
+		public ClimateSample SampleClimateAt(Vector3 worldPosition, float height01)
+		{
+			return SampleClimateAt(worldPosition, height01, out _);
+		}
+
+		/// <summary>
+		/// The climate at a position in this scene right now, and the height the biome system reads
+		/// there.
+		/// </summary>
+		/// <param name="worldPosition">
+		/// A position in this scene. In a scene cut from the globe its Y is the altitude the climate
+		/// is taken at — pass the ground under a character for the ground's climate (as
+		/// <see cref="BiomeSampler"/> does), Y = 0 for sea level.
+		/// </param>
+		/// <param name="height01">
+		/// The normalised terrain height there, as <see cref="BiomeSampler"/> measures it over the
+		/// scene's landmass. Used by hand-made and unplaced scenes; a scene cut from the globe reads
+		/// its height from its altitude instead.
+		/// </param>
+		/// <param name="normalizedHeight">
+		/// The height the reading was taken at, as the biome resolver should use it: planet-relative
+		/// in a scene cut from the globe (what its biomes were painted from), else
+		/// <paramref name="height01"/> unchanged.
+		/// </param>
+		/// <remarks>
+		/// <para>
+		/// <b>One climate model for a scene cut from the globe.</b> Its biomes were painted by the
+		/// body's <see cref="PlanetClimateField"/> at each point's true place and true altitude
+		/// (scene Y ÷ its vertical scale); this evaluates exactly that field there
+		/// (<see cref="ScenePlacementClimate.SampleAt"/>), so temperature, humidity, elevation tier and
+		/// height read at runtime are the ones the ground was painted from. The scene's
+		/// <see cref="ClimateSettings"/> asset no longer bends its temperature or humidity — the
+		/// generator never read it — and keeps supplying the climate variants.
+		/// </para>
+		/// <para>
+		/// A hand-made scene that is only placed keeps its authored climate, the latitude spread
+		/// across its map that it was painted to, plus the wind-driven moisture at its centre. A scene
+		/// with no place on any body reads exactly as <see cref="SampleClimate"/> always did.
+		/// </para>
+		/// <para>
+		/// <see cref="RuntimeTemperatureOffset"/> and <see cref="RuntimeHumidityOffset"/> — the weather's
+		/// and the tests' hooks — apply on top in every case.
+		/// </para>
+		/// <para>
+		/// No allocation: the placement (field, conditions, moisture grid) is built once and cached on
+		/// this component, and re-checked against the atlas entry on each read so an edit in the
+		/// designer rebuilds it.
+		/// </para>
+		/// </remarks>
+		public ClimateSample SampleClimateAt(Vector3 worldPosition, float height01, out float normalizedHeight)
+		{
+			ScenePlacementClimate placement = PlacementClimate;
+			if (placement != null && placement.Generated)
+			{
+				ClimateSample sample = placement.SampleAt(worldPosition, out normalizedHeight);
+				sample.Temperature = Mathf.Clamp(sample.Temperature + RuntimeTemperatureOffset, -1f, 1f);
+				sample.Humidity = Mathf.Clamp(sample.Humidity + RuntimeHumidityOffset, -1f, 1f);
+				return sample;
+			}
+
+			normalizedHeight = height01;
+			SceneBiomeMap map = BiomeMap;
+			float latitude01 = map != null ? map.Latitude01(worldPosition) : 0.5f;
+			ClimateSample authored = SampleClimate(height01, latitude01);
+			if (placement != null)
+			{
+				authored.Humidity = Mathf.Clamp(authored.Humidity + placement.CentreMoisture, -1f, 1f);
+			}
+			return authored;
+		}
+
+		/// <summary>
+		/// The latitude of a position in this scene, degrees: its true latitude on the globe for a
+		/// scene cut from it, else the scene's latitude spread across its biome map by the authored span.
+		/// </summary>
+		public double LatitudeAt(Vector3 worldPosition)
+		{
+			ScenePlacementClimate placement = PlacementClimate;
+			if (placement != null && placement.Generated)
+			{
+				return placement.LatitudeAt(worldPosition.x, worldPosition.z);
+			}
+			SceneBiomeMap map = BiomeMap;
+			float latitude01 = map != null ? map.Latitude01(worldPosition) : 0.5f;
+			float span = (Climate != null ? Climate : ClimateSettings.Default).MapLatitudeSpanDegrees;
+			return Latitude + (latitude01 - 0.5f) * span;
+		}
+
+		/// <summary>This scene's placement climate, built on first use and whenever the placement changes. Null when it is placed on no body.</summary>
+		public ScenePlacementClimate PlacementClimate
+		{
+			get
+			{
+				WorldAtlasScene entry = AtlasEntry;
+				if (entry == null || !entry.Placed)
+				{
+					placementClimate = null;
+					return null;
+				}
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				if (placementClimate == null || !placementClimate.Matches(system, entry))
+				{
+					placementClimate = ScenePlacementClimate.For(system, entry);
+				}
+				return placementClimate;
+			}
+		}
+
+		[System.NonSerialized] private ScenePlacementClimate placementClimate;
+
+		/// <summary>
+		/// The climate at a normalised height and a position across the biome map given as
+		/// <paramref name="latitude01"/>, by the authored latitude span and with no moisture term.
+		/// </summary>
+		/// <remarks>Prefer <see cref="SampleClimateAt"/>, which knows where a generated scene really is.</remarks>
 		public ClimateSample SampleClimate(float height01, float latitude01)
 		{
 			/* The derived model when nothing is authored, not a guess.

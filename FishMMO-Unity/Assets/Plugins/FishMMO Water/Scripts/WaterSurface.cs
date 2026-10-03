@@ -65,8 +65,25 @@ namespace FishMMO.Water
 		private const double WrapSeconds = 10000.0;
 
 		[Header("Sea")]
+		[Tooltip("What this is the surface of. Lava is opaque and flat: it draws Lava Material, and the FFT, " +
+			"the shore, the breakers, the caustics and the underwater pass all stand down.")]
+		public WaterLiquid Liquid = WaterLiquid.Water;
 		[Tooltip("The material. Must use FishMMO/Water/Ocean.")]
 		public Material Material;
+		[Tooltip("The material while the liquid is Lava. Must use FishMMO/Water/Lava.")]
+		public Material LavaMaterial;
+
+		/// <summary>The lava shader's name.</summary>
+		public const string LavaShaderName = "FishMMO/Water/Lava";
+
+		/// <summary>True while this surface is molten rock rather than a sea.</summary>
+		public bool IsLava => Liquid == WaterLiquid.Lava;
+
+		/// <summary>The material actually drawn: the sea's, or the lava's.</summary>
+		public Material DrawnMaterial => IsLava ? LavaMaterial : Material;
+
+		/// <summary>The liquid the surface's own systems were last set up for; null before the first OnEnable.</summary>
+		private WaterLiquid? appliedLiquid;
 
 		[Header("Waves")]
 		[Tooltip("Which way the wind blows TOWARD, clockwise from north.")]
@@ -165,6 +182,19 @@ namespace FishMMO.Water
 		/// <summary>The underwater pass's name, for finding it when the reference was never set.</summary>
 		public const string UnderwaterShaderName = "FishMMO/Water/Underwater";
 
+		[Header("Lava")]
+		[Tooltip("Light the crater walls, rocks and anyone near the lava with its glow. Lava only.")]
+		public bool LavaLight = true;
+		[Tooltip("How much of the lava's fume lingers over it: 0 on an airless world, where the gas leaves " +
+			"ballistically; a faint haze under thin air; 1 under air like ours. Set from the body by the scene " +
+			"generator (SurfaceLiquids.FumeDensity). How dense a full plume is lives on the lava material.")]
+		[Range(0f, 1f)] public float LavaFumes = 1f;
+		[Tooltip("The pass that draws the glow and the fumes. Referenced so a build includes it; found by name otherwise.")]
+		public Shader LavaLightShader;
+
+		/// <summary>The lava light pass's name, for finding it when the reference was never set.</summary>
+		public const string LavaLightShaderName = "FishMMO/Water/Lava Light";
+
 		private MeshFilter meshFilter;
 		private MeshRenderer meshRenderer;
 		private Mesh mesh;
@@ -248,6 +278,11 @@ namespace FishMMO.Water
 		/// </remarks>
 		public float HeightAt(Vector3 worldPosition)
 		{
+			// Lava has no waves: its surface is its level everywhere.
+			if (IsLava)
+			{
+				return SeaLevel;
+			}
 			WaterSpectrum spectrum = SpectrumForQueries();
 			spectrum?.Evaluate(clock);
 			ReadFade(out float fadeStart, out float fadeEnd);
@@ -311,6 +346,11 @@ namespace FishMMO.Water
 		{
 			get
 			{
+				// Wind cannot raise a wave on a melt ten million times as viscous as water.
+				if (IsLava)
+				{
+					return 0f;
+				}
 				if (environment == null)
 				{
 					environment = GetComponent<WaterEnvironment>();
@@ -493,6 +533,10 @@ namespace FishMMO.Water
 		public bool IsUnderSurface(Vector3 worldPosition)
 		{
 			float above = worldPosition.y - SeaLevel;
+			if (IsLava)
+			{
+				return above < 0f;
+			}
 			float highestCrest = 2f * 0.21f * WindSpeed * WindSpeed / Mathf.Max(0.05f, Gravity) + 4f;
 			return above < highestCrest && (above < -highestCrest || IsSubmerged(worldPosition));
 		}
@@ -517,9 +561,115 @@ namespace FishMMO.Water
 			Rebuild();
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
 
-			EnsureSpectrum();
+			ApplyLiquid();
+			if (!IsLava)
+			{
+				EnsureSpectrum();
+			}
+			/* Lava registers too: it is still the surface rain and snow stop at, wherever the ground is
+			 * lower than it. (On any world that has lava there is next to no weather — airless, or above
+			 * the melting point of rock — but a falling particle must not land on a bed nobody can see.) */
 			SurfaceWater.Register(this);
 		}
+
+		/// <summary>
+		/// Stands the sea's own systems down for lava, and back up when the surface becomes a sea again.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Lava has no waves for the FFT to make, no beach for the shore field to measure or the swash to
+		/// climb, no break line, nothing to light with caustics and nothing to dive into. Each of those is
+		/// either a draw every frame (the shore pass, the breakers, the caustics) or a large build at load
+		/// (the shore field samples every terrain millions of times), so they are switched off rather
+		/// than left running to no effect. <see cref="WaterEnvironment"/> too: it drives a sea's wind,
+		/// colour and tide, and a lava lake has none of them — the melt is far too dense for the moons
+		/// to pull it about against its own basin.
+		/// </para>
+		/// <para>
+		/// <b>Switched back on only on a CHANGE to water</b>, never on load: a designer who disabled the
+		/// breakers on an ordinary sea keeps them disabled. Turning to lava always switches them off.
+		/// </para>
+		/// </remarks>
+		private void ApplyLiquid()
+		{
+			bool lava = IsLava;
+			if (lava)
+			{
+				fft?.Dispose();
+				fft = null;
+				Discard(underwaterHost);
+				Discard(underwaterMaterial);
+				Discard(causticsHost);
+				Discard(causticsMaterial);
+				underwaterHost = null;
+				underwaterRenderer = null;
+				underwaterMaterial = null;
+				causticsHost = null;
+				causticsMaterial = null;
+				TideMetres = 0f;
+				BreakDepth = FullSeaDepth = BreakerHeight = 0f;
+				Shader.SetGlobalVector(BreakDepthId, Vector4.zero);
+				Shader.SetGlobalVector(CausticsId, Vector4.zero);
+				// The environment colours the SEA through a property block; it would only keep the lava
+				// out of the SRP Batcher.
+				if (meshRenderer != null)
+				{
+					meshRenderer.SetPropertyBlock(null);
+				}
+				SetOceanSystems(false);
+			}
+			else
+			{
+				DiscardLavaLight();
+				if (appliedLiquid == WaterLiquid.Lava)
+				{
+					SetOceanSystems(true);
+				}
+			}
+			appliedLiquid = Liquid;
+		}
+
+		/// <summary>Enables or disables the components that only a sea has, in the order they depend on each other.</summary>
+		private void SetOceanSystems(bool on)
+		{
+			// Off: the breakers before the shore and the field they read. On: the reverse.
+			if (on)
+			{
+				SetEnabled(GetComponent<WaterShoreField>(), true);
+				SetEnabled(GetComponent<WaterShore>(), true);
+				SetEnabled(GetComponent<WaterBreakers>(), true);
+				SetEnabled(GetComponent<WaterEnvironment>(), true);
+			}
+			else
+			{
+				SetEnabled(GetComponent<WaterBreakers>(), false);
+				SetEnabled(GetComponent<WaterShore>(), false);
+				SetEnabled(GetComponent<WaterShoreField>(), false);
+				SetEnabled(GetComponent<WaterEnvironment>(), false);
+			}
+		}
+
+		private static void SetEnabled(Behaviour behaviour, bool on)
+		{
+			// Unity's == for the null test: a missing component is a fake null.
+			if (behaviour != null && behaviour.enabled != on)
+			{
+				behaviour.enabled = on;
+			}
+		}
+
+#if UNITY_EDITOR
+		/// <summary>The liquid changed in the inspector: applied on the next editor tick, outside OnValidate.</summary>
+		private void DeferredApplyLiquid()
+		{
+			if (this == null || !isActiveAndEnabled)
+			{
+				return;
+			}
+			ApplyLiquid();
+			Rebuild();
+		}
+#endif
 
 		private void OnDisable()
 		{
@@ -537,6 +687,7 @@ namespace FishMMO.Water
 			Discard(causticsMaterial);
 			causticsHost = null;
 			causticsMaterial = null;
+			DiscardLavaLight();
 			if (mesh != null)
 			{
 				// HideAndDontSave, so nothing else will ever clean it up.
@@ -575,6 +726,16 @@ namespace FishMMO.Water
 			if (isActiveAndEnabled)
 			{
 				Rebuild();
+#if UNITY_EDITOR
+				/* Deferred, because switching the liquid disables and enables the sea's other components,
+				 * whose OnDisable destroys what they built — and Unity refuses DestroyImmediate inside
+				 * OnValidate. Coalesced, as the shore field's rebuild is. */
+				if (appliedLiquid.HasValue && appliedLiquid.Value != Liquid)
+				{
+					UnityEditor.EditorApplication.delayCall -= DeferredApplyLiquid;
+					UnityEditor.EditorApplication.delayCall += DeferredApplyLiquid;
+				}
+#endif
 			}
 		}
 
@@ -628,12 +789,14 @@ namespace FishMMO.Water
 			{
 				meshFilter.sharedMesh = mesh;
 			}
-			if (Material != null && meshRenderer.sharedMaterial != Material)
+			Material drawn = DrawnMaterial;
+			if (drawn != null && meshRenderer.sharedMaterial != drawn)
 			{
-				meshRenderer.sharedMaterial = Material;
+				meshRenderer.sharedMaterial = drawn;
 			}
 			/* Nothing the sea does belongs in a lightmap or a probe, and it must not cast: water
-			 * that casts a shadow darkens the sea bed it exists to show through. */
+			 * that casts a shadow darkens the sea bed it exists to show through. Nor does lava: a flat
+			 * sheet can shadow only what is below it, which it already hides. */
 			meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
 			meshRenderer.receiveShadows = true;
 			meshRenderer.lightProbeUsage = LightProbeUsage.Off;
@@ -729,6 +892,11 @@ namespace FishMMO.Water
 			Shader.SetGlobalVector(AirFogVolumeId, Vector4.zero);
 
 			Advance();
+			if (IsLava)
+			{
+				BeginLava(camera);
+				return;
+			}
 			ApplyQuality();
 			UpdateBreakDepth();
 			UpdateUnderwater(camera);
@@ -829,6 +997,153 @@ namespace FishMMO.Water
 			 * the part of white-capping that comes from the wind tearing the tops off rather than
 			 * from the shape of the wave. */
 			Shader.SetGlobalFloat(WhitecapId, Mathf.Clamp01((WindSpeed - 12f) / 13f));
+		}
+
+		/// <summary>
+		/// A camera is about to draw a lava surface: the disc under it, the numbers the lava shader reads,
+		/// and the pass that throws its glow onto its surroundings and draws its fumes. Nothing of the sea's.
+		/// </summary>
+		/// <remarks>
+		/// The surface itself samples neither the depth nor the opaque texture: it is opaque, and the
+		/// weather's fog and clouds reach it through the depth it writes. The light pass does need the
+		/// depth, so the depth keyword is still kept honest. The level is published without a tide
+		/// (<see cref="ApplyLiquid"/>), and the clock keeps the sea's wrap, which the lava's flow map is
+		/// built to cross without a seam.
+		/// </remarks>
+		private void BeginLava(Camera camera)
+		{
+			Vector3 position = transform.position;
+			transform.position = new Vector3(camera.transform.position.x, position.y, camera.transform.position.z);
+			Shader.SetGlobalFloat(LevelId, position.y + TideMetres);
+			Shader.SetGlobalFloat(TideId, TideMetres);
+			Shader.SetGlobalFloat(MeanLevelId, position.y);
+			Shader.SetGlobalFloat(TimeId, (float)clock);
+
+			var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+			SetKeyword(DepthKeyword, DepthEffects && pipeline != null && pipeline.supportsCameraDepthTexture);
+			UpdateLavaLight(position.y + TideMetres);
+		}
+
+		// ── The lava's glow and fumes ─────────────────────────────────
+
+		private static readonly int LavaMaskId = Shader.PropertyToID("_FishLavaMask");
+		private static readonly int LavaMaskRectId = Shader.PropertyToID("_FishLavaMaskRect");
+		private static readonly int LavaMaskInfoId = Shader.PropertyToID("_FishLavaMaskInfo");
+		private GameObject lavaLightHost;
+		private Material lavaLightMaterial;
+		private LavaMask lavaMask;
+		private bool lavaMaskLive;
+		private int lavaTerrainCheckFrame = -1;
+		private readonly System.Collections.Generic.List<Terrain> lavaTerrains = new System.Collections.Generic.List<Terrain>();
+
+		/// <summary>
+		/// Builds the molten mask again from the scene's terrains — after sculpting one, which nothing
+		/// notices on its own. Lava only.
+		/// </summary>
+		[ContextMenu("Rebuild Lava Mask")]
+		public void RebuildLavaMask()
+		{
+			if (!IsLava)
+			{
+				return;
+			}
+			lavaMask ??= new LavaMask();
+			LavaMask.Terrains(gameObject.scene, lavaTerrains);
+			lavaMaskLive = lavaMask.Build(lavaTerrains, SeaLevel);
+		}
+
+		/// <summary>
+		/// Keeps the glow-and-fume pass alive while there is lava to cast them, with the lava's own
+		/// settings and an up-to-date molten mask.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A full-screen triangle on its own child, as the caustics are: a renderer feature would have to
+		/// be added by hand to every URP renderer asset in the project. Its material is the lava's,
+		/// copied across every frame, so the light the surroundings take is computed from the surface
+		/// that is actually drawn — a designer turning the melt hotter brightens the crater walls too.
+		/// </para>
+		/// <para>
+		/// The mask is built once, when terrain first appears (they can enable after this does, in the
+		/// editor), and again only if a terrain arrives or leaves, checked once a second's worth of
+		/// frames, or the level moves. Sculpting is not noticed: <see cref="RebuildLavaMask"/>.
+		/// </para>
+		/// </remarks>
+		private void UpdateLavaLight(float level)
+		{
+			bool wanted = (LavaLight || LavaFumes > 0f) && LavaMaterial != null;
+			if (wanted && lavaLightHost == null)
+			{
+				Shader shader = LavaLightShader != null ? LavaLightShader : Shader.Find(LavaLightShaderName);
+				if (shader == null || !shader.isSupported)
+				{
+					LavaLight = false;
+					LavaFumes = 0f;
+					Debug.LogWarning($"[Water] '{LavaLightShaderName}' is missing or unsupported here, so the lava lights nothing and has no fumes.", this);
+					return;
+				}
+				lavaLightMaterial = new Material(shader) { name = "Lava light", hideFlags = HideFlags.HideAndDontSave };
+				EnsureScreenTriangle();
+				lavaLightHost = new GameObject("Lava light") { hideFlags = HideFlags.DontSave };
+				lavaLightHost.transform.SetParent(transform, false);
+				lavaLightHost.AddComponent<MeshFilter>().sharedMesh = underwaterMesh;
+				var renderer = lavaLightHost.AddComponent<MeshRenderer>();
+				renderer.sharedMaterial = lavaLightMaterial;
+				renderer.shadowCastingMode = ShadowCastingMode.Off;
+				renderer.receiveShadows = false;
+				renderer.lightProbeUsage = LightProbeUsage.Off;
+				renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+			}
+			if (lavaLightHost == null)
+			{
+				return;
+			}
+			if (!wanted)
+			{
+				lavaLightHost.SetActive(false);
+				return;
+			}
+
+			// The lava's own settings, so the light matches the surface.
+			lavaLightMaterial.CopyPropertiesFromMaterial(LavaMaterial);
+
+			int frame = Time.frameCount;
+			bool levelMoved = lavaMask != null && Mathf.Abs(lavaMask.Level - level) > 0.05f;
+			if (lavaMask == null || levelMoved || frame - lavaTerrainCheckFrame > 60 || frame < lavaTerrainCheckFrame)
+			{
+				lavaTerrainCheckFrame = frame;
+				LavaMask.Terrains(gameObject.scene, lavaTerrains);
+				if (lavaMask == null || levelMoved || lavaTerrains.Count != lavaMask.TerrainCount)
+				{
+					lavaMask ??= new LavaMask();
+					lavaMaskLive = lavaMask.Build(lavaTerrains, level);
+				}
+			}
+			if (lavaMaskLive && lavaMask.Texture != null)
+			{
+				Shader.SetGlobalTexture(LavaMaskId, lavaMask.Texture);
+				Shader.SetGlobalVector(LavaMaskRectId, lavaMask.Rect);
+			}
+			// y 0 with no terrain: the shader then treats everything as molten — an open lava sea.
+			Shader.SetGlobalVector(LavaMaskInfoId, new Vector4(
+				lavaMask.TexelMetres, lavaMaskLive ? 1f : 0f, Mathf.Clamp01(LavaFumes), LavaLight ? 1f : 0f));
+			lavaLightHost.SetActive(true);
+		}
+
+		/// <summary>Removes the glow-and-fume pass and its mask. Never from a camera callback.</summary>
+		private void DiscardLavaLight()
+		{
+			Discard(lavaLightHost);
+			Discard(lavaLightMaterial);
+			lavaLightHost = null;
+			lavaLightMaterial = null;
+			if (lavaMask != null)
+			{
+				Discard(lavaMask.Texture);
+				lavaMask = null;
+			}
+			lavaMaskLive = false;
+			Shader.SetGlobalVector(LavaMaskInfoId, Vector4.zero);
 		}
 
 		/// <summary>

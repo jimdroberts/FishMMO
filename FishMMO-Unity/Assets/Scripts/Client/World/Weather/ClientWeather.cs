@@ -204,9 +204,16 @@ namespace FishMMO.Client
 			WorldBody body = SceneTime.BodyOf(settings);
 			if (system != null && body != null && WorldClock.Shared.HasAnchor)
 			{
-				CelestialMath.SeasonalClimateOffsets(system, body, WorldClock.Shared.WorldHoursAt(tick), settings.Latitude, out float bt, out float bh);
+				double hours = WorldClock.Shared.WorldHoursAt(tick);
+				CelestialMath.SeasonalClimateOffsets(system, body, hours, settings.Latitude, out float bt, out float bh);
 				temperature += bt;
 				humidity += bh;
+				// The season for foliage: the same clock and the same humidity swing the climate uses.
+				WeatherShaderGlobals.ApplySeason(CelestialMath.Season01(system, body, hours), (float)settings.Latitude, bh);
+			}
+			else
+			{
+				WeatherShaderGlobals.ClearSeason();
 			}
 			settings.RuntimeTemperatureOffset = Mathf.Clamp(temperature, -2f, 2f);
 			settings.RuntimeHumidityOffset = Mathf.Clamp(humidity, -2f, 2f);

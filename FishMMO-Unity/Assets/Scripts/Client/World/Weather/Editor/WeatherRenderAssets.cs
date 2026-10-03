@@ -15,6 +15,12 @@ namespace FishMMO.Client
 		public const string Folder = "Assets/Prefabs/Client/Weather";
 		public const string MaterialPath = Folder + "/Precipitation.mat";
 		public const string ProfilePath = Folder + "/Weather Render Profile.asset";
+		public const string TerrainInstancingComputePath = "Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute";
+		public const string VegetationIndirectShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishVegetationIndirect.shader";
+		public const string WeatherLitIndirectShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishWeatherLitIndirect.shader";
+		public const string GrassBladesComputePath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute";
+		public const string GrassBladesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.shader";
+		public const string IndirectShaderVariantsPath = "Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants";
 		public const string AudioPath = Folder + "/Weather Audio Profile.asset";
 		public const string ShaderName = "FishMMO/Weather/Precipitation";
 		public const string SplashShaderName = "FishMMO/Weather/Precipitation Splash";
@@ -53,7 +59,7 @@ namespace FishMMO.Client
 				AssetDatabase.CreateAsset(sky, SkyProfilePath);
 			}
 			WorldEditorAssets.RegisterAddressable(sky);
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve();
 			if (system != null && system.HomeWorld != null && system.HomeWorld.Sky == null)
 			{
 				Undo.RecordObject(system.HomeWorld, "Home sky");
@@ -161,6 +167,16 @@ namespace FishMMO.Client
 			if (profile.CloudShape == null) profile.CloudShape = CloudNoiseBaker.Ensure(CloudNoiseBaker.ShapePath, CloudNoiseBaker.ShapeSize, CloudNoiseBaker.DefaultSeed, true);
 			if (profile.CloudDetail == null) profile.CloudDetail = CloudNoiseBaker.Ensure(CloudNoiseBaker.DetailPath, CloudNoiseBaker.DetailSize, CloudNoiseBaker.DefaultSeed + 17, false);
 			CloudRendererSetup.EnsureFeature(clouds);
+			// The GPU-driven terrain trees and details: referenced here so a client build includes them,
+			// and nothing else does (no Resources folder, no Always Included Shaders).
+			if (profile.TerrainInstancingCompute == null) profile.TerrainInstancingCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(TerrainInstancingComputePath);
+			if (profile.VegetationIndirectShader == null) profile.VegetationIndirectShader = AssetDatabase.LoadAssetAtPath<Shader>(VegetationIndirectShaderPath);
+			if (profile.WeatherLitIndirectShader == null) profile.WeatherLitIndirectShader = AssetDatabase.LoadAssetAtPath<Shader>(WeatherLitIndirectShaderPath);
+			// The procedural blade grass: same rule, client only.
+			if (profile.GrassBladesCompute == null) profile.GrassBladesCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(GrassBladesComputePath);
+			if (profile.GrassBladesShader == null) profile.GrassBladesShader = AssetDatabase.LoadAssetAtPath<Shader>(GrassBladesShaderPath);
+			// Generated with the biome art (gitignored, path-derived GUID), so it may not exist yet; assigned once it does.
+			if (profile.IndirectShaderVariants == null) profile.IndirectShaderVariants = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(IndirectShaderVariantsPath);
 			EditorUtility.SetDirty(profile);
 			WorldEditorAssets.RegisterAddressable(profile, WorldEditorAssets.ClientStaticGroup);
 			AssetDatabase.SaveAssets();

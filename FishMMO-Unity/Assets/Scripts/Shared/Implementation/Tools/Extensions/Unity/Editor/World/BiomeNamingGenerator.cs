@@ -284,6 +284,18 @@ namespace FishMMO.Shared.WorldDesign
 				Adjectives = new[] { "Lightless", "Smoking", "Warm", "Crowded", "Black", "Living" },
 				Description = "The one warm, crowded place under kilometres of ice.",
 			},
+			["Ice Shelf"] = new Voice
+			{
+				Onsets = new[] { "Shel", "Pack", "Flo", "Ber", "Lea", "Pol", "Ny", "Rime", "Sas", "Gri" },
+				Nuclei = new[] { "a", "e", "i", "ei", "ae", "ou" },
+				Codas = new[] { "shelf", "floe", "pack", "lead", "ridge", "sheet", "rime", "berg" },
+				Middles = new[] { "an", "or", "el", "is", "ur" },
+				DungeonSuffixes = CryoDungeons,
+				DungeonPrefixes = new[] { "The Frozen", "The Groaning", "The Endless", "The Pale", "The Drowned", "The Cracking", "The Still", "The Sunken" },
+				POISuffixes = new[] { "Shelf", "Floe", "Ridge", "Lead", "Pack", "Front" },
+				Adjectives = new[] { "Frozen", "Groaning", "Endless", "Pale", "Cracking", "Still" },
+				Description = "A sea frozen flat to the horizon, its ridges groaning as the shelf shifts.",
+			},
 
 			// ── Hot and thick ─────────────────────────────────────────
 			["Runaway Greenhouse Plain"] = new Voice

@@ -672,19 +672,32 @@ namespace FishMMO.Shared.Celestial
 			{
 				return 0f;
 			}
+			double relative = InsolationAtDistance(system, au) / Math.Max(1e-6, MeanHomeInsolation(system));
+			double t = 2.2 * (Math.Pow(Math.Max(0.0, relative), 0.25) - 1.0);
+			return (float)Math.Max(-1.0, Math.Min(1.0, t));
+		}
+
+		/// <summary>
+		/// Starlight at a distance from the system's centre, in units of the solar constant: Σ
+		/// luminosity ÷ distance² (AU). 1 with no system.
+		/// </summary>
+		/// <remarks>From the system's centre, which is where the orrery draws its rings about; sums every star, so a binary's band is the real one.</remarks>
+		public static double InsolationAtDistance(SolarSystemProfile system, double au)
+		{
+			if (system == null)
+			{
+				return 1.0;
+			}
 			double d = Math.Max(1e-6, au);
 			double total = 0.0;
 			foreach (CelestialBody candidate in system.Bodies)
 			{
 				if (candidate is StarBody star)
 				{
-					// From the system's centre, which is where the orrery draws its rings about.
 					total += star.Luminosity / (d * d);
 				}
 			}
-			double relative = total / Math.Max(1e-6, MeanHomeInsolation(system));
-			double t = 2.2 * (Math.Pow(Math.Max(0.0, relative), 0.25) - 1.0);
-			return (float)Math.Max(-1.0, Math.Min(1.0, t));
+			return total;
 		}
 
 		public static double MeanHomeInsolation(SolarSystemProfile system)

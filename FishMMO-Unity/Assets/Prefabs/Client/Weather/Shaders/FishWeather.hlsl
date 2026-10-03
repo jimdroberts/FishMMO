@@ -22,6 +22,13 @@ float4 _FishWeatherCover;
 float4 _FishWeatherMisc;
 // x 1 when the quality tier lifts terrain under deep snow, 0 otherwise. y-w unused.
 float4 _FishWeatherTier;
+// The season where the camera is, from the world clock (WeatherShaderGlobals.ApplySeason, called by
+// ClientWeather with the scene's climate): x the local year phase (0 midwinter, 0.25 spring,
+// 0.5 midsummer, 0.75 autumn: CelestialMath.Season01, turned half a year in the south), y local
+// summer (-1 deep winter .. 1 high summer, scaled by w), z the climate's humidity offset from its
+// mean (negative = drier than usual: drought), w how strongly the year swings here (0 on the
+// equator .. 1 past the tropics, never quite 0 once set). All zero means no season is known.
+float4 _FishSeason;
 
 // Where the cover lies: a top-down map around the camera, r snow, g wet, b ash, a sand. The
 // scene-wide _FishWeatherCover is the average of it, and stands in wherever the map does not reach.

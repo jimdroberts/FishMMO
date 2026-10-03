@@ -187,7 +187,7 @@ namespace FishMMO.RenderScratch
 			root.style.flexGrow = 1f;
 			root.style.backgroundColor = new Color(0.16f, 0.16f, 0.17f, 1f);
 
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve();
 			switch (stage)
 			{
 				case "solar-system-day":

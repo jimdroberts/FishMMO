@@ -77,8 +77,12 @@ namespace FishMMO.Client
 		// Hobbs' 0.8 m/s at a millimetre, up to the 1.4 of a three-centimetre aggregate.
 		public static PrecipitationLook Snow() => new PrecipitationLook { AtlasRow = 1, Size = new Vector2(SnowflakeSize.SmallestMillimetres * 0.001f, SnowflakeSize.LargestAggregateMillimetres * 0.001f), Stretch = 1f, FallSpeed = new Vector2(0.8f, 1.4f), Sway = 0.35f, SwayFrequency = 0.8f, Tint = Color.white, Alpha = 0.9f, FogColor = new Color(0.82f, 0.85f, 0.9f, 1f) };
 		public static PrecipitationLook Hail() => new PrecipitationLook { AtlasRow = 2, Size = new Vector2(0.03f, 0.06f), Stretch = 1f, FallSpeed = new Vector2(10f, 16f), Tint = Color.white, Alpha = 0.95f, FogColor = new Color(0.6f, 0.64f, 0.7f, 1f) };
-		public static PrecipitationLook Ash() => new PrecipitationLook { AtlasRow = 3, Size = new Vector2(0.08f, 0.14f), Stretch = 1f, FallSpeed = new Vector2(0.4f, 0.8f), Sway = 0.5f, SwayFrequency = 0.5f, Tint = new Color(0.55f, 0.53f, 0.5f, 1f), Alpha = 0.95f, FogColor = new Color(0.42f, 0.4f, 0.38f, 1f) };
-		public static PrecipitationLook Sand() => new PrecipitationLook { AtlasRow = 4, Size = new Vector2(0.1f, 0.18f), Stretch = 3f, FallSpeed = new Vector2(0.5f, 1f), Sway = 0.2f, SwayFrequency = 2f, Tint = new Color(0.9f, 0.78f, 0.58f, 1f), Alpha = 0.9f, FogColor = new Color(0.78f, 0.66f, 0.46f, 1f) };
+		// Ash and sand are grains, sized as grains. The ash sprite's blob fills about 0.44 of its
+		// quad and the grit's specks 0.06–0.16, so these draw ash as 1–4 mm flakes and aggregates
+		// (what an ashfall is seen as; single shards are under 2 mm) and blown sand as 1–5 mm grit.
+		// They were 8–14 and 10–18 cm, a size no grain of either reaches.
+		public static PrecipitationLook Ash() => new PrecipitationLook { AtlasRow = 3, Size = new Vector2(0.003f, 0.01f), Stretch = 1f, FallSpeed = new Vector2(0.4f, 0.8f), Sway = 0.5f, SwayFrequency = 0.5f, Tint = new Color(0.55f, 0.53f, 0.5f, 1f), Alpha = 0.95f, FogColor = new Color(0.42f, 0.4f, 0.38f, 1f) };
+		public static PrecipitationLook Sand() => new PrecipitationLook { AtlasRow = 4, Size = new Vector2(0.012f, 0.03f), Stretch = 3f, FallSpeed = new Vector2(0.5f, 1f), Sway = 0.2f, SwayFrequency = 2f, Tint = new Color(0.9f, 0.78f, 0.58f, 1f), Alpha = 0.9f, FogColor = new Color(0.78f, 0.66f, 0.46f, 1f) };
 	}
 
 	/// <summary>What a quality level spends on weather.</summary>
@@ -429,6 +433,8 @@ namespace FishMMO.Client
 		public Material VortexMaterial;
 		[Tooltip("What a tornado or a dust devil whirls up (FishMMO/Weather/Vortex Debris).")]
 		public Material VortexDebrisMaterial;
+		[Tooltip("Volcanic plumes: eruption columns, umbrellas and their fall where there is air, ballistic fountains where there is none (FishMMO/Weather/Volcanic Plume).")]
+		public Material PlumeMaterial;
 		public Material CloudCookieMaterial;
 
 		[Header("Volumetric clouds")]
@@ -448,6 +454,46 @@ namespace FishMMO.Client
 
 		[Header("Audio")]
 		public WeatherAudioProfile Audio;
+
+		[Header("Terrain instancing")]
+		[Tooltip("The GPU-driven terrain tree and detail culling (FishTerrainInstancing.compute). Referenced here, not from Resources, so it ships to clients only.")]
+		public ComputeShader TerrainInstancingCompute;
+		[Tooltip("FishMMO/Vegetation Indirect: the procedural-instancing twin the GPU-driven terrain path draws vegetation with. Referenced so a client build includes it.")]
+		public Shader VegetationIndirectShader;
+		[Tooltip("FishMMO/Weather Lit Indirect: the twin for rocks, formations and ice.")]
+		public Shader WeatherLitIndirectShader;
+		[Tooltip("Every keyword set the vegetation and rock materials use, mapped onto the indirect twins (the art generator writes it). Nothing in a build uses those shaders directly, so without this only their keyword-free variants ship: grass loses its alpha test and draws as solid quads.")]
+		public ShaderVariantCollection IndirectShaderVariants;
+
+		[Header("Ground colour under vegetation")]
+		[Tooltip("How much of the ground's colour a grass blade or leaf takes at its root (GroundColourMap). Live: changes apply while playing.")]
+		[Range(0f, 1f)] public float GroundRootBlend = 1f;
+		[Tooltip("How much of the ground's colour the rest of a low plant takes, above Ground Blend Height. Lit grass reads lighter than the soil at the same colour (normals up, translucency, no ground occlusion), so this wants to be high.")]
+		[Range(0f, 1f)] public float GroundPlantBlend = 0.9f;
+		[Tooltip("Metres above the root over which the blend eases from the root's to the plant's.")]
+		[Min(0.05f)] public float GroundBlendHeight = 0.8f;
+		[Tooltip("How much of a blade's own light and dark (texture, darker root) survives the blend, as darkening only: 0 = flat ground colour, 0.3 = up to 30% darker in the blade's dark parts.")]
+		[Range(0f, 0.6f)] public float GroundBladeDetail = 0.25f;
+		[Tooltip("Metres above the root where the blend starts fading out, and where it is gone: tree crowns keep their own colour.")]
+		[Min(0f)] public float GroundCrownStart = 1.5f;
+		[Min(0.1f)] public float GroundCrownEnd = 3f;
+
+		[Header("Distant terrain objects (trees, plants, terrain rocks)")]
+		[Tooltip("Metres from the camera where distant trees, plants and terrain rocks start settling into the landscape: lighting normal flattening toward up (no black shadowed sides against a flat-lit hillside) and colour drifting toward the local ground's. Live.")]
+		[Min(0f)] public float DistanceBlendStart = 80f;
+		[Tooltip("Metres where that is complete.")]
+		[Min(1f)] public float DistanceBlendEnd = 600f;
+		[Tooltip("How far their lighting normal flattens to up at full distance.")]
+		[Range(0f, 1f)] public float DistanceNormalFlatten = 0.6f;
+		[Tooltip("How much of the ground's colour they take at full distance (0 keeps their own).")]
+		[Range(0f, 1f)] public float DistanceGroundPull = 0.35f;
+
+		[Header("Procedural grass")]
+		[Tooltip("FishGrassBlades.compute: generates the visible blades around each camera every frame. Referenced here, not from Resources, so it ships to clients only.")]
+		public ComputeShader GrassBladesCompute;
+		[Tooltip("FishMMO/Grass Blades: the blade strips drawn from the compute's output.")]
+		public Shader GrassBladesShader;
+		public GrassBladeSettings Grass = new GrassBladeSettings();
 
 		/// <summary>The loaded profile, if any.</summary>
 		public static WeatherRenderProfile Active => GetFirst<WeatherRenderProfile>();

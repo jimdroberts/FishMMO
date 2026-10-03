@@ -292,7 +292,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The solar system's home world, or null.</summary>
 		public static WorldBody HomeWorld()
 		{
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve();
 			return system != null ? system.HomeWorld : null;
 		}
 

@@ -5,6 +5,7 @@
         "FishMMO.Client",
         "FishMMO.Shared",
         "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Shared.Map.Editor",
         "Unity.Addressables",
         "Unity.Addressables.Editor",
         "Unity.RenderPipelines.Core.Runtime",

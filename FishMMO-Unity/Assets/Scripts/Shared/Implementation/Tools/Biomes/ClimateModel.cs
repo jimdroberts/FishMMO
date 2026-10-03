@@ -215,6 +215,59 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
+		/// A body's globe-mean surface temperature in kelvin, UNCLAMPED, averaged over its orbit: THE
+		/// absolute temperature of a world.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>One number, read by everything that asks how warm a world is.</b> The climate field
+		/// (<see cref="PlanetClimateField.MeanTemperature"/>), the world's conditions
+		/// (<see cref="BiomeWorldConditions.MeanTemperature"/>, so liquid water and ice), the air
+		/// (<c>PlanetAir.MeanSurfaceKelvin</c>, so what its sky condenses) and what stands in its low
+		/// ground (<see cref="SurfaceLiquids"/>) each used to work it out for themselves — three of
+		/// them from the starlight at hour zero and one from the orbit's mean, and the conditions on
+		/// a different scale altogether. A world could then be liquid-watered by one and
+		/// frozen solid by the next.
+		/// </para>
+		/// <para>
+		/// <b>The orbit's mean, not hour zero's.</b> Hour zero is wherever the epoch happened to fall:
+		/// on an eccentric orbit, perihelion or aphelion, and a world's oceans and biomes depended on
+		/// which. What a world IS is the mean; the weather supplies the season on top of it.
+		/// </para>
+		/// </remarks>
+		public static double MeanSurfaceKelvin(SolarSystemProfile system, WorldBody body)
+		{
+			AtmosphereKind atmosphere = body != null ? body.Atmosphere : AtmosphereKind.Standard;
+			float water = body != null ? body.Water : 0.7f;
+			return MeanSurfaceKelvin(MeanInsolation(system, body), atmosphere, water);
+		}
+
+		/// <summary>
+		/// Starlight a body receives averaged round its orbit, in units of the solar constant; 1 with
+		/// no system or no body.
+		/// </summary>
+		/// <remarks>Eight samples, as <see cref="CelestialMath.MeanClimateOffsets"/> takes: enough to average an eccentric orbit, cheap enough to ask once per body.</remarks>
+		public static double MeanInsolation(SolarSystemProfile system, WorldBody body)
+		{
+			if (system == null || body == null)
+			{
+				return 1.0;
+			}
+			double period = CelestialMath.OrbitHours(system, body);
+			if (double.IsInfinity(period) || double.IsNaN(period) || period <= 0.0)
+			{
+				return CelestialMath.Insolation(system, body, 0.0);
+			}
+			const int Samples = 8;
+			double sum = 0.0;
+			for (int i = 0; i < Samples; i++)
+			{
+				sum += CelestialMath.Insolation(system, body, period * i / Samples);
+			}
+			return sum / Samples;
+		}
+
+		/// <summary>
 		/// How much heat a world makes for itself, 0 dead to 1 molten.
 		/// </summary>
 		/// <remarks>
@@ -246,10 +299,7 @@ namespace FishMMO.Shared.Biomes
 				return EarthlikeInternalHeat;
 			}
 
-			// Tides. Saturated well below Io's, because Io is an extreme and a world half as
-			// tormented is still comprehensively volcanic.
-			double tidal = CelestialMath.TidalHeating(system, body);
-			float fromTides = (float)Math.Min(1.0, Math.Sqrt(Math.Max(0.0, tidal)) * 0.8);
+			float fromTides = TidalHeat(system, body);
 
             /* Size. Radius against Earth's, curved so that the interesting range is where the
              * bodies are: a 5 km rock is stone dead, a 1000 km moon is barely warm, and an
@@ -264,6 +314,25 @@ namespace FishMMO.Shared.Biomes
 			// A magnetic field means a molten core. It can only corroborate.
 			float field = Mathf.Clamp01(body.MagneticField);
 			return Mathf.Clamp01(Mathf.Max(heat, field * 0.55f));
+		}
+
+		/// <summary>
+		/// The tides' share of a body's internal heat, 0 … 1: how hard the world it orbits kneads it.
+		/// </summary>
+		/// <remarks>
+		/// Saturated well below Io's, because Io is an extreme and a world half as tormented is
+		/// still comprehensively volcanic. 0 for a planet and for a moon on a circular orbit. Its own
+		/// function because <see cref="BiomeWorldConditions.TidalHeat"/> needs it apart from the
+		/// size term: tides pull a crust open, size only keeps a world warm.
+		/// </remarks>
+		public static float TidalHeat(SolarSystemProfile system, WorldBody body)
+		{
+			if (body == null)
+			{
+				return 0f;
+			}
+			double tidal = CelestialMath.TidalHeating(system, body);
+			return (float)Math.Min(1.0, Math.Sqrt(Math.Max(0.0, tidal)) * 0.8);
 		}
 
 		/// <summary>What an Earth-sized world makes, for anything with no body to ask about.</summary>
@@ -304,9 +373,10 @@ namespace FishMMO.Shared.Biomes
 		{
 			AtmosphereKind atmosphere = body != null ? body.Atmosphere : AtmosphereKind.Standard;
 			float water = body != null ? body.Water : 0.7f;
-			double insolation = system != null && body != null ? CelestialMath.Insolation(system, body, 0.0) : 1.0;
 
-			double mean = MeanSurfaceKelvin(insolation, atmosphere, water);
+			// The orbit's mean, as the climate field takes it, so the runtime's sea level and the
+			// field's sub-solar point are the same number (the season is added on top at runtime).
+			double mean = MeanSurfaceKelvin(system, body);
 			double subSolar = mean + SubSolarExcess;
 
 			/* Metres of relief, converted once. A landmass with no measured height still needs a

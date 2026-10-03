@@ -169,7 +169,7 @@ namespace FishMMO.TestHarness.World.Editor
 			controller.Camera = camera;
 			controller.Settings = settings;
 			controller.DayNight = dayNight;
-			controller.SolarSystem = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			controller.SolarSystem = SolarSystemProfile.Resolve();
 			controller.SkyProfiles = WorldEditorAssets.FindAll<SkyProfile>();
 			controller.Substances = WorldEditorAssets.FindAll<WeatherSubstance>();
 			UIDocument document = controllerObject.AddComponent<UIDocument>();

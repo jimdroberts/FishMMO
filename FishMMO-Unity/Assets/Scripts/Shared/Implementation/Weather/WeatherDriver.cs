@@ -203,18 +203,39 @@ namespace FishMMO.Shared.Weather
 		/// </remarks>
 		public static Vector2 PrevailingWind(float latitudeDegrees, in WindBelts belts)
 		{
+			float eastward = ZonalWind(latitudeDegrees, belts, out float poleward);
+			var wind = new Vector2(eastward, Mathf.Sign(latitudeDegrees == 0f ? 1f : latitudeDegrees) * poleward * 0.25f);
+			return wind.sqrMagnitude < 1e-6f ? Vector2.right : wind.normalized;
+		}
+
+		/// <summary>
+		/// The east–west part of the prevailing wind, −1 … 1: +1 a full westerly (blowing toward
+		/// the east), −1 a full easterly, 0 where two belts meet and the surface air has nowhere
+		/// steady to go.
+		/// </summary>
+		/// <param name="poleward">+1 where the surface flow runs toward the pole, −1 toward the equator.</param>
+		/// <remarks>
+		/// <para>
+		/// Split out of <see cref="PrevailingWind(float, in WindBelts)"/>, which is this plus the
+		/// meridional lean, normalised — so the climate's moisture (<see cref="Biomes.MoistureModel"/>),
+		/// which needs to know which way is upwind and how steadily, reads the SAME wind the weather
+		/// drifts on and the two cannot disagree about where the rain comes from.
+		/// </para>
+		/// <para>
+		/// The magnitude matters as well as the sign: it passes through zero at every belt edge,
+		/// which is exactly where the direction flips, so anything weighted by it is continuous
+		/// across the edge.
+		/// </para>
+		/// </remarks>
+		public static float ZonalWind(float latitudeDegrees, in WindBelts belts, out float poleward)
+		{
 			float absolute = Mathf.Abs(latitudeDegrees);
 			float cell = Mathf.Clamp(belts.CellDegrees, 1f, 90f);
-			int index = Mathf.Min((int)(absolute / cell), 1000);
-			float start = index * cell;
-			bool last = start + cell >= 90f - 1e-3f;
 			// Where in its cell this latitude is, 0 at the equatorward edge; the last cell runs to the pole.
-			float span = last ? Mathf.Max(1e-3f, 90f - start) : cell;
-			float t = Mathf.Clamp01((absolute - start) / span);
+			int index = belts.Locate(latitudeDegrees, out float t, out bool last);
 			// +1 blows toward the east, -1 toward the west.
 			float eastward;
 			// +1 toward the pole, -1 toward the equator.
-			float poleward;
 			if (index == 0)
 			{
 				// The Hadley cell's surface flow: out of the east, strongest at the equator.
@@ -234,10 +255,11 @@ namespace FishMMO.Shared.Weather
 				poleward = -1f;
 			}
 			// A world that turns backwards turns every belt round with it.
-			eastward *= belts.Handedness;
-			var wind = new Vector2(eastward, Mathf.Sign(latitudeDegrees == 0f ? 1f : latitudeDegrees) * poleward * 0.25f);
-			return wind.sqrMagnitude < 1e-6f ? Vector2.right : wind.normalized;
+			return eastward * belts.Handedness;
 		}
+
+		/// <summary>The east–west part of the prevailing wind. See <see cref="ZonalWind(float, in WindBelts, out float)"/>.</summary>
+		public static float ZonalWind(float latitudeDegrees, in WindBelts belts) => ZonalWind(latitudeDegrees, belts, out _);
 
 		/// <summary>The home world's belts: for callers with no body of their own to ask.</summary>
 		public static Vector2 PrevailingWind(float latitudeDegrees) => PrevailingWind(latitudeDegrees, WindBelts.Home);
@@ -550,8 +572,11 @@ namespace FishMMO.Shared.Weather
 		/// harder, never quite loses its haze, breeds lightning, and moves sluggishly.
 		/// </para>
 		/// <para>
-		/// Applied to what the field and the biome give, not to a preset, a layer or a storm cell:
-		/// those are somebody asking for that weather by name, and they get what they asked for.
+		/// Applied to everything the air makes, storms included (<see cref="WeatherField.Sample"/>
+		/// runs it on the background and on the frame with the cells in it); there are no presets or
+		/// layers any more to be exempt. An airless world never gets this far: Sample returns a clear
+		/// frame before it reads any air, and <see cref="StormPhysics.CanForm"/> refuses a storm cell
+		/// asked for by name, so the None case here is a backstop, not the rule.
 		/// </para>
 		/// </remarks>
 		public static WeatherFrame UnderAtmosphere(WeatherFrame frame, FishMMO.Shared.Celestial.AtmosphereKind air)

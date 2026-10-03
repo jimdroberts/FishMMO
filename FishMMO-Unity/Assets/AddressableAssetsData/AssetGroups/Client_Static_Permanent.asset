@@ -15,11 +15,102 @@ MonoBehaviour:
   m_GroupName: Client_Static_Permanent
   m_GUID: 8057324dd1039b846be556683994bffd
   m_SerializeEntries:
+  - m_GUID: 00215e1a57c5e60448c288f8237afed3
+    m_Address: FishPrecipitation
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 004e0f9936f73e2e0224916d3f3357e3
+    m_Address: Ground_Rock_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0113c04346d1ba31435bcfd2ed3e4711
+    m_Address: Ground_Pebbles_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 01283b7c4d8046e13989d8bbd2db9c1d
+    m_Address: Generated Grass
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 01d1f75c58aeb3974afea4383732c9c1
+    m_Address: Ground_Sandstone_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 025e606925e217c657243571abb425a1
+    m_Address: Ground_Sulphur_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 057385a6a43986c4395767410661fd2e
     m_Address: LiberationSans SDF UIChat
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 06d3efcea17670c5b09e856472aa45fa
+    m_Address: RockSurface_Basalt_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0718a9b0c1d2e3f4293a4b5c6d7e8f07
+    m_Address: Crosshair
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 07942294ca053ead941df01201d871f9
+    m_Address: Ground_Clay_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 07ad6b0e116383746b672119c84588a0
+    m_Address: BiomeTexture_River_3380B2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0953f09522e18f80b6d22f1eb994a61b
+    m_Address: Ground_Coral_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0b7ea11686b5ccf44bb4871d2facee3a
+    m_Address: BiomeTexture_Badlands_B2664C
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c0fe3c70cb5e71ba307783104693159
+    m_Address: Ground_Clay_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0db1abc34a29b81c7d7a84175cefc934
+    m_Address: Ground_Sulphur_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0f5ec2ad5f1c47dfc224bbd2d8b7aa82
+    m_Address: Leaves_Palm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 123a1cbb024511e459625c8d823e4ef9
+    m_Address: BiomeTexture_PermanentIce_F2FAFF
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 130b504fa95c2fb3083e502c7ec3a367
     m_Address: Sky
@@ -27,8 +118,43 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 13a3cf882b59aa46ecad0fb7899aa5a4
+    m_Address: Ground_Mud_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 13d93123b1238cb7a8174cdd412b7bdc
+    m_Address: Ground_Sandstone_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 143351364dad546a4841bdb4f980f063
+    m_Address: Ground_Ash_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1518f27ba41098845a45fc75a3d2edce
+    m_Address: BiomeTexture_Valley_408C40
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 153116bad200a3444be96b22a65500ea
     m_Address: Camera
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 158d0bb7c3161401ad83f4a08943cfdf
+    m_Address: Detail_GrassDry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1673bb19f23752e4a65780b45521c6f2
+    m_Address: Detail_Coral
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -38,6 +164,22 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1829a0b1c2d3e4f5061728394a5b6c01
+    m_Address: GroundGrass
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 189164606a235f741a8e299fdf4a96f1
+    m_Address: BiomeTexture_AlpineMeadow_80CC4C
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1a25c9f32fbc86941820446872df368c
+    m_Address: Woodland
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1a3fc9516df07da4ebbb643fe79bc80b
     m_Address: Ethan
@@ -51,11 +193,86 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22c2e676d9b34e14b87e4b97acdc05ed
+    m_Address: Glacier
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23d01117a107c2f0c70ad0575df77793
+    m_Address: Ground_Pebbles_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 259d82ef004381bfab1a749b89011be1
+    m_Address: Billboard_Palm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 262d8c8b6862907c3a61c0438002b927
     m_Address: Precipitation Splash
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 27e0432adfd730e73a1f0ec570b4cfc0
+    m_Address: Ground_Mud_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 27fce586d1b93163c8602a75217b2658
+    m_Address: Billboard_Acacia_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2839a0b1c2d3e4f5061728394a5b6c02
+    m_Address: GroundDirt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2911dcf50b03949d3c0c12d41293d4a6
+    m_Address: Ground_CrackedEarth_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2982c7ee975dc96ea3e236d45d981944
+    m_Address: Ground_Basalt_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2aaac07da5221414f8c52c54730d6aea
+    m_Address: Ocean
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2aad930a5842d02f3d1b21252cf6c712
+    m_Address: Detail_GrassTuft
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2ada0aee473c5c64f836dbc1cf387aa6
+    m_Address: BiomeTexture_Lake_408CCC
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2d0c4b627dfa757c826c4ef603d5d5b7
+    m_Address: Detail_Fern
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 308cee79997a13645aef863746d0aa99
+    m_Address: BiomeTexture_HighDesert_CCB280
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 316068aec7de8294ba9429fc2bc910b9
     m_Address: DaySkybox
@@ -63,8 +280,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3191ad2728729ad2da014c40f424f908
+    m_Address: FishWeatherTerrain
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 329b8b01f08b9726b02ee70d4b68dc47
+    m_Address: Ground_CliffRock_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 33b71795bf4f44ac50bc9aee5113efd4
+    m_Address: Ground_Soil_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 340c2ccd01ed497e691c1f4bc49cd842
     m_Address: Boundary Glass
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 35688a962c07d42735f0023127a05294
+    m_Address: Rock_Limestone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 35e0ee759d62a84e2b58e5c5c12a08f4
+    m_Address: Weather Terrain Array
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 36568550f85e1e61793920f9d84fb609
+    m_Address: Ground_Limestone_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -81,8 +334,93 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 382ae2a6ad87f03a6496bfa218910b43
+    m_Address: Ground_Grass_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3849a0b1c2d3e4f5061728394a5b6c03
+    m_Address: GroundStone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 395175e8b508aa5328196d48501b8699
+    m_Address: Ground_Regolith_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3ba02b7e929e08b30dec1d27eaf00384
+    m_Address: Ground_CrackedEarth_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3bef62955ce3d825abb51e050fae9f90
+    m_Address: Detail_Reeds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3d80aba0e85f202419137bd5cd05427f
+    m_Address: BiomeTexture_Jungle_1A9933
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e581399c26581c179ec5da226ad9e37
+    m_Address: Roof
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f19be6764f2bcd49b45e22b6ca8b2e8
+    m_Address: BiomeTexture_Mangrove_669966
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f97cefcaf7c19d07fb4104aed0b4273
+    m_Address: Rock_Basalt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 409d23918fda94d4daf83122bcb63ead
     m_Address: EthanWhite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4179c159dc0c613cb6a8d4a6ed5310ec
+    m_Address: Ground_GrassMeadow_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4201eec06e10cfa499e99f76d465f474
+    m_Address: BiomeTexture_Farmland_B2CC66
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4233c2b682c5d8d48bd92ed8a2af23df
+    m_Address: BiomeTexture_Tundra_A6A68C
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 42b24845bff0a680316f912939e812a5
+    m_Address: Ground_CliffRock_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44588e249a51c502114cbc25b68d60f0
+    m_Address: Bark_Palm_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44ed077ddab9b88091f0adbe91346e00
+    m_Address: Ground_Limestone_Mask
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -93,8 +431,90 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 4b7ed807917a1943983786db26612d55
-    m_Address: Cloud Detail
+  - m_GUID: 46216680e19fa3a76b7ed68e1c98c98b
+    m_Address: FishSky
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 468a7c3a4314cef012b7da9295375e42
+    m_Address: RockSurface_Granite_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 476b106b789377bd6fd6e968d1599d8b
+    m_Address: Bark_Brown_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4859a0b1c2d3e4f5061728394a5b6c04
+    m_Address: GroundSand
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48951508992be0d2996bfdaa200f156f
+    m_Address: FishSkyBody
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48da25f64b4a48cfbbf8a53642e2414b
+    m_Address: UILauncher
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4a09c2dcd4df4128917c0b15564b7211
+    m_Address: Volcanic Plume
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4be118050d0264f1017760481b179c51
+    m_Address: RockSurface_Sandstone_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e14e946dc5ac8c730a406459c367163
+    m_Address: Ground_Gravel_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4ee004fa03a2ad8f86d50366ffd45368
+    m_Address: Ground_Sulphur_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 509f90284532a3d39cafd89f86fb7390
+    m_Address: Detail_Kelp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 529c6ea2ae030a64aaddae146da21193
+    m_Address: BiomeTexture_Scree_4C4C4C
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52b46df3bdd93800dc5938f8a77eac4e
+    m_Address: Ground_Regolith_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5322058dc7c84f959fa7bd2a63e3ee49
+    m_Address: RockSurface_Limestone_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 545226bc09f1e4c3795b4370bdecfd77
+    m_Address: Weather Terrain
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -105,8 +525,36 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 587eb95df510f9b08a4dd41eb07e4110
-    m_Address: Cloud Shape
+  - m_GUID: 5869a0b1c2d3e4f5061728394a5b6c05
+    m_Address: WaterPlaceholder
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 594813113d7ac1059434276ec3729147
+    m_Address: Ground_Lava_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d9b33d14c07264e87c0b0f46f5c23f4
+    m_Address: Ground_Grass_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e18c9df598f79a1daa21a93f46c7c4c
+    m_Address: BoundaryGlass
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5fc805ea39fd9514589524dc6c3933f7
+    m_Address: BiomeTexture_MountainSlope_808066
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6011c14a3040101c5b3ebb57b18bcae9
+    m_Address: Bark_Brown
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -117,14 +565,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 64333f8b2527405da834564e461d396b
+    m_Address: FishVolcanicPlume
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 64b113056d1bbd0c4ba226fc2e375cbf
+    m_Address: Billboard_Oak
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 695281b44bcf6b527b3fb26e0dc8d4b5
     m_Address: Precipitation Atlas
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 69baeeda49ea89f268266955933d6961
-    m_Address: Weather Render Profile
+  - m_GUID: 69d0fa3eef9664791b6448803d42877e
+    m_Address: FishVortexDebris
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -135,8 +595,209 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6afb82f4835da552494df473a0f4bee9
+    m_Address: FishVegetation
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b96e7e0b68c2d0968ee7f51f90a2d3d
+    m_Address: FishCloudCookie
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b9f793e90daa35db8b09951b48ba58d
+    m_Address: FishWeatherTerrainArray
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d1ff6a7a984ca4f736d6d83ac0f77f7
+    m_Address: Ground_CrackedEarth_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6dd08aef09a5d59363c9ac76937c9563
+    m_Address: Detail_GrassLush
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6f2a893185ed8dc5e89839da192b2d62
+    m_Address: Wall
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 70eeeadb6186fa22a80675c90ac8cff9
+    m_Address: Ground
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 72ce0e7b06cfe671caecac5644a57f34
+    m_Address: RockSurface_Basalt_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 75cd30f53ff4512ca8834d5c4e787d6f
+    m_Address: Ground_GrassMeadow_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 761c84052547fea50de536a93ad05a34
+    m_Address: Ground_Lava_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 765909b39478b438e7eecac329015c52
+    m_Address: RockSurface_Sandstone_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 77d2de1e9c99042cb99592565ec65216
     m_Address: Clouds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 79f732555549af245a2efb90ae1818a7
+    m_Address: BiomeTexture_Wasteland_594033
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 811a44021a3b8e6b6a640ccb7ab5f601
+    m_Address: Ground_GrassDry_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 81577373c39c49653b358905f794661e
+    m_Address: Wood
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82094809a5d51da706557b73f76e69a2
+    m_Address: Ground_Limestone_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 880ecc3bf473abd4da332ec06e2b5ff2
+    m_Address: Snow
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 89627b2292680a9df991d24027572f7d
+    m_Address: Detail_ShrubSmall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8977198a2f1dfbb1eadab3900e05f252
+    m_Address: Ground_SandBeach_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8d5caee492efece2fa2218379b6727fe
+    m_Address: FishClouds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8d857c52bfad28fe51867aad839c8f64
+    m_Address: Ground_Silt_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e9ab7c0efeeecac7216fd34e1c8a69b
+    m_Address: Bark_Palm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8ef102acc961e0983e67bb7716b637ba
+    m_Address: Leaves_Acacia
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8eff3a386ecb92403e62b017db573c02
+    m_Address: Ground_SandBeach_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8f33613d5d67fafd5a2427b7aa04e554
+    m_Address: Ground_Rock_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8ff886cd4e7558e694c6d503af41fb9c
+    m_Address: RockSurface_Granite_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90c4532d57cdf6df79e81edd604c0222
+    m_Address: Billboard_Acacia
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 91aac82100eac81e8503748b296b092c
+    m_Address: Ground_Basalt_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 921bf8281157c524ab5d40a5ba633989
+    m_Address: BiomeTexture_UnderwaterCanyon_1A2666
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93af93354eefbe66970df94893defd5a
+    m_Address: Ground_Gravel_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9651a3dab058dbdb579661832bf2cd25
+    m_Address: Billboard_Palm_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 96759cd7cb1d577a1aac4d534c118311
+    m_Address: Ground_Mud_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 98251557c9494852b50999eddd6f9e2f
+    m_Address: FishMMOBanner
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9879d2efbe1740b499ccadccf9320289
+    m_Address: BiomeTexture_Estuary_4C99B2
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a681237b604de04880797b962f6b667
+    m_Address: BiomeTexture_Wetlands_4C8059
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9c6d27fe4582029b78c8f9cb7f59b4a3
+    m_Address: Ground_Gravel_Normal
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -147,8 +808,43 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d2907f0fa5983d48ba75b0b05f509ed
+    m_Address: BiomeTexture_CoralReef_4CB2CC
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9d7b4675c91149f25af0e2a82433630e
     m_Address: Lightning Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9efec3aca52347929ba271ce999eebba
+    m_Address: Ground_Silt_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1b2c3d4e5f60718293a4b5c6d7e8f01
+    m_Address: Grass.png
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1c155353d68bbb468bcd000d3568816
+    m_Address: Forest
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a546ecae3ef4fb9e753e60a9cf1d1dbe
+    m_Address: Rock_Sandstone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a805c1e22b45b882bbc02a288629234c
+    m_Address: FishCurtain
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -159,11 +855,107 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a90e24271e761a7c092b4cf0c314474a
+    m_Address: Bark_Palm_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab6367f5ea0ee91ea515bd83bc0d114a
+    m_Address: Ground_Regolith_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac28a532a340bf9ac9c357d7510bd909
+    m_Address: Ground_Rock_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac571e023977e824b8d127213edebc1f
+    m_Address: BiomeTexture_Plains_80CC66
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac99ed97fdaf249478422c10b6724858
+    m_Address: BiomeTexture_Taiga_405940
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad3c6f21859765b9fd2b8bbd9e65d008
+    m_Address: Detail_GrassTall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad67a85610967665c439e92712c23ec2
+    m_Address: RockSurface_Sandstone_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: adaf598e46b14d4dd34372170110302b
+    m_Address: Ground_Soil_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: af5e17aec5ef22d38957933678513fa0
     m_Address: Weather Noise
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af7adca708296aaa3ac83c9980feb991
+    m_Address: FishBolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b053b2d2d381192fd67461f34133d8d9
+    m_Address: Foliage_Atlas
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b0d499e08f7c81d489bd909435b0985b
+    m_Address: BiomeTexture_Volcanic_994C33
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b14f72721ca6ec7f9e2e07781a8319c0
+    m_Address: Ground_CliffRock_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2c3d4e5f60718a9293a4b5c6d7e8f02
+    m_Address: Dirt
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b33352ab540cd3d4fb8c872eaf34569a
+    m_Address: BiomeTexture_Desert_E6B266
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b57d7a0ebf324414fb3f358921cc80fc
+    m_Address: Grass.jpg
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6e698509a1663bb6972d16132adf3d9
+    m_Address: Ground_Soil_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b8390063134b401eadabbd7308815475
+    m_Address: UILauncher
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bb1254a0f5ecb3b239b87631320dba90
     m_Address: Cloud Cookie
@@ -171,8 +963,290 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bb748e69984f276eb34507d9e09e523e
+    m_Address: Ground_Ash_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdb1c818f3530ac3cc0d02fc6ad66d53
+    m_Address: Ground_GrassDry_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: beaa43eb6ed82366360b646fa8a93a11
+    m_Address: Ground_Coral_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c27274f8f213c4e16c9a7c685ceda60c
+    m_Address: Ground_Clay_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c283c1fc40077222b7960111368605b0
+    m_Address: Ground_Sand_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c3d4e5f60718a9b0293a4b5c6d7e8f03
+    m_Address: Stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c5a50262d49b51a9199ea4f5e691517e
+    m_Address: Generated Sand
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c64d309969adcd818386a6187d1dc160
+    m_Address: Leaves_Oak
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cbca89165f7d5cd23aad1b1efde2f5c7
+    m_Address: Ground_Ash_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cd69da14c8470201783e63a65f7361e6
+    m_Address: Ground_Sand_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ce037446216c0e8a6ee8f5af0e061225
+    m_Address: Rock_Grey
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ce8c98f267d4a424799e2fe49fde661a
+    m_Address: BiomeTexture_Scrubland_999966
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cea08c70e01487fdb7749b796f10d093
+    m_Address: Ground_Coral_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cf215995e2791c0b3443c743c465e6db
+    m_Address: Bark_Brown_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d036415a15742759fb3547244be5adc5
+    m_Address: Ground_Sand_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d0ed5d08b5f0911788c42313e2762ae8
+    m_Address: Stone
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d3894f686596c64063145e9de61ebcb3
+    m_Address: Ground_GrassDry_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d3cc1ec27aec34402af931ab5e276f50
+    m_Address: Detail_FlowersMeadow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4e5f60718a9b0c1293a4b5c6d7e8f04
+    m_Address: Sand
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d71fec1a8e79edb7fb7afad20acdaea6
+    m_Address: Detail_ShrubDry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d74297414c89f90408f6c1700ed4f57e
+    m_Address: BiomeTexture_Seamount_336680
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d8444836ec0760a57d31f54c4a89ff09
+    m_Address: Ground_SandBeach_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d906e316be7abe96ea1469ce67794361
+    m_Address: FishPrecipitationSplash
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d96e79db1eaab3abf90f81d8bc6a9f24
+    m_Address: RockSurface_Basalt_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d9c655f56cadae5dd59d9127daef7135
+    m_Address: Ground_Silt_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: da39615ae16bb59a804439306a8f46a8
+    m_Address: Detail_FlowersWarm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: daf4be7380957be4198ece1e45559b2b
+    m_Address: BiomeTexture_Crater_805940
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd5bbea1c628528d90b1d2b64f81fbf1
+    m_Address: Ground_Basalt_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dd89cf5b9246416f84610a006f916af7
     m_Address: TMP_SDF Overlay
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de7a31870448737c0b1ab5db9156fd63
+    m_Address: FishWeatherLit
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dec361d1c27514a43837d6228269bd87
+    m_Address: BiomeTexture_Savanna_B2B266
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: df1fe78f365fb3e2cd2dec60cf78a354
+    m_Address: RockSurface_Granite_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dfb44d4090f354ddcd3c616191b80015
+    m_Address: Ground_Sandstone_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1655f0f7ac0ba9488e2df7b166e8715
+    m_Address: BiomeTexture_RockyCoast_808099
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1957fbdb44fcef6db75e7d37e8e73ef
+    m_Address: Ground_Pebbles_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e58b9ead8f522b5e7885b95420063147
+    m_Address: FishVortex
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e58e98f122109ed5365a235c5754e31b
+    m_Address: RockSurface_Limestone_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e5f60718a9b0c1d2293a4b5c6d7e8f05
+    m_Address: Water
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e992be615149b0846884cc772e34ace5
+    m_Address: BiomeTexture_Cave_1A1A1A
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ebb1a63b1477ea845b9e725d0bed88aa
+    m_Address: BiomeTexture_Oasis_4CCC80
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ec7c6d96ca4878945af594dea5ba3323
+    m_Address: BiomeTexture_Hills_80B266
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ed9a5a56ac1157841a7ad33d6a880f90
+    m_Address: BiomeTexture_Alpine_808080
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eec6be4a1d5245f069e0d9d489ec67db
+    m_Address: White
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eecd4f26b56d1c8fa98304c774e91cc9
+    m_Address: Ground_Lava_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: efa7899a5fe33a300cad9858aea68f0f
+    m_Address: Billboard_Oak_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: effe95255b4b537d17db1eee0f689c2a
+    m_Address: Ground_Grass_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f86c769a177b3e84085abaa1ddeefdc6
+    m_Address: BiomeTexture_AbyssalPlain_050D33
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fdfd98d413716335cf988225b2bce568
+    m_Address: RockSurface_Limestone_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe667aca4d4a250af6e140c82abb812c
+    m_Address: Ground_GrassMeadow_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fe87504467212fe5e8c7818943e1c3c6
+    m_Address: Leaves
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

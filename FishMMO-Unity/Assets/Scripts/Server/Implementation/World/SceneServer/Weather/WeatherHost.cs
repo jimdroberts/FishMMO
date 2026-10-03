@@ -778,6 +778,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				 * hanging about. Kept below the wind itself: a storm lags its steering flow. */
 				float carried = Mathf.Clamp(sw.WindSpeedMetersPerSecond * 0.55f, 1.5f, 14f);
 				float speed = carried * sw.Rng.Range(0.75f, 1.25f);
+				// A vent does not travel: the eruption stays put and its plume is what the wind carries.
+				if (kind == StormKind.Eruption)
+				{
+					speed = 0f;
+				}
 				StormPhysics.Dimensions(kind, sample.OpenColumn, sw.Rng.Range(0f, 1f), sw.Rng.Range(0f, 1f),
 					out float radius, out float extent, out float lifetime);
 				SpawnCellInternal(sw, kind, p, radius, extent, new Vector2(Mathf.Sin(heading), Mathf.Cos(heading)) * speed, lifetime, now);
@@ -935,6 +940,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			uint now = NowTick;
 			// What is not asked for, the air where it starts decides.
 			WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, at, now);
+			// And a world with no air has none to make any storm of: refused, not spawned as nothing.
+			if (!StormPhysics.CanForm(sample.Planet))
+			{
+				return 0;
+			}
 			StormPhysics.Dimensions(kind, sample.OpenColumn, sw.Rng.Range(0f, 1f), sw.Rng.Range(0f, 1f),
 				out float radius, out float extent, out float lifetime);
 			if (radiusMeters > 0f)

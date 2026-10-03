@@ -18,6 +18,7 @@
         "FishMMO.Shared.Tools.Editor",
         "FishMMO.Shared.NameGenerator.Editor",
         "FishMMO.Shared.Map.Editor",
+        "FishMMO.Client.Weather.Editor",
         "Unity.Addressables.Editor"
     ],
     "includePlatforms": [

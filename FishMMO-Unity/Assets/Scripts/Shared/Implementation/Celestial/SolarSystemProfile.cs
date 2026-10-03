@@ -67,6 +67,122 @@ namespace FishMMO.Shared.Celestial
 			}
 		}
 
+		/// <summary>
+		/// THE answer to "which solar system": the body's own, else the atlas's, else the loaded one,
+		/// else (in the editor, out of play mode) the first system asset by path.
+		/// </summary>
+		/// <param name="body">The body being asked about, if there is one. Null asks about the world as a whole.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>One lookup, because three disagreed.</b> The scene generator and the globe bake took the
+		/// first system by asset NAME, the world-map capture the first by PATH after the loaded one,
+		/// and the running game <see cref="Active"/> — the atlas's. With two systems in a project, a
+		/// globe could be baked under one sun and the scene cut from it lit by another. Every tool now
+		/// asks here.
+		/// </para>
+		/// <para>
+		/// <b>The body's own system first</b>, found as the system that lists it (or names it home):
+		/// a body's starlight, orbit and tides only mean anything in the system it orbits in.
+		/// Loaded systems are searched before assets, so in play mode the game's own state decides.
+		/// </para>
+		/// <para>
+		/// <b>Assets only in edit mode.</b> In play mode and in a build the answer is what the game has
+		/// loaded, exactly as <see cref="Active"/>; the asset search exists for tools working on a
+		/// project nothing has loaded, and is ordered by path so two bakes agree on "first".
+		/// Runtime code that wants only the loaded state — and must read null in an EditMode test that
+		/// loaded nothing — keeps reading <see cref="Active"/>, which is this lookup's loaded tier.
+		/// </para>
+		/// </remarks>
+		public static SolarSystemProfile Resolve(CelestialBody body = null)
+		{
+			if (body != null)
+			{
+				Dictionary<int, SolarSystemProfile> loaded = GetCache<SolarSystemProfile>();
+				if (loaded != null)
+				{
+					foreach (SolarSystemProfile candidate in loaded.Values)
+					{
+						if (candidate != null && candidate.Contains(body))
+						{
+							return candidate;
+						}
+					}
+				}
+			}
+			SolarSystemProfile active = Active;
+			if (active != null)
+			{
+				return active;
+			}
+#if UNITY_EDITOR
+			if (!Application.isPlaying)
+			{
+				return ResolveFromAssets(body);
+			}
+#endif
+			return null;
+		}
+
+		/// <summary>True when <paramref name="body"/> is one of this system's bodies or its home world.</summary>
+		public bool Contains(CelestialBody body)
+		{
+			if (body == null)
+			{
+				return false;
+			}
+			if (HomeWorld != null && HomeWorld == body)
+			{
+				return true;
+			}
+			return Bodies != null && Bodies.Contains(body);
+		}
+
+#if UNITY_EDITOR
+		/// <summary>The edit-mode tiers of <see cref="Resolve"/>: body's system, atlas's, first, all from assets by path.</summary>
+		private static SolarSystemProfile ResolveFromAssets(CelestialBody body)
+		{
+			List<SolarSystemProfile> systems = AssetsByPath<SolarSystemProfile>();
+			if (body != null)
+			{
+				foreach (SolarSystemProfile candidate in systems)
+				{
+					if (candidate.Contains(body))
+					{
+						return candidate;
+					}
+				}
+			}
+			foreach (FishMMO.Shared.Atlas.WorldAtlas atlas in AssetsByPath<FishMMO.Shared.Atlas.WorldAtlas>())
+			{
+				if (atlas.SolarSystem != null)
+				{
+					return atlas.SolarSystem;
+				}
+			}
+			return systems.Count > 0 ? systems[0] : null;
+		}
+
+		private static List<T> AssetsByPath<T>() where T : Object
+		{
+			var paths = new List<string>();
+			foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:" + typeof(T).Name))
+			{
+				paths.Add(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
+			}
+			paths.Sort(global::System.StringComparer.Ordinal);
+			var assets = new List<T>(paths.Count);
+			foreach (string path in paths)
+			{
+				T asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+				if (asset != null)
+				{
+					assets.Add(asset);
+				}
+			}
+			return assets;
+		}
+#endif
+
 		/// <summary>The first star in <see cref="Bodies"/>, or null.</summary>
 		public StarBody PrimaryStar
 		{

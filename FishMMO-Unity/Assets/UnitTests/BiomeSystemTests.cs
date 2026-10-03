@@ -137,6 +137,89 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		// ── Any-elevation (tier 9) biomes compete in every tier (2026-10-02) ──
+
+		[Test]
+		public void Resolver_AnAnyElevationBiomeThatFits_BeatsATierBiomeThatDoesNot()
+		{
+			// The tier's own biome is a warm-climate one the cold reading falls outside; it used to
+			// win anyway, because tier-9 biomes were only offered when the tier had no biome at all.
+			BiomeRegistry.Clear();
+			BiomeTemplate native = MakeBiome("Warm Mountain", 6, 0.75f, 0.9f, 0.2f, 1f);
+			BiomeTemplate fracture = MakeBiome("Fracture", BiomeResolver.AnyElevationTier, 0f, 1f, -1f, 0.2f, weight: 0.75f);
+			BiomeRegistry.Register(native);
+			BiomeRegistry.Register(fracture);
+			try
+			{
+				Assert.AreSame(fracture, BiomeResolver.Select(0.8f, -1f, -1f, 6), "a fit beats a near miss");
+				Assert.AreSame(native, BiomeResolver.Select(0.8f, 0.6f, -1f, 6), "and the tier's own biome keeps the readings it fits");
+			}
+			finally
+			{
+				NamingTemplateEditorLoader.Reload();
+			}
+		}
+
+		[Test]
+		public void Resolver_AnAnyElevationBiome_LosesToATierBiomeThatFitsAndWeighsMore()
+		{
+			// Weight below the native biomes that share a reading is how a tier-9 biome is kept from
+			// flooding a world whose every reading is the same corner of the climate plane.
+			BiomeRegistry.Clear();
+			BiomeTemplate plain = MakeBiome("Plain", 4, 0.45f, 0.6f, -1f, 1f, weight: 1f);
+			BiomeTemplate fracture = MakeBiome("Fracture", BiomeResolver.AnyElevationTier, 0f, 1f, -1f, 0.2f, weight: 0.75f);
+			BiomeRegistry.Register(plain);
+			BiomeRegistry.Register(fracture);
+			try
+			{
+				Assert.AreSame(plain, BiomeResolver.Select(0.5f, -1f, -1f, 4));
+				fracture.SelectionWeight = 1.2f;
+				Assert.AreSame(fracture, BiomeResolver.Select(0.5f, -1f, -1f, 4), "it competes in the tier: outweigh the plain and it wins");
+			}
+			finally
+			{
+				NamingTemplateEditorLoader.Reload();
+			}
+		}
+
+		[Test]
+		public void Resolver_ReadsAnAnyElevationBiomesHeightBand()
+		{
+			BiomeRegistry.Clear();
+			BiomeTemplate summit = MakeBiome("Warm Summit", 8, 0.95f, 1f, 0.5f, 1f);
+			BiomeTemplate rille = MakeBiome("Channel", BiomeResolver.AnyElevationTier, 0.42f, 0.75f, -1f, 0.6f, weight: 0.7f);
+			BiomeRegistry.Register(summit);
+			BiomeRegistry.Register(rille);
+			try
+			{
+				Assert.AreSame(summit, BiomeResolver.Select(0.97f, -1f, -1f, 8), "above its band the channel does not compete, however badly the summit fits");
+				Assert.AreSame(rille, BiomeResolver.Select(0.5f, -1f, -1f, 4), "inside it, in a tier with no biome of its own, it wins");
+			}
+			finally
+			{
+				NamingTemplateEditorLoader.Reload();
+			}
+		}
+
+		[Test]
+		public void Resolver_AnAnyElevationBiome_IsListedAmongEveryTiersCandidates()
+		{
+			BiomeRegistry.Clear();
+			BiomeTemplate plain = MakeBiome("Plain", 4, 0.45f, 0.6f, -1f, 1f);
+			BiomeTemplate fracture = MakeBiome("Fracture", BiomeResolver.AnyElevationTier, 0f, 1f, -1f, 0.2f);
+			BiomeRegistry.Register(plain);
+			BiomeRegistry.Register(fracture);
+			try
+			{
+				CollectionAssert.AreEquivalent(new[] { plain, fracture }, BiomeResolver.CandidatesForTier(4));
+				CollectionAssert.AreEquivalent(new[] { fracture }, BiomeResolver.CandidatesForTier(7));
+			}
+			finally
+			{
+				NamingTemplateEditorLoader.Reload();
+			}
+		}
+
 		[Test]
 		public void Resolver_IsDeterministic_AcrossTheWholeMap()
 		{

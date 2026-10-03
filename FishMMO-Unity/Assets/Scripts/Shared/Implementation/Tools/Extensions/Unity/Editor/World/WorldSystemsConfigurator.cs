@@ -105,7 +105,7 @@ namespace FishMMO.Shared.WorldDesign
 			var problems = new List<WorldSystemProblem>();
 			WorldSceneDetailsCache cache = WorldEditorAssets.SceneDetails();
 			HashSet<string> dungeons = WorldEditorAssets.DungeonSceneNames();
-			SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
+			SolarSystemProfile system = SolarSystemProfile.Resolve();
 			WorldBody home = system != null ? system.HomeWorld : null;
 			// Looked up once for the whole pass: it is a project-wide question, not a per-scene one.
 			FishMMO.Shared.Biomes.ClimateSettings authoredClimate = SceneWorldSystems.OnlyAuthoredClimate();

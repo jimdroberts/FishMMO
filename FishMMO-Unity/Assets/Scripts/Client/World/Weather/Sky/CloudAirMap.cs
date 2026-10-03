@@ -151,9 +151,9 @@ namespace FishMMO.Client
 			WorldSceneSettings settings = inputs.Settings;
 			var position = new Vector3(place.x, 0f, place.y);
 			air = WeatherField.OpenAirAt(timeline, place, inputs.WorldSeconds, inputs.Season01, inputs.LocalTime01, inputs.Belts);
-			float latitude01 = settings != null && settings.BiomeMap != null ? settings.BiomeMap.Latitude01(position) : 0.5f;
 			float waterLine = settings != null && settings.Climate != null ? settings.Climate.WaterSurfaceHeight : ClimateModel.DefaultWaterSurfaceHeight;
-			ClimateSample climate = settings != null ? settings.SampleClimate(waterLine, latitude01) : default;
+			// At the place, so a generated scene's sky reads the latitude and moisture its ground was painted from.
+			ClimateSample climate = settings != null ? settings.SampleClimateAt(position, waterLine) : default;
 			air = WeatherDriver.OverPlace(air, climate.Humidity);
 			air = WeatherDriver.InClimate(air, climate.Temperature);
 			if (inputs.HasDaylight)

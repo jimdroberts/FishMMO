@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FishMMO.Water
@@ -16,11 +18,23 @@ namespace FishMMO.Water
 	/// there — and a vertex knows nothing about what is behind it on screen.
 	/// </para>
 	/// <para>
-	/// <b>Built at load, not baked to an asset.</b> Sampling a scene's terrains at 512 x 512 takes
-	/// a few milliseconds, and the result depends on nothing but the terrain — so an asset would be
-	/// a second copy of something already in the scene, with all the staleness that implies. It
-	/// also means a designer raising the beach sees the surf move immediately.
+	/// <b>Built from the terrain, kept as build output — never as an authored asset.</b> The field
+	/// depends on nothing but the terrain, this script and a handful of settings, so an asset in the
+	/// project would only be a second copy of the terrain waiting to go stale. But it is no longer the
+	/// few milliseconds it was at 512²: at 2048² over thirty tiles, with the distance transform and the
+	/// four open-sea floods, it froze every scene load and every entry to play mode for seconds. So:
 	/// </para>
+	/// <list type="bullet">
+	/// <item>In the editor a finished build is CACHED under Library, keyed by the terrain assets'
+	/// dependency hashes, this script's own hash and every setting that shapes it — so editing the
+	/// terrain, the settings or this code can never be answered from a stale cache, and a scene that
+	/// has not changed loads its field in the time it takes to read the file.</item>
+	/// <item>A player build EMBEDS the field in the built scene (the editor's
+	/// <c>WaterShoreFieldBuildEmbed</c>), so no player or server ever builds it.</item>
+	/// <item>Anything else — a changed terrain, a scene that was never saved, a probe — builds live,
+	/// OFF the main thread wherever there are threads: the sea runs without its shore for the moment
+	/// that takes, which is better than the editor freezing.</item>
+	/// </list>
 	/// </remarks>
 	[ExecuteAlways]
 	[AddComponentMenu("FishMMO/Water/Water Shore Field")]
@@ -80,11 +94,29 @@ namespace FishMMO.Water
 		[Tooltip("Rebuild when the terrain changes. Off is one build at load, which is all a shipped scene needs.")]
 		public bool RebuildOnValidate = true;
 
+		/// <summary>
+		/// The field as a player build wrote it into this scene (<see cref="EmbedForBuild"/>); empty in
+		/// the scene on disk, and dropped once it has been read.
+		/// </summary>
+		/// <remarks>
+		/// Only ever filled on a build's own copy of the scene. Filled in the editor and saved, it would
+		/// put tens of megabytes of hex into the scene file.
+		/// </remarks>
+		[SerializeField, HideInInspector] private byte[] embedded;
+
 		/// <summary>Depth recorded where the scene has no terrain at all, in metres.</summary>
 		/// <remarks>
 		/// Deep enough that no wave shoals against it, small enough to stay well inside a half.
 		/// </remarks>
 		private const float OpenWaterDepth = 400f;
+
+		/// <summary>
+		/// The layout of a stored field (<see cref="Write"/>). Bumped only when that layout changes: a change
+		/// to how the field is COMPUTED needs no bump, because this script's own hash is part of every
+		/// cache key and a build embeds a field computed by the code it ships.
+		/// </summary>
+		private const int StoredFormat = 1;
+		private const int StoredMagic = 0x46485346; // "FSHF"
 
 		private Texture2D field;
 		private Texture2D openSea;
@@ -94,11 +126,24 @@ namespace FishMMO.Water
 		private volatile Snapshot snapshot;
 		private int version;
 
+		/// <summary>Counts requests for a field, so a live build that finishes after a newer one was asked for is dropped.</summary>
+		private int generation;
+		private Task<Built> building;
+		private int buildingGeneration;
+#if UNITY_EDITOR
+		/// <summary>The field on screen, kept so a player build can embed it without building it again.</summary>
+		private Built applied;
+		private bool polling;
+#endif
+
 		/// <summary>The world-space rectangle the field covers.</summary>
 		public Rect Area => area;
 
 		/// <summary>Texels along each side of the field; 0 before it is built.</summary>
 		public int Resolution => snapshot != null ? snapshot.Resolution : 0;
+
+		/// <summary>True while a live build is running off the main thread and the sea has no new field yet.</summary>
+		public bool IsBuilding => building != null;
 
 		/// <summary>
 		/// The field as last built, readable from any thread; null before the first build. A rebuild
@@ -126,22 +171,23 @@ namespace FishMMO.Water
 			/// <summary>Counts builds, so anything made from the field knows when it is out of date.</summary>
 			public readonly int Version;
 			/// <summary>
-			/// The tide, in metres over mean sea level, at which each cell of the open-sea map has a way in from
-			/// the open sea deep enough for its waves (<see cref="OpenSea"/>); null when there is none. Row-major,
-			/// <see cref="OpenResolution"/> a side.
+			/// The open-sea map exactly as the GPU has it, four half floats to a cell, row-major,
+			/// <see cref="OpenResolution"/> a side: r the tide, in metres over mean sea level, at which the cell
+			/// has a way in from the open sea deep enough for its waves, then gba how much of the swell the
+			/// narrowest gap on that way in lets through, 0..1, at each of <see cref="ShelterTides"/> of
+			/// <see cref="HighestTide"/> (<see cref="OpenSea"/>). Null when there is none.
 			/// </summary>
-			public readonly float[] JoinTide;
-			/// <summary>
-			/// How much of the swell the narrowest gap on each cell's way in lets through, 0..1, at each of
-			/// <see cref="ShelterTides"/> of <see cref="HighestTide"/>, three to a cell (<see cref="OpenSea"/>).
-			/// </summary>
-			public readonly float[] Shelter;
+			/// <remarks>
+			/// The halves, not the floats they were made from: what the CPU asks is then the very map the
+			/// shaders read, and a stored field needs nothing decoding before it can be used.
+			/// </remarks>
+			public readonly ushort[] OpenHalves;
 			public readonly int OpenResolution;
 			/// <summary>The highest tide the gap floods were run up to, m.</summary>
 			public readonly float HighestTide;
 
 			public Snapshot(ushort[] halves, int resolution, Rect area, float texelMetres, int version,
-				float[] joinTide = null, float[] shelter = null, int openResolution = 0, float highestTide = 0f)
+				ushort[] openHalves = null, int openResolution = 0, float highestTide = 0f)
 			{
 				HighestTide = highestTide;
 				Halves = halves;
@@ -149,9 +195,8 @@ namespace FishMMO.Water
 				Area = area;
 				TexelMetres = texelMetres;
 				Version = version;
-				JoinTide = joinTide;
-				Shelter = shelter;
-				OpenResolution = joinTide != null && shelter != null ? openResolution : 0;
+				OpenHalves = openHalves;
+				OpenResolution = openHalves != null && openHalves.Length >= openResolution * openResolution * 4 ? openResolution : 0;
 			}
 
 			/// <summary>
@@ -175,14 +220,13 @@ namespace FishMMO.Water
 				int x0 = Mathf.Clamp(Mathf.FloorToInt(fx), 0, n - 1), y0 = Mathf.Clamp(Mathf.FloorToInt(fy), 0, n - 1);
 				int x1 = Mathf.Min(x0 + 1, n - 1), y1 = Mathf.Min(y0 + 1, n - 1);
 				float tx = Mathf.Clamp01(fx - Mathf.Floor(fx)), ty = Mathf.Clamp01(fy - Mathf.Floor(fy));
-				float joins = Mathf.Lerp(Mathf.Lerp(JoinTide[y0 * n + x0], JoinTide[y0 * n + x1], tx),
-					Mathf.Lerp(JoinTide[y1 * n + x0], JoinTide[y1 * n + x1], tx), ty);
-				float shelter = ShelterAt(Level(0), Level(1), Level(2), tide, HighestTide);
+				float joins = Level(0);
+				float shelter = ShelterAt(Level(1), Level(2), Level(3), tide, HighestTide);
 				return OpenFromJoin(tide, joins) * shelter;
 
 				float Level(int k) => Mathf.Lerp(
-					Mathf.Lerp(Shelter[(y0 * n + x0) * 3 + k], Shelter[(y0 * n + x1) * 3 + k], tx),
-					Mathf.Lerp(Shelter[(y1 * n + x0) * 3 + k], Shelter[(y1 * n + x1) * 3 + k], tx), ty);
+					Mathf.Lerp(HalfToFloat(OpenHalves[(y0 * n + x0) * 4 + k]), HalfToFloat(OpenHalves[(y0 * n + x1) * 4 + k]), tx),
+					Mathf.Lerp(HalfToFloat(OpenHalves[(y1 * n + x0) * 4 + k]), HalfToFloat(OpenHalves[(y1 * n + x1) * 4 + k]), tx), ty);
 			}
 
 			/// <summary>Metres of water over the ground at mean sea level, at a texel.</summary>
@@ -231,12 +275,12 @@ namespace FishMMO.Water
 			}
 		}
 
-		/// <summary>
-		/// An IEEE half float's value, in plain managed arithmetic so it may run on any thread.
-		/// </summary>
 		/// <summary>How open water is at a tide, from the tide its way in needs: over ±15 cm of tide.</summary>
 		public static float OpenFromJoin(float tide, float joinTide) => Mathf.Clamp01((tide - joinTide) / 0.3f + 0.5f);
 
+		/// <summary>
+		/// An IEEE half float's value, in plain managed arithmetic so it may run on any thread.
+		/// </summary>
 		public static float HalfToFloat(ushort half)
 		{
 			int sign = (half >> 15) & 1;
@@ -259,6 +303,13 @@ namespace FishMMO.Water
 			return sign != 0 ? -value : value;
 		}
 
+		/// <summary>How open to the sea's waves the water at a point is at a tide (<see cref="Snapshot.OpenSeaAt"/>); 1 before a build.</summary>
+		public float OpenSeaAt(Vector2 xz, float tide)
+		{
+			Snapshot current = snapshot;
+			return current != null ? current.OpenSeaAt(xz, tide) : 1f;
+		}
+
 		/// <summary>
 		/// The field at a world point, on the CPU: metres of water over the ground at MEAN sea level
 		/// (negative on land), and signed metres to the mean waterline (positive at sea). False off
@@ -268,13 +319,6 @@ namespace FishMMO.Water
 		/// The same half floats the shader shoals the sea with, filtered the same way, so buoyancy and
 		/// the break line ask exactly the field the GPU draws with.
 		/// </remarks>
-		/// <summary>How open to the sea's waves the water at a point is at a tide (<see cref="Snapshot.OpenSeaAt"/>); 1 before a build.</summary>
-		public float OpenSeaAt(Vector2 xz, float tide)
-		{
-			Snapshot current = snapshot;
-			return current != null ? current.OpenSeaAt(xz, tide) : 1f;
-		}
-
 		public bool TrySample(Vector2 xz, out float depth, out float edgeDistance)
 		{
 			Snapshot current = snapshot;
@@ -290,11 +334,18 @@ namespace FishMMO.Water
 		private void OnEnable()
 		{
 			surface = GetComponent<WaterSurface>();
-			Build();
+			Request(true);
 		}
 
 		private void OnDisable()
 		{
+			// A build still running belongs to this enable; whatever it finishes with is dropped.
+			generation++;
+			building = null;
+#if UNITY_EDITOR
+			StopPolling();
+			applied = null;
+#endif
 			// Leave the globals pointing at nothing, or the next scene reads this scene's beach.
 			Shader.SetGlobalVector(RectId, Vector4.zero);
 			Shader.SetGlobalVector(OpenSeaRectId, Vector4.zero);
@@ -303,6 +354,11 @@ namespace FishMMO.Water
 			Discard(openSea);
 			openSea = null;
 			snapshot = null;
+		}
+
+		private void Update()
+		{
+			Poll();
 		}
 
 		private void OnValidate()
@@ -314,15 +370,13 @@ namespace FishMMO.Water
 #if UNITY_EDITOR
 			/* Deferred to the next editor tick, and coalesced.
 			 *
-			 * A build samples every terrain up to 2048 x 2048 times and runs a two-pass distance
-			 * transform over the result. OnValidate fires on every keystroke in the inspector and
-			 * on every domain reload — where OnEnable then builds again straight afterwards — so
-			 * building synchronously here froze the editor for each of those, twice per recompile.
-			 * Unsubscribing first means ten edits in one frame cost one build. */
+			 * OnValidate fires on every keystroke in the inspector and on every domain reload —
+			 * where OnEnable then asks again straight afterwards. Unsubscribing first means ten edits
+			 * in one frame cost one request, and a request the cache can answer costs a file read. */
 			UnityEditor.EditorApplication.delayCall -= DeferredBuild;
 			UnityEditor.EditorApplication.delayCall += DeferredBuild;
 #else
-			Build();
+			Request(true);
 #endif
 		}
 
@@ -332,18 +386,244 @@ namespace FishMMO.Water
 			// The component can be gone by the time the editor gets round to this.
 			if (this != null && isActiveAndEnabled)
 			{
-				Build();
+				Request(true);
 			}
 		}
 #endif
 
-		/// <summary>Reads the scene's terrains and rebuilds the depth field.</summary>
+		/// <summary>
+		/// Reads the scene's terrains and rebuilds the depth field, finishing before it returns: from the
+		/// embedded or cached field when it still matches the terrain, otherwise built here and now.
+		/// </summary>
 		public void Build()
+		{
+			Request(false);
+		}
+
+		/// <summary>WebGL has no threads; everywhere else a live build runs on the thread pool.</summary>
+		private static bool CanBuildOffThread => Application.platform != RuntimePlatform.WebGLPlayer;
+
+		/// <summary>
+		/// Puts the field for the scene as it stands on the GPU: the embedded field, then the editor's cache,
+		/// then a live build — on the thread pool when <paramref name="allowBackground"/>.
+		/// </summary>
+		private void Request(bool allowBackground)
+		{
+			int request = ++generation;
+			building = null;
+
+			Plan plan = Measure();
+			if (plan == null)
+			{
+				// Open ocean with no ground in the scene: no shore, no shallows, no breakers.
+				embedded = null;
+				Shader.SetGlobalVector(RectId, Vector4.zero);
+				Shader.SetGlobalVector(OpenSeaRectId, Vector4.zero);
+				snapshot = null;
+				return;
+			}
+
+			// A player build's own field. Checked against the terrain all the same: it costs a hash of a few
+			// numbers, and a field drawn over the wrong ground is far worse than a build.
+			if (embedded != null && embedded.Length > 0)
+			{
+				Built stored = Read(embedded);
+				embedded = null;
+				if (stored != null && stored.GeometryKey == plan.GeometryKey)
+				{
+					Apply(stored);
+					return;
+				}
+			}
+
+#if UNITY_EDITOR
+			if (plan.CachePath != null && File.Exists(plan.CachePath))
+			{
+				Built cached = null;
+				try
+				{
+					cached = Read(File.ReadAllBytes(plan.CachePath));
+				}
+				catch (IOException)
+				{
+					// Being written by a build that has just finished; this request builds its own.
+				}
+				if (cached != null && cached.GeometryKey == plan.GeometryKey && cached.ContentKey == plan.ContentKey)
+				{
+					Apply(cached);
+					return;
+				}
+			}
+#endif
+
+			plan.ReadHeights();
+			if (allowBackground && CanBuildOffThread)
+			{
+				buildingGeneration = request;
+				building = Task.Run(() => Compute(plan));
+#if UNITY_EDITOR
+				StartPolling();
+#endif
+				return;
+			}
+			Apply(Compute(plan));
+		}
+
+		/// <summary>Takes a finished live build onto the GPU, if it is still the one wanted.</summary>
+		private void Poll()
+		{
+			Task<Built> done = building;
+			if (done == null || !done.IsCompleted)
+			{
+				return;
+			}
+			building = null;
+#if UNITY_EDITOR
+			StopPolling();
+#endif
+			if (done.IsFaulted)
+			{
+				Debug.LogException(done.Exception.GetBaseException(), this);
+				return;
+			}
+			if (done.Status != TaskStatus.RanToCompletion || done.Result == null
+				|| buildingGeneration != generation || !isActiveAndEnabled)
+			{
+				return;
+			}
+			Apply(done.Result);
+#if UNITY_EDITOR
+			// Nothing else may redraw an idle editor, and the shore would sit unseen until the mouse moved.
+			UnityEditor.SceneView.RepaintAll();
+			UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+#endif
+		}
+
+#if UNITY_EDITOR
+		/* Update does not run in an idle editor out of play mode, so a build finishing there would wait for
+		 * the next scene change to be taken up. The editor's own tick runs regardless. */
+		private void StartPolling()
+		{
+			if (!polling)
+			{
+				polling = true;
+				UnityEditor.EditorApplication.update += Poll;
+			}
+		}
+
+		private void StopPolling()
+		{
+			if (polling)
+			{
+				polling = false;
+				UnityEditor.EditorApplication.update -= Poll;
+			}
+		}
+
+		/// <summary>
+		/// Writes this scene's field into the component, for a player build to carry: a build's copy of
+		/// the scene only — see <see cref="embedded"/>. Returns false when the scene has no ground to
+		/// build a field from.
+		/// </summary>
+		public bool EmbedForBuild()
+		{
+			surface = GetComponent<WaterSurface>();
+			Request(false);
+			if (applied == null)
+			{
+				return false;
+			}
+			embedded = Write(applied);
+			return true;
+		}
+#endif
+
+		/// <summary>One built field: what is uploaded, what the CPU samples, and what is stored.</summary>
+		private sealed class Built
+		{
+			public string GeometryKey;
+			public string ContentKey;
+			public int Resolution;
+			public Rect Area;
+			public float TexelMetres;
+			public float Deepest;
+			public float HighestTide;
+			public int OpenResolution;
+			/// <summary>R depth then G signed distance to the waterline, per texel.</summary>
+			public ushort[] Halves;
+			/// <summary>RGBA per open-sea cell: the tide the way in needs, then the shelter at three tides.</summary>
+			public ushort[] OpenHalves;
+		}
+
+		/// <summary>
+		/// The scene's terrain, as a plain copy a worker thread may read. Measured on the main thread; the
+		/// heights are read only when no stored field will do (<see cref="ReadHeights"/>).
+		/// </summary>
+		private sealed class Plan
+		{
+			public Terrain[] Terrains;
+			public Tile[] Tiles;
+			public Rect Area;
+			public int Resolution;
+			public float TexelMetres;
+			public float Sea;
+			public float HalfGap;
+			public float Clearance;
+			public float HighestTide;
+			public string GeometryKey;
+			public string ContentKey;
+			/// <summary>Where the editor caches this scene's field; null where it may not (outside the editor, an unsaved scene or terrain).</summary>
+			public string CachePath;
+
+			public void ReadHeights()
+			{
+				for (int i = 0; i < Tiles.Length; i++)
+				{
+					TerrainData data = Terrains[i].terrainData;
+					int samples = data.heightmapResolution;
+					// Read in one call each. Asked texel by texel, every one of four million samples cost three
+					// native calls per TILE (its position, its data, its size) before it even looked up a height.
+					Tiles[i].Heights = data.GetHeights(0, 0, samples, samples);
+				}
+			}
+		}
+
+		/// <summary>One terrain tile: where it stands and its heightmap, normalised as Unity stores it.</summary>
+		private struct Tile
+		{
+			public float X, Y, Z, Width, Height, Length;
+			public int Samples;
+			/// <summary>[z, x], 0..1 of <see cref="Height"/>.</summary>
+			public float[,] Heights;
+
+			/// <summary>
+			/// The ground at a world XZ known to be on this tile: bilinear between heightmap samples, as
+			/// <c>TerrainData.GetInterpolatedHeight</c> interpolates.
+			/// </summary>
+			public float GroundAt(float worldX, float worldZ)
+			{
+				float fx = Mathf.Clamp01((worldX - X) / Width) * (Samples - 1);
+				float fz = Mathf.Clamp01((worldZ - Z) / Length) * (Samples - 1);
+				int x0 = Mathf.Min((int)fx, Samples - 2);
+				int z0 = Mathf.Min((int)fz, Samples - 2);
+				float tx = fx - x0;
+				float tz = fz - z0;
+				float near = Heights[z0, x0] + (Heights[z0, x0 + 1] - Heights[z0, x0]) * tx;
+				float far = Heights[z0 + 1, x0] + (Heights[z0 + 1, x0 + 1] - Heights[z0 + 1, x0]) * tx;
+				return Y + (near + (far - near) * tz) * Height;
+			}
+		}
+
+		/// <summary>
+		/// Finds the scene's terrains, the rectangle and resolution the field will have, and the keys a stored
+		/// field must match. Null when the scene has no terrain.
+		/// </summary>
+		private Plan Measure()
 		{
 			var terrains = new List<Terrain>();
 			foreach (Terrain terrain in Terrain.activeTerrains)
 			{
-				if (terrain != null && terrain.terrainData != null
+				if (terrain != null && terrain.terrainData != null && terrain.terrainData.heightmapResolution >= 2
 					&& terrain.gameObject.scene == gameObject.scene)
 				{
 					terrains.Add(terrain);
@@ -351,18 +631,36 @@ namespace FishMMO.Water
 			}
 			if (terrains.Count == 0)
 			{
-				// Open ocean with no ground in the scene: no shore, no shallows, no breakers.
-				Shader.SetGlobalVector(RectId, Vector4.zero);
-				Shader.SetGlobalVector(OpenSeaRectId, Vector4.zero);
-				snapshot = null;
-				return;
+				return null;
 			}
+			// In a fixed order, so the keys do not depend on the order Unity happens to list the tiles in.
+			terrains.Sort((a, b) =>
+			{
+				Vector3 pa = a.GetPosition(), pb = b.GetPosition();
+				int byX = pa.x.CompareTo(pb.x);
+				return byX != 0 ? byX : pa.z.CompareTo(pb.z);
+			});
 
+			var plan = new Plan
+			{
+				Terrains = terrains.ToArray(),
+				Tiles = new Tile[terrains.Count],
+				Sea = surface != null ? surface.MeanSeaLevel : transform.position.y,
+				HalfGap = ShelterGap * 0.5f,
+				Clearance = ShelterDepth,
+				HighestTide = HighestTide,
+			};
 			float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
 			for (int i = 0; i < terrains.Count; i++)
 			{
 				Vector3 origin = terrains[i].GetPosition();
 				Vector3 size = terrains[i].terrainData.size;
+				plan.Tiles[i] = new Tile
+				{
+					X = origin.x, Y = origin.y, Z = origin.z,
+					Width = size.x, Height = size.y, Length = size.z,
+					Samples = terrains[i].terrainData.heightmapResolution,
+				};
 				minX = Mathf.Min(minX, origin.x);
 				minZ = Mathf.Min(minZ, origin.z);
 				maxX = Mathf.Max(maxX, origin.x + size.x);
@@ -373,37 +671,125 @@ namespace FishMMO.Water
 			 * exactly at the boundary, the bilinear filter would blend the last row of real ground
 			 * with whatever the clamp returns and draw a false beach along the scene's edge. */
 			float pad = Mathf.Max(32f, (maxX - minX) * 0.05f);
-			area = Rect.MinMaxRect(minX - pad, minZ - pad, maxX + pad, maxZ + pad);
+			Rect padded = Rect.MinMaxRect(minX - pad, minZ - pad, maxX + pad, maxZ + pad);
 			/* SQUARE, padding the short side with more open water. The texture is square, so a
 			 * rectangular scene gave rectangular texels — 3.49 by 2.96 m on Cov Viaduct — while the
 			 * distance transform counted steps as if they were square, and every distance measured
 			 * north-south came out an eighth too long. */
-			float side = Mathf.Max(area.width, area.height);
-			area = new Rect(area.center.x - side * 0.5f, area.center.y - side * 0.5f, side, side);
+			float side = Mathf.Max(padded.width, padded.height);
+			plan.Area = new Rect(padded.center.x - side * 0.5f, padded.center.y - side * 0.5f, side, side);
 
 			/* Resolution FOLLOWS the scene, rather than the scene being squeezed into a fixed
 			 * resolution: a small bay and a twenty-kilometre coast want very different grids, and
 			 * the thing that has to stay constant is the metres a texel covers. */
-			float span = Mathf.Max(area.width, area.height);
-			int wanted = Mathf.CeilToInt(span / Mathf.Max(0.05f, TargetTexelMetres));
-			int resolution = Mathf.Clamp(Mathf.NextPowerOfTwo(wanted), 64,
+			int wanted = Mathf.CeilToInt(side / Mathf.Max(0.05f, TargetTexelMetres));
+			plan.Resolution = Mathf.Clamp(Mathf.NextPowerOfTwo(wanted), 64,
 				Mathf.Clamp(Mathf.NextPowerOfTwo(MaximumResolution), 64, 4096));
-			TexelMetres = span / resolution;
+			plan.TexelMetres = side / plan.Resolution;
 
-			float sea = surface != null ? surface.MeanSeaLevel : transform.position.y;
+			// Everything that shapes the field and can be read without reading the heights.
+			var geometry = new Hash128();
+			geometry.Append(StoredFormat);
+			geometry.Append(plan.Resolution);
+			geometry.Append(plan.Area.x);
+			geometry.Append(plan.Area.y);
+			geometry.Append(plan.Area.width);
+			geometry.Append(plan.Sea);
+			geometry.Append(plan.HalfGap);
+			geometry.Append(plan.Clearance);
+			geometry.Append(plan.HighestTide);
+			geometry.Append(plan.Tiles.Length);
+			for (int i = 0; i < plan.Tiles.Length; i++)
+			{
+				Tile tile = plan.Tiles[i];
+				geometry.Append(tile.X);
+				geometry.Append(tile.Y);
+				geometry.Append(tile.Z);
+				geometry.Append(tile.Width);
+				geometry.Append(tile.Height);
+				geometry.Append(tile.Length);
+				geometry.Append(tile.Samples);
+			}
+			plan.GeometryKey = geometry.ToString();
+			plan.ContentKey = string.Empty;
+
+#if UNITY_EDITOR
+			/* The heights themselves, without reading them: each terrain asset's dependency hash, which
+			 * moves whenever its file does — and this script's, so changing how the field is computed
+			 * retires every cached field at once. A terrain edited and not yet saved differs from its file,
+			 * and nothing is cached for it until it is. */
+			string scenePath = gameObject.scene.path;
+			string script = UnityEditor.AssetDatabase.GetAssetPath(UnityEditor.MonoScript.FromMonoBehaviour(this));
+			bool cacheable = !string.IsNullOrEmpty(scenePath) && !string.IsNullOrEmpty(script);
+			var content = new Hash128();
+			if (cacheable)
+			{
+				content.Append(UnityEditor.AssetDatabase.GetAssetDependencyHash(script).ToString());
+			}
+			for (int i = 0; i < plan.Terrains.Length && cacheable; i++)
+			{
+				TerrainData data = plan.Terrains[i].terrainData;
+				string path = UnityEditor.AssetDatabase.GetAssetPath(data);
+				if (string.IsNullOrEmpty(path) || UnityEditor.EditorUtility.IsDirty(data))
+				{
+					cacheable = false;
+					break;
+				}
+				content.Append(UnityEditor.AssetDatabase.GetAssetDependencyHash(path).ToString());
+			}
+			if (cacheable)
+			{
+				plan.ContentKey = content.ToString();
+				// Under Library: rebuilt by anyone who deletes it, never committed, never shipped.
+				string library = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Library", "FishMMO", "ShoreField");
+				plan.CachePath = Path.Combine(library, Hash128.Compute(scenePath).ToString() + ".bytes");
+			}
+#endif
+			return plan;
+		}
+
+		/// <summary>
+		/// Builds the field from a measured scene. Plain managed arithmetic over copies, so it may run on any
+		/// thread; writes the editor's cache when the plan has one.
+		/// </summary>
+		private static Built Compute(Plan plan)
+		{
+			int resolution = plan.Resolution;
+			Rect area = plan.Area;
 			var pixels = new Color[resolution * resolution];
-			deepest = 0f;
+			float deepest = 0f;
+			var row = new List<Tile>(plan.Tiles.Length);
 
 			for (int y = 0; y < resolution; y++)
 			{
 				float wz = Mathf.Lerp(area.yMin, area.yMax, (y + 0.5f) / resolution);
+				// The tiles this row crosses, so each texel looks at a handful instead of every tile in the scene.
+				row.Clear();
+				for (int i = 0; i < plan.Tiles.Length; i++)
+				{
+					if (wz >= plan.Tiles[i].Z && wz <= plan.Tiles[i].Z + plan.Tiles[i].Length)
+					{
+						row.Add(plan.Tiles[i]);
+					}
+				}
 				for (int x = 0; x < resolution; x++)
 				{
 					float wx = Mathf.Lerp(area.xMin, area.xMax, (x + 0.5f) / resolution);
-					float ground = Ground(terrains, wx, wz);
+					/* The highest ground across every tile, not the first: stitched tiles overlap along their
+					 * seams by a sample, and taking whichever was listed first put a one-sample trench down
+					 * every join, which the surf then broke along. */
+					float ground = float.MinValue;
+					for (int i = 0; i < row.Count; i++)
+					{
+						Tile tile = row[i];
+						if (wx >= tile.X && wx <= tile.X + tile.Width)
+						{
+							ground = Mathf.Max(ground, tile.GroundAt(wx, wz));
+						}
+					}
 					// Positive in the water, negative on dry land. One metre is one unit. Off every
 					// terrain is open water, not a trench a mile deep.
-					float depth = ground > float.MinValue ? sea - ground : OpenWaterDepth;
+					float depth = ground > float.MinValue ? plan.Sea - ground : OpenWaterDepth;
 					deepest = Mathf.Max(deepest, depth);
 					pixels[y * resolution + x] = new Color(depth, 0f, 0f, 0f);
 				}
@@ -421,66 +807,200 @@ namespace FishMMO.Water
 			 * zero crossing, so bilinear filtering of a coarse grid gives a blocky contour, while
 			 * distance is smooth through the edge and stays smooth at any resolution.
 			 */
-			Distance(pixels, resolution, TexelMetres);
+			Distance(pixels, resolution, plan.TexelMetres);
 			int openResolution = Mathf.Min(resolution, 1024);
-			OpenSea(pixels, resolution, TexelMetres, openResolution, ShelterGap * 0.5f, ShelterDepth, HighestTide,
+			OpenSea(pixels, resolution, plan.TexelMetres, openResolution, plan.HalfGap, plan.Clearance, plan.HighestTide,
 				out float[] joinTide, out float[] shelter);
 
-			var halves = new ushort[resolution * resolution * 2];
+			var built = new Built
+			{
+				GeometryKey = plan.GeometryKey,
+				ContentKey = plan.ContentKey,
+				Resolution = resolution,
+				Area = area,
+				TexelMetres = plan.TexelMetres,
+				Deepest = deepest,
+				HighestTide = plan.HighestTide,
+				OpenResolution = openResolution,
+				Halves = new ushort[resolution * resolution * 2],
+				OpenHalves = new ushort[joinTide.Length * 4],
+			};
 			for (int i = 0; i < pixels.Length; i++)
 			{
-				halves[i * 2] = Mathf.FloatToHalf(pixels[i].r);
-				halves[i * 2 + 1] = Mathf.FloatToHalf(pixels[i].g);
+				built.Halves[i * 2] = Mathf.FloatToHalf(pixels[i].r);
+				built.Halves[i * 2 + 1] = Mathf.FloatToHalf(pixels[i].g);
 			}
+			// r the tide the way in needs, gba how much its narrowest gap lets through at the mean tide, half
+			// the highest and the highest (ShelterTides).
+			for (int i = 0; i < joinTide.Length; i++)
+			{
+				built.OpenHalves[i * 4] = Mathf.FloatToHalf(Mathf.Clamp(joinTide[i], -60000f, 60000f));
+				built.OpenHalves[i * 4 + 1] = Mathf.FloatToHalf(shelter[i * 3]);
+				built.OpenHalves[i * 4 + 2] = Mathf.FloatToHalf(shelter[i * 3 + 1]);
+				built.OpenHalves[i * 4 + 3] = Mathf.FloatToHalf(shelter[i * 3 + 2]);
+			}
+
+			if (plan.CachePath != null)
+			{
+				try
+				{
+					Directory.CreateDirectory(Path.GetDirectoryName(plan.CachePath));
+					// Written aside and moved into place, so a reader never meets half a file.
+					string partial = plan.CachePath + ".partial";
+					File.WriteAllBytes(partial, Write(built));
+					if (File.Exists(plan.CachePath))
+					{
+						File.Delete(plan.CachePath);
+					}
+					File.Move(partial, plan.CachePath);
+				}
+				catch (IOException)
+				{
+					// A cache: the next load builds again.
+				}
+				catch (System.UnauthorizedAccessException)
+				{
+				}
+			}
+			return built;
+		}
+
+		/// <summary>Uploads a field and points the shaders and the CPU readers at it. Main thread.</summary>
+		private void Apply(Built built)
+		{
+			area = built.Area;
+			TexelMetres = built.TexelMetres;
+			deepest = built.Deepest;
 
 			/* A new texture every build, uploaded and made non-readable: the CPU copy is the snapshot.
 			 * A texture that is no longer readable cannot be refilled, so the old one is thrown away —
 			 * which is safe here because nothing builds from OnValidate any more (it defers to the
 			 * editor's next tick) or from inside a render callback. */
 			Texture2D previous = field;
-			field = new Texture2D(resolution, resolution, TextureFormat.RGHalf, false, true)
+			field = new Texture2D(built.Resolution, built.Resolution, TextureFormat.RGHalf, false, true)
 			{
 				name = "Shore depth",
 				wrapMode = TextureWrapMode.Clamp,
 				filterMode = FilterMode.Bilinear,
 				hideFlags = HideFlags.HideAndDontSave,
 			};
-			field.SetPixelData(halves, 0);
+			field.SetPixelData(built.Halves, 0);
 			field.Apply(false, true);
 			Discard(previous);
-			snapshot = new Snapshot(halves, resolution, area, TexelMetres, ++version, joinTide, shelter, openResolution, HighestTide);
+			snapshot = new Snapshot(built.Halves, built.Resolution, built.Area, built.TexelMetres, ++version,
+				built.OpenHalves, built.OpenResolution, built.HighestTide);
 
 			// The tide each place's way in needs and how much its narrowest gap lets through (OpenSea), for the
 			// shaders to hold against the tide now.
 			Texture2D previousOpen = openSea;
-			openSea = new Texture2D(openResolution, openResolution, TextureFormat.RGBAHalf, false, true)
+			openSea = new Texture2D(built.OpenResolution, built.OpenResolution, TextureFormat.RGBAHalf, false, true)
 			{
 				name = "Open sea",
 				wrapMode = TextureWrapMode.Clamp,
 				filterMode = FilterMode.Bilinear,
 				hideFlags = HideFlags.HideAndDontSave,
 			};
-			// r the tide the way in needs, gba how much its narrowest gap lets through at the mean tide, half
-			// the highest and the highest (ShelterTides).
-			var openHalves = new ushort[joinTide.Length * 4];
-			for (int i = 0; i < joinTide.Length; i++)
-			{
-				openHalves[i * 4] = Mathf.FloatToHalf(Mathf.Clamp(joinTide[i], -60000f, 60000f));
-				openHalves[i * 4 + 1] = Mathf.FloatToHalf(shelter[i * 3]);
-				openHalves[i * 4 + 2] = Mathf.FloatToHalf(shelter[i * 3 + 1]);
-				openHalves[i * 4 + 3] = Mathf.FloatToHalf(shelter[i * 3 + 2]);
-			}
-			openSea.SetPixelData(openHalves, 0);
+			openSea.SetPixelData(built.OpenHalves, 0);
 			openSea.Apply(false, true);
 			Discard(previousOpen);
 			Shader.SetGlobalTexture(OpenSeaId, openSea);
 			Shader.SetGlobalVector(OpenSeaRectId, new Vector4(area.xMin, area.yMin, area.width, area.height));
-			Shader.SetGlobalFloat(OpenSeaTidesId, Mathf.Max(0f, HighestTide));
+			Shader.SetGlobalFloat(OpenSeaTidesId, Mathf.Max(0f, built.HighestTide));
 
 			Shader.SetGlobalTexture(FieldId, field);
 			Shader.SetGlobalVector(RectId, new Vector4(area.xMin, area.yMin, area.width, area.height));
 			Shader.SetGlobalFloat(RangeId, Mathf.Max(1f, deepest));
 			Shader.SetGlobalFloat(TexelId, TexelMetres);
+#if UNITY_EDITOR
+			applied = built;
+#endif
+		}
+
+		/// <summary>A field as bytes: a header, then the two maps' half floats as they are uploaded.</summary>
+		private static byte[] Write(Built built)
+		{
+			using (var stream = new MemoryStream(64 + (built.Halves.Length + built.OpenHalves.Length) * 2))
+			using (var writer = new BinaryWriter(stream))
+			{
+				writer.Write(StoredMagic);
+				writer.Write(StoredFormat);
+				writer.Write(built.GeometryKey ?? string.Empty);
+				writer.Write(built.ContentKey ?? string.Empty);
+				writer.Write(built.Resolution);
+				writer.Write(built.Area.x);
+				writer.Write(built.Area.y);
+				writer.Write(built.Area.width);
+				writer.Write(built.Area.height);
+				writer.Write(built.TexelMetres);
+				writer.Write(built.Deepest);
+				writer.Write(built.HighestTide);
+				writer.Write(built.OpenResolution);
+				WriteHalves(writer, built.Halves);
+				WriteHalves(writer, built.OpenHalves);
+				writer.Flush();
+				return stream.ToArray();
+			}
+		}
+
+		private static void WriteHalves(BinaryWriter writer, ushort[] values)
+		{
+			var bytes = new byte[values.Length * 2];
+			System.Buffer.BlockCopy(values, 0, bytes, 0, bytes.Length);
+			writer.Write(values.Length);
+			writer.Write(bytes);
+		}
+
+		/// <summary>A field from <see cref="Write"/>'s bytes; null for anything else, or another layout.</summary>
+		private static Built Read(byte[] bytes)
+		{
+			try
+			{
+				using (var reader = new BinaryReader(new MemoryStream(bytes, false)))
+				{
+					if (reader.ReadInt32() != StoredMagic || reader.ReadInt32() != StoredFormat)
+					{
+						return null;
+					}
+					var built = new Built
+					{
+						GeometryKey = reader.ReadString(),
+						ContentKey = reader.ReadString(),
+						Resolution = reader.ReadInt32(),
+						Area = new Rect(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()),
+						TexelMetres = reader.ReadSingle(),
+						Deepest = reader.ReadSingle(),
+						HighestTide = reader.ReadSingle(),
+						OpenResolution = reader.ReadInt32(),
+					};
+					built.Halves = ReadHalves(reader);
+					built.OpenHalves = ReadHalves(reader);
+					bool whole = built.Resolution >= 2 && built.OpenResolution >= 2
+						&& built.Halves != null && built.Halves.Length == built.Resolution * built.Resolution * 2
+						&& built.OpenHalves != null && built.OpenHalves.Length == built.OpenResolution * built.OpenResolution * 4;
+					return whole ? built : null;
+				}
+			}
+			catch (EndOfStreamException)
+			{
+				return null;
+			}
+		}
+
+		private static ushort[] ReadHalves(BinaryReader reader)
+		{
+			int count = reader.ReadInt32();
+			if (count < 0 || count > 64 * 1024 * 1024)
+			{
+				return null;
+			}
+			byte[] bytes = reader.ReadBytes(count * 2);
+			if (bytes.Length != count * 2)
+			{
+				return null;
+			}
+			var values = new ushort[count];
+			System.Buffer.BlockCopy(bytes, 0, values, 0, bytes.Length);
+			return values;
 		}
 
 		/// <summary>
@@ -854,32 +1374,6 @@ namespace FishMMO.Water
 		private static float Intersection(float[] f, int q, int p)
 		{
 			return ((f[q] + (float)q * q) - (f[p] + (float)p * p)) / (2f * (q - p));
-		}
-
-		/// <summary>The highest ground at a world XZ across every terrain in the scene.</summary>
-		/// <remarks>
-		/// The highest, not the first: stitched tiles overlap along their seams by a sample, and
-		/// taking whichever was listed first put a one-sample trench down every join, which the
-		/// surf then broke along.
-		/// </remarks>
-		private static float Ground(List<Terrain> terrains, float worldX, float worldZ)
-		{
-			float best = float.MinValue;
-			for (int i = 0; i < terrains.Count; i++)
-			{
-				Terrain terrain = terrains[i];
-				Vector3 origin = terrain.GetPosition();
-				Vector3 size = terrain.terrainData.size;
-				float u = (worldX - origin.x) / size.x;
-				float v = (worldZ - origin.z) / size.z;
-				if (u < 0f || u > 1f || v < 0f || v > 1f)
-				{
-					continue;
-				}
-				best = Mathf.Max(best, origin.y + terrain.terrainData.GetInterpolatedHeight(u, v));
-			}
-			// Off every terrain: open water, as deep as the scene gets.
-			return best > float.MinValue ? best : float.MinValue;
 		}
 	}
 }

@@ -50,9 +50,10 @@ namespace FishMMO.Shared.WorldDesign
 			 * term being too small to bend it, and these numbers say which. */
 			if (planet != null)
 			{
-				SolarSystemProfile system = WorldEditorAssets.FindFirst<SolarSystemProfile>();
-				double insolation = system != null ? CelestialMath.Insolation(system, planet, 0.0) : 1.0;
-				double meanK = ClimateModel.MeanSurfaceKelvin(insolation, planet.Atmosphere, planet.Water);
+				SolarSystemProfile system = SolarSystemProfile.Resolve(planet);
+				// The orbit's mean, the one absolute figure the field and the conditions read.
+				double insolation = ClimateModel.MeanInsolation(system, planet);
+				double meanK = ClimateModel.MeanSurfaceKelvin(system, planet);
 				float mean = (float)ClimateModel.ToScaleUnclamped(meanK);
 				Debug.Log($"[Surface probe] {planet.ResolvedName}: system={(system != null ? system.name : "NONE")} " +
 					$"insolation={insolation:0.###} mean={meanK:0.#} K ({mean:+0.00;-0.00}) tilt={planet.AxialTiltDegrees:0.#}");
@@ -77,7 +78,7 @@ namespace FishMMO.Shared.WorldDesign
 				Texture2D baked = PlanetSurfaceBaker.Bake(body);
 				PlanetSurface.PlanetProfile profile = PlanetSurface.ProfileOf(body.ResolvedTerrainSeed, body);
 				Debug.Log($"[Surface probe] {body.ResolvedName}: kind={body.Kind} atm={body.Atmosphere} water={body.Water:0.##} " +
-					$"tilt={body.AxialTiltDegrees:0.#} cratering={PlanetSurface.CrateringOf(body.Atmosphere):0.##} " +
+					$"tilt={body.AxialTiltDegrees:0.#} cratering={PlanetSurface.CrateringOf(body):0.##} " +
 					$"sea={profile.SeaLevel:0.###} range={profile.Range:0.###} -> {(baked != null ? PlanetSurfaceBaker.BakedImagePath(body.name) : "NOT BAKED")}");
 			}
 			AssetDatabase.SaveAssets();
