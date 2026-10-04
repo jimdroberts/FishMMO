@@ -324,7 +324,7 @@ Shader "FishMMO/Weather/Precipitation"
                     FishFogColumn column = FishFogColumnAt(centre.xz);
                     float3 eye = _WorldSpaceCameraPos.xyz;
                     float through = exp(-_FishFogLayer.x * FishFogPath(eye.y, -view.y, 0.0, distance, column));
-                    float3 inFog = FishFogLight(0.5 * (eye.y + centre.y), -view, column, _FishFogLayer.x, 1.0, FishFogSunShare(centre));
+                    float3 inFog = FishFogLight(0.5 * (eye.y + centre.y), -view, column, _FishFogLayer.x, FishTerrainSunlit(centre), FishFogSunShare(centre));
                     lit = lit * through + inFog * (1.0 - through);
                 }
 

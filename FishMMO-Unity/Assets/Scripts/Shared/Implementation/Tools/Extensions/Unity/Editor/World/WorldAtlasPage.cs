@@ -551,6 +551,13 @@ namespace FishMMO.Shared.WorldDesign
 			Debug.Log($"[World atlas] Re-cut '{entry.SceneName}': {result.Plan}, {result.ReliefMetres:0} m of relief from {result.GroundAltitudeMetres:0} m, " +
 				$"cut at {result.RadiusKm:0.##} km with a vertical scale of {result.VerticalScale:0.###}. The old scene is in '{result.BackupFolder}'.");
 			model.Reload();
+			/* The globe draws the scene from its picture, so a re-cut nobody re-renders still shows the
+			 * old ground — before erosion, before a move. Rendered here, it is the newest picture and
+			 * the globe shows it (AtlasPreviews.Find). */
+			if (AtlasPreviews.Render(new[] { result.ScenePath }) == 0)
+			{
+				Debug.LogWarning($"[World atlas] The preview of '{entry.SceneName}' could not be rendered; the globe still shows its old picture.");
+			}
 			RefreshGlobe();
 		}
 
@@ -1433,7 +1440,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			int written = AtlasPreviews.Render(paths, model.Details);
+			int written = AtlasPreviews.Render(paths);
 			Debug.Log($"[World Atlas] Rendered {written} preview(s) into {AtlasPreviews.Folder}.");
 			RefreshGlobe();
 		}

@@ -45,6 +45,9 @@ namespace FishMMO.Shared.Atlas
 			"While any scene on a body has one, the body's atlas radius stays put, because moving it would move the globe out from under the terrain.")]
 		public float CutRadiusKm;
 
+		[Tooltip("How deep erosion cuts this scene's ground when it is generated or re-cut: rivers, glaciers and rain together. 1 is the default; 0 cuts the planet's ground exactly as the globe has it.")]
+		[Range(0f, 3f)] public float ErosionStrength = 1f;
+
 		[Header("Time")]
 		public bool OverrideTimeZone;
 		[Tooltip("Hours from longitude 0. Used when overridden.")]

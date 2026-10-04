@@ -70,6 +70,31 @@ namespace FishMMO.Client
 		private static readonly int CloudSubId = Shader.PropertyToID("_FishCloudSub");
 		private static readonly int CloudViewerId = Shader.PropertyToID("_FishCloudViewer");
 		private static readonly int CloudFlowId = Shader.PropertyToID("_FishCloudFlow");
+		private static readonly int FogFlowId = Shader.PropertyToID("_FishFogFlow");
+		private static readonly int MistId = Shader.PropertyToID("_FishMist");
+
+		/// <summary>
+		/// How much of the height the air could climb (<see cref="CloudClimbHeight"/>) the clouds' steering round
+		/// the terrain honours, 0..1 (<c>_FishCloudFlow.y</c>). 0: every peak taller than a cloud parts it. The
+		/// physical figure, all of it, is right for a great range and wrong for the look this game wants: on an
+		/// ordinary day the air can climb about a kilometre, and in a scene whose peaks stand a kilometre over its
+		/// valleys every cloud cleared every peak and nothing went round anything.
+		/// </summary>
+		public const float CloudSteeringClimbShare = 0f;
+
+		/// <summary>How far the ground mist is drawn from the camera, m (FishMist.hlsl's march).</summary>
+		private const float MistRange = 300f;
+
+		/// <summary>
+		/// The fog's own stability, N (1/s): it is the air the night has chilled under an inversion,
+		/// some four kelvin warmer every hundred metres up — N² = (g/T)·dθ/dz ≈ 9.8/280 × 0.04 — far
+		/// stiffer than the air above it. So a fog climbs almost nothing and flows round any hill that
+		/// stands out of it (FishFogStructure).
+		/// </summary>
+		private const float FogBuoyancy = 0.035f;
+
+		/// <summary>The most cover a hill's cap cloud adds (FISH_CLOUD_CAP_COVER, FishCloudVolume.hlsl).</summary>
+		private const float CapCover = 0.7f;
 
 		/// <summary>
 		/// The height of ground this air has the energy to climb, in metres: the wind's speed over
@@ -358,6 +383,8 @@ namespace FishMMO.Client
 		private VortexPresenter vortices;
 		private CloudShadowPresenter cloudShadows;
 		private CloudTerrainMap cloudTerrain;
+		private CloudFlowField cloudFlow;
+		private MistGroundMap mistGround;
 		private WeatherMap weatherMap;
 		private readonly Vector4[] layerA = new Vector4[MaxCloudLayers];
 		private readonly Vector4[] layerB = new Vector4[MaxCloudLayers];
@@ -495,6 +522,11 @@ namespace FishMMO.Client
 			cloudShadows?.Dispose();
 			cloudTerrain?.Dispose();
 			cloudTerrain = null;
+			cloudFlow?.Dispose();
+			cloudFlow = null;
+			mistGround?.Dispose();
+			mistGround = null;
+			Shader.SetGlobalVector(MistId, Vector4.zero);
 			weatherMap?.Dispose();
 			DestroyOwned(skyMaterial);
 			DestroyOwned(bodyMaterial);
@@ -995,6 +1027,10 @@ namespace FishMMO.Client
 				// through the stack's shell: the fog's shell alone.
 				cloudTerrain ??= new CloudTerrainMap();
 				cloudTerrain.Update(viewerAt);
+				PublishFlow(axis);
+				MistPotential = 0f;
+				MistBestPotential = 0f;
+				Shader.SetGlobalVector(MistId, Vector4.zero);
 				Vector2 alone = PublishFogShell();
 				bool fogAlone = alone.y > alone.x;
 				CloudShellBottom = fogAlone ? alone.x : 0f;
@@ -1076,6 +1112,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(CloudViewerId, new Vector4(viewerAt.x, viewerAt.y, viewerAt.z, 0f));
 			cloudTerrain ??= new CloudTerrainMap();
 			cloudTerrain.Update(viewerAt);
+			PublishFlow(axis);
 			Vector2 fogShell = PublishFogShell();
 			bool fogDrawn = fogShell.y > fogShell.x;
 			// Over, or round: the Froude number U/(N h). N is the air's own buoyancy frequency,
@@ -1084,9 +1121,9 @@ namespace FishMMO.Client
 			float n2 = planet.Gravity / Mathf.Max(20f, column.SurfaceKelvin) * Mathf.Max(0f, column.DryLapse - column.EnvironmentLapse);
 			float buoyancy = Mathf.Max(0.002f, Mathf.Sqrt(n2));
 			CloudClimbHeight = Mathf.Max(1f, cloudWindSpeed) / buoyancy;
-			// 250 m, not more: the lookup is moved by this times the slope across the wind, and a
-			// displacement that changes faster than the distance it moves folds the field into rings.
-			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, 250f, 0f, 0f));
+			// The floor: a mountain's height to the air is measured from the land round it. y: how much of
+			// the climb the steering round the terrain honours (CloudSteeringClimbShare).
+			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, CloudClimbHeight * CloudSteeringClimbShare, cloudTerrain.Floor, 0f));
 
 			// The drift in the frame the noise is read in: along the axis and across it.
 			var across = new Vector2(-axis.y, axis.x);
@@ -1132,6 +1169,14 @@ namespace FishMMO.Client
 					shellBottom = Mathf.Min(shellBottom, storms.AnvilBottom);
 					shellTop = Mathf.Max(shellTop, storms.AnvilTop);
 					band.MaxCoverage = 1f;
+				}
+				// A hill that reaches the condensation level makes its own cloud on its windward face
+				// whatever the day's cover (FishCloudDensityAt's cap cloud), and the march skips a band
+				// whose most cover in view is nothing: so where the ground stands into the deck's base,
+				// the band is never skipped for want of cover.
+				if (band.Column && cloudFlow != null && cloudFlow.HighestRock > band.Bottom)
+				{
+					band.MaxCoverage = Mathf.Max(band.MaxCoverage, CapCover);
 				}
 				float thickness = Mathf.Max(1f, band.Top - band.Bottom);
 				float verticalScale = band.Column
@@ -1224,12 +1269,71 @@ namespace FishMMO.Client
 			// The shell the march runs through, and the deck a reprojection has to be right about. Down
 			// to the ground when there is fog or rain haze under the base to draw; from the lowest
 			// storm base to the highest storm tower when there is a storm about (the bands' shells).
-			CloudShellBottom = CloudStackFloor(lowest, shownRain >= 0.01f, fogDrawn, fogShell.x);
+			// The ground mist lies on the ground, so with any about the march's floor goes down to it, as
+			// it does for the fog — and the steadying's "below every cloud" shortcut with it.
+			bool mistOn = PublishMist(column, viewerAt, fogDrawn);
+			CloudShellBottom = CloudStackFloor(lowest, shownRain >= 0.01f, fogDrawn || mistOn, fogDrawn ? Mathf.Min(fogShell.x, -2f) : -2f);
 			CloudShellTop = Mathf.Max(Mathf.Max(CloudShellBottom + 100f, highest), fogDrawn ? fogShell.y : 0f);
 			CloudLayerCentre = column.Base + 600f;
 			// The bands curve down to the horizon over the radius of the world they are on.
 			float radiusMeters = Mathf.Max(10000f, planet.RadiusMetres);
 			Shader.SetGlobalVector(CloudLayerId, new Vector4(CloudShellBottom, CloudShellTop, radiusMeters, cloudBands[0].Coverage));
+		}
+
+		/// <summary>How ready the air over open ground is to make mist, 0..1 (<see cref="GroundMist.Potential"/>).</summary>
+		public float MistPotential { get; private set; }
+		/// <summary>How ready the most favoured spot could be — a hollow under trees at the water's edge (<see cref="GroundMist.BestPotential"/>).</summary>
+		public float MistBestPotential { get; private set; }
+
+		/// <summary>
+		/// Works out how far short of saturation the air over open ground stays, from the air over the
+		/// camera and the weather being shown (<see cref="GroundMist"/>), keeps the fine ground round the
+		/// camera that the mist lies on, with its water, trees and terrain shadow (<see cref="MistGroundMap"/>) —
+		/// kept while a fog is drawn as well, which is shaded by the same — and publishes both. True when any
+		/// spot might hold mist.
+		/// </summary>
+		private bool PublishMist(in AirColumn column, Vector3 viewerAt, bool fogDrawn)
+		{
+			WeatherPresentation presentation = WeatherPresentation.Instance;
+			WeatherFrame weather = presentation != null ? presentation.Shown : WeatherFrame.Clear;
+			CelestialState state = cycle != null ? cycle.State : null;
+			float spread = column.SurfaceKelvin - column.DewPointKelvin;
+			float wind = Mathf.Clamp01(weather[WeatherChannel.WindSpeed]) * 30f;
+			float rain = Mathf.Clamp01(weather[WeatherChannel.Precipitation] * weather[WeatherChannel.RainWeight]);
+			float clear = 1f - Mathf.Clamp01(weather[WeatherChannel.CloudCover] * (0.4f + 0.6f * weather[WeatherChannel.CloudDensity]));
+			float sunAltitude = state != null ? state.SunAltitude : 45f;
+			float wetness = weather[WeatherChannel.WetnessTarget];
+			float deficit = GroundMist.Deficit(spread, wind, wetness, rain, clear, sunAltitude);
+			float stirred = GroundMist.Stirred(wind);
+			float night = GroundMist.NightCalm(wind, clear, sunAltitude);
+			MistPotential = GroundMist.Potential(spread, wind, wetness, rain, clear, sunAltitude);
+			MistBestPotential = GroundMist.BestPotential(deficit, stirred, night);
+			bool on = MistBestPotential > 0.001f;
+			// Kept for the fog too: the fine ground round the camera carries the near terrain shadow every fog
+			// is shaded by (FishTerrainSunlit), mist or none.
+			if (on || fogDrawn)
+			{
+				mistGround ??= new MistGroundMap();
+				mistGround.Update(viewerAt, cloudSunDirection, cloudFlow);
+			}
+			Shader.SetGlobalVector(MistId, on ? new Vector4(deficit, stirred, night, MistRange) : Vector4.zero);
+			return on;
+		}
+
+		/// <summary>
+		/// Builds the scene's flow round its terrain once (<see cref="CloudFlowField"/>) and publishes
+		/// what the fog needs to read it: the prevailing wind's axis, and how high the fog's own air
+		/// can climb — its wind over its inversion's stiffness (<see cref="FogBuoyancy"/>).
+		/// </summary>
+		private void PublishFlow(Vector2 axis)
+		{
+			cloudFlow ??= new CloudFlowField();
+			// The light that leads the sky — the sun, or the moon after it sets — which the fog and the mist
+			// are lit by, for the terrain's shadow over the scene.
+			cloudFlow.Update(cloudSunDirection);
+			FogLayerView fog = FogLayerView.Current;
+			float fogClimb = Mathf.Max(1f, fog.WindSpeed) / FogBuoyancy;
+			Shader.SetGlobalVector(FogFlowId, new Vector4(axis.x, axis.y, fogClimb, 0f));
 		}
 
 		/// <summary>

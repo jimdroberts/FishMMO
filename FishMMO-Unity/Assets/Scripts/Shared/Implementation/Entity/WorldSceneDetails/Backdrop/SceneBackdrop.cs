@@ -36,6 +36,9 @@ namespace FishMMO.Shared
 		private static Camera raisedCamera;
 		private static float originalFarPlane;
 
+		/// <summary>The backdrops loaded now: the ground beyond the scenes' terrain, which the sky reads as ground too (TerrainSet).</summary>
+		public static IReadOnlyList<SceneBackdrop> Active => active;
+
 		private void OnEnable()
 		{
 			if (!active.Contains(this))

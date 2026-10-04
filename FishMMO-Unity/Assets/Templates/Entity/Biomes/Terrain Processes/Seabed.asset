@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e3c10ecf0699c1aa9ad71651ed8c9fd, type: 3}
+  m_Name: Seabed
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Biomes.TerrainProcessProfile
+  Description: 'Under the sea: no rain and no runoff, only slow slumping; the hydrology
+    passes leave it alone.'
+  Values:
+    Erodibility: 0
+    VegetationCohesion: 0.3
+    Storminess: 0
+    TalusAngleDegrees: 30
+    SoilDepthMetres: 2
+    SoilCreep: 0.3
+    ChannelThreshold: 4
+    DepressionKeeping: 1
+    LakeRetention: 0
+    PlateauShare: 0

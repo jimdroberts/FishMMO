@@ -35,6 +35,19 @@ namespace FishMMO.Shared.WorldDesign
 		public bool FineDetail = true;
 
 		/// <summary>
+		/// Whether to wear the ground before it is written: rain cutting gullies and laying fans,
+		/// steep ground slumping, soil creeping (<see cref="SceneErosion"/>).
+		/// </summary>
+		/// <remarks>
+		/// Off cuts the planet's ground exactly as the globe and the backdrop have it — what the scene-cut
+		/// snapshot compares a terrain against, and a way to see what erosion did.
+		/// </remarks>
+		public bool Erosion = true;
+
+		/// <summary>How deep erosion cuts: rivers, glaciers and rain together. 1 the defaults; the scene's atlas entry carries it for re-cuts.</summary>
+		public float ErosionStrength = 1f;
+
+		/// <summary>
 		/// The radius the scene's kilometres are laid over the globe at. Zero means the body's
 		/// atlas radius now, which is what the rectangle was drawn on.
 		/// </summary>

@@ -88,6 +88,18 @@ namespace FishMMO.Shared.WorldDesign
 			return field;
 		}
 
+		/// <summary>A field holding heights already worked out, one per sample of <paramref name="plan"/>, row by row from the south: for tools and tests.</summary>
+		public static SceneHeightField FromMetres(TerrainTilePlan plan, float[] metres, SceneAltitude beyond = default)
+		{
+			var field = new SceneHeightField(plan, beyond);
+			if (metres == null || metres.Length != field.Metres.Length)
+			{
+				throw new ArgumentException($"The plan has {field.Metres.Length} samples; {metres?.Length ?? 0} heights were given.", nameof(metres));
+			}
+			Array.Copy(metres, field.Metres, metres.Length);
+			return field;
+		}
+
 		/// <summary>Scene metres east of the centre of column <paramref name="x"/>.</summary>
 		/// <remarks>
 		/// From the column's index across the whole grid, in double precision, so a column shared by

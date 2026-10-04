@@ -138,7 +138,7 @@ void Scatter(uint3 id : SV_DispatchThreadID)
         // Lit by the light's average through the cloud (sunShare 1): this volume is handed its inputs
         // one by one and has no cloud shadow, and it only draws where the cloud march — which the
         // shadow is drawn from — does not run (FishFogSunShare).
-        scattered = FishFogLight(middle.y, ray, column, _FishFogLayer.x, FogShadow(middle), 1.0) * density;
+        scattered = FishFogLight(middle.y, ray, column, _FishFogLayer.x, FogShadow(middle) * FishTerrainSunlit(middle), 1.0) * density;
     }
     _FishVolFogScatter[id] = float4(scattered, density);
 }

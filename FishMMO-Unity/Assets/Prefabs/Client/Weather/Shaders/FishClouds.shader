@@ -22,6 +22,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "FishCloudVolume.hlsl"
+            #include "FishMist.hlsl"
 
             float4 _FishCloudMarchParams;   // x steps, y detail amount, z frame index, w max distance
             float4 _FishCloudJitter;        // xy where inside its texel each ray looks this frame (texels, -0.5..0.5), zw this pass's size
@@ -126,6 +127,20 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 float2 cloudMotion;
                 float4 result = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, maxDistance, jitter, lightSeed,
                     (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance, cloudMotion);
+                // The mist on the ground, by its own short march (FishMist.hlsl), laid in front: it is
+                // the nearest thing along any ray it is on. The steadying fetches a pixel's history from
+                // where what it shows stood, so the distance it is handed is the two media's, each by
+                // what it added; the mist carries no wind gain of its own, as the fog does not.
+                float mistDistance;
+                float4 mist = FishMistMarch(_WorldSpaceCameraPos.xyz, direction, maxDistance, jitter, mistDistance);
+                if (mist.a < 0.9999)
+                {
+                    float mistAdded = 1.0 - mist.a;
+                    float cloudAdded = mist.a * (1.0 - result.a);
+                    float added = max(1e-5, mistAdded + cloudAdded);
+                    cloudMotion = float2((mistDistance * mistAdded + cloudMotion.x * cloudAdded) / added, cloudMotion.y * cloudAdded / added);
+                    result = float4(mist.rgb + mist.a * result.rgb, mist.a * result.a);
+                }
                 MarchOutput output;
                 output.clouds = float4(result.rgb, result.a);
                 // A debug view in place of the clouds (_FishCloudDiag.w, CloudDebugView), opaque.

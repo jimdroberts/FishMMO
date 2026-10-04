@@ -98,6 +98,10 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("How hard it does, 0..1: a steady trickle at a tenth, a vent that never stops at one. An eruption multiplies it.")]
 		[Range(0f, 1f)] public float EmissionRate;
 
+		[Header("How the ground wears")]
+		[Tooltip("How erosion, drainage and plateaus shape this biome's ground in a generated scene. Empty wears like temperate soil.")]
+		public TerrainProcessProfile TerrainProcess;
+
 		[Header("Main Texture Layer")]
 		[Tooltip("Primary base texture that covers the majority of the biome.")]
 		[SerializeField] private TerrainTextureLayer mainTextureLayer = new TerrainTextureLayer();
@@ -149,6 +153,9 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>Display name, falling back to the asset name.</summary>
+		/// <summary>How this biome's ground wears: its profile's values, or temperate soil's when it has none.</summary>
+		public TerrainProcess ResolvedTerrainProcess => TerrainProcess != null ? TerrainProcess.Values : Biomes.TerrainProcess.Temperate;
+
 		public string ResolvedDisplayName => string.IsNullOrWhiteSpace(DisplayName) ? name : DisplayName;
 
 		/// <summary>True when climate-driven generation may pick this biome.</summary>

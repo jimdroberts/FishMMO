@@ -224,6 +224,13 @@ namespace FishMMO.Client
 			private static readonly int AmbientId = Shader.PropertyToID("_FishFogAmbient");
 			private static readonly int TerrainId = Shader.PropertyToID("_FishCloudTerrain");
 			private static readonly int TerrainRectId = Shader.PropertyToID("_FishCloudTerrainRect");
+			// The terrain's shadow, near and far (FishTerrainSunlit): a kernel is handed its own, never the globals.
+			private static readonly int ShadeNearId = Shader.PropertyToID("_FishShadeNear");
+			private static readonly int ShadeNearRectId = Shader.PropertyToID("_FishShadeNearRect");
+			private static readonly int ShadeNearBaseId = Shader.PropertyToID("_FishShadeNearBase");
+			private static readonly int ShadeFarId = Shader.PropertyToID("_FishShadeFar");
+			private static readonly int ShadeFarRectId = Shader.PropertyToID("_FishShadeFarRect");
+			private static readonly int ShadeFarBaseId = Shader.PropertyToID("_FishShadeFarBase");
 			private static readonly int ShapeTexId = Shader.PropertyToID("_FishCloudShape");
 			private static readonly int DetailTexId = Shader.PropertyToID("_FishCloudDetail");
 
@@ -406,6 +413,14 @@ namespace FishMMO.Client
 				compute.SetTexture(scatterKernel, ShapeTexId, structured ? shape : FlatShape());
 				compute.SetTexture(scatterKernel, DetailTexId, eddies ? detail : FlatShape());
 				compute.SetTexture(scatterKernel, TerrainId, terrain != null ? terrain : Texture2D.blackTexture);
+				Texture shadeNear = Shader.GetGlobalTexture(ShadeNearId);
+				Texture shadeFar = Shader.GetGlobalTexture(ShadeFarId);
+				compute.SetTexture(scatterKernel, ShadeNearId, shadeNear != null ? shadeNear : Texture2D.blackTexture);
+				compute.SetTexture(scatterKernel, ShadeFarId, shadeFar != null ? shadeFar : Texture2D.blackTexture);
+				compute.SetVector(ShadeNearRectId, shadeNear != null ? Shader.GetGlobalVector(ShadeNearRectId) : Vector4.zero);
+				compute.SetVector(ShadeFarRectId, shadeFar != null ? Shader.GetGlobalVector(ShadeFarRectId) : Vector4.zero);
+				compute.SetFloat(ShadeNearBaseId, Shader.GetGlobalFloat(ShadeNearBaseId));
+				compute.SetFloat(ShadeFarBaseId, Shader.GetGlobalFloat(ShadeFarBaseId));
 
 				// The shafts: only with a shadow map this frame to read them from.
 				TextureHandle shadows = TextureHandle.nullHandle;

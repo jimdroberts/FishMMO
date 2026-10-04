@@ -247,9 +247,9 @@ namespace FishMMO.Shared.WorldDesign
 			try
 			{
 				/* The whole scene's ground as one grid before any tile exists, sampled after Revive so
-				 * the body it asks is live. Everything that reshapes the ground runs on this grid,
-				 * where a tile seam is just another row; the tiles are cut from it afterwards. */
-				SceneHeightField ground = SceneHeightField.Sample(request, plan);
+				 * the body it asks is live, and shaped on that grid — where a tile seam is just another
+				 * row — before the tiles are cut from it. */
+				SceneHeightField ground = SceneGround.Shape(request, plan, SolarSystemProfile.Resolve(request.Body), result.Notes, out SceneErosionReport erosion);
 
 				/* Every tile shares one floor and one height range, measured from the ground itself:
 				 * tiles normalised against their own range are what makes a stitched landmass step
@@ -270,6 +270,17 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				Stitch(terrains, plan);
+
+				/* Canyon walls where the plateaus' risers stand steep: meshes with their faces stood up
+				 * and their beds jutting, the terrain holed under them. Before the biomes are painted,
+				 * so the cliff rocks placed then find the holes and stand only where there is ground. */
+				if (erosion != null && erosion.PlateauWeight != null)
+				{
+					CanyonWallReport walls = CanyonWalls.Build(scene, terrains, plan, ground, erosion.PlateauWeight, erosion.Geology,
+						$"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Canyon Walls.asset");
+					result.Notes.AddRange(walls.Notes);
+					result.Wrote.AddRange(walls.Wrote);
+				}
 
 				/* The biomes, from the finished ground: which lies where, the textures that say so,
 				 * and the map the runtime reads. The flat bands only where no biome fits at all —
@@ -699,6 +710,9 @@ namespace FishMMO.Shared.WorldDesign
 					ClimateSample sample = placement.SampleAt(p, out _);
 					return new Vector2(sample.Temperature, sample.Humidity);
 				};
+				/* The cliffs are the rock the ground is made of: the same planet geology erosion wore the
+				 * ground with, so a wall stands in sandstone where the benches it bounds are sandstone. */
+				cliffOptions.RockTypeAt = GeologyRockTypes(request, system);
 			}
 			CliffPlacerReport cliffs = CliffPlacer.Place(scene, tiles, palette, field, options.Seed, options.NormalizedHeight, cliffOptions);
 			result.Notes.AddRange(cliffs.Notes);
@@ -761,6 +775,27 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
+		/// <summary>The rock type of the planet's geology under a scene position, read on a 32 m grid.</summary>
+		private static Func<float, float, float, string> GeologyRockTypes(SceneGenerationRequest request, SolarSystemProfile system)
+		{
+			PlanetGeology geology = PlanetGeology.For(request, system);
+			AtlasFootprint footprint = request.Footprint;
+			double radiusKm = request.ResolvedRadiusKm;
+			var cache = new Dictionary<long, string>();
+			return (x, altitude, z) =>
+			{
+				int gx = Mathf.FloorToInt(x / 32f), gz = Mathf.FloorToInt(z / 32f);
+				long key = ((long)gx << 32) ^ (uint)gz;
+				if (!cache.TryGetValue(key, out string type))
+				{
+					Vector3 direction = AtlasGeometry.SceneToUnit(footprint, (gx + 0.5) * 0.032, (gz + 0.5) * 0.032, radiusKm).ToVector3();
+					type = geology.ColumnAt(direction).Lithology.RockTypeName;
+					cache[key] = type;
+				}
+				return type;
+			};
+		}
+
 		/// <summary>Scene metres above sea level of the generated ground at a scene position.</summary>
 		private static float GroundAltitude(Terrain[,] terrains, TerrainTilePlan plan, float east, float north)
 		{
@@ -776,7 +811,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The scene's own seed: its body's terrain seed mixed with its name, as local detail does.</summary>
-		private static uint SceneSeed(SceneGenerationRequest request)
+		internal static uint SceneSeed(SceneGenerationRequest request)
 		{
 			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
 			return seed ^ unchecked((uint)(request.SceneName ?? string.Empty).GetDeterministicHashCode());
@@ -910,7 +945,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// refused rather than closed.
 		/// </para>
 		/// </remarks>
-		public static SceneGenerationResult Recut(WorldAtlasScene entry, bool fineDetail = true)
+		public static SceneGenerationResult Recut(WorldAtlasScene entry, bool fineDetail = true, bool erosion = true)
 		{
 			if (entry == null || entry.Body == null)
 			{
@@ -926,6 +961,8 @@ namespace FishMMO.Shared.WorldDesign
 				SizeKm = entry.SizeKm,
 				HeadingDegrees = entry.HeadingDegrees,
 				FineDetail = fineDetail,
+				Erosion = erosion,
+				ErosionStrength = entry.ErosionStrength,
 				ReplaceExisting = true,
 			});
 		}

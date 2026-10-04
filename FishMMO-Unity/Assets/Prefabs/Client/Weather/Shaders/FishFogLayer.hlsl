@@ -102,6 +102,58 @@ TEXTURE2D(_FishCloudTerrain);
 SAMPLER(sampler_FishCloudTerrain);
 float4 _FishCloudTerrainRect;
 
+// The air's way round the scene's terrain (CloudFlowField, TerrainFlowSolver), worked out once for the
+// whole scene. The field: at each of a few heights from the lowest ground to the highest, four offsets
+// a cell (m) — dφx, dψx, dφz, dψz, the potential and the stream function of the flow past every column
+// of ground higher than that height, less the undisturbed coordinates. Rect: xy the grid's corner, z
+// its size (m), w 1 once the rock is read and 2 once the flow is solved too. Levels: x the lowest
+// height solved, y the highest, z how many.
+TEXTURE3D(_FishCloudFlowField);
+SAMPLER(sampler_FishCloudFlowField);
+float4 _FishCloudFlowRect;
+float4 _FishCloudFlowLevels;
+// The rock (same grid): r the ground, each the highest of its three-by-three, so at or above it; g the
+// massif — the highest rock within a kilometre. And the highest rock of all (m), 0 while there is none.
+TEXTURE2D(_FishCloudRock);
+SAMPLER(sampler_FishCloudRock);
+float _FishCloudRockTop;
+// The fog's read of the flow: xy the prevailing wind's axis, z how high the fog's air can climb (m: its
+// wind over its inversion's stiffness — tens of metres), w unused.
+float4 _FishFogFlow;
+
+/// How far the read of a wind-carried field moves at a point so the field flows round the terrain
+/// instead of through it, on the ground plane (m): add it to the point's x and z before the drift.
+///
+/// The air at a height is turned by the ground it cannot climb — every column higher than the height
+/// plus `climb`, the height its wind has the energy to rise (U/N); lower ground it simply rides over.
+/// So the flow solved for that level is the one read. Along the streamlines the field splits round a
+/// mountain, slows against its face and closes up in its lee; far from any, this is zero. The flow for
+/// the wind's own direction is the two solved ones mixed by its cosine and sine (TerrainFlowSolver).
+/// One 3D read, and none at all above the highest ground or outside the grid.
+float2 FishFlowAround(float2 xz, float altitude, float climb, float2 wind)
+{
+    if (_FishCloudFlowRect.w < 1.5)
+    {
+        return float2(0.0, 0.0);
+    }
+    float level = altitude + max(0.0, climb);
+    if (level >= _FishCloudFlowLevels.y)
+    {
+        return float2(0.0, 0.0);
+    }
+    float2 uv = (xz - _FishCloudFlowRect.xy) / max(1.0, _FishCloudFlowRect.z);
+    if (any(uv <= 0.0) || any(uv >= 1.0))
+    {
+        return float2(0.0, 0.0);
+    }
+    float levels = max(1.0, _FishCloudFlowLevels.z);
+    float k = saturate((level - _FishCloudFlowLevels.x) / max(1.0, _FishCloudFlowLevels.y - _FishCloudFlowLevels.x)) * (levels - 1.0);
+    float4 d = SAMPLE_TEXTURE3D_LOD(_FishCloudFlowField, sampler_FishCloudFlowField, float3(uv, (k + 0.5) / levels), 0);
+    float alongBy = wind.x * d.x + wind.y * d.z;
+    float acrossBy = wind.x * d.y + wind.y * d.w;
+    return wind * alongBy + float2(-wind.y, wind.x) * acrossBy;
+}
+
 // The sky's own noise volumes (CloudNoiseBaker): the shape volume (128 cubed: r Perlin–Worley, gba
 // Worley octaves), which the fog's banks are read out of, and the detail volume (32 cubed: rgb Worley
 // octaves), which only the clouds read. Declared here for the fog and the clouds alike.
@@ -279,6 +331,56 @@ float FishFogPhase(float cosAngle, float g)
     return (1.0 - gg) / (4.0 * d * sqrt(d));
 }
 
+// ── The terrain's shadow ────────────────────────────────────────────
+//
+// Where the ground shades the air over it from the light that leads the sky (TerrainShadowSolver): for
+// each cell, the height under which a point there is in the shadow of some ground between it and the light
+// — a mountain's evening shadow, kilometres long, which no shadow map reaches. Two grids: NEAR, 5 m to the
+// cell over 800 m round the camera (MistGroundMap), for the ridge beside the valley the camera stands in;
+// FAR, the scene's own grid of some 36 m to the cell over the whole of it (CloudFlowField), for the fog
+// lying in a valley kilometres off. Each a height above its own base (m), with its own rect: xy the corner,
+// z the size (m), w 1 once worked out. Read by everything the fog is lit in — the cloud march, the mist, the
+// fallbacks — so a shaded valley's fog is shaded however it is drawn.
+TEXTURE2D(_FishShadeNear);
+SAMPLER(sampler_FishShadeNear);
+float4 _FishShadeNearRect;
+float _FishShadeNearBase;
+TEXTURE2D(_FishShadeFar);
+SAMPLER(sampler_FishShadeFar);
+float4 _FishShadeFarRect;
+float _FishShadeFarBase;
+
+/// How much of the light reaches a point past the terrain, 0..1, soft over a share of the grid's cell
+/// either side of the shadow's top so its edge is not a line. The near grid where it covers the point —
+/// eased into the far one over its outer tenth — the far one elsewhere, and 1 where neither does.
+float FishTerrainSunlit(float3 at)
+{
+    float far = 1.0;
+    float nearShare = 0.0;
+    float near = 1.0;
+    if (_FishShadeFarRect.w > 0.5)
+    {
+        float2 uv = (at.xz - _FishShadeFarRect.xy) / max(1.0, _FishShadeFarRect.z);
+        if (all(uv > 0.0) && all(uv < 1.0))
+        {
+            float top = SAMPLE_TEXTURE2D_LOD(_FishShadeFar, sampler_FishShadeFar, uv, 0).r + _FishShadeFarBase;
+            far = saturate((at.y - top) / 40.0 + 0.5);
+        }
+    }
+    if (_FishShadeNearRect.w > 0.5)
+    {
+        float2 uv = (at.xz - _FishShadeNearRect.xy) / max(1.0, _FishShadeNearRect.z);
+        float2 toEdge = min(uv, 1.0 - uv);
+        nearShare = saturate(min(toEdge.x, toEdge.y) / 0.1);
+        if (nearShare > 0.0)
+        {
+            float top = SAMPLE_TEXTURE2D_LOD(_FishShadeNear, sampler_FishShadeNear, saturate(uv), 0).r + _FishShadeNearBase;
+            near = saturate((at.y - top) / 6.0 + 0.5);
+        }
+    }
+    return lerp(far, near, nearShare);
+}
+
 /// <summary>
 /// The light a point in the fog scatters toward the eye, per unit of its scattering: the light's own
 /// beam, what the fog above has already scattered of it, and the sky's.
@@ -369,13 +471,23 @@ float3 FishFogCarried(float3 at)
     return at - float3(_FishFogLayerDrift.x, 0.0, _FishFogLayerDrift.y);
 }
 
+/// The same, with the air's way round the hills taken in: a fog's own air is stiff — it lies under an
+/// inversion and climbs only tens of metres (_FishFogFlow.z) — so its banks part round any hill that
+/// stands out of it and close up again in its lee, rather than running on through the ground.
+float3 FishFogCarriedRound(float3 at)
+{
+    float2 wind = dot(_FishFogFlow.xy, _FishFogFlow.xy) > 1e-6 ? _FishFogFlow.xy : float2(0.0, 1.0);
+    float2 aside = FishFlowAround(at.xz, at.y, _FishFogFlow.z, wind);
+    return FishFogCarried(at + float3(aside.x, 0.0, aside.y));
+}
+
 /// The fog's banks at a point, in spreads either side of their mean: one read of the shape volume's
 /// Perlin–Worley channel, carried on the wind and turning over slowly — rising through its tile by a
 /// whole tile per turn (FogLayerView.BankTurnSeconds), so the wrap of the turn is not a jump. `at` is
 /// (x, altitude, z).
 float FishFogStructure(float3 at, float footprint)
 {
-    float3 carried = FishFogCarried(at);
+    float3 carried = FishFogCarriedRound(at);
     float3 uv = float3(carried.x / FISH_FOG_BANK_TILE, carried.y / FISH_FOG_BANK_RISE + _FishFogLayerShape.z, carried.z / FISH_FOG_BANK_TILE);
     float bank = SAMPLE_TEXTURE3D_LOD(_FishCloudShape, sampler_FishCloudShape, uv, FishFogLod(footprint, FISH_FOG_BANK_TILE)).r;
     return clamp((bank - FISH_FOG_BANK_MEAN) / FISH_FOG_BANK_SPREAD, -3.0, 3.0);

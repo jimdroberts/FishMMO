@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e3c10ecf0699c1aa9ad71651ed8c9fd, type: 3}
+  m_Name: Open
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Biomes.TerrainProcessProfile
+  Description: 'Grass over soil: gentle slopes, sparse channels, shallow seasonal
+    ponds; flat beds occasionally stand as low tables.'
+  Values:
+    Erodibility: 1
+    VegetationCohesion: 0.35
+    Storminess: 1.3
+    TalusAngleDegrees: 33
+    SoilDepthMetres: 1.2
+    SoilCreep: 0.8
+    ChannelThreshold: 1.2
+    DepressionKeeping: 0
+    LakeRetention: 0.4
+    DuneSand: 0.05
+    PlateauShare: 0.1

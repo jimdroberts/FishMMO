@@ -440,6 +440,42 @@ float FishCloudLift(float altitude, float ground)
     return ground * 0.6 * exp(-max(0.0, altitude - ground) / 2500.0);
 }
 
+
+// The most cover a hill adds where it lifts moist air past its condensation level (FishCloudDensityAt):
+// most of a full sky's, in a skin on the windward face.
+#define FISH_CLOUD_CAP_COVER 0.7
+
+// How far above the rock cloud is thinned where its air cannot climb what it is against (m). The visible
+// edge settles at most of this, where the thinned profile falls under the cut.
+#define FISH_CLOUD_ROCK_GAP 250.0
+
+/// How much of its cloud the air at this point may hold for the rock beside it, 0..1.
+///
+/// Where the air goes round a mountain (FishFlowAround) its streamlines run round the rock and the
+/// cloud with them — but a streamline grazing a face still carries cloud right up against it, and
+/// the grid is tens of metres to the cell. So where the mountain beside a point stands higher than its
+/// air can climb (the massif, against the point's height plus `climb`), the cloud is thinned over the
+/// last FISH_CLOUD_ROCK_GAP above the rock, before the noise is cut (FishCloudDensityAt), and parts
+/// round the face along the noise with its usual billowed edge. Where the air CAN climb, it goes over
+/// and its cloud is left on the ground: that is a hill's cap cloud and its hill fog (the orographic
+/// cover), not a cloud running into rock. Read at the point itself, not at the leaned field position.
+float FishCloudClearance(float2 xz, float trueAltitude, float climb)
+{
+    if (_FishCloudRockTop <= 0.0 || _FishCloudFlowRect.w < 0.5 || trueAltitude >= _FishCloudRockTop + FISH_CLOUD_ROCK_GAP)
+    {
+        return 1.0;
+    }
+    float2 uv = (xz - _FishCloudFlowRect.xy) / max(1.0, _FishCloudFlowRect.z);
+    if (any(uv <= 0.0) || any(uv >= 1.0))
+    {
+        return 1.0;
+    }
+    float2 rock = SAMPLE_TEXTURE2D_LOD(_FishCloudRock, sampler_FishCloudRock, uv, 0).rg;
+    float blocked = smoothstep(-100.0, 50.0, rock.y - (trueAltitude + max(0.0, climb)));
+    float clear = smoothstep(0.0, FISH_CLOUD_ROCK_GAP, trueAltitude - rock.x);
+    return lerp(1.0, clear, blocked);
+}
+
 /// How far along a ray the next place is where any cloud can be, from `travelled`; a very large
 /// number when there is none.
 ///
@@ -488,7 +524,11 @@ float FishCloudNextPossible(float3 origin, float3 direction, float travelled, fl
 }
 
 // How air meets high ground: x the wind speed over the air's stability (U/N, metres) — the height of
-// ground the air has the energy to climb; y how far a blocked flow is turned aside (m).
+// ground the air has the energy to climb; y the share of that the cloud's steering round the terrain and
+// its clearance from the rock honour, m (SkySystem.CloudSteeringClimbShare × x: 0 as shipped, so every peak
+// taller than a cloud parts it — the physical U/N, about a kilometre on an ordinary day, cleared every
+// peak in a scene whose mountains stand a kilometre high, and nothing went round anything); z the ground
+// the air arrives from (m): the lowest of the smoothed terrain round the viewer (CloudTerrainMap.Floor).
 float4 _FishCloudFlow;
 
 /// What the sky is doing over one spot of ground. Read once per view sample and handed down to the
@@ -501,7 +541,6 @@ struct FishCloudField
     float ground;       // how high the ground is as the air feels it: the mountain, smoothed (m)
     float surface;      // how high the ground itself is, for what lies on it (m)
     float over;         // 1 the air goes over this ground, 0 it goes round it
-    float2 deflect;     // how far the air here has been turned aside (m, on the ground plane)
     // The air over this place, from the air map.
     float lowCover;     // low cloud the air asks for here, before the formations
     float cloudBase;    // where rising air here reaches its dew point (m)
@@ -573,7 +612,6 @@ FishCloudField FishCloudFieldAt(float2 xz)
     field.ground = 0.0;
     field.surface = 0.0;
     field.over = 1.0;
-    field.deflect = float2(0.0, 0.0);
     float4 airA, airB;
     FishCloudAirAt(xz, airA, airB);
     field.lowCover = airA.x;
@@ -596,14 +634,17 @@ FishCloudField FishCloudFieldAt(float2 xz)
             field.ground = terrain.r * inside;
             field.surface = terrain.a * inside;
             float2 wind = dot(_FishCloudWindDir.xy, _FishCloudWindDir.xy) > 1e-6 ? _FishCloudWindDir.xy : float2(0.0, 1.0);
-            float2 across = float2(-wind.y, wind.x);
 
-            // Over, or round: the height this air can climb against the height that is here.
-            float froude = max(1.0, _FishCloudFlow.x) / max(50.0, field.ground);
-            // Over a wide band of heights, on purpose: where the regime flips is where the turning
-            // aside switches on, and switched on across a few hundred metres of slope it folded
-            // the cloud lookup into rings. From four tenths to nearly twice the height the air can
-            // climb, the change is spread across more than a kilometre of any real slope.
+            // Over, or round: the height this air can climb against the height that is here — how
+            // far the ground rises above the land the air came over, not above the sea. Measured
+            // from sea level, a plateau was a wall its own height high and the air over the whole
+            // of it was "blocked", which switched the lift off everywhere on it.
+            float relief = field.ground - _FishCloudFlow.z * inside;
+            float froude = max(1.0, _FishCloudFlow.x) / max(50.0, relief);
+            // Over a wide band of heights, on purpose: from four tenths to nearly twice the height the
+            // air can climb, the lift fades across more than a kilometre of any real slope. The going
+            // round is not this figure's: it is the flow field's, read at the point's own height
+            // (FishFlowAround).
             field.over = smoothstep(0.4, 1.8, froude);
 
             // Over: rising along the wind is the windward slope, where the cloud gathers; falling
@@ -611,14 +652,6 @@ FishCloudField FishCloudFieldAt(float2 xz)
             // against the foot of what blocks it.
             float upslope = dot(terrain.gb, wind);
             field.orographic = clamp(upslope * 0.9, -0.12, 0.3) * inside * lerp(0.4, 1.0, field.over);
-
-            // Round: the air is turned aside, away from the high ground, across the wind. The
-            // field is read where the air *came from*, so the lookup moves the other way — up the
-            // slope, across the wind — and the pattern on screen is carried outward round the
-            // flanks. Only the slope across the wind turns the flow; the slope along it is what
-            // the air either climbs or does not.
-            float sideways = dot(terrain.gb, across);
-            field.deflect = across * clamp(sideways, -1.0, 1.0) * _FishCloudFlow.y * (1.0 - field.over) * inside;
         }
     }
     return field;
@@ -696,6 +729,11 @@ static const float3 FishCloudDetailSpread = float3(0.1102, 0.0986, 0.0775);
 // drawn. Set by the march before each sample; the light march and the cookie leave it where it is,
 // and ask for no pattern.
 static float FishCloudDetailCone = 0.0;
+// Whether a density read is one the camera sees, and so worth the terrain: the flow round the mountains
+// and the clearance from their rock (FishFlowAround, FishCloudClearance) — two texture reads. The light
+// march and the shadow walk read the density several times for every view sample, a few kilometres off
+// and for a depth, not a shape, and leave them out: off while they run.
+static bool FishCloudReadsTerrain = true;
 // And how far apart its samples are along the ray, m (the step, times _FishCloudStepTau.z): no eddy
 // finer than the samples can resolve, and no edge sharper than them, is drawn. 0 outside the march.
 static float FishCloudDetailAlong = 0.0;
@@ -895,6 +933,14 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
     {
         return 0.0;
     }
+    // In the rock, or against it: no cloud (FishCloudClearance).
+    // Against the cloud's own height plus the share of its climb the steering honours (_FishCloudFlow.y,
+    // SkySystem.CloudSteeringClimbShare): every peak taller than the cloud parts it.
+    float clearance = FishCloudReadsTerrain ? FishCloudClearance(position.xz, trueAltitude, _FishCloudFlow.y) : 1.0;
+    if (clearance <= 0.0)
+    {
+        return 0.0;
+    }
 
     // The axis the noise is drawn out along, and the frame every band's drift arrives in. It has
     // to be the *steady* prevailing wind — never the gusting one the weather reports, and never the
@@ -906,9 +952,9 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
     // global falls back to due north rather than to a sky of one flat colour.
     float2 wind = dot(_FishCloudWindDir.xy, _FishCloudWindDir.xy) > 1e-6 ? _FishCloudWindDir.xy : float2(0.0, 1.0);
     float2 across = float2(-wind.y, wind.x);
-    // Where the air here came from, on the ground plane: turned aside round high ground it could
-    // not climb, straight through otherwise.
-    float2 source = position.xz + field.deflect;
+    // Where the air here came from, on the ground plane: carried round high ground it could not
+    // climb, along the streamlines of the flow past it (FishFlowAround), straight through otherwise.
+    float2 source = position.xz + (FishCloudReadsTerrain ? FishFlowAround(position.xz, trueAltitude, _FishCloudFlow.y, wind) : float2(0.0, 0.0));
     float2 frame = float2(dot(source, wind), dot(source, across));
     // The storms the server sends, as the weather map lays out their anatomy: read once for this
     // place, in the field.
@@ -983,6 +1029,20 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         float airCover = regime == 0 ? field.lowCover : (regime == 1 ? field.midCover : field.highCover);
         float overGround = trueAltitude - field.surface;
         float lifted01 = regime == 0 ? field.orographic * saturate(1.0 - (overGround - 300.0) / 1800.0) : 0.0;
+        // Cap cloud and hill fog. Air that climbs a hill cools as it rises, and once the ground lifts
+        // it past its condensation level (the air map's base here) it turns to cloud lying on the
+        // slope — whatever cover the day's convection is making, since it is the hill doing the
+        // lifting. Thickest in a skin a few hundred metres deep on the windward face, where the air
+        // is being pushed up; gone in the lee, where it sinks and warms; and only where the air goes
+        // over (field.over) — air that goes round is not lifted. So it shows on a humid day (a low
+        // base) on hills that reach it, and never on a dry one, when the base stands above them.
+        if (column)
+        {
+            float reaches = smoothstep(field.cloudBase - 50.0, field.cloudBase + 150.0, field.surface);
+            float skin = saturate(1.0 - overGround / 350.0);
+            float windward = saturate(0.5 + field.orographic / 0.2);
+            lifted01 += FISH_CLOUD_CAP_COVER * reaches * skin * windward * lerp(0.3, 1.0, field.over);
+        }
         float coverage = saturate(airCover + meso * (regime == 0 ? 1.0 : 0.5) + lifted01);
         // A sky the air asks nothing of has nothing in it: the noise's own top would otherwise show
         // a few wisps under any cover at all.
@@ -1081,6 +1141,9 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             topSoftness = 0.08;
         }
         float profile = below ? 1.0 : FishCloudProfile(altitude - floorHere, hIn, riseM, topSoftness);
+        // Thinned toward the rock as toward its base, before the cut: the cloud parts round a mountain
+        // along the noise, not along a line.
+        profile *= clearance;
         if (profile <= 0.0)
         {
             continue;
@@ -1149,7 +1212,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             // Tapered away over the last tenth below the base: densest AT the base, it made a level
             // sheet there, and a level sheet seen edge-on is a line.
             float deep = saturate(reachM / 2500.0);
-            float hang = _FishCloudSub.w * deep * mass * saturate((under - 0.3) / 0.6) * saturate((1.0 - under) / 0.1);
+            float hang = _FishCloudSub.w * deep * mass * saturate((under - 0.3) / 0.6) * saturate((1.0 - under) / 0.1) * clearance;
             float extinction = hang;
             if (extinction > best)
             {
@@ -2026,6 +2089,9 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     float debugLight = 0.0;
     float debugStep = 0.0;
     float3 debugDetail = float3(0.0, 0.0, 0.0);
+    // The terrain view (6): the most any sample along the ray was kept off rock, and moved round it.
+    float debugCleared = 0.0;
+    float debugTurned = 0.0;
     // The light march is most of the cost of a sample and is only worth it while what the sample
     // adds can still be seen: deep inside, with little light left to reach the camera, the last
     // depth found stands in.
@@ -2329,6 +2395,12 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         {
             field = FishCloudFieldAt(position.xz - axis * FishCloudLean(altitudeHere));
             density = FishCloudDensityAt(position, inside ? detailHere : 0.0, footprint, field, true, spot);
+            if (debugging && _FishCloudDiag.w > 5.5)
+            {
+                float2 axisHere = dot(_FishCloudWindDir.xy, _FishCloudWindDir.xy) > 1e-6 ? _FishCloudWindDir.xy : float2(0.0, 1.0);
+                debugCleared = max(debugCleared, 1.0 - FishCloudClearance(position.xz, altitudeHere, _FishCloudFlow.y));
+                debugTurned = max(debugTurned, length(FishFlowAround(position.xz, altitudeHere, _FishCloudFlow.y, axisHere)));
+            }
         }
         high01 = spot.high01;
         layerIndex = spot.layer;
@@ -2529,8 +2601,10 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                             ? float2(_FishCloudFramePhase, _FishCloudFramePhase * 1.6180340) + float2(0.5, 0.0)
                             : lightSeed;
                         float2 lightPhase = frac(lightBase + i * float2(0.7548777, 0.5698403));
+                        FishCloudReadsTerrain = false;
                         depthToSun = FishCloudLightDepth(position, toSun, footprint, field, at, transmittance, lightPhase);
                         depthAway = _FishCloudFixB.x > 0.5 ? spot.tauBelow : FishCloudFarDepth(position, toSun, footprint, field, lightPhase, spot.tauBelow);
+                        FishCloudReadsTerrain = true;
                     }
                     // Only a depth found in this cloud may be used again: once, or in runs deep in (`economy`).
                     depthIsFresh = economy ? true : !reuse;
@@ -2561,7 +2635,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             float3 fogColour = float3(0.0, 0.0, 0.0);
             if (fogBeta > 0.0)
             {
-                fogColour = FishFogLight(altitudeHere, direction, fogColumn, _FishFogLayer.x, 1.0, FishFogSunShare(position));
+                fogColour = FishFogLight(altitudeHere, direction, fogColumn, _FishFogLayer.x, FishTerrainSunlit(position), FishFogSunShare(position));
             }
             // Each medium lights what it takes out of the ray.
             float3 colour = (cloudColour * density + fogColour * fogBeta) / total;
@@ -2750,6 +2824,13 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // 18 m, the finest step, to a kilometre, on a logarithmic scale.
             shown = saw ? FishCloudDebugHeat(log2(max(1.0, debugStep / debugWeight / 18.0)) / log2(1000.0 / 18.0)) : none;
         }
+        else if (view == 6)
+        {
+            // Red: kept off rock (FishCloudClearance). Green: moved round the terrain (FishFlowAround),
+            // full at 500 m. Blue: the flow is built (dim: only the rock is; none: neither).
+            float built = _FishCloudFlowRect.w > 1.5 ? 0.35 : (_FishCloudFlowRect.w > 0.5 ? 0.12 : 0.0);
+            shown = float3(debugCleared, saturate(debugTurned / 500.0), built);
+        }
         FishCloudMarchDebug = float4(shown, 0.0);
     }
     return float4(scattered, kept);
@@ -2766,6 +2847,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
 // Integration along the ray is the band walk's job below, and the jitter's.
 float FishCloudShadowDepth(float3 origin, float3 toSun, int steps, float jitter, float footprint)
 {
+    FishCloudReadsTerrain = false;
     if (toSun.y < 0.02)
     {
         return 0.0;

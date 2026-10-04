@@ -220,6 +220,12 @@ namespace FishMMO.Client
 		DetailLod,
 		/// <summary>How long the ray's steps were where it saw cloud, blue 18 m to red 1 km (logarithmic).</summary>
 		StepLength,
+		/// <summary>
+		/// What the terrain does to the clouds along each ray: red where cloud is kept off rock, green where
+		/// it is moved round the mountains (full at 500 m), blue once the scene's flow is built (dim while
+		/// only its rock is).
+		/// </summary>
+		Terrain,
 	}
 
 	/// <summary>

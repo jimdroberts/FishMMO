@@ -38,6 +38,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public Func<Vector3, Vector2?> ClimateAt;
 
+		/// <summary>
+		/// The rock the ground is made of at a scene position (x, altitude, z) — a <see cref="RockTypes"/>
+		/// name — or null where unknown. When it names a cliff rock it wins over the biome's own, so a
+		/// canyon cut through sandstone is walled in sandstone whatever grows on its rim. Biomes whose
+		/// cliffs are ice keep their ice. Null: every cliff is its biome's rock.
+		/// </summary>
+		public Func<float, float, float, string> RockTypeAt;
+
 		/// <summary>Raise the talus cones into the terrain heightmap and paint them as the biome's cliff (scree).</summary>
 		public bool EditTerrain = true;
 
@@ -272,10 +280,19 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return false;
 				}
+				string type = rock[b];
+				if (options.RockTypeAt != null && type != CliffRocks.Ice)
+				{
+					string bedrock = options.RockTypeAt(x, y, z);
+					if (bedrock != null && RockTypes.TryGet(bedrock, out _))
+					{
+						type = bedrock;
+					}
+				}
 				site = new CliffRockSite
 				{
-					Type = rock[b],
-					Roundness = CliffRocks.Climatic(rock[b]) ? RoundnessAt(x, y, z) : -1,
+					Type = type,
+					Roundness = CliffRocks.Climatic(type) ? RoundnessAt(x, y, z) : -1,
 					MinAngle = minAngle[b],
 				};
 				return true;

@@ -139,7 +139,8 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
                 // there is lit (FishFogSunShare) — one read for the whole stretch, since this pass
                 // integrates it in closed form.
                 float3 litAt = camera + ray * min(distance, start + 1.0 / extinction);
-                float3 light = FishFogLight(lit, ray, column, extinction, 1.0, FishFogSunShare(litAt));
+                // And out of the light where the terrain shades it (FishTerrainSunlit), at the same place.
+                float3 light = FishFogLight(lit, ray, column, extinction, FishTerrainSunlit(float3(litAt.x, lit, litAt.z)), FishFogSunShare(litAt));
 
                 // rgb adds the fog's light, alpha keeps what it lets through.
                 return float4(light * (1.0 - transmittance), transmittance);

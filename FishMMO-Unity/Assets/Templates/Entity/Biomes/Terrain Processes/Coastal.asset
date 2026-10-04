@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e3c10ecf0699c1aa9ad71651ed8c9fd, type: 3}
+  m_Name: Coastal
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Biomes.TerrainProcessProfile
+  Description: 'Sand and shingle above the tide: loose, quickly reworked, dunes at
+    their angle of repose.'
+  Values:
+    Erodibility: 1.1
+    VegetationCohesion: 0.2
+    Storminess: 1.2
+    TalusAngleDegrees: 32
+    SoilDepthMetres: 3
+    SoilCreep: 1
+    ChannelThreshold: 1.5
+    DepressionKeeping: 0
+    LakeRetention: 0.3
+    DuneSand: 0.7
+    PlateauShare: 0

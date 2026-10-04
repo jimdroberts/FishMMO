@@ -213,7 +213,7 @@ namespace FishMMO.Client
 			into.Add(new Figure("Air", "Lapse", $"{column.EnvironmentLapse * 1000f:0.0} K/km", Tone.Plain,
 				$"The air cools this fast with height. Saturated air {column.MoistLapse * 1000f:0.0}, dry {column.DryLapse * 1000f:0.0}: between the two the air is conditionally unstable."));
 			into.Add(new Figure("Air", "Wind", $"{sky.CloudWindSpeed:0.0} m/s toward {Bearing(sky.CloudWind)}"));
-			into.Add(new Figure("Air", "Air climbs", $"{sky.CloudClimbHeight:0} m", Tone.Plain, "Ground lower than this the air goes over; higher, it flows round."));
+			into.Add(new Figure("Air", "Air climbs", $"{sky.CloudClimbHeight:0} m", Tone.Plain, "Ground rising less than this above the land round it, the air goes over; more, it flows round."));
 
 			// Where the air puts things.
 			bool free = column.Deep;

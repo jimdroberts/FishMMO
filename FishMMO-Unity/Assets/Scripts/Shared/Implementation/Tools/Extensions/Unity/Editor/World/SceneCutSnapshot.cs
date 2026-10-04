@@ -47,6 +47,10 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly List<string> Wrote = new List<string>();
 			public float LowestMetres, HighestMetres;
 			public float MeanDifferenceMetres, LargestDifferenceMetres;
+			/// <summary>How far the generator's shaping passes (erosion) moved the cut from the planet's ground.</summary>
+			public float ShapingMeanMetres, ShapingLargestMetres;
+			/// <summary>What each shaping pass reported.</summary>
+			public readonly List<string> Shaping = new List<string>();
 			public float LandShareCut, LandShareTerrain;
 			public float BackdropReachMetres;
 			public string Problem;
@@ -65,6 +69,7 @@ namespace FishMMO.Shared.WorldDesign
 				SizeKm = entry.SizeKm,
 				HeadingDegrees = entry.HeadingDegrees,
 				FineDetail = fineDetail,
+				ErosionStrength = entry.ErosionStrength,
 				RadiusKm = entry.CutRadiusKm > 0f ? entry.CutRadiusKm : 0.0,
 			};
 		}
@@ -122,9 +127,18 @@ namespace FishMMO.Shared.WorldDesign
 				Debug.LogWarning($"[Cut snapshot] {entry.Body.ResolvedName} has no baked surface, so there is no atlas picture. Bake it from the World Atlas page first.");
 			}
 
-			// ── 2. The heightmap the generator cuts ──
+			// ── 2. The heightmap the generator cuts: the planet's ground, shaped as the generator shapes it ──
+			SceneHeightField shaped = SceneGround.Shape(request, plan, SolarSystemProfile.Resolve(entry.Body), report.Shaping);
 			var cut = new float[width * height];
-			Grid(width, height, plan, (i, x, z) => cut[i] = SceneGeneration.AltitudeMetres(request, x, z));
+			double shaping = 0.0;
+			Grid(width, height, plan, (i, x, z) =>
+			{
+				cut[i] = shaped.MetresAt(x, z);
+				float moved = Mathf.Abs(cut[i] - SceneGeneration.AltitudeMetres(request, x, z));
+				shaping += moved;
+				report.ShapingLargestMetres = Mathf.Max(report.ShapingLargestMetres, moved);
+			});
+			report.ShapingMeanMetres = (float)(shaping / cut.Length);
 
 			// ── 3. The heightmap the terrain holds ──
 			var ground = new float[width * height];
@@ -212,6 +226,8 @@ namespace FishMMO.Shared.WorldDesign
 				$"{entry.SceneName} on {entry.Body.ResolvedName}, {entry.Latitude:0.####}°, {entry.Longitude:0.####}°, {plan}\n" +
 				$"cut at atlas radius {request.ResolvedRadiusKm:0.##} km (sky radius {entry.Body.SkyRadiusKm:0} km), vertical scale {request.VerticalScale:0.####}\n" +
 				$"cut: {lowest:0.0} .. {highest:0.0} m, {report.LandShareCut:P1} land\n" +
+				$"shaping: moved the planet's ground {report.ShapingMeanMetres:0.00} m on average, {report.ShapingLargestMetres:0.00} m at most" +
+				(report.Shaping.Count > 0 ? $"; {string.Join("; ", report.Shaping)}\n" : "\n") +
 				$"backdrop: {(report.BackdropReachMetres > 0f ? $"reaches {report.BackdropReachMetres:0} m past the edge" : "none")}\n" +
 				(hasTerrain
 					? $"terrain: {report.LandShareTerrain:P1} land; differs from the cut by {report.MeanDifferenceMetres:0.00} m on average, {report.LargestDifferenceMetres:0.00} m at most\n"
@@ -284,7 +300,8 @@ namespace FishMMO.Shared.WorldDesign
 				Debug.LogError($"[Cut snapshot] {report.Problem}");
 			}
 			Debug.Log($"[Cut snapshot] {sceneName}: cut {report.LowestMetres:0} .. {report.HighestMetres:0} m, {report.LandShareCut:P1} land; " +
-				$"terrain differs by {report.MeanDifferenceMetres:0.00} m on average, {report.LargestDifferenceMetres:0.00} m at most.\n  " +
+				$"terrain differs by {report.MeanDifferenceMetres:0.00} m on average, {report.LargestDifferenceMetres:0.00} m at most; " +
+				$"shaping moved the planet's ground {report.ShapingMeanMetres:0.00} m on average, {report.ShapingLargestMetres:0.00} m at most.\n  " +
 				string.Join("\n  ", report.Wrote));
 			return report.Problem == null;
 		}

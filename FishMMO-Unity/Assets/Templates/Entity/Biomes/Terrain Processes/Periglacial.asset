@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e3c10ecf0699c1aa9ad71651ed8c9fd, type: 3}
+  m_Name: Periglacial
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Biomes.TerrainProcessProfile
+  Description: 'Frozen ground that thaws at the surface: slopes creep and slump,
+    drainage is poor, lakes everywhere.'
+  Values:
+    Erodibility: 0.6
+    VegetationCohesion: 0.35
+    Storminess: 0.6
+    TalusAngleDegrees: 30
+    SoilDepthMetres: 1
+    SoilCreep: 1.8
+    ChannelThreshold: 1.4
+    DepressionKeeping: 0.1
+    LakeRetention: 0.9
+    PlateauShare: 0

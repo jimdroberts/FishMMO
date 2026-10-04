@@ -102,6 +102,7 @@ MonoBehaviour:
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
+  TerrainProcess: {fileID: 11400000, guid: a1f47f4144d2db786a921228ae8a2297, type: 2}
   mainTextureLayer:
     terrainLayer: {fileID: 8574412962073106934, guid: 9b15394da2e5e39f99a90bfccc952e14,
       type: 2}

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -65,10 +66,18 @@ namespace FishMMO.Shared.WorldDesign
 
 		public static string PathOf(string sceneName) => $"{Folder}/{WorldEditorAssets.Sanitize(sceneName)}.png";
 
+		/// <summary>Where a preview's frame is kept: the world rectangle the image was rendered over.</summary>
+		public static string FramePathOf(string sceneName) => $"{Folder}/{WorldEditorAssets.Sanitize(sceneName)}.frame";
+
 		/// <summary>
 		/// The best image of a scene: its baked world map (the hand-assigned definition first,
-		/// then the bake's own), else the designer's preview, else an invalid image.
+		/// then the bake's own), else the designer's preview, else an invalid image — except that a
+		/// preview rendered after the map was baked wins, since it shows the ground as it is now.
 		/// </summary>
+		/// <remarks>
+		/// Maps are build output and are not re-baked when a scene is re-cut, so without the newer
+		/// preview winning, a re-cut scene showed its old ground on the globe until the next bake.
+		/// </remarks>
 		public static AtlasImage Find(string sceneName, WorldSceneDetailsCache details)
 		{
 			WorldSceneDetails sceneDetails = null;
@@ -87,12 +96,55 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Rect rect = definition.HasBounds ? definition.MapRect : boundaries;
 				var baked = new AtlasImage(map, rect, definition.NorthOffsetDegrees, true);
-				if (baked.IsValid)
+				if (baked.IsValid && !PreviewIsNewer(sceneName, map))
 				{
 					return baked;
 				}
 			}
-			return new AtlasImage(Get(sceneName), boundaries, 0f, false);
+			// The rectangle the preview was rendered over, which the cache may not know (a scene not
+			// yet in it) or know wrongly (a scene re-cut to a new size); the cache's for older previews.
+			Rect frame = ReadFrame(sceneName, out Rect saved) ? saved : boundaries;
+			return new AtlasImage(Get(sceneName), frame, 0f, false);
+		}
+
+		private static bool ReadFrame(string sceneName, out Rect frame)
+		{
+			frame = Rect.zero;
+			string path = FramePathOf(sceneName);
+			if (!File.Exists(path))
+			{
+				return false;
+			}
+			string[] parts = File.ReadAllText(path).Split(' ');
+			if (parts.Length != 4
+				|| !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+				|| !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float z)
+				|| !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float width)
+				|| !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float depth)
+				|| width <= 0f || depth <= 0f)
+			{
+				return false;
+			}
+			frame = new Rect(x, z, width, depth);
+			return true;
+		}
+
+		private static void WriteFrame(string sceneName, Rect frame)
+		{
+			File.WriteAllText(FramePathOf(sceneName), string.Format(CultureInfo.InvariantCulture, "{0:R} {1:R} {2:R} {3:R}",
+				frame.x, frame.y, frame.width, frame.height));
+		}
+
+		/// <summary>True when the scene's preview was rendered after <paramref name="map"/>'s file was written.</summary>
+		private static bool PreviewIsNewer(string sceneName, Texture2D map)
+		{
+			string preview = PathOf(sceneName);
+			string mapPath = map != null ? AssetDatabase.GetAssetPath(map) : null;
+			if (!File.Exists(preview) || string.IsNullOrEmpty(mapPath) || !File.Exists(mapPath))
+			{
+				return false;
+			}
+			return File.GetLastWriteTimeUtc(preview) > File.GetLastWriteTimeUtc(mapPath);
 		}
 
 		/// <summary>The designer's preview of a scene, or null when none has been rendered.</summary>
@@ -126,7 +178,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Renders previews for scenes, opening each additively and closing it again. Scenes that
 		/// are already open are rendered as they are and left open. Returns how many were written.
 		/// </summary>
-		public static int Render(IReadOnlyList<string> scenePaths, WorldSceneDetailsCache details)
+		public static int Render(IReadOnlyList<string> scenePaths)
 		{
 			Directory.CreateDirectory(Folder);
 			int written = 0;
@@ -140,7 +192,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						break;
 					}
-					if (RenderOne(path, sceneName, details))
+					if (RenderOne(path, sceneName))
 					{
 						written++;
 					}
@@ -153,26 +205,28 @@ namespace FishMMO.Shared.WorldDesign
 			return written;
 		}
 
-		private static bool RenderOne(string scenePath, string sceneName, WorldSceneDetailsCache details)
+		private static bool RenderOne(string scenePath, string sceneName)
 		{
-			if (details == null || details.Scenes == null || !details.Scenes.TryGetValue(sceneName, out WorldSceneDetails sceneDetails))
-			{
-				Debug.LogWarning($"[World Atlas] {sceneName} is not in the world scene details cache; rebuild it to render a preview.");
-				return false;
-			}
-			Rect rect = MapBoundsResolver.FromSceneBoundaries(sceneDetails);
-			if (rect.width <= 0f || rect.height <= 0f)
-			{
-				Debug.LogWarning($"[World Atlas] {sceneName} has no boundaries; nothing to frame.");
-				return false;
-			}
-
 			Scene scene = SceneManager.GetSceneByPath(scenePath);
 			bool openedHere = false;
 			if (!scene.IsValid() || !scene.isLoaded)
 			{
 				scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
 				openedHere = true;
+			}
+
+			/* Framed from the scene itself, now that it is open: its boundaries and terrain as they
+			 * are. Asking the details cache refused every scene not yet in it — a freshly generated
+			 * one — and would frame a re-cut that changed size by its old size. */
+			Rect rect = MapBoundsResolver.FromOpenScene(scene);
+			if (rect.width <= 0f || rect.height <= 0f)
+			{
+				Debug.LogWarning($"[World Atlas] {sceneName} has no boundaries or terrain; nothing to frame.");
+				if (openedHere)
+				{
+					EditorSceneManager.CloseScene(scene, true);
+				}
+				return false;
 			}
 
 			float longest = Mathf.Max(rect.width, rect.height);
@@ -206,6 +260,7 @@ namespace FishMMO.Shared.WorldDesign
 				image.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
 				image.Apply();
 				File.WriteAllBytes(PathOf(sceneName), image.EncodeToPNG());
+				WriteFrame(sceneName, rect);
 				UnityEngine.Object.DestroyImmediate(image);
 				return true;
 			}

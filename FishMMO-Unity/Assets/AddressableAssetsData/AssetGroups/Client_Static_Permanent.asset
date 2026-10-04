@@ -590,13 +590,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 69baeeda49ea89f268266955933d6961
-    m_Address: Weather Render Profile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69d0fa3eef9664791b6448803d42877e
     m_Address: FishVortexDebris
     m_ReadOnly: 0
