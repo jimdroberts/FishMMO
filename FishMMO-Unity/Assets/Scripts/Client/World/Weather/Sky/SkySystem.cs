@@ -1081,9 +1081,19 @@ namespace FishMMO.Client
 			}
 			cloudAir ??= new CloudAirMap();
 			cloudAir.Update(inputs, viewerAt, Time.deltaTime);
-			CloudAirMap.Probe(inputs, new Vector2(viewerAt.x, viewerAt.z), out WeatherDriver.Synoptic air, out AirColumn column);
-			CloudViewerAir = air;
-			CloudViewerColumn = column;
+			// The air over the camera, for what really is the camera's: what stands overhead, the mist at its
+			// feet, the panel's figures.
+			CloudAirMap.Probe(inputs, new Vector2(viewerAt.x, viewerAt.z), out WeatherDriver.Synoptic viewerAir, out AirColumn viewerColumn);
+			CloudViewerAir = viewerAir;
+			CloudViewerColumn = viewerColumn;
+			// And the air every band's figures are worked out from — how dense a heap is, how crisp its edge,
+			// where the middle and high layers lie, how high the air can climb — read at one place that holds
+			// still: the middle of the scene. Read over the camera, they changed a little with every step it
+			// took, and every cloud in the sky changed with them: the sky wobbled as the camera walked. What
+			// varies from place to place in the sky is the air map's, read per sample (FishCloudAirAt).
+			Rect sceneExtent = TerrainSet.Current.Extent;
+			Vector2 skyAt = sceneExtent.width > 0f ? sceneExtent.center : Vector2.zero;
+			CloudAirMap.Probe(inputs, skyAt, out WeatherDriver.Synoptic air, out AirColumn column);
 			CloudClimate.Bands(cloudScales, planet, air, column, cloudAir.Extremes, cloudBands);
 
 			// The formations: where in this sky the banks and the gaps are, computed per sample in the
@@ -1102,7 +1112,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(CloudTowerDriftId, new Vector4(
 				(float)WrapMetres(driftX, towerPeriod), (float)WrapMetres(driftY, towerPeriod), 1f, 0f));
 			Shader.SetGlobalInt(CloudTowerSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.TowerSeedMix)));
-			CloudTowerAtCamera = air.Tower;
+			CloudTowerAtCamera = viewerAir.Tower;
 
 			// What hangs below a column's base: the rain haze under a wet one, from the frame the
 			// presentation is actually showing, which is eased — at the extinction the world's own fog
@@ -1121,9 +1131,11 @@ namespace FishMMO.Client
 			float n2 = planet.Gravity / Mathf.Max(20f, column.SurfaceKelvin) * Mathf.Max(0f, column.DryLapse - column.EnvironmentLapse);
 			float buoyancy = Mathf.Max(0.002f, Mathf.Sqrt(n2));
 			CloudClimbHeight = Mathf.Max(1f, cloudWindSpeed) / buoyancy;
-			// The floor: a mountain's height to the air is measured from the land round it. y: how much of
-			// the climb the steering round the terrain honours (CloudSteeringClimbShare).
-			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, CloudClimbHeight * CloudSteeringClimbShare, cloudTerrain.Floor, 0f));
+			// The floor: a mountain's height to the air is measured from the land round it — the scene's lowest
+			// ground, which holds still as the camera moves (CloudFlowField.LowestGround). y: how much of the
+			// climb the steering round the terrain honours (CloudSteeringClimbShare).
+			float airFloor = cloudFlow != null ? cloudFlow.LowestGround : 0f;
+			Shader.SetGlobalVector(CloudFlowId, new Vector4(CloudClimbHeight, CloudClimbHeight * CloudSteeringClimbShare, airFloor, 0f));
 
 			// The drift in the frame the noise is read in: along the axis and across it.
 			var across = new Vector2(-axis.y, axis.x);
@@ -1253,7 +1265,7 @@ namespace FishMMO.Client
 			// diffusion — for readouts, and for anything that must know how dark it is under the sky.
 			// Through the gaps everything, through the cloud what diffuses through it.
 			float overheadCover = Mathf.Clamp01(cloudBands[0].Coverage);
-			CloudOverheadDepth = CloudClimate.ColumnOpticalDepth(column, planet);
+			CloudOverheadDepth = CloudClimate.ColumnOpticalDepth(viewerColumn, planet);
 			float diffuseThrough = CloudClimate.DiffuseTransmission(CloudOverheadDepth, cloudBands[0].Asymmetry);
 			CloudDiffuseOverhead = Mathf.Lerp(1f, diffuseThrough, overheadCover);
 			CloudOverheadCover = overheadCover;
@@ -1271,7 +1283,7 @@ namespace FishMMO.Client
 			// storm base to the highest storm tower when there is a storm about (the bands' shells).
 			// The ground mist lies on the ground, so with any about the march's floor goes down to it, as
 			// it does for the fog — and the steadying's "below every cloud" shortcut with it.
-			bool mistOn = PublishMist(column, viewerAt, fogDrawn);
+			bool mistOn = PublishMist(viewerColumn, viewerAt, fogDrawn);
 			CloudShellBottom = CloudStackFloor(lowest, shownRain >= 0.01f, fogDrawn || mistOn, fogDrawn ? Mathf.Min(fogShell.x, -2f) : -2f);
 			CloudShellTop = Mathf.Max(Mathf.Max(CloudShellBottom + 100f, highest), fogDrawn ? fogShell.y : 0f);
 			CloudLayerCentre = column.Base + 600f;
@@ -1343,9 +1355,13 @@ namespace FishMMO.Client
 		private Vector2 PublishFogShell()
 		{
 			FogLayerView fog = FogLayerView.Current;
-			Vector2 shell = cloudTerrain != null
-				? fog.Shell(cloudTerrain.HighestGround, cloudTerrain.HighestPooled)
-				: new Vector2(0f, -1f);
+			// Over the ground the fog is actually read from: the scene's own map once it is published
+			// (CloudFlowField), the window round the camera until then.
+			Vector2 shell = cloudFlow != null && cloudFlow.TerrainReady
+				? fog.Shell(cloudFlow.HighestGround, cloudFlow.HighestPooled)
+				: cloudTerrain != null
+					? fog.Shell(cloudTerrain.HighestGround, cloudTerrain.HighestPooled)
+					: new Vector2(0f, -1f);
 			bool on = shell.y > shell.x;
 			Shader.SetGlobalVector(FogLayerView.ShellId, on ? new Vector4(shell.x, shell.y, 1f, 0f) : Vector4.zero);
 			return shell;

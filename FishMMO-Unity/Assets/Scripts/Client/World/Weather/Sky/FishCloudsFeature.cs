@@ -595,7 +595,11 @@ namespace FishMMO.Client
 				byCompute &= state.RandomWrite;
 
 				Matrix4x4 view = cameraData.GetViewMatrix();
-				Matrix4x4 projection = GL.GetGPUProjectionMatrix(cameraData.GetProjectionMatrix(), true);
+				// The camera's own projection, never URP's jittered one (GetProjectionMatrix carries the
+				// pipeline's temporal antialiasing offset when the player picks TAA): the clouds have their own
+				// sub-texel places (SubPixel) and history, and carried from one jittered matrix to the next their
+				// history would be fetched off by the pipeline's offset every frame, shaking the sky.
+				Matrix4x4 projection = GL.GetGPUProjectionMatrix(cameraData.camera.projectionMatrix, true);
 				Matrix4x4 viewProjection = projection * view;
 				Vector3 position = cameraData.worldSpaceCameraPos;
 				// How far the air carried the low clouds since this camera last drew: the drift is

@@ -46,12 +46,6 @@ namespace FishMMO.Client
 		/// ground can reach anywhere in the window (FogLayerView.Shell).
 		/// </summary>
 		public float HighestPooled { get; private set; }
-		/// <summary>
-		/// The lowest the smoothed ground stands in the window, m: the land the air arrives at the high
-		/// ground over. How high a mountain is to the air is how far it rises above this, not above the
-		/// sea (_FishCloudFlow.z).
-		/// </summary>
-		public float Floor { get; private set; }
 
 		private Texture2D texture;
 		private float[] heights;
@@ -147,20 +141,17 @@ namespace FishMMO.Client
 
 			// The heights the fog's shell has to hold a fog's top over. The shader eases the map to sea
 			// level at its edge, so sea level is always among what the ground can be.
-			float highest = 0f, pooled = 0f, floor = 0f;
+			float highest = 0f, pooled = 0f;
 			if (any)
 			{
-				floor = float.MaxValue;
 				for (int i = 0; i < heights.Length; i++)
 				{
 					highest = Mathf.Max(highest, heights[i]);
 					pooled = Mathf.Max(pooled, smooth[i]);
-					floor = Mathf.Min(floor, smooth[i]);
 				}
 			}
 			HighestGround = highest;
 			HighestPooled = pooled;
-			Floor = floor;
 		}
 
 		/// <summary>A box blur of the given radius, separable, in place (through a scratch buffer).</summary>

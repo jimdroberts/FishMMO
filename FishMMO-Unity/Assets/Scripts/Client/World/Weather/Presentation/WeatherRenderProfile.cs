@@ -319,7 +319,7 @@ namespace FishMMO.Client
 		[Header("Detail / shape")]
 		[Tooltip("Multiplies how strongly the eddies carve the edges, on top of the tier's Cloud Detail (1). 0 draws the edges' average without their pattern. Isolates grain that is the eddies themselves (wisps).")]
 		[Range(0f, 2f)] public float DetailStrength = 1f;
-		[Tooltip("Multiplies how much of a pixel's cone the finest eddies are drawn down to (SkySystem.CloudDetailConeShare, 0.5). Higher fades each octave out nearer the camera, lower keeps it further. The other suspect for a sphere round the camera: if the sphere's radius moves with this, it is the detail fading with distance.")]
+		[Tooltip("Multiplies how much of a pixel's cone the finest eddies are drawn down to (SkySystem.CloudDetailConeShare, 0.5). Usually does NOTHING: the eddies are drawn no finer than the larger of this cone and the step along the ray (Detail Step Footprint), and at any ordinary distance the step — tens of metres — is far wider than a pixel's cone — a metre or two. Use Detail Step Footprint to change how fine the eddies are drawn.")]
 		[Range(0.25f, 8f)] public float DetailLodScale = 1f;
 		[Tooltip("Multiplies the width of the mixing shell round every cloud's edge (half the detail tile, about 100 m). Wider softens every edge; isolates edges that fizz because they are narrower than the step.")]
 		[Range(0.25f, 4f)] public float EdgeShellScale = 1f;

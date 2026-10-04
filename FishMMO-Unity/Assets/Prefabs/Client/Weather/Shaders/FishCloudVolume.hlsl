@@ -528,7 +528,8 @@ float FishCloudNextPossible(float3 origin, float3 direction, float travelled, fl
 // its clearance from the rock honour, m (SkySystem.CloudSteeringClimbShare × x: 0 as shipped, so every peak
 // taller than a cloud parts it — the physical U/N, about a kilometre on an ordinary day, cleared every
 // peak in a scene whose mountains stand a kilometre high, and nothing went round anything); z the ground
-// the air arrives from (m): the lowest of the smoothed terrain round the viewer (CloudTerrainMap.Floor).
+// the air arrives from (m): the scene's lowest ground (CloudFlowField.LowestGround) — never a window's
+// round the viewer, whose lowest moved with the window and lifted the whole sky up and down as it did.
 float4 _FishCloudFlow;
 
 /// What the sky is doing over one spot of ground. Read once per view sample and handed down to the
@@ -734,6 +735,10 @@ static float FishCloudDetailCone = 0.0;
 // march and the shadow walk read the density several times for every view sample, a few kilometres off
 // and for a depth, not a shape, and leave them out: off while they run.
 static bool FishCloudReadsTerrain = true;
+// How far the last density read stood outside the outermost place any cloud's water can reach, m —
+// its shell, the eddies' reach and the edge's ramp (FishCloudDensityAt); 0 inside it, very large where no
+// band could hold cloud near. The march's empty air is walked no faster than this lets it (FishCloudMarch).
+static float FishCloudEdgeAhead = 1e9;
 // And how far apart its samples are along the ray, m (the step, times _FishCloudStepTau.z): no eddy
 // finer than the samples can resolve, and no edge sharper than them, is drawn. 0 outside the march.
 static float FishCloudDetailAlong = 0.0;
@@ -911,6 +916,7 @@ struct FishCloudPoint
 /// toward the sun, where it shapes the self-shadow; off where only a rough depth is wanted.
 float FishCloudDensityAt(float3 position, float detailAmount, float footprint, FishCloudField field, bool carve, out FishCloudPoint spot)
 {
+    FishCloudEdgeAhead = 1e9;
     float meso = field.meso;
     spot.high01 = 0.0;
     spot.layer = 0;
@@ -1194,6 +1200,12 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // Beyond this nothing the eddies do can bring water: the ramp and their reach.
         float outermost = -(ramp + FISH_CLOUD_EDDY_REACH);
         float inside = (body * profile - threshold) / shellNoise;
+        // In shells, so in metres by the shell's width: how far out of reach of this band's water the point
+        // stands, as the noise's slope across the ground has it.
+        if (!below)
+        {
+            FishCloudEdgeAhead = min(FishCloudEdgeAhead, max(0.0, (outermost - inside) * shellMetres));
+        }
         float density = inside > outermost ? 1.0 : 0.0;
         if (below)
         {
@@ -2091,6 +2103,8 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     float3 debugDetail = float3(0.0, 0.0, 0.0);
     // The terrain view (6): the most any sample along the ray was kept off rock, and moved round it.
     float debugCleared = 0.0;
+    // How far the last sample stood from the nearest cloud's outermost water (FishCloudEdgeAhead).
+    float edgeAhead = 1e9;
     float debugTurned = 0.0;
     // The light march is most of the cost of a sample and is only worth it while what the sample
     // adds can still be seen: deep inside, with little light left to reach the camera, the last
@@ -2223,6 +2237,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             lastEmpty = next;
             lastSigma = 0.0;
             emptyRun = 0.0;
+            edgeAhead = 1e9;
             continue;
         }
         // The step. Small near the camera, the tier's step across the middle distance, and growing
@@ -2262,6 +2277,17 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // T = 0.5 it took fewer still but a storm's base came out measurably wrong.
         float deepIn = economy && lastSigma > 0.0 && transmittance < 0.2 ? sqrt(0.2 / max(transmittance, 0.02)) : 1.0;
         float stepHere = stepBase * dimmed * growth * (1.0 + immersedHere) * mistStride * deepIn;
+        // Through a band's empty air, never more than half the way to the nearest cloud's outermost water
+        // (FishCloudEdgeAhead, from the last sample). The steps grew to six times their base there with
+        // nothing to say how near a cloud was — hundreds of metres, against a shell of water and eddies a
+        // hundred deep — so whether a step landed in a cloud's edge or over it went by the ray's phase,
+        // new every frame: every cloud's edge flickered, and its wisps with it. Far from any cloud the steps
+        // keep their length; nearing one they shorten until a sample lands in its edge, where the edge is
+        // found (the halvings below).
+        if (!inside)
+        {
+            stepHere = min(stepHere, max(stepBase, 0.5 * edgeAhead));
+        }
         // Never longer than half the thinnest cloud in the sky, whatever has multiplied it. The
         // multipliers are earned inside a medium and used to be carried into the next one: a ray
         // that had walked a long mist reached the deck with steps as long as the deck is thick,
@@ -2395,12 +2421,17 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         {
             field = FishCloudFieldAt(position.xz - axis * FishCloudLean(altitudeHere));
             density = FishCloudDensityAt(position, inside ? detailHere : 0.0, footprint, field, true, spot);
+            edgeAhead = FishCloudEdgeAhead;
             if (debugging && _FishCloudDiag.w > 5.5)
             {
                 float2 axisHere = dot(_FishCloudWindDir.xy, _FishCloudWindDir.xy) > 1e-6 ? _FishCloudWindDir.xy : float2(0.0, 1.0);
                 debugCleared = max(debugCleared, 1.0 - FishCloudClearance(position.xz, altitudeHere, _FishCloudFlow.y));
                 debugTurned = max(debugTurned, length(FishFlowAround(position.xz, altitudeHere, _FishCloudFlow.y, axisHere)));
             }
+        }
+        else
+        {
+            edgeAhead = 1e9;
         }
         high01 = spot.high01;
         layerIndex = spot.layer;
@@ -2504,6 +2535,61 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             {
                 metCloud = true;
                 immersed = 1.0 - smoothstep(60.0, 300.0, at - near);
+            }
+            // Out of the haze under a base and into the cloud itself: the base is an edge, and it is found
+            // as the near face of a cloud seen from clear air is (above). It was not — the haze already
+            // counted as being inside, so the ray walked from the haze's long strides (up to 32 of the
+            // steps the distance sets, by its own thin optical depth, and only clipped to the base for a
+            // ray climbing toward it) straight into the cloud wherever a stride happened to land. Which
+            // depth into the base the first sample took then went by each texel's own phase, moved on
+            // every frame: the blocks along every cloud's underside and their flicker, plainest on the
+            // level rays that see a base from the side. The haze is closed up to the base, the base is
+            // found in five halvings between the last haze sample and this one, and the steps begin
+            // again on it, with the cloud's own extinction to size them.
+            if (cloudHere && wasUnderBase && lastWasHaze && prevKnown && at > prevAt + 1.0)
+            {
+                float hazeSide = prevAt;
+                float cloudSide = at;
+                UNITY_LOOP
+                for (int b = 0; b < 5; b++)
+                {
+                    float middle = 0.5 * (hazeSide + cloudSide);
+                    float3 probe = origin + direction * middle;
+                    float probeAltitude = FishCloudAltitude(probe);
+                    bool probeCloud = false;
+                    if (FishCloudPossibleAt(probeAltitude))
+                    {
+                        FishCloudField probeField = FishCloudFieldAt(probe.xz - axis * FishCloudLean(probeAltitude));
+                        FishCloudPoint probeSpot;
+                        float probeDensity = FishCloudDensityAt(probe, 0.0, footprint, probeField, true, probeSpot);
+                        probeCloud = probeDensity > 0.0 && probeSpot.high01 >= 0.0;
+                    }
+                    if (probeCloud)
+                    {
+                        cloudSide = middle;
+                    }
+                    else
+                    {
+                        hazeSide = middle;
+                    }
+                }
+                float edge = 0.5 * (hazeSide + cloudSide);
+                // The haze from its last sample to the base, at that sample's extinction and light.
+                float hazeClosing = exp(-prevTotal * max(0.0, edge - prevAt));
+                scattered += transmittance * prevColour * (1.0 - hazeClosing);
+                transmittance *= hazeClosing;
+                travelled = edge;
+                lastSigma = density;
+                emptyRun = 0.0;
+                insideSamples = 0.0;
+                tauInCloud = 0.0;
+                wasUnderBase = false;
+                lastWasHaze = false;
+                prevAt = edge;
+                prevTotal = 0.0;
+                prevDensity = 0.0;
+                prevKnown = true;
+                continue;
             }
             // Out of the smooth media and into the cloud, or the other way: what was learnt about how
             // coarsely the last medium could be walked does not apply to this one.

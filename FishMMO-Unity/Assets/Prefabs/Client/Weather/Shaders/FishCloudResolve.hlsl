@@ -98,6 +98,11 @@ float4 _FishCloudOptions;
 // every change there is.
 #define FISH_RESOLVE_CHANGE_FLOOR 0.005
 
+// How hard parallax shortens the moving average: settled frames over (1 + this × the pixels the fetch
+// moved for the cloud's distance this frame). 3: a quarter-pixel shift keeps nine of sixteen frames, a
+// pixel's keeps four.
+#define FISH_RESOLVE_PARALLAX_FRAMES 3.0
+
 struct FishCloudResolved
 {
     float4 clouds;      // rgb scattered light, a transmittance
@@ -206,8 +211,9 @@ bool FishResolveBelowClouds(float rawHere, float3 seen)
 // their wind gain — and seen through last frame's camera. With none, sky is the far plane, a direction
 // that only the camera's turn moves, and the world is its own surface, which holds still.
 bool FishResolvePrevious(float rawHere, float here, float3 camera, float3 direction, float3 forward,
-    float cloudSeen, float2 motion, out float2 previousUV)
+    float cloudSeen, float2 motion, out float2 previousUV, out float parallax)
 {
+    parallax = 0.0;
     bool sky = FishResolveIsSky(rawHere);
     float toSurface = here / max(1e-4, dot(direction, forward));
     float4 seenAt;
@@ -230,6 +236,19 @@ bool FishResolvePrevious(float rawHere, float here, float3 camera, float3 direct
     #if UNITY_UV_STARTS_AT_TOP
         previousUV.y = 1.0 - previousUV.y;
     #endif
+    // How far, in this buffer's pixels, the place it was fetched from depends on how far away the cloud
+    // was taken to be: the same direction at infinity, against it. Turning the camera moves both alike
+    // (0); only moving it does — and how far it moves the fetch is how far an error in that distance
+    // (one figure a pixel, the mean depth of all it saw, deeper than the face the eye follows) moves it.
+    if (seenAt.w > 0.5)
+    {
+        float4 atInfinity = mul(_FishCloudPreviousVP, float4(direction, 0.0));
+        float2 infinityUV = atInfinity.xy / max(1e-5, atInfinity.w) * 0.5 + 0.5;
+        #if UNITY_UV_STARTS_AT_TOP
+            infinityUV.y = 1.0 - infinityUV.y;
+        #endif
+        parallax = atInfinity.w > 1e-5 ? length((previousUV - infinityUV) * _FishCloudUpsample.xy) : 0.0;
+    }
     return _FishCloudTemporal.y > 0.5 && previous.w > 1e-5 && all(previousUV >= 0.0) && all(previousUV <= 1.0);
 }
 
@@ -364,7 +383,8 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
     float2 previousUV;
     float frames = 0.0;
     float4 history = current;
-    if (FishResolvePrevious(rawHere, here, camera, direction, forward, cloudSeen, motion, previousUV))
+    float parallax;
+    if (FishResolvePrevious(rawHere, here, camera, direction, forward, cloudSeen, motion, previousUV, parallax))
     {
         history = FishResolveCatmullRom(TEXTURE2D_ARGS(_FishCloudHistory, sampler_FishCloudHistory), previousUV, _FishCloudUpsample.xy);
         frames = SAMPLE_TEXTURE2D_LOD(_FishCloudHistoryWeight, sampler_FishCloudHistoryWeight, previousUV, 0).r;
@@ -401,8 +421,17 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
     }
 
     // 4. The moving average: all of this frame for a pixel with nothing behind it, one part in
-    // _FishCloudTemporal.x once settled.
-    float settled = min(frames + 1.0, max(1.0, _FishCloudTemporal.x));
+    // _FishCloudTemporal.x once settled — fewer the more the fetch rode on the cloud's distance. A pixel's
+    // history is carried from where its cloud stood a frame ago at ONE distance, the mean depth of all its
+    // ray saw; the face the eye follows stands nearer, and while the camera moves the history is fetched a
+    // little short every frame. Averaged over sixteen frames that is a lag of a pixel or two behind the
+    // cloud, which swings to the other side when the camera turns back: the clouds wobbled as the camera
+    // strafed, and only then (turning moves the fetch the same at every distance, so it is exact). The
+    // average is shortened by the parallax this frame (FishResolvePrevious), so the lag is held to a
+    // fraction of a pixel: none at all for a camera that only turns or stands, a quarter as long for a
+    // cloud whose fetch moved a pixel.
+    float framesCap = max(1.0, _FishCloudTemporal.x) / (1.0 + FISH_RESOLVE_PARALLAX_FRAMES * parallax);
+    float settled = min(min(frames + 1.0, max(1.0, _FishCloudTemporal.x)), max(2.0, framesCap));
     float4 result = lerp(history, current, 1.0 / settled);
     output.clouds = float4(max(result.rgb, 0.0), saturate(result.a));
     output.weight = settled;

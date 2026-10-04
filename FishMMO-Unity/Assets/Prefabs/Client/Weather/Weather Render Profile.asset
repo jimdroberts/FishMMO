@@ -90,14 +90,14 @@ MonoBehaviour:
     TemporalBlend: 0.9
     ShadowAreaMeters: 4000
     Diagnostics:
-      Temporal: 0
+      Temporal: 1
       HistoryFrames: 16
-      ClipGamma: 1.25
+      ClipGamma: 0.25
       HistoryClip: 1
       Kernel: 0
       BlurPixels: 0.55
       RayJitter: 1
-      StepScale: 1
+      StepScale: 0.25
       DistanceStepGrowth: 0
       MaxStepOpticalDepth: 1
       MaxInCloudGrowth: 2
@@ -105,7 +105,7 @@ MonoBehaviour:
       LightMarch: 1
       LightMarchPhase: 1
       DetailStrength: 1
-      DetailLodScale: 0.25
+      DetailLodScale: 1
       EdgeShellScale: 2
       DetailStepFootprint: 1.25
       BaseDetail: 0

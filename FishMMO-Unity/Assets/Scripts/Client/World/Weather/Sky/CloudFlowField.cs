@@ -45,6 +45,10 @@ namespace FishMMO.Client
 		private static readonly int RectId = Shader.PropertyToID("_FishCloudFlowRect");
 		private static readonly int LevelsId = Shader.PropertyToID("_FishCloudFlowLevels");
 		private static readonly int RockTopId = Shader.PropertyToID("_FishCloudRockTop");
+		private static readonly int TerrainId = Shader.PropertyToID("_FishCloudTerrain");
+		private static readonly int TerrainRectId = Shader.PropertyToID("_FishCloudTerrainRect");
+		/// <summary>The terrain smoothed as the air feels it, m: some 700 m, as CloudTerrainMap smooths it.</summary>
+		private const float AirSmoothMetres = 625f;
 		private static readonly int ShadeId = Shader.PropertyToID("_FishShadeFar");
 		private static readonly int ShadeRectId = Shader.PropertyToID("_FishShadeFarRect");
 		private static readonly int ShadeBaseId = Shader.PropertyToID("_FishShadeFarBase");
@@ -69,7 +73,25 @@ namespace FishMMO.Client
 		/// <summary>The highest rock in the scene, m; 0 while there is none (or it is not yet read).</summary>
 		public float HighestRock { get; private set; }
 
+		/// <summary>
+		/// The lowest ground in the scene, m (0 until it is read): the land the air arrives at its mountains
+		/// over, which how high a mountain is to the air is measured from (<c>_FishCloudFlow.z</c>). The whole
+		/// scene's, never a window's round the camera — a window's lowest moved every time the window did, and
+		/// with it how far every mountain rose, whether the air went over, and how high every cloud was lifted:
+		/// the whole sky jumped as the camera walked.
+		/// </summary>
+		public float LowestGround { get; private set; }
+
 		private TerrainShadowSolver.Grid completeGround;
+		private Texture2D terrainTexture;
+		private bool terrainReady;
+
+		/// <summary>The highest ground in the scene, barely smoothed, m (the scene terrain map's a).</summary>
+		public float HighestGround { get; private set; }
+		/// <summary>The highest the ground stands as the pooled air feels it, smoothed some 700 m, m (its r).</summary>
+		public float HighestPooled { get; private set; }
+		/// <summary>Whether the scene terrain map (<c>_FishCloudTerrain</c> over the whole scene) is published.</summary>
+		public bool TerrainReady => terrainReady;
 		private Texture2D shadeTexture;
 		private Task<float[]> shading;
 		private Vector3 shadingLight, shadedLight;
@@ -192,8 +214,10 @@ namespace FishMMO.Client
 			rockReady = false;
 			fieldReady = false;
 			HighestRock = 0f;
+			LowestGround = 0f;
 			ground = null;
 			completeGround = default;
+			terrainReady = false;
 			shading = null;
 			shadeReady = false;
 			if (terrains.Extent.width <= 0f || terrains.Extent.height <= 0f)
@@ -258,7 +282,9 @@ namespace FishMMO.Client
 			{
 				lowest = 0f;
 			}
+			LowestGround = lowest;
 			completeGround = TerrainShadowSolver.Grid.Of(ground, n, corner.x, corner.y, size);
+			UploadTerrain(cell);
 			float[] massif = MaxFilter(rock, n, Mathf.Max(1, Mathf.CeilToInt(MassifRadius / cell)));
 			UploadRock(rock, massif);
 
@@ -331,8 +357,106 @@ namespace FishMMO.Client
 			fieldReady = true;
 		}
 
+		/// <summary>
+		/// The ground under the sky as the clouds and the fog read it (<c>_FishCloudTerrain</c>: r the terrain
+		/// smoothed as the air feels it, gb which way that rises, a the ground itself), over the whole scene and
+		/// fixed in place — in place of CloudTerrainMap's window round the camera, which moved in steps of eight
+		/// of its texels and eased its ground to sea level over its outer tenth: every step lifted or dropped the
+		/// clouds four and five kilometres out by hundreds of metres, and the sky jumped as the camera travelled.
+		/// </summary>
+		private void UploadTerrain(float cell)
+		{
+			int n = Resolution;
+			// The ground itself, barely smoothed (two passes of a three-by-three), and the air's (three of a box
+			// some 625 m wide), as CloudTerrainMap makes them from its own samples.
+			float[] surface = BoxMean(BoxMean(ground, n, 1), n, 1);
+			int radius = Mathf.Max(1, Mathf.RoundToInt(AirSmoothMetres / cell));
+			float[] air = BoxMean(BoxMean(BoxMean(surface, n, radius), n, radius), n, radius);
+			if (terrainTexture == null)
+			{
+				terrainTexture = new Texture2D(n, n, TextureFormat.RGBAHalf, false, true)
+				{
+					name = "Cloud Terrain (scene)",
+					filterMode = FilterMode.Bilinear,
+					wrapMode = TextureWrapMode.Clamp,
+					hideFlags = HideFlags.DontSave,
+				};
+			}
+			var halves = new ushort[n * n * 4];
+			float highestGround = 0f, highestPooled = 0f;
+			for (int z = 0; z < n; z++)
+			{
+				int up = Mathf.Min(n - 1, z + 1), down = Mathf.Max(0, z - 1);
+				for (int x = 0; x < n; x++)
+				{
+					int right = Mathf.Min(n - 1, x + 1), left = Mathf.Max(0, x - 1);
+					int i = z * n + x;
+					float dx = (air[z * n + right] - air[z * n + left]) / ((right - left) * cell);
+					float dz = (air[up * n + x] - air[down * n + x]) / ((up - down) * cell);
+					halves[i * 4] = Mathf.FloatToHalf(air[i]);
+					halves[i * 4 + 1] = Mathf.FloatToHalf(dx);
+					halves[i * 4 + 2] = Mathf.FloatToHalf(dz);
+					halves[i * 4 + 3] = Mathf.FloatToHalf(surface[i]);
+					highestGround = Mathf.Max(highestGround, surface[i]);
+					highestPooled = Mathf.Max(highestPooled, air[i]);
+				}
+			}
+			terrainTexture.SetPixelData(halves, 0);
+			terrainTexture.Apply(false, false);
+			HighestGround = highestGround;
+			HighestPooled = highestPooled;
+			terrainReady = true;
+		}
+
+		private static float[] BoxMean(float[] source, int n, int radius)
+		{
+			var across = new float[n * n];
+			var result = new float[n * n];
+			for (int z = 0; z < n; z++)
+			{
+				float sum = 0f;
+				int count = 0;
+				for (int o = 0; o <= Mathf.Min(n - 1, radius); o++)
+				{
+					sum += source[z * n + o];
+					count++;
+				}
+				for (int x = 0; x < n; x++)
+				{
+					across[z * n + x] = sum / count;
+					int add = x + radius + 1, drop = x - radius;
+					if (add < n) { sum += source[z * n + add]; count++; }
+					if (drop >= 0) { sum -= source[z * n + drop]; count--; }
+				}
+			}
+			for (int x = 0; x < n; x++)
+			{
+				float sum = 0f;
+				int count = 0;
+				for (int o = 0; o <= Mathf.Min(n - 1, radius); o++)
+				{
+					sum += across[o * n + x];
+					count++;
+				}
+				for (int z = 0; z < n; z++)
+				{
+					result[z * n + x] = sum / count;
+					int add = z + radius + 1, drop = z - radius;
+					if (add < n) { sum += across[add * n + x]; count++; }
+					if (drop >= 0) { sum -= across[drop * n + x]; count--; }
+				}
+			}
+			return result;
+		}
+
 		private void Publish()
 		{
+			// After CloudTerrainMap has published its window this frame: the scene's map, fixed in place, wins.
+			if (terrainReady)
+			{
+				Shader.SetGlobalTexture(TerrainId, terrainTexture);
+				Shader.SetGlobalVector(TerrainRectId, new Vector4(corner.x, corner.y, size, 1f));
+			}
 			if (rockReady)
 			{
 				Shader.SetGlobalTexture(RockId, rockTexture);
@@ -430,6 +554,12 @@ namespace FishMMO.Client
 				if (Application.isPlaying) Object.Destroy(shadeTexture); else Object.DestroyImmediate(shadeTexture);
 				shadeTexture = null;
 			}
+			if (terrainTexture != null)
+			{
+				if (Application.isPlaying) Object.Destroy(terrainTexture); else Object.DestroyImmediate(terrainTexture);
+				terrainTexture = null;
+			}
+			terrainReady = false;
 			shading = null;
 			shadeReady = false;
 			Shader.SetGlobalVector(ShadeRectId, Vector4.zero);
