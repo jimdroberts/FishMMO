@@ -28,7 +28,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>The same ground as the scene, only coarser.</b> Every height is
+	/// <b>The same ground as the scene, only coarser.</b> Every height is the generator's own ground
+	/// (<see cref="SceneHeightField.MetresAt"/>): the scene's grid at its edge, and past it
 	/// <see cref="SceneGeneration.AltitudeMetres"/> for the scene's own request — the same planet,
 	/// radius, vertical scale and local detail — so at the scene's edge the backdrop meets the
 	/// terrain, and past it the land goes on exactly as the globe draws it.
@@ -100,9 +101,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// scene's biomes, so the horizon carries the ground the scene is painted with. Null paints
 		/// the plain height bands, which is what a scene no biome fitted is painted with too.
 		/// </param>
+		/// <param name="ground">
+		/// The ground in scene metres at (east, north). Null asks the planet
+		/// (<see cref="SceneGeneration.AltitudeMetres"/>), which meets a terrain cut straight from it.
+		/// </param>
 		public static SceneBackdropResult Build(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan,
-			float floorMetres, float reliefMetres, string folder, System.Func<float, float, float, float, Color> groundColour = null)
+			float floorMetres, float reliefMetres, string folder, System.Func<float, float, float, float, Color> groundColour = null,
+			System.Func<float, float, float> ground = null)
 		{
+			if (ground == null)
+			{
+				var planet = new SceneAltitude(request);
+				ground = planet.At;
+			}
 			var result = new SceneBackdropResult();
 			float reach = ReachFor(request);
 			result.ReachMetres = reach;
@@ -116,7 +127,7 @@ namespace FishMMO.Shared.WorldDesign
 			float halfD = plan.DepthMetres * 0.5f;
 			string stem = $"{folder}/{WorldEditorAssets.Sanitize(request.SceneName)} Backdrop";
 
-			Material material = BakeMaterial(request, halfW, halfD, reach, floorMetres, reliefMetres, stem, result, groundColour);
+			Material material = BakeMaterial(ground, halfW, halfD, reach, floorMetres, reliefMetres, stem, result, groundColour);
 
 			var root = new GameObject("Backdrop");
 			SceneManager.MoveGameObjectToScene(root, scene);
@@ -135,10 +146,10 @@ namespace FishMMO.Shared.WorldDesign
 				float ox = halfW + outer, oz = halfD + outer, ix = halfW + inner, iz = halfD + inner;
 
 				// North and south run the ring's full width; east and west fill between them.
-				AddRect(meshes, root, material, request, $"Ring {ring} North", -ox, ox, iz, oz, spacing, halfW, halfD, reach, result);
-				AddRect(meshes, root, material, request, $"Ring {ring} South", -ox, ox, -oz, -iz, spacing, halfW, halfD, reach, result);
-				AddRect(meshes, root, material, request, $"Ring {ring} East", ix, ox, -iz, iz, spacing, halfW, halfD, reach, result);
-				AddRect(meshes, root, material, request, $"Ring {ring} West", -ox, -ix, -iz, iz, spacing, halfW, halfD, reach, result);
+				AddRect(meshes, root, material, request, ground, $"Ring {ring} North", -ox, ox, iz, oz, spacing, halfW, halfD, reach, result);
+				AddRect(meshes, root, material, request, ground, $"Ring {ring} South", -ox, ox, -oz, -iz, spacing, halfW, halfD, reach, result);
+				AddRect(meshes, root, material, request, ground, $"Ring {ring} East", ix, ox, -iz, iz, spacing, halfW, halfD, reach, result);
+				AddRect(meshes, root, material, request, ground, $"Ring {ring} West", -ox, -ix, -iz, iz, spacing, halfW, halfD, reach, result);
 				inner = outer;
 			}
 
@@ -167,6 +178,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>One rectangle of a ring: a regular grid with a skirt down all four edges.</summary>
 		private static void AddRect(List<Mesh> meshes, GameObject root, Material material, SceneGenerationRequest request,
+			System.Func<float, float, float> ground,
 			string name, float x0, float x1, float z0, float z1, float spacing, float halfW, float halfD, float reach,
 			SceneBackdropResult result)
 		{
@@ -188,7 +200,7 @@ namespace FishMMO.Shared.WorldDesign
 				float wz = z0 + z * sz;
 				for (int x = 0; x < columns; x++)
 				{
-					float h = SceneGeneration.AltitudeMetres(request, x0 + x * sx, wz);
+					float h = ground(x0 + x * sx, wz);
 					heights[z * columns + x] = h;
 					result.LowestMetres = Mathf.Min(result.LowestMetres, h);
 				}
@@ -287,7 +299,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// range, snow at the top, rock on the steep. Ground beyond the scene that rises above its
 		/// highest point reads as snow, which is what a range that much higher would carry.
 		/// </remarks>
-		private static Material BakeMaterial(SceneGenerationRequest request, float halfW, float halfD, float reach,
+		private static Material BakeMaterial(System.Func<float, float, float> ground, float halfW, float halfD, float reach,
 			float floorMetres, float reliefMetres, string stem, SceneBackdropResult result,
 			System.Func<float, float, float, float, Color> groundColour)
 		{
@@ -308,7 +320,7 @@ namespace FishMMO.Shared.WorldDesign
 					float wx = -extentX + (x + 0.5f) * texelX;
 					heights[z * width + x] = Mathf.Abs(wx) < skipX && Mathf.Abs(wz) < skipZ
 						? float.NaN
-						: SceneGeneration.AltitudeMetres(request, wx, wz);
+						: ground(wx, wz);
 				}
 			}
 

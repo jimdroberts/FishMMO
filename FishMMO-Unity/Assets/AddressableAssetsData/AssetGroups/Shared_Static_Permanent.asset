@@ -2067,14 +2067,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
-    m_Address: Weather Audio Profile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    - Client_Static_Permanent
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 54077f011c3d2cb83ae660b586c30b24
     m_Address: Mock Dispel Event
     m_ReadOnly: 0
@@ -2487,14 +2479,6 @@ MonoBehaviour:
     m_Address: Ground_Gravel
     m_ReadOnly: 0
     m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 69baeeda49ea89f268266955933d6961
-    m_Address: Weather Render Profile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Dynamic
-    - Client_Static_Permanent
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 69d00d6a2a8ea0f609aa70e570329c5b

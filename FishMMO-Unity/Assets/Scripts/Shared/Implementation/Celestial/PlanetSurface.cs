@@ -666,9 +666,21 @@ namespace FishMMO.Shared.Celestial
 		/// </summary>
 		public static void AltitudeParts(uint seed, WorldBody body, Vector3 direction, out float withCraters, out float withoutCraters)
 		{
-			float cratering = CrateringOf(body);
-			PlanetProfile profile = ProfileOf(seed, body);
-			float relief = ReliefMetres(body);
+			AltitudeParts(seed, CrateringOf(body), ProfileOf(seed, body), ReliefMetres(body), direction, out withCraters, out withoutCraters);
+		}
+
+		/// <summary>
+		/// <see cref="AltitudeParts(uint, WorldBody, Vector3, out float, out float)"/> with the body's
+		/// cratering, profile and relief already resolved.
+		/// </summary>
+		/// <remarks>
+		/// For a caller asking millions of times, and from worker threads: the body overload looks the
+		/// profile up in a cache that is not safe to share, and works out the body's internal heat
+		/// again on every call. Everything here is arithmetic on its arguments.
+		/// </remarks>
+		public static void AltitudeParts(uint seed, float cratering, in PlanetProfile profile, float relief, Vector3 direction,
+			out float withCraters, out float withoutCraters)
+		{
 			float height = Height(seed, direction);
 			withoutCraters = AltitudeFromHeight(height, profile, relief);
 			withCraters = cratering > 0.001f

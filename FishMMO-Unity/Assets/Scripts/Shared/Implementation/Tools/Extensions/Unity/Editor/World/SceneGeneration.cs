@@ -281,29 +281,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public static float AltitudeMetres(SceneGenerationRequest request, float eastMetres, float northMetres)
 		{
-			if (request == null)
-			{
-				return 0f;
-			}
-			/* The planet's ground and its craters come to scene height apart: the ground by the vertical
-			 * scale, the craters with the kilometres (CraterScale), or every crater would be a pit about
-			 * as deep as it is wide. */
-			PlanetAltitudeParts(request, eastMetres, northMetres, out float planet, out float uncratered);
-			float altitude = uncratered * request.VerticalScale + (planet - uncratered) * request.CraterScale;
-			if (request.FineDetail)
-			{
-				/* Mixed with the scene's name so two scenes cut from nearby ground do not get the
-				 * same hills, and so re-generating one scene cannot change another. */
-				uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
-				uint detailSeed = seed ^ unchecked((uint)(request.SceneName ?? string.Empty).GetDeterministicHashCode());
-				float ruggedness = PlanetSurface.Ruggedness(planet, PlanetSurface.ReliefMetres(request.Body));
-				altitude += PlanetSurface.LocalDetailMetres(detailSeed, eastMetres, northMetres, request.SceneReliefMetres, ruggedness);
-			}
-			if (request.FrozenSeas)
-			{
-				altitude = Mathf.Max(altitude, IceShelfMetres(request, eastMetres, northMetres));
-			}
-			return altitude;
+			return request != null ? new SceneAltitude(request).At(eastMetres, northMetres) : 0f;
 		}
 
 		/// <summary>Height of a frozen sea's surface above the datum, in scene metres, before its ridges.</summary>
@@ -337,7 +315,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public static float IceShelfMetres(SceneGenerationRequest request, float eastMetres, float northMetres)
 		{
-			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
+			return IceShelfMetres(request.Body != null ? request.Body.ResolvedTerrainSeed : 1u, eastMetres, northMetres);
+		}
+
+		/// <summary><see cref="IceShelfMetres(SceneGenerationRequest, float, float)"/> for a body's terrain seed.</summary>
+		public static float IceShelfMetres(uint seed, float eastMetres, float northMetres)
+		{
 			float offset = (seed & 0xFFFF) * 0.173f;
 			float u = eastMetres / IceRidgeSpacingMetres + offset;
 			float v = northMetres / IceRidgeSpacingMetres - offset;
@@ -364,113 +347,91 @@ namespace FishMMO.Shared.WorldDesign
 			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
 			return PlanetSurface.AltitudeMetres(seed, request.Body, direction);
 		}
+	}
 
-		/// <summary><see cref="PlanetAltitudeMetres"/> with and without the body's craters (<see cref="PlanetSurface.AltitudeParts"/>).</summary>
-		public static void PlanetAltitudeParts(SceneGenerationRequest request, float eastMetres, float northMetres, out float withCraters, out float withoutCraters)
+	/// <summary>
+	/// One scene's ground as a function of position, with everything that does not depend on the
+	/// position worked out once.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>What <see cref="SceneGeneration.AltitudeMetres"/> is.</b> It builds one of these and asks it
+	/// once; a caller asking millions of times builds one and keeps it.
+	/// </para>
+	/// <para>
+	/// <b>Safe to share between threads once built</b>, which is why it is built on the main thread
+	/// and holds values rather than the request. Asking the request per sample is not merely slow: a
+	/// body's seed can come from its asset name, which Unity only answers on the main thread, and the
+	/// planet's profile sits in a cache that is not safe to share.
+	/// </para>
+	/// </remarks>
+	public readonly struct SceneAltitude
+	{
+		private readonly bool valid;
+		private readonly AtlasFootprint footprint;
+		private readonly double radiusKm;
+		private readonly uint seed;
+		private readonly uint detailSeed;
+		private readonly float cratering;
+		private readonly PlanetSurface.PlanetProfile profile;
+		private readonly float bodyRelief;
+		private readonly float verticalScale;
+		private readonly float craterScale;
+		private readonly float sceneRelief;
+		private readonly bool fineDetail;
+		private readonly bool frozenSeas;
+
+		/// <summary>Resolves the request's ground. Main thread only; <see cref="At"/> is then safe anywhere.</summary>
+		public SceneAltitude(SceneGenerationRequest request)
 		{
-			if (request == null)
+			valid = request != null;
+			if (!valid)
 			{
-				withCraters = withoutCraters = 0f;
+				this = default;
 				return;
 			}
-			Vector3 direction = AtlasGeometry.SceneToUnit(request.Footprint,
-				eastMetres / 1000.0, northMetres / 1000.0, request.ResolvedRadiusKm).ToVector3();
-			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
-			PlanetSurface.AltitudeParts(seed, request.Body, direction, out withCraters, out withoutCraters);
+			WorldBody body = request.Body;
+			footprint = request.Footprint;
+			radiusKm = request.ResolvedRadiusKm;
+			seed = body != null ? body.ResolvedTerrainSeed : 1u;
+			/* Mixed with the scene's name so two scenes cut from nearby ground do not get the
+			 * same hills, and so re-generating one scene cannot change another. */
+			detailSeed = seed ^ unchecked((uint)(request.SceneName ?? string.Empty).GetDeterministicHashCode());
+			cratering = PlanetSurface.CrateringOf(body);
+			profile = PlanetSurface.ProfileOf(seed, body);
+			bodyRelief = PlanetSurface.ReliefMetres(body);
+			verticalScale = request.VerticalScale;
+			craterScale = request.CraterScale;
+			sceneRelief = request.SceneReliefMetres;
+			fineDetail = request.FineDetail;
+			frozenSeas = request.FrozenSeas;
 		}
 
-		/// <summary>One sample of the planet's own shape per this many metres, when bounding a scene.</summary>
-		/// <remarks>
-		/// Cut at the atlas radius, the planet's finest mountain octave is about 1.7 km across in a
-		/// scene, so a sample every 40 m sees every peak it has to within a few metres, and
-		/// <see cref="BoundsMarginFraction"/> covers the rest. A 20 km scene costs 250,000 samples,
-		/// a fraction of the millions the heightmap itself takes.
-		/// </remarks>
-		public const float BoundsSampleMetres = 40f;
-		private const int MinimumBoundsSteps = 96;
-		private const int MaximumBoundsSteps = 512;
-
-		/// <summary>Slack added to the sampled planet range, as a share of it, for peaks between samples.</summary>
-		public const float BoundsMarginFraction = 0.02f;
-
-		/// <summary>
-		/// The lowest and highest ground a scene can possibly have, in metres above the body's sea
-		/// level.
-		/// </summary>
-		/// <param name="request">The scene being cut.</param>
-		/// <param name="plan">Its tile grid, for how far the scene reaches.</param>
-		/// <param name="lowest">Metres above sea level of the lowest possible ground.</param>
-		/// <param name="highest">Metres above sea level of the highest possible ground.</param>
-		/// <remarks>
-		/// <para>
-		/// <b>A bound, not a measurement.</b> Every tile's heightmap is stored as a fraction of one
-		/// shared height range, so a height outside that range is not merely rounded — it is
-		/// clamped, and the ground comes out with a flat top where a summit should be and a flat
-		/// floor where a gully should be. A scene is written at about two metres a sample; a range
-		/// sampled every forty-seven metres, as this was, misses most of what local detail does,
-		/// and the terrain then flattens every peak and pit between the samples it took.
-		/// </para>
-		/// <para>
-		/// So the two terms are bounded differently, which is the whole point: the planet's own
-		/// shape is sampled, because it is smooth over a scene and sampling it closely is cheap,
-		/// while local detail is bounded <em>exactly</em> from
-		/// <see cref="PlanetSurface.LocalDetailAmplitudeMetres"/> — it cannot leave ±amplitude
-		/// anywhere, so no sampling can improve on that and none is done. The result is a range
-		/// the ground provably fits inside at every one of the millions of points that get written.
-		/// </para>
-		/// </remarks>
-		public static void Bounds(SceneGenerationRequest request, TerrainTilePlan plan, out float lowest, out float highest)
+		/// <summary>The altitude in scene metres above the body's sea level: see <see cref="SceneGeneration.AltitudeMetres"/>.</summary>
+		public float At(float eastMetres, float northMetres)
 		{
-			lowest = 0f;
-			highest = 0f;
-			if (request == null)
+			if (!valid)
 			{
-				return;
+				return 0f;
 			}
-
-			float halfWidth = plan.WidthMetres * 0.5f;
-			float halfDepth = plan.DepthMetres * 0.5f;
-			int steps = Mathf.Clamp(
-				Mathf.CeilToInt(Mathf.Max(plan.WidthMetres, plan.DepthMetres) / BoundsSampleMetres),
-				MinimumBoundsSteps, MaximumBoundsSteps);
-
-			// The planet's own shape only: local detail is added back as an exact bound below, and
-			// sampling it here would understate it however fine the grid was.
-			bool fineDetail = request.FineDetail;
-			request.FineDetail = false;
-			try
-			{
-				lowest = float.MaxValue;
-				highest = float.MinValue;
-				for (int z = 0; z <= steps; z++)
-				{
-					float north = Mathf.Lerp(-halfDepth, halfDepth, z / (float)steps);
-					for (int x = 0; x <= steps; x++)
-					{
-						float east = Mathf.Lerp(-halfWidth, halfWidth, x / (float)steps);
-						float altitude = AltitudeMetres(request, east, north);
-						lowest = Mathf.Min(lowest, altitude);
-						highest = Mathf.Max(highest, altitude);
-					}
-				}
-			}
-			finally
-			{
-				request.FineDetail = fineDetail;
-			}
-
-			/* The planet term was sampled, not bounded, so it gets slack for whatever stands
-			 * between the samples; Tighten() takes it back once the real ground is on disk. */
-			float margin = (highest - lowest) * BoundsMarginFraction + 1f;
-			lowest -= margin;
-			highest += margin;
-
+			/* Through the footprint, so the heading turns the ground exactly as the atlas turns
+			 * the rectangle. With a heading of 0 the scene's +X is east and +Z north. */
+			Vector3 direction = AtlasGeometry.SceneToUnit(footprint, eastMetres / 1000.0, northMetres / 1000.0, radiusKm).ToVector3();
+			PlanetSurface.AltitudeParts(seed, cratering, profile, bodyRelief, direction, out float planet, out float uncratered);
+			/* The planet's ground and its craters come to scene height apart: the ground by the vertical
+			 * scale, the craters with the kilometres (CraterScale), or every crater would be a pit about
+			 * as deep as it is wide. */
+			float altitude = uncratered * verticalScale + (planet - uncratered) * craterScale;
 			if (fineDetail)
 			{
-				float amplitude = PlanetSurface.LocalDetailAmplitudeMetres(request.SceneReliefMetres);
-				lowest -= amplitude;
-				highest += amplitude;
+				float ruggedness = PlanetSurface.Ruggedness(planet, bodyRelief);
+				altitude += PlanetSurface.LocalDetailMetres(detailSeed, eastMetres, northMetres, sceneRelief, ruggedness);
 			}
+			if (frozenSeas)
+			{
+				altitude = Mathf.Max(altitude, SceneGeneration.IceShelfMetres(seed, eastMetres, northMetres));
+			}
+			return altitude;
 		}
 	}
 }

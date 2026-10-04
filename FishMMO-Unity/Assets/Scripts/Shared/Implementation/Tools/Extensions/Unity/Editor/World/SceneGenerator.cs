@@ -208,16 +208,6 @@ namespace FishMMO.Shared.WorldDesign
 
 			TerrainTilePlan plan = result.Plan;
 
-			/* Bounded before anything is created, because every tile has to share one height range
-			 * and one floor. Tiles normalised against their own range are what makes a stitched
-			 * landmass step at its seams, and the climate read differently on either side. A BOUND
-			 * and not a measurement: a range that merely sampled the ground is a range some peak
-			 * between the samples falls outside, and the heightmap flattens whatever falls outside
-			 * it. Tighten() gives the slack back once the real ground is on disk. */
-			SceneGeneration.Bounds(request, plan, out float lowest, out float highest);
-			result.BaseAltitudeMetres = SceneGeneration.AltitudeMetres(request, 0f, 0f);
-			float relief = Mathf.Max(SceneGeneration.MinimumTerrainHeightMetres, highest - lowest);
-
 			/* Unity refuses to add a scene additively while an UNTITLED scene is open, which is
 			 * exactly what a freshly launched editor has — and what a batch editor always has. So
 			 * the untitled case makes the new scene the only one instead; there is nothing open
@@ -256,28 +246,36 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			try
 			{
+				/* The whole scene's ground as one grid before any tile exists, sampled after Revive so
+				 * the body it asks is live. Everything that reshapes the ground runs on this grid,
+				 * where a tile seam is just another row; the tiles are cut from it afterwards. */
+				SceneHeightField ground = SceneHeightField.Sample(request, plan);
+
+				/* Every tile shares one floor and one height range, measured from the ground itself:
+				 * tiles normalised against their own range are what makes a stitched landmass step
+				 * at its seams, and a range wider than the ground would make a scene cool from
+				 * valley to ridge by a fraction of what its relief says (SceneTerrainExtent). */
+				ground.Range(out float lowest, out float highest);
+				float relief = Mathf.Max(SceneGeneration.MinimumTerrainHeightMetres, highest - lowest);
+				result.BaseAltitudeMetres = ground.MetresAt(0f, 0f);
+				result.ReliefMetres = relief;
+				result.GroundAltitudeMetres = lowest;
+
 				var terrains = new Terrain[plan.CountX, plan.CountZ];
 				for (int tz = 0; tz < plan.CountZ; tz++)
 				{
 					for (int tx = 0; tx < plan.CountX; tx++)
 					{
-						terrains[tx, tz] = CreateTile(request, plan, tx, tz, lowest, relief, scene, terrainFolder, result);
+						terrains[tx, tz] = CreateTile(request, plan, ground, tx, tz, lowest, relief, scene, terrainFolder, result);
 					}
 				}
 				Stitch(terrains, plan);
 
-				/* Now that every height is written, the tiles can be shrunk onto the ground they
-				 * actually hold — and the colour bands painted against a height that means
-				 * something. Painting before this read every scene as lowland, because the bound
-				 * has to allow for a peak that this particular scene does not have. */
-				relief = Tighten(terrains, ref lowest, relief);
-				result.ReliefMetres = relief;
-				result.GroundAltitudeMetres = lowest;
-
 				/* The biomes, from the finished ground: which lies where, the textures that say so,
 				 * and the map the runtime reads. The flat bands only where no biome fits at all —
 				 * no template registered, or none this world allows — so the scene still reads. */
-				if (!PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out Func<float, float, float, float, Color> groundColour))
+				if (!PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out Func<float, float, float, float, Color> groundColour,
+					ground: ground.MetresAt))
 				{
 					foreach (Terrain terrain in terrains)
 					{
@@ -291,7 +289,7 @@ namespace FishMMO.Shared.WorldDesign
 				/* The ground past the scene's edge, out to the horizon: client-only, built from the
 				 * same request so it meets the terrain at the edge. Before the sea, because a scene
 				 * of dry land can still look out over a coast, and that sea has to be drawn. */
-				SceneBackdropResult backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder, groundColour);
+				SceneBackdropResult backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder, groundColour, ground.MetresAt);
 				result.Wrote.AddRange(backdrop.Wrote);
 				result.BackdropReachMetres = backdrop.ReachMetres;
 				result.BackdropVertices = backdrop.Vertices;
@@ -355,8 +353,8 @@ namespace FishMMO.Shared.WorldDesign
 			return result;
 		}
 
-		/// <summary>Creates one terrain tile and its data asset.</summary>
-		private static Terrain CreateTile(SceneGenerationRequest request, TerrainTilePlan plan, int tx, int tz,
+		/// <summary>Creates one terrain tile and its data asset, cut from the scene's ground.</summary>
+		private static Terrain CreateTile(SceneGenerationRequest request, TerrainTilePlan plan, SceneHeightField ground, int tx, int tz,
 			float lowest, float relief, Scene scene, string terrainFolder, SceneGenerationResult result)
 		{
 			var data = new TerrainData
@@ -364,26 +362,8 @@ namespace FishMMO.Shared.WorldDesign
 				heightmapResolution = plan.Resolution,
 				size = new Vector3(plan.TileMetres, relief, plan.TileMetres),
 			};
-
-			int resolution = data.heightmapResolution;
-			var heights = new float[resolution, resolution];
-			float halfWidth = plan.WidthMetres * 0.5f;
-			float halfDepth = plan.DepthMetres * 0.5f;
-			float step = plan.TileMetres / (resolution - 1);
-
-			for (int z = 0; z < resolution; z++)
-			{
-				// Scene coordinates, not tile coordinates. Sampling each tile in its own frame is
-				// what would put a cliff along every seam.
-				float north = tz * plan.TileMetres + z * step - halfDepth;
-				for (int x = 0; x < resolution; x++)
-				{
-					float east = tx * plan.TileMetres + x * step - halfWidth;
-					// Unity indexes its heightmap [z, x], and stores a fraction of the terrain's height.
-					heights[z, x] = Mathf.Clamp01((SceneGeneration.AltitudeMetres(request, east, north) - lowest) / relief);
-				}
-			}
-			data.SetHeights(0, 0, heights);
+			// Unity indexes its heightmap [z, x], and stores a fraction of the terrain's height.
+			data.SetHeights(0, 0, ground.TileHeights(tx, tz, lowest, relief));
 			string dataPath = $"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} {tx}_{tz}.asset";
 			AssetDatabase.CreateAsset(data, dataPath);
 			result.Wrote.Add(dataPath);
@@ -392,8 +372,9 @@ namespace FishMMO.Shared.WorldDesign
 			SceneManager.MoveGameObjectToScene(host, scene);
 			/* Every tile shares one floor, so the landmass is one slope rather than a set of
 			 * terraces — and that floor stands at its real altitude, so y is metres above sea level
-			 * here exactly as it is for the sea, the clouds and the fog. Tighten() moves it again
-			 * when it finds the ground's true floor. */
+			 * here exactly as it is for the sea, the clouds and the fog. */
+			float halfWidth = plan.WidthMetres * 0.5f;
+			float halfDepth = plan.DepthMetres * 0.5f;
 			host.transform.position = new Vector3(tx * plan.TileMetres - halfWidth, lowest, tz * plan.TileMetres - halfDepth);
 
 			Terrain terrain = host.AddComponent<Terrain>();
@@ -587,111 +568,14 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Shrinks every tile onto the ground the scene actually has, and returns the new relief.
-		/// </summary>
-		/// <param name="terrains">Every tile of the scene, already written.</param>
-		/// <param name="lowest">Metres above sea level at height 0; replaced with the new floor.</param>
-		/// <param name="relief">The bound the tiles were written against, in metres.</param>
-		/// <remarks>
-		/// <para>
-		/// The bound the heights were written against has to allow for the highest peak local
-		/// detail could produce anywhere, so that nothing is ever clamped. Most scenes are nowhere
-		/// near it — a couple of kilometres of gentle ground sits inside a tenth of the range its
-		/// world allows — and a terrain whose nominal height is several times its real relief is
-		/// not a harmless overshoot. Its <c>size.y</c> IS the metres that a normalised height of 0
-		/// to 1 spans, which is what <see cref="Biomes.SceneTerrainExtent"/> reports and what turns
-		/// a real lapse rate into the climate scale's. Left inflated, a scene cools from valley to
-		/// ridge by a fraction of what its own relief says it should.
-		/// </para>
-		/// <para>
-		/// Done by rescaling what is on disk rather than by sampling the planet again: the heights
-		/// are already the answer, and asking the noise a second time would double the cost of the
-		/// slowest part of generating a scene. The stored values are 16-bit, so requantising them
-		/// against a smaller range loses at most one step of the OLD range — about a centimetre on
-		/// any scene this produces, against a metre being the unit the world is built in.
-		/// </para>
-		/// </remarks>
-		private static float Tighten(Terrain[,] terrains, ref float lowest, float relief)
-		{
-			float minimum = 1f;
-			float maximum = 0f;
-			bool any = false;
-
-			foreach (Terrain terrain in terrains)
-			{
-				TerrainData data = terrain != null ? terrain.terrainData : null;
-				if (data == null)
-				{
-					continue;
-				}
-				int resolution = data.heightmapResolution;
-				float[,] heights = data.GetHeights(0, 0, resolution, resolution);
-				for (int z = 0; z < resolution; z++)
-				{
-					for (int x = 0; x < resolution; x++)
-					{
-						float height = heights[z, x];
-						minimum = Mathf.Min(minimum, height);
-						maximum = Mathf.Max(maximum, height);
-						any = true;
-					}
-				}
-			}
-
-			if (!any)
-			{
-				return relief;
-			}
-
-			float floor = lowest + minimum * relief;
-			float tightened = Mathf.Max(SceneGeneration.MinimumTerrainHeightMetres, (maximum - minimum) * relief);
-			// Nothing to give back, and rewriting every heightmap to change nothing would only add
-			// a requantisation to the scene for free.
-			if (tightened >= relief - 0.5f)
-			{
-				return relief;
-			}
-
-			foreach (Terrain terrain in terrains)
-			{
-				TerrainData data = terrain != null ? terrain.terrainData : null;
-				if (data == null)
-				{
-					continue;
-				}
-				int resolution = data.heightmapResolution;
-				float[,] heights = data.GetHeights(0, 0, resolution, resolution);
-				for (int z = 0; z < resolution; z++)
-				{
-					for (int x = 0; x < resolution; x++)
-					{
-						float metres = lowest + heights[z, x] * relief;
-						heights[z, x] = Mathf.Clamp01((metres - floor) / tightened);
-					}
-				}
-				Vector3 size = data.size;
-				data.size = new Vector3(size.x, tightened, size.z);
-				data.SetHeights(0, 0, heights);
-				EditorUtility.SetDirty(data);
-
-				// Height 0 now means the new floor, so the tile stands there: y is altitude.
-				Vector3 position = terrain.transform.position;
-				terrain.transform.position = new Vector3(position.x, floor, position.z);
-			}
-
-			lowest = floor;
-			return tightened;
-		}
-
-		/// <summary>
 		/// Paints the scene with its biomes and bakes its biome map. False, having written nothing,
 		/// when no biome fits anywhere in it.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>From the finished heightmap.</b> Tighten() has run, so the ground the biome field
-		/// reads is the ground on disk — local detail included — and a ridge colder than the globe
-		/// can show is painted as the ridge it is.
+		/// <b>From the finished heightmap.</b> The ground the biome field reads is the ground on
+		/// disk — local detail and any reshaping included — and a ridge colder than the globe can
+		/// show is painted as the ridge it is.
 		/// </para>
 		/// <para>
 		/// <b>The map is written beside the terrain</b> and assigned to the atlas entry, which is
@@ -716,9 +600,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// Assets/LOCAL. Every reference this writes — palette layers, scatter prototypes, cliff
 		/// materials — goes through it; the terrain arrays resolve textures LOCAL-first on their own.
 		/// </param>
+		/// <param name="ground">
+		/// The ground in scene metres at (east, north), on the scene and out to the horizon, for the
+		/// horizon's biomes; null asks the planet (<see cref="SceneGeneration.AltitudeMetres"/>), which is
+		/// all a repaint of an existing scene has.
+		/// </param>
 		internal static bool PaintBiomes(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan, Terrain[,] terrains,
 			string terrainFolder, SceneGenerationResult result, out Func<float, float, float, float, Color> groundColour,
-			LocalArtScope scope = null)
+			LocalArtScope scope = null, Func<float, float, float> ground = null)
 		{
 			groundColour = null;
 			SolarSystemProfile system = SolarSystemProfile.Resolve(request.Body);
@@ -850,13 +739,19 @@ namespace FishMMO.Shared.WorldDesign
 			result.BiomeMap = map;
 
 			/* The backdrop's own field, out to the horizon: the ground past the edge is the same
-			 * planet, so it is asked the same question, at the backdrop's own (planet + local
-			 * detail) heights rather than the terrain's, which end at the scene's edge. */
+			 * planet, so it is asked the same question, at the backdrop's own heights — the scene's
+			 * ground where it has it, the planet's past it — rather than the terrain's, which end at
+			 * the scene's edge. */
 			float reach = SceneBackdropBuilder.ReachFor(request);
 			if (reach > 1f)
 			{
+				if (ground == null)
+				{
+					var planet = new SceneAltitude(request);
+					ground = planet.At;
+				}
 				SceneBiomeField horizon = SceneBiomeField.Build(request, plan.WidthMetres + 2f * reach, plan.DepthMetres + 2f * reach,
-					(east, north) => SceneGeneration.AltitudeMetres(request, east, north), system);
+					(east, north) => ground(east, north), system);
 				var colours = new BiomeGroundColours(horizon, BiomeTerrainLayers.Resolve, BiomeTerrainLayers.Placeholder);
 				groundColour = (east, north, altitude, steepness) =>
 					colours.At(east, north, steepness, climate.HeightOfAltitude(altitude / verticalScale));
