@@ -117,10 +117,10 @@ namespace FishMMO.Client
 		[Tooltip("Cloud shadows on the ground: the volume marched from the sun into a cookie.")]
 		public bool CloudShadows = true;
 		[Header("Volumetric clouds")]
-		[Tooltip("Share of the screen the clouds are marched at, across, before the steadying rebuilds them. The rays are the cost: a quarter of them is about a third of the march's time.")]
-		[Range(0.15f, 1f)] public float CloudResolution = 0.5f;
-		[Tooltip("Steps through the cloud layer along a view ray.")]
-		[Range(8, 160)] public int CloudSteps = 64;
+		[Tooltip("Share of the screen the clouds are marched at, across, before the steadying rebuilds them (at four times this, every pixel re-marched once in sixteen frames). The rays are the cost: at 2560x1440 on an RTX 4070 SUPER, 0.2 cost 10.7 ms over open land and 0.0625 about 2 ms (ScenePerfProbe, 2026-10-07); shipped skies march about one pixel in 256 a frame.")]
+		[Range(0.04f, 1f)] public float CloudResolution = 0.07f;
+		[Tooltip("The march's quality: 32 walks the cloud at its finest steps, fewer lengthens them in proportion (24 by a third, 16 twice), and the step length is what the march's cost follows.")]
+		[Range(8, 160)] public int CloudSteps = 24;
 		[Tooltip("How much of the eddies' pattern is drawn at a cloud's edge, 0..1. Their average effect is kept at any setting (the edge's water, CloudClimate.ExpectedEdgeWater), so this changes how frayed an edge looks, not how much cloud there is; above 0 it costs one detail read per sample inside cloud.")]
 		[Range(0f, 1f)] public float CloudDetail = 1f;
 		[Tooltip("Steady the clouds against the last frame. Off means more steps are needed for the same calm.")]
@@ -148,9 +148,9 @@ namespace FishMMO.Client
 		// Balanced's CloudDetail was 0.6. The erosion's average is now kept at any setting, so 0.6 only
 		// drew the eddies at 60 % contrast for the same texture read: it is 1. Performant stays 0, which
 		// skips the read and keeps the average (smooth-edged clouds of the same size).
-		public static WeatherTierSettings Performant() => new WeatherTierSettings { Particles = 3000, BoxSize = 18f, OcclusionResolution = 48, OcclusionTexelMeters = 2f, OcclusionRaysPerFrame = 256, StarCubemapSize = 256, MeteorBudget = 16, Asteroids = false, ReflectionResolution = 64, Curtains = 3, Vortices = 2, VortexParticles = 600, CloudShadows = false, CloudResolution = 0.17f, CloudSteps = 28, CloudDetail = 0f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = false, TerrainSnowDisplacement = false };
-		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, Vortices = 3, VortexParticles = 1500, CloudShadows = true, CloudResolution = 0.25f, CloudSteps = 48, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = false };
-		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, Vortices = 4, VortexParticles = 3000, CloudShadows = true, CloudResolution = 0.3f, CloudSteps = 72, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = true };
+		public static WeatherTierSettings Performant() => new WeatherTierSettings { Particles = 3000, BoxSize = 18f, OcclusionResolution = 48, OcclusionTexelMeters = 2f, OcclusionRaysPerFrame = 256, StarCubemapSize = 256, MeteorBudget = 16, Asteroids = false, ReflectionResolution = 64, Curtains = 3, Vortices = 2, VortexParticles = 600, CloudShadows = false, CloudResolution = 0.05f, CloudSteps = 16, CloudDetail = 0f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = false, TerrainSnowDisplacement = false };
+		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, Vortices = 3, VortexParticles = 1500, CloudShadows = true, CloudResolution = 0.06f, CloudSteps = 21, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = false };
+		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, Vortices = 4, VortexParticles = 3000, CloudShadows = true, CloudResolution = 0.07f, CloudSteps = 24, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = true };
 	}
 
 	/// <summary>

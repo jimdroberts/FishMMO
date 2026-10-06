@@ -329,6 +329,7 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
     float matched = 0.0;
     float4 closest = float4(0.0, 0.0, 0.0, 1.0);
     float closestGap = 1e30;
+    float nearestThere = 1e30;
     bool busy = false;
     [unroll] for (int k = 0; k < 9; k++)
     {
@@ -351,6 +352,7 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
             sumSquares += y * y;
             matched += 1.0;
         }
+        nearestThere = min(nearestThere, theres[k]);
         float gap = abs(theres[k] - here);
         if (gap < closestGap)
         {
@@ -360,6 +362,14 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
     }
     // Nothing but clear air round it: exactly clear, as the kernel's clear tile says.
     if (!busy)
+    {
+        return FishResolveClear();
+    }
+    // Nearer than every ray round it, and none of them stopped at it: a leaf or twig thinner than a texel
+    // against the sky. Whatever those rays crossed is behind it, so nothing of theirs is in front of it:
+    // clear. The nearest in depth below was a sky ray every time, and at a march of a sixteenth of the
+    // screen (a texel some sixteen pixels across) left pale smudges of sky light in the canopy.
+    if (matched < 0.5 && here < nearestThere - max(12.0, here * 0.2))
     {
         return FishResolveClear();
     }

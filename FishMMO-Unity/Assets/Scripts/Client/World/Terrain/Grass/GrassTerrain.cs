@@ -193,6 +193,12 @@ namespace FishMMO.Client
 		/// <summary>The prototypes drawn as blades (by prototype index), what the detail renderer skips.</summary>
 		public bool[] Skip;
 		public int DensityResolution;
+		/// <summary>
+		/// Per density texel (<see cref="DensityResolution"/> square, row z first), 1 where any blade type grows; null
+		/// until built (then every tile is taken to have grass). Lets the per-camera gather skip a tile with nothing on it
+		/// before any of its bounds or frustum work: a beach or a rock face paid the whole gather and drew no blade.
+		/// </summary>
+		public byte[] Occupied;
 		public int HeightResolution;
 		public float MaxGrassHeight;
 		public bool HeightChecked;
@@ -538,6 +544,19 @@ namespace FishMMO.Client
 					textures = true;
 					Color32[] pixels0 = Pack(0), pixels1 = count > 4 ? Pack(4) : null;
 					gt.Density0 = MakeTexture(pixels0, dres, $"{Terrain.name} grass density 0-3");
+					var occupied = new byte[dres * dres];
+					for (int i = 0; i < occupied.Length; i++)
+					{
+						Color32 a = pixels0[i];
+						bool grows = a.r > 1 || a.g > 1 || a.b > 1 || a.a > 1;
+						if (!grows && pixels1 != null)
+						{
+							Color32 b = pixels1[i];
+							grows = b.r > 1 || b.g > 1 || b.b > 1 || b.a > 1;
+						}
+						occupied[i] = grows ? (byte)1 : (byte)0;
+					}
+					gt.Occupied = occupied;
 					gt.Density1 = pixels1 != null ? MakeTexture(pixels1, dres, $"{Terrain.name} grass density 4-7") : null;
 					gt.BeginHeightGrid();
 					return;
@@ -685,6 +704,37 @@ namespace FishMMO.Client
 			heightTexels32 = null;
 		}
 
+		/// <summary>
+		/// Whether any blade type grows under a world xz rectangle, a density texel round it included (the blades
+		/// sample the density bilinearly, so a texel's grass reaches half a texel past it). True until built.
+		/// </summary>
+		public bool HasGrass(float x0, float z0, float x1, float z1)
+		{
+			byte[] occupied = Occupied;
+			int d = DensityResolution;
+			if (occupied == null || d <= 0 || occupied.Length < d * d)
+			{
+				return true;
+			}
+			float perMetreX = d / Mathf.Max(1e-3f, Size.x), perMetreZ = d / Mathf.Max(1e-3f, Size.z);
+			int ax0 = Mathf.Clamp(Mathf.FloorToInt((x0 - Origin.x) * perMetreX) - 1, 0, d - 1);
+			int ax1 = Mathf.Clamp(Mathf.FloorToInt((x1 - Origin.x) * perMetreX) + 1, 0, d - 1);
+			int az0 = Mathf.Clamp(Mathf.FloorToInt((z0 - Origin.z) * perMetreZ) - 1, 0, d - 1);
+			int az1 = Mathf.Clamp(Mathf.FloorToInt((z1 - Origin.z) * perMetreZ) + 1, 0, d - 1);
+			for (int z = az0; z <= az1; z++)
+			{
+				int row = z * d;
+				for (int x = ax0; x <= ax1; x++)
+				{
+					if (occupied[row + x] != 0)
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
 		/// <summary>The ground's height range under a world xz rectangle (clamped to the terrain).</summary>
 		public Vector2 HeightRange(float x0, float z0, float x1, float z1)
 		{
@@ -716,6 +766,7 @@ namespace FishMMO.Client
 				UnityEngine.Object.Destroy(Density1);
 			}
 			Density0 = Density1 = null;
+			Occupied = null;
 			if (heightTexture != null)
 			{
 				UnityEngine.Object.Destroy(heightTexture);

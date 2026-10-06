@@ -187,6 +187,27 @@ namespace FishMMO.Shared.WorldDesign
 						bigFall = f;
 					}
 				}
+				if (bigFall != null)
+				{
+					// Round the biggest fall's lip: the water, its bed and width, and the ground at the line and either side.
+					FishMMO.Water.InlandWaterRenderer.Fall f = bigFall.Value;
+					SceneHydrology.River line = scratch.Rivers.Find(r => r.Id == f.River);
+					summary.Add($"lip {f.Lip}, plunge {f.Plunge}, foot {f.Foot}: i, x, z, water, bed, width, reach, ground at the line, left/right at half + 1 m, kind");
+					for (int k = Mathf.Max(0, f.Lip - 14); line != null && k <= Mathf.Min(line.Points.Length - 1, f.Foot + 8); k++)
+					{
+						Vector3 p = line.Points[k];
+						Vector3 along = line.Points[Mathf.Min(line.Points.Length - 1, k + 1)] - line.Points[Mathf.Max(0, k - 1)];
+						along.y = 0f;
+						along = along.sqrMagnitude > 1e-6f ? along.normalized : Vector3.forward;
+						var left = new Vector3(-along.z, 0f, along.x);
+						float reachOut = 0.5f * line.Width[k] + 1f;
+						int cx = Mathf.Clamp(Mathf.RoundToInt((p.x - field.EastOf(0)) / field.Spacing), 0, field.Width - 1);
+						int cz = Mathf.Clamp(Mathf.RoundToInt((p.z - field.NorthOf(0)) / field.Spacing), 0, field.Depth - 1);
+						summary.Add($"  {k}: {p.x:0.0}, {p.z:0.0}, {p.y:0.00}, {line.Bed[k]:0.00}, {line.Width[k]:0.0}, {line.Reach[k]}, " +
+							$"{field.MetresAt(p.x, p.z):0.00}, {field.MetresAt(p.x + left.x * reachOut, p.z + left.z * reachOut):0.00}/" +
+							$"{field.MetresAt(p.x - left.x * reachOut, p.z - left.z * reachOut):0.00}, {water.Grid.Kind[cz * field.Width + cx]}");
+					}
+				}
 				File.WriteAllLines(Path.Combine(output, "falls.txt"), summary);
 				if (bigFall != null)
 				{
@@ -196,6 +217,27 @@ namespace FishMMO.Shared.WorldDesign
 				else
 				{
 					Debug.LogWarning("[Inland water probe] no fall of 1.5 m or more in this water.");
+				}
+			}
+
+			// FISHMMO_INLAND_FOCUS=pond: the window centred on the first lake a river ponds (SceneWater.Pond; no planet lake).
+			if (Environment.GetEnvironmentVariable("FISHMMO_INLAND_FOCUS") == "pond")
+			{
+				SceneLake pond = water.Lakes.Find(l => l.PlanetLake < 0 && l.Seeds.Count > 0);
+				if (pond != null)
+				{
+					Vector2 centre = Vector2.zero;
+					foreach (Vector2 seed in pond.Seeds)
+					{
+						centre += seed / pond.Seeds.Count;
+					}
+					bestX = Mathf.Clamp(Mathf.RoundToInt((centre.x - field.EastOf(0)) / field.Spacing) - window / 2, 0, field.Width - 1 - window);
+					bestZ = Mathf.Clamp(Mathf.RoundToInt((centre.y - field.NorthOf(0)) / field.Spacing) - window / 2, 0, field.Depth - 1 - window);
+					Debug.Log($"[Inland water probe] pond at {pond.Level:0.00} m round ({centre.x:0}, {centre.y:0}), {pond.Covered} samples covered.");
+				}
+				else
+				{
+					Debug.LogWarning("[Inland water probe] no pond in this water.");
 				}
 			}
 
@@ -302,6 +344,9 @@ namespace FishMMO.Shared.WorldDesign
 					("fall_pool", f.FootPoint + down * (f.PoolRadius * 1.6f + 4f) + side * (f.PoolRadius * 0.6f) + Vector3.up * 1.6f, f.FootPoint + Vector3.up * (f.Drop * 0.3f), false),
 					("fall_high", f.FootPoint + down * (back * 1.4f) - side * (back * 0.6f) + Vector3.up * (back * 0.9f + f.Drop), middle, false),
 					("fall_pooltop", f.FootPoint + down * (f.PoolRadius * 0.8f) + Vector3.up * (f.PoolRadius * 1.4f + 3f), f.FootPoint, false),
+					// Over the lip: the river's last metres before it goes over, from above and from upstream.
+					("fall_liptop", f.LipPoint + down * 4f + Vector3.up * (12f + 2f * f.Width), f.LipPoint - down * 6f, false),
+					("fall_lipback", f.LipPoint - down * (10f + 2f * f.Width) + side * 3f + Vector3.up * (4f + f.Width), f.LipPoint, false),
 				};
 			}
 			// FISHMMO_INLAND_WAKES=1: two logs on the biggest river in the window, their wakes handed to the shader as the
@@ -745,11 +790,13 @@ namespace FishMMO.Shared.WorldDesign
 						case WaterKind.None:
 							if (barShare.x > 0f)
 							{
-								float r0 = Mathf.Clamp01((steep - 30f) / 15f) * (1f - barShare.x);
-								splat[z, x, 0] = (1f - barShare.x) - r0;
+								// Cliffs first, as BiomeSplatPainter does: a bar takes only the ground's share, never rock.
+								float r0 = Mathf.Clamp01((steep - 30f) / 15f);
+								float ground = 1f - r0;
+								splat[z, x, 0] = ground * (1f - barShare.x);
 								splat[z, x, 3] = r0;
-								splat[z, x, 1] = barShare.x * barShare.y;
-								splat[z, x, 2] = barShare.x * (1f - barShare.y);
+								splat[z, x, 1] = ground * barShare.x * barShare.y;
+								splat[z, x, 2] = ground * barShare.x * (1f - barShare.y);
 								break;
 							}
 							goto default;

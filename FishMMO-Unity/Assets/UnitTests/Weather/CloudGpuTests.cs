@@ -77,17 +77,18 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
-		public void BalancedAndHighAreRebuiltAtTheScreenAndPerformantIsNot()
+		public void EveryTierRebuildsAtFourTimesItsMarchAndTheCompositeScalesItUp()
 		{
-			WeatherTierSettings performant = WeatherTierSettings.Performant();
-			WeatherTierSettings balanced = WeatherTierSettings.Balanced();
-			WeatherTierSettings high = WeatherTierSettings.High();
-			LogAssert.AreEqual(1f, CloudTierSettings.HistoryScaleFor(balanced.CloudHistoryScale, balanced.CloudResolution), "Balanced keeps the screen's own size");
-			LogAssert.AreEqual(1f, CloudTierSettings.HistoryScaleFor(high.CloudHistoryScale, high.CloudResolution), "and High");
-			float rebuilt = CloudTierSettings.HistoryScaleFor(performant.CloudHistoryScale, performant.CloudResolution);
-			LogAssert.IsTrue(rebuilt < 1f && rebuilt > performant.CloudResolution,
-				$"Performant rebuilds between its march and the screen, not at the screen: {rebuilt:0.000}");
-			LogAssert.IsTrue(rebuilt * rebuilt < 0.5f, $"so its steadying touches well under half the pixels it used to: {rebuilt * rebuilt:0.00}");
+			// 2026-10-07: the marches came down to about one ray in 200-400 pixels a frame (shipped skies march
+			// about one in 256), 10.7 ms of clouds becoming about 2 at 2560x1440. Each rebuilds at four times its
+			// march, every pixel re-marched once in sixteen frames, and the composite scales that up by depth.
+			foreach (WeatherTierSettings tier in new[] { WeatherTierSettings.Performant(), WeatherTierSettings.Balanced(), WeatherTierSettings.High() })
+			{
+				float rebuilt = CloudTierSettings.HistoryScaleFor(tier.CloudHistoryScale, tier.CloudResolution);
+				LogAssert.IsTrue(Mathf.Abs(rebuilt - 4f * tier.CloudResolution) < 1e-5f, $"rebuilt at four times a march of {tier.CloudResolution}: {rebuilt:0.000}");
+				LogAssert.IsTrue(rebuilt < 0.5f, $"below the screen's size, so the composite's upscale is what draws it: {rebuilt:0.000}");
+				LogAssert.IsTrue(tier.CloudResolution * tier.CloudResolution < 1f / 150f, $"a ray for every 150 pixels or more: {1f / (tier.CloudResolution * tier.CloudResolution):0}");
+			}
 		}
 
 		[Test]

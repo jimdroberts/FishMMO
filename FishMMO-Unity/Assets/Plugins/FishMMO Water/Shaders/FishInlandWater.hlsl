@@ -253,6 +253,23 @@ half StreakFoam(float2 xz, float2 flow, float scale, float cycle)
 }
 
 /// <summary>
+/// The boil of a plunge pool: patches of white welling up and spreading, with no direction to them. The foam texture
+/// read through a warp made of itself (so no clump repeats in a ring round the foot or lines up with its neighbours),
+/// at two scales drifting with the river's own flow. Streaked foam had the pool's outward drift to stretch along, and
+/// drew every pool as a sunburst of dashes.
+/// </summary>
+half BoilFoam(float2 xz, float2 flow, float scale, float cycle)
+{
+	float2 warp = float2(
+		FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), xz, flow * 0.5, scale * 3.7, cycle * 1.9, float2(0.13, 0.57)).r,
+		FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), xz, flow * 0.5, scale * 3.1, cycle * 2.3, float2(0.71, 0.29)).r) - 0.5;
+	float2 at = xz + warp * (scale * 2.2);
+	half broad = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), at, flow, scale * 1.4, cycle * 0.8, float2(0.37, 0.83)).r;
+	half fine = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), at * 1.07 + 3.3, flow * 0.6, scale * 0.5, cycle * 1.3, float2(0.61, 0.07)).r;
+	return saturate(broad * 0.75 + fine * 0.35 + broad * fine * 0.4);
+}
+
+/// <summary>
 /// How hard the water churns here under a fall (0 … 1), and the way it boils out from the nearest foot: white,
 /// pale and rough where the curtain lands, easing out to the pool's edge. Only water near a foot's own level
 /// churns, so a lake far below a fall is not stirred by it.
@@ -386,6 +403,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	half churn = FallChurn(positionWS, outward);
 	// The river's own speed, before the boil: the silt it carries is its own, not the fall's.
 	float riverSpeed = length(flow);
+	float2 riverFlow = flow;
 	/* A little outward drift from where the curtain lands, not a strong one: the ripples and foam ride the flow by
 	 * flow-mapping, and a strong radial flow drew them as pulsing concentric rings, a swirl disc on every pool. */
 	flow += outward * (0.6 * churn);
@@ -536,6 +554,8 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	if (!below)
 	{
 		half lace = StreakFoam(positionWS.xz, flow, max(0.3, _FoamScale), _FlowCycle);
+		// Round a fall's foot the pool boils rather than streaks.
+		lace = lerp(lace, BoilFoam(positionWS.xz, riverFlow, max(0.3, _FoamScale), _FlowCycle), saturate(1.6 * churn));
 		half shore = 0.0;
 		#if defined(_WATER_DEPTH)
 			shore = (1.0 - saturate(waterColumn / max(0.02, _ShoreFoam))) * saturate(speed / 0.8) * 0.5;

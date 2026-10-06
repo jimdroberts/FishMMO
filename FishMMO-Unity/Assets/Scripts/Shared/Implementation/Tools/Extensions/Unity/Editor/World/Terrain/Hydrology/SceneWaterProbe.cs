@@ -249,11 +249,54 @@ namespace FishMMO.Shared.WorldDesign
 					float left = field.MetresAt(path.X[i] + lx * half, path.Z[i] + lz * half);
 					float right = field.MetresAt(path.X[i] - lx * half, path.Z[i] - lz * half);
 					float centre = field.MetresAt(path.X[i], path.Z[i]);
-					float gap = path.Surface[i] - Mathf.Min(left, right);
+					/* A bank sample that lies inside another point's channel is under that water, not a bank: a basin's
+					 * narrowing tail has the wider rows' channel beside it, under the same level pool. */
+					bool Wet(float px, float pz)
+					{
+						// Under a lake (a pond the river runs through), this river's water elsewhere, or another's.
+						if (water.KindAt(px, pz) == WaterKind.Lake || (water.KindAt(px, pz) == WaterKind.River && water.SurfaceAt(px, pz) >= path.Surface[i] - 0.05f))
+						{
+							return true;
+						}
+						// Under this river's water elsewhere, or another's (a tributary's mouth beside the main river).
+						foreach (RiverPath under in water.Rivers)
+						{
+							int from = under == path ? Mathf.Max(0, i - 40) : 0, to = under == path ? Mathf.Min(path.Count, i + 40) : under.Count;
+							for (int k = from; k < to; k++)
+							{
+								float dx = under.X[k] - px, dz = under.Z[k] - pz;
+								if ((under != path || k != i) && dx * dx + dz * dz < 0.25f * under.Width[k] * under.Width[k] && under.Surface[k] >= path.Surface[i] - 0.05f)
+								{
+									return true;
+								}
+							}
+						}
+						return false;
+					}
+					float leftBank = Wet(path.X[i] + lx * half, path.Z[i] + lz * half) ? float.MaxValue : left;
+					float rightBank = Wet(path.X[i] - lx * half, path.Z[i] - lz * half) ? float.MaxValue : right;
+					float gap = Mathf.Min(leftBank, rightBank) == float.MaxValue ? 0f : path.Surface[i] - Mathf.Min(leftBank, rightBank);
 					if (gap > 0.3f)
 					{
 						floating++;
 						worst = Mathf.Max(worst, gap);
+						// The nearest other water: a neighbour's channel or bank cut can take the ground from under this one.
+						float nearest = float.MaxValue;
+						string near = "none";
+						foreach (RiverPath other in water.Rivers)
+						{
+							for (int k = 0; other != path && k < other.Count; k++)
+							{
+								float d = Mathf.Sqrt((other.X[k] - path.X[i]) * (other.X[k] - path.X[i]) + (other.Z[k] - path.Z[i]) * (other.Z[k] - path.Z[i]));
+								if (d < nearest)
+								{
+									nearest = d;
+									near = $"river {other.Id} point {k} at {d:0.0} m, water {other.Surface[k]:0.00}, half-width {0.5f * other.Width[k]:0.0}";
+								}
+							}
+						}
+						report.Add($"  floating river {path.Id} point {i} ({path.X[i]:0.0}, {path.Z[i]:0.0}) by {gap:0.0} m; banks {water.KindAt(path.X[i] + lx * half, path.Z[i] + lz * half)}/{water.KindAt(path.X[i] - lx * half, path.Z[i] - lz * half)}, " +
+							$"surface there {water.SurfaceAt(path.X[i] + lx * half, path.Z[i] + lz * half):0.00}; nearest {near}");
 					}
 					if (path.Bed[i] - centre > 0.5f)
 					{
@@ -274,6 +317,46 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				report.Add($"self river {path.Id} (ends {path.End}, joins {path.JoinsRiver}): {path.Count} points, {crossings} self-crossings; water over a bank by >0.3 m at {floating} (worst {worst:0.0} m); bed over the carved ground at {hanging}");
+				// Where its line first crosses another river's, and that river's water there: a tributary should end there.
+				foreach (RiverPath other in water.Rivers)
+				{
+					if (other == path || other.Count < 2)
+					{
+						continue;
+					}
+					int first = -1, otherAt = -1, total = 0;
+					for (int a = 0; a + 1 < path.Count; a++)
+					{
+						for (int b = 0; b + 1 < other.Count; b++)
+						{
+							if (Crosses(path.X[a], path.Z[a], path.X[a + 1], path.Z[a + 1], other.X[b], other.Z[b], other.X[b + 1], other.Z[b + 1]))
+							{
+								total++;
+								if (first < 0)
+								{
+									first = a;
+									otherAt = b;
+								}
+							}
+						}
+					}
+					if (total > 0)
+					{
+						report.Add($"  crosses river {other.Id} {total}x; first at its point {first} (water {path.Surface[first]:0.00}) over river {other.Id} point {otherAt} (water {other.Surface[otherAt]:0.00}); its last point is {path.Count - 1}");
+					}
+				}
+			}
+			foreach (SceneLake lake in water?.Lakes ?? new List<SceneLake>())
+			{
+				int seedsDry = 0, seedsRiver = 0, seedsHigh = 0;
+				foreach (Vector2 seed in lake.Seeds)
+				{
+					int at = water.Grid.SampleAt(seed.x, seed.y);
+					if (at < 0) { seedsDry++; continue; }
+					if (water.Grid.Kind[at] == WaterKind.River) seedsRiver++;
+					if (field.Metres[at] >= lake.Level) seedsHigh++;
+				}
+				report.Add($"lake {lake.Id} (planet {lake.PlanetLake}) at {lake.Level:0.00} m: {lake.Covered} samples covered from {lake.Seeds.Count} seeds ({seedsDry} off the grid, {seedsRiver} in a channel, {seedsHigh} on ground at or over the level)");
 			}
 			File.WriteAllLines(Path.ChangeExtension(csvPath, null) + "-self.csv", self);
 			foreach (SceneHydrology.River river in hydrology.Rivers)

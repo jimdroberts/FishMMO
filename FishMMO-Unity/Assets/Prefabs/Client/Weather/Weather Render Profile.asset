@@ -137,8 +137,8 @@ MonoBehaviour:
     Vortices: 2
     VortexParticles: 600
     CloudShadows: 0
-    CloudResolution: 0.17
-    CloudSteps: 28
+    CloudResolution: 0.05
+    CloudSteps: 16
     CloudDetail: 0
     CloudTemporal: 1
     CloudHistoryScale: 0
@@ -158,8 +158,8 @@ MonoBehaviour:
     Vortices: 3
     VortexParticles: 1500
     CloudShadows: 1
-    CloudResolution: 0.25
-    CloudSteps: 48
+    CloudResolution: 0.06
+    CloudSteps: 21
     CloudDetail: 1
     CloudTemporal: 1
     CloudHistoryScale: 0
@@ -179,8 +179,8 @@ MonoBehaviour:
     Vortices: 4
     VortexParticles: 3000
     CloudShadows: 1
-    CloudResolution: 0.2
-    CloudSteps: 32
+    CloudResolution: 0.07
+    CloudSteps: 24
     CloudDetail: 1
     CloudTemporal: 1
     CloudHistoryScale: 0

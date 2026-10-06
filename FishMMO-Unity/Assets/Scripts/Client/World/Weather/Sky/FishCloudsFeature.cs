@@ -276,6 +276,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			/* Under the sea nothing of the sky reaches the eye (the water's own volume draws what is above): the whole
+			 * march was being paid for behind it, 27 ms of a 42 ms frame at 2560×1440 on High (ScenePerfProbe). */
+			if (SurfaceWater.IsUnder(renderingData.cameraData.camera.transform.position))
+			{
+				return;
+			}
 			pass.Setup(material, ResolveCompute);
 			lastPass = pass;
 			renderer.EnqueuePass(pass);

@@ -92,8 +92,12 @@ namespace FishMMO.Client
 			return true;
 		}
 
+		/// <summary>Counts the rebuilds: anything cached against the groups (the blade renderer's work list) is stale when it moves.</summary>
+		public int Version { get; private set; }
+
 		private void Rebuild(IReadOnlyList<GrassTerrain> terrains, Func<FishMMO.Shared.TerrainArraySet, GrassAlbedoTexels> albedoFor)
 		{
+			Version++;
 			RetireAll();
 			index.Clear();
 			groupOf.Clear();

@@ -169,6 +169,8 @@ namespace FishMMO.Shared.WorldDesign
 			float[] bank = null;
 			float[] barWidth = null;
 			float[] barSand = null;
+			// Per sample: which point of its owner it is most inside (for a ponded stretch, which builds nothing).
+			int[] pointOf = null;
 			// Per sample: the highest water within a levee's reach of it, from ANY river or reach, and how far out from
 			// that water's channel it stands (the levee's falloff).
 			float[] holdTop = null;
@@ -195,6 +197,11 @@ namespace FishMMO.Shared.WorldDesign
 					float ex = bx - ax, ez = bz - az;
 					float lengthSq = Math.Max(1e-8f, ex * ex + ez * ez);
 					float length = (float)Math.Sqrt(lengthSq);
+					/* A fall's lip holds its level for a grid cell before the drop. Carved as a slope from the lip to the next
+					 * point (60 m lower, 2 m on) the edge ate back into the channel: the ground at the lip stood 7.6 m under
+					 * its water, and the river's last metres hung over a V-shaped hole, black from upstream (Flo Monolith). */
+					float lipHold = river.Reach != null && river.Reach[v] != RiverReach.Fall && river.Reach[v + 1] == RiverReach.Fall
+						? Math.Min(1f, grid.Spacing / length) : 0f;
 					for (int z = z0; z <= z1; z++)
 					{
 						float pz = grid.NorthOf(z);
@@ -221,8 +228,9 @@ namespace FishMMO.Shared.WorldDesign
 							}
 							// Left of the flow is positive.
 							float n = (ex * (pz - az) - ez * (px - ax)) / length;
-							float level = river.Surface[v] + (river.Surface[v + 1] - river.Surface[v]) * t;
-							float bed = river.Bed[v] + (river.Bed[v + 1] - river.Bed[v]) * t;
+							float drop = lipHold <= 0f ? t : lipHold >= 1f ? 0f : Math.Max(0f, (t - lipHold) / (1f - lipHold));
+							float level = river.Surface[v] + (river.Surface[v + 1] - river.Surface[v]) * drop;
+							float bed = river.Bed[v] + (river.Bed[v + 1] - river.Bed[v]) * drop;
 							float curvature = river.Curvature[v] + (river.Curvature[v + 1] - river.Curvature[v]) * t;
 
 							float allowed;
@@ -264,6 +272,7 @@ namespace FishMMO.Shared.WorldDesign
 								bank = new float[count];
 								barWidth = new float[count];
 								barSand = new float[count];
+								pointOf = new int[count];
 								holdTop = new float[count];
 								holdOutside = new float[count];
 								for (int k = 0; k < count; k++)
@@ -285,7 +294,7 @@ namespace FishMMO.Shared.WorldDesign
 							/* Whatever water this sample stands beside, it holds: a cell beside a pool above a fall, or a meander's
 							 * loop, is often most inside ANOTHER reach's channel, lower down, and took its levee from that water; the
 							 * pool above stood over the gap, metres over air (Flo Monolith: "the pools are floating"). */
-							if (outside > 0f && outside < settings.LeveeMetres && level >= tideLine && !Drowned(river, level, settings))
+							if (outside > 0f && outside < settings.LeveeMetres && level >= tideLine && !Drowned(river, level, settings) && v >= river.PondUntil)
 							{
 								float top = level + settings.FreeboardMetres;
 								if (top > holdTop[i] + 1e-3f || (Math.Abs(top - holdTop[i]) <= 1e-3f && outside < holdOutside[i]))
@@ -304,6 +313,7 @@ namespace FishMMO.Shared.WorldDesign
 								bank[i] = outside;
 								barWidth[i] = bar;
 								barSand[i] = sandOf[r][v] + (sandOf[r][v + 1] - sandOf[r][v]) * t;
+								pointOf[i] = v;
 							}
 						}
 					}
@@ -323,7 +333,7 @@ namespace FishMMO.Shared.WorldDesign
 				/* Neither bar nor levee where the river's water is standing water's: under the tide line (the tide
 				 * reworks that sand, and a bank raised above low water walls the channel in), or at the level of the
 				 * lake it runs into or out of (a bar there dams it off from the lake). */
-				bool built = surface[i] >= tideLine && !Drowned(river, surface[i], settings);
+				bool built = surface[i] >= tideLine && !Drowned(river, surface[i], settings) && pointOf[i] >= river.PondUntil;
 				if (!inChannel && bank[i] < barWidth[i] && built)
 				{
 					// On a bar: cut down to its gentle slope, and never under the water beside it.

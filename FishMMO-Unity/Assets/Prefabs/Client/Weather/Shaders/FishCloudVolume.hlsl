@@ -1931,7 +1931,13 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // layers (_FishCloudDiagScale.z, 0 as shipped: × 1), and Distance Step Growth off keeps the near
     // step all the way out (_FishCloudDiag.y). Either may need more steps to reach as far, so the
     // budget grows by as much, to at most 1024 — slow, and meant to be.
-    float stepScale = clamp(1.0 + _FishCloudDiagScale.z, 0.25, 4.0);
+    // And the tier's step count, which is what it means by quality: 32 walks the cloud at the steps above,
+    // fewer lengthens them in proportion (24 by a third, 16 by twice). It was only ever the divisor of a
+    // ray's length, clamped to 18–90 m, and any ray through a shell kilometres deep met the 90 m ceiling:
+    // halving it changed nothing (ScenePerfProbe, 2026-10-07), while the step's length is what the
+    // march's cost follows.
+    float tierStep = clamp(32.0 / max(4.0, (float)steps), 0.5, 3.0);
+    float stepScale = clamp((1.0 + _FishCloudDiagScale.z) * tierStep, 0.25, 4.0);
     bool stepGrows = _FishCloudDiag.y < 0.5;
     fine *= stepScale;
     fineNear *= stepScale;

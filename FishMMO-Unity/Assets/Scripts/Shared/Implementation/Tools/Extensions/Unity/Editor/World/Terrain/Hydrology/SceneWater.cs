@@ -561,6 +561,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				surface[i - first] = i < shoreFirst ? startLake.Level : i > shoreLast ? endLake.Level : shoreSurface[i - shoreFirst];
 			}
+			int pondEnd = Pond(river, x, z, q, widthAt, surface, first, field.Spacing);
 
 			// Split where it turns from a dry wash into running water: the wash ends where the river begins.
 			int wetFrom = first;
@@ -584,6 +585,8 @@ namespace FishMMO.Shared.WorldDesign
 				result.Add(wet);
 				// The wash is joined to the river next added, which follows it in the list.
 				dry.JoinsRiver = -2;
+				dry.PondUntil = Mathf.Clamp(pondEnd - first, 0, dry.Count);
+				wet.PondUntil = Mathf.Clamp(pondEnd - wetFrom, 0, wet.Count);
 			}
 			else
 			{
@@ -594,9 +597,90 @@ namespace FishMMO.Shared.WorldDesign
 				Link(path, startLake, endLake, joined);
 				Flare(path, joined, LakeFloorPast(field, path, endLake));
 				RunIntoLake(path);
+				path.PondUntil = Mathf.Clamp(pondEnd - first, 0, path.Count);
 				result.Add(path);
 			}
 			return result;
+		}
+
+		/// <summary>How far from a ponded stretch of river its lake may spread, metres.</summary>
+		private const float PondReachMetres = 400f;
+
+		/// <summary>
+		/// Ponds a river whose valley lies below the water it runs on into. Its surface, held at the level of what it
+		/// ends in only as far up as its banks stand (the backwater), then steps UP where that stops: Flo Monolith's
+		/// river 1 stood at 149.5 m for its first 190 points and at 166.45 m from there to river 0 (a 17 m wall of
+		/// water). Water cannot do that; it fills the low valley until it can run on. So everything below the step
+		/// rises to its level, and a lake at that level floods the valley's low ground round the ponded stretch
+		/// (seeded beside the channel, which a lake never floods; within <see cref="PondReachMetres"/> of it, sills
+		/// raised where it would leak past). Returns the first point past the pond (all before it stand in the lake),
+		/// or <paramref name="first"/> when nothing ponds.
+		/// </summary>
+		private int Pond(DrainageRiver river, List<float> x, List<float> z, float[] q, float[] width, float[] surface, int first, float spacing)
+		{
+			int rise = -1;
+			for (int k = 1; k < surface.Length; k++)
+			{
+				if (surface[k] > surface[k - 1] + 0.05f)
+				{
+					rise = k;
+				}
+			}
+			if (rise < 0)
+			{
+				return first;
+			}
+			float level = surface[rise];
+			var seeds = new List<Vector2>();
+			var ponded = new List<Vector2>();
+			float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
+			for (int k = 0; k < rise; k++)
+			{
+				if (surface[k] >= level - 0.05f)
+				{
+					continue;
+				}
+				surface[k] = level;
+				int i = first + k;
+				float ax = x[Mathf.Min(x.Count - 1, i + 1)] - x[Mathf.Max(0, i - 1)], az = z[Mathf.Min(z.Count - 1, i + 1)] - z[Mathf.Max(0, i - 1)];
+				float length = Mathf.Max(1e-4f, Mathf.Sqrt(ax * ax + az * az));
+				float nx = -az / length, nz = ax / length, offset = 0.5f * width[i] + 2f * spacing;
+				seeds.Add(new Vector2(x[i] + nx * offset, z[i] + nz * offset));
+				seeds.Add(new Vector2(x[i] - nx * offset, z[i] - nz * offset));
+				ponded.Add(new Vector2(x[i], z[i]));
+				minX = Mathf.Min(minX, x[i]); maxX = Mathf.Max(maxX, x[i]);
+				minZ = Mathf.Min(minZ, z[i]); maxZ = Mathf.Max(maxZ, z[i]);
+			}
+			// Nothing below the step is lower than it: the surface only rose by noise.
+			if (ponded.Count == 0)
+			{
+				return first;
+			}
+			float reachSq = PondReachMetres * PondReachMetres;
+			Lakes.Add(new SceneLake
+			{
+				Id = Lakes.Count,
+				PlanetLake = -1,
+				Level = level,
+				SpillLevel = level,
+				Outflow = q[first + rise],
+				Seeds = seeds,
+				Bounds = Rect.MinMaxRect(minX - PondReachMetres, minZ - PondReachMetres, maxX + PondReachMetres, maxZ + PondReachMetres),
+				MayCover = (east, north) =>
+				{
+					foreach (Vector2 p in ponded)
+					{
+						float dx = p.x - east, dz = p.y - north;
+						if (dx * dx + dz * dz <= reachSq)
+						{
+							return true;
+						}
+					}
+					return false;
+				},
+			});
+			Notes.Add($"Planet river {river.Id}: its valley lies below the water it runs on into, so {ponded.Count} points pond in a lake at {level:0.00} m.");
+			return first + rise;
 		}
 
 		private static void Link(RiverPath path, SceneLake startLake, SceneLake endLake, RiverPath joined)

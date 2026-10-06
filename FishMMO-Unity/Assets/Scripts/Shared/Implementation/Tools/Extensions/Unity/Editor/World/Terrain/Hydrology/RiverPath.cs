@@ -227,6 +227,11 @@ namespace FishMMO.Shared.WorldDesign
 		public RiverReach[] Reach;
 		/// <summary>Per point, the largest grain the water can move, metres (<see cref="RiverShaping.Competence"/>); null where not worked out.</summary>
 		public float[] Grain;
+		/// <summary>
+		/// The points before this index stand in a lake the river ponds (its valley lies below the water it runs on
+		/// into): they build no levee or bar, as the lake holds that water, not banks. 0 for none.
+		/// </summary>
+		public int PondUntil;
 
 		public int Count => X != null ? X.Length : 0;
 
@@ -542,7 +547,67 @@ namespace FishMMO.Shared.WorldDesign
 				double t = Math.Log(Math.Max(1e-5f, grain) / settings.SandGrainMetres) / Math.Log(settings.GravelGrainMetres / settings.SandGrainMetres);
 				sand[i] = 1f - Clamp((float)t, 0f, 1f);
 			}
+			/* Nothing settles where the water is speeding over a ledge: no bar on a fall, and none on the run-up to its lip,
+			 * fading back in over a few widths upstream. A point bar had lain against Flo Monolith's 61 m lip and its sand
+			 * painted on down the cliff (the "dry notch" beside the curtain). */
+			if (river.Reach == null)
+			{
+				return;
+			}
+			for (int i = 0; i < n; i++)
+			{
+				if (river.Reach[i] != RiverReach.Fall || (i > 0 && river.Reach[i - 1] == RiverReach.Fall))
+				{
+					continue;
+				}
+				int lip = Math.Max(0, i - 1);
+				float clear = Math.Max(BrinkClearMetres, 4f * river.Width[lip]);
+				for (int k = lip; k >= 0; k--)
+				{
+					float away = river.S[lip] - river.S[k];
+					if (away >= clear)
+					{
+						break;
+					}
+					float keep = SmoothStep(away / clear);
+					point[k] *= keep;
+					beach[k] *= keep;
+				}
+				/* Nor in the basin the fall scours below it, and only thinly for as far again. A bar is sized by the river's
+				 * width, and in the basin that is the pool's: a gravel point bar 15 m wide lay flat beside the pool as a
+				 * terrace, ending in a cliff where the river narrowed again (Flo Monolith's 61 m fall). */
+				int last = i;
+				while (last + 1 < n && river.Reach[last + 1] == RiverReach.Fall)
+				{
+					last++;
+				}
+				int foot = Math.Min(n - 1, last + 1);
+				float drop = river.Surface[lip] - river.Surface[foot];
+				float basin = Math.Max(3f, 0.9f * river.Width[lip] + 0.35f * Math.Max(0f, drop));
+				for (int k = foot; k < n; k++)
+				{
+					float away = river.S[k] - river.S[foot];
+					if (away >= 2f * basin)
+					{
+						break;
+					}
+					float keep = SmoothStep(away / basin - 1f);
+					point[k] *= keep;
+					beach[k] *= keep;
+				}
+			}
+			for (int i = 0; i < n; i++)
+			{
+				if (river.Reach[i] == RiverReach.Fall)
+				{
+					point[i] = 0f;
+					beach[i] = 0f;
+				}
+			}
 		}
+
+		/// <summary>The least distance above a fall's lip kept clear of bars, metres (or four widths, if more).</summary>
+		public const float BrinkClearMetres = 20f;
 
 		/// <summary>The surface's fall per metre at each point, over a stretch about a width long each way.</summary>
 		public static float[] SurfaceGradient(RiverPath river)
@@ -657,6 +722,19 @@ namespace FishMMO.Shared.WorldDesign
 					/* A basin, not the channel a little wider: a tall fall scours a pool far wider than the stream that
 					 * feeds it (the river's width and half the drop, up to 30 m). At ×1.4 a 49 m fall landed in a 5 m slot. */
 					float poolWidth = Math.Min(30f, Math.Max(1.4f * river.Width[foot], river.Width[foot] + 0.5f * drop));
+					/* A pool is level water, held by the sill where it spills out. The rest of a knickpoint's drop ran on below
+					 * the foot as a ramp, 6 m down across Flo Monolith's 61 m fall's basin: the tail of the pool stood metres over
+					 * the floor the basin's wider rows had scoured beside it. Lowered to the level at the basin's end (only ever
+					 * lowered, so the surface still never rises); the bed below follows, as Depth still holds the old depth. */
+					int end = foot;
+					while (end + 1 < n && Math.Abs(river.S[end + 1] - river.S[foot]) <= radius)
+					{
+						end++;
+					}
+					for (int k = foot; k < end; k++)
+					{
+						river.Surface[k] = Math.Min(river.Surface[k], river.Surface[end]);
+					}
 					for (int k = Math.Max(lip + 1, foot - 1); k < n; k++)
 					{
 						float away = Math.Abs(river.S[k] - river.S[foot]);
@@ -888,6 +966,12 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		private static float Clamp(float v, float min, float max) => v < min ? min : v > max ? max : v;
+
+		private static float SmoothStep(float t)
+		{
+			t = Clamp(t, 0f, 1f);
+			return t * t * (3f - 2f * t);
+		}
 	}
 }
 #endif

@@ -288,7 +288,9 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // at what that pixel looks at, so at the screen's own size there is nothing left to
                 // do but read it. Filtered again here it would only blur what it rebuilt.
                 float blur = _FishCloudComposite.w;
-                if (blur > 0.0)
+                // Only a buffer at the screen's own size is softened: a smaller one is scaled up below, and
+                // its bilinear taps here pulled the sky's texels over every edge the upscale keeps apart.
+                if (blur > 0.0 && _FishCloudComposite.z > 0.5)
                 {
                     // Softened: a Gaussian of `blur` pixels over a three-by-three of bilinear taps (a
                     // five-pixel support at one pixel), each weighed by whether it looks at the same
@@ -321,31 +323,65 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 {
                     return SAMPLE_TEXTURE2D_LOD(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv, 0);
                 }
-                // A buffer smaller than the screen (a very large one: the history is capped) is
-                // scaled up here. Four taps, and each weighed by whether it is looking at the same
-                // thing this pixel is. Every ray stops at the world, so a texel that straddles the
-                // edge of a post holds the sky ray's answer — a long march full of scattered light
-                // — while the pixels of the post itself hold almost none. Averaged blindly, that
-                // light was smeared back over the post: a white rim around everything, brightest
-                // against a dark scene. Comparing depths keeps each pixel to the taps that belong
-                // to it.
-                float2 texel = _FishCloudComposite.xy * 0.5;
+                // A buffer smaller than the screen is scaled up here (a march at a sixteenth of the screen
+                // rebuilds at a quarter of it). Each pixel takes the four nearest buffer texels, read
+                // exactly, by their bilinear share and by whether each was built for what this pixel looks
+                // at: the depth at the texel's own centre, which is where the steadying stood when it
+                // rebuilt it. Every ray stops at the world, so a texel beside a post holds the sky ray's
+                // answer, a long march full of scattered light, while the post's own pixels hold almost
+                // none. Bilinear taps at offsets, weighed by the depth at the TAP (not at the texel the
+                // tap mostly reads), blended the sky's texel in before any weight could keep it out: pale
+                // blocks round every leaf against the sky at a low march (ScenePerfProbe, 2026-10-07).
+                float2 size = rcp(_FishCloudComposite.xy);
                 float here = LinearEyeDepth(SampleSceneDepth(input.uv), _ZBufferParams);
+                float2 pos = input.uv * size - 0.5;
+                int2 base = (int2)floor(pos);
+                float2 f = pos - base;
+                int2 last = (int2)size - 1;
                 float4 sum = 0.0;
                 float total = 0.0;
+                float bestGap = 1e9;
+                float4 best = float4(0.0, 0.0, 0.0, 1.0);
+                float nearest = 1e9;
+                float farthest = 0.0;
+                float4 farValue = float4(0.0, 0.0, 0.0, 1.0);
                 [unroll] for (int t = 0; t < 4; t++)
                 {
-                    float2 at = input.uv + float2(t == 0 || t == 2 ? -texel.x : texel.x, t < 2 ? -texel.y : texel.y);
-                    float there = LinearEyeDepth(SampleSceneDepth(at), _ZBufferParams);
+                    int2 offset = int2(t & 1, t >> 1);
+                    int2 texel = clamp(base + offset, int2(0, 0), last);
+                    float there = LinearEyeDepth(SampleSceneDepth((texel + 0.5) * _FishCloudComposite.xy), _ZBufferParams);
+                    float4 value = LOAD_TEXTURE2D(_FishCloudBuffer, texel);
+                    float share = (offset.x ? f.x : 1.0 - f.x) * (offset.y ? f.y : 1.0 - f.y);
+                    float gap = abs(there - here) / max(2.0, here * 0.06);
                     // Both far away is both sky, whatever the numbers say.
-                    float weight = saturate(1.0 - abs(there - here) / max(12.0, here * 0.2));
-                    weight = max(weight, saturate(min(there, here) / 4000.0));
-                    sum += SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, at) * weight;
-                    total += weight;
+                    float same = max(saturate(1.0 - gap), saturate(min(there, here) / 4000.0));
+                    sum += value * share * same;
+                    total += share * same;
+                    if (gap < bestGap)
+                    {
+                        bestGap = gap;
+                        best = value;
+                    }
+                    nearest = min(nearest, there);
+                    if (there > farthest)
+                    {
+                        farthest = there;
+                        farValue = value;
+                    }
                 }
-                return total > 1e-3
-                    ? sum / total
-                    : SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, input.uv);
+                if (total > 0.02)
+                {
+                    return sum / total;
+                }
+                // No texel shares this pixel's depth: a leaf or twig thinner than a texel against the sky,
+                // or the sky through a gap in the leaves. The closest depth when it is close enough; a
+                // pixel nearer than all of them (a leaf in front of the sky) stands in front of the clouds,
+                // which add nothing to it; one farther than all (sky through the canopy) is the farthest's.
+                if (bestGap < 3.0)
+                {
+                    return best;
+                }
+                return here < nearest ? float4(0.0, 0.0, 0.0, 1.0) : farValue;
             }
             ENDHLSL
         }

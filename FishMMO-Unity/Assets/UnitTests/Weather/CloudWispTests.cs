@@ -205,10 +205,11 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheDetailSurvivesAsFarAsTheScreenCanDrawIt()
 		{
-			// Balanced at 1080p, a 60° view: the marched texel's cone, and half of it for what the
-			// steadying resolves.
+			// Balanced at 1080p, a 60° view: the rebuilt pixel's cone (FishCloudsFeature casts each ray as the
+			// rebuilt pixel's, at four times the march), and half of it for what the steadying resolves.
 			CloudClimate.Scales scales = CloudClimate.ScalesFor(Earth, 45f, 238u);
-			float rows = 1080f * WeatherTierSettings.Balanced().CloudResolution;
+			WeatherTierSettings balanced = WeatherTierSettings.Balanced();
+			float rows = 1080f * CloudTierSettings.HistoryScaleFor(balanced.CloudHistoryScale, balanced.CloudResolution);
 			float m11 = 1f / Mathf.Tan(30f * Mathf.Deg2Rad);
 			float spread = 2f / (m11 * rows) * SkySystem.CloudDetailConeShare;
 			Vector3 At(float metres) => CloudClimate.DetailResolved(metres * spread, scales.LowDetail);

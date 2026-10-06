@@ -525,6 +525,114 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void NoBarSettlesOnAFallOrTheRunUpToItsLip()
+		{
+			var settings = new RiverSettings();
+			const int n = 200;
+			var surface = new float[n];
+			for (int i = 0; i < n; i++)
+			{
+				surface[i] = 60f - 0.0009f * i - (i > 100 ? 30f : 0f);
+			}
+			RiverPath river = Line(surface, 3f, 3f, 10f);
+			river.Reach = new RiverReach[n];
+			river.Reach[101] = RiverReach.Fall;
+			for (int i = 0; i < n; i++)
+			{
+				river.Curvature[i] = 0.02f;
+			}
+			RiverShaping.Bars(river, settings, out float[] point, out float[] beach, out _);
+			Assert.That(point[50], Is.GreaterThan(5f), "far above the fall, the bend's point bar");
+			Assert.That(point[100] + beach[100], Is.EqualTo(0f), "nothing at the lip");
+			Assert.That(point[101] + beach[101], Is.EqualTo(0f), "nothing on the fall");
+			Assert.That(point[95], Is.LessThan(0.5f * point[50]), "thinning out on the run-up to the brink");
+			Assert.That(point[104] + beach[104], Is.EqualTo(0f), "nothing in the basin the fall scours");
+			Assert.That(point[150], Is.GreaterThan(5f), "and bars again well below it");
+		}
+
+		[Test]
+		public void AFallsLipIsCarvedAtItsBedNotDownTheDrop()
+		{
+			// A 59 m ledge: the lip 0.1 m short of a grid line, the next point 2.2 m on at the foot.
+			var settings = new RiverSettings();
+			int w = 120, d = 60;
+			var grid = new SceneWaterGrid(w, d, 2f, -120f, -60f);
+			var height = new float[w * d];
+			for (int z = 0; z < d; z++)
+			{
+				for (int x = 0; x < w; x++)
+				{
+					height[z * w + x] = grid.EastOf(x) <= 0f ? 100f : 41f;
+				}
+			}
+			var xs = new List<float>();
+			for (float p = -0.1f - 2.2f * 20f; p < 40f; p += 2.2f)
+			{
+				xs.Add(p);
+			}
+			int n = xs.Count;
+			var path = new RiverPath
+			{
+				X = xs.ToArray(), Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
+				Surface = new float[n], Bed = new float[n], Curvature = new float[n], Reach = new RiverReach[n],
+			};
+			int lip = -1;
+			for (int i = 0; i < n; i++)
+			{
+				path.S[i] = i * 2.2f;
+				path.Discharge[i] = 3f;
+				path.Width[i] = 4f;
+				path.Depth[i] = 0.7f;
+				bool high = xs[i] <= 0f;
+				path.Surface[i] = high ? 99.5f - 0.001f * i : 40.5f - 0.001f * i;
+				path.Bed[i] = path.Surface[i] - 0.7f;
+				if (high)
+				{
+					lip = i;
+				}
+			}
+			path.Reach[lip + 1] = RiverReach.Fall;
+			WaterCarver.CarveRivers(height, grid, new[] { path }, settings, true);
+			int atLip = grid.SampleAt(0f, 0f), beyond = grid.SampleAt(2f, 0f);
+			Assert.That(height[atLip], Is.GreaterThanOrEqualTo(path.Bed[lip] - 1e-3f), "the lip stands on its own bed: no hole under the water going over");
+			Assert.That(height[beyond], Is.LessThan(80f), "and the drop is still there a cell on");
+		}
+
+		[Test]
+		public void APondedStretchRaisesNoLeveeInsideItsLake()
+		{
+			// A river held 6 m above a flat valley floor by the water it runs on into: unponded, its levees wall it in.
+			var settings = new RiverSettings();
+			int w = 200, d = 100;
+			var grid = new SceneWaterGrid(w, d, 2f, -200f, -100f);
+			var flat = new float[w * d];
+			for (int i = 0; i < flat.Length; i++)
+			{
+				flat[i] = 10f;
+			}
+			RiverPath Held()
+			{
+				RiverPath path = StraightRiver(-180f, 180f, 0f, flat, grid, settings);
+				for (int i = 0; i < path.Count; i++)
+				{
+					path.Surface[i] = 16f;
+					path.Bed[i] = 15f;
+				}
+				return path;
+			}
+			var walled = (float[])flat.Clone();
+			WaterCarver.CarveRivers(walled, grid, new[] { Held() }, settings, true);
+			Assert.That(walled.Max(), Is.GreaterThan(15f), "unponded, the levee holds the water above the floor");
+
+			grid = new SceneWaterGrid(w, d, 2f, -200f, -100f);
+			var ponded = (float[])flat.Clone();
+			RiverPath inLake = Held();
+			inLake.PondUntil = inLake.Count;
+			WaterCarver.CarveRivers(ponded, grid, new[] { inLake }, settings, true);
+			Assert.That(ponded.Max(), Is.LessThanOrEqualTo(10f + 1e-3f), "ponded, the lake holds it: no wall stands in the lake");
+		}
+
+		[Test]
 		public void ATerminalLakeIsRingedBySaltFlat()
 		{
 			int w = 160, d = 160;

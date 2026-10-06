@@ -104,6 +104,40 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void APlungePoolIsLevelWaterAcrossItsBasin()
+		{
+			// Below a 49 m ledge the rest of the drop runs on as a ramp, half a metre a point.
+			const int n = 40;
+			var surface = new float[n];
+			var path = new RiverPath
+			{
+				X = new float[n], Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
+				Surface = surface, Bed = new float[n], Curvature = new float[n], Reach = new RiverReach[n],
+			};
+			for (int i = 0; i < n; i++)
+			{
+				path.X[i] = path.S[i] = i * 1.5f;
+				surface[i] = i <= 2 ? 300f : 251f - 0.5f * (i - 3);
+				path.Width[i] = 4f;
+				path.Depth[i] = 0.7f;
+				path.Bed[i] = surface[i] - 0.7f;
+				path.Reach[i] = i >= 3 && i <= 4 ? RiverReach.Fall : RiverReach.Run;
+			}
+			RiverShaping.PlungePools(path, new RiverSettings());
+			int foot = 5, end = foot;
+			while (end + 1 < n && surface[end + 1] == surface[foot])
+			{
+				end++;
+			}
+			Assert.That(end - foot, Is.GreaterThanOrEqualTo(8), "the pool stands level for most of its basin, not as a ramp");
+			for (int i = 1; i < n; i++)
+			{
+				Assert.That(surface[i], Is.LessThanOrEqualTo(surface[i - 1]), "and the surface still never rises");
+				Assert.That(path.Bed[i], Is.LessThan(surface[i]), "with its bed under it");
+			}
+		}
+
+		[Test]
 		public void APlungeBasinWidensThePoolNotTheLipOrTheFall()
 		{
 			// A 49 m ledge: the lip and the falling points stand within a few metres of the foot, inside the basin's radius.
