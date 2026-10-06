@@ -231,9 +231,16 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.5
-      sinkRange: {x: 0.02, y: 0.05}
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
       sinkSlopeFactor: 0
-      specFingerprint: aae30cfe7b4e38d4
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 2c783532b72c7776
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -267,8 +274,8 @@ MonoBehaviour:
       slopeFalloff: 5
       useNonUniformScaling: 1
       uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.8, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.3}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.8, y: 1.2}
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 33293
@@ -277,9 +284,16 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.2
       clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0.05, y: 0.15}
       sinkSlopeFactor: 0.3
-      specFingerprint: 14a0f0f4b8dcd42e
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 25a3f084060131da
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -323,8 +337,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.2
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0}
       sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
       specFingerprint: 925707996c9cf7d1
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}

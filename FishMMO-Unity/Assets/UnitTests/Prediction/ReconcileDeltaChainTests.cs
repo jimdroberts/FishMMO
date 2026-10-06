@@ -284,6 +284,29 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// The swim flag and a climb out of the water (KinematicCharacterMotorState bits 14 and 15) reach the owner on
+		/// both the full reconcile and the deltas: a swimmer the server says is swimming replays as one.
+		/// </summary>
+		[Test]
+		public void Swimming_AndAClimbOut_RideTheChain()
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+			CharacterReconcileData authoritative = MakeReconcileData();
+
+			for (uint tick = 1; tick <= 45; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				authoritative.MotorState.IsSwimming = tick >= 5 && tick < 40;
+				authoritative.MotorState.ClimbOutTicks = tick >= 26 && tick < 38 ? (byte)(38 - tick) : (byte)0;
+				LogAssert.IsTrue(client.Receive(server.Send(authoritative, tick), tick, out CharacterReconcileData received),
+					$"tick {tick}: nothing was lost");
+				LogAssert.AreEqual(authoritative.MotorState.IsSwimming, received.MotorState.IsSwimming, $"tick {tick}: swimming");
+				LogAssert.AreEqual(authoritative.MotorState.ClimbOutTicks, received.MotorState.ClimbOutTicks, $"tick {tick}: climb");
+			}
+		}
+
+		/// <summary>
 		/// The deltas really are relative to the full reconcile: decoded against the wrong one they
 		/// come out wrong. Without this, every positive test here could be passing on payloads that
 		/// happen to be absolute.
@@ -741,6 +764,8 @@ namespace FishMMO.UnitTests
 			}
 			if (a.MotorState.IsCrouching != b.MotorState.IsCrouching ||
 				a.MotorState.JumpRequested != b.MotorState.JumpRequested ||
+				a.MotorState.IsSwimming != b.MotorState.IsSwimming ||
+				a.MotorState.ClimbOutTicks != b.MotorState.ClimbOutTicks ||
 				a.MotorState.GroundingStatus.IsStableOnGround != b.MotorState.GroundingStatus.IsStableOnGround)
 			{
 				return false;

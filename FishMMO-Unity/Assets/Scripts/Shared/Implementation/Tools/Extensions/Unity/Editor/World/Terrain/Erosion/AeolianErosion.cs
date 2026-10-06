@@ -81,7 +81,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int x = 0; x < width; x++)
 				{
 					int i = z * width + x;
-					if (grid.Height[i] < grid.BaseLevel)
+					if (grid.Height[i] < grid.LevelAt(i))
 					{
 						continue;
 					}

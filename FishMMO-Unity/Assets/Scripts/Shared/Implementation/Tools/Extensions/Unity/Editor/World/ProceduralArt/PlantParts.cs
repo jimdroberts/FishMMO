@@ -11,11 +11,22 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	public static class PlantParts
 	{
-		public static Color32 C32(Color c, float alpha) => new Color32(
-			(byte)Mathf.Clamp(Mathf.RoundToInt(c.r * 255f), 0, 255),
-			(byte)Mathf.Clamp(Mathf.RoundToInt(c.g * 255f), 0, 255),
-			(byte)Mathf.Clamp(Mathf.RoundToInt(c.b * 255f), 0, 255),
-			(byte)Mathf.Clamp(Mathf.RoundToInt(alpha * 255f), 0, 255));
+		/// <remarks>
+		/// The colour is authored in sRGB (the catalogue's hex codes, picked by eye) and stored LINEAR: a vertex
+		/// colour reaches the shader as it is written, with no decoding, and the shader multiplies it into a
+		/// linear albedo. Stored as authored, every plant's colour came out two to four times too bright in its
+		/// darker channels and washed toward white — part of the glow on every crown and flower (the grass blades
+		/// were linearised for the same reason, GrassBladeRenderer). The alpha is a mask, not a colour.
+		/// </remarks>
+		public static Color32 C32(Color c, float alpha)
+		{
+			Color linear = c.linear;
+			return new Color32(
+				(byte)Mathf.Clamp(Mathf.RoundToInt(linear.r * 255f), 0, 255),
+				(byte)Mathf.Clamp(Mathf.RoundToInt(linear.g * 255f), 0, 255),
+				(byte)Mathf.Clamp(Mathf.RoundToInt(linear.b * 255f), 0, 255),
+				(byte)Mathf.Clamp(Mathf.RoundToInt(alpha * 255f), 0, 255));
+		}
 
 		/// <summary>Any unit vector perpendicular to <paramref name="v"/>.</summary>
 		public static Vector3 Perpendicular(Vector3 v)

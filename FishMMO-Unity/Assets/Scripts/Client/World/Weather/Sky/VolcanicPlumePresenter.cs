@@ -61,6 +61,31 @@ namespace FishMMO.Client
 		private static readonly int BallisticId = Shader.PropertyToID("_PlumeBallistic");
 		private static readonly int ColorId = Shader.PropertyToID("_PlumeColor");
 		private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+		private static readonly int PaceId = Shader.PropertyToID("_PlumePace");
+		private static readonly int HeldId = Shader.PropertyToID("_PlumeHeld");
+
+		/// <summary>
+		/// The window a plume's weather-paced motions are held over, s: how long the puffs climbing its
+		/// column, drifting in its umbrella and falling out of it keep one pace.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// How long a puff takes to climb, drift or fall is the weather's — the column's height, the wind,
+		/// how fast the ash settles — and changes as the weather does. The shader turned the clock into
+		/// where each puff is as clock ÷ period, so every change in the period moved every puff by the
+		/// change times the whole clock: the plume scrubbed whenever the wind did.
+		/// </para>
+		/// <para>
+		/// Instead the puffs are two layers of half the quads each, on windows half a window apart, both
+		/// fixed on the shared clock. Each layer holds the period it began its window with
+		/// (<see cref="WorldMotion.HeldValue"/>), runs its puffs on the time into its window, and fades in
+		/// and out as sin² of that time — so it starts again, at the new pace, only where it is unseen,
+		/// while the other carries the plume. The two weights add to one, so the plume never thins or
+		/// pulses. Snapping the period to whole cycles of a window (<see cref="WorldMotion.WholeCycles"/>)
+		/// cannot do it: the umbrella drifts and the ash falls over hours, longer than any window.
+		/// </para>
+		/// </remarks>
+		public const double PaceWindowSeconds = 240.0;
 
 		private WeatherPresentation presentation;
 		private WeatherContext context;
@@ -68,7 +93,13 @@ namespace FishMMO.Client
 		private Mesh mesh;
 		private Material fallbackMaterial;
 		private MaterialPropertyBlock block;
+		/// <summary>The shared clock, wrapped, for the fountains, whose pace is their vent's and constant.</summary>
 		private float clock;
+		/// <summary>Seconds into each layer's window this frame, and which window it is (see <see cref="PaceWindowSeconds"/>).</summary>
+		private float intoA, intoB;
+		private long windowA, windowB;
+		/// <summary>The periods each plume's layers hold, by its vent: column, umbrella and fall, two layers each.</summary>
+		private readonly Dictionary<Vector2Int, WorldMotion.HeldValue[]> held = new Dictionary<Vector2Int, WorldMotion.HeldValue[]>();
 		private readonly List<VolcanicPlume.Plume> plumes = new List<VolcanicPlume.Plume>();
 		private readonly List<(Vector3 vent, float emission, Color tint, float distance)> fountains = new List<(Vector3, float, Color, float)>();
 
@@ -108,14 +139,44 @@ namespace FishMMO.Client
 		public void Reset()
 		{
 			hasContext = false;
+			held.Clear();
 			lakesScene = int.MinValue;
 			lakes.Clear();
 		}
 
 		private void Update()
 		{
-			// On the world's motion, as what falls is: a held clock holds the plumes.
-			clock += WorldMotion.Scale(Time.deltaTime);
+			/* On the world's shared motion clock, as what falls is: every player sees the same puff at the
+			 * same moment, and a held clock holds the plumes. It was a private sum of this client's frame
+			 * times from zero. */
+			double seconds = WorldMotion.Seconds;
+			clock = (float)WorldMotion.Repeat(seconds, WorldMotion.ShaderWrapSeconds);
+			double half = 0.5 * PaceWindowSeconds;
+			windowA = (long)System.Math.Floor(seconds / PaceWindowSeconds);
+			windowB = (long)System.Math.Floor((seconds + half) / PaceWindowSeconds);
+			intoA = (float)(seconds - windowA * PaceWindowSeconds);
+			intoB = (float)(seconds + half - windowB * PaceWindowSeconds);
+		}
+
+		/// <summary>
+		/// The periods a plume's two layers hold for a population this frame (seconds): each the period
+		/// as it was when its layer's window began, or when this client first saw that window.
+		/// </summary>
+		private Vector4 Held(Vector2 vent, int population, float period)
+		{
+			var key = new Vector2Int(Mathf.RoundToInt(vent.x), Mathf.RoundToInt(vent.y));
+			if (!held.TryGetValue(key, out WorldMotion.HeldValue[] periods))
+			{
+				if (held.Count > 64)
+				{
+					held.Clear();
+				}
+				periods = new WorldMotion.HeldValue[6];
+				held[key] = periods;
+			}
+			float a = periods[population * 2].Hold(period, windowA);
+			float b = periods[population * 2 + 1].Hold(period, windowB);
+			return new Vector4(a, b, 0f, 0f);
 		}
 
 		private Material ResolveMaterial(WeatherRenderProfile profile)
@@ -163,8 +224,10 @@ namespace FishMMO.Client
 			WeatherSample sample = context.Sample;
 			if (VolcanicPlume.CanRise(sample.Planet))
 			{
-				// The same call the weather made: the same plumes.
-				VolcanicVents.Plumes(context.Timeline, context.Settings, (uint)context.Tick, sample.Planet, sample.OpenAir.Wind, viewer2, plumes);
+				// The weather's plumes, each leaning on the wind where it stands: the same plume for every
+				// player. Leaning on the viewer's wind, as the weather at the viewer does, it leaned
+				// differently for each.
+				VolcanicVents.PlumesInTheirOwnWind(context.Timeline, context.Settings, (uint)context.Tick, sample.Planet, viewer2, plumes);
 				plumes.Sort((a, b) => (a.Vent - viewer2).sqrMagnitude.CompareTo((b.Vent - viewer2).sqrMagnitude));
 				int drawn = 0;
 				for (int i = 0; i < plumes.Count && drawn < MaxDrawn; i++)
@@ -224,9 +287,10 @@ namespace FishMMO.Client
 			var max = new Vector3(Mathf.Max(plume.Vent.x, far.x) + wide, ground + plume.Top * 1.3f + 200f, Mathf.Max(plume.Vent.y, far.y) + wide);
 			var bounds = new Bounds((min + max) * 0.5f, max - min);
 
-			Draw(material, profile, camera, bounds, vent, 0, 0.35f, 0.5f * strength, rise, lean, drift, Vector4.zero, colour);
-			Draw(material, profile, camera, bounds, vent, 1, 0.65f, 0.35f * strength, rise, lean, drift, Vector4.zero, colour);
-			Draw(material, profile, camera, bounds, vent, 2, 0.4f, 0.12f * strength, rise, lean, drift, new Vector4(fallSeconds, 0f, 0f, 0f), colour);
+			Draw(material, profile, camera, bounds, vent, 0, 0.35f, 0.5f * strength, rise, lean, drift, Vector4.zero, colour, Held(plume.Vent, 0, riseSeconds));
+			Draw(material, profile, camera, bounds, vent, 1, 0.65f, 0.35f * strength, rise, lean, drift, Vector4.zero, colour, Held(plume.Vent, 1, driftSeconds));
+			Draw(material, profile, camera, bounds, vent, 2, 0.4f, 0.12f * strength, rise, lean, drift, new Vector4(fallSeconds, 0f, 0f, 0f), colour,
+				Held(plume.Vent, 2, fallSeconds));
 		}
 
 		private static float GravityOf(in PlanetAir planet) => planet.Gravity > 0f ? planet.Gravity : SurfacePhysics.EarthGravity;
@@ -268,7 +332,7 @@ namespace FishMMO.Client
 			var bounds = new Bounds(vent + Vector3.up * (0.5f * height), new Vector3(2f * outer + 2f * puff, height + 2f * puff, 2f * outer + 2f * puff));
 			var ballistic = new Vector4(speed, gravity, VolcanicPlume.FountainConeDegrees * Mathf.Deg2Rad, VolcanicPlume.FountainInnerShare);
 			Draw(material, profile, camera, bounds, vent, 3, 1f, 0.14f, new Vector4(puff, 0f, 0f, 0f), Vector4.zero, Vector4.zero, ballistic,
-				new Color(tint.r, tint.g, tint.b, 0.4f));
+				new Color(tint.r, tint.g, tint.b, 0.4f), Vector4.zero);
 		}
 
 		/// <summary>The lava lakes under the scene's lava surface, found once per scene.</summary>
@@ -365,7 +429,7 @@ namespace FishMMO.Client
 		// ── Drawing ─────────────────────────────────────────────────────
 
 		private void Draw(Material material, WeatherRenderProfile profile, Camera camera, Bounds bounds, Vector3 vent, int population, float share, float opacity,
-			Vector4 rise, Vector4 lean, Vector4 drift, Vector4 ballistic, Color colour)
+			Vector4 rise, Vector4 lean, Vector4 drift, Vector4 ballistic, Color colour, Vector4 heldPeriods)
 		{
 			block.Clear();
 			if (profile != null && profile.PrecipitationAtlas != null)
@@ -379,6 +443,8 @@ namespace FishMMO.Client
 			block.SetVector(DriftId, drift);
 			block.SetVector(BallisticId, ballistic);
 			block.SetColor(ColorId, colour);
+			block.SetVector(PaceId, new Vector4(intoA, intoB, (float)PaceWindowSeconds, 0f));
+			block.SetVector(HeldId, heldPeriods);
 			var rp = new RenderParams(material)
 			{
 				camera = camera,

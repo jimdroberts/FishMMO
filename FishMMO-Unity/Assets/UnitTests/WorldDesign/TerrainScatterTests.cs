@@ -565,6 +565,306 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(most, Is.LessThanOrEqualTo(full), "never past a full cell");
 		}
 
+		// ── Forest stands ────────────────────────────────────────────
+
+		[Test]
+		public void TheStandFieldAveragesOneCoversItsShareAndIsSeeded()
+		{
+			const float metres = 200f;
+			uint seed = TerrainScatter.StandSeed(42u);
+			float[] table = TerrainScatter.StandQuantiles(seed, metres);
+			var dense = new TerrainScatter.StandField(seed, metres, 0.6f, 0.3f, 0.03f, table);
+			var sparse = new TerrainScatter.StandField(seed, metres, 0.15f, 0.3f, 0.03f, table);
+			Assert.That(dense.Norm, Is.GreaterThan(1.4f), "a stand holds more than the average");
+			Assert.That(sparse.Norm, Is.GreaterThan(dense.Norm * 2f), "a sparser cover packs its trees into fewer, denser copses");
+
+			double sum = 0d, sparseSum = 0d;
+			int samples = 0, wooded = 0, clearing = 0;
+			bool differs = false;
+			var other = new TerrainScatter.StandField(TerrainScatter.StandSeed(43u), metres, 0.6f, 0.3f, 0.03f);
+			// Over 30 stand widths a side, so the share settles.
+			for (float z = 0f; z < metres * 30f; z += 37f)
+			{
+				for (float x = 0f; x < metres * 30f; x += 37f)
+				{
+					float value = dense.Intensity(x, z, 1f, 1f, out float mask);
+					float sparseValue = sparse.Intensity(x, z, 1f, 1f, out float sparseMask);
+					Assert.That(mask, Is.InRange(0f, 1f));
+					Assert.That(sparseMask, Is.LessThanOrEqualTo(mask + 1e-5f), $"a sparse cover's copses must lie inside the dense cover's woods, at ({x}, {z})");
+					sum += value;
+					sparseSum += sparseValue;
+					samples++;
+					wooded += mask > 0.5f ? 1 : 0;
+					clearing += mask <= 0f ? 1 : 0;
+					if (samples % 89 == 0)
+					{
+						Assert.That(dense.Intensity(x, z, 1f, 1f, out _), Is.EqualTo(value), "same seed and place, same stands");
+						differs |= Mathf.Abs(other.Intensity(x, z, 1f, 1f, out _) - value) > 0.5f;
+					}
+				}
+			}
+			Assert.That(sum / samples, Is.EqualTo(1d).Within(0.12d), "stands move a rule's density, they must not change it");
+			Assert.That(sparseSum / samples, Is.EqualTo(1d).Within(0.2d), "however sparse the cover");
+			Assert.That(wooded / (double)samples, Is.EqualTo(0.6d).Within(0.1d), "that share of the ground is wood");
+			Assert.That(clearing / (double)samples, Is.GreaterThan(0.2d), "the rest has clearings and open ground with nothing but lone trees");
+			Assert.That(differs, Is.True, "another scene should have other woods");
+
+			// Open ground holds only the lone trees; a stand's heart the whole of its density.
+			Assert.That(dense.Intensity(0f, 0f, 0f, 1f, out float none), Is.EqualTo(0.03f * dense.Norm).Within(1e-5f), "no cover: lone trees only");
+			Assert.That(none, Is.EqualTo(0f));
+			var whole = new TerrainScatter.StandField(seed, metres, 1f, 0.3f, 0.03f, table);
+			Assert.That(whole.Intensity(123f, 456f, 1f, 1f, out float all), Is.EqualTo(1f).Within(1e-4f), "full cover is an even wood");
+			Assert.That(all, Is.EqualTo(1f));
+		}
+
+		[Test]
+		public void ShrinkingAStandsCoverShrinksTheWoodNotItsHeart()
+		{
+			const float metres = 150f;
+			var stands = new TerrainScatter.StandField(TerrainScatter.StandSeed(7u), metres, 0.7f, 0.3f, 0f);
+			double full = 0d, half = 0d;
+			int heartsFull = 0, heartsHalf = 0;
+			for (float z = 0f; z < metres * 25f; z += 29f)
+			{
+				for (float x = 0f; x < metres * 25f; x += 29f)
+				{
+					float a = stands.Intensity(x, z, 1f, 1f, out float maskFull);
+					float b = stands.Intensity(x, z, 0.5f, 0.5f, out float maskHalf);
+					full += a;
+					half += b;
+					Assert.That(maskHalf, Is.LessThanOrEqualTo(maskFull + 1e-5f), "a shrunken stand lies inside the whole one");
+					if (maskFull >= 1f)
+					{
+						heartsFull++;
+						Assert.That(a, Is.EqualTo(stands.Norm).Within(1e-4f));
+					}
+					if (maskHalf >= 1f)
+					{
+						heartsHalf++;
+						Assert.That(b, Is.EqualTo(stands.Norm).Within(1e-4f), "what is left of a stand is as dense as ever");
+					}
+				}
+			}
+			Assert.That(half / full, Is.EqualTo(0.5d).Within(0.12d), "half the share, about half the trees, as a multiplier would give");
+			Assert.That(heartsHalf, Is.LessThan(heartsFull * 0.75f), "but by fewer stands, not thinner ones");
+			Assert.That(heartsHalf, Is.GreaterThan(0));
+		}
+
+		[Test]
+		public void AForestRuleStandsInWoodsWithClearings()
+		{
+			Texture2D ground = Texture("ground");
+			GameObject prefab = TreePrefab("tree");
+			const int side = 4;
+
+			List<Vector2> Scatter(bool forest)
+			{
+				BiomeTemplate biome = Biome(forest ? "ScatterWood" : "ScatterEvenWood", ground);
+				PrefabSpawnRule rule = TreeRule("trees", prefab, 5f, 3f);
+				if (forest)
+				{
+					// Stands sized to the little test scene: 256 m a side, woods of about 60 m.
+					rule.forestMetres = 60f;
+					rule.forestCover = 0.5f;
+					rule.forestOpen = 0.02f;
+				}
+				biome.MainTextureLayer.prefabSpawnRules.Add(rule);
+				SceneBiomeField field = Field(new[] { biome }, 16, 16, 16f, (x, z) => 0);
+				SceneTerrainPalette palette = Palette(field);
+				var tiles = new List<Terrain>();
+				for (int z = 0; z < side; z++)
+				{
+					for (int x = 0; x < side; x++)
+					{
+						tiles.Add(Tile(new Vector3(x * TileMetres, 0f, z * TileMetres), palette, (layer, ax, ay) => 1f));
+					}
+				}
+				TerrainScatter.Scatter(tiles, palette, field, 31u, Options());
+				var points = new List<Vector2>();
+				foreach (Terrain tile in tiles)
+				{
+					points.AddRange(WorldXZ(tile));
+				}
+				return points;
+			}
+
+			List<Vector2> even = Scatter(false);
+			List<Vector2> wood = Scatter(true);
+			BlockStats(even, side * TileMetres, 16f, out float evenRatio, out float evenEmpty);
+			BlockStats(wood, side * TileMetres, 16f, out float woodRatio, out float woodEmpty);
+			Assert.That(even.Count, Is.GreaterThan(1000));
+			/* Measured on a port of the field over this scene and four other seeds: an even rule's variance
+			 * over mean ~0.4 (spacing makes it evener than random) with no empty block; the forest's 2.3–4.5
+			 * with 7–27% of blocks empty, the spread being how much of a 256 m window happens to be wood.
+			 * Stand interiors pack to their spacing, so the forest keeps half to three quarters of the count. */
+			Assert.That(wood.Count, Is.GreaterThan(even.Count * 0.4f), "stands gather a rule's trees; they should not lose most of them");
+			Assert.That(evenRatio, Is.LessThan(1f), "an even rule at its spacing is as even as random or more so");
+			Assert.That(woodRatio, Is.GreaterThan(1.8f), $"16 m blocks should hold very different counts in a forest (variance/mean {woodRatio:F2})");
+			Assert.That(woodRatio, Is.GreaterThan(4f * evenRatio), $"far less even than the even rule ({woodRatio:F2} against {evenRatio:F2})");
+			Assert.That(woodEmpty, Is.GreaterThan(0.05f), $"a forest has clearings ({woodEmpty:P0} of blocks empty)");
+			Assert.That(evenEmpty, Is.LessThan(0.02f));
+		}
+
+		[Test]
+		public void ForestRulesShareOneCanopy_SoSpeciesDoNotStandInsideOneAnother()
+		{
+			Texture2D ground = Texture("ground");
+
+			float Closest(bool forest)
+			{
+				BiomeTemplate biome = Biome(forest ? "ScatterCanopy" : "ScatterNoCanopy", ground);
+				foreach (string name in new[] { "spruce", "pine" })
+				{
+					PrefabSpawnRule rule = TreeRule(name, TreePrefab(name), 6f, 4f);
+					if (forest)
+					{
+						rule.forestMetres = 40f;
+						rule.forestCover = 0.8f;
+					}
+					biome.MainTextureLayer.prefabSpawnRules.Add(rule);
+				}
+				SceneBiomeField field = Field(new[] { biome }, 8, 4, 16f, (x, z) => 0);
+				SceneTerrainPalette palette = Palette(field);
+				Terrain west = Tile(Vector3.zero, palette, (layer, ax, ay) => 1f);
+				Terrain east = Tile(new Vector3(TileMetres, 0f, 0f), palette, (layer, ax, ay) => 1f);
+				TerrainScatter.Scatter(new[] { west, east }, palette, field, 13u, Options());
+
+				var points = new List<(Vector2 at, int prototype)>();
+				foreach (Terrain tile in new[] { west, east })
+				{
+					Vector3 origin = tile.transform.position;
+					foreach (TreeInstance tree in tile.terrainData.treeInstances)
+					{
+						points.Add((new Vector2(origin.x + tree.position.x * TileMetres, origin.z + tree.position.z * TileMetres), tree.prototypeIndex));
+					}
+				}
+				Assert.That(points.Exists(p => p.prototype == 0) && points.Exists(p => p.prototype == 1), Is.True, "both species should stand");
+				float closest = float.MaxValue;
+				for (int i = 0; i < points.Count; i++)
+				{
+					for (int j = i + 1; j < points.Count; j++)
+					{
+						if (points[i].prototype != points[j].prototype)
+						{
+							closest = Mathf.Min(closest, Vector2.Distance(points[i].at, points[j].at));
+						}
+					}
+				}
+				return closest;
+			}
+
+			Assert.That(Closest(false), Is.LessThan(3f), "two rules' own spacings know nothing of each other");
+			Assert.That(Closest(true), Is.GreaterThanOrEqualTo(4f - 1e-3f), "forest rules keep their spacing from every forest rule's trees, across a tile seam too");
+		}
+
+		[Test]
+		public void AForestScattersIdenticallyTwiceAndInAnyTileOrder()
+		{
+			Texture2D ground = Texture("ground");
+			BiomeTemplate biome = Biome("ScatterWoodDeterminism", ground);
+			foreach (string name in new[] { "oak", "birch" })
+			{
+				PrefabSpawnRule rule = TreeRule(name, TreePrefab(name), 4f, 3f);
+				rule.forestMetres = 50f;
+				rule.forestCover = 0.5f;
+				rule.useNonUniformScaling = true;
+				biome.MainTextureLayer.prefabSpawnRules.Add(rule);
+			}
+			SceneBiomeField field = Field(new[] { biome }, 8, 4, 16f, (x, z) => 0);
+			SceneTerrainPalette palette = Palette(field);
+			Terrain west = Tile(Vector3.zero, palette, (layer, x, y) => 1f);
+			Terrain east = Tile(new Vector3(TileMetres, 0f, 0f), palette, (layer, x, y) => 1f);
+
+			TerrainScatter.Scatter(new[] { west, east }, palette, field, 99u, Options());
+			TreeInstance[] westFirst = west.terrainData.treeInstances;
+			TreeInstance[] eastFirst = east.terrainData.treeInstances;
+			TerrainScatter.Scatter(new[] { east, west }, palette, field, 99u, Options());
+			AssertSameTrees(westFirst, west.terrainData.treeInstances, "west tile, tiles listed the other way round");
+			AssertSameTrees(eastFirst, east.terrainData.treeInstances, "east tile, tiles listed the other way round");
+			Assert.That(westFirst.Length + eastFirst.Length, Is.GreaterThan(0));
+		}
+
+		[Test]
+		public void TreesStandTallerInAStandAndBroaderInTheOpen()
+		{
+			Texture2D ground = Texture("ground");
+			BiomeTemplate biome = Biome("ScatterWoodSizes", ground);
+			PrefabSpawnRule rule = TreeRule("trees", TreePrefab("tree"), 3f, 2f);
+			rule.forestMetres = 60f;
+			rule.forestCover = 0.5f;
+			rule.forestOpen = 0.3f;
+			rule.forestScaleBias = 1f;
+			rule.useNonUniformScaling = true;
+			rule.widthScaleRange = new Vector2(0.8f, 1.2f);
+			rule.heightScaleRange = new Vector2(0.8f, 1.2f);
+			biome.MainTextureLayer.prefabSpawnRules.Add(rule);
+			SceneBiomeField field = Field(new[] { biome }, 8, 8, 16f, (x, z) => 0);
+			SceneTerrainPalette palette = Palette(field);
+			var tiles = new List<Terrain>();
+			for (int z = 0; z < 2; z++)
+			{
+				for (int x = 0; x < 2; x++)
+				{
+					tiles.Add(Tile(new Vector3(x * TileMetres, 0f, z * TileMetres), palette, (layer, ax, ay) => 1f));
+				}
+			}
+			const uint seed = 17u;
+			TerrainScatter.Scatter(tiles, palette, field, seed, Options());
+
+			// The scatter's own field: one biome on flat ground, so nothing shrank the cover.
+			var stands = new TerrainScatter.StandField(TerrainScatter.StandSeed(seed), rule.forestMetres, rule.forestCover, rule.forestEdge, rule.forestOpen);
+			double tallIn = 0d, tallOut = 0d, wideIn = 0d, wideOut = 0d;
+			int inside = 0, outside = 0;
+			foreach (Terrain tile in tiles)
+			{
+				Vector3 origin = tile.transform.position;
+				foreach (TreeInstance tree in tile.terrainData.treeInstances)
+				{
+					stands.Intensity(origin.x + tree.position.x * TileMetres, origin.z + tree.position.z * TileMetres, 1f, 1f, out float mask);
+					if (mask >= 0.99f)
+					{
+						tallIn += tree.heightScale;
+						wideIn += tree.widthScale;
+						inside++;
+					}
+					else if (mask <= 0.01f)
+					{
+						tallOut += tree.heightScale;
+						wideOut += tree.widthScale;
+						outside++;
+					}
+				}
+			}
+			Assume.That(inside, Is.GreaterThan(30));
+			Assume.That(outside, Is.GreaterThan(10));
+			Assert.That(tallIn / inside, Is.GreaterThan(tallOut / outside + 0.08d), "trees in a stand are drawn up taller");
+			Assert.That(wideOut / outside, Is.GreaterThan(wideIn / inside + 0.04d), "trees in the open spread broader");
+		}
+
+		/// <summary>Counts in square blocks over a square scene: variance over mean (1 for random, above for gathered) and the share of blocks with none.</summary>
+		private static void BlockStats(List<Vector2> points, float sceneMetres, float blockMetres, out float varianceOverMean, out float empty)
+		{
+			int blocks = Mathf.RoundToInt(sceneMetres / blockMetres);
+			var counts = new int[blocks * blocks];
+			foreach (Vector2 p in points)
+			{
+				int bx = Mathf.Clamp((int)(p.x / blockMetres), 0, blocks - 1);
+				int bz = Mathf.Clamp((int)(p.y / blockMetres), 0, blocks - 1);
+				counts[bz * blocks + bx]++;
+			}
+			double mean = points.Count / (double)counts.Length;
+			double variance = 0d;
+			int none = 0;
+			foreach (int c in counts)
+			{
+				variance += (c - mean) * (c - mean);
+				none += c == 0 ? 1 : 0;
+			}
+			variance /= counts.Length;
+			varianceOverMean = mean > 0d ? (float)(variance / mean) : 0f;
+			empty = none / (float)counts.Length;
+		}
+
 		private static float MeanNearestNeighbour(List<Vector2> points)
 		{
 			double total = 0d;

@@ -46,6 +46,9 @@ namespace FishMMO.Client
 
 		private static readonly Dictionary<Terrain, Taken> taken = new Dictionary<Terrain, Taken>();
 
+		/// <summary>The blade grass's key in <see cref="TerrainDetailInstancing.SetSkipped"/> (the GPU detail scatter has its own).</summary>
+		private static readonly object SkipOwner = new object();
+
 		/// <summary>Milliseconds a frame the terrain being taken may spend building its density maps and height grid.</summary>
 		public const double BuildBudgetMilliseconds = 2.0;
 
@@ -467,7 +470,7 @@ namespace FishMMO.Client
 			taken[terrain] = new Taken { Terrain = terrain, Data = terrain.terrainData, Grass = grass };
 			grassTerrains.Add(grass);
 			none.Remove(terrain);
-			TerrainDetailInstancing.SetSkipped(terrain, grass.Skip);
+			TerrainDetailInstancing.SetSkipped(SkipOwner, terrain, grass.Skip);
 			summaryTerrains++;
 			summaryChannels += grass.Layers;
 		}
@@ -479,7 +482,7 @@ namespace FishMMO.Client
 			t.Grass.Dispose();
 			if (t.Terrain != null)
 			{
-				TerrainDetailInstancing.SetSkipped(t.Terrain, null);
+				TerrainDetailInstancing.SetSkipped(SkipOwner, t.Terrain, null);
 			}
 		}
 

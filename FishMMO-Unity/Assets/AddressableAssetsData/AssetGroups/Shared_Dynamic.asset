@@ -69,6 +69,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7bc23d76da003981b8d2336aefd97cc5
+    m_Address: Assets/Scenes/WorldScene/Arthis/Flo Monolith Terrain/Flo Monolith
+      Biome Map.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8f629fde6505bb188be91d9698c01088
     m_Address: GrassLayer
     m_ReadOnly: 0

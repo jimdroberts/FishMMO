@@ -8,13 +8,13 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>Regular serializer</b> (Write/Read extension methods): Used by FishNet's codegen
 	/// for RPCs, SyncVars, broadcasts, and any non-prediction serialization context.
-	/// Writes all 7 fields using FishNet's built-in packed encoding (varint for ints,
+	/// Writes all 8 fields using FishNet's built-in packed encoding (varint for ints,
 	/// full precision for floats).
 	/// </para>
 	/// <para>
 	/// <b>Delta serializer</b> (registered via <see cref="GenericDeltaWriter{T}"/>/<see cref="GenericDeltaReader{T}"/>):
 	/// Used during prediction replicate/reconcile ticks. Writes a 1-byte bitmask
-	/// (7 bits for 7 fields) followed by delta-encoded values for only the changed fields.
+	/// (8 bits for 8 fields) followed by delta-encoded values for only the changed fields.
 	/// On a typical tick where only health regens, this sends ~3-4 bytes instead of 28.
 	/// </para>
 	/// <para>
@@ -42,6 +42,7 @@ namespace FishMMO.Shared
 			writer.WriteInt32(value.MaxMana);
 			writer.WriteSingle(value.Stamina);
 			writer.WriteInt32(value.MaxStamina);
+			writer.WriteSingle(value.Breath);
 		}
 
 		/// <summary>
@@ -59,6 +60,7 @@ namespace FishMMO.Shared
 				MaxMana = reader.ReadInt32(),
 				Stamina = reader.ReadSingle(),
 				MaxStamina = reader.ReadInt32(),
+				Breath = reader.ReadSingle(),
 			};
 		}
 
@@ -80,6 +82,8 @@ namespace FishMMO.Shared
 		private const byte STAMINA_BIT = 1 << 5;
 		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.MaxStamina"/>.</summary>
 		private const byte MAX_STAMINA_BIT = 1 << 6;
+		/// <summary>Bitmask bit for <see cref="CharacterAttributeResourceState.Breath"/>: the last of the byte's eight.</summary>
+		private const byte BREATH_BIT = 1 << 7;
 
 		/// <summary>
 		/// Registers the custom delta serializers at runtime, after FishNet's IL-weaved
@@ -99,7 +103,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="CharacterAttributeResourceState"/>.
-		/// Writes a 1-byte bitmask indicating which of the 7 fields changed,
+		/// Writes a 1-byte bitmask indicating which of the 8 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		/// <remarks>
@@ -167,6 +171,13 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32(prev.MaxStamina, next.MaxStamina, fieldOption))
 				flags |= MAX_STAMINA_BIT;
 
+			// Exact, as the other resources are: running out decides when drowning starts.
+			if (fullSerialize || Mathf.Abs(prev.Breath - next.Breath) > FLOAT_EPSILON)
+			{
+				writer.WriteSingle(next.Breath);
+				flags |= BREATH_BIT;
+			}
+
 			// When mustEmit is true, emit the bitmask even if flags==0 (all values equal) so the
 			// reader knows a delta was written. When Unset and flags==0, rewind past the placeholder.
 			if (flags != 0 || mustEmit)
@@ -221,6 +232,9 @@ namespace FishMMO.Shared
 
 			if ((flags & MAX_STAMINA_BIT) != 0)
 				result.MaxStamina = reader.ReadDeltaInt32(prev.MaxStamina);
+
+			if ((flags & BREATH_BIT) != 0)
+				result.Breath = reader.ReadSingle();
 
 			return result;
 		}

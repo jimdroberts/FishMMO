@@ -553,10 +553,21 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			// Under the water.
+			// Under the water: the lakebed is what the sea floor is painted with, so what grows there rides on it.
+			DisableDeadRules(who, "lakebed", biome.LakebedTextureLayer, report, apply);
 			if (entry.Lakebed != null)
 			{
 				Fill(who, "lakebed", biome.LakebedTextureLayer, entry.Lakebed, null, source, report, apply);
+			}
+			if (entry.Bed != null)
+			{
+				AddRules(who, "lakebed", biome.LakebedTextureLayer, entry.Bed, source, report, apply);
+			}
+
+			// Rules the spec has moved or dropped: switched off where the tool wrote them and nobody has tuned them since.
+			foreach ((string slotName, string rule) in entry.Retired)
+			{
+				Retire(who, slotName, SlotNamed(biome, slotName), rule, report, apply);
 			}
 			if (entry.Riverbed != null)
 			{
@@ -641,6 +652,47 @@ namespace FishMMO.Shared.WorldDesign
 						rule.ruleName = $"{DisabledMark}{reason}] {rule.ruleName}";
 					}
 				}
+			}
+		}
+
+		/// <summary>A biome's texture layer by its slot name (<c>main</c>, <c>detail/N</c>, <c>lakebed</c>, <c>riverbed</c>); null for none.</summary>
+		private static TerrainTextureLayer SlotNamed(BiomeTemplate biome, string slotName)
+		{
+			if (slotName == "main") return biome.MainTextureLayer;
+			if (slotName == "lakebed") return biome.LakebedTextureLayer;
+			if (slotName == "riverbed") return biome.RiverbedTextureLayer;
+			if (slotName.StartsWith("detail/", System.StringComparison.Ordinal) && int.TryParse(slotName.Substring(7), out int index)
+				&& biome.DetailTextureLayers != null && index >= 0 && index < biome.DetailTextureLayers.Count)
+			{
+				return biome.DetailTextureLayers[index];
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Switches off a rule the spec no longer writes on a slot — kelp the sea-floor spec moved from the
+		/// main layer, which is never painted under water, to the lakebed — when the tool wrote it (its
+		/// fingerprint still matches, or it has none: an earlier run's) and nobody has tuned it.
+		/// </summary>
+		private static void Retire(string who, string slotName, TerrainTextureLayer slot, string name, Report report, bool apply)
+		{
+			PrefabSpawnRule rule = RuleNamed(slot?.prefabSpawnRules, name);
+			if (rule == null || !rule.enableSpawning)
+			{
+				return;
+			}
+			if (!string.IsNullOrEmpty(rule.SpecFingerprint) && rule.SpecFingerprint != Fingerprint(rule))
+			{
+				report.RulesKept++;
+				report.Lines.Add($"{who} {slotName}: rule '{name}' is no longer in the spec here but was tuned by hand — kept as it is");
+				return;
+			}
+			report.RulesDisabled++;
+			report.Lines.Add($"{who} {slotName}: rule '{name}' moved out of this slot by the spec — {(apply ? "switched off" : "would be switched off")} (kept, not deleted)");
+			if (apply)
+			{
+				rule.enableSpawning = false;
+				rule.ruleName = $"{DisabledMark}moved by the spec] {rule.ruleName}";
 			}
 		}
 
@@ -776,7 +828,8 @@ namespace FishMMO.Shared.WorldDesign
 		private static bool IsLegacySpecRule(string who, PrefabSpawnRule rule, BiomeArtSpec.Scatter s, GameObject[] prefabs, IBiomeArtSource source)
 		{
 			// Fields a pre-fingerprint run could not have set: anything but their defaults is somebody's.
-			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f)
+			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f || rule.forestMetres != 0f
+				|| rule.depthRange != Vector2.zero)
 			{
 				return false;
 			}
@@ -844,6 +897,19 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					text.Append(",N").Append(Q(rule.clusterSize));
 				}
+			}
+			/* Stands the same way: only when a rule has them, so every rule marked before forests existed
+			 * (none has a stand size) still hashes to its mark and is brought into them. */
+			if (rule.forestMetres != 0f)
+			{
+				text.Append("|F").Append(Q(rule.forestMetres)).Append(',').Append(Q(rule.forestCover))
+					.Append(',').Append(Q(rule.forestEdge)).Append(',').Append(Q(rule.forestOpen))
+					.Append(',').Append(Q(rule.forestMix)).Append(',').Append(Q(rule.forestScaleBias));
+			}
+			// And depth bands, for the same reason: only a rule that has one hashes it.
+			if (rule.depthRange != Vector2.zero)
+			{
+				text.Append("|D").Append(Q(rule.depthRange.x)).Append(',').Append(Q(rule.depthRange.y));
 			}
 			return Hash64(text);
 		}
@@ -960,6 +1026,13 @@ namespace FishMMO.Shared.WorldDesign
 				clusterSize = Mathf.Clamp(s.ClusterSize, 0f, 100f),
 				clusterBackground = Mathf.Clamp01(s.ClusterBackground),
 				clusterScaleBias = Mathf.Clamp01(s.ClusterScaleBias),
+				forestMetres = Mathf.Clamp(s.ForestMetres, 0f, 4000f),
+				forestCover = Mathf.Clamp(s.ForestCover, 0.01f, 1f),
+				forestEdge = Mathf.Clamp01(s.ForestEdge),
+				forestOpen = Mathf.Clamp01(s.ForestOpen),
+				forestMix = Mathf.Clamp01(s.ForestMix),
+				forestScaleBias = Mathf.Clamp01(s.ForestScaleBias),
+				depthRange = new Vector2(Mathf.Max(0f, s.Depth.x), Mathf.Max(0f, s.Depth.y)),
 			});
 			rule.SpecFingerprint = Fingerprint(rule);
 		}
@@ -1006,6 +1079,13 @@ namespace FishMMO.Shared.WorldDesign
 			to.clusterSize = from.clusterSize;
 			to.clusterBackground = from.clusterBackground;
 			to.clusterScaleBias = from.clusterScaleBias;
+			to.forestMetres = from.forestMetres;
+			to.forestCover = from.forestCover;
+			to.forestEdge = from.forestEdge;
+			to.forestOpen = from.forestOpen;
+			to.forestMix = from.forestMix;
+			to.forestScaleBias = from.forestScaleBias;
+			to.depthRange = from.depthRange;
 		}
 	}
 }

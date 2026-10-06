@@ -48,7 +48,8 @@ float FishWaterOpenSea(float2 xz)
 
 float _FishWaterSwashPeriod;     // seconds between arriving waves; 0 when the scene has no shore
 float _FishWaterShoreTime;       // the shore's clock, seconds
-float _FishWaterSwashCycles;     // which wave the shore is on: the swash's phase added up, wrapped at 1000
+float _FishWaterSwashCycles;     // which wave the shore is on: whole part the wave's number, fraction how far through it (WaterShore)
+float4 _FishWaterSwashRelabel;   // x what a wave's number was last window less what it is now, y 0…1 how far its height has eased onto the new number
 float4 _FishWaterSwashSea;       // x significant wave height (m), y deep-water wavelength at the peak period (m)
 
 /// Where the open sea hands over to the breakers, from WaterSurface: x the break depth (m), where the

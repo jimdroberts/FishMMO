@@ -300,6 +300,24 @@ namespace FishMMO.Client
 		/// <summary>The anisotropic filtering mode authored in the project, before any change.</summary>
 		private static AnisotropicFiltering authoredAnisotropicFiltering;
 
+		/// <summary>
+		/// The editor's own frame-rate cap: none. <see cref="Application.targetFrameRate"/> is native and outlives
+		/// play mode, and in the editor it caps the Game view; left at the boot phase's 60 it held the Game view
+		/// there while authoring until the editor restarted. Nothing in edit mode sets one, so the editor's value
+		/// is always this, and capturing whatever is set on entering play mode could only capture a leftover.
+		/// </summary>
+		private const int EditorTargetFrameRate = -1;
+
+		/// <summary>Clears a cap a play session left behind, whenever scripts load outside play mode.</summary>
+		[UnityEditor.InitializeOnLoadMethod]
+		private static void ClearLeftoverFrameRateCap()
+		{
+			if (!UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
+			{
+				Application.targetFrameRate = EditorTargetFrameRate;
+			}
+		}
+
 		/// <summary>True once the authored values above have been captured.</summary>
 		private static bool hasAuthoredQuality;
 #endif
@@ -358,6 +376,7 @@ namespace FishMMO.Client
 				QualitySettings.vSyncCount = authoredVSyncCount;
 				QualitySettings.anisotropicFiltering = authoredAnisotropicFiltering;
 			}
+			Application.targetFrameRate = EditorTargetFrameRate;
 
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 
@@ -598,10 +617,9 @@ namespace FishMMO.Client
 		/// a frame rate below the tick rate cannot deliver them on schedule and the client falls
 		/// behind the server's timeline — offering such a value lets a player break their own
 		/// connection from a settings menu.</para>
-		/// <para>The ceiling is the display's fastest mode; frames produced faster than the panel
-		/// can present them are discarded at scan-out.</para>
-		/// <para>The display's own rate is always included even when it is not a ladder value —
-		/// 165 Hz and 59.94 Hz panels both exist.</para>
+		/// <para>The ceiling is <see cref="Client.ResolveMaximumFrameRate"/>: no longer the display's fastest mode,
+		/// which the platform can misreport (60 Hz for a 480 Hz panel under KDE Wayland), and which VSync matches
+		/// when that is what the player wants.</para>
 		/// </remarks>
 		public static List<int> BuildFrameRateChoices()
 		{

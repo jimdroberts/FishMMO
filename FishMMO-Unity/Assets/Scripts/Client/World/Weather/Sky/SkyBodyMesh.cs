@@ -350,7 +350,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Adds the meteors alight at a time.</summary>
-		public void AddMeteors(List<Meteor> meteors, double now)
+		/// <param name="visibility">How much of them the sky lets be seen, 0..1: the schedule is everyone's, what shows of it is this sky's.</param>
+		public void AddMeteors(List<Meteor> meteors, double now, float visibility = 1f)
 		{
 			foreach (Meteor meteor in meteors)
 			{
@@ -362,7 +363,7 @@ namespace FishMMO.Client
 				float t = (float)(age / meteor.Duration);
 				Vector3 head = Vector3.Slerp(meteor.Direction, (meteor.Direction + meteor.Heading * meteor.Length).normalized, t);
 				float fade = Mathf.Sin(t * Mathf.PI);
-				AddQuad(head, Kind.Meteor, 0.0012f, 1f, 0f, Vector3.up, meteor.Brightness * fade, -meteor.Heading, meteor.Length * 0.5f * (0.3f + t), new Color(1f, 0.95f, 0.85f), InFrontOfAll);
+				AddQuad(head, Kind.Meteor, 0.0012f, 1f, 0f, Vector3.up, meteor.Brightness * fade * visibility, -meteor.Heading, meteor.Length * 0.5f * (0.3f + t), new Color(1f, 0.95f, 0.85f), InFrontOfAll);
 			}
 		}
 

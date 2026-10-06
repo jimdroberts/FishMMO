@@ -4,6 +4,7 @@ using UnityEngine.AddressableAssets;
 using FishMMO.Logging;
 using FishMMO.Shared.NameGeneration;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -160,6 +161,37 @@ namespace FishMMO.Shared
 		[Header("Biomes")]
 		[Tooltip("Where this race is at home. Weighted; empty means no preference.")]
 		public List<BiomeAffinity> BiomeAffinities = new List<BiomeAffinity>();
+
+		/// <summary>
+		/// Damage this race takes none of, whatever its resistances: a fire race's fire, lava included (Jim, 2026-10-05:
+		/// fire races are fire immune, and a city under the lava should be possible).
+		/// </summary>
+		[Header("Environment")]
+		[Tooltip("Damage types this race is immune to: none of it lands, before resistance. Fire races list Fire Damage, so lava cannot hurt them and they swim in it.")]
+		public List<DamageAttributeTemplate> DamageImmunities = new List<DamageAttributeTemplate>();
+
+		/// <summary>Whether this race breathes under water and never drowns.</summary>
+		[Tooltip("Breathes under water: its breath never runs down.")]
+		public bool BreathesWater;
+
+		/// <summary>True when this race takes none of <paramref name="damage"/>.</summary>
+		public bool IsImmuneTo(DamageAttributeTemplate damage) => damage != null && DamageImmunities != null && DamageImmunities.Contains(damage);
+
+		/// <summary>
+		/// The race of any character: a player's own, or an NPC's through its faction controller. Null when it has none.
+		/// </summary>
+		public static RaceTemplate Of(ICharacter character)
+		{
+			if (character == null)
+			{
+				return null;
+			}
+			if (character is IPlayerCharacter player && player.RaceTemplate != null)
+			{
+				return player.RaceTemplate;
+			}
+			return character.TryGet(out IFactionController faction) ? faction.RaceTemplate : null;
+		}
 
 		private string namingKey;
 

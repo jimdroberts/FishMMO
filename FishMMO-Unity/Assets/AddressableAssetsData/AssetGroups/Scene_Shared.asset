@@ -57,12 +57,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9bb793da43a030e459af61d22643af10
-    m_Address: NavMesh-Floor
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a47b11ff0cd05e735af9ac470b463348
     m_Address: RegionSim
     m_ReadOnly: 0
@@ -75,20 +69,8 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
-    m_Address: Test Dungeon/NavMesh-Terrain.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3f7f35295862928c98a14ef55691e63
     m_Address: InteractableSim
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c43b6eb487815084ca437ada41086fa4
-    m_Address: Dungeon/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -107,18 +89,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e8a5917e2e784024a83eee958f6f9689
     m_Address: StartScene A
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
-    m_Address: StartScene A/NavMesh-Terrain.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f8dd271abfab0f44287f337e86b02aa5
-    m_Address: StartScene B/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared

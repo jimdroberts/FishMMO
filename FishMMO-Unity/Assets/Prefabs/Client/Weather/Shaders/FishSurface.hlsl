@@ -105,7 +105,8 @@ float2 FishRippleSlope(float3 worldPos, float time, float strength)
         float seed = FishSurfaceHash(cell + i * 7.3);
         float2 landing = (float2(FishSurfaceHash(cell + 3.1 + i), FishSurfaceHash(cell + 9.7 + i)) - 0.5) * 0.8;
         float2 local = frac(p) - 0.5 - landing;
-        float phase = frac(time * (0.9 + seed * 0.6) + seed);
+        // Each drop's pace snapped to whole drops in the clock's wrap, so the wrap is seamless.
+        float phase = frac(time * FishWrapCycles(0.9 + seed * 0.6) + seed);
         float distance = length(local);
         // Rings a little different in size and pitch from drop to drop.
         float pitch = 22.0 + seed * 14.0;

@@ -56,6 +56,7 @@ namespace FishMMO.Client
 		public const uint SaltClump = 0xFD7046C5u;
 		public const uint SaltBlade = 0xB55A4F09u;
 		public const uint SaltPull = 0x94D049BBu;
+		public const uint SaltSprinkle = 0x5BD1E995u;
 
 		// ── Hashes ───────────────────────────────────────────────────
 
@@ -301,6 +302,34 @@ namespace FishMMO.Client
 			return a + d * t;
 		}
 
+		/// <summary>
+		/// The sprinkled channel a candidate holds, or −1 (it is then a tussock species' candidate, or bare). A
+		/// sprinkled type (<see cref="GrassTypeTuning.Sprinkle"/>) has its own chance per candidate,
+		/// <c>min(1, weight / fullness) × chance</c> with chance = stems per square metre × density factor / the
+		/// near density, whatever else grows there; the chances stack in channel order and one uniform number
+		/// <paramref name="u"/> (the cell's <see cref="SaltSprinkle"/> hash) picks among them.
+		/// FishGrassBlades.compute FishGrassGenerate mirrors it.
+		/// </summary>
+		public static int PickSprinkle(float u, float[] weights, float[] chances, int count, float fullness)
+		{
+			float at = 0f;
+			fullness = Math.Max(0.05f, fullness);
+			for (int c = 0; c < count; c++)
+			{
+				float w = Math.Max(0f, weights[c]);
+				if (w <= 0f || chances[c] <= 0f)
+				{
+					continue;
+				}
+				at += Math.Min(1f, w / fullness) * chances[c];
+				if (u < at)
+				{
+					return c;
+				}
+			}
+			return -1;
+		}
+
 		/// <summary>The type a pick lands on among channel densities (cumulative), or −1 when they are all 0.</summary>
 		public static int PickChannel(float pick, float[] weights, int count)
 		{
@@ -314,15 +343,22 @@ namespace FishMMO.Client
 				return -1;
 			}
 			float at = pick * total;
+			int last = -1;
 			for (int c = 0; c < count; c++)
 			{
-				at -= Math.Max(0f, weights[c]);
-				if (at < 0f)
+				float w = Math.Max(0f, weights[c]);
+				at -= w;
+				if (w > 0f)
 				{
-					return c;
+					last = c;
+					if (at < 0f)
+					{
+						return c;
+					}
 				}
 			}
-			return count - 1;
+			// Rounding past the end: the last channel with any weight.
+			return last;
 		}
 
 		// ── The blade record (20 bytes: float3 root, uint packed, uint colour) ─────
@@ -358,12 +394,13 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Packs the terrain's linear albedo under a blade: square root (so dark soils keep their steps) at
-		/// 8 bits a channel, the top byte 255 when <paramref name="valid"/> (FishGrassBlades.compute GrassPackColour).
+		/// 8 bits a channel, bit 31 set when <paramref name="valid"/> (FishGrassBlades.compute GrassPackColour).
+		/// Bits 29..30 are the record's head part (<see cref="WithHeadPart"/>), 24..28 unused.
 		/// </summary>
 		public static uint PackColour(float r, float g, float b, bool valid)
 		{
 			static uint Q(float v) => (uint)Math.Max(0, Math.Min(255, (int)Math.Round(Math.Sqrt(Math.Max(0f, Math.Min(1f, v))) * 255f)));
-			return Q(r) | Q(g) << 8 | Q(b) << 16 | (valid ? 255u : 0u) << 24;
+			return Q(r) | Q(g) << 8 | Q(b) << 16 | (valid ? 1u : 0u) << 31;
 		}
 
 		/// <summary>The inverse of <see cref="PackColour"/> (FishGrassBlades.hlsl GrassUnpackColour).</summary>
@@ -373,8 +410,21 @@ namespace FishMMO.Client
 			r = D(packed & 255u);
 			g = D(packed >> 8 & 255u);
 			b = D(packed >> 16 & 255u);
-			valid = (packed >> 24) > 127u;
+			valid = (packed >> 31) != 0u;
 		}
+
+		/// <summary>Where a record's head part sits in its colour word.</summary>
+		public const int HeadPartShift = 29;
+
+		/// <summary>
+		/// The colour word of one of a stem's head records: part 0 is the stem itself, 1 and 2 the two crossed cards of
+		/// its head. A head record repeats the stem's root and packed shape, so the vertex shader rebuilds the same stem
+		/// (the same wind) and draws the card at its tip; the blade strip mesh is the card's geometry. Mirrored by
+		/// FishGrassBlades.compute GrassWithHeadPart and FishGrassBlades.hlsl GrassHeadPart.
+		/// </summary>
+		public static uint WithHeadPart(uint colour, int part) => (colour & ~(3u << HeadPartShift)) | ((uint)part & 3u) << HeadPartShift;
+
+		public static int HeadPartOf(uint colour) => (int)(colour >> HeadPartShift & 3u);
 
 		/// <summary>
 		/// One texel of a terrain's packed surface layers (GrassTerrain.SurfaceLayers, read by FishGrassBlades.compute

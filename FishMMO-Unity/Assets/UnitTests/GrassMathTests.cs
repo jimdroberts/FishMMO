@@ -148,5 +148,60 @@ namespace FishMMO.UnitTests
 				}
 			}
 		}
+
+		[Test]
+		public void HeadParts_RideTheColourWord_WithoutTouchingTheColourOrItsFlag()
+		{
+			uint colour = GrassMath.PackColour(0.2f, 0.4f, 0.1f, true);
+			for (int part = 0; part < 3; part++)
+			{
+				uint marked = GrassMath.WithHeadPart(colour, part);
+				LogAssert.AreEqual(part, GrassMath.HeadPartOf(marked), $"part {part}");
+				GrassMath.UnpackColour(marked, out float r, out float g, out float b, out bool valid);
+				GrassMath.UnpackColour(colour, out float r0, out float g0, out float b0, out _);
+				LogAssert.IsTrue(valid, $"part {part} keeps the colour valid");
+				LogAssert.IsTrue(r == r0 && g == g0 && b == b0, $"part {part} keeps the colour");
+			}
+			// A shadow caster's record has no colour: its head parts must not read as a valid terrain colour.
+			GrassMath.UnpackColour(GrassMath.WithHeadPart(0u, 2), out _, out _, out _, out bool shadowValid);
+			LogAssert.IsFalse(shadowValid, "a colourless head record stays colourless");
+			LogAssert.AreEqual(0, GrassMath.HeadPartOf(GrassMath.WithHeadPart(GrassMath.WithHeadPart(colour, 2), 0)), "part 0 clears it");
+		}
+
+		[Test]
+		public void Sprinkle_HoldsItsOwnChance_WhateverElseGrows()
+		{
+			// Channel 0 grass (a tussock species: no chance), 1 flowers at 2% a candidate, 2 reeds at 6%, half painted.
+			float[] chances = { 0f, 0.02f, 0.06f };
+			const float fullness = 0.35f;
+			var full = new[] { 1f, 1f, 0.175f };
+			int flowers = 0, reeds = 0;
+			const int side = 300;
+			for (int j = 0; j < side; j++)
+			{
+				for (int i = 0; i < side; i++)
+				{
+					float u = GrassMath.Unit(GrassMath.Hash(i, j, GrassMath.SaltSprinkle));
+					int c = GrassMath.PickSprinkle(u, full, chances, 3, fullness);
+					LogAssert.IsTrue(c != 0, "a tussock species is never sprinkled");
+					flowers += c == 1 ? 1 : 0;
+					reeds += c == 2 ? 1 : 0;
+				}
+			}
+			float n = side * side;
+			LogAssert.IsTrue(Math.Abs(flowers / n - 0.02f) < 0.003f, $"flowers fully painted: {flowers / n}");
+			// Reeds painted at half the fullness: half their chance.
+			LogAssert.IsTrue(Math.Abs(reeds / n - 0.03f) < 0.004f, $"reeds half painted: {reeds / n}");
+			LogAssert.AreEqual(-1, GrassMath.PickSprinkle(0.5f, new[] { 1f, 0f, 0f }, chances, 3, fullness), "no sprinkled layer painted, no sprinkle");
+		}
+
+		[Test]
+		public void PickChannel_FallsBackToTheLastPaintedChannel()
+		{
+			// A pick of exactly 1 runs past the end: the last channel with any weight, never an empty one.
+			LogAssert.AreEqual(1, GrassMath.PickChannel(1f, new[] { 0.3f, 0.7f, 0f, 0f }, 4), "the last painted channel");
+			LogAssert.AreEqual(0, GrassMath.PickChannel(0.1f, new[] { 0.3f, 0.7f, 0f, 0f }, 4), "in order");
+			LogAssert.AreEqual(-1, GrassMath.PickChannel(0.5f, new float[4], 4), "nothing painted");
+		}
 	}
 }

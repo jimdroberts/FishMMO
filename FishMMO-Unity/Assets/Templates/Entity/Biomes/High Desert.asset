@@ -232,9 +232,16 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.5
-      sinkRange: {x: 0.02, y: 0.05}
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
       sinkSlopeFactor: 0
-      specFingerprint: 87f30bce4abb9f4a
+      depthRange: {x: 0, y: 0}
+      specFingerprint: a4ed9dbf3b0b1cf0
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -278,8 +285,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.2
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0.02, y: 0.05}
       sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
       specFingerprint: f2caa2dd0b8d5fd0
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -375,8 +389,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
       specFingerprint: 9ea5865ea34f8996
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -428,8 +449,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.3
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.6
+      depthRange: {x: 0, y: 0}
       specFingerprint: e5bc133cc980d6b7
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -481,8 +509,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
       specFingerprint: 9ad894796ab8cf72
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}

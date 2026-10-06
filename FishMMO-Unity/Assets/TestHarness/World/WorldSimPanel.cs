@@ -47,6 +47,10 @@ namespace FishMMO.TestHarness.World
 		private Slider timeSlider;
 		private Slider daySlider;
 		private Slider yearSlider;
+		private Slider paceSlider;
+		private Label clockReadout;
+		private TextField worldTimeField;
+		private Label worldTimeError;
 		private Slider transition;
 		private Button playButton;
 		private Toggle fieldToggle;
@@ -214,11 +218,23 @@ namespace FishMMO.TestHarness.World
 			heading.AddToClassList("ws-card__title");
 			body.Add(heading);
 
+			// Two explicit columns, not one wrapping row of half-width rows: Yoga rounds two 50%
+			// widths to a pixel more than their parent and wraps the second, which stacked every
+			// row of a wide card one above the other.
 			var grid = new VisualElement();
 			grid.AddToClassList("ws-card__grid");
 			body.Add(grid);
-			foreach ((string key, string label) in rows)
+			var columns = new VisualElement[wide ? 2 : 1];
+			for (int c = 0; c < columns.Length; c++)
 			{
+				columns[c] = new VisualElement();
+				columns[c].AddToClassList("ws-card__column");
+				columns[c].EnableInClassList("ws-card__column--second", c > 0);
+				grid.Add(columns[c]);
+			}
+			for (int i = 0; i < rows.Length; i++)
+			{
+				(string key, string label) = rows[i];
 				var row = new VisualElement();
 				row.AddToClassList("ws-stat");
 				var name = new Label(label);
@@ -227,7 +243,7 @@ namespace FishMMO.TestHarness.World
 				value.AddToClassList("ws-stat__value");
 				row.Add(name);
 				row.Add(value);
-				grid.Add(row);
+				columns[i % columns.Length].Add(row);
 				statValues[key] = value;
 			}
 			return card;
@@ -314,13 +330,19 @@ namespace FishMMO.TestHarness.World
 
 			// The figures sit above the tabs, because what the sky is doing is worth seeing whichever
 			// set of controls happens to be open. One card to a subject, so a number is found by
-			// where it is and not by reading a paragraph for it.
-			stats = new VisualElement();
-			stats.AddToClassList("ws-stats");
-			stats.Add(Card("Clock", false,
+			// where it is and not by reading a paragraph for it. They scroll in a box of their own,
+			// capped in height, so the controls below keep most of the panel.
+			var statsScroll = new ScrollView(ScrollViewMode.Vertical);
+			statsScroll.AddToClassList("fish-scroll");
+			statsScroll.AddToClassList("ws-stats");
+			stats = statsScroll;
+			var pair = new VisualElement();
+			pair.AddToClassList("ws-card-pair");
+			pair.Add(Card("Clock", false,
 				("clock.time", "Time"), ("clock.date", "Date"), ("clock.season", "Season"), ("clock.hours", "World hours"), ("clock.rate", "Rate")));
-			stats.Add(Card("Sun & sky", false,
+			pair.Add(Card("Sun & sky", false,
 				("sky.sun", "Sun"), ("sky.stars", "Stars"), ("sky.meteors", "Meteors"), ("sky.eclipse", "Eclipse"), ("sky.aurora", "Aurora")));
+			stats.Add(pair);
 			stats.Add(Card("Air — what drives the weather", true,
 				("air.pressure", "Pressure"), ("air.humidity", "Humidity"), ("air.instability", "Instability"), ("air.added", "Added"),
 				("air.base", "Cloud base"), ("air.freezing", "Freezing level")));
@@ -414,26 +436,65 @@ namespace FishMMO.TestHarness.World
 			places.Add(SmallButton("45°S", () => SetLatitude(-45f)));
 			page.Add(places);
 
-			page.Add(Heading("When", "Year, day and time together are the whole clock. The weather and every orbit are worked out from it, so all three are needed to have a moment back."));
-			timeSlider = LabeledSlider("Time of day", 0f, 1f, (float)Controller.TimeOfDay, v => Controller.ScrubTo(v));
+			page.Add(Heading("When", "One clock. The bed's tick stands in for the server's and counts at a fixed rate; the world time is its anchor, which you set, hold and race here exactly as an admin does in the game (/admin time). The sun, the weather, the storms and the sea all read it."));
+			clockReadout = Well(string.Empty);
+			page.Add(clockReadout);
+
+			var transport = Row();
+			playButton = SmallButton(Controller.Paused ? "▶ Run" : "❚❚ Hold", TogglePlay);
+			// The one button on the panel that starts and stops everything else.
+			playButton.RemoveFromClassList("fish-button--ghost");
+			playButton.AddToClassList("fish-button--primary");
+			transport.Add(playButton);
+			transport.Add(SmallButton("−1 h", () => StepClock(-3600.0)));
+			transport.Add(SmallButton("−1 min", () => StepClock(-60.0)));
+			transport.Add(SmallButton("+1 min", () => StepClock(60.0)));
+			transport.Add(SmallButton("+1 h", () => StepClock(3600.0)));
+			transport.Add(SmallButton("+1 day", () => StepClock(HomeDaySeconds())));
+			page.Add(transport);
+
+			// The pace Run runs at, on a log scale: a hundredth of real time to ten thousand times.
+			paceSlider = LabeledSlider("Pace (log10 ×)", -2f, 4f, (float)Math.Log10(Controller.RunRate), v => SetPace(Math.Pow(10.0, v)));
+			paceSlider.tooltip = "World seconds per real second while running, as a power of ten: 0 is real time, 1.78 the bed's usual 60×, 2.26 its 180×. The waves, the wind and what falls never run faster than real time however fast this is; the sky, the weather and the storms keep up with it.";
+			page.Add(paceSlider);
+			var paces = Row();
+			paces.Add(SmallButton("1×", () => SetPace(1.0)));
+			paces.Add(SmallButton("10×", () => SetPace(10.0)));
+			paces.Add(SmallButton("60×", () => SetPace(60.0)));
+			paces.Add(SmallButton("180×", () => SetPace(180.0)));
+			paces.Add(SmallButton("600×", () => SetPace(600.0)));
+			paces.Add(SmallButton("3600×", () => SetPace(3600.0)));
+			page.Add(paces);
+
+			// The exact moment, to the millisecond: the same text /admin time set takes in the game.
+			var exact = Row(true);
+			worldTimeField = new TextField("World time") { value = WorldTimeText.Write(Controller.WorldSeconds, Epoch()) };
+			worldTimeField.AddToClassList("fish-input");
+			worldTimeField.tooltip = "A world timestamp (yyyy-MM-dd HH:mm:ss.fff, to the millisecond) or a change (+1h30m, -90s, +2d). Enter or Set applies it.";
+			worldTimeField.RegisterCallback<KeyDownEvent>(evt =>
+			{
+				if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+				{
+					ApplyWorldTime();
+				}
+			});
+			exact.Add(worldTimeField);
+			exact.Add(SmallButton("Set", ApplyWorldTime));
+			page.Add(exact);
+			worldTimeError = Small(string.Empty);
+			page.Add(worldTimeError);
+
+			timeSlider = LabeledSlider("Time of day", 0f, 1f, (float)Controller.TimeOfDay, v => Controller.JumpTo(v));
+			timeSlider.tooltip = "Moves the world clock to the nearest moment with this local time, held or running.";
 			page.Add(timeSlider);
 			int daysPerYear = SolarSystemProfile.Active != null ? SolarSystemProfile.Active.DaysPerYear : 365;
-			daySlider = LabeledSlider("Day of year", 0f, daysPerYear - 1f, Controller.DayOfYear, v => Controller.DayOfYear = v);
+			daySlider = LabeledSlider("Day of year", 0f, daysPerYear - 1f, Mathf.Floor(Controller.DayOfYear), v => Controller.SetDay(v));
+			daySlider.tooltip = "Moves the world clock to this day of the year, keeping the hour.";
 			page.Add(daySlider);
 			yearSlider = LabeledSlider("Year", 0f, 100f, Controller.Year, v => Controller.Year = Mathf.RoundToInt(v));
 			yearSlider.tooltip = "Which year of the world clock. The weather and every orbit are worked out from the whole date, so the same day of another year is a different sky: this, the day and the time together are what reproduce a moment. The box takes years past the slider's end.";
 			page.Add(yearSlider);
-			page.Add(LabeledSlider("Hours / second", 0f, 3f, Controller.TimeScale, v => Controller.TimeScale = v));
 			var times = Row();
-			playButton = SmallButton(Controller.Paused ? "▶ Run" : "❚❚ Pause", () =>
-			{
-				Controller.Paused = !Controller.Paused;
-				playButton.text = Controller.Paused ? "▶ Run" : "❚❚ Pause";
-			});
-			// The one button on the panel that starts and stops everything else.
-			playButton.RemoveFromClassList("fish-button--ghost");
-			playButton.AddToClassList("fish-button--primary");
-			times.Add(playButton);
 			times.Add(SmallButton("Dawn", () => Jump(0.25)));
 			times.Add(SmallButton("Noon", () => Jump(0.5)));
 			times.Add(SmallButton("Dusk", () => Jump(0.75)));
@@ -443,7 +504,7 @@ namespace FishMMO.TestHarness.World
 			eclipses.Add(SmallButton("Next solar eclipse", () => JumpToEclipse(true)));
 			eclipses.Add(SmallButton("Next lunar eclipse", () => JumpToEclipse(false)));
 			page.Add(eclipses);
-			page.Add(Small("Jumps to a minute before first contact and slows the clock to a hundredth of an hour a second, so the phases can be watched: the whole of a solar eclipse here is about twenty real minutes at the bed's usual rate, and its totality a few seconds."));
+			page.Add(Small("Jumps to a minute before first contact, holds the clock and sets the pace to 36× for when you run it, so the phases can be watched: the whole of a solar eclipse is about twenty real minutes at that pace, and its totality a few seconds."));
 			var seasons = Row();
 			// The season here, on this body: found from where its sun stands, not read off the calendar.
 			seasons.Add(SmallButton("Spring", () => SetSeason(0.25f)));
@@ -608,8 +669,88 @@ namespace FishMMO.TestHarness.World
 		private void SetSeason(float season01)
 		{
 			float day = Controller.DayOfSeason(season01);
-			Controller.DayOfYear = day;
+			Controller.SetDay(day);
 			daySlider?.SetValueWithoutNotify(day);
+		}
+
+		// ── The clock ─────────────────────────────────────────────────
+
+		private static long Epoch() => SolarSystemProfile.Active != null ? SolarSystemProfile.Active.EpochUnixSeconds : CalendarProfile.DefaultEpochUnixSeconds;
+
+		/// <summary>One of the home world's days, in world seconds.</summary>
+		private static double HomeDaySeconds() => CelestialMath.HomeSolarDayHours(SolarSystemProfile.Active) * 3600.0;
+
+		private void TogglePlay()
+		{
+			Controller.Paused = !Controller.Paused;
+			playButton.text = Controller.Paused ? "▶ Run" : "❚❚ Hold";
+		}
+
+		private void StepClock(double worldSeconds)
+		{
+			Controller.StepWorld(worldSeconds);
+			SyncClockControls(true);
+		}
+
+		private void SetPace(double rate)
+		{
+			Controller.RunRate = Math.Max(0.01, rate);
+			paceSlider?.SetValueWithoutNotify((float)Math.Log10(Controller.RunRate));
+			RefreshClock();
+		}
+
+		/// <summary>Sets the clock from the field: a world timestamp, or a change from now.</summary>
+		private void ApplyWorldTime()
+		{
+			if (worldTimeField == null)
+			{
+				return;
+			}
+			if (!WorldTimeText.TryRead(worldTimeField.value, Epoch(), Controller.WorldSeconds, out double worldSeconds, out string error))
+			{
+				worldTimeError.text = error;
+				return;
+			}
+			if (worldSeconds < 0.0)
+			{
+				worldTimeError.text = "That is before the calendar's epoch.";
+				return;
+			}
+			worldTimeError.text = string.Empty;
+			Controller.SetWorldSeconds(worldSeconds);
+			SyncClockControls(true);
+		}
+
+		/// <summary>The sliders and the field to the clock, after it moved (or while it runs).</summary>
+		private void SyncClockControls(bool includeField)
+		{
+			timeSlider?.SetValueWithoutNotify((float)Controller.TimeOfDay);
+			daySlider?.SetValueWithoutNotify(Mathf.Floor(Controller.DayOfYear));
+			yearSlider?.SetValueWithoutNotify(Controller.Year);
+			if (includeField && worldTimeField != null && worldTimeField.focusController?.focusedElement != worldTimeField)
+			{
+				worldTimeField.SetValueWithoutNotify(WorldTimeText.Write(Controller.WorldSeconds, Epoch()));
+			}
+			RefreshClock();
+		}
+
+		/// <summary>The readout over the controls: the world timestamp to the millisecond, the date, the hour here and the pace.</summary>
+		private void RefreshClock()
+		{
+			if (clockReadout == null || Controller == null)
+			{
+				return;
+			}
+			CultureInfo culture = CultureInfo.InvariantCulture;
+			string pace = Controller.Paused
+				? $"held (runs at {WorldTimeText.Pace(Controller.RunRate)})"
+				: WorldTimeText.Pace(Controller.Rate);
+			clockReadout.text = $"{WorldTimeText.Write(Controller.WorldSeconds, Epoch())}  ·  year {Controller.Year}, day {Mathf.FloorToInt(Controller.DayOfYear)}  ·  "
+				+ $"{SceneTime.Format(Controller.TimeOfDay)} here  ·  {pace}  ·  tick {Controller.Tick.ToString(culture)}";
+			if (playButton != null)
+			{
+				playButton.text = Controller.Paused ? "▶ Run" : "❚❚ Hold";
+			}
 		}
 
 		/// <summary>The next eclipse of the chosen kind from now, from here, with the clock set to watch it.</summary>
@@ -622,16 +763,15 @@ namespace FishMMO.TestHarness.World
 			}
 			Controller.Paused = true;
 			Controller.JumpToHours(hoursAtFirstContact - 1.0 / 60.0);
-			Controller.TimeScale = 0.01f;
-			timeSlider?.SetValueWithoutNotify((float)Controller.TimeOfDay);
-			daySlider?.SetValueWithoutNotify(Controller.DayOfYear);
-			yearSlider?.SetValueWithoutNotify(Controller.Year);
+			// 36×: the whole of a solar eclipse is about twenty real minutes, its totality a few seconds.
+			SetPace(36.0);
+			SyncClockControls(true);
 		}
 
 		private void Jump(double localTime01)
 		{
 			Controller.JumpTo(localTime01);
-			timeSlider?.SetValueWithoutNotify((float)localTime01);
+			SyncClockControls(true);
 		}
 
 		private void LookAtBody(bool sun)
@@ -697,12 +837,8 @@ namespace FishMMO.TestHarness.World
 				Stat("clock.time", "no day/night cycle", "warn");
 				return;
 			}
-			if (!Controller.Paused)
-			{
-				timeSlider?.SetValueWithoutNotify((float)state.LocalTime01);
-				daySlider?.SetValueWithoutNotify(Controller.DayOfYear);
-				yearSlider?.SetValueWithoutNotify(Controller.Year);
-			}
+			// The controls follow the clock while it runs; the field only when it is not being typed in.
+			SyncClockControls(!Controller.Paused);
 
 			// Clock.
 			Stat("clock.time", $"{SceneTime.Format(state.LocalTime01)} · {(state.IsDaylight ? "day" : "night")}");
@@ -715,7 +851,7 @@ namespace FishMMO.TestHarness.World
 				: SeasonName(CelestialMath.Season01(SolarSystemProfile.Active, Controller.Body, Controller.Hours), Controller.Latitude),
 				upright ? "dim" : null);
 			Stat("clock.hours", Controller.Hours.ToString("0.00", culture));
-			Stat("clock.rate", Controller.Paused ? "paused" : $"{Controller.TimeScale.ToString("0.###", culture)} h/s", Controller.Paused ? "dim" : null);
+			Stat("clock.rate", Controller.Paused ? "held" : WorldTimeText.Pace(Controller.Rate), Controller.Paused ? "dim" : null);
 
 			// Sun and sky.
 			float stars = sky != null ? sky.Current.StarVisibility : 0f;

@@ -46,6 +46,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public Func<float, float, float, string> RockTypeAt;
 
+		/// <summary>
+		/// True at a scene position (x, z) where no cliff rock may stand: in a river's channel or under a
+		/// lake. Null: anywhere the cliff paint allows.
+		/// </summary>
+		public Func<float, float, bool> Excluded;
+
 		/// <summary>Raise the talus cones into the terrain heightmap and paint them as the biome's cliff (scree).</summary>
 		public bool EditTerrain = true;
 
@@ -80,6 +86,8 @@ namespace FishMMO.Shared.WorldDesign
 		public long Triangles;
 		/// <summary>Trees taken out of rocks or off scree, trees re-seated on raised ground, detail texels cleared.</summary>
 		public int TreesRemoved, TreesReseated, DetailTexelsCleared;
+		/// <summary>Rocks big enough to collide (their colliders streamed near characters).</summary>
+		public int Collidable;
 		public TimeSpan Elapsed;
 
 		public override string ToString()
@@ -90,7 +98,7 @@ namespace FishMMO.Shared.WorldDesign
 				types.Add($"{kv.Key} {kv.Value}");
 			}
 			float per100 = Stats.CliffLength > 0f ? Pieces / Stats.CliffLength * 100f : 0f;
-			return $"[Cliffs] {Pieces:N0} rock(s) ({per100:0.0} per 100 m), {Triangles:N0} triangles at LOD0 [{string.Join(", ", types)}]; {Stats}; " +
+			return $"[Cliffs] {Pieces:N0} rock(s) ({per100:0.0} per 100 m) as instanced data ({Collidable:N0} collidable, streamed), {Triangles:N0} triangles at LOD0 [{string.Join(", ", types)}]; {Stats}; " +
 				$"{TreesRemoved} trees removed and {TreesReseated} re-seated, {DetailTexelsCleared:N0} detail texels cleared; " +
 				$"{MissingAssets} left out for missing assets; {Elapsed.TotalSeconds:0.0} s.";
 		}
@@ -263,6 +271,10 @@ namespace FishMMO.Shared.WorldDesign
 			CliffRockSiteAt siteAt = (float x, float z, float y, out CliffRockSite site) =>
 			{
 				site = default;
+				if (options.Excluded != null && options.Excluded(x, z))
+				{
+					return false;
+				}
 				int b = field.DominantIndexAt(x, z, scratch);
 				if (b < 0 || rock[b] == null)
 				{
@@ -299,6 +311,9 @@ namespace FishMMO.Shared.WorldDesign
 			};
 
 			var seating = new Dictionary<CliffPiece, MeshBuilder>();
+			// The talus too keeps out of the water the rock sites keep out of.
+			options.Placement ??= new CliffRockPlacementOptions();
+			options.Placement.Excluded = options.Excluded;
 			CliffRockPlan plan = CliffRockPlacement.Plan(ground, ground.Area, siteAt, seed, piece =>
 			{
 				if (!seating.TryGetValue(piece, out MeshBuilder m))
@@ -320,7 +335,7 @@ namespace FishMMO.Shared.WorldDesign
 				: new List<GeneratedCliffTalus.TerrainEdit>();
 			if (options.CleanScatter)
 			{
-				CleanScatter(ground, plan, report, edits.Count > 0 || removedEdits);
+				CleanScatter(ground, plan, report);
 			}
 
 			var assets = new RockAssets(options.MaterialFor);
@@ -336,8 +351,13 @@ namespace FishMMO.Shared.WorldDesign
 				record.transform.SetParent(root.transform, false);
 				record.AddComponent<GeneratedCliffTalus>().Edits = edits;
 			}
-			var chunks = new Dictionary<long, Transform>();
-			float chunk = Mathf.Max(16f, options.ChunkMetres);
+			/* The rocks as baked props, not objects: one shared prefab per distinct rock (ScenePropSet "Cliffs",
+			 * drawn instanced on the GPU by the client) and their collision streamed into physics near characters
+			 * from the prefab's shared collision mesh (ScenePropCollisionSet). As objects, a scene's 20,000 rocks were 101,000 game objects, 60,000 renderers and 20,000
+			 * LOD groups culled and levelled on the main thread every frame. */
+			var prototypeOf = new Dictionary<string, int>();
+			var prototypes = new List<ScenePropSet.Prototype>();
+			var props = new List<ScenePropSet.Prop>(plan.Rocks.Count);
 			int levels = options.LodHeights.Length;
 			var meshes = new Mesh[levels];
 			string firstMissing = null;
@@ -350,7 +370,7 @@ namespace FishMMO.Shared.WorldDesign
 					meshes[lod] = assets.Mesh(in piece, lod);
 					complete &= meshes[lod] != null;
 				}
-				Mesh collision = meshes[Mathf.Min(CliffRocks.CollisionLod, levels - 1)];
+				Mesh collisionMesh = meshes[Mathf.Min(CliffRocks.CollisionLod, levels - 1)];
 				Material material = assets.Material(piece.Type);
 				if (!complete || material == null)
 				{
@@ -360,20 +380,26 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					continue;
 				}
-				int cx = Mathf.FloorToInt(r.Position.x / chunk), cz = Mathf.FloorToInt(r.Position.z / chunk);
-				long chunkKey = ((long)cx << 32) | (uint)cz;
-				if (!chunks.TryGetValue(chunkKey, out Transform parent))
+				string name = $"{(r.Talus ? "Talus" : "Crag")} {CliffRocks.BaseName(in piece)} {material.name}";
+				if (!prototypeOf.TryGetValue(name, out int prototype))
 				{
-					var go = new GameObject($"Chunk {cx} {cz}") { layer = layer };
-					go.transform.SetParent(root.transform, false);
-					GameObjectUtility.SetStaticEditorFlags(go, Flags);
-					chunks[chunkKey] = parent = go.transform;
+					GameObject prefab = RockPrefab(name, meshes, collisionMesh, material, layer, options.LodHeights, r.Talus);
+					if (prefab == null)
+					{
+						report.MissingAssets++;
+						continue;
+					}
+					prototype = prototypes.Count;
+					prototypeOf[name] = prototype;
+					prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = layer });
 				}
-				BuildRock(parent, in r, meshes, collision, material, layer, options.LodHeights);
+				Quaternion rotation = RotationOf(in r);
+				props.Add(new ScenePropSet.Prop { Prototype = prototype, Position = r.Position, Rotation = rotation, Scale = r.Scale });
 				report.Triangles += meshes[0].GetIndexCount(0) / 3;
 				report.Pieces++;
 				report.PiecesByType[piece.Type] = (report.PiecesByType.TryGetValue(piece.Type, out int n) ? n : 0) + 1;
 			}
+			report.Collidable = ScenePropBaker.Write(scene, PropSource, prototypes, props, layer);
 			if (report.MissingAssets > 0)
 			{
 				report.Notes.Add($"Cliffs: {report.MissingAssets} rock(s) left out because their generated assets are missing (e.g. '{firstMissing}'); run Generate Biome Art, then repaint.");
@@ -382,6 +408,89 @@ namespace FishMMO.Shared.WorldDesign
 			report.Elapsed = clock.Elapsed;
 			report.Notes.Add(report.ToString());
 			return report;
+		}
+
+		/// <summary>The source the cliffs' props and colliders are baked under (<see cref="ScenePropBaker"/>).</summary>
+		public const string PropSource = "Cliffs";
+
+		/// <summary>
+		/// The shared prefab for one distinct rock, made once and kept with the generated art: its
+		/// <see cref="LODGroup"/> and a renderer child per level, and a non-convex <see cref="MeshCollider"/> on
+		/// its collision mesh, which the bake reads (the prefab is never placed). Talus casts no shadow from its
+		/// last level. Returns the existing prefab when there is one with the same parts.
+		/// </summary>
+		public static GameObject RockPrefab(string name, Mesh[] lodMeshes, Mesh collision, Material material, int layer, float[] lodHeights, bool talus)
+		{
+			string path = ProceduralArtCatalogue.PrefabPath($"Rocks/{name}");
+			GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+			// Reused only when it is this rock, collision included, and has the GUID its path gives it on every machine.
+			if (existing != null && SameRock(existing, lodMeshes, material) && existing.TryGetComponent(out MeshCollider kept)
+				&& kept.sharedMesh == collision && ProceduralArtPayload.HasExpectedGuid(path))
+			{
+				return existing;
+			}
+			string folder = System.IO.Path.GetDirectoryName(path)?.Replace('\\', '/');
+			if (!AssetDatabase.IsValidFolder(folder))
+			{
+				System.IO.Directory.CreateDirectory(folder);
+				AssetDatabase.Refresh();
+			}
+			var go = new GameObject(name) { layer = layer };
+			try
+			{
+				int levels = Mathf.Min(lodMeshes.Length, lodHeights.Length);
+				var lods = new LOD[levels];
+				for (int lod = 0; lod < levels; lod++)
+				{
+					var child = new GameObject("LOD" + lod) { layer = layer };
+					child.transform.SetParent(go.transform, false);
+					child.AddComponent<MeshFilter>().sharedMesh = lodMeshes[lod];
+					var renderer = child.AddComponent<MeshRenderer>();
+					renderer.sharedMaterial = material;
+					renderer.shadowCastingMode = lod < levels - 1 || !talus ? ShadowCastingMode.On : ShadowCastingMode.Off;
+					renderer.receiveShadows = true;
+					renderer.lightProbeUsage = LightProbeUsage.BlendProbes;
+					lods[lod] = new LOD(lodHeights[lod], new Renderer[] { renderer });
+				}
+				LODGroup group = go.AddComponent<LODGroup>();
+				group.SetLODs(lods);
+				group.fadeMode = LODFadeMode.CrossFade;
+				group.animateCrossFading = true;
+				group.RecalculateBounds();
+				var collider = go.AddComponent<MeshCollider>();
+				collider.convex = false;
+				collider.sharedMesh = collision;
+				/* As the generator saves its own prefabs: a scene's props reference the rock by GUID, and the art is
+				 * generated on every machine, so the GUID and object IDs must come from its path, not from Unity. */
+				var problems = new List<string>();
+				GameObject prefab = ProceduralArtPayload.SavePrefab(go, path, problems);
+				foreach (string problem in problems)
+				{
+					Debug.LogWarning($"[Cliffs] {problem}");
+				}
+				return prefab;
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		private static bool SameRock(GameObject prefab, Mesh[] lodMeshes, Material material)
+		{
+			MeshFilter[] filters = prefab.GetComponentsInChildren<MeshFilter>(true);
+			if (filters.Length != lodMeshes.Length)
+			{
+				return false;
+			}
+			for (int i = 0; i < filters.Length; i++)
+			{
+				if (filters[i].sharedMesh != lodMeshes[i] || filters[i].GetComponent<MeshRenderer>()?.sharedMaterial != material)
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/// <summary>The rotation a placed rock's matrix holds, as a quaternion.</summary>
@@ -447,6 +556,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return 0;
 			}
+			ScenePropBaker.Clear(scene, PropSource);
 			foreach (GameObject root in scene.GetRootGameObjects())
 			{
 				if (root != null && root.name == RootName && root.GetComponent<GeneratedCliffs>() != null)
@@ -480,8 +590,21 @@ namespace FishMMO.Shared.WorldDesign
 					int s = edit.Samples[k];
 					heights[s / res, s % res] = Mathf.Clamp01(heights[s / res, s % res] - edit.Deltas[k]);
 				}
+				// Each tree follows the ground under it down, keeping its height over it: the scatter sinks every tree by
+				// design, and a snap would stand it on the surface instead.
+				TreeInstance[] trees = data.treeInstances;
+				var under = new float[trees.Length];
+				for (int t = 0; t < trees.Length; t++)
+				{
+					under[t] = data.GetInterpolatedHeight(trees[t].position.x, trees[t].position.z);
+				}
 				data.SetHeights(0, 0, heights);
-				data.SetTreeInstances(data.treeInstances, true);
+				for (int t = 0; t < trees.Length; t++)
+				{
+					float moved = data.GetInterpolatedHeight(trees[t].position.x, trees[t].position.z) - under[t];
+					trees[t].position.y = Mathf.Clamp01(trees[t].position.y + moved / data.size.y);
+				}
+				data.SetTreeInstances(trees, false);
 				EditorUtility.SetDirty(data);
 				any = true;
 			}
@@ -588,7 +711,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// texels under rock or on scree are cleared. So no tree or grass stands inside a rock or floats
 		/// over (or is buried under) a cone.
 		/// </summary>
-		private static void CleanScatter(TerrainGround ground, CliffRockPlan plan, CliffPlacerReport report, bool groundChanged)
+		private static void CleanScatter(TerrainGround ground, CliffRockPlan plan, CliffPlacerReport report)
 		{
 			foreach (TerrainGround.Tile tile in ground.Tiles)
 			{
@@ -608,18 +731,21 @@ namespace FishMMO.Shared.WorldDesign
 							continue;
 						}
 						TreeInstance t = tree;
-						if (plan.HeightDelta(x, z) > 0.01f)
+						float raised = plan.HeightDelta(x, z);
+						if (raised > 0.01f)
 						{
-							t.position = new Vector3(t.position.x, Mathf.Clamp01(tile.Terrain.SampleHeight(new Vector3(x, 0f, z)) / tile.Size.y), t.position.z);
+							// Up by what the cone raised the ground under it, keeping the sink the scatter gave it.
+							t.position = new Vector3(t.position.x, Mathf.Clamp01(t.position.y + raised / tile.Size.y), t.position.z);
 							report.TreesReseated++;
 							changed = true;
 						}
 						kept.Add(t);
 					}
-					if (changed || groundChanged)
+					if (changed)
 					{
-						// Snapped: every tree sits on the ground as it now is (cones raised, old cones lowered).
-						data.SetTreeInstances(kept.ToArray(), true);
+						// Not snapped: a snap would stand every tree on the surface and undo the sink the scatter gave it.
+						// Old cones' trees were already carried down with the ground (LowerCones).
+						data.SetTreeInstances(kept.ToArray(), false);
 					}
 				}
 				int dres = data.detailResolution;

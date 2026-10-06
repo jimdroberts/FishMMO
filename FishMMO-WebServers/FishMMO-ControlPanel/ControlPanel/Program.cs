@@ -113,6 +113,9 @@ builder.Services.AddHostedService<SmsQueueDrainService>();
 builder.Services.AddScoped<IDaemonService, DaemonService>();
 builder.Services.AddScoped<IWorldServerService, WorldServerService>();
 builder.Services.AddScoped<ISceneServerService, SceneServerService>();
+/* The one world clock row the scene servers adopt on their pulse. The panel reads and writes it;
+ * it never seeds it — the first scene server does, from its calendar's epoch. */
+builder.Services.AddScoped<IWorldClockControlService, WorldClockControlService>();
 
 // ── Panel services ──────────────────────────────────────────────────────────
 // The auto-verify bypass mirrors AccountVerificationPolicy: honoured only outside

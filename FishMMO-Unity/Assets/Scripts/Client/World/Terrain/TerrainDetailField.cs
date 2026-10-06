@@ -411,10 +411,23 @@ namespace FishMMO.Client
 			Vector2 scale = TerrainDetailMath.Size(TerrainDetailMath.Noise(worldX * s.NoiseSpread, worldZ * s.NoiseSpread, s.Seed),
 				s.MinWidth, s.MaxWidth, s.MinHeight, s.MaxHeight);
 			Quaternion rotation = Quaternion.AngleAxis(TerrainDetailMath.Yaw(hash), Vector3.up);
+			Vector3 normal = Data.GetInterpolatedNormal(nx, nz);
 			if (s.AlignToGround > 0f)
 			{
-				Vector3 up = Vector3.Slerp(Vector3.up, Data.GetInterpolatedNormal(nx, nz), s.AlignToGround);
+				Vector3 up = Vector3.Slerp(Vector3.up, normal, s.AlignToGround);
 				rotation = Quaternion.FromToRotation(Vector3.up, up) * rotation;
+			}
+			// Into the slope. An upright plant stands on the height under its middle, so on a slope its downhill
+			// edge hangs over the ground by its foot's reach times the slope — 20 to 30 cm for a fern, a shrub or
+			// a patch of litter on a 25° bank, against the few centimetres the shader sinks every detail. It is
+			// set down by most of that (SlopeSinkShare of the drop across its foot, as much of the slope as it
+			// does not lean with), never more than MaxSlopeSink: the uphill side goes into the bank, as a real
+			// plant's base does, and nothing floats. In the matrix, so every path — the GPU's, the CPU's, the
+			// shadows — sets it down alike.
+			float slope = Mathf.Acos(Mathf.Clamp(normal.y, -1f, 1f)) * (1f - s.AlignToGround);
+			if (slope > 1e-3f && s.FootRadius > 0f)
+			{
+				position.y -= Mathf.Min(SlopeSinkShare * s.FootRadius * scale.x * Mathf.Tan(Mathf.Min(slope, 1.2f)), MaxSlopeSink);
 			}
 			return Matrix4x4.TRS(position, rotation, new Vector3(scale.x, scale.y, scale.x));
 		}
@@ -503,9 +516,16 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>How much of the drop across its foot a plant on a slope is set down by (Place).</summary>
+		private const float SlopeSinkShare = 0.6f;
+		/// <summary>The most a plant is set down into a slope, m.</summary>
+		private const float MaxSlopeSink = 0.4f;
+
 		/// <summary>The per-prototype placement settings, read once from the detail prototypes.</summary>
 		public struct DetailPrototypeSettings
 		{
+			/// <summary>How far the plant's foot reaches from its root, m at scale 1: the widest of its lowest sixth (FootRadiusOf).</summary>
+			public float FootRadius;
 			public int Seed;
 			public float Jitter;
 			public float NoiseSpread;
@@ -526,7 +546,48 @@ namespace FishMMO.Client
 					MaxHeight = Mathf.Max(p.minHeight, p.maxHeight),
 					AlignToGround = Mathf.Clamp01(p.alignToGround),
 					UseDensityScaling = p.useDensityScaling,
+					FootRadius = FootRadiusOf(p),
 				};
+			}
+
+			/// <summary>
+			/// How far a prototype's foot reaches from its root, m: the furthest any vertex in the lowest sixth of
+			/// its height stands from the root across the ground — what hangs off a slope. From the vertices where
+			/// the mesh can be read, half its bounds' width where it cannot; 0 for a texture detail.
+			/// </summary>
+			private static float FootRadiusOf(DetailPrototype p)
+			{
+				if (!p.usePrototypeMesh || p.prototype == null)
+				{
+					return 0f;
+				}
+				MeshFilter filter = p.prototype.GetComponentInChildren<MeshFilter>();
+				Mesh mesh = filter != null ? filter.sharedMesh : null;
+				if (mesh == null)
+				{
+					return 0f;
+				}
+				if (!mesh.isReadable)
+				{
+					return 0.5f * Mathf.Max(mesh.bounds.size.x, mesh.bounds.size.z);
+				}
+				Vector3[] vertices = mesh.vertices;
+				float lowest = float.MaxValue, highest = float.MinValue;
+				foreach (Vector3 v in vertices)
+				{
+					lowest = Mathf.Min(lowest, v.y);
+					highest = Mathf.Max(highest, v.y);
+				}
+				float foot = lowest + (highest - lowest) * 0.16f;
+				float reach = 0f;
+				foreach (Vector3 v in vertices)
+				{
+					if (v.y <= foot)
+					{
+						reach = Mathf.Max(reach, Mathf.Sqrt(v.x * v.x + v.z * v.z));
+					}
+				}
+				return reach;
 			}
 		}
 

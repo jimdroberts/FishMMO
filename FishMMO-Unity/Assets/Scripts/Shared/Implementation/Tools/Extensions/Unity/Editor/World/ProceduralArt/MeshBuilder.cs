@@ -50,7 +50,28 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly List<Color32> Colors = new List<Color32>();
 		/// <summary>TEXCOORD1: x sway (moves with the whole plant), y flutter (trembles on its own). Zero for rocks.</summary>
 		public readonly List<Vector2> Wind = new List<Vector2>();
+		/// <summary>
+		/// TEXCOORD2, plants only: xyz where the part this vertex belongs to is attached (a limb's foot on the
+		/// trunk, a blade's root on the ground), w the part's own hash, 0..1. What the vegetation shader turns,
+		/// tilts and stretches each part about, so no two plants of a species hold their limbs alike
+		/// (FishVegetationPasses.hlsl, VegVary).
+		/// </summary>
+		public readonly List<Vector4> PartPivots = new List<Vector4>();
+		/// <summary>
+		/// TEXCOORD3, plants only: x the card's own hash (a leaf card's, a twig's; 0..1), y the part's keep rank,
+		/// z what the part is (<see cref="PlantPart"/>), w the card's keep rank. A rank of 0 is always drawn; a part
+		/// or card ranked above how full this plant is drawn (a per-plant figure the shader draws from its own
+		/// hash) collapses to its pivot and draws nothing — the spare limbs and leaves the generators add are
+		/// what make one tree fuller than the next.
+		/// </summary>
+		public readonly List<Vector4> PartData = new List<Vector4>();
 		public readonly List<List<int>> Submeshes = new List<List<int>>();
+
+		/// <summary>Whether any vertex carries part data, so <see cref="ToMesh"/> writes TEXCOORD2 and 3.</summary>
+		public bool HasParts { get; private set; }
+
+		private Vector4 currentPivot;
+		private Vector4 currentData;
 
 		public MeshBuilder(int submeshCount = 1)
 		{
@@ -84,7 +105,58 @@ namespace FishMMO.Shared.WorldDesign
 			Colors.Add(color);
 			Wind.Add(wind);
 			Tangents.Add(Vector4.zero);
+			PartPivots.Add(currentPivot);
+			PartData.Add(currentData);
 			return Positions.Count - 1;
+		}
+
+		/// <summary>
+		/// The part every vertex added from now on belongs to: where it attaches, its own hash, its keep rank
+		/// (0 always drawn) and what it is. The card is reset to none (hash 0, rank 0).
+		/// </summary>
+		public void SetPart(Vector3 pivot, float hash, float rank, PlantPart kind)
+		{
+			currentPivot = new Vector4(pivot.x, pivot.y, pivot.z, Mathf.Clamp01(hash));
+			currentData = new Vector4(0f, Mathf.Clamp01(rank), (float)kind, 0f);
+			HasParts = true;
+		}
+
+		/// <summary>
+		/// Marks the vertices from <paramref name="first"/> on as a trunk's rings round the centre line
+		/// <paramref name="path"/>: each records the nearest point of that line as its pivot and 1 as its card
+		/// rank (unused on a fixed part), so the vegetation shader can thicken or thin the trunk about its own
+		/// axis (<c>_VaryGirth</c>) without moving what hangs off it.
+		/// </summary>
+		public void MarkTrunkRings(int first, IReadOnlyList<Vector3> path)
+		{
+			for (int i = first; i < Positions.Count; i++)
+			{
+				Vector3 p = Positions[i];
+				Vector3 best = path[0];
+				float bestDistance = float.MaxValue;
+				for (int s = 0; s + 1 < path.Count; s++)
+				{
+					Vector3 a = path[s], ab = path[s + 1] - a;
+					float t = ab.sqrMagnitude > 1e-12f ? Mathf.Clamp01(Vector3.Dot(p - a, ab) / ab.sqrMagnitude) : 0f;
+					Vector3 on = a + ab * t;
+					float d = (p - on).sqrMagnitude;
+					if (d < bestDistance)
+					{
+						bestDistance = d;
+						best = on;
+					}
+				}
+				PartPivots[i] = new Vector4(best.x, best.y, best.z, PartPivots[i].w);
+				Vector4 data = PartData[i];
+				PartData[i] = new Vector4(data.x, data.y, data.z, 1f);
+			}
+		}
+
+		/// <summary>The card (a leaf card, a twig, a blade) within the current part the next vertices belong to.</summary>
+		public void SetCard(float hash, float rank)
+		{
+			currentData.x = Mathf.Clamp01(hash);
+			currentData.w = Mathf.Clamp01(rank);
 		}
 
 		/// <summary>A triangle whose front faces <paramref name="facing"/>; the index order is chosen to make it so.</summary>
@@ -119,6 +191,9 @@ namespace FishMMO.Shared.WorldDesign
 			UVs.AddRange(other.UVs);
 			Colors.AddRange(other.Colors);
 			Wind.AddRange(other.Wind);
+			PartPivots.AddRange(other.PartPivots);
+			PartData.AddRange(other.PartData);
+			HasParts |= other.HasParts;
 			for (int s = 0; s < other.Submeshes.Count; s++)
 			{
 				int target = Mathf.Min(Submeshes.Count - 1, s + submeshOffset);
@@ -138,6 +213,9 @@ namespace FishMMO.Shared.WorldDesign
 				Positions[i] = matrix.MultiplyPoint3x4(Positions[i]);
 				Vector3 n = normalMatrix.MultiplyVector(Normals[i]);
 				Normals[i] = n.sqrMagnitude > 1e-12f ? n.normalized : n;
+				Vector4 pivot = PartPivots[i];
+				Vector3 moved = matrix.MultiplyPoint3x4(new Vector3(pivot.x, pivot.y, pivot.z));
+				PartPivots[i] = new Vector4(moved.x, moved.y, moved.z, pivot.w);
 			}
 		}
 
@@ -327,25 +405,56 @@ namespace FishMMO.Shared.WorldDesign
 
 			Mesh.MeshDataArray dataArray = Mesh.AllocateWritableMeshData(1);
 			Mesh.MeshData data = dataArray[0];
-			data.SetVertexBufferParams(vertexCount,
-				new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
-				new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
-				new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.Float32, 4),
-				new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
-				new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
-				new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 2));
-			NativeArray<Vertex> vertices = data.GetVertexData<Vertex>();
-			for (int i = 0; i < vertexCount; i++)
+			// The part channels only for meshes that carry them (plants): a rock keeps its old layout and size.
+			if (HasParts)
 			{
-				vertices[i] = new Vertex
+				data.SetVertexBufferParams(vertexCount,
+					new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+					new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
+					new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.Float32, 4),
+					new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
+					new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
+					new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 2),
+					new VertexAttributeDescriptor(VertexAttribute.TexCoord2, VertexAttributeFormat.Float32, 4),
+					new VertexAttributeDescriptor(VertexAttribute.TexCoord3, VertexAttributeFormat.Float32, 4));
+				NativeArray<PartVertex> partVertices = data.GetVertexData<PartVertex>();
+				for (int i = 0; i < vertexCount; i++)
 				{
-					Position = Positions[i],
-					Normal = Normals[i],
-					Tangent = Tangents[i],
-					Color = Colors[i],
-					UV = UVs[i],
-					Wind = Wind[i],
-				};
+					partVertices[i] = new PartVertex
+					{
+						Position = Positions[i],
+						Normal = Normals[i],
+						Tangent = Tangents[i],
+						Color = Colors[i],
+						UV = UVs[i],
+						Wind = Wind[i],
+						Pivot = PartPivots[i],
+						Part = PartData[i],
+					};
+				}
+			}
+			else
+			{
+				data.SetVertexBufferParams(vertexCount,
+					new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
+					new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
+					new VertexAttributeDescriptor(VertexAttribute.Tangent, VertexAttributeFormat.Float32, 4),
+					new VertexAttributeDescriptor(VertexAttribute.Color, VertexAttributeFormat.UNorm8, 4),
+					new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
+					new VertexAttributeDescriptor(VertexAttribute.TexCoord1, VertexAttributeFormat.Float32, 2));
+				NativeArray<Vertex> vertices = data.GetVertexData<Vertex>();
+				for (int i = 0; i < vertexCount; i++)
+				{
+					vertices[i] = new Vertex
+					{
+						Position = Positions[i],
+						Normal = Normals[i],
+						Tangent = Tangents[i],
+						Color = Colors[i],
+						UV = UVs[i],
+						Wind = Wind[i],
+					};
+				}
 			}
 
 			data.SetIndexBufferParams(indexCount, wide ? IndexFormat.UInt32 : IndexFormat.UInt16);
@@ -401,6 +510,37 @@ namespace FishMMO.Shared.WorldDesign
 			public Vector2 UV;
 			public Vector2 Wind;
 		}
+
+		[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+		private struct PartVertex
+		{
+			public Vector3 Position;
+			public Vector3 Normal;
+			public Vector4 Tangent;
+			public Color32 Color;
+			public Vector2 UV;
+			public Vector2 Wind;
+			public Vector4 Pivot;
+			public Vector4 Part;
+		}
+	}
+
+	/// <summary>
+	/// What a plant part is, for the vegetation shader's per-plant variation (TEXCOORD3.z): which of the two
+	/// fullness figures decides whether it is drawn, and whether it is turned about its pivot at all.
+	/// </summary>
+	public enum PlantPart
+	{
+		/// <summary>The trunk and anything that holds still: never dropped or turned on its own.</summary>
+		Fixed = 0,
+		/// <summary>A limb with its twigs and leaves: drawn by the plant's branch fullness, turned about its foot.</summary>
+		Limb = 1,
+		/// <summary>A twig on a limb: as a limb, by its card rank too.</summary>
+		Twig = 2,
+		/// <summary>Leaf cards, blades and sprays: drawn by the leaf fullness as well.</summary>
+		Leaf = 3,
+		/// <summary>A palm frond or a fern frond: a whole leafy part, by the branch fullness.</summary>
+		Frond = 4,
 	}
 }
 #endif

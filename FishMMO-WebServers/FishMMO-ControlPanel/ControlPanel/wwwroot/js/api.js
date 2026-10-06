@@ -274,6 +274,20 @@ export const api = {
 	getMaintenance: (id) => request('GET', `/servers/maintenance/${id}`),
 	listMaintenance: (opts) => request('GET', `/servers/maintenance${q(opts)}`),
 	cancelMaintenance: (id, reason) => request('DELETE', `/servers/maintenance/${id}`, { reason }),
+	/* World time.
+	 *
+	 * One row, world_clock_control, that every scene server adopts on its pulse as an instant
+	 * jump. Each write is one statement that computes from the database clock and answers with
+	 * the reading it left (`clock`) and the server's own acknowledgement (`message`), which says
+	 * what was WRITTEN. `setWorldTime` takes a world timestamp (yyyy-MM-dd HH:mm:ss.fff) or a
+	 * signed change (+1h30m); `shiftWorldTime` takes only a change. Every write is a step-up write
+	 * with a reason. There is no seed route: the first scene server creates the row. */
+	getWorldTime: () => request('GET', '/world-time'),
+	setWorldTime: (value, reason) => request('POST', '/world-time/set', { value, reason }),
+	shiftWorldTime: (change, reason) => request('POST', '/world-time/shift', { change, reason }),
+	setWorldTimePace: (rate, reason) => request('POST', '/world-time/pace', { rate, reason }),
+	holdWorldTime: (reason) => request('POST', '/world-time/hold', { reason }),
+	resumeWorldTime: (reason) => request('POST', '/world-time/resume', { reason }),
 
 	/* daemon
 	 *

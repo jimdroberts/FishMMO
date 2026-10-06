@@ -3,6 +3,17 @@ using UnityEngine;
 
 namespace FishMMO.Client
 {
+	/// <summary>What a stem carries at its tip, drawn as two crossed cards there (FishGrassBlades.hlsl GrassHeadVertex).</summary>
+	public enum GrassHead
+	{
+		/// <summary>A plain blade.</summary>
+		None = 0,
+		/// <summary>A spindle along the stem's top (a reed's or a rush's seed head): brown, upright, sways with the stem.</summary>
+		SeedHead = 1,
+		/// <summary>A disc tilted toward the sky (a meadow flower), coloured from the prototype mesh's petal colours.</summary>
+		Flower = 2,
+	}
+
 	/// <summary>How one kind of grass prototype differs from the others as blades (matched by name prefix, longest first).</summary>
 	[Serializable]
 	public class GrassTypeTuning
@@ -22,6 +33,18 @@ namespace FishMMO.Client
 		[Tooltip("Multiplies the height read from the prototype mesh and its height scale.")]
 		[Range(0.3f, 2f)] public float HeightScale = 1f;
 
+		[Header("Sprinkled species and stem tips")]
+		[Tooltip("0: a tussock species — a clump is wholly one type, picked among the others by their painted share (grass). Above 0: stems of this type are sprinkled one at a time through whatever else grows, this many per square metre near the camera where its layer is fully painted (flowers, reeds), and thin with distance as the grass does.")]
+		[Min(0f)] public float Sprinkle = 0f;
+		[Tooltip("What the stem carries at its tip.")]
+		public GrassHead Head = GrassHead.None;
+		[Tooltip("The head's size, metres: a flower's radius, a seed head's length.")]
+		[Range(0.005f, 0.4f)] public float HeadSize = 0.035f;
+		[Tooltip("The head's colour where the prototype mesh has no petal colours of its own (a seed head; a flower mesh's petals win).")]
+		public Color HeadColour = new Color(0.36f, 0.25f, 0.14f);
+		[Tooltip("A strap that keeps its width to a rounded end (a reed's leaf) instead of tapering to a point.")]
+		public bool BluntTip;
+
 		public GrassTypeTuning() { }
 
 		public GrassTypeTuning(string prefix, float density, float stiffness, float width, float clumpPull, float bend, float heightScale = 1f)
@@ -33,6 +56,16 @@ namespace FishMMO.Client
 			ClumpPull = clumpPull;
 			Bend = bend;
 			HeightScale = heightScale;
+		}
+
+		/// <summary>The same tuning as a sprinkled species with a head (flowers, reeds).</summary>
+		public GrassTypeTuning Sprinkled(float perSquareMetre, GrassHead head, float headSize, bool bluntTip = false)
+		{
+			Sprinkle = perSquareMetre;
+			Head = head;
+			HeadSize = headSize;
+			BluntTip = bluntTip;
+			return this;
 		}
 	}
 
@@ -47,8 +80,8 @@ namespace FishMMO.Client
 		[Tooltip("Off: the grass detail prototypes stay meshes (as before) everywhere. The dashboard's A/B button overrides it per play session.")]
 		public bool Enabled = true;
 
-		[Tooltip("Detail prototype prefab names starting with any of these are drawn as blades (and skipped by the detail renderer). Reeds stay meshes: a reed is a stiff stem with a seed head, which a tapering blade loses.")]
-		public string[] PrototypePrefixes = { "Detail_Grass" };
+		[Tooltip("Detail prototype prefab names starting with any of these are drawn as blades (and skipped by the detail renderer). Reeds and meadow flowers are blades too: sprinkled stems with a seed head or a flower at the tip (their Types entries). Sea plants never are (a blade lawn on the sea floor read as land grass).")]
+		public string[] PrototypePrefixes = { "Detail_Grass", "Detail_Reeds", "Detail_Flowers" };
 
 		[Tooltip("Per-type differences, matched by prefix (longest first).")]
 		public GrassTypeTuning[] Types =
@@ -58,6 +91,10 @@ namespace FishMMO.Client
 			new GrassTypeTuning("Detail_GrassDry", 0.8f, 1.3f, 0.85f, 0.15f, 0.25f),
 			new GrassTypeTuning("Detail_GrassTall", 0.75f, 0.7f, 1.15f, 0.12f, 0.55f),
 			new GrassTypeTuning("Detail_GrassTuft", 0.85f, 1.6f, 0.9f, 0.3f, 0.3f),
+			// Stiff straps standing in loose beds, each with a brown spindle at its top.
+			new GrassTypeTuning("Detail_Reeds", 1f, 2.6f, 2f, 0.35f, 0.15f).Sprinkled(110f, GrassHead.SeedHead, 0.16f, bluntTip: true),
+			// Thin straight stems, a flower each, sprinkled through the meadow grass.
+			new GrassTypeTuning("Detail_Flowers", 1f, 1.3f, 0.8f, 0.1f, 0.12f).Sprinkled(14f, GrassHead.Flower, 0.032f),
 		};
 
 		[Header("Density rings (distance m, blades per square metre)")]

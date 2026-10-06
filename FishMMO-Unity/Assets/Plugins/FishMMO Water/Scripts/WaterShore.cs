@@ -96,17 +96,61 @@ namespace FishMMO.Water
 		public double SurfClock => clock;
 
 		/// <summary>
-		/// Which wave the shore is on, in waves: the swash's phase, ADDED UP a frame at a time at the
-		/// period of the moment, and wrapped at a thousand whole waves.
+		/// Which wave the shore is on, in waves: the whole part numbers the wave (the shaders draw each
+		/// wave's height from it, FishWaterWaveShare), the fraction is how far through it the swash is.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// It was the clock over the period. The period is the live sea's, so it drifts as the wind
 		/// does, and with the clock thousands of seconds in, a drift of one part in ten thousand moved
-		/// the swash a fifth of a wave: the shore surged about with the world's time stopped, and
-		/// raced when it ran. Added up, a new period changes only how fast the waves come.
+		/// the swash a fifth of a wave. Then it was added up a frame at a time at the period of the
+		/// moment, which fixed that but made it each client's own: how long it had run, at the periods
+		/// its own easing had passed through. Two players saw different waves on the same beach.
+		/// </para>
+		/// <para>
+		/// <b>Now a function of the shared clock, in windows.</b> The period is held for each
+		/// <see cref="SwashWindowSeconds"/> of the world-motion clock and snapped so the window holds a
+		/// whole number of waves; within it the count is that number times the share of the window
+		/// gone. So the phase comes round to a wave's start exactly as each window ends, and is the same
+		/// for every player, and still follows the sea's period, a window behind at most.
+		/// </para>
+		/// <para>
+		/// <b>The numbering cannot carry over, so it is eased over.</b> A count continuous across
+		/// windows would be the sum of every earlier window's waves since the epoch, and the period each
+		/// window held is the eased sea state — the weather sampled along the coast and a fetch march
+		/// over the planet — which no client can replay for the ~200 000 windows since then. So each
+		/// window numbers its waves from its own base (<see cref="SwashBase"/>), and where the number
+		/// changes at a window's start the shaders ease each wave's height from the old number's draw to
+		/// the new one's over the first few waves (<c>_FishWaterSwashRelabel</c>), rather than every
+		/// wave in flight changing height at once. Only the fraction has to be continuous for the
+		/// motion, and it is.
+		/// </para>
 		/// </remarks>
 		public double SurfCycles => cycles;
 		private double cycles;
+
+		/// <summary>Seconds of the shared clock the swash's period is held for: a dozen waves or so.</summary>
+		private const double SwashWindowSeconds = 120.0;
+		/// <summary>Wave numbers each window may use: more than a window can hold at the shortest period, half a second.</summary>
+		private const int SwashWindowStride = 256;
+		/// <summary>Windows before the numbering comes round, keeping it under 1024 where a float still resolves a cycle finely.</summary>
+		private const int SwashWindowLabels = 4;
+		/// <summary>Waves over which the heights ease from the last window's numbering to this one's.</summary>
+		private const float SwashRelabelWaves = 3f;
+		private static readonly int RelabelId = Shader.PropertyToID("_FishWaterSwashRelabel");
+		private long heldPeriodWindow = long.MinValue;
+		private float heldPeriod;
+		private long swashWindow = long.MinValue;
+		private int swashWaves;
+		private bool swashRelabels;
+		private float swashRelabel;
+
+		/// <summary>The first wave number of a window: windows number their waves from their own base.</summary>
+		private static long SwashBase(long window)
+		{
+			long label = window % SwashWindowLabels;
+			return (label < 0 ? label + SwashWindowLabels : label) * SwashWindowStride;
+		}
 
 		/// <summary>Seconds between arriving waves, as last published; 0 before the first frame.</summary>
 		public float SurfPeriod { get; private set; }
@@ -245,9 +289,80 @@ namespace FishMMO.Water
 			cycles = (seconds / Mathf.Max(0.5f, SurfPeriod)) % 1000.0;
 			lastRealtime = Time.realtimeSinceStartupAsDouble;
 			overridden = true;
+			// From then on this shore keeps its own clock, carried on from here as it always was.
+			manualClock = true;
 		}
 
 		private bool overridden;
+		private bool manualClock;
+
+		/// <summary>
+		/// Which wave the shore is on now, from the shared clock (<see cref="SurfCycles"/> says why it is
+		/// windowed), and how far the heights have eased onto this window's numbering.
+		/// </summary>
+		/// <remarks>
+		/// The period published to the shaders stays the eased one, not the held one: the breakers place
+		/// each wave's run in by it (FishWaterBreakerAt), and a held period would step them all at a
+		/// window's start. The count runs at most half a wave a window off it, a few per cent. The held
+		/// one is the sea's at the window's start, worked out from the clock (WindowPeriod), so every
+		/// client counts the same waves.
+		/// </remarks>
+		private void CountWaves()
+		{
+			double seconds = WorldMotion.Seconds;
+			double whole = System.Math.Floor(seconds / SwashWindowSeconds);
+			long window = (long)whole;
+			double into = System.Math.Max(0.0, System.Math.Min(SwashWindowSeconds, seconds - whole * SwashWindowSeconds));
+			if (window != heldPeriodWindow)
+			{
+				heldPeriodWindow = window;
+				heldPeriod = WindowPeriod(whole * SwashWindowSeconds);
+			}
+			float held = heldPeriod;
+			int waves = Mathf.Clamp(Mathf.RoundToInt((float)(SwashWindowSeconds / Mathf.Max(0.5f, held))), 1, SwashWindowStride - 1);
+			if (window != swashWindow)
+			{
+				/* Straight on from the last window, the number the last one ended on is carried for the
+				 * heights to ease off; after a gap (a join, a stall, a hop) there is nothing on screen to
+				 * keep, and the new numbering takes over at once. */
+				swashRelabels = swashWindow != long.MinValue && window == swashWindow + 1;
+				if (swashRelabels)
+				{
+					// What a wave was numbered in the last window less what it is numbered now.
+					swashRelabel = SwashBase(swashWindow) + swashWaves - SwashBase(window);
+				}
+				swashWindow = window;
+				swashWaves = waves;
+			}
+			double gone = into * swashWaves / SwashWindowSeconds;
+			cycles = SwashBase(window) + gone;
+			float eased = swashRelabels ? Mathf.Clamp01((float)gone / SwashRelabelWaves) : 1f;
+			Shader.SetGlobalVector(RelabelId, new Vector4(swashRelabels ? swashRelabel : 0f, eased, 0f, 0f));
+		}
+
+		/// <summary>
+		/// The period a window of the wave count holds, s: the sea's own at the moment the window began,
+		/// worked out afresh by the weather then (<see cref="WaterEnvironment.PeakPeriodAt"/>) — the same
+		/// number on every client, whenever it joined. The eased period it held before was each client's
+		/// own, and two could round to a different number of waves in a window. Without a sea that
+		/// follows the weather, the period this shore is using now.
+		/// </summary>
+		private float WindowPeriod(double windowStartSeconds)
+		{
+			if (DriveFromSea)
+			{
+				environment ??= GetComponent<WaterEnvironment>();
+				if (environment != null && environment.SignificantHeight > 0f)
+				{
+					float period = environment.PeakPeriodAt(windowStartSeconds);
+					if (!float.IsNaN(period))
+					{
+						return Mathf.Clamp(period, 3f, 20f);
+					}
+				}
+			}
+			return SurfPeriod;
+		}
 
 		private void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
 		{
@@ -292,13 +407,19 @@ namespace FishMMO.Water
 			{
 				lastRealtime = now;
 			}
-			if (!overridden)
+			if (manualClock && !overridden)
 			{
-				// The world's motion, as the sea's: the surf stops when the world's time does, and never
-				// runs faster than real time (WorldMotion).
+				// Driven by hand (a probe): carried on as it always was, a frame's step at a time.
 				double step = WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f));
 				clock = (clock + step) % 10000.0;
 				cycles = (cycles + step / Mathf.Max(0.5f, SurfPeriod)) % 1000.0;
+			}
+			else if (!manualClock)
+			{
+				// The shared world-motion clock, which stops and slows with the world and never races
+				// (WorldMotion): every player's shore on the same second. The foam scroll that reads it
+				// (0.12 a second) moves a whole 1200 tiles in the wrap, so the wrap is seamless.
+				clock = WorldMotion.Repeat(WorldMotion.Seconds, WorldMotion.ShaderWrapSeconds);
 			}
 			overridden = false;
 			lastRealtime = now;
@@ -330,6 +451,14 @@ namespace FishMMO.Water
 			}
 
 			SurfPeriod = Mathf.Max(0.5f, period);
+			if (!manualClock)
+			{
+				CountWaves();
+			}
+			else
+			{
+				Shader.SetGlobalVector(RelabelId, new Vector4(0f, 1f, 0f, 0f));
+			}
 			Shader.SetGlobalFloat(PeriodId, SurfPeriod);
 			Shader.SetGlobalFloat(ReachId, Mathf.Max(0.5f, reach));
 			/* What the run-up is worked out from, per beach, in the shader: the wave height, and the

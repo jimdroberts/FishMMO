@@ -25,6 +25,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// which for half-metre grass on a 20 km scene would be over a billion cells. Open addressing
 	/// and index-linked chains keep the hot path free of allocation; storage doubles when full.
 	/// </para>
+	/// <para>
+	/// <b>Per-point spacing, for a canopy.</b> Built with <c>perPoint</c>, each position carries its own
+	/// spacing and two stand at least the mean of theirs apart: a 30 m oak keeps a birch further off
+	/// than a birch keeps another birch, and trees of different forest rules share one of these, so
+	/// species do not stand inside one another. The cells are then the widest spacing any point may
+	/// carry (a point's own is clamped to it), so the 3×3 search still finds every neighbour that
+	/// could be too close.
+	/// </para>
 	/// </remarks>
 	internal sealed class ScatterSpacing
 	{
@@ -43,12 +51,23 @@ namespace FishMMO.Shared.WorldDesign
 		private int[] next;
 		private int count;
 
+		// Each point's own spacing, in per-point mode only; null otherwise.
+		private float[] spans;
+		private readonly float widest;
+
 		/// <summary>Number of positions recorded.</summary>
 		public int Count => count;
 
 		/// <param name="minimumSpacing">Closest two positions may stand, in metres. Must be positive.</param>
 		/// <param name="expected">Positions expected, to size the storage once.</param>
-		public ScatterSpacing(float minimumSpacing, int expected)
+		public ScatterSpacing(float minimumSpacing, int expected) : this(minimumSpacing, expected, false)
+		{
+		}
+
+		/// <param name="minimumSpacing">Closest two positions may stand, in metres; with <paramref name="perPoint"/>, the widest spacing any one point may carry. Must be positive.</param>
+		/// <param name="expected">Positions expected, to size the storage once.</param>
+		/// <param name="perPoint">True when every position carries its own spacing (<see cref="IsClear(float, float, float)"/>).</param>
+		public ScatterSpacing(float minimumSpacing, int expected, bool perPoint)
 		{
 			if (!(minimumSpacing > 0f))
 			{
@@ -56,11 +75,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			inverseCell = 1f / minimumSpacing;
 			minimumSquared = minimumSpacing * minimumSpacing;
+			widest = minimumSpacing;
 
 			int points = Math.Max(16, expected);
 			xs = new float[points];
 			zs = new float[points];
 			next = new int[points];
+			spans = perPoint ? new float[points] : null;
 
 			int slots = 32;
 			while (slots < points * 2)
@@ -98,7 +119,55 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
-		/// <summary>Records a position. Does not test it; call <see cref="IsClear"/> first.</summary>
+		/// <summary>
+		/// Per-point mode: true when (x, z), carrying <paramref name="spacing"/>, stands at least the mean of
+		/// its own and each recorded position's spacing from every one of them.
+		/// </summary>
+		public bool IsClear(float x, float z, float spacing)
+		{
+			if (spans == null)
+			{
+				return IsClear(x, z);
+			}
+			float own = Math.Min(Math.Max(0f, spacing), widest);
+			int cx = Floor(x * inverseCell);
+			int cz = Floor(z * inverseCell);
+			for (int dz = -1; dz <= 1; dz++)
+			{
+				for (int dx = -1; dx <= 1; dx++)
+				{
+					int slot = Find(Key(cx + dx, cz + dz));
+					if (slot < 0)
+					{
+						continue;
+					}
+					for (int p = heads[slot]; p >= 0; p = next[p])
+					{
+						float ox = xs[p] - x;
+						float oz = zs[p] - z;
+						float need = (own + spans[p]) * 0.5f;
+						if (ox * ox + oz * oz < need * need)
+						{
+							return false;
+						}
+					}
+				}
+			}
+			return true;
+		}
+
+		/// <summary>Per-point mode: records a position with its own spacing. Does not test it; call <see cref="IsClear(float, float, float)"/> first.</summary>
+		public void Add(float x, float z, float spacing)
+		{
+			Add(x, z);
+			if (spans != null)
+			{
+				spans[count - 1] = Math.Min(Math.Max(0f, spacing), widest);
+			}
+		}
+
+		/// <summary>Records a position. Does not test it; call <see cref="IsClear(float, float)"/> first.</summary>
+		/// <remarks>In per-point mode it carries the widest spacing; use <see cref="Add(float, float, float)"/> instead.</remarks>
 		public void Add(float x, float z)
 		{
 			if (count == xs.Length)
@@ -107,6 +176,10 @@ namespace FishMMO.Shared.WorldDesign
 				Array.Resize(ref xs, grown);
 				Array.Resize(ref zs, grown);
 				Array.Resize(ref next, grown);
+				if (spans != null)
+				{
+					Array.Resize(ref spans, grown);
+				}
 			}
 			if ((occupied + 1) * 2 > heads.Length)
 			{
@@ -126,6 +199,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			xs[count] = x;
 			zs[count] = z;
+			if (spans != null)
+			{
+				spans[count] = widest;
+			}
 			next[count] = heads[slot];
 			heads[slot] = count;
 			count++;

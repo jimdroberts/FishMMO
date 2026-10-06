@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using FishMMO.Shared.Celestial;
 
 namespace FishMMO.Shared.Weather
 {
@@ -9,8 +10,17 @@ namespace FishMMO.Shared.Weather
 	/// server, mirrored on each client, and evaluated the same way on both.
 	/// </summary>
 	/// <remarks>
-	/// Every change the server makes takes effect <see cref="LeadTicks"/> after it is sent, so a
-	/// client has it before it matters and predicted weather effects match the server's.
+	/// <para>
+	/// Every change the server makes takes effect <see cref="LeadSeconds"/> of real time after it is
+	/// sent (<see cref="LeadWorldSeconds"/>), so a client has it before it matters and predicted
+	/// weather effects match the server's.
+	/// </para>
+	/// <para>
+	/// <b>Kept in world time.</b> Its storms, the air's moves and the cover's stamp are world seconds,
+	/// not server ticks: the weather holds when an admin holds the world and races when it is raced,
+	/// with the sky over it. Callers holding a tick go through <see cref="WorldSecondsAt(uint)"/>,
+	/// which reads the world clock (pace and all) — the one place a tick becomes a time.
+	/// </para>
 	/// </remarks>
 	public sealed class WeatherTimeline
 	{
@@ -29,7 +39,8 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public AirOffsetEntry Air;
 		public WeatherCover Cover;
-		public uint CoverTick;
+		/// <summary>The world seconds <see cref="Cover"/> was worked out to.</summary>
+		public double CoverSeconds;
 		/// <summary>
 		/// Counts the times this timeline was replaced whole — a join, a resync, a change of scene.
 		/// Not the revision, which moves on every delta: the ground map used to start itself over
@@ -79,22 +90,40 @@ namespace FishMMO.Shared.Weather
 		[System.NonSerialized] public FishMMO.Shared.Celestial.WorldBody BodyOverride;
 
 		/// <summary>World time at a tick, carried forward from the last anchor the server sent.</summary>
-		public double WorldSecondsAt(uint tick) =>
-			WorldSecondsAtTick + (double)((long)tick - WorldSecondsTick) * TickDelta;
+		public double WorldSecondsAt(uint tick) => WorldSecondsAt((double)tick);
 
-		public uint LeadTicks => (uint)Mathf.CeilToInt((float)(LeadSeconds / Math.Max(1e-6, TickDelta)));
+		/// <summary>World time at a fractional tick (a presenter drawing between ticks).</summary>
+		public double WorldSecondsAt(double tick) =>
+			// The world clock when it has an anchor: it carries the pace an admin set (held, raced), which
+			// this timeline's own anchor does not, and the weather must keep the sky's time. The timeline's
+			// anchor for a timeline read on its own (tests, tools).
+			WorldClock.Shared.HasAnchor
+				? WorldClock.Shared.WorldSecondsAt(tick)
+				: WorldSecondsAtTick + (tick - WorldSecondsTick) * TickDelta;
 
-		public uint SecondsToTicks(float seconds) => (uint)Math.Max(0, Math.Round(seconds / Math.Max(1e-6, TickDelta)));
+		/// <summary>
+		/// How far ahead of now, in world seconds, an edit is scheduled: <see cref="LeadSeconds"/> of
+		/// real time at the world's pace now (none while the world is held, when every client reads the
+		/// same moment however late the edit arrives).
+		/// </summary>
+		public double LeadWorldSeconds => LeadSeconds * (WorldClock.Shared.HasAnchor ? WorldClock.Shared.Rate : 1.0);
 
 		// ── Evaluation ────────────────────────────────────────────────
 
 		/// <summary>What has been added to the scene's air at runtime, at a tick.</summary>
-		public AirOffsets AirAt(uint tick) => Air.At(tick);
+		public AirOffsets AirAt(uint tick) => Air.AtSeconds(WorldSecondsAt(tick));
+
+		/// <summary>Where a cell is at a (fractional) tick.</summary>
+		public Vector2 CentreOf(in StormCell cell, double tick) => cell.CentreAtSeconds(WorldSecondsAt(tick));
+
+		/// <summary>How strong a cell is at a tick, 0..1.</summary>
+		public float EnvelopeOf(in StormCell cell, double tick) => cell.EnvelopeAtSeconds(WorldSecondsAt(tick));
 
 		/// <summary>Forgets dead cells. Both sides run it, so they stay equal without messages.</summary>
 		public void Prune(uint tick)
 		{
-			Cells.RemoveAll(c => c.IsDead(tick));
+			double now = WorldSecondsAt(tick);
+			Cells.RemoveAll(c => c.IsDeadAtSeconds(now));
 		}
 
 		public bool TryGetCell(ushort id, out int index)
@@ -128,7 +157,7 @@ namespace FishMMO.Shared.Weather
 				Cells = new List<StormCell>(Cells),
 				Air = Air,
 				Cover = Cover,
-				CoverTick = CoverTick,
+				CoverSeconds = CoverSeconds,
 				// Where and when, so the client's driver computes the server's weather rather than
 				// the weather of world-time zero on the equator.
 				Driver = Driver,
@@ -150,7 +179,7 @@ namespace FishMMO.Shared.Weather
 			if (msg.Cells != null) Cells.AddRange(msg.Cells);
 			Air = msg.Air;
 			Cover = msg.Cover;
-			CoverTick = msg.CoverTick;
+			CoverSeconds = msg.CoverSeconds;
 			Generation++;
 			CoverSnapshots++;
 			Driver = msg.Driver;
@@ -189,7 +218,7 @@ namespace FishMMO.Shared.Weather
 			if (msg.HasCover)
 			{
 				Cover = msg.Cover;
-				CoverTick = msg.CoverTick;
+				CoverSeconds = msg.CoverSeconds;
 				CoverSnapshots++;
 			}
 			return true;

@@ -348,8 +348,16 @@ namespace FishMMO.Water
 			if (hasClock)
 			{
 				double delta = clock - lastClock;
-				// The clock wraps every few hours and can be set: neither is motion.
-				stepSeconds = delta > 0.0 && delta < 1.0 ? (float)delta : 0f;
+				// Across the wrap, the step is what ran up to it and on from zero.
+				if (delta < 0.0 && delta + WaterSurface.WrapSeconds < 1.0)
+				{
+					delta += WaterSurface.WrapSeconds;
+				}
+				/* The clock is the shared world-motion clock now, not a private sum of clamped frame times:
+				 * it jumps when a join or a corrected server clock snaps it, and it can be set by hand. A
+				 * jump back or of a second or more is not motion and steps nothing; anything else is held to
+				 * the quarter second the old accumulator never exceeded, so a hitch cannot kick the berg. */
+				stepSeconds = delta > 0.0 && delta < 1.0 ? Mathf.Min((float)delta, 0.25f) : 0f;
 			}
 			lastClock = clock;
 			hasClock = true;

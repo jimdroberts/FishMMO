@@ -11,10 +11,10 @@ NavMeshProjectSettings:
     cost: 1
   - name: Jump
     cost: 2
-  - name: 
-    cost: 1
-  - name: 
-    cost: 1
+  - name: Deep Water
+    cost: 4
+  - name: Lava
+    cost: 8
   - name: 
     cost: 1
   - name: 

@@ -57,6 +57,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<AccountEntity> Accounts { get; set; }
 		/// <summary>Kick request records.</summary>
 		public DbSet<KickRequestEntity> KickRequests { get; set; }
+		/// <summary>The one world clock row (id 1). See <see cref="WorldClockControlEntity"/>.</summary>
+		public DbSet<WorldClockControlEntity> WorldClockControl { get; set; }
 		/// <summary>Login server signing keys.</summary>
 		public DbSet<LoginServerSigningKeyEntity> LoginServerSigningKeys { get; set; }
 		/// <summary>Authentication tokens.</summary>

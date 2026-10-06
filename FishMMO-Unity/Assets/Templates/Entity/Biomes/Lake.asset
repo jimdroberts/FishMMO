@@ -138,6 +138,7 @@ MonoBehaviour:
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
+  TerrainProcess: {fileID: 0}
   mainTextureLayer:
     terrainLayer: {fileID: 8574412962073106934, guid: 41f6eb1d8712e8d73accf8b30ec56aca,
       type: 2}
@@ -202,8 +203,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.2
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0.02, y: 0.05}
       sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
       specFingerprint: 528461f777da4271
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -273,9 +281,16 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.5
-      sinkRange: {x: 0.02, y: 0.05}
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.08}
       sinkSlopeFactor: 0
-      specFingerprint: bff2242105fbdabc
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 3248c374b701f3cb
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}

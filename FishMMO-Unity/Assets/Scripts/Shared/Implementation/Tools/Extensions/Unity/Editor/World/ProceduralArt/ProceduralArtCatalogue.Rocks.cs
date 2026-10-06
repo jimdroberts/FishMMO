@@ -114,24 +114,21 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>Every rock-formation and ice prefab: tree-channel props with their <c>_Decor</c> twins, and the floating ice.</summary>
+		/// <summary>Every rock-formation and ice prefab: the tree-channel props and the floating ice.</summary>
 		public static IEnumerable<string> RockPrefabNames()
 		{
 			foreach ((RockType type, FormationShape shape, int variant) in RockArtNames.AllFormations())
 			{
 				string prefab = RockArtNames.FormationPrefab(type.Name, shape.Name, variant);
 				yield return prefab;
-				yield return RockArtNames.Decor(prefab);
 			}
 			foreach (IceBoulderShape s in IceMeshes.Boulders)
 			{
 				yield return RockArtNames.IceBoulderPrefab(in s);
-				yield return RockArtNames.Decor(RockArtNames.IceBoulderPrefab(in s));
 			}
 			foreach (SeracShape s in IceMeshes.Seracs)
 			{
 				yield return RockArtNames.SeracPrefab(in s);
-				yield return RockArtNames.Decor(RockArtNames.SeracPrefab(in s));
 			}
 			foreach (IcebergShape s in IceMeshes.Icebergs)
 			{

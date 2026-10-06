@@ -1397,6 +1397,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * NPC's own PhysicsScene; AICombatSlots spaces attackers around a target. */
 			Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
+			/* Land only: the bake marks water too deep to wade as its own area (the sea floor and lake beds keep their
+			 * NavMesh for swimmers), and an NPC that cannot swim must never be routed across it. */
+			Agent.areaMask = LandAreas;
+			ApplySwimAreas(swimming: false);
+
 			// Initialize boss script runtime state if a boss script is already assigned.
 			if (bossScript != null && BossState == null)
 			{
@@ -1437,6 +1442,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			{
 				Agent.avoidancePriority = (int)AvoidancePriority;
 			}
+			ApplySwimAreas(swimming: false);
 		}
 
 		/// <summary>
@@ -1662,6 +1668,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			SubStateTimer = 0f;
 			PetStuckTimer = 0f;
 			UnreachableTargetTimer = 0f;
+			ResetSwimming();
 			WasAttackingLastTick = false;
 			AllyScanTimer = 0f;
 			CachedHealTarget = null;
@@ -1753,6 +1760,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 				// Apply this tick's slice of agent motion before anything reads the position.
 				StepAgent(networkTickDelta);
+				TickSwimming(networkTickDelta);
 
 				/* Facing runs on every network tick, the brain on a fraction of them.
 				 *
@@ -3684,7 +3692,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (NeedsAgentWrite(step, Agent.nextPosition, before))
 			{
 				Agent.nextPosition = before + step;
-				t.position = Agent.nextPosition;
+				// The agent walks the bed; a swimmer at the surface floats over it (AIController.Swimming).
+				t.position = SwimHeightOver(Agent.nextPosition);
 
 				// What the mesh let through, not what was asked for: the stuck detector reads this.
 				measuredTickSpeedSqr = MeasureTickSpeedSqr(before, t.position, tickDelta);
@@ -3718,7 +3727,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <returns>True to write the step.</returns>
 		public static bool NeedsAgentWrite(Vector3 step, Vector3 agentPosition, Vector3 transformPosition)
 		{
-			return step != Vector3.zero || agentPosition != transformPosition;
+			/* Across the ground only. The agent's height is the NavMesh's, and the transform's is not always: a
+			 * swimmer floats at the surface over an agent walking the bed, and a height test would write both every
+			 * tick for every swimmer standing still. What moves an NPC up or down without moving it across (a lift)
+			 * is re-seated on its next step. */
+			return step != Vector3.zero ||
+				!Mathf.Approximately(agentPosition.x, transformPosition.x) ||
+				!Mathf.Approximately(agentPosition.z, transformPosition.z);
 		}
 
 		/// <summary>

@@ -98,6 +98,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		[Tooltip("Whether and how this archetype's NPCs go and stand out of the weather. Off by default.")]
 		public AIShelterSettings Shelter = new AIShelterSettings();
 
+		[Header("Water")]
+		[Tooltip("Whether and how this archetype's NPCs swim, and how much they will risk in the water for a target. Off by default: they stay on land.")]
+		public AISwimSettings Swim = new AISwimSettings();
+
 		[Header("Performance")]
 		[Tooltip("Optional distance-based update throttling.")]
 		public AILodSettings LodSettings;

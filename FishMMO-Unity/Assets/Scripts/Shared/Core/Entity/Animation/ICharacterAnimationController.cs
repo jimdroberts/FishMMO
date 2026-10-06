@@ -24,6 +24,12 @@ namespace FishMMO.Shared
 		void SetCrouching(bool crouching);
 
 		/// <summary>
+		/// Sets whether the character is swimming, and how it lies in the water: <paramref name="pitch"/> degrees, positive
+		/// nose down (diving), negative nose up.
+		/// </summary>
+		void SetSwimming(bool swimming, float pitch);
+
+		/// <summary>
 		/// Triggers a jump animation.
 		/// </summary>
 		void TriggerJump();

@@ -50,12 +50,12 @@ float WaterEyeDepth(float rawDepth)
 /// </remarks>
 float3 WaterRippleNormal(float2 xz, float strength)
 {
-	float2 wind = _FishWaterWind.xy;
+	// The wind held for a window of the shared clock, never the eased one times the clock (FishWaterHeldScroll).
+	float2 wind = _FishWaterRippleWindow.xy;
 	float2 across = float2(-wind.y, wind.x);
-	float time = _FishWaterTime * _WaveSpeed;
 
-	float2 uvA = xz / max(0.05, _NormalScaleA) + wind * time * 0.030;
-	float2 uvB = xz / max(0.05, _NormalScaleB) - (wind * 0.6 + across * 0.8) * time * 0.019;
+	float2 uvA = xz / max(0.05, _NormalScaleA) + FishWaterHeldScroll(wind * (_WaveSpeed * 0.030));
+	float2 uvB = xz / max(0.05, _NormalScaleB) - FishWaterHeldScroll((wind * 0.6 + across * 0.8) * (_WaveSpeed * 0.019));
 
 	half3 a = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uvA), strength);
 	half3 b = UnpackNormalScale(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, uvB), strength * 0.7);
@@ -170,8 +170,9 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 
 	/* How clear the water is here. A real sea is never one tint: plankton, sediment and the
 	 * currents that carry them leave patches hundreds of metres across, and without them an ocean
-	 * is one flat colour whose only variation is the waves. */
-	float2 clarityUV = flatXZ / max(20.0, _ClarityScale) - _FishWaterWind.xy * _FishWaterTime * 0.004;
+	 * is one flat colour whose only variation is the waves. Drifting with the held wind, a whole tile or
+	 * two a window (FishWaterHeldScroll): wind × clock slid the patches whenever the wind turned. */
+	float2 clarityUV = flatXZ / max(20.0, _ClarityScale) - FishWaterHeldScroll(_FishWaterRippleWindow.xy * 0.004);
 	float clarityField = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, clarityUV).g;
 	half3 density = max(1e-3, _WaterDensity.rgb * lerp(1.0 + _Clarity, 1.0 - _Clarity, clarityField));
 
@@ -238,6 +239,12 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	half fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
 
 	half perceptualRoughness = saturate((1.0 - _Smoothness) + (1.0 - detailFade) * 0.06);
+	/* Specular anti-aliasing (Tokuyoshi & Kaplanyan): where the normal turns faster than a pixel can follow, the
+	 * pixel sees a spread of facets, not one, and its highlight must be the rougher average of them. Without it the
+	 * sun's glint on waves a few hundred metres off broke into a field of white pinpoints that read as foam. */
+	float3 dndx = ddx(normalWS), dndy = ddy(normalWS);
+	half normalVariance = saturate(0.25 * (dot(dndx, dndx) + dot(dndy, dndy)));
+	perceptualRoughness = saturate(sqrt(perceptualRoughness * perceptualRoughness + min(2.0 * normalVariance, 0.25)));
 	float3 reflectVector = reflect(-view, normalWS);
 	// A reflection bent below the horizon by a steep crest picks up the ground half of the probe
 	// and smears brown across the wave; real water at that angle reflects the sky past the crest.
@@ -321,7 +328,8 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		float facing = FishWaterShoreFacing(flatXZ, shoreward);
 		float inSurf = facing * (1.0 - smoothstep(0.75, 1.0, wave.depth / max(8.0, _FishWaterBreakDepth.y)));
 		float2 flow = lerp(_FishWaterWind.xy, shoreward, inSurf) * 0.5;
-		const float FlowCycle = 6.0;
+		// Six seconds, snapped to a whole fraction of the clock's 10 000 s wrap so the wrap lands on a cycle's start.
+		const float FlowCycle = 10000.0 / round(10000.0 / 6.0);
 		float phase = frac(_FishWaterTime / FlowCycle);
 		float phaseOther = frac(phase + 0.5);
 		half other = abs(2.0 * phase - 1.0);
@@ -369,7 +377,18 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		 * crest scores about 0.18, the mask takes it to 0.14, and a curve starting at 0.15 returns
 		 * zero — white caps on one crest in the frame and nowhere else. */
 		half curveTop = max(0.06, _FoamSharpness);
-		half whitecaps = smoothstep(0.02, curveTop, crest) * (0.45 + 0.55 * mask);
+		half breaking = smoothstep(0.02, curveTop, crest);
+		/* Clumped, not peppered. Scaled by the mottle, every crest kept at least 45% of its white, so each tiny
+		 * dip of the Jacobian drew a speck of its own and a calm bay came out salt-and-pepper. Thresholded against
+		 * it, a cap is a patch of white with ragged edges, and a crest that hardly breaks shows nothing; the harder
+		 * it breaks, the more of the pattern passes. */
+		half caps = smoothstep(0.62 - 0.4 * breaking, 0.86 - 0.3 * breaking, mask) * breaking;
+		/* And only as fine as a pixel can show. Past a metre or so per pixel a cap is smaller than the pixel and
+		 * the thresholded pattern aliases into crawling specks; there the caps go over to what the eye sees of a
+		 * whitecapped sea at a distance, a faint even lightening by their share. */
+		float footprint = length(fwidth(flatXZ));
+		half resolved = saturate(1.0 - footprint / 0.5);
+		half whitecaps = lerp(breaking * 0.14, caps, resolved);
 
 		/* The SURF is thresholded against the mottle rather than scaled by it. Scaled, as the white
 		 * caps above still are, the thinnest part of the pattern kept 45% of the foam — and the surf

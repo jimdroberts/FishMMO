@@ -72,14 +72,30 @@ namespace FishMMO.UnitTests.WorldDesign
 
 				float midLow = float.MaxValue, midHigh = float.MinValue;
 				int pinned = 0, edge = 0;
+				var seen = new System.Collections.Generic.SortedSet<string>();
+				// The wall's own length along the riser: its ends taper back onto the terrain, by design.
+				float wallMin = float.MaxValue, wallMax = float.MinValue;
 				foreach (MeshCollider collider in root.GetComponentsInChildren<MeshCollider>())
 				{
 					foreach (Vector3 v in collider.sharedMesh.vertices)
 					{
-						if (v.y > 56f && v.y < 64f)
+						wallMin = Mathf.Min(wallMin, v.z);
+						wallMax = Mathf.Max(wallMax, v.z);
+					}
+				}
+				foreach (MeshCollider collider in root.GetComponentsInChildren<MeshCollider>())
+				{
+					foreach (Vector3 v in collider.sharedMesh.vertices)
+					{
+						// The face away from its ends, where the wall tapers back onto the terrain (the edge check below).
+						if (v.y > 56f && v.y < 64f && v.z > wallMin + 12f && v.z < wallMax - 12f)
 						{
 							midLow = Mathf.Min(midLow, v.x);
 							midHigh = Mathf.Max(midHigh, v.x);
+							if (seen.Count < 12)
+							{
+								seen.Add($"({v.x:0.00},{v.y:0.0},{v.z:0})");
+							}
 						}
 						/* At the wall's top and foot nothing moves: every vertex sits where the terrain has
 						 * it, on the face's lattice of half cells (two quads to a cell). */
@@ -95,7 +111,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 				// On the terrain the middle eight metres of height spread across about four metres of ground.
-				Assert.That(midHigh - midLow, Is.LessThan(1.5f), $"the face should stand up: its middle spreads {midHigh - midLow:0.00} m");
+				Assert.That(midHigh - midLow, Is.LessThan(1.5f), $"the face should stand up: its middle spreads {midHigh - midLow:0.00} m; e.g. {string.Join(" ", seen)}; report: {report}");
 				Assert.That(edge, Is.GreaterThan(0));
 				Assert.That(pinned, Is.EqualTo(edge), "every vertex at the wall's top and foot sits on a terrain sample");
 			}

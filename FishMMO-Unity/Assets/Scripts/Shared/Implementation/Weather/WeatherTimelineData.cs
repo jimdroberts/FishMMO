@@ -56,8 +56,11 @@ namespace FishMMO.Shared.Weather
 
 	/// <summary>
 	/// A moving storm: a physical kind over a shape that drifts with the wind, grows, matures and
-	/// decays. Motion and life are pure functions of the tick, so the network only hears about
-	/// births, edits and deaths. What it does to the air under it is its kind's
+	/// decays. Motion and life are pure functions of WORLD time, so the network only hears about
+	/// births, edits and deaths — and a storm holds when an admin holds the world, races when it is
+	/// raced, as the sky over it does. (It lived in server ticks, which kept counting through a hold:
+	/// the tornado drifted on under a frozen sky.) Times are world seconds since the calendar epoch;
+	/// a caller holding a tick asks the timeline, which converts it (<see cref="WeatherTimeline.WorldSecondsAt(uint)"/>). What it does to the air under it is its kind's
 	/// (<see cref="StormPhysics.Perturb"/>); what falls there is then that air's.
 	/// </summary>
 	[Serializable]
@@ -67,7 +70,7 @@ namespace FishMMO.Shared.Weather
 		/// <summary>What kind of storm this is.</summary>
 		public StormKind Kind;
 		public uint Seed;
-		/// <summary>World X/Z of the centre at <see cref="MotionTick"/>.</summary>
+		/// <summary>World X/Z of the centre at <see cref="MotionSeconds"/>.</summary>
 		public float OriginX, OriginZ;
 		/// <summary>Metres per second.</summary>
 		public float VelocityX, VelocityZ;
@@ -86,13 +89,15 @@ namespace FishMMO.Shared.Weather
 		public float PeakIntensity;
 		/// <summary>Amplitude of the seeded wander, in metres.</summary>
 		public float MeanderMeters;
-		public uint MotionTick;
-		public uint BirthTick, MatureTick, DecayTick, DeathTick;
+		/// <summary>World seconds its motion is measured from (where its origin is).</summary>
+		public double MotionSeconds;
+		/// <summary>World seconds of its life: born, full strength, starting to fade, gone.</summary>
+		public double BirthSeconds, MatureSeconds, DecaySeconds, DeathSeconds;
 
-		/// <summary>The centre at a tick.</summary>
-		public Vector2 CentreAt(uint tick, double tickDelta)
+		/// <summary>The centre at a moment of world time.</summary>
+		public Vector2 CentreAtSeconds(double worldSeconds)
 		{
-			double seconds = ((long)tick - MotionTick) * tickDelta;
+			double seconds = worldSeconds - MotionSeconds;
 			double phase = Seed % 1000 * 0.00628;
 			float wanderX = (float)(Math.Sin(seconds * 0.0021 + phase) * MeanderMeters);
 			float wanderZ = (float)(Math.Cos(seconds * 0.0017 + phase * 1.3) * MeanderMeters);
@@ -101,23 +106,23 @@ namespace FishMMO.Shared.Weather
 				(float)(OriginZ + VelocityZ * seconds) + wanderZ);
 		}
 
-		/// <summary>Strength over the cell's life, 0..1: grows, holds, fades.</summary>
-		public float EnvelopeAt(uint tick)
+		/// <summary>Strength over the cell's life at a moment of world time, 0..1: grows, holds, fades.</summary>
+		public float EnvelopeAtSeconds(double worldSeconds)
 		{
-			if (tick <= BirthTick || tick >= DeathTick)
+			if (worldSeconds <= BirthSeconds || worldSeconds >= DeathSeconds)
 			{
 				return 0f;
 			}
-			if (tick < MatureTick)
+			if (worldSeconds < MatureSeconds)
 			{
-				float t = (tick - BirthTick) / (float)Math.Max(1u, MatureTick - BirthTick);
+				float t = (float)((worldSeconds - BirthSeconds) / Math.Max(1e-3, MatureSeconds - BirthSeconds));
 				return t * t * (3f - 2f * t);
 			}
-			if (tick <= DecayTick)
+			if (worldSeconds <= DecaySeconds)
 			{
 				return 1f;
 			}
-			float d = (tick - DecayTick) / (float)Math.Max(1u, DeathTick - DecayTick);
+			float d = (float)((worldSeconds - DecaySeconds) / Math.Max(1e-3, DeathSeconds - DecaySeconds));
 			return 1f - d * d * (3f - 2f * d);
 		}
 
@@ -127,14 +132,14 @@ namespace FishMMO.Shared.Weather
 		/// spread over the ground. Split out so each shape is readable on its own and can be tested
 		/// without a tick or a timeline.
 		/// </remarks>
-		public float InfluenceAt(Vector3 position, uint tick, double tickDelta)
+		public float InfluenceAtSeconds(Vector3 position, double worldSeconds)
 		{
-			float envelope = EnvelopeAt(tick);
+			float envelope = EnvelopeAtSeconds(worldSeconds);
 			if (envelope <= 0f || RadiusMeters <= 0f)
 			{
 				return 0f;
 			}
-			Vector2 centre = CentreAt(tick, tickDelta);
+			Vector2 centre = CentreAtSeconds(worldSeconds);
 			var at = new Vector2(position.x, position.z);
 			return envelope * PeakIntensity * Coverage(at - centre);
 		}
@@ -231,19 +236,19 @@ namespace FishMMO.Shared.Weather
 		/// it like the walls of a stadium. Eased across its edge, so the wall's inner face is not a
 		/// cut. Zero for every other shape: a storm's own cloud is what the rest of them bring.
 		/// </remarks>
-		public float ClearingAt(Vector3 position, uint tick, double tickDelta)
+		public float ClearingAtSeconds(Vector3 position, double worldSeconds)
 		{
 			if (Shape != StormCellShape.Eyewall || RadiusMeters <= 0f)
 			{
 				return 0f;
 			}
-			float envelope = EnvelopeAt(tick);
+			float envelope = EnvelopeAtSeconds(worldSeconds);
 			float eye = Mathf.Clamp(ExtentMeters, 0f, RadiusMeters * 0.6f);
 			if (envelope <= 0f || eye <= 1e-3f)
 			{
 				return 0f;
 			}
-			float distance = Vector2.Distance(new Vector2(position.x, position.z), CentreAt(tick, tickDelta));
+			float distance = Vector2.Distance(new Vector2(position.x, position.z), CentreAtSeconds(worldSeconds));
 			return Mathf.Clamp01(envelope * PeakIntensity) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(eye * 0.6f, eye * 1.05f, distance)));
 		}
 
@@ -342,7 +347,7 @@ namespace FishMMO.Shared.Weather
 			}
 		}
 
-		public bool IsDead(uint tick) => tick >= DeathTick;
+		public bool IsDeadAtSeconds(double worldSeconds) => worldSeconds >= DeathSeconds;
 
 	}
 

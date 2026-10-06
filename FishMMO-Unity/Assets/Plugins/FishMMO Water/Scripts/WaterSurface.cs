@@ -59,10 +59,23 @@ namespace FishMMO.Water
 		/// <remarks>
 		/// A float holding ten thousand seconds still resolves a millisecond, while <c>_Time.y</c>
 		/// after a few hours of a session no longer resolves a frame and the sea visibly judders —
-		/// which a client that stays open all evening will reach. The wrap puts a single
-		/// imperceptible discontinuity in every 2.8 hours in exchange.
+		/// which a client that stays open all evening will reach. The wrap is the shared motion clock's
+		/// (<see cref="WorldMotion.ShaderWrapSeconds"/>), so every player's sea wraps at the same instant,
+		/// and what reads it snaps its periods to whole fractions of it (the lava's flow, the foam's).
+		/// The FFT does not read this one: it is fed the clock wrapped at its own loop period
+		/// (<see cref="SpectrumSeconds"/>), which ten thousand is not a multiple of.
 		/// </remarks>
-		private const double WrapSeconds = 10000.0;
+		public const double WrapSeconds = WorldMotion.ShaderWrapSeconds;
+
+		/// <summary>The ripples' held wind and how far into its window the clock is (<see cref="PublishRippleWindow"/>).</summary>
+		private static readonly int RippleWindowId = Shader.PropertyToID("_FishWaterRippleWindow");
+
+		/// <summary>
+		/// Seconds the wind the ripples scroll by is held for. Long enough that every layer moves several
+		/// whole tiles in it (the slowest, the clarity's, a little over one), short enough that the
+		/// ripples follow a turning wind within minutes.
+		/// </summary>
+		private const double RippleWindowSeconds = 300.0;
 
 		[Header("Sea")]
 		[Tooltip("What this is the surface of. Lava is opaque and flat: it draws Lava Material, and the FFT, " +
@@ -204,6 +217,13 @@ namespace FishMMO.Water
 		private int liveWaves;
 		private double clock;
 		private double lastRealtime = -1.0;
+		/// <summary>True once something has driven the clock by hand (<see cref="SetClock"/>): a probe.</summary>
+		private bool manualClock;
+		/// <summary>The hand-driven clock, unwrapped, while <see cref="manualClock"/>.</summary>
+		private double manualSeconds;
+		private WorldMotion.HeldValue heldRippleHeading;
+		private WorldMotion.HeldValue heldRippleSpeed;
+		private static readonly int HeldWindSpeedId = Shader.PropertyToID("_FishWaterHeldWindSpeed");
 		private int builtRings, builtSegments;
 		private float builtInner, builtOuter;
 		private static readonly int MeshSpacingId = Shader.PropertyToID("_FishWaterMeshSpacing");
@@ -247,8 +267,36 @@ namespace FishMMO.Water
 		/// <summary>How many of <see cref="Waves"/> are in use.</summary>
 		public int WaveLiveCount => liveWaves;
 
-		/// <summary>The clock the surface is being drawn at, in seconds.</summary>
+		/// <summary>The clock the surface is being drawn at, in seconds, wrapped at <see cref="WrapSeconds"/>.</summary>
 		public double Clock => clock;
+
+		/// <summary>
+		/// Seconds of motion, unwrapped: the shared world-motion clock (<see cref="WorldMotion.Seconds"/>),
+		/// or the hand-driven one once a probe has set it.
+		/// </summary>
+		private double MotionSeconds => manualClock ? manualSeconds : WorldMotion.Seconds;
+
+		/// <summary>
+		/// The instant the spectrum is evolved to: the motion clock wrapped at the loop period, for the
+		/// FFT on the GPU and the height queries on the CPU alike.
+		/// </summary>
+		/// <remarks>
+		/// The FFT's frequencies are quantised to whole multiples of 2π over the loop period
+		/// (FishWaterSpectrum.hlsl, <see cref="WaterSpectrum"/>), so the sea is exactly periodic in it
+		/// and wrapping there is seamless. Fed the ten-thousand-second clock it was not: ten thousand is
+		/// no multiple of a 120 s loop, and the whole sea jumped at the wrap. Read straight from the
+		/// motion clock, which is one value for the whole frame, so a float asking in Update and the
+		/// surface drawn later that frame agree. With no loop (never periodic) it falls back to the
+		/// long wrap and its one seam.
+		/// </remarks>
+		private double SpectrumSeconds
+		{
+			get
+			{
+				double loop = fft != null && fft.LoopPeriod > 0f ? fft.LoopPeriod : LoopPeriod;
+				return WorldMotion.Repeat(MotionSeconds, loop > 0.0 ? loop : WrapSeconds);
+			}
+		}
 
 		/// <summary>
 		/// 1 under open sky, 0 fully under cloud. Driven by the weather system where there is one.
@@ -284,7 +332,8 @@ namespace FishMMO.Water
 				return SeaLevel;
 			}
 			WaterSpectrum spectrum = SpectrumForQueries();
-			spectrum?.Evaluate(clock);
+			// The very instant the FFT is evolved to (SpectrumSeconds), or the float rides another sea.
+			spectrum?.Evaluate(SpectrumSeconds);
 			ReadFade(out float fadeStart, out float fadeEnd);
 			// Asked before any camera has drawn the sea: work out the shallows now, or they would not fade.
 			if (FullSeaDepth <= 0f)
@@ -433,7 +482,8 @@ namespace FishMMO.Water
 				|| Mathf.Abs(querySpectrum.Wind - WindSpeed) > Mathf.Max(0.05f, WindSpeed * 0.02f)
 				|| Mathf.Abs(Mathf.DeltaAngle(querySpectrum.HeadingDegrees, WindDirectionDegrees)) > 1f
 				|| !Mathf.Approximately(querySpectrum.Gravity, Gravity)
-				|| !Mathf.Approximately(querySpectrum.Choppiness, FFTChoppiness);
+				|| !Mathf.Approximately(querySpectrum.Choppiness, FFTChoppiness)
+				|| !Mathf.Approximately(querySpectrum.LoopPeriod, LoopPeriod);
 			if (stale && queryBuild == null)
 			{
 				float wind = WindSpeed;
@@ -850,6 +900,15 @@ namespace FishMMO.Water
 
 		private bool reportedSpectrum;
 
+		/// <summary>
+		/// Brings the clock to now: the shared world-motion clock, wrapped.
+		/// </summary>
+		/// <remarks>
+		/// It was a private sum of this client's frame times from zero, so every player's sea stood at
+		/// how long their client had been running, and a rejoin dealt a different one. The shared clock
+		/// is the server's tick carried to seconds and smoothed (<see cref="WorldMotion"/>), which already
+		/// stops and slows with the world and never races, so nothing here clamps or scales it.
+		/// </remarks>
 		private void Advance()
 		{
 			double now = Time.realtimeSinceStartupAsDouble;
@@ -857,19 +916,51 @@ namespace FishMMO.Water
 			{
 				lastRealtime = now;
 			}
-			// Clamped so a domain reload, a breakpoint or a long frame does not jump the sea; scaled
-			// by the world's motion, so the sea stops when the world's time does — and never runs faster
-			// than real time, however fast a preview runs the clock (WorldMotion).
-			double delta = WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f));
+			if (manualClock)
+			{
+				// Driven by hand: carried on from the set value as the clock always was, so a probe that
+				// sets it once and lets it run sees it run.
+				manualSeconds += WorldMotion.Scale(Mathf.Clamp((float)(now - lastRealtime), 0f, 0.25f));
+			}
 			lastRealtime = now;
-			clock = (clock + delta) % WrapSeconds;
+			clock = WorldMotion.Repeat(MotionSeconds, WrapSeconds);
 		}
 
-		/// <summary>Drives the clock from somewhere else, for a scene whose time is not wall time.</summary>
+		/// <summary>
+		/// Drives the clock from somewhere else, for a scene whose time is not wall time (the render
+		/// probes). From then on this surface keeps its own clock and leaves the shared one.
+		/// </summary>
 		public void SetClock(double seconds)
 		{
-			clock = seconds % WrapSeconds;
+			manualClock = true;
+			manualSeconds = seconds;
+			clock = WorldMotion.Repeat(seconds, WrapSeconds);
 			lastRealtime = Time.realtimeSinceStartupAsDouble;
+		}
+
+		/// <summary>
+		/// The wind the ripples scroll with, held for each window of the motion clock, and how far into
+		/// the window it is: <c>_FishWaterRippleWindow</c> = (direction x, z, seconds in, window seconds).
+		/// </summary>
+		/// <remarks>
+		/// A texture scrolled by direction × clock moves by the change in direction times the WHOLE clock
+		/// whenever the direction changes: with the clock at five thousand seconds, the eased wind
+		/// turning a degree a second smeared the ripples across the sea at eighty times their own speed,
+		/// and the ten-thousand-second wrap jumped them. Held, the direction is still for a window; the
+		/// shader snaps each layer's scroll to whole tiles a window (FishWaterRippleScroll), so at the
+		/// window's end every layer has come round to where the next window starts it. Every player
+		/// changes window at the same moment, on the same held wind give or take the rounding.
+		/// </remarks>
+		private void PublishRippleWindow()
+		{
+			double seconds = MotionSeconds;
+			double whole = System.Math.Floor(seconds / RippleWindowSeconds);
+			float into = (float)System.Math.Max(0.0, System.Math.Min(RippleWindowSeconds, seconds - whole * RippleWindowSeconds));
+			float heading = heldRippleHeading.Hold(WindDirectionDegrees, (long)whole) * Mathf.Deg2Rad;
+			Shader.SetGlobalVector(RippleWindowId,
+				new Vector4(Mathf.Sin(heading), Mathf.Cos(heading), into, (float)RippleWindowSeconds));
+			// And its speed, for what turns at the wind's pace: the swell's orbit the motes sway on.
+			Shader.SetGlobalFloat(HeldWindSpeedId, heldRippleSpeed.Hold(WindSpeed, (long)whole));
 		}
 
 		private void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
@@ -941,6 +1032,8 @@ namespace FishMMO.Water
 			// The ripples run with the wind, so the fragment stage needs it too.
 			float radians = WindDirectionDegrees * Mathf.Deg2Rad;
 			Shader.SetGlobalVector(WindId, new Vector4(Mathf.Sin(radians), Mathf.Cos(radians), WindSpeed, 0f));
+			// And what they scroll by: the wind held for a window, so the scroll never scrubs.
+			PublishRippleWindow();
 			Shader.SetGlobalFloat(GravityId, Mathf.Max(0.05f, Gravity));
 
 			// Shared with the shore pass, so the beach foam and the sea foam are the same stuff.
@@ -970,7 +1063,8 @@ namespace FishMMO.Water
 				if (!Mathf.Approximately(builtWind, WindSpeed)
 					|| !Mathf.Approximately(builtHeading, WindDirectionDegrees)
 					|| !Mathf.Approximately(builtGravity, Gravity)
-					|| !Mathf.Approximately(builtChoppiness, FFTChoppiness))
+					|| !Mathf.Approximately(builtChoppiness, FFTChoppiness)
+					|| !Mathf.Approximately(fft.LoopPeriod, LoopPeriod))
 				{
 					float windRadians = WindDirectionDegrees * Mathf.Deg2Rad;
 					fft.SetSeaState(WindSpeed,
@@ -982,7 +1076,8 @@ namespace FishMMO.Water
 					builtChoppiness = FFTChoppiness;
 				}
 
-				fft.Evaluate((float)clock);
+				// Wrapped at its own loop, not the ten-thousand-second clock: see SpectrumSeconds.
+				fft.Evaluate((float)SpectrumSeconds);
 				for (int i = 0; i < WaterFFT.Cascades; i++)
 				{
 					Shader.SetGlobalTexture(DisplacementNames[i], fft.Displacement[i]);

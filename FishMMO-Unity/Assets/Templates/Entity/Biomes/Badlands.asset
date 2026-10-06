@@ -230,9 +230,16 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.5
-      sinkRange: {x: 0.02, y: 0.05}
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
       sinkSlopeFactor: 0
-      specFingerprint: f712690949165bcc
+      depthRange: {x: 0, y: 0}
+      specFingerprint: d8a385c0ab939c4e
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -276,8 +283,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.2
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0}
       sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
       specFingerprint: f58e8c6e4decd0a4
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
@@ -325,8 +339,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.3
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.6
+      depthRange: {x: 0, y: 0}
       specFingerprint: 25942cd60179ac3d
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -378,8 +399,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
       specFingerprint: 78e96883fcdc527b
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -451,8 +479,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
       specFingerprint: c6c92a3ca8ed9606
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -500,8 +535,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.3
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.6
+      depthRange: {x: 0, y: 0}
       specFingerprint: fc89a32875a55cdc
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}

@@ -169,3 +169,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1508835452
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 1

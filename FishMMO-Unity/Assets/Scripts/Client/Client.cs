@@ -2271,29 +2271,22 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The highest frame rate this client may be capped to: the monitor's fastest mode, or
-		/// <see cref="MaximumTargetFrameRate"/>, whichever is lower.
+		/// The highest frame rate this client may be capped to: <see cref="MaximumTargetFrameRate"/>.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Frames drawn faster than the display can present them are never seen. They cost GPU
-		/// time, power and heat to produce and are then discarded at scan-out, so the ceiling is
-		/// the panel's own capability rather than an arbitrary number.
-		/// </para>
-		/// <para>
-		/// Enforced here rather than only in the options UI so the bound holds for every caller —
-		/// a saved preference from a machine with a faster monitor, or a config edited by hand,
-		/// clamps down to what the current display can actually show.
-		/// </para>
-		/// <para>
-		/// The 500 ceiling still applies on top, both because it is FishNet's own limit and
-		/// because a display reporting something implausible should not be taken at its word.
+		/// <b>Not the display's refresh rate any more.</b> It was: frames faster than the panel presents are never
+		/// seen, so the cap was clamped to the fastest mode <see cref="Screen.resolutions"/> reported. But that report
+		/// is not to be trusted. Under KDE on Wayland the editor logs "Desktop is 2560 x 1440 @ 60 Hz" for a panel
+		/// running at 480 Hz (2026-10-06), every cap the player chose became 60, and the frame-rate menu offered nothing
+		/// higher. Matching the panel is what VSync is for. The player's cap is now theirs, up to the
+		/// <see cref="MaximumTargetFrameRate"/> ceiling (FishNet's own limit).
 		/// </para>
 		/// </remarks>
 		/// <returns>The maximum frames per second.</returns>
 		public static int ResolveMaximumFrameRate()
 		{
-			return Mathf.Min(ResolveDisplayRefreshRate(), MaximumTargetFrameRate);
+			return MaximumTargetFrameRate;
 		}
 
 		/// <summary>

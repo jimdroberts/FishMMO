@@ -50,13 +50,18 @@ Shader "FishMMO/Weather/Volcanic Plume"
             CBUFFER_END
 
             // Per draw, from a MaterialPropertyBlock.
-            float4 _PlumeVent;      // xyz the vent on the ground, w the plume's clock, s
+            float4 _PlumeVent;      // xyz the vent on the ground, w the shared clock, wrapped (s): the fountain's, whose pace is constant
             float4 _PlumeForm;      // x population (0 column, 1 umbrella, 2 fall, 3 fountain), y share of the quads drawn, z opacity, w atlas row
             float4 _PlumeRise;      // x column top m (fountain: puff size m), y umbrella height m, z umbrella half-width at the column m, w seconds to climb
             float4 _PlumeLean;      // xy the column top's offset from the vent XZ, zw the downwind unit XZ (zero in calm)
             float4 _PlumeDrift;     // x distance drawn downwind m, y seconds to drift it, z spread per metre downwind, w fallout length m
             float4 _PlumeBallistic; // fountain: x launch speed m/s, y gravity m/s2, z widest launch angle rad, w narrowest share; fall: x seconds to fall
             float4 _PlumeColor;     // rgb what it is made of, a its own glow near the vent
+            // The column, umbrella and fall's pace (VolcanicPlumePresenter.PaceWindowSeconds): two layers of puffs, on windows of the
+            // shared clock half a window apart, each running on the time into its own window at the period it held from that window's
+            // start, and fading in and out over it. The rise.w, drift.y and ballistic.x periods are the live ones, and time nothing.
+            float4 _PlumePace;      // x seconds into layer A's window, y into layer B's, z the window (s)
+            float4 _PlumeHeld;      // x the period layer A holds, y layer B (s): the drawn population's climb, drift or fall
 
             struct Attributes
             {
@@ -102,11 +107,20 @@ Shader "FishMMO/Weather/Volcanic Plume"
                 float glow = 0.0;
                 float2 sideways = float2(0.0, 0.0);
 
+                // The layer this puff is in, how far into its window, and the period it holds: the weights
+                // sin² and cos² of the same angle add to one, so the two layers together never thin.
+                bool second = frac(r.w * 37.13) >= 0.5;
+                float into = second ? _PlumePace.y : _PlumePace.x;
+                float period = max(1.0, second ? _PlumeHeld.y : _PlumeHeld.x);
+                float layer = sin(PI * saturate(into / max(1.0, _PlumePace.z)));
+                // Twice the weight, as each layer is half the puffs.
+                float paced = 2.0 * layer * layer;
+
                 if (population == 0)
                 {
                     // Climbing the column: from the vent to the top, leaning further downwind the higher
                     // it is (the wind has had longer to carry it), widening by entrainment.
-                    float s = frac(t / max(1.0, _PlumeRise.w) + r.x);
+                    float s = frac(into / period + r.x);
                     float z = s * _PlumeRise.x;
                     float2 axis = _PlumeLean.xy * (s * s);
                     float width = 25.0 + 0.12 * z;
@@ -114,14 +128,14 @@ Shader "FishMMO/Weather/Volcanic Plume"
                     sideways = offset / width;
                     centre = vent + float3(axis.x + offset.x, z, axis.y + offset.y);
                     size = 0.9 * width + 15.0;
-                    alpha = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.8, 1.0, s));
-                    glow = pow(saturate(1.0 - s * 6.0), 3.0);
+                    alpha = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.8, 1.0, s)) * paced;
+                    glow = pow(saturate(1.0 - s * 6.0), 3.0) * paced;
                 }
                 else if (population == 1)
                 {
                     // The umbrella: spreading from the column's top at neutral buoyancy, carried downwind,
                     // and thinning as it spreads — the same ash over more sky.
-                    float s = frac(t / max(1.0, _PlumeDrift.y) + r.x);
+                    float s = frac(into / period + r.x);
                     float thick = max(60.0, 0.8 * (_PlumeRise.x - _PlumeRise.y));
                     float2 p;
                     float width;
@@ -140,7 +154,7 @@ Shader "FishMMO/Weather/Volcanic Plume"
                     float h = _PlumeRise.y + (r.z - 0.4) * thick;
                     centre = vent + float3(_PlumeLean.x + p.x, h, _PlumeLean.y + p.y);
                     size = 0.3 * width + 0.6 * thick;
-                    alpha = smoothstep(0.0, 0.06, s) * (1.0 - s) * saturate(radius0 / width);
+                    alpha = smoothstep(0.0, 0.06, s) * (1.0 - s) * saturate(radius0 / width) * paced;
                     // Its underside is in its own shadow.
                     shade = lerp(0.4, 1.0, saturate(r.z * 1.25));
                 }
@@ -163,12 +177,12 @@ Shader "FishMMO/Weather/Volcanic Plume"
                         width = radius0 + _PlumeDrift.z * x;
                         p = down * x + across * ((r.y * 2.0 - 1.0) * width);
                     }
-                    float fallen = frac(t / max(1.0, _PlumeBallistic.x) + r.z);
+                    float fallen = frac(into / period + r.z);
                     float h = _PlumeRise.y * (1.0 - fallen);
                     centre = vent + float3(_PlumeLean.x + p.x, h, _PlumeLean.y + p.y);
                     size = 0.2 * width + 30.0;
                     stretch = 3.0;
-                    alpha = exp(-x / max(1.0, _PlumeDrift.w)) * saturate(radius0 / width) * smoothstep(0.0, 0.1, 1.0 - fallen) * smoothstep(0.0, 0.1, fallen);
+                    alpha = exp(-x / max(1.0, _PlumeDrift.w)) * saturate(radius0 / width) * smoothstep(0.0, 0.1, 1.0 - fallen) * smoothstep(0.0, 0.1, fallen) * paced;
                     shade = 0.75;
                 }
                 else

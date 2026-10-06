@@ -116,6 +116,7 @@ namespace FishMMO.Shared.WorldDesign
 			"SurfaceSynth.cs",
 			"TreeMeshes.cs",
 			"VegetationMeshes.cs",
+			"SeaFloorMeshes.cs",
 			// Rock formations, ice and cliff rocks.
 			"BiomeArtGenerator.Rocks.cs",
 			"CliffRocks.cs",
@@ -394,6 +395,42 @@ namespace FishMMO.Shared.WorldDesign
 				problems?.Add($"{path}: written but not loadable after import");
 			}
 			return loaded;
+		}
+
+		/// <summary>
+		/// Saves a prefab built outside the generator's own pass (the cliff placer's rocks) the way the generator saves
+		/// its own: by Unity to the staging folder, its object IDs rewritten from its hierarchy
+		/// (<see cref="ProceduralArtFileIds"/>), then written beside a .meta carrying its path's GUID and imported. So a
+		/// scene's reference to it is the same on every machine that generates the art. Returns the prefab, or null
+		/// with a reason in <paramref name="problems"/>.
+		/// </summary>
+		public static GameObject SavePrefab(GameObject root, string path, List<string> problems)
+		{
+			path = Normalise(path);
+			WorldEditorAssets.EnsureFolder(StagingFolder);
+			string staged = $"{StagingFolder}/{Path.GetFileName(path)}";
+			if (File.Exists(staged))
+			{
+				Delete(staged);
+			}
+			PrefabUtility.SaveAsPrefabAsset(root, staged, out bool saved);
+			if (!saved || !File.Exists(staged))
+			{
+				problems?.Add($"{path}: Unity could not save it");
+				return null;
+			}
+			string yaml = File.ReadAllText(staged);
+			Delete(staged);
+			if (!ProceduralArtFileIds.TryRewrite(path, yaml, out string rewritten, out _, out string error))
+			{
+				problems?.Add($"{path}: its object IDs could not be made deterministic ({error}); not written");
+				return null;
+			}
+			if (WriteFile(path, Encoding.UTF8.GetBytes(rewritten), PrefabMetaText, problems))
+			{
+				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+			}
+			return AssetDatabase.LoadAssetAtPath<GameObject>(path);
 		}
 
 		/// <summary>

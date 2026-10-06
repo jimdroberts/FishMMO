@@ -150,6 +150,8 @@ namespace FishMMO.UnitTests.AI
 			Assert.IsTrue(AIController.NeedsAgentWrite(new Vector3(0.05f, 0f, 0f), at, at), "moving");
 			Assert.IsTrue(AIController.NeedsAgentWrite(Vector3.zero, at, at + new Vector3(0f, 0f, 0.3f)),
 				"a platform or a scripted placement moved the transform: the agent must be re-seated");
+			Assert.IsFalse(AIController.NeedsAgentWrite(Vector3.zero, at, at + new Vector3(0f, 1.6f, 0f)),
+				"a swimmer floating over an agent on the bed is where it should be: no write every tick");
 		}
 
 		[Test]

@@ -84,6 +84,18 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void TheInlandWaterDeclaresExactlyItsConstants()
+		{
+			List<string> members = PerMaterial(Read("FishInlandWater.hlsl"));
+			LogAssert.IsTrue(members.Count > 10, $"the scan found only {members.Count} constants; its pattern is stale");
+			HashSet<string> declared = Properties(Read("FishInlandWater.shader"));
+			string missing = string.Join(", ", members.Where(m => !declared.Contains(m)));
+			string extra = string.Join(", ", declared.Where(p => !members.Contains(p) && p != "_NormalMap" && p != "_FoamTexture"));
+			LogAssert.IsTrue(missing.Length == 0, "FishMMO/Water/Inland Water reads these but never declares them, so they are zero: " + missing);
+			LogAssert.IsTrue(extra.Length == 0, "FishMMO/Water/Inland Water declares these but its material block never reads them: " + extra);
+		}
+
+		[Test]
 		public void TheBreakersDeclareExactlyTheOceansProperties()
 		{
 			HashSet<string> ocean = Properties(Read("FishWater.shader"));

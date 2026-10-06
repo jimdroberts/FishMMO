@@ -27,12 +27,27 @@ namespace FishMMO.Shared
 		private static readonly int ParamRoll = Animator.StringToHash("Roll");
 		private static readonly int ParamCast = Animator.StringToHash("Cast");
 		private static readonly int ParamDeath = Animator.StringToHash("Death");
+		private static readonly int ParamIsSwimming = Animator.StringToHash("IsSwimming");
+		private static readonly int ParamSwimPitch = Animator.StringToHash("SwimPitch");
+
+		/// <summary>How quickly the body turns to lie along a swimmer's stroke, and back upright out of the water.</summary>
+		private const float SwimPoseSharpness = 6f;
 
 		/// <summary>
 		/// Cached Animator reference from the instantiated character model.
 		/// May be null if model hasn't loaded yet. Re-acquired in <see cref="OnModelReady"/>.
 		/// </summary>
 		private Animator animator;
+
+#if !UNITY_SERVER
+		// Whether the animator has the swimming parameters at all (no clips exist yet: Jim, code first, clips later), so
+		// setting them never logs a missing parameter.
+		private bool animatorHasSwimming;
+		private bool swimming;
+		private float swimPitch;
+		private float posedPitch;
+		private Quaternion modelRestRotation = Quaternion.identity;
+#endif
 
 		/// <summary>
 		/// Attempts initial discovery. May fail if model isn't loaded.
@@ -98,7 +113,56 @@ namespace FishMMO.Shared
 				animator = meshRoot.GetComponentInChildren<Animator>();
 			}
 
+			animatorHasSwimming = false;
+			posedPitch = 0f;
+			if (animator != null)
+			{
+				modelRestRotation = animator.transform.localRotation;
+				foreach (AnimatorControllerParameter parameter in animator.parameters)
+				{
+					if (parameter.nameHash == ParamIsSwimming)
+					{
+						animatorHasSwimming = true;
+						break;
+					}
+				}
+			}
+
 			RestorePoseForCurrentState();
+		}
+
+		/// <summary>
+		/// The swimmer's pose in code, until there are clips: the model turned to lie along its stroke. Nose down diving,
+		/// up rising, level floating; upright again out of the water. Observers learn of it through the animator's
+		/// parameters (synced by the NetworkAnimator) once the controller has them.
+		/// </summary>
+		private void LateUpdate()
+		{
+			if (animator == null)
+			{
+				return;
+			}
+			if (animatorHasSwimming && !base.IsOwner && !base.IsServerInitialized)
+			{
+				swimming = animator.GetBool(ParamIsSwimming);
+				swimPitch = animator.GetFloat(ParamSwimPitch);
+			}
+			// Swimming lies the body forward along the stroke; a swimmer lying still floats a little forward of upright.
+			float target = swimming ? 70f + Mathf.Clamp(swimPitch, -60f, 20f) : 0f;
+			if (swimming && Mathf.Abs(swimPitch) < 1f && animator.GetFloat(ParamSpeed) <= 0.01f)
+			{
+				target = 20f;
+			}
+			if (posedPitch == 0f && target == 0f)
+			{
+				return; // upright and staying so: nothing to write, as for almost every character almost always
+			}
+			posedPitch = Mathf.Lerp(posedPitch, target, 1f - Mathf.Exp(-SwimPoseSharpness * Time.deltaTime));
+			if (Mathf.Abs(posedPitch) < 0.01f && target == 0f)
+			{
+				posedPitch = 0f;
+			}
+			animator.transform.localRotation = modelRestRotation * Quaternion.Euler(posedPitch, 0f, 0f);
 		}
 
 		/// <summary>
@@ -144,6 +208,20 @@ namespace FishMMO.Shared
 			if (animator != null)
 			{
 				animator.SetFloat(ParamSpeed, speed);
+			}
+#endif
+		}
+
+		/// <inheritdoc />
+		public void SetSwimming(bool swimming, float pitch)
+		{
+#if !UNITY_SERVER
+			this.swimming = swimming;
+			swimPitch = pitch;
+			if (animator != null && animatorHasSwimming)
+			{
+				animator.SetBool(ParamIsSwimming, swimming);
+				animator.SetFloat(ParamSwimPitch, pitch);
 			}
 #endif
 		}

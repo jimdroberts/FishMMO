@@ -19,6 +19,8 @@ namespace FishMMO.Shared.WorldDesign
 		public float LowestMetres = float.MaxValue;
 		public int Vertices;
 		public int Meshes;
+		/// <summary>How many lake and river surfaces were drawn past the edge.</summary>
+		public int WaterMeshes;
 		public readonly List<string> Wrote = new List<string>();
 	}
 
@@ -105,14 +107,28 @@ namespace FishMMO.Shared.WorldDesign
 		/// The ground in scene metres at (east, north). Null asks the planet
 		/// (<see cref="SceneGeneration.AltitudeMetres"/>), which meets a terrain cut straight from it.
 		/// </param>
+		/// <param name="water">
+		/// The planet's lakes and rivers past the scene's edge (<see cref="BackdropWater"/>): their channels are
+		/// cut into the near ground, their banks darken the colour, and their surfaces are drawn with
+		/// <paramref name="waterMaterial"/>. Null for dry ground.
+		/// </param>
 		public static SceneBackdropResult Build(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan,
 			float floorMetres, float reliefMetres, string folder, System.Func<float, float, float, float, Color> groundColour = null,
-			System.Func<float, float, float> ground = null)
+			System.Func<float, float, float> ground = null, BackdropWater water = null, Material waterMaterial = null)
 		{
 			if (ground == null)
 			{
 				var planet = new SceneAltitude(request);
 				ground = planet.At;
+			}
+			if (water != null && !water.Empty)
+			{
+				System.Func<float, float, float> uncut = ground;
+				ground = (east, north) => water.Cut(east, north, uncut(east, north));
+			}
+			else
+			{
+				water = null;
 			}
 			var result = new SceneBackdropResult();
 			float reach = ReachFor(request);
@@ -127,7 +143,7 @@ namespace FishMMO.Shared.WorldDesign
 			float halfD = plan.DepthMetres * 0.5f;
 			string stem = $"{folder}/{WorldEditorAssets.Sanitize(request.SceneName)} Backdrop";
 
-			Material material = BakeMaterial(ground, halfW, halfD, reach, floorMetres, reliefMetres, stem, result, groundColour);
+			Material material = BakeMaterial(ground, halfW, halfD, reach, floorMetres, reliefMetres, stem, result, groundColour, water);
 
 			var root = new GameObject("Backdrop");
 			SceneManager.MoveGameObjectToScene(root, scene);
@@ -153,6 +169,28 @@ namespace FishMMO.Shared.WorldDesign
 				inner = outer;
 			}
 
+			// The water past the edge, on the ground just built: lakes first, then rivers, as the scene draws its own.
+			if (water != null && waterMaterial != null)
+			{
+				System.Func<float, float, float> cutGround = ground;
+				float hw = halfW, hd = halfD, r = reach;
+				foreach ((string name, Mesh mesh, int order) in water.Meshes((east, north) => MeshSurfaceAt(east, north, hw, hd, r, cutGround)))
+				{
+					mesh.name = $"{request.SceneName} {name}";
+					meshes.Add(mesh);
+					var host = new GameObject(name);
+					host.transform.SetParent(root.transform, false);
+					host.AddComponent<MeshFilter>().sharedMesh = mesh;
+					MeshRenderer renderer = host.AddComponent<MeshRenderer>();
+					renderer.sharedMaterial = waterMaterial;
+					renderer.sortingOrder = order;
+					renderer.shadowCastingMode = ShadowCastingMode.Off;
+					renderer.receiveShadows = false;
+					renderer.lightProbeUsage = LightProbeUsage.Off;
+					result.WaterMeshes++;
+				}
+			}
+
 			// One asset holds every mesh, so a scene's backdrop is one file to move or delete.
 			string meshPath = $"{stem}.asset";
 			for (int i = 0; i < meshes.Count; i++)
@@ -175,6 +213,50 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		// ── Geometry ──────────────────────────────────────────────────
+
+		/// <summary>
+		/// The height of the backdrop as drawn at a point: the ring rectangle holding it, its grid, and the
+		/// triangle of that grid under the point (as <see cref="AddRect"/> winds them), so what is laid on the
+		/// backdrop lies on its drawn surface rather than on the finer ground between its vertices.
+		/// </summary>
+		private static float MeshSurfaceAt(float x, float z, float halfW, float halfD, float reach, System.Func<float, float, float> ground)
+		{
+			float past = Mathf.Max(Mathf.Abs(x) - halfW, Mathf.Abs(z) - halfD);
+			if (past <= 0f)
+			{
+				return ground(x, z);
+			}
+			float inner = 0f;
+			for (int ring = 0; ring < Rings.Length && inner < reach; ring++)
+			{
+				float outer = Mathf.Min(Rings[ring].Outer, reach);
+				if (past > outer && ring < Rings.Length - 1 && outer < reach)
+				{
+					inner = outer;
+					continue;
+				}
+				float spacing = Rings[ring].Spacing;
+				float ox = halfW + outer, oz = halfD + outer, ix = halfW + inner, iz = halfD + inner;
+				float x0, x1, z0, z1;
+				if (z >= iz) { x0 = -ox; x1 = ox; z0 = iz; z1 = oz; }
+				else if (z <= -iz) { x0 = -ox; x1 = ox; z0 = -oz; z1 = -iz; }
+				else if (x >= ix) { x0 = ix; x1 = ox; z0 = -iz; z1 = iz; }
+				else { x0 = -ox; x1 = -ix; z0 = -iz; z1 = iz; }
+				int nx = Mathf.Max(1, Mathf.CeilToInt((x1 - x0) / spacing));
+				int nz = Mathf.Max(1, Mathf.CeilToInt((z1 - z0) / spacing));
+				float sx = (x1 - x0) / nx, sz = (z1 - z0) / nz;
+				float fx = Mathf.Clamp((x - x0) / sx, 0f, nx - 1e-4f), fz = Mathf.Clamp((z - z0) / sz, 0f, nz - 1e-4f);
+				int gx = (int)fx, gz = (int)fz;
+				float u = fx - gx, v = fz - gz;
+				float ha = ground(x0 + gx * sx, z0 + gz * sz);
+				float hb = ground(x0 + (gx + 1) * sx, z0 + gz * sz);
+				float hc = ground(x0 + gx * sx, z0 + (gz + 1) * sz);
+				float hd = ground(x0 + (gx + 1) * sx, z0 + (gz + 1) * sz);
+				// The triangles (a, c, b) and (b, c, d): split along the diagonal from b to c.
+				return u + v <= 1f ? ha + u * (hb - ha) + v * (hc - ha) : hd + (1f - u) * (hc - hd) + (1f - v) * (hb - hd);
+			}
+			return ground(x, z);
+		}
 
 		/// <summary>One rectangle of a ring: a regular grid with a skirt down all four edges.</summary>
 		private static void AddRect(List<Mesh> meshes, GameObject root, Material material, SceneGenerationRequest request,
@@ -301,7 +383,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		private static Material BakeMaterial(System.Func<float, float, float> ground, float halfW, float halfD, float reach,
 			float floorMetres, float reliefMetres, string stem, SceneBackdropResult result,
-			System.Func<float, float, float, float, Color> groundColour)
+			System.Func<float, float, float, float, Color> groundColour, BackdropWater water)
 		{
 			float extentX = halfW + reach, extentZ = halfD + reach;
 			int width = AlbedoResolution;
@@ -342,18 +424,26 @@ namespace FishMMO.Shared.WorldDesign
 					float gradient = Mathf.Sqrt(Sq(east / (2f * texelX)) + Sq(north / (2f * texelZ)));
 					float steepness = Mathf.Atan(gradient) * Mathf.Rad2Deg;
 
+					float px = -extentX + (x + 0.5f) * texelX;
+					float pz = -extentZ + (z + 0.5f) * texelZ;
+					Color colour;
 					if (groundColour != null)
 					{
-						float wx = -extentX + (x + 0.5f) * texelX;
-						float wz = -extentZ + (z + 0.5f) * texelZ;
-						pixels[z * width + x] = groundColour(wx, wz, h, steepness);
-						continue;
+						colour = groundColour(px, pz, h, steepness);
 					}
-					GeneratedTerrainLayers.Weights(Mathf.Clamp01((h - floorMetres) / relief), steepness, weights);
-					Color colour = Color.black;
-					for (int i = 0; i < 4; i++)
+					else
 					{
-						colour += GeneratedTerrainLayers.Colours[i] * weights[i];
+						GeneratedTerrainLayers.Weights(Mathf.Clamp01((h - floorMetres) / relief), steepness, weights);
+						colour = Color.black;
+						for (int i = 0; i < 4; i++)
+						{
+							colour += GeneratedTerrainLayers.Colours[i] * weights[i];
+						}
+					}
+					// A river's wet bed and banks, so a river narrower than the water drawn far off still reads as a line.
+					if (water != null)
+					{
+						colour = Color.Lerp(colour, WetGround, 0.7f * water.Wetness(px, pz, Mathf.Max(texelX, texelZ)));
 					}
 					colour.a = 1f;
 					pixels[z * width + x] = colour;
@@ -409,6 +499,9 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		private static float Sq(float v) => v * v;
+
+		/// <summary>The colour of a river's wet gravel and banks in the backdrop's bake.</summary>
+		private static readonly Color WetGround = new Color(0.24f, 0.25f, 0.22f, 1f);
 	}
 }
 #endif

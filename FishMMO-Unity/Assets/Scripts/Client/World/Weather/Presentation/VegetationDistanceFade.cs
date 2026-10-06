@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace FishMMO.Client
 {
@@ -38,6 +39,13 @@ namespace FishMMO.Client
 	{
 		/// <summary>The global the vegetation shader reads: x, y detail start and end; z, w tree start and end (metres).</summary>
 		public static readonly int FadeId = Shader.PropertyToID("_FishVegetationFade");
+
+		/// <summary>
+		/// 1 while the pipeline renders multisampled, for the vegetation shader's soft leaf edges
+		/// (alpha-to-coverage: FishVegetationPasses.hlsl). Without MSAA there is no coverage to give, and the
+		/// shader keeps its plain cut.
+		/// </summary>
+		public static readonly int AlphaToCoverageId = Shader.PropertyToID("_FishVegetationAlphaToCoverage");
 
 		/// <summary>Metres over which a detail dissolves before its patch could be culled.</summary>
 		public const float DetailBandMetres = 25f;
@@ -113,6 +121,8 @@ namespace FishMMO.Client
 
 		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
 		{
+			UniversalRenderPipelineAsset pipeline = UniversalRenderPipeline.asset;
+			Shader.SetGlobalFloat(AlphaToCoverageId, pipeline != null && pipeline.msaaSampleCount > 1 ? 1f : 0f);
 			Refresh(false);
 		}
 

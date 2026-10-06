@@ -1297,6 +1297,13 @@ namespace FishMMO.Shared
 				return amount;
 			}
 
+			// A race immune to this damage takes none of it, whatever its resistances (a fire race in lava).
+			RaceTemplate race = RaceTemplate.Of(target);
+			if (race != null && race.IsImmuneTo(damageAttribute))
+			{
+				return MIN_DAMAGE;
+			}
+
 			// No attribute controller means no resistance stats — pass through at full value.
 			// Returning 0 here would make the character silently invulnerable, which is wrong.
 			if (!target.TryGet(out ICharacterAttributeController attributeController))

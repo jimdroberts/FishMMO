@@ -54,6 +54,8 @@ namespace FishMMO.Client
 		};
 		private static readonly int HeightmapId = Shader.PropertyToID("_GrassHeightmap");
 		private static readonly int Density0Id = Shader.PropertyToID("_GrassDensity0");
+		private static readonly int SeaId = Shader.PropertyToID("_GrassSea");
+		private static readonly int FishSeaId = Shader.PropertyToID("_FishSea");
 		private static readonly int Density1Id = Shader.PropertyToID("_GrassDensity1");
 		private static readonly int CameraId = Shader.PropertyToID("_GrassCamera");
 		private static readonly int PlanesId = Shader.PropertyToID("_GrassPlanes");
@@ -64,6 +66,9 @@ namespace FishMMO.Client
 		private static readonly int RingDensityId = Shader.PropertyToID("_GrassRingDensity");
 		private static readonly int RingCountId = Shader.PropertyToID("_GrassRingCount");
 		private static readonly int TypeShapeId = Shader.PropertyToID("_GrassTypeShape");
+		private static readonly int TypeShape2Id = Shader.PropertyToID("_GrassTypeShape2");
+		private static readonly int TypeHeadId = Shader.PropertyToID("_GrassTypeHead");
+		private static readonly int TypeHeadColourId = Shader.PropertyToID("_GrassTypeHeadColour");
 		private static readonly int Capacity0Id = Shader.PropertyToID("_GrassCapacity0");
 		private static readonly int Capacity1Id = Shader.PropertyToID("_GrassCapacity1");
 		private static readonly int ItemOffsetId = Shader.PropertyToID("_GrassItemOffset");
@@ -126,6 +131,11 @@ namespace FishMMO.Client
 		private readonly float[] ringDensityF = new float[MaxRings];
 		private int ringCount;
 		private readonly Vector4[] typeShape = new Vector4[MaxTypes];
+		/// <summary>Per type for the compute: x the sprinkle chance per candidate (0: a tussock species), y the head, z its size (m).</summary>
+		private readonly Vector4[] typeShape2 = new Vector4[MaxTypes];
+		/// <summary>Per type for the blades: x the head, y its size (m), z how many head colours, w 1 = blunt strap tip.</summary>
+		private readonly Vector4[] typeHead = new Vector4[MaxTypes];
+		private readonly Vector4[] typeHeadColour = new Vector4[MaxTypes * GrassType.MaxHeadColours];
 		private readonly Vector4[] typeRoot = new Vector4[MaxTypes];
 		private readonly Vector4[] typeTip = new Vector4[MaxTypes];
 		private readonly Vector4[] typeHealthy = new Vector4[MaxTypes];
@@ -331,8 +341,13 @@ namespace FishMMO.Client
 				if (type == null)
 				{
 					typeShape[t] = new Vector4(0.3f, 1f, 0f, 0f);
+					typeShape2[t] = typeHead[t] = Vector4.zero;
 					typeRoot[t] = typeTip[t] = typeHealthy[t] = typeDry[t] = Vector4.one;
 					typeParams[t] = new Vector4(1f, 0f, 0.4f, 1f);
+					for (int k = 0; k < GrassType.MaxHeadColours; k++)
+					{
+						typeHeadColour[t * GrassType.MaxHeadColours + k] = Vector4.one;
+					}
 					continue;
 				}
 				GrassTypeTuning tuning = s.TuningFor(type.Name) ?? type.Tuning;
@@ -342,12 +357,27 @@ namespace FishMMO.Client
 				typeHealthy[t] = new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread);
 				typeDry[t] = new Vector4(type.Dry.r, type.Dry.g, type.Dry.b, type.PatchMetres);
 				typeParams[t] = new Vector4(tuning?.Stiffness ?? 1f, type.SnowBury, tuning?.Bend ?? 0.4f, 1f);
+				// Sprinkled species: stems per square metre at full paint, as a chance per candidate of the near lattice.
+				float sprinkle = tuning != null && tuning.Sprinkle > 0f ? Mathf.Clamp01(tuning.Sprinkle / s.NearDensity) : 0f;
+				GrassHead head = tuning?.Head ?? GrassHead.None;
+				float headSize = Mathf.Max(0.002f, tuning?.HeadSize ?? 0.035f);
+				typeShape2[t] = new Vector4(sprinkle, (float)head, head != GrassHead.None ? headSize : 0f, 0f);
+				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
+				Color fallback = (tuning?.HeadColour ?? new Color(0.36f, 0.25f, 0.14f)).linear;
+				for (int k = 0; k < GrassType.MaxHeadColours; k++)
+				{
+					Color c = k < colours ? type.HeadColours[k] : fallback;
+					typeHeadColour[t * GrassType.MaxHeadColours + k] = new Vector4(c.r, c.g, c.b, 1f);
+				}
+				typeHead[t] = new Vector4((float)head, headSize, Mathf.Max(1, colours), tuning != null && tuning.BluntTip ? 1f : 0f);
 			}
 			material.SetVectorArray(TypeRootId, typeRoot);
 			material.SetVectorArray(TypeTipId, typeTip);
 			material.SetVectorArray(TypeHealthyId, typeHealthy);
 			material.SetVectorArray(TypeDryId, typeDry);
 			material.SetVectorArray(TypeParamsId, typeParams);
+			material.SetVectorArray(TypeHeadId, typeHead);
+			material.SetVectorArray(TypeHeadColourId, typeHeadColour);
 			material.SetVectorArray(RingDistanceId, ringDistance);
 			material.SetVectorArray(RingDensityId, ringDensity);
 			material.SetFloat(RingCountId, ringCount);
@@ -539,6 +569,9 @@ namespace FishMMO.Client
 			cmd.Clear();
 			cmd.SetBufferData(itemBuffer, items, 0, 0, itemCount);
 			cmd.SetComputeVectorParam(compute, CameraId, new Vector4(eye.x, eye.y, eye.z, grassDistance));
+			// The sea (SeaLifeSystem's _FishSea, which a compute shader never sees as a global): no land grass below its lowest tide.
+			Vector4 sea = Shader.GetGlobalVector(FishSeaId);
+			cmd.SetComputeVectorParam(compute, SeaId, new Vector4(sea.y, sea.z, 0f, 0f));
 			cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
 			cmd.SetComputeVectorParam(compute, LightId, shadowDistance > 0f ? new Vector4(view.LightDirection.x, view.LightDirection.y, view.LightDirection.z, shadowDistance) : Vector4.zero);
 			cmd.SetComputeVectorParam(compute, LatticeId, new Vector4(cell, Mathf.Max(0.1f, s.ClumpMetres), s.ClumpFacing, s.ClumpHeightVariation));
@@ -547,6 +580,7 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorArrayParam(compute, RingDensityId, ringDensity);
 			cmd.SetComputeIntParam(compute, RingCountId, ringCount);
 			cmd.SetComputeVectorArrayParam(compute, TypeShapeId, typeShape);
+			cmd.SetComputeVectorArrayParam(compute, TypeShape2Id, typeShape2);
 			cmd.SetComputeVectorParam(compute, Capacity0Id, new Vector4(capacities[0], capacities[1], capacities[2], capacities[3]));
 			cmd.SetComputeVectorParam(compute, Capacity1Id, new Vector4(capacities[4], 0f, 0f, 0f));
 
@@ -742,12 +776,18 @@ namespace FishMMO.Client
 				{
 					Debug.LogWarning(line + " The blades float or sink: GrassTerrain.Heightmap (the grass's own height texture, 0..1 of the terrain's height) does not read back as written on this platform.");
 				}
-				else
+				else if (!heightCheckReported)
 				{
-					Debug.Log(line);
+					// Once a session: every play and every scene load rebuilds the terrains and probes each
+					// one again, and a line per terrain per load buried the console. A failure always warns.
+					heightCheckReported = true;
+					Debug.Log(line + " (Further checks that pass are not logged this session.)");
 				}
 			});
 		}
+
+		/// <summary>Whether a passing height check has been logged this session (RecordHeightProbe).</summary>
+		private static bool heightCheckReported;
 
 		private void EnsureItems(int needed)
 		{

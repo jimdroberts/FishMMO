@@ -13,6 +13,7 @@ float4 _VortexWind;       // x core radius (m), y peak wind (m/s), z gravity (m/
 float4 _VortexLean;       // xy where the top stands from the foot (m, world x/z); z how far the axis wanders (m); w how far above the top the funnel reaches into the cloud (m)
 float4 _VortexFlow;       // x how fast the air climbs the axis (m/s); y sub-vortices (0, or 2..6); z how hollow the core is (a two-celled vortex), 0..1; w 1 while the sky has published the clouds' light
 float4 _VortexTime;       // x seconds, wrapped; y a number of its own, 0..1; z how far it has roped out, 0..1; w unused
+float4 _VortexPace;       // what its motions are TIMED by, the cell's at maturity and constant for its life: x the climb (m/s), y the core radius (m), z the peak wind (m/s); w the clock's wrap (s)
 
 // ── What it puts in the air (the volume only) ─────────────────────────────
 float4 _VortexDust;       // x the wind that starts the ground moving (m/s); y how high the dust stands (m); z its extinction where the wind carries all it can (1/m); w how fast it thins upward (a power of the height left)
@@ -198,6 +199,19 @@ float VortexSkyOnFace(float normalElevation, float skyEdge, float ground)
 // ── The axis ──────────────────────────────────────────────────────────────
 
 /// <summary>
+/// How far round a motion of this many cycles a second has come, 0..1, on the shared clock — its rate
+/// snapped to a whole number of cycles in the clock's wrap, so it comes round to where it started as the
+/// clock wraps. A rate times the clock jumps by the change times the whole clock whenever the rate
+/// changes, so every rate given here is a constant: the cell's pace (_VortexPace), never its live form,
+/// which grows and decays every tick and scrubbed every motion with it.
+/// </summary>
+float VortexCycles(float cyclesPerSecond)
+{
+	float wrap = max(1.0, _VortexPace.w);
+	return frac(round(cyclesPerSecond * wrap) / wrap * _VortexTime.x);
+}
+
+/// <summary>
 /// Where the vortex's axis is at a height above the ground, world x/z. The foot is where the storm
 /// cell is; the top stands ahead of it (VortexPhysics.TopOffset), upright where it leaves the cloud and
 /// bent over toward the ground, since the difference between the storm and the air held to the ground
@@ -212,11 +226,11 @@ float2 VortexAxis(float height)
 	float2 lean = _VortexLean.xy * (z * (2.0 - z));
 	float bow = 4.0 * z * (1.0 - z);
 	float wave = top * lerp(0.9, 0.4, saturate(_VortexTime.z));
-	float time = _VortexTime.x;
 	float seed = _VortexTime.y * VORTEX_TAU;
+	// 0.21 and 0.17 rad/s, whole in the clock's wrap.
 	float2 sway = _VortexLean.z * bow * float2(
-		sin(VORTEX_TAU * height / wave - time * 0.21 + seed),
-		cos(VORTEX_TAU * height / (1.4 * wave) - time * 0.17 + seed * 1.7));
+		sin(VORTEX_TAU * (height / wave - VortexCycles(0.21 / VORTEX_TAU)) + seed),
+		cos(VORTEX_TAU * (height / (1.4 * wave) - VortexCycles(0.17 / VORTEX_TAU)) + seed * 1.7));
 	return _VortexCentre.xz + lean + sway;
 }
 
@@ -260,16 +274,18 @@ float4 VortexNoise(float3 uvw, float lod)
 /// bands follow the wall's own turn instead (VortexHelixTurn, VortexGrain).
 /// </para>
 /// </remarks>
-float3 VortexStream(float2 offset, float radius, float height, float stretch, float tile)
+/// <param name="paceTile">The tile at the cell's pace (_VortexPace): how fast the pattern slides is timed by it, its size by <paramref name="tile"/>.</param>
+float3 VortexStream(float2 offset, float radius, float height, float stretch, float tile, float paceTile)
 {
 	float climb = max(0.5, _VortexFlow.x);
 	float omega = _VortexWind.w * VortexAngularSpeed(radius, _VortexWind.x, _VortexWind.y);
 	float s, c;
 	sincos(-omega / climb * height, s, c);
 	float2 label = float2(offset.x * c - offset.y * s, offset.x * s + offset.y * c);
-	// Slid up the streamline with the air, a whole tile at a time so a long-running clock keeps its precision.
+	// Slid up the streamline with the air, a whole tile at a time so a long-running clock keeps its
+	// precision, at the pace's climb over the pace's tile: the live ones change as it grows.
 	float along = tile * stretch;
-	float slid = height - along * frac(climb * _VortexTime.x / along);
+	float slid = height - along * VortexCycles(max(0.5, _VortexPace.x) / max(1.0, paceTile * stretch));
 	return float3(label.x / tile, slid / along, label.y / tile);
 }
 
@@ -291,11 +307,10 @@ float4 VortexGrain(float phase, float height, float radius, float footprint)
 		return float4(0.5, 0.5, 0.5, 0.5);
 	}
 	float core = max(1.0, _VortexWind.x);
-	float climb = max(0.5, _VortexFlow.x);
 	// Billows a core radius or so long up the streamlines, slid up them at the air's climb, a whole
 	// tile at a time so a long-running clock keeps its precision.
 	float along = 4.0 * core;
-	float slid = height - along * frac(climb * _VortexTime.x / along);
+	float slid = height - along * VortexCycles(max(0.5, _VortexPace.x) / (4.0 * max(1.0, _VortexPace.y)));
 	float s, c;
 	sincos(phase, s, c);
 	float3 uvw = float3(VORTEX_GRAIN_RING * c, slid / along, VORTEX_GRAIN_RING * s) + _VortexTime.y * float3(3.7, 1.3, 5.9);
@@ -329,7 +344,9 @@ float VortexSubLift(float2 offset, float radius, float height)
 	float subWind = VORTEX_SUB_WIND * _VortexWind.y;
 	float turn = VORTEX_SUB_TURN * _VortexWind.y / core;
 	float climb = max(0.5, _VortexFlow.x);
-	float phase = _VortexWind.w * (VORTEX_TAU * frac(turn * _VortexTime.x / VORTEX_TAU) - turn / climb * height) + _VortexTime.y * VORTEX_TAU;
+	// Round in time at the pace's turn; wound up the column at the live one, which is its shape.
+	float paceTurn = VORTEX_SUB_TURN * _VortexPace.z / max(1.0, _VortexPace.y);
+	float phase = _VortexWind.w * (VORTEX_TAU * VortexCycles(paceTurn / VORTEX_TAU) - turn / climb * height) + _VortexTime.y * VORTEX_TAU;
 	float s, c;
 	sincos(phase, s, c);
 	float2 at = float2(c, s) * orbit;
@@ -520,7 +537,8 @@ float VortexDustAt(float2 offset, float radius, float height, float footprint, b
 	if (fine && _VortexMarch.z > 0.5)
 	{
 		float tile = clamp(3.0 * core, 20.0, 800.0);
-		float4 n = VortexNoise(VortexStream(offset, radius, height, 2.0, tile) + _VortexTime.y * float3(7.1, 2.9, 4.3), VortexLod(footprint, tile));
+		float paceTile = clamp(3.0 * max(0.5, _VortexPace.y), 20.0, 800.0);
+		float4 n = VortexNoise(VortexStream(offset, radius, height, 2.0, tile, paceTile) + _VortexTime.y * float3(7.1, 2.9, 4.3), VortexLod(footprint, tile));
 		lumps = n.r * 0.7 + n.b * 0.3;
 		ragged = n.g;
 	}

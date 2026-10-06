@@ -40,6 +40,7 @@ Shader "FishMMO/Vegetation Indirect"
         _WindSway("Sway (m at sway weight 1, full wind)", Range(0.0, 2.0)) = 0.4
         _WindFlutter("Flutter (m)", Range(0.0, 0.2)) = 0.03
         _WindFrequency("Frequency", Range(0.1, 4.0)) = 1.2
+        [Toggle] _Aquatic("Under the sea (sways with the surge instead of the wind, kept under the surface)", Float) = 0.0
 
         [Header(Season)]
         _HealthyColor("Healthy tint", Color) = (0.9, 0.95, 0.9, 1)
@@ -57,6 +58,18 @@ Shader "FishMMO/Vegetation Indirect"
         [Toggle] _FacingCamera("Turn to face the camera (tree billboards)", Float) = 0.0
         _GroundSink("Ground sink: x min, y max metres (each instance draws between them)", Vector) = (0, 0, 0, 0)
         _TintPatchMetres("Healthy/dry patch size (m, 0 = plant by plant)", Float) = 12
+
+        [Header(Variation (each plant from its own hash))]
+        _VaryLean("Lean (most degrees, about the root)", Range(0.0, 20.0)) = 0
+        _VaryTwist("Twist (most degrees, at 10 m up)", Range(0.0, 90.0)) = 0
+        _VaryCrown("Crown width (share either way, growing with height)", Range(0.0, 0.6)) = 0
+        _VaryHeight("Height (share either way)", Range(0.0, 0.4)) = 0
+        _VaryGirth("Trunk girth (share either way, more on the taller)", Range(0.0, 0.5)) = 0.22
+        _VaryPartSwing("Each limb's swing about its foot (degrees either way)", Range(0.0, 60.0)) = 0
+        _VaryPartDroop("Each limb's droop or rise (degrees either way)", Range(0.0, 40.0)) = 0
+        _VaryPartLength("Each limb's length (share either way)", Range(0.0, 0.5)) = 0
+        _VaryFullness("Fullness: x the fewest of the spare limbs kept, y the fewest leaves kept (0..1)", Vector) = (0, 0, 0, 0)
+        _VaryColour("Colour: x brightness, y hue and saturation, z each leaf card, w bark (shares either way)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
@@ -76,6 +89,8 @@ Shader "FishMMO/Vegetation Indirect"
             Tags { "LightMode" = "UniversalForward" }
             Cull [_Cull]
             ZWrite On
+            // Soft leaf edges where the target is multisampled (FishVegetationPasses.hlsl, VegForwardFragment).
+            AlphaToMask On
 
             HLSLPROGRAM
             #pragma target 3.0

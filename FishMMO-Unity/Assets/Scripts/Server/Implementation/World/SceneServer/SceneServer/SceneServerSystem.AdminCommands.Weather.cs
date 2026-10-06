@@ -54,12 +54,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Arguments = "action:Choice=show,air,cell,director,help?;details:Text?",
 					Run = RunAdminWeather,
 				},
-				new OperatorCommand
-				{
-					Name = "clock", Category = "World",
-					Summary = "Reports the world clock, the date and your local time. Nothing can set it.",
-					Run = (c, a) => ReportClock(c),
-				},
 			};
 		}
 

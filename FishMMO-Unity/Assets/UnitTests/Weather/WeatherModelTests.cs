@@ -264,18 +264,18 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void AddedAirEasesBetweenItsTicks()
 		{
-			var entry = new AirOffsetEntry { From = default, To = new AirOffsets { Humidity = 0.4f, Temperature = -10f }, StartTick = 100, EndTick = 200 };
-			LogAssert.AreEqual(0f, entry.At(50).Humidity);
-			LogAssert.AreEqual(0f, entry.At(100).Humidity);
-			Assert.That(entry.At(150).Humidity, Is.EqualTo(0.2f).Within(Tolerance));
-			Assert.That(entry.At(150).Temperature, Is.EqualTo(-5f).Within(Tolerance));
-			LogAssert.AreEqual(0.4f, entry.At(200).Humidity);
-			LogAssert.AreEqual(0.4f, entry.At(5000).Humidity);
+			var entry = new AirOffsetEntry { From = default, To = new AirOffsets { Humidity = 0.4f, Temperature = -10f }, StartSeconds = 100, EndSeconds = 200 };
+			LogAssert.AreEqual(0f, entry.AtSeconds(50).Humidity);
+			LogAssert.AreEqual(0f, entry.AtSeconds(100).Humidity);
+			Assert.That(entry.AtSeconds(150).Humidity, Is.EqualTo(0.2f).Within(Tolerance));
+			Assert.That(entry.AtSeconds(150).Temperature, Is.EqualTo(-5f).Within(Tolerance));
+			LogAssert.AreEqual(0.4f, entry.AtSeconds(200).Humidity);
+			LogAssert.AreEqual(0.4f, entry.AtSeconds(5000).Humidity);
 
 			float last = 0f;
 			for (uint t = 100; t <= 200; t++)
 			{
-				float value = entry.At(t).Humidity;
+				float value = entry.AtSeconds(t).Humidity;
 				LogAssert.IsTrue(value >= last, $"what is added must not fall on the way up (tick {t})");
 				last = value;
 			}
@@ -284,9 +284,9 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void AnInstantChangeToTheAirJumps()
 		{
-			var entry = new AirOffsetEntry { From = new AirOffsets { Pressure = 0.2f }, To = new AirOffsets { Pressure = 0.9f }, StartTick = 100, EndTick = 100 };
-			LogAssert.AreEqual(0.2f, entry.At(99).Pressure);
-			LogAssert.AreEqual(0.9f, entry.At(100).Pressure);
+			var entry = new AirOffsetEntry { From = new AirOffsets { Pressure = 0.2f }, To = new AirOffsets { Pressure = 0.9f }, StartSeconds = 100, EndSeconds = 100 };
+			LogAssert.AreEqual(0.2f, entry.AtSeconds(99).Pressure);
+			LogAssert.AreEqual(0.9f, entry.AtSeconds(100).Pressure);
 		}
 
 		[Test]
@@ -325,8 +325,8 @@ namespace FishMMO.UnitTests.Weather
 		public void PruningForgetsDeadCells()
 		{
 			var timeline = new WeatherTimeline();
-			timeline.Cells.Add(new StormCell { ID = 7, BirthTick = 0, MatureTick = 10, DecayTick = 20, DeathTick = 30 });
-			timeline.Cells.Add(new StormCell { ID = 8, BirthTick = 0, MatureTick = 10, DecayTick = 200, DeathTick = 300 });
+			timeline.Cells.Add(new StormCell { ID = 7, BirthSeconds = 0 * TickDelta, MatureSeconds = 10 * TickDelta, DecaySeconds = 20 * TickDelta, DeathSeconds = 30 * TickDelta });
+			timeline.Cells.Add(new StormCell { ID = 8, BirthSeconds = 0 * TickDelta, MatureSeconds = 10 * TickDelta, DecaySeconds = 200 * TickDelta, DeathSeconds = 300 * TickDelta });
 			timeline.Prune(50);
 			LogAssert.AreEqual(1, timeline.Cells.Count);
 			LogAssert.AreEqual((ushort)8, timeline.Cells[0].ID);
@@ -336,9 +336,8 @@ namespace FishMMO.UnitTests.Weather
 		public void TheLeadCoversOneAndAHalfSeconds()
 		{
 			var timeline = new WeatherTimeline { TickDelta = TickDelta };
-			LogAssert.AreEqual(45u, timeline.LeadTicks);
-			LogAssert.AreEqual(300u, timeline.SecondsToTicks(10f));
-			LogAssert.AreEqual(0u, timeline.SecondsToTicks(0f));
+			// In world time at the world's pace: real time, with no world clock anchored.
+			Assert.That(timeline.LeadWorldSeconds, Is.EqualTo(1.5).Within(1e-9));
 		}
 
 		[Test]
@@ -359,7 +358,7 @@ namespace FishMMO.UnitTests.Weather
 		private static WeatherTimeline TimelineAt(uint revision)
 		{
 			var timeline = new WeatherTimeline { SceneName = "Test", Revision = revision, TickDelta = TickDelta };
-			timeline.Cells.Add(new StormCell { ID = 1, Kind = StormKind.Thunderstorm, DeathTick = 1000 });
+			timeline.Cells.Add(new StormCell { ID = 1, Kind = StormKind.Thunderstorm, DeathSeconds = 1000 * TickDelta });
 			return timeline;
 		}
 
@@ -372,7 +371,7 @@ namespace FishMMO.UnitTests.Weather
 				SceneName = "Test",
 				Revision = 5,
 				RemovedCells = new List<ushort> { 1 },
-				Cells = new List<StormCell> { new StormCell { ID = 2, Kind = StormKind.Haboob, DeathTick = 1000 } },
+				Cells = new List<StormCell> { new StormCell { ID = 2, Kind = StormKind.Haboob, DeathSeconds = 1000 * TickDelta } },
 				HasAir = true,
 				Air = new AirOffsetEntry { To = new AirOffsets { Temperature = -4f } },
 			};
@@ -412,9 +411,9 @@ namespace FishMMO.UnitTests.Weather
 			WeatherTimeline source = TimelineAt(9);
 			source.Seed = 42;
 			source.SceneMode = WeatherSceneMode.None;
-			source.Air = new AirOffsetEntry { From = new AirOffsets { Humidity = 0.1f }, To = new AirOffsets { Humidity = 0.3f }, StartTick = 10, EndTick = 20 };
+			source.Air = new AirOffsetEntry { From = new AirOffsets { Humidity = 0.1f }, To = new AirOffsets { Humidity = 0.3f }, StartSeconds = 10, EndSeconds = 20 };
 			source.Cover = new WeatherCover { Snow = 0.2f, Wet = 0.4f };
-			source.CoverTick = 1234;
+			source.CoverSeconds = 1234.5;
 
 			WeatherTimeline target = TimelineAt(2);
 			target.Cells.Add(new StormCell { ID = 99 });
@@ -424,10 +423,10 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.AreEqual(42u, target.Seed);
 			LogAssert.AreEqual(WeatherSceneMode.None, target.SceneMode);
 			LogAssert.AreEqual(0.3f, target.Air.To.Humidity);
-			LogAssert.AreEqual(20u, target.Air.EndTick);
+			LogAssert.AreEqual(20.0, target.Air.EndSeconds);
 			LogAssert.AreEqual(1, target.Cells.Count);
 			LogAssert.AreEqual(0.2f, target.Cover.Snow);
-			LogAssert.AreEqual(1234u, target.CoverTick);
+			LogAssert.AreEqual(1234.5, target.CoverSeconds);
 
 			WeatherTimelineBroadcast copy = source.ToBroadcast();
 			copy.Cells.Clear();
@@ -448,11 +447,11 @@ namespace FishMMO.UnitTests.Weather
 				VelocityZ = 1f,
 				RadiusMeters = 400f,
 				PeakIntensity = 0.8f,
-				MotionTick = 300,
-				BirthTick = 300,
-				MatureTick = 600,
-				DecayTick = 3000,
-				DeathTick = 3300,
+				MotionSeconds = 300 * TickDelta,
+				BirthSeconds = 300 * TickDelta,
+				MatureSeconds = 600 * TickDelta,
+				DecaySeconds = 3000 * TickDelta,
+				DeathSeconds = 3300 * TickDelta,
 			};
 		}
 
@@ -460,20 +459,20 @@ namespace FishMMO.UnitTests.Weather
 		public void ACellGrowsHoldsAndFades()
 		{
 			StormCell cell = Cell();
-			LogAssert.AreEqual(0f, cell.EnvelopeAt(0));
-			LogAssert.AreEqual(0f, cell.EnvelopeAt(300));
-			Assert.That(cell.EnvelopeAt(450), Is.EqualTo(0.5f).Within(Tolerance));
-			LogAssert.AreEqual(1f, cell.EnvelopeAt(600));
-			LogAssert.AreEqual(1f, cell.EnvelopeAt(3000));
-			Assert.That(cell.EnvelopeAt(3150), Is.EqualTo(0.5f).Within(Tolerance));
-			LogAssert.AreEqual(0f, cell.EnvelopeAt(3300));
-			LogAssert.IsTrue(cell.IsDead(3300));
-			LogAssert.IsFalse(cell.IsDead(3299));
+			LogAssert.AreEqual(0f, cell.EnvelopeAtSeconds((0) * TickDelta));
+			LogAssert.AreEqual(0f, cell.EnvelopeAtSeconds((300) * TickDelta));
+			Assert.That(cell.EnvelopeAtSeconds((450) * TickDelta), Is.EqualTo(0.5f).Within(Tolerance));
+			LogAssert.AreEqual(1f, cell.EnvelopeAtSeconds((600) * TickDelta));
+			LogAssert.AreEqual(1f, cell.EnvelopeAtSeconds((3000) * TickDelta));
+			Assert.That(cell.EnvelopeAtSeconds((3150) * TickDelta), Is.EqualTo(0.5f).Within(Tolerance));
+			LogAssert.AreEqual(0f, cell.EnvelopeAtSeconds((3300) * TickDelta));
+			LogAssert.IsTrue(cell.IsDeadAtSeconds((3300) * TickDelta));
+			LogAssert.IsFalse(cell.IsDeadAtSeconds((3299) * TickDelta));
 
 			float previous = -1f;
 			for (uint t = 300; t <= 600; t++)
 			{
-				float value = cell.EnvelopeAt(t);
+				float value = cell.EnvelopeAtSeconds((t) * TickDelta);
 				LogAssert.IsTrue(value >= previous, $"growth must not dip (tick {t})");
 				previous = value;
 			}
@@ -483,10 +482,10 @@ namespace FishMMO.UnitTests.Weather
 		public void ACellDriftsWithItsVelocity()
 		{
 			StormCell cell = Cell();
-			Vector2 start = cell.CentreAt(300, TickDelta);
+			Vector2 start = cell.CentreAtSeconds((300) * TickDelta);
 			LogAssert.AreEqual(new Vector2(100f, -50f), start);
 
-			Vector2 later = cell.CentreAt(300 + 30 * 60, TickDelta);
+			Vector2 later = cell.CentreAtSeconds((300 + 30 * 60) * TickDelta);
 			Assert.That(later.x, Is.EqualTo(100f + 2f * 60f).Within(0.01f));
 			Assert.That(later.y, Is.EqualTo(-50f + 1f * 60f).Within(0.01f));
 		}
@@ -499,9 +498,9 @@ namespace FishMMO.UnitTests.Weather
 			StormCell b = a;
 			for (uint t = 300; t < 3300; t += 97)
 			{
-				LogAssert.AreEqual(a.CentreAt(t, TickDelta), b.CentreAt(t, TickDelta));
+				LogAssert.AreEqual(a.CentreAtSeconds((t) * TickDelta), b.CentreAtSeconds((t) * TickDelta));
 				Vector2 straight = new Vector2(100f + 2f * (float)((t - 300) * TickDelta), -50f + (float)((t - 300) * TickDelta));
-				LogAssert.IsTrue(Vector2.Distance(a.CentreAt(t, TickDelta), straight) <= 150f * Mathf.Sqrt(2f) + 0.01f,
+				LogAssert.IsTrue(Vector2.Distance(a.CentreAtSeconds((t) * TickDelta), straight) <= 150f * Mathf.Sqrt(2f) + 0.01f,
 					"the wander stays within its amplitude");
 			}
 		}
@@ -511,14 +510,14 @@ namespace FishMMO.UnitTests.Weather
 		{
 			StormCell cell = Cell();
 			const uint tick = 1000;
-			Vector2 centre = cell.CentreAt(tick, TickDelta);
+			Vector2 centre = cell.CentreAtSeconds((tick) * TickDelta);
 			var at = new Vector3(centre.x, 0f, centre.y);
-			Assert.That(cell.InfluenceAt(at, tick, TickDelta), Is.EqualTo(0.8f).Within(Tolerance));
-			Assert.That(cell.InfluenceAt(at + new Vector3(200f, 0f, 0f), tick, TickDelta), Is.EqualTo(0.8f).Within(Tolerance), "full strength inside 55% of the radius");
-			float edge = cell.InfluenceAt(at + new Vector3(300f, 0f, 0f), tick, TickDelta);
+			Assert.That(cell.InfluenceAtSeconds(at, (tick) * TickDelta), Is.EqualTo(0.8f).Within(Tolerance));
+			Assert.That(cell.InfluenceAtSeconds(at + new Vector3(200f, 0f, 0f), (tick) * TickDelta), Is.EqualTo(0.8f).Within(Tolerance), "full strength inside 55% of the radius");
+			float edge = cell.InfluenceAtSeconds(at + new Vector3(300f, 0f, 0f), (tick) * TickDelta);
 			LogAssert.IsTrue(edge > 0f && edge < 0.8f, $"fading toward the edge, got {edge}");
-			LogAssert.AreEqual(0f, cell.InfluenceAt(at + new Vector3(0f, 0f, 401f), tick, TickDelta));
-			LogAssert.AreEqual(0f, cell.InfluenceAt(at, 3400, TickDelta), "a dead cell has no influence");
+			LogAssert.AreEqual(0f, cell.InfluenceAtSeconds(at + new Vector3(0f, 0f, 401f), (tick) * TickDelta));
+			LogAssert.AreEqual(0f, cell.InfluenceAtSeconds(at, (3400) * TickDelta), "a dead cell has no influence");
 		}
 	}
 }

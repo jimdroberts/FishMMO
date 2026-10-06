@@ -38,4 +38,21 @@ namespace FishMMO.Shared
 		/// <param name="activated">The state to adopt immediately.</param>
 		void SnapTo(bool activated);
 	}
+
+	/// <summary>
+	/// A <see cref="ISwitchTarget"/> whose change plays out over time, from the server tick it began
+	/// at: every peer works out the same pose from the tick, so a door is in the same place on every
+	/// screen and on the server, and a player who arrives mid-swing sees it mid-swing.
+	/// </summary>
+	public interface ITimedSwitchTarget : ISwitchTarget
+	{
+		/// <summary>The server tick the last change began at (0: none since the scene loaded).</summary>
+		uint ChangeTick { get; }
+
+		/// <summary>How far along its travel it stood when that change began, 0..1.</summary>
+		float ChangeTravel { get; }
+
+		/// <summary>Adopts the server's state: <paramref name="activated"/>, changed at <paramref name="changeTick"/> from <paramref name="changeTravel"/>.</summary>
+		void SetState(bool activated, uint changeTick, float changeTravel);
+	}
 }

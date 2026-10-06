@@ -121,3 +121,6 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1474826537
     Weight: 0.5
+  DamageImmunities:
+  - {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a, type: 2}
+  BreathesWater: 0

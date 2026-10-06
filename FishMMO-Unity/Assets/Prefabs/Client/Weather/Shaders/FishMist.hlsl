@@ -204,6 +204,17 @@ float4 FishMistMarch(float3 origin, float3 direction, float depth, float jitter,
         {
             continue;
         }
+        /* Below the ground is no air. Over land the depth buffer ends the ray at the terrain, so this only drops what
+         * lies well under the map's 5 m surface (its bilinear ground can sit a little above the real one on a convex
+         * slope: the tolerance keeps the mist hugging it). Over water the map's ground IS the surface, and water
+         * writes no depth the march sees: the ray ran on under the surface, where `above` clamped to 0 is the
+         * mist's densest, lit only by the dim ambient of a basin the terrain shades. That was the black mist
+         * sinking into lakes and the sea. */
+        float underTolerance = ground.z > 0.95 ? 0.0 : 1.5;
+        if (at.y < ground.x - underTolerance)
+        {
+            continue;
+        }
         float above = max(0.0, at.y - ground.x);
         if (above > deepest)
         {

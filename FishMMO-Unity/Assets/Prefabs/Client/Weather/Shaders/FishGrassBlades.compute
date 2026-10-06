@@ -49,6 +49,7 @@
 #define SALT_CLUMP    0xFD7046C5u
 #define SALT_BLADE    0xB55A4F09u
 #define SALT_PULL     0x94D049BBu
+#define SALT_SPRINKLE 0x5BD1E995u
 
 struct GrassItem { int cellX; int cellZ; uint packed; uint terrain; };   // packed: level 3 bits, main 1, shadow 1, nx 4, nz 4
 struct GrassBlade { float3 root; uint packed; uint colour; };           // 20 bytes (GrassMath.Pack, PackColour)
@@ -76,6 +77,7 @@ StructuredBuffer<uint> _GrassShared;
 #define GRASS_TERRAIN_UINTS 24u
 
 float4 _GrassCamera;                         // xyz position, w grass distance
+float4 _GrassSea;                            // x the sea's low-tide ceiling (world y), y 1 while there is a sea (FishSea.hlsl's _FishSea)
 float4 _GrassPlanes[6];                      // inside when dot(n, p) + w >= 0
 float4 _GrassLight;                          // xyz the sun's direction of travel, w blade shadow distance (0 none)
 float4 _GrassLattice;                        // x cell metres, y clump metres, z clump facing strength, w clump height variation
@@ -83,6 +85,7 @@ float4 _GrassShapeParams;                    // x max lean, y LOD0 distance, z L
 float4 _GrassRingDistance[GRASS_RINGS];      // x distance (metres); count in _GrassRingCount
 float4 _GrassRingDensity[GRASS_RINGS];       // x blades per square metre; [0].y the fullness (density share that grows the full field)
 float4 _GrassTypeShape[GRASS_TYPES];         // x height (m), y density factor (0..1], z clump pull, w unused
+float4 _GrassTypeShape2[GRASS_TYPES];        // x sprinkle chance per candidate where fully painted (0: a tussock species), y head (0 none, 1 seed head, 2 flower), z head size (m)
 // The thread's terrain, from the table (GrassLoadTerrain).
 static float4 _GrassTerrainOrigin;           // xyz terrain position, w metres per heightmap unit (size.y)
 static float4 _GrassTerrainSize;             // x size x, y size z, z heightmap resolution, w density map resolution
@@ -434,12 +437,20 @@ float4 GrassTerrainColourAt(float2 local, float2 world, float share)
 }
 #endif
 
-// sRGB-ish (square root) 8:8:8 + a flag byte: dark soils keep their steps (GrassMath.PackColour).
+// sRGB-ish (square root) 8:8:8 + bit 31 valid: dark soils keep their steps (GrassMath.PackColour). Bits 29..30
+// are the record's head part (GrassWithHeadPart).
 uint GrassPackColour(float4 c)
 {
     uint3 q = (uint3)clamp((int3)round(sqrt(saturate(c.rgb)) * 255.0), 0, 255);
-    uint a = c.a > 0.5 ? 255u : 0u;
-    return q.r | (q.g << 8) | (q.b << 16) | (a << 24);
+    uint a = c.a > 0.5 ? 1u : 0u;
+    return q.r | (q.g << 8) | (q.b << 16) | (a << 31);
+}
+
+// GrassMath.WithHeadPart: 0 the stem, 1 and 2 the crossed cards of its head (same root and shape: the vertex shader
+// rebuilds the stem and draws the card at its tip).
+uint GrassWithHeadPart(uint colour, uint part)
+{
+    return (colour & ~(3u << 29)) | ((part & 3u) << 29);
 }
 
 // The density channels at a point: texel centres at (k + 0.5) cells, as the detail layer's cells.
@@ -569,45 +580,71 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     float weights[8] = { d0.x, d0.y, d0.z, d0.w, d1.x, d1.y, d1.z, d1.w };
     float channelTypes[8] = { _GrassChannels0.x, _GrassChannels0.y, _GrassChannels0.z, _GrassChannels0.w,
                               _GrassChannels1.x, _GrassChannels1.y, _GrassChannels1.z, _GrassChannels1.w };
-    // Spawn: the summed density (each channel times its type's density factor) is the chance a cell holds a blade.
+    // Fullness: grass painted at or above this share of its layer's maximum grows the full ring density;
+    // the detail layers say where grass grows, the rings how thick it is.
+    float fullness = max(0.05, _GrassRingDensity[0].y);
+    /* Sprinkled types (flowers, reeds: GrassTypeTuning.Sprinkle) first: each has its own chance per candidate where
+     * its layer is painted, whatever else grows there, stacked in channel order and picked by one number
+     * (GrassMath.PickSprinkle). They are then taken out of the tussock pick below, so a clump is never a whole
+     * patch of flowers. */
+    float sprinkleU = GrassUnit(GrassHash(ci, cj, SALT_SPRINKLE));
+    float sprinkleAt = 0.0;
+    int sprinkleChannel = -1;
+    // Spawn: the summed density of the tussock types (each channel times its type's density factor) is the chance a
+    // cell holds a blade.
     float total = 0.0;
     float spawn = 0.0;
     [unroll] for (int c = 0; c < 8; c++)
     {
+        int t = channelTypes[c] >= 0.0 ? (int)channelTypes[c] : 0;
         float w = channelTypes[c] >= 0.0 ? max(0.0, weights[c]) : 0.0;
+        float chance = w > 0.0 ? _GrassTypeShape2[t].x : 0.0;
+        if (chance > 0.0)
+        {
+            sprinkleAt += min(1.0, w / fullness) * chance;
+            if (sprinkleChannel < 0 && sprinkleU < sprinkleAt)
+            {
+                sprinkleChannel = c;
+            }
+            w = 0.0;
+        }
         weights[c] = w;
         total += w;
         if (w > 0.0)
         {
-            spawn += w * _GrassTypeShape[(int)channelTypes[c]].y;
+            spawn += w * _GrassTypeShape[t].y;
         }
     }
-    // Fullness: grass painted at or above this share of its layer's maximum grows the full ring density;
-    // the detail layers say where grass grows, the rings how thick it is.
-    spawn /= max(0.05, _GrassRingDensity[0].y);
-    if (total <= 0.0 || GrassUnit(GrassHash(ci, cj, SALT_SPAWN)) >= min(1.0, spawn))
+    spawn /= fullness;
+    int channel = sprinkleChannel;
+    if (channel < 0)
     {
-        return;
-    }
-    // The clump's own pick, so a tussock is one species (GrassMath.PickChannel).
-    int channel = 7;
-    float at = typePick * total;
-    bool found = false;
-    [unroll] for (int k = 0; k < 8; k++)
-    {
-        at -= weights[k];
-        if (!found && at < 0.0)
+        if (total <= 0.0 || GrassUnit(GrassHash(ci, cj, SALT_SPAWN)) >= min(1.0, spawn))
         {
-            channel = k;
-            found = true;
+            return;
+        }
+        // The clump's own pick, so a tussock is one species (GrassMath.PickChannel); the last channel with any
+        // weight if rounding runs past the end.
+        float at = typePick * total;
+        bool found = false;
+        [unroll] for (int k = 0; k < 8; k++)
+        {
+            at -= weights[k];
+            if (weights[k] > 0.0 && !found)
+            {
+                channel = k;
+                found = at < 0.0;
+            }
         }
     }
-    int type = (int)channelTypes[channel];
+    int type = channel >= 0 ? (int)channelTypes[channel] : -1;
     if (type < 0)
     {
         return;
     }
     float4 typeShape = _GrassTypeShape[type];
+    float4 typeShape2 = _GrassTypeShape2[type];
+    uint head = (uint)round(typeShape2.y);
 
     float2 rootXZ = lerp(cellRoot, centre, typeShape.z * (0.4 + 0.6 * GrassUnit(pullHash)));
     float2 local = rootXZ - _GrassTerrainOrigin.xz;
@@ -616,6 +653,11 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
         return;   // the neighbouring terrain's dispatch draws it
     }
     float3 root = float3(rootXZ.x, GrassHeightAt(local), rootXZ.y);
+    // Land grass does not grow under the sea, whatever a scene's scatter wrote there: below the lowest tide is sea floor.
+    if (_GrassSea.y > 0.5 && root.y < _GrassSea.x)
+    {
+        return;
+    }
 
     float3 eye = _GrassCamera.xyz;
     float d = distance(root, eye);
@@ -654,7 +696,8 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
      * left the tips of bent tall grass outside it: blades at the screen's edges were culled while visible
      * and popped as the camera turned or a gust passed. */
     float3 sphereCentre = root + float3(0.0, 0.3 * height, 0.0);
-    float radius = 1.05 * height + 0.1;
+    // A head reaches its own size past the tip.
+    float radius = 1.05 * height + 0.1 + (head != 0u ? typeShape2.z : 0.0);
     // Each blade's LOD distance moves by its own hash, so a LOD boundary is not a line on the ground.
     float lodJitter = 0.9 + 0.2 * GrassUnit(GrassMix(own ^ 0x9E3779B1u));
     float lodDistance = d / lodJitter;
@@ -665,6 +708,14 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
         GrassBlade lit = blade;
         lit.colour = GrassPackColour(GrassTerrainColourAt(local, rootXZ, share));
         GrassEmit(lod, lit);
+        if (head != 0u)
+        {
+            // The head's two crossed cards: the same stem, drawn at its tip (FishGrassBlades.hlsl GrassBuild).
+            lit.colour = GrassWithHeadPart(lit.colour, 1u);
+            GrassEmit(lod, lit);
+            lit.colour = GrassWithHeadPart(lit.colour, 2u);
+            GrassEmit(lod, lit);
+        }
     }
     float shadowDistance = _GrassLight.w;
     if (shadow && shadowDistance > 0.0 && d <= shadowDistance)
@@ -674,7 +725,15 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
         float sweep = min(shadowDistance, 2.0 * height / down);
         if (GrassSweptSphereVisible(sphereCentre, radius, l, sweep))
         {
-            GrassEmit(lod == 0u ? 3u : 4u, blade);
+            uint shadowSlot = lod == 0u ? 3u : 4u;
+            GrassEmit(shadowSlot, blade);
+            if (head != 0u)
+            {
+                blade.colour = GrassWithHeadPart(0u, 1u);
+                GrassEmit(shadowSlot, blade);
+                blade.colour = GrassWithHeadPart(0u, 2u);
+                GrassEmit(shadowSlot, blade);
+            }
         }
     }
 }

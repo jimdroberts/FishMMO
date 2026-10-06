@@ -92,6 +92,9 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class CanyonWalls
 	{
+		/// <summary>How far from the scene's water no wall stands, metres.</summary>
+		public const float WaterClearMetres = 6f;
+
 		/// <summary>The one root every wall chunk lives under.</summary>
 		public const string RootName = "Canyon Walls";
 
@@ -100,8 +103,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="plateauWeight">Per sample, how much of a plateau the ground became.</param>
 		/// <param name="geology">The rock under every sample.</param>
 		/// <param name="assetPath">Where the wall meshes are written: one asset holds them all. Null keeps them in memory (tests).</param>
+		/// <param name="water">Per sample, true where the scene's water or the ground it shaped stands (a river's channel, banks and bars, a lake): no wall is stood there or within a few metres of it, or a river crossing a riser ran through a wall. Null for none.</param>
 		public static CanyonWallReport Build(Scene scene, Terrain[,] terrains, TerrainTilePlan plan, SceneHeightField field,
-			float[] plateauWeight, SceneGeologyGrid geology, string assetPath, CanyonWallOptions options = null)
+			float[] plateauWeight, SceneGeologyGrid geology, string assetPath, CanyonWallOptions options = null, Func<int, bool> water = null)
 		{
 			options ??= new CanyonWallOptions();
 			var report = new CanyonWallReport();
@@ -138,6 +142,31 @@ namespace FishMMO.Shared.WorldDesign
 					float s = 0.25f * (slope[a] + slope[b] + slope[c] + slope[d]);
 					float w = 0.25f * (plateauWeight[a] + plateauWeight[b] + plateauWeight[c] + plateauWeight[d]);
 					wall[z * cellsX + x] = s >= steep && w >= options.MinPlateauWeight;
+				}
+			}
+			if (water != null)
+			{
+				int clear = Mathf.Max(1, Mathf.CeilToInt(WaterClearMetres / cell));
+				for (int z = 0; z < depth; z++)
+				{
+					for (int x = 0; x < width; x++)
+					{
+						if (!water(z * width + x))
+						{
+							continue;
+						}
+						for (int dz = -clear; dz <= clear; dz++)
+						{
+							for (int dx = -clear; dx <= clear; dx++)
+							{
+								int cx = x + dx, cz = z + dz;
+								if (cx >= 0 && cz >= 0 && cx < cellsX && cz < cellsZ)
+								{
+									wall[cz * cellsX + cx] = false;
+								}
+							}
+						}
+					}
 				}
 			}
 			Close(wall, cellsX, cellsZ);
@@ -480,7 +509,21 @@ namespace FishMMO.Shared.WorldDesign
 				float h = field.MetresAt(east + direction.x * (travelled + step), north + direction.y * (travelled + step));
 				if (Mathf.Abs(h - previous) / step < exit)
 				{
-					break;
+					/* The steep ground ends inside this step: found to an eighth of it. Whole steps put every sample of
+					 * a riser up to a step off the line halfway across it, and the face stood up leaning by that much. */
+					float fine = step / 8f;
+					float h0 = previous;
+					for (int k = 1; k <= 8; k++)
+					{
+						float hk = field.MetresAt(east + direction.x * (travelled + k * fine), north + direction.y * (travelled + k * fine));
+						if (Mathf.Abs(hk - h0) / fine < exit)
+						{
+							break;
+						}
+						h0 = hk;
+						travelled += fine;
+					}
+					return travelled;
 				}
 				previous = h;
 				travelled += step;

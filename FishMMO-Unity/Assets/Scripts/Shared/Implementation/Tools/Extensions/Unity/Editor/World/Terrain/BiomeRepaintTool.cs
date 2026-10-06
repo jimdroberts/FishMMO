@@ -109,13 +109,40 @@ namespace FishMMO.Shared.WorldDesign
 				return $"'{scene.name}' is under Assets/LOCAL but paints committed terrain data ({scope.Reason}); repainting it would rewrite the committed scene's ground. Make the copy with \"Copy open scene to LOCAL for real art\", which gives it its own terrain data.";
 			}
 			string terrainFolder = scope.AllowsLocal ? LocalArtScope.TerrainFolderOf(tiles) : SceneGenerator.TerrainFolder(entry.Body, entry.SceneName);
-			if (!SceneGenerator.PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out _, scope))
+			// The baked props, their collision and the NavMesh go beside this scene's own terrain (a LOCAL copy's too).
+			ScenePropBaker.BakeFolder = terrainFolder;
+			try
 			{
-				string why = result.Notes.Count > 0 ? result.Notes[0] : "No biome fits this scene.";
-				result = null;
-				return why;
+				/* The old talus cones down first: the biome field, the water's marks, the splat and the scatter all read the
+				 * ground, and with the cones still raised they would paint scree and steepness on ground the placer then lowers. */
+				CliffPlacer.Clear(scene);
+				// The rivers and lakes the scene was cut with, marked on its ground as it stands now.
+				SceneWater water = SceneGenerator.LoadWater(request, plan, terrains, result.Notes);
+				if (!SceneGenerator.PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out _, scope, water: water))
+				{
+					string why = result.Notes.Count > 0 ? result.Notes[0] : "No biome fits this scene.";
+					result = null;
+					return why;
+				}
+				result.Notes.AddRange(IcePlacer.PlaceInOpenScene(scene, request, IcePlacer.SceneSeed(request), scope.IceOptions()).Notes);
+				// The boulders were placed again: their new places go back into the committed hydrology asset.
+				if (water != null && !scope.AllowsLocal)
+				{
+					string hydrologyPath = SceneGenerator.SaveWater(request, SceneGenerator.TerrainFolder(entry.Body, entry.SceneName), water);
+					if (hydrologyPath != null)
+					{
+						var hydrology = AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath);
+						SceneGenerator.EnsureInlandWater(scene, hydrology);
+						// The boulders moved: the flow round them is solved again.
+						RiverFlowBake.Bake(hydrology, result.BiomeMap != null ? result.BiomeMap : entry.BiomeMap, result.Notes);
+					}
+				}
+				SceneGenerator.BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
 			}
-			result.Notes.AddRange(IcePlacer.PlaceInOpenScene(scene, request, IcePlacer.SceneSeed(request), scope.IceOptions()).Notes);
+			finally
+			{
+				ScenePropBaker.BakeFolder = null;
+			}
 
 			// The atlas entry is committed: it is never pointed at a LOCAL copy's map.
 			if (entry.BiomeMap == null && result.BiomeMap != null && !BiomeLocalArtIndex.IsLocal(result.BiomeMap))

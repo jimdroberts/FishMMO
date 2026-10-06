@@ -64,6 +64,16 @@
 .res-bar--mp   { left: 500px; bottom: 84px; }
 .res-bar--stam { left: 706px; bottom: 84px; }
 
+/* The breath meter, along the top of the stamina bar (UITKStaminaBar builds it): thin, so it reads as the
+   stamina bar's companion and costs no row of its own, and shown only while it matters. */
+.res-breath {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -8px;
+    height: 5px;
+}
+
 /* The fill grows left-to-right; width is driven from C# as a percentage. Radius comes from
    .fish-bar__fill in the theme — this used to restate it as 3px, which was a heavier corner than
    the 14px-tall bar can carry. */

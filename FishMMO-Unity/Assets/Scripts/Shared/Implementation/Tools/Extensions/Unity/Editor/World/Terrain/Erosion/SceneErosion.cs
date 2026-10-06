@@ -77,7 +77,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="settings">The process's constants.</param>
 		/// <param name="baseLevel">World Y of a sea or lava surface; negative infinity for none.</param>
 		/// <param name="seed">The scene's seed, so a re-cut wears the same way.</param>
-		public static SceneErosionReport Apply(SceneHeightField field, SceneTerrainProcess process, ErosionSettings settings, float baseLevel, uint seed)
+		/// <param name="lay">
+		/// Lays the scene's rivers and lakes into the ground once the plateaus are stepped, and returns the
+		/// water's surface per sample (negative infinity where dry): erosion's base level beside the sea's.
+		/// Null for none.
+		/// </param>
+		public static SceneErosionReport Apply(SceneHeightField field, SceneTerrainProcess process, ErosionSettings settings, float baseLevel, uint seed,
+			Func<SceneHeightField, float[]> lay = null)
 		{
 			var report = new SceneErosionReport();
 			if (field.Metres.Length > MaximumSamples)
@@ -99,6 +105,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				report.PlateauShare = Plateaus(field, geology, ground, settings.Plateau, baseLevel, out report.PlateauWeight);
 			}
+			// The rivers and lakes on the stepped ground, before the rain: the gullies grow toward them.
+			float[] water = lay?.Invoke(field);
 			var soil = new float[height.Length];
 
 			/* The soil it starts with: the biome's depth on the flat, thinning to nothing where the
@@ -118,7 +126,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			});
 
-			var grid = new ErosionGrid(width, depth, cell, height, soil) { BaseLevel = baseLevel };
+			var grid = new ErosionGrid(width, depth, cell, height, soil) { BaseLevel = baseLevel, WaterLevel = water };
 			report.Tally = Erosion.Run(grid, ground, settings, unchecked((int)seed));
 
 			// Faded to nothing at the edge, where the scene meets the backdrop and its neighbours.

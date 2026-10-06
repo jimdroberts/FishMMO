@@ -25,7 +25,8 @@ namespace FishMMO.Shared
 		public AirOffsetEntry Air;
 		public WeatherCover Cover;
 		/// <summary>The server tick <see cref="Cover"/> was measured at.</summary>
-		public uint CoverTick;
+		/// <summary>The world seconds the cover was worked out to.</summary>
+		public double CoverSeconds;
 
 		/// <summary>
 		/// Where and when this scene is, so the client's weather driver lands on the server's answer.
@@ -64,7 +65,8 @@ namespace FishMMO.Shared
 		public AirOffsetEntry Air;
 		public bool HasCover;
 		public WeatherCover Cover;
-		public uint CoverTick;
+		/// <summary>The world seconds the cover was worked out to.</summary>
+		public double CoverSeconds;
 	}
 
 	/// <summary>Client → server: my weather timeline has a gap; send it whole.</summary>

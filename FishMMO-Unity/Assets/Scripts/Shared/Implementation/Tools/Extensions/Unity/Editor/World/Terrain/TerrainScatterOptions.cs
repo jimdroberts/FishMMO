@@ -164,6 +164,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public float AquaticFadeStartMetres = -1f;
 		public float AquaticFullMetres = -2.5f;
+
+		/// <summary>
+		/// The surface of a river or lake over a world position (x, z), or negative infinity where there is
+		/// none; positive infinity in a dry wash's bed. Land plants keep above it by
+		/// <see cref="InlandFadeStartMetres"/> … <see cref="InlandFullMetres"/>, and out of a dry bed. Null for none.
+		/// </summary>
+		public Func<float, float, float> InlandWaterSurface;
+
+		/// <summary>Land plants fade in from this height above an inland water's surface to <see cref="InlandFullMetres"/>: a bank, not a tidal beach.</summary>
+		public float InlandFadeStartMetres = 0.3f;
+		public float InlandFullMetres = 0.9f;
 	}
 }
 #endif

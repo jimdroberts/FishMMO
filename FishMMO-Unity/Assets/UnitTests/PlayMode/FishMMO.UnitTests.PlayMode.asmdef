@@ -4,7 +4,8 @@
     "references": [
         "UnityEngine.TestRunner",
         "FishMMO.TestHarness",
-        "FishMMO.TestHarness.Server"
+        "FishMMO.TestHarness.Server",
+        "FishMMO.Shared"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

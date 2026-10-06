@@ -347,6 +347,23 @@ namespace FishMMO.Shared
 		public virtual void OnDestroying() { }
 
 		/// <summary>
+		/// On the server, every character keeps the scene's prop colliders (trees, rocks, boulders) streamed in round
+		/// itself while it is spawned: players and NPCs alike, so none walks through a rock a client draws.
+		/// </summary>
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+			PropColliderStreamer.AddFocus(Transform != null ? Transform : transform, PropColliderStreamer.ServerRadius);
+		}
+
+		/// <summary>Stops streaming prop colliders round this character.</summary>
+		public override void OnStopServer()
+		{
+			PropColliderStreamer.RemoveFocus(Transform != null ? Transform : transform);
+			base.OnStopServer();
+		}
+
+		/// <summary>
 		/// Drops the identity every character carries before the object returns to the pool.
 		/// </summary>
 		/// <remarks>

@@ -410,6 +410,9 @@ namespace FishMMO.Shared
 			}
 
 			CharacterController.SetInputs(ref kccInput, controlsSuppressed);
+			// The water (the sea's tide) is read at the synced tick, never the replicate's own, which is the owner's
+			// unsynchronised counter: the one conversion the weather uses too, correct live and on a replay.
+			CharacterController.WaterTick = FishMMO.Shared.Weather.WeatherExposureTick.Resolve(this, kccInput.GetTick());
 
 			float deltaTime = (float)base.TimeManager.TickDelta;
 

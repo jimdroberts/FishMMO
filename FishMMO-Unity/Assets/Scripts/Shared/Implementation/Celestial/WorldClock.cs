@@ -2,7 +2,10 @@ using System;
 
 namespace FishMMO.Shared.Celestial
 {
-	/// <summary>"At server tick <see cref="Tick"/>, world time was <see cref="WorldSeconds"/>."</summary>
+	/// <summary>
+	/// "At server tick <see cref="Tick"/>, world time was <see cref="WorldSeconds"/>, and it runs at
+	/// <see cref="Rate"/> world seconds to each second of ticks."
+	/// </summary>
 	[Serializable]
 	public struct WorldClockAnchor
 	{
@@ -11,6 +14,11 @@ namespace FishMMO.Shared.Celestial
 		public double WorldSeconds;
 		/// <summary>True once the anchor was checked against the database clock.</summary>
 		public bool Verified;
+		/// <summary>
+		/// World seconds per second of ticks: 1 the world's own pace, 0 held still, more raced. Set by an
+		/// admin (the world clock control). Every anchor states it: a default anchor (no anchor) has 0.
+		/// </summary>
+		public double Rate;
 	}
 
 	/// <summary>
@@ -29,7 +37,11 @@ namespace FishMMO.Shared.Celestial
 	/// computes the same value as one that was there when it began.
 	/// </para>
 	/// <para>
-	/// Nothing sets the time. There is no API, command or action that moves the clock.
+	/// <b>The tick drives it; the anchor says what time it is.</b> FishNet's tick never changes pace;
+	/// an admin who sets the time, holds it or races it (the world clock control, adopted by every
+	/// scene server) publishes a new anchor at the tick it happens on — the time it has reached and
+	/// the new pace — so nothing drifts out of line and every client computes the same moment. Such a
+	/// change is instant (<see cref="Override"/>); a correction of the clock's own drift is eased.
 	/// </para>
 	/// </remarks>
 	public sealed class WorldClock
@@ -69,12 +81,12 @@ namespace FishMMO.Shared.Celestial
 			{
 				return 0;
 			}
-			double latest = current.WorldSeconds + (tick - current.Tick) * TickDelta;
+			double latest = current.WorldSeconds + (tick - current.Tick) * TickDelta * current.Rate;
 			if (!hasPrevious || slewTicks == 0)
 			{
 				return latest;
 			}
-			double older = previous.WorldSeconds + (tick - previous.Tick) * TickDelta;
+			double older = previous.WorldSeconds + (tick - previous.Tick) * TickDelta * previous.Rate;
 			double f = (tick - current.Tick) / slewTicks;
 			if (f >= 1.0)
 			{
@@ -91,6 +103,33 @@ namespace FishMMO.Shared.Celestial
 		/// <summary>Real hours since the epoch at a tick.</summary>
 		public double WorldHoursAt(double tick) => WorldSecondsAt(tick) / 3600.0;
 
+		/// <summary>World seconds per second of ticks now: 1 the world's own pace, 0 held, more raced. 1 without an anchor.</summary>
+		public double Rate => HasAnchor ? current.Rate : 1.0;
+
+		/// <summary>
+		/// The (fractional) tick at which the clock reads <paramref name="worldSeconds"/>, by the current
+		/// anchor; while the clock is held, the anchor's own tick (every tick reads the same moment).
+		/// </summary>
+		public double TickAt(double worldSeconds)
+		{
+			if (!HasAnchor || current.Rate <= 0.0 || TickDelta <= 0.0)
+			{
+				return current.Tick;
+			}
+			return current.Tick + (worldSeconds - current.WorldSeconds) / (TickDelta * current.Rate);
+		}
+
+		/// <summary>
+		/// Sets the clock outright: at <paramref name="tick"/> the world reads <paramref name="worldSeconds"/>
+		/// and runs at <paramref name="rate"/> from there. Instant — no easing — because it is a decision
+		/// (an admin's, a test bed's), not a correction: the new time is exact from that tick on.
+		/// </summary>
+		public void Override(uint tick, double worldSeconds, double rate, bool verified)
+		{
+			LastMeasuredError = 0;
+			Set(new WorldClockAnchor { Tick = tick, WorldSeconds = worldSeconds, Verified = verified, Rate = Math.Max(0.0, rate) }, default, false, 0);
+		}
+
 		/// <summary>
 		/// Offers a fresh reading of the reference clock. Publishes (and returns true) only when there
 		/// is no anchor yet, the error exceeds <see cref="RepublishThresholdSeconds"/>, or the reading
@@ -101,7 +140,7 @@ namespace FishMMO.Shared.Celestial
 			if (!HasAnchor)
 			{
 				LastMeasuredError = 0;
-				Set(new WorldClockAnchor { Tick = tick, WorldSeconds = referenceWorldSeconds, Verified = verified }, default, false, 0);
+				Set(new WorldClockAnchor { Tick = tick, WorldSeconds = referenceWorldSeconds, Verified = verified, Rate = 1.0 }, default, false, 0);
 				return true;
 			}
 			double error = referenceWorldSeconds - WorldSecondsAt(tick);
@@ -112,9 +151,10 @@ namespace FishMMO.Shared.Celestial
 				return false;
 			}
 			// Freeze the blend in progress so the new slew starts from what is shown right now.
-			WorldClockAnchor from = new WorldClockAnchor { Tick = tick, WorldSeconds = WorldSecondsAt(tick), Verified = current.Verified };
+			WorldClockAnchor from = new WorldClockAnchor { Tick = tick, WorldSeconds = WorldSecondsAt(tick), Verified = current.Verified, Rate = current.Rate };
 			uint ticks = (uint)Math.Max(1.0, Math.Round(SlewSeconds / Math.Max(1e-6, TickDelta)));
-			Set(new WorldClockAnchor { Tick = tick, WorldSeconds = referenceWorldSeconds, Verified = verified || current.Verified }, from, Math.Abs(error) > RepublishThresholdSeconds, ticks);
+			// A correction keeps the pace the clock runs at; only a decision (Override) changes it.
+			Set(new WorldClockAnchor { Tick = tick, WorldSeconds = referenceWorldSeconds, Verified = verified || current.Verified, Rate = current.Rate }, from, Math.Abs(error) > RepublishThresholdSeconds, ticks);
 			return true;
 		}
 

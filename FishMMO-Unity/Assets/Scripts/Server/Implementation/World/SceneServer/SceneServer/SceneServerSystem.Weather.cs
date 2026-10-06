@@ -4,6 +4,9 @@ using System.Globalization;
 using FishNet.Connection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
 using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Server.Implementation.World.SceneServer.Weather;
@@ -50,7 +53,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				_ = Log.Warning("SceneServerSystem", "No SolarSystemProfile is loaded; the world clock uses the default epoch and scenes use the home world's defaults.");
 			}
 
-			worldClockHost = new WorldClockHost(networkManager, Server.Database, epoch);
+			// The world clock control row (/admin time, the Control Panel): written by the first scene
+			// server to run, at this calendar's epoch; every server then reads it.
+			worldClockHost = new WorldClockHost(networkManager, Server.Database, epoch, async () =>
+			{
+				if (!TryGetDbService(out IWorldClockControlService clockControl))
+				{
+					return false;
+				}
+				DatabaseResult<WorldClockReading> seeded = await clockControl.EnsureSeededAsync(epoch);
+				if (!seeded.IsSuccess || seeded.Data == null || !seeded.Data.Exists)
+				{
+					return false;
+				}
+				if (seeded.Data.EpochUnixSeconds != epoch)
+				{
+					_ = Log.Warning("SceneServerSystem", $"The world clock control row was written with epoch {seeded.Data.EpochUnixSeconds}, this server's calendar uses {epoch}: world times will read differently in the Control Panel.");
+				}
+				return true;
+			});
 			worldClockHost.Start();
 
 			weatherHost = new WeatherHost(Server.NetworkWrapper, characterMapping);
@@ -136,11 +157,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			var cells = new List<StormCell>();
 			WeatherQuery.CellsWithin(scene, character.Transform.position, ReportCellRadiusMeters, cells);
 			Vector3 p = character.Transform.position;
+			double nowSeconds = timeline.WorldSecondsAt(tick);
 			foreach (StormCell cell in cells)
 			{
-				Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
+				Vector2 centre = cell.CentreAtSeconds(nowSeconds);
 				Vector2 offset = centre - new Vector2(p.x, p.z);
-				lines.Add($"Cell {cell.ID} {StormPhysics.NameOf(cell.Kind)} {offset.magnitude:0} m {Compass(offset)}, radius {cell.RadiusMeters:0} m, strength {cell.EnvelopeAt(tick):0.00}");
+				lines.Add($"Cell {cell.ID} {StormPhysics.NameOf(cell.Kind)} {offset.magnitude:0} m {Compass(offset)}, radius {cell.RadiusMeters:0} m, strength {cell.EnvelopeAtSeconds(nowSeconds):0.00}");
 			}
 			int others = timeline.Cells.Count - cells.Count;
 			if (others > 0)
@@ -150,7 +172,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ReplyLines(character, lines);
 		}
 
-		/// <summary>The world clock and the caller's local time. Nothing can set the clock.</summary>
+		/// <summary>The world clock — its time to the millisecond, its pace — and the caller's local time.</summary>
 		private void ReportClock(IPlayerCharacter character)
 		{
 			if (character?.GameObject == null)
@@ -168,9 +190,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldSceneSettings.TryGetForScene(character.GameObject.scene, out WorldSceneSettings settings);
 			WorldBody body = SceneTime.BodyOf(settings);
+			long epoch = system != null ? system.EpochUnixSeconds : CalendarProfile.DefaultEpochUnixSeconds;
+			long revision = worldClockHost != null ? worldClockHost.AdoptedRevision : long.MinValue;
 			var lines = new List<string>
 			{
-				$"World clock: {(clock.Current.Verified ? "anchored to the database" : "host clock, not yet verified")}, last error {clock.LastMeasuredError * 1000.0:0} ms, next check in {(worldClockHost != null ? worldClockHost.SecondsUntilCheck : 0f):0}s.",
+				$"World time: {WorldTimeText.Write(clock.WorldSecondsAt(tick + Server.NetworkWrapper.NetworkManager.TimeManager.GetTickPercentAsDouble()), epoch)} ({WorldTimeText.Pace(clock.Rate)}).",
+				$"World clock: {(clock.Current.Verified ? "anchored to the database" : "host clock, not yet verified")}, "
+					+ (revision == long.MinValue ? "no time control (it runs at real time)" : $"control revision {revision}")
+					+ $", last error {clock.LastMeasuredError * 1000.0:0} ms, next check in {(worldClockHost != null ? worldClockHost.SecondsUntilCheck : 0f):0}s.",
 			};
 			double local = SceneTime.LocalTime01(settings, hours);
 			string where = body != null ? body.ResolvedName : "the home world";

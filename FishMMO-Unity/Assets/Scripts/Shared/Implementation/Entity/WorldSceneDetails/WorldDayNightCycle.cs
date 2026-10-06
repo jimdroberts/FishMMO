@@ -394,7 +394,9 @@ namespace FishMMO.Shared
 			isDaytime = daylight;
 			UpdateDayNightActivations(daylight, DayObjects);
 			UpdateDayNightActivations(!daylight, NightObjects);
-			fadeTime = FadeThreshold;
+			// Faded only through a change seen happening: a scene that loads (a join) shows the settled
+			// state at once, as every player already there sees it, instead of replaying the last fade.
+			fadeTime = ignoreCurrentState ? 0f : FadeThreshold;
 			if (!ignoreCurrentState)
 			{
 				InvokeTriggers(daylight ? onDayStartTriggers : onNightStartTriggers);
@@ -509,11 +511,17 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Where in the fade one renderer switches, 0.15..0.85. Stable for a renderer, so the same
-		/// object always turns at the same moment and the group's dissolve does not shimmer.
+		/// object always turns at the same moment and the group's dissolve does not shimmer — and from
+		/// where it stands, not its instance ID, which differs from process to process: every player's
+		/// group thins out in the same order.
 		/// </summary>
 		private static float SwitchPointOf(Renderer renderer)
 		{
-			uint hash = (uint)renderer.GetInstanceID() * 2654435761u;
+			Vector3 p = renderer.transform.position;
+			uint hash = (uint)Mathf.RoundToInt(p.x * 10f) * 73856093u
+				^ (uint)Mathf.RoundToInt(p.y * 10f) * 19349663u
+				^ (uint)Mathf.RoundToInt(p.z * 10f) * 83492791u;
+			hash *= 2654435761u;
 			return 0.15f + 0.7f * ((hash >> 8 & 0xFFFF) / 65535f);
 		}
 

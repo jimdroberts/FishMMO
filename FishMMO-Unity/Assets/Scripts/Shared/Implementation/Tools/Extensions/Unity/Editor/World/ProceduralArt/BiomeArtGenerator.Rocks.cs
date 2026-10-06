@@ -189,7 +189,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>A tree-channel prop: LODGroup root with a capsule collider, and its collider-free <c>_Decor</c> twin.</summary>
+		/// <summary>A tree-channel prop: LODGroup root with a mesh collider on its lowest level (whether it collides in a scene is the bake's call, by size).</summary>
 		private static void WriteProp(Context c, string prefab, Mesh[] meshes, Material material)
 		{
 			Material[][] mats = LodMaterials(meshes, material);
@@ -198,9 +198,8 @@ namespace FishMMO.Shared.WorldDesign
 			WritePrefab(c, prefab, root =>
 			{
 				Lods(root, meshes, mats, heights, shadows);
-				AddBoulderCollider(root, meshes[0]);
+				AddBoulderCollider(root, meshes);
 			});
-			WritePrefab(c, RockArtNames.Decor(prefab), root => Lods(root, meshes, mats, heights, shadows));
 		}
 
 		/// <summary>Per level, one material per submesh: <paramref name="bySubmesh"/> in order, its last repeated.</summary>

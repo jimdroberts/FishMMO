@@ -35,6 +35,11 @@
 		/// Sprint action flag (continuous, held while key is down).
 		/// </summary>
 		Sprint,
+		/// <summary>
+		/// Held while the jump key is down: a swimmer rises while it is held. <see cref="Jump"/> is the one-shot press;
+		/// this is the key's held state, which only swimming reads.
+		/// </summary>
+		Ascend,
 	}
 
 	/// <summary>

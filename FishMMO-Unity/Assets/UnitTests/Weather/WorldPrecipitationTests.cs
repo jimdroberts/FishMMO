@@ -97,14 +97,16 @@ namespace FishMMO.UnitTests.Weather
 				BodyOverride = body,
 			};
 			var wet = new AirOffsets { Humidity = 1f, Instability = 1f, Pressure = -1f };
-			timeline.Air = new AirOffsetEntry { From = wet, To = wet, StartTick = 0, EndTick = 0 };
-			timeline.Cells.Add(Cell(1, StormKind.Thunderstorm, tick));
-			timeline.Cells.Add(Cell(2, StormKind.Eruption, tick));
+			timeline.Air = new AirOffsetEntry { From = wet, To = wet, StartSeconds = 0, EndSeconds = 0 };
+			timeline.Cells.Add(Cell(1, StormKind.Thunderstorm, timeline, tick));
+			timeline.Cells.Add(Cell(2, StormKind.Eruption, timeline, tick));
 			return timeline;
 		}
 
-		private static StormCell Cell(ushort id, StormKind kind, uint tick)
+		private static StormCell Cell(ushort id, StormKind kind, WeatherTimeline timeline, uint tick)
 		{
+			// Its life in the world seconds the timeline reads at those ticks.
+			double At(long t) => timeline.WorldSecondsAt((double)t);
 			return new StormCell
 			{
 				ID = id,
@@ -113,11 +115,11 @@ namespace FishMMO.UnitTests.Weather
 				RadiusMeters = 5000f,
 				ExtentMeters = 5000f,
 				PeakIntensity = 1f,
-				BirthTick = 0,
-				MatureTick = 1,
-				DecayTick = tick + 100000,
-				DeathTick = tick + 200000,
-				MotionTick = tick,
+				BirthSeconds = At(0),
+				MatureSeconds = At(1),
+				DecaySeconds = At(tick + 100000L),
+				DeathSeconds = At(tick + 200000L),
+				MotionSeconds = At(tick),
 			};
 		}
 

@@ -79,7 +79,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			public DeterministicRNG Rng;
 			public ushort NextCellID = 1;
 			public bool Director;
-			public uint NextSpawnTick;
+			/// <summary>World seconds the director next considers a storm: it holds with the world.</summary>
+			public double NextSpawnSeconds;
 			/// <summary>Degrees the prevailing wind blows TOWARD. Derived; see RefreshPrevailingWind.</summary>
 			public float WindHeadingDegrees;
 
@@ -134,6 +135,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		}
 
 		private uint NowTick => networkManager.TimeManager.Tick;
+
+		/// <summary>World seconds now, by a scene's timeline (the world clock, at the pace an admin set).</summary>
+		private double NowSeconds(SceneWeather sw) => sw.Timeline.WorldSecondsAt(NowTick);
 
 		// ── Lifecycle ─────────────────────────────────────────────────
 
@@ -215,8 +219,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				Seed = seed,
 				SceneMode = mode,
 				TickDelta = networkManager.TimeManager.TickDelta,
-				CoverTick = NowTick,
 			};
+			timeline.CoverSeconds = timeline.WorldSecondsAt(NowTick);
 			var sw = new SceneWeather
 			{
 				Scene = scene,
@@ -230,7 +234,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			 * been given its clock anchor yet and the driver has nothing to answer from. */
 			sw.WindHeadingDegrees = sw.Rng.Range(0f, 360f);
 			sw.WindSpeedMetersPerSecond = 4f;
-			sw.NextSpawnTick = NowTick + timeline.SecondsToTicks(sw.Rng.Range(5f, 30f));
+			sw.NextSpawnSeconds = timeline.WorldSecondsAt(NowTick) + sw.Rng.Range(5f, 30f);
 			/* Its own phase in (0, interval], so scenes loaded together — every scene at startup —
 			 * do not all queue their cover on the same pass forever after. */
 			sw.CoverResync = CoverResyncSeconds * (float)(1.0 - phaseRandom.NextDouble());
@@ -361,7 +365,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			ref WeatherDeltaBroadcast d = ref Pending(sw);
 			d.HasCover = true;
 			d.Cover = sw.Timeline.Cover;
-			d.CoverTick = sw.Timeline.CoverTick;
+			d.CoverSeconds = sw.Timeline.CoverSeconds;
 		}
 
 		/// <summary>
@@ -566,24 +570,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		/// </summary>
 		private void IntegrateCover(SceneWeather sw, uint tick, float seconds)
 		{
-			if (!TryGetArea(sw, out Rect area))
-			{
-				area = new Rect(-50f, -50f, 100f, 100f);
-			}
-			var average = new WeatherAccumulator();
-			float temperature = 0f;
-			Vector2 c = area.center;
-			for (int i = 0; i < CoverSampleOffsets.Length; i++)
-			{
-				Vector2 p = c + Vector2.Scale(CoverSampleOffsets[i], area.size);
-				WeatherSample sample = WeatherField.Sample(sw.Timeline, sw.Settings, sw.Scene, new Vector3(p.x, 0f, p.y), tick);
-				average.Add(sample.Frame, 1f / CoverSampleOffsets.Length);
-				temperature += sample.Temperature / CoverSampleOffsets.Length;
-			}
-			WeatherFrame frame = average.Resolve();
-			double coverHours = WorldClock.Shared.HasAnchor ? WorldClock.Shared.WorldHoursAt(tick) : 0;
-			sw.Timeline.Cover.Integrate(frame, temperature, seconds, SceneTime.IsDaylight(sw.Settings, coverHours) ? 1f : 0f);
-			sw.Timeline.CoverTick = tick;
+			// The same five points the clients integrate between snapshots (SceneCoverSampling).
+			SceneCoverSampling.Sample(sw.Timeline, sw.Settings, sw.Scene, tick, out WeatherFrame frame, out float temperature);
+			double now = sw.Timeline.WorldSecondsAt(tick);
+			// Over the world time that passed, not the real: the ground holds while the world is held.
+			float worldSeconds = (float)Math.Max(0.0, Math.Min(120.0, now - sw.Timeline.CoverSeconds));
+			double coverHours = now / 3600.0;
+			sw.Timeline.Cover.Integrate(frame, temperature, worldSeconds, SceneTime.IsDaylight(sw.Settings, coverHours) ? 1f : 0f);
+			sw.Timeline.CoverSeconds = now;
+			// The resend stays on real time: it is how often clients are told, not weather.
 			sw.CoverResync -= seconds;
 			if (sw.CoverResync <= 0f)
 			{
@@ -592,36 +587,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			}
 		}
 
-		/// <summary>
-		/// Where cover is sampled, as fractions of the scene's area from its centre: the centre and
-		/// the middle of each quarter. Static, so a pass does not allocate the list.
-		/// </summary>
-		private static readonly Vector2[] CoverSampleOffsets =
-		{
-			Vector2.zero,
-			new Vector2(-0.25f, -0.25f),
-			new Vector2(0.25f, -0.25f),
-			new Vector2(-0.25f, 0.25f),
-			new Vector2(0.25f, 0.25f),
-		};
-
 		/// <summary>The scene's world-space X/Z rectangle, from its biome map or its terrain.</summary>
-		private static bool TryGetArea(SceneWeather sw, out Rect area)
-		{
-			SceneBiomeMap map = sw.Settings != null ? sw.Settings.BiomeMap : null;
-			if (map != null && map.WorldSize.x > 0f && map.WorldSize.y > 0f)
-			{
-				area = new Rect(map.WorldOrigin, map.WorldSize);
-				return true;
-			}
-			/* One measurement of the scene's ground, shared with the biome sampler. This used to
-			 * union the tiles here as well, which was the same arithmetic written twice — and the
-			 * two could drift, leaving the director working over a different landmass from the one
-			 * the climate was being read against. */
-			SceneTerrainExtent extent = SceneTerrainExtent.Of(sw.Scene);
-			area = extent.Area;
-			return extent.Found;
-		}
+		private static bool TryGetArea(SceneWeather sw, out Rect area) => SceneCoverSampling.TryGetArea(sw.Settings, sw.Scene, out area);
 
 		// ── Director ──────────────────────────────────────────────────
 
@@ -637,18 +604,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				return;
 			}
 			WeatherTimeline timeline = sw.Timeline;
+			double nowSeconds = timeline.WorldSecondsAt(now);
 
 			// Retire cells that left the scene, or drifted into air that cannot keep them going.
 			int alive = 0;
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
 				StormCell cell = timeline.Cells[i];
-				if (cell.DecayTick <= now)
+				if (cell.DecaySeconds <= nowSeconds)
 				{
 					continue;
 				}
+				/* Born after now: an admin set the world back past its birth. It would hang unseen until
+				 * the clock caught up, holding a place the director could fill, so it is let go — and on
+				 * every client with it, since the retirement goes out as an edit like any other. */
+				if (cell.BirthSeconds > nowSeconds + timeline.LeadWorldSeconds + 1.0)
+				{
+					Retire(sw, ref cell, now, 1f);
+					timeline.Cells[i] = cell;
+					continue;
+				}
 				alive++;
-				Vector2 centre = cell.CentreAt(now, timeline.TickDelta);
+				Vector2 centre = cell.CentreAtSeconds(nowSeconds);
 				/* ReachMeters, not the radius: a front reaches far further along its line than
 				 * across it, so measuring by radius would retire one the moment its CENTRE neared
 				 * the edge, with most of the wall still over the scene. */
@@ -674,7 +651,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				}
 			}
 
-			if (now < sw.NextSpawnTick || alive >= MaxCellsPerScene)
+			if (nowSeconds < sw.NextSpawnSeconds || alive >= MaxCellsPerScene)
 			{
 				return;
 			}
@@ -683,11 +660,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			int target = Mathf.Min(MaxCellsPerScene, Mathf.RoundToInt(squareKm * StormsPerSquareKm * likelihood));
 			if (alive >= target)
 			{
-				sw.NextSpawnTick = now + timeline.SecondsToTicks(sw.Rng.Range(30f, 90f));
+				sw.NextSpawnSeconds = nowSeconds + sw.Rng.Range(30f, 90f);
 				return;
 			}
 			TrySpawnFromAir(sw, area, now);
-			sw.NextSpawnTick = now + timeline.SecondsToTicks(sw.Rng.Range(60f, 240f));
+			sw.NextSpawnSeconds = nowSeconds + sw.Rng.Range(60f, 240f);
 		}
 
 		/// <summary>
@@ -822,7 +799,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		private ushort SpawnCellInternal(SceneWeather sw, StormKind kind, Vector3 at, float radius, float extent, Vector2 velocity, float lifetimeSeconds, uint now)
 		{
 			WeatherTimeline timeline = sw.Timeline;
-			uint birth = now + timeline.LeadTicks;
+			double birth = timeline.WorldSecondsAt(now) + timeline.LeadWorldSeconds;
 			float matureSeconds = Mathf.Clamp(lifetimeSeconds * 0.15f, 20f, 180f);
 			float decaySeconds = Mathf.Clamp(lifetimeSeconds * 0.2f, 20f, 240f);
 			float holdSeconds = Mathf.Max(0f, lifetimeSeconds - matureSeconds - decaySeconds);
@@ -844,12 +821,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				PeakIntensity = 1f,
 				// A wall wanders less than a shower: it is held in shape by the air pushing it.
 				MeanderMeters = Mathf.Max(10f, radius) * (StormPhysics.ShapeOf(kind) == StormCellShape.Front ? 0.04f : 0.15f),
-				MotionTick = birth,
-				BirthTick = birth,
-				MatureTick = birth + timeline.SecondsToTicks(matureSeconds),
+				// Its life in world time: it grows, holds and fades with the world's clock, held or raced.
+				MotionSeconds = birth,
+				BirthSeconds = birth,
+				MatureSeconds = birth + matureSeconds,
 			};
-			cell.DecayTick = cell.MatureTick + timeline.SecondsToTicks(holdSeconds);
-			cell.DeathTick = cell.DecayTick + timeline.SecondsToTicks(decaySeconds);
+			cell.DecaySeconds = cell.MatureSeconds + holdSeconds;
+			cell.DeathSeconds = cell.DecaySeconds + decaySeconds;
 			QueueCell(sw, cell, isNew: true);
 			return cell.ID;
 		}
@@ -870,18 +848,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 
 		private void Retire(SceneWeather sw, ref StormCell cell, uint now, float fadeSeconds)
 		{
-			uint start = now + sw.Timeline.LeadTicks;
-			if (cell.DecayTick <= start)
+			double start = sw.Timeline.WorldSecondsAt(now) + sw.Timeline.LeadWorldSeconds;
+			if (cell.DecaySeconds <= start)
 			{
 				return;
 			}
 			// Keep the envelope continuous: a still-growing cell fades from where it is.
-			if (cell.MatureTick > start)
+			if (cell.MatureSeconds > start)
 			{
-				cell.MatureTick = start;
+				cell.MatureSeconds = start;
 			}
-			cell.DecayTick = start;
-			cell.DeathTick = start + sw.Timeline.SecondsToTicks(Mathf.Max(1f, fadeSeconds));
+			cell.DecaySeconds = start;
+			cell.DeathSeconds = start + Mathf.Max(1f, fadeSeconds);
 			QueueCell(sw, cell, isNew: false);
 			WeatherEvents.RaiseCellRetired(sw.Scene, cell.ID);
 		}
@@ -908,13 +886,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 			{
 				return false;
 			}
-			uint start = NowTick + sw.Timeline.LeadTicks;
+			double start = NowSeconds(sw) + sw.Timeline.LeadWorldSeconds;
 			QueueAir(sw, new AirOffsetEntry
 			{
-				From = sw.Timeline.Air.At(start),
+				From = sw.Timeline.Air.AtSeconds(start),
 				To = offsets,
-				StartTick = start,
-				EndTick = start + sw.Timeline.SecondsToTicks(Mathf.Max(0f, transitionSeconds)),
+				StartSeconds = start,
+				EndSeconds = start + Mathf.Max(0f, transitionSeconds),
 			});
 			return true;
 		}
@@ -967,16 +945,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 				return false;
 			}
 			StormCell cell = sw.Timeline.Cells[index];
-			uint start = NowTick + sw.Timeline.LeadTicks;
+			double start = NowSeconds(sw) + sw.Timeline.LeadWorldSeconds;
 			// Re-base the motion where the cell will be when the change lands; the meander restarts from there.
-			Vector2 from = cell.CentreAt(start, sw.Timeline.TickDelta);
+			Vector2 from = cell.CentreAtSeconds(start);
 			Vector2 direction = new Vector2(towards.x, towards.z) - from;
 			Vector2 velocity = direction.sqrMagnitude > 1f ? direction.normalized * Mathf.Max(0f, speed) : Vector2.zero;
 			cell.OriginX = from.x;
 			cell.OriginZ = from.y;
 			cell.VelocityX = velocity.x;
 			cell.VelocityZ = velocity.y;
-			cell.MotionTick = start;
+			cell.MotionSeconds = start;
 			cell.MeanderMeters = 0f;
 			QueueCell(sw, cell, isNew: false);
 			return true;

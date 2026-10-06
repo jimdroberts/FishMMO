@@ -232,7 +232,10 @@ namespace FishMMO.UnitTests
 				Assert.That(problems, Is.Empty, $"{spec.Name}: {string.Join("; ", problems)}");
 				Assert.That(mesh.Submeshes.Count, Is.EqualTo(1), $"{spec.Name}: a detail prototype draws one sub-mesh");
 				Assert.That(mesh.TriangleCount, Is.GreaterThan(0), spec.Name);
-				int budget = plant.Kind == DetailKind.Grass || plant.Kind == DetailKind.Reeds ? 100 : 400;
+				// Solid sea-floor life (corals, sponges, fans, urchins) is round where a plant is flat, and sparse: twice the plants'.
+				bool solidSea = SeaFloorMeshes.IsAquatic(plant.Kind) && plant.Kind != DetailKind.Kelp 
+					&& plant.Kind != DetailKind.Seaweed && plant.Kind != DetailKind.Coral && plant.Kind != DetailKind.Starfish;
+				int budget = plant.Kind == DetailKind.Grass || plant.Kind == DetailKind.Reeds ? 100 : solidSea ? 800 : 400;
 				Assert.That(mesh.TriangleCount, Is.LessThanOrEqualTo(budget), $"{spec.Name} has {mesh.TriangleCount} triangles");
 				AssertSame(mesh, VegetationMeshes.Build(in plant, Seed), spec.Name);
 				Assert.That(mesh.Wind.Count, Is.EqualTo(mesh.VertexCount));
@@ -631,6 +634,194 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void Authoring_BringsARuleMarkedBeforeWoodsExistedIntoThem()
+		{
+			var source = new FakeSource(created);
+			BiomeTemplate biome = MakeBiome("Copse");
+
+			BiomeArtAuthoring.Report Run(float forestMetres)
+			{
+				var entry = new BiomeArtSpec.Entry { Biome = "Copse", Main = new BiomeArtSpec.Layer { Family = Ground.Grass } };
+				entry.Main.Scatter.Add(new BiomeArtSpec.Scatter
+				{
+					Name = "Trees: Oak",
+					Channel = PrefabSpawnChannel.TreeInstance,
+					Prefabs = new[] { "OakPrefab" },
+					Density = 0.5f,
+					Spacing = 10f,
+					ClusterMetres = 15f,
+					ClusterSize = 6f,
+					ForestMetres = forestMetres,
+					ForestCover = 0.3f,
+				});
+				var report = new BiomeArtAuthoring.Report();
+				BiomeArtAuthoring.Author(biome, entry, source, report, true);
+				return report;
+			}
+
+			// No stand size writes, and hashes, exactly what a run before woods existed did.
+			Assert.That(Run(0f).RulesAdded, Is.EqualTo(1));
+			PrefabSpawnRule rule = biome.MainTextureLayer.prefabSpawnRules[0];
+			string before = rule.SpecFingerprint;
+			rule.forestCover = 0.9f; // inert without a stand size, so not a tuning either
+			rule.forestOpen = 0.5f;
+			Assert.That(BiomeArtAuthoring.Fingerprint(rule), Is.EqualTo(before), "wood settings without a stand size must not change the hash");
+
+			BiomeArtAuthoring.Report wooded = Run(520f);
+			Assert.That(wooded.RulesUpdated, Is.EqualTo(1), "an untouched rule from before woods should be brought into them:\n" + wooded);
+			Assert.That(rule.forestMetres, Is.EqualTo(520f));
+			Assert.That(rule.forestCover, Is.EqualTo(0.3f).Within(1e-6f), "the spec's cover, not the inert value");
+			Assert.That(rule.IsForested, Is.True);
+			Assert.That(rule.SpecFingerprint, Is.Not.EqualTo(before));
+
+			rule.forestEdge = 0.9f; // somebody tunes the wood
+			BiomeArtAuthoring.Report kept = Run(400f);
+			Assert.That(kept.RulesKept, Is.EqualTo(1), "a tuned wood is somebody's work:\n" + kept);
+			Assert.That(rule.forestMetres, Is.EqualTo(520f));
+		}
+
+		/// <summary>
+		/// Mature sizes, metres: what each species reaches in a stand, after the measured ranges of the
+		/// real trees (Norway spruce, Scots pine, pedunculate oak, silver birch, a rainforest canopy tree,
+		/// a snag, a coconut palm, a saguaro, an umbrella thorn, a clumping bamboo).
+		/// </summary>
+		private static readonly Dictionary<string, (Vector2 height, Vector2 trunk, Vector2 crown)> RealSizes = new Dictionary<string, (Vector2, Vector2, Vector2)>
+		{
+			{ "Spruce", (new Vector2(22f, 35f), new Vector2(0.3f, 0.5f), new Vector2(2.2f, 4f)) },
+			{ "Pine", (new Vector2(22f, 35f), new Vector2(0.3f, 0.5f), new Vector2(3f, 5f)) },
+			{ "Oak", (new Vector2(18f, 30f), new Vector2(0.45f, 0.8f), new Vector2(5.5f, 10f)) },
+			{ "Birch", (new Vector2(15f, 25f), new Vector2(0.12f, 0.22f), new Vector2(2.5f, 4.5f)) },
+			{ "Jungle", (new Vector2(30f, 45f), new Vector2(0.55f, 0.95f), new Vector2(6f, 12f)) },
+			{ "Dead", (new Vector2(10f, 18f), new Vector2(0.2f, 0.45f), new Vector2(2f, 5f)) },
+			{ "Palm", (new Vector2(12f, 20f), new Vector2(0.14f, 0.25f), new Vector2(3.5f, 6f)) },
+			{ "Saguaro", (new Vector2(8f, 12f), new Vector2(0.2f, 0.4f), new Vector2(0.6f, 1.5f)) },
+			{ "Acacia", (new Vector2(6f, 12f), new Vector2(0.15f, 0.35f), new Vector2(3.5f, 7f)) },
+			{ "Bamboo", (new Vector2(10f, 15f), new Vector2(0.05f, 0.08f), new Vector2(1.5f, 3.5f)) },
+		};
+
+		[Test]
+		public void TreeSpecies_StandAtTheirRealMatureSizes()
+		{
+			Assert.That(ProceduralArtCatalogue.Trees.Length, Is.EqualTo(RealSizes.Count), "a species was added or removed: give it its real size here");
+			foreach (TreeSpecies t in ProceduralArtCatalogue.Trees)
+			{
+				Assert.That(RealSizes.TryGetValue(t.Name, out var real), Is.True, $"{t.Name} has no real size to check against");
+				Assert.That(t.Height, Is.InRange(real.height.x, real.height.y), $"{t.Name}'s height in metres");
+				Assert.That(t.TrunkRadius, Is.InRange(real.trunk.x, real.trunk.y), $"{t.Name}'s trunk radius in metres");
+				Assert.That(ProceduralArtCatalogue.CrownRadius(in t), Is.InRange(real.crown.x, real.crown.y), $"{t.Name}'s crown radius in metres");
+			}
+			Assert.That(ProceduralArtCatalogue.TryTree("Pine", out TreeSpecies pine), Is.True);
+			Assert.That(ProceduralArtCatalogue.TryTree("Birch", out TreeSpecies birch), Is.True);
+			Assert.That(pine.Height, Is.GreaterThan(birch.Height), "a pine overtops a birch");
+		}
+
+		[Test]
+		public void TreeSpecies_BroadCrownsCarryEnoughLeafToStayFull()
+		{
+			// Card area against the crown's surface, as the generator hangs them (21 cards a limb, two crossed at LOD0):
+			// at the old sizes about two to two and a half; a bigger crown on the old cards would be a skeleton.
+			foreach (TreeSpecies t in ProceduralArtCatalogue.Trees)
+			{
+				if (t.Form != TreeForm.Broadleaf)
+				{
+					continue;
+				}
+				float radius = t.CrownWidth * t.Height;
+				float depth = t.Height * (1f - t.CrownBase) * 0.5f;
+				float surface = 4f * Mathf.PI * (radius * radius + 2f * radius * depth) / 3f;
+				float cards = Mathf.Max(3, t.Branches) * 21f * 2f * t.LeafSize * t.LeafSize;
+				Assert.That(cards / surface, Is.InRange(1.8f, 4.5f), $"{t.Name}'s leaf cards cover {cards / surface:F2}× its crown");
+			}
+		}
+
+		[Test]
+		public void SpecTable_TreeSizesVaryNaturally_AndWoodsAreSpacedByTheirCrowns()
+		{
+			int woods = 0;
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				foreach ((BiomeArtSpec.Layer _, BiomeArtSpec.Scatter s) in entry.Rules())
+				{
+					if (s.Channel != PrefabSpawnChannel.TreeInstance || !s.Name.StartsWith("Trees: ", System.StringComparison.Ordinal))
+					{
+						continue;
+					}
+					Assert.That(s.NonUniform, Is.True, $"{entry.Biome} / {s.Name}");
+					// The spread round the rule's own size: ±15–25%, never a range that shrinks a tree to a sapling.
+					float widthMid = (s.WidthScale.x + s.WidthScale.y) * 0.5f;
+					float heightMid = (s.HeightScale.x + s.HeightScale.y) * 0.5f;
+					Assert.That(s.WidthScale.y / s.WidthScale.x, Is.InRange(1.2f, 1.7f), $"{entry.Biome} / {s.Name} width spread");
+					Assert.That(s.HeightScale.y / s.HeightScale.x, Is.InRange(1.3f, 1.7f), $"{entry.Biome} / {s.Name} height spread");
+					Assert.That(heightMid, Is.EqualTo(widthMid).Within(0.05f), $"{entry.Biome} / {s.Name}: a stunted tree is smaller all over, not squashed");
+					Assert.That(heightMid, Is.InRange(0.3f, 1.05f), $"{entry.Biome} / {s.Name} size against the mature tree");
+
+					if (s.ForestMetres <= 0f)
+					{
+						continue;
+					}
+					woods++;
+					float crown = 0f;
+					int species = 0;
+					foreach (string prefab in s.Prefabs)
+					{
+						string name = prefab.Substring(prefab.LastIndexOf('_') + 1);
+						if (ProceduralArtCatalogue.TryTree(name, out TreeSpecies t))
+						{
+							crown += ProceduralArtCatalogue.CrownRadius(in t);
+							species++;
+						}
+					}
+					Assume.That(species, Is.GreaterThan(0), $"{entry.Biome} / {s.Name}: prefab names should end in the species ({string.Join(", ", s.Prefabs)})");
+					crown = crown / species * heightMid;
+					Assert.That(s.Spacing, Is.InRange(crown * 1.2f, crown * 1.8f), $"{entry.Biome} / {s.Name}: spacing {s.Spacing} m for {crown:F1} m crowns");
+				}
+			}
+			Assert.That(woods, Is.GreaterThan(20), "most tree rules should stand in woods");
+		}
+
+		[Test]
+		public void SpecTable_ForestBiomesAreMostlyWood_OpenBiomesHaveCopses()
+		{
+			float Cover(string biome, string rule)
+			{
+				BiomeArtSpec.Entry entry = BiomeArtSpec.For(biome);
+				Assume.That(entry, Is.Not.Null, biome);
+				foreach ((BiomeArtSpec.Layer _, BiomeArtSpec.Scatter s) in entry.Rules())
+				{
+					if (s.Name == rule)
+					{
+						Assert.That(s.ForestMetres, Is.GreaterThan(0f), $"{biome} / {rule} should stand in woods");
+						return s.ForestCover;
+					}
+				}
+				Assert.Fail($"{biome} has no rule '{rule}'");
+				return 0f;
+			}
+
+			Assert.That(Cover("Taiga", "Trees: Spruce"), Is.GreaterThanOrEqualTo(0.7f));
+			Assert.That(Cover("Forest", "Trees: Oak, Birch"), Is.GreaterThanOrEqualTo(0.7f));
+			Assert.That(Cover("Jungle", "Trees: Jungle"), Is.GreaterThanOrEqualTo(0.8f));
+			Assert.That(Cover("Woodland", "Trees: Oak, Birch"), Is.InRange(0.35f, 0.7f));
+			Assert.That(Cover("Grassland", "Trees: Oak"), Is.LessThanOrEqualTo(0.2f));
+			Assert.That(Cover("Plains", "Trees: Oak"), Is.LessThanOrEqualTo(0.1f));
+
+			// A biome's species stand in the same woods: one stand size, so one field.
+			var taiga = new List<float>();
+			foreach ((BiomeArtSpec.Layer _, BiomeArtSpec.Scatter s) in BiomeArtSpec.For("Taiga").Rules())
+			{
+				if (s.ForestMetres > 0f)
+				{
+					taiga.Add(s.ForestMetres);
+					Assert.That(s.ForestMetres, Is.InRange(300f, 1500f), "woods are hundreds of metres across, not groves");
+				}
+			}
+			Assert.That(taiga.Count, Is.EqualTo(3));
+			Assert.That(taiga.TrueForAll(m => m == taiga[0]), Is.True, "the taiga's spruce, pine and birch should cut one stand field");
+			Assert.That(BiomeArtSpec.For("Grassland").Rules(), Has.Some.Matches<(BiomeArtSpec.Layer, BiomeArtSpec.Scatter)>(r => r.Item2.ForestMetres == taiga[0]),
+				"a grassland's copses should be the hearts of the taiga's woods");
+		}
+
+		[Test]
 		public void SpecTable_EveryCountedThingGathersIntoGroups()
 		{
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
@@ -641,10 +832,19 @@ namespace FishMMO.UnitTests
 					{
 						continue;
 					}
-					Assert.That(s.ClusterMetres, Is.GreaterThan(0f), $"{entry.Biome} / {s.Name} is scattered evenly");
-					Assert.That(s.ClusterBackground, Is.LessThan(1f), $"{entry.Biome} / {s.Name} has groups but nothing in them");
-					Assert.That(s.ClusterSize, Is.GreaterThan(1f), $"{entry.Biome} / {s.Name} should size its groups by members, or a sparse rule's groups hold one each");
-					Assert.That(s.Earlier.Exists(e => e.ClusterMetres == 0f && e.Name == s.Name), Is.True,
+					if (s.ForestMetres > 0f)
+					{
+						// A wood gathers into stands instead of groups (TerrainScatter.StandField).
+						Assert.That(s.Channel, Is.EqualTo(PrefabSpawnChannel.TreeInstance), $"{entry.Biome} / {s.Name}: only trees stand in woods");
+						Assert.That(s.ForestCover, Is.LessThan(1f), $"{entry.Biome} / {s.Name} is one unbroken wood, with no clearing anywhere");
+					}
+					else
+					{
+						Assert.That(s.ClusterMetres, Is.GreaterThan(0f), $"{entry.Biome} / {s.Name} is scattered evenly");
+						Assert.That(s.ClusterBackground, Is.LessThan(1f), $"{entry.Biome} / {s.Name} has groups but nothing in them");
+						Assert.That(s.ClusterSize, Is.GreaterThan(1f), $"{entry.Biome} / {s.Name} should size its groups by members, or a sparse rule's groups hold one each");
+					}
+					Assert.That(s.Earlier.Exists(e => e.ClusterMetres == 0f && e.ForestMetres == 0f && e.Name == s.Name), Is.True,
 						$"{entry.Biome} / {s.Name} should remember its ungrouped version, under its own name, so an earlier run's rule is recognised");
 				}
 			}

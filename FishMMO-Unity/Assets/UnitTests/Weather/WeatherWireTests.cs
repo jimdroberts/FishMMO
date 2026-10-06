@@ -101,11 +101,11 @@ namespace FishMMO.UnitTests.Weather
 				RadiusMeters = 450f,
 				PeakIntensity = 0.85f,
 				MeanderMeters = 120f,
-				MotionTick = 1000,
-				BirthTick = 1000,
-				MatureTick = 4000,
-				DecayTick = 40000,
-				DeathTick = 50000,
+				MotionSeconds = 1000.25,
+				BirthSeconds = 1000.25,
+				MatureSeconds = 4000.25,
+				DecaySeconds = 40000.25,
+				DeathSeconds = 50000.25,
 			};
 		}
 
@@ -115,8 +115,8 @@ namespace FishMMO.UnitTests.Weather
 			{
 				From = new AirOffsets { Temperature = -3.5f, Humidity = 0.1f, Pressure = -0.2f, Instability = 0.05f, Wind = 1.5f, Gravity = -0.25f },
 				To = new AirOffsets { Temperature = 12.25f, Humidity = -0.4f, Pressure = 0.6f, Instability = -0.3f, Wind = -4f, Gravity = 2f },
-				StartTick = 10,
-				EndTick = 910,
+				StartSeconds = 10.5,
+				EndSeconds = 910.75,
 			};
 		}
 
@@ -131,7 +131,7 @@ namespace FishMMO.UnitTests.Weather
 				SceneMode = WeatherSceneMode.Own,
 				Air = Air(),
 				Cover = new WeatherCover { Snow = 0.1f, Wet = 0.2f, Ash = 0.3f, Sand = 0.4f },
-				CoverTick = 123456,
+				CoverSeconds = 123456.125,
 			};
 			timeline.Cells.Add(Cell(9));
 
@@ -144,7 +144,7 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.AreEqual(timeline.SceneMode, copy.SceneMode);
 			LogAssert.AreEqual(timeline.Air, copy.Air);
 			LogAssert.AreEqual(timeline.Cover, copy.Cover);
-			LogAssert.AreEqual(timeline.CoverTick, copy.CoverTick);
+			LogAssert.AreEqual(timeline.CoverSeconds, copy.CoverSeconds);
 			LogAssert.AreEqual(1, copy.Cells.Count);
 			LogAssert.AreEqual(Cell(9), copy.Cells[0]);
 		}
@@ -173,7 +173,7 @@ namespace FishMMO.UnitTests.Weather
 				Air = Air(),
 				HasCover = true,
 				Cover = new WeatherCover { Wet = 1f },
-				CoverTick = 4321,
+				CoverSeconds = 4321.125,
 			};
 			WeatherDeltaBroadcast back = RoundTrip(delta);
 			LogAssert.AreEqual(delta.SceneName, back.SceneName);
@@ -184,7 +184,7 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.AreEqual(delta.Air, back.Air);
 			LogAssert.IsTrue(back.HasCover);
 			LogAssert.AreEqual(delta.Cover, back.Cover);
-			LogAssert.AreEqual(delta.CoverTick, back.CoverTick);
+			LogAssert.AreEqual(delta.CoverSeconds, back.CoverSeconds);
 		}
 
 		[Test]

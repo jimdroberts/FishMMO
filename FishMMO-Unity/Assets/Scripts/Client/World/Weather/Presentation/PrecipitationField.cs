@@ -301,6 +301,15 @@ namespace FishMMO.Client
 		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
 		private readonly Travel[] travel = new Travel[Kinds.Length * SnowShells];
 		private float lastTime = float.NaN;
+		private static readonly float GustPaceA = WholeTurns(0.7);
+		private static readonly float GustPaceB = WholeTurns(0.23);
+
+		/// <summary>An angular pace, rad/s, snapped so the motion clock's wrap holds whole turns.</summary>
+		private static float WholeTurns(double radiansPerSecond)
+		{
+			double turns = System.Math.Round(radiansPerSecond * WorldMotion.ShaderWrapSeconds / (2.0 * System.Math.PI));
+			return (float)(turns * 2.0 * System.Math.PI / WorldMotion.ShaderWrapSeconds);
+		}
 
 		/// <summary>How far one kind's air and particles have gone, wrapped.</summary>
 		public struct Travel
@@ -667,7 +676,8 @@ namespace FishMMO.Client
 			}
 
 			Vector3 origin = camera.transform.position;
-			float gust = frame[WeatherChannel.WindGust] * (0.5f + 0.5f * Mathf.Sin(time * 0.7f) * Mathf.Sin(time * 0.23f + 1f));
+			// Paces snapped to whole turns in the motion clock's wrap, so the wrap does not jump the gust.
+			float gust = frame[WeatherChannel.WindGust] * (0.5f + 0.5f * Mathf.Sin(time * GustPaceA) * Mathf.Sin(time * GustPaceB + 1f));
 			var rp = new RenderParams(profile.PrecipitationMaterial)
 			{
 				camera = camera,

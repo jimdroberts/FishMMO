@@ -37,9 +37,9 @@ namespace FishMMO.UnitTests.Weather
 			return new StormCell
 			{
 				ID = id, Kind = kind, Shape = StormPhysics.ShapeOf(kind), OriginX = at.x, OriginZ = at.y,
-				VelocityX = velocity.x, VelocityZ = velocity.y, MotionTick = 10,
+				VelocityX = velocity.x, VelocityZ = velocity.y, MotionSeconds = 10 * TickDelta,
 				RadiusMeters = radius, ExtentMeters = extent, PeakIntensity = 1f,
-				BirthTick = 0, MatureTick = 0, DecayTick = 1000000, DeathTick = 1000001,
+				BirthSeconds = 0 * TickDelta, MatureSeconds = 0 * TickDelta, DecaySeconds = 1000000 * TickDelta, DeathSeconds = 1000001 * TickDelta,
 			};
 		}
 

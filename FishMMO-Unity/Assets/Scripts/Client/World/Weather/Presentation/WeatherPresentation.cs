@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
@@ -137,6 +138,41 @@ namespace FishMMO.Client
 			target = frame;
 			context = ctx;
 			hasContext = true;
+			contextRealtime = Time.realtimeSinceStartupAsDouble;
+		}
+
+		private double contextRealtime;
+		private double presentedTickSeconds = double.NaN;
+		private double lastTickTarget;
+		private double lastTickRealtime = double.NaN;
+
+		/// <summary>
+		/// The server tick (fractional) the storm cells are drawn at this frame: the weather's own tick,
+		/// carried on between its ten-a-second arrivals at real time and smoothed over FishNet's
+		/// once-a-second re-estimates (<see cref="WorldMotion.Follow"/>). Cells read at the arrival's tick
+		/// stepped ten times a second, a metre and a half at a time. Every player computes the same cell
+		/// at the same tick, so this is shared to within the clocks' agreement.
+		/// </summary>
+		public double PresentTick { get; private set; }
+
+		/// <summary>Moves <see cref="PresentTick"/> on to this frame.</summary>
+		private void AdvancePresentTick()
+		{
+			double now = Time.realtimeSinceStartupAsDouble;
+			double real = double.IsNaN(lastTickRealtime) ? 0.0 : Math.Max(0.0, now - lastTickRealtime);
+			lastTickRealtime = now;
+			if (!hasContext)
+			{
+				presentedTickSeconds = double.NaN;
+				PresentTick = 0.0;
+				return;
+			}
+			double delta = context.Timeline != null && context.Timeline.TickDelta > 0.0 ? context.Timeline.TickDelta : 1.0 / 30.0;
+			// The arrival's tick, carried on at real time since it came (at the world's pace).
+			double target = context.Tick * delta + (now - contextRealtime) * WorldMotion.Rate;
+			presentedTickSeconds = WorldMotion.Follow(presentedTickSeconds, lastTickTarget, target, real);
+			lastTickTarget = target;
+			PresentTick = presentedTickSeconds / delta;
 		}
 
 		public void Reset()
@@ -144,6 +180,7 @@ namespace FishMMO.Client
 			target = WeatherFrame.Clear;
 			shown = WeatherFrame.Clear;
 			hasContext = false;
+			presentedTickSeconds = double.NaN;
 			occlusion?.Invalidate();
 			coverMap?.Clear();
 			audioPresenter?.Silence();
@@ -190,10 +227,14 @@ namespace FishMMO.Client
 				return;
 			}
 			float dt = deltaTime;
-			// What is falling moves on the world's motion, so it stops when the world's time does.
-			// The weather itself still eases to its target on the wall clock: held still, a new
-			// preset should still appear, just not move.
-			time += WorldMotion.Scale(dt);
+			// What is falling, the wind in the grass and the trees, the fog banks: all on the world's
+			// shared motion clock, so every player sees the same gust at the same moment, and it stops
+			// when the world's time does. It was a private float summed from zero — each client's own
+			// uptime, and frozen once that float could no longer hold a frame (~36 h at 144 fps).
+			// Wrapped in double before a shader's float sees it. The weather itself still eases to its
+			// target on the wall clock: held still, a new preset should still appear, just not move.
+			time = WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds);
+			AdvancePresentTick();
 			shown = dt > 0f ? WeatherFrame.Lerp(shown, target, 1f - Mathf.Exp(-dt / SmoothingSeconds)) : shown;
 
 			Camera camera = TargetCamera != null ? TargetCamera : Camera.main;
@@ -245,7 +286,7 @@ namespace FishMMO.Client
 			}
 
 			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash,
-				hasContext ? context.Substance : null);
+				hasContext ? context.Substance : null, target[WeatherChannel.WindSpeed]);
 			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
 			WeatherFogPresenter.Apply(shown, profile);
 			ApplyWind(shown);

@@ -52,7 +52,10 @@ namespace FishMMO.Client
 			networkManager.ClientManager.RegisterBroadcast<WeatherTimelineBroadcast>(OnTimeline);
 			networkManager.ClientManager.RegisterBroadcast<WeatherDeltaBroadcast>(OnDelta);
 			networkManager.ClientManager.RegisterBroadcast<WorldClockBroadcast>(OnClock);
+			networkManager.ClientManager.OnClientConnectionState += OnConnectionState;
 			WeatherQuery.TickSource = () => networkManager != null ? networkManager.TimeManager.Tick : 0u;
+			// The tick the world's motion (waves, wind, fog banks) reads the shared clock at.
+			WorldMotion.TimeManager = networkManager.TimeManager;
 			WeatherPresentation.Ensure();
 		}
 
@@ -63,9 +66,11 @@ namespace FishMMO.Client
 				networkManager.ClientManager.UnregisterBroadcast<WeatherTimelineBroadcast>(OnTimeline);
 				networkManager.ClientManager.UnregisterBroadcast<WeatherDeltaBroadcast>(OnDelta);
 				networkManager.ClientManager.UnregisterBroadcast<WorldClockBroadcast>(OnClock);
+				networkManager.ClientManager.OnClientConnectionState -= OnConnectionState;
 			}
 			Clear(resetClock: true);
 			WeatherQuery.TickSource = null;
+			WorldMotion.TimeManager = null;
 			if (WeatherPresentation.Instance != null)
 			{
 				Object.Destroy(WeatherPresentation.Instance.gameObject);
@@ -91,6 +96,23 @@ namespace FishMMO.Client
 				WorldClock.Shared.Reset();
 			}
 			WeatherClient.ResetPresenters();
+		}
+
+		/// <summary>
+		/// Forgets the world clock's anchor the moment the connection stops. The anchor names a tick of
+		/// the server it came from, and FishNet restarts the tick at 0 on a disconnect and counts the
+		/// next server's ticks after — so a scene hop or a reconnect read the old server's anchor against
+		/// the new server's tick, and the sky (and everything on the world's clock) was off by the two
+		/// servers' difference in uptime, often days, until the new anchor came with the character.
+		/// Without one the clock is this machine's UTC, a fraction of a second out at most; the next
+		/// server's anchor arrives on spawn.
+		/// </summary>
+		private void OnConnectionState(ClientConnectionStateArgs args)
+		{
+			if (args.ConnectionState == LocalConnectionState.Stopped || args.ConnectionState == LocalConnectionState.Stopping)
+			{
+				WorldClock.Shared.Reset();
+			}
 		}
 
 		private void OnClock(WorldClockBroadcast msg, Channel channel)
@@ -168,17 +190,21 @@ namespace FishMMO.Client
 			networkManager.ClientManager.Broadcast(new WeatherResyncRequestBroadcast { HaveRevision = timeline.Revision }, Channel.Reliable);
 		}
 
-		/// <summary>Advances the server's cover snapshot from its tick to now.</summary>
+		/// <summary>Advances the server's cover snapshot from the world time it was taken at to now.</summary>
 		private void CatchUpCover()
 		{
 			uint now = CurrentTick();
-			if (now > timeline.CoverTick && scene.IsValid())
+			double nowSeconds = timeline.WorldSecondsAt(now);
+			if (nowSeconds > timeline.CoverSeconds && scene.IsValid())
 			{
-				float seconds = Mathf.Min(120f, (float)((now - timeline.CoverTick) * timeline.TickDelta));
-				WeatherSample sample = WeatherField.Sample(timeline, settings, scene, ViewerPosition(), now);
-				double coverHours = WorldClock.Shared.HasAnchor ? WorldClock.Shared.WorldHoursAt(now) : 0;
-				timeline.Cover.Integrate(sample.Frame, sample.Temperature, seconds, SceneTime.IsDaylight(settings, coverHours) ? 1f : 0f);
-				timeline.CoverTick = now;
+				// World time, as the server integrates it: nothing dries while the world is held.
+				float seconds = (float)System.Math.Min(120.0, nowSeconds - timeline.CoverSeconds);
+				// From the scene's five cover points, as the server integrates it, not from where this
+				// camera stands: the same forcing, so the figure tracks the server's between snapshots.
+				SceneCoverSampling.Sample(timeline, settings, scene, now, out WeatherFrame frame, out float temperature);
+				double coverHours = nowSeconds / 3600.0;
+				timeline.Cover.Integrate(frame, temperature, seconds, SceneTime.IsDaylight(settings, coverHours) ? 1f : 0f);
+				timeline.CoverSeconds = nowSeconds;
 			}
 		}
 

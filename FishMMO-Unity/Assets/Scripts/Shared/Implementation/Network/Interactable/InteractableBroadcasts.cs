@@ -807,6 +807,10 @@ namespace FishMMO.Shared
 		public long InteractableID;
 		/// <summary>True if the switch target is now activated.</summary>
 		public bool Activated;
+		/// <summary>The server tick the change began at, for a target that plays it out (<see cref="ITimedSwitchTarget"/>).</summary>
+		public uint ChangeTick;
+		/// <summary>How far along its travel that target stood when the change began, 0..1.</summary>
+		public float ChangeTravel;
 	}
 
 	// ──────────────────────────────────────────

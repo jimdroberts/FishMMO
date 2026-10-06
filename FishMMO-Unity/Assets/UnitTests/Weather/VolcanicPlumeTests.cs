@@ -247,11 +247,12 @@ namespace FishMMO.UnitTests.Weather
 		public void TheDrawnPlume_IsThePlumeTheAshFallsFrom()
 		{
 			string field = CodeOnly(Read("Scripts/Shared/Implementation/Weather/WeatherField.cs"));
-			LogAssert.IsTrue(field.Contains("VolcanicVents.Plumes(timeline, settings, tick, planet, air.Wind, position2, plumes)"), "the weather asks for the plumes in the open air's wind");
+			LogAssert.IsTrue(field.Contains("VolcanicVents.PlumesInTheirOwnWindAtSeconds(timeline, settings, worldSeconds, planet, position2, plumes)"),
+				"the weather asks for the plumes each in the open air's wind where it stands — not the asker's, so one plume is one plume");
 			LogAssert.IsTrue(field.Contains("steadyFallout, steadySubstance") && field.Contains("emission, fallout, falloutSubstance"), "and drops their fallout in the background and the storm frame");
 			string presenter = CodeOnly(Read("Scripts/Client/World/Weather/Sky/VolcanicPlumePresenter.cs"));
-			LogAssert.IsTrue(presenter.Contains("VolcanicVents.Plumes(context.Timeline, context.Settings, (uint)context.Tick, sample.Planet, sample.OpenAir.Wind,"),
-				"the presenter draws exactly those plumes: the same planet and the same wind");
+			LogAssert.IsTrue(presenter.Contains("VolcanicVents.PlumesInTheirOwnWind(context.Timeline, context.Settings, (uint)context.Tick, sample.Planet,"),
+				"the presenter draws exactly those plumes: the same planet and the same winds, so every player sees the one the ash falls from");
 			string presentation = CodeOnly(Read("Scripts/Client/World/Weather/Presentation/WeatherPresentation.cs"));
 			LogAssert.IsTrue(presentation.Contains("go.AddComponent<VolcanicPlumePresenter>()"), "and it is made with the weather's presentation");
 			LogAssert.IsTrue(PrecipitationField.TraitsOf(WeatherChannel.AshWeight).FromCloud && PrecipitationField.TraitsOf(WeatherChannel.AshWeight).FromPlume,

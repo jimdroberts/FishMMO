@@ -505,7 +505,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Custom delta serializers for <see cref="KinematicCharacterMotorState"/>.
 	/// <para>
-	/// <b>Delta serializer</b>: Writes a 2-byte bitmask over 14 bit positions carrying 13 fields
+	/// <b>Delta serializer</b>: Writes a 2-byte bitmask over 16 bit positions carrying 15 fields
 	/// (bit 4 is a retired gap — see the constants below)
 	/// followed by delta-encoded values for only the changed fields.
 	/// On a typical grounded walking tick, only Position, Rotation, BaseVelocity, and
@@ -550,6 +550,10 @@ namespace FishMMO.Shared
 		private const ushort TIME_SINCE_JUMP_BIT = 1 << 12;
 		/// <summary>Bit flag for TimeSinceJumpRequested changes.</summary>
 		private const ushort TIME_SINCE_JUMP_REQ_BIT = 1 << 13;
+		/// <summary>Bit flag for IsSwimming changes.</summary>
+		private const ushort IS_SWIMMING_BIT = 1 << 14;
+		/// <summary>Bit flag for ClimbOutTicks changes.</summary>
+		private const ushort CLIMB_OUT_TICKS_BIT = 1 << 15;
 
 		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="KinematicCharacterMotorState"/>.
@@ -578,6 +582,8 @@ namespace FishMMO.Shared
 			writer.WriteBoolean(value.JumpRequested);
 			writer.WriteSingle(value.TimeSinceLastAbleToJump);
 			writer.WriteSingle(value.TimeSinceJumpRequested);
+			writer.WriteBoolean(value.IsSwimming);
+			writer.WriteUInt8Unpacked(value.ClimbOutTicks);
 		}
 
 		/// <summary>
@@ -600,6 +606,8 @@ namespace FishMMO.Shared
 				JumpRequested = reader.ReadBoolean(),
 				TimeSinceLastAbleToJump = reader.ReadSingle(),
 				TimeSinceJumpRequested = reader.ReadSingle(),
+				IsSwimming = reader.ReadBoolean(),
+				ClimbOutTicks = reader.ReadUInt8Unpacked(),
 			};
 		}
 
@@ -614,7 +622,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="KinematicCharacterMotorState"/>.
-		/// Writes a 2-byte bitmask indicating which of the 13 fields changed,
+		/// Writes a 2-byte bitmask indicating which of the 15 fields changed,
 		/// followed by delta-encoded values for only those fields.
 		/// </summary>
 		/// <param name="writer">Writer to serialize to.</param>
@@ -709,6 +717,18 @@ namespace FishMMO.Shared
 				flags |= TIME_SINCE_JUMP_REQ_BIT;
 			}
 
+			if (fullSerialize || prev.IsSwimming != next.IsSwimming)
+			{
+				writer.WriteBoolean(next.IsSwimming);
+				flags |= IS_SWIMMING_BIT;
+			}
+
+			if (fullSerialize || prev.ClimbOutTicks != next.ClimbOutTicks)
+			{
+				writer.WriteUInt8Unpacked(next.ClimbOutTicks);
+				flags |= CLIMB_OUT_TICKS_BIT;
+			}
+
 			if (flags != 0 || mustEmit)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
@@ -782,6 +802,12 @@ namespace FishMMO.Shared
 
 			if ((flags & TIME_SINCE_JUMP_REQ_BIT) != 0)
 				result.TimeSinceJumpRequested = reader.ReadSingle();
+
+			if ((flags & IS_SWIMMING_BIT) != 0)
+				result.IsSwimming = reader.ReadBoolean();
+
+			if ((flags & CLIMB_OUT_TICKS_BIT) != 0)
+				result.ClimbOutTicks = reader.ReadUInt8Unpacked();
 
 			return result;
 		}

@@ -117,6 +117,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			measuredTickSpeedSqr = 0f;
 		}
 
+		/// <summary>The name of the NavMesh area the bake gives water too deep to wade (SceneNavMeshBaker).</summary>
+		public const string DeepWaterAreaName = "Deep Water";
+
+		private static int deepWaterArea = -2;
+
+		/// <summary>The deep-water NavMesh area's index; -1 when the project has none.</summary>
+		public static int DeepWaterArea => deepWaterArea != -2 ? deepWaterArea : (deepWaterArea = NavMesh.GetAreaFromName(DeepWaterAreaName));
+
+		/// <summary>The name of the NavMesh area the bake gives molten lava (swimmable only by the fire-immune).</summary>
+		public const string LavaAreaName = "Lava";
+
+		private static int lavaArea = -2;
+
+		/// <summary>The lava NavMesh area's index; -1 when the project has none.</summary>
+		public static int LavaArea => lavaArea != -2 ? lavaArea : (lavaArea = NavMesh.GetAreaFromName(LavaAreaName));
+
+		/// <summary>Every NavMesh area but deep water and lava: where an NPC that can swim in neither may go.</summary>
+		public static int LandAreas
+		{
+			get
+			{
+				int mask = NavMesh.AllAreas;
+				if (DeepWaterArea >= 0)
+				{
+					mask &= ~(1 << DeepWaterArea);
+				}
+				if (LavaArea >= 0)
+				{
+					mask &= ~(1 << LavaArea);
+				}
+				return mask;
+			}
+		}
+
 		/// <summary>
 		/// Places a world position onto the NavMesh, widening the search until it lands or the
 		/// attempts run out.
@@ -130,13 +164,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <param name="result">The nearest position actually on the NavMesh.</param>
 		/// <param name="initialRadius">Radius for the first attempt.</param>
 		/// <returns>True if a NavMesh position was found.</returns>
-		public static bool TrySampleNavMesh(Vector3 position, out Vector3 result, float initialRadius = SAMPLE_RADIUS)
+		/// <param name="areaMask">
+		/// The areas to sample; land only (<see cref="LandAreas"/>) when 0, so nothing is put on a sea floor. Not -1 for
+		/// that: -1 is <see cref="NavMesh.AllAreas"/>, which a swimmer immune to lava really does walk.
+		/// </param>
+		public static bool TrySampleNavMesh(Vector3 position, out Vector3 result, float initialRadius = SAMPLE_RADIUS, int areaMask = 0)
 		{
 			float radius = initialRadius > 0f ? initialRadius : SAMPLE_RADIUS;
+			int mask = areaMask == 0 ? LandAreas : areaMask;
 
 			for (int attempt = 0; attempt < SAMPLE_ATTEMPTS; ++attempt)
 			{
-				if (NavMesh.SamplePosition(position, out NavMeshHit hit, radius, NavMesh.AllAreas))
+				if (NavMesh.SamplePosition(position, out NavMeshHit hit, radius, mask))
 				{
 					result = hit.position;
 					return true;
@@ -171,7 +210,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return AIMovementResult.Throttled;
 			}
 
-			if (!TrySampleNavMesh(destination, out Vector3 sampled, sampleRadius))
+			// Onto the areas this agent may walk: a swimmer chasing into the water is given a point on the sea floor.
+			if (!TrySampleNavMesh(destination, out Vector3 sampled, sampleRadius, Agent.areaMask))
 			{
 				return AIMovementResult.Failed;
 			}

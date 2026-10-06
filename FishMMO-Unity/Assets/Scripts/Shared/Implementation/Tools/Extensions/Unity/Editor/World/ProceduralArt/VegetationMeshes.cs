@@ -17,6 +17,17 @@ namespace FishMMO.Shared.WorldDesign
 		Kelp,
 		Coral,
 		BarrelCactus,
+		// The sea floor (SeaFloorMeshes).
+		Seaweed,
+		BrainCoral,
+		TableCoral,
+		SeaFan,
+		Sponge,
+		Anemone,
+		Urchin,
+		Starfish,
+		Shells,
+		TubeWorms,
 	}
 
 	/// <summary>One detail plant's recipe.</summary>
@@ -44,7 +55,7 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// Detail-channel meshes: grass clumps, reeds, ferns, flowers, small shrubs, ground debris,
-	/// kelp, coral, small cacti. Each is one sub-mesh for one material, as Unity's detail
+	/// branching coral, small cacti; kelp and the rest of the sea floor are <see cref="SeaFloorMeshes"/>. Each is one sub-mesh for one material, as Unity's detail
 	/// prototypes require, small in triangle count (a grass clump is about 60), with the vertex
 	/// layout <c>FishVegetation.shader</c> reads (see FishVegetationPasses.hlsl).
 	/// </summary>
@@ -69,9 +80,10 @@ namespace FishMMO.Shared.WorldDesign
 				case DetailKind.Shrub: Shrub(mesh, in p, rng, FoliageCell.SmallLeaves, 1f); break;
 				case DetailKind.DryShrub: Shrub(mesh, in p, rng, FoliageCell.Twigs, 0f); break;
 				case DetailKind.Debris: Debris(mesh, in p, rng); break;
-				case DetailKind.Kelp: Kelp(mesh, in p, rng); break;
+				case DetailKind.Kelp: SeaFloorMeshes.Kelp(mesh, in p, rng); break;
 				case DetailKind.Coral: Coral(mesh, in p, rng); break;
 				case DetailKind.BarrelCactus: BarrelCactus(mesh, in p, rng); break;
+				default: SeaFloorMeshes.Build(mesh, in p, rng); break;
 			}
 			mesh.RecalculateNormals(true, onlyMissing: true);
 			mesh.RecalculateTangents();
@@ -80,6 +92,42 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static Color Pick(in DetailPlant p, DeterministicRNG rng) => Color.Lerp(p.ColourA, p.ColourB, rng.NextFloat());
 
+		// ── Parts ─────────────────────────────────────────────────────
+		// Every blade, frond, flower, card and strand is a part attached at its root, grown half again as many
+		// times as the plant asks for, about seven in ten of the asked-for number always drawn: the vegetation
+		// shader keeps as many as each plant's fullness allows and turns each kept one about its root (VegVary),
+		// so one clump of grass is thin and the next lush, and no two lean alike (TreeMeshes does the same).
+
+		/// <summary>A hash of a part's number, 0..1, drawn without touching the plant's own stream.</summary>
+		private static float Hash(int n, int salt) => (ProceduralNoise.Mix(((uint)n * 0x9e3779b1u) ^ ((uint)salt * 0x85ebca6bu) ^ 0x51ed27u) >> 8) * (1f / 16777216f);
+
+		/// <summary>How many of a set to grow, and how many always to draw.</summary>
+		private static (int total, int core) Spared(int asked) => Spared(asked, TreeMeshes.Spare);
+
+		/// <summary>The same with its own share of spares.</summary>
+		private static (int total, int core) Spared(int asked, float spare) =>
+			(Mathf.Max(asked, Mathf.RoundToInt(asked * spare)), Mathf.Max(1, Mathf.RoundToInt(asked * TreeMeshes.Core)));
+
+		/// <summary>
+		/// Spares for grass and reed blades: few, because blades are what a meadow draws millions of and a
+		/// clump's triangles are capped at 100. A clump varies mostly by dropping toward its core.
+		/// </summary>
+		private const float BladeSpare = 1.1f;
+
+		/// <summary>The keep rank of the index-th of total, core of them always drawn and spread evenly through the indices.</summary>
+		private static float Rank(int index, int total, int core, int salt)
+		{
+			bool always = core >= total || (int)((long)(index + 1) * core / total) > (int)((long)index * core / total);
+			return always ? 0f : 0.02f + 0.98f * Hash(index, salt);
+		}
+
+		/// <summary>The part the next geometry belongs to: a whole blade or card, from its root.</summary>
+		private static void Part(MeshBuilder mesh, int index, int total, int core, Vector3 root, PlantPart kind, int salt)
+		{
+			mesh.SetPart(root, Hash(index, salt + 1), Rank(index, total, core, salt), kind);
+			mesh.SetCard(Hash(index, salt + 2), 0f);
+		}
+
 		private static void Blades(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng, FoliageCell cell)
 		{
 			int segments = Mathf.Max(1, p.Segments);
@@ -87,11 +135,14 @@ namespace FishMMO.Shared.WorldDesign
 			var widths = new List<float>();
 			var colours = new List<Color32>();
 			var wind = new List<Vector2>();
-			for (int b = 0; b < p.Count; b++)
+			(int blades, int core) = Spared(p.Count, BladeSpare);
+			int salt = cell == FoliageCell.Blade ? 300 : 400;
+			for (int b = 0; b < blades; b++)
 			{
 				float angle = rng.NextFloat() * Mathf.PI * 2f;
 				float r = Mathf.Sqrt(rng.NextFloat()) * p.Radius;
 				var root = new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
+				Part(mesh, b, blades, core, root, PlantPart.Leaf, salt);
 				float height = p.Height * rng.Range(0.65f, 1.15f);
 				float leanYaw = rng.NextFloat() * Mathf.PI * 2f;
 				// Outer blades lean outward more: a clump opens like a fountain.
@@ -132,10 +183,12 @@ namespace FishMMO.Shared.WorldDesign
 			var widths = new List<float>();
 			var colours = new List<Color32>();
 			var wind = new List<Vector2>();
-			for (int f = 0; f < p.Count; f++)
+			(int fronds, int core) = Spared(p.Count);
+			for (int f = 0; f < fronds; f++)
 			{
-				float yaw = (f + rng.Range(-0.3f, 0.3f)) * Mathf.PI * 2f / p.Count;
+				float yaw = (f + rng.Range(-0.3f, 0.3f)) * Mathf.PI * 2f / fronds;
 				var dir = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
+				Part(mesh, f, fronds, core, dir * p.Radius, PlantPart.Frond, 500);
 				float length = p.Height * rng.Range(0.8f, 1.2f);
 				float elevation = Mathf.Deg2Rad * rng.Range(45f, 70f);
 				float droop = rng.Range(0.5f, 0.8f);
@@ -161,11 +214,14 @@ namespace FishMMO.Shared.WorldDesign
 			var widths = new List<float>();
 			var colours = new List<Color32>();
 			var wind = new List<Vector2>();
-			for (int f = 0; f < p.Count; f++)
+			(int flowers, int core) = Spared(p.Count);
+			for (int f = 0; f < flowers; f++)
 			{
 				float angle = rng.NextFloat() * Mathf.PI * 2f;
 				float r = Mathf.Sqrt(rng.NextFloat()) * p.Radius;
 				var root = new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
+				// The stem and its head, kept or dropped together.
+				Part(mesh, f, flowers, core, root, PlantPart.Frond, 600);
 				float height = p.Height * rng.Range(0.7f, 1.2f);
 				var lean = new Vector3(rng.Range(-0.15f, 0.15f), 0f, rng.Range(-0.15f, 0.15f)) * height;
 				Vector3 top = root + Vector3.up * height + lean;
@@ -205,19 +261,33 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Shrub(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng, FoliageCell cell, float tintable)
 		{
+			int first = mesh.VertexCount;
 			var centre = new Vector3(0f, p.Height * 0.5f, 0f);
-			for (int k = 0; k < p.Count; k++)
+			(int cards, int core) = Spared(p.Count);
+			for (int k = 0; k < cards; k++)
 			{
 				// Cards spread over a dome, each facing roughly out from the bush's heart.
-				float yaw = (k + rng.Range(-0.4f, 0.4f)) * Mathf.PI * 2f / p.Count;
+				float yaw = (k + rng.Range(-0.4f, 0.4f)) * Mathf.PI * 2f / cards;
 				float up = rng.Range(0.1f, 0.9f);
 				var outward = new Vector3(Mathf.Cos(yaw) * (1f - up * 0.6f), up, Mathf.Sin(yaw) * (1f - up * 0.6f)).normalized;
 				Vector3 root = centre * 0.4f + outward * p.Radius * 0.3f;
+				Part(mesh, k, cards, core, root, PlantPart.Leaf, 700);
 				Color colour = Pick(in p, rng);
 				float length = p.Height * rng.Range(0.7f, 1.0f);
 				var direction = (outward + Vector3.up * 0.8f).normalized;
 				PlantParts.SprayCard(mesh, 0, root, direction, length, p.Width * rng.Range(0.8f, 1.2f), rng.Range(-40f, 40f), cell,
 					PlantParts.C32(colour, tintable), new Vector2(0.05f, 0.1f), new Vector2(length * 0.5f, 0.6f), centre, 0.7f);
+			}
+			// The cards start part way up the dome, so the bush stood on air: its lowest point was some six
+			// centimetres over its root, more than the shader sinks a detail. Brought down to two under it.
+			float lowest = float.MaxValue;
+			for (int i = first; i < mesh.VertexCount; i++)
+			{
+				lowest = Mathf.Min(lowest, mesh.Positions[i].y);
+			}
+			if (lowest < float.MaxValue)
+			{
+				mesh.Transform(Matrix4x4.Translate(new Vector3(0f, -(lowest + 0.02f), 0f)), first);
 			}
 		}
 
@@ -234,34 +304,6 @@ namespace FishMMO.Shared.WorldDesign
 				Color colour = Pick(in p, rng);
 				PlantParts.Card(mesh, 0, centre, yaw * Vector3.right * size, yaw * Vector3.forward * size * (twig ? 1.4f : 1f),
 					twig ? FoliageCell.Twigs : FoliageCell.SmallLeaves, PlantParts.C32(colour, twig ? 0f : 0.6f), Vector2.zero, Vector2.zero, Vector3.up);
-			}
-		}
-
-		private static void Kelp(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
-		{
-			int segments = Mathf.Max(3, p.Segments);
-			var spine = new List<Vector3>();
-			var widths = new List<float>();
-			var colours = new List<Color32>();
-			var wind = new List<Vector2>();
-			for (int k = 0; k < p.Count; k++)
-			{
-				float angle = rng.NextFloat() * Mathf.PI * 2f;
-				var root = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * (p.Radius * Mathf.Sqrt(rng.NextFloat()));
-				float height = p.Height * rng.Range(0.7f, 1.2f);
-				float phase = rng.NextFloat() * Mathf.PI * 2f;
-				var wave = new Vector3(Mathf.Cos(angle + 1.3f), 0f, Mathf.Sin(angle + 1.3f));
-				Color colour = Pick(in p, rng);
-				spine.Clear(); widths.Clear(); colours.Clear(); wind.Clear();
-				for (int s = 0; s <= segments; s++)
-				{
-					float t = (float)s / segments;
-					spine.Add(root + Vector3.up * height * t + wave * (Mathf.Sin(t * 5f + phase) * 0.15f * t));
-					widths.Add(p.Width * (s == segments ? 0.3f : 1f));
-					colours.Add(PlantParts.C32(colour * Mathf.Lerp(0.6f, 1f, t), 1f));
-					wind.Add(new Vector2(t * height * 0.5f, 0.3f * t));
-				}
-				PlantParts.Strip(mesh, 0, spine, widths, Vector3.Cross(Vector3.up, wave), FoliageCell.Strap, colours, wind, Vector3.zero);
 			}
 		}
 

@@ -51,8 +51,9 @@ namespace FishMMO.TestHarness.World
 		public List<WeatherSubstance> Substances = new List<WeatherSubstance>();
 
 		[Header("Start")]
-		[Tooltip("Hours per real second while the clock runs.")]
-		public float TimeScale = 0.05f;
+		[Tooltip("World hours per real second while the clock runs (0.05 is 180 times real time).")]
+		[UnityEngine.Serialization.FormerlySerializedAs("TimeScale")]
+		[SerializeField] private float timeScale = 0.05f;
 		[Tooltip("The most the ground's clock may run ahead of real time. The sky's clock defaults to a hundred and eighty times real time, and a ground kept to that is wet and dry again inside a second — true to the clock and useless to look at. Capped, a road takes half a minute or so to dry while the day races by overhead.")]
 		[Range(1f, 200f)] public float GroundTimeScale = 12f;
 		[Min(1f)] public float TickRate = 30f;
@@ -68,15 +69,18 @@ namespace FishMMO.TestHarness.World
 		private bool forcing;
 		private WeatherSample lastSample;
 
-		private double hours;
-		private double timeOfDay = 0.35;
+		/// <summary>
+		/// The bed's tick: FishNet's stand-in offline, counting at <see cref="TickRate"/> a real second
+		/// whatever the world's pace, and driving the shared world clock as a scene server does.
+		/// </summary>
+		private LocalWorldClock clock;
+		private const double StartTimeOfDay = 0.35;
 		private float dayOfYear = 172f;
 		private float latitude = 25f;
 		private float longitude;
 		private float heading;
 		private WorldBody body;
 		private SkyProfile skyOverride;
-		private bool paused = true;
 		private WeatherCover? coverOverride;
 
 		/// <summary>Every planet and moon in the system, in the order the system lists them.</summary>
@@ -97,15 +101,25 @@ namespace FishMMO.TestHarness.World
 			}
 		}
 
-		/// <summary>Local time of day, 0.5 noon. Held while the clock is paused.</summary>
+		/// <summary>
+		/// Local time of day where the bed stands, 0.5 noon. Setting it moves the world clock to the
+		/// nearest moment that has it (<see cref="JumpTo"/>): the sun, the weather and everything else
+		/// move together, as they do in the game. (It used to pin only where the sun was drawn while
+		/// paused, a second clock the weather never saw.)
+		/// </summary>
 		public double TimeOfDay
 		{
-			get => timeOfDay;
-			set
+			get
 			{
-				timeOfDay = Mathf.Repeat((float)value, 1f);
-				ApplyClock();
+				CelestialState state = State;
+				if (state != null)
+				{
+					return state.LocalTime01;
+				}
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				return system != null && body != null ? CelestialMath.LocalTime01(system, body, Hours, longitude) : StartTimeOfDay;
 			}
+			set => JumpTo(value);
 		}
 
 		/// <summary>The home calendar day within its year: the season.</summary>
@@ -116,7 +130,6 @@ namespace FishMMO.TestHarness.World
 			{
 				dayOfYear = Mathf.Clamp(value, 0f, DaysPerYear - 0.0001f);
 				ComposeHours();
-				ApplyClock();
 			}
 		}
 
@@ -138,13 +151,19 @@ namespace FishMMO.TestHarness.World
 			{
 				year = Mathf.Max(0, value);
 				ComposeHours();
-				ApplyClock();
 			}
 		}
 
 		private int year;
 
 		private static int DaysPerYear => SolarSystemProfile.Active != null ? SolarSystemProfile.Active.DaysPerYear : 365;
+
+		/// <summary>Moves the clock to a day of this year, keeping the hour of the day it is at.</summary>
+		public void SetDay(float day)
+		{
+			float hourOfDay = dayOfYear - Mathf.Floor(dayOfYear);
+			DayOfYear = Mathf.Floor(Mathf.Clamp(day, 0f, DaysPerYear - 1f)) + hourOfDay;
+		}
 
 		/// <summary>The world hours at a day of the year the bed is in.</summary>
 		public double HoursOfDay(float day) => ((double)year * DaysPerYear + day) * DayHours;
@@ -186,14 +205,26 @@ namespace FishMMO.TestHarness.World
 		/// <summary>Sets the clock to a world hour outright, and the date to match.</summary>
 		public void JumpToHours(double worldHours)
 		{
-			hours = Math.Max(0.0, worldHours);
+			SetHours(worldHours);
+		}
+
+		/// <summary>Sets the world clock outright, to the millisecond, keeping its pace.</summary>
+		public void SetWorldSeconds(double worldSeconds)
+		{
+			SetHours(worldSeconds / 3600.0);
+		}
+
+		/// <summary>Moves the world clock on (or back) by world seconds, held or running.</summary>
+		public void StepWorld(double worldSeconds)
+		{
+			SetHours(Hours + worldSeconds / 3600.0);
+		}
+
+		/// <summary>Sets the clock, and reads the calendar back from it.</summary>
+		private void SetHours(double worldHours)
+		{
+			clock?.SetWorldSeconds(Math.Max(0.0, worldHours) * 3600.0);
 			ReadCalendar();
-			ApplyClock();
-			CelestialState state = State;
-			if (state != null)
-			{
-				timeOfDay = state.LocalTime01;
-			}
 		}
 
 		/// <summary>
@@ -217,9 +248,10 @@ namespace FishMMO.TestHarness.World
 			float sunScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.SunScale : 1f;
 			float bodyScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.BodyScale : 1f;
 			double step = 2.0 / 60.0;
-			double limit = hours + CelestialMath.YearHours(system) * 4.0;
+			double now = Hours;
+			double limit = now + CelestialMath.YearHours(system) * 4.0;
 			bool wasIn = true;
-			for (double at = hours; at < limit; at += step)
+			for (double at = now; at < limit; at += step)
 			{
 				probe.Compute(system, Body, at, latitude, longitude, heading);
 				bool isIn = solar
@@ -238,13 +270,13 @@ namespace FishMMO.TestHarness.World
 		/// <summary>The date into the clock. In double: a float day stops holding the hour after a few years.</summary>
 		private void ComposeHours()
 		{
-			hours = ((double)year * DaysPerYear + dayOfYear) * DayHours;
+			clock?.SetWorldSeconds(((double)year * DaysPerYear + dayOfYear) * DayHours * 3600.0);
 		}
 
 		/// <summary>The clock into the date, after anything that moved the clock itself.</summary>
 		private void ReadCalendar()
 		{
-			double days = hours / Math.Max(1e-6, DayHours);
+			double days = Hours / Math.Max(1e-6, DayHours);
 			year = Math.Max(0, (int)Math.Floor(days / DaysPerYear));
 			dayOfYear = (float)(days - (double)year * DaysPerYear);
 		}
@@ -292,20 +324,62 @@ namespace FishMMO.TestHarness.World
 			}
 		}
 
+		/// <summary>
+		/// Whether the world is held. Held, the world clock stands still — sun, sky, weather, the sea and
+		/// everything on the world's motion — while the tick goes on counting, exactly as an admin's
+		/// <c>/admin time hold</c> does on a live server.
+		/// </summary>
 		public bool Paused
 		{
-			get => paused;
+			get => clock == null || clock.Held;
 			set
 			{
-				bool started = paused && !value;
-				paused = value;
-				ApplyClock();
+				if (clock == null)
+				{
+					return;
+				}
+				bool started = clock.Held && !value;
+				if (value)
+				{
+					clock.Hold();
+				}
+				else
+				{
+					clock.SetRate(RunRate);
+				}
 				if (started)
 				{
 					BeginRunTrace();
 				}
 			}
 		}
+
+		/// <summary>World hours per real second while the clock runs (held or not, what Run runs at).</summary>
+		public float TimeScale
+		{
+			get => timeScale;
+			set
+			{
+				timeScale = Mathf.Max(0f, value);
+				if (clock != null && !clock.Held)
+				{
+					clock.SetRate(RunRate);
+				}
+			}
+		}
+
+		/// <summary>World seconds per real second while running: <see cref="TimeScale"/> in the world clock's own terms.</summary>
+		public double RunRate
+		{
+			get => Math.Max(1e-6, timeScale * 3600.0);
+			set => TimeScale = (float)(Math.Max(0.0, value) / 3600.0);
+		}
+
+		/// <summary>The world clock's pace now: 0 held, else <see cref="RunRate"/>.</summary>
+		public double Rate => clock != null ? clock.Rate : 0.0;
+
+		/// <summary>World seconds since the epoch now.</summary>
+		public double WorldSeconds => clock != null ? clock.WorldSeconds : 0.0;
 
 		// ── The run trace ─────────────────────────────────────────────
 		// What the sky was doing, frame by frame, for the first seconds after Run is pressed. A
@@ -343,7 +417,7 @@ namespace FishMMO.TestHarness.World
 			string F(double v) => v.ToString("0.#####", culture);
 			float Cover(SkySystem s, int index) => s != null && s.CloudBands != null && index < s.CloudBands.Count ? s.CloudBands[index].Coverage : 0f;
 			runTrace.Append(F(runTraceElapsed)).Append(',').Append(F(dt)).Append(',')
-				.Append(F(timeOfDay)).Append(',').Append(F(state != null ? state.LocalTime01 : -1)).Append(',').Append(F(hours)).Append(',')
+				.Append(F(TimeOfDay)).Append(',').Append(F(state != null ? state.LocalTime01 : -1)).Append(',').Append(F(Hours)).Append(',')
 				.Append(F(sky != null ? sky.CloudDrift.x : 0)).Append(',').Append(F(sky != null ? sky.CloudDrift.y : 0)).Append(',')
 				.Append(F(lastSample.Background[WeatherChannel.CloudCover])).Append(',')
 				.Append(F(lastSample.Background[WeatherChannel.FogDensity])).Append(',')
@@ -366,7 +440,7 @@ namespace FishMMO.TestHarness.World
 				runTrace.Append("0,0,0,0,0,0,0,0,0,0,0,0,0,");
 			}
 			runTrace.Append(F(CloudStats.MeasuredCover)).Append(',').Append(F(CloudStats.MeasuredAnyCloud)).AppendLine();
-			if (runTraceElapsed >= RunTraceSeconds || paused)
+			if (runTraceElapsed >= RunTraceSeconds || Paused)
 			{
 				try
 				{
@@ -393,8 +467,8 @@ namespace FishMMO.TestHarness.World
 			set => SkyProfile.LargerThanLifeOverride = value;
 		}
 
-		/// <summary>World hours since the epoch, as shown.</summary>
-		public double Hours => hours;
+		/// <summary>World hours since the epoch, as shown: the bed's clock.</summary>
+		public double Hours => clock != null ? clock.WorldSeconds / 3600.0 : 0.0;
 
 		public SkySystem Sky => SkySystem.Instance;
 
@@ -427,37 +501,33 @@ namespace FishMMO.TestHarness.World
 		/// </remarks>
 		public void ScrubTo(double localTime01)
 		{
-			timeOfDay = Mathf.Repeat((float)localTime01, 1f);
-			dayOfYear = Mathf.Floor(dayOfYear) + (float)timeOfDay;
+			dayOfYear = Mathf.Floor(dayOfYear) + Mathf.Repeat((float)localTime01, 1f);
 			ComposeHours();
-			ApplyClock();
 		}
 
 		/// <summary>Moves the clock to a time of day (0.5 noon) on the current date.</summary>
 		/// <remarks>
-		/// Always moves the world's clock, paused or not. Paused, <see cref="TimeOfDay"/> alone only
-		/// pins where the sky draws its sun; the weather is sampled on the world's clock, which then
-		/// stayed at the day's start — on Arthis one in the morning — so a probe's "noon" had a
-		/// night's weather under a noon sun: a humid night's fog lit by the midday sun.
+		/// To the nearest moment that has it, held or not: the one world clock moves, and with it the sun,
+		/// the weather and everything else. (When <see cref="TimeOfDay"/> only pinned where the sky drew
+		/// its sun, the weather stayed at the day's start — on Arthis one in the morning — and a probe's
+		/// "noon" had a night's weather under a noon sun.)
 		/// </remarks>
 		public void JumpTo(double localTime01)
 		{
-			TimeOfDay = localTime01;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system == null || body == null)
 			{
-				SolarSystemProfile system = SolarSystemProfile.Active;
-				if (system != null && body != null)
-				{
-					double local = CelestialMath.LocalTime01(system, body, hours, longitude);
-					double shift = localTime01 - local;
-					shift -= Math.Round(shift);
-					double day = CelestialMath.SolarDayHours(system, body);
-					if (!double.IsInfinity(day))
-					{
-						hours = Math.Max(0.0, hours + shift * day);
-						ReadCalendar();
-					}
-				}
-				ApplyClock();
+				ScrubTo(localTime01);
+				return;
+			}
+			double now = Hours;
+			double local = CelestialMath.LocalTime01(system, body, now, longitude);
+			double shift = Mathf.Repeat((float)localTime01, 1f) - local;
+			shift -= Math.Round(shift);
+			double day = CelestialMath.SolarDayHours(system, body);
+			if (!double.IsInfinity(day))
+			{
+				SetHours(now + shift * day);
 			}
 		}
 
@@ -471,19 +541,17 @@ namespace FishMMO.TestHarness.World
 			Camera.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
 		}
 
-		/// <summary>Pins the time of day while paused; lets the clock run free otherwise.</summary>
-		private void ApplyClock()
-		{
-			WorldDayNightCycle.PreviewHours = hours;
-			WorldDayNightCycle.PreviewLocalTime01 = paused ? timeOfDay : (double?)null;
-		}
 
 		// ── The weather ───────────────────────────────────────────────
 
 		public WeatherTimeline Timeline => timeline;
 		public WeatherSample LastSample => lastSample;
 		public WeatherPresentation Presentation => presentation;
-		public uint Tick => (uint)(Time.timeSinceLevelLoad * TickRate);
+		/// <summary>The bed's tick, whole (the local clock's, which never changes pace).</summary>
+		public uint Tick => clock != null ? (uint)clock.Tick : 0u;
+
+		/// <summary>The bed's tick, fractional: where the storms are drawn this frame.</summary>
+		public double PreciseTick => clock != null ? clock.Tick : 0.0;
 
 		/// <summary>
 		/// What is added to the scene's air at runtime — the same thing an admin's
@@ -504,13 +572,14 @@ namespace FishMMO.TestHarness.World
 		/// <summary>Moves what is added to the air to new values over a transition.</summary>
 		public void SetAir(AirOffsets offsets, float seconds)
 		{
-			uint now = Tick;
+			// In world time, as the server's are: a transition holds while the world is held.
+			double now = WorldSeconds;
 			timeline.Air = new AirOffsetEntry
 			{
-				From = timeline.Air.At(now),
+				From = timeline.Air.AtSeconds(now),
 				To = offsets,
-				StartTick = now,
-				EndTick = now + timeline.SecondsToTicks(Mathf.Max(0f, seconds)),
+				StartSeconds = now,
+				EndSeconds = now + Mathf.Max(0f, seconds),
 			};
 			timeline.Revision++;
 			ApplyClimate();
@@ -555,11 +624,11 @@ namespace FishMMO.TestHarness.World
 				float bodyTemperature, bodyHumidity;
 				if (Settings != null && Settings.Body == Body)
 				{
-					CelestialMath.SeasonalClimateOffsets(system, Body, hours, latitude, out bodyTemperature, out bodyHumidity);
+					CelestialMath.SeasonalClimateOffsets(system, Body, Hours, latitude, out bodyTemperature, out bodyHumidity);
 				}
 				else
 				{
-					CelestialMath.ClimateOffsets(system, Body, hours, out bodyTemperature, out bodyHumidity, latitude);
+					CelestialMath.ClimateOffsets(system, Body, Hours, out bodyTemperature, out bodyHumidity, latitude);
 				}
 				BodyTemperature = bodyTemperature;
 				BodyHumidity = bodyHumidity;
@@ -609,7 +678,9 @@ namespace FishMMO.TestHarness.World
 				speed = 0f;
 			}
 			// Long enough to cross the camera and go, and no longer than the storm would live.
-			uint lifetime = timeline.SecondsToTicks(overhead ? Mathf.Max(600f, life) : Mathf.Min(life * 2f, (distance * 2f) / Mathf.Max(0.5f, speed) + 30f));
+			// In world seconds, as the server's storms are: it holds with the world, and races with it.
+			double lifetime = overhead ? Mathf.Max(600f, life) : Mathf.Min(life * 2f, (distance * 2f) / Mathf.Max(0.5f, speed) + 30f);
+			double born = WorldSeconds;
 			timeline.UpsertCell(new StormCell
 			{
 				ID = nextCell++,
@@ -624,11 +695,11 @@ namespace FishMMO.TestHarness.World
 				Shape = StormPhysics.ShapeOf(kind),
 				PeakIntensity = 1f,
 				MeanderMeters = 20f,
-				MotionTick = now,
-				BirthTick = now,
-				MatureTick = now + timeline.SecondsToTicks(overhead ? 0.1f : 10f),
-				DecayTick = now + lifetime - timeline.SecondsToTicks(10f),
-				DeathTick = now + lifetime,
+				MotionSeconds = born,
+				BirthSeconds = born,
+				MatureSeconds = born + (overhead ? 0.1 : 10.0),
+				DecaySeconds = born + lifetime - 10.0,
+				DeathSeconds = born + lifetime,
 			});
 			timeline.Revision++;
 		}
@@ -703,7 +774,15 @@ namespace FishMMO.TestHarness.World
 		private void Awake()
 		{
 			Cache();
-			ComposeHours();
+			/* The bed's own tick, standing in for FishNet's: it drives the shared world clock, so the sky,
+			 * the weather, the sea and the storms all read the time down the game's own path. Held at
+			 * the start, as the bed always was. */
+			clock = new LocalWorldClock(TickRate, ((double)year * DaysPerYear + dayOfYear) * DayHours * 3600.0);
+			LocalWorldClock.Activate(clock);
+			clock.Hold();
+			// No preview pins: the cycle reads the local clock (WorldTime), as it reads the server's in game.
+			WorldDayNightCycle.PreviewHours = null;
+			WorldDayNightCycle.PreviewLocalTime01 = null;
 			/* Stands where the scene stands: on its own body, at its own place on the atlas. It used
 			 * to start on the home world at 25° whatever scene it was dressed into, so a generated
 			 * scene on an airless moon was simulated under the home world's wet air — rain and snow
@@ -720,10 +799,10 @@ namespace FishMMO.TestHarness.World
 			Latitude = latitude;
 			Longitude = longitude;
 			Heading = heading;
-			WorldDayNightCycle.PreviewClockAdvances = false;
 			// The bed starts life-size, whatever the profiles say, so what you see is what ships.
 			SkyProfile.LargerThanLifeOverride = false;
-			ApplyClock();
+			// At its starting hour of the day, where the bed stands.
+			JumpTo(StartTimeOfDay);
 
 			Scene scene = gameObject.scene;
 			timeline.SceneName = scene.name;
@@ -753,6 +832,13 @@ namespace FishMMO.TestHarness.World
 		{
 			WorldDayNightCycle.PreviewHours = null;
 			WorldDayNightCycle.PreviewLocalTime01 = null;
+			if (LocalWorldClock.Active == clock)
+			{
+				LocalWorldClock.Activate(null);
+			}
+			// Back to the game's own: the bed scales these to its clock's pace.
+			WeatherCover.TimeScale = 1f;
+			SkySchedule.RateScale = 1f;
 			WorldDayNightCycle.PreviewLatitude = null;
 			WorldDayNightCycle.PreviewLongitude = null;
 			WorldDayNightCycle.PreviewHeading = null;
@@ -843,26 +929,13 @@ namespace FishMMO.TestHarness.World
 
 		private void Update()
 		{
-			if (!paused)
-			{
-				hours += Time.deltaTime * TimeScale;
-				// The day used to be the clock over the day's length and nothing more, so it ran on
-				// past the end of the year — day 365, 366 — off the end of its own slider.
-				ReadCalendar();
-				ApplyClock();
-				CelestialState state = State;
-				if (state != null)
-				{
-					timeOfDay = state.LocalTime01;
-				}
-			}
-
-			/* One clock for everything. The sky follows the hours above; the sea, the surf and what
-			 * is falling have real-time clocks of their own and followed nothing, so a stopped clock
-			 * went on surfing under a frozen sky. They stop with it and slow with it, but never run
-			 * faster than real time: waves sped up never look like waves (WorldMotion). The sea's
-			 * weather keeps the sky's clock all the same (WorldDayNightCycle.SkyClockHours). */
-			WorldMotion.FollowClock(paused ? 0.0 : TimeScale * 3600.0);
+			/* The tick counts on at its own fixed rate, held or not, as FishNet's does; the world's pace
+			 * (held, real time, raced) is the clock's anchor, set by the panel. One clock for everything:
+			 * the sky, the weather, the storms and the sea all read it, and the world's motion (waves,
+			 * wind, what falls) follows its pace — stopped when held, slowed when slowed, but never faster
+			 * than real time (WorldMotion). */
+			clock?.Advance(Time.unscaledDeltaTime);
+			ReadCalendar();
 
 			uint tick = Tick;
 			float dt = Time.deltaTime;
@@ -874,13 +947,15 @@ namespace FishMMO.TestHarness.World
 				// The ground keeps the bed's clock, not the wall's: at the default rate the sky runs
 				// a hundred and eighty times real time, and a road that dried at the speed of the
 				// wall clock never seemed to dry at all.
-				WeatherCover.TimeScale = paused ? 1f : Mathf.Clamp(TimeScale * 3600f, 1f, Mathf.Max(1f, GroundTimeScale));
+				// Held, the ground holds too: nothing dries or settles while the world stands still.
+				double pace = Rate;
+				WeatherCover.TimeScale = pace <= 0.0 ? 0f : Mathf.Clamp((float)pace, 0f, Mathf.Max(1f, GroundTimeScale));
 				// The bolts are scheduled in world time, so the bed's fast clock would fire a
 				// storm's whole night of lightning in a few seconds. Scaled back to about what it
 				// would look like at the world's own pace.
-				SkySchedule.RateScale = paused ? 1f : 1f / Mathf.Max(1f, TimeScale * 3600f / Mathf.Max(1f, GroundTimeScale));
-				timeline.Cover.Integrate(lastSample.Frame, lastSample.Temperature, coverTimer, DayNight == null || DayNight.DaylightNow ? 1f : 0f);
-				timeline.CoverTick = tick;
+				SkySchedule.RateScale = pace <= 0.0 ? 1f : 1f / Mathf.Max(1f, (float)pace / Mathf.Max(1f, GroundTimeScale));
+				timeline.Cover.Integrate(lastSample.Frame, lastSample.Temperature, coverTimer * WeatherCover.TimeScale, DayNight == null || DayNight.DaylightNow ? 1f : 0f);
+				timeline.CoverSeconds = WorldSeconds;
 				coverTimer = 0f;
 			}
 			presentTimer -= dt;
@@ -926,12 +1001,14 @@ namespace FishMMO.TestHarness.World
 			Scene scene = gameObject.scene;
 			Vector3 viewer = Camera.transform.position;
 			CelestialState now = State;
-			double localTime = now != null ? now.LocalTime01 : timeOfDay;
+			double localTime = now != null ? now.LocalTime01 : TimeOfDay;
 
 			// Where and when the bed is, for the weather driver. In the game these come from the
 			// world clock and the scene's place on the atlas; here they come from the panel, so
 			// dragging the clock really does drive the weather forward.
-			timeline.WorldSecondsAtTick = hours * 3600.0;
+			// The timeline's own anchor, for anything that reads it alone; the weather reads the world clock
+			// itself while one is anchored (WeatherTimeline.WorldSecondsAt), pace and all.
+			timeline.WorldSecondsAtTick = WorldClock.Shared.WorldSecondsAt(tick);
 			timeline.WorldSecondsTick = tick;
 			timeline.LatitudeDegrees = latitude;
 			timeline.LongitudeDegrees = longitude;
@@ -950,8 +1027,8 @@ namespace FishMMO.TestHarness.World
 				Settings = Settings,
 				Timeline = timeline,
 				ViewerPosition = viewer,
-				Tick = tick,
-				WorldHours = hours,
+				Tick = PreciseTick,
+				WorldHours = Hours,
 				Cover = timeline.Cover,
 				Background = lastSample.Background,
 				Sample = lastSample,

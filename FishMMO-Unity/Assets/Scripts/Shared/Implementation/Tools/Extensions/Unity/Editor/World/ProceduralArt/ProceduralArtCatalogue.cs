@@ -101,7 +101,6 @@ namespace FishMMO.Shared.WorldDesign
 
 		public static string DetailPrefab(string name) => "Detail_" + name;
 		public static string TreePrefab(string name) => "Tree_" + name;
-		public static string TreeDecorPrefab(string name) => "Tree_" + name + "_Decor";
 		public static string BoulderPrefab(string material, string shape) => $"Boulder_{material}_{shape}";
 		public static string SmallRocksPrefab(string material) => $"Detail_Rocks_{material}";
 		public static string PebblesPrefab(string material) => $"Detail_Pebbles_{material}";
@@ -135,6 +134,8 @@ namespace FishMMO.Shared.WorldDesign
 		private static Color H(string hex) => SurfaceCatalogue.Hex(hex);
 		private static readonly Color HealthyTint = new Color(0.9f, 0.95f, 0.9f, 1f);
 		private static readonly Color DryTint = new Color(0.75f, 0.7f, 0.55f, 1f);
+		/// <summary>Healthy and dry alike for sea plants: no drought browns a kelp forest.</summary>
+		private static readonly Color SeaTint = new Color(0.95f, 0.95f, 0.95f, 1f);
 
 		private static DetailSpec D(string name, DetailKind kind, int count, float height, float width, float radius, string a, string b,
 			float lean = 0.3f, int segments = 3, Color[] accents = null, float snowBury = 0.8f, Color? healthy = null, Color? dry = null)
@@ -159,7 +160,8 @@ namespace FishMMO.Shared.WorldDesign
 				Healthy = healthy ?? HealthyTint,
 				Dry = dry ?? DryTint,
 				SnowBury = snowBury,
-				CastsShadows = kind == DetailKind.Fern || kind == DetailKind.Shrub || kind == DetailKind.DryShrub || kind == DetailKind.BarrelCactus,
+				CastsShadows = kind == DetailKind.Fern || kind == DetailKind.Shrub || kind == DetailKind.DryShrub || kind == DetailKind.BarrelCactus
+					|| kind == DetailKind.BrainCoral || kind == DetailKind.TableCoral || kind == DetailKind.Sponge,
 			};
 		}
 
@@ -167,7 +169,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			D("GrassLush", DetailKind.Grass, 18, 0.45f, 0.035f, 0.45f, "#4c7a2c", "#78a040"),
 			D("GrassDry", DetailKind.Grass, 16, 0.5f, 0.03f, 0.45f, "#a08a4c", "#cdb672", healthy: new Color(1f, 0.97f, 0.9f), dry: new Color(0.85f, 0.78f, 0.62f)),
-			D("GrassTall", DetailKind.Grass, 20, 0.9f, 0.035f, 0.4f, "#557f30", "#86a848", lean: 0.4f),
+			D("GrassTall", DetailKind.Grass, 18, 0.9f, 0.035f, 0.4f, "#557f30", "#86a848", lean: 0.4f),
 			D("GrassTuft", DetailKind.Grass, 10, 0.2f, 0.03f, 0.15f, "#6e7a3c", "#9a9a58", lean: 0.5f, segments: 2),
 			D("Reeds", DetailKind.Reeds, 14, 1.4f, 0.025f, 0.2f, "#5e7034", "#8a9050", lean: 0.12f),
 			D("Fern", DetailKind.Fern, 7, 0.6f, 0.28f, 0.03f, "#355e22", "#4f7a2e", segments: 4),
@@ -176,9 +178,27 @@ namespace FishMMO.Shared.WorldDesign
 			D("ShrubSmall", DetailKind.Shrub, 10, 0.6f, 0.45f, 0.4f, "#3f6526", "#5e8034", snowBury: 0.4f),
 			D("ShrubDry", DetailKind.DryShrub, 8, 0.7f, 0.6f, 0.45f, "#6a5a44", "#8a7458", snowBury: 0.3f),
 			D("DebrisForest", DetailKind.Debris, 10, 0f, 0.25f, 0.6f, "#6a4a2a", "#9a6a3a", snowBury: 1f),
-			D("Kelp", DetailKind.Kelp, 4, 3f, 0.12f, 0.3f, "#4a5a22", "#6a6a2e", segments: 8, snowBury: 0f),
+			D("Kelp", DetailKind.Kelp, 4, 4.5f, 0.1f, 0.3f, "#5a4e1e", "#8a7428", segments: 10, snowBury: 0f, healthy: SeaTint, dry: SeaTint),
 			D("Coral", DetailKind.Coral, 5, 0.5f, 0.04f, 0.2f, "#d06a5a", "#e8a060",
 				accents: new[] { H("#d06a5a"), H("#e8a060"), H("#c070c0"), H("#6ac0c8"), H("#f0e080") }, snowBury: 0f),
+			// The rest of the sea floor (SeaFloorMeshes).
+			D("Seaweed", DetailKind.Seaweed, 6, 0.8f, 0.045f, 0.15f, "#4a3e14", "#8a6a22", lean: 0.35f, segments: 6, snowBury: 0f, healthy: SeaTint, dry: SeaTint),
+			D("BrainCoral", DetailKind.BrainCoral, 1, 0.28f, 0f, 0.45f, "#b8a070", "#8c7a4a",
+				accents: new[] { H("#b8a878"), H("#a8b070"), H("#c09a70"), H("#9a8a9a") }, snowBury: 0f),
+			D("TableCoral", DetailKind.TableCoral, 1, 0.4f, 0f, 0.7f, "#9ab0a0", "#6a7a6a",
+				accents: new[] { H("#a0c0b0"), H("#c0b090"), H("#b090a0"), H("#90a8c0") }, snowBury: 0f),
+			D("SeaFan", DetailKind.SeaFan, 1, 0.9f, 0.012f, 0.5f, "#8a3a8a", "#c06a3a",
+				accents: new[] { H("#8a3a8a"), H("#c0603a"), H("#d0b040"), H("#c03a4a") }, snowBury: 0f),
+			D("Sponge", DetailKind.Sponge, 3, 0.5f, 0.1f, 0.25f, "#c08030", "#a04a2a",
+				accents: new[] { H("#d09030"), H("#b04a6a"), H("#7a4a9a"), H("#c0c040"), H("#c06030") }, snowBury: 0f),
+			D("Anemone", DetailKind.Anemone, 1, 0.12f, 0.006f, 0.15f, "#a05a4a", "#c08070",
+				accents: new[] { H("#e070a0"), H("#70c090"), H("#b080e0"), H("#f0a050") }, snowBury: 0f),
+			D("Urchin", DetailKind.Urchin, 2, 0.08f, 0.004f, 0.22f, "#2a1a2e", "#4a2a4a", snowBury: 0f),
+			D("Starfish", DetailKind.Starfish, 2, 0.02f, 0f, 0.3f, "#d06030", "#b03a3a",
+				accents: new[] { H("#e07030"), H("#c03a40"), H("#8a4a9a"), H("#e0a040") }, snowBury: 0f),
+			D("Shells", DetailKind.Shells, 4, 0.03f, 0f, 0.35f, "#e8dcc0", "#c0a080",
+				accents: new[] { H("#eee2c8"), H("#d8b898"), H("#e0b0a8"), H("#b89870") }, snowBury: 0f),
+			D("TubeWorms", DetailKind.TubeWorms, 10, 0.7f, 0.015f, 0.25f, "#e8e4d8", "#d0c8b0", accents: new[] { H("#c01c1c") }, snowBury: 0f),
 			D("CactusBarrel", DetailKind.BarrelCactus, 1, 0.45f, 0f, 0.25f, "#3e7238", "#5a8a48", snowBury: 0f),
 		};
 
@@ -223,6 +243,15 @@ namespace FishMMO.Shared.WorldDesign
 				case DetailKind.Kelp: return 0.05f;
 				case DetailKind.Coral: return 0.05f;
 				case DetailKind.BarrelCactus: return 0.05f;
+				case DetailKind.BrainCoral: return 0.06f;
+				case DetailKind.TableCoral: return 0.05f;
+				case DetailKind.SeaFan: return 0.04f;
+				case DetailKind.Sponge: return 0.05f;
+				case DetailKind.TubeWorms: return 0.05f;
+				case DetailKind.Anemone: return 0.02f;
+				case DetailKind.Urchin: return 0.015f;
+				case DetailKind.Starfish: return 0.004f;
+				case DetailKind.Shells: return 0.006f;
 				default: return 0.03f;
 			}
 		}
@@ -244,29 +273,84 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Trees ─────────────────────────────────────────────────────
 
+		/// <summary>Every tree species, at the size of a mature tree of its kind: one unit is one metre.</summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Real sizes.</b> These were 6–20 m, about half to two thirds of the real trees, which made a
+		/// pine wood read as a plantation of saplings beside a 1.8 m character. Each is now a mature tree
+		/// as it grows in a stand, the scatter's ±15–20% per instance (<see cref="BiomeArtSpec"/>) giving
+		/// the spread round it:
+		/// </para>
+		/// <list type="bullet">
+		/// <item><b>Spruce</b> (Norway spruce): 28 m, trunk 0.38 m radius (≈0.75 m across at the foot),
+		/// a narrow spire 3.1 m in radius (0.11 of the height) from low down (0.18): spruce keeps its
+		/// lower boughs, even in a stand. 28 whorls, about one every 0.8 m of crown.</item>
+		/// <item><b>Pine</b> (Scots pine): 30 m, trunk 0.4 m, its crown high on a bare bole (from 0.55) and
+		/// 3.9 m in radius (0.13): a stand-grown pine sheds its lower branches.</item>
+		/// <item><b>Oak</b> (pedunculate oak): 24 m, trunk 0.6 m, a broad crown 7.2 m in radius (0.3) from
+		/// a third of the way up; an open-grown oak spreads wider still, which the open-ground width lean
+		/// gives it.</item>
+		/// <item><b>Birch</b> (silver birch): 20 m, a slender 0.18 m trunk, a narrow crown 3.2 m in radius.</item>
+		/// <item><b>Jungle</b> (a rainforest canopy tree): 36 m, a 0.7 m trunk (the generator has no
+		/// buttresses, so the trunk is wide at the foot instead), a crown 9 m in radius high on the bole (0.6).</item>
+		/// <item><b>Dead</b> (a snag): 14 m, 0.3 m.</item>
+		/// <item><b>Palm</b> (coconut): 16 m, a 0.2 m stem, fronds 4.8 m long (0.3 of the height) and 1.2 m wide.</item>
+		/// <item><b>Saguaro</b>: 10 m, a 0.3 m column with three arms.</item>
+		/// <item><b>Acacia</b> (umbrella thorn): 9 m, its flat crown 5.4 m in radius — wider than the tree is tall.</item>
+		/// <item><b>Bamboo</b>: a clump of twelve 13 m culms of 0.065 m radius on a footing 1 m across.</item>
+		/// </list>
+		/// <para>
+		/// <b>Leaf cards grow with the crown.</b> A crown is cards hung on limbs, so a crown twice as wide
+		/// with the old cards and limbs would be a quarter as full: the broadleaves get more limbs and
+		/// larger cards (oak 2.2 m, jungle 2.6 m), keeping card area at about two and a half times the
+		/// crown's surface as before. Conifer sprays are sized from the crown already. The billboard's
+		/// texture is a fixed pixel height whatever the tree's, and the level-of-detail switches are
+		/// screen heights (<see cref="TreeLodHeights"/>), so a taller tree simply changes level further off.
+		/// </para>
+		/// </remarks>
 		public static readonly TreeSpecies[] Trees =
 		{
-			new TreeSpecies { Name = "Spruce", Form = TreeForm.Conifer, Height = 14f, TrunkRadius = 0.22f, CrownWidth = 0.22f, CrownBase = 0.12f, Branches = 16,
-				BarkFamily = Bark.Brown, LeafA = H("#24452a"), LeafB = H("#35593a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.2f },
-			new TreeSpecies { Name = "Pine", Form = TreeForm.Conifer, Height = 16f, TrunkRadius = 0.25f, CrownWidth = 0.16f, CrownBase = 0.45f, Branches = 12,
-				BarkFamily = Bark.Pine, LeafA = H("#2e5230"), LeafB = H("#46683a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.3f },
-			new TreeSpecies { Name = "Oak", Form = TreeForm.Broadleaf, Height = 11f, TrunkRadius = 0.35f, CrownWidth = 0.45f, CrownBase = 0.32f, Branches = 6,
-				BarkFamily = Bark.Brown, LeafA = H("#3d6426"), LeafB = H("#5a7e30"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 1.6f, Deciduous = true },
-			new TreeSpecies { Name = "Birch", Form = TreeForm.Broadleaf, Height = 12f, TrunkRadius = 0.16f, CrownWidth = 0.25f, CrownBase = 0.4f, Branches = 5,
-				BarkFamily = Bark.Birch, LeafA = H("#5a8a30"), LeafB = H("#7aa040"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.1f, Deciduous = true },
-			new TreeSpecies { Name = "Jungle", Form = TreeForm.Broadleaf, Height = 20f, TrunkRadius = 0.45f, CrownWidth = 0.35f, CrownBase = 0.6f, Branches = 7,
-				BarkFamily = Bark.Brown, LeafA = H("#24501e"), LeafB = H("#3a6a26"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 2f },
-			new TreeSpecies { Name = "Dead", Form = TreeForm.Dead, Height = 9f, TrunkRadius = 0.25f, CrownWidth = 0.35f, CrownBase = 0.35f, Branches = 5,
-				BarkFamily = Bark.Dead, LeafA = H("#6a5e4e"), LeafB = H("#8a7a66"), LeafCell = FoliageCell.Twigs, LeafSize = 1f },
-			new TreeSpecies { Name = "Palm", Form = TreeForm.Palm, Height = 10f, TrunkRadius = 0.2f, CrownWidth = 0.35f, CrownBase = 0.9f, Branches = 10,
-				BarkFamily = Bark.Palm, LeafA = H("#3e6a26"), LeafB = H("#5a8030"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1f },
-			new TreeSpecies { Name = "Saguaro", Form = TreeForm.Cactus, Height = 6f, TrunkRadius = 0.3f, CrownWidth = 0.2f, CrownBase = 0f, Branches = 2,
+			new TreeSpecies { Name = "Spruce", Form = TreeForm.Conifer, Height = 28f, TrunkRadius = 0.38f, CrownWidth = 0.11f, CrownBase = 0.18f, Branches = 28,
+				BarkFamily = Bark.Brown, LeafA = H("#24452a"), LeafB = H("#35593a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.6f },
+			new TreeSpecies { Name = "Pine", Form = TreeForm.Pine, Height = 30f, TrunkRadius = 0.4f, CrownWidth = 0.13f, CrownBase = 0.55f, Branches = 18,
+				BarkFamily = Bark.Pine, LeafA = H("#2e5230"), LeafB = H("#46683a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.8f },
+			new TreeSpecies { Name = "Oak", Form = TreeForm.Broadleaf, Height = 24f, TrunkRadius = 0.6f, CrownWidth = 0.3f, CrownBase = 0.3f, Branches = 8,
+				BarkFamily = Bark.Brown, LeafA = H("#3d6426"), LeafB = H("#5a7e30"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 2.2f, Deciduous = true },
+			new TreeSpecies { Name = "Birch", Form = TreeForm.Broadleaf, Height = 20f, TrunkRadius = 0.18f, CrownWidth = 0.16f, CrownBase = 0.4f, Branches = 6,
+				BarkFamily = Bark.Birch, LeafA = H("#5a8a30"), LeafB = H("#7aa040"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.5f, Deciduous = true },
+			new TreeSpecies { Name = "Jungle", Form = TreeForm.Broadleaf, Height = 36f, TrunkRadius = 0.7f, CrownWidth = 0.25f, CrownBase = 0.6f, Branches = 8,
+				BarkFamily = Bark.Brown, LeafA = H("#24501e"), LeafB = H("#3a6a26"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 2.6f },
+			new TreeSpecies { Name = "Dead", Form = TreeForm.Dead, Height = 14f, TrunkRadius = 0.3f, CrownWidth = 0.25f, CrownBase = 0.4f, Branches = 6,
+				BarkFamily = Bark.Dead, LeafA = H("#6a5e4e"), LeafB = H("#8a7a66"), LeafCell = FoliageCell.Twigs, LeafSize = 1.2f },
+			new TreeSpecies { Name = "Palm", Form = TreeForm.Palm, Height = 16f, TrunkRadius = 0.2f, CrownWidth = 0.3f, CrownBase = 0.9f, Branches = 14,
+				BarkFamily = Bark.Palm, LeafA = H("#3e6a26"), LeafB = H("#5a8030"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1.2f },
+			new TreeSpecies { Name = "Saguaro", Form = TreeForm.Cactus, Height = 10f, TrunkRadius = 0.3f, CrownWidth = 0.2f, CrownBase = 0f, Branches = 3,
 				BarkFamily = Bark.Cactus, LeafA = Color.white, LeafB = Color.white, LeafCell = FoliageCell.Solid, LeafSize = 0f },
-			new TreeSpecies { Name = "Acacia", Form = TreeForm.Umbrella, Height = 6f, TrunkRadius = 0.18f, CrownWidth = 0.6f, CrownBase = 0.8f, Branches = 3,
-				BarkFamily = Bark.Brown, LeafA = H("#55702a"), LeafB = H("#748a38"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.5f },
-			new TreeSpecies { Name = "Bamboo", Form = TreeForm.Bamboo, Height = 9f, TrunkRadius = 0.05f, CrownWidth = 0.3f, CrownBase = 0.45f, Branches = 10,
-				BarkFamily = Bark.Bamboo, LeafA = H("#4a7a2a"), LeafB = H("#6a9638"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 0.9f },
+			new TreeSpecies { Name = "Acacia", Form = TreeForm.Umbrella, Height = 9f, TrunkRadius = 0.25f, CrownWidth = 0.6f, CrownBase = 0.8f, Branches = 3,
+				BarkFamily = Bark.Brown, LeafA = H("#55702a"), LeafB = H("#748a38"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2.2f },
+			new TreeSpecies { Name = "Bamboo", Form = TreeForm.Bamboo, Height = 13f, TrunkRadius = 0.065f, CrownWidth = 0.3f, CrownBase = 0.45f, Branches = 12,
+				BarkFamily = Bark.Bamboo, LeafA = H("#4a7a2a"), LeafB = H("#6a9638"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 1.4f },
 		};
+
+		/// <summary>
+		/// How far a species' crown reaches from its trunk, metres, at scale 1: what a stand's spacing is
+		/// sized from (<see cref="BiomeArtSpec"/>).
+		/// </summary>
+		/// <remarks>
+		/// The crown width is a radius over the height for every form the generator grows round a single
+		/// stem (TreeMeshes: a conifer's lowest whorl, a broadleaf's or an umbrella's crown radius, a palm's
+		/// frond length). A bamboo's crown is its clump — culm feet spread over a quarter of the crown
+		/// width times the height — plus one leaf spray; a cactus's is its arms, about three trunk radii.
+		/// </remarks>
+		public static float CrownRadius(in TreeSpecies species)
+		{
+			switch (species.Form)
+			{
+				case TreeForm.Bamboo: return species.CrownWidth * species.Height * 0.25f + species.LeafSize;
+				case TreeForm.Cactus: return species.TrunkRadius * 3f;
+				default: return species.CrownWidth * species.Height;
+			}
+		}
 
 		public static bool TryTree(string name, out TreeSpecies species)
 		{
@@ -287,6 +371,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <para>
 		/// For a 15 m tree under a 60° vertical field of view (screen share = h / (2·d·tan 30°)):
 		/// LOD0 → LOD1 at 0.25 ≈ 52 m, LOD1 → the billboard at 0.08 ≈ 160 m, culled at 0.002 ≈ 4.3 km.
+		/// Screen shares scale with the tree, so a 28 m spruce steps at ≈ 97 m and ≈ 300 m: the trees
+		/// grew to their real sizes (2026-10-04) and change level proportionally further off, at the same
+		/// size on screen, which is what the shares are for.
 		/// The billboard used to start at 0.1 (≈130 m), close enough that its flatness showed; at 160 m a
 		/// 15 m tree is ~90 px tall at 1080p, a little below the 512 px picture's own resolution.
 		/// </para>
@@ -409,7 +496,6 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (TreeSpecies t in Trees)
 			{
 				yield return TreePrefab(t.Name);
-				yield return TreeDecorPrefab(t.Name);
 			}
 			foreach (RockMaterialSpec m in RockMaterials)
 			{

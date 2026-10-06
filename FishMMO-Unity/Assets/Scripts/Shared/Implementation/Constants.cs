@@ -576,6 +576,36 @@ namespace FishMMO.Shared
 			/// <remarks>Stamina units consumed per jump.</remarks>
 			public const float JumpStaminaCost = 5.0f;
 
+			/// <summary>Swimming speed, m/s, before the Swim Speed attribute.</summary>
+			public const float SwimSpeed = 2.0f;
+
+			/// <summary>Swimming speed with sprint held (paid for in stamina at <see cref="SwimSprintStaminaCost"/>), m/s.</summary>
+			public const float SwimSprintSpeed = 3.2f;
+
+			/// <summary>Stamina per second a fast swim costs.</summary>
+			public const float SwimSprintStaminaCost = 6.0f;
+
+			/// <summary>How fast holding Jump or Crouch rises or dives, m/s.</summary>
+			public const float SwimVerticalSpeed = 1.8f;
+
+			/// <summary>Submersion (share of the capsule's height under the surface) at which a wading character starts to swim.</summary>
+			public const float SwimEnterSubmersion = 0.6f;
+
+			/// <summary>Submersion under which a swimmer with ground under it stands up again. Below the enter mark, so the two never flicker.</summary>
+			public const float SwimExitSubmersion = 0.45f;
+
+			/// <summary>Submersion a swimmer floats at: head and shoulders out.</summary>
+			public const float SwimFloatSubmersion = 0.75f;
+
+			/// <summary>Looking further down than this, degrees, while moving dives.</summary>
+			public const float SwimDiveLookDegrees = 20f;
+
+			/// <summary>Ticks a climb out of the water lasts.</summary>
+			public const int SwimClimbOutTicks = 12;
+
+			/// <summary>How high a ledge over the water a swimmer can climb out onto, metres.</summary>
+			public const float SwimClimbOutLedgeMetres = 1.3f;
+
 			/// <summary>
 			/// Gravity vector applied to characters.
 			/// <c>static readonly</c> because <see cref="Vector3"/> is a non-primitive type and cannot be <c>const</c>.

@@ -96,6 +96,11 @@ namespace FishMMO.Shared
 		{
 			base.WritePayload(connection, writer);
 			writer.WriteBoolean(SwitchTarget != null && SwitchTarget.IsActivated);
+			// And when it changed, for a target that plays a change out: a player arriving mid-swing
+			// sees it mid-swing, and one arriving later sees it settled (ITimedSwitchTarget).
+			ITimedSwitchTarget timed = SwitchTarget as ITimedSwitchTarget;
+			writer.WriteUInt32(timed != null ? timed.ChangeTick : 0u);
+			writer.WriteSingle(timed != null ? timed.ChangeTravel : 0f);
 		}
 
 		/// <summary>
@@ -106,8 +111,16 @@ namespace FishMMO.Shared
 			base.ReadPayload(connection, reader);
 
 			bool activated = reader.ReadBoolean();
+			uint changeTick = reader.ReadUInt32();
+			float changeTravel = reader.ReadSingle();
 			if (SwitchTarget == null)
 			{
+				return;
+			}
+			// Worked out from the tick the change began at: settled if that was long ago, partway if not.
+			if (SwitchTarget is ITimedSwitchTarget timed)
+			{
+				timed.SetState(activated, changeTick, changeTravel);
 				return;
 			}
 

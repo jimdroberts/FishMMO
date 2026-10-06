@@ -219,6 +219,78 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		// ── Variety and budget (Jim 2026-10-04: "sparse, and all identical") ──
+
+		[Test]
+		public void FaceRoles_HaveSeveralVariants([Values("Granite", "Sandstone", "Basalt", "Slate", "Ice")] string type)
+		{
+			foreach (CliffRole role in new[] { CliffRole.Base, CliffRole.Mid, CliffRole.Fill })
+			{
+				int variants = CliffRocks.ShapesOf(type, role).Sum(s => s.Variants);
+				Assert.That(variants, Is.GreaterThanOrEqualTo(3), $"{type} {role}: the roles a cliff mostly shows need more than one or two meshes");
+			}
+			Assert.That(CliffRocks.ShapesOf(type, CliffRole.Titan).Sum(s => s.Variants), Is.GreaterThanOrEqualTo(2), $"{type} titans");
+		}
+
+		[Test]
+		public void Variants_HaveTheirOwnProportions_AndMeshes()
+		{
+			var v0 = new CliffPiece("Sandstone", CliffRole.Base, 0, -1, 0);
+			var v1 = new CliffPiece("Sandstone", CliffRole.Base, 0, -1, 1);
+			var v2 = new CliffPiece("Sandstone", CliffRole.Base, 0, -1, 2);
+			CliffRocks.Proportions(in v0, out float s0, out float h0, out float e0);
+			Assert.That((s0, h0, e0), Is.EqualTo((1f, 1f, 1f)), "variant 0 is the shape as declared");
+			CliffRocks.Proportions(in v1, out float s1, out float h1, out _);
+			CliffRocks.Proportions(in v2, out float s2, out float h2, out _);
+			Assert.That(s1, Is.InRange(0.88f, 1.12f));
+			Assert.That(h1, Is.InRange(0.82f, 1.22f));
+			Assert.That(Mathf.Abs(s1 - s2) + Mathf.Abs(h1 - h2), Is.GreaterThan(1e-3f), "two variants, two sets of proportions");
+			CliffRocks.Proportions(in v1, out float again, out _, out _);
+			Assert.That(again, Is.EqualTo(s1), "proportions come from the piece, never from a running generator");
+
+			Vector3 a = Seating(v0).Bounds.size, b = Seating(v1).Bounds.size, c = Seating(v2).Bounds.size;
+			Assert.That(Mathf.Max((a - b).magnitude, (a - c).magnitude), Is.GreaterThan(0.02f * a.magnitude), "variants are different rocks, not one rock re-seeded into the same box");
+		}
+
+		[Test]
+		public void Plan_UsesManyPiecesSizesAndTurns()
+		{
+			List<PlacedCliffRock> face = PlanOf("Sandstone").Rocks.Where(r => !r.Talus).ToList();
+			Assert.That(face.Select(r => r.Piece).Distinct().Count(), Is.GreaterThanOrEqualTo(4), "a cliff of one or two meshes reads as a stamp");
+			var volumes = face.Select(r => r.Scale.x * r.Scale.y * r.Scale.z).ToList();
+			Assert.That(volumes.Max() / volumes.Min(), Is.GreaterThan(1.3f), "the rocks of a cliff take different sizes");
+		}
+
+		[Test]
+		public void Budget_GrowsWithTheCliff_WithinItsFloorAndCeiling()
+		{
+			var o = new CliffRockPlacementOptions();
+			Assert.That(CliffRockPlacement.BudgetFor(500f, o), Is.EqualTo(o.MinBudget), "a small cliff keeps the old ceiling");
+			Assert.That(CliffRockPlacement.BudgetFor(20000f, o), Is.EqualTo(Mathf.CeilToInt(20000f / 100f * o.RocksPer100Metres)));
+			Assert.That(CliffRockPlacement.BudgetFor(1e7f, o), Is.EqualTo(o.MaxRocks), "never above the hard ceiling");
+		}
+
+		[Test]
+		public void Budget_WhenItBites_ThinsEveryClassEvenly()
+		{
+			var options = new CliffRockPlacementOptions { MinBudget = 0, MaxRocks = 30 };
+			CliffRockPlan plan = Plan("Sandstone", 0, options);
+			Assert.That(plan.Stats.Budget, Is.EqualTo(30));
+			Assert.That(plan.Rocks.Count, Is.LessThanOrEqualTo(30));
+			var footing = plan.Rocks.Where(r => r.Base && r.BandT == 0f && !r.Talus).ToList();
+			Assert.That(footing.Any(r => r.Position.x < 120f) && footing.Any(r => r.Position.x >= 120f), Is.True,
+				"the footing is thinned along the whole foot line, not used up on the first stretch the tracer found");
+			Assert.That(plan.Stats.Face, Is.GreaterThan(plan.Stats.Footing), "the footing leaves room for the face rocks");
+		}
+
+		[Test]
+		public void Footing_IsSizedToTheBand()
+		{
+			Assert.That(CliffRockPlacement.FootRoleFor(3f), Is.EqualTo(CliffRole.Fill));
+			Assert.That(CliffRockPlacement.FootRoleFor(7f), Is.EqualTo(CliffRole.Mid));
+			Assert.That(CliffRockPlacement.FootRoleFor(25f), Is.EqualTo(CliffRole.Base));
+		}
+
 		[Test]
 		public void Roundness_FollowsTheClimate()
 		{

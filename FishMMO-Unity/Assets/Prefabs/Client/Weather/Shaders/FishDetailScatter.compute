@@ -1,0 +1,409 @@
+// GPU detail scatter: regenerates the visible mesh details (pebbles, small rocks, shells, litter...) around one
+// camera every frame (DetailScatterRenderer, FishMMO.Client/World/Terrain/Scatter), the mesh counterpart of the blade
+// grass. Nothing is resident but the per-terrain block counts and heights; every instance is a deterministic function
+// of its world block, its type's salt and its channel's seed (DetailScatterMath.cs is the CPU mirror; change both
+// together). The output is what the procedural-instancing twins (FishIndirectInstancing.hlsl) already draw: FishInstance
+// matrices and FishVisible entries in per-(type, view) regions, so the same materials draw it as the chunk renderer's.
+//
+// Per camera, in order:
+//   FishScatterClear      zero every slot's counter
+//   FishScatterGenerate   ONCE per resolution group of DetailScatterAtlas (normally one): one 64-thread group per CPU work
+//                         item (8 x 8 blocks of one terrain), one thread per 2 m block; per channel (type) the block's
+//                         exact count (whole + its coin), and per instance: its place in the block, the ground height
+//                         and normal, its size from the noise, its turn, ground alignment and slope sink (the chunk
+//                         renderer's rules), distance thinning and the edge fade, frustum / sun-swept cull, append
+//   FishScatterFinalize   each indirect command's instanceCount = min(count, capacity)
+//
+// Slots: type * 2 + view (0 camera, 1 shadow casters). A slot never overflows: an append past its capacity is dropped
+// (the CPU sizes it from the exact upper bound of the blocks it listed, so only the per-slot cap can drop anything).
+//
+// Portable (WebGPU, Vulkan, D3D11/12, Metal, GLCore): no wave intrinsics; atomics only on a RWByteAddressBuffer;
+// textures read with Load (no samplers); 7 storage buffers in the generate kernel (WebGPU's per-stage limit is 8); 2
+// textures, both the scatter's own.
+
+#pragma kernel FishScatterClear
+#pragma kernel FishScatterGenerate
+#pragma kernel FishScatterFinalize
+#pragma kernel FishScatterArgsFence
+
+#define SCATTER_ITEM_SIDE 8
+#define SCATTER_MAX_PER_BLOCK 128
+#define SCATTER_MAX_CHANNELS 8
+#define SCATTER_TERRAIN_UINTS 96u
+#define SCATTER_CHANNEL_BASE 16u
+#define SCATTER_CHANNEL_UINTS 10u
+#define SCATTER_THIN_BAND 0.08
+#define SCATTER_SLOPE_SINK_SHARE 0.6
+#define SCATTER_MAX_SLOPE_SINK 0.4
+
+struct FishInstance { float4 row0; float4 row1; float4 row2; };   // 48 bytes (FishIndirectInstancing.hlsl)
+struct FishVisible { uint index; float lodFade; };                 // 8 bytes
+struct ScatterItem { int blockX; int blockZ; uint packed; uint terrain; };   // packed: main 1, shadow 2, nx 4 bits from 2, nz 4 bits from 6
+struct ScatterModel { float4 sphere; float4 extra; };              // sphere: local centre xyz, radius; extra: x foot radius, y salt (bits), z casts shadows (0/1)
+
+StructuredBuffer<ScatterItem> _ScatterItems;
+StructuredBuffer<uint> _ScatterTable;           // DetailScatterAtlas.WriteTable: SCATTER_TERRAIN_UINTS per terrain
+StructuredBuffer<ScatterModel> _ScatterModels;  // per type
+StructuredBuffer<uint2> _ScatterSlots;          // per slot: x base in the output buffers, y capacity
+RWByteAddressBuffer _ScatterCounts;             // one uint per slot
+RWStructuredBuffer<FishInstance> _ScatterInstancesOut;
+RWStructuredBuffer<FishVisible> _ScatterVisibleOut;
+
+Texture2DArray<float> _ScatterHeights;          // the scatter's own copy of the heights, 0..1 of the terrain's height
+Texture2DArray<float4> _ScatterDensity;         // two slices a terrain: channels 0..3, 4..7; expected instances per block
+
+float4 _ScatterCamera;                          // xyz position
+float4 _ScatterPlanes[6];                       // inside when dot(n, p) + w >= 0
+float4 _ScatterLight;                           // xyz the sun's direction of travel, w shadow distance (0 none)
+float4 _ScatterThin;                            // x thin start (m), y share kept at the draw distance, z edge fade band (share of the distance)
+uint _ScatterItemOffset;
+uint _ScatterItemCount;
+uint _ScatterSlotCount;
+uint _ScatterArgCount;
+
+// The thread's terrain, from the table (ScatterLoadTerrain).
+static float4 _TerrainOrigin;    // xyz, w metres per height unit
+static float4 _TerrainSize;      // x size x, y size z, z heightmap resolution, w blocks per side
+static float2 _TerrainBlock;     // block size x, z (m)
+static uint _TerrainHeightSlice;
+static uint _TerrainDensitySlice;
+static int2 _TerrainWorldBlock;  // world index of block 0
+static float _TerrainDistance;
+static uint _TerrainRow;
+
+void ScatterLoadTerrain(uint terrain)
+{
+    uint at = terrain * SCATTER_TERRAIN_UINTS;
+    _TerrainRow = at;
+    _TerrainOrigin = asfloat(uint4(_ScatterTable[at], _ScatterTable[at + 1u], _ScatterTable[at + 2u], _ScatterTable[at + 3u]));
+    _TerrainSize = asfloat(uint4(_ScatterTable[at + 4u], _ScatterTable[at + 5u], _ScatterTable[at + 6u], _ScatterTable[at + 7u]));
+    _TerrainBlock = asfloat(uint2(_ScatterTable[at + 8u], _ScatterTable[at + 9u]));
+    _TerrainHeightSlice = _ScatterTable[at + 10u];
+    _TerrainDensitySlice = _ScatterTable[at + 11u];
+    _TerrainWorldBlock = asint(uint2(_ScatterTable[at + 13u], _ScatterTable[at + 14u]));
+    _TerrainDistance = asfloat(_ScatterTable[at + 15u]);
+}
+
+// ── Hashes (TerrainDetailMath.Mix / Hash / Unit) ──────────────────────
+
+uint ScatterMix(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+uint ScatterHash(int cellX, int cellZ, uint prototype, uint seed, uint instance)
+{
+    uint h = ScatterMix(asuint(cellX) * 0x9E3779B1u ^ ScatterMix(asuint(cellZ) + 0x632BE5ABu));
+    h = ScatterMix(h ^ prototype * 0x85EBCA77u);
+    h = ScatterMix(h ^ seed * 0xC2B2AE3Du);
+    return ScatterMix(h ^ instance * 0x27D4EB2Fu);
+}
+
+float ScatterUnit(uint hash, uint stream)
+{
+    return (float)(ScatterMix(hash ^ (stream + 1u) * 0x165667B1u) >> 8) * (1.0 / 16777216.0);
+}
+
+// TerrainDetailMath.Noise: smooth value noise over the world, so neighbouring plants share a size.
+float ScatterNoise(float x, float z, uint seed)
+{
+    int x0 = (int)floor(x);
+    int z0 = (int)floor(z);
+    float fx = x - (float)x0;
+    float fz = z - (float)z0;
+    fx = fx * fx * (3.0 - 2.0 * fx);
+    fz = fz * fz * (3.0 - 2.0 * fz);
+    uint minusOne = 0xFFFFFFFFu;
+    float a = ScatterUnit(ScatterHash(x0, z0, minusOne, seed, 0u), 3u);
+    float b = ScatterUnit(ScatterHash(x0 + 1, z0, minusOne, seed, 0u), 3u);
+    float c = ScatterUnit(ScatterHash(x0, z0 + 1, minusOne, seed, 0u), 3u);
+    float d = ScatterUnit(ScatterHash(x0 + 1, z0 + 1, minusOne, seed, 0u), 3u);
+    return lerp(lerp(a, b, fx), lerp(c, d, fx), fz);
+}
+
+// FishTerrainInstancing.compute FishThinFade's position hash (DetailScatterMath.PositionHash01).
+float ScatterPositionHash(float3 p)
+{
+    return (float)(ScatterMix(asuint(p.x) ^ ScatterMix(asuint(p.z))) & 0xFFFFFFu) / 16777216.0;
+}
+
+// ── The terrain ───────────────────────────────────────────────────────
+
+float ScatterHeightTexel(int2 i)
+{
+    int last = (int)_TerrainSize.z - 1;
+    return _ScatterHeights.Load(int4(clamp(i, 0, last), _TerrainHeightSlice, 0));
+}
+
+// Bilinear between four Loads (no sampler, so the same on every API): world y.
+float ScatterHeightAt(float2 local)
+{
+    float res = _TerrainSize.z;
+    float2 g = clamp(local / _TerrainSize.xy, 0.0, 1.0) * (res - 1.0);
+    int2 i = (int2)floor(g);
+    float2 f = g - (float2)i;
+    float h00 = ScatterHeightTexel(i);
+    float h10 = ScatterHeightTexel(i + int2(1, 0));
+    float h01 = ScatterHeightTexel(i + int2(0, 1));
+    float h11 = ScatterHeightTexel(i + int2(1, 1));
+    return _TerrainOrigin.y + lerp(lerp(h00, h10, f.x), lerp(h01, h11, f.x), f.y) * _TerrainOrigin.w;
+}
+
+// The ground's normal from the heights a texel either side (TerrainData.GetInterpolatedNormal's role).
+float3 ScatterNormalAt(float2 local)
+{
+    float2 step = _TerrainSize.xy / max(1.0, _TerrainSize.z - 1.0);
+    float hx0 = ScatterHeightAt(local - float2(step.x, 0.0));
+    float hx1 = ScatterHeightAt(local + float2(step.x, 0.0));
+    float hz0 = ScatterHeightAt(local - float2(0.0, step.y));
+    float hz1 = ScatterHeightAt(local + float2(0.0, step.y));
+    return normalize(float3((hx0 - hx1) / (2.0 * step.x), 1.0, (hz0 - hz1) / (2.0 * step.y)));
+}
+
+// ── Culling ───────────────────────────────────────────────────────────
+
+bool ScatterSphereVisible(float3 c, float r)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        inside = inside && dot(_ScatterPlanes[k].xyz, c) + _ScatterPlanes[k].w >= -r;
+    }
+    return inside;
+}
+
+bool ScatterSweptSphereVisible(float3 c, float r, float3 d, float l)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        float d0 = dot(_ScatterPlanes[k].xyz, c) + _ScatterPlanes[k].w;
+        float d1 = d0 + dot(_ScatterPlanes[k].xyz, d) * l;
+        inside = inside && max(d0, d1) >= -r;
+    }
+    return inside;
+}
+
+void ScatterEmit(uint slot, FishInstance instance, float fade)
+{
+    uint at;
+    _ScatterCounts.InterlockedAdd(slot * 4u, 1u, at);
+    uint2 s = _ScatterSlots[slot];
+    if (at < s.y)
+    {
+        _ScatterInstancesOut[s.x + at] = instance;
+        FishVisible v;
+        v.index = s.x + at;
+        v.lodFade = fade;
+        _ScatterVisibleOut[s.x + at] = v;
+    }
+}
+
+// ── Kernels ───────────────────────────────────────────────────────────
+
+[numthreads(64, 1, 1)]
+void FishScatterClear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _ScatterSlotCount)
+    {
+        _ScatterCounts.Store(id.x * 4u, 0u);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint itemIndex = group.x + group.y * 65535u;
+    if (itemIndex >= _ScatterItemCount)
+    {
+        return;
+    }
+    ScatterItem item = _ScatterItems[_ScatterItemOffset + itemIndex];
+    ScatterLoadTerrain(item.terrain);
+    bool main = (item.packed & 1u) != 0u;
+    bool shadow = (item.packed & 2u) != 0u;
+    uint nx = (item.packed >> 2) & 15u;
+    uint nz = (item.packed >> 6) & 15u;
+    uint lx = thread.x & 7u;
+    uint lz = thread.x >> 3;
+    if (lx >= nx || lz >= nz)
+    {
+        return;
+    }
+    int bx = item.blockX + (int)lx;
+    int bz = item.blockZ + (int)lz;
+    int blocks = (int)_TerrainSize.w;
+    if (bx >= blocks || bz >= blocks)
+    {
+        return;
+    }
+    // The block's extent on the terrain (the last row and column may be partial).
+    float2 blockMin = float2((float)bx, (float)bz) * _TerrainBlock;
+    float2 blockMax = min(blockMin + _TerrainBlock, _TerrainSize.xy);
+    float2 extent = max(blockMax - blockMin, 0.0);
+    float distanceLimit = _TerrainDistance;
+    float3 eye = _ScatterCamera.xyz;
+    // Nothing in a block whose nearest ground point is past the distance (in the ground plane: never more than the 3D one).
+    float2 nearest = clamp(eye.xz - _TerrainOrigin.xz, blockMin, blockMax);
+    if (distance(nearest, eye.xz - _TerrainOrigin.xz) > distanceLimit)
+    {
+        return;
+    }
+    int2 worldBlock = _TerrainWorldBlock + int2(bx, bz);
+    float4 density0 = _ScatterDensity.Load(int4(bx, bz, _TerrainDensitySlice, 0));
+    // The loop bound read here from the table, not through the static (whose zero initializer the compiler may
+    // fold into the loop's trip count).
+    uint channels = min(_ScatterTable[_TerrainRow + 12u], (uint)SCATTER_MAX_CHANNELS);
+    float4 density1 = channels > 4u ? _ScatterDensity.Load(int4(bx, bz, _TerrainDensitySlice + 1u, 0)) : 0.0;
+    float shadowDistance = _ScatterLight.w;
+
+    [loop] for (uint c = 0u; c < channels; c++)
+    {
+        // Both slices indexed in range (c & 3): an unrolled `density1[c - 4u]` wraps to a huge constant index in the
+        // iterations below 4, which the compiler rejects ("array index out of bounds") even on the branch not taken.
+        float4 slice = c < 4u ? density0 : density1;
+        float expected = slice[c & 3u];
+        if (!(expected > 0.0))
+        {
+            continue;
+        }
+        uint cb = _TerrainRow + SCATTER_CHANNEL_BASE + c * SCATTER_CHANNEL_UINTS;
+        int type = asint(_ScatterTable[cb]);
+        if (type < 0)
+        {
+            continue;
+        }
+        float2 widthRange = asfloat(uint2(_ScatterTable[cb + 1u], _ScatterTable[cb + 2u]));
+        float2 heightRange = asfloat(uint2(_ScatterTable[cb + 3u], _ScatterTable[cb + 4u]));
+        float noiseSpread = asfloat(_ScatterTable[cb + 5u]);
+        uint seed = _ScatterTable[cb + 6u];
+        float align = asfloat(_ScatterTable[cb + 7u]);
+        ScatterModel model = _ScatterModels[type];
+        uint salt = asuint(model.extra.y);
+        bool casts = model.extra.z > 0.5;
+
+        // DetailScatterMath.Count: the whole part, plus one when the block's coin lands under the fraction.
+        float stored = min(expected, (float)SCATTER_MAX_PER_BLOCK);
+        uint whole = (uint)floor(stored);
+        uint count = whole + (ScatterUnit(ScatterHash(worldBlock.x, worldBlock.y, salt, seed, 0u), 7u) < stored - (float)whole ? 1u : 0u);
+        count = min(count, (uint)SCATTER_MAX_PER_BLOCK);
+
+        [loop] for (uint k = 0u; k < count; k++)
+        {
+            uint h = ScatterHash(worldBlock.x, worldBlock.y, salt, seed, k + 1u);
+            float2 local = blockMin + float2(ScatterUnit(h, 0u), ScatterUnit(h, 1u)) * extent;
+            float2 worldXZ = _TerrainOrigin.xz + local;
+            float3 position = float3(worldXZ.x, ScatterHeightAt(local), worldXZ.y);
+            float d = distance(position, eye);
+            if (d > distanceLimit)
+            {
+                continue;
+            }
+            // Distance thinning (DetailScatterMath.Keep / ThinFade) and the dissolve at the distance's edge.
+            float keep = 1.0;
+            if (_ScatterThin.y < 1.0 && d > _ScatterThin.x)
+            {
+                keep = lerp(1.0, _ScatterThin.y, saturate((d - _ScatterThin.x) / max(1e-3, distanceLimit - _ScatterThin.x)));
+            }
+            float thin = keep >= 1.0 ? 0.0 : saturate(1.0 - (keep - ScatterPositionHash(position)) / SCATTER_THIN_BAND);
+            float band = max(1e-3, _ScatterThin.z * distanceLimit);
+            float edge = saturate((d - (distanceLimit - band)) / band);
+            float fadeOut = max(thin, edge);
+            if (fadeOut >= 1.0)
+            {
+                continue;
+            }
+
+            // Size by the noise (neighbours share it), the turn by the hash.
+            float noise = ScatterNoise(worldXZ.x * noiseSpread, worldXZ.y * noiseSpread, seed);
+            float width = lerp(widthRange.x, widthRange.y, noise);
+            float height = lerp(heightRange.x, heightRange.y, noise);
+            float yaw = ScatterUnit(h, 2u) * 6.2831853;
+            float cy = cos(yaw), sy = sin(yaw);
+            // Unity's turn about +Y (Quaternion.AngleAxis(yaw, up)): x' = x cos + z sin, z' = -x sin + z cos.
+            float3x3 turn = float3x3(cy, 0.0, sy,
+                                     0.0, 1.0, 0.0,
+                                     -sy, 0.0, cy);
+            float3 normal = ScatterNormalAt(local);
+            float3x3 rotation = turn;
+            if (align > 0.0)
+            {
+                // FromToRotation(up, the up leaned toward the ground's normal by the prototype's alignment).
+                float3 to = normalize(lerp(float3(0.0, 1.0, 0.0), normal, align));
+                float3 v = float3(to.z, 0.0, -to.x);   // cross(up, to)
+                float cosine = to.y;
+                float k2 = 1.0 / (1.0 + cosine);
+                // The Rodrigues form written out: R = I + [v]x + [v]x^2 / (1 + c), v = (vx, 0, vz); R * up = to.
+                float3x3 lean = float3x3(1.0 - k2 * v.z * v.z,  -v.z,      k2 * v.x * v.z,
+                                         v.z,                   cosine,    -v.x,
+                                         k2 * v.x * v.z,        v.x,       1.0 - k2 * v.x * v.x);
+                rotation = mul(lean, turn);
+            }
+            // Into the slope by most of the drop across its foot, as much of the slope as it does not lean with
+            // (TerrainDetailField.Place): nothing floats on a bank.
+            float slope = acos(clamp(normal.y, -1.0, 1.0)) * (1.0 - align);
+            if (slope > 1e-3 && model.extra.x > 0.0)
+            {
+                position.y -= min(SCATTER_SLOPE_SINK_SHARE * model.extra.x * width * tan(min(slope, 1.2)), SCATTER_MAX_SLOPE_SINK);
+            }
+
+            FishInstance instance;
+            float3 scale = float3(width, height, width);
+            instance.row0 = float4(rotation[0] * scale, position.x);
+            instance.row1 = float4(rotation[1] * scale, position.y);
+            instance.row2 = float4(rotation[2] * scale, position.z);
+
+            float3 centre = position + mul(rotation, model.sphere.xyz * scale);
+            float radius = model.sphere.w * max(width, height);
+            float fade = -fadeOut;
+            if (main && ScatterSphereVisible(centre, radius))
+            {
+                ScatterEmit((uint)type * 2u, instance, fade);
+            }
+            if (shadow && casts && shadowDistance > 0.0 && d <= shadowDistance + radius)
+            {
+                float3 l = _ScatterLight.xyz;
+                float down = max(-l.y, 0.1);
+                float sweep = min(shadowDistance, 2.0 * radius / down);
+                if (ScatterSweptSphereVisible(centre, radius, l, sweep))
+                {
+                    ScatterEmit((uint)type * 2u + 1u, instance, fade);
+                }
+            }
+        }
+    }
+}
+
+StructuredBuffer<uint> _ScatterArgSlots;        // the slot each indirect command draws
+RWByteAddressBuffer _ScatterArgs;               // IndirectDrawIndexedArgs, 5 uints per command
+
+[numthreads(64, 1, 1)]
+void FishScatterFinalize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _ScatterArgCount)
+    {
+        uint slot = _ScatterArgSlots[id.x];
+        uint count = _ScatterCounts.Load(slot * 4u);
+        _ScatterArgs.Store((id.x * 5u + 1u) * 4u, min(count, _ScatterSlots[slot].y));
+    }
+}
+
+/* OpenGL: makes Unity issue GL_COMMAND_BARRIER_BIT before the indirect draws (FishGrassBlades.compute FishGrassArgsFence,
+ * FishTerrainInstancing.compute FishArgsFence): Unity's GLES device marks the command barrier pending only when the args
+ * buffer is BOUND after its write, never for the write itself. */
+ByteAddressBuffer _ScatterArgsFence;
+
+[numthreads(1, 1, 1)]
+void FishScatterArgsFence(uint3 id : SV_DispatchThreadID)
+{
+    // Never true (instance counts are capped): only the bindings matter.
+    if (_ScatterArgsFence.Load(4) == 0xFFFFFFFFu)
+    {
+        _ScatterCounts.Store(0, 0u);
+    }
+}

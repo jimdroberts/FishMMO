@@ -76,7 +76,13 @@ namespace FishMMO.Water
 		[Tooltip("Multiplies the open-ocean tide for this coast. 1 is mid-ocean; a funnelled estuary is 10 or more.")]
 		[Range(0f, 20f)] public float CoastalAmplification = 2.5f;
 		[Tooltip("The most the tide may move the sea, in metres, whatever the moons say. A tide that would go further is scaled down whole, so it still comes in and goes out smoothly — never cut off.")]
-		[Range(0f, 30f)] public float MaximumTideMetres = 2.5f;
+		[Range(0f, 30f)] public float MaximumTideMetres = DefaultMaximumTideMetres;
+
+		/// <summary>
+		/// The tide's limit a scene starts with. Generated rivers reaching the sea run on to this far below mean
+		/// level (RiverSettings.IntertidalMetres), so they meet the sea at the lowest tide too.
+		/// </summary>
+		public const float DefaultMaximumTideMetres = 2.5f;
 
 		private WaterSurface surface;
 		private MeshRenderer meshRenderer;
@@ -88,6 +94,12 @@ namespace FishMMO.Water
 		private bool seaPrimed;
 		private float fetchHeading = float.NaN;
 		private WorldBody fetchBody;
+		// The fetch at whole bins of heading, for PeakPeriodAt: a pure function of the heading, where the
+		// eased sea's own fetch is re-measured wherever its wind happened to have swung to.
+		private readonly System.Collections.Generic.Dictionary<int, float> fetchByBin = new System.Collections.Generic.Dictionary<int, float>();
+		private WorldBody fetchBinsBody;
+		private WorldSceneSettings fetchBinsSettings;
+		private const float FetchBinDegrees = 10f;
 
 		/// <summary>The tide this frame, in metres above mean sea level.</summary>
 		public float Tide { get; private set; }
@@ -107,6 +119,11 @@ namespace FishMMO.Water
 		/// <summary>Surface gravity in use, in m/s².</summary>
 		public float Gravity => surface != null ? surface.Gravity : WaterWaves.EarthGravity;
 
+		/// <summary>This sea's level for the simulation (<see cref="WaterQuery"/>): the same tide, kept by the synced clock.</summary>
+		public SeaTide SimulatedTide { get; } = new SeaTide();
+		private WorldSceneSettings tideSettings;
+		private bool tideLava;
+
 		private void OnEnable()
 		{
 			surface = GetComponent<WaterSurface>();
@@ -114,6 +131,37 @@ namespace FishMMO.Water
 			primed = false;
 			seaPrimed = false;
 			settings = null;
+			tideSettings = null;
+			tideLava = surface != null && surface.IsLava;
+			RefreshSimulatedTide();
+			WaterQuery.RegisterSea(gameObject.scene, SimulatedTide, tideLava);
+		}
+
+		private void OnDisable()
+		{
+			WaterQuery.UnregisterSea(gameObject.scene, SimulatedTide);
+		}
+
+		/// <summary>Copies this sea's level, coast and place into <see cref="SimulatedTide"/>: on enable, and when a setting changes.</summary>
+		public void RefreshSimulatedTide()
+		{
+			WorldSceneSettings.TryGetForScene(gameObject.scene, out WorldSceneSettings here);
+			SimulatedTide.MeanLevel = surface != null ? surface.MeanSeaLevel : transform.position.y;
+			SimulatedTide.Drive = DriveTide;
+			SimulatedTide.Amplification = CoastalAmplification;
+			SimulatedTide.MaximumMetres = MaximumTideMetres;
+			SimulatedTide.Latitude = here != null ? here.Latitude : 0f;
+			SimulatedTide.Longitude = here != null ? here.Longitude : 0f;
+			SimulatedTide.Body = SceneTime.BodyOf(here);
+			SimulatedTide.Invalidate();
+		}
+
+		private void OnValidate()
+		{
+			if (isActiveAndEnabled)
+			{
+				RefreshSimulatedTide();
+			}
 		}
 
 		private void LateUpdate() => Apply();
@@ -136,6 +184,14 @@ namespace FishMMO.Water
 			if (settings == null)
 			{
 				WorldSceneSettings.TryGetForScene(gameObject.scene, out settings);
+			}
+			// The scene's settings can register after this enabled, and a sea can turn to lava: the simulation's sea follows.
+			if (tideSettings != settings || tideLava != surface.IsLava)
+			{
+				tideSettings = settings;
+				tideLava = surface.IsLava;
+				RefreshSimulatedTide();
+				WaterQuery.RegisterSea(gameObject.scene, SimulatedTide, tideLava);
 			}
 
 			// The sky's clock: the sea's wind, period and tide keep the same time as the clouds.
@@ -161,6 +217,36 @@ namespace FishMMO.Water
 				ApplyClimate(system, body);
 			}
 			surface.TideMetres = DriveTide ? Tide = TideAt(system, body, hours, latitude, longitude) : 0f;
+			PublishMoteDrift(system, body, latitude);
+		}
+
+		private static readonly int MoteDriftId = Shader.PropertyToID("_FishWaterMoteDrift");
+		/// <summary>
+		/// Where the motes' grid wraps, m: ten thousand of its 0.6 m cells, the period its hash already
+		/// has (FishWaterVolume.shader's CellHash), so the wrap lands on the same motes.
+		/// </summary>
+		private const double MoteWrapMetres = 6000.0;
+		/// <summary>The current the wind sets the water near the surface moving at, as a share of the wind.</summary>
+		private const float MoteCurrentShare = 0.008f;
+		/// <summary>How fast marine snow sinks, m/s.</summary>
+		private const double MoteSinkSpeed = 0.012;
+
+		/// <summary>
+		/// How far the water's suspended matter has been carried by now (FishWaterVolume.shader's motes):
+		/// the current the surface wind sets up, worked out from the shared clock as the fog banks' drift is
+		/// (SurfaceAirDrift), and its slow sinking. The shader multiplied the eased wind by the sea's
+		/// clock, so the motes slid whenever the wind changed, and stood elsewhere for every player.
+		/// </summary>
+		private static void PublishMoteDrift(SolarSystemProfile system, WorldBody body, float latitude)
+		{
+			double seconds = WorldMotion.Seconds;
+			WindBelts belts = WindBelts.For(PlanetAir.For(system, body));
+			SurfaceAirDrift.At(WeatherDriver.WorldSeed, latitude, belts, MoteCurrentShare, seconds, out double x, out double z, out _);
+			Shader.SetGlobalVector(MoteDriftId, new Vector4(
+				(float)WorldMotion.Repeat(x, MoteWrapMetres),
+				(float)WorldMotion.Repeat(-MoteSinkSpeed * seconds, MoteWrapMetres),
+				(float)WorldMotion.Repeat(z, MoteWrapMetres),
+				1f));
 		}
 
 		/// <summary>
@@ -270,14 +356,7 @@ namespace FishMMO.Water
 			 * period — the long rolling lines of a calm day under a storm — even though the local
 			 * sea was carrying twenty times the energy. Whichever field has the energy sets the
 			 * rhythm the waves arrive to. */
-			float localPeriod = WaterSeaState.PeakPeriod(windSpeed, FetchMetres, gravity);
-			const float SwellPeriod = 9f;
-			float localEnergy = local * local;
-			float swellEnergy = SwellMetres * SwellMetres;
-			float energy = localEnergy + swellEnergy;
-			float period = energy > 1e-6f
-				? (localEnergy * localPeriod + swellEnergy * SwellPeriod) / energy
-				: SwellPeriod;
+			float period = PeriodOf(windSpeed, FetchMetres, gravity, local);
 			/* Eased as the wind is, because the fetch is not: it is re-measured in one go whenever the
 			 * wind swings twelve degrees, and the sea it gave stepped with it. Every breaker along the
 			 * coast takes its place in its cycle from the period and the height (the bore's run in,
@@ -305,6 +384,63 @@ namespace FishMMO.Water
 			 * surface works out where they break from SignificantHeight, and the shore sets their
 			 * rhythm from PeakPeriod. */
 			surface.Rebuild();
+		}
+
+		/// <summary>The period waves arrive at, s, from the local sea of this wind and fetch and the swell.</summary>
+		private float PeriodOf(float wind, float fetch, float gravity, float localHeight)
+		{
+			float localPeriod = WaterSeaState.PeakPeriod(wind, fetch, gravity);
+			const float SwellPeriod = 9f;
+			float localEnergy = localHeight * localHeight;
+			float swellEnergy = SwellMetres * SwellMetres;
+			float energy = localEnergy + swellEnergy;
+			return energy > 1e-6f
+				? (localEnergy * localPeriod + swellEnergy * SwellPeriod) / energy
+				: SwellPeriod;
+		}
+
+		/// <summary>
+		/// The sea's peak period at a moment of world time, s, worked out afresh from the weather then —
+		/// not eased, and with the fetch measured at a fixed bin of the wind's heading — so it is the
+		/// same number on every client whenever it asks. What the shore holds for each window of its
+		/// wave count (WaterShore), which every player must agree on. NaN when the sea is not driven by
+		/// the weather.
+		/// </summary>
+		/// <remarks>
+		/// The eased <see cref="PeakPeriod"/> is a record of each client's own frames (and its fetch of
+		/// whichever heading its wind last swung past): two clients could hold periods either side of a
+		/// rounding and count a different number of waves in the same window.
+		/// </remarks>
+		public float PeakPeriodAt(double worldSeconds)
+		{
+			if (!DriveWind || surface == null)
+			{
+				return float.NaN;
+			}
+			float latitude = settings != null ? settings.Latitude : 0f;
+			var position = new Vector2(transform.position.x, transform.position.z);
+			WeatherDriver.Synoptic air = WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, latitude, 0.5f);
+			float speed = WindOverride >= 0f ? WindOverride : air.Wind.magnitude * Mathf.Max(0f, Fetch);
+			float heading = HeadingOverride >= 0f
+				? Mathf.Repeat(HeadingOverride, 360f)
+				: Mathf.Repeat(Mathf.Atan2(air.Wind.x, air.Wind.y) * Mathf.Rad2Deg, 360f);
+
+			WorldBody body = WorldDayNightCycle.BodyFor(settings);
+			if (fetchBinsBody != body || fetchBinsSettings != settings)
+			{
+				fetchByBin.Clear();
+				fetchBinsBody = body;
+				fetchBinsSettings = settings;
+			}
+			int bin = Mathf.RoundToInt(heading / FetchBinDegrees) % Mathf.RoundToInt(360f / FetchBinDegrees);
+			if (!fetchByBin.TryGetValue(bin, out float fetch))
+			{
+				fetch = MeasureFetch(body, settings, bin * FetchBinDegrees);
+				fetchByBin[bin] = fetch;
+			}
+			float gravity = surface.Gravity;
+			float local = WaterSeaState.SignificantHeight(speed, fetch, gravity);
+			return PeriodOf(speed, fetch, gravity, local);
 		}
 
 		/// <summary>
@@ -442,8 +578,8 @@ namespace FishMMO.Water
 			{
 				return 0f;
 			}
-			double equilibrium = PlanetTides.HeightMetres(system, body, hours, latitude, longitude, out double reach);
-			return ScaledTide(equilibrium, reach, CoastalAmplification, MaximumTideMetres);
+			// The simulation's function (SeaTide), so the sea drawn stands where swimmers float.
+			return SeaTide.TideMetres(system, body, hours, latitude, longitude, CoastalAmplification, MaximumTideMetres);
 		}
 
 		/// <summary>
@@ -471,12 +607,6 @@ namespace FishMMO.Water
 		/// </para>
 		/// </remarks>
 		public static float ScaledTide(double equilibrium, double reach, float amplification, float maximum)
-		{
-			double gain = System.Math.Max(0f, amplification);
-			double limit = System.Math.Max(0f, maximum);
-			double peak = reach * gain;
-			double scale = peak > limit && peak > 1e-9 ? limit / peak : 1.0;
-			return Mathf.Clamp((float)(equilibrium * gain * scale), -(float)limit, (float)limit);
-		}
+			=> SeaTide.ScaledTide(equilibrium, reach, amplification, maximum);
 	}
 }

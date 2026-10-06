@@ -220,5 +220,25 @@ namespace FishMMO.ControlPanel.Services
 		/// the question asked when nobody can log in afterwards.
 		/// </remarks>
 		public const string MaintenanceCancel = "maintenance.cancel";
+
+		/// <summary>World time was set to a world timestamp, keeping the pace.</summary>
+		/// <remarks>
+		/// The five world-time actions share a prefix so "everything anyone did to the world clock"
+		/// is one filter. Every row's details carry the world time and pace before and after, read
+		/// from the one statement that wrote them.
+		/// </remarks>
+		public const string WorldTimeSet = "world-time.set";
+
+		/// <summary>World time was moved by a signed change (+1h, -90s), keeping the pace.</summary>
+		public const string WorldTimeShift = "world-time.shift";
+
+		/// <summary>The world clock's pace was changed.</summary>
+		public const string WorldTimePace = "world-time.pace";
+
+		/// <summary>The world clock was held (pace zero).</summary>
+		public const string WorldTimeHold = "world-time.hold";
+
+		/// <summary>The world clock was resumed at its resume pace.</summary>
+		public const string WorldTimeResume = "world-time.resume";
 	}
 }

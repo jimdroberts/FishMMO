@@ -127,6 +127,34 @@ namespace FishMMO.Shared.Weather
 			return vents;
 		}
 
+		/// <summary>World seconds between readings of a plume's own wind.</summary>
+		public const double WindSeconds = 5.0;
+
+		[ThreadStatic] private static Dictionary<Vector2, Vector2> windByVent;
+		[ThreadStatic] private static double windAt;
+		[ThreadStatic] private static WeatherTimeline windTimeline;
+		[ThreadStatic] private static WorldSceneSettings windSettings;
+
+		/// <summary>The open air's wind at a vent, read at the whole <see cref="WindSeconds"/> of world time at or before the moment.</summary>
+		private static Vector2 WindAt(WeatherTimeline timeline, WorldSceneSettings settings, Vector2 vent, double worldSeconds)
+		{
+			double at = Math.Floor(worldSeconds / WindSeconds) * WindSeconds;
+			windByVent ??= new Dictionary<Vector2, Vector2>();
+			if (at != windAt || !ReferenceEquals(timeline, windTimeline) || settings != windSettings || windByVent.Count > 256)
+			{
+				windByVent.Clear();
+				windAt = at;
+				windTimeline = timeline;
+				windSettings = settings;
+			}
+			if (!windByVent.TryGetValue(vent, out Vector2 wind))
+			{
+				wind = WeatherField.OpenWindAtSeconds(timeline, settings, vent, at);
+				windByVent[vent] = wind;
+			}
+			return wind;
+		}
+
 		/// <summary>Forgets every scene's vents: for tools that repaint a biome map while the game runs.</summary>
 		public static void ClearCache() => cache.Clear();
 
@@ -138,6 +166,37 @@ namespace FishMMO.Shared.Weather
 		/// <param name="near">The point the weather is for: plumes beyond <see cref="ReachMetres"/> are skipped.</param>
 		public static void Plumes(WeatherTimeline timeline, WorldSceneSettings settings, uint tick, in PlanetAir planet, Vector2 surfaceWind,
 			Vector2 near, List<VolcanicPlume.Plume> into)
+		{
+			Plumes(timeline, settings, timeline != null ? timeline.WorldSecondsAt(tick) : 0.0, planet, surfaceWind, false, near, into);
+		}
+
+		/// <summary>
+		/// The same, each plume leaning on the wind where it stands (<see cref="WeatherField.OpenWindAtSeconds"/>)
+		/// rather than on the wind of the place asked about: a plume is one thing, wherever it is looked at
+		/// from. The weather (its ash) and the sky (the plume it draws) both ask this way, so the plume is
+		/// the plume the ash falls from, and the same for every player and the server. It used to lean on
+		/// the asker's wind: each point's ash came out of a plume leaning its own way, and each player saw
+		/// their own plume.
+		/// </summary>
+		/// <remarks>
+		/// The wind is read at whole <see cref="WindSeconds"/> of world time, and kept per vent until the next:
+		/// the weather is sampled often, a wind costs an open-air reading, and the air turns over hours.
+		/// </remarks>
+		public static void PlumesInTheirOwnWind(WeatherTimeline timeline, WorldSceneSettings settings, uint tick, in PlanetAir planet,
+			Vector2 near, List<VolcanicPlume.Plume> into)
+		{
+			Plumes(timeline, settings, timeline != null ? timeline.WorldSecondsAt(tick) : 0.0, planet, Vector2.zero, true, near, into);
+		}
+
+		/// <summary>The same, at a moment of world time.</summary>
+		public static void PlumesInTheirOwnWindAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, double worldSeconds, in PlanetAir planet,
+			Vector2 near, List<VolcanicPlume.Plume> into)
+		{
+			Plumes(timeline, settings, worldSeconds, planet, Vector2.zero, true, near, into);
+		}
+
+		private static void Plumes(WeatherTimeline timeline, WorldSceneSettings settings, double worldSeconds, in PlanetAir planet, Vector2 surfaceWind,
+			bool ownWind, Vector2 near, List<VolcanicPlume.Plume> into)
 		{
 			into.Clear();
 			if (!VolcanicPlume.CanRise(planet))
@@ -152,7 +211,8 @@ namespace FishMMO.Shared.Weather
 				{
 					continue;
 				}
-				VolcanicPlume.Plume plume = VolcanicPlume.Of(v.Position, v.Emission, v.Substance, planet, surfaceWind, false, v.Seed);
+				Vector2 wind = ownWind ? WindAt(timeline, settings, v.Position, worldSeconds) : surfaceWind;
+				VolcanicPlume.Plume plume = VolcanicPlume.Of(v.Position, v.Emission, v.Substance, planet, wind, false, v.Seed);
 				if (plume.Valid)
 				{
 					into.Add(plume);
@@ -170,12 +230,12 @@ namespace FishMMO.Shared.Weather
 				{
 					continue;
 				}
-				float strength = cell.EnvelopeAt(tick) * Mathf.Clamp01(cell.PeakIntensity);
+				float strength = cell.EnvelopeAtSeconds(worldSeconds) * Mathf.Clamp01(cell.PeakIntensity);
 				if (strength <= 0f)
 				{
 					continue;
 				}
-				Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
+				Vector2 centre = cell.CentreAtSeconds(worldSeconds);
 				if ((centre - near).sqrMagnitude > ReachMetres * ReachMetres)
 				{
 					continue;
@@ -187,7 +247,8 @@ namespace FishMMO.Shared.Weather
 				WeatherSubstance substance = biome != null ? biome.Emits : null;
 				float rate = biome != null && biome.Emits != null ? Mathf.Max(0.05f, biome.EmissionRate) : 0.05f;
 				float emission = Mathf.Clamp01(rate * StormPhysics.EmissionBoost(StormKind.Eruption, strength));
-				VolcanicPlume.Plume plume = VolcanicPlume.Of(centre, emission, substance, planet, surfaceWind, true, cell.Seed);
+				Vector2 wind = ownWind ? WindAt(timeline, settings, centre, worldSeconds) : surfaceWind;
+				VolcanicPlume.Plume plume = VolcanicPlume.Of(centre, emission, substance, planet, wind, true, cell.Seed);
 				if (plume.Valid)
 				{
 					into.Add(plume);

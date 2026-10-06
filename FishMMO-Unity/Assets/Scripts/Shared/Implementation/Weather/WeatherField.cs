@@ -101,7 +101,50 @@ namespace FishMMO.Shared.Weather
 
 		[System.ThreadStatic] private static List<VolcanicPlume.Plume> plumeScratch;
 
+		/// <summary>
+		/// The open air's wind at a place and tick, m/s, as <see cref="Sample"/> works it out there (with
+		/// the scene's added air, but no volume): a pure function of the timeline, the place and the tick.
+		/// Zero where the scene has no weather of its own or no air.
+		/// </summary>
+		/// <remarks>
+		/// What a plume leans on where it stands, for drawing it: read at the viewer, as the sample is,
+		/// every player saw the same plume leaning on their own wind.
+		/// </remarks>
+		public static Vector2 OpenWindAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, Vector2 position, double worldSeconds)
+		{
+			if (timeline == null || timeline.SceneMode != WeatherSceneMode.Own)
+			{
+				return Vector2.zero;
+			}
+			WorldBody weatherBody = timeline.BodyOverride != null ? timeline.BodyOverride : SceneTime.BodyOf(settings);
+			if (weatherBody != null && weatherBody.Atmosphere == FishMMO.Shared.Celestial.AtmosphereKind.None)
+			{
+				return Vector2.zero;
+			}
+			double worldHours = worldSeconds / 3600.0;
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			float season01 = CelestialMath.Season01(system, weatherBody, worldHours);
+			float localTime01 = system != null && weatherBody != null
+				? (float)CelestialMath.LocalTime01(system, weatherBody, worldHours, timeline.LongitudeDegrees)
+				: 0.5f;
+			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.Air.AtSeconds(worldSeconds);
+			PlanetAir planet = offsets.Apply(PlanetAir.For(system, weatherBody));
+			WeatherDriver.Synoptic air = OpenAirAt(timeline, position, worldSeconds, season01, localTime01, WindBelts.For(planet));
+			return offsets.Apply(air).Wind;
+		}
+
+		/// <summary>The weather at a place and tick: the world time at that tick (<see cref="WeatherTimeline.WorldSecondsAt(uint)"/>), sampled.</summary>
 		public static WeatherSample Sample(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, uint tick)
+		{
+			return SampleAtSeconds(timeline, settings, scene, position, timeline != null ? timeline.WorldSecondsAt(tick) : 0.0);
+		}
+
+		/// <summary>
+		/// The weather at a place and a moment of world time. Pure in the timeline, the place and the
+		/// moment, so a storm's own air read at its maturity (StormCellAir) is the same number on every
+		/// machine whatever the world clock is doing now.
+		/// </summary>
+		public static WeatherSample SampleAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, double worldSeconds)
 		{
 			var sample = new WeatherSample { Frame = WeatherFrame.Clear, Background = WeatherFrame.Clear };
 			BiomeReading reading = BiomeSampler.Read(position, settings);
@@ -121,7 +164,6 @@ namespace FishMMO.Shared.Weather
 			// Where and when. The season and the hour are worked out here, on both sides, from the
 			// clock anchor the server sent; sending them instead would freeze them at whatever they
 			// were when the client joined.
-			double worldSeconds = timeline.WorldSecondsAt(tick);
 			double worldHours = worldSeconds / 3600.0;
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			float season01 = CelestialMath.Season01(system, weatherBody, worldHours);
@@ -133,7 +175,7 @@ namespace FishMMO.Shared.Weather
 			// volume's. Their temperature is already in the climate reading (it is the climate's); a
 			// volume's is local, so it is added here.
 			AirOffsets volume = WeatherVolumeRegistry.OffsetsAt(scene, position);
-			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.AirAt(tick) + volume;
+			AirOffsets offsets = (settings != null ? settings.AuthoredAir : default) + timeline.Air.AtSeconds(worldSeconds) + volume;
 			sample.Offsets = offsets;
 			sample.Temperature = Mathf.Clamp(sample.Temperature + volume.TemperatureScale, -1f, 1f);
 
@@ -172,7 +214,7 @@ namespace FishMMO.Shared.Weather
 			// of them here falls out of the plume the sky draws (VolcanicPlume, VolcanicVents).
 			var position2 = new Vector2(position.x, position.z);
 			List<VolcanicPlume.Plume> plumes = plumeScratch ??= new List<VolcanicPlume.Plume>();
-			VolcanicVents.Plumes(timeline, settings, tick, planet, air.Wind, position2, plumes);
+			VolcanicVents.PlumesInTheirOwnWindAtSeconds(timeline, settings, worldSeconds, planet, position2, plumes);
 			float steadyFallout = VolcanicVents.FalloutAt(plumes, position2, false, out WeatherSubstance steadySubstance);
 			float fallout = VolcanicVents.FalloutAt(plumes, position2, true, out WeatherSubstance falloutSubstance);
 
@@ -189,7 +231,7 @@ namespace FishMMO.Shared.Weather
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
 				StormCell cell = timeline.Cells[i];
-				float weight = cell.InfluenceAt(position, tick, timeline.TickDelta);
+				float weight = cell.InfluenceAtSeconds(position, worldSeconds);
 				if (weight <= 0f)
 				{
 					continue;

@@ -52,10 +52,13 @@ namespace FishMMO.Shared
 			NetworkObject switchObject = data.Interactable.GameObject.GetComponent<NetworkObject>();
 			if (switchObject != null)
 			{
+				ITimedSwitchTarget timed = target as ITimedSwitchTarget;
 				switchObject.Broadcast(new SwitchStateBroadcast()
 				{
 					InteractableID = data.Interactable.ID,
 					Activated = target.IsActivated,
+					ChangeTick = timed != null ? timed.ChangeTick : 0u,
+					ChangeTravel = timed != null ? timed.ChangeTravel : 0f,
 				});
 			}
 

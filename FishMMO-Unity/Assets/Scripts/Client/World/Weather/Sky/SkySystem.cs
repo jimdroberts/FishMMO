@@ -399,7 +399,14 @@ namespace FishMMO.Client
 		/// </summary>
 		public static bool DrawCloudGizmos;
 		private readonly List<Meteor> meteors = new List<Meteor>();
-		private double meteorsUntil = double.NaN;
+		/// <summary>The window of world time the meteors were last scheduled for (<see cref="MeteorWindowSeconds"/>).</summary>
+		private long meteorsWindow = long.MinValue;
+		/// <summary>
+		/// Meteors are scheduled a window of world time at a time, the windows fixed on the clock: a tier's
+		/// budget cuts each window, and so cuts it the same for every player. They ran from whenever this
+		/// client started, so the cut fell differently for each.
+		/// </summary>
+		public const double MeteorWindowSeconds = 4.0;
 		private readonly Vector4[] sunDirections = new Vector4[MaxSuns];
 		private readonly Vector4[] sunColors = new Vector4[MaxSuns];
 		private SkySample current;
@@ -681,7 +688,9 @@ namespace FishMMO.Client
 			Vector3 viewer = camera != null ? camera.transform.position : Vector3.zero;
 			// With the lightning of the weather here — the field's storms and heavy rain — and not only
 			// the scene layers' and the cells'.
-			lightning.Update(timeline, tick, worldSeconds, viewer, camera, profile.BoltMaterial, context.Sample);
+			// Each strike decided by the weather where it is, read in this context's scene: the same for
+			// every player, whoever is looking (LightningAir).
+			lightning.Update(timeline, tick, worldSeconds, viewer, camera, profile.BoltMaterial, context);
 			if (presentation != null)
 			{
 				presentation.LightningFlash = lightning.Flash;
@@ -691,6 +700,7 @@ namespace FishMMO.Client
 			// by have to take in their bases, towers and anvils as they are now.
 			if (camera != null)
 			{
+				WeatherMap.SetCellAirScene(context.Settings, context.Scene);
 				weatherMap.Update(timeline, viewer, tick, context.Sample, dt, WeatherMapRefreshSeconds);
 			}
 
@@ -707,16 +717,29 @@ namespace FishMMO.Client
 			{
 				bodyTimer = BodyRefreshSeconds;
 			}
-			// Meteors are scheduled a few seconds ahead and drawn every frame.
-			if (double.IsNaN(meteorsUntil) || worldSeconds > meteorsUntil || worldSeconds < meteorsUntil - 10.0)
+			/* Meteors are scheduled a window at a time, the windows fixed on the world clock, and drawn every
+			 * frame. Scheduled whatever the sky looks like here: whether they can be SEEN is decided as they
+			 * are drawn. Asked at the start of each window, a client whose sky happened to be bright then
+			 * had none for the window, and the rest of the world had them. */
+			long meteorWindow = (long)System.Math.Floor(worldSeconds / MeteorWindowSeconds);
+			if (meteorWindow != meteorsWindow)
 			{
-				meteors.RemoveAll(m => m.Time + m.Duration < worldSeconds);
-				double from = double.IsNaN(meteorsUntil) || worldSeconds < meteorsUntil - 10.0 ? worldSeconds : meteorsUntil;
-				meteorsUntil = worldSeconds + 4.0;
-				if (sample.StarVisibility > 0.2f)
+				// A join, a preview's leap or a clock set back: start afresh at this window.
+				bool leapt = meteorsWindow == long.MinValue || meteorWindow < meteorsWindow || meteorWindow > meteorsWindow + 2;
+				if (leapt)
 				{
-					SkySchedule.Meteors(state, from, meteorsUntil, profile.TierFor(QualitySettings.GetQualityLevel()).MeteorBudget, meteors);
+					meteors.Clear();
 				}
+				else
+				{
+					meteors.RemoveAll(m => m.Time + m.Duration < worldSeconds);
+				}
+				int budget = profile.TierFor(QualitySettings.GetQualityLevel()).MeteorBudget;
+				for (long w = leapt ? meteorWindow : meteorsWindow + 1; w <= meteorWindow; w++)
+				{
+					SkySchedule.Meteors(state, w * MeteorWindowSeconds, (w + 1) * MeteorWindowSeconds, budget, meteors);
+				}
+				meteorsWindow = meteorWindow;
 			}
 			// In the order they are drawn, furthest first: a belt's specks, then the bodies by their own
 			// distances, then the meteors, which burn in this world's air and are nearer than anything.
@@ -726,7 +749,12 @@ namespace FishMMO.Client
 				bodies.AddAsteroids(state, state.System != null ? state.System.Limits : new SkyLimits());
 			}
 			bodies.AddBodies(state, blendTo, state.System != null ? state.System.Limits : new SkyLimits());
-			bodies.AddMeteors(meteors, worldSeconds);
+			// Seen only while the sky is dark enough, faded in over the stars' own coming out.
+			float meteorsSeen = Mathf.InverseLerp(0.15f, 0.3f, sample.StarVisibility);
+			if (meteorsSeen > 0f)
+			{
+				bodies.AddMeteors(meteors, worldSeconds, meteorsSeen);
+			}
 			bodies.Upload();
 			UploadOccluders();
 		}
@@ -765,7 +793,7 @@ namespace FishMMO.Client
 			hasRegionSky = false;
 			regionSky = null;
 			meteors.Clear();
-			meteorsUntil = double.NaN;
+			meteorsWindow = long.MinValue;
 			lightning.Reset();
 			warnedCamera = false;
 		}
@@ -930,7 +958,9 @@ namespace FishMMO.Client
 			// dated from when the only aurora was one a preset asked for, in scenes made cold for it; it
 			// would have put out a storm's aurora over any mild country it reached.
 			float aurora = weather[WeatherChannel.Aurora] * sample.StarVisibility * (1f - overcast);
-			Shader.SetGlobalVector(AuroraParamsId, new Vector4(aurora, (float)(worldSeconds % 100000.0), 0f, 0f));
+			// On the shared motion clock, smoothed and wrapped in double: the raw world clock stepped with
+			// every one of FishNet's re-estimates, and at 100000 s a float stepped 7.8 ms at a time.
+			Shader.SetGlobalVector(AuroraParamsId, new Vector4(aurora, WorldMotion.Wrapped(WorldMotion.SkyWrapSeconds), 0f, 0f));
 			Shader.SetGlobalVector(AuroraAId, sky.AuroraA);
 			Shader.SetGlobalVector(AuroraBId, sky.AuroraB);
 
@@ -1590,6 +1620,8 @@ namespace FishMMO.Client
 			}
 			cloudWind = wind;
 			cloudWindSpeed = speed;
+			airLatitude = latitude;
+			airBelts = belts;
 			// Where the air has got to by now, worked out from the world clock rather than added up
 			// frame by frame, and the same drift the weather field is sampled through, so the cloud
 			// overhead and the weather underneath are the same air. Exact, in double: each band
@@ -1824,6 +1856,25 @@ namespace FishMMO.Client
 		private Vector2 cloudDrift;
 		/// <summary>How far the air has carried the clouds, wrapped for a float: for readouts and traces.</summary>
 		public Vector2 CloudDrift => cloudDrift;
+
+		private float airLatitude;
+		private WindBelts airBelts = WindBelts.Home;
+
+		/// <summary>
+		/// The latitude and wind belts the sky's air is worked out at (the same the cloud drift uses), for
+		/// anything else the air carries (the fog banks); the equator of our own world before any sky.
+		/// </summary>
+		public static void AirAt(out float latitude, out WindBelts belts)
+		{
+			if (instance != null)
+			{
+				latitude = instance.airLatitude;
+				belts = instance.airBelts;
+				return;
+			}
+			latitude = 0f;
+			belts = WindBelts.Home;
+		}
 
 		private void AddSun(in SkyBodyState star, in SkySample sample, SkyProfile sky, float eclipse, ref int count)
 		{
@@ -2113,13 +2164,17 @@ namespace FishMMO.Client
 				WeatherTierSettings tier = profile.TierFor(QualitySettings.GetQualityLevel());
 				if (presentation != null && presentation.HasContext)
 				{
-					curtains.Draw(presentation.Context.Timeline, (uint)presentation.Context.Tick, camera, profile.CurtainMaterial, profile, tier.Curtains, (float)(worldSeconds % 100000.0),
-						presentation.Context.Sample, State != null ? State.Observer : null, weatherMap);
-					// Tornadoes and dust devils, hung from the cloud base of the air they stand in.
-					// With the same context the weather map reads, so the funnel hangs from the very wall
-					// cloud the cloud shader draws.
-					vortices.Draw(presentation.Context, (uint)presentation.Context.Tick, camera, profile.VortexMaterial, profile.VortexDebrisMaterial,
-						profile.CloudShape, tier.Vortices, tier.VortexParticles, (float)(worldSeconds % 100000.0));
+					/* The storms where they are this frame (PresentTick: the weather's tick carried on between its
+					 * ten-a-second arrivals, where the whole tick stepped them a metre and a half at a time), and
+					 * their motion on the shared sky clock — smoothed, and wrapped in double — not the raw world
+					 * clock, which stepped with FishNet's re-estimates and, at 100000 s, 7.8 ms at a time. */
+					float skyClock = WorldMotion.Wrapped(WorldMotion.SkyWrapSeconds);
+					double presentTick = presentation.PresentTick;
+					curtains.Draw(presentation.Context.Timeline, presentTick, camera, profile.CurtainMaterial, profile, tier.Curtains, skyClock,
+						presentation.Context.Sample, State != null ? State.Observer : null, weatherMap, presentation.Context.Settings, presentation.Context.Scene);
+					// Tornadoes and dust devils, each worked out in its own cell's air (StormCellAir).
+					vortices.Draw(presentation.Context, presentTick, camera, profile.VortexMaterial, profile.VortexDebrisMaterial,
+						profile.CloudShape, tier.Vortices, tier.VortexParticles, skyClock);
 				}
 				lightning.Draw(camera, profile.BoltMaterial);
 			}

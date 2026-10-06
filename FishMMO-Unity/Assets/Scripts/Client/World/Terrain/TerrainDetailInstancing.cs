@@ -95,8 +95,12 @@ namespace FishMMO.Client
 		private static readonly Dictionary<TerrainDetailModel, int> users = new Dictionary<TerrainDetailModel, int>();
 		private static readonly List<TerrainDetailModel> modelList = new List<TerrainDetailModel>();
 		private static readonly Dictionary<Terrain, TerrainData> refused = new Dictionary<Terrain, TerrainData>();
-		/// <summary>Per terrain, the prototypes another renderer draws (the procedural grass, <see cref="SetSkipped"/>).</summary>
-		private static readonly Dictionary<Terrain, bool[]> skipped = new Dictionary<Terrain, bool[]>();
+		/// <summary>
+		/// Per terrain, the prototypes other renderers draw, per owner (the procedural grass, the GPU detail
+		/// scatter: <see cref="SetSkipped"/>). One mask per owner, so neither owner's release gives back the
+		/// other's prototypes.
+		/// </summary>
+		private static readonly Dictionary<Terrain, Dictionary<object, bool[]>> skipped = new Dictionary<Terrain, Dictionary<object, bool[]>>();
 		private static readonly HashSet<string> warned = new HashSet<string>();
 		private static readonly List<Terrain> active = new List<Terrain>();
 		private static readonly List<TerrainDetailField.Missing> missing = new List<TerrainDetailField.Missing>();
@@ -208,34 +212,45 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Leaves the prototypes set in <paramref name="mask"/> (by index into the terrain's detail prototypes)
-		/// undrawn on <paramref name="terrain"/>, because another renderer draws them — the procedural blade
-		/// grass (<see cref="GrassBladeSystem"/>) while it runs there; null draws them all again. A driven
-		/// terrain is let go and taken straight back with the new set, so it is never handed to Unity's own
-		/// detail drawing in between. Kept across this renderer's own releases (its A/B, a path switch) until
-		/// the owner clears it.
+		/// undrawn on <paramref name="terrain"/>, because <paramref name="owner"/> draws them — the procedural
+		/// blade grass (<see cref="GrassBladeSystem"/>) or the GPU detail scatter (<see cref="DetailScatterSystem"/>)
+		/// while it runs there; null gives that owner's prototypes back. A prototype is skipped while any owner
+		/// claims it. A driven terrain is let go and taken straight back with the new set, so it is never handed
+		/// to Unity's own detail drawing in between. Kept across this renderer's own releases (its A/B, a path
+		/// switch) until the owner clears it.
 		/// </summary>
-		public static void SetSkipped(Terrain terrain, bool[] mask)
+		public static void SetSkipped(object owner, Terrain terrain, bool[] mask)
 		{
-			if (terrain == null)
+			if (terrain == null || owner == null)
 			{
 				return;
 			}
-			bool had = skipped.TryGetValue(terrain, out bool[] old);
+			skipped.TryGetValue(terrain, out Dictionary<object, bool[]> owners);
+			bool had = owners != null && owners.TryGetValue(owner, out bool[] old) && old != null;
 			if (mask == null)
 			{
 				if (!had)
 				{
 					return;
 				}
-				skipped.Remove(terrain);
+				owners.Remove(owner);
+				if (owners.Count == 0)
+				{
+					skipped.Remove(terrain);
+				}
 			}
 			else
 			{
-				if (had && SameMask(old, mask))
+				if (had && SameMask(owners[owner], mask))
 				{
 					return;
 				}
-				skipped[terrain] = (bool[])mask.Clone();
+				if (owners == null)
+				{
+					owners = new Dictionary<object, bool[]>();
+					skipped[terrain] = owners;
+				}
+				owners[owner] = (bool[])mask.Clone();
 			}
 			refused.Remove(terrain);
 			if (driven.TryGetValue(terrain, out Driven d))
@@ -245,10 +260,21 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>Whether a prototype of a terrain is left to another renderer.</summary>
+		/// <summary>Whether a prototype of a terrain is left to another renderer (any owner's).</summary>
 		public static bool IsSkipped(Terrain terrain, int prototype)
 		{
-			return terrain != null && skipped.TryGetValue(terrain, out bool[] mask) && prototype >= 0 && prototype < mask.Length && mask[prototype];
+			if (terrain == null || prototype < 0 || !skipped.TryGetValue(terrain, out Dictionary<object, bool[]> owners))
+			{
+				return false;
+			}
+			foreach (bool[] mask in owners.Values)
+			{
+				if (mask != null && prototype < mask.Length && mask[prototype])
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		private static bool SameMask(bool[] a, bool[] b)

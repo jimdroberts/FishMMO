@@ -128,13 +128,16 @@ namespace FishMMO.Shared.Weather
 	{
 		public AirOffsets From;
 		public AirOffsets To;
-		public uint StartTick, EndTick;
+		/// <summary>World seconds the move from <see cref="From"/> to <see cref="To"/> starts and ends: it holds with the world.</summary>
+		public double StartSeconds, EndSeconds;
 
-		/// <summary>What is added at a tick, eased.</summary>
-		public AirOffsets At(uint tick)
+		/// <summary>What is added at a moment of world time, eased.</summary>
+		public AirOffsets AtSeconds(double worldSeconds)
 		{
-			float t = EndTick <= StartTick ? (tick >= EndTick ? 1f : 0f) : Mathf.Clamp01((tick - (float)StartTick) / (EndTick - StartTick));
-			if (tick < StartTick)
+			float t = EndSeconds <= StartSeconds
+				? (worldSeconds >= EndSeconds ? 1f : 0f)
+				: Mathf.Clamp01((float)((worldSeconds - StartSeconds) / (EndSeconds - StartSeconds)));
+			if (worldSeconds < StartSeconds)
 			{
 				t = 0f;
 			}

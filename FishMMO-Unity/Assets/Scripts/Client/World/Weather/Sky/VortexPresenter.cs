@@ -90,6 +90,7 @@ namespace FishMMO.Client
 		private static readonly int DebrisLookId = Shader.PropertyToID("_VortexDebrisLook");
 		private static readonly int FleckId = Shader.PropertyToID("_VortexFleck");
 		private static readonly int CloudSunDirId = Shader.PropertyToID("_FishCloudSunDir");
+		private static readonly int PaceId = Shader.PropertyToID("_VortexPace");
 
 		/// <summary>
 		/// What a tornado tears off bound ground — soil, roots, crops, grass — and the spray a waterspout
@@ -114,17 +115,35 @@ namespace FishMMO.Client
 		private readonly MaterialPropertyBlock debrisBlock = new MaterialPropertyBlock();
 		private readonly List<(StormCell cell, float distance)> nearest = new List<(StormCell, float)>();
 		private readonly Dictionary<ushort, (Vector2 at, GroundTraits ground)> grounds = new Dictionary<ushort, (Vector2, GroundTraits)>();
+		private readonly Dictionary<ushort, Pace> paces = new Dictionary<ushort, Pace>();
+
+		/// <summary>
+		/// What a vortex's motions are timed by: its form at maturity in its cell's own air, constant for
+		/// the cell's life (see <see cref="PaceOf"/>).
+		/// </summary>
+		private struct Pace
+		{
+			/// <summary>The cell air it was worked out from; read again when that is.</summary>
+			public StormCellAir.Air Air;
+			/// <summary>x the climb (m/s), y the core radius (m), z the peak wind (m/s), w the clock's wrap (s).</summary>
+			public Vector4 Rates;
+			/// <summary>A fleck's life, s, whole in the clock's wrap.</summary>
+			public float DebrisLife;
+			/// <summary>How far out a fleck goes round half-way up its life, m.</summary>
+			public float DebrisSpread;
+		}
 
 		/// <summary>Vortices drawn last frame.</summary>
 		public int Drawn { get; private set; }
 
 		/// <summary>
-		/// The call SkySystem makes: everything else comes from the weather presentation's context — the
-		/// air at the viewer, which the storms' anatomy is worked out in, as the sky's own storms are.
+		/// A call with the timeline alone: everything else comes from the weather presentation's context —
+		/// its scene and settings, which each cell's own air is read in (StormCellAir).
 		/// </summary>
-		/// <param name="column">Unused: the storm's air is the context's.</param>
-		/// <param name="body">Unused: the world's pull is the context's air's, offsets and all.</param>
-		public void Draw(WeatherTimeline timeline, uint tick, Camera camera, Material funnelMaterial, Material debrisMaterial,
+		/// <param name="column">Unused: the storm's air is its cell's.</param>
+		/// <param name="body">Unused: the world's pull is the cell's air's, offsets and all.</param>
+		/// <param name="tick">The fractional server tick it is drawn at (WeatherPresentation.PresentTick).</param>
+		public void Draw(WeatherTimeline timeline, double tick, Camera camera, Material funnelMaterial, Material debrisMaterial,
 			int limit, int particles, float time, in AirColumn column, FishMMO.Shared.Celestial.WorldBody body)
 		{
 			WeatherPresentation presentation = WeatherPresentation.Instance;
@@ -140,14 +159,15 @@ namespace FishMMO.Client
 			Draw(context, tick, camera, funnelMaterial, debrisMaterial, profile != null ? profile.CloudShape : null, limit, particles, time);
 		}
 
-		/// <param name="context">The weather at the viewer: its air is what each storm's anatomy and each tornado's strength are worked out in.</param>
+		/// <param name="context">The weather at the viewer: its timeline, scene and settings. Each storm's anatomy and each tornado's strength are worked out in the cell's own air (StormCellAir), never the viewer's.</param>
+		/// <param name="tick">The fractional server tick it is drawn at (WeatherPresentation.PresentTick): the cells move every frame.</param>
 		/// <param name="volumeMaterial">The vortex volume (FishMMO/Weather/Vortex).</param>
 		/// <param name="debrisMaterial">The flecks (FishMMO/Weather/Vortex Debris).</param>
 		/// <param name="noise">The clouds' shape volume, which the funnel's striations and the dust's billows are read from.</param>
 		/// <param name="limit">The most vortices drawn at once, nearest first.</param>
 		/// <param name="particles">Flecks for a tornado near the camera; a dust devil takes the same.</param>
 		/// <param name="time">Seconds, wrapped — the clock the vortices turn on.</param>
-		public void Draw(in WeatherContext context, uint tick, Camera camera, Material volumeMaterial, Material debrisMaterial, Texture noise,
+		public void Draw(in WeatherContext context, double tick, Camera camera, Material volumeMaterial, Material debrisMaterial, Texture noise,
 			int limit, int particles, float time)
 		{
 			Drawn = 0;
@@ -156,12 +176,14 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			WeatherSample around = context.Sample;
-			PlanetAir planet = around.Planet;
-			if (!planet.HasAir || planet.Gravity <= 0f)
+			// The world's air at all: no vortex on an airless world. Each one's own air is its cell's.
+			if (!context.Sample.Planet.HasAir || context.Sample.Planet.Gravity <= 0f)
 			{
 				return;
 			}
+			// Its life on the whole tick, where it moves on the fractional one.
+			// The world time it is drawn at: where the vortices stand and how strong they are, held with the world.
+			double now = timeline.WorldSecondsAt(tick);
 			volumeMaterial = volumeMaterial != null ? volumeMaterial : Own(ref ownVolume, FunnelShaderName);
 			debrisMaterial = debrisMaterial != null ? debrisMaterial : Own(ref ownDebris, DebrisShaderName);
 			if (volumeMaterial == null)
@@ -187,7 +209,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
+				Vector2 centre = cell.CentreAtSeconds(now);
 				float distance = Vector2.Distance(centre, new Vector2(viewer.x, viewer.z));
 				if (distance <= FarthestMeters)
 				{
@@ -203,31 +225,48 @@ namespace FishMMO.Client
 			{
 				grounds.Clear();
 			}
-
-			/* The air every tornado here feeds on: its CAPE is their speed limit, its updraught (spun up
-			 * by the mesocyclone) what feeds them, its condensate what their funnels hold. The same air
-			 * the storms' anatomy — and so the wall cloud the sky draws — is worked out in. */
-			AirColumn open = around.OpenColumn;
-			float gravity = planet.Gravity;
-			float updraft = Mathf.Max(2f, open.Updraft * VortexPhysics.MesocycloneUpdraftGain);
-			float condensate = VortexPhysics.FunnelExtinction(open, planet);
-			// And its striations: how far the moisture it brings through its boundary layer's rolls swings
-			// the level each streamline condenses at, and how big those rolls are.
-			float swing = VortexPhysics.CondensationSwing(open, planet);
-			float rolls = VortexPhysics.RollWavelength(open);
-			float forwardScatter = CloudClimate.ForwardScatter(open, planet);
+			if (paces.Count > 64)
+			{
+				paces.Clear();
+			}
 			bool cloudsLit = SkySystem.CloudsReady;
 			Vector3 toSun = SunDirection(cloudsLit);
 
 			for (int i = 0; i < nearest.Count && Drawn < limit; i++)
 			{
 				StormCell cell = nearest[i].cell;
-				float envelope = cell.EnvelopeAt(tick);
+				float envelope = cell.EnvelopeAtSeconds(now);
 				if (envelope * cell.PeakIntensity < 0.02f)
 				{
 					continue;
 				}
-				Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
+
+				/* The air this tornado feeds on: its CAPE is its speed limit, its updraught (spun up by the
+				 * mesocyclone) what feeds it, its condensate what its funnel holds. Its CELL's air, read
+				 * where and when the cell matured (StormCellAir): it was the viewer's, so two players in
+				 * different air saw two funnels on one storm, and the funnel changed as its watcher walked. */
+				StormCellAir.Air cellAir = StormCellAir.Of(timeline, context.Settings, context.Scene, cell);
+				if (cellAir == null)
+				{
+					continue;
+				}
+				WeatherSample own = cellAir.Sample;
+				PlanetAir planet = own.Planet;
+				if (!planet.HasAir || planet.Gravity <= 0f)
+				{
+					continue;
+				}
+				AirColumn open = own.OpenColumn;
+				float gravity = planet.Gravity;
+				float updraft = Mathf.Max(2f, open.Updraft * VortexPhysics.MesocycloneUpdraftGain);
+				float condensate = VortexPhysics.FunnelExtinction(open, planet);
+				// And its striations: how far the moisture it brings through its boundary layer's rolls swings
+				// the level each streamline condenses at, and how big those rolls are.
+				float swing = VortexPhysics.CondensationSwing(open, planet);
+				float rolls = VortexPhysics.RollWavelength(open);
+				float forwardScatter = CloudClimate.ForwardScatter(open, planet);
+
+				Vector2 centre = cell.CentreAtSeconds(now);
 				var motion = new Vector2(cell.VelocityX, cell.VelocityZ);
 				float ground = GroundAt(centre, out bool water);
 				GroundTraits traits = TraitsAt(cell.ID, centre, ground, water, context.Settings);
@@ -248,18 +287,19 @@ namespace FishMMO.Client
 				}
 				else
 				{
-					anatomy = StormAnatomy.Of(cell.Kind, around, motion, timeline.LatitudeDegrees, cell.RadiusMeters);
+					anatomy = StormAnatomy.Of(cell.Kind, own, motion, timeline.LatitudeDegrees, cell.RadiusMeters);
 					if (!anatomy.Valid)
 					{
 						continue;
 					}
-					form = VortexPhysics.Tornado(open.Cape, envelope, cell.PeakIntensity, tick > cell.DecayTick, cell.RadiusMeters,
+					form = VortexPhysics.Tornado(open.Cape, envelope, cell.PeakIntensity, now > cell.DecaySeconds, cell.RadiusMeters,
 						anatomy.WallCloudBase, anatomy.WallCloudRadius, motion, updraft, gravity, liftingWind);
 				}
 				if (!form.Valid)
 				{
 					continue;
 				}
+				Pace pace = PaceOf(cell, cellAir, anatomy, form, devil, motion, updraft, gravity);
 
 				float core = form.CoreRadius;
 				float top = form.Top;
@@ -293,6 +333,7 @@ namespace FishMMO.Client
 				volumeBlock.SetVector(LeanId, new Vector4(form.TopOffset.x, form.TopOffset.y, form.Sway, over));
 				volumeBlock.SetVector(FlowId, new Vector4(form.AxialUpdraft, form.SubVortices, form.Hollow, cloudsLit ? 1f : 0f));
 				volumeBlock.SetVector(TimeId, new Vector4(time, seed, form.Rope, 0f));
+				volumeBlock.SetVector(PaceId, pace.Rates);
 				volumeBlock.SetVector(DustId, new Vector4(liftingWind, form.DebrisHeight, dust, form.DebrisThinning));
 				volumeBlock.SetVector(DustShapeId, new Vector4(form.DebrisReachGround, form.DebrisReachTop, tube, 0f));
 				volumeBlock.SetVector(LookId, new Vector4(lifted.r, lifted.g, lifted.b, form.Condenses ? condensate : 0f));
@@ -344,10 +385,11 @@ namespace FishMMO.Client
 					debrisBlock.SetVector(LeanId, new Vector4(form.TopOffset.x, form.TopOffset.y, form.Sway, over));
 					debrisBlock.SetVector(FlowId, new Vector4(form.AxialUpdraft, form.SubVortices, form.Hollow, cloudsLit ? 1f : 0f));
 					debrisBlock.SetVector(TimeId, new Vector4(time, seed, form.Rope, 0f));
+					debrisBlock.SetVector(PaceId, pace.Rates);
 					debrisBlock.SetVector(SkyId, new Vector4(sunSeen, skySeen, forwardScatter, flare));
 					debrisBlock.SetVector(FleckId, new Vector4(lifted.r * 0.55f, lifted.g * 0.55f, lifted.b * 0.55f, form.Lifted));
-					debrisBlock.SetVector(DebrisId, new Vector4(form.DebrisHeight, form.DebrisReachGround, form.DebrisReachTop, Mathf.Max(2f, 0.5f * form.AxialUpdraft)));
-					debrisBlock.SetVector(DebrisLookId, new Vector4(devil ? 1.4f : 2.4f, Mathf.Clamp(core * 0.04f, 0.3f, 4f), FlecksMeters, 0f));
+					debrisBlock.SetVector(DebrisId, new Vector4(form.DebrisHeight, form.DebrisReachGround, form.DebrisReachTop, pace.DebrisLife));
+					debrisBlock.SetVector(DebrisLookId, new Vector4(BottomHeavy(devil), Mathf.Clamp(core * 0.04f, 0.3f, 4f), FlecksMeters, pace.DebrisSpread));
 					float fleckRadius = form.DebrisReachGround * core + inflate + 20f;
 					var debrisParams = new RenderParams(debrisMaterial)
 					{
@@ -362,6 +404,61 @@ namespace FishMMO.Client
 				}
 				Drawn++;
 			}
+		}
+
+		/// <summary>How bottom-heavy the flecks are: a power on how far up their life they have climbed (FishVortexDebris).</summary>
+		private static float BottomHeavy(bool devil) => devil ? 1.4f : 2.4f;
+
+		/// <summary>
+		/// The pace a vortex's motions are timed by: its form at full strength (envelope 1, not yet
+		/// decaying) in its cell's own air, on the ground where the cell matured — so constant for the
+		/// cell's life and the same on every client.
+		/// </summary>
+		/// <remarks>
+		/// The shaders turn the clock into motion by multiplying it by rates — the climb over a billow's
+		/// length, the sub-vortices' turn, a fleck's life and its angular speed. Taken from the live form,
+		/// which grows and spins down every tick, each of those jumped by the change in rate times the whole
+		/// clock (hours of it): every billow, sub-vortex and fleck somewhere else each frame. The live form
+		/// still sets everything's size and strength; only the timing is the pace's. A cell whose mature
+		/// form is no vortex at all keeps the first live form drawn instead.
+		/// </remarks>
+		private Pace PaceOf(in StormCell cell, StormCellAir.Air cellAir, in StormAnatomy anatomy, in VortexPhysics.Form live, bool devil,
+			Vector2 motion, float updraft, float gravity)
+		{
+			if (paces.TryGetValue(cell.ID, out Pace known) && ReferenceEquals(known.Air, cellAir))
+			{
+				return known;
+			}
+			WeatherSample own = cellAir.Sample;
+			AirColumn open = own.OpenColumn;
+			// What the ground where it matured gives it to lift: its sea, its loose ground, or bound ground.
+			float liftingWind = cellAir.Water || own.Ground.Water ? VortexPhysics.TearsTheSea
+				: own.Ground.Loose != null ? WeatherPhysics.LiftingWind(own.Ground.Loose, own.Planet, open.SurfaceKelvin)
+				: VortexPhysics.StripsBoundGround;
+			VortexPhysics.Form form = devil
+				? VortexPhysics.DustDevil(1f, cell.PeakIntensity, cell.RadiusMeters, cell.ExtentMeters * 1.4f, motion, liftingWind)
+				: VortexPhysics.Tornado(open.Cape, 1f, cell.PeakIntensity, false, cell.RadiusMeters,
+					anatomy.WallCloudBase, anatomy.WallCloudRadius, motion, updraft, gravity, liftingWind);
+			if (!form.Valid)
+			{
+				form = live;
+			}
+			const double Wrap = FishMMO.Shared.Celestial.WorldMotion.SkyWrapSeconds;
+			// A fleck's life as the debris shader had it — the debris' height over its climb — whole in the
+			// wrap, so the flecks come round to where they were as the clock wraps.
+			float life = Mathf.Max(1f, form.DebrisHeight) / Mathf.Max(2f, 0.5f * form.AxialUpdraft);
+			double lives = System.Math.Max(1.0, System.Math.Round(Wrap / life));
+			float core = Mathf.Max(0.5f, form.CoreRadius);
+			float halfWay = Mathf.Sqrt(Mathf.Pow(0.5f, BottomHeavy(devil)));
+			var pace = new Pace
+			{
+				Air = cellAir,
+				Rates = new Vector4(form.AxialUpdraft, form.CoreRadius, form.PeakWind, (float)Wrap),
+				DebrisLife = (float)(Wrap / lives),
+				DebrisSpread = core * Mathf.Lerp(form.DebrisReachGround, form.DebrisReachTop, halfWay),
+			};
+			paces[cell.ID] = pace;
+			return pace;
 		}
 
 		/// <summary>
@@ -483,7 +580,7 @@ namespace FishMMO.Client
 		/// The height a vortex stands on: the ground, or the sea over it — a tornado over water is a
 		/// waterspout, and what it lifts is spray.
 		/// </summary>
-		private static float GroundAt(Vector2 at, out bool water)
+		internal static float GroundAt(Vector2 at, out bool water)
 		{
 			float ground = float.MinValue;
 			foreach (Terrain terrain in Terrain.activeTerrains)
@@ -501,7 +598,7 @@ namespace FishMMO.Client
 				ground = Mathf.Max(ground, origin.y + terrain.SampleHeight(new Vector3(at.x, 0f, at.y)));
 			}
 			water = false;
-			if (SurfaceWater.TryGetLevel(out float level) && level > ground)
+			if (SurfaceWater.TryGetSurfaceAt(at.x, at.y, out float level) && level > ground)
 			{
 				ground = level;
 				water = true;
@@ -574,6 +671,7 @@ namespace FishMMO.Client
 			Discard(ref ownDebris);
 			debrisBuilt = -1;
 			grounds.Clear();
+			paces.Clear();
 		}
 
 		private static void Discard<T>(ref T victim) where T : Object

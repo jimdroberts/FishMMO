@@ -42,19 +42,26 @@
 
 /* ── Statistics: cards of aligned key / value rows ─────────── */
 
+/* A scroll box of its own, capped so the tabs below keep most of the panel. */
 .ws-stats {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-grow: 0;
+    flex-shrink: 0;
+    max-height: 210px;
     margin: 0 -2px 6px -2px;
 }
 
-.ws-card {
-    width: 50%;
-    padding: 2px;
+/* Two half cards side by side: equal shares of the row, never a wrap. */
+.ws-card-pair {
+    flex-direction: row;
 }
 
-.ws-card--wide {
-    width: 100%;
+.ws-card-pair > .ws-card {
+    flex-grow: 1;
+    flex-basis: 0;
+}
+
+.ws-card {
+    padding: 2px;
 }
 
 .ws-card__body {
@@ -72,21 +79,25 @@
 
 .ws-card__grid {
     flex-direction: row;
-    flex-wrap: wrap;
+}
+
+.ws-card__column {
+    flex-grow: 1;
+    flex-basis: 0;
+    min-width: 0;
+}
+
+/* In a wide card the rows run two abreast, with a gutter between the columns. (USS has no
+   sibling combinator; a '+' fails the whole sheet's import, so the second column is classed.) */
+.ws-card__column--second {
+    margin-left: 8px;
 }
 
 .ws-stat {
     flex-direction: row;
     justify-content: space-between;
     align-items: flex-start;
-    width: 100%;
     min-height: 13px;
-}
-
-/* In a wide card the rows run two abreast, with a gutter between the columns. */
-.ws-card--wide .ws-stat {
-    width: 50%;
-    padding-right: 8px;
 }
 
 .ws-stat__key {

@@ -96,15 +96,31 @@ struct FishWaterBreakerPoint
 /// long, and changed at a stretch's end in one step — so a wave breaking across that line had a cliff
 /// in its crest, one side a third taller than the other. It is now eased from one stretch's draw to the
 /// next's across the whole stretch.
+/// <para>
+/// <b>And continuous across the shore's windows.</b> The waves are numbered afresh each window of the
+/// shared clock (WaterShore.SurfCycles), so every wave in flight changes number at a window's start; its
+/// height eases from its old number's draw to its new one's over the first few waves
+/// (_FishWaterSwashRelabel) instead of the whole surf changing height in one frame.
+/// </para>
 /// </remarks>
-float FishWaterWaveShare(float wave, float along)
+float FishWaterWaveDraw(float wave, float along)
 {
 	float stretch = along * 0.5;
 	float first = floor(stretch);
 	float blend = smoothstep(0.0, 1.0, stretch - first);
 	float here = frac(sin(wave * 12.9898 + first * 4.1414 + 78.233) * 43758.5453);
 	float next = frac(sin(wave * 12.9898 + (first + 1.0) * 4.1414 + 78.233) * 43758.5453);
-	return 0.65 + 0.7 * lerp(here, next, blend);
+	return lerp(here, next, blend);
+}
+
+float FishWaterWaveShare(float wave, float along)
+{
+	float draw = FishWaterWaveDraw(wave, along);
+	if (_FishWaterSwashRelabel.y < 1.0)
+	{
+		draw = lerp(FishWaterWaveDraw(wave + _FishWaterSwashRelabel.x, along), draw, saturate(_FishWaterSwashRelabel.y));
+	}
+	return 0.65 + 0.7 * draw;
 }
 
 /// <summary>How fast the whitewater bore runs inshore, m/s: the shallow-water speed at the break depth.</summary>

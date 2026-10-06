@@ -231,6 +231,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The water's surface: droplets end there and drop their load, and running water wears nothing under it. Negative infinity for a dry world.</summary>
 		public float BaseLevel = float.NegativeInfinity;
 
+		/// <summary>
+		/// Per cell, the surface of water standing or running there above <see cref="BaseLevel"/> — a
+		/// river's channel, a lake — or negative infinity; null for none. Running water ends at it as
+		/// at the sea, so gullies grow toward the rivers and drop their load on the banks.
+		/// </summary>
+		public float[] WaterLevel;
+
+		/// <summary>The water's surface at a cell: the sea's, or a river's or lake's above it.</summary>
+		public float LevelAt(int cell) => WaterLevel != null && WaterLevel[cell] > BaseLevel ? WaterLevel[cell] : BaseLevel;
+
 		/// <summary>Per cell, the highest running water may build the ground; null for no limit (<see cref="ErosionSettings.MaxFillMetres"/>).</summary>
 		public float[] Ceiling;
 
@@ -366,7 +376,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				var before = (float[])height.Clone();
 				var soilBefore = (float[])soil.Clone();
-				var coarse = new ErosionGrid(width, depth, grid.CellMetres * step, height, soil) { BaseLevel = grid.BaseLevel };
+				var coarse = new ErosionGrid(width, depth, grid.CellMetres * step, height, soil) { BaseLevel = grid.BaseLevel, WaterLevel = Coarsen(grid.WaterLevel, fine) };
 				if (grid.Ceiling != null)
 				{
 					coarse.Ceiling = new float[fine.Length];
@@ -391,6 +401,21 @@ namespace FishMMO.Shared.WorldDesign
 				total.Lost += cut - laid;
 			}
 			return total;
+		}
+
+		/// <summary>A per-cell array read at a coarse grid's cells (their fine indices); null stays null.</summary>
+		private static float[] Coarsen(float[] values, int[] fine)
+		{
+			if (values == null)
+			{
+				return null;
+			}
+			var result = new float[fine.Length];
+			for (int n = 0; n < fine.Length; n++)
+			{
+				result[n] = values[fine[n]];
+			}
+			return result;
 		}
 
 		/// <summary>
@@ -462,7 +487,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			var before = (float[])height.Clone();
-			LandscapeEvolution.Run(height, width, depth, grid.CellMetres * step, cells, grid.BaseLevel, settings);
+			float[] water = Coarsen(grid.WaterLevel, fine);
+			LandscapeEvolution.Run(height, width, depth, grid.CellMetres * step, cells, grid.BaseLevel, settings, water);
 			if (glacial != null && glacial.Passes > 0)
 			{
 				// Glaciers take over the valleys the rivers made, where the climate fed them.
@@ -470,7 +496,8 @@ namespace FishMMO.Shared.WorldDesign
 				for (int n = 0; n < count; n++)
 				{
 					int a = n % width, b = n / width;
-					outlet[n] = a == 0 || b == 0 || a == width - 1 || b == depth - 1 || height[n] < grid.BaseLevel || cells.Sink[n];
+					outlet[n] = a == 0 || b == 0 || a == width - 1 || b == depth - 1 || height[n] < grid.BaseLevel || cells.Sink[n]
+						|| (water != null && height[n] < water[n]);
 				}
 				tally.Glaciated = GlacialErosion.Run(height, width, depth, grid.CellMetres * step,
 					(n, altitude) => ground.IceBalance(fine[n], altitude), cells.Hardness, outlet, glacial);
@@ -670,7 +697,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int x = x0; x < x1; x++)
 				{
 					int cell = z * grid.Width + x;
-					if (grid.Height[cell] < grid.BaseLevel)
+					if (grid.Height[cell] < grid.LevelAt(cell))
 					{
 						continue;
 					}
@@ -733,7 +760,7 @@ namespace FishMMO.Shared.WorldDesign
 
 				float next = Bilinear(height, width, nx, nz);
 				float drop = next - here;
-				if (next < grid.BaseLevel)
+				if (next < grid.LevelAt(Math.Min(grid.Depth - 1, (int)(nz + 0.5f)) * width + Math.Min(width - 1, (int)(nx + 0.5f))))
 				{
 					// Into the sea or the lake: the current dies and its load settles at the mouth.
 					float spilled = Spread(grid, brush, ix, iz, sediment);
@@ -802,7 +829,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int k = 0; k < brush.Count; k++)
 			{
 				int x = ix + brush.X[k], z = iz + brush.Z[k];
-				if (x >= 0 && z >= 0 && x < width && z < grid.Depth && height[z * width + x] >= grid.BaseLevel)
+				if (x >= 0 && z >= 0 && x < width && z < grid.Depth && height[z * width + x] >= grid.LevelAt(z * width + x))
 				{
 					weightSum += brush.Weight[k];
 				}
@@ -821,7 +848,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				int j = z * width + x;
-				if (height[j] < grid.BaseLevel)
+				if (height[j] < grid.LevelAt(j))
 				{
 					continue;
 				}
@@ -936,7 +963,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int x = 0; x < width; x++)
 				{
 					int i = z * width + x;
-					if (height[i] < grid.BaseLevel)
+					if (height[i] < grid.LevelAt(i))
 					{
 						continue;
 					}

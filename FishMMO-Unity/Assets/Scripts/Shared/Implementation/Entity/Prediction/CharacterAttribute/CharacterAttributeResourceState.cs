@@ -47,5 +47,11 @@ namespace FishMMO.Shared
 		/// The current maximum stamina cap (final value) of the character.
 		/// </summary>
 		public int MaxStamina;
+
+		/// <summary>
+		/// Seconds of breath the character has left under water. Its maximum is not carried: both peers derive it
+		/// from the same attributes (CharacterAttributeController.MaxBreathSeconds).
+		/// </summary>
+		public float Breath;
 	}
 }

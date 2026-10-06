@@ -203,9 +203,9 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 2.5
+      densityPer100m2: 5.418
       maxPerChunk: 20000
-      minSpacing: 4
+      minSpacing: 4.3
       minTextureWeight: 0.5
       spawnProbabilityMultiplier: 1
       useHeightConstraint: 0
@@ -220,19 +220,26 @@ MonoBehaviour:
       slopeFalloff: 5
       useNonUniformScaling: 1
       uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.8, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.3}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.8, y: 1.2}
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 40010
-      clusterMetres: 18
-      clusterSize: 25
+      clusterMetres: 0
+      clusterSize: 0
       clusterSpacing: 4
-      clusterBackground: 0.4
-      clusterScaleBias: 0.3
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 520
+      forestCover: 0.8
+      forestEdge: 0.3
+      forestOpen: 0.0069565214
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0.05, y: 0.15}
       sinkSlopeFactor: 0.3
-      specFingerprint: 8284f50819e31a42
+      depthRange: {x: 0, y: 0}
+      specFingerprint: d38ad79976338245
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -249,9 +256,9 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 0.8
+      densityPer100m2: 1.492
       maxPerChunk: 20000
-      minSpacing: 4
+      minSpacing: 5.5
       minTextureWeight: 0.5
       spawnProbabilityMultiplier: 1
       useHeightConstraint: 0
@@ -266,19 +273,26 @@ MonoBehaviour:
       slopeFalloff: 5
       useNonUniformScaling: 1
       uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.8, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.3}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.8, y: 1.2}
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 5063
-      clusterMetres: 18
-      clusterSize: 25
+      clusterMetres: 0
+      clusterSize: 0
       clusterSpacing: 4
-      clusterBackground: 0.4
-      clusterScaleBias: 0.3
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 520
+      forestCover: 0.8
+      forestEdge: 0.3
+      forestOpen: 0.010847458
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0.05, y: 0.15}
       sinkSlopeFactor: 0.3
-      specFingerprint: 5112e8fa02bca3f4
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 900fe6a422bd0b09
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -322,9 +336,16 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.5
-      sinkRange: {x: 0.02, y: 0.05}
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.08}
       sinkSlopeFactor: 0
-      specFingerprint: 0aaa4a2341bd23c5
+      depthRange: {x: 0, y: 0}
+      specFingerprint: dded0b73610bf93c
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -368,8 +389,15 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.2
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0.02, y: 0.05}
       sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
       specFingerprint: b20a9b616f66fc35
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -412,9 +440,9 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 0.2
+      densityPer100m2: 1.245
       maxPerChunk: 20000
-      minSpacing: 5
+      minSpacing: 4.5
       minTextureWeight: 0.5
       spawnProbabilityMultiplier: 1
       useHeightConstraint: 0
@@ -429,19 +457,26 @@ MonoBehaviour:
       slopeFalloff: 5
       useNonUniformScaling: 1
       uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.8, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.3}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.8, y: 1.2}
       yRotationRange: {x: 0, y: 360}
       alignToTerrainNormal: 0
       seedOffset: 34177
-      clusterMetres: 15
-      clusterSize: 6
+      clusterMetres: 0
+      clusterSize: 0
       clusterSpacing: 4
       clusterBackground: 0.2
-      clusterScaleBias: 0.4
+      clusterScaleBias: 0.5
+      forestMetres: 520
+      forestCover: 0.8
+      forestEdge: 0.3
+      forestOpen: 0.034042552
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0.05, y: 0.15}
       sinkSlopeFactor: 0.3
-      specFingerprint: d8822e3353289698
+      depthRange: {x: 0, y: 0}
+      specFingerprint: ad69f6af31c1a740
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -485,9 +520,16 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.5
-      sinkRange: {x: 0.02, y: 0.05}
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
       sinkSlopeFactor: 0
-      specFingerprint: 019e2414d1864e9e
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 8b478294d76ed634
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}

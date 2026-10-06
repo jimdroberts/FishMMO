@@ -130,20 +130,27 @@ namespace FishMMO.Client
 
 		private void Read(TerrainSet terrains, float cell)
 		{
-			bool water = SurfaceWater.TryGetLevel(out float level);
+			if (readingWet == null || readingWet.Length != reading.Length)
+			{
+				readingWet = new bool[reading.Length];
+			}
 			int end = Mathf.Min(reading.Length, read + SamplesPerFrame);
 			for (; read < end; read++)
 			{
 				int x = read % Resolution, z = read / Resolution;
-				if (!terrains.TryHeight(readingCorner.x + (x + 0.5f) * cell, readingCorner.y + (z + 0.5f) * cell, out float height))
+				float wx = readingCorner.x + (x + 0.5f) * cell, wz = readingCorner.y + (z + 0.5f) * cell;
+				if (!terrains.TryHeight(wx, wz, out float height))
 				{
 					height = 0f;
 				}
-				reading[read] = water ? Mathf.Max(height, level) : height;
+				// The sea, a lake or a river: whichever stands over this ground.
+				bool wet = SurfaceWater.TryGetSurfaceAt(wx, wz, out float level) && level >= height;
+				readingWet[read] = wet;
+				reading[read] = wet ? level : height;
 			}
 			if (read >= reading.Length)
 			{
-				Upload(terrains, cell, water, level);
+				Upload(terrains, cell, readingWet);
 				corner = readingCorner;
 				ready = true;
 				read = -1;
@@ -152,7 +159,10 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void Upload(TerrainSet terrains, float cell, bool water, float level)
+		/// <summary>Per cell of the read in progress, whether water stands over it.</summary>
+		private bool[] readingWet;
+
+		private void Upload(TerrainSet terrains, float cell, bool[] wetCells)
 		{
 			int n = Resolution;
 			if (texture == null)
@@ -172,7 +182,7 @@ namespace FishMMO.Client
 			}
 			groundBase = lowest;
 			float[] mean = BoxMean(reading, n, HollowRadius);
-			float[] wet = WaterNearness(reading, n, cell, water, level);
+			float[] wet = WaterNearness(wetCells, n, cell);
 			float[] canopy = Canopy(terrains.Terrains, n, cell, readingCorner);
 			groundHalves ??= new ushort[n * n * 4];
 			for (int i = 0; i < n * n; i++)
@@ -188,21 +198,17 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// How near open water each cell is, 0..1: 1 on it, e^(−d / <see cref="WaterReach"/>) at d metres
-		/// from its edge (a chamfer distance over the grid). Water is where the ground read is the sea's level.
+		/// from its edge (a chamfer distance over the grid). Water is wherever the sea, a lake or a river stands.
 		/// </summary>
-		private static float[] WaterNearness(float[] heights, int n, float cell, bool water, float level)
+		private static float[] WaterNearness(bool[] wetCells, int n, float cell)
 		{
 			var near = new float[n * n];
-			if (!water)
-			{
-				return near;
-			}
 			const float far = 1e9f;
 			var distance = new float[n * n];
 			bool any = false;
 			for (int i = 0; i < n * n; i++)
 			{
-				bool wet = heights[i] <= level + 0.01f;
+				bool wet = wetCells[i];
 				distance[i] = wet ? 0f : far;
 				any |= wet;
 			}

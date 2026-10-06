@@ -883,7 +883,8 @@ namespace FishMMO.Shared.WorldDesign
 			if (clip) m.EnableKeyword("_ALPHATEST_ON"); else m.DisableKeyword("_ALPHATEST_ON");
 			m.SetFloat("_Cull", twoSided ? (float)CullMode.Off : (float)CullMode.Back);
 			m.SetFloat("_BackfaceFlip", 0f);
-			m.SetFloat("_Smoothness", 0.25f);
+			// Leaves, blades and bark are rough: 0.25 gave every plant a sheen, plainest at grazing angles.
+			m.SetFloat("_Smoothness", 0.1f);
 			m.SetFloat("_Translucency", translucency);
 			m.SetFloat("_WindSway", sway);
 			m.SetFloat("_WindFlutter", flutter);
@@ -904,7 +905,43 @@ namespace FishMMO.Shared.WorldDesign
 			m.SetFloat("_FacingCamera", facingCamera ? 1f : 0f);
 			m.SetVector("_GroundSink", new Vector4(groundSink.x, groundSink.y, 0f, 0f));
 			m.SetFloat("_TintPatchMetres", tintPatchMetres);
+			PlantVariation(m, distanceFade);
 			m.renderQueue = clip ? (int)RenderQueue.AlphaTest : (int)RenderQueue.Geometry;
+		}
+
+		/// <summary>
+		/// How far each plant differs from the next (the vegetation shader's <c>_Vary*</c>, VegVary): by the
+		/// material's class, never by species. A tree's bark and its leaves are two materials on one mesh, and the
+		/// bark's material is shared by every species of its family — if their shapes were varied by different
+		/// amounts the leaves would come away from their limbs, so every tree material carries the same figures.
+		/// </summary>
+		/// <remarks>
+		/// Trees: a few degrees of lean, a quarter-turn of twist at most, crowns and heights a sixth either way;
+		/// each limb swung up to 18° about its foot, drooped or raised up to 10°, and a sixth longer or shorter;
+		/// from about seven in ten of the asked-for limbs to half again as many, and from about half the leaves
+		/// to half again as many. Details: looser — a clump leans and twists more, and its blades swing further —
+		/// and as full or as thin as their spares allow. Colour: a tenth either way in brightness, a little in hue,
+		/// each leaf card a little its own, bark a tenth. A billboard takes only the colour (the shader).
+		/// </remarks>
+		private static void PlantVariation(Material m, float distanceFade)
+		{
+			bool tree = distanceFade > FadeDetail + 0.5f;
+			bool detail = !tree && distanceFade > FadeNone + 0.5f;
+			if (!tree && !detail)
+			{
+				return;
+			}
+			m.SetFloat("_VaryLean", tree ? 3f : 8f);
+			m.SetFloat("_VaryTwist", tree ? 25f : 45f);
+			m.SetFloat("_VaryCrown", tree ? 0.16f : 0.25f);
+			m.SetFloat("_VaryHeight", tree ? 0.14f : 0.25f);
+			// Trunk girth: a fifth either way, more for the taller of a species (detail plants have no trunk).
+			m.SetFloat("_VaryGirth", tree ? 0.22f : 0f);
+			m.SetFloat("_VaryPartSwing", tree ? 18f : 25f);
+			m.SetFloat("_VaryPartDroop", tree ? 10f : 15f);
+			m.SetFloat("_VaryPartLength", tree ? 0.16f : 0.2f);
+			m.SetVector("_VaryFullness", tree ? new Vector4(0.15f, 0.55f, 0f, 0f) : new Vector4(0f, 0.2f, 0f, 0f));
+			m.SetVector("_VaryColour", tree ? new Vector4(0.1f, 0.06f, 0.08f, 0.1f) : new Vector4(0.12f, 0.08f, 0.06f, 0.1f));
 		}
 
 		private static void WriteMaterials(Context c)
@@ -971,9 +1008,22 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				bool grassy = spec.Plant.Kind == DetailKind.Grass || spec.Plant.Kind == DetailKind.Reeds;
 				float sway = grassy ? 0.35f : spec.Plant.Kind == DetailKind.Kelp ? 0.25f : 0.2f;
+				bool aquatic = SeaFloorMeshes.IsAquatic(spec.Plant.Kind);
 				WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), veg, m =>
+				{
 					Vegetation(m, atlas, 0.45f, true, sway, 0.02f, 0.5f, spec.Healthy, spec.Dry, 0.35f, spec.SnowBury, false, distanceFade: FadeDetail, groundSink: sink,
-						tintPatchMetres: DetailTintPatchMetres(in spec)));
+						tintPatchMetres: DetailTintPatchMetres(in spec));
+					// Under the sea: the surge sways it instead of the wind (each kind as far as it gives), nothing
+					// grows past the low-tide surface, and no snow, rain or ash lies on it (FishSea.hlsl).
+					m.SetFloat("_Aquatic", aquatic ? 1f : 0f);
+					if (aquatic)
+					{
+						Vector2 give = SeaFloorMeshes.Sway(spec.Plant.Kind);
+						m.SetFloat("_WindSway", give.x);
+						m.SetFloat("_WindFlutter", give.y);
+						m.SetFloat("_FishWeatherAmount", 0f);
+					}
+				});
 			}
 
 			foreach (TreeSpecies t in ProceduralArtCatalogue.Trees)
@@ -1600,7 +1650,7 @@ namespace FishMMO.Shared.WorldDesign
 							shadows[i] = i < meshes.Length - 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
 						}
 						Lods(root, meshes, mats, new[] { 0.25f, 0.08f, 0.01f }, shadows);
-						AddBoulderCollider(root, meshes[0]);
+						AddBoulderCollider(root, meshes);
 					});
 				}
 				WritePrefab(c, ProceduralArtCatalogue.SmallRocksPrefab(spec.Name), root =>
@@ -1611,24 +1661,75 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A capsule along the boulder's longest horizontal axis. A capsule because it is the
-		/// collider every terrain tree instance supports; a mesh collider on a tree prototype is not.
+		/// A rock collides as its own shape: a mesh collider on its lowest level of detail, the coarsest mesh that still
+		/// draws the rock (a collision LOD, as the cliff rocks' is). A capsule sized from the narrowest side left a
+		/// 3.2 m pavement a 0.5 m tube to collide with, and a leaning serac an upright one. The baked props merge these
+		/// meshes per streamed chunk (ScenePropBaker, PropColliderStreamer), so a prop is never a collider of its own.
 		/// </summary>
-		private static void AddBoulderCollider(GameObject root, Mesh mesh)
+		private static void AddBoulderCollider(GameObject root, Mesh[] lods)
 		{
+			Mesh mesh = null;
+			for (int i = lods.Length - 1; i >= 0 && mesh == null; i--)
+			{
+				mesh = lods[i];
+			}
 			if (mesh == null)
 			{
 				return;
 			}
-			Bounds b = mesh.bounds;
-			var capsule = Ensure<CapsuleCollider>(root);
-			bool alongX = b.size.x >= b.size.z;
-			bool upright = b.size.y > Mathf.Max(b.size.x, b.size.z);
-			capsule.direction = upright ? 1 : alongX ? 0 : 2;
-			float across = upright ? Mathf.Min(b.size.x, b.size.z) : Mathf.Min(b.size.y, alongX ? b.size.z : b.size.x);
-			capsule.radius = across * 0.45f;
-			capsule.height = Mathf.Max(capsule.radius * 2f, (upright ? b.size.y : alongX ? b.size.x : b.size.z) * 0.9f);
-			capsule.center = b.center;
+			var collider = Ensure<MeshCollider>(root);
+			collider.convex = false;
+			collider.sharedMesh = mesh;
+		}
+
+		/// <summary>
+		/// A tree's collision mesh: its trunk's own surface, cut from a level's bark, so a player walks into the trunk as
+		/// it is drawn (a palm's curve, a fork, a lean) and under the branches and leaves. The trunk's triangles
+		/// (<see cref="PlantPart.Fixed"/>), every stem that stands on the ground itself (a limb whose foot is at the
+		/// ground: a bamboo clump's culms), and a cactus's arms, solid as its stem. Branches off the trunk are left out:
+		/// detail a player does not need to stand against. Empty when the tree has no wood to cut.
+		/// </summary>
+		/// <summary>A limb whose foot is this close to the ground stands on it: a stem of its own, collided with.</summary>
+		private const float StemFootMetres = 0.5f;
+
+		private static MeshBuilder TrunkCollision(MeshBuilder level, in TreeSpecies species)
+		{
+			var trunk = new MeshBuilder(1);
+			if (level == null || level.Submeshes.Count <= TreeMeshes.BarkSubmesh || level.PartData.Count != level.VertexCount)
+			{
+				return trunk;
+			}
+			bool arms = species.Form == TreeForm.Cactus;
+			var remap = new Dictionary<int, int>();
+			List<int> bark = level.Submeshes[TreeMeshes.BarkSubmesh];
+			List<int> into = trunk.Submeshes[0];
+			for (int t = 0; t + 2 < bark.Count; t += 3)
+			{
+				bool keep = true;
+				for (int k = 0; k < 3 && keep; k++)
+				{
+					int v = bark[t + k];
+					var part = (PlantPart)Mathf.RoundToInt(level.PartData[v].z);
+					bool standing = part == PlantPart.Limb && level.PartPivots[v].y <= StemFootMetres;
+					keep = part == PlantPart.Fixed || standing || (arms && part == PlantPart.Limb);
+				}
+				if (!keep)
+				{
+					continue;
+				}
+				for (int k = 0; k < 3; k++)
+				{
+					int v = bark[t + k];
+					if (!remap.TryGetValue(v, out int mapped))
+					{
+						remap[v] = mapped = trunk.AddVertex(level.Positions[v], level.Normals[v], level.UVs[v], level.Colors[v]);
+						trunk.Tangents[mapped] = level.Tangents[v];
+					}
+					// Straight into the list: the winding is the bark's own.
+					into.Add(mapped);
+				}
+			}
+			return trunk;
 		}
 
 		// ── Details ───────────────────────────────────────────────────
@@ -1673,7 +1774,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					tex.a = 1f;
 				}
-				return new Color(tex.r * vc.r, tex.g * vc.g, tex.b * vc.b, tex.a);
+				// The vertex colour is stored linear (PlantParts.C32) and the textures in sRGB: taken back to sRGB
+				// to be multiplied with them, so the baked billboard is the colour the shader draws the tree.
+				Color tint = vc.gamma;
+				return new Color(tex.r * tint.r, tex.g * tint.g, tex.b * tint.b, tex.a);
 			}, ProceduralArtCatalogue.BillboardHeight, species.Height, species.Deciduous ? 0.35f : 1f);
 
 			string billboardPath = ProceduralArtCatalogue.BillboardTexture(species.Name);
@@ -1711,25 +1815,19 @@ namespace FishMMO.Shared.WorldDesign
 			var mats = new[] { treeMaterials, treeMaterials, new[] { billboardMaterial } };
 			var shadows = new[] { ShadowCastingMode.On, ShadowCastingMode.On, ShadowCastingMode.Off };
 
+			// The trunk as drawn at the first reduced level: its own shape, at the fewest triangles that still are it.
+			MeshBuilder trunkShape = TrunkCollision(lod1, in species);
+			Mesh trunk = trunkShape.TriangleCount > 0 ? WriteMesh(c, trunkShape, prefix + "_Collision", false) : null;
 			WritePrefab(c, ProceduralArtCatalogue.TreePrefab(species.Name), root =>
 			{
 				Lods(root, meshes, mats, ProceduralArtCatalogue.TreeLodHeights, shadows);
-				AddTrunkCollider(root, in species);
+				if (trunk != null)
+				{
+					var collider = Ensure<MeshCollider>(root);
+					collider.convex = false;
+					collider.sharedMesh = trunk;
+				}
 			});
-			WritePrefab(c, ProceduralArtCatalogue.TreeDecorPrefab(species.Name), root =>
-				Lods(root, meshes, mats, ProceduralArtCatalogue.TreeLodHeights, shadows));
-		}
-
-		/// <summary>The trunk as a capsule: what a player walks into. Branches and leaves do not collide.</summary>
-		private static void AddTrunkCollider(GameObject root, in TreeSpecies species)
-		{
-			var capsule = Ensure<CapsuleCollider>(root);
-			capsule.direction = 1;
-			float radius = species.Form == TreeForm.Bamboo ? species.CrownWidth * species.Height * 0.25f : species.TrunkRadius * 1.15f;
-			float height = species.Form == TreeForm.Cactus || species.Form == TreeForm.Bamboo ? species.Height : species.Height * Mathf.Max(0.35f, species.CrownBase + 0.2f);
-			capsule.radius = Mathf.Max(0.1f, radius);
-			capsule.height = Mathf.Max(capsule.radius * 2f, height);
-			capsule.center = new Vector3(0f, capsule.height * 0.5f, 0f);
 		}
 
 		// ── Build and editor-load entry ───────────────────────────────

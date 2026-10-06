@@ -43,6 +43,7 @@ float2 FishWaterShoreSample(float2 xz)
 
 float _FishWaterSwashSkew;       // 0 symmetric, 1 a fast rush and a long drain
 float4 _FishWaterWind;           // xy the direction the wind and the sea run toward
+float4 _FishWaterRippleWindow;   // the sea's ripples' held wind: xy direction, z seconds into the window, w its length (WaterSurface)
 
 // The clock, the period, the sea and the phase along the shore, shared with the breakers so the
 // swash and the waves that make it are one motion — and the set a wave belongs to (FishWaterWaveShare).

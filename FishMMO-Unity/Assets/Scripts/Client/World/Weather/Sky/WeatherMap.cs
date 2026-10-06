@@ -192,11 +192,13 @@ namespace FishMMO.Client
 		/// <summary>One storm, worked out once per build: its anatomy put into the world, and its life.</summary>
 		private struct StormCloud
 		{
+			/// <summary>The air it was laid out in: its own (StormCellAir), or the viewer's without a scene.</summary>
+			public WeatherSample Air;
 			public StormCell Cell;
 			/// <summary>The cell with its motion frozen where it stands now, for what it answers per place.</summary>
 			public StormCell Frozen;
-			public uint Tick;
-			public double TickDelta;
+			/// <summary>The world seconds it was laid out at.</summary>
+			public double Seconds;
 			public bool Anatomy;
 			public StormAnatomy A;
 			public Vector2 Centre, Body, AnvilCentre, Rain;
@@ -528,7 +530,7 @@ namespace FishMMO.Client
 				var at = new Vector2(position.x, position.z);
 				for (int i = 0; i < timeline.Cells.Count; i++)
 				{
-					if (Prepare(timeline.Cells[i], tick, timeline.TickDelta, timeline.LatitudeDegrees, storms, around, out StormCloud cloud)
+					if (Prepare(timeline, timeline.Cells[i], tick, timeline.TickDelta, timeline.LatitudeDegrees, storms, around, out StormCloud cloud)
 						&& Contribute(cloud, at, 0f, out Contribution c))
 					{
 						sum.Add(c);
@@ -538,21 +540,43 @@ namespace FishMMO.Client
 			return sum.ToTexel();
 		}
 
+		/// <summary>
+		/// The scene each storm's own air is read in (<see cref="StormCellAir"/>), set by the sky every frame
+		/// it draws. Unset (tests, probes), a storm is laid out in the viewer's air, as it always was.
+		/// </summary>
+		/// <remarks>
+		/// From the viewer's air, a storm's base, wall cloud and anvil were where that player's own air put
+		/// them: two players saw the same storm built differently, and it changed as one walked. Laid out
+		/// in its own air, it is the same storm for everyone, and the tornado (VortexPresenter), its rain
+		/// (CurtainPresenter) and its cloud here are worked out in the same air, so they meet.
+		/// </remarks>
+		public static void SetCellAirScene(FishMMO.Shared.WorldSceneSettings settings, UnityEngine.SceneManagement.Scene scene)
+		{
+			cellAirSettings = settings;
+			cellAirScene = scene;
+		}
+
+		private static FishMMO.Shared.WorldSceneSettings cellAirSettings;
+		private static UnityEngine.SceneManagement.Scene cellAirScene;
+
 		/// <summary>A storm's anatomy put into the world where the storm stands now, or false when it has none.</summary>
-		private static bool Prepare(in StormCell cell, uint tick, double tickDelta, float latitude, StormFrames storms, in WeatherSample around, out StormCloud cloud)
+		private static bool Prepare(WeatherTimeline timeline, in StormCell cell, uint tick, double tickDelta, float latitude, StormFrames storms, in WeatherSample viewerAir, out StormCloud cloud)
 		{
 			cloud = default;
-			float envelope = cell.EnvelopeAt(tick);
+			StormCellAir.Air own = cellAirSettings != null ? StormCellAir.Of(timeline, cellAirSettings, cellAirScene, cell) : null;
+			WeatherSample around = own != null ? own.Sample : viewerAir;
+			cloud.Air = around;
+			double now = timeline.WorldSecondsAt(tick);
+			float envelope = cell.EnvelopeAtSeconds(now);
 			if (envelope <= 0f || cell.RadiusMeters <= 0f || !around.Planet.HasAir || around.Planet.Gravity <= 0f)
 			{
 				return false;
 			}
 			float strength = envelope * Mathf.Clamp01(cell.PeakIntensity);
-			WeatherFrame frame = storms.Of(cell.Kind);
+			WeatherFrame frame = own != null ? own.Frames.Of(cell.Kind) : storms.Of(cell.Kind);
 			cloud.Cell = cell;
-			cloud.Tick = tick;
-			cloud.TickDelta = tickDelta;
-			cloud.Centre = cell.CentreAt(tick, tickDelta);
+			cloud.Seconds = now;
+			cloud.Centre = cell.CentreAtSeconds(now);
 			cloud.Life = envelope;
 			cloud.Severity = frame.StormSeverity * strength;
 			cloud.Precipitation = frame[WeatherChannel.Precipitation] * strength;
@@ -562,7 +586,7 @@ namespace FishMMO.Client
 			frozen.OriginX = cloud.Centre.x;
 			frozen.OriginZ = cloud.Centre.y;
 			frozen.MeanderMeters = 0f;
-			frozen.MotionTick = tick;
+			frozen.MotionSeconds = now;
 			// Its velocity is kept: a front's line is square to it. It moves nothing at its own tick.
 			cloud.Frozen = frozen;
 			cloud.Forward = cell.Facing;
@@ -740,7 +764,7 @@ namespace FishMMO.Client
 
 			if (cell.Shape == StormCellShape.Eyewall)
 			{
-				c.Clearing = s.Frozen.ClearingAt(new Vector3(p.x, 0f, p.y), s.Tick, s.TickDelta);
+				c.Clearing = s.Frozen.ClearingAtSeconds(new Vector3(p.x, 0f, p.y), s.Seconds);
 			}
 
 			// The rain, as the curtains draw it: the cell's own footprint, and a supercell's forward flank.
@@ -790,9 +814,9 @@ namespace FishMMO.Client
 					StormCell cell = timeline.Cells[i];
 					h = h * 31 + cell.ID;
 					h = h * 31 + (int)cell.Kind;
-					h = h * 31 + (int)cell.BirthTick;
-					h = h * 31 + (int)cell.DeathTick;
-					h = h * 31 + (int)cell.MotionTick;
+					h = h * 31 + cell.BirthSeconds.GetHashCode();
+					h = h * 31 + cell.DeathSeconds.GetHashCode();
+					h = h * 31 + cell.MotionSeconds.GetHashCode();
 					h = h * 31 + cell.OriginX.GetHashCode();
 					h = h * 31 + cell.OriginZ.GetHashCode();
 					h = h * 31 + cell.VelocityX.GetHashCode();
@@ -888,7 +912,7 @@ namespace FishMMO.Client
 			storms.Reset(around);
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
-				if (Prepare(timeline.Cells[i], tick, timeline.TickDelta, timeline.LatitudeDegrees, storms, around, out StormCloud cloud))
+				if (Prepare(timeline, timeline.Cells[i], tick, timeline.TickDelta, timeline.LatitudeDegrees, storms, around, out StormCloud cloud))
 				{
 					clouds.Add(cloud);
 				}
@@ -1059,7 +1083,7 @@ namespace FishMMO.Client
 					extremes.AnvilBottom = Mathf.Min(extremes.AnvilBottom, a.AnvilBase);
 					extremes.AnvilTop = Mathf.Max(extremes.AnvilTop, a.AnvilTop);
 					extremes.AnvilDepth = Mathf.Max(extremes.AnvilDepth, a.AnvilTop - a.AnvilBase);
-					extremes.AnvilExtinction = Mathf.Max(extremes.AnvilExtinction, AnvilExtinction(around, a));
+					extremes.AnvilExtinction = Mathf.Max(extremes.AnvilExtinction, AnvilExtinction(cloud.Air, a));
 				}
 			}
 			else
@@ -1150,7 +1174,7 @@ namespace FishMMO.Client
 			int count = 0;
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
-				if (Prepare(timeline.Cells[i], tick, timeline.TickDelta, timeline.LatitudeDegrees, storms, around, out StormCloud cloud)
+				if (Prepare(timeline, timeline.Cells[i], tick, timeline.TickDelta, timeline.LatitudeDegrees, storms, around, out StormCloud cloud)
 					&& Overlaps(cloud.Centre, cloud.Reach, area))
 				{
 					PackStorm(cloud, into);

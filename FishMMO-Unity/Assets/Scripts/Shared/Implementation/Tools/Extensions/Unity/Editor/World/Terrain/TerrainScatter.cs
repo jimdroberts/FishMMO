@@ -58,6 +58,15 @@ namespace FishMMO.Shared.WorldDesign
 	/// clustered rule's spacing is how tightly its group may pack.
 	/// </para>
 	/// <para>
+	/// <b>Forests stand in woods.</b> A tree rule with <see cref="PrefabSpawnRule.forestMetres"/> set
+	/// has its chance multiplied by its <see cref="StandField"/> instead: one scene-wide field of
+	/// stands hundreds of metres across, which every forest rule cuts at its own cover, with clearings,
+	/// feathered edges and lone trees in the open, averaging 1 like the groups. Its biome share and
+	/// the ground's steepness shrink its stands rather than thinning them. Forest rules share one
+	/// canopy spacing, each tree keeping clear a ring scaled by its own crown (<see cref="ShareCanopy"/>),
+	/// so two species gathered into the same wood do not grow through each other.
+	/// </para>
+	/// <para>
 	/// <b>Carpets are coverage, not candidates.</b> A detail rule placed as a
 	/// <see cref="DetailPlacement.Carpet"/> skips the draw entirely: every detail cell of its ground
 	/// is written with a share of the cell, <c>carpetCoverage × ramp(texture weight) × biome share ×
@@ -179,6 +188,7 @@ namespace FishMMO.Shared.WorldDesign
 			var treePrototypes = new List<TreePrototype>();
 			var treeFootprints = new List<float>();
 			BuildPrototypes(rules, options, detailPrototypes, treePrototypes, treeFootprints, report);
+			ShareCanopy(rules, treeFootprints);
 			report.DetailPrototypes = detailPrototypes.Count;
 			report.TreePrototypes = treePrototypes.Count;
 
@@ -235,12 +245,37 @@ namespace FishMMO.Shared.WorldDesign
 			public uint ClusterSeed;
 			/// <summary>A clustered rule's group radius and centre spacing, metres (<see cref="ClusterShape"/>).</summary>
 			public float ClusterMetres, ClusterPitch;
+			/// <summary>True for a tree rule that stands in woods and copses (<see cref="PrefabSpawnRule.IsForested"/>).</summary>
+			public bool Forest;
+			/// <summary>A forest rule's stands: the scene-wide field cut at the rule's cover.</summary>
+			public StandField Stands;
+			/// <summary>The seeds of a forest rule's own species patches, between rules and between its prefabs.</summary>
+			public uint MixSeed, VariantSeed;
+			/// <summary>Size of a forest rule's species patches, metres.</summary>
+			public float PatchMetres;
+			/// <summary>The slope at which a forest rule's stands have thinned the most, degrees.</summary>
+			public float SlopeReference;
+			/// <summary>
+			/// True when the rule's <see cref="Spacing"/> is the canopy every forest rule shares, each tree
+			/// carrying its own spacing (<see cref="ShareCanopy"/>).
+			/// </summary>
+			public bool Canopy;
+			/// <summary>Each prototype's crown against the rule's mean crown, by variant; scales a canopy tree's spacing.</summary>
+			public float[] CrownScale;
 			/// <summary>
 			/// Which side of the water line the rule grows on, as a smoothstep over world y from
 			/// <see cref="WaterFrom"/> (none) to <see cref="WaterTo"/> (full); unused when <see cref="WaterGated"/> is false.
 			/// </summary>
 			public bool WaterGated;
 			public float WaterFrom, WaterTo;
+			/// <summary>
+			/// A sea-floor rule's band of depth below mean sea level (<see cref="PrefabSpawnRule.depthRange"/>):
+			/// shallowest and deepest, 0 for an open end; both 0 for none.
+			/// </summary>
+			public Vector2 Depth;
+			/// <summary>A river's or lake's surface at (x, z), for a land rule kept above it (see <see cref="TerrainScatterOptions.InlandWaterSurface"/>); null for none.</summary>
+			public Func<float, float, float> Inland;
+			public float InlandFrom, InlandTo;
 			public TerrainScatterReport.RuleOutcome Outcome;
 			public bool Runnable => !Outcome.Skipped;
 		}
@@ -274,11 +309,14 @@ namespace FishMMO.Shared.WorldDesign
 			var seen = new HashSet<(int, PrefabSpawnRule)>();
 			var duplicates = new Dictionary<string, int>();
 			var attributionIndex = new Dictionary<SceneTerrainPalette.Entry, int>();
+			// One quantile table per stand size: every forest rule reads the same scene-wide field.
+			var standTables = new Dictionary<float, float[]>();
 
 			foreach (SceneTerrainPalette.Entry entry in palette.Entries)
 			{
 				List<PrefabSpawnRule> source = entry?.Source?.prefabSpawnRules;
-				if (source == null || source.Count == 0)
+				// A river's bars are bare: their art is borrowed from a biome whose rules belong to it.
+				if (source == null || source.Count == 0 || entry.Role == PaletteRole.Sediment)
 				{
 					continue;
 				}
@@ -343,6 +381,15 @@ namespace FishMMO.Shared.WorldDesign
 					scatterRule.ClumpSeed = Mix(scatterRule.Seed ^ 0xC1A4F00Du);
 					scatterRule.ClusterSeed = Mix(scatterRule.Seed ^ 0x6C0B5E11u);
 					ClusterShape(rule, out scatterRule.ClusterMetres, out scatterRule.ClusterPitch);
+					if (rule.IsForested && !scatterRule.Carpet)
+					{
+						scatterRule.Forest = true;
+						scatterRule.Stands = StandsFor(seed, rule, standTables);
+						scatterRule.MixSeed = Mix(scatterRule.Seed ^ 0x3C6EF372u);
+						scatterRule.VariantSeed = Mix(scatterRule.Seed ^ 0xA54FF53Au);
+						scatterRule.PatchMetres = Mathf.Max(30f, rule.forestMetres * 0.25f);
+						scatterRule.SlopeReference = rule.useSlopeConstraint ? Mathf.Max(5f, rule.slopeRange.max) : 45f;
+					}
 					if (options != null && options.HasLiquidWater)
 					{
 						// A rule on a biome's submerged layer is aquatic; anything else, trees included, grows on land.
@@ -350,6 +397,15 @@ namespace FishMMO.Shared.WorldDesign
 						scatterRule.WaterGated = true;
 						scatterRule.WaterFrom = aquatic ? options.AquaticFadeStartMetres : options.LandFadeStartMetres;
 						scatterRule.WaterTo = aquatic ? options.AquaticFullMetres : options.LandFullMetres;
+						// Kelp and seagrass where the light reaches, sponges below: the rule's own depth band.
+						scatterRule.Depth = aquatic ? rule.depthRange : Vector2.zero;
+					}
+					if (options != null && options.InlandWaterSurface != null && entry.Role != PaletteRole.Submerged)
+					{
+						// Land plants keep to the banks of rivers and lakes, and out of a dry wash's bed.
+						scatterRule.Inland = options.InlandWaterSurface;
+						scatterRule.InlandFrom = options.InlandFadeStartMetres;
+						scatterRule.InlandTo = options.InlandFullMetres;
 					}
 					rules.Add(scatterRule);
 
@@ -511,6 +567,100 @@ namespace FishMMO.Shared.WorldDesign
 				if (scatterRule.Prototypes.Count == 0)
 				{
 					Skip(scatterRule, "none of its prefabs is valid (see invalid prefabs)");
+				}
+			}
+		}
+
+		/// <summary>A forest rule's stands, its quantile table shared with every rule of the same stand size.</summary>
+		private static StandField StandsFor(uint sceneSeed, PrefabSpawnRule rule, Dictionary<float, float[]> tables)
+		{
+			uint seed = StandSeed(sceneSeed);
+			float metres = Mathf.Max(1f, rule.forestMetres);
+			if (!tables.TryGetValue(metres, out float[] quantiles))
+			{
+				quantiles = StandQuantiles(seed, metres);
+				tables[metres] = quantiles;
+			}
+			return new StandField(seed, metres, rule.forestCover, rule.forestEdge, rule.forestOpen, quantiles);
+		}
+
+		/// <summary>
+		/// The seed of a scene's stand field. The scene's alone — not a rule's, not a biome's — so every
+		/// forest rule in the scene reads one field: see <see cref="StandField"/>.
+		/// </summary>
+		public static uint StandSeed(uint sceneSeed) => Mix(sceneSeed ^ 0x5717D5EEu);
+
+		/// <summary>
+		/// Gives every forest rule with a spacing one shared, per-point spacing — the canopy — in place of
+		/// its own, each tree carrying the rule's spacing times its crown against the rule's mean crown.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A rule's own spacing keeps only its own trees apart. Two rules of one biome (spruce and pine in
+		/// a taiga, oak and birch beside spruce in a forest) each knew nothing of the other, so a pine could
+		/// stand half a metre from a spruce and the two crowns grew through each other; and gathering both
+		/// into the same stands, which is the point of stands, would make that the rule rather than the
+		/// accident. Sharing one canopy, two trees stand at least the mean of their spacings apart.
+		/// </para>
+		/// <para>
+		/// <b>Crowns, not prefab slots.</b> A rule with several species has one spacing, which is right for
+		/// none of them when an oak's crown is twice a birch's. Each prototype's footprint
+		/// (<see cref="FootprintRadius"/>, its crown's reach) over the rule's mean footprint scales its
+		/// trees' spacing, and so does each tree's own width: a broad oak keeps a wider ring clear than a
+		/// slim birch of the same rule, and a small tree can stand closer than a large one. With no
+		/// footprint to read (a test's cube) every prototype counts as the mean.
+		/// </para>
+		/// <para>
+		/// Order still decides a conflict, as it always has: rules run in key order, so where two forest
+		/// rules compete for one gap the first to reach it keeps it. The species patches
+		/// (<see cref="PrefabSpawnRule.forestMix"/>) are what stop the first rule taking every stand.
+		/// </para>
+		/// </remarks>
+		private static void ShareCanopy(List<ScatterRule> rules, List<float> footprints)
+		{
+			float widest = 0f;
+			foreach (ScatterRule rule in rules)
+			{
+				if (!rule.Runnable || !rule.Forest || !(rule.Rule.minSpacing > 0f) || rule.Rule.spawnChannel != PrefabSpawnChannel.TreeInstance)
+				{
+					continue;
+				}
+				int count = rule.Prototypes.Count;
+				rule.CrownScale = new float[count];
+				float mean = 0f;
+				int known = 0;
+				for (int v = 0; v < count; v++)
+				{
+					float footprint = rule.Prototypes[v] < footprints.Count ? footprints[rule.Prototypes[v]] : 0f;
+					if (footprint > 0f)
+					{
+						mean += footprint;
+						known++;
+					}
+				}
+				mean = known > 0 ? mean / known : 0f;
+				float most = 1f;
+				for (int v = 0; v < count; v++)
+				{
+					float footprint = rule.Prototypes[v] < footprints.Count ? footprints[rule.Prototypes[v]] : 0f;
+					rule.CrownScale[v] = mean > 0f && footprint > 0f ? footprint / mean : 1f;
+					most = Mathf.Max(most, rule.CrownScale[v]);
+				}
+				PrefabSpawnRule r = rule.Rule;
+				float widestScale = r.useNonUniformScaling ? Mathf.Max(r.widthScaleRange.x, r.widthScaleRange.y) : Mathf.Max(r.uniformScaleRange.x, r.uniformScaleRange.y);
+				widest = Mathf.Max(widest, r.minSpacing * most * Mathf.Max(0.05f, widestScale));
+			}
+			if (!(widest > 0f))
+			{
+				return;
+			}
+			var canopy = new ScatterSpacing(widest, 4096, true);
+			foreach (ScatterRule rule in rules)
+			{
+				if (rule.CrownScale != null)
+				{
+					rule.Spacing = canopy;
+					rule.Canopy = true;
 				}
 			}
 		}
@@ -1257,6 +1407,16 @@ namespace FishMMO.Shared.WorldDesign
 			uint clusterSeed = scatterRule.ClusterSeed;
 			float clusterMetres = scatterRule.ClusterMetres;
 			float clusterPitch = scatterRule.ClusterPitch;
+			bool forest = scatterRule.Forest && tree;
+			StandField stands = scatterRule.Stands;
+			float forestMix = forest ? Mathf.Clamp01(rule.forestMix) : 0f;
+			float forestBias = forest ? Mathf.Clamp01(rule.forestScaleBias) : 0f;
+			bool canopy = scatterRule.Canopy && spacing != null;
+			/* The most a forest rule's chance can be multiplied by — its stands' heart at full cover, in
+			 * the thickest of its species patches — so a roll above it is refused before the field is
+			 * read. Most of a forest rule's cells go that way (a tree cell's chance is a few per cent), and
+			 * the field is the dearest thing in the loop. A clustered forest rule has no such bound. */
+			float forestCeiling = forest && !clustered ? stands.Ceiling * (1f + forestMix) : float.PositiveInfinity;
 
 			/* Cells in world integer coordinates, continuous from one tile into the next. From the
 			 * origin over the cell, not a tile index: three tiles centred on zero start at -1.5,
@@ -1314,8 +1474,34 @@ namespace FishMMO.Shared.WorldDesign
 				float worldX = frame.Origin.x + u * frame.Size.x;
 				float worldZ = frame.Origin.z + v * frame.Size.z;
 				float closeness = 0f;
+				float standMask = 0f;
 				float roll = Unit(h);
 				float chance = baseChance * weight;
+				float share = 0f;
+				if (forest)
+				{
+					if (roll >= chance * forestCeiling)
+					{
+						noChance++;
+						continue;
+					}
+					/* A forest rule's biome share shrinks its stands instead of thinning them: across a seam the
+					 * woods recede to their hearts and break into copses, as a real forest edge does, rather
+					 * than the whole forest going uniformly sparse. The open ground's lone trees fade with the
+					 * share. Steep ground shrinks them too (thin soil, rock, windthrow), on top of the slope band. */
+					share = Bilinear(attribution, alphaRes, u, v);
+					if (share <= 0f)
+					{
+						noBiome++;
+						continue;
+					}
+					float steep = Mathf.Clamp01(Bilinear(slopes, heightRes, u, v) / scatterRule.SlopeReference);
+					chance *= stands.Intensity(worldX, worldZ, share * (1f - StandSlopeThinning * steep * steep), share, out standMask);
+					if (forestMix > 0f)
+					{
+						chance *= SpeciesPatch(scatterRule.MixSeed, worldX, worldZ, scatterRule.PatchMetres, forestMix);
+					}
+				}
 				if (clustered)
 				{
 					chance *= ClusterIntensity(clusterSeed, worldX, worldZ, clusterMetres, clusterPitch, rule.clusterBackground, out closeness);
@@ -1326,13 +1512,16 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 
-				float share = Bilinear(attribution, alphaRes, u, v);
-				if (share <= 0f)
+				if (!forest)
 				{
-					noBiome++;
-					continue;
+					share = Bilinear(attribution, alphaRes, u, v);
+					if (share <= 0f)
+					{
+						noBiome++;
+						continue;
+					}
+					chance *= share;
 				}
-				chance *= share;
 
 				if (solid != null)
 				{
@@ -1351,13 +1540,23 @@ namespace FishMMO.Shared.WorldDesign
 				if (scatterRule.WaterGated)
 				{
 					// Counted with the height rejections: the water line is a height band of its own.
-					float shore = WaterBand(scatterRule, worldY);
+					float shore = WaterBand(scatterRule, worldY) * DepthBand(scatterRule, worldY);
 					if (shore <= 0f)
 					{
 						noHeight++;
 						continue;
 					}
 					chance *= shore;
+				}
+				if (scatterRule.Inland != null)
+				{
+					float bank = InlandBand(scatterRule, worldX, worldY, worldZ);
+					if (bank <= 0f)
+					{
+						noHeight++;
+						continue;
+					}
+					chance *= bank;
 				}
 				if (useHeight)
 				{
@@ -1385,16 +1584,42 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 
-				if (spacing != null && !spacing.IsClear(worldX, worldZ))
+				int variant;
+				if (forest && forestMix > 0f && variants > 1)
+				{
+					/* A rule's species stand in patches of their own (a birch grove inside the oaks) with a
+					 * few strays across each patch's edge, rather than alternating tree by tree. */
+					float pick = SpeciesPatch(scatterRule.VariantSeed, worldX, worldZ, scatterRule.PatchMetres, 1f) * 0.5f;
+					pick = Mathf.Clamp01(pick + (Unit(Mix(h + 3u)) - 0.5f) * (1f - forestMix * 0.6f));
+					variant = Math.Min(variants - 1, (int)(pick * variants));
+				}
+				else
+				{
+					variant = variants == 1 ? 0 : (int)(Mix(h + 3u) % (uint)variants);
+				}
+
+				TreeInstance instance = default;
+				float pointSpacing = 0f;
+				if (tree)
+				{
+					// Taller and narrower in a stand's heart (drawn up by its neighbours), shorter and broader in the open.
+					float groupShift = clustered ? rule.clusterScaleBias * (closeness - 0.5f) : 0f;
+					float standShift = forest ? forestBias * (standMask - 0.5f) : 0f;
+					instance = TreeInstanceAt(rule, prototypes[variant], u, height01, v, h, groupShift + standShift, groupShift - 0.5f * standShift);
+					if (canopy)
+					{
+						pointSpacing = rule.minSpacing * instance.widthScale * (scatterRule.CrownScale != null && variant < scatterRule.CrownScale.Length ? scatterRule.CrownScale[variant] : 1f);
+					}
+				}
+
+				if (spacing != null && !(canopy ? spacing.IsClear(worldX, worldZ, pointSpacing) : spacing.IsClear(worldX, worldZ)))
 				{
 					noSpacing++;
 					continue;
 				}
 
-				int variant = variants == 1 ? 0 : (int)(Mix(h + 3u) % (uint)variants);
 				if (tree)
 				{
-					TreeInstance instance = TreeInstanceAt(rule, prototypes[variant], u, height01, v, h, clustered ? rule.clusterScaleBias * (closeness - 0.5f) : 0f);
 					trees.Add(instance);
 					float footprint = prototypes[variant] < work.TreeFootprints.Length ? work.TreeFootprints[prototypes[variant]] * instance.widthScale : 0f;
 					float sinkSlope = rule.sinkSlopeFactor > 0f ? Bilinear(slopes, heightRes, u, v) : 0f;
@@ -1409,7 +1634,14 @@ namespace FishMMO.Shared.WorldDesign
 					detailBuffers[variant][j, i] = value;
 					work.DetailPlaced[variant]++;
 				}
-				spacing?.Add(worldX, worldZ);
+				if (canopy)
+				{
+					spacing.Add(worldX, worldZ, pointSpacing);
+				}
+				else
+				{
+					spacing?.Add(worldX, worldZ);
+				}
 				placed++;
 
 				if (--budget.RuleLeft <= 0 || --budget.BiomeLeft <= 0 || --budget.TileLeft <= 0)
@@ -1441,22 +1673,23 @@ namespace FishMMO.Shared.WorldDesign
 		/// The colour is a fixed per-instance variation around white — a little brightness and a
 		/// little warm or cool — for the vegetation shader to tint seasonally on top of; a forest of
 		/// identical tints would turn in autumn as one block. lightmapColor varies independently.
-		/// Nothing seasonal is in either. <paramref name="sizeShift"/> moves the size's draw along the
-		/// scale range (a clustered rule's lean toward large at a group's heart, small at its fringe);
-		/// 0 leaves it exactly as it was.
+		/// Nothing seasonal is in either. <paramref name="heightShift"/> and <paramref name="widthShift"/>
+		/// move the size's draws along the scale ranges (a clustered rule's lean toward large at a group's
+		/// heart, small at its fringe; a forest rule's toward tall and narrow inside a stand, short and
+		/// broad in the open); equal shifts of 0 leave it exactly as it was. A uniform scale follows the
+		/// height's shift, which is the one a forest leans on hardest.
 		/// </remarks>
-		private static TreeInstance TreeInstanceAt(PrefabSpawnRule rule, int prototype, float u, float height01, float v, uint h, float sizeShift)
+		private static TreeInstance TreeInstanceAt(PrefabSpawnRule rule, int prototype, float u, float height01, float v, uint h, float heightShift, float widthShift)
 		{
 			float widthScale, heightScale;
-			float widthDraw = Mathf.Clamp01(Unit(Mix(h + 4u)) + sizeShift);
 			if (rule.useNonUniformScaling)
 			{
-				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.widthScaleRange.x, rule.widthScaleRange.y, widthDraw));
-				heightScale = Mathf.Max(0.05f, Mathf.Lerp(rule.heightScaleRange.x, rule.heightScaleRange.y, Mathf.Clamp01(Unit(Mix(h + 5u)) + sizeShift)));
+				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.widthScaleRange.x, rule.widthScaleRange.y, Mathf.Clamp01(Unit(Mix(h + 4u)) + widthShift)));
+				heightScale = Mathf.Max(0.05f, Mathf.Lerp(rule.heightScaleRange.x, rule.heightScaleRange.y, Mathf.Clamp01(Unit(Mix(h + 5u)) + heightShift)));
 			}
 			else
 			{
-				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.uniformScaleRange.x, rule.uniformScaleRange.y, widthDraw));
+				widthScale = Mathf.Max(0.05f, Mathf.Lerp(rule.uniformScaleRange.x, rule.uniformScaleRange.y, Mathf.Clamp01(Unit(Mix(h + 4u)) + heightShift)));
 				heightScale = widthScale;
 			}
 			float degrees = Mathf.Lerp(rule.yRotationRange.x, rule.yRotationRange.y, Unit(Mix(h + 6u)));
@@ -1635,13 +1868,24 @@ namespace FishMMO.Shared.WorldDesign
 					float worldZ = frame.Origin.z + v * frame.Size.z;
 					if (scatterRule.WaterGated)
 					{
-						float shore = WaterBand(scatterRule, frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y);
+						float bedY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
+						float shore = WaterBand(scatterRule, bedY) * DepthBand(scatterRule, bedY);
 						if (shore <= 0f)
 						{
 							noHeight++;
 							continue;
 						}
 						coverage *= shore;
+					}
+					if (scatterRule.Inland != null)
+					{
+						float bank = InlandBand(scatterRule, worldX, frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y, worldZ);
+						if (bank <= 0f)
+						{
+							noHeight++;
+							continue;
+						}
+						coverage *= bank;
 					}
 					if (useHeight)
 					{
@@ -1868,6 +2112,234 @@ namespace FishMMO.Shared.WorldDesign
 			return background + (1f - background) * norm * sum;
 		}
 
+		// ── Forest stands ────────────────────────────────────────────
+
+		/// <summary>How much a forest rule's stands shrink at its steepest ground: their cover × (1 − this × steepness²).</summary>
+		public const float StandSlopeThinning = 0.6f;
+
+		/// <summary>Entries in a stand field's quantile table.</summary>
+		public const int StandQuantileCount = 256;
+
+		private const int StandOctaves = 4;
+		// Each octave turned against the last, so no lattice axis lines up from one to the next.
+		private static readonly float[] StandCos = { 1f, Mathf.Cos(0.62f), Mathf.Cos(1.24f), Mathf.Cos(1.87f) };
+		private static readonly float[] StandSin = { 0f, Mathf.Sin(0.62f), Mathf.Sin(1.24f), Mathf.Sin(1.87f) };
+
+		/// <summary>
+		/// Where a forest rule's trees stand: a scene-wide field cut at the rule's cover into stands, with
+		/// a feathered edge, clearings and open ground between them, as a multiplier on the rule's chance
+		/// whose average is 1.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why groups did not make forests.</b> The group field (<see cref="ClusterIntensity"/>) works
+		/// at the scale of a group: a forest rule's thickets were 26 m in radius on a 52 m lattice, so
+		/// from anywhere a player stands the woods were one even texture of slightly thicker and thinner
+		/// patches. And a dense forest already sits near the packing its spacing allows, so a mean-1 field
+		/// had nowhere to put more trees at a heart: it could only thin the glades, which the background
+		/// share refilled. Each rule also had its own groups, and two species' independent groves fill
+		/// each other's gaps, so a taiga's spruce and pine together were evener than either. What reads
+		/// as forest is structure at hundreds of metres: woods with a closed interior, clearings, a ragged
+		/// edge, lone trees in the fields beyond. That is this field.
+		/// </para>
+		/// <para>
+		/// <b>The field.</b> <see cref="StandNoise"/>: four octaves of value noise from
+		/// <see cref="PrefabSpawnRule.forestMetres"/> down to an eighth of it, each turned against the
+		/// last, through a slow domain warp that bends the outlines so no stand is a lattice blob. It is a
+		/// function of the scene's seed and the world position alone, the same for every forest rule of
+		/// every biome: a biome's species stand in the same woods, and because each rule cuts the same
+		/// field at its own level, a sparse neighbour's copses are the hearts of a dense one's forest and
+		/// woods run on across a biome seam instead of stopping at it.
+		/// </para>
+		/// <para>
+		/// <b>The cut.</b> Value-noise sums bunch round a half, so a fixed level would mean a different
+		/// cover at every scale. The field's own distribution is measured instead — 96² samples over 24
+		/// stand widths, sorted into <see cref="StandQuantileCount"/> quantiles — and the stands are where
+		/// the field passes its (1 − cover) quantile, so that share of the ground is wood. The edge is a
+		/// smoothstep across <see cref="PrefabSpawnRule.forestEdge"/> of the field's 15–85% spread, so a
+		/// wood thins over tens of metres at its margin. Inside, the stand's density is the rule's average
+		/// over the share the stands and the open ground take of it, <c>1 / (open + (1 − open) × mean
+		/// mask)</c>, measured on the same table: the rule's density is still what it says, only gathered.
+		/// </para>
+		/// <para>
+		/// <b>Shrinking, not thinning.</b> The cover can be scaled per point (<see cref="Intensity"/>):
+		/// the scatter scales it by the rule's biome share and by steepness, so a stand recedes to its
+		/// heart and breaks into copses across an ecotone or up a slope while its interior stays closed,
+		/// which is how a forest edge looks, where multiplying the chance would thin the whole wood
+		/// evenly. The cut follows the table, so the mean still falls with the share as a multiplier would.
+		/// </para>
+		/// </remarks>
+		public sealed class StandField
+		{
+			public readonly uint Seed;
+			public readonly float Metres;
+			public readonly float Cover;
+			public readonly float Open;
+			/// <summary>Half the edge's width, in the field's own units.</summary>
+			public readonly float EdgeNoise;
+			/// <summary>Where the field is cut at full cover.</summary>
+			public readonly float Threshold;
+			/// <summary>The stands' share of the ground at full cover, soft edges counted: the mean of the mask.</summary>
+			public readonly float MeanMask;
+			/// <summary>The multiplier inside a stand: 1 / (open + (1 − open) × mean mask).</summary>
+			public readonly float Norm;
+			private readonly float[] quantiles;
+
+			/// <param name="seed">The scene's stand seed (<see cref="StandSeed"/>).</param>
+			/// <param name="metres">Size of the largest stands, metres.</param>
+			/// <param name="cover">Share of the ground under stands.</param>
+			/// <param name="edge">Edge width as a share of the field's 15–85% spread.</param>
+			/// <param name="open">Density between stands as a share of the density inside one.</param>
+			/// <param name="table">The field's quantiles for this seed and size (<see cref="StandQuantiles"/>); null measures them.</param>
+			public StandField(uint seed, float metres, float cover, float edge, float open, float[] table = null)
+			{
+				Seed = seed;
+				Metres = Mathf.Max(1f, metres);
+				Cover = Mathf.Clamp01(cover);
+				Open = Mathf.Clamp01(open);
+				quantiles = table ?? StandQuantiles(seed, Metres);
+				EdgeNoise = Mathf.Max(0f, edge) * (StandQuantile(quantiles, 0.85f) - StandQuantile(quantiles, 0.15f)) * 0.5f;
+				Threshold = StandQuantile(quantiles, 1f - Cover);
+				double sum = 0d;
+				for (int k = 0; k < quantiles.Length; k++)
+				{
+					sum += StandMask(quantiles[k], Threshold, EdgeNoise);
+				}
+				MeanMask = (float)(sum / quantiles.Length);
+				float mean = Open + (1f - Open) * MeanMask;
+				Norm = mean > 1e-4f ? 1f / mean : 0f;
+			}
+
+			/// <summary>The most <see cref="Intensity"/> can be: a stand's heart.</summary>
+			public float Ceiling => Norm;
+
+			/// <summary>The raw field at a world position, about 0–1.</summary>
+			public float Noise(float worldX, float worldZ) => StandNoise(Seed, worldX, worldZ, Metres);
+
+			/// <summary>
+			/// The multiplier on a forest rule's chance at a world position.
+			/// </summary>
+			/// <param name="coverScale">Scales the cover here (biome share, steepness): the stands shrink to their hearts.</param>
+			/// <param name="openScale">Scales the open ground's lone trees here.</param>
+			/// <param name="mask">1 inside a stand, 0 in the open, between across its edge.</param>
+			public float Intensity(float worldX, float worldZ, float coverScale, float openScale, out float mask)
+			{
+				float threshold = coverScale >= 1f ? Threshold : StandQuantile(quantiles, 1f - Cover * Mathf.Max(0f, coverScale));
+				mask = StandMask(Noise(worldX, worldZ), threshold, EdgeNoise);
+				return (Open * Mathf.Clamp01(openScale) + (1f - Open) * mask) * Norm;
+			}
+		}
+
+		/// <summary>
+		/// The scene-wide stand field at a world position: about 0–1, bunched round a half, varying over
+		/// <paramref name="metres"/> and down to an eighth of it. See <see cref="StandField"/>.
+		/// </summary>
+		public static float StandNoise(uint seed, float worldX, float worldZ, float metres)
+		{
+			float scale = 1f / Mathf.Max(1f, metres);
+			float x = worldX * scale;
+			float z = worldZ * scale;
+			// A slow warp, so the stands' outlines meander instead of following the lattice.
+			float warpX = ValueNoise(Mix(seed ^ 0x2C1B3C6Du), x * 0.5f + 0.31f, z * 0.5f + 0.77f) - 0.5f;
+			float warpZ = ValueNoise(Mix(seed ^ 0x297A2D39u), x * 0.5f + 0.59f, z * 0.5f + 0.13f) - 0.5f;
+			x += warpX * 1.2f;
+			z += warpZ * 1.2f;
+			float sum = 0f, total = 0f, amplitude = 1f, frequency = 1f;
+			for (int octave = 0; octave < StandOctaves; octave++)
+			{
+				float c = StandCos[octave], s = StandSin[octave];
+				float rx = (x * c - z * s) * frequency + octave * 17.17f;
+				float rz = (x * s + z * c) * frequency + octave * 31.31f;
+				sum += amplitude * ValueNoise(Mix(seed + (uint)octave * 0x9E3779B9u), rx, rz);
+				total += amplitude;
+				amplitude *= 0.5f;
+				frequency *= 2.03f;
+			}
+			return sum / total;
+		}
+
+		/// <summary>
+		/// The stand field's distribution: <see cref="StandQuantileCount"/> quantiles (at (k + ½) / count)
+		/// of 96² samples spread over 24 stand widths. A function of the seed and size alone.
+		/// </summary>
+		public static float[] StandQuantiles(uint seed, float metres)
+		{
+			const int side = 96;
+			float step = Mathf.Max(1f, metres) * 0.25f;
+			var samples = new float[side * side];
+			for (int j = 0; j < side; j++)
+			{
+				for (int i = 0; i < side; i++)
+				{
+					// Jittered inside each step, so the samples do not sit on the noise's own lattice.
+					uint h = Hash(seed ^ 0x51ED270Bu, i, j);
+					samples[j * side + i] = StandNoise(seed, (i + Unit(h)) * step, (j + Unit(Mix(h + 1u))) * step, metres);
+				}
+			}
+			Array.Sort(samples);
+			var table = new float[StandQuantileCount];
+			for (int k = 0; k < table.Length; k++)
+			{
+				table[k] = samples[Math.Min(samples.Length - 1, (int)((k + 0.5f) / table.Length * samples.Length))];
+			}
+			return table;
+		}
+
+		/// <summary>The field value below which a share <paramref name="p"/> of the ground lies; ±∞ at 0 and 1.</summary>
+		public static float StandQuantile(float[] table, float p)
+		{
+			if (p <= 0f)
+			{
+				return float.NegativeInfinity;
+			}
+			if (p >= 1f)
+			{
+				return float.PositiveInfinity;
+			}
+			float f = p * table.Length - 0.5f;
+			if (f <= 0f)
+			{
+				return table[0];
+			}
+			if (f >= table.Length - 1)
+			{
+				return table[table.Length - 1];
+			}
+			int i = (int)f;
+			return table[i] + (table[i + 1] - table[i]) * (f - i);
+		}
+
+		/// <summary>1 above the cut, 0 below it, a smoothstep across ±<paramref name="edge"/> round it.</summary>
+		public static float StandMask(float noise, float threshold, float edge)
+		{
+			if (float.IsNegativeInfinity(threshold))
+			{
+				return 1f;
+			}
+			if (float.IsPositiveInfinity(threshold))
+			{
+				return 0f;
+			}
+			if (!(edge > 0f))
+			{
+				return noise >= threshold ? 1f : 0f;
+			}
+			float t = Mathf.Clamp01((noise - threshold + edge) / (2f * edge));
+			return t * t * (3f - 2f * t);
+		}
+
+		/// <summary>
+		/// A forest rule's species patch at a world position: 1 ± <paramref name="strength"/>, averaging 1,
+		/// varying over about <paramref name="metres"/> — so where two rules share a stand, each is thicker
+		/// in some parts of it and thinner in others, and a rule's prefabs gather by species.
+		/// </summary>
+		/// <remarks>The carpet's two-octave stretched noise (<see cref="CarpetClump"/> with no floor), which is symmetric about a half.</remarks>
+		public static float SpeciesPatch(uint seed, float worldX, float worldZ, float metres, float strength)
+		{
+			float t = CarpetClump(seed, worldX, worldZ, metres, 0f);
+			return 1f + Mathf.Clamp01(strength) * (2f * t - 1f);
+		}
+
 		/// <summary>
 		/// A carpet's share of a cell: its coverage as it is while the carpets in the cell sum to no
 		/// more than a full cell, scaled by the sum where they pass it.
@@ -1952,6 +2424,57 @@ namespace FishMMO.Shared.WorldDesign
 		/// rule out toward its limit — the tree line is sparse before it is bare.
 		/// </remarks>
 		/// <summary>How far a rule may grow at a world height against the water line: 0 … 1 (<see cref="ScatterRule.WaterFrom"/>).</summary>
+		/// <summary>How fully a land rule grows at a point beside inland water: 0 under it or in a dry bed, rising to 1 over its bank.</summary>
+		private static float InlandBand(ScatterRule rule, float worldX, float worldY, float worldZ)
+		{
+			float surface = rule.Inland(worldX, worldZ);
+			if (float.IsNegativeInfinity(surface))
+			{
+				return 1f;
+			}
+			if (float.IsPositiveInfinity(surface))
+			{
+				return 0f;
+			}
+			float t = Mathf.Clamp01((worldY - surface - rule.InlandFrom) / Mathf.Max(0.05f, rule.InlandTo - rule.InlandFrom));
+			return t * t * (3f - 2f * t);
+		}
+
+		/// <summary>
+		/// How fully a sea-floor rule grows at a world height for its band of depth (<see cref="ScatterRule.Depth"/>):
+		/// 1 well inside it, thinning to 0 over the outer fifth at each closed end; 1 with no band. Mean sea level
+		/// is world y = 0 (<see cref="TerrainScatterOptions.HasLiquidWater"/>).
+		/// </summary>
+		private static float DepthBand(ScatterRule rule, float worldY)
+		{
+			return DepthBand(rule.Depth, worldY);
+		}
+
+		/// <summary><see cref="DepthBand(ScatterRule, float)"/> for a band on its own.</summary>
+		public static float DepthBand(Vector2 band, float worldY)
+		{
+			float from = Mathf.Max(0f, band.x), to = Mathf.Max(0f, band.y);
+			if (from <= 0f && to <= 0f)
+			{
+				return 1f;
+			}
+			float depth = -worldY;
+			float width = to > from ? 0.2f * (to - from) : Mathf.Max(0.5f, 0.25f * from);
+			width = Mathf.Max(0.05f, width);
+			float grow = 1f;
+			if (from > 0f)
+			{
+				float t = Mathf.Clamp01((depth - from) / width);
+				grow *= t * t * (3f - 2f * t);
+			}
+			if (to > 0f)
+			{
+				float t = Mathf.Clamp01((to - depth) / width);
+				grow *= t * t * (3f - 2f * t);
+			}
+			return grow;
+		}
+
 		private static float WaterBand(ScatterRule rule, float worldY)
 		{
 			float span = rule.WaterTo - rule.WaterFrom;

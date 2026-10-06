@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -32,6 +33,16 @@ namespace FishMMO.Client
 		/// it to dry, brown, turn and drop its leaves.
 		/// </summary>
 		public static readonly int Season = Shader.PropertyToID("_FishSeason");
+		/// <summary>The wind held for each window of the shared motion clock (FishWeather.hlsl's _FishWindHold).</summary>
+		public static readonly int WindHold = Shader.PropertyToID("_FishWindHold");
+
+		/// <summary>
+		/// How long the wind's pace is held for what travels at it (the gust bands in the grass, the
+		/// gusts in the trees), s: long enough that a snapped pace is within a few percent of the wind's,
+		/// short enough to follow a front coming through.
+		/// </summary>
+		public const double WindHoldSeconds = 60.0;
+		private static WorldMotion.HeldValue heldWindSpeed;
 
 		/// <summary>The wind's ground-plane direction (world x, z) for a heading in degrees.</summary>
 		public static Vector2 WindDirection(float headingDegrees)
@@ -54,7 +65,13 @@ namespace FishMMO.Client
 		/// an overlay show nitrogen snow and water snow as the different things they are, without
 		/// anything downstream having to know what a substance is.
 		/// </param>
-		public static void Apply(in WeatherFrame frame, in WeatherCover cover, float temperature, float shelter, float time, float lightningFlash, WeatherSubstance substance = null)
+		/// <param name="windToHold">
+		/// The wind speed (channel units) to hold for a window that starts now: the weather's own target,
+		/// which every player works out alike, rather than the eased one a player who just joined is still
+		/// fading in from calm. NaN takes the frame's.
+		/// </param>
+		public static void Apply(in WeatherFrame frame, in WeatherCover cover, float temperature, float shelter, float time, float lightningFlash, WeatherSubstance substance = null,
+			float windToHold = float.NaN)
 		{
 			Color tint = substance != null ? substance.Tint : Color.white;
 			float harshness = substance != null ? substance.Harshness : 0f;
@@ -69,6 +86,12 @@ namespace FishMMO.Client
 			FogLayerView.Publish(frame, time);
 			Shader.SetGlobalVector(Cover, new Vector4(cover.Snow, cover.Wet, cover.Ash, cover.Sand));
 			Shader.SetGlobalVector(Misc, new Vector4(frame[WeatherChannel.Aurora], temperature, shelter, time));
+			// The wind's pace for what travels at it, held still for each window of the shared clock: every
+			// player switches window at the same moment, and the shaders snap the pace so a window holds
+			// whole bands (FishWindTravel), so nothing scrubs as the wind eases and the bands agree.
+			double into = WorldMotion.Window(WindHoldSeconds, out long window);
+			float heldSpeed = heldWindSpeed.Hold(float.IsNaN(windToHold) ? frame[WeatherChannel.WindSpeed] : windToHold, window);
+			Shader.SetGlobalVector(WindHold, new Vector4((float)into, (float)WindHoldSeconds, heldSpeed, 0f));
 			// What is falling, kind by kind. A surface needs to know: rain rings a puddle, hail does
 			// not, and snow does neither.
 			Shader.SetGlobalVector(Mix, new Vector4(frame[WeatherChannel.RainWeight], frame[WeatherChannel.SnowWeight],

@@ -113,6 +113,25 @@ float _FishWaterCloudShadow;
 float4 _FishWaterWind;
 /// 0 below a stiff breeze, 1 in a gale. Lifts the white-cap threshold.
 float _FishWaterWhitecap;
+/// What the ripples scroll by (WaterSurface.PublishRippleWindow): xy the wind's direction held still for a
+/// window of the shared clock, z seconds into that window, w the window's length in seconds.
+float4 _FishWaterRippleWindow;
+
+/// <summary>
+/// How far a texture scrolling at <paramref name="uvPerSecond"/> (tiles a second) has moved this window,
+/// snapped per axis to whole tiles a window: at the window's end it has come round to where the next
+/// window starts it, so the scroll is seamless and every player's is the same.
+/// </summary>
+/// <remarks>
+/// For a scroll whose rate follows the wind. Rate × clock moves by the change in rate times the whole
+/// clock whenever the rate changes — the eased wind scrubbed the ripples across the sea — and jumps at
+/// the clock's wrap. A layer that moves less than half a tile a window does not move.
+/// </remarks>
+float2 FishWaterHeldScroll(float2 uvPerSecond)
+{
+	float window = max(1.0, _FishWaterRippleWindow.w);
+	return round(uvPerSecond * window) * (_FishWaterRippleWindow.z / window);
+}
 
 // ── The shore ──────────────────────────────────────────────────────────
 //

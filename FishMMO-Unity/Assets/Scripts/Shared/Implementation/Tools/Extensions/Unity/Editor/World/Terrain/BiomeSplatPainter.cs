@@ -30,6 +30,22 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Metres under the water line over which a biome's submerged layer takes over.</summary>
 		public float ShoreFadeMetres = 1.5f;
 
+		/// <summary>
+		/// The surface of a river or lake over a world position (x, z), or negative infinity where there is
+		/// none; positive infinity for a dry wash's bed, which takes the bed layer with no water over it.
+		/// Null for a scene with no inland water.
+		/// </summary>
+		public Func<float, float, float> InlandWaterSurface;
+
+		/// <summary>Metres under an inland water's surface over which the bed layer takes over: a river's bank has no tide.</summary>
+		public float InlandShoreFadeMetres = 0.3f;
+
+		/// <summary>
+		/// A river's bar at a world position (x, z): how much of the point is bar, 0 … 1, and how sandy, 0
+		/// gravel … 1 sand. Painted with the palette's sediment layers. Null for none.
+		/// </summary>
+		public Func<float, float, Vector2> BarAt;
+
 		/// <summary>Mixed into every layer's noise so two scenes with the same biomes do not share a pattern.</summary>
 		public uint Seed = 1u;
 	}
@@ -196,7 +212,19 @@ namespace FishMMO.Shared.WorldDesign
 				float submerged = options.HasLiquidWater && options.ShoreFadeMetres > 0f
 					? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(-worldY / options.ShoreFadeMetres))
 					: 0f;
+				if (options.InlandWaterSurface != null)
+				{
+					// Under a river or lake: its bed, from just below its surface.
+					float inland = options.InlandWaterSurface(worldX, worldZ);
+					if (!float.IsNegativeInfinity(inland))
+					{
+						float under = float.IsPositiveInfinity(inland) ? 1f
+							: Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((inland - worldY) / Mathf.Max(0.05f, options.InlandShoreFadeMetres)));
+						submerged = Mathf.Max(submerged, under);
+					}
+				}
 
+				Vector2 bar = options.BarAt != null ? options.BarAt(worldX, worldZ) : Vector2.zero;
 				float reached = 0f;
 				for (int b = 0; b < field.Biomes.Count; b++)
 				{
@@ -206,7 +234,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					reached += biomeWeight;
-					Share(b, biomeWeight, worldX, worldZ, height, slopeDegrees, submerged, layerWeights);
+					Share(b, biomeWeight, worldX, worldZ, height, slopeDegrees, submerged, bar, layerWeights);
 				}
 
 				float total = 0f;
@@ -231,11 +259,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>Shares one biome's reach at a point out among its layers. See the class remarks for the order.</summary>
-			private void Share(int biomeIndex, float biomeWeight, float worldX, float worldZ, float height, float slope, float submerged, float[] layerWeights)
+			private void Share(int biomeIndex, float biomeWeight, float worldX, float worldZ, float height, float slope, float submerged, Vector2 bar, float[] layerWeights)
 			{
 				IReadOnlyList<SceneTerrainPalette.Entry> entries = palette.EntriesFor(biomeIndex);
 				SceneTerrainPalette.Entry main = null;
 				SceneTerrainPalette.Entry under = null;
+				SceneTerrainPalette.Entry sand = null;
+				SceneTerrainPalette.Entry gravel = null;
 				float cliffTotal = 0f;
 				float cliffMax = 0f;
 
@@ -248,6 +278,10 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						case PaletteRole.Main: main ??= entry; break;
 						case PaletteRole.Submerged: under ??= entry; break;
+						case PaletteRole.Sediment:
+							if (entry.Slot == SceneTerrainPalette.SlotSand) sand ??= entry;
+							else gravel ??= entry;
+							break;
 						case PaletteRole.Cliff:
 							float w = entry.Source is CliffTextureLayer cliff ? cliff.GetCliffWeight(slope, height) : 0f;
 							detailStrength[entry.Index] = w;
@@ -269,6 +303,15 @@ namespace FishMMO.Shared.WorldDesign
 				}
 
 				float ground = 1f - cliffMax;
+				// A river's bar: sand where the water was slow, gravel where it was quick.
+				if (bar.x > 0f && (sand != null || gravel != null))
+				{
+					float sandy = sand == null ? 0f : gravel == null ? 1f : Mathf.Clamp01(bar.y);
+					float share = biomeWeight * ground * Mathf.Clamp01(bar.x);
+					if (sand != null) layerWeights[sand.LayerIndex] += share * sandy;
+					if (gravel != null) layerWeights[gravel.LayerIndex] += share * (1f - sandy);
+					ground *= 1f - Mathf.Clamp01(bar.x);
+				}
 				if (under != null && submerged > 0f)
 				{
 					layerWeights[under.LayerIndex] += biomeWeight * ground * submerged;

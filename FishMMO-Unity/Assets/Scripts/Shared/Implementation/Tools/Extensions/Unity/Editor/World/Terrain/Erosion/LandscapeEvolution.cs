@@ -126,8 +126,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Evolves <paramref name="height"/> (width × depth cells of <paramref name="cellMetres"/>) in place.</summary>
 		/// <param name="cells">What each cell's ground is like.</param>
 		/// <param name="baseLevel">A sea's surface: cells below it are outlets and never change.</param>
+		/// <param name="water">Per cell, a river's or lake's surface, or negative infinity; cells under it are outlets too. Null for none.</param>
 		public static void Run(float[] height, int width, int depth, float cellMetres, LandscapeCells cells,
-			float baseLevel, LandscapeEvolutionSettings settings)
+			float baseLevel, LandscapeEvolutionSettings settings, float[] water = null)
 		{
 			int count = width * depth;
 			float[] planet = (float[])height.Clone();
@@ -146,6 +147,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				int x = n % width, z = n / width;
 				outlet[n] = x == 0 || z == 0 || x == width - 1 || z == depth - 1 || height[n] < baseLevel
+					|| (water != null && height[n] < water[n])
 					|| (cells.Sink != null && cells.Sink[n]);
 			}
 			// Per cell, the share of curvature creep smooths per step, kept under the explicit scheme's stability limit.

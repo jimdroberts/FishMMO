@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f985c150d9bd4d658dc8492ee47640e1, type: 3}
+  m_Name: SceneNavMeshCatalogue
+  m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue
+  Entries:
+  - SceneName: Dungeon
+    Data: {fileID: 23800000, guid: c43b6eb487815084ca437ada41086fa4, type: 2}
+    Position: {x: -256, y: -35, z: -256}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Flo Monolith
+    Data: {fileID: -7159132686343500872, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: StartScene A
+    Data: {fileID: 23800000, guid: e9b8b2a3c19045247a7b70f2b23b0ca1, type: 2}
+    Position: {x: -500, y: 0.21, z: -500}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: StartScene B
+    Data: {fileID: 23800000, guid: f8dd271abfab0f44287f337e86b02aa5, type: 2}
+    Position: {x: -500, y: 0, z: -500}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Test Dungeon
+    Data: {fileID: 23800000, guid: bccc2ce460150eb43bb0d7f0db28b05b, type: 2}
+    Position: {x: -500, y: 0, z: -500}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Tutorial Spawners
+    Data: {fileID: 23800000, guid: 9bb793da43a030e459af61d22643af10, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}

@@ -501,8 +501,56 @@ namespace FishMMO.Client
 		public Shader GrassBladesShader;
 		public GrassBladeSettings Grass = new GrassBladeSettings();
 
-		/// <summary>The loaded profile, if any.</summary>
-		public static WeatherRenderProfile Active => GetFirst<WeatherRenderProfile>();
+		[Header("GPU detail scatter")]
+		[Tooltip("FishDetailScatter.compute: generates the visible mesh details named below (pebbles, small rocks, shells, litter) around each camera every frame instead of the CPU's detail chunks. Referenced here, not from Resources, so it ships to clients only.")]
+		public ComputeShader DetailScatterCompute;
+		public DetailScatterSettings DetailScatter = new DetailScatterSettings();
+
+		[Header("Sea life")]
+		[Tooltip("FishMMO/Sea Life: the background fish, rays, turtles, whales, jellies and crabs (SeaLifeSystem). Referenced here so a client build includes it.")]
+		public Shader SeaLifeShader;
+		public SeaLifeSettings SeaLife = new SeaLifeSettings();
+
+		/// <summary>
+		/// The loaded profile, if any. In the editor, a world scene played straight from its own file never runs the
+		/// client boot that loads the profile into the cache: the weather still ran (the scene's controller hands its
+		/// presentation the profile directly), but everything that asks here (sea life, the blade grass, the GPU detail
+		/// scatter, terrain instancing) saw nothing, and sea life stayed idle. There the project's profile asset is
+		/// loaded once instead. Builds always have it cached.
+		/// </summary>
+		public static WeatherRenderProfile Active
+		{
+			get
+			{
+				WeatherRenderProfile cached = GetFirst<WeatherRenderProfile>();
+#if UNITY_EDITOR
+				if (cached == null)
+				{
+					if (editorFallback == null && !editorFallbackTried)
+					{
+						editorFallbackTried = true;
+						editorFallback = UnityEditor.AssetDatabase.LoadAssetAtPath<WeatherRenderProfile>(EditorProfilePath);
+					}
+					return editorFallback;
+				}
+#endif
+				return cached;
+			}
+		}
+
+#if UNITY_EDITOR
+		/// <summary>The project's profile asset (WeatherRenderAssets.ProfilePath), for <see cref="Active"/>'s editor fallback.</summary>
+		public const string EditorProfilePath = "Assets/Prefabs/Client/Weather/Weather Render Profile.asset";
+		private static WeatherRenderProfile editorFallback;
+		private static bool editorFallbackTried;
+
+		[UnityEditor.InitializeOnEnterPlayMode]
+		private static void ResetEditorFallback()
+		{
+			editorFallback = null;
+			editorFallbackTried = false;
+		}
+#endif
 
 		/// <summary>The budget for a quality level index (0 Performant, 1 Balanced, 2+ High Fidelity).</summary>
 		public WeatherTierSettings TierFor(int qualityLevel)

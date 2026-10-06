@@ -29,6 +29,7 @@ namespace FishMMO.Client
 		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
 		private Mesh mesh;
 		private double lastTime = double.NaN;
+		private readonly LightningAir air = new LightningAir();
 
 		/// <summary>0..1 flash brightness now.</summary>
 		public float Flash { get; private set; }
@@ -42,18 +43,35 @@ namespace FishMMO.Client
 		{
 			strikes.Clear();
 			thunder.Clear();
+			air.Clear();
 			lastTime = double.NaN;
 			Flash = 0f;
 		}
 
+		/// <summary>
+		/// What the game calls: every strike decided by the weather where it is (<see cref="LightningAir"/>),
+		/// read in the context's scene, so each one happens, and where, for every player alike.
+		/// </summary>
+		public void Update(WeatherTimeline timeline, uint tick, double now, Vector3 viewer, Camera camera, Material material, in WeatherContext context)
+		{
+			air.Bind(timeline, context.Settings, context.Scene);
+			Update(timeline, tick, now, viewer, camera, material, context.Sample, air);
+		}
+
+		/// <summary>The same with the viewer's weather standing in for everywhere's: a test bed with no scene.</summary>
 		public void Update(WeatherTimeline timeline, uint tick, double now, Vector3 viewer, Camera camera, Material material, in WeatherSample around)
+		{
+			Update(timeline, tick, now, viewer, camera, material, around, null);
+		}
+
+		private void Update(WeatherTimeline timeline, uint tick, double now, Vector3 viewer, Camera camera, Material material, in WeatherSample around, LightningAir where)
 		{
 			if (double.IsNaN(lastTime) || now < lastTime || now - lastTime > 5.0)
 			{
 				lastTime = now;
 			}
 			fresh.Clear();
-			SkySchedule.Lightning(timeline, tick, lastTime, now, viewer, fresh, around);
+			SkySchedule.Lightning(timeline, tick, lastTime, now, viewer, fresh, around, null, where);
 			lastTime = now;
 			foreach (LightningStrike strike in fresh)
 			{
@@ -79,6 +97,20 @@ namespace FishMMO.Client
 			colors.Clear();
 			indices.Clear();
 			ActiveBolts = 0;
+			/* Under water the sky is not seen (Jim, 2026-10-06: strikes were visible from under the sea): no bolts, and
+			 * of the flash only a dim, diffuse brightening comes down through the surface, less the deeper the eye. */
+			float underwater = 1f;
+			bool submerged = false;
+			if (camera != null)
+			{
+				Vector3 eye = camera.transform.position;
+				if (SurfaceWater.IsUnder(eye))
+				{
+					submerged = true;
+					float depth = SurfaceWater.TryGetSurfaceAt(eye.x, eye.z, out float surface) ? Mathf.Max(0f, surface - eye.y) : 0f;
+					underwater = 0.25f * Mathf.Exp(-depth / 6f);
+				}
+			}
 			for (int i = strikes.Count - 1; i >= 0; i--)
 			{
 				LightningStrike strike = strikes[i];
@@ -97,7 +129,7 @@ namespace FishMMO.Client
 				float nearness = Mathf.Clamp01(1.3f - distance / 4000f);
 				float pulse = Mathf.Exp(-(float)age * 7f) + 0.6f * Mathf.Exp(-Mathf.Abs((float)age - 0.12f) * 25f);
 				flash = Mathf.Max(flash, pulse * nearness * strike.Intensity);
-				if (age < BoltSeconds && camera != null)
+				if (age < BoltSeconds && camera != null && !submerged)
 				{
 					float alpha = (1f - (float)age / BoltSeconds) * strike.Intensity;
 					SkySchedule.BoltPath(strike, trunk, branches);
@@ -110,7 +142,7 @@ namespace FishMMO.Client
 					ActiveBolts++;
 				}
 			}
-			Flash = Mathf.Clamp01(flash);
+			Flash = Mathf.Clamp01(flash * underwater);
 
 			if (mesh == null)
 			{
@@ -282,6 +314,8 @@ namespace FishMMO.Client
 			public Vector2 Centre;
 			/// <summary>The shape it falls in: the cell's own, or a supercell's forward flank.</summary>
 			public StormCell Footprint;
+			/// <summary>The air it is worked out in: the storm's own (StormCellAir), or the viewer's without a scene.</summary>
+			public WeatherSample Air;
 		}
 
 		public int Drawn { get; private set; }
@@ -467,8 +501,12 @@ namespace FishMMO.Client
 		/// <param name="around">The weather at the viewer: each distant storm rains what its kind of storm makes in this air.</param>
 		/// <param name="body">The world the viewer is on, for how fast things fall there. Null is our own.</param>
 		/// <param name="map">The storms' cloud as the sky draws it: rain is never drawn where its cloud is not.</param>
-		public void Draw(WeatherTimeline timeline, uint tick, Camera camera, Material material, WeatherRenderProfile profile, int limit, float time,
-			in WeatherSample around, WorldBody body = null, WeatherMap map = null)
+		/// <param name="tick">The fractional server tick it is drawn at (WeatherPresentation.PresentTick): the storms move every frame.</param>
+		/// <param name="time">The shared sky clock, wrapped (WorldMotion.SkyWrapSeconds).</param>
+		/// <param name="settings">The scene's settings, and <paramref name="scene"/> the scene: each storm's own air is read in them (StormCellAir).</param>
+		public void Draw(WeatherTimeline timeline, double tick, Camera camera, Material material, WeatherRenderProfile profile, int limit, float time,
+			in WeatherSample around, WorldBody body = null, WeatherMap map = null, FishMMO.Shared.WorldSceneSettings settings = null,
+			UnityEngine.SceneManagement.Scene scene = default)
 		{
 			Drawn = 0;
 			if (timeline == null || camera == null || material == null || limit <= 0 || timeline.SceneMode != WeatherSceneMode.Own)
@@ -481,12 +519,20 @@ namespace FishMMO.Client
 			}
 			Vector3 viewer = camera.transform.position;
 			var viewer2 = new Vector2(viewer.x, viewer.z);
+			// The world time it is drawn at: where the storms stand and how strong they are, held with the world.
+			double now = timeline.WorldSecondsAt(tick);
 			storms.Reset(around);
 			nearest.Clear();
 			foreach (StormCell cell in timeline.Cells)
 			{
-				WeatherFrame frame = storms.Of(cell.Kind, out WeatherSubstance substance);
-				float amount = frame[WeatherChannel.Precipitation] * cell.EnvelopeAt(tick) * cell.PeakIntensity;
+				/* What it rains, how much, from what base, drifting on what wind: all from the storm's own
+				 * air (StormCellAir), read once for its life, so every player sees the same shaft — from the
+				 * viewer's air it changed as each viewer walked, and differed between them. Without a scene
+				 * (tests, probes) the viewer's air, as before. */
+				StormCellAir.Air own = settings != null ? StormCellAir.Of(timeline, settings, scene, cell) : null;
+				WeatherSample air = own != null ? own.Sample : around;
+				WeatherFrame frame = own != null ? own.Frames.Of(cell.Kind, out WeatherSubstance substance) : storms.Of(cell.Kind, out substance);
+				float amount = frame[WeatherChannel.Precipitation] * cell.EnvelopeAtSeconds(now) * cell.PeakIntensity;
 				if (amount < 0.05f)
 				{
 					continue;
@@ -501,7 +547,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				Vector2 centre = cell.CentreAt(tick, timeline.TickDelta);
+				Vector2 centre = cell.CentreAtSeconds(now);
 				StormCell footprint = cell;
 				StormAnatomy anatomy = default;
 				bool ownCloud = false;
@@ -512,7 +558,7 @@ namespace FishMMO.Client
 					 * base the sky draws over it. A supercell's cell is its tornado, on the storm's rear
 					 * flank; its rain and hail fall on the forward flank, ahead of the tornado, and not
 					 * in a ring round it. */
-					anatomy = StormAnatomy.Of(cell.Kind, around, new Vector2(cell.VelocityX, cell.VelocityZ), timeline.LatitudeDegrees, cell.RadiusMeters);
+					anatomy = StormAnatomy.Of(cell.Kind, air, new Vector2(cell.VelocityX, cell.VelocityZ), timeline.LatitudeDegrees, cell.RadiusMeters);
 					ownCloud = anatomy.Valid;
 					if (ownCloud && cell.Kind == StormKind.Supercell && anatomy.RainRadius > 0f)
 					{
@@ -563,6 +609,7 @@ namespace FishMMO.Client
 					Anatomy = anatomy,
 					Centre = centre,
 					Footprint = footprint,
+					Air = air,
 				});
 			}
 			nearest.Sort((a, b) => a.Distance.CompareTo(b.Distance));
@@ -589,9 +636,14 @@ namespace FishMMO.Client
 				bool itsOwn = substance != null && (kind == PrecipitationKind.Sand ? substance.Cover == WeatherCoverKind.Sand
 					: kind == PrecipitationKind.Ash ? substance.Cover == WeatherCoverKind.Ash
 					: substance.Condenses);
-				/* The streaks fall at the kind's own speed on this world, in metres a second. Constant
-				 * for the cell, which keeps a storm's frame, so the time it is multiplied by is honest. */
-				float fallSpeed = Mathf.Lerp(look.FallSpeed.x, look.FallSpeed.y, frame[WeatherChannel.DropSize])
+				/* The streaks fall at the kind's own speed on this world, in metres a second, and the shader
+				 * multiplies it by the clock — so it must be constant for the cell. Its drops' size is the
+				 * cell's own air's (StormCellAir), read once for its life: from the viewer's air, which
+				 * drifts as the viewer walks and the field moves, every change in speed times hours of
+				 * clock put every streak somewhere else. */
+				StormCellAir.Air cellAir = StormCellAir.Of(timeline, settings, scene, cell);
+				float dropSize = cellAir != null ? cellAir.Frames.Of(cell.Kind)[WeatherChannel.DropSize] : frame[WeatherChannel.DropSize];
+				float fallSpeed = Mathf.Lerp(look.FallSpeed.x, look.FallSpeed.y, dropSize)
 					* (itsOwn ? Mathf.Max(0.01f, substance.FallSpeedScale) : 1f)
 					* SurfacePhysics.TerminalSpeedScale(SurfacePhysics.Gravity(body), SurfacePhysics.AirDensity(body), PrecipitationField.TraitsOf(channel).Fine);
 
@@ -601,13 +653,13 @@ namespace FishMMO.Client
 				float extent = Mathf.Max(0f, footprint.ExtentMeters);
 
 				/* How high it stands. Rain from the base of the storm's own cloud; a wall of dust as
-				 * deep as the storm's outflow in the air around the viewer (the same the storm's size
+				 * deep as the storm's outflow in its own air (the same the storm's size
 				 * came from); a whirl as tall as the vortices draw a dust devil's. */
 				float top;
 				switch (style)
 				{
 					case Style.DustWall:
-						top = StormPhysics.OutflowDepth(around.OpenColumn);
+						top = StormPhysics.OutflowDepth(curtain.Air.OpenColumn);
 						break;
 					case Style.DustWhirl:
 						top = Mathf.Max(20f, extent * 1.4f);
@@ -624,7 +676,7 @@ namespace FishMMO.Client
 							// A storm with no cloud of its own falls from the cloud its air makes, at
 							// the higher of its base and the open air's: at the lower it hung in clear
 							// sky under a cloud it never reached.
-							top = Mathf.Max(150f, Mathf.Max(frame[WeatherChannel.CloudBase] * 4000f, around.OpenColumn.Base));
+							top = Mathf.Max(150f, Mathf.Max(frame[WeatherChannel.CloudBase] * 4000f, curtain.Air.OpenColumn.Base));
 						}
 						break;
 				}
@@ -636,7 +688,7 @@ namespace FishMMO.Client
 					// whose frame carries its gust front and, in a supercell, the spin of its core — a
 					// shaft leaned by those streamed out kilometres. Relative to the storm, which moves
 					// with its steering wind.
-					drift = Drift(around.OpenAir.Wind, new Vector2(cell.VelocityX, cell.VelocityZ), top, fallSpeed);
+					drift = Drift(curtain.Air.OpenAir.Wind, new Vector2(cell.VelocityX, cell.VelocityZ), top, fallSpeed);
 				}
 
 				/* The footprint, in the frame the box is laid out in: a front's own — forward across its
@@ -787,7 +839,7 @@ namespace FishMMO.Client
 				ground = Mathf.Max(ground, origin.y + terrain.SampleHeight(new Vector3(at.x, 0f, at.y)));
 			}
 			overSea = false;
-			if (SurfaceWater.TryGetLevel(out float level) && level > ground)
+			if (SurfaceWater.TryGetSurfaceAt(at.x, at.y, out float level) && level > ground)
 			{
 				ground = level;
 				overSea = true;

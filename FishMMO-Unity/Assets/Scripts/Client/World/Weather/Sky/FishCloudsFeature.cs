@@ -868,7 +868,10 @@ namespace FishMMO.Client
 				// 4. God rays: shafts from the sun, or from around a body eclipsing it. The clouds
 				// are already in the frame, so they cast the shafts they should. Gathered at half the
 				// march's size as before: the rebuilt clouds are sharper than a shaft needs.
-				if (sky.GodRayIntensity > 0.001f && SkySystem.DrawGodRays)
+				/* Not from under the water (Jim, 2026-10-06: the sky's glow showed on things under the sea): the shafts rake
+				 * out from the sun across the frame, and under the surface the water's own pass (FishMMO/Water/Underwater)
+				 * draws the sun's shafts as the water bends and scatters them. */
+				if (sky.GodRayIntensity > 0.001f && SkySystem.DrawGodRays && !SurfaceWater.IsUnder(cameraData.camera.transform.position))
 				{
 					DrawGodRays(renderGraph, resourceData, sky, steadied, viewProjection, width / 2, height / 2);
 				}

@@ -17,6 +17,11 @@ namespace FishMMO.Shared.WorldDesign
 		Cliff,
 		/// <summary>Ground under the sea: the biome's lakebed layer, else its riverbed layer.</summary>
 		Submerged,
+		/// <summary>
+		/// A river's bars and beaches: sand or gravel the water laid, the same art whatever biome the river
+		/// runs through (<see cref="SceneTerrainPalette.SlotSand"/>, <see cref="SceneTerrainPalette.SlotGravel"/>).
+		/// </summary>
+		Sediment,
 	}
 
 	/// <summary>
@@ -56,6 +61,9 @@ namespace FishMMO.Shared.WorldDesign
 		public const string SlotCliff = "cliff/";
 		public const string SlotLakebed = "lakebed";
 		public const string SlotRiverbed = "riverbed";
+		/// <summary>The scene's river sediment slots: the sand and gravel every biome's bars are painted with.</summary>
+		public const string SlotSand = "sediment/sand";
+		public const string SlotGravel = "sediment/gravel";
 
 		/// <summary>The texture layer a slot key names on a biome, or null when the biome has no such slot.</summary>
 		public static TerrainTextureLayer SlotLayer(BiomeTemplate biome, string slot)
@@ -163,8 +171,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// (<see cref="TerrainTextureLayer.HasAlbedo"/>), so an override dresses a slot; it cannot
 		/// conjure one a biome lacks.
 		/// </remarks>
+		/// <param name="sediment">
+		/// The scene's river sediment, slot and texture layer (<see cref="SlotSand"/>, <see cref="SlotGravel"/>),
+		/// given to every biome so a bar is sand or gravel by the water that laid it, not by the biome it lies
+		/// in; null or empty for a scene with no rivers.
+		/// </param>
 		public static SceneTerrainPalette Build(SceneBiomeField field,
-			Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolveSlot, Func<BiomeTemplate, TerrainLayer> placeholder)
+			Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolveSlot, Func<BiomeTemplate, TerrainLayer> placeholder,
+			IReadOnlyList<(string slot, TerrainTextureLayer source)> sediment = null)
 		{
 			if (field == null)
 			{
@@ -204,6 +218,18 @@ namespace FishMMO.Shared.WorldDesign
 				if (submergedSource != null)
 				{
 					candidates.Add((new Entry { BiomeIndex = b, Biome = biome, Source = submergedSource, Role = PaletteRole.Submerged, Slot = lakebed ? SlotLakebed : SlotRiverbed }, lakebed ? lakebedLayer : riverbedLayer, 1));
+				}
+
+				if (sediment != null)
+				{
+					foreach ((string slot, TerrainTextureLayer source) in sediment)
+					{
+						TerrainLayer layer = Resolve(resolveSlot, biome, slot, source);
+						if (layer != null)
+						{
+							candidates.Add((new Entry { BiomeIndex = b, Biome = biome, Source = source, Role = PaletteRole.Sediment, Slot = slot }, layer, 1));
+						}
+					}
 				}
 
 				if (biome.CliffTextureLayers != null)

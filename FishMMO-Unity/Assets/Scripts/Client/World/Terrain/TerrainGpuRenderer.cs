@@ -234,7 +234,24 @@ namespace FishMMO.Client
 			{
 				return clone;
 			}
-			if (!IndirectShaders.TryGetValue(material.shader.name, out string name))
+			Shader shader = IndirectShaderFor(material);
+			if (shader == null)
+			{
+				return null;
+			}
+			clone = new Material(material) { shader = shader, name = material.name + " (indirect)", hideFlags = HideFlags.DontSave };
+			clones.Add(material, clone);
+			return clone;
+		}
+
+		/// <summary>
+		/// The procedural-instancing twin of a material's shader ("FishMMO/Vegetation" → "FishMMO/Vegetation Indirect",
+		/// "FishMMO/Weather Lit" → "FishMMO/Weather Lit Indirect"), or null when it has none or it is unsupported. Shared
+		/// with the GPU detail scatter (<see cref="DetailScatterRenderer"/>), which draws through the same twins.
+		/// </summary>
+		public static Shader IndirectShaderFor(Material material)
+		{
+			if (material == null || material.shader == null || !IndirectShaders.TryGetValue(material.shader.name, out string name))
 			{
 				return null;
 			}
@@ -249,13 +266,7 @@ namespace FishMMO.Client
 			{
 				shader = Shader.Find(name);
 			}
-			if (shader == null || !shader.isSupported)
-			{
-				return null;
-			}
-			clone = new Material(material) { shader = shader, name = material.name + " (indirect)", hideFlags = HideFlags.DontSave };
-			clones.Add(material, clone);
-			return clone;
+			return shader != null && shader.isSupported ? shader : null;
 		}
 
 		/// <summary>

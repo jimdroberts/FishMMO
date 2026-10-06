@@ -18,8 +18,43 @@ float4 _FishWeatherWind;
 float4 _FishWeatherFog;
 // Surface cover: x snow, y wet, z ash, w sand
 float4 _FishWeatherCover;
-// x aurora, y local temperature (-1..1), z camera shelter (0..1), w weather time in seconds
+// x aurora, y local temperature (-1..1), z camera shelter (0..1), w weather time in seconds: the
+// world's shared motion clock (WorldMotion.Seconds), wrapped at FISH_MOTION_WRAP — the same moment on
+// every player's screen
 float4 _FishWeatherMisc;
+// The wind held still for each window of the shared motion clock (WeatherShaderGlobals.Apply): x seconds
+// into the window, y the window's length, z the wind speed (as _FishWeatherWind.z) when it began, w unused.
+// What a phase that runs at the wind's pace reads (FishWindTravel), so it never scrubs as the wind eases.
+float4 _FishWindHold;
+
+// What _FishWeatherMisc.w wraps at, s (WorldMotion.ShaderWrapSeconds).
+#define FISH_MOTION_WRAP 10000.0
+
+// A steady rate, in cycles per second, snapped so the weather clock's wrap holds a whole number of
+// cycles: a phase it drives meets itself across the wrap instead of jumping. Constants fold.
+float FishWrapCycles(float cyclesPerSecond)
+{
+    return round(cyclesPerSecond * FISH_MOTION_WRAP) / FISH_MOTION_WRAP;
+}
+
+// The same for an angular rate, radians per second.
+float FishWrapAngular(float radiansPerSecond)
+{
+    return round(radiansPerSecond * (FISH_MOTION_WRAP / 6.2831853)) * (6.2831853 / FISH_MOTION_WRAP);
+}
+
+// How far a pattern of period `period` has travelled at `rate` (period units per second, held for the
+// window), from the window's start: the rate snapped so the window holds whole periods. At the window's
+// end it has come a whole number of periods, which is where the next window starts it — so a speed that
+// changes with the wind moves the pattern faster or slower and never jumps it, and every player's
+// pattern stands in the same place. speed × clock, which it replaces, jumped by the change in speed
+// times the whole clock every time the wind eased.
+float FishWindTravel(float rate, float period)
+{
+    float window = max(1.0, _FishWindHold.y);
+    float whole = max(0.0, round(rate * window / period));
+    return whole * period / window * _FishWindHold.x;
+}
 // x 1 when the quality tier lifts terrain under deep snow, 0 otherwise. y-w unused.
 float4 _FishWeatherTier;
 // The season where the camera is, from the world clock (WeatherShaderGlobals.ApplySeason, called by
@@ -149,12 +184,17 @@ float FishCloudOver(float3 worldPos)
     return SAMPLE_TEXTURE2D_LOD(_FishCloudOverhead, sampler_FishCloudOverhead, uv, 0).r;
 }
 
-// A cheap moving gust, 0..1, for vertex animation.
+// A cheap moving gust, 0..1, for vertex animation. `time` is unused: the gust travels on the held
+// wind (FishWindTravel), each factor snapped to its own whole turns, so it neither scrubs as the wind
+// eases nor differs between players.
 float FishWindGust(float2 xz, float time)
 {
     float2 dir = _FishWeatherWind.xy;
-    float phase = dot(xz, dir) * 0.08 - time * (0.6 + _FishWeatherWind.z * 2.0);
-    return (sin(phase) * 0.5 + 0.5) * (sin(phase * 0.37 + 1.7) * 0.5 + 0.5) * _FishWeatherWind.w;
+    float along = dot(xz, dir) * 0.08;
+    float rate = 0.6 + _FishWindHold.z * 2.0;
+    float a = along - FishWindTravel(rate, 6.2831853);
+    float b = along * 0.37 + 1.7 - FishWindTravel(rate * 0.37, 6.2831853);
+    return (sin(a) * 0.5 + 0.5) * (sin(b) * 0.5 + 0.5) * _FishWeatherWind.w;
 }
 
 #endif

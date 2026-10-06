@@ -30,12 +30,6 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class RockArtNames
 	{
-		/// <summary>The suffix of a tree-channel prefab's collider-free twin.</summary>
-		public const string DecorSuffix = "_Decor";
-
-		/// <summary>The collider-free twin of a tree-channel prefab.</summary>
-		public static string Decor(string prefab) => prefab + DecorSuffix;
-
 		// ── Rock formations ───────────────────────────────────────────
 
 		public static string FormationPrefab(string type, string shape, int variant) => $"Formation_{type}_{shape}_{variant}";

@@ -44,6 +44,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public bool Erosion = true;
 
+		/// <summary>
+		/// Whether the planet's rivers and lakes are laid into the ground (<see cref="SceneWater"/>). Only
+		/// with <see cref="Erosion"/>: without it the ground is the planet's exactly.
+		/// </summary>
+		public bool Rivers = true;
+
 		/// <summary>How deep erosion cuts: rivers, glaciers and rain together. 1 the defaults; the scene's atlas entry carries it for re-cuts.</summary>
 		public float ErosionStrength = 1f;
 
@@ -96,8 +102,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (frozenSeas == null)
 				{
-					frozenSeas = Body != null
-						&& BiomeWorldConditions.For(SolarSystemProfile.Resolve(Body), Body).IsFrozenThrough;
+					/* Only from the system the body is actually in. A body in none (one being set up, or a test's) would be
+					 * read against the active system, where it has no orbit and so no sunlight, and come out frozen through:
+					 * its whole sea floor laid over with an ice shelf at the datum. */
+					SolarSystemProfile system = Body != null ? SolarSystemProfile.Resolve(Body) : null;
+					frozenSeas = system != null && system.Contains(Body) && BiomeWorldConditions.For(system, Body).IsFrozenThrough;
 				}
 				return frozenSeas.Value;
 			}

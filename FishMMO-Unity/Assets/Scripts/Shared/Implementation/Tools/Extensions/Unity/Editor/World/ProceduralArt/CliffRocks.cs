@@ -119,7 +119,8 @@ namespace FishMMO.Shared.WorldDesign
 	public static class CliffRocks
 	{
 		/// <summary>Raise when the meshes change in a way the source text does not show.</summary>
-		public const int Version = 1;
+		/// <remarks>2: more variants per role (2026-10-04) and per-variant proportions (<see cref="Proportions"/>).</remarks>
+		public const int Version = 2;
 
 		/// <summary>The pseudo rock type of glacier-ice cliffs.</summary>
 		public const string Ice = "Ice";
@@ -225,6 +226,20 @@ namespace FishMMO.Shared.WorldDesign
 			S("Columns" + count, FormationKind.Columns, length, length / (Mathf.Sqrt(count) * 0.53f * columns * 1.05f), variants, 1f, count, 0f, columns);
 
 		/// <summary>The shapes a type's rocks of a role are built from.</summary>
+		/// <remarks>
+		/// The variant counts are what keeps a cliff from reading as one rock stamped along its length.
+		/// The first pass had a single variant for every footing shape and every titan, and the footing is
+		/// what a cliff mostly shows: a canyon in Baoakraal Hyena-den (2026-10-04) held 6,000 rocks made
+		/// of four meshes (Conglomerate and Sandstone Base0_0 and Base1_0), and the bedded rotation rule
+		/// (one shared bedding plane) turned them all the same way. The roles the eye meets most —
+		/// footing, middle face, fill — now have three variants (two for each of the two jointed footing
+		/// shapes, and for the bedded ledges), the rare titans two, and every variant past the first is
+		/// built at its own proportions (<see cref="Proportions"/>), so variants differ in silhouette and
+		/// not only in their noise. Crest and debris keep two: they are small, and debris is already
+		/// fall-sorted to random sizes and resting poses. The cost is payload: about 335 pieces instead
+		/// of 235, roughly 1.6 times the cliff meshes' bytes, the footing and titan meshes being the
+		/// heaviest.
+		/// </remarks>
 		public static CliffShape[] ShapesOf(string type, CliffRole role)
 		{
 			switch (StructureOf(type))
@@ -232,10 +247,10 @@ namespace FishMMO.Shared.WorldDesign
 				case CliffStructure.Bedded:
 					switch (role)
 					{
-						case CliffRole.Titan: return new[] { S("Slab", FormationKind.Bedded, 44f, 0.36f, 1) };
-						case CliffRole.Base: return new[] { S("Slab", FormationKind.Bedded, 30f, 0.4f, 1), S("Ledges", FormationKind.Ledges, 26f, 0.78f, 1, 1f, 7) };
-						case CliffRole.Mid: return new[] { S("Block", FormationKind.Bedded, 14f, 0.67f, 2) };
-						case CliffRole.Fill: return new[] { S("Block", FormationKind.Bedded, 7f, 0.67f, 2) };
+						case CliffRole.Titan: return new[] { S("Slab", FormationKind.Bedded, 44f, 0.36f, 2) };
+						case CliffRole.Base: return new[] { S("Slab", FormationKind.Bedded, 30f, 0.4f, 3), S("Ledges", FormationKind.Ledges, 26f, 0.78f, 2, 1f, 7) };
+						case CliffRole.Mid: return new[] { S("Block", FormationKind.Bedded, 14f, 0.67f, 3) };
+						case CliffRole.Fill: return new[] { S("Block", FormationKind.Bedded, 7f, 0.67f, 3) };
 						case CliffRole.Crest: return new[] { S("Block", FormationKind.Bedded, 9f, 0.6f, 2) };
 						default: return new[] { S("Slab", FormationKind.Bedded, 3f, 0.45f, 2), S("Slab", FormationKind.Bedded, 6f, 0.4f, 2) };
 					}
@@ -244,40 +259,40 @@ namespace FishMMO.Shared.WorldDesign
 					// placer stands them on the cliff's one steep foliation, so the bands line up rock to rock.
 					switch (role)
 					{
-						case CliffRole.Titan: return new[] { S("Slab", FormationKind.Boulder, 44f, 0.4f, 1, 1f, 0, 1.2f, 1f, true) };
-						case CliffRole.Base: return new[] { S("Slab", FormationKind.Boulder, 30f, 0.45f, 2, 1f, 0, 1.2f, 1f, true) };
-						case CliffRole.Mid: return new[] { S("Slab", FormationKind.Boulder, 15f, 0.45f, 2, 1f, 0, 1.2f, 1f, true) };
+						case CliffRole.Titan: return new[] { S("Slab", FormationKind.Boulder, 44f, 0.4f, 2, 1f, 0, 1.2f, 1f, true) };
+						case CliffRole.Base: return new[] { S("Slab", FormationKind.Boulder, 30f, 0.45f, 3, 1f, 0, 1.2f, 1f, true) };
+						case CliffRole.Mid: return new[] { S("Slab", FormationKind.Boulder, 15f, 0.45f, 3, 1f, 0, 1.2f, 1f, true) };
 						case CliffRole.Fill:
-						case CliffRole.Crest: return new[] { S("Slab", FormationKind.Boulder, 7f, 0.5f, 2, 1f, 0, 1.2f, 1f, true) };
+						case CliffRole.Crest: return new[] { S("Slab", FormationKind.Boulder, 7f, 0.5f, 3, 1f, 0, 1.2f, 1f, true) };
 						default: return new[] { S("Flake", FormationKind.Bedded, 3f, 0.3f, 2, 1f, 3), S("Flake", FormationKind.Bedded, 6f, 0.3f, 2, 1f, 4) };
 					}
 				case CliffStructure.Columnar:
 					switch (role)
 					{
-						case CliffRole.Titan: return new[] { Cols(44f, 37, 5f, 1) };
-						case CliffRole.Base: return new[] { Cols(30f, 37, 5f, 2) };
-						case CliffRole.Mid: return new[] { Cols(16f, 30, 4f, 2) };
+						case CliffRole.Titan: return new[] { Cols(44f, 37, 5f, 2) };
+						case CliffRole.Base: return new[] { Cols(30f, 37, 5f, 3) };
+						case CliffRole.Mid: return new[] { Cols(16f, 30, 4f, 3) };
 						case CliffRole.Fill:
-						case CliffRole.Crest: return new[] { Cols(8f, 12, 3.4f, 2) };
+						case CliffRole.Crest: return new[] { Cols(8f, 12, 3.4f, 3) };
 						default: return new[] { S("Prism", FormationKind.Faceted, 3f, 0.4f, 2), S("Fallen", FormationKind.FallenColumns, 10f, 0.35f, 2, 1f, 5, 0f, 2.6f) };
 					}
 				case CliffStructure.Ice:
 					switch (role)
 					{
-						case CliffRole.Titan: return new[] { IceShape("Serac", true, "Block", 44f, 0.75f, 1) };
-						case CliffRole.Base: return new[] { IceShape("Serac", true, "Block", 30f, 0.75f, 2) };
-						case CliffRole.Mid: return new[] { IceShape("Tower", true, "Tower", 16f, 2.3f, 2) };
-						case CliffRole.Fill: return new[] { IceShape("Calved", false, "Calved", 8f, 0.85f, 2) };
+						case CliffRole.Titan: return new[] { IceShape("Serac", true, "Block", 44f, 0.75f, 2) };
+						case CliffRole.Base: return new[] { IceShape("Serac", true, "Block", 30f, 0.75f, 3) };
+						case CliffRole.Mid: return new[] { IceShape("Tower", true, "Tower", 16f, 2.3f, 3) };
+						case CliffRole.Fill: return new[] { IceShape("Calved", false, "Calved", 8f, 0.85f, 3) };
 						case CliffRole.Crest: return new[] { IceShape("Rounded", false, "Rounded", 10f, 0.72f, 2) };
 						default: return new[] { IceShape("Calved", false, "Calved", 3f, 0.85f, 2), IceShape("Calved", false, "Calved", 6f, 0.85f, 2) };
 					}
 				default:
 					switch (role)
 					{
-						case CliffRole.Titan: return new[] { S("Block", FormationKind.Boulder, 44f, 0.62f, 1, 1f, 0, 1.1f, 1f, true) };
-						case CliffRole.Base: return new[] { S("Block", FormationKind.Boulder, 30f, 0.62f, 1, 2f, 0, 1f, 1f, true), S("Block", FormationKind.Boulder, 30f, 0.62f, 1, 1f, 0, 1.3f, 1f, true) };
-						case CliffRole.Mid: return new[] { S("Block", FormationKind.Boulder, 15f, 0.62f, 2, 1f, 0, 1.1f, 1f, true) };
-						case CliffRole.Fill: return new[] { S("Block", FormationKind.Boulder, 7f, 0.62f, 2, 1f, 0, 1.1f, 1f, true) };
+						case CliffRole.Titan: return new[] { S("Block", FormationKind.Boulder, 44f, 0.62f, 2, 1f, 0, 1.1f, 1f, true) };
+						case CliffRole.Base: return new[] { S("Block", FormationKind.Boulder, 30f, 0.62f, 2, 2f, 0, 1f, 1f, true), S("Block", FormationKind.Boulder, 30f, 0.62f, 2, 1f, 0, 1.3f, 1f, true) };
+						case CliffRole.Mid: return new[] { S("Block", FormationKind.Boulder, 15f, 0.62f, 3, 1f, 0, 1.1f, 1f, true) };
+						case CliffRole.Fill: return new[] { S("Block", FormationKind.Boulder, 7f, 0.62f, 3, 1f, 0, 1.1f, 1f, true) };
 						case CliffRole.Crest: return new[] { S("Corestone", FormationKind.Boulder, 10f, 0.72f, 2) };
 						// Fresh fall debris is angular and irregular: conchoidal chunks, never dice.
 						default: return new[] { S("Chunk", FormationKind.Faceted, 3f, 0.6f, 2, 1f, 0, 1.3f), S("Chunk", FormationKind.Faceted, 7f, 0.6f, 2, 1f, 0, 1.3f) };
@@ -436,8 +451,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The FormationShape a piece is built as (size and height from the shape's length).</summary>
 		public static FormationShape FormationOf(in CliffPiece piece, in CliffShape shape)
 		{
-			float size = shape.HeightOverWidth <= 1f ? shape.Length : shape.Length / shape.HeightOverWidth;
-			float height = shape.HeightOverWidth <= 1f ? shape.Length * shape.HeightOverWidth : shape.Length;
+			Proportions(in piece, out float sizeK, out float heightK, out float elongationK);
+			float size = (shape.HeightOverWidth <= 1f ? shape.Length : shape.Length / shape.HeightOverWidth) * sizeK;
+			float height = (shape.HeightOverWidth <= 1f ? shape.Length * shape.HeightOverWidth : shape.Length) * heightK;
+			float elongation = shape.Kind == FormationKind.Boulder || shape.Kind == FormationKind.Faceted
+				? (shape.Elongation > 0f ? shape.Elongation : 1f) * elongationK
+				: shape.Elongation;
 			return new FormationShape
 			{
 				Name = $"Cliff{piece.Role}{piece.Kind}{shape.Name}{Mathf.RoundToInt(shape.Length)}",
@@ -446,9 +465,40 @@ namespace FishMMO.Shared.WorldDesign
 				Height = height,
 				Count = shape.Count,
 				Dip = -1f,
-				Elongation = shape.Elongation,
+				Elongation = elongation,
 				Exponent = shape.SubAngular ? Mathf.Lerp(5f, 2.6f, RoundnessOf(in piece)) : 0f,
 			};
+		}
+
+		/// <summary>
+		/// A variant's own proportions as factors on its shape: variant 0 is the shape as declared; every
+		/// later one is 0.88–1.12 times as broad, 0.82–1.22 times as tall and (boulders, chunks) 0.92–1.3
+		/// times as elongated, from a hash of the piece, so the same piece always gets the same numbers.
+		/// </summary>
+		/// <remarks>
+		/// The generators already vary a variant's outline and relief with its seed, but at cliff size a
+		/// rock is read by its silhouette first — its height against its breadth — and two seeds of one
+		/// declared size look like the same rock turned. The ranges stay inside what a role means
+		/// (a footing slab is still a slab, a middle block still a block), and the placer measures every
+		/// piece's own mesh, so its size caps and seating need nothing from these numbers.
+		/// </remarks>
+		public static void Proportions(in CliffPiece piece, out float size, out float height, out float elongation)
+		{
+			size = height = elongation = 1f;
+			if (piece.Variant <= 0)
+			{
+				return;
+			}
+			int seed = ProceduralNoise.SeedFor($"CliffProportions/{piece.Type}/{piece.Role}{piece.Kind}", 0x5c1f);
+			uint h = ProceduralNoise.Hash(piece.Variant, Math.Max(0, piece.Roundness) + 1, seed);
+			float a = ProceduralNoise.ToUnit(h);
+			h = ProceduralNoise.Mix(h);
+			float b = ProceduralNoise.ToUnit(h);
+			h = ProceduralNoise.Mix(h);
+			float c = ProceduralNoise.ToUnit(h);
+			size = Mathf.Lerp(0.88f, 1.12f, a);
+			height = Mathf.Lerp(0.82f, 1.22f, b);
+			elongation = Mathf.Lerp(0.92f, 1.3f, c);
 		}
 
 		private static readonly System.Collections.Concurrent.ConcurrentDictionary<(CliffPiece, int), int> retries = new System.Collections.Concurrent.ConcurrentDictionary<(CliffPiece, int), int>();
@@ -701,10 +751,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				SeracShape t = Array.Find(IceMeshes.Seracs, s => s.Name == template);
 				float scale = shape.Length / Mathf.Max(t.Width, Mathf.Max(t.Depth, t.Height));
+				Proportions(in piece, out float sizeK, out float heightK, out float elongationK);
 				t.Name = name;
-				t.Width *= scale;
-				t.Depth *= scale;
-				t.Height *= scale;
+				t.Width *= scale * sizeK * Mathf.Sqrt(elongationK);
+				t.Depth *= scale * sizeK / Mathf.Sqrt(elongationK);
+				t.Height *= scale * heightK;
 				return IceMeshes.BuildSerac(in t, resolution, seed);
 			}
 			IceBoulderShape b = Array.Find(IceMeshes.Boulders, s => s.Name == template);

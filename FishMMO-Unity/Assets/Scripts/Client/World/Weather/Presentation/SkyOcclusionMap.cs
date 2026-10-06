@@ -125,6 +125,12 @@ namespace FishMMO.Client
 				building[i] = physics.Raycast(origin, Vector3.down, out RaycastHit hit, CastDistance, layers, QueryTriggerInteraction.Ignore)
 					? hit.point.y
 					: buildTop - CastDistance;
+				// A ray goes through a lake or a river to its bed; their surfaces are laid in here. The sea is
+				// laid over at every read instead, because its tide moves.
+				if (SurfaceWater.TryGetInlandSurfaceAt(origin.x, origin.z, out float inland) && inland > building[i])
+				{
+					building[i] = inland;
+				}
 			}
 			nextRay = end;
 			if (nextRay >= count)

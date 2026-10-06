@@ -40,8 +40,32 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Cones = true;
 		/// <summary>The angle of repose, degrees.</summary>
 		public float ReposeDegrees = 35f;
-		/// <summary>Hard ceiling on rocks per scene.</summary>
-		public int MaxRocks = 6000;
+
+		/// <summary>
+		/// The budget never drops below this many rocks: a scene with less cliff than that is planned
+		/// exactly as it always was, by the roles' quotas alone.
+		/// </summary>
+		public int MinBudget = 6000;
+		/// <summary>Above <see cref="MinBudget"/>, the budget grows by this many rocks per 100 m of cliff.</summary>
+		public float RocksPer100Metres = 70f;
+		/// <summary>Hard ceiling on rocks per scene, whatever its cliff length (each rock is a handful of scene objects).</summary>
+		public int MaxRocks = 20000;
+		/// <summary>Share of the budget the footing may take; the face roles and the talus share the rest.</summary>
+		public float FootingShare = 0.4f;
+		/// <summary>
+		/// Bands lower than this, metres, get no footing rock at all: a step that size is a bank, and a
+		/// footing rock there was only ever a big slab shrunk to fit.
+		/// </summary>
+		public float MinFootBand = 2.5f;
+
+		/// <summary>
+		/// Ground no talus may reach (scene x, z): rivers, lakes and their beds. A cone stops short of it, by
+		/// <see cref="ExclusionMarginMetres"/>, and no debris rock lands on it. Rock sites test it separately.
+		/// </summary>
+		public Func<float, float, bool> Excluded;
+
+		/// <summary>How far short of excluded ground a cone's spread stops, metres.</summary>
+		public float ExclusionMarginMetres = 4f;
 	}
 
 	/// <summary>One rock to put in the scene: the payload piece, a pose and a scale (rotation applied after scale, as a Transform does).</summary>
@@ -88,6 +112,10 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		public int Attempts, Rejected, Dropped, Face, Talus, Cones, Footing;
 		public float CliffLength, Covered;
+		/// <summary>The rock budget the cliff length gave (<see cref="CliffRockPlacementOptions.MinBudget"/> … <see cref="CliffRockPlacementOptions.MaxRocks"/>).</summary>
+		public int Budget;
+		/// <summary>Share of their quotas the footing and the face roles kept to stay in the budget: 1 when nothing was thinned.</summary>
+		public float FootingKept = 1f, FaceKept = 1f;
 		public readonly Dictionary<CliffRole, int> PerRole = new Dictionary<CliffRole, int>();
 		public readonly float[] ThirdSum = new float[3], ThirdMax = new float[3];
 		public readonly int[] ThirdCount = new int[3];
@@ -107,7 +135,13 @@ namespace FishMMO.Shared.WorldDesign
 
 		public override string ToString()
 		{
-			return $"{Face} face rocks ({Footing} footing) + {Talus} talus on {Cones} cones over {CliffLength:0} m of cliff, steep ground under rock {Covered:P0}; " +
+			var roles = new List<string>();
+			foreach (KeyValuePair<CliffRole, int> kv in PerRole)
+			{
+				roles.Add($"{kv.Key} {kv.Value}");
+			}
+			string thinned = FootingKept < 0.999f || FaceKept < 0.999f ? $", thinned to stay in budget (footing {FootingKept:P0}, face {FaceKept:P0} of their quotas)" : "";
+			return $"{Face} face rocks ({Footing} footing; {string.Join(", ", roles)}) + {Talus} talus on {Cones} cones over {CliffLength:0} m of cliff, budget {Budget}{thinned}, steep ground under rock {Covered:P0}; " +
 				$"size mean/max per third foot→crest {SizeByHeight()}; footing underside {(Footing > 0 ? UndersideSum / Footing : 0f):P1}";
 		}
 	}
@@ -140,8 +174,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// noise (constant along a fall line: buttresses and gullies) plus weaker clustering noise — is above
 	/// the coverage quantile; and gentler cells within a noise-driven reach of the steep mask (spurs up
 	/// to ~25 m below the foot, crest rocks up to ~12 m behind the top). Tried steepest first, weighted-random.</item>
-	/// <item><b>Footing.</b> Along each foot line the biggest rocks (titans where the band is ≥ 16 m
-	/// tall, at most a couple), overlapping 10–35 %, only ~8 % of the line left open by noise.</item>
+	/// <item><b>Footing.</b> Along each foot line the biggest rocks the band takes (titans where it is
+	/// ≥ 16 m tall, at most a couple; base rocks from 10 m, middle rocks from 5 m, fill rocks below,
+	/// nothing under <see cref="CliffRockPlacementOptions.MinFootBand"/>), overlapping 10–35 %, only ~8 %
+	/// of the line left open by noise.</item>
 	/// <item><b>Size by height.</b> Quotas are each role's share of the cliff length; base-class rocks
 	/// only in the lowest ~35 % of the band (±5 %); above that the longest extent is capped at 65→40 %
 	/// of the base size up to 60 % of the band, 40→25 % to the crest (±10 % per rock); mid and fill
@@ -154,15 +190,23 @@ namespace FishMMO.Shared.WorldDesign
 	/// while more than 1.5 % of its vertices are visible underside in its lowest third.</item>
 	/// <item><b>Overlap.</b> Equal-volume spheres: the share of a new rock inside its neighbours under a
 	/// per-rock 2–12 %, and no rock may swallow 45 % of one already placed.</item>
-	/// <item><b>Rotation by structure.</b> Jointed: squared to the face's joint set ±12° with sheet-joint
-	/// lean, crest corestones any way up. Bedded: one regional dip 0–10° per cliff, ±3°, strike ±10°.
-	/// Foliated: one steep foliation 45–80°, ±5°. Columnar: vertical ±4°. Ice: crevasse sets ±10°.
-	/// Debris: of 24 poses the one with the centre of mass lowest over the slope, long axis down it.</item>
+	/// <item><b>Rotation by structure.</b> Jointed: squared to the face's joint set (tilt ±12°, turn ±20°,
+	/// a quarter of them on the other quarter) with sheet-joint lean, crest corestones any way up.
+	/// Bedded: one regional dip 0–10° per cliff, ±3°, turned ±35° in the bedding plane. Foliated: one
+	/// steep foliation 45–80°, ±5°, turned ±35° in it. Columnar: vertical ±4°. Ice: crevasse sets,
+	/// ±25°. Debris: of 24 poses the one with the centre of mass lowest over the slope, long axis down
+	/// it. Every face rock also takes an overall size factor (<see cref="SizeRange"/>) on its per-axis
+	/// scale (<see cref="AnisoRange"/>).</item>
 	/// <item><b>Talus cones.</b> One per ~45 m of cliff below gullies and the tallest face, radius
 	/// 0.45 × band + 4 (7–20 m), apex at the angle of repose against the foot, stamped ray by ray and
 	/// stopped where the ground falls away, edges feathered; debris fall-sorted on it (1.5 m high up
 	/// to 6.5 m at the toe) and 8–12 m blocks just beyond, resting on the ground only.</item>
 	/// <item><b>Roundness.</b> The site's level picks the baked joint-block variant (granite).</item>
+	/// <item><b>Budget.</b> At most <see cref="CliffRockPlacementOptions.MinBudget"/> rocks, or
+	/// <see cref="CliffRockPlacementOptions.RocksPer100Metres"/> per 100 m of cliff where that is more,
+	/// never above <see cref="CliffRockPlacementOptions.MaxRocks"/>. When the quotas want more, every
+	/// class is thinned evenly over the whole scene (see <see cref="Plan"/>), never cut off where the
+	/// budget happened to run out.</item>
 	/// </list>
 	/// </remarks>
 	public static class CliffRockPlacement
@@ -196,13 +240,18 @@ namespace FishMMO.Shared.WorldDesign
 			return f * baseLength * (1f + 0.1f * noise);
 		}
 
-		/// <summary>Per-axis scale range by structure: bedded and foliated stay within ±15 % so the strata texture keeps its density.</summary>
+		/// <summary>
+		/// Per-axis scale range by structure, in the rock's own frame. Bedded and foliated rocks keep their
+		/// y (across the beds) within ±15 % so the bed thickness holds; across their x and z — along the
+		/// beds, where a stretch only lengthens the bands — they range 0.8–1.35, which also breaks the
+		/// round lathe footprint of a bedded slab into longer and shorter blocks.
+		/// </summary>
 		public static Vector2 AnisoRange(CliffStructure s, int axis)
 		{
 			switch (s)
 			{
 				case CliffStructure.Bedded:
-				case CliffStructure.Foliated: return new Vector2(0.87f, 1.15f);
+				case CliffStructure.Foliated: return axis == 1 ? new Vector2(0.87f, 1.15f) : new Vector2(0.8f, 1.35f);
 				case CliffStructure.Columnar: return axis == 1 ? new Vector2(0.8f, 1.2f) : new Vector2(0.85f, 1.15f);
 				default: return new Vector2(0.8f, 1.25f);
 			}
@@ -319,6 +368,10 @@ namespace FishMMO.Shared.WorldDesign
 			public CliffRockPlacementOptions O;
 			public CliffRockPlan Plan;
 			public Matrix4x4 Bedding, Foliation;
+			/// <summary>Most rocks this plan may hold.</summary>
+			public int Budget;
+			/// <summary>Factor on the face roles' quotas that keeps them, the footing and the talus inside the budget.</summary>
+			public float FaceScale = 1f;
 		}
 
 		/// <summary>
@@ -357,12 +410,33 @@ namespace FishMMO.Shared.WorldDesign
 			run.Foliation = Rot(new Vector3(Mathf.Cos(faz), 0f, Mathf.Sin(faz)), run.Rng.Range(45f, 80f));
 
 			plan.Stats.CliffLength = g.CliffLength;
+			run.Budget = BudgetFor(g.CliffLength, options);
+			plan.Stats.Budget = run.Budget;
 			var zone = Zone(run);
 			if (options.FootRow)
 			{
 				FootRow(run);
 			}
-			foreach (CliffRole role in new[] { CliffRole.Titan, CliffRole.Base, CliffRole.Mid, CliffRole.Fill, CliffRole.Crest })
+			// The face roles share what the footing left, less a reserve for the talus: when their quotas
+			// want more, each is scaled down by the same factor so all of them thin evenly.
+			var faceRoles = new[] { CliffRole.Titan, CliffRole.Base, CliffRole.Mid, CliffRole.Fill, CliffRole.Crest };
+			float demand = 0f;
+			foreach (CliffRole role in faceRoles)
+			{
+				if (role == CliffRole.Titan && options.FootRow)
+				{
+					continue;
+				}
+				foreach (string type in g.TypesPresent)
+				{
+					demand += Quota(g, type, role, options.FootRow);
+				}
+			}
+			int talusReserve = options.Cones ? Mathf.Min((int)(g.CliffLength / 45f) * 22, (int)(0.3f * run.Budget)) : 0;
+			float room = run.Budget - plan.Rocks.Count - talusReserve;
+			run.FaceScale = demand <= room || demand <= 0f ? 1f : Mathf.Max(0f, room) / demand;
+			plan.Stats.FaceKept = run.FaceScale;
+			foreach (CliffRole role in faceRoles)
 			{
 				if (role == CliffRole.Titan && options.FootRow)
 				{
@@ -411,6 +485,57 @@ namespace FishMMO.Shared.WorldDesign
 			return plan;
 		}
 
+		/// <summary>
+		/// The most rocks a plan over this much cliff may hold: <see cref="CliffRockPlacementOptions.MinBudget"/>,
+		/// or <see cref="CliffRockPlacementOptions.RocksPer100Metres"/> per 100 m where that is more, never
+		/// above <see cref="CliffRockPlacementOptions.MaxRocks"/>.
+		/// </summary>
+		/// <remarks>
+		/// The ceiling used to be a flat 6,000 rocks a scene, and it was checked as the rocks went in:
+		/// footing first, its foot lines in the order the contour tracer found them (south to north), then
+		/// the face roles, then the talus. Baoakraal Hyena-den (6.3 × 5.2 km of canyon country) spent all
+		/// 6,000 on footing in the southern half: no middle, fill or crest rock anywhere, no talus, and the
+		/// north nearly bare — the "extremely sparse" cliffs. A ceiling must grow with the cliff it covers,
+		/// and must thin evenly when it bites (<see cref="FootRow"/>'s pacing, the face roles' scale).
+		/// </remarks>
+		public static int BudgetFor(float cliffLength, CliffRockPlacementOptions options)
+		{
+			int byLength = Mathf.CeilToInt(Mathf.Max(0f, cliffLength) / 100f * Mathf.Max(0f, options.RocksPer100Metres));
+			return Mathf.Max(1, Mathf.Min(options.MaxRocks, Mathf.Max(options.MinBudget, byLength)));
+		}
+
+		/// <summary>A role's quota for one rock type before any thinning: its cover share of the type's cliff length over the shapes' mean length along the cliff.</summary>
+		private static float Quota(CliffGrid g, string type, CliffRole role, bool footRow)
+		{
+			CliffStructure s = CliffRocks.StructureOf(type);
+			float cover = Cover(s, role, footRow);
+			CliffShape[] shapes = CliffRocks.ShapesOf(type, role);
+			float along = 0f;
+			foreach (CliffShape sh in shapes)
+			{
+				along += 0.5f * (sh.Length + sh.Length * Mathf.Min(1f, sh.HeightOverWidth <= 1f ? 0.75f : 1f / sh.HeightOverWidth));
+			}
+			along /= shapes.Length;
+			float target = Mathf.Round(cover * g.CliffLengthOf(type) / Mathf.Max(1f, along));
+			if (role == CliffRole.Titan)
+			{
+				target = Mathf.Min(target, Mathf.Max(1, (int)(g.CliffLengthOf(type) / 250f)));
+			}
+			return target;
+		}
+
+		/// <summary>
+		/// The role a footing rock plays for the height of its band. Footing rocks are seated with the
+		/// base rule whatever their role; the role only picks a size that fits the step.
+		/// </summary>
+		/// <remarks>
+		/// Every footing rock used to be a base-class rock (26–30 m), shrunk to at most 8 m + 1.6 × the
+		/// band, never below 0.55 of its size — so a 3 m step got a 16 m slab, and every step in a
+		/// scene got the same two slabs. Bands of 10 m and more keep the base rocks; 5–10 m take middle
+		/// rocks, which fit unshrunk; lower ones take fill rocks.
+		/// </remarks>
+		public static CliffRole FootRoleFor(float band) => band >= 10f ? CliffRole.Base : band >= 5f ? CliffRole.Mid : CliffRole.Fill;
+
 		private static float Longest(Metrics m, Vector3 s) => Mathf.Max(m.ExtX * Mathf.Max(s.x, s.z), Mathf.Max(m.ExtZ * Mathf.Min(s.x, s.z), m.Height * s.y));
 
 		/// <summary>The class covers by role: each role's share of the cliff length.</summary>
@@ -456,11 +581,31 @@ namespace FishMMO.Shared.WorldDesign
 			return new CliffPiece(type, r, kind, roundness, run.Rng.Next(shapes[kind].Variants));
 		}
 
-		private static Vector3 Aniso(Run run, CliffStructure s)
+		/// <summary>
+		/// A rock's scale: per-axis (<see cref="AnisoRange"/>) times one overall size factor
+		/// (<see cref="SizeRange"/>, log-uniform) unless <paramref name="sized"/> is false (talus debris,
+		/// whose size the fall sorting sets).
+		/// </summary>
+		private static Vector3 Aniso(Run run, CliffStructure s, bool sized = true)
 		{
 			Vector2 x = AnisoRange(s, 0), y = AnisoRange(s, 1);
-			return new Vector3(run.Rng.Range(x.x, x.y), run.Rng.Range(y.x, y.y), run.Rng.Range(x.x, x.y));
+			var v = new Vector3(run.Rng.Range(x.x, x.y), run.Rng.Range(y.x, y.y), run.Rng.Range(x.x, x.y));
+			if (sized)
+			{
+				Vector2 k = SizeRange(s);
+				v *= Mathf.Exp(run.Rng.Range(Mathf.Log(k.x), Mathf.Log(k.y)));
+			}
+			return v;
 		}
+
+		/// <summary>
+		/// The overall size factor range by structure. One mesh at two sizes reads as two rocks far more
+		/// than one mesh at two turns; the payload meshes are built at their real size, so the range is
+		/// kept to what the texel density bears (bedded and foliated narrower: their bed thickness scales
+		/// with it).
+		/// </summary>
+		public static Vector2 SizeRange(CliffStructure s) =>
+			s == CliffStructure.Bedded || s == CliffStructure.Foliated ? new Vector2(0.82f, 1.2f) : new Vector2(0.75f, 1.3f);
 
 		// ── Zone ──────────────────────────────────────────────────────
 
@@ -511,20 +656,50 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Footing ───────────────────────────────────────────────────
 
+		/// <summary>
+		/// The footing: rocks walked along every foot line, overlapping, sized to the band
+		/// (<see cref="FootRoleFor"/>), none on bands below <see cref="CliffRockPlacementOptions.MinFootBand"/>.
+		/// </summary>
+		/// <remarks>
+		/// <b>Pacing.</b> The footing may take <see cref="CliffRockPlacementOptions.FootingShare"/> of the
+		/// budget. Its demand is estimated from the foot lines' total length (a rock per ~12 m); when that
+		/// is more than its share, the walk is paced — a rock is only tried while the footing is under its
+		/// share times the fraction of the total foot length walked so far — so the thinning is spread
+		/// over every line instead of the first lines found taking everything.
+		/// </remarks>
 		private static void FootRow(Run run)
 		{
 			CliffGrid g = run.G;
 			var titans = new Dictionary<string, int>();
-			foreach (List<Vector3> line in g.FootLines())
+			List<List<Vector3>> lines = g.FootLines();
+			var arcs = new List<float[]>(lines.Count);
+			float total = 0f;
+			foreach (List<Vector3> line in lines)
 			{
 				var arc = new float[line.Count];
 				for (int i = 1; i < line.Count; i++)
 				{
 					arc[i] = arc[i - 1] + Mathf.Min(6f, Flat(line[i] - line[i - 1]));
 				}
+				arcs.Add(arc);
+				total += arc[arc.Length - 1];
+			}
+			int share = Mathf.Max(1, Mathf.RoundToInt(run.Budget * Mathf.Clamp01(run.O.FootingShare)));
+			bool paced = total / 12f > share;
+			run.Plan.Stats.FootingKept = paced ? Mathf.Clamp01(share / (total / 12f)) : 1f;
+			float walked = 0f;
+			for (int li = 0; li < lines.Count; li++)
+			{
+				List<Vector3> line = lines[li];
+				float[] arc = arcs[li];
 				float a = run.Rng.Range(0f, 8f);
-				while (a < arc[arc.Length - 1] && run.Plan.Rocks.Count < run.O.MaxRocks)
+				while (a < arc[arc.Length - 1] && run.Plan.Rocks.Count < run.Budget)
 				{
+					if (paced && run.Plan.Stats.Footing >= share * ((walked + a) / Mathf.Max(1f, total)))
+					{
+						a += 4f;
+						continue;
+					}
 					int k = 1;
 					while (k < line.Count - 1 && arc[k] < a) k++;
 					Vector3 p = Vector3.Lerp(line[k - 1], line[k], Mathf.Clamp01((a - arc[k - 1]) / Mathf.Max(1e-3f, arc[k] - arc[k - 1])));
@@ -534,9 +709,14 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					float band = g.BandHeight(p.x, p.z);
+					if (band < run.O.MinFootBand)
+					{
+						a += 4f;
+						continue;
+					}
 					titans.TryGetValue(site.Type, out int nt);
 					bool asTitan = nt < Mathf.Max(1, (int)(g.CliffLengthOf(site.Type) / 250f)) && band >= 16f && run.Rng.NextFloat() < 0.12f;
-					CliffPiece piece = PickPiece(run, in site, asTitan ? CliffRole.Titan : CliffRole.Base);
+					CliffPiece piece = PickPiece(run, in site, asTitan ? CliffRole.Titan : FootRoleFor(band));
 					Metrics m = run.Metrics.Of(piece);
 					CliffStructure structure = CliffRocks.StructureOf(site.Type);
 					Vector3 S = Aniso(run, structure);
@@ -574,6 +754,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					a += along * 0.35f;
 				}
+				walked += arc[arc.Length - 1];
 			}
 		}
 
@@ -586,27 +767,15 @@ namespace FishMMO.Shared.WorldDesign
 			var counts = new Dictionary<string, int>(StringComparer.Ordinal);
 			foreach (string type in g.TypesPresent)
 			{
-				CliffStructure s = CliffRocks.StructureOf(type);
-				float cover = Cover(s, role, run.O.FootRow);
-				CliffShape[] shapes = CliffRocks.ShapesOf(type, role);
-				float along = 0f;
-				foreach (CliffShape sh in shapes)
-				{
-					along += 0.5f * (sh.Length + sh.Length * Mathf.Min(1f, sh.HeightOverWidth <= 1f ? 0.75f : 1f / sh.HeightOverWidth));
-				}
-				along /= shapes.Length;
-				int target = Mathf.RoundToInt(cover * g.CliffLengthOf(type) / Mathf.Max(1f, along));
-				if (role == CliffRole.Titan)
-				{
-					target = Mathf.Min(target, Mathf.Max(1, (int)(g.CliffLengthOf(type) / 250f)));
-				}
-				targets[type] = target;
+				float quota = Quota(g, type, role, run.O.FootRow);
+				// Thinned quotas round up, so a role the budget squeezes still shows where its quota was one.
+				targets[type] = run.FaceScale >= 1f ? Mathf.RoundToInt(quota) : Mathf.CeilToInt(quota * run.FaceScale);
 				counts[type] = 0;
 			}
 			float nominal = 0f;
 			foreach (ZonePoint zp in zone)
 			{
-				if (run.Plan.Rocks.Count >= run.O.MaxRocks)
+				if (run.Plan.Rocks.Count >= run.Budget)
 				{
 					break;
 				}
@@ -777,14 +946,18 @@ namespace FishMMO.Shared.WorldDesign
 			Vector3 down = run.G.DownhillSmooth(p.x, p.z);
 			DeterministicRNG rng = run.Rng;
 			Matrix4x4 align = Rot(Vector3.up, -m.AlignYaw);
+			// The turn about the rock's own up (its bed or foliation normal) changes nothing the structure
+			// rule constrains — beds stay parallel whatever way a slab is turned in its plane — so it is
+			// free to be wide: ±35° about the strike, either way round. At ±10° every slab of a cliff
+			// showed the same face to the valley.
 			switch (structure)
 			{
 				case CliffStructure.Bedded:
 					return run.Bedding * Frame(down) * Rot(Vector3.forward, rng.Range(-3f, 3f)) * Rot(Vector3.right, rng.Range(-3f, 3f))
-						* Rot(Vector3.up, rng.Range(-10f, 10f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
+						* Rot(Vector3.up, rng.Range(-35f, 35f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
 				case CliffStructure.Foliated:
 					return run.Foliation * Frame(down) * Rot(Vector3.forward, rng.Range(-5f, 5f)) * Rot(Vector3.right, rng.Range(-5f, 5f))
-						* Rot(Vector3.up, rng.Range(-10f, 10f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
+						* Rot(Vector3.up, rng.Range(-35f, 35f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
 				case CliffStructure.Columnar:
 				{
 					float a = rng.NextFloat() * 6.2831853f;
@@ -792,12 +965,15 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case CliffStructure.Ice:
 					return Frame(down) * Rot(Vector3.forward, rng.Range(-6f, 6f)) * Rot(Vector3.right, rng.Range(-6f, 6f))
-						* Rot(Vector3.up, rng.Range(-10f, 10f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
+						* Rot(Vector3.up, rng.Range(-25f, 25f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
 				default:
 				{
+					// Squared to the face's joint set within ±12° of tilt; the turn about the joint block's
+					// own up reaches ±20°, and one block in four is stood on its other quarter (90°).
 					float j = 12f, lean = new[] { 0.2f, 0.4f, 0.6f }[rng.Next(3)];
+					float quarter = rng.NextFloat() < 0.25f ? 90f : 0f;
 					return Frame(down) * Rot(Vector3.right, -lean * slope) * Rot(Vector3.forward, rng.Range(-j, j) * 0.6f) * Rot(Vector3.right, rng.Range(-j, j) * 0.6f)
-						* Rot(Vector3.up, rng.Range(-j, j) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
+						* Rot(Vector3.up, rng.Range(-20f, 20f) + quarter + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
 				}
 			}
 		}
@@ -1097,7 +1273,7 @@ namespace FishMMO.Shared.WorldDesign
 				apex.y = apexH;
 				run.Plan.Cones.Add(new CliffCone { Apex = apex, Radius = r, ApexHeight = apexH, Down = down, Type = g.Sites[g.Site[k]].Type });
 			}
-			g.StampCones(run.Plan.Cones, tan, g.Seed + 23);
+			g.StampCones(run.Plan.Cones, tan, g.Seed + 23, run.O.Excluded, run.O.ExclusionMarginMetres);
 			run.Plan.Stats.Cones = run.Plan.Cones.Count;
 
 			// Fall-sorted debris on each cone, resting on the ground only (no towers of loose rock).
@@ -1114,14 +1290,14 @@ namespace FishMMO.Shared.WorldDesign
 				int n = Mathf.Clamp(Mathf.RoundToInt(cone.Radius * 1.6f), 10, 32);
 				var mine = new List<PlacedCliffRock>();
 				CliffStructure structure = CliffRocks.StructureOf(cone.Type);
-				for (int i = 0; i < n + 3 && run.Plan.Rocks.Count < run.O.MaxRocks; i++)
+				for (int i = 0; i < n + 3 && run.Plan.Rocks.Count < run.Budget; i++)
 				{
 					bool big = i >= n;
 					float u = big ? run.Rng.Range(1f, 1.3f) : Mathf.Sqrt(run.Rng.Range(0.05f, 1f));
 					float ang = run.Rng.Range(-75f, 75f) * Mathf.Deg2Rad;
 					Vector3 dir = cone.Down * Mathf.Cos(ang) + strike * Mathf.Sin(ang);
 					Vector3 at = cone.Apex + dir * (u * toe);
-					if (!g.Inside(at.x, at.z, 4f))
+					if (!g.Inside(at.x, at.z, 4f) || (run.O.Excluded != null && run.O.Excluded(at.x, at.z)))
 					{
 						continue;
 					}
@@ -1136,7 +1312,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					var piece = new CliffPiece(cone.Type, CliffRole.Debris, kind, -1, run.Rng.Next(shapes[kind].Variants));
 					Metrics m = run.Metrics.Of(piece);
-					Vector3 S = Aniso(run, structure) * (size / Mathf.Max(0.1f, m.Length));
+					Vector3 S = Aniso(run, structure, false) * (size / Mathf.Max(0.1f, m.Length));
 					var c = NewCandidate(run, m, at, S, structure, false);
 					c.TerrainOnly = true;
 					c.Band = 0.1f;
@@ -1721,7 +1897,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// or where the ground falls away under it — no cone over a lower cliff), feathers the added
 		/// height (3 passes of a 5×5 box) and marks it as debris; then re-derives the slopes.
 		/// </summary>
-		public void StampCones(List<CliffCone> cones, float tan, int noiseSeed)
+		/// <param name="excluded">Ground no cone may reach (water): each ray of a cone's spread stops <paramref name="margin"/> short of it.</param>
+		public void StampCones(List<CliffCone> cones, float tan, int noiseSeed, Func<float, float, bool> excluded = null, float margin = 0f)
 		{
 			var orig = (float[])H.Clone();
 			foreach (CliffCone cone in cones)
@@ -1736,6 +1913,7 @@ namespace FishMMO.Shared.WorldDesign
 						float x = cone.Apex.x + dir.x * d, z = cone.Apex.z + dir.z * d;
 						int i = Mathf.RoundToInt((x - X0) / S), j = Mathf.RoundToInt((z - Z0) / S);
 						if (i < 0 || j < 0 || i >= NX || j >= NZ) break;
+						if (excluded != null && excluded(x + dir.x * margin, z + dir.z * margin)) break;
 						int k = j * NX + i;
 						float hc = cone.ApexHeight - d * tan + 0.6f * ProceduralNoise.Fbm3(new Vector3(x / 6f, 7.5f, z / 6f), 2, 0.5f, noiseSeed);
 						if (d > 1f && hc <= orig[k]) break;

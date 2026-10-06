@@ -183,6 +183,10 @@ namespace FishMMO.Client
 		/// </summary>
 		private bool jumpQueued = false;
 		/// <summary>
+		/// Whether the jump key is held now: a swimmer rises while it is (<see cref="KCCMoveFlags.Ascend"/>).
+		/// </summary>
+		private bool jumpHeld = false;
+		/// <summary>
 		/// Indicates if crouch input is currently active.
 		/// </summary>
 		private bool crouchInputActive = false;
@@ -287,6 +291,7 @@ namespace FishMMO.Client
 			Controls.UI.ScrollWheel.canceled += OnScrollWheelCanceled;
 
 			Controls.Player.Jump.performed += OnJumpPerformed;
+			Controls.Player.Jump.canceled += OnJumpCanceled;
 			Controls.Player.Crouch.performed += OnCrouchPerformed;
 			Controls.Player.Crouch.canceled += OnCrouchCanceled;
 			Controls.Player.Sprint.performed += OnSprintPerformed;
@@ -337,6 +342,7 @@ namespace FishMMO.Client
 			Controls.UI.ScrollWheel.canceled -= OnScrollWheelCanceled;
 
 			Controls.Player.Jump.performed -= OnJumpPerformed;
+			Controls.Player.Jump.canceled -= OnJumpCanceled;
 			Controls.Player.Crouch.performed -= OnCrouchPerformed;
 			Controls.Player.Crouch.canceled -= OnCrouchCanceled;
 			Controls.Player.Sprint.performed -= OnSprintPerformed;
@@ -454,6 +460,7 @@ namespace FishMMO.Client
 			if (!CanUpdateInput())
 			{
 				jumpQueued = false;
+				jumpHeld = false;
 				crouchInputActive = false;
 				sprintInputActive = false;
 				moveInput = Vector2.zero;
@@ -470,6 +477,10 @@ namespace FishMMO.Client
 			{
 				moveFlags.EnableBit(KCCMoveFlags.Jump);
 				jumpQueued = false;
+			}
+			if (jumpHeld)
+			{
+				moveFlags.EnableBit(KCCMoveFlags.Ascend);
 			}
 			if (crouchInputActive)
 			{
@@ -724,6 +735,12 @@ namespace FishMMO.Client
 		private void OnJumpPerformed(InputAction.CallbackContext context)
 		{
 			jumpQueued = true;
+			jumpHeld = true;
+		}
+
+		private void OnJumpCanceled(InputAction.CallbackContext context)
+		{
+			jumpHeld = false;
 		}
 
 		private void OnCrouchPerformed(InputAction.CallbackContext context)

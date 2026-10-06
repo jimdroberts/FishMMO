@@ -76,21 +76,21 @@ namespace FishMMO.Shared.Weather
 			{
 				return;
 			}
-			uint tick = CurrentTick;
+			double now = timeline.WorldSecondsAt(CurrentTick);
 			var here = new Vector2(position.x, position.z);
 			foreach (StormCell cell in timeline.Cells)
 			{
-				if (cell.EnvelopeAt(tick) <= 0f)
+				if (cell.EnvelopeAtSeconds(now) <= 0f)
 				{
 					continue;
 				}
-				if (Vector2.Distance(here, cell.CentreAt(tick, timeline.TickDelta)) - cell.RadiusMeters <= radius)
+				if (Vector2.Distance(here, cell.CentreAtSeconds(now)) - cell.RadiusMeters <= radius)
 				{
 					results.Add(cell);
 				}
 			}
 			results.Sort((a, b) =>
-				Vector2.Distance(here, a.CentreAt(tick, timeline.TickDelta)).CompareTo(Vector2.Distance(here, b.CentreAt(tick, timeline.TickDelta))));
+				Vector2.Distance(here, a.CentreAtSeconds(now)).CompareTo(Vector2.Distance(here, b.CentreAtSeconds(now))));
 		}
 	}
 

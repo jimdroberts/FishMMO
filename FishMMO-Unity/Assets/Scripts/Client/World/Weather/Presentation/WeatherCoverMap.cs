@@ -255,10 +255,11 @@ namespace FishMMO.Client
 			var accumulator = new WeatherAccumulator();
 			accumulator.Add(open, 1f);
 			bool any = false;
+			double now = timeline.WorldSecondsAt(tick);
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
 				StormCell cell = timeline.Cells[i];
-				float weight = cell.InfluenceAt(position, tick, timeline.TickDelta);
+				float weight = cell.InfluenceAtSeconds(position, now);
 				if (weight <= 0f)
 				{
 					continue;

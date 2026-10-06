@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 	/// via the unified <see cref="CharacterReconcileData"/>. There is no longer a
 	/// separate broadcast path for non-resource attributes.
 	/// </summary>
-	public class CharacterAttributeController : CharacterBehaviour, ICharacterAttributeController, IPredictableController
+	public partial class CharacterAttributeController : CharacterBehaviour, ICharacterAttributeController, IPredictableController
 	{
 		/// <summary>
 		/// Execution order in the unified prediction pipeline.
@@ -880,6 +880,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			payloadResourceCurrentValues.Clear();
+			ResetBreath();
 
 			/* The observer push baselines belong to the previous occupant of a pooled object. Left
 			 * behind, the first resource push after a respawn is rate-gated against that character's
@@ -2125,6 +2126,7 @@ namespace FishMMO.Shared
 			ApplyIndividualResourceState(HealthResourceTemplateID, resourceState.MaxHealth, resourceState.Health);
 			ApplyIndividualResourceState(ManaResourceTemplateID, resourceState.MaxMana, resourceState.Mana);
 			ApplyIndividualResourceState(StaminaResourceTemplateID, resourceState.MaxStamina, resourceState.Stamina);
+			ApplyBreathState(resourceState.Breath);
 			EndPropagation();
 		}
 
@@ -2225,6 +2227,7 @@ namespace FishMMO.Shared
 				state.Stamina = stamina.CurrentValue;
 				state.MaxStamina = stamina.FinalValue;
 			}
+			state.Breath = BreathSeconds;
 
 			return state;
 		}
@@ -2255,6 +2258,7 @@ namespace FishMMO.Shared
 			EnsureRegenIntervalCurrent();
 
 			ProcessReplicateTick(input.GetTick(), state);
+			StepBreath();
 		}
 
 		/// <summary>

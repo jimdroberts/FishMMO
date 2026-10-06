@@ -1021,24 +1021,63 @@ namespace FishMMO.UnitTests.Weather
 			{
 				SkySchedule.Lightning(timeline, 0, t, Math.Min(1600.0, t + 0.37), Vector3.zero, split, air);
 			}
+			// Gathered patch by patch, so in no particular order: compared in the order they strike.
+			Comparison<LightningStrike> byTime = (a, b) => a.Time != b.Time ? a.Time.CompareTo(b.Time) : a.Seed.CompareTo(b.Seed);
+			whole.Sort(byTime);
+			again.Sort(byTime);
+			split.Sort(byTime);
 			LogAssert.AreEqual(whole.Count, again.Count, "the same window gives the same strikes");
 			LogAssert.AreEqual(whole.Count, split.Count, "frame-sized windows give the same strikes as one big one");
 			for (int i = 0; i < whole.Count; i++)
 			{
 				LogAssert.AreEqual(whole[i].Time, split[i].Time);
 				LogAssert.AreEqual(whole[i].Seed, split[i].Seed);
+				LogAssert.AreEqual(whole[i].Ground, split[i].Ground);
 				LogAssert.IsTrue(whole[i].Time >= 1000.0 && whole[i].Time < 1600.0, "inside the window");
 				float distance = new Vector2(whole[i].Ground.x, whole[i].Ground.z).magnitude;
-				LogAssert.IsTrue(distance >= 249f && distance <= 3001f, $"scene lightning keeps its distance, got {distance}");
+				LogAssert.IsTrue(distance <= SkySchedule.SceneReachMeters + 1f, $"only what the viewer could see, got {distance}");
 			}
-			/* A rate of 1 is a strike about every eight seconds: 600 s of it is around 72.
+			/* A rate of 1 is a strike about every eight seconds over the old 250 m to 3 km ring: 600 s of
+			 * it is around 72 there. The strikes now stand on a world grid of patches and a viewer sees
+			 * every one within 4 km, at the same density, so about 72 × (π·4000²) / (π·(3000² − 250²)),
+			 * some 129.
 			 *
-			 * This asserted ~300 — the old rate of 0.5/s — and was simply never revisited when
-			 * StrikesPerSecondAtFullRate was deliberately dropped to 0.12, because twenty-one
-			 * flashes a minute is three times the busiest real storm and reads as a strobe. The
-			 * calibration is the considered one; this number was the stale one. Keep them together:
-			 * if the constant moves again, so must this. */
-			LogAssert.IsTrue(whole.Count > 50 && whole.Count < 100, $"about 72 strikes in 600 s, got {whole.Count}");
+			 * The ring figure once asserted ~300 — the old rate of 0.5/s — and was never revisited when
+			 * StrikesPerSecondAtFullRate was deliberately dropped to 0.12, because twenty-one flashes a
+			 * minute is three times the busiest real storm and reads as a strobe. Keep them together: if
+			 * the constant moves again, so must this. */
+			LogAssert.IsTrue(whole.Count > 90 && whole.Count < 170, $"about 129 strikes in 600 s, got {whole.Count}");
+		}
+
+		[Test]
+		public void TwoViewers_SeeTheSameStrikes_WhereTheyCanBothSeeThem()
+		{
+			/* Where a strike lands and whether it happens is the patch's and the slot's, not the viewer's:
+			 * it was placed at an angle and distance from each viewer, so two players saw the same flash
+			 * kilometres apart (audit 2026-10-06). */
+			WeatherTimeline timeline = LightningTimeline();
+			WeatherSample air = Thundering(1f);
+			var here = new List<LightningStrike>();
+			var there = new List<LightningStrike>();
+			var a = new Vector3(0f, 0f, 0f);
+			var b = new Vector3(1500f, 0f, 0f);
+			SkySchedule.Lightning(timeline, 0, 0.0, 1200.0, a, here, air);
+			SkySchedule.Lightning(timeline, 0, 0.0, 1200.0, b, there, air);
+			float reach = SkySchedule.SceneReachMeters;
+			int shared = 0;
+			foreach (LightningStrike strike in here)
+			{
+				var at = new Vector2(strike.Ground.x, strike.Ground.z);
+				bool both = (at - new Vector2(b.x, b.z)).magnitude <= reach;
+				int match = there.FindIndex(s => s.Seed == strike.Seed && s.Time == strike.Time);
+				LogAssert.AreEqual(both, match >= 0, $"a strike within both views is in both, one outside the other's is not ({at})");
+				if (match >= 0)
+				{
+					LogAssert.AreEqual(strike.Ground, there[match].Ground, "at the same place");
+					shared++;
+				}
+			}
+			LogAssert.IsTrue(shared > 20, $"and they share plenty, got {shared}");
 		}
 
 		[Test]
@@ -1062,7 +1101,7 @@ namespace FishMMO.UnitTests.Weather
 			timeline.Cells.Add(new StormCell
 			{
 				ID = 3, Kind = StormKind.Thunderstorm, Shape = StormCellShape.Disc, Seed = 7, OriginX = 2000f, OriginZ = 0f,
-				RadiusMeters = 600f, PeakIntensity = 1f, BirthTick = 0, MatureTick = 0, DecayTick = 1000000, DeathTick = 1000001,
+				RadiusMeters = 600f, PeakIntensity = 1f, BirthSeconds = 0 * TickDelta, MatureSeconds = 0 * TickDelta, DecaySeconds = 1000000 * TickDelta, DeathSeconds = 1000001 * TickDelta,
 			});
 			var strikes = new List<LightningStrike>();
 			SkySchedule.Lightning(timeline, 10, 0.0, 1200.0, Vector3.zero, strikes, StormyAir());
@@ -1131,8 +1170,8 @@ namespace FishMMO.UnitTests.Weather
 			timeline.Cells.Add(new StormCell
 			{
 				ID = 1, Kind = kind, Shape = StormPhysics.ShapeOf(kind), OriginX = 0f, OriginZ = 0f,
-				VelocityX = velocity.x, VelocityZ = velocity.y, MotionTick = 10,
-				RadiusMeters = radius, ExtentMeters = extent, PeakIntensity = 1f, BirthTick = 0, MatureTick = 0, DecayTick = 1000000, DeathTick = 1000001,
+				VelocityX = velocity.x, VelocityZ = velocity.y, MotionSeconds = 10 * TickDelta,
+				RadiusMeters = radius, ExtentMeters = extent, PeakIntensity = 1f, BirthSeconds = 0 * TickDelta, MatureSeconds = 0 * TickDelta, DecaySeconds = 1000000 * TickDelta, DeathSeconds = 1000001 * TickDelta,
 			});
 			return timeline;
 		}
@@ -1185,7 +1224,7 @@ namespace FishMMO.UnitTests.Weather
 			timeline.Cells.Add(new StormCell
 			{
 				ID = 1, Kind = StormKind.TropicalCyclone, Shape = StormCellShape.Eyewall, OriginX = 0f, OriginZ = 0f,
-				RadiusMeters = 2000f, ExtentMeters = 350f, PeakIntensity = 1f, BirthTick = 0, MatureTick = 0, DecayTick = 1000000, DeathTick = 1000001,
+				RadiusMeters = 2000f, ExtentMeters = 350f, PeakIntensity = 1f, BirthSeconds = 0 * TickDelta, MatureSeconds = 0 * TickDelta, DecaySeconds = 1000000 * TickDelta, DeathSeconds = 1000001 * TickDelta,
 			});
 			var storms = new StormFrames(StormyAir());
 			LogAssert.IsTrue(WeatherMap.Sample(timeline, storms, Vector3.zero, 10).b > 0.9f, "the eye is clear");

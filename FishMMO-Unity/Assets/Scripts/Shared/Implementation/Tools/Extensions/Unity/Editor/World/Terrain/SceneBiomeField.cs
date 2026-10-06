@@ -52,6 +52,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Half-width of a soft boundary between two biomes, in metres.</summary>
 		public const float DefaultBlendMetres = 48f;
 
+		/// <summary>Humidity, on the climate's −1 … 1 scale, that standing or running water adds to the ground beside it.</summary>
+		/// <remarks>
+		/// What makes a river through a desert a green ribbon: the water table and the spray keep its banks
+		/// wetter than the rain alone does, so the biomes beside it are the wetter ones the climate offers.
+		/// </remarks>
+		public const float RiparianHumidity = 0.3f;
+
+		/// <summary>How far from the water its humidity reaches, metres: it falls off as e^(−d / this).</summary>
+		public const float RiparianMetres = 70f;
+
 		/// <summary>Grid columns, along world X.</summary>
 		public readonly int Width;
 		/// <summary>Grid rows, along world Z.</summary>
@@ -119,10 +129,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// </param>
 		/// <param name="system">The solar system, for starlight and the world's conditions. Null is Earth-like.</param>
 		/// <param name="blendMetres">Half-width of a soft boundary.</param>
+		/// <param name="water">The scene's rivers and lakes: their cells take the Lake and River biomes, and the ground beside them is wetter. Null for none.</param>
 		public static SceneBiomeField Build(SceneGenerationRequest request, TerrainTilePlan plan,
-			Func<float, float, float> sceneAltitude, SolarSystemProfile system, float blendMetres = DefaultBlendMetres)
+			Func<float, float, float> sceneAltitude, SolarSystemProfile system, float blendMetres = DefaultBlendMetres, SceneWater water = null)
 		{
-			return Build(request, plan.WidthMetres, plan.DepthMetres, sceneAltitude, system, blendMetres);
+			return Build(request, plan.WidthMetres, plan.DepthMetres, sceneAltitude, system, blendMetres, water);
 		}
 
 		/// <summary>
@@ -131,8 +142,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <param name="widthMetres">Extent along world X, centred on the scene's origin.</param>
 		/// <param name="depthMetres">Extent along world Z, centred on the scene's origin.</param>
+		/// <param name="water">The scene's rivers and lakes; null for none.</param>
 		public static SceneBiomeField Build(SceneGenerationRequest request, float widthMetres, float depthMetres,
-			Func<float, float, float> sceneAltitude, SolarSystemProfile system, float blendMetres = DefaultBlendMetres)
+			Func<float, float, float> sceneAltitude, SolarSystemProfile system, float blendMetres = DefaultBlendMetres, SceneWater water = null)
 		{
 			if (request == null)
 			{
@@ -161,6 +173,17 @@ namespace FishMMO.Shared.WorldDesign
 
 			var chosen = new BiomeTemplate[width * height];
 			var present = new HashSet<BiomeTemplate>();
+			// Lakes of what this world's air condenses: methane on a Titan, water on a temperate world.
+			BiomeTemplate lakeBiome = null;
+			if (water != null)
+			{
+				FishMMO.Shared.Weather.Condensate condensate = FishMMO.Shared.Weather.PlanetAir.For(system, request.Body).Condensate;
+				bool cryogenic = condensate == FishMMO.Shared.Weather.Condensate.Methane || condensate == FishMMO.Shared.Weather.Condensate.Nitrogen;
+				lakeBiome = (cryogenic ? BiomeRegistry.Get("Methane Lake") : null) ?? BiomeRegistry.Get("Lake");
+			}
+			BiomeTemplate riverBiome = water != null ? BiomeRegistry.Get("River") : null;
+			BiomeTemplate estuaryBiome = water != null ? BiomeRegistry.Get("Estuary") : null;
+			BiomeTemplate saltFlatBiome = water != null ? BiomeRegistry.Get("Salt Flat") : null;
 			for (int z = 0; z < height; z++)
 			{
 				float north = origin.y + (z + 0.5f) * cellMetres;
@@ -169,7 +192,9 @@ namespace FishMMO.Shared.WorldDesign
 					float east = origin.x + (x + 0.5f) * cellMetres;
 					Vector3 direction = AtlasGeometry.SceneToUnit(footprint, east / 1000.0, north / 1000.0, radiusKm).ToVector3();
 					float altitude = sceneAltitude(east, north) / verticalScale;
-					BiomeTemplate biome = field.BiomeAt(direction, altitude, out _);
+					BiomeTemplate biome = water != null && water.Any
+						? WaterBiome(field, water, direction, altitude, east, north, cellMetres, lakeBiome, riverBiome, estuaryBiome, saltFlatBiome)
+						: field.BiomeAt(direction, altitude, out _);
 					chosen[z * width + x] = biome;
 					if (biome != null)
 					{
@@ -199,6 +224,53 @@ namespace FishMMO.Shared.WorldDesign
 			uint seed = request.Body != null ? request.Body.ResolvedTerrainSeed : 1u;
 			seed ^= unchecked((uint)(request.SceneName ?? string.Empty).GetDeterministicHashCode());
 			return new SceneBiomeField(width, height, cellMetres, origin, Mathf.Max(0f, blendMetres), biomes, cells, seed);
+		}
+
+		/// <summary>
+		/// The biome of a cell with water in or near it: the Lake or River biome where most of the cell is
+		/// under one, otherwise the planet's choice with the water's humidity added to the climate it
+		/// chooses from.
+		/// </summary>
+		private static BiomeTemplate WaterBiome(in PlanetClimateField field, SceneWater water, Vector3 direction, float altitude,
+			float east, float north, float cellMetres, BiomeTemplate lakeBiome, BiomeTemplate riverBiome, BiomeTemplate estuaryBiome,
+			BiomeTemplate saltFlatBiome)
+		{
+			int lake = 0, river = 0, playa = 0;
+			float q = cellMetres * 0.25f;
+			for (int k = 0; k < 5; k++)
+			{
+				float x = east + (k == 1 ? -q : k == 2 ? q : 0f), z = north + (k == 3 ? -q : k == 4 ? q : 0f);
+				WaterKind kind = water.KindAt(x, z);
+				lake += kind == WaterKind.Lake ? 1 : 0;
+				river += kind == WaterKind.River ? 1 : 0;
+				playa += kind == WaterKind.Playa ? 1 : 0;
+			}
+			if (saltFlatBiome != null && playa >= 3)
+			{
+				return saltFlatBiome;
+			}
+			if (lakeBiome != null && lake >= 3)
+			{
+				return lakeBiome;
+			}
+			if (river >= 3)
+			{
+				if (estuaryBiome != null && water.IsEstuary(east, north))
+				{
+					return estuaryBiome;
+				}
+				if (riverBiome != null)
+				{
+					return riverBiome;
+				}
+			}
+			PlanetSurfacePoint point = field.At(direction, altitude);
+			float distance = water.DistanceAt(east, north);
+			if (distance < SceneWater.DistanceReachMetres)
+			{
+				point.Climate.Humidity = Mathf.Clamp(point.Climate.Humidity + RiparianHumidity * Mathf.Exp(-distance / RiparianMetres), -1f, 1f);
+			}
+			return field.SelectBiome(direction.normalized, point);
 		}
 
 		/// <summary>

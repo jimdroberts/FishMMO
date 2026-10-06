@@ -78,6 +78,9 @@ namespace FishMMO.Water
 		/// <summary>The gravity the spectrum was built for.</summary>
 		public float Gravity { get; }
 
+		/// <summary>The loop period its frequencies were quantised to: the spectrum repeats exactly in it.</summary>
+		public float LoopPeriod { get; private set; }
+
 		private WaterSpectrum(int capacity, float choppiness, float wind, float heading, float gravity)
 		{
 			kx = new float[capacity];
@@ -107,6 +110,7 @@ namespace FishMMO.Water
 		{
 			int cascades = patchMetres.Length;
 			var spectrum = new WaterSpectrum(cascades * ComponentsPerCascade, choppiness, wind, headingDegrees, gravity);
+			spectrum.LoopPeriod = loopPeriod;
 
 			float radians = headingDegrees * Mathf.Deg2Rad;
 			float windX = Mathf.Sin(radians);

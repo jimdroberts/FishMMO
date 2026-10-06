@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared.Atlas;
@@ -34,10 +35,25 @@ namespace FishMMO.Shared.WorldDesign
 		public static SceneHeightField Shape(SceneGenerationRequest request, TerrainTilePlan plan, SolarSystemProfile system, List<string> notes,
 			out SceneErosionReport erosion)
 		{
+			return Shape(request, plan, system, notes, out erosion, out _);
+		}
+
+		/// <summary>The same, also handing back the rivers and lakes laid into the ground.</summary>
+		/// <param name="water">The scene's rivers and lakes, laid; null when none were (erosion off, underground, no body).</param>
+		/// <remarks>
+		/// The water is worked out from the planet's drainage (<see cref="PlanetDrainage"/>) on the ground
+		/// as the plateaus leave it, laid into it before the rain wears it so the gullies grow toward the
+		/// rivers, and laid again on the worn ground past erosion's edge fade (<see cref="SceneWater"/>).
+		/// </remarks>
+		public static SceneHeightField Shape(SceneGenerationRequest request, TerrainTilePlan plan, SolarSystemProfile system, List<string> notes,
+			out SceneErosionReport erosion, out SceneWater water)
+		{
 			erosion = null;
+			water = null;
 			SceneHeightField field = SceneHeightField.Sample(request, plan);
 			if (!request.Erosion)
 			{
+				// The planet's ground exactly: no rain wears it and no river is laid into it (SceneGenerationRequest.Rivers).
 				return field;
 			}
 			if (request.Layer != null && request.Layer.Underground)
@@ -55,9 +71,50 @@ namespace FishMMO.Shared.WorldDesign
 			settings.Strength *= strength;
 			settings.Landscape.RiverErodibility *= strength;
 			settings.Glacial.CutMetres *= strength;
-			erosion = SceneErosion.Apply(field, process, settings, BaseLevel(request, system), SceneGenerator.SceneSeed(request));
+			SceneWater laid = null;
+			Func<SceneHeightField, float[]> lay = null;
+			if (request.Rivers)
+			{
+				lay = ground =>
+				{
+					// Roots hold a river's banks: bare ground lets it spread wide and shallow.
+					laid = SceneWater.Build(request, system, ground, null, (east, north) => process.ProcessAt(east, north).VegetationCohesion);
+					return laid.Any ? laid.Lay(ground) : null;
+				};
+			}
+			erosion = SceneErosion.Apply(field, process, settings, BaseLevel(request, system), SceneGenerator.SceneSeed(request), lay);
 			notes?.Add(erosion.ToString());
 			UnityEngine.Debug.Log($"[Scene generator] '{request.SceneName}' {erosion}");
+			if (lay != null && laid == null)
+			{
+				// Erosion did not run, so nothing laid the water: it still runs where the planet sends it.
+				lay(field);
+			}
+			if (laid != null)
+			{
+				/* The water again, from the eroded ground. What was laid before the rain only guided it (the
+				 * gullies grow toward those rivers and lakes); erosion has since cut valleys deeper, filled others
+				 * and moved their floors, and a river kept on its old line and levels hangs over a valley cut under
+				 * it, with its boulders in the air, or crosses ground it no longer runs down. Carving only lowers
+				 * the ground, so the old levels could never be put right afterwards: the lines are snapped to the
+				 * eroded floors and their surfaces and beds worked out from them, then cut. */
+				if (laid.Any)
+				{
+					SceneWater final = SceneWater.Build(request, system, field, null, (east, north) => process.ProcessAt(east, north).VegetationCohesion);
+					if (final.Any)
+					{
+						final.Finish(field);
+						laid = final;
+					}
+					else
+					{
+						laid.Finish(field);
+					}
+				}
+				notes?.AddRange(laid.Notes);
+				UnityEngine.Debug.Log($"[Scene generator] '{request.SceneName}' {string.Join(" ", laid.Notes)}");
+				water = laid;
+			}
 			return field;
 		}
 

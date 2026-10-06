@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -188,7 +189,12 @@ namespace FishMMO.Client
 		public static Vector4 Motion { get; private set; }
 
 		private static double driftX, driftZ, bankTurn;
-		private static float lastTime = float.NaN;
+
+		/// <summary>
+		/// The share of the ten-metre wind the banks drift at: the law of the wall at the middle of a
+		/// fog a few metres deep (<see cref="DriftWind"/>), about three quarters.
+		/// </summary>
+		public const float SurfaceShare = 0.75f;
 
 		/// <summary>The layer a frame carries, and how it looks.</summary>
 		public static FogLayerView Of(in WeatherFrame frame)
@@ -256,8 +262,9 @@ namespace FishMMO.Client
 		/// clear air under it. Not the wind of the whole column: this is the surface layer, well under
 		/// any cloud base, where the logarithmic law is the whole of it — a WindProfile whose free wind is
 		/// the law's own at the top of the layer, so the blend it makes toward the free wind adds nothing.
-		/// Integrated frame by frame (<see cref="Publish"/>), so a change of wind changes how fast the fog
-		/// moves and never where it is: this is not a drift worked out from a clock, which would jump.
+		/// What the banks actually drift by is <see cref="SurfaceAirDrift"/> at <see cref="SurfaceShare"/>
+		/// (<see cref="Publish"/>): the integral of the reported wind from the world clock, which every
+		/// player shares, so a change of wind changes how fast the fog moves and never where it is.
 		/// </remarks>
 		/// <param name="windAtTenMetres">The weather's wind, m/s.</param>
 		/// <param name="depth">How deep the fog lies, m.</param>
@@ -333,20 +340,24 @@ namespace FishMMO.Client
 		/// publishes both, with the light on the ground that lights it. Called by
 		/// <see cref="WeatherShaderGlobals.Apply"/>, so a cleared weather clears it.
 		/// </summary>
-		/// <param name="time">The presentation's own clock, s: the world's motion, which stops when the world does.</param>
+		/// <param name="time">The presentation's clock, s (unused: the banks read <see cref="WorldMotion.Seconds"/>, in double).</param>
 		public static void Publish(in WeatherFrame frame, float time)
 		{
 			FogLayerView view = Of(frame);
 			Current = view;
 
-			float dt = float.IsNaN(lastTime) ? 0f : Mathf.Clamp(time - lastTime, 0f, 1f);
-			lastTime = time;
-			Vector2 toward = WeatherShaderGlobals.WindDirection(frame[WeatherChannel.WindHeading]);
-			driftX = Wrap(driftX + toward.x * view.WindSpeed * dt, BankTile);
-			driftZ = Wrap(driftZ + toward.y * view.WindSpeed * dt, BankTile);
-			// Stirred faster in wind: twice as fast by a fresh breeze.
-			double pace = 1.0 + Mathf.Clamp01(view.WindSpeed / 8f);
-			bankTurn = Wrap(bankTurn + dt * pace / BankTurnSeconds, 1.0);
+			/* Carried by the surface air, worked out from the shared motion clock: every player's banks
+			 * stand in the same place and a rejoin finds them where they were. They were integrated
+			 * here frame by frame from each client's own eased wind, so each client's fog stood where
+			 * its own history had left it (audit 2026-10-06). The surface air follows the wind the
+			 * weather reports — still in a calm, running in a gale — at the share a fog's middle feels
+			 * (DriftWind). Stirred faster in wind: twice as fast by a fresh breeze, as before. */
+			SkySystem.AirAt(out float latitude, out WindBelts belts);
+			SurfaceAirDrift.At(WeatherDriver.WorldSeed, latitude, belts, SurfaceShare, WorldMotion.Seconds,
+				out double carriedX, out double carriedZ, out double stirred);
+			driftX = Wrap(carriedX, BankTile);
+			driftZ = Wrap(carriedZ, BankTile);
+			bankTurn = Wrap(stirred / BankTurnSeconds, 1.0);
 			Motion = new Vector4((float)driftX, (float)driftZ, (float)bankTurn, 0f);
 
 			Shader.SetGlobalVector(LayerId, view.Visible ? new Vector4(view.Extinction, view.Depth, view.Lift, view.TopSoftness) : Vector4.zero);

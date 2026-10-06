@@ -20,6 +20,7 @@ namespace FishMMO.Client
 		public const string WeatherLitIndirectShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishWeatherLitIndirect.shader";
 		public const string GrassBladesComputePath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute";
 		public const string GrassBladesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.shader";
+		public const string SeaLifeShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSeaLife.shader";
 		public const string IndirectShaderVariantsPath = "Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants";
 		public const string AudioPath = Folder + "/Weather Audio Profile.asset";
 		public const string ShaderName = "FishMMO/Weather/Precipitation";
@@ -175,6 +176,8 @@ namespace FishMMO.Client
 			// The procedural blade grass: same rule, client only.
 			if (profile.GrassBladesCompute == null) profile.GrassBladesCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(GrassBladesComputePath);
 			if (profile.GrassBladesShader == null) profile.GrassBladesShader = AssetDatabase.LoadAssetAtPath<Shader>(GrassBladesShaderPath);
+			// The sea's background creatures: same rule.
+			if (profile.SeaLifeShader == null) profile.SeaLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaLifeShaderPath);
 			// Generated with the biome art (gitignored, path-derived GUID), so it may not exist yet; assigned once it does.
 			if (profile.IndirectShaderVariants == null) profile.IndirectShaderVariants = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(IndirectShaderVariantsPath);
 			EditorUtility.SetDirty(profile);

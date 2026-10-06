@@ -54,7 +54,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				filled[n] = height[n];
 				int x = n % width, z = n / width;
-				if (x == 0 || z == 0 || x == width - 1 || z == depth - 1 || height[n] < grid.BaseLevel)
+				if (x == 0 || z == 0 || x == width - 1 || z == depth - 1 || height[n] < grid.LevelAt(n))
 				{
 					queued[n] = true;
 					heap.Push(height[n], n);
@@ -100,7 +100,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				int n = order[t];
 				int x = n % width, z = n / width;
-				if (x == 0 || z == 0 || x == width - 1 || z == depth - 1 || height[n] < grid.BaseLevel)
+				if (x == 0 || z == 0 || x == width - 1 || z == depth - 1 || height[n] < grid.LevelAt(n))
 				{
 					continue; // an outlet: its water leaves the grid
 				}

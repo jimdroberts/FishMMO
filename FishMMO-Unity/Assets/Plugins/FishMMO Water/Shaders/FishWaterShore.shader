@@ -288,7 +288,11 @@ Shader "FishMMO/Water/Shore"
                 if (gloss > 0.001)
                 {
                     float3 normalWS = normalize(float3(gradient.x, 1.0, gradient.y));
-                    float2 rippleUV = positionWS.xz / 3.5 + _FishWaterWind.xy * (_FishWaterShoreTime * 0.05);
+                    /* Scrolled with the sea's held wind, a whole number of tiles a window (FishWaterHeldScroll in
+                     * FishWaterInput.hlsl): the eased wind times the clock scrubbed whenever the wind turned. */
+                    float rippleWindow = max(1.0, _FishWaterRippleWindow.w);
+                    float2 rippleUV = positionWS.xz / 3.5
+                        + round(_FishWaterRippleWindow.xy * (0.05 * rippleWindow)) * (_FishWaterRippleWindow.z / rippleWindow);
                     half3 ripple = UnpackNormalScale(SAMPLE_TEXTURE2D(_FishWaterNormalTexture, sampler_FishWaterNormalTexture, rippleUV), 0.8 * film);
                     normalWS = normalize(normalWS + float3(ripple.x, 0.0, ripple.y));
 

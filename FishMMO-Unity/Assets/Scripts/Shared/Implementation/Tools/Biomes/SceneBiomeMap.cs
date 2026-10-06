@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 
 namespace FishMMO.Shared.Biomes
 {
@@ -21,6 +22,8 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 WorldSize = new Vector2(1024f, 1024f);
 		[Tooltip("BiomeTemplate cached-object IDs, row-major from the south-west corner; 0 = no biome.")]
 		[HideInInspector] public int[] BiomeIDs = new int[1];
+		[Tooltip("The solved flow down the scene's rivers, a sub-asset of this map: loaded by clients when they build the water, never by the server.")]
+		public AssetReferenceT<SceneRiverFlow> RiverFlow;
 
 		/// <summary>True when the position's X/Z lies inside the grid's rectangle.</summary>
 		public bool Contains(Vector3 worldPosition)

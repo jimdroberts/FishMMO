@@ -65,6 +65,9 @@ Shader "FishMMO/Water/Underwater"
             float _FishWaterCloudShadow;    // 1 under open sky, 0 under cloud
             float _FishWaterTime;           // the sea's clock: stops when the world's does
             float4 _FishWaterWind;          // xy toward, z speed (m/s)
+            float4 _FishWaterMoteDrift;     // xyz how far the motes have been carried (m, wrapped at their grid's period), w 1 once set (WaterEnvironment)
+            float4 _FishWaterRippleWindow;  // xy the wind's heading held for a window of the shared clock, z seconds into it, w its length (WaterSurface)
+            float _FishWaterHeldWindSpeed;  // the wind's speed held for that window, m/s
             float _FishWaterGravity;
 
             CBUFFER_START(UnityPerMaterial)
@@ -158,20 +161,31 @@ Shader "FishMMO/Water/Underwater"
              */
             half MoteCover(float3 origin, float3 direction, float limit, float pixelAngle, float extinction)
             {
-                float2 downwind = _FishWaterWind.xy;
-                float3 current = float3(downwind.x, 0.0, downwind.y) * (0.008 * _FishWaterWind.z)
-                    + float3(0.0, -0.012, 0.0);
+                /* Carried and swayed on the shared clock, the same for every player. The drift is the
+                 * current's whole travel (WaterEnvironment works it out from the clock, as the fog banks'
+                 * is), wrapped where the grid's hash repeats; the sway runs on the wind held for a window
+                 * of the clock, each pace snapped to whole turns in the window. Both were the eased wind
+                 * times the sea's clock, which slid every mote whenever the wind changed. */
+                float2 downwind = _FishWaterRippleWindow.xy;
+                float3 drift = _FishWaterMoteDrift.w > 0.5 ? _FishWaterMoteDrift.xyz : float3(0.0, 0.0, 0.0);
 
                 float gravity = max(0.05, _FishWaterGravity);
+                float heldWind = max(0.5, _FishWaterHeldWindSpeed);
+                float window = max(1.0, _FishWaterRippleWindow.w);
+                float into = _FishWaterRippleWindow.z;
+                float omega = 0.877 * gravity / heldWind;
+                float paceA = round(omega * window / 6.2831853) * (6.2831853 / window);
+                float paceB = round(1.23 * omega * window / 6.2831853) * (6.2831853 / window);
+                // How far the swell reaches down, from the wind as it is: a size, not a pace, so easing it moves nothing.
                 float wind = max(0.5, _FishWaterWind.z);
-                float omega = 0.877 * gravity / wind;
+                float reachOmega = 0.877 * gravity / wind;
                 float orbit = 0.0735 * wind * wind / gravity                          // 0.35 of the significant height
-                    * exp(-(omega * omega / gravity) * max(0.0, _FishWaterLevel - origin.y));
-                float2 turn = float2(cos(omega * _FishWaterTime) + 0.5 * cos(1.23 * omega * _FishWaterTime + 1.7),
-                    sin(omega * _FishWaterTime) + 0.5 * sin(1.23 * omega * _FishWaterTime + 1.7)) * (orbit / 1.5);
+                    * exp(-(reachOmega * reachOmega / gravity) * max(0.0, _FishWaterLevel - origin.y));
+                float2 turn = float2(cos(paceA * into) + 0.5 * cos(paceB * into + 1.7),
+                    sin(paceA * into) + 0.5 * sin(paceB * into + 1.7)) * (orbit / 1.5);
                 float3 sway = float3(downwind.x * turn.x, turn.y, downwind.y * turn.x);
 
-                float3 start = (origin - current * _FishWaterTime - sway) / MoteCell;
+                float3 start = (origin - drift - sway) / MoteCell;
                 float end = limit / MoteCell;
 
                 float3 stride = float3(direction.x >= 0.0 ? 1.0 : -1.0, direction.y >= 0.0 ? 1.0 : -1.0,
@@ -343,6 +357,17 @@ Shader "FishMMO/Water/Underwater"
                         + sunLight * phase * shade * exp(-beamDimming * depthHere);
                     motes = lightHere * (cover * 0.45 * _Motes);
                 }
+
+                /* What is behind was lit by light that came DOWN through the water to it, and the fog above only
+                 * counts the water between it and the eye. Without this a rock twenty metres down, near the camera,
+                 * was as sunlit as one on the beach (Jim, 2026-10-06: "the sky light glow is visible on objects under
+                 * water"). Its light, the sky's and the sun's, dimmed by the depth it stands at, as the water's own
+                 * inscatter is; one number, since the blend carries one (the water's colour is in the inscatter).
+                 * Nothing past the surface: the ray left the water before it reached that. */
+                bool reachedUnderwater = sceneDistance <= exitDistance;
+                float behindDepth = reachedUnderwater ? max(0.0, _FishWaterLevel - positionWS.y) : 0.0;
+                half3 behindLight = exp(-0.5 * (dimming + beamDimming) * behindDepth);
+                transmittance *= dot(behindLight, half3(0.2126, 0.7152, 0.0722));
 
                 return half4(inscatter + motes, transmittance);
             }

@@ -23,7 +23,8 @@ namespace FishMMO.UnitTests
 		[SetUp]
 		public void OpenScene()
 		{
-			scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+			// Single, like the repo's other scene fixtures: the runner's own untitled scene is dirty, so an additive one is refused.
+			scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 		}
 
 		[TearDown]
@@ -37,7 +38,7 @@ namespace FishMMO.UnitTests
 				}
 			}
 			created.Clear();
-			if (scene.IsValid())
+			if (scene.IsValid() && SceneManager.sceneCount > 1)
 			{
 				EditorSceneManager.CloseScene(scene, true);
 			}

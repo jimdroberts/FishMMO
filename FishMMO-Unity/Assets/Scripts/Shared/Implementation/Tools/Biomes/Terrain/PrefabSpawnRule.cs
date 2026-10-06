@@ -73,6 +73,16 @@ namespace FishMMO.Shared.Biomes
 	/// ignores it; its swathes are <see cref="carpetClumpMetres"/>.
 	/// </para>
 	/// <para>
+	/// <b>Forests.</b> Groups are tens of metres; woods are hundreds. A tree rule with
+	/// <see cref="forestMetres"/> set stands in stands: a scene-wide field (one for every forest
+	/// rule, whatever its biome) is cut at the rule's <see cref="forestCover"/>, so that share of
+	/// the ground is wood with a feathered edge and the rest is clearing and open ground holding
+	/// only <see cref="forestOpen"/>'s lone trees. Rules share the field, so a biome's species stand
+	/// in the same woods and a sparse neighbour's copses are the hearts of a dense one's forest. The
+	/// density is still the average; a forest rule's spacing is shared with every other forest rule
+	/// and scales with each tree's crown, so species do not stand inside one another.
+	/// </para>
+	/// <para>
 	/// <b>The spec fingerprint.</b> A rule the Biome Art authoring tool created carries a hidden hash
 	/// of the values it wrote. While the rule still hashes to it, nobody has tuned it, and a later run
 	/// may bring it up to date with the spec; once anything differs it is somebody's work and the tool
@@ -115,7 +125,7 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 50f)] public float densityPer100m2 = 0.5f;
 		[Tooltip("Scattered only (a carpet is not counted per instance). Cap per terrain tile, on top of the tile's own budget. 0 = no cap of the rule's own — right for grass, which at one-metre detail cells covers far more than 10,000 cells of a tile; keep a cap for trees.")]
 		[Min(0)] public int maxPerChunk = 10000;
-		[Tooltip("Scattered only. Minimum spacing in meters between spawned prefabs.")]
+		[Tooltip("Scattered only. Minimum spacing in meters between spawned prefabs. Forest rules: between two trees of average crown and width, kept from every forest rule's trees (the mean of the two spacings) and scaled per tree by its own crown and width.")]
 		[Range(0f, 50f)] public float minSpacing = 2f;
 
 		[Header("Texture Weight")]
@@ -160,11 +170,29 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Trees only (Unity sizes details itself). How much larger instances stand toward a group's heart and smaller at its fringe, as a share of the scale range.")]
 		[Range(0f, 1f)] public float clusterScaleBias = 0.5f;
 
+		[Header("Forest")]
+		[Tooltip("Trees only. Size in metres of the stands the rule's trees gather into — woods and copses with clearings between, from a scene-wide field every forest rule shares, so the species of a biome (and of its neighbours) stand in the same woods. 0 = no stands.")]
+		[Range(0f, 4000f)] public float forestMetres = 0f;
+		[Tooltip("Share of the rule's ground under stands. The rest is clearings and open ground, which only lone trees reach (Forest Open). The rule's density stays the average over all of it, so the stands are that much denser.")]
+		[Range(0.01f, 1f)] public float forestCover = 0.6f;
+		[Tooltip("Width of a stand's feathered edge, as a share of the field's spread: 0 is a hard line, 0.3 a woodland edge thinning over tens of metres, 1 a gradual fade.")]
+		[Range(0f, 1f)] public float forestEdge = 0.3f;
+		[Tooltip("Density in the open, between stands, as a share of the density inside one: the lone trees in a field.")]
+		[Range(0f, 1f)] public float forestOpen = 0.05f;
+		[Tooltip("How strongly each forest rule (and each species of a rule with several) gathers into its own patches inside the shared stands, instead of mixing tree by tree. 0 = evenly mixed.")]
+		[Range(0f, 1f)] public float forestMix = 0.5f;
+		[Tooltip("How much taller and narrower trees grow inside a stand, and shorter and broader in the open and at its edge, as a share of the scale ranges.")]
+		[Range(0f, 1f)] public float forestScaleBias = 0.3f;
+
 		[Header("Ground Sink")]
 		[Tooltip("Metres each instance is pushed into the ground, drawn per instance between min and max, so it reads as bedded rather than set down. Trees: applied by the scatter. Details: carried to the vegetation material, which applies it (Unity has no per-instance detail height).")]
 		public Vector2 sinkRange = Vector2.zero;
 		[Tooltip("Extra sink on a slope, as a share of footprint radius × tan(slope): at 1 the downhill edge of the footprint meets the ground. The radius is the prefab's horizontal bounds times the instance's width scale. Slopes past 60° count as 60°.")]
 		[Range(0f, 1f)] public float sinkSlopeFactor = 0f;
+
+		[Header("Depth")]
+		[Tooltip("Rules on a biome's submerged (lakebed) layer only. Metres below mean sea level the rule grows between: x the shallowest, y the deepest; 0 for either end leaves that end open. The rule thins out over the outer fifth of the range at each closed end, as light fades for kelp and seagrass. (0, 0) = no depth band; the shore gate still keeps it under water at every tide.")]
+		public Vector2 depthRange = Vector2.zero;
 
 		[SerializeField, HideInInspector]
 		private string specFingerprint = string.Empty;
@@ -196,6 +224,9 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>True when a point-sampled rule gathers into groups (<see cref="clusterMetres"/>); a carpet has its own swathes instead.</summary>
 		public bool IsClustered => !IsCarpet && clusterMetres > 0f && clusterBackground < 1f;
+
+		/// <summary>True when a tree rule stands in woods and copses (<see cref="forestMetres"/>); detail rules never do.</summary>
+		public bool IsForested => spawnChannel == PrefabSpawnChannel.TreeInstance && forestMetres > 0f;
 
 		public bool HasValidPrefabs()
 		{

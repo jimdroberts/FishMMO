@@ -566,7 +566,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 				if (timeline.Cells.Count > 0)
 				{
 					StormCell cell = timeline.Cells[timeline.Cells.Count - 1];
-					Vector2 centre = cell.CentreAt((uint)controller.Tick, timeline.TickDelta);
+					Vector2 centre = timeline.CentreOf(cell, controller.PreciseTick);
 					Vector3 from = controller.Camera.transform.position;
 					float yaw = Mathf.Atan2(centre.x - from.x, centre.y - from.z) * Mathf.Rad2Deg;
 					controller.Camera.transform.rotation = Quaternion.Euler(stage.CameraEuler.x, yaw, 0f);
@@ -712,7 +712,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			if (controller.Timeline.Cells.Count > 0)
 			{
 				StormCell cell = controller.Timeline.Cells[0];
-				Vector2 centre = cell.CentreAt((uint)controller.Tick, controller.Timeline.TickDelta);
+				Vector2 centre = controller.Timeline.CentreOf(cell, controller.PreciseTick);
 				Color heart = WeatherMap.Sample(controller.Timeline, new StormFrames(controller.LastSample), new Vector3(centre.x, 0f, centre.y), (uint)controller.Tick);
 				storms = $"; cell {cell.Kind} {cell.Shape} r {cell.RadiusMeters:0} m x {cell.ExtentMeters:0} m at {Vector2.Distance(centre, new Vector2(controller.Camera.transform.position.x, controller.Camera.transform.position.z)):0} m, map heart r {heart.r:0.00} g {heart.g:0.00} b {heart.b:0.00} a {heart.a:0.00}";
 				SkySystem skyNow = SkySystem.Instance;

@@ -86,6 +86,16 @@ namespace KinematicCharacterController
 		/// </summary>
 		public float TimeSinceJumpRequested;
 
+		/// <summary>
+		/// Whether the character is swimming: no ground solving, no gravity, floating at the surface or diving.
+		/// </summary>
+		public bool IsSwimming;
+
+		/// <summary>
+		/// Ticks left of a climb out of the water onto a ledge; zero when not climbing.
+		/// </summary>
+		public byte ClimbOutTicks;
+
 		private uint tick;
 
 		/// <inheritdoc/>

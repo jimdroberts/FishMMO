@@ -49,10 +49,19 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Groups.</b> Everything point-sampled gathers (<see cref="Grouped"/>): flowers in patches of
 	/// a few metres, shrubs and ferns in clumps, stones and pebbles in scatters round a few larger
-	/// ones, boulders in piles, formations in outcrop fields, sparse trees in groves and dense forest
-	/// into thickets and glades. The density in the table stays the average; grouping only moves it.
-	/// Grouped helpers also vary size plant by plant and stone by stone (a detail's noise spread of
-	/// 1.2–2.5 rather than swathes of one size) and pack closer (spacing is how tight a group may be).
+	/// ones, boulders in piles, formations in outcrop fields, and trees that never close into a wood
+	/// (saguaros, beach palms, snags) in groves. The density in the table stays the average; grouping
+	/// only moves it. Grouped helpers also vary size plant by plant and stone by stone (a detail's noise
+	/// spread of 1.2–2.5 rather than swathes of one size) and pack closer (spacing is how tight a group
+	/// may be).
+	/// </para>
+	/// <para>
+	/// <b>Woods.</b> Every other tree rule is a <see cref="Stand"/>: the biome says how much of its
+	/// ground is wood, how closed the canopy is inside, how many lone trees stand in the open and how
+	/// stunted the trees are, and spacing and density follow from the species' real crowns. A taiga is
+	/// four fifths closed spruce-and-pine forest with clearings; a woodland half; a grassland a tenth, in
+	/// copses, with a few parkland oaks between. Every wood cuts one scene-wide stand field, so the
+	/// grassland's copses are the hearts of the forest next to it (<see cref="TerrainScatter.StandField"/>).
 	/// </para>
 	/// <para>
 	/// <b>Earlier versions.</b> When a helper's output changes, the old output is kept on the new
@@ -61,7 +70,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Submerged.</b> Each biome names a lakebed and a riverbed family; the palette paints the
-	/// lakebed under the sea, else the riverbed.
+	/// lakebed under the sea, else the riverbed. Under the sea the lakebed is all there is — the main
+	/// and detail layers give way to it below the shore — so what lives on the sea floor rides on it
+	/// (<see cref="Entry.Bed"/>), each rule within its own band of depth (<see cref="Scatter.Depth"/>):
+	/// kelp and seaweed where light reaches, sponges and sea fans below, tube worms at a vent.
 	/// </para>
 	/// </remarks>
 	public static class BiomeArtSpec
@@ -130,6 +142,23 @@ namespace FishMMO.Shared.WorldDesign
 			public float ClusterBackground = 0.2f;
 			/// <summary><see cref="PrefabSpawnRule.clusterScaleBias"/>.</summary>
 			public float ClusterScaleBias = 0.5f;
+			/// <summary>Stand size, metres; 0 = no stands (<see cref="PrefabSpawnRule.forestMetres"/>).</summary>
+			public float ForestMetres;
+			/// <summary><see cref="PrefabSpawnRule.forestCover"/>.</summary>
+			public float ForestCover = 0.6f;
+			/// <summary><see cref="PrefabSpawnRule.forestEdge"/>.</summary>
+			public float ForestEdge = 0.3f;
+			/// <summary><see cref="PrefabSpawnRule.forestOpen"/>.</summary>
+			public float ForestOpen = 0.05f;
+			/// <summary><see cref="PrefabSpawnRule.forestMix"/>.</summary>
+			public float ForestMix = 0.5f;
+			/// <summary><see cref="PrefabSpawnRule.forestScaleBias"/>.</summary>
+			public float ForestScaleBias = 0.3f;
+			/// <summary>
+			/// Sea-floor rules (<see cref="Entry.Bed"/>): metres below mean sea level the rule grows between,
+			/// x the shallowest and y the deepest, 0 leaving that end open (<see cref="PrefabSpawnRule.depthRange"/>).
+			/// </summary>
+			public Vector2 Depth;
 			/// <summary>
 			/// What earlier versions of the spec wrote for this rule, so the authoring tool can tell a
 			/// rule an older run wrote and nobody touched from one somebody tuned.
@@ -154,6 +183,35 @@ namespace FishMMO.Shared.WorldDesign
 			public Cliff[] Cliffs = new Cliff[0];
 			public string Lakebed;
 			public string Riverbed;
+			/// <summary>
+			/// What lives on the sea floor: rules on the biome's lakebed layer (family <see cref="Lakebed"/>),
+			/// the only layer painted under the sea. Null for none.
+			/// </summary>
+			public Layer Bed;
+			/// <summary>
+			/// Rules an earlier spec wrote on a slot (<c>main</c>, <c>detail/N</c>, <c>lakebed</c>) that it no
+			/// longer does — kelp the spec once put on an ocean's main layer, never painted under water, so
+			/// it only ever grew on the odd island — for the authoring tool to switch off where untouched.
+			/// </summary>
+			public readonly List<(string slot, string rule)> Retired = new List<(string slot, string rule)>();
+
+			/// <summary>Sets what lives on the sea floor (<see cref="Bed"/>).</summary>
+			public Entry Under(params Scatter[] scatter)
+			{
+				Bed = new Layer { Family = Lakebed };
+				Bed.Scatter.AddRange(scatter);
+				return this;
+			}
+
+			/// <summary>Records rules the spec moved off a slot (<see cref="Retired"/>).</summary>
+			public Entry Moved(string slot, params string[] rules)
+			{
+				foreach (string rule in rules)
+				{
+					Retired.Add((slot, rule));
+				}
+				return this;
+			}
 
 			/// <summary>Every family the entry uses.</summary>
 			public IEnumerable<string> Families()
@@ -170,6 +228,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (Main != null) foreach (Scatter s in Main.Scatter) yield return (Main, s);
 				foreach (Layer d in Details) foreach (Scatter s in d.Scatter) yield return (d, s);
+				if (Bed != null) foreach (Scatter s in Bed.Scatter) yield return (Bed, s);
 			}
 		}
 
@@ -206,6 +265,23 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>Detail sink for grass and plants, applied by the vegetation material.</summary>
 		private static readonly Vector2 DetailSink = new Vector2(0.02f, 0.05f);
+
+		/// <summary>
+		/// How far an upright plant is pushed into the ground, by its kind: one grass-sized range for all of
+		/// them left a fern's or a reed bed's stems standing on the surface. (Slopes are handled where the plant
+		/// is placed, by its foot's reach: TerrainDetailField.Place.)
+		/// </summary>
+		private static Vector2 PlantSink(string detail)
+		{
+			if (detail.StartsWith("Debris", StringComparison.Ordinal)) return new Vector2(0f, 0.01f);
+			if (detail == "Kelp" || detail == "Coral" || detail == "BrainCoral" || detail == "Sponge" || detail == "TubeWorms") return new Vector2(0.05f, 0.1f);
+			if (detail == "TableCoral" || detail == "SeaFan") return new Vector2(0.03f, 0.06f);
+			if (detail == "Starfish" || detail == "Shells") return new Vector2(0f, 0.008f);
+			if (detail == "Urchin" || detail == "Anemone") return new Vector2(0.01f, 0.025f);
+			if (detail.StartsWith("Fern", StringComparison.Ordinal) || detail == "Reeds" || detail.Contains("Cactus")) return new Vector2(0.04f, 0.08f);
+			if (detail.StartsWith("Shrub", StringComparison.Ordinal)) return new Vector2(0.03f, 0.06f);
+			return DetailSink;
+		}
 
 		/// <summary>
 		/// Grass and other ground cover: a carpet on the detail channel, following the ground, on
@@ -260,21 +336,53 @@ namespace FishMMO.Shared.WorldDesign
 			Scatter s = GroundCover(detail, density, coverage, slopeMax);
 			s.AlignToNormal = false;
 			s.MinWeight = 0.45f;
-			s.Sink = DetailSink;
-			// Flowers in small patches, shrubs and ferns in clumps, reeds, kelp and coral in beds.
+			s.Sink = PlantSink(detail);
+			// Flowers in small patches, shrubs and ferns in clumps, reeds, kelp and coral in beds; on the sea
+			// floor corals in heads across a reef, urchins and anemones in little colonies, starfish few and apart.
 			float metres = detail.StartsWith("Flowers", StringComparison.Ordinal) ? 3f
 				: detail.StartsWith("Shrub", StringComparison.Ordinal) ? 5f
 				: detail == "Reeds" || detail == "Kelp" ? 6f
 				: detail == "Coral" ? 8f
+				: detail == "BrainCoral" || detail == "TableCoral" ? 10f
+				: detail == "SeaFan" || detail == "Sponge" || detail == "Starfish" ? 6f
+				: detail == "Urchin" || detail == "Anemone" || detail == "Shells" || detail == "TubeWorms" ? 3f
 				: 4f;
 			float background = detail.StartsWith("Flowers", StringComparison.Ordinal) ? 0.15f : 0.25f;
 			// Cells per group; each holds a few plants.
 			float size = detail.StartsWith("Flowers", StringComparison.Ordinal) ? 10f
 				: detail.StartsWith("Shrub", StringComparison.Ordinal) ? 6f
 				: detail == "Reeds" ? 20f
-				: detail == "Kelp" || detail == "Coral" ? 12f
+				: detail == "Kelp" || detail == "Coral" || detail == "TubeWorms" ? 12f
+				: detail == "Urchin" || detail == "Seaweed" ? 10f
+				: detail == "Starfish" ? 3f
+				: detail == "BrainCoral" || detail == "TableCoral" || detail == "SeaFan" || detail == "Sponge" || detail == "Anemone" ? 5f
 				: 8f;
 			return Grouped(s, metres, background, size, regroup: g => g.NoiseSpread = 1.2f);
+		}
+
+		/// <summary>
+		/// Sea-floor life (<see cref="Entry.Bed"/>): a counted thing, grouped as <see cref="Plants"/> groups it,
+		/// within a band of depth below mean sea level (0 for an open end). Things that lie on the bed (starfish,
+		/// shells, urchins) lie with its slope; anything that grows stands up.
+		/// </summary>
+		private static Scatter Sea(string detail, float density, float shallowest, float deepest, int coverage = 180, float slopeMax = 40f)
+		{
+			Scatter s = Plants(detail, density, coverage, slopeMax);
+			bool lying = detail == "Starfish" || detail == "Shells" || detail == "Urchin";
+			AndEarlier(s, r =>
+			{
+				r.Depth = new Vector2(shallowest, deepest);
+				r.AlignToNormal = lying;
+			});
+			return s;
+		}
+
+		/// <summary>Small stones on the sea floor: as <see cref="Stones"/>, within a band of depth.</summary>
+		private static Scatter SeaStones(string prefab, float density, float shallowest, float deepest)
+		{
+			Scatter s = Stones(prefab, density);
+			AndEarlier(s, r => r.Depth = new Vector2(shallowest, deepest));
+			return s;
 		}
 
 		/// <summary>Small stones: detail channel, any slope, lying with the ground.</summary>
@@ -303,8 +411,12 @@ namespace FishMMO.Shared.WorldDesign
 			});
 		}
 
-		/// <summary>Trees: tree channel (colliding prefabs), upright, spaced, off steep ground.</summary>
-		private static Scatter Trees(float density, float spacing, float slopeMax, params string[] prefabs)
+		/// <summary>
+		/// What <see cref="Trees"/> wrote until 2026-10-04, verbatim (the earlier versions it remembers
+		/// included): kept so a rule an older run wrote, and nobody has touched, is still recognised.
+		/// Never planted from directly.
+		/// </summary>
+		private static Scatter TreesBefore(float density, float spacing, float slopeMax, params string[] prefabs)
 		{
 			var names = new string[prefabs.Length];
 			for (int i = 0; i < prefabs.Length; i++)
@@ -338,6 +450,163 @@ namespace FishMMO.Shared.WorldDesign
 			 * heart, and at the forest's own spacing that heart could hold barely more than the average,
 			 * so a thicket packs closer (crowns touching) than the forest round it. */
 			return Grouped(t, 18f, 0.4f, 25f, 0.3f, g => g.Spacing = Mathf.Min(spacing, Mathf.Max(4f, spacing * 0.6f)));
+		}
+
+		/// <summary>Per-instance tree sizes: natural variation of about ±15% across and ±20% in height round the species' mature size.</summary>
+		private static readonly Vector2 TreeWidthScale = new Vector2(0.85f, 1.15f);
+		private static readonly Vector2 TreeHeightScale = new Vector2(0.8f, 1.2f);
+
+		/// <summary>
+		/// Size of the largest stands, metres: woods of several hundred metres to a kilometre or so, with
+		/// clearings and copses down to an eighth of it. One size for every wood on purpose — forest rules
+		/// cut one shared field, and only rules of one size cut the same one, so a forest's stands and a
+		/// neighbouring grassland's copses line up (<see cref="TerrainScatter.StandField"/>).
+		/// </summary>
+		private const float StandMetres = 520f;
+
+		/// <summary>
+		/// A stand's spacing over its species' crown radius. Crowns in a closed stand interlock a little —
+		/// trunks a bit under a crown's diameter apart — so 1.4 radii: with the random packing a scatter
+		/// reaches, the crowns then cover about two thirds of the ground inside a stand, against a third
+		/// at two radii.
+		/// </summary>
+		private const float CanopySpacing = 1.4f;
+
+		/// <summary>
+		/// Candidates per spacing² inside a stand at closure 1. A scatter is random sequential packing: a
+		/// candidate too close to a tree is refused, not moved, so asking for more never packs past
+		/// ~0.7 / spacing². Measured on the scatter's 2 m cells, 1.25 per spacing² places ~0.6 of that
+		/// most (≈0.42 / spacing², half the asked), 0.5 ~0.42 of it, 3 only ~0.77 for over twice the asks.
+		/// </summary>
+		private const float StandPressure = 1.25f;
+
+		/// <summary>What an older spec wrote for a tree rule — its density and spacing — so the rule is still recognised (<see cref="TreesBefore"/>).</summary>
+		private readonly struct Before
+		{
+			public readonly float Density, Spacing;
+			public Before(float density, float spacing)
+			{
+				Density = density;
+				Spacing = spacing;
+			}
+		}
+
+		private static Before Was(float density, float spacing) => new Before(density, spacing);
+
+		/// <summary>How a biome's trees stand in woods (<see cref="Stand"/>).</summary>
+		private readonly struct Wood
+		{
+			/// <summary>Share of the rule's ground under stands.</summary>
+			public readonly float Cover;
+			/// <summary>How closed a stand's canopy is, 0–1: 1 crowns touching, 0.5 an open wood.</summary>
+			public readonly float Closure;
+			/// <summary>Density in the open as a share of the density inside a stand: lone trees.</summary>
+			public readonly float Open;
+			/// <summary>The species' size here against its mature size (stunted at a tree line, on a bog).</summary>
+			public readonly float Scale;
+			/// <summary>Size of the largest stands, metres.</summary>
+			public readonly float Metres;
+
+			public Wood(float cover, float closure, float open, float scale, float metres)
+			{
+				Cover = cover;
+				Closure = closure;
+				Open = open;
+				Scale = scale;
+				Metres = metres;
+			}
+		}
+
+		private static Wood W(float cover, float closure, float open = 0.02f, float scale = 1f, float metres = StandMetres) => new Wood(cover, closure, open, scale, metres);
+
+		/// <summary>
+		/// Trees in ones and small groves: saguaros, palms along a beach, snags on a wasteland — things that
+		/// never close into a wood. Grouped as before (<see cref="Grouped"/>), at the realistic size spread.
+		/// </summary>
+		private static Scatter Trees(float density, float spacing, float slopeMax, params string[] prefabs)
+		{
+			Scatter before = TreesBefore(density, spacing, slopeMax, prefabs);
+			Scatter s = before.Clone();
+			s.WidthScale = TreeWidthScale;
+			s.HeightScale = TreeHeightScale;
+			s.Earlier.AddRange(before.Earlier);
+			s.Earlier.Add(before);
+			return s;
+		}
+
+		/// <summary>
+		/// Trees that stand in woods: a stand field (<see cref="PrefabSpawnRule.forestMetres"/>) cut at the
+		/// wood's cover, spacing from the species' crowns, and a density that closes the canopy inside a
+		/// stand as far as the wood's closure asks.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Spacing from crowns.</b> <see cref="CanopySpacing"/> times the mean crown radius of the rule's
+		/// species (<see cref="ProceduralArtCatalogue.CrownRadius"/>) at the wood's scale: 4.3 m for spruce,
+		/// 5.5 for pine, 10 for oak, 12.6 for a rainforest giant. Spacing used to be a number per biome,
+		/// 4–6 m for most forests, which with real-sized crowns would put three oaks inside one another.
+		/// The scatter scales it again per tree by its own crown and width (the shared canopy).
+		/// </para>
+		/// <para>
+		/// <b>Density from closure.</b> Inside a stand the rule asks for <c>closure × </c><see cref="StandPressure"/>
+		/// candidates per spacing²; the rule's density is that times the share the stands and the open
+		/// ground take of the whole, <c>open + (1 − open) × cover</c>, because the density is the average
+		/// over the rule's ground and the scatter gathers it back into the stands. So the table says what a
+		/// biome's woods are like — how much of it is wood, how closed — and the numbers follow from the trees.
+		/// </para>
+		/// <para>
+		/// <b>Lone trees are counted standing.</b> The wood's open share is lone trees against the trees
+		/// that actually stand in a stand, but the rule's <see cref="PrefabSpawnRule.forestOpen"/> scales
+		/// what is asked for, and inside a stand most asks are refused by the spacing while in the open
+		/// almost none are. Measured, a share of the asks kept is about <c>1 / (1 + 1.5 × pressure)</c>
+		/// (pressure being asks per spacing², closure × <see cref="StandPressure"/>): 0.35 for a closed
+		/// stand. Uncorrected, a taiga asking for 4% stood a lone spruce every 17 m in its clearings
+		/// (15% of the stand's density); so the rule's open share is the wood's times that.
+		/// </para>
+		/// <para>
+		/// <b>No groups inside.</b> A stand's thickets and glades come from the field's own small octaves and
+		/// from the ground layers the rule is gated on, and its species patches from <see cref="PrefabSpawnRule.forestMix"/>;
+		/// the 20–50 m groups the rule had before (<see cref="Grouped"/>) only fought the closed canopy, so
+		/// they are off. The rule keeps its name, so the authoring tool updates it in place.
+		/// </para>
+		/// </remarks>
+		private static Scatter Stand(Before was, float slopeMax, Wood wood, params string[] species)
+		{
+			Scatter before = TreesBefore(was.Density, was.Spacing, slopeMax, species);
+			Scatter s = before.Clone();
+			float crown = 0f;
+			foreach (string name in species)
+			{
+				if (ProceduralArtCatalogue.TryTree(name, out TreeSpecies t))
+				{
+					crown += ProceduralArtCatalogue.CrownRadius(in t);
+				}
+			}
+			crown = crown / Mathf.Max(1, species.Length) * wood.Scale;
+			s.Spacing = Mathf.Clamp(Mathf.Round(crown * CanopySpacing * 10f) / 10f, 1f, 50f);
+			float pressure = wood.Closure * StandPressure;
+			float inside = pressure * 100f / (s.Spacing * s.Spacing);
+			// The open share is of what stands, not of what is asked: see remarks.
+			float open = Mathf.Clamp01(wood.Open / (1f + 1.5f * pressure));
+			float share = open + (1f - open) * wood.Cover;
+			s.Density = Mathf.Clamp(Mathf.Round(inside * share * 1000f) / 1000f, 0.001f, 50f);
+			s.WidthScale = TreeWidthScale * wood.Scale;
+			s.HeightScale = TreeHeightScale * wood.Scale;
+			// No groups: a stand is the gathering (see remarks). Back to the rule's defaults, which a rule without a radius ignores.
+			s.ClusterMetres = 0f;
+			s.ClusterSize = 0f;
+			s.ClusterSpacing = 4f;
+			s.ClusterBackground = 0.2f;
+			s.ClusterScaleBias = 0.5f;
+			s.ForestMetres = wood.Metres;
+			s.ForestCover = Mathf.Clamp(wood.Cover, 0.01f, 1f);
+			s.ForestOpen = open;
+			s.ForestEdge = 0.3f;
+			s.ForestMix = 0.5f;
+			s.ForestScaleBias = 0.3f;
+			s.Earlier.AddRange(before.Earlier);
+			s.Earlier.Add(before);
+			return s;
 		}
 
 		/// <summary>Boulders: tree channel (capsule colliders), bedded into the slope.</summary>
@@ -519,33 +788,58 @@ namespace FishMMO.Shared.WorldDesign
 			return new[]
 			{
 				// ── Under the sea (tiers 0–2) ──
-				E("Abyssal Plain", L(Ground.Silt), Ds(D(Ground.Mud, 96f)), C(Ground.Basalt), Ground.Silt, Ground.Silt),
-				E("Abyss", L(Ground.Silt), Ds(D(Ground.Basalt, 64f, 3f, 20f, 90f)), C(Ground.Basalt, 35f), Ground.Silt, Ground.Silt),
-				E("Deep Ocean", L(Ground.Silt), Ds(D(Ground.Mud, 128f)), C(Ground.Basalt), Ground.Silt, Ground.Silt),
-				E("Ocean", L(Ground.Sand, Plants("Kelp", 2f, 128)), Ds(D(Ground.Silt, 64f), D(Ground.Pebbles, 32f, 3f)), C(Ground.Rock), Ground.Sand, Ground.Sand),
-				E("Seamount", L(Ground.Basalt), Ds(D(Ground.Silt, 48f, 2f, 0f, 20f, Plants("Kelp", 4f, 160))), C(Ground.Basalt), Ground.Silt, Ground.Silt),
-				E("Underwater Canyon", L(Ground.Silt), Ds(D(Ground.Rock, 48f, 3f, 25f, 90f), D(Ground.Gravel, 64f)), C(Ground.CliffRock, 38f), Ground.Silt, Ground.Silt),
-				E("Coastal Water", L(Ground.Sand), Ds(D(Ground.Pebbles, 32f, 3f, -1f, -1f, Plants("Kelp", 8f, 200), Stones(SmallRocks("Grey"), 3f)), D(Ground.Silt, 64f)),
-					C(Ground.Rock), Ground.Sand, Ground.Pebbles),
-				E("Coral Reef", L(Ground.Coral, Plants("Coral", 25f, 200), Plants("Kelp", 2f, 96)), Ds(D(Ground.SandBeach, 32f), D(Ground.Sand, 96f)),
-					C(Ground.Limestone), Ground.Sand, Ground.Sand),
-				E("Subsurface Ocean Vent", L(Ground.Basalt, Plants("Coral", 4f, 128)), Ds(D(Ground.Silt, 48f), D(Ground.Sulphur, 24f, 4f)), C(Ground.Basalt), Ground.Silt, Ground.Silt),
+				// What lives on the sea floor rides on the lakebed (Entry.Bed), by depth: kelp and seaweed where
+				// the light reaches, corals in warm shallows, sponges and sea fans below, little in the abyss.
+				E("Abyssal Plain", L(Ground.Silt), Ds(D(Ground.Mud, 96f)), C(Ground.Basalt), Ground.Silt, Ground.Silt)
+					.Under(Sea("Sponge", 0.2f, 0f, 0f, 128), Sea("Starfish", 0.3f, 0f, 0f, 96), Sea("Anemone", 0.15f, 0f, 0f, 128)),
+				E("Abyss", L(Ground.Silt), Ds(D(Ground.Basalt, 64f, 3f, 20f, 90f)), C(Ground.Basalt, 35f), Ground.Silt, Ground.Silt)
+					.Under(Sea("Sponge", 0.15f, 0f, 0f, 128, 60f), Sea("Anemone", 0.15f, 0f, 0f, 128, 60f)),
+				E("Deep Ocean", L(Ground.Silt), Ds(D(Ground.Mud, 128f)), C(Ground.Basalt), Ground.Silt, Ground.Silt)
+					.Under(Sea("Sponge", 0.3f, 0f, 0f, 128), Sea("Starfish", 0.2f, 0f, 0f, 96), Sea("Anemone", 0.2f, 0f, 0f, 128)),
+				E("Ocean", L(Ground.Sand), Ds(D(Ground.Silt, 64f), D(Ground.Pebbles, 32f, 3f)), C(Ground.Rock), Ground.Sand, Ground.Sand)
+					.Under(Sea("Kelp", 3f, 4f, 30f, 160), Sea("Seaweed", 2f, 1.5f, 20f, 160), Sea("Sponge", 1f, 6f, 0f, 128), Sea("SeaFan", 0.5f, 8f, 120f, 128),
+						Sea("Urchin", 1f, 2f, 40f, 128), Sea("Starfish", 0.5f, 1f, 0f, 96), Sea("Shells", 1f, 1f, 30f, 96))
+					.Moved("main", "Kelp"),
+				E("Seamount", L(Ground.Basalt), Ds(D(Ground.Silt, 48f, 2f, 0f, 20f)), C(Ground.Basalt), Ground.Silt, Ground.Silt)
+					.Under(Sea("Kelp", 4f, 4f, 30f, 160), Sea("SeaFan", 3f, 4f, 0f, 160, 60f), Sea("Sponge", 2f, 4f, 0f, 160, 60f), Sea("Anemone", 1f, 2f, 0f, 128, 60f))
+					.Moved("detail/0", "Kelp"),
+				E("Underwater Canyon", L(Ground.Silt), Ds(D(Ground.Rock, 48f, 3f, 25f, 90f), D(Ground.Gravel, 64f)), C(Ground.CliffRock, 38f), Ground.Silt, Ground.Silt)
+					.Under(Sea("SeaFan", 1.5f, 4f, 0f, 160, 70f), Sea("Sponge", 1.5f, 4f, 0f, 160, 70f), Sea("Anemone", 0.5f, 2f, 0f, 128, 70f)),
+				E("Coastal Water", L(Ground.Sand), Ds(D(Ground.Pebbles, 32f, 3f, -1f, -1f, Stones(SmallRocks("Grey"), 3f)), D(Ground.Silt, 64f)),
+					C(Ground.Rock), Ground.Sand, Ground.Pebbles)
+					.Under(Sea("Seaweed", 6f, 1f, 20f, 200), Sea("Kelp", 6f, 5f, 30f, 200),
+						Sea("Urchin", 3f, 1.5f, 30f, 160), Sea("Starfish", 1f, 0.5f, 40f, 128), Sea("Shells", 4f, 0.5f, 25f, 128),
+						Sea("Anemone", 1f, 2f, 40f, 128), SeaStones(SmallRocks("Grey"), 2f, 0.5f, 0f))
+					.Moved("detail/0", "Kelp").Moved("lakebed", "Seagrass"),
+				E("Coral Reef", L(Ground.Coral), Ds(D(Ground.SandBeach, 32f), D(Ground.Sand, 96f)),
+					C(Ground.Limestone), Ground.Sand, Ground.Sand)
+					.Under(Sea("Coral", 20f, 1f, 30f, 200), Sea("BrainCoral", 3f, 1f, 30f, 200), Sea("TableCoral", 2f, 1f, 15f, 200),
+						Sea("SeaFan", 2f, 3f, 60f, 160), Sea("Sponge", 2f, 2f, 0f, 160), Sea("Anemone", 3f, 1f, 40f, 160),
+						Sea("Urchin", 2f, 1f, 30f, 128), Sea("Starfish", 1f, 0.5f, 40f, 128), Sea("Shells", 3f, 0.5f, 25f, 128),
+						Sea("Kelp", 1f, 4f, 25f, 96))
+					.Moved("main", "Coral", "Kelp").Moved("lakebed", "Seagrass"),
+				E("Subsurface Ocean Vent", L(Ground.Basalt), Ds(D(Ground.Silt, 48f), D(Ground.Sulphur, 24f, 4f)), C(Ground.Basalt), Ground.Silt, Ground.Silt)
+					.Under(Sea("TubeWorms", 6f, 0f, 0f, 200, 50f), Sea("Coral", 3f, 0f, 0f, 128), Sea("Anemone", 1f, 0f, 0f, 128))
+					.Moved("main", "Coral"),
 				E("Methane Lake", L(Ground.Frost), Ds(D(Ground.Ice, 64f)), C(Ground.Ice), Ground.Tholin, Ground.Tholin),
 				E("Lava Tube", L(Ground.Basalt, Stones(SmallRocks("Basalt"), 3f), Blocks("Basalt roof fall", 0.05f, 12f, F(RockTypes.Basalt, "Block", "Fallen"))), Ds(D(Ground.Ash, 48f), D(Ground.Lava, 96f, 5f)), C(Ground.Basalt, 35f), Ground.Basalt, Ground.Basalt),
 
 				// ── Shore (tier 3) ──
 				E("Beach", L(Ground.SandBeach, Trees(0.03f, 14f, 20f, "Palm")),
 					Ds(D(Ground.Sand, 64f, 2f, -1f, -1f, Grass("GrassTall", 8f, 160)), D(Ground.Pebbles, 24f, 3f, -1f, -1f, Boulders(0.3f, 6f, GreyRound))),
-					C(Ground.Rock), Ground.Sand, Ground.Pebbles),
+					C(Ground.Rock), Ground.Sand, Ground.Pebbles)
+					// The shallows off the beach.
+					.Under(Sea("Shells", 2f, 0.5f, 15f, 96), Sea("Starfish", 0.5f, 0.5f, 20f, 96))
+					.Moved("lakebed", "Seagrass"),
 				E("Dust Sea", L(Ground.Regolith), Ds(D(Ground.Sand, 128f)), C(Ground.Rock), Ground.Regolith, Ground.Regolith),
 				E("Estuary", L(Ground.Mud, Plants("Reeds", 30f, 220)), Ds(D(Ground.Silt, 48f), D(Ground.Grass, 48f, 2f, 0f, 10f, Grass("GrassTall", 20f))),
 					C(Ground.Soil), Ground.Silt, Ground.Silt),
 				E("Impact Basin", L(Ground.Regolith, Stones(SmallRocks("Grey"), 4f)), Ds(D(Ground.Rock, 48f, 3f, 15f, 90f, Boulders(0.3f, 8f, GreyRound), Blocks("Mare basalt", 0.04f, 14f, F(RockTypes.Basalt, "Block"))), D(Ground.Gravel, 64f)),
 					C(Ground.CliffRock), Ground.Regolith, Ground.Regolith),
-				E("Mangrove", L(Ground.Mud, Trees(2f, 4f, 15f, "Jungle"), Plants("Reeds", 10f)), Ds(D(Ground.Silt, 32f), D(Ground.JungleFloor, 48f, 2f, -1f, -1f, Plants("Fern", 6f))),
+				E("Mangrove", L(Ground.Mud, Stand(Was(2f, 4f), 15f, W(0.85f, 1f, scale: 0.35f), "Jungle"), Plants("Reeds", 10f)), Ds(D(Ground.Silt, 32f), D(Ground.JungleFloor, 48f, 2f, -1f, -1f, Plants("Fern", 6f))),
 					C(Ground.Soil), Ground.Silt, Ground.Mud),
 				E("Molten Surface", L(Ground.Lava), Ds(D(Ground.Basalt, 32f, 3f, -1f, -1f, Stones(SmallRocks("Basalt"), 2f), Blocks("Obsidian", 0.03f, 14f, F(RockTypes.Obsidian, "Chunk", "Shard"))), D(Ground.Ash, 64f)), C(Ground.Basalt), Ground.Basalt, Ground.Basalt),
-				E("Peat Bog", L(Ground.Peat, Plants("Reeds", 15f), Trees(0.05f, 12f, 15f, "Dead", "Birch")), Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Grass("GrassTuft", 20f)), D(Ground.Mud, 64f)),
+				E("Peat Bog", L(Ground.Peat, Plants("Reeds", 15f), Stand(Was(0.05f, 12f), 15f, W(0.1f, 0.12f, open: 0.03f, scale: 0.7f), "Dead", "Birch")), Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Grass("GrassTuft", 20f)), D(Ground.Mud, 64f)),
 					C(Ground.Soil), Ground.Mud, Ground.Peat),
 				E("Rille", L(Ground.Regolith, Stones(SmallRocks("Basalt"), 3f)), Ds(D(Ground.Basalt, 48f, 3f, 20f, 90f, Boulders(0.2f, 8f, BasaltRocks), Blocks("Basalt blocks", 0.05f, 12f, F(RockTypes.Basalt, "Block", "Fallen"))), D(Ground.Gravel, 64f)),
 					C(Ground.Basalt), Ground.Regolith, Ground.Regolith),
@@ -560,13 +854,13 @@ namespace FishMMO.Shared.WorldDesign
 
 				// ── Lowland (tier 4) ──
 				E("Cryovolcanic Plain", L(Ground.Frost, Stones(SmallRocks("Grey"), 1f), IceBlocks(0.02f, 16f, "Rounded", "Slab")), Ds(D(Ground.Ice, 64f), D(Ground.Snow, 96f)), C(Ground.Ice), Ground.Ice, Ground.Ice),
-				E("Grassland", L(Ground.Grass, Grass("GrassLush", 45f, 220), Trees(0.15f, 12f, 25f, "Oak")),
+				E("Grassland", L(Ground.Grass, Grass("GrassLush", 45f, 220), Stand(Was(0.15f, 12f), 25f, W(0.1f, 0.6f, open: 0.06f), "Oak")),
 					Ds(D(Ground.GrassMeadow, 64f, 2f, -1f, -1f, Plants("FlowersMeadow", 6f, 180), Grass("GrassLush", 30f)),
 						D(Ground.Soil, 96f, 2f, 15f, 40f, Boulders(0.05f, 10f, GreyRound))),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
-				E("Oasis", L(Ground.Grass, Trees(1.5f, 6f, 15f, "Palm"), Grass("GrassTall", 25f)), Ds(D(Ground.Sand, 64f), D(Ground.Mud, 32f, 2f, 0f, 8f, Plants("Reeds", 12f))),
+				E("Oasis", L(Ground.Grass, Stand(Was(1.5f, 6f), 15f, W(0.6f, 0.9f, open: 0.05f, metres: 160f), "Palm"), Grass("GrassTall", 25f)), Ds(D(Ground.Sand, 64f), D(Ground.Mud, 32f, 2f, 0f, 8f, Plants("Reeds", 12f))),
 					C(Ground.Sandstone), Ground.Mud, Ground.Sand),
-				E("Plains", L(Ground.GrassDry, Grass("GrassDry", 40f, 220), Plants("FlowersWarm", 3f), Trees(0.03f, 20f, 20f, "Oak")),
+				E("Plains", L(Ground.GrassDry, Grass("GrassDry", 40f, 220), Plants("FlowersWarm", 3f), Stand(Was(0.03f, 20f), 20f, W(0.03f, 0.5f, open: 0.08f), "Oak")),
 					Ds(D(Ground.Grass, 96f, 2f, -1f, -1f, Grass("GrassLush", 25f)), D(Ground.Soil, 128f, 2f, 15f, 45f)),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
 				E("Radiation Plain", L(Ground.Regolith, Stones(SmallRocks("Grey"), 2f)), Ds(D(Ground.CrackedEarth, 64f), D(Ground.Gravel, 48f)), C(Ground.Rock), Ground.Regolith, Ground.Regolith),
@@ -575,71 +869,71 @@ namespace FishMMO.Shared.WorldDesign
 					C(Ground.Rock), Ground.Regolith, Ground.Regolith),
 				E("Runaway Greenhouse Plain", L(Ground.Basalt, Stones(SmallRocks("Basalt"), 2f), Blocks("Basalt blocks", 0.03f, 16f, F(RockTypes.Basalt, "Block"))), Ds(D(Ground.Sulphur, 96f), D(Ground.Ash, 64f)), C(Ground.Basalt), Ground.Basalt, Ground.Basalt),
 				E("Salt Flat", L(Ground.SaltCrust), Ds(D(Ground.CrackedEarth, 128f), D(Ground.Sand, 96f)), C(Ground.Rock), Ground.SaltCrust, Ground.SaltCrust),
-				E("Scrubland", L(Ground.GrassDry, Plants("ShrubDry", 8f), Plants("ShrubSmall", 4f), Grass("GrassTuft", 15f), Trees(0.05f, 15f, 25f, "Acacia")),
+				E("Scrubland", L(Ground.GrassDry, Plants("ShrubDry", 8f), Plants("ShrubSmall", 4f), Grass("GrassTuft", 15f), Stand(Was(0.05f, 15f), 25f, W(0.15f, 0.1f, open: 0.2f), "Acacia")),
 					Ds(D(Ground.Soil, 64f), D(Ground.Rock, 48f, 3f, 25f, 90f, Boulders(0.1f, 8f, Sandstone), Blocks("Sandstone beds", 0.03f, 14f, F(RockTypes.Sandstone, "Block", "Tilted")))),
 					C(Ground.Rock), Ground.Gravel, Ground.Gravel),
 				E("Sulphur Flats", L(Ground.Sulphur, Stones(SmallRocks("Basalt"), 1f)), Ds(D(Ground.CrackedEarth, 64f), D(Ground.Ash, 96f)), C(Ground.Basalt), Ground.Sulphur, Ground.Sulphur),
 				E("Tholin Plain", L(Ground.Tholin, Stones(SmallRocks("Grey"), 1f), IceBlocks(0.03f, 14f, "Rounded")), Ds(D(Ground.Frost, 96f), D(Ground.Gravel, 64f)), C(Ground.Rock), Ground.Tholin, Ground.Tholin),
 				E("Wasteland", L(Ground.CrackedEarth, Plants("ShrubDry", 3f), Trees(0.05f, 15f, 25f, "Dead"), Stones(SmallRocks("Grey"), 2f)),
 					Ds(D(Ground.Ash, 64f), D(Ground.Gravel, 48f)), C(Ground.Rock), Ground.Mud, Ground.Gravel),
-				E("Wetlands", L(Ground.Grass, Grass("GrassTall", 30f), Trees(0.08f, 10f, 15f, "Birch")),
+				E("Wetlands", L(Ground.Grass, Grass("GrassTall", 30f), Stand(Was(0.08f, 10f), 15f, W(0.15f, 0.4f, open: 0.03f), "Birch")),
 					Ds(D(Ground.Mud, 48f, 2f, 0f, 10f, Plants("Reeds", 25f, 220)), D(Ground.Moss, 64f, 2f, -1f, -1f, Plants("Fern", 3f))),
 					C(Ground.Soil), Ground.Mud, Ground.Mud),
-				E("Farmland", L(Ground.Soil, Trees(0.02f, 20f, 15f, "Oak")), Ds(D(Ground.Grass, 32f, 2f, -1f, -1f, Grass("GrassLush", 30f)), D(Ground.GrassDry, 64f, 2f, -1f, -1f, Grass("GrassDry", 20f))),
+				E("Farmland", L(Ground.Soil, Stand(Was(0.02f, 20f), 15f, W(0.03f, 0.5f, open: 0.06f), "Oak")), Ds(D(Ground.Grass, 32f, 2f, -1f, -1f, Grass("GrassLush", 30f)), D(Ground.GrassDry, 64f, 2f, -1f, -1f, Grass("GrassDry", 20f))),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
 				E("Lake", L(Ground.Grass, Grass("GrassLush", 30f)), Ds(D(Ground.Mud, 32f, 2f, 0f, 10f, Plants("Reeds", 15f)), D(Ground.Pebbles, 48f)),
 					C(Ground.Rock), Ground.Mud, Ground.Pebbles),
 				E("River", L(Ground.Grass, Grass("GrassLush", 25f)), Ds(D(Ground.Pebbles, 32f), D(Ground.Mud, 48f, 2f, 0f, 10f, Plants("Reeds", 10f))),
 					C(Ground.Rock), Ground.Pebbles, Ground.Gravel),
-				E("Swamp", L(Ground.Mud, Plants("Reeds", 20f), Trees(0.2f, 8f, 15f, "Dead"), Grass("GrassTall", 15f)), Ds(D(Ground.Peat, 48f), D(Ground.Moss, 64f, 2f, -1f, -1f, Plants("Fern", 5f))),
+				E("Swamp", L(Ground.Mud, Plants("Reeds", 20f), Stand(Was(0.2f, 8f), 15f, W(0.35f, 0.3f, open: 0.05f), "Dead"), Grass("GrassTall", 15f)), Ds(D(Ground.Peat, 48f), D(Ground.Moss, 64f, 2f, -1f, -1f, Plants("Fern", 5f))),
 					C(Ground.Soil), Ground.Mud, Ground.Mud),
 				E("Swamp Cave", L(Ground.Mud, Plants("Reeds", 6f)), Ds(D(Ground.Moss, 48f), D(Ground.Rock, 48f, 3f, 20f, 90f)), C(Ground.CliffRock, 38f), Ground.Mud, Ground.Mud),
-				E("Swamp Ruins", L(Ground.Mud, Plants("Reeds", 15f), Trees(0.15f, 8f, 15f, "Dead")), Ds(D(Ground.Flagstone, 32f, 4f), D(Ground.Moss, 48f, 2f, -1f, -1f, Plants("Fern", 5f))),
+				E("Swamp Ruins", L(Ground.Mud, Plants("Reeds", 15f), Stand(Was(0.15f, 8f), 15f, W(0.3f, 0.3f, open: 0.05f), "Dead")), Ds(D(Ground.Flagstone, 32f, 4f), D(Ground.Moss, 48f, 2f, -1f, -1f, Plants("Fern", 5f))),
 					C(Ground.Soil), Ground.Mud, Ground.Mud),
 				E("Swamp Temple", L(Ground.Mud, Plants("Reeds", 10f)), Ds(D(Ground.Flagstone, 24f, 4f), D(Ground.Moss, 48f, 2f, -1f, -1f, Plants("Fern", 5f))), C(Ground.CliffRock), Ground.Mud, Ground.Mud),
-				E("Jungle Ruins", L(Ground.JungleFloor, Trees(1.2f, 5f, 25f, "Jungle"), Plants("Fern", 15f), Plants("ShrubSmall", 6f)), Ds(D(Ground.Flagstone, 32f, 4f), D(Ground.Moss, 48f)),
+				E("Jungle Ruins", L(Ground.JungleFloor, Stand(Was(1.2f, 5f), 25f, W(0.7f, 0.8f), "Jungle"), Plants("Fern", 15f), Plants("ShrubSmall", 6f)), Ds(D(Ground.Flagstone, 32f, 4f), D(Ground.Moss, 48f)),
 					C(Ground.Rock), Ground.Mud, Ground.Mud),
-				E("Jungle Temple", L(Ground.JungleFloor, Trees(0.8f, 5f, 25f, "Jungle"), Plants("Fern", 12f)), Ds(D(Ground.Flagstone, 24f, 4f), D(Ground.Moss, 48f)),
+				E("Jungle Temple", L(Ground.JungleFloor, Stand(Was(0.8f, 5f), 25f, W(0.55f, 0.7f), "Jungle"), Plants("Fern", 12f)), Ds(D(Ground.Flagstone, 24f, 4f), D(Ground.Moss, 48f)),
 					C(Ground.Rock), Ground.Mud, Ground.Mud),
 
 				// ── Highland (tier 5) ──
-				E("Bamboo Forest", L(Ground.ForestFloor, Trees(3f, 3f, 25f, "Bamboo"), Plants("Fern", 8f), Grass("GrassTall", 6f)), Ds(D(Ground.Moss, 48f), D(Ground.Soil, 64f, 2f, 20f, 45f)),
+				E("Bamboo Forest", L(Ground.ForestFloor, Stand(Was(3f, 3f), 25f, W(0.7f, 0.5f, metres: 200f), "Bamboo"), Plants("Fern", 8f), Grass("GrassTall", 6f)), Ds(D(Ground.Moss, 48f), D(Ground.Soil, 64f, 2f, 20f, 45f)),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
-				E("Forest", L(Ground.ForestFloor, Trees(2f, 6f, 30f, "Oak", "Birch"), Plants("Fern", 12f), Plants("DebrisForest", 10f, 128), Plants("ShrubSmall", 3f)),
-					Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Plants("Fern", 8f)), D(Ground.NeedleLitter, 96f, 2f, -1f, -1f, Trees(1.5f, 6f, 30f, "Spruce")),
+				E("Forest", L(Ground.ForestFloor, Stand(Was(2f, 6f), 30f, W(0.8f, 1f), "Oak", "Birch"), Plants("Fern", 12f), Plants("DebrisForest", 10f, 128), Plants("ShrubSmall", 3f)),
+					Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Plants("Fern", 8f)), D(Ground.NeedleLitter, 96f, 2f, -1f, -1f, Stand(Was(1.5f, 6f), 30f, W(0.8f, 1f), "Spruce")),
 						D(Ground.Soil, 64f, 2f, 20f, 45f, Boulders(0.05f, 10f, GreyRound))),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
 				E("Geyser Basin", L(Ground.CrackedEarth, Grass("GrassTuft", 4f), Blocks("Tuff", 0.02f, 16f, F(RockTypes.Tuff, "Tafoni")), Blocks("Obsidian", 0.015f, 18f, F(RockTypes.Obsidian, "Chunk"))), Ds(D(Ground.Sulphur, 32f, 4f), D(Ground.Mud, 48f)), C(Ground.Rock), Ground.Mud, Ground.Mud),
-				E("Hills", L(Ground.Grass, Grass("GrassLush", 35f, 220), Plants("FlowersMeadow", 4f), Trees(0.1f, 12f, 25f, "Oak"), Outcrops("Granite tors", 0.008f, 40f, F(RockTypes.Granite, "Tor", "Perched"), 15f)),
+				E("Hills", L(Ground.Grass, Grass("GrassLush", 35f, 220), Plants("FlowersMeadow", 4f), Stand(Was(0.1f, 12f), 25f, W(0.12f, 0.6f, open: 0.05f), "Oak"), Outcrops("Granite tors", 0.008f, 40f, F(RockTypes.Granite, "Tor", "Perched"), 15f)),
 					Ds(D(Ground.Moss, 64f), D(Ground.Rock, 48f, 3f, 25f, 90f, Boulders(0.1f, 8f, GreyRound), Blocks("Granite corestones", 0.04f, 12f, F(RockTypes.Granite, "Corestone", "Split")))),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
 				E("Ice Geyser Field", L(Ground.Snow, Stones(SmallRocks("Grey"), 0.5f), IceBlocks(0.02f, 16f, "Calved")), Ds(D(Ground.Ice, 64f), D(Ground.Frost, 48f)), C(Ground.Ice), Ground.Ice, Ground.Ice),
-				E("Jungle", L(Ground.JungleFloor, Trees(3f, 5f, 30f, "Jungle"), Trees(0.3f, 8f, 20f, "Palm"), Plants("Fern", 25f), Plants("ShrubSmall", 10f), Grass("GrassTall", 10f)),
-					Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Trees(0.4f, 4f, 25f, "Bamboo")), D(Ground.Mud, 64f, 2f, 0f, 10f)),
+				E("Jungle", L(Ground.JungleFloor, Stand(Was(3f, 5f), 30f, W(0.9f, 1f), "Jungle"), Stand(Was(0.3f, 8f), 20f, W(0.9f, 0.25f, open: 0.3f), "Palm"), Plants("Fern", 25f), Plants("ShrubSmall", 10f), Grass("GrassTall", 10f)),
+					Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Stand(Was(0.4f, 4f), 25f, W(0.4f, 0.25f, open: 0.02f, metres: 200f), "Bamboo")), D(Ground.Mud, 64f, 2f, 0f, 10f)),
 					C(Ground.Rock), Ground.Mud, Ground.Mud),
-				E("Karst", L(Ground.Grass, Grass("GrassLush", 30f), Trees(0.2f, 10f, 25f, "Oak"), Plants("Fern", 4f), Blocks("Limestone pavement", 0.03f, 18f, F(RockTypes.Limestone, "Pavement", "Block"), 12f)),
+				E("Karst", L(Ground.Grass, Grass("GrassLush", 30f), Stand(Was(0.2f, 10f), 25f, W(0.2f, 0.6f, open: 0.05f), "Oak"), Plants("Fern", 4f), Blocks("Limestone pavement", 0.03f, 18f, F(RockTypes.Limestone, "Pavement", "Block"), 12f)),
 					Ds(D(Ground.Limestone, 48f, 3f, 20f, 90f, Boulders(0.3f, 6f, LimestoneRocks), Outcrops("Limestone pinnacles", 0.06f, 12f, F(RockTypes.Limestone, "Pinnacle"), 30f)), D(Ground.Soil, 64f)),
 					C(Ground.Limestone, 35f), Ground.Mud, Ground.Gravel),
 				E("Nitrogen Ice Field", L(Ground.Frost), Ds(D(Ground.Snow, 64f), D(Ground.Ice, 96f)), C(Ground.Ice), Ground.Frost, Ground.Frost),
-				E("Savanna", L(Ground.GrassDry, Grass("GrassDry", 40f, 220), Trees(0.08f, 20f, 20f, "Acacia"), Plants("ShrubDry", 2f), Outcrops("Granite kopjes", 0.01f, 30f, F(RockTypes.Granite, "Tor", "Perched"), 15f)),
+				E("Savanna", L(Ground.GrassDry, Grass("GrassDry", 40f, 220), Stand(Was(0.08f, 20f), 20f, W(0.25f, 0.15f, open: 0.25f), "Acacia"), Plants("ShrubDry", 2f), Outcrops("Granite kopjes", 0.01f, 30f, F(RockTypes.Granite, "Tor", "Perched"), 15f)),
 					Ds(D(Ground.Soil, 96f), D(Ground.Clay, 64f, 2f, -1f, -1f, Boulders(0.03f, 12f, Sandstone))),
 					C(Ground.Sandstone), Ground.Mud, Ground.Gravel),
 				E("Steppe", L(Ground.GrassDry, Grass("GrassDry", 35f), Grass("GrassTuft", 15f), Plants("FlowersWarm", 2f)),
 					Ds(D(Ground.Soil, 96f), D(Ground.Gravel, 64f, 2f, -1f, -1f, Stones(SmallRocks("Grey"), 1f))),
 					C(Ground.Rock), Ground.Gravel, Ground.Gravel),
-				E("Taiga", L(Ground.NeedleLitter, Trees(2.5f, 5f, 30f, "Spruce"), Trees(0.8f, 6f, 30f, "Pine"), Plants("Fern", 4f), Grass("GrassTuft", 8f)),
-					Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Trees(0.2f, 6f, 25f, "Birch"), Plants("ShrubSmall", 3f)), D(Ground.Snow, 96f)),
+				E("Taiga", L(Ground.NeedleLitter, Stand(Was(2.5f, 5f), 30f, W(0.8f, 1f), "Spruce"), Stand(Was(0.8f, 6f), 30f, W(0.8f, 0.45f), "Pine"), Plants("Fern", 4f), Grass("GrassTuft", 8f)),
+					Ds(D(Ground.Moss, 48f, 2f, -1f, -1f, Stand(Was(0.2f, 6f), 25f, W(0.8f, 0.25f, open: 0.05f), "Birch"), Plants("ShrubSmall", 3f)), D(Ground.Snow, 96f)),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
-				E("Valley", L(Ground.Grass, Grass("GrassLush", 45f, 220), Trees(0.3f, 10f, 25f, "Oak", "Birch")),
+				E("Valley", L(Ground.Grass, Grass("GrassLush", 45f, 220), Stand(Was(0.3f, 10f), 25f, W(0.3f, 0.7f, open: 0.05f), "Oak", "Birch")),
 					Ds(D(Ground.GrassMeadow, 64f, 2f, -1f, -1f, Plants("FlowersMeadow", 8f, 180)), D(Ground.Pebbles, 32f, 3f, 0f, 8f, Blocks("Conglomerate", 0.03f, 14f, F(RockTypes.Conglomerate, "Boulder", "Block"), 10f))),
 					C(Ground.Rock), Ground.Mud, Ground.Pebbles),
-				E("Woodland", L(Ground.Grass, Trees(0.8f, 8f, 30f, "Oak", "Birch"), Grass("GrassLush", 25f), Plants("FlowersMeadow", 3f)),
+				E("Woodland", L(Ground.Grass, Stand(Was(0.8f, 8f), 30f, W(0.55f, 0.8f, open: 0.05f), "Oak", "Birch"), Grass("GrassLush", 25f), Plants("FlowersMeadow", 3f)),
 					Ds(D(Ground.ForestFloor, 48f, 2f, -1f, -1f, Plants("Fern", 6f), Plants("DebrisForest", 6f, 128)), D(Ground.Moss, 64f)),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
 				E("Castle", L(Ground.Flagstone), Ds(D(Ground.Grass, 32f, 2f, -1f, -1f, Grass("GrassTuft", 8f)), D(Ground.Gravel, 48f)), C(Ground.CliffRock), Ground.Mud, Ground.Gravel),
 				E("Marble Palace", L(Ground.Flagstone), Ds(D(Ground.Limestone, 48f, 2f, -1f, -1f, Blocks("Marble", 0.02f, 16f, F(RockTypes.Marble, "Block", "Boulder"))), D(Ground.Grass, 32f, 2f, -1f, -1f, Grass("GrassLush", 15f))), C(Ground.Limestone), Ground.Mud, Ground.Gravel),
 				E("Cave", L(Ground.Rock, Stones(SmallRocks("Grey"), 4f), Stones(Pebbles("Grey"), 6f), Blocks("Limestone", 0.05f, 10f, F(RockTypes.Limestone, "Block")), Outcrops("Limestone pinnacles", 0.03f, 12f, F(RockTypes.Limestone, "Pinnacle"))), Ds(D(Ground.Gravel, 48f), D(Ground.Mud, 64f)), C(Ground.CliffRock, 35f), Ground.Mud, Ground.Gravel),
-				E("Forest Ruins", L(Ground.ForestFloor, Trees(1f, 6f, 30f, "Oak"), Plants("Fern", 10f), Plants("DebrisForest", 6f, 128)), Ds(D(Ground.Flagstone, 32f, 4f), D(Ground.Moss, 48f)),
+				E("Forest Ruins", L(Ground.ForestFloor, Stand(Was(1f, 6f), 30f, W(0.6f, 0.9f), "Oak"), Plants("Fern", 10f), Plants("DebrisForest", 6f, 128)), Ds(D(Ground.Flagstone, 32f, 4f), D(Ground.Moss, 48f)),
 					C(Ground.Rock), Ground.Mud, Ground.Gravel),
 
 				// ── Mountain (tier 6) ──
@@ -650,7 +944,7 @@ namespace FishMMO.Shared.WorldDesign
 				E("Desert", L(Ground.Sand, Trees(0.04f, 15f, 15f, "Saguaro"), Plants("CactusBarrel", 0.5f, 96), Plants("ShrubDry", 0.5f)),
 					Ds(D(Ground.Sandstone, 48f, 3f, 15f, 90f, Boulders(0.03f, 12f, Sandstone), Outcrops("Sandstone pedestals", 0.01f, 30f, F(RockTypes.Sandstone, "Pedestal", "Ledges"), 30f)), D(Ground.Gravel, 64f)),
 					C(Ground.Sandstone), Ground.Sand, Ground.Sand),
-				E("Mountain Slope", L(Ground.Rock, Boulders(0.3f, 6f, Grey), Stones(SmallRocks("Grey"), 4f), Trees(0.1f, 10f, 30f, "Pine"),
+				E("Mountain Slope", L(Ground.Rock, Boulders(0.3f, 6f, Grey), Stones(SmallRocks("Grey"), 4f), Stand(Was(0.1f, 10f), 30f, W(0.1f, 0.35f, scale: 0.8f), "Pine"),
 						Outcrops("Slate upright", 0.03f, 14f, F(RockTypes.Slate, "Upright"), 30f), Blocks("Slate", 0.05f, 10f, F(RockTypes.Slate, "Stack"))),
 					Ds(D(Ground.Gravel, 48f, 2f, -1f, -1f, Blocks("Slate scree", 0.04f, 12f, F(RockTypes.Slate, "Scree"))), D(Ground.GrassDry, 64f, 2f, 0f, 25f, Grass("GrassTuft", 10f))),
 					C(Ground.CliffRock, 38f), Ground.Gravel, Ground.Gravel),
@@ -672,7 +966,7 @@ namespace FishMMO.Shared.WorldDesign
 				E("Alpine", L(Ground.Rock, Boulders(0.3f, 6f, GreyRound), Stones(SmallRocks("Grey"), 4f),
 						Blocks("Schist", 0.06f, 10f, F(RockTypes.Schist, "Lump", "Ridge", "Flags")), Blocks("Gneiss", 0.03f, 12f, F(RockTypes.Gneiss, "Boulder"))), Ds(D(Ground.Gravel, 48f), D(Ground.Snow, 64f, 2f, -1f, -1f, Grass("GrassTuft", 5f))),
 					C(Ground.CliffRock, 38f), Ground.Gravel, Ground.Gravel),
-				E("Alpine Meadow", L(Ground.GrassMeadow, Grass("GrassLush", 30f), Plants("FlowersMeadow", 12f, 200), Trees(0.05f, 12f, 25f, "Spruce")),
+				E("Alpine Meadow", L(Ground.GrassMeadow, Grass("GrassLush", 30f), Plants("FlowersMeadow", 12f, 200), Stand(Was(0.05f, 12f), 25f, W(0.08f, 0.15f, open: 0.02f, scale: 0.65f), "Spruce")),
 					Ds(D(Ground.Rock, 48f, 3f, 25f, 90f, Boulders(0.08f, 8f, GreyRound), Blocks("Gneiss", 0.03f, 12f, F(RockTypes.Gneiss, "Boulder", "Block"))), D(Ground.Moss, 64f)),
 					C(Ground.Rock), Ground.Gravel, Ground.Gravel),
 				E("High Desert", L(Ground.Sand, Plants("ShrubDry", 6f), Grass("GrassTuft", 6f)), Ds(D(Ground.Gravel, 64f), D(Ground.Sandstone, 48f, 3f, 20f, 90f, Boulders(0.1f, 8f, Sandstone),

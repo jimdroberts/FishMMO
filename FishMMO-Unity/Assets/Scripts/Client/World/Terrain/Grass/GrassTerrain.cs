@@ -24,6 +24,17 @@ namespace FishMMO.Client
 		public GrassTypeTuning Tuning;
 		/// <summary>True when the colours came from the mesh's vertex colours (false: the fallback greens).</summary>
 		public bool ColoursFromMesh;
+		/// <summary>
+		/// Linear head colours, up to <see cref="MaxHeadColours"/>: a flower mesh's petal colours (its head vertices,
+		/// written with vertex alpha 0.3 by the art generator), most common first; empty when the mesh has none
+		/// (the tuning's <see cref="GrassTypeTuning.HeadColour"/> is used).
+		/// </summary>
+		public readonly List<Color> HeadColours = new List<Color>();
+
+		public const int MaxHeadColours = 4;
+
+		/// <summary>Vertex alpha below this marks a head (petal) vertex; stems and leaves are written at 1.</summary>
+		public const float HeadVertexAlpha = 0.5f;
 
 		private static readonly Color FallbackRoot = new Color(0.035f, 0.07f, 0.012f);
 		private static readonly Color FallbackTip = new Color(0.12f, 0.26f, 0.035f);
@@ -59,7 +70,7 @@ namespace FishMMO.Client
 			};
 			if (mesh != null && mesh.isReadable)
 			{
-				type.ColoursFromMesh = ReadColours(mesh, out type.Root, out type.Tip);
+				type.ColoursFromMesh = ReadColours(mesh, out type.Root, out type.Tip, type.HeadColours);
 			}
 			if (material != null)
 			{
@@ -75,8 +86,12 @@ namespace FishMMO.Client
 			return type;
 		}
 
-		/// <summary>The mean vertex colour of the bottom and the top fifth of the mesh (the generator darkens the root).</summary>
-		private static bool ReadColours(Mesh mesh, out Color root, out Color tip)
+		/// <summary>
+		/// The mean vertex colour of the bottom and the top fifth of the mesh's stems and blades (the generator darkens
+		/// the root), and its head colours: the petal vertices (alpha under <see cref="HeadVertexAlpha"/>) are left
+		/// out of the stem's colours and gathered by colour, the most common first.
+		/// </summary>
+		private static bool ReadColours(Mesh mesh, out Color root, out Color tip, List<Color> heads)
 		{
 			root = FallbackRoot;
 			tip = FallbackTip;
@@ -88,13 +103,41 @@ namespace FishMMO.Client
 			{
 				return false;
 			}
-			Bounds b = mesh.bounds;
-			float low = b.min.y + 0.2f * b.size.y, high = b.max.y - 0.2f * b.size.y;
+			var petals = new Dictionary<int, int>();
+			float stemTop = float.MinValue, stemBottom = float.MaxValue;
+			for (int i = 0; i < vertices.Count; i++)
+			{
+				Color32 c = colours[i];
+				if (c.a / 255f < HeadVertexAlpha)
+				{
+					int key = c.r << 16 | c.g << 8 | c.b;
+					petals[key] = petals.TryGetValue(key, out int n) ? n + 1 : 1;
+					continue;
+				}
+				stemTop = Mathf.Max(stemTop, vertices[i].y);
+				stemBottom = Mathf.Min(stemBottom, vertices[i].y);
+			}
+			var ranked = new List<KeyValuePair<int, int>>(petals);
+			ranked.Sort((a, b) => b.Value != a.Value ? b.Value.CompareTo(a.Value) : a.Key.CompareTo(b.Key));
+			for (int i = 0; i < ranked.Count && heads.Count < MaxHeadColours; i++)
+			{
+				int key = ranked[i].Key;
+				heads.Add(((Color)new Color32((byte)(key >> 16), (byte)(key >> 8), (byte)key, 255)).linear);
+			}
+			if (stemTop < stemBottom)
+			{
+				return false;
+			}
+			float low = stemBottom + 0.2f * (stemTop - stemBottom), high = stemTop - 0.2f * (stemTop - stemBottom);
 			Vector4 r = Vector4.zero, t = Vector4.zero;
 			int nr = 0, nt = 0;
 			for (int i = 0; i < vertices.Count; i++)
 			{
 				Color c = colours[i];
+				if (c.a < HeadVertexAlpha)
+				{
+					continue;
+				}
 				if (vertices[i].y <= low)
 				{
 					r += (Vector4)c;

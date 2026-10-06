@@ -7,8 +7,8 @@ namespace FishMMO.Shared.Celestial
 	public static class WorldTime
 	{
 		/// <summary>
-		/// From the world clock at the current (fractional) tick when it is anchored; otherwise
-		/// from this machine's clock, which is only good enough for offline previews.
+		/// From the world clock at the current (fractional) tick when it is anchored; offline, at the
+		/// <see cref="LocalWorldClock"/>'s tick when one is active; otherwise from this machine's clock.
 		/// </summary>
 		public static double CurrentHours(TimeManager timeManager)
 		{
@@ -16,6 +16,12 @@ namespace FishMMO.Shared.Celestial
 			if (clock.HasAnchor && timeManager != null)
 			{
 				return clock.WorldHoursAt(timeManager.Tick + timeManager.GetTickPercentAsDouble());
+			}
+			// Offline (the editor's World Sim bed): its own tick, driving the same clock.
+			LocalWorldClock local = LocalWorldClock.Active;
+			if (local != null && clock.HasAnchor)
+			{
+				return clock.WorldHoursAt(local.Tick);
 			}
 			return UnanchoredHours();
 		}

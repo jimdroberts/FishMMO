@@ -189,6 +189,33 @@ namespace FishMMO.Client
 			Debug.Log($"[Grass] Dispatch order {(GrassBladeRenderer.ReverseDispatchOrder ? "REVERSED (terrain underfoot last)" : "normal (terrain underfoot first)")}.");
 		}
 
+		[DashboardTool(DashboardToolAttribute.Biomes, "Toggle GPU detail scatter (play mode A/B)", Section = "Diagnostics", Order = 115, AllowInPlayMode = true,
+			Tooltip = "The GPU detail scatter (pebbles, small rocks, shells, litter generated on the GPU every frame) is the default wherever compute runs. This opts those prototypes back into the CPU-built detail chunks, and a second press returns to the scatter. Remembered for the editor session; in edit mode it sets what the next play session starts with. Each press in play mode logs the scatter's state.")]
+		public static void ToggleDetailScatter()
+		{
+			bool chunks = !SessionState.GetBool(DetailScatterSystem.ChunkDetailsKey, false);
+			if (Application.isPlaying)
+			{
+				chunks = DetailScatterSystem.Enabled;
+			}
+			SessionState.SetBool(DetailScatterSystem.ChunkDetailsKey, chunks);
+			if (!Application.isPlaying)
+			{
+				Debug.Log($"[Detail scatter] When play starts: {(chunks ? "CPU DETAIL CHUNKS for every mesh detail; press again for the GPU scatter" : "GPU detail scatter (default)")}.");
+				return;
+			}
+			DetailScatterSystem.Enabled = !chunks;
+			SceneView.RepaintAll();
+			AfterFrames(() => Debug.Log($"[Detail scatter] {DetailScatterSystem.Describe()}"));
+		}
+
+		[DashboardTool(DashboardToolAttribute.Biomes, "Describe GPU detail scatter (play mode)", Section = "Diagnostics", Order = 116, AllowInPlayMode = true,
+			Tooltip = "Logs the GPU detail scatter's state: terrains taken, types, the game camera's work items and upper bound, and each type's appended instances against its slot capacity (read back every 30 frames in the editor).")]
+		public static void DescribeDetailScatter()
+		{
+			Debug.Log($"[Detail scatter] {DetailScatterSystem.Describe()}");
+		}
+
 		[DashboardTool(DashboardToolAttribute.Biomes, "Freeze GPU tree/rock/detail culling (play mode)", Section = "Diagnostics", Order = 113, AllowInPlayMode = true,
 			Tooltip = "Stops TerrainGpuRenderer's culling (trees, details, cliff rocks) and keeps drawing the last results (press again to resume). A flicker that goes on while frozen is in the drawing; one that stops is in the culling.")]
 		public static void ToggleGpuCullFreeze()

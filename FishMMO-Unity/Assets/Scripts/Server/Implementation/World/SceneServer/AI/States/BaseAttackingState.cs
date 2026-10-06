@@ -980,6 +980,23 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 			controller.Resume();
 
+			/* Through water? Scored (AISwimRisk): into it after the target, wait on the shore, or let it go. A swimmer
+			 * that has turned back heads for land; one that waits faces the target and keeps whatever reach it has. */
+			switch (controller.DecideChase(controller.Target.position))
+			{
+				case WaterVerdict.GiveUp:
+					GiveUpTarget(controller);
+					return;
+				case WaterVerdict.WaitAtShore:
+					controller.LookTarget = controller.Target;
+					if (controller.InDeepWater && controller.TryFindShore(out Vector3 shore))
+					{
+						controller.TryMoveTo(shore);
+						return;
+					}
+					break;
+			}
+
 			float sphereRadius = Mathf.Max(stopRange * AICombatDecision.RANGE_APPROACH_FACTOR, 0.1f);
 			Vector3 approach = ResolveApproachPosition(controller, sphereRadius);
 
@@ -1074,6 +1091,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
+			/* Waiting at the water's edge for a target out in it is not being stuck: the path is partial because the
+			 * NPC chose not to swim (or cannot). It holds the shore, facing the target, for its patience, and does not
+			 * wander off trying to walk round water. */
+			if (controller.WaterVerdict == WaterVerdict.WaitAtShore)
+			{
+				controller.UnreachableTargetTimer = 0f;
+				controller.ShoreWaitTimer += controller.StateDeltaTime;
+				controller.LookTarget = controller.Target;
+				float patience = controller.Swim != null ? controller.Swim.ShorePatience : 20f;
+				if (controller.ShoreWaitTimer >= patience)
+				{
+					GiveUpTarget(controller);
+				}
+				return;
+			}
+
 			controller.UnreachableTargetTimer += controller.StateDeltaTime;
 
 			if (controller.UnreachableTargetTimer < UnreachableTargetTimeout)
@@ -1083,9 +1116,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
-			// Give up on this target. Dropping threat as well prevents an immediate re-acquire of
-			// the same unreachable enemy on the very next sweep.
+			GiveUpTarget(controller);
+		}
+
+		/// <summary>
+		/// Lets the target go. Dropping threat as well prevents an immediate re-acquire of the same unreachable enemy
+		/// on the very next sweep.
+		/// </summary>
+		protected void GiveUpTarget(AIController controller)
+		{
 			controller.UnreachableTargetTimer = 0f;
+			controller.ShoreWaitTimer = 0f;
 			controller.Aggression?.RemoveEntry(ResolveTargetID(controller));
 			controller.Target = null;
 			controller.LookTarget = null;

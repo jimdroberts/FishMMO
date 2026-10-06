@@ -35,9 +35,11 @@ Shader "FishMMO/Weather/Vortex Debris"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "FishVortex.hlsl"
 
-            // x height the flecks climb to (m); y radius at the ground, z at the top, in core radii; w how fast they climb (m/s)
+            // x height the flecks climb to (m); y radius at the ground, z at the top, in core radii; w a fleck's life (s): the
+            // climb at the cell's pace (VortexPresenter), whole in the clock's wrap
             float4 _VortexDebris;
-            // x how bottom-heavy (1 even, more keeps them low); y fleck size (m); z where they have faded out (m from the camera); w unused
+            // x how bottom-heavy (1 even, more keeps them low); y fleck size (m); z where they have faded out (m from the camera);
+            // w how far out a fleck goes round half-way up its life, at the cell's pace (m): what its turning is timed by
             float4 _VortexDebrisLook;
             // rgb their colour; a the share of them the wind lifts
             float4 _VortexFleck;
@@ -64,7 +66,10 @@ Shader "FishMMO/Weather/Vortex Debris"
                 }
 
                 float height = max(1.0, _VortexDebris.x);
-                float life = height / max(0.5, _VortexDebris.w);
+                /* Its life is the pace's, constant for the cell: the live height over the live climb changed
+                 * every tick as the vortex grew and spun down, and the clock times the change put every
+                 * fleck somewhere else each frame. */
+                float life = max(1.0, _VortexDebris.w);
                 float climbed = frac(_VortexTime.x / life + r.y);
                 float h01 = pow(climbed, max(1.0, _VortexDebrisLook.x));
                 float y = h01 * height;
@@ -72,9 +77,13 @@ Shader "FishMMO/Weather/Vortex Debris"
                 float core = max(0.5, _VortexWind.x);
                 float spread = core * lerp(_VortexDebris.y, _VortexDebris.z, sqrt(h01));
                 float radius = spread * (0.25 + 0.75 * sqrt(r.z));
-                // Round at this radius's own rate: the Rankine vortex's angular speed.
-                float omega = VortexAngularSpeed(radius, core, _VortexWind.y);
-                float angle = VORTEX_TAU * frac(r.w + _VortexWind.w * omega * _VortexTime.x / VORTEX_TAU);
+                /* Round at its own radius's rate, the Rankine vortex's angular speed — at the pace, and at
+                 * the radius it has half-way up its life, so the rate is one number for its whole life.
+                 * Taken where it is now, the rate changed as it climbed and as the vortex grew, and
+                 * multiplied by the clock that spun it at hundreds of turns a second. */
+                float paceRadius = max(0.5, _VortexDebrisLook.w) * (0.25 + 0.75 * sqrt(r.z));
+                float omega = VortexAngularSpeed(paceRadius, max(0.5, _VortexPace.y), _VortexPace.z);
+                float angle = VORTEX_TAU * frac(r.w + _VortexWind.w * VortexCycles(omega / VORTEX_TAU));
                 float2 axis = VortexAxis(y);
                 float3 positionWS = float3(axis.x + cos(angle) * radius, _VortexCentre.y + y, axis.y + sin(angle) * radius);
 
@@ -97,7 +106,7 @@ Shader "FishMMO/Weather/Vortex Debris"
 
                 float2 corner = input.corner.xy * 2.0 - 1.0;
                 // Tumbling: each turns over at its own rate.
-                float turn = r.y * VORTEX_TAU + _VortexTime.x * (1.0 + 3.0 * r.z);
+                float turn = r.y * VORTEX_TAU + VORTEX_TAU * VortexCycles((1.0 + 3.0 * r.z) / VORTEX_TAU);
                 float s, c;
                 sincos(turn, s, c);
                 // Torn pieces, not discs: squashed along one side.
