@@ -51,6 +51,9 @@ float _FishInlandTime;
 float _FishInlandCameraUnder;
 /// 1 while the camera is under the sea (InlandWaterRenderer.MarkCamera): no inland water is drawn then.
 float _FishInlandCameraInSea;
+// Debug (InlandWaterRenderProbe FISHMMO_INLAND_DEBUG): foam (1) the foam's inputs as colour, r the river's churn, g the
+// fall's, b stones and the shore, instead of the water; noglint (2) the water without the sun's glints.
+float _FishInlandDebugFoam;
 /// The sea's surface now, tide included (WaterSurface).
 float _FishWaterLevel;
 /// Where the scene's falls land (InlandWaterRenderer.Falls): xyz the foot, w how far round it the pool churns.
@@ -216,7 +219,14 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, out half whi
 				float waveLength = max(0.25, radius * 1.2);
 				float crestPhase = 6.2831853 * a / waveLength;
 				gradient += along * (cos(crestPhase) * ridge * 0.45);
-				white = max(white, saturate(ridge * (1.0 - a / (radius * 6.0 + 0.5))) * saturate((speed - 0.5) / 1.0));
+				/* White only behind the larger stones, as a short pillow trailing downstream of the stone, not along the
+				 * V's arms: every stone's white V on a 2.2 m grid read from above as rows of ticks, fish scales over every
+				 * riffle (2026-10-07). The V stays in the surface's slope. */
+				if (h.z > 0.55)
+				{
+					float pillow = exp(-c * c / (radius * radius * 1.5)) * exp(-a / (radius * 4.0 + 0.3));
+					white = max(white, pillow * saturate((h.z - 0.55) / 0.3) * saturate((speed - 0.5) / 1.0));
+				}
 			}
 		}
 	}
@@ -225,31 +235,24 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, out half whi
 }
 
 /// <summary>
-/// The foam's pattern streaked out along the current: several taps of the carried texture laid back
-/// upstream from the point (a line-integral smear, by the strongest tap), so the foam is drawn out in the way the
-/// water moves it, faster water the longer. In world space, from the scene's one flow field, so where two
-/// pieces of water meet the streaks run on across the join.
+/// The foam's pattern streaked out along the current: the carried texture read in the river's own frame (metres across,
+/// metres along over the stretch), so each clump is drawn out the way the water moves it, faster water the longer.
+/// <paramref name="frame"/> is x across, y along; <paramref name="speed"/> the current along it (m/s).
 /// </summary>
-half StreakFoam(float2 xz, float2 flow, float scale, float cycle)
+/// <remarks>
+/// Not world space turned to the flow's direction: river water lies hundreds of metres from the origin, and there the
+/// slightest turn of the flow slid the turned coordinate by metres from one pixel to the next. The texture was squeezed
+/// and aliased into rows of white ticks bending in arcs, and tore along triangle edges (Jim's screenshots, 2026-10-07).
+/// The river's frame bends with the river and turns nowhere.
+/// </remarks>
+half StreakFoam(float2 frame, float speed, float scale, float cycle)
 {
-	float speed = length(flow);
-	float2 along = speed > 1e-3 ? flow / speed : float2(1.0, 0.0);
-	float stretch = scale * (0.6 + 1.6 * saturate(speed / 2.0));
-	/* The strongest of the taps, each weaker the further upstream it was taken: every clump of foam keeps
-	 * its own white and trails a fading tail down the current. An average would grey the sparse clumps away. */
-	/* Taps close enough that a clump's tail is one streak, not a row of copies of it: five taps a quarter of the
-	 * stretch apart drew every clump of fine foam as a line of dots down the current. The fine detail only at the
-	 * head, where the clump is; the tail is the coarse foam drawn out. */
-	half fine = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), xz, flow, scale * 0.33, cycle, float2(0.43, 0.17)).r;
-	half streak = 0.0;
-	[unroll]
-	for (int k = 0; k < 8; k++)
-	{
-		float2 at = xz - along * (stretch * (k / 7.0));
-		half coarse = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), at, flow, scale, cycle, float2(0.0, 0.0)).r;
-		streak = max(streak, coarse * (1.0 - 0.09 * k));
-	}
-	return saturate(streak * 0.7 + fine * 0.35 * streak + fine * 0.12);
+	float stretch = 1.4 + 1.6 * saturate(speed / 2.0);
+	float2 q = float2(frame.x, frame.y / stretch);
+	float2 carried = float2(0.0, speed / stretch);
+	half coarse = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), q, carried, scale, cycle, float2(0.0, 0.0)).r;
+	half fine = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), q * 1.9 + 3.7, carried * 1.9, scale * 0.45, cycle, float2(0.43, 0.17)).r;
+	return saturate(coarse * 0.85 + (fine - 0.5) * 0.4 * coarse + fine * 0.1);
 }
 
 /// <summary>
@@ -356,9 +359,11 @@ float2 Wakes(float3 positionWS, float2 flow, out half white)
 			half moving = saturate(speed / 0.4);
 			float crests = cos(6.2831853 * a / waveLength);
 			gradient += along * (crests * ridge * 0.35 * moving);
-			// And between them, the transverse waves: crests across the wake, weaker, filling the wedge.
+			// And between them, the transverse waves: crests across the wake, weaker, filling the wedge, and broken along
+			// their length (whole, they drew sets of straight white lines in a low sun).
 			half inside = saturate(1.0 - abs(c) / (a * 0.354 + radius));
-			gradient += along * (crests * inside * trail * 0.12 * moving);
+			half breakUp = smoothstep(0.35, 0.8, SAMPLE_TEXTURE2D_LOD(_FoamTexture, sampler_FoamTexture, float2(c / (1.3 * waveLength), a / (2.0 * waveLength)) * 0.27 + float2(0.62, 0.19), 0).g);
+			gradient += along * (crests * inside * trail * 0.07 * moving * breakUp);
 			white = max(white, ridge * saturate((speed - 0.6) / 1.2) * saturate(1.0 - a / (radius * 8.0 + 1.0)));
 		}
 		// The bow: white heaped where the water meets the body.
@@ -383,6 +388,8 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	view /= distanceToCamera;
 
 	float2 flow = input.flow;
+	// How sharply the current changes across the river here (s⁻¹), from the solved field: roughens the water (below).
+	half shear = 0.0;
 	/* The solved flow, inside a river's channel: the current round its boulders and slack at its banks, its own
 	 * metres along and across read straight off its field. Faded out over its ends, where it meets a lake, the sea or
 	 * the river it joins and the blended flow (the same on both sides of the join) carries on. */
@@ -390,13 +397,25 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	{
 		float lengthMetres = _RiverFlowInfo.x;
 		float2 fieldUV = float2(input.riverUV.x / lengthMetres, saturate(input.riverUV.y / input.bank.x * 0.5 + 0.5));
+		/* The field and its neighbours a cell to either side across (16 cells bank to bank). The ripples and foam ride
+		 * the current smoothed over those three: carried on the raw field, the two sides of a sharp shear slid their
+		 * patterns metres apart in one flow-map cycle, squeezing the ripples into bright lines along the flow. */
+		const float fieldCells = 16.0;
+		float2 oneCell = float2(0.0, 1.0 / fieldCells);
 		half2 local = SAMPLE_TEXTURE2D(_RiverFlowField, sampler_RiverFlowField, fieldUV).rg;
+		half2 localLeft = SAMPLE_TEXTURE2D(_RiverFlowField, sampler_RiverFlowField, saturate(fieldUV + oneCell)).rg;
+		half2 localRight = SAMPLE_TEXTURE2D(_RiverFlowField, sampler_RiverFlowField, saturate(fieldUV - oneCell)).rg;
+		half2 smoothed = (localLeft + 2.0 * local + localRight) * 0.25;
 		float2 downstream = normalize(input.bank.zw + float2(1e-5, 0.0));
 		float2 leftBank = float2(-downstream.y, downstream.x);
-		float2 solved = (downstream * local.x + leftBank * local.y) * input.bank.y;
+		float2 solved = (downstream * smoothed.x + leftBank * smoothed.y) * input.bank.y;
+		float cellMetres = max(0.05, 2.0 * input.bank.x / fieldCells);
+		shear = abs(localLeft.x - localRight.x) * input.bank.y / (2.0 * cellMetres);
 		float ends = saturate(min(input.riverUV.x, lengthMetres - input.riverUV.x) / max(4.0, 4.0 * input.bank.x));
-		half inside = saturate(1.0 - abs(input.riverUV.y) / max(0.1, input.bank.x)) > 0.0 ? 1.0 : 0.0;
+		// Into the channel over its last fifth toward each bank, not switched on at the bank's line (a seam along it).
+		half inside = smoothstep(0.0, 0.2, 1.0 - abs(input.riverUV.y) / max(0.1, input.bank.x));
 		flow = lerp(flow, solved, ends * inside * saturate(input.state.w));
+		shear *= ends * inside;
 	}
 	// Under a fall the water boils out from where the curtain lands: that flow, stirred in, and broken water.
 	float2 outward;
@@ -414,7 +433,8 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	// Two scales: the current's own, and a finer one the air stirs that hardly moves. Faster water is
 	// rougher, broken water roughest.
 	half detailFade = saturate(1.0 - distanceToCamera / max(1.0, _NormalFadeDistance));
-	half strength = _NormalStrength * detailFade * (1.0 + saturate(speed / 2.0) + broken + 1.5 * churn);
+	// Choppier along a shear line (the wavelets its turbulence raises), as well as duller (the roughness below).
+	half strength = _NormalStrength * detailFade * (1.0 + 0.6 * saturate(speed / 2.0) + 0.6 * broken + 1.5 * churn + 0.4 * saturate(shear / 2.0));
 	half3 a = UnpackNormalScale(FlowSample(TEXTURE2D_ARGS(_NormalMap, sampler_NormalMap), positionWS.xz, flow, max(0.2, _NormalScale), _FlowCycle, float2(0.0, 0.0)), strength);
 	half3 b = UnpackNormalScale(FlowSample(TEXTURE2D_ARGS(_NormalMap, sampler_NormalMap), positionWS.xz, flow * 0.25 + float2(0.05, 0.03), max(0.1, _NormalScale * 0.37), _FlowCycle * 1.7, float2(0.21, 0.13)), strength * 0.6);
 	half3 ripple = normalize(half3(a.xy + b.xy, a.z * b.z));
@@ -433,11 +453,20 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	half cluster = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, clusterUV * 0.37 + float2(0.13, 0.71)).g;
 	half train = smoothstep(0.35, 0.75, cluster);
 	half wander = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, clusterUV * 0.21 + float2(0.57, 0.29)).g;
-	float phase = 6.2831853 * (input.riverUV.x / (wavelength * (0.8 + 0.4 * wander)))
-		+ 2.2 * sin(6.2831853 * input.riverUV.y / (1.3 * wavelength) + wander * 6.2831853);
+	/* Their spacing wandering more, and their lines bowed harder and broken by the cluster noise: a metre apart and
+	 * near-parallel they caught the light as rows of glints from above and dark dashes from a bank (2026-10-07). */
+	float phase = 6.2831853 * (input.riverUV.x / (wavelength * (0.6 + 0.8 * wander)))
+		+ 3.0 * sin(6.2831853 * input.riverUV.y / (1.3 * wavelength) + wander * 6.2831853)
+		+ 4.0 * (cluster - 0.5);
+	/* Short-crested: each crest a hump a wavelength or two across, not a ridge running on across the channel. Long, even
+	 * crests caught a low sun as rows of parallel white lines on the river (Jim, 2026-10-07, at dusk); real standing waves
+	 * are separate haystacks that rise and fall. The humps drift slowly so they come and go. */
+	float2 humpUV = float2(input.riverUV.x / (1.6 * wavelength), input.riverUV.y / (1.1 * wavelength + 0.4)) * 0.23
+		+ float2(_FishInlandTime * 0.004, 0.0);
+	half hump = smoothstep(0.4, 0.85, SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, humpUV + float2(0.31, 0.47)).g);
 	half crest = saturate(sin(phase) * 0.5 + 0.5);
-	crest = crest * crest * crest * train;
-	half waveSlope = broken * saturate(speed / 1.5) * 0.28 * detailFade * train;
+	crest = crest * crest * crest * train * hump;
+	half waveSlope = broken * saturate(speed / 1.5) * 0.15 * detailFade * train * hump;
 	float2 tilt = along * (waveSlope * cos(phase));
 	// And the stones on a shallow bed, each with its hump and its V.
 	half stoneWhite;
@@ -532,7 +561,13 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	// ── Reflection, Fresnel and glint ─────────────────────────────────
 	half NdotV = saturate(dot(normalWS, view));
 	half fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
-	half perceptualRoughness = saturate((1.0 - _Smoothness) + (1.0 - detailFade) * 0.06 + broken * 0.2);
+	/* Broken water is rough: the sun spreads over it as a broad sheen, not a sparkle on every ripple. At + broken × 0.2
+	 * each ripple of a rapid kept a pin-sharp glint, and the flow-mapped ripples lined them up: rows of white ticks
+	 * that read as foam from above (FISHMMO_INLAND_DEBUG=noglint took every one away, 2026-10-07). */
+	/* And where the current shears: the turbulence there chops the surface into small irregular wavelets, a duller
+	 * band along the edge of every jet, as on a real river, rather than a polished line catching the sun. Up to 0.12
+	 * at a shear of 2 per second (a metre a second across half a metre). */
+	half perceptualRoughness = saturate((1.0 - _Smoothness) + (1.0 - detailFade) * 0.06 + broken * 0.5 + 0.12 * saturate(shear / 2.0));
 	// Specular anti-aliasing, as the sea's: ripples finer than a pixel glint as their rougher average, not as specks.
 	float3 dndx = ddx(normalWS), dndy = ddy(normalWS);
 	half normalVariance = saturate(0.25 * (dot(dndx, dndx) + dot(dndy, dndy)));
@@ -546,6 +581,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	half a2 = roughness * roughness;
 	half d = (NdotH * NdotH) * (a2 - 1.0) + 1.0;
 	half3 glint = lightColor * (a2 / max(1e-4, 3.14159 * d * d)) * _SpecularStrength * fresnel * NdotL;
+	glint = _FishInlandDebugFoam > 1.5 ? half3(0.0, 0.0, 0.0) : glint;
 	half3 color = below ? behind : lerp(behind, reflection, fresnel) + glint;
 
 	// ── Foam: on the crests of fast water's standing waves, streaked down the current, and where moving
@@ -553,7 +589,12 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	half foam = 0.0;
 	if (!below)
 	{
-		half lace = StreakFoam(positionWS.xz, flow, max(0.3, _FoamScale), _FlowCycle);
+		/* A river's foam in its own frame (riverUV: metres along, across); a lake's, whose water barely moves, in world xz
+		 * as it lies, never turned. */
+		bool onRiver = input.bank.x > 0.05;
+		float2 foamFrame = onRiver ? float2(input.riverUV.y, input.riverUV.x) : positionWS.xz;
+		float foamSpeed = onRiver ? max(0.0, dot(flow, normalize(input.bank.zw + float2(1e-5, 0.0)))) : 0.0;
+		half lace = StreakFoam(foamFrame, foamSpeed, max(0.3, _FoamScale), _FlowCycle);
 		// Round a fall's foot the pool boils rather than streaks.
 		lace = lerp(lace, BoilFoam(positionWS.xz, riverFlow, max(0.3, _FoamScale), _FlowCycle), saturate(1.6 * churn));
 		half shore = 0.0;
@@ -561,15 +602,25 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 			shore = (1.0 - saturate(waterColumn / max(0.02, _ShoreFoam))) * saturate(speed / 0.8) * 0.5;
 		#endif
 		// How much white the water can carry here: breaking crests in rapids, aeration under a fall, churn in fast water.
-		half fallChurn = churn;
-		churn = saturate(broken * (0.45 + 0.8 * crest) + saturate((speed - _FoamSpeed) / max(0.1, 2.0 * _FoamSpeed)) * 0.25);
+		// The boil is thickest where the curtain lands and thins fast toward the pool's edge: patches, not an even carpet.
+		half fallChurn = churn * churn;
+		// The river's own breaking water only (input.state.x): `broken` carries the fall's churn too, and through it the
+		// whole pool read as churned as the impact, an even carpet of white to its edge.
+		// The crests only lean on it: weighted 0.8, their bands about a metre apart drew white rows straight across every
+		// rapid (fish scales from above, 2026-10-07); the streaks' own pattern is what should show.
+		churn = saturate(input.state.x * (0.5 + 0.3 * crest) + saturate((speed - _FoamSpeed) / max(0.1, 2.0 * _FoamSpeed)) * 0.25);
 		// Under a fall the pool boils white: most of it foam near the foot, thinning to its edge.
 		half amount = max(max(max(max(churn, shore), stoneWhite * 0.8), fallChurn), wakeWhite);
 		// Thinned softly, never cut into specks: below a little churn the pattern fades out rather than leaving its peaks.
-		half cut = lerp(0.72, 0.35, amount);
-		foam = smoothstep(cut - 0.08, cut + 0.22, lace) * smoothstep(0.03, 0.35, amount);
+		half cut = lerp(0.72, 0.25, amount);
+		foam = smoothstep(cut - 0.15, cut + 0.3, lace) * smoothstep(0.02, 0.3, amount);
 		half3 foamLit = _FoamColor.rgb * (lightColor * (NdotL * 0.6 + 0.3) + _GlossyEnvironmentColor.rgb * 0.5 + 0.1);
 		color = lerp(color, foamLit, foam * 0.9);
+		if (_FishInlandDebugFoam > 0.5 && _FishInlandDebugFoam < 1.5)
+		{
+			color = half3(churn, fallChurn, max(stoneWhite * 0.8, shore));
+			foam = 1.0;
+		}
 	}
 
 	alpha = saturate(alpha * edgeFade);

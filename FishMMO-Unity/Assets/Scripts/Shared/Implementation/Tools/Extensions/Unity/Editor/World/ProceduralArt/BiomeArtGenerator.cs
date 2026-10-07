@@ -1754,7 +1754,8 @@ namespace FishMMO.Shared.WorldDesign
 		private static void WriteTree(Context c, TreeSpecies species)
 		{
 			MeshBuilder lod0 = TreeMeshes.Build(in species, 0, c.Seed);
-			MeshBuilder lod1 = TreeMeshes.Build(in species, 1, c.Seed);
+			// The reduced level keeps the full tree's foliage cover (fewer, wider cards), or distant trees go bare.
+			MeshBuilder lod1 = TreeMeshes.BuildReduced(in species, 1, c.Seed, lod0);
 			bool leaves = lod0.Submeshes[TreeMeshes.LeafSubmesh].Count > 0;
 			if (!leaves)
 			{

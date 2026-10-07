@@ -27,6 +27,9 @@
 #pragma kernel FishGrassFinalize
 #pragma kernel FishGrassProbeHeights
 #pragma kernel FishGrassArgsFence
+#pragma kernel FishGrassGatherClear
+#pragma kernel FishGrassGather
+#pragma kernel FishGrassGatherArgs
 // Diagnostic (GrassBladeRenderer.SkipTerrainColour): the generate kernel without the terrain-colour textures, so it
 // binds exactly what it did before the tint (heightmap + two density maps). Bisects the OpenGL-only flicker.
 #pragma multi_compile_local __ GRASS_NO_TERRAIN_COLOUR
@@ -144,6 +147,22 @@ void GrassLoadTerrain(uint terrain)
 
 uint _GrassItemOffset;
 uint _GrassItemCount;
+
+/* The GPU-driven gather (GrassBladeRenderer.GpuGather): every tile with grass, baked once (GrassBladeRenderer.EnsureTiles),
+ * culled here each frame into the work list the generate kernel reads, with nothing gathered or uploaded on the CPU. */
+// 16 bytes (GrassBladeRenderer.Tile): tile x, z (signed 16-bit each); terrain (low 16), group (high 16); the padded
+// height range in quarter metres (signed 16-bit each); the pad round the tile (metres). Bounds are rebuilt here.
+struct GrassTile { uint tileXZ; uint terrainGroup; uint heights; float pad; };
+StructuredBuffer<GrassTile> _GrassTiles;
+uint _GrassTileCount;
+uint _GrassGatherGroupCount;
+RWStructuredBuffer<GrassItem> _GrassItemsOut;
+RWByteAddressBuffer _GrassGatherCounts;      // per group: items written (may run past the capacity; read clamped)
+RWByteAddressBuffer _GrassGatherArgs;        // per group: the generate kernel's dispatch (x, y, z)
+ByteAddressBuffer _GrassGatherLayout;        // per group: its first item, its capacity
+uint _GrassGatherGroup;                      // the generate dispatch's group
+uint _GrassGatherCapacity;                   // and its capacity
+uint _GrassGatherFromGpu;                    // 1: the count is the gather's, not _GrassItemCount
 uint _GrassRingCount;
 
 // ── Hashes (GrassMath.Mix / Hash / Unit) ──────────────────────────────
@@ -528,7 +547,8 @@ void FishGrassClear(uint3 id : SV_DispatchThreadID)
 void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
 {
     uint itemIndex = group.x + group.y * 65535u;
-    if (itemIndex >= _GrassItemCount)
+    uint itemCount = _GrassGatherFromGpu != 0u ? min(_GrassGatherCounts.Load(_GrassGatherGroup * 4u), _GrassGatherCapacity) : _GrassItemCount;
+    if (itemIndex >= itemCount)
     {
         return;
     }
@@ -782,5 +802,127 @@ void FishGrassProbeHeights(uint3 id : SV_DispatchThreadID)
     {
         GrassLoadTerrain(_GrassProbeTerrain);
         _GrassProbeHeights[id.x] = GrassHeightAt(_GrassProbePoints[id.x]);
+    }
+}
+
+// ── The GPU-driven gather ─────────────────────────────────────────────
+
+[numthreads(8, 1, 1)]
+void FishGrassGatherClear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _GrassGatherGroupCount)
+    {
+        _GrassGatherCounts.Store(id.x * 4u, 0u);
+    }
+}
+
+// Whether a box (centre, half extents) reaches inside every plane (TerrainTreeMath.IntersectsFrustum).
+bool GrassBoxInView(float3 c, float3 e)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        float3 n = _GrassPlanes[k].xyz;
+        float reach = abs(n.x) * e.x + abs(n.y) * e.y + abs(n.z) * e.z;
+        inside = inside && dot(n, c) + _GrassPlanes[k].w + reach >= 0.0;
+    }
+    return inside;
+}
+
+// GrassMath.LevelForShare: the detail level a tile is generated at for the density share at its distance.
+int GrassLevelForShare(float share)
+{
+    int level = share >= 1.0 ? 0 : GRASS_MAX_LEVEL;
+    if (share > 0.0 && share < 1.0)
+    {
+        level = clamp((int)floor(log(1.0 / share) / log(4.0) + 1e-6), 0, GRASS_MAX_LEVEL);
+    }
+    return level;
+}
+
+/* One tile per thread, exactly the CPU gather's tests (GrassBladeRenderer.Execute): out of the grass's reach, or seen by
+ * neither the view nor its shadows (the box swept along the light, TerrainTreeMath.ShadowSweep), it is dropped; kept, its
+ * level from the share at its distance, and its items appended to its group's run of the work list. */
+[numthreads(64, 1, 1)]
+void FishGrassGather(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _GrassTileCount)
+    {
+        return;
+    }
+    GrassTile packedTile = _GrassTiles[id.x];
+    int tx = asint(packedTile.tileXZ << 16) >> 16;
+    int tz = asint(packedTile.tileXZ) >> 16;
+    uint tileTerrain = packedTile.terrainGroup & 0xFFFFu;
+    uint tileGroup = packedTile.terrainGroup >> 16;
+    float tileMetres = _GrassLattice.x * GRASS_TILE_CELLS;
+    float pad = packedTile.pad;
+    float3 boundsMin = float3(tx * tileMetres - pad, (float)(asint(packedTile.heights << 16) >> 16) * 0.25, tz * tileMetres - pad);
+    float3 boundsMax = float3((tx + 1) * tileMetres + pad, (float)(asint(packedTile.heights) >> 16) * 0.25, (tz + 1) * tileMetres + pad);
+    float3 eye = _GrassCamera.xyz;
+    float3 outside = max(max(boundsMin - eye, eye - boundsMax), 0.0);
+    float near = length(outside);
+    if (near > _GrassCamera.w)
+    {
+        return;
+    }
+    float3 centre = (boundsMin + boundsMax) * 0.5;
+    float3 extent = (boundsMax - boundsMin) * 0.5;
+    bool main = GrassBoxInView(centre, extent);
+    bool shadow = false;
+    float shadowDistance = _GrassLight.w;
+    if (shadowDistance > 0.0 && near <= shadowDistance)
+    {
+        float3 d = dot(_GrassLight.xyz, _GrassLight.xyz) > 1e-8 ? normalize(_GrassLight.xyz) : float3(0.0, -1.0, 0.0);
+        float down = max(-d.y, 0.1);
+        float run = min(shadowDistance, (boundsMax.y - boundsMin.y) / down);
+        float3 sweptMin = min(boundsMin, boundsMin + d * run);
+        float3 sweptMax = max(boundsMax, boundsMax + d * run);
+        shadow = GrassBoxInView((sweptMin + sweptMax) * 0.5, (sweptMax - sweptMin) * 0.5);
+    }
+    if (!main && !shadow)
+    {
+        return;
+    }
+    int level = GrassLevelForShare(GrassShare(near));
+    int side = GRASS_TILE_CELLS >> level;
+    int perSide = max(1, (side + GRASS_ITEM_SIDE - 1) / GRASS_ITEM_SIDE);
+    int step = 1 << level;
+    uint wanted = (uint)(perSide * perSide);
+    uint first;
+    _GrassGatherCounts.InterlockedAdd(tileGroup * 4u, wanted, first);
+    uint start = _GrassGatherLayout.Load(tileGroup * 8u);
+    uint capacity = _GrassGatherLayout.Load(tileGroup * 8u + 4u);
+    uint flags = (uint)level | (main ? 8u : 0u) | (shadow ? 16u : 0u);
+    for (int iz = 0; iz < perSide; iz++)
+    {
+        for (int ix = 0; ix < perSide; ix++)
+        {
+            uint k = first + (uint)(iz * perSide + ix);
+            if (k < capacity)
+            {
+                uint nx = (uint)min(GRASS_ITEM_SIDE, side - ix * GRASS_ITEM_SIDE);
+                uint nz = (uint)min(GRASS_ITEM_SIDE, side - iz * GRASS_ITEM_SIDE);
+                GrassItem item;
+                item.cellX = tx * GRASS_TILE_CELLS + ix * GRASS_ITEM_SIDE * step;
+                item.cellZ = tz * GRASS_TILE_CELLS + iz * GRASS_ITEM_SIDE * step;
+                item.packed = flags | (nx << 5) | (nz << 9);
+                item.terrain = tileTerrain;
+                _GrassItemsOut[start + k] = item;
+            }
+        }
+    }
+}
+
+// The generate kernel's dispatch per group from what the gather wrote: a group of threads an item, rows of 65535.
+[numthreads(8, 1, 1)]
+void FishGrassGatherArgs(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _GrassGatherGroupCount)
+    {
+        uint count = min(_GrassGatherCounts.Load(id.x * 4u), _GrassGatherLayout.Load(id.x * 8u + 4u));
+        _GrassGatherArgs.Store(id.x * 12u, min(count, 65535u));
+        _GrassGatherArgs.Store(id.x * 12u + 4u, count > 0u ? (count + 65534u) / 65535u : 0u);
+        _GrassGatherArgs.Store(id.x * 12u + 8u, 1u);
     }
 }

@@ -285,13 +285,28 @@ namespace FishMMO.Shared.WorldDesign
 			Shader.EnableKeyword("_WATER_DEPTH");
 			Shader.EnableKeyword("_WATER_REFRACTION");
 			Shader.SetGlobalFloat("_FishInlandTime", 12.5f);
+			// FISHMMO_INLAND_DEBUG=foam: the foam's inputs as colour (FishInlandWater.hlsl _FishInlandDebugFoam).
+			Shader.SetGlobalFloat("_FishInlandDebugFoam", Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "foam" ? 1f : Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "noglint" ? 2f : 0f);
 
 			var sun = new GameObject("Sun").AddComponent<Light>();
 			sun.type = LightType.Directional;
 			sun.intensity = 1.4f;
 			sun.color = new Color(1f, 0.96f, 0.9f);
 			sun.shadows = LightShadows.Soft;
-			sun.transform.rotation = Quaternion.Euler(40f, 150f, 0f);
+			// FISHMMO_INLAND_SUN="elevation,heading" (degrees): a low evening sun shows what grazing light picks out.
+			float sunElevation = 40f, sunHeading = 150f;
+			string sunAsked = Environment.GetEnvironmentVariable("FISHMMO_INLAND_SUN");
+			if (!string.IsNullOrEmpty(sunAsked))
+			{
+				string[] parts = sunAsked.Split(',');
+				float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out sunElevation);
+				if (parts.Length > 1)
+				{
+					float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out sunHeading);
+				}
+				sun.color = sunElevation < 15f ? new Color(1f, 0.72f, 0.45f) : sun.color;
+			}
+			sun.transform.rotation = Quaternion.Euler(sunElevation, sunHeading, 0f);
 			RenderSettings.sun = sun;
 			RenderSettings.skybox = new Material(Shader.Find("Skybox/Procedural"));
 			RenderSettings.ambientMode = AmbientMode.Skybox;
@@ -577,6 +592,8 @@ namespace FishMMO.Shared.WorldDesign
 			Shader.EnableKeyword("_WATER_DEPTH");
 			Shader.EnableKeyword("_WATER_REFRACTION");
 			Shader.SetGlobalFloat("_FishInlandTime", 12.5f);
+			// FISHMMO_INLAND_DEBUG=foam: the foam's inputs as colour (FishInlandWater.hlsl _FishInlandDebugFoam).
+			Shader.SetGlobalFloat("_FishInlandDebugFoam", Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "foam" ? 1f : Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "noglint" ? 2f : 0f);
 
 			var sun = new GameObject("Sun").AddComponent<Light>();
 			sun.type = LightType.Directional;
@@ -822,7 +839,7 @@ namespace FishMMO.Shared.WorldDesign
 			return terrain;
 		}
 
-		private static void Capture(Camera camera, RenderTexture target, string path)
+		internal static void Capture(Camera camera, RenderTexture target, string path)
 		{
 			for (int i = 0; i < 3; i++)
 			{

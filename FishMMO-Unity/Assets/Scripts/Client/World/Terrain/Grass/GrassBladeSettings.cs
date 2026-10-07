@@ -101,18 +101,26 @@ namespace FishMMO.Client
 		[Tooltip("Blades per square metre out to each distance, falling log-log between them; the first is the near density, which also sets the candidate lattice (cell = 1/sqrt(density)). Thinning is nested: a far blade is always one of the near ones.")]
 		public Vector2[] Rings =
 		{
-			new Vector2(8f, 1600f),
-			new Vector2(20f, 480f),
-			new Vector2(50f, 110f),
-			new Vector2(120f, 22f),
-			new Vector2(300f, 4.5f),
+			// To 50 m the count falls exactly as a blade's width on screen grows (density × distance constant, the
+			// blades widened by the same factor), so every blade stays about two pixels wide and the ground is wholly
+			// covered: the field looks as full at 50 m as at 8. Beyond, it thins faster than the pixel cap
+			// (MaxBladePixels) lets blades widen, and coverage eases off into the far field's ground colour.
+			new Vector2(7.5f, 1600f),
+			new Vector2(50f, 240f),
+			new Vector2(100f, 60f),
+			new Vector2(200f, 15f),
+			new Vector2(400f, 4f),
+			new Vector2(600f, 2f),
 		};
 
 		[Tooltip("The detail-layer density (as a share of its maximum) at and above which grass grows at the FULL ring density. The scatter paints biome grass at roughly 20–40% of the maximum; read as a straight spawn chance that thinned the near field to a few dozen blades per square metre, which looked like the old clumps. Below this the field thins in proportion, so painted edges still fade.")]
 		[Range(0.05f, 1f)] public float Fullness = 0.35f;
-		[Tooltip("Blades widen as the field thins: width × share^-exponent (0.5 keeps the covered area per blade count).")]
-		[Range(0f, 1f)] public float WidenExponent = 0.5f;
-		[Range(1f, 12f)] public float MaxWiden = 6f;
+		[Tooltip("Blades widen as the field thins: width × share^-exponent. 1 keeps the ground covered as fully as near the camera (fewer blades, each standing for the ones thinned out); 0.5 let coverage fall to two thirds by 15 m and a quarter by 50 m, which read as the grass fading out just past the camera. Flower and seed heads keep their area instead (share^-0.5 whatever this is).")]
+		[Range(0f, 1f)] public float WidenExponent = 1f;
+		[Tooltip("The most a blade widens (and a head grows), as a multiple of its near width. Past the share where it caps, coverage falls with the share: at 12 that is about 50 m with the default rings.")]
+		[Range(1f, 96f)] public float MaxWiden = 64f;
+		[Tooltip("The widest a widened blade gets ON SCREEN, pixels (at the base width, Blade Width). Blades are what a pixel shows: widening only in metres left them one or two pixels wide past 8 m and under a pixel past 100 m, which read as the grass getting smaller and sparser with distance. Where the field thins faster than this allows blades to widen, coverage falls off instead of the blades turning into cards.")]
+		[Range(0.5f, 8f)] public float MaxBladePixels = 2.5f;
 
 		[Header("Levels of detail")]
 		[Tooltip("Blades nearer than this draw the 15-vertex strip; to Lod1 Distance the 7-vertex one; beyond, a triangle.")]
@@ -121,7 +129,7 @@ namespace FishMMO.Client
 		[Tooltip("Blades nearer than this cast shadows (0: none).")]
 		[Min(0f)] public float ShadowDistance = 20f;
 		[Tooltip("The most blades the camera view can draw in a frame (all levels); the shadow views get 0.3 of it each. Appends past it are dropped.")]
-		[Min(1024)] public int BladeCap = 2500000;
+		[Min(1024)] public int BladeCap = 5000000;
 		[Tooltip("The share of the grass distance over which the field dissolves at its edge.")]
 		[Range(0.02f, 0.5f)] public float DistanceFadeBand = 0.12f;
 
@@ -136,6 +144,12 @@ namespace FishMMO.Client
 		[Range(0f, 0.8f)] public float ClumpHeightVariation = 0.3f;
 		[Tooltip("The most a blade's tip leans over (share of its height), at a clump's edge.")]
 		[Range(0f, 0.95f)] public float MaxLean = 0.5f;
+
+		[Header("Seen from above and edge-on")]
+		[Tooltip("How far blades lay over, degrees from upright, when the view looks straight down on them (none at eye level, easing in from a view about 20° down). Along a smooth direction field a few metres across, turned toward the wind as it rises (never toward or away from the camera, so the meadow does not swivel as the camera moves): from above a lawn is combed in patches. From above an upright blade is a dot: without this a lawn seen from a height was pins in a cushion.")]
+		[Range(0f, 80f)] public float TopDownLayDegrees = 60f;
+		[Tooltip("How much of a blade's width it keeps when seen edge-on (0 none: an edge-on blade is a sliver; 1 as wide as face-on). The extra width is added across the view, so a blade turned edge-on to the camera still covers what it would face-on.")]
+		[Range(0f, 1f)] public float EdgeOnThicken = 0.6f;
 
 		[Header("Light")]
 		[Tooltip("How far the normal turns toward each edge, degrees: a blade reads as a cylinder, not a card.")]

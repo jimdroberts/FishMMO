@@ -3122,6 +3122,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 869e4b96a48c468fb97e65c725b57c2e
+    m_Address: Drowning Damage
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 86a5d7685403ecd6890fb5d93f28bb98
     m_Address: Mock Channeled Flame
     m_ReadOnly: 0
@@ -5102,12 +5108,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e0d004d1b5e90374fa54e7f9aec2166a
     m_Address: Fire Damage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 869e4b96a48c468fb97e65c725b57c2e
-    m_Address: Drowning Damage
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

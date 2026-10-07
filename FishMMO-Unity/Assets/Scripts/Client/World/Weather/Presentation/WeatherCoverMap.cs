@@ -36,8 +36,13 @@ namespace FishMMO.Client
 		/// <summary>How much of the gap to the server's figure one snapshot closes.</summary>
 		private const float AnchorBlend = 0.25f;
 
-		/// <summary>Rows integrated per update: the whole map is swept over several frames.</summary>
-		private const int RowsPerUpdate = 12;
+		/// <summary>
+		/// Seconds the whole map takes to sweep, whatever the frame rate: each frame integrates the rows that time has
+		/// earned. It was twelve rows every frame, the whole map eight times a second at 60 fps (more at 300), each texel
+		/// a full weather sample and the texture uploaded every frame: 0.8 ms of the main thread for cover that moves
+		/// over minutes (ScenePerfProbe, 2026-10-07).
+		/// </summary>
+		public const float SweepSeconds = 6f;
 
 		private Texture2D texture;
 		private Color32[] pixels;
@@ -48,6 +53,7 @@ namespace FishMMO.Client
 		private Vector2 corner;
 		private int nextRow;
 		private float sinceRow;
+		private float rowCredit;
 		private bool valid;
 
 		public Texture2D Texture => texture;
@@ -89,7 +95,15 @@ namespace FishMMO.Client
 			}
 
 			sinceRow += Mathf.Max(0f, deltaTime);
-			int rows = Mathf.Min(RowsPerUpdate, resolution);
+			// A reseed has already put the anchor everywhere (Seed); the sweep then works the weather in at its own pace.
+			rowCredit += resolution * Mathf.Max(0f, deltaTime) / SweepSeconds;
+			int rows = Mathf.Min(resolution, Mathf.FloorToInt(rowCredit));
+			if (rows <= 0)
+			{
+				Publish();
+				return;
+			}
+			rowCredit -= rows;
 			// Each row is advanced by how long it has been since its own turn came round.
 			float sweepSeconds = sinceRow * resolution / Mathf.Max(1, rows);
 

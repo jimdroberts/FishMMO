@@ -170,6 +170,8 @@ namespace FishMMO.Client
 		[Range(1, 12)] public int LightSteps = 6;
 		[Tooltip("How far the clouds are drawn, in metres. They dissolve over the last quarter of it, and the haze is full by four fifths of it, so the sky ends in the colour of the horizon and not on an edge.")]
 		[Min(1000f)] public float MaxDistance = 44000f;
+		[Tooltip("Steps a ray may take past the camera's far plane, each as long as it must be to reach the end of the ray (0: no limit). The march costs as long as its longest rays, and in a storm those are the low ones that cross a hundred kilometres of deck toward the horizon; past the far plane a cloud is a few pixels of haze, and this keeps the horizon clouded without paying for it.")]
+		[Range(0, 64)] public int FarTailSteps = 24;
 		[Tooltip("How much the last frame is kept when the clouds are steadied.")]
 		[Range(0f, 0.98f)] public float TemporalBlend = 0.9f;
 		[Tooltip("Metres across that the cloud shadow cookie covers.")]

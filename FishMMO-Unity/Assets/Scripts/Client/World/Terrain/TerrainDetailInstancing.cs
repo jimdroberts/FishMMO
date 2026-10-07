@@ -301,7 +301,14 @@ namespace FishMMO.Client
 		/// which culls and thins on the GPU and so can go far past what the scene authored for Unity's own
 		/// drawing; on the CPU fallback never past the scene's own distance, every drawn instance being CPU work there.
 		/// </summary>
-		private static float EffectiveDistance(float authored) => gpu != null ? grassDistance : Mathf.Min(grassDistance, authored);
+		private static float EffectiveDistance(float authored) => gpu != null ? Mathf.Min(grassDistance, MaxChunkDistance) : Mathf.Min(grassDistance, authored);
+
+		/// <summary>
+		/// The farthest the CPU-built chunks reach on the GPU path, metres, whatever the grass distance: every chunk in reach
+		/// is built on the CPU and kept resident, and both grow with the square of the distance. The blade grass and the GPU
+		/// detail scatter, which keep nothing per instance, carry on to the full grass distance.
+		/// </summary>
+		public const float MaxChunkDistance = 250f;
 
 		private static void OnGrassSettingsChanged() => grassDistance = ClientGrassSettings.Distance;
 

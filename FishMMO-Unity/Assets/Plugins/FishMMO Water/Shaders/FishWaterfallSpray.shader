@@ -68,7 +68,8 @@ Shader "FishMMO/Water/Waterfall Spray"
                 float4 color : COLOR;           // r: the fall's drop over 30 m
                 float2 corner : TEXCOORD0;      // −1…1
                 float2 seed : TEXCOORD1;        // two seeds, 0…1
-                float2 kind : TEXCOORD2;        // x 0 spray / 1 mist (y the pool's radius, m); 2 strand / 3 veil (y the fall's drop, m; color g its run over 20 m)
+                float2 kind : TEXCOORD2;        // x 0 spray / 1 mist (y the impact zone's radius, m); 2 strand / 3 veil (y the fall's drop, m; color g its run over 20 m)
+                float2 impact : TEXCOORD3;      // spray and mist: where it starts from the impact, a share of the zone's radius (xz)
             };
 
             struct Varyings
@@ -152,28 +153,42 @@ Shader "FishMMO/Water/Waterfall Spray"
                 }
                 else if (!mist)
                 {
-                    // Flung up and out of the pool, faster under a taller fall, and falling back under gravity and drag.
-                    float up = lerp(2.0, 5.5, r1) * (0.7 + 0.25 * sqrt(drop));
-                    float out_ = lerp(0.8, 3.5, r2);
-                    float angle = (r3 - 0.5) * 2.6;
-                    float3 horizontal = (downstream * cos(angle) + sideways * sin(angle)) * out_;
+                    /* Thrown up and out from where the curtain lands: hardest and highest at the impact, softer toward the
+                     * zone's edge (out = how far out it starts, 0 at the impact, 1 at the edge), outward from the impact
+                     * with a scatter, and falling back under gravity and drag. Clumps of spray at the impact, droplets out
+                     * at the edge, and fewer of them there (InlandWaterRenderer.SprayMesh puts them out by R·u²). */
+                    float out_ = saturate(length(input.impact));
+                    float2 away2 = dot(input.impact, input.impact) > 1e-6 ? normalize(input.impact) : float2(downstream.x, downstream.z);
+                    float3 away = float3(away2.x, 0.0, away2.y);
+                    float angle = (r3 - 0.5) * 1.6;
+                    float3 outward = away * cos(angle) + float3(-away.z, 0.0, away.x) * sin(angle);
+                    float hard = lerp(1.0, 0.45, out_);
+                    /* Low and out, not up: the curtain drives the water down into the pool, and what bursts back out is thrown
+                     * a metre or two high and well out across it. At up to 16 m/s (13 m high) and stretched along its flight,
+                     * the spray read as water shooting back up the fall (Jim, 2026-10-07). */
+                    float up = lerp(1.2, 4.0, r1 * r1) * (0.8 + 0.08 * sqrt(drop)) * hard;
+                    float3 horizontal = outward * lerp(1.0, 4.0, r2) * (0.6 + 0.8 * out_) + downstream * 0.6;
                     float drag = 1.0 / (1.0 + 0.6 * t);
                     position = home + horizontal * t * drag + float3(0.0, up * t - 0.5 * g * t * t, 0.0);
                     velocity = horizontal * drag * drag + float3(0.0, up - g * t, 0.0);
                     // A droplet that has fallen back into the pool is gone.
                     opacity = position.y > home.y - 0.1 ? 1.0 : 0.0;
-                    size = _SpraySize * lerp(0.6, 1.6, r2);
-                    opacity *= smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(0.7, 1.0, age)) * _SprayOpacity;
+                    size = lerp(0.05, 0.18, r2) * lerp(1.3, 0.6, out_);
+                    opacity *= smoothstep(0.0, 0.06, age) * (1.0 - smoothstep(0.7, 1.0, age)) * saturate(_SprayOpacity * 2.2) * lerp(1.0, 0.45, out_);
                 }
                 else
                 {
-                    // Rising from the foot, spreading and drifting downstream, swelling as it goes.
-                    float rise = lerp(0.25, 0.8, r1) * (0.6 + 0.15 * sqrt(drop));
-                    float drift = lerp(0.4, 1.4, r2);
-                    float3 spread = sideways * ((r3 - 0.5) * radius * 0.8);
-                    position = home + spread * age + downstream * (drift * t) + float3(0.0, rise * t, 0.0);
-                    size = radius * _MistSize * lerp(0.35, 1.1, age) * lerp(0.7, 1.3, r3);
-                    opacity = sin(3.14159 * age) * _MistOpacity * saturate(0.4 + drop / 10.0);
+                    /* The mist boiling off the impact: dense, big and low over it, rising and spreading out from it and drifting
+                     * downstream, thinner the further out it began. */
+                    float out_ = saturate(length(input.impact));
+                    float2 away2 = dot(input.impact, input.impact) > 1e-6 ? normalize(input.impact) : float2(downstream.x, downstream.z);
+                    float3 away = float3(away2.x, 0.0, away2.y);
+                    float rise = lerp(0.3, 1.0, r1) * (0.6 + 0.15 * sqrt(drop)) * lerp(1.2, 0.7, out_);
+                    float spread = lerp(0.3, 1.2, r2) * (0.5 + out_);
+                    float drift = lerp(0.3, 1.0, r3);
+                    position = home + away * (spread * t) + downstream * (drift * t) + float3(0.0, rise * t, 0.0);
+                    size = radius * _MistSize * lerp(0.4, 1.1, age) * lerp(0.7, 1.3, r3) * lerp(1.2, 0.6, out_);
+                    opacity = sin(3.14159 * age) * saturate(_MistOpacity * 3.0) * saturate(0.4 + drop / 10.0) * lerp(1.0, 0.3, out_);
                 }
 
                 // Facing the camera; a droplet drawn out along its flight, as a fast drop is in any exposure.
@@ -186,7 +201,8 @@ Shader "FishMMO/Water/Waterfall Spray"
                     float3 toEye = normalize(_WorldSpaceCameraPos - position);
                     upAxis = velocity / speed;
                     right = normalize(cross(upAxis, toEye) + float3(1e-5, 0.0, 0.0));
-                    stretch = 1.0 + speed * 0.9;
+                    // Drawn out along its flight, less for the spray's droplets than for the strands falling with the curtain.
+                    stretch = 1.0 + speed * (kindId == 2 ? 0.9 : 0.35);
                 }
                 float3 world = position + (right * input.corner.x + upAxis * (input.corner.y * stretch)) * size;
                 output.positionCS = TransformWorldToHClip(world);

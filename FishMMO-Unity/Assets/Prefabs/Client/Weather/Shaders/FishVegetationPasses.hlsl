@@ -563,7 +563,13 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
         // is plainly outside is clipped; a bare deciduous plant's leaves still drop out whole.
         half a = tex.a * _BaseColor.a;
         half cutoff = lerp(_Cutoff, 1.01, input.tint.a * input.color.a);
-        coverage = saturate((a - cutoff) / max(fwidth(a), 1e-4) + 0.5);
+        /* The ramp is at most a quarter of the alpha range wide. Far off, a needle card is a pixel or two and
+         * neighbouring pixels read unrelated alphas: fwidth(a) ran toward 1, every leaf pixel came out near half
+         * coverage, and half coverage is the same two samples of four on every layer, so a crown of many layers
+         * never added up past half. Distant pines turned to see-through haze round an opaque trunk (Jim,
+         * 2026-10-07). Capped, a far pixel is cut by its own alpha again (the mips keep the needles' coverage:
+         * the importer's Preserve Coverage at the same cutoff), and near edges keep their soft ramp. */
+        coverage = saturate((a - cutoff) / clamp(fwidth(a), 1e-4, 0.25) + 0.5);
         clip(coverage - 0.01);
     }
     else

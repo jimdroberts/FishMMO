@@ -95,6 +95,36 @@ namespace FishMMO.Client
 		}
 
 		private static readonly List<Driven> drivenList = new List<Driven>();
+		/// <summary>Counts every change to <see cref="drivenList"/>: a work list gathered before one is stale.</summary>
+		private static int drivenVersion;
+
+		/// <summary>
+		/// How far a camera may move, metres, and turn, degrees, before the GPU work list is gathered again (as the
+		/// blade grass does, GrassBladeRenderer.RegatherMetres). Gathered against a view widened by what that sweeps at
+		/// the far edge, with the level masks widened for the move, the list holds until then; the GPU culls each
+		/// instance against the camera's own frustum every frame. Walking every chunk of every source for every camera
+		/// was 0.7 ms of the main thread in the editor (ScenePerfProbe, 2026-10-07).
+		/// </summary>
+		public const float RegatherMetres = 1.5f, RegatherDegrees = 3f;
+
+		private static Camera gatheredFor;
+		private static Vector3 gatheredEye, gatheredForward, gatheredLight;
+		private static float gatheredFov, gatheredAspect, gatheredReach, gatheredShadow, gatheredLodBias;
+		private static int gatheredVersion = -1;
+		private static readonly Plane[] widened = new Plane[6];
+
+		private static bool StillGathered(Camera camera, in TerrainTreeField.View view, float drawDistance)
+		{
+			if (gatheredFor != camera || gatheredVersion != drivenVersion || gatheredReach != drawDistance || gatheredShadow != view.ShadowDistance
+				|| gatheredFov != camera.fieldOfView || gatheredAspect != camera.aspect || gatheredLodBias != QualitySettings.lodBias)
+			{
+				return false;
+			}
+			float turn = Mathf.Cos(RegatherDegrees * Mathf.Deg2Rad);
+			return (view.Position - gatheredEye).sqrMagnitude <= RegatherMetres * RegatherMetres
+				&& Vector3.Dot(camera.transform.forward, gatheredForward) >= turn
+				&& (!view.Shadows || Vector3.Dot(view.LightDirection, gatheredLight) >= turn);
+		}
 		private static readonly HashSet<Object> drivenSources = new HashSet<Object>();
 		private static readonly Dictionary<string, TerrainTreeModel> models = new Dictionary<string, TerrainTreeModel>();
 		private static readonly List<TerrainTreeModel> modelList = new List<TerrainTreeModel>();
@@ -348,6 +378,7 @@ namespace FishMMO.Client
 			if (placed.Count == 0)
 			{
 				drivenList.Add(d);
+				drivenVersion++;
 				return;
 			}
 			var byChunk = new Dictionary<Vector2Int, Dictionary<TerrainTreeModel, List<int>>>();
@@ -412,6 +443,7 @@ namespace FishMMO.Client
 			}
 			RockCount += d.Instances.Length;
 			drivenList.Add(d);
+			drivenVersion++;
 		}
 
 		/// <summary>The model for a prefab on a layer (shared by every prop of it), or null when it cannot be drawn here.</summary>
@@ -500,6 +532,7 @@ namespace FishMMO.Client
 				d.Matrices.Dispose();
 			}
 			drivenList.Remove(d);
+			drivenVersion++;
 			drivenSources.Remove(d.Source);
 		}
 
@@ -559,10 +592,41 @@ namespace FishMMO.Client
 			{
 				modelList[i].Clear();
 			}
+			// The GPU work list kept from the last gather while the camera stays inside what it was widened for. Only
+			// when every source is resident: a CPU-path source's props are bucketed afresh each camera.
+			bool reuse = onGpu && StillGathered(camera, in view, drawDistance);
+			if (!reuse)
+			{
+				Gather(camera, in view, onGpu, reflection, drawDistance);
+			}
+			int draws = 0;
+			for (int i = 0; i < modelList.Count; i++)
+			{
+				draws += modelList[i].Draw(camera, LightProbeUsage.Off);
+			}
 			if (onGpu)
 			{
+				draws += gpu.Execute(camera, in view, drawDistance, context);
+			}
+			LastDrawCount = draws;
+		}
+
+		/// <summary>Walks every chunk for a camera: the GPU work list (against a widened view) and the CPU path's buckets.</summary>
+		private static void Gather(Camera camera, in TerrainTreeField.View view, bool onGpu, bool reflection, float drawDistance)
+		{
+			float margin = onGpu ? RegatherMetres + Mathf.Min(drawDistance, MaxDrawDistance) * RegatherDegrees * Mathf.Deg2Rad : 0f;
+			Plane[] planes = view.Planes;
+			if (onGpu)
+			{
+				for (int i = 0; i < 6; i++)
+				{
+					widened[i] = new Plane(view.Planes[i].normal, view.Planes[i].distance + margin);
+				}
+				planes = widened;
 				gpu.BeginCamera();
 			}
+			bool allResident = true;
+			float slack = onGpu ? RegatherMetres : 0f;
 			Vector3 eye = view.Position;
 			foreach (Driven d in drivenList)
 			{
@@ -572,19 +636,20 @@ namespace FishMMO.Client
 				}
 				foreach (Chunk chunk in d.Chunks)
 				{
-					float near = TerrainTreeMath.MinDistance(chunk.Bounds, eye);
+					// Nearer and farther by the move the list must outlast.
+					float near = Mathf.Max(0f, TerrainTreeMath.MinDistance(chunk.Bounds, eye) - slack);
 					if (near > Mathf.Min(drawDistance, DrawDistanceFor(chunk.MaxSize)))
 					{
 						continue;
 					}
-					bool inView = TerrainTreeMath.IntersectsFrustum(view.Planes, chunk.Bounds);
+					bool inView = TerrainTreeMath.IntersectsFrustum(planes, chunk.Bounds);
 					bool shadowOnly = !inView && view.Shadows && near <= view.ShadowDistance
-						&& TerrainTreeMath.IntersectsFrustum(view.Planes, TerrainTreeMath.ShadowSweep(chunk.Bounds, view.LightDirection, view.ShadowDistance));
+						&& TerrainTreeMath.IntersectsFrustum(planes, TerrainTreeMath.ShadowSweep(chunk.Bounds, view.LightDirection, view.ShadowDistance));
 					if (!inView && !shadowOnly)
 					{
 						continue;
 					}
-					float far = TerrainTreeMath.MaxDistance(chunk.Bounds, eye);
+					float far = TerrainTreeMath.MaxDistance(chunk.Bounds, eye) + slack;
 					foreach (Run run in chunk.Runs)
 					{
 						TerrainTreeModel model = run.Model;
@@ -617,20 +682,28 @@ namespace FishMMO.Client
 								reach * (1f - ThinShare), 0f);
 							continue;
 						}
+						allResident = false;
 						AppendByDistance(model, d.Matrices, run, chunk, in view, reach);
 					}
 				}
 			}
-			int draws = 0;
-			for (int i = 0; i < modelList.Count; i++)
+			if (onGpu && allResident)
 			{
-				draws += modelList[i].Draw(camera, LightProbeUsage.Off);
+				gatheredFor = camera;
+				gatheredVersion = drivenVersion;
+				gatheredEye = eye;
+				gatheredForward = camera.transform.forward;
+				gatheredLight = view.LightDirection;
+				gatheredFov = camera.fieldOfView;
+				gatheredAspect = camera.aspect;
+				gatheredReach = drawDistance;
+				gatheredShadow = view.ShadowDistance;
+				gatheredLodBias = QualitySettings.lodBias;
 			}
-			if (onGpu)
+			else
 			{
-				draws += gpu.Execute(camera, in view, drawDistance, context);
+				gatheredFor = null;
 			}
-			LastDrawCount = draws;
 		}
 
 		/// <summary>

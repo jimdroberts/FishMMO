@@ -55,6 +55,33 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void TheShearPastARockIsSpreadByTurbulenceNotACellWide()
+		{
+			// A turbulent river mixes the fast water past a rock into the slack behind it over a metre or two. Laminar at
+			// τ 0.56, the jet stood a cell from dead water (a step of 0.87 of the mean between neighbouring cells, measured
+			// on a port of this solve), and the ripples riding it tore into lines along the flow.
+			const int length = 160;
+			var solid = new bool[length * Ny];
+			for (int y = Ny / 2 - 2; y < Ny / 2 + 2; y++)
+			{
+				for (int x = 58; x < 62; x++)
+				{
+					solid[y * length + x] = true;
+				}
+			}
+			float[] v = RiverFlowSolver.Solve(length, solid);
+			float steepest = 0f;
+			for (int x = 62; x < 110; x++)
+			{
+				for (int y = 0; y + 1 < Ny; y++)
+				{
+					steepest = System.Math.Max(steepest, System.Math.Abs(U(v, length, x, y + 1) - U(v, length, x, y)));
+				}
+			}
+			Assert.That(steepest, Is.LessThan(0.6f), "no step across the current sharper than about half the mean speed between cells");
+		}
+
+		[Test]
 		public void ALongRiverSolvedInWindowsHasNoSeam()
 		{
 			int length = RiverFlowSolver.Window * 3;

@@ -129,14 +129,35 @@ float3 FishResolveRay(float2 uv, float3 camera)
     return normalize(world.xyz / world.w - camera);
 }
 
-// Whether a sample looked at the same thing this pixel does. Every ray stops at the world, so a
-// sample whose ray went past the edge of a post carries the sky's long march, full of scattered
-// light, and handed to the post it drew a white rim round everything. Both far away is both sky,
-// whatever the numbers say.
-float FishResolveSameSurface(float here, float there)
+// What of a texel's answer lies nearer than `depth` metres along its ray: every ray stops at the world, so
+// one that went past the pixel's surface (the sky beside a post, beside a leaf, beside a far ridge) also
+// carries everything behind that surface. Only the march's mean distance of what it saw is known
+// (`cloudDistance`), so what it saw is taken as spread evenly round that mean, as widely as the ray's own
+// length allows (fog from the camera on: the whole ray; a cloud deck far out: a narrow band), and the share
+// in front of `depth` is kept: its transmittance as that share of the optical depth, its light in proportion
+// to the opacity kept. A leaf a few metres out keeps nothing of the sky ray's kilometres (it stands clear in
+// front of the clouds); a ridge six kilometres out keeps the haze in front of it and none of a deck behind.
+//
+// This replaced "both far away is both sky": a texel and a pixel both past 4 km matched whatever their
+// depths, so on the horizon a far ridge's pixels took the sky rays' whole march (twenty kilometres of fog
+// and cloud) and the sky's took the ridge's. With the march at a sixteenth of the screen, which texels hit
+// the ridge and which the sky changed with the grid's jitter every frame, and the horizon shimmered; a ridge
+// thinner than a texel flipped between that and the leaf rule's "clear" outright.
+float4 FishResolveInFront(float4 value, float rayDepth, float cloudDistance, float depth)
 {
-    float weight = saturate(1.0 - abs(there - here) / max(12.0, here * 0.2));
-    return max(weight, saturate(min(there, here) / 4000.0));
+    float4 kept = value;
+    if (cloudDistance > 0.0 && depth < rayDepth)
+    {
+        float spread = rayDepth > cloudDistance ? min(cloudDistance, rayDepth - cloudDistance) : 0.25 * cloudDistance;
+        spread = max(1.0, spread);
+        float share = saturate((depth - (cloudDistance - spread)) / (2.0 * spread));
+        float transmittance = max(value.a, 1e-4);
+        float keptTransmittance = pow(transmittance, share);
+        float opacity = 1.0 - value.a;
+        float light = opacity > 1e-4 ? (1.0 - keptTransmittance) / opacity : share;
+        kept = float4(value.rgb * light, keptTransmittance);
+    }
+    return kept;
 }
 
 // Catmull-Rom in five bilinear reads, the corners dropped. Carrying the history from where it was to
@@ -329,13 +350,25 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
     float matched = 0.0;
     float4 closest = float4(0.0, 0.0, 0.0, 1.0);
     float closestGap = 1e30;
-    float nearestThere = 1e30;
     bool busy = false;
+    // Eye depths to distances along the rays (the march's distances are), for FishResolveInFront.
+    float alongRay = rcp(max(0.05, dot(direction, forward)));
     [unroll] for (int k = 0; k < 9; k++)
     {
         float4 value = values[k];
         busy = busy || any(value != float4(0.0, 0.0, 0.0, 1.0));
-        float same = FishResolveSameSurface(here, theres[k]);
+        // A ray that reached this pixel's depth or beyond saw what is in front of it, and more: it speaks for
+        // the pixel once cut back to its depth. One stopped nearer saw a different surface (a post in front,
+        // a slope's nearer face), and counts only by how close its depth is.
+        float same = 1.0;
+        if (theres[k] >= here)
+        {
+            value = FishResolveInFront(value, theres[k] * alongRay, motions[k].x * 1000.0, here * alongRay);
+        }
+        else
+        {
+            same = saturate(1.0 - (here - theres[k]) / max(12.0, here * 0.2));
+        }
         float2 across = FishResolveKernel(ats[k] - onGrid);
         float w = across.x * across.y * same;
         current += value * w;
@@ -352,7 +385,6 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
             sumSquares += y * y;
             matched += 1.0;
         }
-        nearestThere = min(nearestThere, theres[k]);
         float gap = abs(theres[k] - here);
         if (gap < closestGap)
         {
@@ -365,14 +397,9 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
     {
         return FishResolveClear();
     }
-    // Nearer than every ray round it, and none of them stopped at it: a leaf or twig thinner than a texel
-    // against the sky. Whatever those rays crossed is behind it, so nothing of theirs is in front of it:
-    // clear. The nearest in depth below was a sky ray every time, and at a march of a sixteenth of the
-    // screen (a texel some sixteen pixels across) left pale smudges of sky light in the canopy.
-    if (matched < 0.5 && here < nearestThere - max(12.0, here * 0.2))
-    {
-        return FishResolveClear();
-    }
+    // (A leaf or twig thinner than a texel against the sky is nearer than every ray round it: each is cut back
+    // to the leaf's depth above, which keeps next to nothing of a sky ray's kilometres, so the canopy takes no
+    // pale smudges of sky light, as the old "clear" here gave it.)
     // No texel looked at this pixel's surface (a post thinner than a texel, between hits): the one
     // nearest in depth.
     current = currentWeight > 1e-4 ? current / currentWeight : closest;

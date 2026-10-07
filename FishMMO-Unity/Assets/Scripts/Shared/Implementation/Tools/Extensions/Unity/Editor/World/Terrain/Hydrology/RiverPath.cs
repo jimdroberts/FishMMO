@@ -753,7 +753,9 @@ namespace FishMMO.Shared.WorldDesign
 						{
 							river.Width[k] += (Math.Max(river.Width[k], poolWidth) - river.Width[k]) * bowl;
 						}
-						if (k > foot && river.Reach[k] != RiverReach.Fall)
+						// The foot too: left a rapid, it is as wide as the basin, and its broken water whitened the whole pool to
+						// the outlet (SceneWaterBodies.Broken); the fall's own churn is what whitens the impact.
+						if (k >= foot && river.Reach[k] != RiverReach.Fall)
 						{
 							river.Reach[k] = RiverReach.Pool;
 						}

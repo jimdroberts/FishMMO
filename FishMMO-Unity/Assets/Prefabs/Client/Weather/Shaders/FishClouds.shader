@@ -834,6 +834,55 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             }
             ENDHLSL
         }
+        // ── 8: the light volume: the cloud's density on a coarse grid round the camera, for the light march ──
+        // Drawn into a band of tiles at a time (CloudLightVolume), each tile one slice of the grid; every pixel is the
+        // field's own density at its texel's middle, so the light march's long segments read the same cloud.
+        Pass
+        {
+            Name "CloudLightVolume"
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "FishCloudVolume.hlsl"
+
+            float4 _FishCloudLightBuildA;   // xy the grid's corner (world xz), z a texel (m), w texels a side
+            float4 _FishCloudLightBuildB;   // x its floor (world y), y a slice (m), z slices, w tiles across
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings { float4 positionCS : SV_POSITION; };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                return output;
+            }
+
+            float Frag(Varyings input) : SV_Target
+            {
+                float n = _FishCloudLightBuildA.w;
+                float2 pixel = floor(input.positionCS.xy);
+                float2 tile = floor(pixel / n);
+                float slice = tile.y * _FishCloudLightBuildB.w + tile.x;
+                if (slice >= _FishCloudLightBuildB.z)
+                {
+                    return 0.0;
+                }
+                float2 inTile = pixel - tile * n + 0.5;
+                float3 position = float3(_FishCloudLightBuildA.x + inTile.x * _FishCloudLightBuildA.z,
+                    _FishCloudLightBuildB.x + (slice + 0.5) * _FishCloudLightBuildB.y,
+                    _FishCloudLightBuildA.y + inTile.y * _FishCloudLightBuildA.z);
+                float2 axis = FishCloudAxis();
+                FishCloudField field = FishCloudFieldAt(position.xz - axis * FishCloudLean(position.y));
+                float high01;
+                return FishCloudDensity(position, 0.0, _FishCloudLightBuildA.z, field, false, high01);
+            }
+            ENDHLSL
+        }
     }
     Fallback Off
 }

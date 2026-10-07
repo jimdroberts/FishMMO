@@ -1588,6 +1588,49 @@ float3 FishCloudAirDepth(float distance, float fromAltitude, float toAltitude)
     return max(0.0, distance) * (_FishCloudAirExtinction.xyz * air + _FishCloudAerosol.x * haze);
 }
 
+// ── The light volume ──────────────────────────────────────────────────
+// The cloud's density on a coarse grid round the camera (CloudLightVolume, built a band of slices a frame by
+// the CloudLightVolume pass from FishCloudDensity itself, so it is the same cloud): what the light march's long
+// segments read instead of the whole field. A segment past the first 384 m is hundreds of metres long and wants
+// the cloud's average there, which a texel of the grid is. Slices of the volume are tiled into one 2D texture.
+TEXTURE2D(_FishCloudLightVolume);
+SAMPLER(sampler_FishCloudLightVolume);
+float4 _FishCloudLightVolumeA;   // xy the grid's corner (world xz, m), z a texel (m), w texels a side
+float4 _FishCloudLightVolumeB;   // x its floor (world y, m), y a slice (m), z slices, w tiles across the texture
+float4 _FishCloudLightVolumeC;   // x 1 while there is a volume to read
+// x the camera's far plane (m), y the steps a ray may take past it (0: no limit). FishCloudsFeature, per camera.
+float4 _FishCloudFarTail;
+
+// The density at a point from the volume, or −1 outside it (the caller asks the field instead).
+float FishCloudLightVolumeDensity(float3 position)
+{
+    if (_FishCloudLightVolumeC.x < 0.5)
+    {
+        return -1.0;
+    }
+    float n = _FishCloudLightVolumeA.w;
+    float2 cell = (position.xz - _FishCloudLightVolumeA.xy) / _FishCloudLightVolumeA.z;
+    float slice = (position.y - _FishCloudLightVolumeB.x) / _FishCloudLightVolumeB.y - 0.5;
+    float slices = _FishCloudLightVolumeB.z;
+    if (any(cell < 0.0) || any(cell > n) || slice < -0.5 || slice > slices - 0.5)
+    {
+        return -1.0;
+    }
+    float tiles = _FishCloudLightVolumeB.w;
+    float rows = ceil(slices / tiles);
+    float2 size = float2(tiles * n, rows * n);
+    // Clamped half a texel inside the tile, so the bilinear read never reaches into the next slice's tile.
+    float2 inTile = clamp(cell, 0.5, n - 0.5);
+    float s0 = clamp(floor(slice), 0.0, slices - 1.0);
+    float s1 = min(s0 + 1.0, slices - 1.0);
+    float t = saturate(slice - s0);
+    float2 tile0 = float2(fmod(s0, tiles), floor(s0 / tiles)) * n;
+    float2 tile1 = float2(fmod(s1, tiles), floor(s1 / tiles)) * n;
+    float d0 = SAMPLE_TEXTURE2D_LOD(_FishCloudLightVolume, sampler_FishCloudLightVolume, (tile0 + inTile) / size, 0).r;
+    float d1 = SAMPLE_TEXTURE2D_LOD(_FishCloudLightVolume, sampler_FishCloudLightVolume, (tile1 + inTile) / size, 0).r;
+    return lerp(d0, d1, t);
+}
+
 // How much cloud stands between a point and the sun: the optical depth that way, in a few steps
 // that grow as they go. Because it asks the whole field, a band below another is shadowed by it.
 //
@@ -1685,7 +1728,16 @@ float FishCloudLightDepth(float3 position, float3 toSun, float footprint, FishCl
         // light path through them meets. It read the detail volume at half strength on every step — up to
         // six more texture reads a sample, for speckle in the self-shadow — and that half-strength
         // thinning made the light's cloud a different size from the one it was lighting.
-        density += FishCloudDensity(position + offset, 0.0, footprint, field, k < 1, high01) * span;
+        /* Past the first two segments (384 m), the light volume's average there when the point is inside it: one
+         * texture read for what was the whole field's density, the most of what a sample cost in a storm. The first
+         * two stay live; they are what lights a cloud's edge, and finer than the volume's texels. */
+        float segment = k >= 2 ? FishCloudLightVolumeDensity(position + offset) : -1.0;
+        UNITY_BRANCH
+        if (segment < 0.0)
+        {
+            segment = FishCloudDensity(position + offset, 0.0, footprint, field, k < 1, high01);
+        }
+        density += segment * span;
         // Past this nothing gets through whatever the rest of the way holds; the remaining steps
         // would only be spent confirming it.
         if (density > 10.0)
@@ -2095,6 +2147,17 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // and a deck overhead needs the extra room. And a few dozen more with a fog to walk: at the steps
     // above a ray crosses a dense fog in fifteen or twenty and a mist to the far plane in about as many.
     int budget = steps * 4 + (fogOn ? 48 : 0);
+    // Past the camera's far plane, a fixed few steps to the end of the ray (`_FishCloudFarTail`): the march
+    // costs as long as its slowest rays (its buffer is far too small to fill the GPU, so every ray runs at
+    // once and the pass waits on the longest), and in a storm those were the low rays crossing a hundred
+    // kilometres of deck toward the horizon on the whole budget — 4.8 ms of march, and 1.8 of it gone with the
+    // rays stopped at 20 km (which emptied the low sky). A cloud past the far plane is a few pixels of haze.
+    // 24 steps saved ~3.2 ms of a storm's frame and drew the horizon as the unlimited march did; at 16 the haze
+    // under a distant base came out blotchy and a little bright (long steps through dense cloud let light by).
+    float tailPlane = _FishCloudFarTail.x;
+    int tailSteps = (int)_FishCloudFarTail.y;
+    bool tailOn = tailSteps > 0 && tailPlane > 0.0 && tailPlane < far;
+    int tailFrom = -1;
     if (stepScale < 1.0 || !stepGrows)
     {
         budget = min(1024, (int)(budget * (stepGrows ? 1.0 : 4.0) / min(1.0, stepScale)));
@@ -2360,6 +2423,12 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         if (fogShell)
         {
             stepHere = min(stepHere, fogCap);
+        }
+        // Past the far plane, never so short that the rest of the ray cannot be walked in the tail's steps.
+        if (tailOn && travelled >= tailPlane)
+        {
+            tailFrom = tailFrom < 0 ? i : tailFrom;
+            stepHere = max(stepHere, (far - travelled) / max(1.0, (float)(tailSteps - (i - tailFrom))));
         }
         // Never across the fog's floor or ceiling, or past the end of the ray: the next step begins on
         // it, so how the ray is sampled on either side of it goes by where it is and not by how many

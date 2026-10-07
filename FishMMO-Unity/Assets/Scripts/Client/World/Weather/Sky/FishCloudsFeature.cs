@@ -389,6 +389,7 @@ namespace FishMMO.Client
 			private static readonly int InverseVPId = Shader.PropertyToID("_FishCloudInverseVP");
 			private static readonly int PreviousVPId = Shader.PropertyToID("_FishCloudPreviousVP");
 			private static readonly int MarchParamsId = Shader.PropertyToID("_FishCloudMarchParams");
+			private static readonly int FarTailId = Shader.PropertyToID("_FishCloudFarTail");
 			private static readonly int LodParamsId = Shader.PropertyToID("_FishCloudLodParams");
 			private static readonly int TemporalId = Shader.PropertyToID("_FishCloudTemporal");
 			private static readonly int JitterId = Shader.PropertyToID("_FishCloudJitter");
@@ -632,6 +633,8 @@ namespace FishMMO.Client
 				// longer tells one pixel from the next, and the jitter every ray's phase depends on goes
 				// coarse the longer the game has been running. Sixty-four frames is the noise's own period.
 				material.SetVector(MarchParamsId, new Vector4(tier.Steps, tier.Detail, state.Frame % 64, sky.CloudFarDistance));
+				// Past this camera's far plane a ray has a few steps left to reach its end (FarTailSteps).
+				material.SetVector(FarTailId, new Vector4(cameraData.camera.farClipPlane, sky.CloudFarTailSteps, 0f, 0f));
 				// How wide one ray's cone opens, in metres per metre of distance. The projection's
 				// [1][1] is 1/tan(halfFov), so 2/(m11 * rows) is the height of one of `rows` pixels a
 				// metre in front of the camera. It has to be worked out here and nowhere else: this is

@@ -87,6 +87,7 @@ MonoBehaviour:
   Clouds:
     LightSteps: 6
     MaxDistance: 44000
+    FarTailSteps: 24
     TemporalBlend: 0.9
     ShadowAreaMeters: 4000
     Diagnostics:
@@ -302,24 +303,28 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 0
     Rings:
-    - {x: 8, y: 1600}
-    - {x: 20, y: 480}
-    - {x: 50, y: 110}
-    - {x: 120, y: 22}
-    - {x: 300, y: 4.5}
+    - {x: 7.5, y: 1600}
+    - {x: 50, y: 240}
+    - {x: 100, y: 60}
+    - {x: 200, y: 15}
+    - {x: 400, y: 4}
+    - {x: 600, y: 2}
     Fullness: 0.35
-    WidenExponent: 0.5
-    MaxWiden: 6
+    WidenExponent: 1
+    MaxWiden: 64
+    MaxBladePixels: 2.5
     Lod0Distance: 12
     Lod1Distance: 45
     ShadowDistance: 18.14
-    BladeCap: 2500000
+    BladeCap: 5000000
     DistanceFadeBand: 0.12
     BladeWidth: 0.012
     ClumpMetres: 0.7
     ClumpFacing: 0.45
     ClumpHeightVariation: 0.3
     MaxLean: 0.5
+    TopDownLayDegrees: 60
+    EdgeOnThicken: 0.6
     NormalRounding: 38
     RootOcclusion: 0.35
     Translucency: 0.6
@@ -363,9 +368,9 @@ MonoBehaviour:
   SeaLifeShader: {fileID: 4800000, guid: fed391ef859a41a0b7e7b819fe159a24, type: 3}
   SeaLife:
     Enabled: 1
-    DrawDistance: 140
+    DrawDistance: 70
     FadeBand: 0.2
-    ShadowDistance: 60
+    ShadowDistance: 40
     CellMetres: 96
     MaxCameraHeight: 120
     Kinds:
@@ -375,7 +380,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 0.12, y: 0.18}
       GroupSize: {x: 40, y: 90}
-      GroupsPerKm2: 150
+      GroupsPerKm2: 600
       Spread: 2.5
       Speed: 1.2
       Roam: {x: 8, y: 18}
@@ -400,7 +405,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 0.14, y: 0.3}
       GroupSize: {x: 5, y: 14}
-      GroupsPerKm2: 80
+      GroupsPerKm2: 1000
       Spread: 4
       Speed: 0.4
       Roam: {x: 2, y: 5}
@@ -432,7 +437,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 0.6, y: 1}
       GroupSize: {x: 10, y: 24}
-      GroupsPerKm2: 20
+      GroupsPerKm2: 100
       Spread: 4
       Speed: 1.8
       Roam: {x: 25, y: 50}
@@ -457,7 +462,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 2.2, y: 3.2}
       GroupSize: {x: 1, y: 1}
-      GroupsPerKm2: 3
+      GroupsPerKm2: 12
       Spread: 1
       Speed: 1.3
       Roam: {x: 30, y: 70}
@@ -482,7 +487,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 3, y: 4.5}
       GroupSize: {x: 1, y: 2}
-      GroupsPerKm2: 2
+      GroupsPerKm2: 8
       Spread: 6
       Speed: 0.9
       Roam: {x: 25, y: 50}
@@ -507,7 +512,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 0.8, y: 1.2}
       GroupSize: {x: 1, y: 1}
-      GroupsPerKm2: 8
+      GroupsPerKm2: 30
       Spread: 1
       Speed: 0.6
       Roam: {x: 12, y: 30}
@@ -534,7 +539,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 0.25, y: 0.5}
       GroupSize: {x: 5, y: 16}
-      GroupsPerKm2: 50
+      GroupsPerKm2: 200
       Spread: 8
       Speed: 0.08
       Roam: {x: 2, y: 4}
@@ -563,7 +568,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 0.15, y: 0.25}
       GroupSize: {x: 2, y: 5}
-      GroupsPerKm2: 150
+      GroupsPerKm2: 1000
       Spread: 4
       Speed: 0.12
       Roam: {x: 1, y: 3}
@@ -591,7 +596,7 @@ MonoBehaviour:
       Enabled: 1
       Length: {x: 11, y: 15}
       GroupSize: {x: 1, y: 2}
-      GroupsPerKm2: 0.4
+      GroupsPerKm2: 1.5
       Spread: 14
       Speed: 1.6
       Roam: {x: 80, y: 160}
@@ -612,4 +617,4 @@ MonoBehaviour:
       Palette: []
       Smoothness: 0.4
       CastShadows: 1
-    Version: 0
+    Version: 2

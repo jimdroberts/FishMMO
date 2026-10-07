@@ -21,14 +21,22 @@ namespace FishMMO.Client
 	public static class ClientGrassSettings
 	{
 		/// <summary>Grass distance a fresh install uses, in metres.</summary>
+		/// <remarks>
+		/// The blade grass covers the ground in full to 50 m and thins into the far field's ground colour beyond (its rings
+		/// run to 600 m for a player who sets it further). 500 m was tried as the default (2026-10-07) and judged excessive.
+		/// </remarks>
 		public const float DefaultDistance = 200f;
 
 		/// <summary>Shortest grass distance offered, in metres.</summary>
 		public const float MinimumDistance = 50f;
 
 		/// <summary>Longest grass distance offered, in metres.</summary>
-		/// <remarks>Resident instances grow with its square: 300 m holds ~6× what 120 m did.</remarks>
-		public const float MaximumDistance = 300f;
+		/// <remarks>
+		/// The blade grass and the GPU detail scatter hold nothing per blade, so their cost past a few hundred metres is the
+		/// far field's thin share. The CPU-built mesh detail chunks (ferns, shrubs) stop at
+		/// <c>TerrainDetailInstancing.MaxChunkDistance</c> whatever this is: their resident instances grow with its square.
+		/// </remarks>
+		public const float MaximumDistance = 1000f;
 
 		/// <summary>Raised when the grass distance changes. The detail renderer re-reads it.</summary>
 		public static event Action OnChanged;

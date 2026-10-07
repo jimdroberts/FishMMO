@@ -28,7 +28,13 @@ namespace FishMMO.Client
 		/// <summary>The slot's level of detail (camera 0..2, shadow 0..1).</summary>
 		private static readonly int[] SlotLod = { 0, 1, 2, 0, 1 };
 		/// <summary>The slot's share of the blade cap.</summary>
-		private static readonly float[] SlotShare = { 0.3f, 0.5f, 0.5f, 0.3f, 0.3f };
+		/// <remarks>
+		/// Sized to where the blades are: with the default rings a camera sees ~0.16 M blades nearer than LOD0's 12 m, ~0.6 M
+		/// to LOD1's 45 m and ~2.3 M beyond (to 500 m), and casts shadows only to 20 m. Every slot keeps headroom over that.
+		/// </remarks>
+		private static readonly float[] SlotShare = { 0.06f, 0.2f, 0.6f, 0.06f, 0.06f };
+		private static readonly int ScreenId = Shader.PropertyToID("_GrassScreen");
+		private static readonly int ViewerId = Shader.PropertyToID("_GrassViewer");
 
 		[StructLayout(LayoutKind.Sequential)]
 		private struct Item
@@ -37,6 +43,31 @@ namespace FishMMO.Client
 			public int CellX, CellZ;
 			public uint Packed, Terrain;
 		}
+
+		/// <summary>
+		/// A tile with grass, as the GPU gather reads it (FishGrassBlades.compute GrassTile), baked once in 16 bytes: its
+		/// place on the tile grid (two signed 16-bit), terrain (low 16) and group (high 16), its padded height range in
+		/// quarter metres (two signed 16-bit, rounded outward), and the pad round it. Bounds were 48 bytes a tile, and Flo
+		/// Monolith has 720 000 tiles at 2.5 cm cells: 35 MB of tile table.
+		/// </summary>
+		[StructLayout(LayoutKind.Sequential)]
+		private struct Tile
+		{
+			public const int Stride = 16;
+			public const float HeightStep = 0.25f;
+			public uint TileXZ, TerrainGroup, Heights;
+			public float Pad;
+
+			public static uint PackPair(int low, int high) => (uint)(low & 0xFFFF) | ((uint)(high & 0xFFFF) << 16);
+		}
+
+		/// <summary>
+		/// The GPU-driven gather: every tile with grass baked once into a table (<see cref="EnsureTiles"/>), and each frame
+		/// a compute pass culls it (reach, view, the shadows' sweep), picks each tile's level and writes the work list the
+		/// generation reads, dispatched indirectly from the counts it wrote. Nothing is gathered or uploaded on the CPU per
+		/// frame. Off: the CPU gather (the work list kept across frames, RegatherMetres). Jim, 2026-10-07: "the real fix".
+		/// </summary>
+		public static bool GpuGather = true;
 
 		private struct GroupRange
 		{
@@ -71,6 +102,16 @@ namespace FishMMO.Client
 		private static readonly int TypeHeadColourId = Shader.PropertyToID("_GrassTypeHeadColour");
 		private static readonly int Capacity0Id = Shader.PropertyToID("_GrassCapacity0");
 		private static readonly int Capacity1Id = Shader.PropertyToID("_GrassCapacity1");
+		private static readonly int TilesId = Shader.PropertyToID("_GrassTiles");
+		private static readonly int TileCountId = Shader.PropertyToID("_GrassTileCount");
+		private static readonly int ItemsOutId = Shader.PropertyToID("_GrassItemsOut");
+		private static readonly int GatherCountsId = Shader.PropertyToID("_GrassGatherCounts");
+		private static readonly int GatherArgsId = Shader.PropertyToID("_GrassGatherArgs");
+		private static readonly int GatherLayoutId = Shader.PropertyToID("_GrassGatherLayout");
+		private static readonly int GatherGroupCountId = Shader.PropertyToID("_GrassGatherGroupCount");
+		private static readonly int GatherGroupId = Shader.PropertyToID("_GrassGatherGroup");
+		private static readonly int GatherCapacityId = Shader.PropertyToID("_GrassGatherCapacity");
+		private static readonly int GatherFromGpuId = Shader.PropertyToID("_GrassGatherFromGpu");
 		private static readonly int ItemOffsetId = Shader.PropertyToID("_GrassItemOffset");
 		private static readonly int ItemCountId = Shader.PropertyToID("_GrassItemCount");
 		private static readonly int SurfaceLayersId = Shader.PropertyToID("_GrassSurfaceLayers");
@@ -98,6 +139,18 @@ namespace FishMMO.Client
 
 		private readonly ComputeShader compute;
 		private readonly int clearKernel, generateKernel, finalizeKernel, probeKernel, argsFenceKernel;
+		private readonly int gatherClearKernel = -1, gatherKernel = -1, gatherArgsKernel = -1;
+		private GraphicsBuffer tileBuffer, gatherItems, gatherCounts, gatherArgs, gatherLayout;
+		private readonly List<Tile> tileList = new List<Tile>();
+		private int tileCount;
+		private int[] groupBase = new int[0], groupCapacity = new int[0];
+		private int tilesAtlas = -1, tilesFoliage = -1;
+		private float tilesCell = -1f, tilesClump = -1f, tilesDistance = -1f, tilesRings = float.NaN;
+
+		/// <summary>The GPU gather's items written last (summed over groups, clamped to their capacities), read back in the editor.</summary>
+		public static int GpuItems;
+
+		private bool GpuGatherReady => gatherKernel >= 0 && gatherClearKernel >= 0 && gatherArgsKernel >= 0 && SystemInfo.supportsIndirectArgumentsBuffer;
 		private static readonly int ArgsFenceId = Shader.PropertyToID("_GrassArgsFence");
 
 		/// <summary>
@@ -139,6 +192,9 @@ namespace FishMMO.Client
 		/// (ScenePerfProbe, 2026-10-07: 3 500 tiles, 67 000 items) for a list that changes only as the camera moves.
 		/// </summary>
 		public const float RegatherMetres = 1.5f, RegatherDegrees = 3f;
+
+		/// <summary>Tiles a side in the blocks the gather culls before their tiles (8 × 8: about 50 m at the near density).</summary>
+		public const int GatherBlockTiles = 8;
 
 		private Camera gatheredFor;
 		private Vector3 gatheredEye, gatheredForward, gatheredLight;
@@ -280,7 +336,7 @@ namespace FishMMO.Client
 		{
 			get
 			{
-				long n = Size(itemBuffer) + Size(countBuffer) + Size(argsBuffer);
+				long n = Size(itemBuffer) + Size(countBuffer) + Size(argsBuffer) + Size(tileBuffer) + Size(gatherItems) + Size(gatherCounts) + Size(gatherArgs) + Size(gatherLayout);
 				foreach (GraphicsBuffer b in outBuffers)
 				{
 					n += Size(b);
@@ -299,6 +355,14 @@ namespace FishMMO.Client
 			finalizeKernel = compute.FindKernel("FishGrassFinalize");
 			probeKernel = compute.FindKernel("FishGrassProbeHeights");
 			argsFenceKernel = compute.FindKernel("FishGrassArgsFence");
+			if (compute.HasKernel("FishGrassGather") && compute.HasKernel("FishGrassGatherClear") && compute.HasKernel("FishGrassGatherArgs"))
+			{
+				gatherClearKernel = compute.FindKernel("FishGrassGatherClear");
+				gatherKernel = compute.FindKernel("FishGrassGather");
+				gatherArgsKernel = compute.FindKernel("FishGrassGatherArgs");
+			}
+			// Bound to the generate kernel on either path (it reads the count from it when the gather is on the GPU).
+			gatherCounts = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 16, 4);
 			noTerrainColour = new LocalKeyword(compute, "GRASS_NO_TERRAIN_COLOUR");
 			material = new Material(shader) { name = "Grass Blades (runtime)", hideFlags = HideFlags.DontSave };
 			for (int s = 0; s < Slots; s++)
@@ -476,8 +540,9 @@ namespace FishMMO.Client
 			material.SetVector(Params3Id, new Vector4(s.RootGroundBlend, s.RootGroundHeight, s.GroundHueTint, s.Specular));
 			material.SetVector(Params4Id, new Vector4(s.MaxWindBendDegrees * Mathf.Deg2Rad, s.GustSharpness, s.GustSpeed, s.GustSheen));
 			material.SetVector(Params5Id, new Vector4(s.FarBlendStart, s.FarBlendEnd, s.FarGroundPull, s.FarNormalFlatten));
-			material.SetVector(Params6Id, new Vector4(s.TerrainTextureTint, s.TerrainTextureBrightness, s.TerrainTextureRoot, 0f));
-			material.SetVector(Params7Id, new Vector4(s.WindCalmStart, Mathf.Max(s.WindCalmStart + 1f, s.WindCalmEnd), s.FarWind, 0f));
+			material.SetVector(Params6Id, new Vector4(s.TerrainTextureTint, s.TerrainTextureBrightness, s.TerrainTextureRoot, Mathf.Clamp01(s.EdgeOnThicken)));
+			material.SetVector(Params7Id, new Vector4(s.WindCalmStart, Mathf.Max(s.WindCalmStart + 1f, s.WindCalmEnd), s.FarWind,
+				Mathf.Sin(Mathf.Clamp(s.TopDownLayDegrees, 0f, 80f) * Mathf.Deg2Rad)));
 			colourFootprint = Mathf.Max(0.01f, s.TerrainTextureFootprint);
 			EnsureCapacity(s.BladeCap);
 			// One set's albedo copy a frame (a blit and a readback per layer), outside any camera's rendering.
@@ -531,6 +596,16 @@ namespace FishMMO.Client
 			TimedCalls++;
 			ReleaseRetired(false);
 			Shader.SetGlobalFloat(HighlightId, Highlight ? 1f : 0f);
+			// This camera's pixel at a distance, for the blades' on-screen width cap (FishGrassBlades.hlsl). A global, set
+			// before every draw of this camera, so its shadow casters widen exactly as its blades do.
+			float pixelsHigh = Mathf.Max(1f, camera.pixelHeight);
+			float perMetre = camera.orthographic ? 0f : 2f * Mathf.Tan(0.5f * camera.fieldOfView * Mathf.Deg2Rad) / pixelsHigh;
+			float flat = camera.orthographic ? 2f * camera.orthographicSize / pixelsHigh : 0f;
+			Shader.SetGlobalVector(ScreenId, new Vector4(perMetre, flat, Mathf.Max(0.1f, s.MaxBladePixels) / Mathf.Max(1e-4f, s.BladeWidth), 0f));
+			// And where it stands, for the lay-over seen from above and the edge-on thickening: the shadow pass's own
+			// camera is the light's, and its casters must take the shape this camera's blades have.
+			Vector3 viewer = camera.transform.position;
+			Shader.SetGlobalVector(ViewerId, new Vector4(viewer.x, viewer.y, viewer.z, 0f));
 			float cell = s.CellMetres;
 			float tile = GrassMath.TileCells * cell;
 			float shadowDistance = view.Shadows ? Mathf.Min(s.ShadowDistance, view.ShadowDistance) : 0f;
@@ -545,12 +620,25 @@ namespace FishMMO.Client
 			{
 				return 0;
 			}
+			bool gpuGather = false;
+			if (GpuGather && GpuGatherReady)
+			{
+				if (!EnsureTiles(s, cell, grassDistance))
+				{
+					return 0;
+				}
+				gpuGather = true;
+			}
 			Vector3 eye = view.Position;
 			// Kept from the last gather while the camera has not moved or turned past what it was widened for.
-			bool reuse = StillGathered(camera, in view, cell, grassDistance, shadowDistance);
-			int tiles = gatheredTiles;
-			long candidates = gatheredCandidates;
-			if (!reuse)
+			bool reuse = !gpuGather && StillGathered(camera, in view, cell, grassDistance, shadowDistance);
+			int tiles = gpuGather ? tileCount : gatheredTiles;
+			long candidates = gpuGather ? 0 : gatheredCandidates;
+			if (gpuGather)
+			{
+				itemCount = GpuItems;
+			}
+			else if (!reuse)
 			{
 				itemCount = 0;
 				ranges.Clear();
@@ -578,59 +666,90 @@ namespace FishMMO.Client
 						}
 						int tx0 = Mathf.FloorToInt(x0 / tile), tx1 = Mathf.FloorToInt(x1 / tile);
 						int tz0 = Mathf.FloorToInt(z0 / tile), tz1 = Mathf.FloorToInt(z1 / tile);
-						for (int tz = tz0; tz <= tz1; tz++)
+						// Blocks of tiles first, as one: a block with no grass, out of reach, or seen by neither the view nor its
+						// shadows is passed over whole, so a regather walks the tiles of only the blocks that matter.
+						float blockReach = gt.MaxGrassHeight * 1.6f + 0.5f;
+						float blockPad = s.ClumpMetres + blockReach;
+						for (int blockZ = tz0; blockZ <= tz1; blockZ += GatherBlockTiles)
 						{
-							for (int tx = tx0; tx <= tx1; tx++)
+							for (int blockX = tx0; blockX <= tx1; blockX += GatherBlockTiles)
 							{
-								float bx0 = Mathf.Max(tx * tile, rx0), bx1 = Mathf.Min((tx + 1) * tile, rx1);
-								float bz0 = Mathf.Max(tz * tile, rz0), bz1 = Mathf.Min((tz + 1) * tile, rz1);
-								if (bx0 >= bx1 || bz0 >= bz1 || !gt.HasGrass(bx0, bz0, bx1, bz1))
+								int lastX = Mathf.Min(blockX + GatherBlockTiles - 1, tx1), lastZ = Mathf.Min(blockZ + GatherBlockTiles - 1, tz1);
+								float qx0 = Mathf.Max(blockX * tile, rx0), qx1 = Mathf.Min((lastX + 1) * tile, rx1);
+								float qz0 = Mathf.Max(blockZ * tile, rz0), qz1 = Mathf.Min((lastZ + 1) * tile, rz1);
+								if (qx0 >= qx1 || qz0 >= qz1 || !gt.HasGrass(qx0, qz0, qx1, qz1))
 								{
 									continue;
 								}
-								Vector2 heights = gt.HeightRange(bx0, bz0, bx1, bz1);
-								var bounds = new Bounds();
-								// Room for the clump pull (blades leave their cell toward the clump's centre) and the wind: a blade
-								// laid over reaches its full length sideways (up to 1.6 x the type height with the clump and own
-								// variation, as the top). With 0.5 m the edge tiles were culled while their bent blades showed.
-								float reach = gt.MaxGrassHeight * 1.6f + 0.5f;
-								float pad = s.ClumpMetres + reach;
-								bounds.SetMinMax(new Vector3(bx0 - pad, heights.x - 0.2f, bz0 - pad), new Vector3(bx1 + pad, heights.y + reach, bz1 + pad));
-								float near = TerrainTreeMath.MinDistance(bounds, eye);
-								if (near > grassDistance)
+								Vector2 blockHeights = gt.HeightRange(qx0, qz0, qx1, qz1);
+								var blockBounds = new Bounds();
+								blockBounds.SetMinMax(new Vector3(qx0 - blockPad, blockHeights.x - 0.2f, qz0 - blockPad), new Vector3(qx1 + blockPad, blockHeights.y + blockReach, qz1 + blockPad));
+								float blockNear = TerrainTreeMath.MinDistance(blockBounds, eye);
+								if (blockNear > grassDistance)
 								{
 									continue;
 								}
-								bool main = TerrainTreeMath.IntersectsFrustum(gatherPlanes, bounds);
-								bool shadow = shadowDistance > 0f && near <= shadowDistance
-									&& TerrainTreeMath.IntersectsFrustum(gatherPlanes, TerrainTreeMath.ShadowSweep(bounds, view.LightDirection, shadowDistance));
-								if (!main && !shadow)
+								if (!TerrainTreeMath.IntersectsFrustum(gatherPlanes, blockBounds)
+									&& !(shadowDistance > 0f && blockNear <= shadowDistance
+										&& TerrainTreeMath.IntersectsFrustum(gatherPlanes, TerrainTreeMath.ShadowSweep(blockBounds, view.LightDirection, shadowDistance))))
 								{
 									continue;
 								}
-								float share = GrassMath.Share(near, ringDistanceF, ringDensityF, ringCount);
-								int level = GrassMath.LevelForShare(share);
-								int side = GrassMath.TileCells >> level;
-								int perSide = GrassMath.ItemsPerSide(level);
-								int step = 1 << level;
-								EnsureItems(itemCount + perSide * perSide);
-								for (int iz = 0; iz < perSide; iz++)
+								for (int tz = blockZ; tz <= lastZ; tz++)
 								{
-									for (int ix = 0; ix < perSide; ix++)
+									for (int tx = blockX; tx <= lastX; tx++)
 									{
-										int nx = Mathf.Min(GrassMath.ItemSide, side - ix * GrassMath.ItemSide);
-										int nz = Mathf.Min(GrassMath.ItemSide, side - iz * GrassMath.ItemSide);
-										items[itemCount++] = new Item
+										float bx0 = Mathf.Max(tx * tile, rx0), bx1 = Mathf.Min((tx + 1) * tile, rx1);
+										float bz0 = Mathf.Max(tz * tile, rz0), bz1 = Mathf.Min((tz + 1) * tile, rz1);
+										if (bx0 >= bx1 || bz0 >= bz1 || !gt.HasGrass(bx0, bz0, bx1, bz1))
 										{
-											CellX = tx * GrassMath.TileCells + ix * GrassMath.ItemSide * step,
-											CellZ = tz * GrassMath.TileCells + iz * GrassMath.ItemSide * step,
-											Packed = (uint)level | (main ? 8u : 0u) | (shadow ? 16u : 0u) | (uint)nx << 5 | (uint)nz << 9,
-										Terrain = terrainIndex,
-										};
-										candidates += nx * nz;
+											continue;
+										}
+										Vector2 heights = gt.HeightRange(bx0, bz0, bx1, bz1);
+										var bounds = new Bounds();
+										// Room for the clump pull (blades leave their cell toward the clump's centre) and the wind: a blade
+										// laid over reaches its full length sideways (up to 1.6 x the type height with the clump and own
+										// variation, as the top). With 0.5 m the edge tiles were culled while their bent blades showed.
+										float reach = gt.MaxGrassHeight * 1.6f + 0.5f;
+										float pad = s.ClumpMetres + reach;
+										bounds.SetMinMax(new Vector3(bx0 - pad, heights.x - 0.2f, bz0 - pad), new Vector3(bx1 + pad, heights.y + reach, bz1 + pad));
+										float near = TerrainTreeMath.MinDistance(bounds, eye);
+										if (near > grassDistance)
+										{
+											continue;
+										}
+										bool main = TerrainTreeMath.IntersectsFrustum(gatherPlanes, bounds);
+										bool shadow = shadowDistance > 0f && near <= shadowDistance
+											&& TerrainTreeMath.IntersectsFrustum(gatherPlanes, TerrainTreeMath.ShadowSweep(bounds, view.LightDirection, shadowDistance));
+										if (!main && !shadow)
+										{
+											continue;
+										}
+										float share = GrassMath.Share(near, ringDistanceF, ringDensityF, ringCount);
+										int level = GrassMath.LevelForShare(share);
+										int side = GrassMath.TileCells >> level;
+										int perSide = GrassMath.ItemsPerSide(level);
+										int step = 1 << level;
+										EnsureItems(itemCount + perSide * perSide);
+										for (int iz = 0; iz < perSide; iz++)
+										{
+											for (int ix = 0; ix < perSide; ix++)
+											{
+												int nx = Mathf.Min(GrassMath.ItemSide, side - ix * GrassMath.ItemSide);
+												int nz = Mathf.Min(GrassMath.ItemSide, side - iz * GrassMath.ItemSide);
+												items[itemCount++] = new Item
+												{
+													CellX = tx * GrassMath.TileCells + ix * GrassMath.ItemSide * step,
+													CellZ = tz * GrassMath.TileCells + iz * GrassMath.ItemSide * step,
+													Packed = (uint)level | (main ? 8u : 0u) | (shadow ? 16u : 0u) | (uint)nx << 5 | (uint)nz << 9,
+												Terrain = terrainIndex,
+												};
+												candidates += nx * nz;
+											}
+										}
+										tiles++;
 									}
 								}
-								tiles++;
 							}
 						}
 					}
@@ -653,17 +772,18 @@ namespace FishMMO.Client
 			TimeGather += TerrainInstancingProbe.Now - t1;
 			TimedItems = itemCount;
 			TimedTiles = tiles;
-			if (itemCount == 0)
+			if (!gpuGather && itemCount == 0)
 			{
 				return 0;
 			}
-			if (itemBuffer == null || itemBuffer.count < itemCount)
+			if (!gpuGather && (itemBuffer == null || itemBuffer.count < itemCount))
 			{
 				if (itemBuffer != null)
 				{
 					retired.Add((itemBuffer, Time.frameCount));
 				}
 				itemBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Mathf.Max(itemCount, items.Length), Item.Stride);
+				reuse = false;
 			}
 
 			for (int i = 0; i < 6; i++)
@@ -674,7 +794,7 @@ namespace FishMMO.Client
 			double recordStart = TerrainInstancingProbe.Now;
 			cmd.Clear();
 			// A reused work list is already in the buffer (only a new gather can grow it, which reallocates).
-			if (!reuse)
+			if (!gpuGather && !reuse)
 			{
 				cmd.SetBufferData(itemBuffer, items, 0, 0, itemCount);
 			}
@@ -694,11 +814,18 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorParam(compute, Capacity0Id, new Vector4(capacities[0], capacities[1], capacities[2], capacities[3]));
 			cmd.SetComputeVectorParam(compute, Capacity1Id, new Vector4(capacities[4], 0f, 0f, 0f));
 
+			if (gpuGather)
+			{
+				RecordGather();
+			}
+
 			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
 			cmd.DispatchCompute(compute, clearKernel, 1, 1, 1);
 
 			compute.SetKeyword(noTerrainColour, SkipTerrainColour);
-			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, itemBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, gpuGather ? gatherItems : itemBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, GatherCountsId, gatherCounts);
+			cmd.SetComputeIntParam(compute, GatherFromGpuId, gpuGather ? 1 : 0);
 			cmd.SetComputeBufferParam(compute, generateKernel, CountsId, countBuffer);
 			for (int slot = 0; slot < Slots; slot++)
 			{
@@ -706,7 +833,27 @@ namespace FishMMO.Client
 			}
 			cmd.SetComputeBufferParam(compute, generateKernel, SharedId, atlas.Shared);
 			cmd.SetComputeVectorParam(compute, ColourId, new Vector4(colourFootprint, cell, ConstantTerrainColour ? 1f : 0f, 0f));
-			for (int r = 0; r < ranges.Count; r++)
+			if (gpuGather)
+			{
+				// One indirect dispatch per resolution group, from the counts the gather wrote.
+				for (int g = 0; g < atlas.Groups.Count; g++)
+				{
+					GrassTerrainAtlas.Group group = atlas.Groups[g];
+					cmd.SetComputeTextureParam(compute, generateKernel, HeightmapId, group.Heights);
+					cmd.SetComputeTextureParam(compute, generateKernel, Density0Id, group.Density0);
+					cmd.SetComputeTextureParam(compute, generateKernel, Density1Id, group.Density1);
+					if (!SkipTerrainColour)
+					{
+						cmd.SetComputeTextureParam(compute, generateKernel, SurfaceLayersId, group.Surface);
+					}
+					cmd.SetComputeIntParam(compute, ItemOffsetId, groupBase[g]);
+					cmd.SetComputeIntParam(compute, ItemCountId, 0);
+					cmd.SetComputeIntParam(compute, GatherGroupId, g);
+					cmd.SetComputeIntParam(compute, GatherCapacityId, groupCapacity[g]);
+					cmd.DispatchCompute(compute, generateKernel, gatherArgs, (uint)(g * 12));
+				}
+			}
+			for (int r = 0; !gpuGather && r < ranges.Count; r++)
 			{
 				GroupRange range = ranges[ReverseDispatchOrder ? ranges.Count - 1 - r : r];
 				GrassTerrainAtlas.Group group = range.Group;
@@ -750,6 +897,29 @@ namespace FishMMO.Client
 			if ((StatsEnabled || Application.isEditor) && camera.cameraType == CameraType.Game && Time.frameCount - lastStatsFrame >= StatsInterval)
 			{
 				lastStatsFrame = Time.frameCount;
+				if (gpuGather)
+				{
+					int[] capacitiesNow = (int[])groupCapacity.Clone();
+					cmd.RequestAsyncReadback(gatherCounts, request =>
+					{
+						if (request.hasError)
+						{
+							return;
+						}
+						NativeArray<uint> written = request.GetData<uint>();
+						int sum = 0;
+						for (int g = 0; g < capacitiesNow.Length && g < written.Length; g++)
+						{
+							sum += (int)Mathf.Min(written[g], capacitiesNow[g]);
+							if (written[g] > capacitiesNow[g] && !gatherOverflowWarned)
+							{
+								gatherOverflowWarned = true;
+								Debug.LogWarning($"[Grass] The GPU gather's work list overflowed group {g}: {written[g]} items for a capacity of {capacitiesNow[g]}. Tiles past it go ungenerated.");
+							}
+						}
+						GpuItems = sum;
+					});
+				}
 				cmd.RequestAsyncReadback(countBuffer, request =>
 				{
 					if (request.hasError)
@@ -779,6 +949,172 @@ namespace FishMMO.Client
 			int issued = IssueDraws(camera, terrains, eye, grassDistance, shadowDistance);
 			TimeDraws += TerrainInstancingProbe.Now - drawsAt;
 			return issued;
+		}
+
+		private bool gatherOverflowWarned;
+
+		/// <summary>
+		/// The tile table for the GPU gather: every tile of every drawn terrain with grass on it, its bounds padded as the
+		/// CPU gather pads them (clump pull and the wind's lean), its first cell, terrain and resolution group, with each
+		/// group's run of the work list sized to the most items a camera anywhere can want (<see cref="DiscItems"/>).
+		/// Built again only when the atlas, the lattice, the grass distance or the rings change. False: no grass at all.
+		/// </summary>
+		private bool EnsureTiles(GrassBladeSettings s, float cell, float grassDistance)
+		{
+			int foliage = 17;
+			foreach (GrassTerrainAtlas.Group group in atlas.Groups)
+			{
+				foreach (GrassTerrain gt in group.Terrains)
+				{
+					foliage = foliage * 31 + (gt.Terrain != null && gt.Terrain.drawTreesAndFoliage ? 1 : 0);
+				}
+			}
+			if (tilesAtlas == atlas.Version && tilesCell == cell && tilesClump == s.ClumpMetres && tilesDistance == grassDistance
+				&& tilesRings == ringSignature && tilesFoliage == foliage && tileBuffer != null)
+			{
+				return tileCount > 0;
+			}
+			tilesAtlas = atlas.Version;
+			tilesCell = cell;
+			tilesClump = s.ClumpMetres;
+			tilesDistance = grassDistance;
+			tilesRings = ringSignature;
+			tilesFoliage = foliage;
+
+			float tile = GrassMath.TileCells * cell;
+			int groups = atlas.Groups.Count;
+			groupBase = new int[groups];
+			groupCapacity = new int[groups];
+			int disc = DiscItems(tile, grassDistance);
+			int fullTile = GrassMath.ItemsPerSide(0) * GrassMath.ItemsPerSide(0);
+			tileList.Clear();
+			int total = 0;
+			for (int g = 0; g < groups; g++)
+			{
+				int start = tileList.Count;
+				foreach (GrassTerrain gt in atlas.Groups[g].Terrains)
+				{
+					if (gt.Terrain == null || !gt.Terrain.drawTreesAndFoliage)
+					{
+						continue;
+					}
+					uint terrainIndex = (uint)atlas.IndexOf(gt);
+					float rx0 = gt.Origin.x, rz0 = gt.Origin.z, rx1 = rx0 + gt.Size.x, rz1 = rz0 + gt.Size.z;
+					float reach = gt.MaxGrassHeight * 1.6f + 0.5f;
+					float pad = s.ClumpMetres + reach;
+					int tx0 = Mathf.FloorToInt(rx0 / tile), tx1 = Mathf.FloorToInt(rx1 / tile);
+					int tz0 = Mathf.FloorToInt(rz0 / tile), tz1 = Mathf.FloorToInt(rz1 / tile);
+					for (int tz = tz0; tz <= tz1; tz++)
+					{
+						for (int tx = tx0; tx <= tx1; tx++)
+						{
+							float bx0 = Mathf.Max(tx * tile, rx0), bx1 = Mathf.Min((tx + 1) * tile, rx1);
+							float bz0 = Mathf.Max(tz * tile, rz0), bz1 = Mathf.Min((tz + 1) * tile, rz1);
+							if (bx0 >= bx1 || bz0 >= bz1 || !gt.HasGrass(bx0, bz0, bx1, bz1))
+							{
+								continue;
+							}
+							Vector2 heights = gt.HeightRange(bx0, bz0, bx1, bz1);
+							int low = Mathf.Clamp(Mathf.FloorToInt((heights.x - 0.2f) / Tile.HeightStep), short.MinValue, short.MaxValue);
+							int high = Mathf.Clamp(Mathf.CeilToInt((heights.y + reach) / Tile.HeightStep), short.MinValue, short.MaxValue);
+							tileList.Add(new Tile
+							{
+								TileXZ = Tile.PackPair(tx, tz),
+								TerrainGroup = (terrainIndex & 0xFFFFu) | ((uint)g << 16),
+								Heights = Tile.PackPair(low, high),
+								Pad = pad,
+							});
+						}
+					}
+				}
+				groupBase[g] = total;
+				groupCapacity[g] = (int)Mathf.Min((long)disc, (long)(tileList.Count - start) * fullTile);
+				total += groupCapacity[g];
+			}
+			tileCount = tileList.Count;
+			if (tileCount == 0)
+			{
+				return false;
+			}
+			Retire(ref tileBuffer);
+			tileBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, tileCount, Tile.Stride);
+			tileBuffer.SetData(tileList);
+			Retire(ref gatherItems);
+			gatherItems = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Mathf.Max(1, total), Item.Stride);
+			Retire(ref gatherLayout);
+			gatherLayout = new GraphicsBuffer(GraphicsBuffer.Target.Raw, Mathf.Max(2, groups * 2), 4);
+			var layout = new uint[Mathf.Max(2, groups * 2)];
+			for (int g = 0; g < groups; g++)
+			{
+				layout[g * 2] = (uint)groupBase[g];
+				layout[g * 2 + 1] = (uint)groupCapacity[g];
+			}
+			gatherLayout.SetData(layout);
+			Retire(ref gatherArgs);
+			gatherArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments | GraphicsBuffer.Target.Raw, Mathf.Max(3, groups * 3), 4);
+			if (gatherCounts.count < groups)
+			{
+				Retire(ref gatherCounts);
+				gatherCounts = new GraphicsBuffer(GraphicsBuffer.Target.Raw, Mathf.Max(16, groups), 4);
+			}
+			gatherOverflowWarned = false;
+			return true;
+		}
+
+		private void Retire(ref GraphicsBuffer buffer)
+		{
+			if (buffer != null)
+			{
+				retired.Add((buffer, Time.frameCount));
+				buffer = null;
+			}
+		}
+
+		/// <summary>
+		/// The most work items a camera anywhere can want: every tile within the grass distance of it (by its ground
+		/// distance less half a tile, for wherever in its own tile the camera stands) at the level its distance gives, as
+		/// if every one had grass and were seen. A tenth more for good measure.
+		/// </summary>
+		private int DiscItems(float tile, float grassDistance)
+		{
+			int r = Mathf.CeilToInt(grassDistance / tile) + 2;
+			long sum = 0;
+			for (int j = -r; j <= r; j++)
+			{
+				for (int i = -r; i <= r; i++)
+				{
+					float dx = Mathf.Max(0f, Mathf.Max(i * tile, -(i + 1) * tile));
+					float dz = Mathf.Max(0f, Mathf.Max(j * tile, -(j + 1) * tile));
+					float near = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - 0.5f * tile);
+					if (near > grassDistance)
+					{
+						continue;
+					}
+					int perSide = GrassMath.ItemsPerSide(GrassMath.LevelForShare(GrassMath.Share(near, ringDistanceF, ringDensityF, ringCount)));
+					sum += perSide * perSide;
+				}
+			}
+			return (int)Mathf.Min(int.MaxValue / 2, sum * 11 / 10 + 64);
+		}
+
+		/// <summary>The gather on the GPU: counts cleared, the tile table culled into the work list, the dispatches written.</summary>
+		private void RecordGather()
+		{
+			int groups = atlas.Groups.Count;
+			int groupThreads = (groups + 7) / 8;
+			cmd.SetComputeIntParam(compute, GatherGroupCountId, groups);
+			cmd.SetComputeIntParam(compute, TileCountId, tileCount);
+			cmd.SetComputeBufferParam(compute, gatherClearKernel, GatherCountsId, gatherCounts);
+			cmd.DispatchCompute(compute, gatherClearKernel, groupThreads, 1, 1);
+			cmd.SetComputeBufferParam(compute, gatherKernel, TilesId, tileBuffer);
+			cmd.SetComputeBufferParam(compute, gatherKernel, ItemsOutId, gatherItems);
+			cmd.SetComputeBufferParam(compute, gatherKernel, GatherCountsId, gatherCounts);
+			cmd.SetComputeBufferParam(compute, gatherKernel, GatherLayoutId, gatherLayout);
+			cmd.DispatchCompute(compute, gatherKernel, (tileCount + 63) / 64, 1, 1);
+			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherCountsId, gatherCounts);
+			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherLayoutId, gatherLayout);
+			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherArgsId, gatherArgs);
+			cmd.DispatchCompute(compute, gatherArgsKernel, groupThreads, 1, 1);
 		}
 
 		/// <summary>The five indirect draws of whatever the slots last received.</summary>
@@ -935,6 +1271,12 @@ namespace FishMMO.Client
 			cmd.Release();
 			ReleaseRetired(true);
 			itemBuffer?.Release();
+			tileBuffer?.Release();
+			gatherItems?.Release();
+			gatherCounts?.Release();
+			gatherArgs?.Release();
+			gatherLayout?.Release();
+			tileBuffer = gatherItems = gatherCounts = gatherArgs = gatherLayout = null;
 			countBuffer?.Release();
 			argsBuffer?.Release();
 			itemBuffer = countBuffer = argsBuffer = null;

@@ -87,12 +87,21 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>How many of the asked-for number are always drawn (rank 0).</summary>
 		public const float Core = 0.7f;
 
-		/// <summary>Level 0 is the full tree; each level above roughly quarters the triangles.</summary>
-		public static MeshBuilder Build(in TreeSpecies species, int lod, int seed)
+		/// <summary>The share of the full tree's leaf area a reduced level keeps (<see cref="BuildReduced"/>).</summary>
+		public const float LodFoliageShare = 0.8f;
+
+		/// <summary>The most a reduced level's leaf cards are widened to keep that share.</summary>
+		public const float MaxLodLeafScale = 4f;
+
+		/// <summary>
+		/// Level 0 is the full tree; level 1 has fewer limbs, sides and cards. <paramref name="leafScale"/> widens every
+		/// leaf card (its length, and so the crown's reach, unchanged); <see cref="BuildReduced"/> picks it.
+		/// </summary>
+		public static MeshBuilder Build(in TreeSpecies species, int lod, int seed, float leafScale = 1f)
 		{
 			var mesh = new MeshBuilder(2);
 			TreeSpecies sp = species;
-			var builder = new Grower(mesh, in sp, Mathf.Clamp(lod, 0, 1), ProceduralNoise.SeedFor(sp.Name, seed));
+			var builder = new Grower(mesh, in sp, Mathf.Clamp(lod, 0, 1), ProceduralNoise.SeedFor(sp.Name, seed), Mathf.Max(0.01f, leafScale));
 			switch (sp.Form)
 			{
 				case TreeForm.Conifer: builder.Conifer(false); break;
@@ -109,12 +118,61 @@ namespace FishMMO.Shared.WorldDesign
 			return mesh;
 		}
 
+		/// <summary>
+		/// A reduced level whose foliage still covers what the full tree's does: fewer cards, each widened until their
+		/// area is <see cref="LodFoliageShare"/> of <paramref name="full"/>'s (at most <see cref="MaxLodLeafScale"/>).
+		/// The level used to keep a tenth of a conifer's needle area at the same card size (pine 146 leaf triangles
+		/// against 1 396) and about a seventh of a broadleaf's: from fifty metres on a pine stood as a bare trunk with a
+		/// few tufts (Jim, 2026-10-07). Area is linear in the width scale, so one correction lands it.
+		/// </summary>
+		public static MeshBuilder BuildReduced(in TreeSpecies species, int lod, int seed, MeshBuilder full)
+		{
+			float target = LeafArea(full) * LodFoliageShare;
+			float scale = 1f;
+			MeshBuilder mesh = Build(in species, lod, seed, scale);
+			for (int i = 0; i < 3 && target > 0f; i++)
+			{
+				float area = LeafArea(mesh);
+				if (area <= 0f || Mathf.Abs(area - target) <= target * 0.03f)
+				{
+					break;
+				}
+				float next = Mathf.Clamp(scale * target / area, 1f, MaxLodLeafScale);
+				if (Mathf.Abs(next - scale) < 1e-3f)
+				{
+					break;
+				}
+				scale = next;
+				mesh = Build(in species, lod, seed, scale);
+			}
+			return mesh;
+		}
+
+		/// <summary>The summed area of a tree mesh's leaf cards, m² (0 when it has no leaf submesh).</summary>
+		public static float LeafArea(MeshBuilder mesh)
+		{
+			if (mesh == null || mesh.Submeshes.Count <= LeafSubmesh)
+			{
+				return 0f;
+			}
+			List<int> indices = mesh.Submeshes[LeafSubmesh];
+			float area = 0f;
+			for (int i = 0; i + 2 < indices.Count; i += 3)
+			{
+				Vector3 a = mesh.Positions[indices[i]], b = mesh.Positions[indices[i + 1]], c = mesh.Positions[indices[i + 2]];
+				area += 0.5f * Vector3.Cross(b - a, c - a).magnitude;
+			}
+			return area;
+		}
+
 		private sealed class Grower
 		{
 			private readonly MeshBuilder mesh;
 			private readonly TreeSpecies sp;
 			private readonly int lod;
 			private readonly int seed;
+			/// <summary>How much wider every leaf card is grown (a reduced level's, BuildReduced).</summary>
+			private readonly float leafScale;
 			private DeterministicRNG rng;
 			private readonly List<Vector3> path = new List<Vector3>();
 			private readonly List<float> radii = new List<float>();
@@ -128,12 +186,13 @@ namespace FishMMO.Shared.WorldDesign
 			private int partId;
 			private int cardSerial;
 
-			public Grower(MeshBuilder mesh, in TreeSpecies species, int lod, int seed)
+			public Grower(MeshBuilder mesh, in TreeSpecies species, int lod, int seed, float leafScale)
 			{
 				this.mesh = mesh;
 				sp = species;
 				this.lod = lod;
 				this.seed = seed;
+				this.leafScale = leafScale;
 				rng = new DeterministicRNG(seed);
 			}
 
@@ -288,17 +347,16 @@ namespace FishMMO.Shared.WorldDesign
 				bool leaf = partKind != PlantPart.Frond;
 				mesh.SetPart(partPivot, partHash, partRank, leaf ? PlantPart.Leaf : PlantPart.Frond);
 				int card = cardSerial++;
+				width *= leafScale;
 				mesh.SetCard(Hash(partId * 4099 + card, 11), leaf ? 0.02f + 0.98f * Hash(partId * 4099 + card, 13) : 0f);
 				float pick = rng.NextFloat();
 				Color32 shaded = ShadedLeaf(pick, root + direction * length * 0.5f, crown);
 				PlantParts.SprayCard(mesh, LeafSubmesh, root, direction, length, width, rng.Range(-30f, 30f), cell, shaded,
 					Sway(root, 0.3f), Sway(root + direction * length, 1f), crown, bend);
-				if (lod == 0)
-				{
-					// A second card across the first gives the spray depth from every side.
-					PlantParts.SprayCard(mesh, LeafSubmesh, root, direction, length, width, rng.Range(60f, 120f), cell, shaded,
-						Sway(root, 0.3f), Sway(root + direction * length, 1f), crown, bend);
-				}
+				// A second card across the first gives the spray depth from every side. On every level: alone, a card
+				// seen edge-on is a line, and a reduced crown of single cards came and went as it turned.
+				PlantParts.SprayCard(mesh, LeafSubmesh, root, direction, length, width, rng.Range(60f, 120f), cell, shaded,
+					Sway(root, 0.3f), Sway(root + direction * length, 1f), crown, bend);
 			}
 
 			/// <param name="rounded">A pine's crown (<see cref="TreeForm.Pine"/>): widest a third of the way down and
@@ -308,7 +366,8 @@ namespace FishMMO.Shared.WorldDesign
 				float h = sp.Height;
 				BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
 				Limb(Vector3.zero, new Vector3(0f, h * 0.5f, 0f), new Vector3(0f, h, 0f), sp.TrunkRadius, sp.TrunkRadius * 0.08f, 8, lod == 0 ? 8 : 4, true);
-				int whorls = lod == 0 ? Mathf.Max(6, sp.Branches) : Mathf.Max(4, sp.Branches / 2);
+				// Every level has every whorl: halved, the reduced crown showed bare trunk between its tiers.
+				int whorls = Mathf.Max(6, sp.Branches);
 				float baseY = h * sp.CrownBase;
 				var crown = new Vector3(0f, (baseY + h) * 0.5f, 0f);
 				for (int w = 0; w < whorls; w++)
@@ -564,7 +623,7 @@ namespace FishMMO.Shared.WorldDesign
 					var at = new Vector3(Mathf.Cos(a) * r, h * rng.Range(0.82f, 0.95f) - r * r / (crownRadius * crownRadius) * h * 0.08f, Mathf.Sin(a) * r);
 					var dir = (new Vector3(Mathf.Cos(a), 0.15f, Mathf.Sin(a)) + Random3() * 0.3f).normalized;
 					float size = sp.LeafSize * (lod == 0 ? 1f : 1.6f);
-					PlantParts.SprayCard(mesh, LeafSubmesh, at - dir * size * 0.5f, dir, size, size, rng.Range(70f, 110f), sp.LeafCell, ShadedLeaf(rng.NextFloat(), at, crown),
+					PlantParts.SprayCard(mesh, LeafSubmesh, at - dir * size * 0.5f, dir, size, size * leafScale, rng.Range(70f, 110f), sp.LeafCell, ShadedLeaf(rng.NextFloat(), at, crown),
 						Sway(at, 0.4f), Sway(at, 1f), crown + Vector3.down * h * 0.3f, 0.8f);
 				}
 			}

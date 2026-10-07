@@ -426,7 +426,7 @@ namespace FishMMO.UnitTests.Weather
 				code => code == null ? "FishCloudLightDepth is gone"
 					: !code.Contains("float from = step * k * (1.0 + 0.6 * (k - 1));") || !code.Contains("float span = step * (1.0 + 1.2 * k);") ? "the segments are no longer the ones this test mirrors"
 					: !code.Contains("float reach = from + phase.x * span;") ? "the sample is no longer drawn from inside its segment"
-					: !code.Contains("high01) * span;") ? "a sample no longer counts its own segment's length"
+					: !code.Contains("density += segment * span;") ? "a sample no longer counts its own segment's length"
 					: !code.Contains("6.2831853 * phase.y") ? "the cone is no longer turned by the ray's phase"
 					: null,
 				SourceScanPins.Replace("float reach = from + phase.x * span;", "float reach = from + span;"),

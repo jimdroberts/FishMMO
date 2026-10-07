@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Rendering;
 using FishMMO.Shared;
@@ -160,6 +161,9 @@ namespace FishMMO.Client
 
 		/// <summary>How far a cloud ray may travel, in metres.</summary>
 		public float CloudFarDistance { get; private set; } = 90000f;
+
+		/// <summary>Steps a cloud ray may take past the camera's far plane (VolumetricCloudSettings.FarTailSteps).</summary>
+		public int CloudFarTailSteps { get; private set; } = 24;
 
 		/// <summary>Half way up the cloud layer: where a screen point is reprojected against.</summary>
 		public float CloudLayerCentre { get; private set; } = 3000f;
@@ -376,12 +380,18 @@ namespace FishMMO.Client
 		private Vector3 probeSun;
 		private Color lastAmbientSky, lastAmbientEquator, lastAmbientGround;
 		private float bodyTimer;
+		private double bodiesBuiltAt = double.NaN;
+		private SkyProfile bodiesBuiltFor;
+
+		/// <summary>World seconds the clock may move between two body rebuilds before it counts as a leap and they are rebuilt at once.</summary>
+		public const double BodyLeapSeconds = 120.0;
 		private bool warnedCamera;
 		private SkyBodyMesh bodies;
 		private LightningPresenter lightning;
 		private CurtainPresenter curtains;
 		private VortexPresenter vortices;
 		private CloudShadowPresenter cloudShadows;
+		private CloudLightVolume cloudLight;
 		private CloudTerrainMap cloudTerrain;
 		private CloudFlowField cloudFlow;
 		private MistGroundMap mistGround;
@@ -501,6 +511,7 @@ namespace FishMMO.Client
 			curtains = curtains ?? new CurtainPresenter();
 			vortices = vortices ?? new VortexPresenter();
 			cloudShadows = cloudShadows ?? new CloudShadowPresenter();
+			cloudLight = cloudLight ?? new CloudLightVolume();
 			weatherMap = weatherMap ?? new WeatherMap();
 			if (defaultSky == null)
 			{
@@ -527,6 +538,7 @@ namespace FishMMO.Client
 			curtains?.Dispose();
 			vortices?.Dispose();
 			cloudShadows?.Dispose();
+			cloudLight?.Dispose();
 			cloudTerrain?.Dispose();
 			cloudTerrain = null;
 			cloudFlow?.Dispose();
@@ -593,6 +605,16 @@ namespace FishMMO.Client
 			return defaultSky;
 		}
 
+		// What Update's time goes on, for the profiler (ScenePerfProbe's CPU table): it was 1.4 ms a frame in the editor
+		// with nothing inside it to say where (2026-10-07).
+		private static readonly ProfilerMarker SampleMarker = new ProfilerMarker("Sky.Sample");
+		private static readonly ProfilerMarker LightningMarker = new ProfilerMarker("Sky.Lightning");
+		private static readonly ProfilerMarker WeatherMapMarker = new ProfilerMarker("Sky.WeatherMap");
+		private static readonly ProfilerMarker GlobalsMarker = new ProfilerMarker("Sky.Globals");
+		private static readonly ProfilerMarker LightsMarker = new ProfilerMarker("Sky.Lights");
+		private static readonly ProfilerMarker ReflectionMarker = new ProfilerMarker("Sky.Reflection");
+		private static readonly ProfilerMarker BodiesMarker = new ProfilerMarker("Sky.Bodies");
+
 		private void Update()
 		{
 			EnsureParts();
@@ -634,6 +656,7 @@ namespace FishMMO.Client
 			WeatherTimeline timeline = presentation != null && presentation.HasContext ? context.Timeline : null;
 			uint tick = presentation != null && presentation.HasContext ? (uint)context.Tick : 0u;
 
+			SampleMarker.Begin();
 			// The profile, blended when it changes.
 			SkyProfile target = TargetSky(state);
 			if (blendTo != target)
@@ -684,7 +707,9 @@ namespace FishMMO.Client
 				current = sample;
 			}
 
+			SampleMarker.End();
 			// Lightning first: its flash reaches the sky, the lights and the weather globals.
+			LightningMarker.Begin();
 			Vector3 viewer = camera != null ? camera.transform.position : Vector3.zero;
 			// With the lightning of the weather here — the field's storms and heavy rain — and not only
 			// the scene layers' and the cells'.
@@ -695,32 +720,38 @@ namespace FishMMO.Client
 			{
 				presentation.LightningFlash = lightning.Flash;
 			}
+			LightningMarker.End();
 
 			// The storms' own cloud, before the bands are packed: the shells the march skips empty air
 			// by have to take in their bases, towers and anvils as they are now.
 			if (camera != null)
 			{
+				WeatherMapMarker.Begin();
 				WeatherMap.SetCellAirScene(context.Settings, context.Scene);
 				weatherMap.Update(timeline, viewer, tick, context.Sample, dt, WeatherMapRefreshSeconds);
+				WeatherMapMarker.End();
 			}
 
+			GlobalsMarker.Begin();
 			SetGodRays(state, sample, weather, overcast, eclipse, tier, context);
 			SetSkyGlobals(state, sample, blendTo, weather, overcast, eclipse, context, tier, profile);
+			GlobalsMarker.End();
+			LightsMarker.Begin();
 			ApplyLights(state, sample, overcast, eclipse, weather, dt, profile, tier);
 			ApplyAmbient(sample, overcast, eclipse, lightning.Flash);
 			FogComposer.SetSkyColor(Color.Lerp(sample.Fog, sample.Fog * 0.7f + new Color(0.25f, 0.26f, 0.28f) * 0.3f, overcast));
+			LightsMarker.End();
+			ReflectionMarker.Begin();
 			UpdateReflection(state, dt, tier);
+			ReflectionMarker.End();
 			CheckCamera(camera);
 
 			bodyTimer -= dt;
-			if (bodyTimer <= 0f)
-			{
-				bodyTimer = BodyRefreshSeconds;
-			}
 			/* Meteors are scheduled a window at a time, the windows fixed on the world clock, and drawn every
 			 * frame. Scheduled whatever the sky looks like here: whether they can be SEEN is decided as they
 			 * are drawn. Asked at the start of each window, a client whose sky happened to be bright then
 			 * had none for the window, and the rest of the world had them. */
+			BodiesMarker.Begin();
 			long meteorWindow = (long)System.Math.Floor(worldSeconds / MeteorWindowSeconds);
 			if (meteorWindow != meteorsWindow)
 			{
@@ -741,6 +772,20 @@ namespace FishMMO.Client
 				}
 				meteorsWindow = meteorWindow;
 			}
+			/* The bodies again only every BodyRefreshSeconds: they cross the sky in hours, and a belt's every speck is an
+			 * orbit solved in double precision. Rebuilt every frame they were 1.2 ms of the main thread at noon, when
+			 * none of them showed (ScenePerfProbe, 2026-10-07). At once when the clock leaps (a join, the bed's scrub)
+			 * or the sky changes, and every frame while a meteor is burning, which crosses the sky in a second. */
+			float meteorsSeen = Mathf.InverseLerp(0.15f, 0.3f, sample.StarVisibility);
+			bool burning = meteorsSeen > 0f && meteors.Count > 0;
+			if (bodyTimer > 0f && !burning && blendTo == bodiesBuiltFor && System.Math.Abs(worldSeconds - bodiesBuiltAt) < BodyLeapSeconds)
+			{
+				BodiesMarker.End();
+				return;
+			}
+			bodyTimer = BodyRefreshSeconds;
+			bodiesBuiltAt = worldSeconds;
+			bodiesBuiltFor = blendTo;
 			// In the order they are drawn, furthest first: a belt's specks, then the bodies by their own
 			// distances, then the meteors, which burn in this world's air and are nearer than anything.
 			bodies.Clear();
@@ -750,17 +795,19 @@ namespace FishMMO.Client
 			}
 			bodies.AddBodies(state, blendTo, state.System != null ? state.System.Limits : new SkyLimits());
 			// Seen only while the sky is dark enough, faded in over the stars' own coming out.
-			float meteorsSeen = Mathf.InverseLerp(0.15f, 0.3f, sample.StarVisibility);
 			if (meteorsSeen > 0f)
 			{
 				bodies.AddMeteors(meteors, worldSeconds, meteorsSeen);
 			}
 			bodies.Upload();
 			UploadOccluders();
+			BodiesMarker.End();
 		}
 
 		private void Bind(WorldDayNightCycle next, WeatherRenderProfile profile)
 		{
+			// A new cycle (or none) is another sky: its bodies are built afresh on the next frame.
+			bodiesBuiltFor = null;
 			if (cycle != null)
 			{
 				Unbind();
@@ -800,7 +847,10 @@ namespace FishMMO.Client
 
 		private void Unbind()
 		{
+			// A new cycle (or none) is another sky: its bodies are built afresh on the next frame.
+			bodiesBuiltFor = null;
 			cloudShadows.Clear(sun);
+			cloudLight?.Clear();
 			foreach (Light companion in companions)
 			{
 				if (companion != null)
@@ -1570,6 +1620,7 @@ namespace FishMMO.Client
 				HistoryScale = tier.CloudHistoryScale,
 			};
 			CloudFarDistance = clouds.MaxDistance;
+			CloudFarTailSteps = clouds.FarTailSteps;
 			// The inspector's diagnostic switches, live every frame; all zeros is the clouds as they
 			// ship, so a shader that never sees these draws the default (VolumetricCloudDiagnostics).
 			Shader.SetGlobalVector(CloudDiagId, diagnostics.MarchVector);
@@ -2054,6 +2105,9 @@ namespace FishMMO.Client
 			Vector3 viewer = TargetCamera != null ? TargetCamera.transform.position : transform.position;
 			cloudShadows.Update(shadowed, profile.CloudMaterial, viewer, profile.Clouds.ShadowAreaMeters,
 				1f, 8 * MaxCloudLayers, cookie, far);
+			// The cloud's density round the camera on a coarse grid, for the light march's long segments.
+			float farPlane = TargetCamera != null ? TargetCamera.farClipPlane : CloudFarDistance;
+			cloudLight.Update(profile.CloudMaterial, viewer, farPlane, CloudShellBottom, CloudShellTop, CloudsReady);
 		}
 
 		/// <summary>A directional light shining along −direction.</summary>

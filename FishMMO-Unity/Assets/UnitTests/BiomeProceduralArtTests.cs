@@ -249,7 +249,7 @@ namespace FishMMO.UnitTests
 			{
 				TreeSpecies species = t;
 				MeshBuilder lod0 = TreeMeshes.Build(in species, 0, Seed);
-				MeshBuilder lod1 = TreeMeshes.Build(in species, 1, Seed);
+				MeshBuilder lod1 = TreeMeshes.BuildReduced(in species, 1, Seed, lod0);
 				foreach ((MeshBuilder mesh, string level) in new[] { (lod0, "LOD0"), (lod1, "LOD1") })
 				{
 					List<string> problems = mesh.Validate(false);
@@ -257,6 +257,13 @@ namespace FishMMO.UnitTests
 				}
 				Assert.That(lod0.TriangleCount, Is.LessThanOrEqualTo(6000), $"{species.Name} LOD0 has {lod0.TriangleCount} triangles");
 				Assert.That(lod1.TriangleCount, Is.LessThan(lod0.TriangleCount), $"{species.Name} LOD1 is not lighter than LOD0");
+				// The reduced level keeps the crown: it used to keep a tenth of a conifer's needle area, and from fifty
+				// metres on a pine stood as a bare trunk with a few tufts.
+				float fullLeaves = TreeMeshes.LeafArea(lod0), reducedLeaves = TreeMeshes.LeafArea(lod1);
+				if (fullLeaves > 0f && reducedLeaves > 0f)
+				{
+					Assert.That(reducedLeaves, Is.GreaterThanOrEqualTo(0.6f * fullLeaves), $"{species.Name} LOD1 keeps {reducedLeaves / fullLeaves:P0} of its leaf area");
+				}
 				Assert.That(lod0.Submeshes[TreeMeshes.BarkSubmesh].Count, Is.GreaterThan(0), $"{species.Name} has no trunk");
 				Assert.That(lod0.Bounds.max.y, Is.GreaterThan(species.Height * 0.6f), $"{species.Name} is far shorter than its height");
 				AssertSame(lod0, TreeMeshes.Build(in species, 0, Seed), species.Name);

@@ -53,9 +53,15 @@ float4 _GrassParams2;   // x wind strength, y gust wave length (m), z flutter, w
 float4 _GrassParams3;   // x root ground blend, y root ground height (share of the blade), z ground hue tint, w specular strength
 float4 _GrassParams4;   // x max wind bend (radians from vertical), y gust crest sharpness, z gust travel speed scale, w gust sheen
 float _GrassHighlight;   // debug: 1 draws every blade magenta (GrassBladeRenderer.Highlight)
+// This camera's pixel size (GrassBladeRenderer.Execute, a global so the shadow pass widens as the camera does): x metres per
+// pixel per metre of distance (perspective), y metres per pixel (orthographic), z the most pixels a widened blade spans
+// divided by the base blade width.
+float4 _GrassScreen;
+// This camera's position (GrassBladeRenderer.Execute; the shadow pass's own camera is the light's): xyz.
+float4 _GrassViewer;
 float4 _GrassParams5;   // far-field blend: x start (m), y end (share of the grass distance), z ground colour pull, w normal flatten
-float4 _GrassParams6;   // terrain texture colour: x strength, y brightness, z root strength
-float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z bend kept at the end (0..1)
+float4 _GrassParams6;   // terrain texture colour: x strength, y brightness, z root strength; w edge-on thickening (0..1)
+float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z bend kept at the end (0..1); w top-down lay (sine of its angle)
 
 // The ground colour map (GroundColourMap; same globals FishVegetationPasses.hlsl reads).
 #include "FishGroundColour.hlsl"
@@ -257,7 +263,21 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float2 facing = float2(cos(facingAngle), sin(facingAngle));
     float2 across = float2(facing.y, -facing.x);
     // The tip's direction: its own lean toward its facing plus the wind's angle downwind and the flutter.
-    float2 lay = facing * lean + dir * sin(windAngle) + across * flutter;
+    /* Seen from above, an upright blade is a dot and a lawn was pins in a cushion. The steeper the view looks down on
+     * this blade, the further it lies over, along its own facing (its clump's): never toward or away from the camera,
+     * so nothing swivels as the camera moves, and the shadow pass (which takes the camera from _GrassViewer) lays it
+     * over alike. None at eye level; easing in from a view about 20 degrees down to all of it from about 70. */
+    float3 toViewer = _GrassViewer.xyz - root;
+    float viewSteep = toViewer.y / max(1e-3, length(toViewer));
+    float viewLay = _GrassParams7.w * smoothstep(0.35, 0.95, viewSteep);
+    /* Which way: a smooth field over a few metres, turned toward the wind as it rises, so neighbouring blades and
+     * whole clumps lie the same way and a lawn seen from above is combed in patches. Along each blade's own facing
+     * (outward from its clump's centre) every clump burst into a star round a dark middle: polka dots from above
+     * (render 2026-10-07). */
+    float combAngle = (FishSurfaceNoise(root.xz / 3.0) * 0.7 + FishSurfaceNoise(root.xz / 1.1 + 31.7) * 0.3) * 12.566371;
+    float2 comb = float2(cos(combAngle), sin(combAngle)) + dir * (0.4 + 1.5 * speed);
+    comb = dot(comb, comb) > 1e-6 ? normalize(comb) : facing;
+    float2 lay = facing * lean + comb * viewLay + dir * sin(windAngle) + across * flutter;
     float layLength = length(lay);
     if (layLength > 0.97)
     {
@@ -266,7 +286,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float3 tipDirection = float3(lay.x, sqrt(max(0.0, 1.0 - dot(lay, lay))), lay.y);
 
     // Bent further, the blade curves more: the base still rises before it arcs over.
-    float bend = saturate(_GrassTypeParams[type].z * (0.5 + 0.5 * r1) + 0.6 * windAngle / max(0.1, _GrassParams4.x));
+    float bend = saturate(_GrassTypeParams[type].z * (0.5 + 0.5 * r1) + 0.6 * windAngle / max(0.1, _GrassParams4.x) + 0.5 * viewLay);
     float3 control, tip;
     GrassCurve(bladeHeight, tipDirection, bend, control, tip);
     float3 curvePoint = 2.0 * t * (1.0 - t) * control + t * t * tip;
@@ -274,12 +294,31 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     tangent = dot(tangent, tangent) > 1e-10 ? normalize(tangent) : float3(0.0, 1.0, 0.0);
 
     float3 sideWS = float3(across.x, 0.0, across.y);
-    float widen = min(_GrassParams0.y, pow(max(1e-6, GrassShareV(d)), -_GrassParams0.x));
+    /* Thinned blades widen to stand for the ones thinned out (share^-exponent), but never past MaxBladePixels on
+     * this camera's screen, nor MaxWiden. Widening in metres alone left blades one or two pixels wide past 8 m and
+     * under one past 100 m: the field read as smaller and sparser the further it went. */
+    float pixelMetres = d * _GrassScreen.x + _GrassScreen.y;
+    float screenCap = max(1.0, pixelMetres * _GrassScreen.z);
+    float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, GrassShareV(d)), -_GrassParams0.x));
     float width = _GrassTypeTip[type].a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade);
     float4 headInfo = _GrassTypeHead[type];
     // A strap (a reed's leaf) keeps its width to a rounded end; a blade tapers to a point.
     float taper = headInfo.w > 0.5 ? 1.0 - 0.45 * pow(saturate(t), 3.0) : 1.0 - pow(saturate(t), 1.6);
     o.positionWS = root + curvePoint + sideWS * (u * 0.5 * width * taper);
+    /* Edge-on, a blade is a sliver: its width lies along the line of sight. The share of the width it has lost is put
+     * back ACROSS the view (perpendicular to both the view and the blade's own line), so an edge-on blade covers
+     * EdgeOnThicken of what it would face-on. Face-on, or seen down its length from above (where the lay-over does the
+     * work), nothing is added. */
+    float3 toEye = normalize(_GrassViewer.xyz - root);
+    float3 screenSide = cross(toEye, tangent);
+    float screenSideLength = length(screenSide);
+    if (_GrassParams6.w > 0.0 && screenSideLength > 1e-3)
+    {
+        screenSide /= screenSideLength;
+        screenSide *= dot(screenSide, sideWS) < 0.0 ? -1.0 : 1.0;
+        float lost = 1.0 - length(cross(sideWS, toEye));
+        o.positionWS += screenSide * (u * 0.5 * width * taper * _GrassParams6.w * lost);
+    }
     o.normalWS = normalize(cross(sideWS, tangent));
 
     /* A head record (GrassMath.WithHeadPart): the same stem, rebuilt above with the same wind, and one of its head's
@@ -294,7 +333,10 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
         float3 tipWS = root + tip;
         float3 tipTangent = tip - control;
         tipTangent = dot(tipTangent, tipTangent) > 1e-10 ? normalize(tipTangent) : float3(0.0, 1.0, 0.0);
-        float size = max(0.002, headInfo.y) * widen * thinFade * lerp(0.35, 1.0, visible) * (0.85 + 0.3 * r2);
+        // A head keeps its AREA as the field thins (share^-0.5), whatever the blades' widening: a disc grown by the
+        // blades' width factor would grow by its square.
+        float headWiden = min(_GrassParams0.y, rsqrt(max(1e-6, GrassShareV(d))));
+        float size = max(0.002, headInfo.y) * headWiden * thinFade * lerp(0.35, 1.0, visible) * (0.85 + 0.3 * r2);
         float second = headPart == 2u ? 1.0 : 0.0;
         float3 axisA, axisB, centre;
         float profile;

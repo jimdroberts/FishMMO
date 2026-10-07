@@ -42,8 +42,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Inflow in lattice units: low, so the flow stays incompressible.</summary>
 		public const float InflowSpeed = 0.06f;
 
-		/// <summary>Relaxation time: a viscosity low enough that eddies stand behind the rocks, high enough to stay stable.</summary>
-		public const float Tau = 0.56f;
+		/// <summary>
+		/// Relaxation time: the viscosity. Not water's own but the eddy viscosity of a turbulent river (its eddies mix fast and
+		/// slow water across the current), still low enough that a slack wake stands behind each rock. At 0.56 the jets past
+		/// the rocks were a cell or two wide beside dead water, up to 4.8 times the section's mean speed, and the ripples
+		/// carried on them tore into bright lines along the flow (Flo Monolith, 2026-10-07).
+		/// </summary>
+		public const float Tau = 0.62f;
+
+		/// <summary>
+		/// How many times the solved field is mixed with its neighbours (open water only, a [1 2 1] across and along): the
+		/// turbulence the lattice is too coarse to carry, spreading each shear layer over about a metre.
+		/// </summary>
+		public const int MixPasses = 2;
 
 		private static readonly int[] Ex = { 0, 1, 0, -1, 0, 1, -1, -1, 1 };
 		private static readonly int[] Ey = { 0, 0, 1, 0, -1, 1, 1, -1, -1 };
@@ -102,6 +113,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (last)
 				{
+					Mix(result, length, solid);
 					break;
 				}
 				// The next window starts where this one's kept part ends, fed by the flow there.
@@ -112,6 +124,70 @@ namespace FishMMO.Shared.WorldDesign
 				start += keep;
 			}
 			return result;
+		}
+
+		/// <summary>
+		/// The turbulent mixing the solve leaves out: each open cell averaged with its open neighbours ([1 2 1] across, then
+		/// along), <see cref="MixPasses"/> times, rock left at 0; then each section put back to its own mean along (1), so it
+		/// still carries exactly its discharge.
+		/// </summary>
+		private static void Mix(float[] field, int length, bool[] solid)
+		{
+			int ny = Across;
+			var scratch = new float[field.Length];
+			bool Open(int x, int y) => x >= 0 && x < length && y >= 0 && y < ny && !(solid != null && y * length + x < solid.Length && solid[y * length + x]);
+			for (int pass = 0; pass < MixPasses; pass++)
+			{
+				for (int axis = 0; axis < 2; axis++)
+				{
+					for (int y = 0; y < ny; y++)
+					{
+						for (int x = 0; x < length; x++)
+						{
+							int c = (y * length + x) * 2;
+							if (!Open(x, y))
+							{
+								scratch[c] = scratch[c + 1] = 0f;
+								continue;
+							}
+							float u = 2f * field[c], v = 2f * field[c + 1], w = 2f;
+							for (int side = -1; side <= 1; side += 2)
+							{
+								int nx = axis == 0 ? x : x + side, nyy = axis == 0 ? y + side : y;
+								if (Open(nx, nyy))
+								{
+									int n = (nyy * length + nx) * 2;
+									u += field[n];
+									v += field[n + 1];
+									w += 1f;
+								}
+							}
+							scratch[c] = u / w;
+							scratch[c + 1] = v / w;
+						}
+					}
+					Array.Copy(scratch, field, field.Length);
+				}
+			}
+			for (int x = 0; x < length; x++)
+			{
+				float sum = 0f;
+				for (int y = 0; y < ny; y++)
+				{
+					sum += field[(y * length + x) * 2];
+				}
+				float mean = sum / ny;
+				if (mean <= 1e-4f)
+				{
+					continue;
+				}
+				for (int y = 0; y < ny; y++)
+				{
+					int c = (y * length + x) * 2;
+					field[c] /= mean;
+					field[c + 1] /= mean;
+				}
+			}
 		}
 
 		/// <summary>One window: <paramref name="n"/> cells from <paramref name="start"/>, settled over <paramref name="passes"/> lengths. Returns (u, v) per cell, lattice units.</summary>

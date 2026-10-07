@@ -218,6 +218,13 @@ namespace FishMMO.Client
 			Step(0f);
 		}
 
+		// What Step's time goes on, for the profiler (0.8 ms a frame in the editor, 2026-10-07, with nothing inside it).
+		private static readonly Unity.Profiling.ProfilerMarker OcclusionMarker = new Unity.Profiling.ProfilerMarker("Weather.Occlusion");
+		private static readonly Unity.Profiling.ProfilerMarker CoverMarker = new Unity.Profiling.ProfilerMarker("Weather.CoverMap");
+		private static readonly Unity.Profiling.ProfilerMarker GlobalsMarker = new Unity.Profiling.ProfilerMarker("Weather.Globals");
+		private static readonly Unity.Profiling.ProfilerMarker AudioMarker = new Unity.Profiling.ProfilerMarker("Weather.Audio");
+		private static readonly Unity.Profiling.ProfilerMarker PrecipitationMarker = new Unity.Profiling.ProfilerMarker("Weather.Precipitation");
+
 		private void Step(float deltaTime)
 		{
 			EnsureParts();
@@ -245,7 +252,9 @@ namespace FishMMO.Client
 			{
 				Scene scene = hasContext && context.Scene.IsValid() ? context.Scene : camera.gameObject.scene;
 				PhysicsScene physics = scene.IsValid() ? scene.GetPhysicsScene() : Physics.defaultPhysicsScene;
+				OcclusionMarker.Begin();
 				occlusion.Update(camera.transform.position, physics, tier, profile.OcclusionLayers);
+				OcclusionMarker.End();
 			}
 			float shelter = hasContext ? context.Shelter : 0f;
 			/* Under water is under cover, and all at once: the rain overhead is muffled the moment the
@@ -268,6 +277,7 @@ namespace FishMMO.Client
 				// same number, which the anchor's own summary says is for "when a snapshot arrives,
 				// which is rarely" — so the ground never dried place by place at all. It tracked a
 				// single scene-wide figure, and went dry the instant that figure did.
+				CoverMarker.Begin();
 				WeatherTimeline ground = context.Timeline;
 				bool reseed = ground != null && (!ReferenceEquals(ground, coverTimeline) || ground.Generation != coverGeneration);
 				coverMap.Update(ground, context.Settings, camera.transform.position, (uint)context.Tick,
@@ -283,15 +293,20 @@ namespace FishMMO.Client
 					coverSnapshots = ground.CoverSnapshots;
 					coverMap.Anchor(context.Cover);
 				}
+				CoverMarker.End();
 			}
 
+			GlobalsMarker.Begin();
 			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash,
 				hasContext ? context.Substance : null, target[WeatherChannel.WindSpeed]);
 			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
 			WeatherFogPresenter.Apply(shown, profile);
 			ApplyWind(shown);
+			GlobalsMarker.End();
 			currentTier = tier;
+			AudioMarker.Begin();
 			audioPresenter.Update(shown, shelter, profile.Audio, dt);
+			AudioMarker.End();
 		}
 
 		private WeatherTierSettings currentTier;
@@ -331,12 +346,14 @@ namespace FishMMO.Client
 			float hailStone = hasContext
 				? WeatherPhysics.HailStoneMetres(this.context.Sample.Air, this.context.Sample.Column, this.context.Sample.Planet)
 				: 0f;
+			PrecipitationMarker.Begin();
 			precipitation.Render(shown, camera, currentTier, Profile, time, falling, Underfoot(), hailStone);
 			// Where it lands. Needs the height map, so it draws nothing until that has been built.
 			// The rain's own substance only: a volcano's ash winning the frame's one substance used to
 			// stop the rain beside it splashing at all.
 			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid,
 				hasContext ? this.context.Temperature : 0f, PrecipitationField.SubstanceOf(WeatherChannel.RainWeight, falling));
+			PrecipitationMarker.End();
 		}
 
 		/// <summary>
