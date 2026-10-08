@@ -130,28 +130,23 @@ float4 _FishFogFlow;
 /// mountain, slows against its face and closes up in its lee; far from any, this is zero. The flow for
 /// the wind's own direction is the two solved ones mixed by its cosine and sine (TerrainFlowSolver).
 /// One 3D read, and none at all above the highest ground or outside the grid.
+/// One exit, as FishFogDensity: FXC flags an early return inlined into a kernel's loop as a potentially
+/// uninitialised return value.
 float2 FishFlowAround(float2 xz, float altitude, float climb, float2 wind)
 {
-    if (_FishCloudFlowRect.w < 1.5)
-    {
-        return float2(0.0, 0.0);
-    }
+    float2 aside = float2(0.0, 0.0);
     float level = altitude + max(0.0, climb);
-    if (level >= _FishCloudFlowLevels.y)
-    {
-        return float2(0.0, 0.0);
-    }
     float2 uv = (xz - _FishCloudFlowRect.xy) / max(1.0, _FishCloudFlowRect.z);
-    if (any(uv <= 0.0) || any(uv >= 1.0))
+    if (_FishCloudFlowRect.w >= 1.5 && level < _FishCloudFlowLevels.y && all(uv > 0.0) && all(uv < 1.0))
     {
-        return float2(0.0, 0.0);
+        float levels = max(1.0, _FishCloudFlowLevels.z);
+        float k = saturate((level - _FishCloudFlowLevels.x) / max(1.0, _FishCloudFlowLevels.y - _FishCloudFlowLevels.x)) * (levels - 1.0);
+        float4 d = SAMPLE_TEXTURE3D_LOD(_FishCloudFlowField, sampler_FishCloudFlowField, float3(uv, (k + 0.5) / levels), 0);
+        float alongBy = wind.x * d.x + wind.y * d.z;
+        float acrossBy = wind.x * d.y + wind.y * d.w;
+        aside = wind * alongBy + float2(-wind.y, wind.x) * acrossBy;
     }
-    float levels = max(1.0, _FishCloudFlowLevels.z);
-    float k = saturate((level - _FishCloudFlowLevels.x) / max(1.0, _FishCloudFlowLevels.y - _FishCloudFlowLevels.x)) * (levels - 1.0);
-    float4 d = SAMPLE_TEXTURE3D_LOD(_FishCloudFlowField, sampler_FishCloudFlowField, float3(uv, (k + 0.5) / levels), 0);
-    float alongBy = wind.x * d.x + wind.y * d.z;
-    float acrossBy = wind.x * d.y + wind.y * d.w;
-    return wind * alongBy + float2(-wind.y, wind.x) * acrossBy;
+    return aside;
 }
 
 // The sky's own noise volumes (CloudNoiseBaker): the shape volume (128 cubed: r Perlin–Worley, gba
@@ -505,16 +500,17 @@ float FishFogStructure(float3 at, float footprint)
 float FishFogDensity(float3 at, FishFogColumn column, float footprint)
 {
     float profile = FishFogProfile(at.y, column);
+    float density = 0.0;
     // Above the top's fade, or under the lifted base's: nothing to read the banks for.
-    if (profile <= 0.0)
+    if (profile > 0.0)
     {
-        return 0.0;
+        float spread = _FishFogLayerShape.y;
+        // The chilled air drains downhill before it condenses, so a fog forms first and thickest in the
+        // hollows and thinnest on the rises — the more so the younger and patchier it is.
+        float s = FishFogStructure(at, footprint) + clamp(column.hollow / max(5.0, _FishFogLayer.y), -1.0, 1.0);
+        density = _FishFogLayer.x * profile * exp(spread * s - 0.5 * spread * spread);
     }
-    float spread = _FishFogLayerShape.y;
-    // The chilled air drains downhill before it condenses, so a fog forms first and thickest in the
-    // hollows and thinnest on the rises — the more so the younger and patchier it is.
-    float s = FishFogStructure(at, footprint) + clamp(column.hollow / max(5.0, _FishFogLayer.y), -1.0, 1.0);
-    return _FishFogLayer.x * profile * exp(spread * s - 0.5 * spread * spread);
+    return density;
 }
 
 #endif

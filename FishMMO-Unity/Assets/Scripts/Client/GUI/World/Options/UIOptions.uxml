@@ -70,6 +70,10 @@
                     <ui:Label name="grass-distance-value" text="200 m" class="fish-hint options-row-value" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">
+                    <ui:Label text="Volumetric Clouds" class="fish-label options-row-label" />
+                    <ui:Toggle name="clouds-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
                     <ui:Label text="Brightness" class="fish-label options-row-label" />
                     <ui:Slider name="brightness-slider" low-value="0" high-value="1" class="options-row-field" />
                     <ui:Label name="brightness-value" text="100%" class="fish-hint options-row-value" />

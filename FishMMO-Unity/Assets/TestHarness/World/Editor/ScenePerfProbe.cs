@@ -151,6 +151,8 @@ namespace FishMMO.TestHarness.World.Editor
 
 		private static void Begin()
 		{
+			// Before anything is measured or its markers listed: the clouds as shipped, whatever the editor's own switch says.
+			SkySystem.EditorCloudsOff = false;
 			output = SessionState.GetString(StateKey, output);
 			report.Clear();
 			steps.Clear();
@@ -285,10 +287,12 @@ namespace FishMMO.TestHarness.World.Editor
 				{
 					// Each variant beside a fresh base: the frame drifts as a run warms up (5–6 ms over a run in a storm), so
 					// a variant is only comparable with the base measured just before it.
+					// FISHMMO_PERF_BREAKDOWN_ALL=1: every step's GPU-by-marker and CPU tables, so a pair shows which passes moved.
+					bool all = Environment.GetEnvironmentVariable("FISHMMO_PERF_BREAKDOWN_ALL") == "1";
 					foreach (string variant in Variants(variants))
 					{
-						steps.Add(new Step { View = viewList[v], Variant = "rebase" });
-						steps.Add(new Step { View = viewList[v], Variant = variant });
+						steps.Add(new Step { View = viewList[v], Variant = "rebase", Breakdown = all });
+						steps.Add(new Step { View = viewList[v], Variant = variant, Breakdown = all });
 					}
 					// The base again, settled: the first measurement of a run reads high while the scene warms up.
 					steps.Add(new Step { View = viewList[v], Variant = "rebase" });
@@ -349,6 +353,9 @@ namespace FishMMO.TestHarness.World.Editor
 
 		private static void Enter(Step step)
 		{
+			// The editor's cloud switch (CloudToggle) is a person's preference, restored after every domain reload: the
+			// probe measures the clouds as shipped, so it is held on here, for this session only (nothing is saved).
+			SkySystem.EditorCloudsOff = false;
 			Place(step.View);
 			revert = Apply(step.Variant);
 			gpuSum.Clear();
@@ -378,6 +385,21 @@ namespace FishMMO.TestHarness.World.Editor
 					eye = new Vector3(0f, GroundAt(0f, 0f) + 350f, -600f);
 					look = new Vector3(0f, GroundAt(0f, 0f), 0f);
 					break;
+				case "skyline":
+				case "skyup":
+				{
+					// The meadow's spot and direction, above the trees: level, half the screen sky (skyline), or tilted 25
+					// degrees up into it (skyup) — the clouds' cost follows how much sky is in view, and the meadow's trees
+					// hide most of it.
+					Place("meadow");
+					Vector3 forward = camera.transform.forward;
+					forward.y = 0f;
+					forward = forward.sqrMagnitude > 1e-6f ? forward.normalized : Vector3.forward;
+					Vector3 standing = camera.transform.position + Vector3.up * 30f;
+					Vector3 dir = view == "skyup" ? Quaternion.AngleAxis(-25f, Vector3.Cross(Vector3.up, forward)) * forward : forward;
+					camera.transform.SetPositionAndRotation(standing, Quaternion.LookRotation(dir, Vector3.up));
+					return;
+				}
 				default:
 				{
 					// A player standing on open land nearest the middle of the scene (its middle may be sea), looking
@@ -705,10 +727,34 @@ namespace FishMMO.TestHarness.World.Editor
 					on.ForEach(r => r.enabled = false);
 					return () => on.ForEach(r => r.enabled = true);
 				}
+				case "vegold":
+					Shader.SetGlobalFloat("_FishVegetationDiag", 1f);
+					return () => Shader.SetGlobalFloat("_FishVegetationDiag", 0f);
+				case "noocclusion":
+					FishDepthPyramid.Enabled = false;
+					return () => FishDepthPyramid.Enabled = true;
 				case "nocamera":
 					// The editor's own GPU time alone in the natural frames (the timed renders still draw the camera).
 					camera.enabled = false;
 					return () => camera.enabled = true;
+				case "depthprime":
+				{
+					// Depth priming forced on every renderer (URP leaves it off under MSAA: pair it with msaa1).
+					var changed = new List<(UniversalRendererData Data, DepthPrimingMode Was)>();
+					FieldInfo list = typeof(UniversalRenderPipelineAsset).GetField("m_RendererDataList", BindingFlags.NonPublic | BindingFlags.Instance);
+					if (list?.GetValue(pipeline) is ScriptableRendererData[] all)
+					{
+						foreach (ScriptableRendererData d in all)
+						{
+							if (d is UniversalRendererData universal)
+							{
+								changed.Add((universal, universal.depthPrimingMode));
+								universal.depthPrimingMode = DepthPrimingMode.Forced;
+							}
+						}
+					}
+					return () => changed.ForEach(c => c.Data.depthPrimingMode = c.Was);
+				}
 				case "msaa1":
 				{
 					int was = pipeline.msaaSampleCount;
@@ -883,7 +929,14 @@ namespace FishMMO.TestHarness.World.Editor
 				case "stepscale": { float was = d.StepScale; d.StepScale = value; return () => d.StepScale = was; }
 				case "growth": { bool was = d.DistanceStepGrowth; d.DistanceStepGrowth = value > 0.5f; return () => d.DistanceStepGrowth = was; }
 				case "exit": { float was = d.EarlyExit; d.EarlyExit = value; return () => d.EarlyExit = was; }
+				case "fieldskip": { Shader.SetGlobalFloat("_FishCloudFieldSkip", value); return () => Shader.SetGlobalFloat("_FishCloudFieldSkip", 0f); }
+				case "fieldreuse": { Shader.SetGlobalFloat("_FishCloudFieldReuse", value); return () => Shader.SetGlobalFloat("_FishCloudFieldReuse", 0f); }
 				case "tail": { int was = clouds.FarTailSteps; clouds.FarTailSteps = (int)value; return () => clouds.FarTailSteps = was; }
+				case "splita": { float was = FishCloudsFeature.FarSplitA; FishCloudsFeature.FarSplitA = value; return () => FishCloudsFeature.FarSplitA = was; }
+				case "splitb": { float was = FishCloudsFeature.FarSplitB; FishCloudsFeature.FarSplitB = value; return () => FishCloudsFeature.FarSplitB = was; }
+				case "farslice": { int was = FishCloudsFeature.FarSliceOverride; FishCloudsFeature.FarSliceOverride = (int)value; return () => FishCloudsFeature.FarSliceOverride = was; }
+				case "farband": { float was = clouds.FarBandMetres; clouds.FarBandMetres = value; return () => clouds.FarBandMetres = was; }
+				case "tiles": { bool was = CloudFieldTiles.Enabled; CloudFieldTiles.Enabled = value > 0.5f; return () => CloudFieldTiles.Enabled = was; }
 				case "lightvol": { bool was = CloudLightVolume.Enabled; CloudLightVolume.Enabled = value > 0.5f; return () => CloudLightVolume.Enabled = was; }
 				case "debug": { CloudDebugView was = d.DebugView; d.DebugView = (CloudDebugView)(int)value; return () => d.DebugView = was; }
 				default:
@@ -957,6 +1010,43 @@ namespace FishMMO.TestHarness.World.Editor
 			string delta = step.Variant == "base" || step.Variant == "rebase" ? "" : $" (saves {baseMilliseconds - ms:+0.00;-0.00} ms timed, {baseNatural - natural:+0.00;-0.00} ms natural)";
 			report.Add($"{step.View} {step.Variant}: natural GPU frame {natural:0.00} ms (camera {cameraGpu:0.00}); timed {ms:0.00} ms ({1000f / ms:0} fps), CPU in Render() {submit / TimedFrames:0.00} ms{delta}");
 			{
+				// The cloud passes by themselves (natural frames), and what resolution the march really ran at: a variant
+				// that moves the resolution must be seen to have moved it.
+				int frames = Mathf.Max(1, sampled);
+				string passes = string.Join(", ", gpuSum.Where(p => p.Key.StartsWith("Fish Clouds"))
+					.OrderByDescending(p => p.Value)
+					.Select(p => $"{p.Key.Substring("Fish Clouds".Length).Trim(' ', '(', ')')} {p.Value / frames / 1e6:0.00}"));
+				SkySystem sky = SkySystem.Instance;
+				float resolution = sky != null ? sky.CloudTier.Resolution : 0f;
+				report.Add($"  clouds: {(passes.Length > 0 ? passes : "no passes")} ms; march {resolution:0.000} of the screen, {FishCloudsFeature.PixelsPerMarchedTexel:0.0} rebuilt px a texel");
+			}
+			{
+				// The field's tiles: whether the march reads them, and what is in them (a tile of zeros was never drawn).
+				Vector4 tilesOn = Shader.GetGlobalVector("_FishCloudFieldTiles");
+				string Mean(string name)
+				{
+					var tile = Shader.GetGlobalTexture(name) as RenderTexture;
+					if (tile == null)
+					{
+						return "none";
+					}
+					var read = new Texture2D(tile.width, tile.height, TextureFormat.RGBAFloat, false, true);
+					RenderTexture before = RenderTexture.active;
+					RenderTexture.active = tile;
+					read.ReadPixels(new Rect(0, 0, tile.width, tile.height), 0, 0);
+					RenderTexture.active = before;
+					Color[] texels = read.GetPixels();
+					UnityEngine.Object.DestroyImmediate(read);
+					double total = 0.0;
+					float most = 0f;
+					foreach (Color texel in texels)
+					{
+						total += texel.r;
+						most = Mathf.Max(most, texel.r);
+					}
+					return $"{tile.width}² mean {total / texels.Length:0.000} max {most:0.000}";
+				}
+				report.Add($"  cloud field tiles: {(tilesOn.x > 0.5f ? "on" : "off")}; tower {Mean("_FishCloudTowerTile")}; formation {Mean("_FishCloudMesoTile")}");
 				// The light volume the cloud march's long light segments read: whether it is published, and what is in it.
 				Vector4 on = Shader.GetGlobalVector("_FishCloudLightVolumeC");
 				var volume = Shader.GetGlobalTexture("_FishCloudLightVolume") as RenderTexture;
@@ -986,6 +1076,8 @@ namespace FishMMO.TestHarness.World.Editor
 					report.Add($"  cloud light volume: off (C.x {on.x:0}, texture {(volume != null ? "set" : "none")})");
 				}
 			}
+			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
+			report.Add($"  indirect draws a camera: props {CliffRockInstancing.LastDrawCount}, trees {TerrainTreeInstancing.LastDrawCount}, details {TerrainDetailInstancing.LastDrawCount}, scatter {DetailScatterSystem.LastDrawCount}, grass {GrassBladeSystem.LastDrawCount}");
 			if (GrassBladeRenderer.TimedCalls > 0)
 			{
 				float calls = GrassBladeRenderer.TimedCalls;

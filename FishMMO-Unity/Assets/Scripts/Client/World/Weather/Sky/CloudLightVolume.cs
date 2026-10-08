@@ -29,6 +29,12 @@ namespace FishMMO.Client
 		public const int Slices = 48;
 		/// <summary>Slices along a row of the texture.</summary>
 		public const int TilesAcross = 8;
+		/// <summary>
+		/// Slices drawn a frame: the whole volume every 24 frames. At 8 a frame (every 6) the build cost 0.55 ms of GPU,
+		/// more than the light march saved in an overcast (ScenePerfProbe 2026-10-07); a cloud drifts a few metres in
+		/// 24 frames against texels of three hundred.
+		/// </summary>
+		public const int SlicesPerFrame = 2;
 		/// <summary>The grid reaches this far past the camera's far plane: the light march's own reach, and some.</summary>
 		public const float MarginMetres = 3500f;
 		/// <summary>And no farther than this, however far the camera sees.</summary>
@@ -42,11 +48,12 @@ namespace FishMMO.Client
 		private static readonly int BuildBId = Shader.PropertyToID("_FishCloudLightBuildB");
 
 		private static int Rows => (Slices + TilesAcross - 1) / TilesAcross;
+		private static int Frames => (Slices + SlicesPerFrame - 1) / SlicesPerFrame;
 
 		private RenderTexture front;
 		private RenderTexture back;
 		private CommandBuffer commands;
-		private int row = -1;
+		private int part = -1;
 		private Vector4 buildA;
 		private Vector4 buildB;
 		private bool published;
@@ -76,9 +83,9 @@ namespace FishMMO.Client
 				front = Create(width, height, format, "Cloud Light Volume");
 				back = Create(width, height, format, "Cloud Light Volume (building)");
 				commands = new CommandBuffer { name = "Cloud Light Volume" };
-				row = -1;
+				part = -1;
 			}
-			if (row < 0)
+			if (part < 0)
 			{
 				// A new build: the grid round where the viewer is now, snapped to a texel so a still camera keeps
 				// its grid, and through the shell as it stands now.
@@ -88,17 +95,26 @@ namespace FishMMO.Client
 				float z = Mathf.Round(viewer.z / texel) * texel - half;
 				buildA = new Vector4(x, z, texel, Texels);
 				buildB = new Vector4(bottom, (top - bottom) / Slices, Slices, TilesAcross);
-				row = 0;
+				part = 0;
 			}
 			commands.Clear();
 			commands.SetRenderTarget(back);
-			commands.SetViewport(new Rect(0f, row * Texels, TilesAcross * Texels, Texels));
 			commands.SetGlobalVector(BuildAId, buildA);
 			commands.SetGlobalVector(BuildBId, buildB);
-			commands.DrawProcedural(Matrix4x4.identity, cloudMaterial, pass, MeshTopology.Triangles, 3);
+			// This frame's slices, a tile each; the pass works out each pixel's slice from where it is.
+			for (int k = 0; k < SlicesPerFrame; k++)
+			{
+				int slice = part * SlicesPerFrame + k;
+				if (slice >= Slices)
+				{
+					break;
+				}
+				commands.SetViewport(new Rect(slice % TilesAcross * Texels, slice / TilesAcross * Texels, Texels, Texels));
+				commands.DrawProcedural(Matrix4x4.identity, cloudMaterial, pass, MeshTopology.Triangles, 3);
+			}
 			Graphics.ExecuteCommandBuffer(commands);
-			row++;
-			if (row >= Rows)
+			part++;
+			if (part >= Frames)
 			{
 				(front, back) = (back, front);
 				Shader.SetGlobalTexture(VolumeId, front);
@@ -106,19 +122,19 @@ namespace FishMMO.Client
 				Shader.SetGlobalVector(VolumeBId, buildB);
 				Shader.SetGlobalVector(VolumeCId, new Vector4(1f, 0f, 0f, 0f));
 				published = true;
-				row = -1;
+				part = -1;
 			}
 		}
 
 		/// <summary>No volume: the light march asks the field all the way, as it did.</summary>
 		public void Clear()
 		{
-			if (published || row >= 0)
+			if (published || part >= 0)
 			{
 				Shader.SetGlobalVector(VolumeCId, Vector4.zero);
 				published = false;
 			}
-			row = -1;
+			part = -1;
 		}
 
 		public void Dispose()

@@ -216,6 +216,9 @@ namespace FishMMO.Client
 		/// <summary>Grass and small-detail draw distance, metres (<see cref="ClientGrassSettings"/>).</summary>
 		public const string GrassDistanceKey = "Grass.Distance";
 
+		/// <summary>Whether the volumetric clouds are drawn (<see cref="ClientCloudSettings"/>).</summary>
+		public const string CloudsEnabledKey = "Clouds.Enabled";
+
 		/// <summary>Configuration key for world label opacity, 0 to 1.</summary>
 		public const string WorldLabelOpacityKey = "WorldLabels.Opacity";
 

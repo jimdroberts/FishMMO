@@ -82,6 +82,7 @@ namespace FishMMO.Client
 		private static readonly int InstancesId = Shader.PropertyToID("_FishInstances");
 		private static readonly int VisibleId = Shader.PropertyToID("_FishVisibleInstances");
 		private static readonly int CommandBasesId = Shader.PropertyToID(TerrainGpuRenderer.CommandBasesName);
+		private static readonly int ContactOnId = Shader.PropertyToID("_FishContactOn");
 
 		/// <summary>OpenGL only: the args fence (see FishDetailScatter.compute FishScatterArgsFence).</summary>
 		private static bool NeedsArgsFence => SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore || SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3;
@@ -528,6 +529,9 @@ namespace FishMMO.Client
 				return null;
 			}
 			clone = new Material(material) { shader = shader, name = material.name + " (scatter)", hideFlags = HideFlags.DontSave };
+			// Its base takes the terrain's colour and shading (FishGroundColour.hlsl contact blend, the small details'
+			// settings; 1 here and on every draw's block). Only this renderer's draws: the shared materials never.
+			clone.SetFloat(ContactOnId, 1f);
 			clones.Add(material, clone);
 			return clone;
 		}
@@ -549,6 +553,7 @@ namespace FishMMO.Client
 				blocks[c].SetBuffer(InstancesId, instanceBuffer);
 				blocks[c].SetBuffer(VisibleId, visibleBuffer);
 				blocks[c].SetBuffer(CommandBasesId, commandBaseBuffer);
+				blocks[c].SetFloat(ContactOnId, 1f);
 			}
 		}
 

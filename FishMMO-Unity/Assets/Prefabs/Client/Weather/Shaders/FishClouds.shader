@@ -30,6 +30,9 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             // The reconstruction options under trial (CloudOptions in FishCloudsFeature.cs; FishCloudResolve.hlsl
             // declares the same for the steadying): w the rays' phase this frame, always set.
             float4 _FishCloudOptions;
+            // The far band (pass 10, CloudFarBand): x where it begins (m; 0 none), y frames between a texel's
+            // marches, z this frame's turn, w 1 when last frame's band can be carried on.
+            float4 _FishCloudFarBand;
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -125,8 +128,13 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     + _FishCloudOptions.w * float2(1.0, 1.6180340));
                 float cloudDistance;
                 float2 cloudMotion;
-                float4 result = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, maxDistance, jitter, lightSeed,
+                // In two bands where the ray runs past the far band's start: this pass walks the near one, at
+                // the steps the whole ray would have had; pass 10 lays the far band behind it.
+                bool split = _FishCloudFarBand.x > 0.0 && maxDistance > _FishCloudFarBand.x;
+                FishCloudMarchWhole = split ? maxDistance : -1.0;
+                float4 result = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, split ? _FishCloudFarBand.x : maxDistance, jitter, lightSeed,
                     (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance, cloudMotion);
+                FishCloudMarchWhole = -1.0;
                 // The mist on the ground, by its own short march (FishMist.hlsl), laid in front: it is
                 // the nearest thing along any ray it is on. The steadying fetches a pixel's history from
                 // where what it shows stood, so the distance it is handed is the two media's, each by
@@ -883,6 +891,292 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             }
             ENDHLSL
         }
+
+        // ── 9: the field's tiles: the tower lattice (x 0) or the formation noise (x 1) over one period of it ──
+        // Drawn once a world (CloudFieldTiles), read with a wrapping fetch in place of working either out per sample.
+        Pass
+        {
+            Name "CloudFieldTile"
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "FishCloudVolume.hlsl"
+
+            float4 _FishCloudTileBuild;   // x which tile (0 tower, 1 formation noise), y texels a side
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings { float4 positionCS : SV_POSITION; };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                return output;
+            }
+
+            float Frag(Varyings input) : SV_Target
+            {
+                float2 uv = (floor(input.positionCS.xy) + 0.5) / max(1.0, _FishCloudTileBuild.y);
+                if (_FishCloudTileBuild.x < 0.5)
+                {
+                    return FishCloudTowerAnalytic(uv * _FishCloudColumn.y * max(1.0, _FishCloudColumn.z));
+                }
+                return FishCloudMesoNoiseAnalytic(uv * _FishCloudMesoParams.y * max(1.0, _FishCloudMesoParams.z));
+            }
+            ENDHLSL
+        }
+
+        // ── 10: the far band, in four slices, one marched a frame ──
+        // Two thirds of a fair sky's march was cloud past ten kilometres (ScenePerfProbe 2026-10-07), and the march is
+        // as slow as its longest rays: marching a quarter of the texels in turn saved nothing, since each still walked
+        // the whole far band. So the far band is cut into four slices by distance (_FishCloudFarBounds) and every texel
+        // marches ONE of them a frame, in turn — every ray a quarter as long, and all the GPU's threads in step. Each
+        // slice is kept with the view it was drawn with (_FishCloudFarVP) and fetched back along the texel's direction
+        // (at infinity: a camera moving at 50 m/s shifts a cloud five kilometres off by under a pixel in three frames);
+        // where it cannot be — off that view's screen, its ray now ending elsewhere — it is marched at once. A slice
+        // behind a near band and nearer slices that already let nothing through is not marched at all. Writes near and
+        // far together, which the steadying reads in place of pass 0's march. Jim, 2026-10-07: distant clouds may be
+        // softer for this.
+        Pass
+        {
+            Name "CloudFarBand"
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            #include "FishCloudVolume.hlsl"
+
+            float4 _FishCloudMarchParams;
+            float4 _FishCloudJitter;
+            float4x4 _FishCloudInverseVP;
+            float4 _FishCloudOptions;
+            float4 _FishCloudFarBand;           // x where the far band begins (m), z the slice marched this frame
+            float4 _FishCloudFarBounds;         // x, y, z where slices 1, 2, 3 begin (m); slice 3 runs to the ray's end
+            float4 _FishCloudFarValid;          // 1 for each slice kept from an earlier frame
+            float4x4 _FishCloudFarVP[4];        // the view each slice was drawn with
+            TEXTURE2D(_FishCloudFar0); TEXTURE2D(_FishCloudFar1); TEXTURE2D(_FishCloudFar2); TEXTURE2D(_FishCloudFar3);
+            TEXTURE2D(_FishCloudFarInfo0); TEXTURE2D(_FishCloudFarInfo1); TEXTURE2D(_FishCloudFarInfo2); TEXTURE2D(_FishCloudFarInfo3);
+            TEXTURE2D(_FishCloudNear);          // pass 0's near band: rgb, a transmittance
+            TEXTURE2D(_FishCloudNearMotion);    // x its mean distance (km), y its wind gain
+            SAMPLER(sampler_linear_clamp);
+            SAMPLER(sampler_point_clamp);
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                output.uv = GetFullScreenTriangleTexCoord(input.vertexID);
+                return output;
+            }
+
+            // Pass 0's, exactly: the same rays and phases.
+            float3 RayFor(float2 uv)
+            {
+                float4 clip = float4(uv * 2.0 - 1.0, 1.0, 1.0);
+                #if UNITY_UV_STARTS_AT_TOP
+                    clip.y = -clip.y;
+                #endif
+                float4 world = mul(_FishCloudInverseVP, clip);
+                return normalize(world.xyz / world.w - _WorldSpaceCameraPos.xyz);
+            }
+
+            float Jitter(float2 pixel, float frame)
+            {
+                float3 magic = float3(0.06711056, 0.00583715, 52.9829189);
+                return frac(magic.z * frac(dot(pixel + frame * 5.588238, magic.xy)));
+            }
+
+            struct FarOutput
+            {
+                float4 clouds : SV_Target0;     // near and far together: rgb, a transmittance
+                float2 motion : SV_Target1;     // x their mean distance (km), y their mean wind gain
+                float4 slice : SV_Target2;      // this frame's slice: rgb, a transmittance
+                float4 info : SV_Target3;       // x its mean distance (km), y its wind gain, z where the ray ends (km), w 1 when real
+            };
+
+            float4 FarSlice(int j, float2 uv)
+            {
+                return j == 0 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFar0, sampler_linear_clamp, uv, 0)
+                    : j == 1 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFar1, sampler_linear_clamp, uv, 0)
+                    : j == 2 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFar2, sampler_linear_clamp, uv, 0)
+                    : SAMPLE_TEXTURE2D_LOD(_FishCloudFar3, sampler_linear_clamp, uv, 0);
+            }
+
+            float4 FarSliceInfo(int j, float2 uv)
+            {
+                return j == 0 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFarInfo0, sampler_point_clamp, uv, 0)
+                    : j == 1 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFarInfo1, sampler_point_clamp, uv, 0)
+                    : j == 2 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFarInfo2, sampler_point_clamp, uv, 0)
+                    : SAMPLE_TEXTURE2D_LOD(_FishCloudFarInfo3, sampler_point_clamp, uv, 0);
+            }
+
+            // Whether a kept slice holds for this ray: it was real, and either its ray ended where this one does or
+            // both ran past the slice's far end — the depth then had no say in it.
+            bool FarSliceHolds(float4 info, float endKm, float toKm)
+            {
+                return info.w > 0.5 && (abs(info.z - endKm) <= 0.05 * endKm + 0.05 || (info.z >= toKm && endKm >= toKm));
+            }
+
+            // A kept slice along this direction: the texel it fell on, or failing that one beside it. The jitter takes
+            // the texels at a leaf's edge from sky to leaf and back, and those at a cloud's edge from behind it to clear;
+            // marching each such slice again made whole groups of threads wait on the few that did (4.6 % of the sky's
+            // pixels cost 2.7 ms in a fair sky). A neighbouring direction stands for a cloud kilometres off.
+            bool FarFetch(int j, float2 thenUV, float endKm, float toKm, out float4 slice, out float2 motion)
+            {
+                slice = float4(0.0, 0.0, 0.0, 1.0);
+                motion = float2(0.0, 0.0);
+                float4 info = FarSliceInfo(j, thenUV);
+                if (FarSliceHolds(info, endKm, toKm))
+                {
+                    slice = FarSlice(j, thenUV);
+                    motion = info.xy;
+                    return true;
+                }
+                // The four beside it, then the four corners and the four two away: a gap between leaves is often a
+                // texel or two of sky with leaf all round it.
+                float2 step = 1.0 / max(1.0, _FishCloudJitter.zw);
+                float2 offsets[12] = { float2(1, 0), float2(-1, 0), float2(0, 1), float2(0, -1),
+                    float2(1, 1), float2(-1, 1), float2(1, -1), float2(-1, -1),
+                    float2(2, 0), float2(-2, 0), float2(0, 2), float2(0, -2) };
+                UNITY_LOOP
+                for (int n = 0; n < 12; n++)
+                {
+                    float2 at = thenUV + offsets[n] * step;
+                    float4 near = FarSliceInfo(j, at);
+                    if (all(at >= 0.0) && all(at <= 1.0) && FarSliceHolds(near, endKm, toKm))
+                    {
+                        // The texel itself, not a blend that may reach into the one that failed.
+                        slice = j == 0 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFar0, sampler_point_clamp, at, 0)
+                            : j == 1 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFar1, sampler_point_clamp, at, 0)
+                            : j == 2 ? SAMPLE_TEXTURE2D_LOD(_FishCloudFar2, sampler_point_clamp, at, 0)
+                            : SAMPLE_TEXTURE2D_LOD(_FishCloudFar3, sampler_point_clamp, at, 0);
+                        motion = near.xy;
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            FarOutput Frag(Varyings input)
+            {
+                FarOutput output;
+                int2 texel = int2(input.positionCS.xy);
+                float4 nearBand = LOAD_TEXTURE2D(_FishCloudNear, texel);
+                float2 nearMotion = LOAD_TEXTURE2D(_FishCloudNearMotion, texel).xy;
+                output.clouds = nearBand;
+                output.motion = nearMotion;
+                output.slice = float4(0.0, 0.0, 0.0, 1.0);
+
+                float2 uv = input.uv + _FishCloudJitter.xy / max(1.0, _FishCloudJitter.zw);
+                float3 direction = RayFor(uv);
+                float rawDepth = SampleSceneDepth(uv);
+                float depth = LinearEyeDepth(rawDepth, _ZBufferParams);
+                #if UNITY_REVERSED_Z
+                    bool isSky = rawDepth <= 1e-6;
+                #else
+                    bool isSky = rawDepth >= 1.0 - 1e-6;
+                #endif
+                float maxDistance = isSky ? _FishCloudMarchParams.w * 4.6 : depth / max(1e-4, dot(direction, -UNITY_MATRIX_V[2].xyz));
+                float endKm = maxDistance * 0.001;
+                output.info = float4(0.0, 0.0, endKm, 1.0);
+                float band = _FishCloudFarBand.x;
+                if (band <= 0.0 || maxDistance <= band)
+                {
+                    return output;
+                }
+
+                float jitter = frac(Jitter(input.positionCS.xy, 0.0) + _FishCloudOptions.w);
+                jitter = _FishCloudDiag.x > 0.5 ? 0.5 : jitter;
+                float2 pixel = input.positionCS.xy;
+                float2 lightSeed = frac(float2(frac(dot(pixel, float2(0.7548777, 0.5698403))), Jitter(pixel.yx, 0.0))
+                    + _FishCloudOptions.w * float2(1.0, 1.6180340));
+
+                float bounds[5] = { band, _FishCloudFarBounds.x, _FishCloudFarBounds.y, _FishCloudFarBounds.z, 1e9 };
+                int marching = (int)_FishCloudFarBand.z;
+                float3 light = nearBand.rgb;
+                float through = nearBand.a;
+                float weight = 1.0 - nearBand.a;
+                float2 motionSum = nearMotion * weight;
+                int marchedSlices = 0;
+                UNITY_LOOP
+                for (int j = 0; j < 4; j++)
+                {
+                    float from = bounds[j];
+                    float to = min(maxDistance, bounds[j + 1]);
+                    float4 slice = float4(0.0, 0.0, 0.0, 1.0);
+                    float2 sliceMotion = float2(0.0, 0.0);
+                    bool fresh = false;
+                    if (to > from)
+                    {
+                        bool kept = false;
+                        if (j != marching && _FishCloudFarValid[j] > 0.5)
+                        {
+                            float4 then = mul(_FishCloudFarVP[j], float4(direction, 0.0));
+                            float2 thenUV = then.xy / max(1e-5, then.w) * 0.5 + 0.5;
+                            #if UNITY_UV_STARTS_AT_TOP
+                                thenUV.y = 1.0 - thenUV.y;
+                            #endif
+                            if (then.w > 1e-5 && all(thenUV >= 0.0) && all(thenUV <= 1.0))
+                            {
+                                kept = FarFetch(j, thenUV, endKm, to * 0.001, slice, sliceMotion);
+                            }
+                        }
+                        // Marched: this frame's slice, or one that could not be fetched — unless nothing of it would
+                        // get through what lies in front. (Probe diagnostics, `cloud:fieldskip`: 262144 marches nothing,
+                        // what the pass costs besides; 524288 marches only this frame's slice, to time one alone.)
+                        bool probeSkip = _FishCloudFieldSkip == 262144.0 || (_FishCloudFieldSkip == 524288.0 && j != marching);
+                        if (!kept && through > 0.02 && !probeSkip)
+                        {
+                            float cloudDistance;
+                            float2 cloudMotion;
+                            FishCloudMarchFrom = from;
+                            FishCloudMarchWhole = maxDistance;
+                            slice = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, to, jitter, lightSeed,
+                                (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance, cloudMotion);
+                            FishCloudMarchFrom = 0.0;
+                            FishCloudMarchWhole = -1.0;
+                            sliceMotion = float2(cloudMotion.x * 0.001, cloudMotion.y);
+                            fresh = true;
+                            marchedSlices++;
+                        }
+                    }
+                    if (j == marching)
+                    {
+                        output.slice = slice;
+                        // Not marched (behind what is opaque, or past the ray's end): not to be fetched back as real.
+                        output.info = float4(sliceMotion, endKm, fresh || to <= from ? 1.0 : 0.0);
+                    }
+                    float added = through * (1.0 - slice.a);
+                    light += through * slice.rgb;
+                    motionSum += sliceMotion * added;
+                    weight += added;
+                    through *= slice.a;
+                }
+                output.clouds = float4(light, through);
+                output.motion = weight > 1e-5 ? motionSum / weight : nearMotion;
+                // Probe diagnostic (`cloud:fieldskip=131072`): how many slices this texel marched this frame — green one,
+                // yellow two, red three or four, blue none.
+                if (_FishCloudFieldSkip == 131072.0)
+                {
+                    output.clouds = marchedSlices == 0 ? float4(0.0, 0.0, 1.0, 0.0) : marchedSlices == 1 ? float4(0.0, 1.0, 0.0, 0.0)
+                        : marchedSlices == 2 ? float4(1.0, 1.0, 0.0, 0.0) : float4(1.0, 0.0, 0.0, 0.0);
+                }
+                return output;
+            }
+            ENDHLSL
+        }
+
     }
     Fallback Off
 }

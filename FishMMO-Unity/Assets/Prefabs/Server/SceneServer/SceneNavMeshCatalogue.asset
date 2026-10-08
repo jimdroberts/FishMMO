@@ -13,6 +13,10 @@ MonoBehaviour:
   m_Name: SceneNavMeshCatalogue
   m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue
   Entries:
+  - SceneName: Baoakraal Hyena-den
+    Data: {fileID: -3336068400606198296, guid: 11d9bfc9b6072c5dea7405d9ae333eb8, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Dungeon
     Data: {fileID: 23800000, guid: c43b6eb487815084ca437ada41086fa4, type: 2}
     Position: {x: -256, y: -35, z: -256}

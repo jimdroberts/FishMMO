@@ -150,7 +150,7 @@ namespace FishMMO.Client
 		// skips the read and keeps the average (smooth-edged clouds of the same size).
 		public static WeatherTierSettings Performant() => new WeatherTierSettings { Particles = 3000, BoxSize = 18f, OcclusionResolution = 48, OcclusionTexelMeters = 2f, OcclusionRaysPerFrame = 256, StarCubemapSize = 256, MeteorBudget = 16, Asteroids = false, ReflectionResolution = 64, Curtains = 3, Vortices = 2, VortexParticles = 600, CloudShadows = false, CloudResolution = 0.05f, CloudSteps = 16, CloudDetail = 0f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = false, TerrainSnowDisplacement = false };
 		public static WeatherTierSettings Balanced() => new WeatherTierSettings { Particles = 8000, BoxSize = 24f, OcclusionResolution = 64, OcclusionTexelMeters = 1.5f, OcclusionRaysPerFrame = 512, StarCubemapSize = 512, MeteorBudget = 64, Asteroids = true, ReflectionResolution = 128, Curtains = 6, Vortices = 3, VortexParticles = 1500, CloudShadows = true, CloudResolution = 0.06f, CloudSteps = 21, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = false };
-		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, Vortices = 4, VortexParticles = 3000, CloudShadows = true, CloudResolution = 0.07f, CloudSteps = 24, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = true };
+		public static WeatherTierSettings High() => new WeatherTierSettings { Particles = 16000, BoxSize = 30f, OcclusionResolution = 96, OcclusionTexelMeters = 1f, OcclusionRaysPerFrame = 1024, StarCubemapSize = 1024, MeteorBudget = 256, Asteroids = true, ReflectionResolution = 256, Curtains = 8, Vortices = 4, VortexParticles = 3000, CloudShadows = true, CloudResolution = 0.25f, CloudSteps = 24, CloudDetail = 1f, CloudTemporal = true, CloudHistoryScale = 0f, GodRays = true, TerrainSnowDisplacement = true };
 	}
 
 	/// <summary>
@@ -172,6 +172,8 @@ namespace FishMMO.Client
 		[Min(1000f)] public float MaxDistance = 44000f;
 		[Tooltip("Steps a ray may take past the camera's far plane, each as long as it must be to reach the end of the ray (0: no limit). The march costs as long as its longest rays, and in a storm those are the low ones that cross a hundred kilometres of deck toward the horizon; past the far plane a cloud is a few pixels of haze, and this keeps the horizon clouded without paying for it.")]
 		[Range(0, 64)] public int FarTailSteps = 24;
+		[Tooltip("Where the far band begins, in metres from the camera (0: one band). Cloud past it is marched a quarter of the screen a frame and carried on between from the frame before: two thirds of a fair sky's cost was past ten kilometres, where a cloud barely moves on the screen. The far clouds are a little softer for it (Jim, 2026-10-07).")]
+		[Min(0f)] public float FarBandMetres = 5000f;
 		[Tooltip("How much the last frame is kept when the clouds are steadied.")]
 		[Range(0f, 0.98f)] public float TemporalBlend = 0.9f;
 		[Tooltip("Metres across that the cloud shadow cookie covers.")]
@@ -495,6 +497,26 @@ namespace FishMMO.Client
 		[Range(0f, 1f)] public float DistanceNormalFlatten = 0.6f;
 		[Tooltip("How much of the ground's colour they take at full distance (0 keeps their own).")]
 		[Range(0f, 1f)] public float DistanceGroundPull = 0.35f;
+
+		[Header("Contact with the ground: small details (GPU detail scatter)")]
+		[Tooltip("Pebbles, small rocks, shells and litter from the GPU detail scatter take the terrain's colour and lighting normal at their base, so they sit in the ground instead of on it. Off = their own colour down to the ground line. Live.")]
+		public bool ContactBlend = true;
+		[Tooltip("Metres above the ground over which the blend fades out (eased: most of it in the lowest third).")]
+		[Range(0.01f, 1f)] public float ContactBlendHeight = 0.15f;
+		[Tooltip("How much of the ground's colour a detail takes where it meets the ground (0 keeps its own).")]
+		[Range(0f, 1f)] public float ContactColour = 0.8f;
+		[Tooltip("How far its lighting normal turns to the terrain's where it meets the ground: the base then shades exactly like the slope around it.")]
+		[Range(0f, 1f)] public float ContactNormal = 0.7f;
+
+		[Header("Contact with the ground: trees and terrain rocks")]
+		[Tooltip("The same for the GPU-drawn terrain trees (trunk bases), boulders and rock formations, over a deeper band. Live.")]
+		public bool ContactBlendLarge = true;
+		[Tooltip("Metres above the ground over which the blend fades out.")]
+		[Range(0.01f, 3f)] public float ContactBlendHeightLarge = 0.5f;
+		[Tooltip("How much of the ground's colour they take where they meet the ground.")]
+		[Range(0f, 1f)] public float ContactColourLarge = 0.75f;
+		[Tooltip("How far their lighting normal turns to the terrain's where they meet the ground.")]
+		[Range(0f, 1f)] public float ContactNormalLarge = 0.6f;
 
 		[Header("Procedural grass")]
 		[Tooltip("FishGrassBlades.compute: generates the visible blades around each camera every frame. Referenced here, not from Resources, so it ships to clients only.")]

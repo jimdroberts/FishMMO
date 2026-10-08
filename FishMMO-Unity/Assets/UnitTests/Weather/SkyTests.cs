@@ -216,6 +216,53 @@ namespace FishMMO.UnitTests.Weather
 			}
 		}
 
+		[Test]
+		public void EachStarTwinklesAsOne()
+		{
+			/* The twinkle phase rides in alpha, and a bilinear sample anywhere on a star blends the
+			 * texels round it: every lit texel's neighbours must hold its phase, or the star's edge
+			 * flickers apart from its middle — the split the old sky-grid phase gave. Few stars, and a
+			 * 5% allowance: where two overlap one of them keeps the shared texels, about 1% of the lit
+			 * ones here, while without the ring of phase round each star half of them fail. And the
+			 * stars must not all share one phase, or the sky would pulse as one. */
+			Cubemap sky = StarfieldBuilder.Build(512, 238u, stars: 200, keepReadable: true);
+			try
+			{
+				int lit = 0, whole = 0;
+				var phases = new HashSet<float>();
+				for (int f = 0; f < 6; f++)
+				{
+					Color[] p = sky.GetPixels((CubemapFace)f);
+					for (int y = 1; y < 511; y++)
+					{
+						for (int x = 1; x < 511; x++)
+						{
+							Color c = p[y * 512 + x];
+							if (c.r + c.g + c.b <= 0f) continue;
+							lit++;
+							phases.Add(c.a);
+							bool same = true;
+							for (int dy = -1; dy <= 1 && same; dy++)
+							{
+								for (int dx = -1; dx <= 1 && same; dx++)
+								{
+									same = p[(y + dy) * 512 + x + dx].a == c.a;
+								}
+							}
+							if (same) whole++;
+						}
+					}
+				}
+				Assert.That(lit, Is.GreaterThan(300), "the stars were not drawn");
+				Assert.That(whole, Is.GreaterThanOrEqualTo(lit * 0.95f), $"{lit - whole} of {lit} lit texels sit next to another phase");
+				Assert.That(phases.Count, Is.GreaterThan(80), "the stars share too few phases");
+			}
+			finally
+			{
+				Object.DestroyImmediate(sky);
+			}
+		}
+
 		// ── Which way the axis leans ─────────────────────────────────────
 
 		private WorldBody Twin(string name, float tilt, float poleLongitude)

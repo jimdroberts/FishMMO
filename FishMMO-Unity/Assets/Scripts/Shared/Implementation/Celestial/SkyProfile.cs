@@ -108,6 +108,7 @@ namespace FishMMO.Shared.Celestial
 		[Range(0f, 2f)] public float MilkyWay = 0.6f;
 		[Tooltip("Your own galaxy for the night sky. Left empty, the sky draws its own Milky Way band. A cubemap because the star field it sits in is one too, so it turns with the stars and has no seam or pinched pole; an equirectangular panorama works by setting its importer's Texture Shape to Cube (Latitude-Longitude).")]
 		public Cubemap Galaxy;
+		[Tooltip("How hard stars twinkle near the horizon, under air like our own on a calm night: 0.4 swings a low star's brightness between 0.6 and 1.4 of itself. Overhead they barely shimmer. The world's own air scales it (none on an airless body, about 0.4 of this under thin air, 1.7 under thick), and wind stirs it a little more. Moons and planets never twinkle.")]
 		[Range(0f, 1f)] public float StarTwinkle = 0.4f;
 		[Tooltip("Sky exposure multiplier.")]
 		[Min(0f)] public float Exposure = 1f;

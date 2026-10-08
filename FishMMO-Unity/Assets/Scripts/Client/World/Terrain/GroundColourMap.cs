@@ -49,10 +49,14 @@ namespace FishMMO.Client
 		private static readonly int ParamsId = Shader.PropertyToID("_FishGroundColourParams");
 		private static readonly int ShapeId = Shader.PropertyToID("_FishGroundColourShape");
 		private static readonly int DistanceBlendId = Shader.PropertyToID("_FishDistanceBlend");
+		private static readonly int ContactBlendId = Shader.PropertyToID("_FishContactBlend");
+		private static readonly int ContactLargeId = Shader.PropertyToID("_FishContactLarge");
 
 		/// <summary>The blend settings: the Weather Render Profile's "Ground colour under vegetation", read every frame (live in the inspector).</summary>
 		private static float rootBlend = 1f, plantBlend = 0.9f, blendHeight = 0.8f, bladeDetail = 0.25f, crownStart = 1.5f, crownEnd = 3f;
 		private static Vector4 distanceBlend = new Vector4(80f, 600f, 0.6f, 0.35f);
+		/// <summary>Contact with the ground (FishGroundColour.hlsl FishContactApply): band height, colour, normal, on — scattered details, and trees/rocks.</summary>
+		private static Vector4 contactBlend = new Vector4(0.15f, 0.8f, 0.7f, 1f), contactLarge = new Vector4(0.5f, 0.75f, 0.6f, 1f);
 
 		/// <summary>Takes the profile's settings, republishing when one changed.</summary>
 		private static void ReadProfile()
@@ -68,6 +72,14 @@ namespace FishMMO.Client
 			if (distance != distanceBlend)
 			{
 				distanceBlend = distance;
+				Publish();
+			}
+			var contact = new Vector4(Mathf.Max(0.01f, p.ContactBlendHeight), Mathf.Clamp01(p.ContactColour), Mathf.Clamp01(p.ContactNormal), p.ContactBlend ? 1f : 0f);
+			var large = new Vector4(Mathf.Max(0.01f, p.ContactBlendHeightLarge), Mathf.Clamp01(p.ContactColourLarge), Mathf.Clamp01(p.ContactNormalLarge), p.ContactBlendLarge ? 1f : 0f);
+			if (contact != contactBlend || large != contactLarge)
+			{
+				contactBlend = contact;
+				contactLarge = large;
 				Publish();
 			}
 			if (p.GroundRootBlend != rootBlend || p.GroundPlantBlend != plantBlend || p.GroundBlendHeight != blendHeight
@@ -204,6 +216,8 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(ParamsId, new Vector4(on ? 1f : 0f, debugMode, rootBlend, plantBlend));
 			Shader.SetGlobalVector(ShapeId, new Vector4(blendHeight, crownStart, crownEnd, bladeDetail));
 			Shader.SetGlobalVector(DistanceBlendId, distanceBlend);
+			Shader.SetGlobalVector(ContactBlendId, contactBlend);
+			Shader.SetGlobalVector(ContactLargeId, contactLarge);
 		}
 
 		/// <summary>Takes the map down and switches the shader's blend off.</summary>
@@ -224,6 +238,7 @@ namespace FishMMO.Client
 			means.Clear();
 			sliceMeans.Clear();
 			waitingForArrays = false;
+			GroundMaterialMap.Release();
 		}
 
 		/// <summary>Builds the map from every active terrain and publishes it (or switches the blend off when there is none).</summary>
@@ -316,6 +331,8 @@ namespace FishMMO.Client
 			normalMap.Apply(false, false);
 			Shader.SetGlobalTexture(NormalTextureId, normalMap);
 			Report(terrains, sets, w, h, texel, pixels);
+			// The terrains' own heights and layers, for the contact blend at trunk, rock and detail bases (GPU only).
+			GroundMaterialMap.Build(terrains, sets);
 			Shader.SetGlobalTexture(TextureId, map);
 			Shader.SetGlobalVector(RectId, new Vector4(bounds.xMin, bounds.yMin, 1f / (w * texel), 1f / (h * texel)));
 			published = true;

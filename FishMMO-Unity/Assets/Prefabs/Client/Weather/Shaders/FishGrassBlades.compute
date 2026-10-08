@@ -886,7 +886,8 @@ void FishGrassGather(uint3 id : SV_DispatchThreadID)
     }
     int level = GrassLevelForShare(GrassShare(near));
     int side = GRASS_TILE_CELLS >> level;
-    int perSide = max(1, (side + GRASS_ITEM_SIDE - 1) / GRASS_ITEM_SIDE);
+    // Divided unsigned (side is never negative): a signed divide needs a rounding fix-up, and the compiler says so.
+    int perSide = (int)max(1u, ((uint)side + (uint)GRASS_ITEM_SIDE - 1u) / (uint)GRASS_ITEM_SIDE);
     int step = 1 << level;
     uint wanted = (uint)(perSide * perSide);
     uint first;

@@ -214,13 +214,16 @@ float3 FishResolveSeen(float here, float3 camera, float3 direction, float3 forwa
 // air below that floor is a ball about the world's centre, and a ball is convex: with the camera and
 // the point it looks at both inside it, the whole segment between them is too, so the march of this
 // very ray finds nothing. A metre of margin keeps the one comparison from ever being decided by rounding.
+// One exit, as every helper here: FXC flags an early return inlined into a kernel as a potentially
+// uninitialised return value.
 bool FishResolveBelowClouds(float rawHere, float3 seen)
 {
-    if (_FishCloudResolveShell.z < 0.5 || FishResolveIsSky(rawHere))
+    bool below = false;
+    if (_FishCloudResolveShell.z > 0.5 && !FishResolveIsSky(rawHere))
     {
-        return false;
+        below = FishResolveAltitude(seen, _FishCloudResolveShell.y) < _FishCloudResolveShell.x - 1.0;
     }
-    return FishResolveAltitude(seen, _FishCloudResolveShell.y) < _FishCloudResolveShell.x - 1.0;
+    return below;
 }
 
 // Where what this pixel shows stood last frame, and whether the history there can be used.
@@ -308,13 +311,14 @@ float4 FishResolveClip(float4 history, float4 mean, float4 extent, out float uni
 float2 FishResolveKernel(float2 apart)
 {
     float2 a = abs(apart);
+    float2 weight = saturate(1.0 - a);
     if (_FishCloudOptions.x > 0.5)
     {
         float2 inner = 0.75 - a * a;
         float2 tail = saturate(1.5 - a);
-        return lerp(0.5 * tail * tail, inner, step(a, 0.5));
+        weight = lerp(0.5 * tail * tail, inner, step(a, 0.5));
     }
-    return saturate(1.0 - a);
+    return weight;
 }
 
 // A pixel with nothing in front of it (FishResolveBelowClouds), or whose every texel came back clear air
@@ -392,86 +396,88 @@ FishCloudResolved FishCloudResolve(float2 uv, float rawHere, float here, float3 
             closest = value;
         }
     }
-    // Nothing but clear air round it: exactly clear, as the kernel's clear tile says.
-    if (!busy)
+    // Nothing but clear air round it: exactly clear, as the kernel's clear tile says. (One exit for the
+    // whole function, the rest under the else: FXC flags early returns inlined into a kernel.)
+    FishCloudResolved output = FishResolveClear();
+    if (busy)
     {
-        return FishResolveClear();
-    }
-    // (A leaf or twig thinner than a texel against the sky is nearer than every ray round it: each is cut back
-    // to the leaf's depth above, which keeps next to nothing of a sky ray's kilometres, so the canopy takes no
-    // pale smudges of sky light, as the old "clear" here gave it.)
-    // No texel looked at this pixel's surface (a post thinner than a texel, between hits): the one
-    // nearest in depth.
-    current = currentWeight > 1e-4 ? current / currentWeight : closest;
-    current = float4(max(current.rgb, 0.0), saturate(current.a));
+        // (A leaf or twig thinner than a texel against the sky is nearer than every ray round it: each is cut back
+        // to the leaf's depth above, which keeps next to nothing of a sky ray's kilometres, so the canopy takes no
+        // pale smudges of sky light, as the old "clear" here gave it.)
+        // No texel looked at this pixel's surface (a post thinner than a texel, between hits): the one
+        // nearest in depth.
+        current = currentWeight > 1e-4 ? current / currentWeight : closest;
+        current = float4(max(current.rgb, 0.0), saturate(current.a));
 
-    FishCloudResolved output;
-    // With the steadying off, the rebuild is only this frame's upscale.
-    if (_FishCloudUpsample.w <= 0.0)
-    {
-        output.clouds = current;
-        output.weight = 0.0;
-        return output;
-    }
-
-    // 2. Where what this pixel shows was last frame.
-    float cloudSeen = currentWeight > 1e-4 ? cloudWeight / currentWeight : 0.0;
-    motion = cloudWeight > 1e-6 ? motion / cloudWeight : float2(0.0, 0.0);
-    float2 previousUV;
-    float frames = 0.0;
-    float4 history = current;
-    float parallax;
-    if (FishResolvePrevious(rawHere, here, camera, direction, forward, cloudSeen, motion, previousUV, parallax))
-    {
-        history = FishResolveCatmullRom(TEXTURE2D_ARGS(_FishCloudHistory, sampler_FishCloudHistory), previousUV, _FishCloudUpsample.xy);
-        frames = SAMPLE_TEXTURE2D_LOD(_FishCloudHistoryWeight, sampler_FishCloudHistoryWeight, previousUV, 0).r;
-        // One bad number kept in a history is kept for good: everything after is blended with it.
-        if (any(isnan(history)) || isnan(frames))
+        // With the steadying off, the rebuild is only this frame's upscale.
+        if (_FishCloudUpsample.w <= 0.0)
         {
-            history = current;
-            frames = 0.0;
+            output.clouds = current;
+            output.weight = 0.0;
         }
-        // 3. Clipped toward this frame's neighbourhood, and trusted less the further it had to be
-        // pulled: a history two box-widths out is of a cloud that has gone, three is let go of — when
-        // the change is real. A box is narrowest where the cloud is bright and smooth, and there a few
-        // per cent of one frame's noise could stand the history three box-widths out: it was let go of
-        // whole, and the pixel showed that frame's raw noise. So the letting go is also by how big the
-        // change is, as a share of the brightness (luma) or of the opacity: none under half of
-        // _FishCloudUpsample.z (the diagnostics' History Reset Change, 0.1 as shipped), all of it over
-        // one and a half. A cloud that has gone or come is a change of most of either; noise is a few
-        // per cent. The clip itself is unchanged — and no clip can tell a noise every texel shares from
-        // a change: that has to be kept out of the march (its light phase is each pixel's own).
-        // (The diagnostics may widen or narrow the clip, or turn it off: _FishCloudTemporal.zw.)
-        if (matched > 0.5 && _FishCloudTemporal.w < 0.5)
+        else
         {
-            float4 mean = sum / matched;
-            float4 sigma = sqrt(max(sumSquares / matched - mean * mean, 0.0)) + FISH_RESOLVE_SIGMA_FLOOR;
-            float units;
-            float gamma = max(0.05, FISH_RESOLVE_GAMMA + _FishCloudTemporal.z);
-            float4 before = FishResolveToYCoCg(history);
-            float4 clipped = FishResolveClip(before, mean, gamma * sigma, units);
-            history = FishResolveFromYCoCg(clipped);
-            float change = max(abs(before.x - mean.x) / max(max(before.x, mean.x), FISH_RESOLVE_CHANGE_FLOOR), abs(before.w - mean.w));
-            float real = _FishCloudUpsample.z > 0.0 ? smoothstep(0.5 * _FishCloudUpsample.z, 1.5 * _FishCloudUpsample.z, change) : 1.0;
-            frames *= 1.0 - smoothstep(1.0, 3.0, units) * real;
+            // 2. Where what this pixel shows was last frame.
+            float cloudSeen = currentWeight > 1e-4 ? cloudWeight / currentWeight : 0.0;
+            motion = cloudWeight > 1e-6 ? motion / cloudWeight : float2(0.0, 0.0);
+            float2 previousUV;
+            float frames = 0.0;
+            float4 history = current;
+            float parallax;
+            if (FishResolvePrevious(rawHere, here, camera, direction, forward, cloudSeen, motion, previousUV, parallax))
+            {
+                history = FishResolveCatmullRom(TEXTURE2D_ARGS(_FishCloudHistory, sampler_FishCloudHistory), previousUV, _FishCloudUpsample.xy);
+                frames = SAMPLE_TEXTURE2D_LOD(_FishCloudHistoryWeight, sampler_FishCloudHistoryWeight, previousUV, 0).r;
+                // One bad number kept in a history is kept for good: everything after is blended with it. The
+                // bit-pattern test (Common.hlsl): the intrinsic isnan is folded away without /Gic.
+                if (AnyIsNaN(history) || IsNaN(frames))
+                {
+                    history = current;
+                    frames = 0.0;
+                }
+                // 3. Clipped toward this frame's neighbourhood, and trusted less the further it had to be
+                // pulled: a history two box-widths out is of a cloud that has gone, three is let go of — when
+                // the change is real. A box is narrowest where the cloud is bright and smooth, and there a few
+                // per cent of one frame's noise could stand the history three box-widths out: it was let go of
+                // whole, and the pixel showed that frame's raw noise. So the letting go is also by how big the
+                // change is, as a share of the brightness (luma) or of the opacity: none under half of
+                // _FishCloudUpsample.z (the diagnostics' History Reset Change, 0.1 as shipped), all of it over
+                // one and a half. A cloud that has gone or come is a change of most of either; noise is a few
+                // per cent. The clip itself is unchanged — and no clip can tell a noise every texel shares from
+                // a change: that has to be kept out of the march (its light phase is each pixel's own).
+                // (The diagnostics may widen or narrow the clip, or turn it off: _FishCloudTemporal.zw.)
+                if (matched > 0.5 && _FishCloudTemporal.w < 0.5)
+                {
+                    float4 mean = sum / matched;
+                    float4 sigma = sqrt(max(sumSquares / matched - mean * mean, 0.0)) + FISH_RESOLVE_SIGMA_FLOOR;
+                    float units;
+                    float gamma = max(0.05, FISH_RESOLVE_GAMMA + _FishCloudTemporal.z);
+                    float4 before = FishResolveToYCoCg(history);
+                    float4 clipped = FishResolveClip(before, mean, gamma * sigma, units);
+                    history = FishResolveFromYCoCg(clipped);
+                    float change = max(abs(before.x - mean.x) / max(max(before.x, mean.x), FISH_RESOLVE_CHANGE_FLOOR), abs(before.w - mean.w));
+                    float real = _FishCloudUpsample.z > 0.0 ? smoothstep(0.5 * _FishCloudUpsample.z, 1.5 * _FishCloudUpsample.z, change) : 1.0;
+                    frames *= 1.0 - smoothstep(1.0, 3.0, units) * real;
+                }
+            }
+
+            // 4. The moving average: all of this frame for a pixel with nothing behind it, one part in
+            // _FishCloudTemporal.x once settled — fewer the more the fetch rode on the cloud's distance. A pixel's
+            // history is carried from where its cloud stood a frame ago at ONE distance, the mean depth of all its
+            // ray saw; the face the eye follows stands nearer, and while the camera moves the history is fetched a
+            // little short every frame. Averaged over sixteen frames that is a lag of a pixel or two behind the
+            // cloud, which swings to the other side when the camera turns back: the clouds wobbled as the camera
+            // strafed, and only then (turning moves the fetch the same at every distance, so it is exact). The
+            // average is shortened by the parallax this frame (FishResolvePrevious), so the lag is held to a
+            // fraction of a pixel: none at all for a camera that only turns or stands, a quarter as long for a
+            // cloud whose fetch moved a pixel.
+            float framesCap = max(1.0, _FishCloudTemporal.x) / (1.0 + FISH_RESOLVE_PARALLAX_FRAMES * parallax);
+            float settled = min(min(frames + 1.0, max(1.0, _FishCloudTemporal.x)), max(2.0, framesCap));
+            float4 result = lerp(history, current, 1.0 / settled);
+            output.clouds = float4(max(result.rgb, 0.0), saturate(result.a));
+            output.weight = settled;
         }
     }
-
-    // 4. The moving average: all of this frame for a pixel with nothing behind it, one part in
-    // _FishCloudTemporal.x once settled — fewer the more the fetch rode on the cloud's distance. A pixel's
-    // history is carried from where its cloud stood a frame ago at ONE distance, the mean depth of all its
-    // ray saw; the face the eye follows stands nearer, and while the camera moves the history is fetched a
-    // little short every frame. Averaged over sixteen frames that is a lag of a pixel or two behind the
-    // cloud, which swings to the other side when the camera turns back: the clouds wobbled as the camera
-    // strafed, and only then (turning moves the fetch the same at every distance, so it is exact). The
-    // average is shortened by the parallax this frame (FishResolvePrevious), so the lag is held to a
-    // fraction of a pixel: none at all for a camera that only turns or stands, a quarter as long for a
-    // cloud whose fetch moved a pixel.
-    float framesCap = max(1.0, _FishCloudTemporal.x) / (1.0 + FISH_RESOLVE_PARALLAX_FRAMES * parallax);
-    float settled = min(min(frames + 1.0, max(1.0, _FishCloudTemporal.x)), max(2.0, framesCap));
-    float4 result = lerp(history, current, 1.0 / settled);
-    output.clouds = float4(max(result.rgb, 0.0), saturate(result.a));
-    output.weight = settled;
     return output;
 }
 

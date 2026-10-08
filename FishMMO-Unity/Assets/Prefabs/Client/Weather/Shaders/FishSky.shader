@@ -38,16 +38,44 @@ Shader "FishMMO/Sky"
                 return (1.0 - g2) / (4.0 * PI * pow(max(1.0 + g2 - 2.0 * g * cosTheta, 1e-4), 1.5));
             }
 
-            float Hash31(float3 p)
-            {
-                p = frac(p * 0.1031);
-                p += dot(p, p.yzx + 33.33);
-                return frac((p.x + p.y) * p.z);
-            }
-
             float3 Hue(float h)
             {
                 return saturate(abs(frac(h + float3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0);
+            }
+
+            // Scintillation. A star is a point, so the turbulent cells of the air crossing its one thin
+            // beam throw the whole of its light on and off the eye; a moon or a planet is a disc, many
+            // beams that average out, and holds steady (those are the sky-body shader's, not here).
+            // _FishSkyParams.z is how hard stars twinkle at the horizon: the profile's slider scaled
+            // by how much air the world has and how windy it is (SkySystem), so 0 on an airless body,
+            // where the stars burn perfectly still. phase is the star's own, from the starfield's
+            // alpha (StarfieldBuilder), so all of a star twinkles together. rgb: low down each colour
+            // flickers on its own.
+            float3 StarTwinkle(float phase, float up)
+            {
+                // How much air the light has crossed: one overhead, about forty along the horizon
+                // (Rozenberg's fit, near enough Kasten and Young's for this and cheaper).
+                float s = max(up, 0.0);
+                float airMass = 1.0 / (s + 0.025 * exp(-11.0 * s));
+                // Scintillation grows as the 1.5 power of the air mass (Young): a star overhead barely
+                // shimmers, one low down flashes. It reaches the full amount about 15° up.
+                float amount = min(_FishSkyParams.z * saturate(0.15 * pow(airMass, 1.5)), 1.0);
+                if (amount < 0.002)
+                {
+                    return 1.0;
+                }
+                // Low down the air is a prism as well: each colour takes its own path through
+                // different cells, which is the red and blue flashing of a star just risen.
+                float3 phases = phase + float3(0.0, 0.17, 0.31) * saturate((airMass - 2.0) / 6.0);
+                // Three rates that do not share a beat, each star at its own pace, snapped so the
+                // motion clock's wrap holds whole cycles. frac before sin: the clock runs to 10000 s,
+                // and a sine of that many turns is noise on some hardware.
+                float pace = 0.75 + 0.5 * frac(phase * 7.13);
+                float t = _FishWeatherMisc.w;
+                float3 n = 0.55 * sin(6.2831853 * frac(FishWrapCycles(3.1 * pace) * t + phases))
+                         + 0.30 * sin(6.2831853 * frac(FishWrapCycles(7.7 * pace) * t + phases * 3.0 + 0.4))
+                         + 0.15 * sin(6.2831853 * frac(FishWrapCycles(13.3 * pace) * t + phases * 5.0 + 0.7));
+                return 1.0 + amount * n;
             }
 
             half4 Frag(Varyings input) : SV_Target
@@ -197,8 +225,9 @@ Shader "FishMMO/Sky"
                 if (starVisibility > 0.001)
                 {
                     float3 sd = mul((float3x3)_FishStarMatrix, dir);
-                    float3 stars = SAMPLE_TEXTURECUBE_LOD(_FishStarCube, sampler_FishStarCube, sd, 0).rgb;
-                    float twinkle = 1.0 + _FishSkyParams.z * (Hash31(floor(sd * 400.0) + floor(_FishWeatherMisc.w * 6.0)) - 0.5) * (1.0 - h);
+                    float4 starTexel = SAMPLE_TEXTURECUBE_LOD(_FishStarCube, sampler_FishStarCube, sd, 0);
+                    float3 stars = starTexel.rgb;
+                    float3 twinkle = StarTwinkle(starTexel.a, up);
                     float3 milkyWay;
                     if (_FishGalaxyParams.x > 0.5)
                     {

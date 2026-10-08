@@ -165,6 +165,9 @@ namespace FishMMO.Client
 		/// <summary>Steps a cloud ray may take past the camera's far plane (VolumetricCloudSettings.FarTailSteps).</summary>
 		public int CloudFarTailSteps { get; private set; } = 24;
 
+		/// <summary>Where a cloud ray's far band begins, metres (VolumetricCloudSettings.FarBandMetres; 0 none).</summary>
+		public float CloudFarBandMetres { get; private set; } = 5000f;
+
 		/// <summary>Half way up the cloud layer: where a screen point is reprojected against.</summary>
 		public float CloudLayerCentre { get; private set; } = 3000f;
 
@@ -218,6 +221,16 @@ namespace FishMMO.Client
 		/// sim panels switch it; nothing in the game does.
 		/// </summary>
 		public static bool DrawCloudShadows = true;
+
+		/// <summary>The editor's own switch (Dashboard → Weather Tools → Clouds, CloudToggle): kept in EditorPrefs and set
+		/// again after every domain reload, so it holds in edit mode, where the player's settings store may not be loaded,
+		/// and across play sessions. Always false in a build.</summary>
+		public static bool EditorCloudsOff;
+
+		/// <summary>Whether the volumetric clouds are drawn: the player's switch (ClientCloudSettings) and the editor's,
+		/// read every frame. Off, the march, its shadows on the ground and the light volume stop; the sky and the weather
+		/// go on.</summary>
+		public static bool DrawClouds => !EditorCloudsOff && ClientCloudSettings.Enabled;
 
 		/// <summary>An explicit render profile (the test scene); otherwise the loaded one.</summary>
 		public WeatherRenderProfile Profile;
@@ -392,6 +405,9 @@ namespace FishMMO.Client
 		private VortexPresenter vortices;
 		private CloudShadowPresenter cloudShadows;
 		private CloudLightVolume cloudLight;
+		private CloudFieldTiles cloudTiles;
+		/// <summary>The world seed the cloud lattice's globals were last set for (SetCloudLayers), for the field's tiles.</summary>
+		private uint? latticeSeed;
 		private CloudTerrainMap cloudTerrain;
 		private CloudFlowField cloudFlow;
 		private MistGroundMap mistGround;
@@ -512,6 +528,7 @@ namespace FishMMO.Client
 			vortices = vortices ?? new VortexPresenter();
 			cloudShadows = cloudShadows ?? new CloudShadowPresenter();
 			cloudLight = cloudLight ?? new CloudLightVolume();
+			cloudTiles = cloudTiles ?? new CloudFieldTiles();
 			weatherMap = weatherMap ?? new WeatherMap();
 			if (defaultSky == null)
 			{
@@ -539,6 +556,7 @@ namespace FishMMO.Client
 			vortices?.Dispose();
 			cloudShadows?.Dispose();
 			cloudLight?.Dispose();
+			cloudTiles?.Dispose();
 			cloudTerrain?.Dispose();
 			cloudTerrain = null;
 			cloudFlow?.Dispose();
@@ -906,7 +924,12 @@ namespace FishMMO.Client
 			fog.a = fogBlend;
 			Shader.SetGlobalVector(FogColorId, fog);
 			float starVisibility = sample.StarVisibility * (1f - overcast * 0.9f);
-			Shader.SetGlobalVector(ParamsId, new Vector4(starVisibility * sky.StarBrightness, sky.MilkyWay, sky.StarTwinkle, sky.Exposure));
+			// Twinkling is the air's doing, so it is the body's air that sets it and not the profile:
+			// none on an airless moon, where the stars hold perfectly still. It goes as the square root
+			// of how much air there is (the turbulence a beam crosses adds up in variance, not in
+			// amplitude), and a windy night stirs it more.
+			float twinkle = sky.StarTwinkle * Mathf.Sqrt(AtmosphereModel.Density(atmosphere)) * (1f + 0.4f * Mathf.Clamp01(weather[WeatherChannel.WindSpeed]));
+			Shader.SetGlobalVector(ParamsId, new Vector4(starVisibility * sky.StarBrightness, sky.MilkyWay, twinkle, sky.Exposure));
 			// How bright the sun is, in its three parts: the halo the air scatters at you, the disc
 			// itself, and the glow along the horizon toward a low sun. They were three constants in
 			// the shader, which is no use to anyone judging the sky by eye.
@@ -1192,6 +1215,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(CloudTowerDriftId, new Vector4(
 				(float)WrapMetres(driftX, towerPeriod), (float)WrapMetres(driftY, towerPeriod), 1f, 0f));
 			Shader.SetGlobalInt(CloudTowerSeedId, unchecked((int)(WeatherDriver.WorldSeed ^ WeatherDriver.TowerSeedMix)));
+			latticeSeed = WeatherDriver.WorldSeed;
 			CloudTowerAtCamera = viewerAir.Tower;
 
 			// What hangs below a column's base: the rain haze under a wet one, from the frame the
@@ -1621,6 +1645,7 @@ namespace FishMMO.Client
 			};
 			CloudFarDistance = clouds.MaxDistance;
 			CloudFarTailSteps = clouds.FarTailSteps;
+			CloudFarBandMetres = clouds.FarBandMetres;
 			// The inspector's diagnostic switches, live every frame; all zeros is the clouds as they
 			// ship, so a shader that never sees these draws the default (VolumetricCloudDiagnostics).
 			Shader.SetGlobalVector(CloudDiagId, diagnostics.MarchVector);
@@ -2094,7 +2119,7 @@ namespace FishMMO.Client
 			// average rather than to full sun, so the land beyond the window is neither sunlit under
 			// an overcast nor dimmed twice inside it.
 			Light shadowed = leader != null ? leader : sun;
-			bool cookie = tier.CloudShadows && DrawCloudShadows && profile.CloudMaterial != null && CloudsReady;
+			bool cookie = tier.CloudShadows && DrawCloudShadows && DrawClouds && profile.CloudMaterial != null && CloudsReady;
 			float far = 1f;
 			if (cookie && shadowed != null)
 			{
@@ -2107,7 +2132,9 @@ namespace FishMMO.Client
 				1f, 8 * MaxCloudLayers, cookie, far);
 			// The cloud's density round the camera on a coarse grid, for the light march's long segments.
 			float farPlane = TargetCamera != null ? TargetCamera.farClipPlane : CloudFarDistance;
-			cloudLight.Update(profile.CloudMaterial, viewer, farPlane, CloudShellBottom, CloudShellTop, CloudsReady);
+			// The tower lattice and formation noise as wrapping tiles (once a world), before the light volume reads them.
+			cloudTiles.Update(profile.CloudMaterial, CloudsReady, latticeSeed == WeatherDriver.WorldSeed);
+			cloudLight.Update(profile.CloudMaterial, viewer, farPlane, CloudShellBottom, CloudShellTop, CloudsReady && DrawClouds);
 		}
 
 		/// <summary>A directional light shining along −direction.</summary>

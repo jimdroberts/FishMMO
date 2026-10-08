@@ -505,6 +505,29 @@ float4 GrassShadowCoord(float3 positionWS)
 #endif
 }
 
+// One light on a blade: wrapped diffuse, a low waxy specular, and light through the blade from behind. `colour` is
+// the light's own, already through its shadow and falloff.
+float3 GrassLit(float3 L, float3 colour, float3 albedo, float3 n, float3 faceN, float3 V, float smoothness, float ao, float far, float thin)
+{
+    // Thin leaves wrap a little light round the edge.
+    float ndl = saturate((dot(n, L) + 0.2) / 1.2);
+    float3 lit = albedo * colour * ndl * lerp(0.55, 1.0, ao);
+
+    // Low, narrow, subtle specular (a waxy blade, never a mirror).
+    float3 H = normalize(L + V);
+    float power = exp2(10.0 * smoothness + 1.0);
+    float spec = pow(saturate(dot(n, H)), power) * (power + 2.0) / 8.0 * 0.04 * _GrassParams3.w;
+    lit += colour * spec * saturate(dot(n, L)) * ao * (1.0 - far);
+
+    // Light through the blade only when the light is behind it, and more through a thin one.
+    float back = saturate(dot(V, -L));
+    back *= back;
+    back *= back;
+    float behind = saturate(-dot(faceN, L) * 2.0 + 0.3);
+    lit += albedo * colour * back * behind * _GrassParams1.z * lerp(0.3, 1.0, thin) * ao * (1.0 - far);
+    return lit;
+}
+
 half4 GrassForwardFragment(GrassVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
     GrassFadeClip(input.positionCS, input.extra.zw);
@@ -548,26 +571,32 @@ half4 GrassForwardFragment(GrassVaryings input, FRONT_FACE_TYPE face : FRONT_FAC
     float ao = lerp(lerp(_GrassParams1.y, 1.0, saturate(pow(t, 0.75))), 1.0, far);
 
     Light mainLight = GetMainLight(GrassShadowCoord(input.positionWS));
-    float3 L = mainLight.direction;
-    float shadow = mainLight.shadowAttenuation * mainLight.distanceAttenuation;
-    float3 lightColour = mainLight.color * shadow;
+    float3 colour = GrassLit(mainLight.direction, mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation),
+        albedo, n, faceN, V, smoothness, ao, far, input.extra.x);
 
-    // Thin leaves wrap a little light round the edge.
-    float ndl = saturate((dot(n, L) + 0.2) / 1.2);
-    float3 colour = albedo * lightColour * ndl * lerp(0.55, 1.0, ao);
-
-    // Low, narrow, subtle specular (a waxy blade, never a mirror).
-    float3 H = normalize(L + V);
-    float power = exp2(10.0 * smoothness + 1.0);
-    float spec = pow(saturate(dot(n, H)), power) * (power + 2.0) / 8.0 * 0.04 * _GrassParams3.w;
-    colour += lightColour * spec * saturate(dot(n, L)) * ao * (1.0 - far);
-
-    // Light through the blade only when the sun is behind it, and more through a thin one.
-    float back = saturate(dot(V, -L));
-    back *= back;
-    back *= back;
-    float behind = saturate(-dot(faceN, L) * 2.0 + 0.3);
-    colour += albedo * lightColour * back * behind * _GrassParams1.z * lerp(0.3, 1.0, input.extra.x) * ao * (1.0 - far);
+    /* Every other light, as the terrain and the trees under the grass have them: the moon when it is not the
+     * main light (it is not, until it outshines what is left of the sun), a companion sun, a torch. Without
+     * them a moonlit meadow went black where the blades stood, over ground that was lit. No shadows: the
+     * main light's are the ones a blade needs. */
+#if defined(_ADDITIONAL_LIGHTS)
+    InputData inputData = (InputData)0;
+    inputData.positionWS = input.positionWS;
+    inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
+    half4 noMask = half4(1.0, 1.0, 1.0, 1.0);
+#if USE_CLUSTER_LIGHT_LOOP
+    [loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
+    {
+        CLUSTER_LIGHT_LOOP_SUBTRACTIVE_LIGHT_CHECK
+        Light light = GetAdditionalLight(lightIndex, input.positionWS, noMask);
+        colour += GrassLit(light.direction, light.color * light.distanceAttenuation, albedo, n, faceN, V, smoothness, ao, far, input.extra.x);
+    }
+#endif
+    uint additionalCount = GetAdditionalLightsCount();
+    LIGHT_LOOP_BEGIN(additionalCount)
+        Light light = GetAdditionalLight(lightIndex, input.positionWS, noMask);
+        colour += GrassLit(light.direction, light.color * light.distanceAttenuation, albedo, n, faceN, V, smoothness, ao, far, input.extra.x);
+    LIGHT_LOOP_END
+#endif
 
     // The sky's ambient, with the base's occlusion.
     colour += albedo * FishTrilight((half3)n) * ao;

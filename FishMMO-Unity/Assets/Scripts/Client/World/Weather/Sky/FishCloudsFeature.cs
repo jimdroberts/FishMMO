@@ -260,8 +260,14 @@ namespace FishMMO.Client
 
 		public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
 		{
+			// Every game camera's depth pyramid, for the instanced props' occlusion culling next frame (FishDepthPyramid):
+			// here because every renderer carries this feature, and whether or not the clouds draw.
+			if (renderingData.cameraData.cameraType == CameraType.Game)
+			{
+				renderer.EnqueuePass(FishDepthPyramid.Pass);
+			}
 			Material material = Resolve();
-			if (material == null || !SkySystem.CloudsReady)
+			if (material == null || !SkySystem.CloudsReady || !SkySystem.DrawClouds)
 			{
 				return;
 			}
@@ -341,9 +347,20 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The march, the steadying and the composite, in one pass object.</summary>
+		/// <summary>Probe: the far band always marches this slice (0-3), to time each; -1 as shipped, in turn.</summary>
+		public static int FarSliceOverride = -1;
+		/// <summary>Where the far band's second and third slices begin, as multiples of its start (the probe tunes them).</summary>
+		public static float FarSplitA = 1.5f, FarSplitB = 2.4f;
+
 		private sealed class CloudPass : ScriptableRenderPass
 		{
 			private const string MarchName = "Fish Clouds (march)";
+			private const string FarBandName = "Fish Clouds (far band)";
+			/// <summary>The far band's slices by distance, one marched a frame.</summary>
+			public const int FarSlices = 4;
+			/// <summary>Off: one band, the whole ray marched every frame (the probe's A/B).</summary>
+			public static bool FarBandEnabled = true;
+
 			private const string TemporalName = "Fish Clouds (steady)";
 			private const string TemporalComputeName = "Fish Clouds (steady, compute)";
 			private const string CompositeName = "Fish Clouds (composite)";
@@ -423,6 +440,14 @@ namespace FishMMO.Client
 			private static readonly int ResolvedWeightId = Shader.PropertyToID("_FishCloudResolvedWeight");
 			private static readonly int CloudLayerId = Shader.PropertyToID("_FishCloudLayer");
 			private static readonly int OptionsId = Shader.PropertyToID("_FishCloudOptions");
+			private static readonly int FarBandId = Shader.PropertyToID("_FishCloudFarBand");
+			private static readonly int NearId = Shader.PropertyToID("_FishCloudNear");
+			private static readonly int NearMotionId = Shader.PropertyToID("_FishCloudNearMotion");
+			private static readonly int FarBoundsId = Shader.PropertyToID("_FishCloudFarBounds");
+			private static readonly int FarValidId = Shader.PropertyToID("_FishCloudFarValid");
+			private static readonly int FarViewProjectionId = Shader.PropertyToID("_FishCloudFarVP");
+			private static readonly int[] FarSliceIds = { Shader.PropertyToID("_FishCloudFar0"), Shader.PropertyToID("_FishCloudFar1"), Shader.PropertyToID("_FishCloudFar2"), Shader.PropertyToID("_FishCloudFar3") };
+			private static readonly int[] FarSliceInfoIds = { Shader.PropertyToID("_FishCloudFarInfo0"), Shader.PropertyToID("_FishCloudFarInfo1"), Shader.PropertyToID("_FishCloudFarInfo2"), Shader.PropertyToID("_FishCloudFarInfo3") };
 			private static readonly int FramePhaseId = Shader.PropertyToID("_FishCloudFramePhase");
 
 			/// <summary>The kernel's thread group, a side: FISH_RESOLVE_GROUP in FishCloudResolve.compute.</summary>
@@ -524,6 +549,9 @@ namespace FishMMO.Client
 			{
 				public Material Material;
 				public int Pass;
+				public TextureHandle[] FarSlices;
+				public TextureHandle[] FarSliceInfos;
+				public int Marching;
 				public TextureHandle Source;
 				public TextureHandle Motion;
 				public TextureHandle History;
@@ -723,7 +751,37 @@ namespace FishMMO.Client
 				TextureHandle weightRead = renderGraph.ImportTexture(state.Weight[state.Index]);
 				TextureHandle weightWrite = renderGraph.ImportTexture(state.Weight[1 - state.Index]);
 
-				// 1. March the volume at the tier's resolution: the clouds, and each texel's motion.
+				// The far band (CloudFarBand) begins here, metres; 0: one band.
+				int farPass = material.FindPass("CloudFarBand");
+				float band = FarBandEnabled && farPass >= 0 ? Mathf.Max(0f, sky.CloudFarBandMetres) : 0f;
+				int marching = FarSliceOverride >= 0 ? FarSliceOverride % FarSlices : state.Frame % FarSlices;
+				if (band > 0f)
+				{
+					if (!state.FarFits(width, height))
+					{
+						state.AllocateFar(width, height);
+					}
+					if (cut)
+					{
+						state.FarValid = Vector4.zero;
+					}
+					// The slices: from the band's start to 1.5 times it, to 2.4 times it, to the camera's far plane, and past it
+					// to the ray's end (the far tail's few steps) — about even in a fair sky (ScenePerfProbe `cloud:farslice`).
+					float farPlane = Mathf.Max(band * FarSplitB + 1000f, cameraData.camera.farClipPlane);
+					material.SetVector(FarBandId, new Vector4(band, FarSlices, marching, 0f));
+					material.SetVector(FarBoundsId, new Vector4(band * FarSplitA, band * FarSplitB, farPlane, 0f));
+					Vector4 valid = state.FarValid;
+					valid[marching] = 0f;
+					material.SetVector(FarValidId, valid);
+					material.SetMatrixArray(FarViewProjectionId, state.FarViewProjection);
+				}
+				else
+				{
+					material.SetVector(FarBandId, Vector4.zero);
+				}
+
+				// 1. March the volume at the tier's resolution: the clouds, and each texel's motion (with a far band,
+				// the near band only).
 				using (var builder = renderGraph.AddRasterRenderPass<MarchData>(MarchName, out MarchData data))
 				{
 					data.Material = material;
@@ -738,6 +796,69 @@ namespace FishMMO.Client
 					builder.AllowPassCulling(false);
 					builder.SetRenderFunc((MarchData d, RasterGraphContext context) =>
 						Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass));
+				}
+
+				// 1b. The far band behind the near: a quarter of its texels marched past FarBandMetres (by eight-by-eight
+				// blocks), the rest carried on from the frame before, none behind a near band that is already opaque; it
+				// writes near and far together, which the steadying reads in place of the march.
+				if (band > 0f)
+				{
+					TextureHandle near = marched, nearMotion = marchedMotion;
+					marchDesc.name = "FishCloudsMarchWithFar";
+					motionDesc.name = "FishCloudsMarchMotionWithFar";
+					marched = renderGraph.CreateTexture(marchDesc);
+					marchedMotion = renderGraph.CreateTexture(motionDesc);
+					var slices = new TextureHandle[FarSlices];
+					var sliceInfos = new TextureHandle[FarSlices];
+					for (int i = 0; i < FarSlices; i++)
+					{
+						slices[i] = renderGraph.ImportTexture(state.Far[i]);
+						sliceInfos[i] = renderGraph.ImportTexture(state.FarInfo[i]);
+					}
+					using (var builder = renderGraph.AddRasterRenderPass<MarchData>(FarBandName, out MarchData data))
+					{
+						data.Material = material;
+						data.Pass = farPass;
+						data.Source = near;
+						data.Motion = nearMotion;
+						data.FarSlices = slices;
+						data.FarSliceInfos = sliceInfos;
+						data.Marching = marching;
+						builder.SetRenderAttachment(marched, 0);
+						builder.SetRenderAttachment(marchedMotion, 1);
+						builder.SetRenderAttachment(slices[marching], 2);
+						builder.SetRenderAttachment(sliceInfos[marching], 3);
+						builder.UseTexture(near, AccessFlags.Read);
+						builder.UseTexture(nearMotion, AccessFlags.Read);
+						for (int i = 0; i < FarSlices; i++)
+						{
+							if (i != marching)
+							{
+								builder.UseTexture(slices[i], AccessFlags.Read);
+								builder.UseTexture(sliceInfos[i], AccessFlags.Read);
+							}
+						}
+						builder.UseAllGlobalTextures(true);
+						if (resourceData.cameraDepthTexture.IsValid())
+						{
+							builder.UseTexture(resourceData.cameraDepthTexture, AccessFlags.Read);
+						}
+						builder.AllowPassCulling(false);
+						builder.SetRenderFunc((MarchData d, RasterGraphContext context) =>
+						{
+							d.Material.SetTexture(NearId, d.Source);
+							d.Material.SetTexture(NearMotionId, d.Motion);
+							for (int i = 0; i < FarSlices; i++)
+							{
+								if (i != d.Marching)
+								{
+									d.Material.SetTexture(FarSliceIds[i], d.FarSlices[i]);
+									d.Material.SetTexture(FarSliceInfoIds[i], d.FarSliceInfos[i]);
+								}
+							}
+							Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass);
+						});
+					}
 				}
 
 				// 2. Rebuild it at the buffer's resolution with the frames before it: this frame's tent
@@ -920,6 +1041,15 @@ namespace FishMMO.Client
 				state.PreviousDrift = drift;
 				state.Valid = tier.Temporal;
 				state.Index = 1 - state.Index;
+				if (band > 0f)
+				{
+					state.FarViewProjection[marching] = viewProjection;
+					state.FarValid[marching] = 1f;
+				}
+				else
+				{
+					state.FarValid = Vector4.zero;
+				}
 				// Wrapped at a whole number of every cycle that reads it — the jitter's 64, the places'
 				// 16, and the 64 x 16 over which SubPixel turns their order — so wrapping skips nothing.
 				state.Frame = (state.Frame + 1) % (64 * SubPixelCycle);
@@ -1142,6 +1272,52 @@ namespace FishMMO.Client
 				/// <summary>Which of each pair holds the latest.</summary>
 				public int Index;
 				public bool Valid;
+
+				/// <summary>The far band's four slices (pass CloudFarBand) at the march's size: rgb, a transmittance; and x the
+				/// slice's mean distance (km), y its wind gain, z where its ray ended (km), w 1 when real. One is written a
+				/// frame, each with the view it was drawn with.</summary>
+				public readonly RTHandle[] Far = new RTHandle[FarSlices];
+				public readonly RTHandle[] FarInfo = new RTHandle[FarSlices];
+				public readonly Matrix4x4[] FarViewProjection = new Matrix4x4[FarSlices];
+				public Vector4 FarValid;
+
+				public bool FarFits(int width, int height)
+				{
+					for (int i = 0; i < FarSlices; i++)
+					{
+						if (Far[i] == null || Far[i].rt == null || FarInfo[i] == null || FarInfo[i].rt == null
+							|| Far[i].rt.width != width || Far[i].rt.height != height)
+						{
+							return false;
+						}
+					}
+					return true;
+				}
+
+				public void AllocateFar(int width, int height)
+				{
+					ReleaseFar();
+					for (int i = 0; i < FarSlices; i++)
+					{
+						Far[i] = RTHandles.Alloc(width, height, colorFormat: GraphicsFormat.R16G16B16A16_SFloat,
+							filterMode: FilterMode.Bilinear, wrapMode: TextureWrapMode.Clamp, name: $"FishCloudsFar{i}");
+						FarInfo[i] = RTHandles.Alloc(width, height, colorFormat: GraphicsFormat.R16G16B16A16_SFloat,
+							filterMode: FilterMode.Point, wrapMode: TextureWrapMode.Clamp, name: $"FishCloudsFarInfo{i}");
+					}
+					FarValid = Vector4.zero;
+				}
+
+				public void ReleaseFar()
+				{
+					for (int i = 0; i < FarSlices; i++)
+					{
+						Far[i]?.Release();
+						Far[i] = null;
+						FarInfo[i]?.Release();
+						FarInfo[i] = null;
+					}
+					FarValid = Vector4.zero;
+				}
 				public Matrix4x4 PreviousViewProjection = Matrix4x4.identity;
 				public Vector3 PreviousPosition;
 				public Vector2 PreviousDrift;
@@ -1205,6 +1381,7 @@ namespace FishMMO.Client
 						Weight[i] = null;
 					}
 					Valid = false;
+					ReleaseFar();
 				}
 			}
 		}

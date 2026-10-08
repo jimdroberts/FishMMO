@@ -13,6 +13,8 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DBuffer.hlsl"
+// FishMMO edit: the ground reflects the sky on the true curve, not URP's (FishGroundLighting.hlsl).
+#include "FishGroundLighting.hlsl"
 
 // Every layer may carry a normal map, so the tangent frame is always interpolated (TerrainLit only does when
 // the material's _NORMALMAP keyword says some layer has one). Per-pixel normals replace it when instanced.
@@ -298,7 +300,7 @@ void SplatmapFragment(
     half4 color;
     Light mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
     MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI, inputData.shadowMask);
-    color.rgb = GlobalIllumination(brdfData, (BRDFData)0, 0, inputData.bakedGI, occlusion, inputData.positionWS,
+    color.rgb = FishGlobalIllumination(brdfData, inputData.bakedGI, occlusion, inputData.positionWS,
                                    inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
     color.a = alpha;
     SplatmapFinalColor(color, inputData.fogCoord);
@@ -306,7 +308,7 @@ void SplatmapFragment(
     return PackGBuffersBRDFData(brdfData, inputData, smoothness, color.rgb, occlusion);
 #else
 
-    half4 color = UniversalFragmentPBR(inputData, albedo, metallic, /* specular */ half3(0.0h, 0.0h, 0.0h), smoothness, occlusion, /* emission */ half3(0, 0, 0), alpha);
+    half4 color = FishFragmentPBR(inputData, albedo, metallic, smoothness, occlusion, alpha);
 
     SplatmapFinalColor(color, inputData.fogCoord);
 

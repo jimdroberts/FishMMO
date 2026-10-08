@@ -143,6 +143,9 @@ namespace FishMMO.Client
 		/// <summary>True while the GPU path draws (play mode, compute present, switched on).</summary>
 		private static bool OnGpu => Application.isPlaying && gpu != null;
 
+		/// <summary>What the props' last culling drew (TerrainGpuRenderer.DescribeDraws), for probes.</summary>
+		public static string DescribeDraws() => gpu != null ? gpu.DescribeDraws() : "not on the GPU path";
+
 		// ── Hook ──────────────────────────────────────────────────────
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -276,6 +279,10 @@ namespace FishMMO.Client
 			{
 				gpuTried = true;
 				gpu = TerrainGpuRenderer.TryCreate();
+				if (gpu != null)
+				{
+					gpu.ContactMode = 2f;   // rock bases blend into the terrain (FishGroundColour.hlsl)
+				}
 			}
 
 			// Let go of sources that were destroyed (their scene unloaded) before taking on new ones.

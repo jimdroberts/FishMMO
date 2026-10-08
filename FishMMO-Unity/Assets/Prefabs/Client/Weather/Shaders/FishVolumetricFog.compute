@@ -89,11 +89,18 @@ float AlongRay(float3 ray)
 /// bound, the same layer without its banks where it is not.
 float FogDensity(float3 world, float footprint, FishFogColumn column)
 {
+    // One exit: FXC flags an early return inlined into the kernel's loop. An if, not ?:, which would
+    // read the shape volume on both sides.
+    float density;
     if (_FishVolFogCamera.w < 0.5)
     {
-        return _FishFogLayer.x * FishFogProfile(world.y, column);
+        density = _FishFogLayer.x * FishFogProfile(world.y, column);
     }
-    return FishFogDensity(world, column, footprint);
+    else
+    {
+        density = FishFogDensity(world, column, footprint);
+    }
+    return density;
 }
 
 /// How much of the light's beam reaches a point past whatever stands in its way.

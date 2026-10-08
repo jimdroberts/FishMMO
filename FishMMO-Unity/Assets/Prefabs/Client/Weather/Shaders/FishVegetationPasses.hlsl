@@ -88,6 +88,9 @@ CBUFFER_END
 
 // Not per material: one value for every plant, from the terrains' draw distances.
 float4 _FishVegetationFade;
+// Probe diagnostic (ScenePerfProbe `vegold`): 1 lights the leaves as before VegFragmentPBR — URP's UniversalFragmentPBR
+// and the main light sampled again for the light through the leaves. 0 as shipped.
+float _FishVegetationDiag;
 // 1 while the camera's target is multisampled (VegetationDistanceFade, from the pipeline's MSAA): leaf and
 // needle edges are then drawn by alpha-to-coverage — a soft, antialiased fringe — instead of cut at the
 // cutoff, which drew every card as a hard paper cut-out up close. 0: the plain cut.
@@ -498,6 +501,8 @@ struct VegVaryings
     half fogFactor : TEXCOORD6;
     half2 fade : TEXCOORD7; // x drawn share by distance, y dither shift
     half4 ground : TEXCOORD8; // rgb the ground's colour under the plant, a how much this vertex takes
+    float2 contact : TEXCOORD9;         // the contact blend at a trunk's or detail's base (FishGroundColour.hlsl FishContactData):
+    half4 contactWeights : TEXCOORD10;  // the trace down to the terrain, the root's terrain layers and their weights
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
 };
@@ -517,6 +522,9 @@ VegVaryings VegVertex(VegAttributes input)
     VegDeform(input, positionWS, normalWS, tint, fade, ground);
     output.fade = fade;
     output.ground = ground;
+    FishContactData contact = FishContactVertex(positionWS, TransformObjectToWorld(float3(0.0, 0.0, 0.0)));
+    output.contact = contact.trace;
+    output.contactWeights = contact.weights;
     output.positionWS = positionWS;
     output.normalWS = normalWS;
     // A billboard's tangent is not turned with it; billboards carry no normal map, so nothing reads it.
@@ -547,6 +555,92 @@ half3 VegNormal(VegVaryings input, half facing)
 #endif
 
 #if defined(FISH_VEG_PASS_FORWARD)
+
+// URP's UniversalFragmentPBR (Lighting.hlsl, this package's), step for step, but handing back the main light it
+// lit with — before the screen-space occlusion, as GetMainLight(shadowCoord, ...) gives it — so the light through
+// the leaves need not sample the main light's soft shadow a second time. That second sample was 0.3 ms of the trees'
+// 2.4 ms forward pass in an overcast meadow at 2560x1440 (ScenePerfProbe `vegnoback`, 2026-10-07).
+half4 VegFragmentPBR(InputData inputData, SurfaceData surfaceData, out Light mainLightUnoccluded)
+{
+    #if defined(_SPECULARHIGHLIGHTS_OFF)
+    bool specularHighlightsOff = true;
+    #else
+    bool specularHighlightsOff = false;
+    #endif
+    BRDFData brdfData;
+    InitializeBRDFData(surfaceData, brdfData);
+    #if defined(DEBUG_DISPLAY)
+    half4 debugColor;
+    if (CanDebugOverrideOutputColor(inputData, surfaceData, brdfData, debugColor))
+    {
+        mainLightUnoccluded = GetMainLight(inputData.shadowCoord, inputData.positionWS, half4(1.0, 1.0, 1.0, 1.0));
+        return debugColor;
+    }
+    #endif
+    BRDFData brdfDataClearCoat = CreateClearCoatBRDFData(surfaceData, brdfData);
+    half4 shadowMask = CalculateShadowMask(inputData);
+    AmbientOcclusionFactor aoFactor = CreateAmbientOcclusionFactor(inputData, surfaceData);
+    uint meshRenderingLayers = GetMeshRenderingLayer();
+    mainLightUnoccluded = GetMainLight(inputData.shadowCoord, inputData.positionWS, shadowMask);
+    Light mainLight = mainLightUnoccluded;
+    #if defined(_SCREEN_SPACE_OCCLUSION) && !defined(_SURFACE_TYPE_TRANSPARENT)
+    if (IsLightingFeatureEnabled(DEBUGLIGHTINGFEATUREFLAGS_AMBIENT_OCCLUSION))
+    {
+        mainLight.color *= aoFactor.directAmbientOcclusion;
+    }
+    #endif
+
+    MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI);
+    LightingData lightingData = CreateLightingData(inputData, surfaceData);
+    lightingData.giColor = GlobalIllumination(brdfData, brdfDataClearCoat, surfaceData.clearCoatMask,
+        inputData.bakedGI, aoFactor.indirectAmbientOcclusion, inputData.positionWS,
+        inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
+#ifdef _LIGHT_LAYERS
+    if (IsMatchingLightLayer(mainLight.layerMask, meshRenderingLayers))
+#endif
+    {
+        lightingData.mainLightColor = LightingPhysicallyBased(brdfData, brdfDataClearCoat, mainLight,
+            inputData.normalWS, inputData.viewDirectionWS, surfaceData.clearCoatMask, specularHighlightsOff);
+    }
+
+    #if defined(_ADDITIONAL_LIGHTS)
+    uint pixelLightCount = GetAdditionalLightsCount();
+    #if USE_CLUSTER_LIGHT_LOOP
+    [loop] for (uint lightIndex = 0; lightIndex < min(URP_FP_DIRECTIONAL_LIGHTS_COUNT, MAX_VISIBLE_LIGHTS); lightIndex++)
+    {
+        CLUSTER_LIGHT_LOOP_SUBTRACTIVE_LIGHT_CHECK
+        Light light = GetAdditionalLight(lightIndex, inputData, shadowMask, aoFactor);
+#ifdef _LIGHT_LAYERS
+        if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
+#endif
+        {
+            lightingData.additionalLightsColor += LightingPhysicallyBased(brdfData, brdfDataClearCoat, light,
+                inputData.normalWS, inputData.viewDirectionWS, surfaceData.clearCoatMask, specularHighlightsOff);
+        }
+    }
+    #endif
+    LIGHT_LOOP_BEGIN(pixelLightCount)
+        Light light = GetAdditionalLight(lightIndex, inputData, shadowMask, aoFactor);
+#ifdef _LIGHT_LAYERS
+        if (IsMatchingLightLayer(light.layerMask, meshRenderingLayers))
+#endif
+        {
+            lightingData.additionalLightsColor += LightingPhysicallyBased(brdfData, brdfDataClearCoat, light,
+                inputData.normalWS, inputData.viewDirectionWS, surfaceData.clearCoatMask, specularHighlightsOff);
+        }
+    LIGHT_LOOP_END
+    #endif
+
+    #if defined(_ADDITIONAL_LIGHTS_VERTEX)
+    lightingData.vertexLightingColor += inputData.vertexLighting * brdfData.diffuse;
+    #endif
+
+#if REAL_IS_HALF
+    return min(CalculateFinalColor(lightingData, surfaceData.alpha), HALF_MAX);
+#else
+    return CalculateFinalColor(lightingData, surfaceData.alpha);
+#endif
+}
 
 half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
 {
@@ -602,6 +696,11 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     }
     half3 normalWS = VegNormal(input, IS_FRONT_VFACE(face, 1.0, -1.0));
     half smoothness = _Smoothness;
+    // A trunk's base, a shell, a bit of litter: sits IN the ground, bark and all (FishGroundColour.hlsl).
+    FishContactData contact;
+    contact.trace = input.contact;
+    contact.weights = input.contactWeights;
+    FishContactApply(contact, input.positionWS, albedo, smoothness, normalWS);
 
     if (_FishWeatherAmount > 0.0)
     {
@@ -658,10 +757,21 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     surface.alpha = 1.0;
     surface.normalTS = half3(0.0, 0.0, 1.0);
 
-    half4 color = UniversalFragmentPBR(inputData, surface);
+    Light mainLight;
+    half4 color;
+    UNITY_BRANCH
+    if (_FishVegetationDiag > 0.5)
+    {
+        color = UniversalFragmentPBR(inputData, surface);
+        mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
+    }
+    else
+    {
+        color = VegFragmentPBR(inputData, surface, mainLight);
+    }
 
-    // Light through a leaf: thin foliage glows when the sun is behind it.
-    Light mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
+    // Light through a leaf: thin foliage glows when the sun is behind it (lit by the main light the surface was, its
+    // shadow sampled once).
     half back = saturate(dot(inputData.viewDirectionWS, -mainLight.direction));
     back *= back;
     back *= back;

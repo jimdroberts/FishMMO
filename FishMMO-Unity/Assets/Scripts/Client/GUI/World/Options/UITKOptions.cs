@@ -100,6 +100,7 @@ namespace FishMMO.Client
 		private const string ANTIALIASING_DROPDOWN_NAME = "antialiasing-dropdown";
 		private const string GRASS_DISTANCE_SLIDER_NAME = "grass-distance-slider";
 		private const string GRASS_DISTANCE_VALUE_NAME = "grass-distance-value";
+		private const string CLOUDS_TOGGLE_NAME = "clouds-toggle";
 		private const string FRAMERATE_DROPDOWN_NAME = "framerate-dropdown";
 		private const string GRAPHICS_HINT_NAME = "options-graphics-hint";
 		private const string CLOSE_BUTTON_NAME = "options-close-btn";
@@ -431,6 +432,7 @@ namespace FishMMO.Client
 		private DropdownField anisotropicDropdown;
 		private DropdownField antialiasingDropdown;
 		private Slider grassDistanceSlider;
+		private Toggle cloudsToggle;
 		private Label grassDistanceValueLabel;
 		private DropdownField frameRateDropdown;
 		private Label graphicsHint;
@@ -623,6 +625,7 @@ namespace FishMMO.Client
 			anisotropicDropdown = Root.Q<DropdownField>(ANISOTROPIC_DROPDOWN_NAME);
 			antialiasingDropdown = Root.Q<DropdownField>(ANTIALIASING_DROPDOWN_NAME);
 			grassDistanceSlider = Root.Q<Slider>(GRASS_DISTANCE_SLIDER_NAME);
+			cloudsToggle = Root.Q<Toggle>(CLOUDS_TOGGLE_NAME);
 			grassDistanceValueLabel = Root.Q<Label>(GRASS_DISTANCE_VALUE_NAME);
 			frameRateDropdown = Root.Q<DropdownField>(FRAMERATE_DROPDOWN_NAME);
 			graphicsHint = Root.Q<Label>(GRAPHICS_HINT_NAME);
@@ -690,6 +693,7 @@ namespace FishMMO.Client
 			InitializeBrightness();
 			InitializeAntialiasing();
 			InitializeGrassDistance();
+			InitializeClouds();
 			InitializeLookSensitivity();
 			InitializeFrameRateLimit();
 			InitializeVSync();
@@ -1375,6 +1379,20 @@ namespace FishMMO.Client
 			"Per Texture",
 			"Forced",
 		};
+
+		/// <summary>
+		/// Binds the volumetric clouds switch to <see cref="ClientCloudSettings"/>: a performance control, with the graphics
+		/// rows. The cloud feature and the sky read it every frame, so the change shows at once.
+		/// </summary>
+		private void InitializeClouds()
+		{
+			if (cloudsToggle == null)
+			{
+				return;
+			}
+			cloudsToggle.SetValueWithoutNotify(ClientCloudSettings.Enabled);
+			cloudsToggle.RegisterValueChangedCallback((evt) => ClientCloudSettings.SetEnabled(evt.newValue));
+		}
 
 		/// <summary>
 		/// Binds the grass distance slider to <see cref="ClientGrassSettings"/>.

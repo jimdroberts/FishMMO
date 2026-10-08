@@ -50,6 +50,13 @@ struct Varyings
     half4 tangentWS                : TEXCOORD3;    // xyz: tangent, w: sign
 #endif
 
+#if defined(FISH_INDIRECT_INSTANCED)
+    // ── FishMMO edit: the trace down to the terrain and the root's terrain layers, for the contact blend
+    // (FishGroundColour.hlsl FishContactData). ──
+    float2 fishContact              : TEXCOORD4;
+    half4 fishContactWeights        : TEXCOORD11;
+#endif
+
 #ifdef _ADDITIONAL_LIGHTS_VERTEX
     half4 fogFactorAndVertexLight   : TEXCOORD5; // x: fogFactor, yzw: vertex light
 #else
@@ -230,6 +237,11 @@ Varyings LitPassVertex(Attributes input)
 #if defined(REQUIRES_WORLD_SPACE_POS_INTERPOLATOR)
     output.positionWS = vertexInput.positionWS;
 #endif
+#if defined(FISH_INDIRECT_INSTANCED)
+    FishContactData contact = FishContactVertex(vertexInput.positionWS, TransformObjectToWorld(float3(0.0, 0.0, 0.0)));
+    output.fishContact = contact.trace;
+    output.fishContactWeights = contact.weights;
+#endif
 
 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
     output.shadowCoord = GetShadowCoord(vertexInput);
@@ -296,6 +308,16 @@ void LitPassFragment(
         inputData.normalWS = normalize(lerp(inputData.normalWS, distanceTarget, distanceFlatten));
         surfaceData.albedo = lerp(surfaceData.albedo, distancePull.rgb, distancePull.a);
         surfaceData.smoothness *= (half)(1.0 - distanceFar);
+    }
+    // ── FishMMO edit: a terrain rock or scattered pebble sits IN the ground — its base takes the terrain's
+    // colour and shading (FishGroundColour.hlsl). Only the band's own pixels sample anything. ──
+    {
+        FishContactData contact;
+        contact.trace = input.fishContact;
+        contact.weights = input.fishContactWeights;
+        half3 contactNormal = (half3)inputData.normalWS;
+        FishContactApply(contact, inputData.positionWS, surfaceData.albedo, surfaceData.smoothness, contactNormal);
+        inputData.normalWS = contactNormal;
     }
 #endif
 

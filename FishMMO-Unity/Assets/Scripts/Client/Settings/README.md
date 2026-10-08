@@ -24,6 +24,7 @@ The settings screen itself is `UITKOptions` in
 | `ClientNameplateSettings` | Overhead nameplate opacity, scale, background strength, budget, guild and title rows. |
 | `ClientWorldLabelSettings` | World-label scale, distance, opacity, budget, occlusion, and the per-kind nameplate ranges. |
 | `ClientGrassSettings` | How far terrain grass and small details are drawn on the GPU-driven path. |
+| `ClientCloudSettings` | Whether the volumetric clouds (and their ground shadows and god rays) are drawn. |
 | `UIProfile` | Reads and writes a shareable UI layout/colour file, separate from `Configuration.cfg`. |
 
 ## Boot order
@@ -102,6 +103,7 @@ files.
 | Network statistics | `NetworkStats.Enabled` (default off), `NetworkStats.ShowGraph` (default on) — the **UI** tab's Network rows |
 | World labels | `WorldLabels.Scale`, `WorldLabels.Distance`, `WorldLabels.Opacity`, `WorldLabels.MaxVisible`, `WorldLabels.Occlude`, `WorldLabels.NpcNameRange`, `WorldLabels.PlayerNameRange`, `WorldLabels.ShowOwnName` |
 | Grass | `Grass.Distance` |
+| Clouds | `Clouds.Enabled` |
 | Nameplates | `Nameplates.Opacity`, `Nameplates.Scale`, `Nameplates.BackgroundOpacity`, `Nameplates.MaxVisible`, `Nameplates.ShowGuild`, `Nameplates.ShowTitles`, `Nameplates.ShowIcons` |
 | Map | `Map.MinimapZoom`, `Map.MinimapRotates`, `Map.MinimapFrameRate`, `Map.ShowCoordinates` |
 | Interface | `UI.Scale`, `UI.SnapGridSize`, `UI.Panel.<PanelName>.X` / `.Y`, `UIThemeVersion`, `<Name>ColorR/G/B/A` |
@@ -280,6 +282,7 @@ only a player who moves something changes anything.
 | `ClientNameplateSettings` | `UITKNameplateLayer` | `Opacity` (0.2–1), `Scale` (0.5–2), `BackgroundOpacity` (0–1, a multiplier on each style's own opacity), `MaxVisible` (8–256, default 64), `ShowGuild`, `ShowTitles`, `ShowIcons` |
 | `ClientWorldLabelSettings` | `UITKWorldLabelLayer`, and `ClientNameplateDisplay` for the three visibility rules | `Scale` (0.5–2), `Distance` (10–200 m, default 80), `Opacity` (0.2–1), `MaxVisible` (16–256, default 64), `Occlude` (default off), `NpcNameRange` / `PlayerNameRange` (0–200 m, default 30; zero means target only), `ShowOwnName` |
 | `ClientGrassSettings` | `TerrainDetailInstancing` | `Distance` (50–300 m, default 200; edited from the **Graphics** tab) |
+| `ClientCloudSettings` | `FishCloudsFeature`, `SkySystem` | `Enabled` (default on; the **Graphics** tab's Volumetric Clouds toggle, read every frame) |
 
 **Why nameplates and world labels are split.** They are drawn by different layers with separate
 budgets and answer different questions: a damage number is feedback read for a second, a nameplate

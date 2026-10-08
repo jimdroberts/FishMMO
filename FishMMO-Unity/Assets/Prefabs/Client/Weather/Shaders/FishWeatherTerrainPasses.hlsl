@@ -10,6 +10,8 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DBuffer.hlsl"
+// ── FishMMO edit 3 of 3: the ground reflects the sky on the true curve, not URP's (FishGroundLighting.hlsl). ──
+#include "FishGroundLighting.hlsl"
 
 struct Attributes
 {
@@ -311,7 +313,7 @@ Varyings SplatmapVert(Attributes v)
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
     TerrainInstancing(v.positionOS, v.normalOS, v.texcoord);
 
-    // ── FishMMO edit 2 of 2: deep snow lifts the ground it lies on. Off unless the quality tier
+    // ── FishMMO edit 2 of 3: deep snow lifts the ground it lies on. Off unless the quality tier
     // asks for it (_FishSnowDepth is 0 below High), and only where the sky can reach. ──
     if (_FishSnowDepth > 0.0 && _FishWeatherTier.x > 0.0 && _FishWeatherCover.x > 0.0)
     {
@@ -464,7 +466,7 @@ void SplatmapFragment(
     InitializeInputData(IN, normalTS, inputData);
     SetupTerrainDebugTextureData(inputData, IN.uvMainAndLM.xy);
 
-    // ── FishMMO edit 1 of 2: the weather on this ground. ──
+    // ── FishMMO edit 1 of 3: the weather on this ground. ──
     if (_FishWeatherAmount > 0.0)
     {
         half3 weathered = inputData.normalWS;
@@ -494,7 +496,7 @@ void SplatmapFragment(
     half4 color;
     Light mainLight = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
     MixRealtimeAndBakedGI(mainLight, inputData.normalWS, inputData.bakedGI, inputData.shadowMask);
-    color.rgb = GlobalIllumination(brdfData, (BRDFData)0, 0, inputData.bakedGI, occlusion, inputData.positionWS,
+    color.rgb = FishGlobalIllumination(brdfData, inputData.bakedGI, occlusion, inputData.positionWS,
                                    inputData.normalWS, inputData.viewDirectionWS, inputData.normalizedScreenSpaceUV);
     color.a = alpha;
     SplatmapFinalColor(color, inputData.fogCoord);
@@ -512,7 +514,7 @@ void SplatmapFragment(
     return PackGBuffersBRDFData(brdfData, inputData, smoothness, color.rgb, occlusion);
 #else
 
-    half4 color = UniversalFragmentPBR(inputData, albedo, metallic, /* specular */ half3(0.0h, 0.0h, 0.0h), smoothness, occlusion, /* emission */ half3(0, 0, 0), alpha);
+    half4 color = FishFragmentPBR(inputData, albedo, metallic, smoothness, occlusion, alpha);
 
     SplatmapFinalColor(color, inputData.fogCoord);
 

@@ -25,6 +25,60 @@ namespace FishMMO.Client
 			diagnosticReport = report;
 		}
 
+		/// <summary>
+		/// What the last culling drew, read back now (a stall: for probes, not the game) — instances and triangles for
+		/// the main view and the shadows, by level, and the meshes that cost the most triangles in the main view.
+		/// </summary>
+		public string DescribeDraws()
+		{
+			if (argsBuffer == null || commands.Count == 0)
+			{
+				return "no draws";
+			}
+			AsyncGPUReadbackRequest request = AsyncGPUReadback.Request(argsBuffer);
+			request.WaitForCompletion();
+			if (request.hasError)
+			{
+				return "readback failed";
+			}
+			NativeArray<GraphicsBuffer.IndirectDrawIndexedArgs> args = request.GetData<GraphicsBuffer.IndirectDrawIndexedArgs>();
+			var instancesBy = new long[2, 4];
+			var trianglesBy = new long[2, 4];
+			var byMesh = new Dictionary<string, long>();
+			for (int c = 0; c < commands.Count && c < args.Length; c++)
+			{
+				Command command = commands[c];
+				int view = command.View == 0 ? 0 : 1;
+				int level = Mathf.Clamp(command.Level, 0, 3);
+				long triangles = (long)args[c].instanceCount * (args[c].indexCountPerInstance / 3);
+				instancesBy[view, level] += args[c].instanceCount;
+				trianglesBy[view, level] += triangles;
+				if (view == 0 && command.Mesh != null)
+				{
+					string key = $"{command.Mesh.name} L{level}";
+					byMesh[key] = (byMesh.TryGetValue(key, out long t) ? t : 0) + triangles;
+				}
+			}
+			var sb = new StringBuilder();
+			for (int view = 0; view < 2; view++)
+			{
+				sb.Append(view == 0 ? "main" : "; shadows");
+				for (int level = 0; level < 4; level++)
+				{
+					if (instancesBy[view, level] > 0)
+					{
+						sb.Append($" L{level} {instancesBy[view, level]} inst {trianglesBy[view, level] / 1000}k tri");
+					}
+				}
+			}
+			sb.Append("; heaviest:");
+			foreach (KeyValuePair<string, long> pair in byMesh.OrderByDescending(p => p.Value).Take(6))
+			{
+				sb.Append($" {pair.Key} {pair.Value / 1000}k");
+			}
+			return sb.ToString();
+		}
+
 		private sealed class Snapshot
 		{
 			public Vector3 Eye;

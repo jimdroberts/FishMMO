@@ -325,6 +325,10 @@ namespace FishMMO.Client
 			{
 				gpuTried = true;
 				gpu = TerrainGpuRenderer.TryCreate();
+				if (gpu != null)
+				{
+					gpu.ContactMode = 2f;   // trunk and rock bases blend into the terrain (FishGroundColour.hlsl)
+				}
 			}
 
 			LightProbes probes = LightmapSettings.lightProbes;

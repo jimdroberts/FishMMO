@@ -6,7 +6,8 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Generates the star field: a cubemap of a few thousand stars with real-looking brightness
 	/// and colour spreads, from a seed. Built on each client, in the solar system's own fixed frame;
-	/// the sky turns it for the body and the place it is seen from.
+	/// the sky turns it for the body and the place it is seen from. rgb is the light; alpha is each
+	/// star's own twinkle phase (see <see cref="Splat"/>).
 	/// </summary>
 	/// <remarks>
 	/// Every client builds its own copy, so the same seed has to give the same stars on every one
@@ -53,6 +54,12 @@ namespace FishMMO.Client
 		/// <summary>The n-th number, 0..1, of the sequence a seed gives. Stateless, so it cannot drift.</summary>
 		private static float Draw(uint seed, uint index) => SkySchedule.Unit(SkySchedule.Hash(seed ^ 0x57A25EEDu, index));
 
+		/// <summary>
+		/// A star's twinkle phase, 0..1. From a sequence of its own, so adding it moved no star: the
+		/// four numbers a star's place and colour come from are where they always were.
+		/// </summary>
+		private static float Phase(uint seed, int star) => SkySchedule.Unit(SkySchedule.Hash(seed ^ 0x7D1A5C3Bu, (uint)star));
+
 		/// <param name="keepReadable">
 		/// Keep the CPU-side copy of the pixels. False in the game, where the starfield is uploaded
 		/// once and never read back, and the copy is pure waste — a 1024 cubemap is 24 MB of it. True
@@ -68,7 +75,7 @@ namespace FishMMO.Client
 				faces[f] = new Color32[size * size];
 				for (int i = 0; i < faces[f].Length; i++)
 				{
-					faces[f][i] = new Color32(0, 0, 0, 255);
+					faces[f][i] = new Color32(0, 0, 0, 0);
 				}
 			}
 			for (int s = 0; s < stars; s++)
@@ -84,7 +91,7 @@ namespace FishMMO.Client
 				float brightness = Mathf.Pow(Draw(seed, at + 2u), 6f) * 0.9f + 0.1f;
 				Color color = ColorOf(Mathf.Lerp(2800f, 11000f, Draw(seed, at + 3u))) * brightness;
 				FaceOf(direction, size, out CubemapFace face, out float px, out float py);
-				Splat(faces[(int)face], size, px, py, color, brightness > 0.6f ? 1.2f : 0.7f);
+				Splat(faces[(int)face], size, px, py, color, brightness > 0.6f ? 1.2f : 0.7f, (byte)Mathf.RoundToInt(Phase(seed, s) * 255f));
 			}
 			var cubemap = new Cubemap(size, TextureFormat.RGBA32, false)
 			{
@@ -107,10 +114,18 @@ namespace FishMMO.Client
 			return cubemap;
 		}
 
-		private static void Splat(Color32[] pixels, int size, float x, float y, Color color, float radius)
+		/// <param name="phase">
+		/// The star's twinkle phase, written to alpha (the sky reads it there; the colour is rgb). It
+		/// goes one pixel further out than the light does, so the four texels a bilinear sample blends
+		/// anywhere on the star all hold the same phase and the whole star twinkles as one. A phase
+		/// read from a grid in the sky instead split a star lying across a cell edge into two halves
+		/// that flickered apart. Where two stars overlap, the pixel keeps the phase of the one that
+		/// lights it more.
+		/// </param>
+		private static void Splat(Color32[] pixels, int size, float x, float y, Color color, float radius, byte phase)
 		{
-			int x0 = Mathf.FloorToInt(x - radius), x1 = Mathf.CeilToInt(x + radius);
-			int y0 = Mathf.FloorToInt(y - radius), y1 = Mathf.CeilToInt(y + radius);
+			int x0 = Mathf.FloorToInt(x - radius) - 1, x1 = Mathf.CeilToInt(x + radius) + 1;
+			int y0 = Mathf.FloorToInt(y - radius) - 1, y1 = Mathf.CeilToInt(y + radius) + 1;
 			for (int py = y0; py <= y1; py++)
 			{
 				if (py < 0 || py >= size) continue;
@@ -119,14 +134,22 @@ namespace FishMMO.Client
 					if (px < 0 || px >= size) continue;
 					float d = Vector2.Distance(new Vector2(px + 0.5f, py + 0.5f), new Vector2(x, y));
 					float w = Mathf.Exp(-d * d / (radius * radius * 0.5f));
-					if (w < 0.02f) continue;
+					int r = 0, g = 0, b = 0;
+					if (w >= 0.02f)
+					{
+						r = Mathf.RoundToInt(color.r * w * 255f);
+						g = Mathf.RoundToInt(color.g * w * 255f);
+						b = Mathf.RoundToInt(color.b * w * 255f);
+					}
 					int i = py * size + px;
 					Color32 old = pixels[i];
+					int oldLight = old.r + old.g + old.b;
+					bool owns = oldLight == 0 || r + g + b > oldLight;
 					pixels[i] = new Color32(
-						(byte)Mathf.Min(255, old.r + Mathf.RoundToInt(color.r * w * 255f)),
-						(byte)Mathf.Min(255, old.g + Mathf.RoundToInt(color.g * w * 255f)),
-						(byte)Mathf.Min(255, old.b + Mathf.RoundToInt(color.b * w * 255f)),
-						255);
+						(byte)Mathf.Min(255, old.r + r),
+						(byte)Mathf.Min(255, old.g + g),
+						(byte)Mathf.Min(255, old.b + b),
+						owns ? phase : old.a);
 				}
 			}
 		}

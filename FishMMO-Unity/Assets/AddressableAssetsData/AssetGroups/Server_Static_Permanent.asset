@@ -15,6 +15,13 @@ MonoBehaviour:
   m_GroupName: Server_Static_Permanent
   m_GUID: f2edf6310b68f6b4bae56ba99aeaeab9
   m_SerializeEntries:
+  - m_GUID: 11d9bfc9b6072c5dea7405d9ae333eb8
+    m_Address: Assets/Scenes/WorldScene/Arthis/Baoakraal Hyena-den Terrain/Baoakraal
+      Hyena-den NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
     m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
     m_ReadOnly: 0

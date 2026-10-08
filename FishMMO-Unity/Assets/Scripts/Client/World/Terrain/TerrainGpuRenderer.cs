@@ -55,6 +55,7 @@ namespace FishMMO.Client
 		/// <summary>One uint per indirect command index: the visible-buffer base of the slot that command draws (read with GetCommandID(0)).</summary>
 		public const string CommandBasesName = "_FishCommandBases";
 		private static readonly int CommandBasesId = Shader.PropertyToID(CommandBasesName);
+		private static readonly int ContactOnId = Shader.PropertyToID("_FishContactOn");
 		private static readonly int ModelsId = Shader.PropertyToID("_FishModels");
 		private static readonly int WorkId = Shader.PropertyToID("_FishWork");
 		private static readonly int SlotsId = Shader.PropertyToID("_FishSlots");
@@ -183,6 +184,13 @@ namespace FishMMO.Client
 
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO terrain GPU culling" };
 
+		/// <summary>
+		/// Which contact blend with the ground this renderer's draws take (FishGroundColour.hlsl <c>_FishContactOn</c>):
+		/// 0 none, 1 the small details' settings, 2 the trees' and rocks' (their bases take the terrain's colour and
+		/// shading). Set by the owner right after <see cref="TryCreate"/>; written on its clones and per-draw blocks.
+		/// </summary>
+		public float ContactMode;
+
 		private TerrainGpuRenderer(ComputeShader compute)
 		{
 			this.compute = compute;
@@ -240,6 +248,7 @@ namespace FishMMO.Client
 				return null;
 			}
 			clone = new Material(material) { shader = shader, name = material.name + " (indirect)", hideFlags = HideFlags.DontSave };
+			clone.SetFloat(ContactOnId, ContactMode);
 			clones.Add(material, clone);
 			return clone;
 		}
@@ -679,6 +688,9 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
 				cmd.DispatchCompute(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
 
+				// Last frame's depth, to drop from the main view what was hidden behind what was drawn (not while a
+				// diagnostic compares this culling with its CPU mirror, which knows nothing of depth).
+				FishDepthPyramid.Bind(cmd, compute, cullKernel, camera, view.Position, !(diagnosticCamera == camera && diagnosticReport != null));
 				cmd.SetComputeBufferParam(compute, cullKernel, InstancesId, instances);
 				cmd.SetComputeBufferParam(compute, cullKernel, ModelsId, modelBuffer);
 				cmd.SetComputeBufferParam(compute, cullKernel, WorkId, workBuffer);
@@ -884,6 +896,7 @@ namespace FishMMO.Client
 
 		private void Bind(MaterialPropertyBlock block)
 		{
+			block.SetFloat(ContactOnId, ContactMode);
 			if (instances != null)
 			{
 				block.SetBuffer(InstancesId, instances);

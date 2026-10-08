@@ -120,8 +120,12 @@ WmStorm WmLoad(uint index)
 }
 
 // How strongly a cell's shape covers a point, given as an offset from its centre: StormCell.Coverage.
+// One exit here and in WmContribute: FXC flags an early return inlined into the kernel's dynamic loop as a
+// potentially uninitialised return value.
 float WmCoverage(WmStorm s, float2 offset)
 {
+    float coverage;
+    float d = length(offset);
     if (s.shape == 1u)
     {
         // A front: sharp ahead, a long tail behind, soft ends along its line.
@@ -132,31 +136,33 @@ float WmCoverage(WmStorm s, float2 offset)
         float deep = 1.0 - WmSmooth(0.0, 1.0, abs(across) / max(1e-3, reachAcross));
         float halfLine = max(s.radius, s.extent);
         float lengthwise = 1.0 - WmSmooth(halfLine * 0.75, halfLine, sideways);
-        return deep * lengthwise;
+        coverage = deep * lengthwise;
     }
-    float d = length(offset);
-    if (s.shape == 2u)
+    else if (s.shape == 2u)
     {
         // A hurricane: calm but not empty in the eye, worst in the ring round it, decaying outward.
         float eye = clamp(s.extent, 0.0, s.radius * 0.6);
         if (d <= eye)
         {
             float t = eye > 1e-3 ? d / eye : 1.0;
-            return lerp(0.05, 1.0, WmSmooth(0.0, 1.0, t));
+            coverage = lerp(0.05, 1.0, WmSmooth(0.0, 1.0, t));
         }
-        return 1.0 - WmSmooth(eye, s.radius, d);
+        else
+        {
+            coverage = 1.0 - WmSmooth(eye, s.radius, d);
+        }
     }
-    if (s.shape == 3u)
+    else if (s.shape == 3u)
     {
         // A tornado: all of it in the core, falling away steeply.
-        if (d <= s.radius)
-        {
-            return 1.0;
-        }
         float falloff = 1.0 - WmSmooth(s.radius, max(s.extent, s.radius * 1.5), d);
-        return falloff * falloff;
+        coverage = d <= s.radius ? 1.0 : falloff * falloff;
     }
-    return 1.0 - WmSmooth(s.radius * 0.55, s.radius, d);
+    else
+    {
+        coverage = 1.0 - WmSmooth(s.radius * 0.55, s.radius, d);
+    }
+    return coverage;
 }
 
 // What one storm puts at one place: WeatherMap.Contribute, without the rain.
@@ -168,100 +174,101 @@ bool WmContribute(WmStorm s, float2 p, float texel, out float4 c0, out float4 c1
     float2 offset = p - s.centre;
     if (dot(offset, offset) > s.reach * s.reach)
     {
-        return false;
+        // Out of its reach: nothing (c0 and c1 stay zero).
     }
-    if (!s.anatomy)
+    else if (!s.anatomy)
     {
         // No cloud of its own: what its air adds to the open air's cloud, as a shield over it.
         float shield = WmCoverage(s, offset * FISH_STORM_SHIELD_SCALE) * s.life * saturate(s.peak);
         c0 = float4(s.addedCover * shield, s.fallbackBase, s.fallbackTop, 0.0);
-        return c0.x > 0.0;
-    }
-
-    // Stands as soon as it has begun, climbs as it matures, spreads its anvil only once it has
-    // reached the top of the weather.
-    float stands = WmSmooth(0.0, 0.35, s.life);
-    float climbed = lerp(0.35, 1.0, WmSmooth(0.0, 0.7, s.life));
-    float spread = WmSmooth(0.4, 0.9, s.life);
-    float depth = max(100.0, s.topM - s.baseM);
-    float cloud;
-    float baseHere = s.baseM;
-    float topHere;
-    float2 along = float2(-s.forward.y, s.forward.x);
-    if (s.shape == 1u)
-    {
-        // A squall line: towers along the gust front, the trailing stratiform behind, the shelf ahead.
-        float u = dot(offset, s.forward);
-        float v = abs(dot(offset, along));
-        float lengthwise = 1.0 - WmSmooth(0.75 * s.halfLength, s.halfLength, v);
-        float lead = 0.45 * s.radius;
-        float width = max(1.0, s.shelfWidth);
-        float back = lead - 2.0 * s.core;
-        cloud = WmSmooth(back, back + s.core, u) * (1.0 - WmSmooth(lead, lead + 0.3 * width, u)) * lengthwise;
-        topHere = s.baseM + depth * climbed * lerp(0.6, 1.0, WmSmooth(back, lead - 0.3 * s.core, u));
-        float x = (u - lead) / width;
-        float shelf = WmSmooth(-0.15, 0.05, x) * (1.0 - WmSmooth(0.85, 1.0, x)) * lengthwise;
-        if (shelf > 0.0)
-        {
-            float shelfFloor = s.baseM - s.shelfDrop;
-            float shelfTop = shelfFloor + max(80.0, (s.baseM + 0.5 * s.shelfDrop - shelfFloor) * (1.0 - saturate(x)));
-            float total = cloud + shelf;
-            baseHere = (cloud * s.baseM + shelf * shelfFloor) / total;
-            topHere = (cloud * topHere + shelf * shelfTop) / total;
-            cloud = max(cloud, shelf);
-        }
     }
     else
     {
-        // A tower over the body, domed over its updraught, and a supercell's wall cloud under it.
-        float d = distance(p, s.body) / max(1.0, s.core);
-        cloud = 1.0 - WmSmooth(0.6, 1.0, d);
-        float2 updraught = s.supercell ? s.centre : s.body;
-        float du = min(1.0, distance(p, updraught) / max(1.0, s.core));
-        topHere = s.baseM + depth * climbed * (1.0 - 0.35 * du * du);
-        if (s.wallRadius > 0.0)
-        {
-            float inner = min(0.9, max(0.45, 0.75 * texel / s.wallRadius));
-            float wall = 1.0 - WmSmooth(inner, 1.0, length(offset) / s.wallRadius);
-            baseHere = s.baseM - s.wallDrop * wall;
-            cloud = max(cloud, wall);
-        }
-    }
-    float cover = cloud * stands;
-    float baseM = max(0.0, baseHere);
-    float topM = max(baseM + 100.0, topHere);
-    c0 = float4(cover, baseM, topM, s.severity * cover);
-
-    if (s.anvilRadius > 0.0 && spread > 0.0)
-    {
-        float da;
+        // Stands as soon as it has begun, climbs as it matures, spreads its anvil only once it has
+        // reached the top of the weather.
+        float stands = WmSmooth(0.0, 0.35, s.life);
+        float climbed = lerp(0.35, 1.0, WmSmooth(0.0, 0.7, s.life));
+        float spread = WmSmooth(0.4, 0.9, s.life);
+        float depth = max(100.0, s.topM - s.baseM);
+        float cloud;
+        float baseHere = s.baseM;
+        float topHere;
+        float2 along = float2(-s.forward.y, s.forward.x);
         if (s.shape == 1u)
         {
-            float2 o = p - s.anvilCentre;
-            float ua = dot(o, s.forward);
-            float va = max(0.0, abs(dot(o, along)) - s.halfLength);
-            da = sqrt(ua * ua + va * va) / s.anvilRadius;
+            // A squall line: towers along the gust front, the trailing stratiform behind, the shelf ahead.
+            float u = dot(offset, s.forward);
+            float v = abs(dot(offset, along));
+            float lengthwise = 1.0 - WmSmooth(0.75 * s.halfLength, s.halfLength, v);
+            float lead = 0.45 * s.radius;
+            float width = max(1.0, s.shelfWidth);
+            float back = lead - 2.0 * s.core;
+            cloud = WmSmooth(back, back + s.core, u) * (1.0 - WmSmooth(lead, lead + 0.3 * width, u)) * lengthwise;
+            topHere = s.baseM + depth * climbed * lerp(0.6, 1.0, WmSmooth(back, lead - 0.3 * s.core, u));
+            float x = (u - lead) / width;
+            float shelf = WmSmooth(-0.15, 0.05, x) * (1.0 - WmSmooth(0.85, 1.0, x)) * lengthwise;
+            if (shelf > 0.0)
+            {
+                float shelfFloor = s.baseM - s.shelfDrop;
+                float shelfTop = shelfFloor + max(80.0, (s.baseM + 0.5 * s.shelfDrop - shelfFloor) * (1.0 - saturate(x)));
+                float total = cloud + shelf;
+                baseHere = (cloud * s.baseM + shelf * shelfFloor) / total;
+                topHere = (cloud * topHere + shelf * shelfTop) / total;
+                cloud = max(cloud, shelf);
+            }
         }
         else
         {
-            da = distance(p, s.anvilCentre) / s.anvilRadius;
+            // A tower over the body, domed over its updraught, and a supercell's wall cloud under it.
+            float d = distance(p, s.body) / max(1.0, s.core);
+            cloud = 1.0 - WmSmooth(0.6, 1.0, d);
+            float2 updraught = s.supercell ? s.centre : s.body;
+            float du = min(1.0, distance(p, updraught) / max(1.0, s.core));
+            topHere = s.baseM + depth * climbed * (1.0 - 0.35 * du * du);
+            if (s.wallRadius > 0.0)
+            {
+                float inner = min(0.9, max(0.45, 0.75 * texel / s.wallRadius));
+                float wall = 1.0 - WmSmooth(inner, 1.0, length(offset) / s.wallRadius);
+                baseHere = s.baseM - s.wallDrop * wall;
+                cloud = max(cloud, wall);
+            }
         }
-        float thin = (1.0 - WmSmooth(0.3, 1.0, da)) * spread;
-        if (thin > 0.0)
-        {
-            c1.x = thin;
-            c1.y = s.anvilTop;
-            c1.z = (s.anvilTop - s.anvilBase) * thin;
-        }
-    }
+        float cover = cloud * stands;
+        float baseM = max(0.0, baseHere);
+        float topM = max(baseM + 100.0, topHere);
+        c0 = float4(cover, baseM, topM, s.severity * cover);
 
-    if (s.shape == 2u)
-    {
-        // The eye: sinking air dissolves whatever cloud the air round it would make (StormCell.ClearingAt).
-        float eye = clamp(s.extent, 0.0, s.radius * 0.6);
-        if (s.life > 0.0 && eye > 1e-3)
+        if (s.anvilRadius > 0.0 && spread > 0.0)
         {
-            c1.w = saturate(s.life * s.peak) * (1.0 - WmSmooth(eye * 0.6, eye * 1.05, length(offset)));
+            float da;
+            if (s.shape == 1u)
+            {
+                float2 o = p - s.anvilCentre;
+                float ua = dot(o, s.forward);
+                float va = max(0.0, abs(dot(o, along)) - s.halfLength);
+                da = sqrt(ua * ua + va * va) / s.anvilRadius;
+            }
+            else
+            {
+                da = distance(p, s.anvilCentre) / s.anvilRadius;
+            }
+            float thin = (1.0 - WmSmooth(0.3, 1.0, da)) * spread;
+            if (thin > 0.0)
+            {
+                c1.x = thin;
+                c1.y = s.anvilTop;
+                c1.z = (s.anvilTop - s.anvilBase) * thin;
+            }
+        }
+
+        if (s.shape == 2u)
+        {
+            // The eye: sinking air dissolves whatever cloud the air round it would make (StormCell.ClearingAt).
+            float eye = clamp(s.extent, 0.0, s.radius * 0.6);
+            if (s.life > 0.0 && eye > 1e-3)
+            {
+                c1.w = saturate(s.life * s.peak) * (1.0 - WmSmooth(eye * 0.6, eye * 1.05, length(offset)));
+            }
         }
     }
     return c0.x > 0.0 || c1.x > 0.0 || c1.w > 0.0;

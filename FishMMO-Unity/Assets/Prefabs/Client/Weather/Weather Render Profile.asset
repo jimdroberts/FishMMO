@@ -88,6 +88,7 @@ MonoBehaviour:
     LightSteps: 6
     MaxDistance: 44000
     FarTailSteps: 24
+    FarBandMetres: 5000
     TemporalBlend: 0.9
     ShadowAreaMeters: 4000
     Diagnostics:
@@ -98,8 +99,8 @@ MonoBehaviour:
       Kernel: 0
       BlurPixels: 0.55
       RayJitter: 1
-      StepScale: 0.25
-      DistanceStepGrowth: 0
+      StepScale: 0.5
+      DistanceStepGrowth: 1
       MaxStepOpticalDepth: 1
       MaxInCloudGrowth: 2
       EarlyExit: 0.05
@@ -110,7 +111,7 @@ MonoBehaviour:
       EdgeShellScale: 2
       DetailStepFootprint: 1.25
       BaseDetail: 0
-      BaseSmoothHeight: 1
+      BaseSmoothHeight: 0.127
       MultipleScattering: 0.5
       DropletSpike: 1
       SkyAmbient: 1
@@ -180,7 +181,7 @@ MonoBehaviour:
     Vortices: 4
     VortexParticles: 3000
     CloudShadows: 1
-    CloudResolution: 0.07
+    CloudResolution: 0.25
     CloudSteps: 24
     CloudDetail: 1
     CloudTemporal: 1
@@ -209,6 +210,14 @@ MonoBehaviour:
   DistanceBlendEnd: 600
   DistanceNormalFlatten: 0.6
   DistanceGroundPull: 0.35
+  ContactBlend: 1
+  ContactBlendHeight: 0.15
+  ContactColour: 0.8
+  ContactNormal: 0.7
+  ContactBlendLarge: 1
+  ContactBlendHeightLarge: 0.5
+  ContactColourLarge: 0.75
+  ContactNormalLarge: 0.6
   GrassBladesCompute: {fileID: 7200000, guid: 8bd7189a93a941d9b60c4f759d719be6, type: 3}
   GrassBladesShader: {fileID: 4800000, guid: 713c81c490c74311b936e0315f3029c4, type: 3}
   Grass:
@@ -309,7 +318,7 @@ MonoBehaviour:
     - {x: 200, y: 15}
     - {x: 400, y: 4}
     - {x: 600, y: 2}
-    Fullness: 0.35
+    Fullness: 0.215
     WidenExponent: 1
     MaxWiden: 64
     MaxBladePixels: 2.5
@@ -319,7 +328,7 @@ MonoBehaviour:
     BladeCap: 5000000
     DistanceFadeBand: 0.12
     BladeWidth: 0.012
-    ClumpMetres: 0.7
+    ClumpMetres: 0.15
     ClumpFacing: 0.45
     ClumpHeightVariation: 0.3
     MaxLean: 0.5
@@ -334,7 +343,7 @@ MonoBehaviour:
     RootGroundHeight: 0.3
     GroundHueTint: 0.25
     TerrainTextureTint: 0.85
-    TerrainTextureBrightness: 0.85
+    TerrainTextureBrightness: 1
     TerrainTextureRoot: 0.9
     TerrainTextureFootprint: 0.25
     WindStrength: 1.6
