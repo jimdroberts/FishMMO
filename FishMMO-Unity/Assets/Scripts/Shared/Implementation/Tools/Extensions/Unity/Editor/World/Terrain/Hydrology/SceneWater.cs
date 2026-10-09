@@ -361,6 +361,20 @@ namespace FishMMO.Shared.WorldDesign
 			SceneLake startLake = start == RiverEnd.Lake && river.StartLake >= 0 && lakes.TryGetValue(river.StartLake, out SceneLake sl) ? sl : null;
 			SceneLake endLake = end == RiverEnd.Lake && river.EndLake >= 0 && lakes.TryGetValue(river.EndLake, out SceneLake el) ? el : null;
 			RiverPath joined = end == RiverEnd.Confluence && river.JoinsRiver >= 0 && laid.TryGetValue(river.JoinsRiver, out RiverPath jr) ? jr : null;
+			/* Joining a river that ponds, upstream of where it leaves its pond: it runs into the pond. The river is laid
+			 * from the pond's outlet on (Pond), so meeting it would drag this one's end across the pond to the outlet. */
+			if (joined != null && joined.Start == RiverEnd.Lake && joined.StartLake >= 0 && joined.StartLake < Lakes.Count
+				&& Lakes[joined.StartLake].PlanetLake < 0)
+			{
+				SceneLake joinedPond = Lakes[joined.StartLake];
+				Nearest(joined, x[n - 1], z[n - 1], out _, out _, out int meets);
+				if (meets == 0 && (joinedPond.MayCover == null || joinedPond.MayCover(x[n - 1], z[n - 1])))
+				{
+					end = RiverEnd.Lake;
+					endLake = joinedPond;
+					joined = null;
+				}
+			}
 
 			/* The planet's line stops at the lake's edge. A river entering or leaving a lake runs on into it on its
 			 * own heading, so its channel can be cut through the lake's shallow margin; the trim below keeps only
@@ -563,7 +577,33 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				surface[i - first] = i < shoreFirst ? startLake.Level : i > shoreLast ? endLake.Level : shoreSurface[i - shoreFirst];
 			}
-			int pondEnd = Pond(river, x, z, q, widthAt, surface, first, field.Spacing);
+			int surfaceFirst = first;
+			int pondEnd = Pond(river, x, z, q, widthAt, surface, first, field.Spacing, out SceneLake pond, out int pondFrom);
+			/* A ponded stretch is lake, not river: the river runs into the pond and out of it at the step, as at any
+			 * lake. Kept as a channel through the pond, its ribbon was drawn across the lake in the river's own
+			 * colours and riffles, the lake leaving the channel to it (it neither started nor ended there), and it
+			 * started at the scene's edge at the pond's level, which the backdrop then lifted its river to. */
+			if (pond != null)
+			{
+				if (pondFrom - first >= 2)
+				{
+					RiverPath inflow = Path(river, x, z, q, widthAt, depthAt, surface, surfaceFirst, first, pondFrom, wetAt[pondFrom]);
+					inflow.Start = start;
+					inflow.End = RiverEnd.Lake;
+					Link(inflow, startLake, pond, null);
+					Flare(inflow, null, LakeFloorPast(field, inflow, pond));
+					RunIntoLake(inflow);
+					result.Add(inflow);
+				}
+				// Out of the pond from its last point standing in it, as an outlet leaves its lake.
+				first = Math.Max(first, pondEnd - 1);
+				start = RiverEnd.Lake;
+				startLake = pond;
+				if (last - first < 2)
+				{
+					return result;
+				}
+			}
 
 			// Split where it turns from a dry wash into running water: the wash ends where the river begins.
 			int wetFrom = first;
@@ -573,8 +613,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (wetFrom > first + 2 && wetFrom < last - 2)
 			{
-				RiverPath dry = Path(river, x, z, q, widthAt, depthAt, surface, first, first, wetFrom, false);
-				RiverPath wet = Path(river, x, z, q, widthAt, depthAt, surface, first, wetFrom, last, true);
+				RiverPath dry = Path(river, x, z, q, widthAt, depthAt, surface, surfaceFirst, first, wetFrom, false);
+				RiverPath wet = Path(river, x, z, q, widthAt, depthAt, surface, surfaceFirst, wetFrom, last, true);
 				dry.Start = start;
 				dry.End = RiverEnd.Confluence;
 				wet.Start = RiverEnd.Source;
@@ -593,7 +633,7 @@ namespace FishMMO.Shared.WorldDesign
 			else
 			{
 				bool perennial = wetFrom <= first + 2;
-				RiverPath path = Path(river, x, z, q, widthAt, depthAt, surface, first, first, last, perennial);
+				RiverPath path = Path(river, x, z, q, widthAt, depthAt, surface, surfaceFirst, first, last, perennial);
 				path.Start = start;
 				path.End = end;
 				Link(path, startLake, endLake, joined);
@@ -616,10 +656,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// rises to its level, and a lake at that level floods the valley's low ground round the ponded stretch
 		/// (seeded beside the channel, which a lake never floods; within <see cref="PondReachMetres"/> of it, sills
 		/// raised where it would leak past). Returns the first point past the pond (all before it stand in the lake),
-		/// or <paramref name="first"/> when nothing ponds.
+		/// or <paramref name="first"/> when nothing ponds; <paramref name="pond"/> is the lake (null for none) and
+		/// <paramref name="pondFrom"/> the first point standing in it.
 		/// </summary>
-		private int Pond(DrainageRiver river, List<float> x, List<float> z, float[] q, float[] width, float[] surface, int first, float spacing)
+		private int Pond(DrainageRiver river, List<float> x, List<float> z, float[] q, float[] width, float[] surface, int first, float spacing,
+			out SceneLake pond, out int pondFrom)
 		{
+			pond = null;
+			pondFrom = first;
 			int rise = -1;
 			for (int k = 1; k < surface.Length; k++)
 			{
@@ -644,11 +688,17 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				surface[k] = level;
 				int i = first + k;
+				if (ponded.Count == 0)
+				{
+					pondFrom = i;
+				}
 				float ax = x[Mathf.Min(x.Count - 1, i + 1)] - x[Mathf.Max(0, i - 1)], az = z[Mathf.Min(z.Count - 1, i + 1)] - z[Mathf.Max(0, i - 1)];
 				float length = Mathf.Max(1e-4f, Mathf.Sqrt(ax * ax + az * az));
 				float nx = -az / length, nz = ax / length, offset = 0.5f * width[i] + 2f * spacing;
 				seeds.Add(new Vector2(x[i] + nx * offset, z[i] + nz * offset));
 				seeds.Add(new Vector2(x[i] - nx * offset, z[i] - nz * offset));
+				// And on the line itself: the stretch is lake now, not channel (Shape splits the river round it).
+				seeds.Add(new Vector2(x[i], z[i]));
 				ponded.Add(new Vector2(x[i], z[i]));
 				minX = Mathf.Min(minX, x[i]); maxX = Mathf.Max(maxX, x[i]);
 				minZ = Mathf.Min(minZ, z[i]); maxZ = Mathf.Max(maxZ, z[i]);
@@ -659,7 +709,7 @@ namespace FishMMO.Shared.WorldDesign
 				return first;
 			}
 			float reachSq = PondReachMetres * PondReachMetres;
-			Lakes.Add(new SceneLake
+			Lakes.Add(pond = new SceneLake
 			{
 				Id = Lakes.Count,
 				PlanetLake = -1,

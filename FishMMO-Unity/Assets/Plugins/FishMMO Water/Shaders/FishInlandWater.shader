@@ -33,8 +33,6 @@ Shader "FishMMO/Water/Inland Water"
         [NoScaleOffset] _FoamTexture("Foam", 2D) = "black" {}
         _FoamScale("Foam size (m)", Float) = 2.5
         _FoamColor("Foam colour", Color) = (0.92, 0.94, 0.95, 1)
-        _FoamSpeed("Speed foam starts (m/s)", Float) = 1.2
-        _ShoreFoam("Shore foam depth (m)", Float) = 0.25
     }
 
     SubShader

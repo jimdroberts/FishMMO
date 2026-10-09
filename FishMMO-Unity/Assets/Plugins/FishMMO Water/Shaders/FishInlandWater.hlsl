@@ -34,8 +34,6 @@ CBUFFER_START(UnityPerMaterial)
 	half _MaxAlpha;
 	float _FoamScale;
 	half4 _FoamColor;
-	float _FoamSpeed;
-	float _ShoreFoam;
 CBUFFER_END
 
 TEXTURE2D(_NormalMap);
@@ -249,6 +247,15 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, out half whi
 /// map: two copies half a cycle apart, but blended so the blend keeps the lace's contrast. A plain blend of two laces
 /// is a grey smear mid-cycle, and the cut through it lost every hole twice a cycle.
 /// </summary>
+/// <remarks>
+/// Read <see cref="FISH_RIVER_LACE_MIP"/> mips down: a river's white water is clumps of froth with holes, never the
+/// lace's web of bubble walls. Those walls are a texel or three wide, and every cut under about a third covers little
+/// else, so a river's thin foam drew as hairlines, stretched along the current into rows of parallel dotted streaks
+/// (the cut keeps only the top of a texel-wide ridge, and that wanders as the wall crosses texel centres; Jim's
+/// close-up, 2026-10-09). Averaged over 4×4 texels a wall falls below any cut, while the patches and their holes stay,
+/// and the cut still covers what it is asked (a fifth covers 19 %).
+/// </remarks>
+#define FISH_RIVER_LACE_MIP 2.0
 half FlowLace(float2 xz, float2 flow, float scale, float cycle, float2 shift)
 {
 	cycle = FISH_INLAND_CLOCK_WRAP / max(1.0, round(FISH_INLAND_CLOCK_WRAP / max(0.05, cycle)));
@@ -258,7 +265,9 @@ half FlowLace(float2 xz, float2 flow, float scale, float cycle, float2 shift)
 	half blend = abs(2.0 * phaseA - 1.0);
 	float2 uvA = (xz - flow * phaseA * cycle) / scale + shift;
 	float2 uvB = (xz - flow * phaseB * cycle) / scale + shift + float2(0.37, 0.61);
-	return FishFoamBlend(SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, uvA).a, SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, uvB).a, blend);
+	return FishFoamBlend(
+		SAMPLE_TEXTURE2D_BIAS(_FoamTexture, sampler_FoamTexture, uvA, FISH_RIVER_LACE_MIP).a,
+		SAMPLE_TEXTURE2D_BIAS(_FoamTexture, sampler_FoamTexture, uvB, FISH_RIVER_LACE_MIP).a, blend);
 }
 
 /// <summary>
@@ -821,8 +830,12 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	glint = _FishInlandDebugFoam > 1.5 ? half3(0.0, 0.0, 0.0) : glint;
 	half3 color = below ? behind : lerp(behind, reflection, fresnel) + glint;
 
-	// ── Foam: on the crests of fast water's standing waves, streaked down the current, and where moving
-	//    water thins over a bar ─────────────────────────────────────────────────────────────
+	/* ── Foam: only where the water breaks — the crests of a rapid's standing waves, the pillows over big stones, a
+	 *    fall's boil and the trail it sends downstream, and wakes ───────────────────────────────────────────────
+	 * Not on water for being fast, shallow or rippled: a river running smooth, however fast, is clear, and a riffle is a
+	 * broken surface, not a white one. Speed alone (from 1.2 m/s) and shallow moving water at the banks used to give
+	 * every quick reach a thin even foam, which the lace drew as streaks of white hairlines (Jim, 2026-10-09: "rivers
+	 * don't typically have foam"). */
 	half foam = 0.0;
 	if (!below)
 	{
@@ -846,32 +859,31 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		}
 		// Round a fall's foot the pool boils rather than streaks.
 		lace = FishFoamBlend(lace, BoilFoam(positionWS.xz, riverFlow, max(0.3, _FoamScale), _FlowCycle), saturate(1.6 * churn));
-		half shore = 0.0;
-		#if defined(_WATER_DEPTH)
-			shore = (1.0 - saturate(waterColumn / max(0.02, _ShoreFoam))) * saturate(speed / 0.8) * 0.5;
-		#endif
-		// How much white the water can carry here: breaking crests in rapids, aeration under a fall, churn in fast water.
+		// How much white the water can carry here: breaking crests in rapids, aeration under a fall.
 		// The boil is thickest where the curtain lands and thins fast toward the pool's edge: patches, not an even carpet.
 		half fallChurn = pool.white;
 		// The river's own breaking water only (input.state.x): `broken` carries the fall's churn too, and through it the
 		// whole pool read as churned as the impact, an even carpet of white to its edge.
 		// The crests only lean on it: weighted 0.8, their bands about a metre apart drew white rows straight across every
 		// rapid (fish scales from above, 2026-10-07); the streaks' own pattern is what should show.
-		churn = saturate(input.state.x * (0.5 + 0.3 * crest) + saturate((speed - _FoamSpeed) / max(0.1, 2.0 * _FoamSpeed)) * 0.25);
+		// Rapids and falls only (SceneWaterBodies.Broken: rapid 0.6, fall 1): a riffle's 0.15 is broken but not white.
+		half rapid = input.state.x * smoothstep(0.25, 0.55, input.state.x);
+		churn = saturate(rapid * (0.5 + 0.3 * crest));
 		// Under a fall the pool boils white: most of it foam near the foot, thinning to its edge.
 		// And on the crowns of the boil's domes, where its bubbles break the surface; and in the trail downstream.
 		fallChurn = max(fallChurn, pool.crown * 0.6 * pool.stir);
-		half amount = max(max(max(max(max(churn, shore), stoneWhite * 0.8), fallChurn), wakeWhite), trail);
+		half amount = max(max(max(max(churn, stoneWhite * 0.8), fallChurn), wakeWhite), trail);
 		/* As COVERAGE, the share of the water that is white (FishWaterFoam.hlsl): the lace says what that much foam
-		 * looks like — froth with round holes where there is much, a web, then strands. Lit as foam is (the sun
+		 * looks like — froth with round holes where there is much, thinning to scattered clumps (the river reads the lace
+		 * coarse, FlowLace, so never the web of walls: the resolve is told the coarser tile). Lit as foam is (the sun
 		 * wrapped round it, the sky as ambient, no light of its own: it glowed at night), opaque where thick and
 		 * lace over the water where thin, the water round it milky with bubbles. */
-		FishFoam foamCut = FishFoamCut(lace, saturate(amount) * 0.85, length(fwidth(positionWS.xz)), max(0.3, _FoamScale));
+		FishFoam foamCut = FishFoamCut(lace, saturate(amount) * 0.85, length(fwidth(positionWS.xz)), max(0.3, _FoamScale) * exp2(FISH_RIVER_LACE_MIP));
 		half3 foamLit = FishFoamLight(_FoamColor.rgb, lightColor, NdotL, 0.0h, _GlossyEnvironmentColor.rgb * 0.6);
 		color = FishFoamOver(color, foamCut, foamLit, foam);
 		if (_FishInlandDebugFoam > 0.5 && _FishInlandDebugFoam < 1.5)
 		{
-			color = half3(churn, max(fallChurn, trail), max(stoneWhite * 0.8, shore));
+			color = half3(churn, max(fallChurn, trail), max(stoneWhite * 0.8, wakeWhite));
 			foam = 1.0;
 		}
 	}

@@ -315,6 +315,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d20f37d4b8f469d9ed40a32ac03f75f
+    m_Address: Soluris System - Test Comet
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0d4cbb49a14dfb6c8985875e72fc8e93
     m_Address: Regolith Plain
     m_ReadOnly: 0

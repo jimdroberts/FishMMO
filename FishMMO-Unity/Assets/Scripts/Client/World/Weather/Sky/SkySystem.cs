@@ -403,18 +403,21 @@ namespace FishMMO.Client
 		private Vector3 probeSun;
 		private Color lastAmbientSky, lastAmbientEquator, lastAmbientGround;
 		private float bodyTimer;
-		private double bodiesBuiltAt = double.NaN;
-		private SkyProfile bodiesBuiltFor;
-		// The sky's orientation when the bodies were last built (CelestialState.EquatorialToScene), and the turn from it to
-		// the sky's orientation now: every body is drawn through that turn, so between rebuilds they go round with the
+		private double beltBuiltAt = double.NaN;
+		private SkyProfile beltBuiltFor;
+		// The sky's orientation when the belt was last built (CelestialState.EquatorialToScene), and the turn from it to
+		// the sky's orientation now: the belt is drawn through that turn, so between rebuilds its specks go round with the
 		// stars, which are turned every frame, instead of standing still and jumping four times a second.
-		private Matrix4x4 bodiesBuiltSky = Matrix4x4.identity;
-		private Matrix4x4 bodyTurn = Matrix4x4.identity;
+		private Matrix4x4 beltBuiltSky = Matrix4x4.identity;
+		private Matrix4x4 beltTurn = Matrix4x4.identity;
 
-		/// <summary>World seconds the clock may move between two body rebuilds before it counts as a leap and they are rebuilt at once.</summary>
+		/// <summary>World seconds the clock may move between two belt rebuilds before it counts as a leap and it is rebuilt at once.</summary>
 		public const double BodyLeapSeconds = 120.0;
 		private bool warnedCamera;
+		/// <summary>The moons, planets, comets and meteors: rebuilt every frame, where they stand now.</summary>
 		private SkyBodyMesh bodies;
+		/// <summary>The belts' specks: rebuilt every <see cref="BodyRefreshSeconds"/>, drawn through <see cref="beltTurn"/>.</summary>
+		private SkyBodyMesh belt;
 		private LightningPresenter lightning;
 		private CurtainPresenter curtains;
 		private VortexPresenter vortices;
@@ -465,6 +468,8 @@ namespace FishMMO.Client
 		public CurtainPresenter Curtains => curtains;
 		public VortexPresenter Vortices => vortices;
 		public SkyBodyMesh Bodies => bodies;
+		/// <summary>The belts' specks, built apart from <see cref="Bodies"/> and drawn behind them.</summary>
+		public SkyBodyMesh Belt => belt;
 		public WeatherMap Map => weatherMap;
 
 		/// <summary>The most bands the shader takes.</summary>
@@ -538,6 +543,7 @@ namespace FishMMO.Client
 		{
 			block = block ?? new MaterialPropertyBlock();
 			bodies = bodies ?? new SkyBodyMesh();
+			belt = belt ?? new SkyBodyMesh();
 			lightning = lightning ?? new LightningPresenter();
 			curtains = curtains ?? new CurtainPresenter();
 			vortices = vortices ?? new VortexPresenter();
@@ -562,6 +568,7 @@ namespace FishMMO.Client
 			ChangeSkyProfileAction.OnChangeSkyProfile -= OnChangeSkyProfile;
 			RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
 			bodies?.Dispose();
+			belt?.Dispose();
 			foreach (SkyBodyMesh mesh in texturedMeshes)
 			{
 				mesh.Dispose();
@@ -805,77 +812,47 @@ namespace FishMMO.Client
 				}
 				meteorsWindow = meteorWindow;
 			}
-			/* The bodies again only every BodyRefreshSeconds: they cross the sky in hours, and a belt's every speck is an
-			 * orbit solved in double precision. Rebuilt every frame they were 1.2 ms of the main thread at noon, when
-			 * none of them showed (ScenePerfProbe, 2026-10-07). At once when the clock leaps (a join, the bed's scrub)
-			 * or the sky changes, and every frame while a meteor is burning, which crosses the sky in a second. */
-			float meteorsSeen = Mathf.InverseLerp(0.15f, 0.3f, sample.StarVisibility);
-			bool burning = meteorsSeen > 0f && meteors.Count > 0;
-			if (bodyTimer > 0f && !burning && blendTo == bodiesBuiltFor && System.Math.Abs(worldSeconds - bodiesBuiltAt) < BodyLeapSeconds)
+			/* The belts again only every BodyRefreshSeconds: every speck is an orbit solved in double precision, and rebuilt
+			 * every frame they were 1.2 ms of the main thread at noon, when none of them showed (ScenePerfProbe, 2026-10-07).
+			 * At once when the clock leaps (a join, the bed's scrub) or the sky changes. Between rebuilds they are carried
+			 * round with the stars (beltTurn): a speck's own orbit moves it nowhere near a pixel in a quarter of a second.
+			 * The moons and planets are NOT held with them. A near moon's own orbit is a good share of its motion across the
+			 * sky (half of it, in the capture that found this), so carried round with the stars it ran ahead for a quarter of
+			 * a second and snapped back at every rebuild (2026-10-09). There are a handful of them and the cycle solves them every frame
+			 * anyway (CelestialState.Bodies), so they are laid out every frame where they now stand, and the meteors with them. */
+			if (bodyTimer <= 0f || blendTo != beltBuiltFor || System.Math.Abs(worldSeconds - beltBuiltAt) >= BodyLeapSeconds)
 			{
-				TurnBodies(state);
-				BodiesMarker.End();
-				return;
+				bodyTimer = BodyRefreshSeconds;
+				beltBuiltAt = worldSeconds;
+				beltBuiltFor = blendTo;
+				beltBuiltSky = state != null ? state.EquatorialToScene : Matrix4x4.identity;
+				belt.Clear();
+				if (tier.Asteroids)
+				{
+					belt.AddAsteroids(state, state.System != null ? state.System.Limits : new SkyLimits());
+				}
+				belt.Upload();
 			}
-			bodyTimer = BodyRefreshSeconds;
-			bodiesBuiltAt = worldSeconds;
-			bodiesBuiltFor = blendTo;
-			bodiesBuiltSky = state != null ? state.EquatorialToScene : Matrix4x4.identity;
-			// In the order they are drawn, furthest first: a belt's specks, then the bodies by their own
-			// distances, then the meteors, which burn in this world's air and are nearer than anything.
+			beltTurn = state != null && state.System != null ? state.EquatorialToScene * beltBuiltSky.transpose : Matrix4x4.identity;
+			// In the order they are drawn, furthest first: the bodies by their own distances, then the meteors, which burn
+			// in this world's air and are nearer than anything. The belt's specks are behind them all, and drawn first.
 			bodies.Clear();
-			if (tier.Asteroids)
-			{
-				bodies.AddAsteroids(state, state.System != null ? state.System.Limits : new SkyLimits());
-			}
 			bodies.AddBodies(state, blendTo, state.System != null ? state.System.Limits : new SkyLimits());
 			// Seen only while the sky is dark enough, faded in over the stars' own coming out.
+			float meteorsSeen = Mathf.InverseLerp(0.15f, 0.3f, sample.StarVisibility);
 			if (meteorsSeen > 0f)
 			{
 				bodies.AddMeteors(meteors, worldSeconds, meteorsSeen);
 			}
 			bodies.Upload();
 			UploadOccluders();
-			TurnBodies(state);
 			BodiesMarker.End();
-		}
-
-		/// <summary>
-		/// Works out how far the sky has turned since the bodies were built (<see cref="bodyTurn"/>), which they are drawn
-		/// through (<see cref="DrawBodies"/>), and puts the discs that hide what is behind them where that turn takes them.
-		/// </summary>
-		/// <remarks>
-		/// The bodies are rebuilt only every <see cref="BodyRefreshSeconds"/>, but the world turns under them all the time,
-		/// and the stars are turned with it every frame (<c>StarMatrixId</c>). Left where they were built, a belt's specks
-		/// jumped four times a second against stars that glide. The turn is the whole of that motion: a body's own
-		/// orbit moves it nowhere near a pixel in a quarter of a second. Both orientations are reflection-rotations
-		/// (<see cref="CelestialState.EquatorialToScene"/>), so the turn from one to the other is a proper rotation.
-		/// </remarks>
-		private void TurnBodies(CelestialState state)
-		{
-			bodyTurn = state != null && state.System != null ? state.EquatorialToScene * bodiesBuiltSky.transpose : Matrix4x4.identity;
-			int count = Mathf.Min(bodies.Occluders.Count, SkyBodyMesh.MaxOccluders);
-			for (int i = 0; i < count; i++)
-			{
-				turnedOccluders[i] = Turned(occluders[i]);
-				turnedOccluderRings[i] = Turned(occluderRings[i]);
-			}
-			// Arrays are sized by their first upload, so the whole of each goes up every time.
-			Shader.SetGlobalVectorArray(OccludersId, turnedOccluders);
-			Shader.SetGlobalVectorArray(OccluderRingsId, turnedOccluderRings);
-		}
-
-		/// <summary>A direction in xyz, carried round by <see cref="bodyTurn"/>; w as it was.</summary>
-		private Vector4 Turned(Vector4 value)
-		{
-			Vector3 turned = bodyTurn.MultiplyVector(new Vector3(value.x, value.y, value.z));
-			return new Vector4(turned.x, turned.y, turned.z, value.w);
 		}
 
 		private void Bind(WorldDayNightCycle next, WeatherRenderProfile profile)
 		{
-			// A new cycle (or none) is another sky: its bodies are built afresh on the next frame.
-			bodiesBuiltFor = null;
+			// A new cycle (or none) is another sky: its belt is built afresh on the next frame.
+			beltBuiltFor = null;
 			if (cycle != null)
 			{
 				Unbind();
@@ -915,8 +892,8 @@ namespace FishMMO.Client
 
 		private void Unbind()
 		{
-			// A new cycle (or none) is another sky: its bodies are built afresh on the next frame.
-			bodiesBuiltFor = null;
+			// A new cycle (or none) is another sky: its belt is built afresh on the next frame.
+			beltBuiltFor = null;
 			cloudShadows.Clear(sun);
 			cloudLight?.Clear();
 			foreach (Light companion in companions)
@@ -2366,9 +2343,6 @@ namespace FishMMO.Client
 		private readonly Vector4[] occluderRanks = new Vector4[SkyBodyMesh.MaxOccluders];
 		private readonly Vector4[] occluderRings = new Vector4[SkyBodyMesh.MaxOccluders];
 		private readonly Vector4[] occluderRingShapes = new Vector4[SkyBodyMesh.MaxOccluders];
-		// The two above that hold directions, as the sky has turned since they were built (TurnBodies): what the shaders read.
-		private readonly Vector4[] turnedOccluders = new Vector4[SkyBodyMesh.MaxOccluders];
-		private readonly Vector4[] turnedOccluderRings = new Vector4[SkyBodyMesh.MaxOccluders];
 		private static readonly int OccluderRingsId = Shader.PropertyToID("_FishOccluderRings");
 		private static readonly int OccluderRingShapesId = Shader.PropertyToID("_FishOccluderRingShapes");
 
@@ -2388,8 +2362,9 @@ namespace FishMMO.Client
 				occluderRings[i] = bodies.OccluderRings[total - count + i];
 				occluderRingShapes[i] = bodies.OccluderRingShapes[total - count + i];
 			}
-			// The directions go up turned, every frame (TurnBodies). Arrays are sized by their first upload, so the whole of
-			// each goes up every time.
+			// Arrays are sized by their first upload, so the whole of each goes up every time.
+			Shader.SetGlobalVectorArray(OccludersId, occluders);
+			Shader.SetGlobalVectorArray(OccluderRingsId, occluderRings);
 			Shader.SetGlobalVectorArray(OccluderRingShapesId, occluderRingShapes);
 			Shader.SetGlobalVectorArray(OccluderRanksId, occluderRanks);
 			Shader.SetGlobalFloat(OccluderCountId, count);
@@ -2409,6 +2384,23 @@ namespace FishMMO.Client
 			CelestialState state = State;
 			float scale = blendTo != null ? blendTo.BodyScale : 1f;
 			var bounds = new Bounds(camera.transform.position, Vector3.one * 20000f);
+			// The belts' specks first, behind everything, through the turn the sky has made since they were built: the
+			// shader turns every direction it is handed by the object matrix.
+			if (belt.Mesh != null && belt.Mesh.vertexCount > 0)
+			{
+				block.Clear();
+				block.SetFloat(UseTextureId, 0f);
+				var beltParams = new RenderParams(bodyMaterial)
+				{
+					camera = camera,
+					matProps = block,
+					worldBounds = bounds,
+					shadowCastingMode = ShadowCastingMode.Off,
+					receiveShadows = false,
+					rendererPriority = 0,
+				};
+				Graphics.RenderMesh(beltParams, belt.Mesh, 0, beltTurn);
+			}
 			int textured = 0, ringed = 0;
 			for (int i = 0; i < bodies.Steps.Count; i++)
 			{
@@ -2469,9 +2461,7 @@ namespace FishMMO.Client
 						quad.Clear();
 						// The ring plane's normal is the body's own pole, brought from the ecliptic into
 						// this sky the way every other direction in it is.
-						// Taken back to the sky as it stood when the bodies were built, like the body's own direction:
-						// the draw turns both on to now (bodyTurn).
-						Vector3 pole = bodyTurn.transpose.MultiplyVector(state.HeliocentricDirection(CelestialMath.PoleOf(body.Body)));
+						Vector3 pole = state.HeliocentricDirection(CelestialMath.PoleOf(body.Body));
 						quad.AddRing(body.Direction, body.AngularRadius * scale, pole, rings, body.LightDirection, step.Rank, (float)body.DistanceKm);
 						properties = ringBlocks[ringed];
 						properties.Clear();
@@ -2492,11 +2482,9 @@ namespace FishMMO.Client
 					worldBounds = bounds,
 					shadowCastingMode = ShadowCastingMode.Off,
 					receiveShadows = false,
-					rendererPriority = i,
+					rendererPriority = i + 1,
 				};
-				// Through the turn the sky has made since the bodies were built (TurnBodies): the shader turns every
-				// direction it is handed by the object matrix.
-				Graphics.RenderMesh(rp, mesh, subMesh, bodyTurn);
+				Graphics.RenderMesh(rp, mesh, subMesh, Matrix4x4.identity);
 			}
 		}
 	}

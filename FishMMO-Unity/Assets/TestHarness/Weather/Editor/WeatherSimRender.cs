@@ -821,7 +821,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			float shadow = sky.State.LunarEclipse;
 			if (stage.Moonlit && stage.Eclipse && shadow < 0.5f) problems.Add($"the moon should be eclipsed, shadow {shadow:0.00}");
 			if (stage.Moonlit && !stage.Eclipse && shadow > 0.05f) problems.Add($"the moon should be clear, shadow {shadow:0.00}");
-			return $"sun {altitude:0.0}°, {strikes} strikes ({scheduledStrikes} scheduled), {curtains} curtains, aurora {aurora:0.00}, lunar shadow {sky.State.LunarEclipse:0.00}, {sky.Bodies?.QuadCount ?? 0} body quads";
+			return $"sun {altitude:0.0}°, {strikes} strikes ({scheduledStrikes} scheduled), {curtains} curtains, aurora {aurora:0.00}, lunar shadow {sky.State.LunarEclipse:0.00}, {(sky.Bodies?.QuadCount ?? 0) + (sky.Belt?.QuadCount ?? 0)} body quads";
 		}
 
 		/// <summary>

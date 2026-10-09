@@ -26,6 +26,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// stands in a channel as the scene's does. Further out a channel is narrower than the grid, so the
 	/// water lies on the ground and carries its depth for the shader instead.
 	/// </para>
+	/// <para>
+	/// <b>One water across the edge.</b> A pond the scene raised a river into (<see cref="SceneLake.PlanetLake"/>
+	/// −1) runs on past the edge over the backdrop's ground below its level, as far as the scene let it spread,
+	/// with a sill raised where it would leak further. A river runs on the backdrop's valley floor
+	/// (<see cref="RiverShaping.SnapToFloor"/>), not the planet's 200 m cells, from where the scene's own river
+	/// leaves it, and stops at the water of any lake it runs into. Its surface never stands above its own ground
+	/// to meet what it runs into (<see cref="Profile"/>).
+	/// </para>
 	/// </remarks>
 	public sealed class BackdropWater
 	{
@@ -44,8 +52,18 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public const float TrenchHalfMetres = 12f;
 		public const float TrenchTaperMetres = 60f;
-		/// <summary>How far apart a river's rows lie, metres.</summary>
-		public const float RowMetres = 20f;
+		/// <summary>How far apart a river's rows lie, metres: the near ring's grid, so the water follows the ground drawn between them.</summary>
+		public const float RowMetres = 8f;
+		/// <summary>The farthest a river is moved sideways onto the backdrop's valley floor, metres: about a planet cell.</summary>
+		public const float SnapMetres = 150f;
+		/// <summary>Over how far from the scene's edge a river is held to the scene's own river where they meet, metres.</summary>
+		public const float HoldMetres = 200f;
+		/// <summary>Over how many rows a river comes down onto the level of what it runs into.</summary>
+		public const int MeetRows = 4;
+		/// <summary>How far above a pond's level a sill stands where the pond would leak past its reach, metres.</summary>
+		public const float SillMetres = 0.5f;
+		/// <summary>The far side of a sill, falling back to the ground, metres.</summary>
+		public const float SillRunMetres = LakeCellMetres;
 		/// <summary>The grid lakes are laid on past the scene, metres.</summary>
 		public const float LakeCellMetres = 50f;
 		/// <summary>How steeply a channel's banks are cut, degrees.</summary>
@@ -64,6 +82,20 @@ namespace FishMMO.Shared.WorldDesign
 			public float[] Speed;
 		}
 
+		/// <summary>One run of a planet river past the scene's edge, before it is shaped.</summary>
+		public sealed class Run
+		{
+			public int PlanetRiver;
+			/// <summary>Upstream to downstream, scene metres.</summary>
+			public readonly List<Vector2> Points = new List<Vector2>();
+			/// <summary>Discharge at each point, m³/s.</summary>
+			public readonly List<float> Discharge = new List<float>();
+			/// <summary>It comes out of the scene at its first point.</summary>
+			public bool StartsAtScene;
+			/// <summary>It goes into the scene at its last point.</summary>
+			public bool EndsAtScene;
+		}
+
 		public readonly List<Line> Rivers = new List<Line>();
 
 		private readonly float halfW, halfD, reach;
@@ -72,6 +104,14 @@ namespace FishMMO.Shared.WorldDesign
 		private readonly Dictionary<long, List<(int line, int segment)>> hash = new Dictionary<long, List<(int, int)>>();
 		private const float HashMetres = 100f;
 		private float widest;
+
+		// The lakes on the LakeCellMetres grid: each cell's level (NaN for none), whether water stands in it,
+		// and the level a sill in it holds back (NaN for none).
+		private int lakeNx, lakeNz;
+		private float[] lakeLevel;
+		private bool[] lakeWet;
+		private float[] sillLevel;
+		private bool anyLake, anySill;
 
 		private BackdropWater(float halfW, float halfD, float reach, Func<float, float, Vector3> lakeAt, Func<float, float, float> ground)
 		{
@@ -83,7 +123,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>True when there is no water past the edge to draw.</summary>
-		public bool Empty { get; private set; } = true;
+		public bool Empty => !anyLake && Rivers.Count == 0;
 
 		/// <summary>
 		/// The water past <paramref name="request"/>'s edge, out to <paramref name="reach"/>, from the planet's
@@ -98,7 +138,6 @@ namespace FishMMO.Shared.WorldDesign
 				return null;
 			}
 			var frame = new SceneWater.SceneFrame(request);
-			RiverSettings settings = scene != null ? scene.Settings : new RiverSettings();
 			float extentX = halfW + reach, extentZ = halfD + reach;
 
 			// Lakes: each lake's cells and a ring of their neighbours, at its level.
@@ -148,9 +187,8 @@ namespace FishMMO.Shared.WorldDesign
 				return new Vector3(at.level, at.lake, at.core ? 1f : 0f);
 			}
 
-			var water = new BackdropWater(halfW, halfD, reach, LakeAt, ground) { Empty = levelOf.Count == 0 };
-
 			// Rivers: each planet river's runs inside the backdrop and outside the scene, where water runs all year.
+			var runs = new List<Run>();
 			float perennial = new DrainageSettings().MinRiverDischarge;
 			foreach (DrainageRiver river in result.Rivers)
 			{
@@ -164,48 +202,55 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					points[i] = frame.ToScene(drainage.CentreOf(river.Cells[i]));
 				}
-				var runX = new List<float>();
-				var runZ = new List<float>();
-				var runQ = new List<float>();
-				bool startsAtScene = false;
+				var run = new Run { PlanetRiver = river.Id };
 				for (int i = 0; i <= n; i++)
 				{
 					bool keep = i < n && river.Discharge[i] >= perennial && InBackdrop(points[i], halfW, halfD, extentX, extentZ);
 					if (keep)
 					{
-						if (runX.Count == 0 && i > 0 && InScene(points[i - 1], halfW, halfD))
+						if (run.Points.Count == 0 && i > 0 && InScene(points[i - 1], halfW, halfD))
 						{
 							// Starts where it leaves the scene: on the scene's edge.
-							Vector2 edge = EdgeCrossing(points[i - 1], points[i], halfW, halfD);
-							runX.Add(edge.x);
-							runZ.Add(edge.y);
-							runQ.Add(river.Discharge[i]);
-							startsAtScene = true;
+							run.Points.Add(EdgeCrossing(points[i - 1], points[i], halfW, halfD));
+							run.Discharge.Add(river.Discharge[i]);
+							run.StartsAtScene = true;
 						}
-						runX.Add(points[i].x);
-						runZ.Add(points[i].y);
-						runQ.Add(river.Discharge[i]);
+						run.Points.Add(points[i]);
+						run.Discharge.Add(river.Discharge[i]);
 						continue;
 					}
-					if (runX.Count > 0)
+					if (run.Points.Count > 0)
 					{
-						bool endsAtScene = false;
 						if (i < n && InScene(points[i], halfW, halfD))
 						{
 							// Ends where it enters the scene.
-							Vector2 edge = EdgeCrossing(points[i], points[i - 1], halfW, halfD);
-							runX.Add(edge.x);
-							runZ.Add(edge.y);
-							runQ.Add(river.Discharge[i - 1]);
-							endsAtScene = true;
+							run.Points.Add(EdgeCrossing(points[i], points[i - 1], halfW, halfD));
+							run.Discharge.Add(river.Discharge[i - 1]);
+							run.EndsAtScene = true;
 						}
-						water.AddRun(river.Id, runX, runZ, runQ, startsAtScene, endsAtScene, scene, ground, settings);
+						runs.Add(run);
 					}
-					runX.Clear();
-					runZ.Clear();
-					runQ.Clear();
-					startsAtScene = false;
+					run = new Run { PlanetRiver = river.Id };
 				}
+			}
+			return Assemble(scene, ground, halfW, halfD, reach, levelOf.Count > 0 ? LakeAt : (Func<float, float, Vector3>)null, runs);
+		}
+
+		/// <summary>
+		/// The water past a scene's edge from what it is made of, the planet aside: <paramref name="lakeAt"/> gives the
+		/// planet lake at a point as (level, lake, 1 for its own cells), level NaN for none (null for no lakes), and
+		/// <paramref name="runs"/> are its rivers' runs past the edge. <paramref name="scene"/>'s ponds and rivers are
+		/// what they meet at the edge.
+		/// </summary>
+		public static BackdropWater Assemble(SceneWater scene, Func<float, float, float> ground, float halfW, float halfD, float reach,
+			Func<float, float, Vector3> lakeAt, IEnumerable<Run> runs)
+		{
+			var water = new BackdropWater(halfW, halfD, reach, lakeAt ?? ((east, north) => new Vector3(float.NaN, -1f, 0f)), ground);
+			water.FloodLakes(scene);
+			RiverSettings settings = scene != null ? scene.Settings : new RiverSettings();
+			foreach (Run run in runs)
+			{
+				water.AddRun(run, scene, settings);
 			}
 			water.Index();
 			return water;
@@ -240,19 +285,136 @@ namespace FishMMO.Shared.WorldDesign
 			return inside + d * Mathf.Clamp01(t);
 		}
 
-		private void AddRun(int planetRiver, List<float> x, List<float> z, List<float> q, bool startsAtScene, bool endsAtScene,
-			SceneWater scene, Func<float, float, float> ground, RiverSettings settings)
+		private void AddRun(Run run, SceneWater scene, RiverSettings settings)
 		{
-			if (x.Count < 2)
+			if (run.Points.Count < 2)
 			{
 				return;
 			}
-			var xs = new List<float>(x);
-			var zs = new List<float>(z);
-			var qs = new List<float>(q);
+			var xs = new List<float>(run.Points.Count);
+			var zs = new List<float>(run.Points.Count);
+			var qs = new List<float>(run.Discharge);
+			foreach (Vector2 p in run.Points)
+			{
+				xs.Add(p.x);
+				zs.Add(p.y);
+			}
 			RiverShaping.Chaikin(xs, zs, qs, 2);
 			RiverShaping.Resample(xs, zs, qs, RowMetres);
+			if (xs.Count < 2)
+			{
+				return;
+			}
+
+			/* Where it meets the scene's own river: from that river's end, which the scene moved onto its own valley
+			 * floor, and at its level there. */
+			float startLevel = float.NaN, endLevel = float.NaN;
+			if (run.StartsAtScene && EdgeMeet(scene, run.PlanetRiver, new Vector2(xs[0], zs[0]), true, out startLevel, out Vector2 from))
+			{
+				ShiftEnd(xs, zs, false, from);
+			}
+			if (run.EndsAtScene && EdgeMeet(scene, run.PlanetRiver, new Vector2(xs[xs.Count - 1], zs[zs.Count - 1]), false, out endLevel, out Vector2 to))
+			{
+				ShiftEnd(xs, zs, true, to);
+			}
+
+			/* Onto the backdrop's own valley floor: the planet's line runs from cell centre to cell centre, 200 m apart
+			 * and more, and laid as it was it crossed hillsides the ground drawn has no valley on. Held where it meets
+			 * the scene, so it still comes out of the scene's channel. */
+			var along = new float[xs.Count];
+			for (int i = 1; i < xs.Count; i++)
+			{
+				along[i] = along[i - 1] + RiverShaping.Distance(xs[i - 1], zs[i - 1], xs[i], zs[i]);
+			}
+			float length = along[xs.Count - 1];
+			var hold = new float[xs.Count];
+			for (int i = 0; i < xs.Count; i++)
+			{
+				hold[i] = 1f;
+				if (run.StartsAtScene)
+				{
+					hold[i] = Mathf.Min(hold[i], Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(along[i] / HoldMetres)));
+				}
+				if (run.EndsAtScene)
+				{
+					hold[i] = Mathf.Min(hold[i], Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((length - along[i]) / HoldMetres)));
+				}
+			}
+			RiverShaping.SnapToFloor(xs, zs, ground, hold, SnapMetres, settings.SnapPenalty, 120f);
+			RiverShaping.SnapToFloor(xs, zs, ground, hold, SnapMetres * 0.4f, settings.SnapPenalty, 60f);
+			var widths = new float[xs.Count];
+			for (int i = 0; i < xs.Count; i++)
+			{
+				RiverShaping.Size(qs[i], 0.5f, settings, out widths[i], out _);
+			}
+			RiverShaping.Untangle(xs, zs, qs, widths, 4f);
 			int n = xs.Count;
+			if (n < 2)
+			{
+				return;
+			}
+
+			/* Under a lake it is the lake's water: it ends at the water it runs into and begins again where it runs out,
+			 * a row on into the lake either side so it meets the water, not the shore. */
+			var lakeLevelAt = new float[n];
+			for (int i = 0; i < n; i++)
+			{
+				lakeLevelAt[i] = LakeLevelOver(xs[i], zs[i]);
+			}
+			int k = 0;
+			while (k < n)
+			{
+				if (!float.IsNaN(lakeLevelAt[k]))
+				{
+					k++;
+					continue;
+				}
+				int a = k, b = k;
+				while (b + 1 < n && float.IsNaN(lakeLevelAt[b + 1]))
+				{
+					b++;
+				}
+				k = b + 1;
+				// A lone row out of the water (the scene's edge, where the backdrop has no lake) is nothing to draw.
+				if (b == a && (a > 0 || b < n - 1))
+				{
+					continue;
+				}
+				float sLevel = a == 0 ? startLevel : lakeLevelAt[a - 1];
+				float eLevel = b == n - 1 ? endLevel : lakeLevelAt[b + 1];
+				int from0 = Mathf.Max(0, a - 1), to0 = Mathf.Min(n - 1, b + 1);
+				AddLine(run.PlanetRiver, xs, zs, qs, from0, to0, sLevel, eLevel, settings);
+			}
+		}
+
+		/// <summary>Moves a line's first or last point (<paramref name="atEnd"/>) onto <paramref name="to"/>, the rows within <see cref="HoldMetres"/> of it following less the farther they are.</summary>
+		private static void ShiftEnd(List<float> x, List<float> z, bool atEnd, Vector2 to)
+		{
+			int n = x.Count;
+			int from = atEnd ? n - 1 : 0, step = atEnd ? -1 : 1;
+			float sx = to.x - x[from], sz = to.y - z[from];
+			float along = 0f;
+			for (int i = from; i >= 0 && i < n; i += step)
+			{
+				if (i != from)
+				{
+					along += RiverShaping.Distance(x[i - step], z[i - step], x[i], z[i]);
+				}
+				float w = Mathf.Clamp01(1f - along / HoldMetres);
+				if (w <= 0f)
+				{
+					break;
+				}
+				x[i] += sx * w;
+				z[i] += sz * w;
+			}
+		}
+
+		/// <summary>One shaped stretch of a run, points <paramref name="a"/> … <paramref name="b"/>, meeting <paramref name="startLevel"/> and <paramref name="endLevel"/> (NaN for nothing).</summary>
+		private void AddLine(int planetRiver, List<float> xs, List<float> zs, List<float> qs, int a, int b, float startLevel, float endLevel,
+			RiverSettings settings)
+		{
+			int n = b - a + 1;
 			if (n < 2)
 			{
 				return;
@@ -266,49 +428,80 @@ namespace FishMMO.Shared.WorldDesign
 				Depth = new float[n],
 				Speed = new float[n],
 			};
+			var groundAt = new float[n];
 			for (int i = 0; i < n; i++)
 			{
-				line.Points[i] = new Vector2(xs[i], zs[i]);
-				RiverShaping.Size(qs[i], 0.5f, settings, out line.Width[i], out line.Depth[i]);
-				line.Speed[i] = qs[i] / Mathf.Max(0.05f, line.Width[i] * line.Depth[i] * (2f / 3f));
+				line.Points[i] = new Vector2(xs[a + i], zs[a + i]);
+				RiverShaping.Size(qs[a + i], 0.5f, settings, out line.Width[i], out line.Depth[i]);
+				line.Speed[i] = qs[a + i] / Mathf.Max(0.05f, line.Width[i] * line.Depth[i] * (2f / 3f));
 				widest = Mathf.Max(widest, line.Width[i]);
+				groundAt[i] = ground(line.Points[i].x, line.Points[i].y);
 			}
 			line.Width = RiverShaping.SmoothAlong(line.Width, 3);
 			line.Depth = RiverShaping.SmoothAlong(line.Depth, 3);
-
-			/* The water's surface: a little under the ground along the line, never rising downstream; where it
-			 * leaves the scene, from the scene river's own level there, and where it enters, never under it. */
-			float startLevel = startsAtScene ? EdgeLevel(scene, planetRiver, line.Points[0], true) : float.NaN;
-			float endLevel = endsAtScene ? EdgeLevel(scene, planetRiver, line.Points[n - 1], false) : float.NaN;
-			float running = float.IsNaN(startLevel) ? float.PositiveInfinity : startLevel;
-			for (int i = 0; i < n; i++)
-			{
-				float level = ground(line.Points[i].x, line.Points[i].y) - settings.InsetMetres;
-				running = Mathf.Min(running, level);
-				line.Surface[i] = running;
-			}
-			if (!float.IsNaN(endLevel))
-			{
-				for (int i = 0; i < n; i++)
-				{
-					line.Surface[i] = Mathf.Max(line.Surface[i], endLevel);
-				}
-			}
+			line.Surface = Profile(groundAt, startLevel, endLevel, settings.InsetMetres, MeetRows);
 			Rivers.Add(line);
-			Empty = false;
 		}
 
 		/// <summary>
-		/// The level of the scene's own river where it meets the edge at <paramref name="at"/>: its last point if it
-		/// leaves the scene there (<paramref name="leaving"/>), its first if it comes in; NaN when the scene has none.
+		/// A river's surface along its rows from the ground under them: a little under it, never rising downstream,
+		/// starting from <paramref name="startLevel"/> (the water it comes out of; NaN for none) and coming down onto
+		/// <paramref name="endLevel"/> (the water it runs into) over its last <paramref name="meetRows"/> rows.
 		/// </summary>
-		private static float EdgeLevel(SceneWater scene, int planetRiver, Vector2 at, bool leaving)
+		/// <remarks>
+		/// Where what it runs into stands higher than its own ground lets it, it is held up from its end only as far
+		/// as its ground stands over that level (a backwater), never over its ground: lifted all the way to it, a river
+		/// running into a scene's pond lay as one flat sheet over the lower hills it crossed.
+		/// </remarks>
+		public static float[] Profile(float[] ground, float startLevel, float endLevel, float inset, int meetRows)
 		{
+			int n = ground.Length;
+			var surface = new float[n];
+			float running = float.IsNaN(startLevel) ? float.PositiveInfinity : startLevel;
+			for (int i = 0; i < n; i++)
+			{
+				running = Mathf.Min(running, ground[i] - inset);
+				surface[i] = running;
+			}
+			if (n == 0 || float.IsNaN(endLevel))
+			{
+				return surface;
+			}
+			int last = n - 1;
+			if (surface[last] > endLevel)
+			{
+				int rows = Mathf.Clamp(meetRows, 1, Mathf.Max(1, last));
+				for (int j = 0; j <= rows && last - j >= 0; j++)
+				{
+					int i = last - j;
+					surface[i] = Mathf.Min(surface[i], Mathf.Lerp(endLevel, surface[i], j / (float)rows));
+				}
+			}
+			else
+			{
+				for (int i = last; i >= 0 && ground[i] - inset >= endLevel; i--)
+				{
+					surface[i] = Mathf.Max(surface[i], endLevel);
+				}
+			}
+			return surface;
+		}
+
+		/// <summary>
+		/// The scene's own river where it meets the edge at <paramref name="at"/>: its last point if it leaves the
+		/// scene there (<paramref name="leaving"/>), its first if it comes in, and its level there. False when the
+		/// scene has none within 200 m.
+		/// </summary>
+		private static bool EdgeMeet(SceneWater scene, int planetRiver, Vector2 at, bool leaving, out float level, out Vector2 point)
+		{
+			level = float.NaN;
+			point = at;
 			if (scene == null)
 			{
-				return float.NaN;
+				return false;
 			}
-			float best = float.MaxValue, level = float.NaN;
+			float best = 200f * 200f;
+			bool found = false;
 			foreach (RiverPath path in scene.Rivers)
 			{
 				if (path.PlanetRiver != planetRiver || path.Count < 2 || !path.Perennial)
@@ -320,14 +513,252 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				float d = (new Vector2(path.X[i], path.Z[i]) - at).sqrMagnitude;
+				var end = new Vector2(path.X[i], path.Z[i]);
+				float d = (end - at).sqrMagnitude;
 				if (d < best)
 				{
 					best = d;
 					level = path.Surface[i];
+					point = end;
+					found = true;
 				}
 			}
-			return best < 200f * 200f ? level : float.NaN;
+			return found;
+		}
+
+		// ── The lakes ──────────────────────────────────────────────────
+
+		/// <summary>The lake cell holding a point; −1 off the grid.</summary>
+		private int LakeCell(float east, float north)
+		{
+			if (lakeLevel == null)
+			{
+				return -1;
+			}
+			int x = Mathf.FloorToInt((east + halfW + reach) / LakeCellMetres), z = Mathf.FloorToInt((north + halfD + reach) / LakeCellMetres);
+			return x < 0 || z < 0 || x >= lakeNx || z >= lakeNz ? -1 : z * lakeNx + x;
+		}
+
+		/// <summary>The level of the lake whose water stands over a point past the scene's edge; NaN where none does.</summary>
+		public float LakeLevelOver(float east, float north)
+		{
+			int i = LakeCell(east, north);
+			if (i < 0 || !lakeWet[i] || PastEdge(east, north) <= 0f)
+			{
+				return float.NaN;
+			}
+			return ground(east, north) < lakeLevel[i] ? lakeLevel[i] : float.NaN;
+		}
+
+		/// <summary>
+		/// Floods the lakes past the scene onto the <see cref="LakeCellMetres"/> grid: the planet's, from each lake's
+		/// own cells across the ground lower than its level that joins them, within its cells and the ring round them,
+		/// so the water stands wherever the ground is under the level and nowhere it is not (no holes where a planet
+		/// cell's mean ground stood higher, no sheet hung over a valley falling away past the outlet); then the
+		/// scene's ponds, on from the edge where the scene's pond meets it.
+		/// </summary>
+		private void FloodLakes(SceneWater scene)
+		{
+			float extentX = halfW + reach, extentZ = halfD + reach;
+			int nx = lakeNx = Mathf.CeilToInt(2f * extentX / LakeCellMetres), nz = lakeNz = Mathf.CeilToInt(2f * extentZ / LakeCellMetres);
+			int count = nx * nz;
+			var level = lakeLevel = new float[count];
+			var lake = new int[count];
+			var low = new float[count];
+			var wet = lakeWet = new bool[count];
+			var sill = sillLevel = new float[count];
+			var queue = new Queue<int>();
+			float half = 0.5f * LakeCellMetres;
+			for (int z = 0; z < nz; z++)
+			{
+				for (int x = 0; x < nx; x++)
+				{
+					int i = z * nx + x;
+					float cx = -extentX + (x + 0.5f) * LakeCellMetres, cz = -extentZ + (z + 0.5f) * LakeCellMetres;
+					sill[i] = float.NaN;
+					low[i] = float.NaN;
+					Vector3 at = lakeAt(cx, cz);
+					level[i] = at.x;
+					lake[i] = (int)at.y;
+					if (!float.IsNaN(at.x) && LowestIn(i) < at.x && at.z > 0.5f && ground(cx, cz) < at.x)
+					{
+						wet[i] = true;
+						queue.Enqueue(i);
+					}
+				}
+			}
+			while (queue.Count > 0)
+			{
+				int i = queue.Dequeue();
+				int x = i % nx, z = i / nx;
+				for (int k = 0; k < 4; k++)
+				{
+					int ax = x + (k == 0 ? 1 : k == 1 ? -1 : 0), az = z + (k == 2 ? 1 : k == 3 ? -1 : 0);
+					if (ax < 0 || az < 0 || ax >= nx || az >= nz)
+					{
+						continue;
+					}
+					int j = az * nx + ax;
+					if (wet[j] || float.IsNaN(level[j]) || lake[j] != lake[i] || LowestIn(j) >= level[j])
+					{
+						continue;
+					}
+					wet[j] = true;
+					queue.Enqueue(j);
+				}
+			}
+
+			if (scene != null)
+			{
+				foreach (SceneLake pond in scene.Lakes)
+				{
+					if (pond.PlanetLake < 0)
+					{
+						FloodPond(pond, LowestIn, queue);
+					}
+				}
+			}
+			for (int i = 0; i < count; i++)
+			{
+				anyLake |= wet[i] && OutsideScene(i);
+				anySill |= !float.IsNaN(sill[i]);
+			}
+
+			// The lowest of a cell's centre and corners, so a shore cell is drawn and the ground cuts it. Asked only
+			// of cells a lake may stand in: across a 10 km backdrop with none, it was 800 000 samples of the ground.
+			float LowestIn(int i)
+			{
+				if (float.IsNaN(low[i]))
+				{
+					float cx = -extentX + (i % nx + 0.5f) * LakeCellMetres, cz = -extentZ + (i / nx + 0.5f) * LakeCellMetres;
+					low[i] = Mathf.Min(ground(cx, cz), Mathf.Min(Mathf.Min(ground(cx - half, cz - half), ground(cx + half, cz - half)),
+						Mathf.Min(ground(cx - half, cz + half), ground(cx + half, cz + half))));
+				}
+				return low[i];
+			}
+		}
+
+		/// <summary>Whether any of a lake cell lies past the scene's edge.</summary>
+		private bool OutsideScene(int i)
+		{
+			float x0 = -(halfW + reach) + (i % lakeNx) * LakeCellMetres, z0 = -(halfD + reach) + (i / lakeNx) * LakeCellMetres;
+			return x0 < -halfW || x0 + LakeCellMetres > halfW || z0 < -halfD || z0 + LakeCellMetres > halfD;
+		}
+
+		/// <summary>
+		/// A scene's pond past its edge: from the cells along the edge where the pond may stand and the ground there is
+		/// under its level, across the backdrop's ground under its level, as far as the scene let it spread
+		/// (<see cref="SceneLake.MayCover"/>); a sill where it would run on past that.
+		/// </summary>
+		private void FloodPond(SceneLake pond, Func<int, float> low, Queue<int> queue)
+		{
+			float extentX = halfW + reach, extentZ = halfD + reach;
+			float level = pond.Level;
+			bool May(float east, float north) => pond.MayCover != null ? pond.MayCover(east, north) : pond.Bounds.Contains(new Vector2(east, north));
+			queue.Clear();
+			for (int i = 0; i < lakeWet.Length; i++)
+			{
+				float cx = -extentX + (i % lakeNx + 0.5f) * LakeCellMetres, cz = -extentZ + (i / lakeNx + 0.5f) * LakeCellMetres;
+				if (lakeWet[i] || PastEdge(cx, cz) > LakeCellMetres || !OutsideScene(i) || low(i) >= level)
+				{
+					continue;
+				}
+				// Where the scene's pond meets its edge: the edge's point nearest the cell, its ground under the level.
+				Vector2 edge = NearestEdgePoint(cx, cz);
+				if (!May(edge.x, edge.y) || ground(edge.x, edge.y) >= level)
+				{
+					continue;
+				}
+				lakeWet[i] = true;
+				lakeLevel[i] = level;
+				queue.Enqueue(i);
+			}
+			while (queue.Count > 0)
+			{
+				int i = queue.Dequeue();
+				int x = i % lakeNx, z = i / lakeNx;
+				for (int k = 0; k < 4; k++)
+				{
+					int ax = x + (k == 0 ? 1 : k == 1 ? -1 : 0), az = z + (k == 2 ? 1 : k == 3 ? -1 : 0);
+					if (ax < 0 || az < 0 || ax >= lakeNx || az >= lakeNz)
+					{
+						continue;
+					}
+					int j = az * lakeNx + ax;
+					if (lakeWet[j] || !OutsideScene(j) || low(j) >= level)
+					{
+						continue;
+					}
+					float cx = -extentX + (ax + 0.5f) * LakeCellMetres, cz = -extentZ + (az + 0.5f) * LakeCellMetres;
+					if (!May(cx, cz))
+					{
+						// Low ground the pond may not spread over: a sill holds it back, or its water stops in a straight line.
+						sillLevel[j] = float.IsNaN(sillLevel[j]) ? level : Mathf.Max(sillLevel[j], level);
+						continue;
+					}
+					lakeWet[j] = true;
+					lakeLevel[j] = level;
+					queue.Enqueue(j);
+				}
+			}
+		}
+
+		/// <summary>The point on the scene's edge nearest a point.</summary>
+		private Vector2 NearestEdgePoint(float east, float north)
+		{
+			float x = Mathf.Clamp(east, -halfW, halfW), z = Mathf.Clamp(north, -halfD, halfD);
+			if (Mathf.Abs(east) < halfW && Mathf.Abs(north) < halfD)
+			{
+				// Inside: out to the nearer side.
+				if (halfW - Mathf.Abs(east) < halfD - Mathf.Abs(north))
+				{
+					x = east < 0f ? -halfW : halfW;
+				}
+				else
+				{
+					z = north < 0f ? -halfD : halfD;
+				}
+			}
+			return new Vector2(x, z);
+		}
+
+		/// <summary>
+		/// The ground raised into a sill where a pond would leak past its reach: up to <see cref="SillMetres"/> over its
+		/// level across the sill's cell, falling back to the ground over <see cref="SillRunMetres"/> round it, and
+		/// nothing at the scene's edge, where the backdrop meets the scene's ground.
+		/// </summary>
+		private float Sill(float east, float north, float height)
+		{
+			int centre = LakeCell(east, north);
+			if (centre < 0)
+			{
+				return height;
+			}
+			float extentX = halfW + reach, extentZ = halfD + reach;
+			int cx = centre % lakeNx, cz = centre / lakeNx;
+			float raised = height;
+			for (int dz = -1; dz <= 1; dz++)
+			{
+				for (int dx = -1; dx <= 1; dx++)
+				{
+					int x = cx + dx, z = cz + dz;
+					if (x < 0 || z < 0 || x >= lakeNx || z >= lakeNz)
+					{
+						continue;
+					}
+					float level = sillLevel[z * lakeNx + x];
+					if (float.IsNaN(level))
+					{
+						continue;
+					}
+					float x0 = -extentX + x * LakeCellMetres, z0 = -extentZ + z * LakeCellMetres;
+					float ox = Mathf.Max(0f, Mathf.Max(x0 - east, east - (x0 + LakeCellMetres)));
+					float oz = Mathf.Max(0f, Mathf.Max(z0 - north, north - (z0 + LakeCellMetres)));
+					float w = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(Mathf.Sqrt(ox * ox + oz * oz) / SillRunMetres));
+					raised = Mathf.Max(raised, Mathf.Lerp(height, level + SillMetres, w));
+				}
+			}
+			return Mathf.Lerp(height, raised, Mathf.Clamp01(PastEdge(east, north) / LakeCellMetres));
 		}
 
 		private void Index()
@@ -405,10 +836,15 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The backdrop's ground with the river channels cut into it near the scene: a parabola from bank to
-		/// bank down to the bed, banks cut back at <see cref="BankDegrees"/>, fading out toward <see cref="CutMetres"/>.
+		/// bank down to the bed, banks cut back at <see cref="BankDegrees"/>, fading out toward <see cref="CutMetres"/>;
+		/// and the sills that hold a pond in (<see cref="Sill"/>).
 		/// </summary>
 		public float Cut(float east, float north, float height)
 		{
+			if (anySill)
+			{
+				height = Sill(east, north, height);
+			}
 			if (Rivers.Count == 0)
 			{
 				return height;
@@ -489,84 +925,36 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The lakes past the scene on a <see cref="LakeCellMetres"/> grid: flooded from each lake's own cells across
-		/// the ground lower than its level that joins them, within its cells and the ring round them, so the water
-		/// stands wherever the ground is under the level and nowhere it is not (no holes where a planet cell's mean
-		/// ground stood higher, no sheet hung over a valley falling away past the outlet).
+		/// The lakes past the scene (<see cref="FloodLakes"/>): a sheet at its level over every wet cell, clipped at the
+		/// scene's edge rather than dropped where a cell overlaps it, so the backdrop's water meets the scene's at the
+		/// edge and not up to a cell short of it.
 		/// </summary>
 		private Mesh LakeMesh()
 		{
+			if (lakeWet == null)
+			{
+				return null;
+			}
 			float extentX = halfW + reach, extentZ = halfD + reach;
-			int nx = Mathf.CeilToInt(2f * extentX / LakeCellMetres), nz = Mathf.CeilToInt(2f * extentZ / LakeCellMetres);
-			int count = nx * nz;
-			var level = new float[count];
-			var lake = new int[count];
-			var under = new bool[count];
-			var wet = new bool[count];
-			var queue = new Queue<int>();
-			for (int z = 0; z < nz; z++)
-			{
-				for (int x = 0; x < nx; x++)
-				{
-					int i = z * nx + x;
-					float cx = -extentX + (x + 0.5f) * LakeCellMetres, cz = -extentZ + (z + 0.5f) * LakeCellMetres;
-					Vector3 at = lakeAt(cx, cz);
-					level[i] = at.x;
-					lake[i] = (int)at.y;
-					if (float.IsNaN(at.x))
-					{
-						continue;
-					}
-					// Under the level anywhere in the cell: its centre and corners, so a shore cell is drawn and the ground cuts it.
-					float h = Mathf.Min(ground(cx, cz), Mathf.Min(Mathf.Min(ground(cx - 0.5f * LakeCellMetres, cz - 0.5f * LakeCellMetres), ground(cx + 0.5f * LakeCellMetres, cz - 0.5f * LakeCellMetres)),
-						Mathf.Min(ground(cx - 0.5f * LakeCellMetres, cz + 0.5f * LakeCellMetres), ground(cx + 0.5f * LakeCellMetres, cz + 0.5f * LakeCellMetres))));
-					under[i] = h < at.x;
-					if (under[i] && at.z > 0.5f && ground(cx, cz) < at.x)
-					{
-						wet[i] = true;
-						queue.Enqueue(i);
-					}
-				}
-			}
-			while (queue.Count > 0)
-			{
-				int i = queue.Dequeue();
-				int x = i % nx, z = i / nx;
-				for (int k = 0; k < 4; k++)
-				{
-					int ax = x + (k == 0 ? 1 : k == 1 ? -1 : 0), az = z + (k == 2 ? 1 : k == 3 ? -1 : 0);
-					if (ax < 0 || az < 0 || ax >= nx || az >= nz)
-					{
-						continue;
-					}
-					int j = az * nx + ax;
-					if (wet[j] || !under[j] || lake[j] != lake[i])
-					{
-						continue;
-					}
-					wet[j] = true;
-					queue.Enqueue(j);
-				}
-			}
 			var positions = new List<Vector3>();
 			var indices = new List<int>();
-			for (int z = 0; z < nz; z++)
+			var pieces = new List<Rect>(4);
+			for (int i = 0; i < lakeWet.Length; i++)
 			{
-				float z0 = -extentZ + z * LakeCellMetres, z1 = z0 + LakeCellMetres;
-				for (int x = 0; x < nx; x++)
+				if (!lakeWet[i])
 				{
-					int i = z * nx + x;
-					float x0 = -extentX + x * LakeCellMetres, x1 = x0 + LakeCellMetres;
-					// The scene's own lakes cover its ground (the flood still runs through it, to reach a lake's far side).
-					if (!wet[i] || (x1 > -halfW && x0 < halfW && z1 > -halfD && z0 < halfD))
-					{
-						continue;
-					}
+					continue;
+				}
+				float x0 = -extentX + (i % lakeNx) * LakeCellMetres, z0 = -extentZ + (i / lakeNx) * LakeCellMetres;
+				// The scene's own lakes cover its ground (the flood still runs through it, to reach a lake's far side).
+				OutsideRect(new Rect(x0, z0, LakeCellMetres, LakeCellMetres), halfW, halfD, pieces);
+				foreach (Rect piece in pieces)
+				{
 					int b = positions.Count;
-					positions.Add(new Vector3(x0, level[i], z0));
-					positions.Add(new Vector3(x1, level[i], z0));
-					positions.Add(new Vector3(x1, level[i], z1));
-					positions.Add(new Vector3(x0, level[i], z1));
+					positions.Add(new Vector3(piece.xMin, lakeLevel[i], piece.yMin));
+					positions.Add(new Vector3(piece.xMax, lakeLevel[i], piece.yMin));
+					positions.Add(new Vector3(piece.xMax, lakeLevel[i], piece.yMax));
+					positions.Add(new Vector3(piece.xMin, lakeLevel[i], piece.yMax));
 					indices.Add(b); indices.Add(b + 3); indices.Add(b + 2);
 					indices.Add(b); indices.Add(b + 2); indices.Add(b + 1);
 				}
@@ -586,6 +974,39 @@ namespace FishMMO.Shared.WorldDesign
 				colours.Add(new Color32(255, 255, 255, 255));
 			}
 			return Finish("Backdrop Lakes", positions, uvs, zero, zero, zero, colours, indices);
+		}
+
+		/// <summary>
+		/// The parts of <paramref name="cell"/> outside the scene's rectangle (±<paramref name="halfW"/>,
+		/// ±<paramref name="halfD"/>), as up to four rectangles that do not overlap: the whole cell when it lies
+		/// clear of the scene, none when inside it.
+		/// </summary>
+		public static void OutsideRect(Rect cell, float halfW, float halfD, List<Rect> pieces)
+		{
+			pieces.Clear();
+			if (cell.xMax <= -halfW || cell.xMin >= halfW || cell.yMax <= -halfD || cell.yMin >= halfD)
+			{
+				pieces.Add(cell);
+				return;
+			}
+			// West and east strips the cell's full depth, then north and south between them.
+			if (cell.xMin < -halfW)
+			{
+				pieces.Add(Rect.MinMaxRect(cell.xMin, cell.yMin, -halfW, cell.yMax));
+			}
+			if (cell.xMax > halfW)
+			{
+				pieces.Add(Rect.MinMaxRect(halfW, cell.yMin, cell.xMax, cell.yMax));
+			}
+			float xMin = Mathf.Max(cell.xMin, -halfW), xMax = Mathf.Min(cell.xMax, halfW);
+			if (cell.yMin < -halfD)
+			{
+				pieces.Add(Rect.MinMaxRect(xMin, cell.yMin, xMax, -halfD));
+			}
+			if (cell.yMax > halfD)
+			{
+				pieces.Add(Rect.MinMaxRect(xMin, halfD, xMax, cell.yMax));
+			}
 		}
 
 		private Mesh RiverMesh(Line line, Func<float, float, float> surface)
@@ -619,7 +1040,7 @@ namespace FishMMO.Shared.WorldDesign
 					Vector2 at = line.Points[i] + left * (half * k);
 					float past = PastEdge(at.x, at.y);
 					float drawn = surface(at.x, at.y);
-					float draped = drawn + 0.25f + 0.002f * past;
+					float draped = drawn + DrapeLift(past);
 					float y = cut >= 0.999f ? line.Surface[i] : Mathf.Max(Mathf.Lerp(draped, line.Surface[i], cut), drawn + 0.1f);
 					positions.Add(new Vector3(at.x, y, at.y));
 					uvs.Add(new Vector2(along, half * k));
@@ -640,6 +1061,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			return Finish($"Backdrop River {line.PlanetRiver}", positions, uvs, flows, states, tides, colours, indices);
 		}
+
+		/// <summary>
+		/// How far over the ground drawn a river lying on it far out is lifted, metres: enough that the depth buffer
+		/// keeps it in front of the ground at that distance, and no more. At 0.25 m and 2 mm a metre (2.25 m a
+		/// kilometre out) the rivers past the edge read as sheets floating over the hills.
+		/// </summary>
+		public static float DrapeLift(float pastMetres) => 0.1f + 0.0008f * pastMetres;
 
 		private static Mesh Finish(string name, List<Vector3> positions, List<Vector2> uvs, List<Vector2> flows, List<Vector2> states,
 			List<Vector2> tides, List<Color32> colours, List<int> indices)

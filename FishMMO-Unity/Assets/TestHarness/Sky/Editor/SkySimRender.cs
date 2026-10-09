@@ -1198,7 +1198,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 				if (sky.Current.Zenith.maxColorComponent > 0.05f) problems.Add($"the airless zenith is not black ({sky.Current.Zenith})");
 			}
 			int textured = sky.Bodies != null ? sky.Bodies.Textured.Count : 0;
-			int quads = sky.Bodies != null ? sky.Bodies.QuadCount : 0;
+			int quads = (sky.Bodies != null ? sky.Bodies.QuadCount : 0) + (sky.Belt != null ? sky.Belt.QuadCount : 0);
 			if (stage.ExpectTextured && textured == 0) problems.Add("no body was drawn with its surface texture");
 			if (stage.ExpectComet && !HasKind(state, SkyBodyKind.Comet, 0f)) problems.Add("no comet above the horizon");
 			if (stage.ExpectMeteors && state.MeteorRate < 40f) problems.Add($"the shower should be falling, rate {state.MeteorRate:0}/h");
@@ -1351,7 +1351,7 @@ namespace FishMMO.TestHarness.Sky.Editor
 					{
 						Tier = QualitySettings.names[level],
 						Milliseconds = (float)(watch.Elapsed.TotalMilliseconds / Frames),
-						Quads = sky.Bodies != null ? sky.Bodies.QuadCount : 0,
+						Quads = (sky.Bodies != null ? sky.Bodies.QuadCount : 0) + (sky.Belt != null ? sky.Belt.QuadCount : 0),
 						Textured = sky.Bodies != null ? sky.Bodies.Textured.Count : 0,
 						StarCubemapSize = controller.Profile != null ? controller.Profile.TierFor(level).StarCubemapSize : 0,
 						Frames = Frames,
