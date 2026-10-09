@@ -79,9 +79,18 @@ namespace FishMMO.Water
 			map.RiverFlow.LoadAssetAsync().Completed += handle =>
 			{
 				flowLoading = false;
-				if (this != null && handle.Status == AsyncOperationStatus.Succeeded)
+				if (this == null)
+				{
+					return;
+				}
+				if (handle.Status == AsyncOperationStatus.Succeeded && handle.Result != null)
 				{
 					SetFlow(handle.Result);
+				}
+				else
+				{
+					// No flow after all: the falls Start held back for it are built without it.
+					Rebuild();
 				}
 			};
 #endif
@@ -109,15 +118,17 @@ namespace FishMMO.Water
 					continue;
 				}
 				SceneRiverFlow.River field = flow != null ? flow.Find(pair.Key) : null;
-				if (field == null || field.Field == null)
-				{
-					pair.Value.SetPropertyBlock(null);
-					continue;
-				}
 				flowBlock.Clear();
-				flowBlock.SetTexture(FlowFieldId, field.Field);
-				flowBlock.SetVector(FlowInfoId, new Vector4(field.Length * field.AlongMetres, 1f, 0f, 0f));
-				pair.Value.SetPropertyBlock(flowBlock);
+				bool any = false;
+				if (field != null && field.Field != null)
+				{
+					flowBlock.SetTexture(FlowFieldId, field.Field);
+					flowBlock.SetVector(FlowInfoId, new Vector4(field.Length * field.AlongMetres, 1f, 0f, 0f));
+					any = true;
+				}
+				// The foam the falls above its water beat up, carried downstream (FishInlandWater.hlsl FallTrail).
+				any |= ApplyRiverFalls(pair.Key, flowBlock);
+				pair.Value.SetPropertyBlock(any ? flowBlock : null);
 			}
 		}
 	}

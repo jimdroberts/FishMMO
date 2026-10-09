@@ -553,9 +553,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			/* Settles onto the level of what it runs into over its last few widths: no step where it meets it.
 			 * Worked out from shore to shore, so the low floor of a lake's margin does not hold the river down;
-			 * the stretch cut through a lake's margin stands at the lake's level. */
+			 * the stretch cut through a lake's margin stands at the lake's level. A sea or lake fills its shore to its
+			 * own level (the sea's mean, not the low-water line it is trimmed at), so it runs in there off no ledge. */
+			float meetLevel = joined != null ? float.NegativeInfinity : end == RiverEnd.Sea ? SeaLevel : endLevel;
 			float[] shoreSurface = RiverShaping.Surface(Slice(floor, shoreFirst, shoreLast), Slice(bank, shoreFirst, shoreLast), Slice(stepMetres, shoreFirst, shoreLast),
-				startCeiling, endFloor, s, Mathf.Max(15f, 3f * Median(widthAt)));
+				startCeiling, endFloor, s, Mathf.Max(15f, 3f * Median(widthAt)), meetLevel);
 			var surface = new float[last - first + 1];
 			for (int i = first; i <= last; i++)
 			{

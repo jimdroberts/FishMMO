@@ -303,6 +303,8 @@ namespace FishMMO.Client
 		[Range(0f, 8f)] public float BlurPixels = DefaultBlurPixels;
 
 		[Header("March (FishCloudMarch)")]
+		[Tooltip("A hard cap on how far any cloud ray marches, in metres (0: off, the clouds as shipped). For testing what the clouds cost by distance: at 1 km only the cloud overhead is drawn, at 20 km about what the camera's far plane sees. Live in play mode. A test control, not a look: the sky past it is simply left empty.")]
+		[Range(0f, 50000f)] public float MaxMarchDistance = 0f;
 		[Tooltip("Sample each step of the march at a random place in it, new for every ray and frame (stratified, unbiased). Off samples every step at its middle. The steps are laid out from each band's edge and each cloud's own edge, not from the camera, so the clouds should stay smooth with this off: rings or terraces that appear are undersampling along the ray (try Step Scale), and grain that goes with it was the phases.")]
 		public bool RayJitter = true;
 		[Tooltip("Multiplies the march's step (the near step, 18–90 m, and every step grown from it: through a band's empty air, up to six times, and deep inside cloud). The limits on how far a step may climb through a thin layer and how much light it may take out of a dense cloud still apply. Under 1 is finer and slower. Grain or banding that shrinks with it is undersampling along the ray.")]
@@ -388,9 +390,10 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The in-cloud step limits (<c>_FishCloudStepTau</c>): x the most optical depth a step takes, y the most
-		/// it grows, z the eddies' and the edge's footprint along the ray, in steps (0: none, the old way).
+		/// it grows, z the eddies' and the edge's footprint along the ray, in steps (0: none, the old way), w the test cap on
+		/// how far a ray marches (m; 0 none).
 		/// </summary>
-		public Vector4 StepVector => new Vector4(Mathf.Clamp(MaxStepOpticalDepth, 0.05f, 2f), Mathf.Clamp(MaxInCloudGrowth, 1f, 4f), Mathf.Clamp(DetailStepFootprint, 0f, 2f), 0f);
+		public Vector4 StepVector => new Vector4(Mathf.Clamp(MaxStepOpticalDepth, 0.05f, 2f), Mathf.Clamp(MaxInCloudGrowth, 1f, 4f), Mathf.Clamp(DetailStepFootprint, 0f, 2f), Mathf.Max(0f, MaxMarchDistance));
 
 		/// <summary>
 		/// The audit's fixes (<c>_FishCloudFix</c>), each 1 to go back to the old behaviour so all zeros is as
@@ -472,6 +475,8 @@ namespace FishMMO.Client
 		public Shader VegetationIndirectShader;
 		[Tooltip("FishMMO/Weather Lit Indirect: the twin for rocks, formations and ice.")]
 		public Shader WeatherLitIndirectShader;
+		[Tooltip("FishMMO/Vegetation Prime: the depth the GPU-driven path lays ahead of each alpha-tested vegetation draw, so the lit pass shades only the leaf in front (TerrainGpuRenderer). Referenced so a client build includes it.")]
+		public Shader VegetationPrimeShader;
 		[Tooltip("Every keyword set the vegetation and rock materials use, mapped onto the indirect twins (the art generator writes it). Nothing in a build uses those shaders directly, so without this only their keyword-free variants ship: grass loses its alpha test and draws as solid quads.")]
 		public ShaderVariantCollection IndirectShaderVariants;
 
@@ -498,25 +503,26 @@ namespace FishMMO.Client
 		[Tooltip("How much of the ground's colour they take at full distance (0 keeps their own).")]
 		[Range(0f, 1f)] public float DistanceGroundPull = 0.35f;
 
-		[Header("Contact with the ground: small details (GPU detail scatter)")]
-		[Tooltip("Pebbles, small rocks, shells and litter from the GPU detail scatter take the terrain's colour and lighting normal at their base, so they sit in the ground instead of on it. Off = their own colour down to the ground line. Live.")]
-		public bool ContactBlend = true;
-		[Tooltip("Metres above the ground over which the blend fades out (eased: most of it in the lowest third).")]
-		[Range(0.01f, 1f)] public float ContactBlendHeight = 0.15f;
-		[Tooltip("How much of the ground's colour a detail takes where it meets the ground (0 keeps its own).")]
-		[Range(0f, 1f)] public float ContactColour = 0.8f;
-		[Tooltip("How far its lighting normal turns to the terrain's where it meets the ground: the base then shades exactly like the slope around it.")]
-		[Range(0f, 1f)] public float ContactNormal = 0.7f;
-
 		[Header("Contact with the ground: trees and terrain rocks")]
-		[Tooltip("The same for the GPU-drawn terrain trees (trunk bases), boulders and rock formations, over a deeper band. Live.")]
+		[Tooltip("The GPU-drawn terrain trees (trunk bases), boulders and rock formations render the TERRAIN itself over a band at their base — its own layers, normal, weather and lighting, exactly as the terrain draws that point — fading into their own look above, so they sit in the ground instead of on it. No geometry is added or moved: collision is unchanged. Small scattered details (pebbles, shells, litter) take none. Live.")]
 		public bool ContactBlendLarge = true;
-		[Tooltip("Metres above the ground over which the blend fades out.")]
+		[Tooltip("Metres above the ground (measured across the slope) over which the blend fades out.")]
 		[Range(0.01f, 3f)] public float ContactBlendHeightLarge = 0.5f;
-		[Tooltip("How much of the ground's colour they take where they meet the ground.")]
+		[Tooltip("How much of the terrain the band shows above its solid foot (the lowest third of the band is always wholly the terrain, so the object fades out of the ground).")]
 		[Range(0f, 1f)] public float ContactColourLarge = 0.75f;
-		[Tooltip("How far their lighting normal turns to the terrain's where they meet the ground.")]
-		[Range(0f, 1f)] public float ContactNormalLarge = 0.6f;
+		[Header("Rock crevices (rock against rock)")]
+		[Tooltip("Where one rock meets another, the seam darkens toward its bottom and fills with the surrounding ground's own material, as soil and grit settle between real stones. Distance fields per rock shape (RockContactField), so the seam is the same from every angle. Rocks only, never trees. Live.")]
+		public bool RockCrevices = true;
+		[Tooltip("Metres from the other rock over which the crevice fades out.")]
+		[Range(0.02f, 1.5f)] public float RockCreviceWidth = 0.35f;
+		[Tooltip("How dark the bottom of a crevice is (0 none, 1 black).")]
+		[Range(0f, 1f)] public float RockCreviceShadow = 0.45f;
+		[Tooltip("How much of the surrounding ground's material fills a crevice on the parts that face up.")]
+		[Range(0f, 1f)] public float RockCreviceSoil = 0.85f;
+		[Tooltip("FishRockField.compute: lists the rocks around the camera into the crevice grid every frame. Referenced here so it ships to clients only.")]
+		public ComputeShader RockFieldCompute;
+		[Tooltip("Hidden/FishMMO/RockSdf: draws each rock shape's distance field. Referenced here so it ships to clients only.")]
+		public Shader RockSdfShader;
 
 		[Header("Procedural grass")]
 		[Tooltip("FishGrassBlades.compute: generates the visible blades around each camera every frame. Referenced here, not from Resources, so it ships to clients only.")]

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using FishMMO.Shared;
+using Unity.Profiling;
 
 namespace FishMMO.Client
 {
@@ -231,7 +232,16 @@ namespace FishMMO.Client
 
 		private static void OnGrassSettingsChanged() => grassDistance = ClientGrassSettings.Distance;
 
-		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras) => Sync();
+		/// <summary>This system's once-a-frame work before the cameras render, named in the profiler (StartupTimeline reads it).</summary>
+		private static readonly ProfilerMarker ContextMarker = new ProfilerMarker("GrassBladeSystem.BeginContext");
+
+		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
+		{
+			using (ContextMarker.Auto())
+			{
+				Sync();
+			}
+		}
 
 		private static GrassBladeSettings Settings => WeatherRenderProfile.Active?.Grass;
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Unity.Profiling;
 
 namespace FishMMO.Client
 {
@@ -114,10 +115,14 @@ namespace FishMMO.Client
 			if (counts.Length > 0)
 			{
 				s.Append("; appended (camera/shadow, capacity):");
-				for (int t = 0; t < types.Count && t * DetailScatterRenderer.Views + 1 < counts.Length; t++)
+				for (int t = 0; t < types.Count && DetailScatterRenderer.SlotOf(t, 0, 1) < counts.Length; t++)
 				{
-					int main = t * DetailScatterRenderer.Views;
-					s.Append($" {types[t].Name} {counts[main]}/{counts[main + 1]} ({renderer.Capacity(main)})");
+					int main = DetailScatterRenderer.SlotOf(t, 0, 0), shadow = DetailScatterRenderer.SlotOf(t, 0, 1);
+					s.Append($" {types[t].Name} {counts[main]}/{counts[shadow]} ({renderer.Capacity(main)})");
+					for (int level = 1; level < types[t].Levels.Length && DetailScatterRenderer.SlotOf(t, level, 0) < counts.Length; level++)
+					{
+						s.Append($" L{level} {counts[DetailScatterRenderer.SlotOf(t, level, 0)]}");
+					}
 				}
 			}
 			return s.Append('.').ToString();
@@ -185,7 +190,16 @@ namespace FishMMO.Client
 			Unhook();
 		}
 
-		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras) => Sync();
+		/// <summary>This system's once-a-frame work before the cameras render, named in the profiler (StartupTimeline reads it).</summary>
+		private static readonly ProfilerMarker ContextMarker = new ProfilerMarker("DetailScatterSystem.BeginContext");
+
+		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
+		{
+			using (ContextMarker.Auto())
+			{
+				Sync();
+			}
+		}
 
 		private static DetailScatterSettings Settings => WeatherRenderProfile.Active?.DetailScatter;
 
@@ -320,12 +334,16 @@ namespace FishMMO.Client
 			int layer = terrain.gameObject.layer;
 			prototypeScratch.Clear();
 			typeScratch.Clear();
+			// Bushes first: a terrain has DetailScatterMath.MaxChannels channels, and a type past them stays on the CPU chunk
+			// renderer, which draws it to each player's own detail distance. Cover must not; pebbles may.
+			for (int pass = 0; pass < 2; pass++)
 			for (int p = 0; p < prototypes.Length; p++)
 			{
 				DetailPrototype proto = prototypes[p];
 				GameObject prefab = proto?.prototype;
 				// Whatever the blade grass claims is never taken here, running or not, so nothing is drawn twice.
-				if (prefab == null || !proto.usePrototypeMesh || !settings.IsScatterPrototype(prefab.name) || grass.IsBladePrototype(prefab.name))
+				if (prefab == null || !proto.usePrototypeMesh || !settings.IsScatterPrototype(prefab.name) || grass.IsBladePrototype(prefab.name)
+					|| DetailScatterSettings.IsBush(prefab.name) != (pass == 0))
 				{
 					continue;
 				}

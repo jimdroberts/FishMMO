@@ -266,6 +266,9 @@ namespace FishMMO.Client
 			{
 				renderer.EnqueuePass(FishDepthPyramid.Pass);
 			}
+			// Every camera's shadow cascades, for the GPU-driven vegetation's casters to skip the cascades that do not need
+			// them (ShadowCascadeCulling): every camera, since each draws its own shadows and must not read another's.
+			renderer.EnqueuePass(ShadowCascadeCulling.Pass);
 			Material material = Resolve();
 			if (material == null || !SkySystem.CloudsReady || !SkySystem.DrawClouds)
 			{

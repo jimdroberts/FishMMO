@@ -352,6 +352,112 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
+    - stableGuid: 9f1e01f33a0a4d4193cbe5675c6e7bd3
+      enableSpawning: 1
+      ruleName: 'Bush: MountainPine'
+      prefabs:
+      - {fileID: 9168953951334920974, guid: 1556cd800380328a631f07d596b5c43e, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.4
+      maxPerChunk: 0
+      minSpacing: 1.9
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 47227
+      clusterMetres: 6.8
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 8a8a9452729d39de
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: 628b20c91fbc40728793493435590dce
+      enableSpawning: 1
+      ruleName: 'Bush: Juniper'
+      prefabs:
+      - {fileID: 8386573957111930591, guid: 57e36d138056a6e1f9cf96217841ecea, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.2
+      maxPerChunk: 0
+      minSpacing: 0.6
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.56, y: 0.84000003}
+      heightScaleRange: {x: 0.56, y: 0.84000003}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 50783
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 60b296ff04ed9197
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
   detailTextureLayers:
   - terrainLayer: {fileID: 8574412962073106934, guid: b460e0b7c7d15dda82b56be3ce4cb55f,
       type: 2}

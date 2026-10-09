@@ -438,6 +438,165 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
+    - stableGuid: 8f8479274ba94d8cb7fa2d2f6f76430b
+      enableSpawning: 1
+      ruleName: 'Bush: Gorse'
+      prefabs:
+      - {fileID: 5480543826371131809, guid: b89a8c2aa25f1fbfe24d61ecb3031a3b, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.5
+      maxPerChunk: 0
+      minSpacing: 1.2
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 4775
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 89f9fa1c24ef9637
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: cac2d632d3ac484b9d566e5a000dde87
+      enableSpawning: 1
+      ruleName: 'Bush: Juniper'
+      prefabs:
+      - {fileID: 8386573957111930591, guid: 57e36d138056a6e1f9cf96217841ecea, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.2
+      maxPerChunk: 0
+      minSpacing: 0.8
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 15981
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 986e65cd6cfd4a1c
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: d5fa3aa798bb4ce19e20ec2539a454fc
+      enableSpawning: 1
+      ruleName: 'Bush: Bramble'
+      prefabs:
+      - {fileID: 7666373586666039274, guid: da17dfdba0bfcbf42e0af60c612e83e6, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.15
+      maxPerChunk: 0
+      minSpacing: 1.8
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 44942
+      clusterMetres: 6.4
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 1d9ba08d0cfee6e8
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
   detailTextureLayers:
   - terrainLayer: {fileID: 8574412962073106934, guid: b7c6da84cc4c4005a287abfab095836d,
       type: 2}

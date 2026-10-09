@@ -131,9 +131,10 @@ namespace FishMMO.Client
 		/// has to keep its meaning across Unity upgrades, and persisting a framework enum means a
 		/// reordering there silently changes what an existing saved file says. This order is ours.
 		///
-		/// Post-process antialiasing rather than MSAA. MSAA lives on the render pipeline asset and
-		/// is chosen by the quality level, so exposing it here would mean either swapping pipeline
-		/// assets at runtime or having two controls quietly fight over the same edges.
+		/// Post-process antialiasing rather than MSAA. MSAA lives on the render pipeline asset and has
+		/// its own option (ClientDisplaySettings.MsaaOption), written onto whichever asset the quality
+		/// level uses; the two stack rather than fight: MSAA for geometry and leaf edges, this over
+		/// the finished image.
 		/// </remarks>
 		public enum AntialiasingOption
 		{

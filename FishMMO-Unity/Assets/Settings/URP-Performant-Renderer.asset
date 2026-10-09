@@ -25,6 +25,7 @@ MonoBehaviour:
   Anisotropy: 0.6
   AmbientFloor: 0.12
   DensityScale: 0.03
+  FallMist: 0
 --- !u!114 &-323941509406291843
 MonoBehaviour:
   m_ObjectHideFlags: 0

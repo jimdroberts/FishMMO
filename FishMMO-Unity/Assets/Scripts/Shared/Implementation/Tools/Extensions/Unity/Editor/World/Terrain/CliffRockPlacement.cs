@@ -12,13 +12,11 @@ namespace FishMMO.Shared.WorldDesign
 		bool TryHeight(float x, float z, out float height);
 	}
 
-	/// <summary>What cliff stands at a point: its rock, the roundness level the climate there gives, and the cliff layer's angle.</summary>
+	/// <summary>What cliff stands at a point: its rock and the cliff layer's angle.</summary>
 	public struct CliffRockSite
 	{
 		/// <summary>A <see cref="CliffRocks.Types"/> name.</summary>
 		public string Type;
-		/// <summary>Index into <see cref="CliffRocks.RoundnessLevels"/> for climatic types; ignored otherwise.</summary>
-		public int Roundness;
 		/// <summary>The slope, degrees, from which the ground counts as cliff.</summary>
 		public float MinAngle;
 	}
@@ -36,6 +34,12 @@ namespace FishMMO.Shared.WorldDesign
 		public float ColumnarCoverage = 0.78f;
 		/// <summary>Lay a near-continuous footing of the biggest rocks along every foot line.</summary>
 		public bool FootRow = true;
+		/// <summary>Stand a sheer wall as tall as the cliff along every foot line, behind the clutter (<see cref="CliffRole.Backdrop"/>).</summary>
+		public bool Backdrops = true;
+		/// <summary>Bands lower than this, metres, get no backdrop: the footing alone covers them.</summary>
+		public float MinBackdropBand = 8f;
+		/// <summary>Share of the budget the backdrops may take; when they would want more they are spread evenly along every foot line.</summary>
+		public float BackdropShare = 0.25f;
 		/// <summary>Raise talus cones at the angle of repose (terrain edits) and scatter fall-sorted debris on them.</summary>
 		public bool Cones = true;
 		/// <summary>The angle of repose, degrees.</summary>
@@ -48,8 +52,12 @@ namespace FishMMO.Shared.WorldDesign
 		public int MinBudget = 6000;
 		/// <summary>Above <see cref="MinBudget"/>, the budget grows by this many rocks per 100 m of cliff.</summary>
 		public float RocksPer100Metres = 70f;
-		/// <summary>Hard ceiling on rocks per scene, whatever its cliff length (each rock is a handful of scene objects).</summary>
-		public int MaxRocks = 20000;
+		/// <summary>
+		/// Hard ceiling on rocks per scene, whatever its cliff length. 20 000 cut Baoakraal Hyena-den's cliffs short (it
+		/// placed exactly that many, 2026-10-08); rocks are baked prop data now, not scene objects, so the ceiling is the
+		/// collision and draw cost of about 57 km of cliff at the per-length rate.
+		/// </summary>
+		public int MaxRocks = 40000;
 		/// <summary>Share of the budget the footing may take; the face roles and the talus share the rest.</summary>
 		public float FootingShare = 0.4f;
 		/// <summary>
@@ -78,6 +86,8 @@ namespace FishMMO.Shared.WorldDesign
 		public Vector3 Scale;
 		/// <summary>Detached debris on a talus cone (rests on its broadest face).</summary>
 		public bool Talus;
+		/// <summary>A sheer backdrop wall: the clutter stands in front of it, never on it or pushed off it.</summary>
+		public bool Backdrop;
 		/// <summary>A footing rock (the base rule was applied).</summary>
 		public bool Base;
 		/// <summary>Relative height in its band where it was placed: 0 foot, 1 crest.</summary>
@@ -110,7 +120,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>What the planner did.</summary>
 	public sealed class CliffRockStats
 	{
-		public int Attempts, Rejected, Dropped, Face, Talus, Cones, Footing;
+		public int Attempts, Rejected, Dropped, Face, Talus, Cones, Footing, Backdrops;
 		public float CliffLength, Covered;
 		/// <summary>The rock budget the cliff length gave (<see cref="CliffRockPlacementOptions.MinBudget"/> … <see cref="CliffRockPlacementOptions.MaxRocks"/>).</summary>
 		public int Budget;
@@ -141,7 +151,7 @@ namespace FishMMO.Shared.WorldDesign
 				roles.Add($"{kv.Key} {kv.Value}");
 			}
 			string thinned = FootingKept < 0.999f || FaceKept < 0.999f ? $", thinned to stay in budget (footing {FootingKept:P0}, face {FaceKept:P0} of their quotas)" : "";
-			return $"{Face} face rocks ({Footing} footing; {string.Join(", ", roles)}) + {Talus} talus on {Cones} cones over {CliffLength:0} m of cliff, budget {Budget}{thinned}, steep ground under rock {Covered:P0}; " +
+			return $"{Face} face rocks ({Backdrops} backdrops, {Footing} footing; {string.Join(", ", roles)}) + {Talus} talus on {Cones} cones over {CliffLength:0} m of cliff, budget {Budget}{thinned}, steep ground under rock {Covered:P0}; " +
 				$"size mean/max per third foot→crest {SizeByHeight()}; footing underside {(Footing > 0 ? UndersideSum / Footing : 0f):P1}";
 		}
 	}
@@ -184,24 +194,24 @@ namespace FishMMO.Shared.WorldDesign
 	/// rocks must touch bigger ones and avoid the foot.</item>
 	/// <item><b>Rotate, then settle.</b> Sink until 92 % of the lowest 18 % of the rotated rock is below
 	/// the support (ground or earlier rock); then push INTO THE SLOPE along its normal until the deepest
-	/// point is <see cref="EmbedFor"/> of the thickness along the normal below the surface.</item>
+	/// point is <see cref="EmbedFor"/> of the thickness along the normal below the surface. A section instead
+	/// slides out of the hill along the fall line until 30–45 % of it is underground (never more than
+	/// <see cref="SectionMostHidden"/>): it is a wall standing out of the face (<see cref="SeatSection"/>).</item>
 	/// <item><b>Base rule.</b> A footing rock's widest point toward the valley (horizontally and down the
 	/// slope) goes 3 % of its height below the surface, plus 0–10 % noise; then 4 % deeper per step
 	/// while more than 1.5 % of its vertices are visible underside in its lowest third.</item>
 	/// <item><b>Overlap.</b> Equal-volume spheres: the share of a new rock inside its neighbours under a
 	/// per-rock 2–12 %, and no rock may swallow 45 % of one already placed.</item>
-	/// <item><b>Rotation by structure.</b> Jointed: squared to the face's joint set (tilt ±12°, turn ±20°,
-	/// a quarter of them on the other quarter) with sheet-joint lean, crest corestones any way up.
-	/// Bedded: one regional dip 0–10° per cliff, ±3°, turned ±35° in the bedding plane. Foliated: one
-	/// steep foliation 45–80°, ±5°, turned ±35° in it. Columnar: vertical ±4°. Ice: crevasse sets,
-	/// ±25°. Debris: of 24 poses the one with the centre of mass lowest over the slope, long axis down
-	/// it. Every face rock also takes an overall size factor (<see cref="SizeRange"/>) on its per-axis
-	/// scale (<see cref="AnisoRange"/>).</item>
+	/// <item><b>Rotation.</b> Sections (every rock type's face, <see cref="CliffRocks.FaceShapes"/>) face down
+	/// the fall line ±15°; footing and crest sections stand upright (leaning back 0–15 % of the slope), those
+	/// on the face lean back with it (30–50 %), so an upright box never juts from a steep face on its flat floor. Ice:
+	/// crevasse sets, ±25°, crest boulders any way up. Debris: flat on the hull face that puts the centre of mass
+	/// lowest over the slope (<see cref="StablePose"/>), long axis down it. Every face rock also takes an overall size factor
+	/// (<see cref="SizeRange"/>, <see cref="SectionScale"/>) on its per-axis scale.</item>
 	/// <item><b>Talus cones.</b> One per ~45 m of cliff below gullies and the tallest face, radius
 	/// 0.45 × band + 4 (7–20 m), apex at the angle of repose against the foot, stamped ray by ray and
 	/// stopped where the ground falls away, edges feathered; debris fall-sorted on it (1.5 m high up
 	/// to 6.5 m at the toe) and 8–12 m blocks just beyond, resting on the ground only.</item>
-	/// <item><b>Roundness.</b> The site's level picks the baked joint-block variant (granite).</item>
 	/// <item><b>Budget.</b> At most <see cref="CliffRockPlacementOptions.MinBudget"/> rocks, or
 	/// <see cref="CliffRockPlacementOptions.RocksPer100Metres"/> per 100 m of cliff where that is more,
 	/// never above <see cref="CliffRockPlacementOptions.MaxRocks"/>. When the quotas want more, every
@@ -367,7 +377,6 @@ namespace FishMMO.Shared.WorldDesign
 			public DeterministicRNG Rng;
 			public CliffRockPlacementOptions O;
 			public CliffRockPlan Plan;
-			public Matrix4x4 Bedding, Foliation;
 			/// <summary>Most rocks this plan may hold.</summary>
 			public int Budget;
 			/// <summary>Factor on the face roles' quotas that keeps them, the footing and the talus inside the budget.</summary>
@@ -403,16 +412,15 @@ namespace FishMMO.Shared.WorldDesign
 				Plan = plan,
 			};
 			plan.Top = run.Top;
-			// One bedding plane and one foliation per cliff (the scene's): beds line up across every rock.
-			float az = run.Rng.NextFloat() * 6.2831853f;
-			run.Bedding = Rot(new Vector3(Mathf.Cos(az), 0f, Mathf.Sin(az)), run.Rng.Range(0f, 10f));
-			float faz = run.Rng.NextFloat() * 6.2831853f;
-			run.Foliation = Rot(new Vector3(Mathf.Cos(faz), 0f, Mathf.Sin(faz)), run.Rng.Range(45f, 80f));
 
 			plan.Stats.CliffLength = g.CliffLength;
 			run.Budget = BudgetFor(g.CliffLength, options);
 			plan.Stats.Budget = run.Budget;
 			var zone = Zone(run);
+			if (options.Backdrops)
+			{
+				Backdrops(run);
+			}
 			if (options.FootRow)
 			{
 				FootRow(run);
@@ -445,6 +453,15 @@ namespace FishMMO.Shared.WorldDesign
 				Fill(run, zone, role);
 			}
 			plan.Stats.Face = plan.Rocks.Count;
+			// The backdrops go into the top raster only now: before, every rock in front of one would have been
+			// seated on its top. From here on (talus, coverage, the scatter clean-up) they are rock like any other.
+			foreach (PlacedCliffRock r in plan.Rocks)
+			{
+				if (r.Backdrop)
+				{
+					Stamp(run, r);
+				}
+			}
 			if (options.Cones)
 			{
 				Cones(run);
@@ -553,17 +570,11 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static float BaseLength(string type) => CliffRocks.ShapesOf(type, CliffRole.Base)[0].Length;
 
-		/// <summary>A piece of a role for a site: a weighted shape, a variant, the site's roundness.</summary>
+		/// <summary>A piece of a role for a site: a weighted shape and a variant.</summary>
 		private static CliffPiece PickPiece(Run run, in CliffRockSite site, CliffRole role)
 		{
 			string type = site.Type;
-			CliffRole r = role;
-			// Crest rocks of jointed rock are corestones only where it weathers round; else small joint blocks.
-			if (role == CliffRole.Crest && CliffRocks.StructureOf(type) == CliffStructure.Jointed && CliffRocks.Climatic(type) && site.Roundness < 1)
-			{
-				r = CliffRole.Fill;
-			}
-			CliffShape[] shapes = CliffRocks.ShapesOf(type, r);
+			CliffShape[] shapes = CliffRocks.ShapesOf(type, role);
 			float sum = 0f;
 			foreach (CliffShape s in shapes) sum += s.Weight;
 			float u = run.Rng.NextFloat() * sum;
@@ -577,8 +588,7 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 				}
 			}
-			int roundness = CliffRocks.HasRoundness(type, r) ? Mathf.Clamp(site.Roundness, 0, CliffRocks.RoundnessLevels.Length - 1) : -1;
-			return new CliffPiece(type, r, kind, roundness, run.Rng.Next(shapes[kind].Variants));
+			return new CliffPiece(type, role, kind, run.Rng.Next(shapes[kind].Variants));
 		}
 
 		/// <summary>
@@ -588,6 +598,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static Vector3 Aniso(Run run, CliffStructure s, bool sized = true)
 		{
+			return Aniso(run, s, sized, false);
+		}
+
+		private static Vector3 Aniso(Run run, CliffStructure s, bool sized, bool section)
+		{
+			if (section)
+			{
+				return SectionScale(run.Rng);
+			}
 			Vector2 x = AnisoRange(s, 0), y = AnisoRange(s, 1);
 			var v = new Vector3(run.Rng.Range(x.x, x.y), run.Rng.Range(y.x, y.y), run.Rng.Range(x.x, x.y));
 			if (sized)
@@ -596,6 +615,18 @@ namespace FishMMO.Shared.WorldDesign
 				v *= Mathf.Exp(run.Rng.Range(Mathf.Log(k.x), Mathf.Log(k.y)));
 			}
 			return v;
+		}
+
+		/// <summary>
+		/// A section's scale: 0.85–1.2 along its length and into the slope, 0.9–1.12 in height, then one
+		/// overall 0.85–1.15 (log-uniform). Narrower than a formation's: the variants already differ in their
+		/// proportions (<see cref="CliffSections.StyleOf(string, int)"/>), and a section's beds and joints are
+		/// metres in its tiling material, which a large stretch would coarsen.
+		/// </summary>
+		public static Vector3 SectionScale(DeterministicRNG rng)
+		{
+			var v = new Vector3(rng.Range(0.85f, 1.2f), rng.Range(0.9f, 1.12f), rng.Range(0.85f, 1.2f));
+			return v * Mathf.Exp(rng.Range(Mathf.Log(0.85f), Mathf.Log(1.15f)));
 		}
 
 		/// <summary>
@@ -719,7 +750,8 @@ namespace FishMMO.Shared.WorldDesign
 					CliffPiece piece = PickPiece(run, in site, asTitan ? CliffRole.Titan : FootRoleFor(band));
 					Metrics m = run.Metrics.Of(piece);
 					CliffStructure structure = CliffRocks.StructureOf(site.Type);
-					Vector3 S = Aniso(run, structure);
+					bool section = CliffRocks.IsSection(in piece);
+					Vector3 S = Aniso(run, structure, true, section);
 					float along = 0.5f * (m.ExtX * S.x + m.ExtZ * S.z);
 					float cap = 8f + (structure == CliffStructure.Columnar ? 2.2f : 1.6f) * band;
 					float longest = Longest(m, S);
@@ -736,11 +768,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					Vector3 down = g.DownhillSmooth(p.x, p.z);
 					// Level beds cannot lean into the slope, so a bedded footing slab sits further out on the foot, its back against the face.
-					float outward = structure == CliffStructure.Bedded || structure == CliffStructure.Foliated ? 0.3f : 0.05f;
+					float outward = !section && (structure == CliffStructure.Bedded || structure == CliffStructure.Foliated) ? 0.3f : 0.05f;
 					Vector3 at = p + down * (outward * m.ExtZ * S.z + run.Rng.Range(-0.12f, 0.12f) * longest);
 					at.y = g.Height(at.x, at.z);
 					var c = NewCandidate(run, m, at, S, structure, true);
-					c.R = InSitu(run, structure, m, at, c.Slope);
+					c.R = InSitu(run, m, at, c.Slope, true);
 					run.Plan.Stats.Attempts++;
 					if (Fit(run, c, 0.97f, out PlacedCliffRock rock) && Accept(run, rock, run.Rng.Range(0.1f, 0.3f)))
 					{
@@ -756,6 +788,183 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				walked += arc[arc.Length - 1];
 			}
+		}
+
+		// ── Backdrops ─────────────────────────────────────────────────
+
+		/// <summary>
+		/// The sheer walls behind the clutter (Jim, 2026-10-08: "larger variants as background ... the height
+		/// scale based on the height of the cliff itself ... sheer realistic cliff faces"). Walked along every foot
+		/// line before the footing: at each step the scarp nearest the band's height there
+		/// (<see cref="CliffRocks.FaceShapes"/>), scaled to 85–100 % of it (0.75–1.3 in height, so its beds stay
+		/// near their built thickness), deep enough that its top meets the slope behind it, stood upright (leaning
+		/// back at most 8 % of the face) with its front at the foot, the next one overlapping 8–20 %. Gullies (the
+		/// footing's gate) stay open; bands under <see cref="CliffRockPlacementOptions.MinBackdropBand"/> get none;
+		/// ice keeps its seracs.
+		/// </summary>
+		/// <remarks>
+		/// A backdrop is kept out of the overlap test and out of the top raster until the face is planned
+		/// (<see cref="Plan"/>), so the footing and the face rocks stand in front of it and not on it; face rocks
+		/// are not tried inside its footprint, where the slope is inside the wall.
+		/// </remarks>
+		private static void Backdrops(Run run)
+		{
+			CliffGrid g = run.G;
+			List<List<Vector3>> lines = g.FootLines();
+			var arcs = new List<float[]>(lines.Count);
+			float total = 0f;
+			foreach (List<Vector3> line in lines)
+			{
+				var arc = new float[line.Count];
+				for (int i = 1; i < line.Count; i++)
+				{
+					arc[i] = arc[i - 1] + Mathf.Min(6f, Flat(line[i] - line[i - 1]));
+				}
+				arcs.Add(arc);
+				total += arc[arc.Length - 1];
+			}
+			// Paced as the footing is: a wall (and its tiers) per ~20 m wanted; when that is over the share, a wall
+			// is only tried while the count is under the share times the share of foot line walked so far.
+			int share = Mathf.Max(1, Mathf.RoundToInt(run.Budget * Mathf.Clamp01(run.O.BackdropShare)));
+			bool paced = total / 20f * 1.5f > share;
+			float walked = 0f;
+			for (int li = 0; li < lines.Count; li++)
+			{
+				List<Vector3> line = lines[li];
+				float[] arc = arcs[li];
+				float a = run.Rng.Range(0f, 6f);
+				while (a < arc[arc.Length - 1] && run.Plan.Rocks.Count < run.Budget && run.Plan.Stats.Backdrops < share)
+				{
+					if (paced && run.Plan.Stats.Backdrops >= share * ((walked + a) / Mathf.Max(1f, total)))
+					{
+						a += 6f;
+						continue;
+					}
+					int k = 1;
+					while (k < line.Count - 1 && arc[k] < a) k++;
+					Vector3 p = Vector3.Lerp(line[k - 1], line[k], Mathf.Clamp01((a - arc[k - 1]) / Mathf.Max(1e-3f, arc[k] - arc[k - 1])));
+					if (!g.SiteNear(p.x, p.z, out CliffRockSite site) || CliffRocks.StructureOf(site.Type) == CliffStructure.Ice)
+					{
+						a += 6f;
+						continue;
+					}
+					float band = g.BandHeight(p.x, p.z);
+					if (band < run.O.MinBackdropBand || ProceduralNoise.Fbm3(new Vector3(p.x / 30f, 9.5f, p.z / 30f), 2, 0.5f, g.Seed + 29) < -0.45f)
+					{
+						a += 8f;
+						continue;
+					}
+					// Tiers: a cliff taller than one wall gets another standing on the slope behind the first one's
+					// top, sized to what is left, up to three.
+					Vector3 down = g.DownhillSmooth(p.x, p.z);
+					float crest = p.y + band, along = 0f;
+					Vector3 foot = p;
+					for (int tier = 0; tier < 3 && run.Plan.Rocks.Count < run.Budget && run.Plan.Stats.Backdrops < share; tier++)
+					{
+						float left = crest - foot.y;
+						if (left < run.O.MinBackdropBand)
+						{
+							break;
+						}
+						if (!PlaceBackdrop(run, in site, foot, down, left * run.Rng.Range(0.85f, 1f), out float top, out float width))
+						{
+							break;
+						}
+						along = tier == 0 ? width : along;
+						// The next tier's foot: up the fall line to where the slope reaches a fifth of this wall below its
+						// top, so the two overlap and only a narrow ledge parts them.
+						Vector3 q = foot;
+						float drop = 0.2f * (top - foot.y);
+						for (float d = 1f; d < 4f * band; d += 1f)
+						{
+							q = foot - down * d;
+							q.y = g.Height(q.x, q.z);
+							if (q.y >= top - drop)
+							{
+								break;
+							}
+						}
+						foot = q;
+					}
+					a += along > 0f ? along * run.Rng.Range(0.8f, 0.92f) : 8f;
+				}
+				walked += arc[arc.Length - 1];
+			}
+		}
+
+		/// <summary>
+		/// One backdrop with its front at <paramref name="foot"/>: the scarp nearest <paramref name="want"/> in
+		/// height, scaled there (0.75–1.3), deep enough that its top meets the slope behind it, dropped onto the
+		/// ground. False where it would be mostly underground (a spur in front). <paramref name="top"/> is its
+		/// highest point, <paramref name="width"/> its length along the cliff.
+		/// </summary>
+		private static bool PlaceBackdrop(Run run, in CliffRockSite site, Vector3 foot, Vector3 down, float want, out float top, out float width)
+		{
+			CliffGrid g = run.G;
+			top = width = 0f;
+			CliffShape[] shapes = CliffRocks.ShapesOf(site.Type, CliffRole.Backdrop);
+			int kind = 0;
+			float best = float.MaxValue;
+			for (int s = 0; s < shapes.Length; s++)
+			{
+				float h = run.Metrics.Of(new CliffPiece(site.Type, CliffRole.Backdrop, s, 0)).Height;
+				float miss = Mathf.Abs(Mathf.Log(want / Mathf.Max(1f, h)));
+				if (miss < best) { best = miss; kind = s; }
+			}
+			var piece = new CliffPiece(site.Type, CliffRole.Backdrop, kind, run.Rng.Next(shapes[kind].Variants));
+			Metrics m = run.Metrics.Of(piece);
+			Bounds mb = m.Mesh.Bounds;
+			// The face's steepest slope above the foot: how far back the slope is at the wall's top.
+			float face = 0f;
+			for (float d = 2f; d <= Mathf.Max(4f, want); d += 2f)
+			{
+				face = Mathf.Max(face, g.SlopeAt(foot.x - down.x * d, foot.z - down.z * d));
+			}
+			float sy = Mathf.Clamp(want / Mathf.Max(1f, mb.size.y), 0.75f, 1.3f);
+			float need = 0.9f * mb.size.y * sy / Mathf.Tan(Mathf.Clamp(face, 35f, 85f) * Mathf.Deg2Rad);
+			var S = new Vector3(run.Rng.Range(0.9f, 1.15f), sy, Mathf.Clamp(need / Mathf.Max(1f, mb.size.z), 0.8f, 1.8f));
+			float depth = mb.size.z * S.z;
+			Matrix4x4 r = Frame(down) * Rot(Vector3.right, -run.Rng.Range(0f, 0.08f) * face) * Rot(Vector3.up, 180f + run.Rng.Range(-8f, 8f));
+			// Its front at the foot (a little out onto it): the centre half its depth back up the fall line.
+			Vector3 at = foot - down * (0.5f * depth - run.Rng.Range(0f, 0.1f) * depth);
+			var c = NewCandidate(run, m, at, S, CliffRocks.StructureOf(site.Type), false);
+			c.TerrainOnly = true;
+			var rock = new PlacedCliffRock { Piece = piece, Rotation = r, Scale = S, Position = new Vector3(at.x, 0f, at.z), Backdrop = true, Length = Longest(m, S) };
+			var w = new Vector3[m.Mesh.VertexCount];
+			Sink(run, m.Mesh, c, w, ref rock);
+			rock.Hidden = Hidden(run, m.Mesh, in rock, true);
+			run.Plan.Stats.Attempts++;
+			if (rock.Hidden > 0.8f)
+			{
+				run.Plan.Stats.Dropped++;
+				return false;
+			}
+			Vector3 n = g.NormalSmooth(rock.Position.x, rock.Position.z);
+			top = float.MinValue;
+			for (int i = 0; i < w.Length; i++)
+			{
+				w[i] = rock.World(m.Mesh.Positions[i]);
+				top = Mathf.Max(top, w[i].y);
+				w[i].y -= rock.Position.y;
+			}
+			float thick = Thickness(run, c, w, n, rock.Position.y, out float deepest);
+			rock.EmbedAchieved = rock.Embed = Mathf.Max(0f, deepest / thick);
+			rock.BandT = 0f;
+			width = mb.size.x * S.x;
+			Add(run, rock, CliffRole.Backdrop);
+			run.Plan.Stats.Backdrops++;
+			return true;
+		}
+
+		/// <summary>True when (x, z) of <paramref name="p"/> lies inside a placed rock's footprint, below its top.</summary>
+		private static bool InFootprint(in PlacedCliffRock q, Metrics qm, Vector3 p)
+		{
+			Vector3 d = p - q.Position;
+			// The rotation is orthonormal: its transpose takes the point into the rock's frame.
+			var l = new Vector3(Vector3.Dot(d, q.Rotation.GetColumn(0)), Vector3.Dot(d, q.Rotation.GetColumn(1)), Vector3.Dot(d, q.Rotation.GetColumn(2)));
+			l = new Vector3(l.x / q.Scale.x, l.y / q.Scale.y, l.z / q.Scale.z);
+			Bounds b = qm.Mesh.Bounds;
+			return l.x > b.min.x && l.x < b.max.x && l.z > b.min.z && l.z < b.max.z && l.y < b.max.y;
 		}
 
 		// ── The classes ───────────────────────────────────────────────
@@ -820,6 +1029,8 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (PlacedCliffRock q in run.Plan.Rocks)
 				{
 					Metrics qm = run.Metrics.Of(q.Piece);
+					// Behind a backdrop's face the slope is inside the wall: a rock there would never be seen.
+					if (q.Backdrop && InFootprint(in q, qm, p)) { inside = true; break; }
 					float ql = Longest(qm, q.Scale), qr = Radius(qm, q.Scale), d = Flat(q.Position - p);
 					if (d < 0.55f * qr && ql >= nominal * 0.6f) { inside = true; break; }
 					if (!near && ql > nominal * 1.3f && d < qr * 1.15f + 0.5f * nominal) near = true;
@@ -831,7 +1042,7 @@ namespace FishMMO.Shared.WorldDesign
 				run.Plan.Stats.Attempts++;
 				CliffPiece piece = PickPiece(run, in site, role);
 				Metrics m = run.Metrics.Of(piece);
-				Vector3 S = Aniso(run, structure);
+				Vector3 S = Aniso(run, structure, true, CliffRocks.IsSection(in piece));
 				float longest = Longest(m, S);
 				float cap = 8f + (structure == CliffStructure.Columnar ? 2.2f : 1.6f) * band;
 				if (role != CliffRole.Crest)
@@ -850,8 +1061,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				var c = NewCandidate(run, m, p, S, structure, t < 0.25f && role != CliffRole.Crest);
 				c.ExtraEmbed = role == CliffRole.Crest ? 0.15f : 0f;
-				bool freeCrest = role == CliffRole.Crest && (structure == CliffStructure.Jointed || structure == CliffStructure.Ice);
-				c.R = freeCrest ? (Matrix4x4?)null : InSitu(run, structure, m, p, c.Slope);
+				bool freeCrest = role == CliffRole.Crest && structure == CliffStructure.Ice;
+				c.R = freeCrest ? (Matrix4x4?)null : InSitu(run, m, p, c.Slope, c.Base || role == CliffRole.Crest);
 				if (freeCrest)
 				{
 					float tilt = 8f;
@@ -883,7 +1094,10 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			run.Plan.Rocks.Add(rock);
 			run.Plan.Stats.PerRole[role] = (run.Plan.Stats.PerRole.TryGetValue(role, out int n) ? n : 0) + 1;
-			Stamp(run, rock);
+			if (!rock.Backdrop)
+			{
+				Stamp(run, rock);
+			}
 		}
 
 		/// <summary>Volume overlap with every placed face rock (equal-volume spheres) against an allowance; never swallowing one.</summary>
@@ -894,7 +1108,7 @@ namespace FishMMO.Shared.WorldDesign
 			float rr = Radius(m, rock.Scale), sum = 0f;
 			foreach (PlacedCliffRock q in run.Plan.Rocks)
 			{
-				if (q.Talus)
+				if (q.Talus || q.Backdrop)
 				{
 					continue;
 				}
@@ -940,70 +1154,80 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Orientation ───────────────────────────────────────────────
 
-		/// <summary>The in-situ pose by structure (see the class remarks).</summary>
-		private static Matrix4x4 InSitu(Run run, CliffStructure structure, Metrics m, Vector3 p, float slope)
+		/// <summary>The in-situ pose of a face rock: a section's (<see cref="SectionPose"/>), or glacier ice's.</summary>
+		private static Matrix4x4 InSitu(Run run, Metrics m, Vector3 p, float slope, bool upright)
 		{
 			Vector3 down = run.G.DownhillSmooth(p.x, p.z);
 			DeterministicRNG rng = run.Rng;
-			Matrix4x4 align = Rot(Vector3.up, -m.AlignYaw);
-			// The turn about the rock's own up (its bed or foliation normal) changes nothing the structure
-			// rule constrains — beds stay parallel whatever way a slab is turned in its plane — so it is
-			// free to be wide: ±35° about the strike, either way round. At ±10° every slab of a cliff
-			// showed the same face to the valley.
-			switch (structure)
+			if (CliffRocks.IsSection(in m.Piece))
 			{
-				case CliffStructure.Bedded:
-					return run.Bedding * Frame(down) * Rot(Vector3.forward, rng.Range(-3f, 3f)) * Rot(Vector3.right, rng.Range(-3f, 3f))
-						* Rot(Vector3.up, rng.Range(-35f, 35f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
-				case CliffStructure.Foliated:
-					return run.Foliation * Frame(down) * Rot(Vector3.forward, rng.Range(-5f, 5f)) * Rot(Vector3.right, rng.Range(-5f, 5f))
-						* Rot(Vector3.up, rng.Range(-35f, 35f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
-				case CliffStructure.Columnar:
-				{
-					float a = rng.NextFloat() * 6.2831853f;
-					return Rot(new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)), rng.Range(0f, 4f)) * Rot(Vector3.up, rng.NextFloat() * 360f);
-				}
-				case CliffStructure.Ice:
-					return Frame(down) * Rot(Vector3.forward, rng.Range(-6f, 6f)) * Rot(Vector3.right, rng.Range(-6f, 6f))
-						* Rot(Vector3.up, rng.Range(-25f, 25f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
-				default:
-				{
-					// Squared to the face's joint set within ±12° of tilt; the turn about the joint block's
-					// own up reaches ±20°, and one block in four is stood on its other quarter (90°).
-					float j = 12f, lean = new[] { 0.2f, 0.4f, 0.6f }[rng.Next(3)];
-					float quarter = rng.NextFloat() < 0.25f ? 90f : 0f;
-					return Frame(down) * Rot(Vector3.right, -lean * slope) * Rot(Vector3.forward, rng.Range(-j, j) * 0.6f) * Rot(Vector3.right, rng.Range(-j, j) * 0.6f)
-						* Rot(Vector3.up, rng.Range(-20f, 20f) + quarter + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
-				}
+				return SectionPose(down, slope, upright, rng);
 			}
+			// Ice: squared to the crevasse sets, ±6° of tilt, turned ±25° either way round.
+			Matrix4x4 align = Rot(Vector3.up, -m.AlignYaw);
+			return Frame(down) * Rot(Vector3.forward, rng.Range(-6f, 6f)) * Rot(Vector3.right, rng.Range(-6f, 6f))
+				* Rot(Vector3.up, rng.Range(-25f, 25f) + (rng.NextFloat() < 0.5f ? 0f : 180f)) * align;
 		}
 
 		/// <summary>
-		/// A detached rock's resting pose: of 24 random orientations, the one whose centre of mass sits
-		/// lowest over the local slope plane (on its broadest face — the hull's lowest-potential pose is
-		/// the stable one), turned about the slope normal so its long axis runs down the fall line ±20°.
+		/// A section's pose: its front (−z as built) turned down the fall line ±15°. <paramref name="upright"/>
+		/// (footing, crest): leaning back 0–15 % of the slope, a wall standing near plumb on its ground. On the
+		/// face: leaning back 30–50 % of it — upright, a section 9 m deep against a 72° face either sinks until
+		/// three quarters of it is underground or juts out on its flat floor.
 		/// </summary>
-		public static Matrix4x4 StablePose(MeshBuilder mesh, Vector3 com, Vector3 s, Vector3 down, float slopeDegrees, DeterministicRNG rng)
+		public static Matrix4x4 SectionPose(Vector3 down, float slopeDegrees, bool upright, DeterministicRNG rng)
+		{
+			float lean = (upright ? rng.Range(0f, 0.15f) : rng.Range(0.3f, 0.5f)) * slopeDegrees;
+			return Frame(down) * Rot(Vector3.right, -lean) * Rot(Vector3.up, 180f + rng.Range(-15f, 15f));
+		}
+
+		/// <summary>
+		/// The normal of a slope falling <paramref name="slopeDegrees"/> toward <paramref name="down"/> (horizontal, unit):
+		/// tilted from straight up TOWARD the fall line. Ground h = −tan θ (p·down) has gradient −tan θ·down, and its normal
+		/// (−∇h, 1) leans down the hill.
+		/// </summary>
+		/// <remarks>
+		/// It was written up·cos θ − down·sin θ, leaning uphill: a mirror of the real slope, 2θ off it, so every talus rock
+		/// was rested on a slope that was not there and stood on end on the cone it lay on (Jim, 2026-10-08; measured on
+		/// Flo Monolith's re-cut: centre of mass 2.5× the lowest it can rest, 41° between the two normals on the planner's
+		/// own test cliff). Its tests built the slope normal the same wrong way, so they agreed with it.
+		/// </remarks>
+		public static Vector3 SlopeNormal(Vector3 down, float slopeDegrees)
 		{
 			float sl = slopeDegrees * Mathf.Deg2Rad;
-			Vector3 n = (Vector3.up * Mathf.Cos(sl) - down * Mathf.Sin(sl)).normalized;
+			return (Vector3.up * Mathf.Cos(sl) + down * Mathf.Sin(sl)).normalized;
+		}
+
+		/// <summary>
+		/// A detached rock's resting pose: flat on the face of its hull that brings its centre of mass lowest over the
+		/// local slope plane (a convex body comes to rest on a face, and the lowest one is the stable one), turned
+		/// about the slope normal so its long axis runs down the fall line ±20°.
+		/// </summary>
+		/// <remarks>
+		/// It used to keep the best of 24 random orientations. For the round boulders that came first that was close
+		/// enough; for cliff sections, which are blocks with broad flat faces, the best of 24 was almost never face
+		/// down, so 8–12 m blocks stood on an edge or a corner over the talus, looking poised in the air (Jim,
+		/// 2026-10-08). Now the lowest rest is searched for and snapped flat onto its hull face (<see cref="RestingFace"/>);
+		/// random orientations remain only for an empty mesh.
+		/// </remarks>
+		public static Matrix4x4 StablePose(MeshBuilder mesh, Vector3 com, Vector3 s, Vector3 down, float slopeDegrees, DeterministicRNG rng)
+		{
+			Vector3 n = SlopeNormal(down, slopeDegrees);
 			Vector3 cs = new Vector3(com.x * s.x, com.y * s.y, com.z * s.z);
 			Matrix4x4 best = Matrix4x4.identity;
 			float bestH = float.MaxValue;
-			for (int k = 0; k < 24; k++)
+			if (!RestingFace(mesh, cs, s, n, ref best, ref bestH))
 			{
-				float y = rng.Range(-1f, 1f), a = rng.NextFloat() * 6.2831853f, h = Mathf.Sqrt(1f - y * y);
-				Matrix4x4 q = Rot(new Vector3(h * Mathf.Cos(a), y, h * Mathf.Sin(a)), rng.NextFloat() * 360f);
-				float minD = float.MaxValue;
-				foreach (Vector3 v in mesh.Positions)
+				for (int k = 0; k < 24; k++)
 				{
-					minD = Mathf.Min(minD, Vector3.Dot(q.MultiplyVector(new Vector3(v.x * s.x, v.y * s.y, v.z * s.z)), n));
-				}
-				float hc = Vector3.Dot(q.MultiplyVector(cs), n) - minD;
-				if (hc < bestH)
-				{
-					bestH = hc;
-					best = q;
+					float y = rng.Range(-1f, 1f), a = rng.NextFloat() * 6.2831853f, h = Mathf.Sqrt(1f - y * y);
+					Matrix4x4 q = Rot(new Vector3(h * Mathf.Cos(a), y, h * Mathf.Sin(a)), rng.NextFloat() * 360f);
+					float hc = ComHeightScaled(mesh, cs, s, q, n);
+					if (hc < bestH)
+					{
+						bestH = hc;
+						best = q;
+					}
 				}
 			}
 			Vector3 u = Vector3.Cross(n, down).normalized, w = Vector3.Cross(u, n);
@@ -1017,6 +1241,245 @@ namespace FishMMO.Shared.WorldDesign
 			float axis = 0.5f * Mathf.Atan2((float)(2 * sxy), (float)(sxx - syy)) * Mathf.Rad2Deg;
 			float turn = 90f - axis + rng.Range(-20f, 20f);
 			return Rot(n, -turn) * best;
+		}
+
+		/// <summary>
+		/// The pose that rests the rock on its hull against the slope plane (normal <paramref name="n"/>) with its centre of
+		/// mass lowest: the down direction u (in the rock's scaled frame) minimising h(u) = max over vertices of v·u − c·u,
+		/// the centre's height over the support plane square to u. Minima of h lie on the hull's faces, so the search
+		/// samples the sphere, refines the best few, then snaps u to the plane through the support vertices, which puts
+		/// a face flat on the ground. False only for an empty mesh.
+		/// </summary>
+		/// <remarks>
+		/// The hull, not the mesh's own triangles: a rubble block is not convex, and it rests on a face of its hull that
+		/// spans a hollow between two of its own faces, lower than any one of them.
+		/// </remarks>
+		private static bool RestingFace(MeshBuilder mesh, Vector3 cs, Vector3 s, Vector3 n, ref Matrix4x4 best, ref float bestH)
+		{
+			int count = mesh.VertexCount;
+			if (count == 0)
+			{
+				return false;
+			}
+			var p = new Vector3[count];
+			float size = 0f;
+			for (int i = 0; i < count; i++)
+			{
+				Vector3 v = mesh.Positions[i];
+				p[i] = new Vector3(v.x * s.x, v.y * s.y, v.z * s.z);
+				size = Mathf.Max(size, (p[i] - cs).magnitude);
+			}
+			float H(Vector3 u)
+			{
+				float most = float.MinValue;
+				for (int i = 0; i < count; i++)
+				{
+					most = Mathf.Max(most, Vector3.Dot(p[i], u));
+				}
+				return most - Vector3.Dot(cs, u);
+			}
+			// The sphere, evenly (a Fibonacci lattice); the best go on to be refined, each to the face it settles on.
+			const int Samples = 256, Refined = 16;
+			var seeds = new List<(float h, Vector3 u)>(Samples);
+			for (int k = 0; k < Samples; k++)
+			{
+				float y = 1f - 2f * (k + 0.5f) / Samples, r = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y)), a = k * 2.3999632f;
+				var u = new Vector3(r * Mathf.Cos(a), y, r * Mathf.Sin(a));
+				seeds.Add((H(u), u));
+			}
+			seeds.Sort((x, y) => x.h.CompareTo(y.h));
+			var faces = new List<(Vector3 u, float h, float area)>();
+			for (int k = 0; k < Refined && k < seeds.Count; k++)
+			{
+				Vector3 u = seeds[k].u;
+				float h = seeds[k].h;
+				for (float step = 0.1f; step > 1e-4f;)
+				{
+					Vector3 e1 = Vector3.Cross(u, Mathf.Abs(u.y) < 0.9f ? Vector3.up : Vector3.right).normalized, e2 = Vector3.Cross(u, e1);
+					bool moved = false;
+					for (int d = 0; d < 8; d++)
+					{
+						float ang = d * 0.78539816f;
+						Vector3 trial = (u + step * (Mathf.Cos(ang) * e1 + Mathf.Sin(ang) * e2)).normalized;
+						float th = H(trial);
+						if (th < h - 1e-7f)
+						{
+							h = th;
+							u = trial;
+							moved = true;
+							break;
+						}
+					}
+					if (!moved)
+					{
+						step *= 0.5f;
+					}
+				}
+				u = SnapToSupport(p, u, size);
+				if (faces.Exists(f => Vector3.Dot(f.u, u) > 0.999f))
+				{
+					continue;
+				}
+				faces.Add((u, H(u), ContactArea(p, u, size)));
+			}
+			/* Of the faces it can settle on, the broadest that is nearly as steady as the steadiest: on a block the
+			 * steadiest face IS its broadest, but a notched rubble block can sit a shade lower on a narrow face (Jim:
+			 * "shouldn't the largest face lay flat against the terrain?"). */
+			float lowest = float.MaxValue;
+			foreach ((Vector3 _, float h, float _) in faces)
+			{
+				lowest = Mathf.Min(lowest, h);
+			}
+			(Vector3 u, float h, float area) chosen = faces[0];
+			bool any = false;
+			foreach ((Vector3 u, float h, float area) f in faces)
+			{
+				if (f.h <= RestingSteadiness * lowest && (!any || f.area > chosen.area))
+				{
+					chosen = f;
+					any = true;
+				}
+			}
+			Matrix4x4 q = Matrix4x4.Rotate(Quaternion.FromToRotation(chosen.u, -n));
+			if (chosen.h < bestH)
+			{
+				bestH = chosen.h;
+				best = q;
+			}
+			return true;
+		}
+
+		/// <summary>How much higher than the steadiest face's a broader face's centre of mass may sit and still be the one rested on.</summary>
+		public const float RestingSteadiness = 1.15f;
+
+		/// <summary>The area of the face a rock rests on with <paramref name="u"/> down: the hull of its vertices within half a percent of its size of the lowest.</summary>
+		private static float ContactArea(Vector3[] p, Vector3 u, float size)
+		{
+			float most = float.MinValue;
+			foreach (Vector3 v in p)
+			{
+				most = Mathf.Max(most, Vector3.Dot(v, u));
+			}
+			Vector3 e1 = Vector3.Cross(u, Mathf.Abs(u.y) < 0.9f ? Vector3.up : Vector3.right).normalized, e2 = Vector3.Cross(u, e1);
+			var pts = new List<Vector2>();
+			foreach (Vector3 v in p)
+			{
+				if (Vector3.Dot(v, u) >= most - 0.005f * size)
+				{
+					pts.Add(new Vector2(Vector3.Dot(v, e1), Vector3.Dot(v, e2)));
+				}
+			}
+			if (pts.Count < 3)
+			{
+				return 0f;
+			}
+			// Monotone chain hull, then the shoelace.
+			pts.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+			var hull = new List<Vector2>();
+			for (int pass = 0; pass < 2; pass++)
+			{
+				int start = hull.Count;
+				for (int i = 0; i < pts.Count; i++)
+				{
+					Vector2 q = pts[pass == 0 ? i : pts.Count - 1 - i];
+					while (hull.Count >= start + 2)
+					{
+						Vector2 a = hull[hull.Count - 2], b = hull[hull.Count - 1];
+						if ((b.x - a.x) * (q.y - a.y) - (b.y - a.y) * (q.x - a.x) > 0f)
+						{
+							break;
+						}
+						hull.RemoveAt(hull.Count - 1);
+					}
+					hull.Add(q);
+				}
+				hull.RemoveAt(hull.Count - 1);
+			}
+			float twice = 0f;
+			for (int i = 0; i < hull.Count; i++)
+			{
+				Vector2 a = hull[i], b = hull[(i + 1) % hull.Count];
+				twice += a.x * b.y - b.x * a.y;
+			}
+			return 0.5f * Mathf.Abs(twice);
+		}
+
+		/// <summary>
+		/// Turns a down direction found to within a fraction of a degree onto the plane through the rock's support
+		/// vertices (those within half a percent of its size of the lowest), the widest triangle of them: that plane is
+		/// a hull face, so the rock lies flat on it. Keeps <paramref name="u"/> when fewer than three support it or the
+		/// plane would cut the rock.
+		/// </summary>
+		private static Vector3 SnapToSupport(Vector3[] p, Vector3 u, float size)
+		{
+			float most = float.MinValue;
+			foreach (Vector3 v in p)
+			{
+				most = Mathf.Max(most, Vector3.Dot(v, u));
+			}
+			var support = new List<Vector3>();
+			foreach (Vector3 v in p)
+			{
+				if (Vector3.Dot(v, u) >= most - 0.005f * size)
+				{
+					support.Add(v);
+				}
+			}
+			if (support.Count < 3)
+			{
+				return u;
+			}
+			// The widest triangle of the support (a few dozen points at most on a seating mesh's face).
+			int limit = Mathf.Min(support.Count, 48);
+			Vector3 normal = Vector3.zero, corner = Vector3.zero;
+			float widest = 0f;
+			for (int i = 0; i < limit; i++)
+			{
+				for (int j = i + 1; j < limit; j++)
+				{
+					for (int k = j + 1; k < limit; k++)
+					{
+						Vector3 c = Vector3.Cross(support[j] - support[i], support[k] - support[i]);
+						float area = c.sqrMagnitude;
+						if (area > widest)
+						{
+							widest = area;
+							normal = c;
+							corner = support[i];
+						}
+					}
+				}
+			}
+			if (widest < 1e-10f)
+			{
+				return u;
+			}
+			normal = normal.normalized;
+			if (Vector3.Dot(normal, u) < 0f)
+			{
+				normal = -normal;
+			}
+			// A hull face only: nothing of the rock beyond the triangle's plane (two millimetres' grace per metre of it).
+			float plane = Vector3.Dot(corner, normal);
+			foreach (Vector3 v in p)
+			{
+				if (Vector3.Dot(v, normal) > plane + 0.002f * size)
+				{
+					return u;
+				}
+			}
+			return normal;
+		}
+
+		/// <summary><see cref="ComHeight"/> with the centre of mass already scaled.</summary>
+		private static float ComHeightScaled(MeshBuilder mesh, Vector3 cs, Vector3 s, Matrix4x4 r, Vector3 n)
+		{
+			float minD = float.MaxValue;
+			foreach (Vector3 v in mesh.Positions)
+			{
+				minD = Mathf.Min(minD, Vector3.Dot(r.MultiplyVector(new Vector3(v.x * s.x, v.y * s.y, v.z * s.z)), n));
+			}
+			return Vector3.Dot(r.MultiplyVector(cs), n) - minD;
 		}
 
 		/// <summary>Height of a pose's centre of mass over the slope plane through its lowest point: what <see cref="StablePose"/> minimises.</summary>
@@ -1038,7 +1501,10 @@ namespace FishMMO.Shared.WorldDesign
 			return terrainOnly ? h : Mathf.Max(h, run.Top.At(x, z));
 		}
 
-		/// <summary>Rotate, then sink (no floating), then bury by size along the normal, then the base rule.</summary>
+		/// <summary>
+		/// Rotate, then sink (no floating), then bury by size along the normal, then the base rule — or, for a
+		/// section, seat it by how much of it shows (<see cref="SeatSection"/>).
+		/// </summary>
 		private static bool Fit(Run run, Candidate c, float drop, out PlacedCliffRock best)
 		{
 			best = default;
@@ -1047,56 +1513,37 @@ namespace FishMMO.Shared.WorldDesign
 			MeshBuilder m = c.M.Mesh;
 			var w = new Vector3[m.VertexCount];
 			Vector3 n = run.G.NormalSmooth(c.At.x, c.At.z);
+			bool section = !c.TerrainOnly && CliffRocks.IsSection(in c.M.Piece);
 			foreach (float lean in c.R.HasValue ? new[] { 0f } : c.Leans)
 			{
 				Matrix4x4 r = c.R ?? Frame(c.Down) * Rot(Vector3.right, -lean * c.Slope) * Rot(Vector3.forward, c.Roll) * Rot(Vector3.right, -c.Pitch) * Rot(Vector3.up, c.Yaw);
 				var rock = new PlacedCliffRock { Piece = c.M.Piece, Rotation = r, Scale = c.S, Position = new Vector3(c.At.x, 0f, c.At.z), Talus = c.TerrainOnly, Length = Longest(c.M, c.S) };
-				float lo = float.MaxValue, hi = float.MinValue;
-				for (int i = 0; i < w.Length; i++)
+				float height = Sink(run, m, c, w, ref rock);
+				if (section)
 				{
-					w[i] = rock.World(m.Positions[i]);
-					lo = Mathf.Min(lo, w[i].y);
-					hi = Mathf.Max(hi, w[i].y);
+					SeatSection(run, m, c, w, ref rock, height);
 				}
-				float band = lo + c.Band * (hi - lo);
-				var gaps = new List<float>();
-				for (int i = 0; i < w.Length; i++)
+				else
 				{
-					if (w[i].y <= band)
+					// Size-graded burial along the slope normal.
+					float thick = Thickness(run, c, w, n, rock.Position.y, out float deepest);
+					rock.Embed = Mathf.Min(0.85f, EmbedFor(Longest(c.M, c.S), c.EmbedNoise) + c.ExtraEmbed);
+					float want = rock.Embed * thick;
+					if (deepest < want)
 					{
-						gaps.Add(w[i].y - Support(run, w[i].x, w[i].z, c.TerrainOnly));
+						rock.Position -= n * (want - deepest);
+						deepest = want;
 					}
+					if (c.Base)
+					{
+						rock.Underside = BaseRule(run, m, ref rock, n, c.Down, c.Slope, c.BaseNoise, height, out float extra);
+						deepest += extra;
+					}
+					rock.EmbedAchieved = deepest / thick;
 				}
-				gaps.Sort();
-				float sink = gaps.Count == 0 ? 0f : gaps[Mathf.Min(gaps.Count - 1, (int)(0.92f * gaps.Count))];
-				rock.Position.y = -sink - 0.1f;
-				// Size-graded burial along the slope normal.
-				float tMin = float.MaxValue, tMax = float.MinValue, deepest = float.MinValue;
-				for (int i = 0; i < w.Length; i++)
-				{
-					Vector3 v = w[i];
-					v.y += rock.Position.y;
-					float t = Vector3.Dot(v, n);
-					tMin = Mathf.Min(tMin, t);
-					tMax = Mathf.Max(tMax, t);
-					deepest = Mathf.Max(deepest, (Support(run, v.x, v.z, c.TerrainOnly) - v.y) * n.y);
-				}
-				float thick = Mathf.Max(1e-3f, tMax - tMin);
-				rock.Embed = Mathf.Min(0.85f, EmbedFor(Longest(c.M, c.S), c.EmbedNoise) + c.ExtraEmbed);
-				float want = rock.Embed * thick;
-				if (deepest < want)
-				{
-					rock.Position -= n * (want - deepest);
-					deepest = want;
-				}
-				if (c.Base)
-				{
-					rock.Underside = BaseRule(run, m, ref rock, n, c.Down, c.Slope, c.BaseNoise, hi - lo, out float extra);
-					deepest += extra;
-				}
-				rock.EmbedAchieved = deepest / thick;
 				rock.Hidden = Hidden(run, m, in rock, c.TerrainOnly);
-				if (rock.Hidden <= drop && rock.Hidden < bestHidden)
+				if (rock.Hidden <= (section ? Mathf.Min(drop, SectionMostHidden) : drop) && rock.Hidden < bestHidden
+					&& (!section || rock.Underside <= SectionMostUnderside))
 				{
 					bestHidden = rock.Hidden;
 					best = rock;
@@ -1104,6 +1551,109 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return any;
+		}
+
+		/// <summary>The most of a section's surface that may be underground: past it the face is a flat patch on the slope.</summary>
+		public const float SectionMostHidden = 0.6f;
+
+		/// <summary>The most of a section's vertices that may be visible underside once seated (<see cref="Underside"/>): past it, it hangs.</summary>
+		public const float SectionMostUnderside = 0.03f;
+
+		/// <summary>
+		/// Drops a rock (its x, z and pose kept) until 92 % of its lowest <see cref="Candidate.Band"/> is below the
+		/// support. <paramref name="w"/> is left holding its world vertices before the drop; returns its height.
+		/// </summary>
+		private static float Sink(Run run, MeshBuilder m, Candidate c, Vector3[] w, ref PlacedCliffRock rock)
+		{
+			rock.Position.y = 0f;
+			float lo = float.MaxValue, hi = float.MinValue;
+			for (int i = 0; i < w.Length; i++)
+			{
+				w[i] = rock.World(m.Positions[i]);
+				lo = Mathf.Min(lo, w[i].y);
+				hi = Mathf.Max(hi, w[i].y);
+			}
+			float band = lo + c.Band * (hi - lo);
+			var gaps = new List<float>();
+			for (int i = 0; i < w.Length; i++)
+			{
+				if (w[i].y <= band)
+				{
+					gaps.Add(w[i].y - Support(run, w[i].x, w[i].z, c.TerrainOnly));
+				}
+			}
+			gaps.Sort();
+			float sink = gaps.Count == 0 ? 0f : gaps[Mathf.Min(gaps.Count - 1, (int)(0.92f * gaps.Count))];
+			rock.Position.y = -sink - 0.1f;
+			return hi - lo;
+		}
+
+		/// <summary>A dropped rock's thickness along the slope normal, and its deepest point below the surface along it.</summary>
+		private static float Thickness(Run run, Candidate c, Vector3[] w, Vector3 n, float dropY, out float deepest)
+		{
+			float tMin = float.MaxValue, tMax = float.MinValue;
+			deepest = float.MinValue;
+			for (int i = 0; i < w.Length; i++)
+			{
+				Vector3 v = w[i];
+				v.y += dropY;
+				float t = Vector3.Dot(v, n);
+				tMin = Mathf.Min(tMin, t);
+				tMax = Mathf.Max(tMax, t);
+				deepest = Mathf.Max(deepest, (Support(run, v.x, v.z, c.TerrainOnly) - v.y) * n.y);
+			}
+			return Mathf.Max(1e-3f, tMax - tMin);
+		}
+
+		/// <summary>
+		/// Seats a section by how much of it shows. A section is a wall standing out of the hill, its back and foot in
+		/// the ground: buried along the slope normal as a boulder is (a third to a half of its thickness, more for the
+		/// footing's base rule), an upright section on a steep face went in until its front was flush with the
+		/// ground — three quarters of it underground, the face a flat cut patch (Jim, Flo Monolith, 2026-10-08).
+		/// Instead it slides out of the hill along the fall line, re-dropped at every step, until 30–45 % of its
+		/// surface is underground; then every section is lowered (never pushed into the face) while its flat
+		/// underside shows over falling ground.
+		/// </summary>
+		private static void SeatSection(Run run, MeshBuilder m, Candidate c, Vector3[] w, ref PlacedCliffRock rock, float height)
+		{
+			var outward = new Vector3(c.Down.x, 0f, c.Down.z).normalized;
+			float target = Mathf.Lerp(0.3f, 0.45f, c.BaseNoise);
+			float depth = Mathf.Max(1f, c.M.ExtZ * Mathf.Min(c.S.x, c.S.z));
+			Vector3 start = rock.Position;
+			// Hidden falls as the section comes out of the hill: bisect the shift from half its depth back into
+			// the slope to a full depth out of it.
+			float lo = -0.5f * depth, hi = depth;
+			PlacedCliffRock trial = rock;
+			for (int it = 0; it < 10; it++)
+			{
+				float mid = 0.5f * (lo + hi);
+				trial.Position = new Vector3(start.x, 0f, start.z) + outward * mid;
+				Sink(run, m, c, w, ref trial);
+				if (Hidden(run, m, in trial, false) > target) lo = mid; else hi = mid;
+			}
+			rock.Position = new Vector3(start.x, 0f, start.z) + outward * hi;
+			Sink(run, m, c, w, ref rock);
+			/* Every section, not only the footing: slid out of a convex brow, a face or fill block's flat floor hung
+			 * over the falling ground and the block looked poised in the air (Jim, 2026-10-08). Lowered (never pushed
+			 * into the face) until no underside shows; one that has to go past SectionMostHidden is refused by Fit. */
+			{
+				float under = Underside(run, m, in rock, height);
+				for (int step = 0; step < 10 && under > 0.015f; step++)
+				{
+					rock.Position.y -= 0.04f * height;
+					under = Underside(run, m, in rock, height);
+				}
+				rock.Underside = under;
+			}
+			Vector3 n = run.G.NormalSmooth(rock.Position.x, rock.Position.z);
+			for (int i = 0; i < w.Length; i++)
+			{
+				w[i] = rock.World(m.Positions[i]);
+				w[i].y -= rock.Position.y;
+			}
+			float thick = Thickness(run, c, w, n, rock.Position.y, out float deepest);
+			// Its burial is what the seating gave, not a size curve's ask.
+			rock.EmbedAchieved = rock.Embed = Mathf.Max(0f, deepest / thick);
 		}
 
 		/// <summary>
@@ -1279,7 +1829,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Fall-sorted debris on each cone, resting on the ground only (no towers of loose rock).
 			foreach (CliffCone cone in run.Plan.Cones)
 			{
-				var site = new CliffRockSite { Type = cone.Type, Roundness = 0 };
+				var site = new CliffRockSite { Type = cone.Type };
 				Vector3 strike = new Vector3(cone.Down.z, 0f, -cone.Down.x);
 				float toe = cone.Radius;
 				for (float d = 0f; d < 4f * cone.Radius; d += 0.5f)
@@ -1310,7 +1860,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						if (Mathf.Abs(shapes[s].Length - size) < Mathf.Abs(shapes[kind].Length - size)) kind = s;
 					}
-					var piece = new CliffPiece(cone.Type, CliffRole.Debris, kind, -1, run.Rng.Next(shapes[kind].Variants));
+					var piece = new CliffPiece(cone.Type, CliffRole.Debris, kind, run.Rng.Next(shapes[kind].Variants));
 					Metrics m = run.Metrics.Of(piece);
 					Vector3 S = Aniso(run, structure, false) * (size / Mathf.Max(0.1f, m.Length));
 					var c = NewCandidate(run, m, at, S, structure, false);
@@ -1568,7 +2118,7 @@ namespace FishMMO.Shared.WorldDesign
 			int n = Count;
 			Site = new int[n];
 			Steep = new bool[n];
-			var index = new Dictionary<(string, int, int), int>();
+			var index = new Dictionary<(string, int), int>();
 			for (int k = 0; k < n; k++)
 			{
 				Site[k] = -1;
@@ -1581,7 +2131,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
-				var key = (site.Type, site.Roundness, Mathf.RoundToInt(site.MinAngle * 10f));
+				var key = (site.Type, Mathf.RoundToInt(site.MinAngle * 10f));
 				if (!index.TryGetValue(key, out int si))
 				{
 					si = Sites.Count;

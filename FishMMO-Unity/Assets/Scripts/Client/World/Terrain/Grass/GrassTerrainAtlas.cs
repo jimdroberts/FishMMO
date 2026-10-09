@@ -21,13 +21,15 @@ namespace FishMMO.Client
 	public sealed class GrassTerrainAtlas : IDisposable
 	{
 		/// <summary>Uints per terrain in the table (FishGrassBlades.compute GRASS_TERRAIN_UINTS; GrassLoadTerrain reads it).</summary>
-		public const int TerrainUints = 24;
+		public const int TerrainUints = 25;
 
 		/// <summary>Terrains whose textures share resolutions (and so one set of arrays and one dispatch).</summary>
 		public sealed class Group
 		{
 			public int HeightResolution, DensityResolution, SurfaceResolution;
 			public Texture2DArray Heights, Density0, Density1, Surface;
+			/// <summary>The water-line maps (<see cref="GrassTerrain.Freeboard"/>) of the group's terrains that have one, a slice each; one unread 1×1 slice when none does.</summary>
+			public Texture2DArray Water;
 			public readonly List<GrassTerrain> Terrains = new List<GrassTerrain>();
 		}
 
@@ -164,7 +166,8 @@ namespace FishMMO.Client
 					Put(data, at + 8 + c, gt.ChannelTypes[c]);
 				}
 				// 16 slice, 17 has a second density map, 18 surface resolution, 19 colour layers (0: none);
-				// 20 albedo width, 21 albedo mips, 22 texels per layer, 23 the copy's first uint (raw).
+				// 20 albedo width, 21 albedo mips, 22 texels per layer, 23 the copy's first uint (raw);
+				// 24 its water-line slice (raw; 0xFFFFFFFF none).
 				data[at + 16] = (uint)slice;
 				data[at + 17] = gt.Density1 != null ? 1u : 0u;
 				Put(data, at + 18, g.SurfaceResolution);
@@ -173,6 +176,7 @@ namespace FishMMO.Client
 				Put(data, at + 21, texels != null ? texels.Mips : 1);
 				Put(data, at + 22, texels != null ? texels.LayerTexels : 0);
 				data[at + 23] = texels != null ? (uint)albedoBase[texels] : 0u;
+				data[at + 24] = gt.Freeboard != null ? (uint)WaterSliceOf(g, gt) : 0xFFFFFFFFu;
 			}
 			foreach (KeyValuePair<GrassAlbedoTexels, int> a in albedoBase)
 			{
@@ -190,6 +194,19 @@ namespace FishMMO.Client
 				g.Density0 = NewArray(g.DensityResolution, n, TextureFormat.RGBA32, "density 0-3");
 				g.Density1 = NewArray(g.DensityResolution, n, TextureFormat.RGBA32, "density 4-7");
 				g.Surface = NewArray(Math.Max(1, g.SurfaceResolution), n, TextureFormat.RGBA32, "surface layers");
+				int wet = 0;
+				foreach (GrassTerrain gt in g.Terrains)
+				{
+					if (gt.Freeboard != null)
+					{
+						wet++;
+					}
+				}
+				g.Water = NewArray(wet > 0 ? g.HeightResolution : 1, Math.Max(1, wet), TextureFormat.R8, "water line");
+				if (wet == 0)
+				{
+					g.Water.Apply(false, false);
+				}
 				for (int s = 0; s < n; s++)
 				{
 					GrassTerrain gt = g.Terrains[s];
@@ -197,8 +214,30 @@ namespace FishMMO.Client
 					Graphics.CopyTexture(gt.Density0, 0, 0, g.Density0, s, 0);
 					Graphics.CopyTexture(gt.Density1 != null ? gt.Density1 : Black(g.DensityResolution), 0, 0, g.Density1, s, 0);
 					Graphics.CopyTexture(gt.SurfaceLayers != null ? gt.SurfaceLayers : Black(Math.Max(1, g.SurfaceResolution)), 0, 0, g.Surface, s, 0);
+					if (gt.Freeboard != null)
+					{
+						Graphics.CopyTexture(gt.Freeboard, 0, 0, g.Water, WaterSliceOf(g, gt), 0);
+					}
 				}
 			}
+		}
+
+		/// <summary>A wet terrain's slice in its group's <see cref="Group.Water"/>: its rank among the group's terrains that have a water line.</summary>
+		private static int WaterSliceOf(Group g, GrassTerrain terrain)
+		{
+			int slice = 0;
+			foreach (GrassTerrain gt in g.Terrains)
+			{
+				if (gt == terrain)
+				{
+					return slice;
+				}
+				if (gt.Freeboard != null)
+				{
+					slice++;
+				}
+			}
+			return -1;
 		}
 
 		private static void Put(uint[] data, int at, float value) => data[at] = BitConverter.ToUInt32(BitConverter.GetBytes(value), 0);
@@ -233,7 +272,7 @@ namespace FishMMO.Client
 			int frame = Time.frameCount;
 			foreach (Group g in Groups)
 			{
-				foreach (Texture2DArray a in new[] { g.Heights, g.Density0, g.Density1, g.Surface })
+				foreach (Texture2DArray a in new[] { g.Heights, g.Density0, g.Density1, g.Surface, g.Water })
 				{
 					if (a != null)
 					{

@@ -8,8 +8,13 @@
 // ── FishMMO edit: the instanced tree channels' per-instance LOD cross-fade (contract in the file). ──
 #include "FishLodFade.hlsl"
 #include "FishGroundColour.hlsl"
+// ── FishMMO edit: rock-against-rock crevices (the indirect twin's rocks only). ──
+#include "FishRockContact.hlsl"
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+// ── FishMMO edit: the terrain's own lighting, for the ground a rock's base and crevices render (FishGroundContactLit.hlsl). ──
+#include "FishGroundLighting.hlsl"
+#include "FishGroundContactLit.hlsl"
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 
 #if defined(LOD_FADE_CROSSFADE)
@@ -51,10 +56,9 @@ struct Varyings
 #endif
 
 #if defined(FISH_INDIRECT_INSTANCED)
-    // ── FishMMO edit: the trace down to the terrain and the root's terrain layers, for the contact blend
-    // (FishGroundColour.hlsl FishContactData). ──
-    float2 fishContact              : TEXCOORD4;
-    half4 fishContactWeights        : TEXCOORD11;
+    // ── FishMMO edit: metres above the terrain straight below, for the contact blend (FishGroundColour.hlsl). ──
+    float fishContact               : TEXCOORD4;
+    float3 fishRockOrigin           : TEXCOORD11;   // this rock's world position, to tell it from its neighbours
 #endif
 
 #ifdef _ADDITIONAL_LIGHTS_VERTEX
@@ -238,9 +242,8 @@ Varyings LitPassVertex(Attributes input)
     output.positionWS = vertexInput.positionWS;
 #endif
 #if defined(FISH_INDIRECT_INSTANCED)
-    FishContactData contact = FishContactVertex(vertexInput.positionWS, TransformObjectToWorld(float3(0.0, 0.0, 0.0)));
-    output.fishContact = contact.trace;
-    output.fishContactWeights = contact.weights;
+    output.fishContact = FishContactHeight(vertexInput.positionWS, TransformObjectToWorld(float3(0.0, 0.0, 0.0)));
+    output.fishRockOrigin = TransformObjectToWorld(float3(0.0, 0.0, 0.0));
 #endif
 
 #if defined(REQUIRES_VERTEX_SHADOW_COORD_INTERPOLATOR)
@@ -290,6 +293,36 @@ void LitPassFragment(
     // ── FishMMO edit: the weather on this surface, and the day/night dissolve. Here, because this
     // is the first point where the world position and the shaded normal are both known. ──
     FishDitherClip(input.positionCS.xy, _FishVisible);
+#if defined(FISH_INDIRECT_INSTANCED)
+    // ── FishMMO edit: a terrain rock sits IN the ground. Over a band at its base, and in the crevices where it meets
+    // another rock, it renders the TERRAIN — the terrain's own surface there (FishGroundColour.hlsl FishGroundContact)
+    // lit by the terrain's own lighting and weather (FishGroundContactLit.hlsl), blended with the rock's lit colour
+    // after its lighting below. The crevice also darkens the rock itself toward its bottom (FishRockContact.hlsl). ──
+    float3 fishWorldDx = ddx(inputData.positionWS);
+    float3 fishWorldDy = ddy(inputData.positionWS);
+    half fishGroundWeight;
+    FishGroundSite fishSite;
+    bool fishHasGround = FishGroundContact(inputData.positionWS, input.fishContact, (half3)input.normalWS, fishGroundWeight, fishSite);
+    half fishSoil, fishShade;
+    FishRockCrevice(inputData.positionWS, input.fishRockOrigin, (half3)input.normalWS, fishSoil, fishShade);
+    surfaceData.albedo *= fishShade;
+    surfaceData.occlusion *= fishShade;
+    if (fishSoil > fishGroundWeight)
+    {
+        if (!fishHasGround)
+        {
+            half fishSteep = 1.0h - saturate((normalize((half3)input.normalWS).y - 0.45h) / 0.4h);
+            fishHasGround = FishGroundSiteAt(inputData.positionWS, fishSteep, fishSite);
+        }
+        fishGroundWeight = fishSoil;
+    }
+    // One sample of the terrain's surface for both.
+    FishGroundPixel fishGround = (FishGroundPixel)0;
+    if (fishHasGround && fishGroundWeight > 0.0h)
+    {
+        fishGround = FishGroundSurfaceAtSite(fishSite, inputData.positionWS, fishWorldDx, fishWorldDy);
+    }
+#endif
     if (_FishWeatherAmount > 0.0)
     {
         half3 weathered = inputData.normalWS;
@@ -309,16 +342,6 @@ void LitPassFragment(
         surfaceData.albedo = lerp(surfaceData.albedo, distancePull.rgb, distancePull.a);
         surfaceData.smoothness *= (half)(1.0 - distanceFar);
     }
-    // ── FishMMO edit: a terrain rock or scattered pebble sits IN the ground — its base takes the terrain's
-    // colour and shading (FishGroundColour.hlsl). Only the band's own pixels sample anything. ──
-    {
-        FishContactData contact;
-        contact.trace = input.fishContact;
-        contact.weights = input.fishContactWeights;
-        half3 contactNormal = (half3)inputData.normalWS;
-        FishContactApply(contact, inputData.positionWS, surfaceData.albedo, surfaceData.smoothness, contactNormal);
-        inputData.normalWS = contactNormal;
-    }
 #endif
 
 #if defined(_DBUFFER)
@@ -328,6 +351,13 @@ void LitPassFragment(
     InitializeBakedGIData(input, inputData);
 
     half4 color = UniversalFragmentPBR(inputData, surfaceData);
+#if defined(FISH_INDIRECT_INSTANCED)
+    // ── FishMMO edit: the ground's lit colour over the band and in the crevices (above). ──
+    if (fishHasGround && fishGroundWeight > 0.0h)
+    {
+        color.rgb = lerp(color.rgb, FishGroundLit(inputData, fishGround, fishShade), fishGroundWeight);
+    }
+#endif
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
     color.a = OutputAlpha(color.a, IsSurfaceTypeTransparent(_Surface));
 

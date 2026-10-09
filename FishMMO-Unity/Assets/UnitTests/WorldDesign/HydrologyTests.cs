@@ -305,6 +305,77 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// A river reaching the sea over a beach crest runs in at the sea's level, not off the crest: Flo Monolith's river 0
+		/// held 2.1 m on its crest and dropped to −1.5 m at the shore, and was drawn as a fall into (and under) the sea. The
+		/// bluff is sharp (one point) or smoothed over several, as the generator's smoothed floor has it, crossing sea level
+		/// part way down: grading only the point where it first met the level left the rest for Knickpoints to gather back
+		/// into a ledge.
+		/// </summary>
+		[TestCase(0f)]
+		[TestCase(16f)]
+		public void ARiverReachingTheSeaRunsInAtItsLevelNotOffALedge(float bluffMetres)
+		{
+			var settings = new RiverSettings();
+			int n = 160, shore = 120;
+			float spacing = 2.2f, seaLevel = 0f, lowWater = seaLevel - settings.IntertidalMetres;
+			var floor = new float[n];
+			var bank = new float[n];
+			var step = new float[n];
+			for (int i = 0; i < n; i++)
+			{
+				// A coastal plain falling gently to a 2.6 m crest, a bluff at the shore, then the sea floor shelving away.
+				float s = (i - shore) * spacing;
+				float plain = 2.6f - 0.01f * s, sea = -1.3f - 0.03f * s;
+				float t = bluffMetres <= 0f ? (i < shore ? 0f : 1f) : Mathf.Clamp01(0.5f + s / bluffMetres);
+				floor[i] = Mathf.Lerp(plain, sea, t * t * (3f - 2f * t));
+				bank[i] = floor[i] + 1f;
+				step[i] = i == 0 ? 0f : spacing;
+			}
+			RiverPath before = SeaRiver(RiverShaping.Surface(floor, bank, step, float.PositiveInfinity, lowWater, settings, 15f), spacing, settings);
+			Assert.That(System.Array.IndexOf(before.Reach, RiverReach.Fall), Is.GreaterThan(0), "without a meet level the bluff is a fall into the sea");
+			float[] surface = RiverShaping.Surface(floor, bank, step, float.PositiveInfinity, lowWater, settings, 15f, seaLevel);
+			for (int i = 1; i < n; i++)
+			{
+				Assert.That(surface[i], Is.LessThanOrEqualTo(surface[i - 1] - settings.MinGradient * step[i] + 1e-4f), $"falls at {i}");
+			}
+			RiverPath after = SeaRiver(surface, spacing, settings);
+			for (int i = 0; i < n; i++)
+			{
+				Assert.That(after.Reach[i], Is.Not.EqualTo(RiverReach.Fall), $"point {i}: graded into the sea, no fall");
+			}
+			Assert.That(surface[shore], Is.LessThanOrEqualTo(seaLevel), "in the sea at the shore");
+			for (int i = 0; i < shore; i++)
+			{
+				Assert.That(surface[i], Is.GreaterThanOrEqualTo(lowWater - 1e-4f), $"point {i}: never cut under the low-water line inland");
+			}
+			Assert.That(surface[0], Is.EqualTo(RiverShaping.Surface(floor, bank, step, float.PositiveInfinity, lowWater, settings, 15f)[0]).Within(1e-4f),
+				"the river above the ramp is left as it was");
+		}
+
+		/// <summary>A straight river along those surfaces, its reaches named (knickpoints and pools included).</summary>
+		private static RiverPath SeaRiver(float[] surface, float spacing, RiverSettings settings)
+		{
+			int n = surface.Length;
+			RiverShaping.Size(6f, settings, out float width, out float depth);
+			var path = new RiverPath
+			{
+				X = new float[n], Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
+				Bed = new float[n], Curvature = new float[n], Surface = (float[])surface.Clone(), End = RiverEnd.Sea,
+			};
+			for (int i = 0; i < n; i++)
+			{
+				path.X[i] = i * spacing;
+				path.S[i] = i * spacing;
+				path.Width[i] = width;
+				path.Depth[i] = depth;
+				path.Discharge[i] = 6f;
+				path.Bed[i] = surface[i] - depth;
+			}
+			RiverShaping.Reaches(path, settings, 7u);
+			return path;
+		}
+
 		[Test]
 		public void AChannelIsCarvedUnderItsWaterAndItsBanksStandNoSteeperThanAllowed()
 		{

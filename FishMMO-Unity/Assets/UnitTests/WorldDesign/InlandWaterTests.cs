@@ -103,6 +103,27 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void TheWaterReachesPastItsBanksOnlyAsFarAsAsked()
+		{
+			// The main river is 12 m wide: banks 6 m either side of its line.
+			Assert.That(bodies.TryGetSurfaceNear(-100f, 7.5f, 0f, out _), Is.False, "past the bank with no reach");
+			Assert.That(bodies.TryGetSurfaceNear(-100f, 7.5f, 2f, out float near), Is.True, "within 2 m of the bank");
+			Assert.That(near, Is.EqualTo(9.75f).Within(0.05f), "the river's own surface there");
+			Assert.That(bodies.TryGetSurfaceNear(-100f, 9f, 5f, out _), Is.False, "the reach is capped at MaxReachMetres");
+			// The lake's mask starts at x 400 inside bounds from 380.
+			Assert.That(bodies.TryGetSurfaceNear(398f, 0f, 0f, out _), Is.False, "outside the lake's mask");
+			Assert.That(bodies.TryGetSurfaceNear(398f, 0f, 2f, out float lake), Is.True, "within 2 m of the mask");
+			Assert.That(lake, Is.EqualTo(8f));
+			// Reach 0 is the plain question.
+			Assert.That(bodies.TryGetSurfaceNear(-100f, 3f, 0f, out float plain) && bodies.TryGetSurface(-100f, 3f, out float same) && plain == same, Is.True);
+
+			Assert.That(bodies.Reaches(new Rect(-150f, 7.5f, 50f, 50f)), Is.True, "a terrain beside the main river's bank");
+			Assert.That(bodies.Reaches(new Rect(-150f, 8.5f, 50f, 50f)), Is.False, "a terrain past bank and reach");
+			Assert.That(bodies.Reaches(new Rect(1000f, 1000f, 100f, 100f)), Is.False, "dry country");
+			Assert.That(bodies.Reaches(new Rect(450f, -50f, 10f, 10f)), Is.True, "inside the lake");
+		}
+
+		[Test]
 		public void TheFlowRunsWithoutAJumpFromATributaryIntoTheRiverItJoins()
 		{
 			// Down the tributary's line and on across the main river: the current turns from south to east, smoothly.
@@ -198,6 +219,76 @@ namespace FishMMO.UnitTests.WorldDesign
 						Assert.That(surface.GetComponent<MeshRenderer>().sortingOrder, Is.GreaterThan(lakeOrder));
 					}
 				}
+			}
+			finally
+			{
+				Object.DestroyImmediate(renderer);
+				Object.DestroyImmediate(material);
+			}
+		}
+
+		/// <summary>
+		/// A lake is drawn first and keeps the pixels it claims, and its surface is its mask grown by a 4 m cell. Beside a
+		/// river it neither drains into nor from (a pond along a ponded stretch), those cells laid square patches of lake
+		/// water over the channel (Jim, 2026-10-08). It gives the channel up, along the bank's own line; at a mouth it
+		/// keeps it, as before.
+		/// </summary>
+		[Test]
+		public void ALakeGivesARiverPassingThroughItsChannelButKeepsAMouth()
+		{
+			Shader shader = Shader.Find("FishMMO/Water/Inland Water");
+			var material = new Material(shader);
+			var renderer = host.AddComponent<InlandWaterRenderer>();
+			renderer.Material = material;
+			// Through the middle of the lake, north to south, at its level, 6 m wide: channel x 497 … 503.
+			hydrology.Rivers.Add(River(4, 4, new Vector3(500f, 8f, -150f), new Vector3(500f, 8f, 150f), 6f, 0.5f, SceneHydrology.End.Edge));
+			try
+			{
+				renderer.Rebuild();
+				GameObject lake = null;
+				foreach (GameObject surface in renderer.Built)
+				{
+					if (surface.name == "Lake 0")
+					{
+						lake = surface;
+					}
+				}
+				Assert.That(lake, Is.Not.Null);
+				Mesh mesh = lake.GetComponent<MeshFilter>().sharedMesh;
+				Vector3[] vertices = mesh.vertices;
+				var colours = new List<Color32>();
+				mesh.GetColors(colours);
+				int[] triangles = mesh.triangles;
+				int insideChannel = 0, mouth = 0;
+				for (int i = 0; i < vertices.Length; i++)
+				{
+					float across = Mathf.Abs(vertices[i].x - 500f);
+					if (across <= 2f)
+					{
+						insideChannel++;
+						Assert.That(colours[i].g, Is.LessThan(128), $"the lake gives the channel up at {vertices[i]}");
+					}
+					else if (across >= 3.6f && vertices[i].z > -90f)
+					{
+						Assert.That(colours[i].g, Is.EqualTo(255), $"and keeps the water past its bank at {vertices[i]}");
+					}
+					// River 2 ends in the lake at (400, −100), on the line x − z = 500, 8 m wide: the lake keeps its mouth.
+					if (Mathf.Abs(vertices[i].x - vertices[i].z - 500f) < 2f && vertices[i].x < 404f)
+					{
+						mouth++;
+						Assert.That(colours[i].g, Is.EqualTo(255), $"the lake keeps the mouth of the river that ends in it at {vertices[i]}");
+					}
+				}
+				Assert.That(insideChannel, Is.GreaterThan(0), "the lake's cells are cut finer over the channel");
+				Assert.That(mouth, Is.GreaterThan(0), "the lake's ring reaches into the mouth");
+				// Where the channel is cut out the lake draws nothing: no triangle wholly inside it.
+				for (int t = 0; t < triangles.Length; t += 3)
+				{
+					float cx = (vertices[triangles[t]].x + vertices[triangles[t + 1]].x + vertices[triangles[t + 2]].x) / 3f;
+					Assert.That(Mathf.Abs(cx - 500f), Is.GreaterThan(1.5f), "no lake triangle lies wholly in the channel");
+				}
+				// The rest of the lake is still whole 4 m quads: the four columns of cells by the channel are cut finer, not the 52.
+				Assert.That(vertices.Length, Is.LessThan(53 * 53 + 5 * 8 * (52 * 8 + 1)), "only the cells by the channel are cut finer");
 			}
 			finally
 			{

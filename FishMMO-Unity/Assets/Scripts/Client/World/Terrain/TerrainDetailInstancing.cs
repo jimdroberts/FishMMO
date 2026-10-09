@@ -3,6 +3,7 @@ using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Debug = UnityEngine.Debug;
+using Unity.Profiling;
 
 namespace FishMMO.Client
 {
@@ -351,6 +352,10 @@ namespace FishMMO.Client
 			ClientGrassSettings.OnChanged += OnGrassSettingsChanged;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+			// Scripts recompiled while playing reload in place: everything native must be let go first, or the
+			// renderer's and the fields' NativeArrays leak (the "Leak Detected : Persistent" at each reload).
+			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
+			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += Shutdown;
 #endif
 		}
 
@@ -367,6 +372,7 @@ namespace FishMMO.Client
 			ClientGrassSettings.OnChanged -= OnGrassSettingsChanged;
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
 #endif
 		}
 
@@ -386,8 +392,12 @@ namespace FishMMO.Client
 			Unhook();
 		}
 
+		/// <summary>This system's once-a-frame work before the cameras render, named in the profiler (StartupTimeline reads it).</summary>
+		private static readonly ProfilerMarker ContextMarker = new ProfilerMarker("TerrainDetailInstancing.BeginContext");
+
 		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
 		{
+			using var contextScope = ContextMarker.Auto();
 			Sync();
 		}
 

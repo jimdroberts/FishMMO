@@ -17,10 +17,23 @@ namespace FishMMO.Client
 		public string Name;
 		public uint Salt;
 		public Mesh Mesh;
+		/// <summary>
+		/// The meshes it draws by distance: <see cref="Mesh"/> first, then the prefab's <c>LOD1</c> and <c>LOD2</c> children
+		/// (bare MeshFilters, one sub-mesh each) when it has them. One for every type but a bush.
+		/// </summary>
+		public Mesh[] Levels;
+		/// <summary>
+		/// A bush (<see cref="DetailScatterSettings.BushPrefix"/>): cover, the same for every player. Never thinned, never
+		/// scaled by a density setting, drawn to a reach set by its own height rather than by the detail distance.
+		/// </summary>
+		public bool Bush;
+		/// <summary>The top of its tallest level at scale 1, metres (a bush's reach and level steps go by its height).</summary>
+		public float MeshTop;
 		public Material Material;
 		/// <summary>Layer, receive shadows, reflection probes, rendering layer mask; shadow casting and camera are set per draw.</summary>
 		public RenderParams Template;
 		public bool CastsShadows;
+		/// <summary>The bounds of every level together, at scale 1.</summary>
 		public Bounds MeshBounds;
 		/// <summary>How far its foot reaches from its root at scale 1, m (what hangs off a slope: the chunk renderer's rule).</summary>
 		public float FootRadius;
@@ -53,15 +66,33 @@ namespace FishMMO.Client
 				reason = $"'{prefab.name}' material '{material.name}' ({material.shader?.name}) has no procedural-instancing twin";
 				return null;
 			}
+			var levels = new List<Mesh> { filter.sharedMesh };
+			Bounds bounds = filter.sharedMesh.bounds;
+			// The reduced levels, in order, while they are there; one with more than one sub-mesh ends the list.
+			for (int lod = 1; lod < DetailScatterSettings.MaxLevels; lod++)
+			{
+				Transform child = prefab.transform.Find("LOD" + lod);
+				Mesh mesh = child != null && child.TryGetComponent(out MeshFilter levelFilter) ? levelFilter.sharedMesh : null;
+				if (mesh == null || mesh.subMeshCount != 1)
+				{
+					break;
+				}
+				levels.Add(mesh);
+				bounds.Encapsulate(mesh.bounds);
+			}
+			bool bush = DetailScatterSettings.IsBush(prefab.name);
 			return new DetailScatterType
 			{
 				Prefab = prefab,
 				Name = prefab.name,
 				Salt = DetailScatterMath.Salt(prefab.name),
 				Mesh = filter.sharedMesh,
+				Levels = levels.ToArray(),
+				Bush = bush,
+				MeshTop = Mathf.Max(0.05f, bounds.max.y),
 				Material = material,
 				CastsShadows = renderer.shadowCastingMode != ShadowCastingMode.Off,
-				MeshBounds = filter.sharedMesh.bounds,
+				MeshBounds = bounds,
 				FootRadius = TerrainDetailField.DetailPrototypeSettings.From(prototype).FootRadius,
 				Template = new RenderParams(material)
 				{
@@ -175,6 +206,8 @@ namespace FishMMO.Client
 			private readonly DetailScatterTerrain st;
 			private readonly List<int> layerPrototypes = new List<int>(), layerChannels = new List<int>();
 			private readonly TerrainDetailField.DetailPrototypeSettings[] prototypeSettings;
+			/// <summary>Per channel, whether its type is a bush (no density scale: cover is the same for everyone).</summary>
+			private readonly bool[] channelBush;
 			private readonly float[] coverage;
 			private readonly double[] prototypeTotals;
 			private readonly int res, factor;
@@ -242,11 +275,13 @@ namespace FishMMO.Client
 					WorldBlockZ = DetailScatterMath.WorldBlockBase(origin.z, cellZ * factor),
 					ItemsSide = DetailScatterMath.Items(blocks),
 				};
+				channelBush = new bool[channelTypes.Count];
 				for (int c = 0; c < channelTypes.Count; c++)
 				{
 					DetailScatterType type = channelTypes[c];
 					st.ChannelSettings[c].Type = type.Index;
 					st.CastsShadows |= type.CastsShadows;
+					channelBush[c] = type.Bush;
 				}
 				foreach (int p in layerPrototypes)
 				{
@@ -314,7 +349,7 @@ namespace FishMMO.Client
 					int[,] cells = data.GetDetailLayer(0, row, res, rows, p);
 					float[] target = expected[layerChannels[layer]];
 					int blocks = st.Blocks;
-					float density = Density(p);
+					float density = channelBush[layerChannels[layer]] ? 1f : Density(p);
 					double total = 0.0;
 					for (int z = 0; z < rows; z++)
 					{

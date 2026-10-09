@@ -193,18 +193,12 @@ namespace FishMMO.Client
 		/// <summary>Advances the server's cover snapshot from the world time it was taken at to now.</summary>
 		private void CatchUpCover()
 		{
-			uint now = CurrentTick();
-			double nowSeconds = timeline.WorldSecondsAt(now);
-			if (nowSeconds > timeline.CoverSeconds && scene.IsValid())
+			if (scene.IsValid())
 			{
-				// World time, as the server integrates it: nothing dries while the world is held.
-				float seconds = (float)System.Math.Min(120.0, nowSeconds - timeline.CoverSeconds);
-				// From the scene's five cover points, as the server integrates it, not from where this
-				// camera stands: the same forcing, so the figure tracks the server's between snapshots.
-				SceneCoverSampling.Sample(timeline, settings, scene, now, out WeatherFrame frame, out float temperature);
-				double coverHours = nowSeconds / 3600.0;
-				timeline.Cover.Integrate(frame, temperature, seconds, SceneTime.IsDaylight(settings, coverHours) ? 1f : 0f);
-				timeline.CoverSeconds = nowSeconds;
+				// World time, from the scene's five cover points, exactly as the server integrates it — not
+				// from where this camera stands — so the figure tracks the server's between snapshots, held,
+				// raced or jumped.
+				SceneCoverSampling.Advance(timeline, settings, scene, timeline.WorldSecondsAt(CurrentTick()));
 			}
 		}
 

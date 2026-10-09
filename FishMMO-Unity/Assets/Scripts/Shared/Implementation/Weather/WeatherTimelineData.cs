@@ -362,16 +362,34 @@ namespace FishMMO.Shared.Weather
 		public const float WetFillSeconds = 120f;
 		/// <summary>Seconds a soaked ground takes to dry at an evaporation of 1: a mild, still, half-lit hour.</summary>
 		public const float DrySeconds = 1500f;
-		/// <summary>
-		/// How much faster than real time the ground's clock runs. 1 in the game, where the world's
-		/// clock is the real one. A test bed that runs the sky at a hundred and eighty times real time
-		/// sets this to match, or the weather races past overhead while the puddles dry at the
-		/// speed of the wall clock and nothing ever seems to dry at all.
-		/// </summary>
-		public static float TimeScale = 1f;
 		public const float MeltSeconds = 1200f;
 		public const float DustFillSeconds = 1200f;
 		public const float DustClearSeconds = 3600f;
+
+		/// <summary>
+		/// The longest step cover is integrated in, world seconds. Every advance runs in WORLD time — the time the
+		/// world clock moved over, not the wall clock's — so a held world holds its ground and a raced one races
+		/// it; a long span is cut into steps of this, each under the weather of its own moment, so a storm the
+		/// world raced through still wets the ground it crossed.
+		/// </summary>
+		public const double StepSeconds = 60.0;
+
+		/// <summary>
+		/// The most world time one advance looks back over: two days. Past that the ground has long since come to
+		/// whatever the weather of the last day made it, so a jump of a month is integrated over its last two days
+		/// (in the same number of steps, each longer).
+		/// </summary>
+		public const double MaxAdvanceSeconds = 2.0 * 86400.0;
+
+		/// <summary>How many steps an advance over <paramref name="span"/> world seconds takes, at most <paramref name="maxSteps"/>.</summary>
+		public static int StepsFor(double span, int maxSteps)
+		{
+			if (!(span > 0.0))
+			{
+				return 0;
+			}
+			return (int)Math.Min(Math.Max(1, maxSteps), Math.Ceiling(Math.Min(span, MaxAdvanceSeconds) / StepSeconds));
+		}
 
 		/// <summary>
 		/// Advances cover by <paramref name="seconds"/> under a frame. Snow melts above freezing;
@@ -383,7 +401,6 @@ namespace FishMMO.Shared.Weather
 		/// </param>
 		public void Integrate(in WeatherFrame frame, float temperature, float seconds, float sunlight = 0.5f)
 		{
-			seconds *= Mathf.Max(0f, TimeScale);
 			if (seconds <= 0f)
 			{
 				return;

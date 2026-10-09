@@ -151,8 +151,10 @@ namespace FishMMO.TestHarness.World.Editor
 
 		private static void Begin()
 		{
-			// Before anything is measured or its markers listed: the clouds as shipped, whatever the editor's own switch says.
-			SkySystem.EditorCloudsOff = false;
+			// Before anything is measured or its markers listed: the clouds and fog as shipped, whatever the editor's own switches say
+			// (FISHMMO_PERF_CLOUDS=0 holds the clouds off instead, to price everything else).
+			SkySystem.EditorCloudsOff = CloudsHeldOff;
+			SkySystem.EditorFogOff = false;
 			output = SessionState.GetString(StateKey, output);
 			report.Clear();
 			steps.Clear();
@@ -256,6 +258,7 @@ namespace FishMMO.TestHarness.World.Editor
 				$"GPU {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceType}), GPU recorder {(SystemInfo.supportsGpuRecorder ? "yes" : "NO")}");
 			report.Add($"camera far {camera.farClipPlane:0}, fov {camera.fieldOfView:0}, lodBias {QualitySettings.lodBias:0.00}; weather {weatherName}");
 			report.Add($"render-pipeline hooks: {Hooks()}");
+			report.Add(DescribeBackdrop());
 
 			var names = new List<string>();
 			Sampler.GetNames(names);
@@ -299,6 +302,9 @@ namespace FishMMO.TestHarness.World.Editor
 				}
 			}
 		}
+
+		/// <summary>FISHMMO_PERF_CLOUDS=0: the whole run with the clouds off, as a player with the option off sees it.</summary>
+		private static bool CloudsHeldOff => Environment.GetEnvironmentVariable("FISHMMO_PERF_CLOUDS") == "0";
 
 		private static IEnumerable<string> Variants(string asked)
 		{
@@ -354,8 +360,10 @@ namespace FishMMO.TestHarness.World.Editor
 		private static void Enter(Step step)
 		{
 			// The editor's cloud switch (CloudToggle) is a person's preference, restored after every domain reload: the
-			// probe measures the clouds as shipped, so it is held on here, for this session only (nothing is saved).
-			SkySystem.EditorCloudsOff = false;
+			// probe measures the clouds as shipped, so it is held on here, for this session only (nothing is saved). The fog
+			// switch (FogToggle) likewise. FISHMMO_PERF_CLOUDS=0 holds them off for the whole run instead.
+			SkySystem.EditorCloudsOff = CloudsHeldOff;
+			SkySystem.EditorFogOff = false;
 			Place(step.View);
 			revert = Apply(step.Variant);
 			gpuSum.Clear();
@@ -369,6 +377,7 @@ namespace FishMMO.TestHarness.World.Editor
 			switch (view)
 			{
 				case "grass-eye":
+				case "grass-back":
 				case "grass-third":
 				case "grass-high":
 				case "grass-top":
@@ -385,6 +394,18 @@ namespace FishMMO.TestHarness.World.Editor
 					eye = new Vector3(0f, GroundAt(0f, 0f) + 350f, -600f);
 					look = new Vector3(0f, GroundAt(0f, 0f), 0f);
 					break;
+				case "edge":
+				case "edge-high":
+				{
+					// On land just inside the scene's edge, looking out over the backdrop: level at a player's eye (edge), or
+					// from 150 m up tilted 12 degrees down (edge-high), where the backdrop fills most of the frame.
+					Edge(out Vector3 at, out Vector3 outward);
+					bool high = view == "edge-high";
+					eye = new Vector3(at.x, GroundAt(at.x, at.z) + (high ? 150f : 1.8f), at.z);
+					Vector3 dir = high ? Quaternion.AngleAxis(12f, Vector3.Cross(Vector3.up, outward)) * outward : outward + new Vector3(0f, -0.03f, 0f);
+					look = eye + dir * 100f;
+					break;
+				}
 				case "skyline":
 				case "skyup":
 				{
@@ -455,6 +476,110 @@ namespace FishMMO.TestHarness.World.Editor
 			return true;
 		}
 
+		private static (Vector3 At, Vector3 Out)? edgeSpot;
+
+		/// <summary>
+		/// The land point 40 m inside the scene's terrain edge nearest the middle of an edge, and the way out across it.
+		/// </summary>
+		private static void Edge(out Vector3 at, out Vector3 outward)
+		{
+			if (edgeSpot.HasValue)
+			{
+				at = edgeSpot.Value.At;
+				outward = edgeSpot.Value.Out;
+				return;
+			}
+			float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
+			foreach (Terrain terrain in Terrain.activeTerrains)
+			{
+				Vector3 p = terrain.transform.position, size = terrain.terrainData.size;
+				minX = Mathf.Min(minX, p.x);
+				minZ = Mathf.Min(minZ, p.z);
+				maxX = Mathf.Max(maxX, p.x + size.x);
+				maxZ = Mathf.Max(maxZ, p.z + size.z);
+			}
+			const float inset = 40f;
+			float sea = SeaLevel();
+			at = new Vector3((minX + maxX) * 0.5f, 0f, maxZ - inset);
+			outward = Vector3.forward;
+			float nearest = float.MaxValue;
+			// North, south, east, west: a point on each edge's inset line, walked out from the edge's middle.
+			var edges = new (Vector3 Mid, Vector3 Along, float Half, Vector3 Out)[]
+			{
+				(new Vector3((minX + maxX) * 0.5f, 0f, maxZ - inset), Vector3.right, (maxX - minX) * 0.5f - inset, Vector3.forward),
+				(new Vector3((minX + maxX) * 0.5f, 0f, minZ + inset), Vector3.right, (maxX - minX) * 0.5f - inset, Vector3.back),
+				(new Vector3(maxX - inset, 0f, (minZ + maxZ) * 0.5f), Vector3.forward, (maxZ - minZ) * 0.5f - inset, Vector3.right),
+				(new Vector3(minX + inset, 0f, (minZ + maxZ) * 0.5f), Vector3.forward, (maxZ - minZ) * 0.5f - inset, Vector3.left),
+			};
+			foreach (var e in edges)
+			{
+				for (float d = 0f; d < e.Half && d < nearest; d += 50f)
+				{
+					foreach (float sign in new[] { 1f, -1f })
+					{
+						Vector3 p = e.Mid + e.Along * (d * sign);
+						if (GroundAt(p.x, p.z) > sea + 2f)
+						{
+							nearest = d;
+							at = p;
+							outward = e.Out;
+							break;
+						}
+					}
+				}
+			}
+			edgeSpot = (at, outward);
+			report.Add($"edge view at ({at.x:0}, {at.z:0}), looking ({outward.x:0}, {outward.z:0}), {(nearest < float.MaxValue ? $"{nearest:0} m from the edge's middle" : "NO land on any edge")}");
+		}
+
+		/// <summary>Every renderer under the scene's backdrops: the ground rings, or (water) only the lakes and rivers drawn on them.</summary>
+		private static List<Renderer> BackdropRenderers(bool water)
+		{
+			var found = new List<Renderer>();
+			foreach (SceneBackdrop backdrop in UnityEngine.Object.FindObjectsByType<SceneBackdrop>(FindObjectsInactive.Exclude))
+			{
+				foreach (Renderer r in backdrop.GetComponentsInChildren<Renderer>())
+				{
+					// The rings are named "Ring <n> <side>" by SceneBackdropBuilder; everything else under it is water.
+					if (r.enabled && (!water || !r.name.StartsWith("Ring ", StringComparison.Ordinal)))
+					{
+						found.Add(r);
+					}
+				}
+			}
+			return found;
+		}
+
+		/// <summary>What the backdrop draws, for the report: meshes, vertices, triangles and shaders, ground and water apart.</summary>
+		private static string DescribeBackdrop()
+		{
+			List<Renderer> all = BackdropRenderers(false);
+			if (all.Count == 0)
+			{
+				return "backdrop: none in this scene";
+			}
+			var sb = new StringBuilder("backdrop:");
+			foreach (var group in all.GroupBy(r => r.name.StartsWith("Ring ", StringComparison.Ordinal) ? "ground" : "water"))
+			{
+				long verts = 0, tris = 0;
+				foreach (Renderer r in group)
+				{
+					Mesh mesh = r.GetComponent<MeshFilter>()?.sharedMesh;
+					if (mesh != null)
+					{
+						verts += mesh.vertexCount;
+						for (int s = 0; s < mesh.subMeshCount; s++)
+						{
+							tris += mesh.GetIndexCount(s) / 3;
+						}
+					}
+				}
+				string shaders = string.Join("/", group.Select(r => r.sharedMaterial != null ? r.sharedMaterial.shader.name : "none").Distinct());
+				sb.Append($" {group.Key} {group.Count()} meshes, {verts:N0} verts, {tris:N0} tris ({shaders});");
+			}
+			return sb.ToString();
+		}
+
 		private static float SeaLevel() => SurfaceWater.TryGetLevel(out float sea) ? sea : 0f;
 
 		private static Vector2? grassSpot;
@@ -476,6 +601,11 @@ namespace FishMMO.TestHarness.World.Editor
 				case "grass-eye":
 					eye = at + Vector3.up * 1.7f;
 					look = eye + (dir + Vector3.down * 0.05f) * 50f;
+					break;
+				case "grass-back":
+					// The same eye turned round: at Flo Monolith grass-eye stands in a bush, which fills most of its frame.
+					eye = at + Vector3.up * 1.7f;
+					look = eye + (-dir + Vector3.down * 0.05f) * 50f;
 					break;
 				case "grass-third":
 					eye = at - dir * 6f;
@@ -632,6 +762,85 @@ namespace FishMMO.TestHarness.World.Editor
 			{
 				return Unhook(variant.Substring("hook:".Length));
 			}
+			if (variant.StartsWith("backdropfade:"))
+			{
+				// "backdropfade:<from>:<to>": the distances (m) the backdrop's arrays fade over (FishMMO/Backdrop Ground's
+				// _FishBackdropDetail), on its shared material for this step; 0:0 draws the colour bake alone.
+				string[] parts = variant.Substring("backdropfade:".Length).Split(':');
+				var vector = new Vector4(float.Parse(parts[0]), float.Parse(parts[1]), 0f, 0f);
+				var changed = new List<(Material Material, Vector4 Was)>();
+				foreach (Renderer r in BackdropRenderers(false))
+				{
+					Material m = r.sharedMaterial;
+					if (m != null && m.HasProperty("_FishBackdropDetail") && !changed.Exists(c => c.Material == m))
+					{
+						changed.Add((m, m.GetVector("_FishBackdropDetail")));
+						m.SetVector("_FishBackdropDetail", vector);
+					}
+				}
+				return () => changed.ForEach(c => c.Material.SetVector("_FishBackdropDetail", c.Was));
+			}
+			if (variant.StartsWith("grass:") || variant.StartsWith("grassrings="))
+			{
+				// The grass profile, live (restored after): `grass:Field=value` sets a number field of GrassBladeSettings,
+				// `grassrings=k` scales every ring's blades per square metre by k (fewer blades, same reach).
+				GrassBladeSettings g = WeatherRenderProfile.Active != null ? WeatherRenderProfile.Active.Grass : null;
+				if (g == null)
+				{
+					return () => { };
+				}
+				if (variant.StartsWith("grassrings="))
+				{
+					float k = float.Parse(variant.Substring("grassrings=".Length), System.Globalization.CultureInfo.InvariantCulture);
+					Vector2[] rings = g.Rings;
+					g.Rings = rings.Select(r => new Vector2(r.x, r.y * k)).ToArray();
+					return () => g.Rings = rings;
+				}
+				string[] kv = variant.Substring("grass:".Length).Split('=');
+				FieldInfo field = typeof(GrassBladeSettings).GetField(kv[0]);
+				if (field == null)
+				{
+					return null;
+				}
+				object was = field.GetValue(g);
+				object value = field.FieldType == typeof(int) ? (object)int.Parse(kv[1]) : float.Parse(kv[1], System.Globalization.CultureInfo.InvariantCulture);
+				field.SetValue(g, value);
+				return () => field.SetValue(g, was);
+			}
+			if (variant.StartsWith("shadowdist=") || variant.StartsWith("cascades=") || variant.StartsWith("shadowres=") || variant.StartsWith("stp="))
+			{
+				// The pipeline asset, live (restored after): main-light shadow distance (m), cascade count, shadow map
+				// resolution, or render scale with the STP upscaler.
+				var asset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+				string number = variant.Substring(variant.IndexOf('=') + 1);
+				if (variant.StartsWith("shadowdist="))
+				{
+					float was = asset.shadowDistance;
+					asset.shadowDistance = float.Parse(number, System.Globalization.CultureInfo.InvariantCulture);
+					return () => asset.shadowDistance = was;
+				}
+				if (variant.StartsWith("cascades="))
+				{
+					int was = asset.shadowCascadeCount;
+					asset.shadowCascadeCount = int.Parse(number);
+					return () => asset.shadowCascadeCount = was;
+				}
+				if (variant.StartsWith("shadowres="))
+				{
+					int was = asset.mainLightShadowmapResolution;
+					asset.mainLightShadowmapResolution = int.Parse(number);
+					return () => asset.mainLightShadowmapResolution = was;
+				}
+				float scaleWas = asset.renderScale;
+				UpscalingFilterSelection filterWas = asset.upscalingFilter;
+				asset.renderScale = float.Parse(number, System.Globalization.CultureInfo.InvariantCulture);
+				asset.upscalingFilter = UpscalingFilterSelection.STP;
+				return () =>
+				{
+					asset.renderScale = scaleWas;
+					asset.upscalingFilter = filterWas;
+				};
+			}
 			if (variant.StartsWith("quality:"))
 			{
 				int was = QualitySettings.GetQualityLevel();
@@ -688,12 +897,20 @@ namespace FishMMO.TestHarness.World.Editor
 				case "regather":
 					GrassBladeRenderer.AlwaysRegather = true;
 					return () => GrassBladeRenderer.AlwaysRegather = false;
+				case "scatterregen":
+					// The detail scatter generated on every render, as before its reuse (DetailScatterRenderer.RegatherMetres).
+					DetailScatterRenderer.AlwaysRegenerate = true;
+					return () => DetailScatterRenderer.AlwaysRegenerate = false;
 				case "godrays":
 					SkySystem.DrawGodRays = false;
 					return () => SkySystem.DrawGodRays = true;
 				case "cloudshadows":
 					SkySystem.DrawCloudShadows = false;
 					return () => SkySystem.DrawCloudShadows = true;
+				case "fog":
+					// Every fog at once (FogToggle): the layer's passes, the ground mist and the distance fog.
+					SkySystem.EditorFogOff = true;
+					return () => SkySystem.EditorFogOff = false;
 				case "details":
 					TerrainInstancingShared.SetDrawsDetails(camera, false);
 					return () => TerrainInstancingShared.SetDrawsDetails(camera, true);
@@ -730,6 +947,25 @@ namespace FishMMO.TestHarness.World.Editor
 				case "vegold":
 					Shader.SetGlobalFloat("_FishVegetationDiag", 1f);
 					return () => Shader.SetGlobalFloat("_FishVegetationDiag", 0f);
+				case "vegtrace":
+					Shader.SetGlobalFloat("_FishVegContactAlways", 1f);
+					return () => Shader.SetGlobalFloat("_FishVegContactAlways", 0f);
+				case "nocascadecull":
+					// Every tree drawn into every shadow cascade again (ShadowCascadeCulling).
+					ShadowCascadeCulling.Enabled = false;
+					return () => ShadowCascadeCulling.Enabled = true;
+				case "vegplantconst":
+					// Every per-plant value as a constant (FishVegetationPasses.hlsl _FishVegPlantConst): the most a per-instance
+					// precompute of them could save. Draws every plant alike.
+					Shader.SetGlobalFloat("_FishVegPlantConst", 1f);
+					return () => Shader.SetGlobalFloat("_FishVegPlantConst", 0f);
+				case "castercullall":
+					Shader.SetGlobalFloat("_FishCasterCullAll", 1f);
+					return () => Shader.SetGlobalFloat("_FishCasterCullAll", 0f);
+				case "noprime":
+					// The trees' alpha-tested lit pass drawn alone again, writing its own depth (TerrainGpuRenderer.PrimeAlphaTested).
+					TerrainGpuRenderer.PrimeAlphaTested = false;
+					return () => TerrainGpuRenderer.PrimeAlphaTested = true;
 				case "noocclusion":
 					FishDepthPyramid.Enabled = false;
 					return () => FishDepthPyramid.Enabled = true;
@@ -755,6 +991,32 @@ namespace FishMMO.TestHarness.World.Editor
 					}
 					return () => changed.ForEach(c => c.Data.depthPrimingMode = c.Was);
 				}
+				case "msaa2":
+				{
+					int was = pipeline.msaaSampleCount;
+					pipeline.msaaSampleCount = 2;
+					return () => pipeline.msaaSampleCount = was;
+				}
+				case "ssaoafter":
+				{
+					// URP's SSAO applied after the opaques (no depth prepass needed for it). Its settings are internal.
+					var changed = new List<(object Settings, FieldInfo Field, object Was)>();
+					foreach (ScriptableRendererFeature feature in Features())
+					{
+						if (feature == null || feature.GetType().Name != "ScreenSpaceAmbientOcclusion")
+						{
+							continue;
+						}
+						object settings = feature.GetType().GetField("m_Settings", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(feature);
+						FieldInfo after = settings?.GetType().GetField("AfterOpaque", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+						if (after != null)
+						{
+							changed.Add((settings, after, after.GetValue(settings)));
+							after.SetValue(settings, true);
+						}
+					}
+					return () => changed.ForEach(c => c.Field.SetValue(c.Settings, c.Was));
+				}
 				case "msaa1":
 				{
 					int was = pipeline.msaaSampleCount;
@@ -772,6 +1034,15 @@ namespace FishMMO.TestHarness.World.Editor
 					var on = Terrain.activeTerrains.Where(t => t.enabled).ToList();
 					on.ForEach(t => t.enabled = false);
 					return () => on.ForEach(t => t.enabled = true);
+				}
+				case "backdrop":
+				case "backdropwater":
+				{
+					// The renderers only: SceneBackdrop itself stays on, so the camera's far plane it raised (and everything
+					// else drawn to that distance) is unchanged and the difference is the backdrop's own draws.
+					List<Renderer> on = BackdropRenderers(variant == "backdropwater");
+					on.ForEach(r => r.enabled = false);
+					return () => on.ForEach(r => r.enabled = true);
 				}
 				case "water":
 				{
@@ -926,6 +1197,7 @@ namespace FishMMO.TestHarness.World.Editor
 				case "light": { int was = clouds.LightSteps; clouds.LightSteps = Mathf.Max(1, (int)value); return () => clouds.LightSteps = was; }
 				case "maxdist": { float was = clouds.MaxDistance; clouds.MaxDistance = value; return () => clouds.MaxDistance = was; }
 				case "lightmarch": { bool was = d.LightMarch; d.LightMarch = value > 0.5f; return () => d.LightMarch = was; }
+				case "maxmarch": { float was = d.MaxMarchDistance; d.MaxMarchDistance = value; return () => d.MaxMarchDistance = was; }
 				case "stepscale": { float was = d.StepScale; d.StepScale = value; return () => d.StepScale = was; }
 				case "growth": { bool was = d.DistanceStepGrowth; d.DistanceStepGrowth = value > 0.5f; return () => d.DistanceStepGrowth = was; }
 				case "exit": { float was = d.EarlyExit; d.EarlyExit = value; return () => d.EarlyExit = was; }
@@ -1077,6 +1349,7 @@ namespace FishMMO.TestHarness.World.Editor
 				}
 			}
 			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
+			report.Add($"  shadow cascades: {ShadowCascadeCulling.LastReport}");
 			report.Add($"  indirect draws a camera: props {CliffRockInstancing.LastDrawCount}, trees {TerrainTreeInstancing.LastDrawCount}, details {TerrainDetailInstancing.LastDrawCount}, scatter {DetailScatterSystem.LastDrawCount}, grass {GrassBladeSystem.LastDrawCount}");
 			if (GrassBladeRenderer.TimedCalls > 0)
 			{
@@ -1090,6 +1363,11 @@ namespace FishMMO.TestHarness.World.Editor
 				RenderTexture.active = target;
 				image.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
 				string tag = new string((step.Variant).Select(ch => char.IsLetterOrDigit(ch) || ch == '.' || ch == '=' ? ch : '_').ToArray());
+				// A long combination (every hook at once) overflows the file name limit and failed the run: cut it, kept apart by its hash.
+				if (tag.Length > 96)
+				{
+					tag = tag.Substring(0, 80) + "_" + ((uint)step.Variant.GetHashCode()).ToString("x8");
+				}
 				File.WriteAllBytes(Path.Combine(output, $"perf-{step.View}-{tag}.png"), image.EncodeToPNG());
 				UnityEngine.Object.DestroyImmediate(image);
 			}

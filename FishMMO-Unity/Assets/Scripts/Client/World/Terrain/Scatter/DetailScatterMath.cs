@@ -132,6 +132,84 @@ namespace FishMMO.Client
 			return Mathf.Clamp01((d - (drawDistance - band)) / band);
 		}
 
+		// ── Bushes: levels of detail and a fixed reach (FishDetailScatter.compute ScatterSelectLevel) ──
+
+		/// <summary>How far a bush <paramref name="height"/> metres tall is drawn: its height times the metres per metre, clamped.</summary>
+		public static float BushDrawDistance(float height, float metresPerMetre, float min, float max)
+		{
+			return Mathf.Clamp(Mathf.Max(0f, height) * metresPerMetre, min, Mathf.Max(min, max));
+		}
+
+		/// <summary>
+		/// The level an instance <paramref name="d"/> metres away draws, for a type of <paramref name="levels"/> levels that
+		/// step at <paramref name="metresPerMetre"/> (x: 0 → 1, y: 1 → 2) times the instance's height. In the last
+		/// <paramref name="band"/> share of a level's reach it cross-fades into the next: <paramref name="fade"/> −f on the
+		/// level returned and +f on <paramref name="partner"/> (FishLodFade.hlsl's convention: equal magnitudes, so each pixel
+		/// is drawn by exactly one of the two); outside a band, fade 0 and no partner.
+		/// </summary>
+		public static int SelectLevel(float d, float height, int levels, Vector2 metresPerMetre, float band, out float fade, out int partner, out float partnerFade)
+		{
+			fade = 0f;
+			partner = -1;
+			partnerFade = 0f;
+			levels = Mathf.Clamp(levels, 1, DetailScatterSettings.MaxLevels);
+			if (levels <= 1)
+			{
+				return 0;
+			}
+			float end0 = metresPerMetre.x * height, end1 = metresPerMetre.y * height;
+			int level = d < end0 ? 0 : levels > 2 && d < end1 ? 1 : levels - 1;
+			if (level < levels - 1)
+			{
+				float end = level == 0 ? end0 : end1;
+				float width = Mathf.Clamp(band, 0f, 1f) * end;
+				float f = width > 0f ? (d - (end - width)) / width : 0f;
+				if (f > 0f)
+				{
+					fade = -f;
+					partner = level + 1;
+					partnerFade = f;
+				}
+			}
+			return level;
+		}
+
+		/// <summary>
+		/// The levels (a bit each) any instance of heights <paramref name="minHeight"/>..<paramref name="maxHeight"/> between
+		/// <paramref name="near"/> and <paramref name="far"/> metres away can draw, cross-fades included: which of a work
+		/// item's slots its upper bound goes to (<see cref="SelectLevel"/>'s superset).
+		/// </summary>
+		public static int LevelsReached(float near, float far, float minHeight, float maxHeight, int levels, Vector2 metresPerMetre, float band)
+		{
+			levels = Mathf.Clamp(levels, 1, DetailScatterSettings.MaxLevels);
+			if (levels <= 1)
+			{
+				return 1;
+			}
+			float keep = 1f - Mathf.Clamp01(band);
+			int mask = 0;
+			if (near < metresPerMetre.x * maxHeight)
+			{
+				mask |= 1;
+			}
+			if (levels > 2)
+			{
+				if (far >= metresPerMetre.x * minHeight * keep && near < metresPerMetre.y * maxHeight)
+				{
+					mask |= 2;
+				}
+				if (far >= metresPerMetre.y * minHeight * keep)
+				{
+					mask |= 4;
+				}
+			}
+			else if (far >= metresPerMetre.x * minHeight * keep)
+			{
+				mask |= 2;
+			}
+			return mask;
+		}
+
 		/// <summary>The hash of a position the thinning keeps by (FishTerrainInstancing.compute FishThinFade's), 0..1.</summary>
 		public static float PositionHash01(float x, float z)
 		{

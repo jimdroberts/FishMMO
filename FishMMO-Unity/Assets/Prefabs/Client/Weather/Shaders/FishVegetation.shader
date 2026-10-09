@@ -31,6 +31,9 @@ Shader "FishMMO/Vegetation"
         _Translucency("Translucency (light through leaves)", Range(0.0, 2.0)) = 0.5
         [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull", Float) = 0.0
         [Toggle] _BackfaceFlip("Flip normal on back faces (flat parts; off for bent-normal cards)", Float) = 0.0
+        // Off only where a depth-prime draw has already laid this material's depth (TerrainGpuRenderer, Vegetation Prime):
+        // the lit pass then writes none, so a leaf hidden behind another fails the depth test before it is shaded.
+        [HideInInspector] _VegZWrite("Lit pass writes depth", Float) = 1.0
 
         [Header(Wind)]
         _WindSway("Sway (m at sway weight 1, full wind)", Range(0.0, 2.0)) = 0.4
@@ -84,7 +87,7 @@ Shader "FishMMO/Vegetation"
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
             Cull [_Cull]
-            ZWrite On
+            ZWrite [_VegZWrite]
             // Soft leaf edges where the target is multisampled (FishVegetationPasses.hlsl, VegForwardFragment).
             AlphaToMask On
 

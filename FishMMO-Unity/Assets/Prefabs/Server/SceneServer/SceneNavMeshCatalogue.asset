@@ -22,7 +22,7 @@ MonoBehaviour:
     Position: {x: -256, y: -35, z: -256}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Flo Monolith
-    Data: {fileID: -2482731682205308588, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
+    Data: {fileID: -448529235919948317, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: StartScene A

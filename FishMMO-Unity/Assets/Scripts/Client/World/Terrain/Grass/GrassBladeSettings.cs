@@ -45,6 +45,9 @@ namespace FishMMO.Client
 		[Tooltip("A strap that keeps its width to a rounded end (a reed's leaf) instead of tapering to a point.")]
 		public bool BluntTip;
 
+		[Tooltip("How deep into a river's or lake's water this type may stand, metres (reeds and rushes in the shallows). 0: none of it grows below the bank (Bank Clearance).")]
+		[Range(0f, 1.5f)] public float Wade = 0f;
+
 		public GrassTypeTuning() { }
 
 		public GrassTypeTuning(string prefix, float density, float stiffness, float width, float clumpPull, float bend, float heightScale = 1f)
@@ -115,6 +118,12 @@ namespace FishMMO.Client
 
 		[Tooltip("The detail-layer density (as a share of its maximum) at and above which grass grows at the FULL ring density. The scatter paints biome grass at roughly 20–40% of the maximum; read as a straight spawn chance that thinned the near field to a few dozen blades per square metre, which looked like the old clumps. Below this the field thins in proportion, so painted edges still fade.")]
 		[Range(0.05f, 1f)] public float Fullness = 0.35f;
+
+		[Header("River and lake banks")]
+		[Tooltip("How far above a river's or lake's water a blade must root, metres (each terrain's water line, cut per blade). The density maps are 2 m texels smoothed over 2 m and filled narrow creeks from both banks; this cuts the grass where the water meets the ground.")]
+		[Range(0f, 0.5f)] public float BankClearance = 0.03f;
+		[Tooltip("Over how much more height above that the bank grass thins in to full, metres: a fringe instead of a mown edge.")]
+		[Range(0.01f, 1f)] public float BankThinning = 0.25f;
 		[Tooltip("Blades widen as the field thins: width × share^-exponent. 1 keeps the ground covered as fully as near the camera (fewer blades, each standing for the ones thinned out); 0.5 let coverage fall to two thirds by 15 m and a quarter by 50 m, which read as the grass fading out just past the camera. Flower and seed heads keep their area instead (share^-0.5 whatever this is).")]
 		[Range(0f, 1f)] public float WidenExponent = 1f;
 		[Tooltip("The most a blade widens (and a head grows), as a multiple of its near width. Past the share where it caps, coverage falls with the share: at 12 that is about 50 m with the default rings.")]

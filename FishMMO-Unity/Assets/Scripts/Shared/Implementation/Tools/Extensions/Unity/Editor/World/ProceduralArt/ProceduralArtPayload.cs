@@ -117,12 +117,19 @@ namespace FishMMO.Shared.WorldDesign
 			"TreeMeshes.cs",
 			"VegetationMeshes.cs",
 			"SeaFloorMeshes.cs",
-			// Rock formations, ice and cliff rocks.
+			// Shrubs.
+			"BiomeArtGenerator.Bushes.cs",
+			"BushMeshes.cs",
+			"ProceduralArtCatalogue.Bushes.cs",
+			// Rock formations, ice, cliff rocks and cliff sections.
 			"BiomeArtGenerator.Rocks.cs",
 			"CliffRocks.cs",
+			"CliffSections.cs",
 			"IceMeshes.cs",
 			"IceSurfaces.cs",
+			"MeshDecimator.cs",
 			"ProceduralArtCatalogue.Rocks.cs",
+			"ProceduralSurfaceNets.cs",
 			"RockArtNames.cs",
 			"RockFormations.cs",
 			"RockTypes.cs",

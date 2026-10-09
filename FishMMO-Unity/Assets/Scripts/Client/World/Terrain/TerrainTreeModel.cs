@@ -121,11 +121,13 @@ namespace FishMMO.Client
 					{
 						return;
 					}
+					// A renderer that blends bases into the ground draws trunks with a skirt down to it (TrunkSkirt).
+					Mesh mesh = gpu.ContactMode > 0.5f ? Skirted(part) : part.Mesh;
 					for (int s = 0; s < part.Params.Length; s++)
 					{
 						parts.Add(new TerrainGpuRenderer.PartSource
 						{
-							Mesh = part.Mesh,
+							Mesh = mesh,
 							Submesh = part.Submesh[s],
 							Material = part.Params[s].material,
 							Template = part.Params[s],
@@ -543,9 +545,68 @@ namespace FishMMO.Client
 			Capacity = 0;
 		}
 
+		/// <summary>Each part mesh's skirted copy (TrunkSkirt), or the mesh itself when it has no trunk foot; owned here.</summary>
+		private readonly Dictionary<Mesh, Mesh> skirted = new Dictionary<Mesh, Mesh>();
+
+		/// <summary>
+		/// The part's mesh with a skirt under its trunk's feet, built once per mesh. Only the submeshes drawn with the
+		/// vegetation shader grow one (it is what drops the skirt to the ground), and never a camera-facing billboard.
+		/// </summary>
+		private Mesh Skirted(Part part)
+		{
+			if (part.Mesh == null)
+			{
+				return null;
+			}
+			if (skirted.TryGetValue(part.Mesh, out Mesh mesh))
+			{
+				return mesh;
+			}
+			var allowed = new bool[part.Mesh.subMeshCount];
+			for (int s = 0; s < part.Params.Length; s++)
+			{
+				Material material = part.Params[s].material;
+				int submesh = part.Submesh[s];
+				if (submesh >= 0 && submesh < allowed.Length && material != null && material.shader != null
+					&& material.shader.name.StartsWith("FishMMO/Vegetation", StringComparison.Ordinal)
+					&& !(material.HasFloat(FacingCameraId) && material.GetFloat(FacingCameraId) > 0.5f))
+				{
+					allowed[submesh] = true;
+				}
+			}
+			mesh = TrunkSkirt.Build(part.Mesh, allowed) ?? part.Mesh;
+			skirted.Add(part.Mesh, mesh);
+#if UNITY_EDITOR
+			if (Array.IndexOf(allowed, true) >= 0)
+			{
+				Debug.Log(mesh != part.Mesh
+					? $"[Trunk skirt] '{part.Mesh.name}': {mesh.vertexCount - part.Mesh.vertexCount} foot vertices."
+					: $"[Trunk skirt] '{part.Mesh.name}': none (no open bark at its foot, or the mesh is not readable).");
+			}
+#endif
+			return mesh;
+		}
+
+		private static readonly int FacingCameraId = Shader.PropertyToID("_FacingCamera");
+
 		public void Dispose()
 		{
 			DisposeBuffers();
+			foreach (KeyValuePair<Mesh, Mesh> pair in skirted)
+			{
+				if (pair.Value != null && pair.Value != pair.Key)
+				{
+					if (Application.isPlaying)
+					{
+						UnityEngine.Object.Destroy(pair.Value);
+					}
+					else
+					{
+						UnityEngine.Object.DestroyImmediate(pair.Value);
+					}
+				}
+			}
+			skirted.Clear();
 		}
 	}
 }

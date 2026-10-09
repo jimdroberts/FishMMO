@@ -475,9 +475,9 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static int StepCount()
 		{
-			// Migration, ground, bark, atlas, import, verify, layers, materials, rocks, details, trees, built
+			// Migration, ground, bark, atlas, import, verify, layers, materials, rocks, details, bushes, trees, built
 			// layers; and the rock-formation, ice and cliff-piece steps (BiomeArtGenerator.Rocks.cs).
-			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 9 + ProceduralArtCatalogue.Trees.Length + RockStepCount();
+			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 9 + ProceduralArtCatalogue.Bushes.Length + ProceduralArtCatalogue.Trees.Length + RockStepCount();
 		}
 
 		/// <summary>The generation as steps; each <c>yield</c> names the step whose work follows it.</summary>
@@ -520,6 +520,12 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			yield return "Detail plants";
 			WriteDetails(c);
+			// Shrubs (BiomeArtGenerator.Bushes.cs).
+			foreach (BushSpecies species in ProceduralArtCatalogue.Bushes)
+			{
+				yield return "Bush: " + species.Name;
+				WriteBush(c, species);
+			}
 			foreach (TreeSpecies species in ProceduralArtCatalogue.Trees)
 			{
 				yield return "Tree: " + species.Name;

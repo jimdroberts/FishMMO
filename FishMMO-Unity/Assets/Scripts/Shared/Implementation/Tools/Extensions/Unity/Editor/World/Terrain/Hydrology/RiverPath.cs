@@ -462,8 +462,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <paramref name="endFloor"/>, so it meets that water at its level rather than above it: the
 		/// surface is lowered by a ramp that never makes it rise. 0 leaves it where the ground put it.
 		/// </param>
+		/// <param name="meetLevel">
+		/// The level of the standing water it ends in (the sea's mean level, a lake's), which fills its shore up to there:
+		/// the river is in it from the first point at or under that level, and runs in without a ledge. −∞ for none
+		/// (a river joining another, which fills nothing round it).
+		/// </param>
 		public static float[] Surface(float[] floor, float[] bank, float[] spacing, float startCeiling, float endFloor, RiverSettings settings,
-			float settleMetres = 0f)
+			float settleMetres = 0f, float meetLevel = float.NegativeInfinity)
 		{
 			int count = floor.Length;
 			var surface = new float[count];
@@ -521,8 +526,72 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
+			/* Nor off a ledge into standing water. The settle above measures from the line's last point, which for the sea
+			 * lies out past the shore under the low-water line, so it never ran there: Flo Monolith's river 0 held 2.1 m on
+			 * its beach crest and dropped to −1.5 m at the shore, named a fall and drawn as one into (and under) the sea.
+			 * The whole steep run that crosses the water's level is graded instead: from its brink above to its foot below
+			 * (the floor is smoothed along the line, so a bluff spans several points, and only grading the one point where
+			 * the surface first met the level left the rest for Knickpoints to gather back into a ledge). The drop is taken
+			 * off over the stretch above, so the river cuts down through the crest and runs in at its foot's level, as
+			 * rivers grade to their base level. Never under endFloor (the low-water line): what lies under that is the
+			 * sea's, and a channel lowered past it inland would be too. */
+			if (!float.IsNegativeInfinity(meetLevel))
+			{
+				int meet = -1;
+				for (int i = 1; i < count; i++)
+				{
+					if (surface[i] <= meetLevel)
+					{
+						meet = i;
+						break;
+					}
+				}
+				if (meet > 0)
+				{
+					float steep = settings.SettleGradient, search = MouthSearchSettles * Math.Max(15f, settleMetres);
+					bool Steep(int i) => surface[i - 1] - surface[i] >= steep * Math.Max(1e-3f, spacing[i]);
+					int foot = meet;
+					for (float metres = 0f; foot + 1 < count && Steep(foot + 1) && metres <= search; foot++)
+					{
+						metres += spacing[foot + 1];
+					}
+					int brink = meet - 1;
+					for (float metres = 0f; brink > 0 && Steep(brink) && metres <= search; brink--)
+					{
+						metres += spacing[brink];
+					}
+					float target = Math.Max(surface[foot], endFloor);
+					float step = surface[brink] - target;
+					if (step > 0f)
+					{
+						// As the settle: long enough that the steepest of the smooth ramp (1.5 × its mean) keeps to the settle gradient.
+						float rampMetres = Math.Max(settleMetres, 1.5f * step / Math.Max(1e-3f, settings.SettleGradient));
+						float fromFoot = 0f;
+						for (int i = foot; i >= 0; i--)
+						{
+							if (i < foot)
+							{
+								fromFoot += spacing[i + 1];
+							}
+							float t = 1f - Clamp(fromFoot / rampMetres, 0f, 1f);
+							if (t <= 0f)
+							{
+								break;
+							}
+							// Between the brink and the foot it lies (just falling) at the foot's level: the run-in itself.
+							surface[i] = Math.Max(Math.Min(surface[i], target + settings.MinGradient * fromFoot), surface[i] - step * t * t * (3f - 2f * t));
+						}
+					}
+				}
+			}
 			return surface;
 		}
+
+		/// <summary>
+		/// How far up and down from where a river meets standing water its steep run-in is followed, in settle lengths
+		/// (at least 15 m each): a smoothed bluff at the shore, not a mountain stream's whole lower course.
+		/// </summary>
+		public const float MouthSearchSettles = 4f;
 
 		/// <summary>
 		/// The bars along a river: per point, how wide a point bar stands on the inside of its bend, how wide

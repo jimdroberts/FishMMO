@@ -29,7 +29,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>What it leaves alone:</b> the heights, the sea, the boundary, and the backdrop past the
-	/// scene's edge (which is rebuilt by a re-cut). It marks the scene dirty and does not save it,
+	/// scene's edge (which is rebuilt by a re-cut) — except that a backdrop drawn with the scene's
+	/// arrays has its control maps baked again, since they follow the scene's layer order. It marks the scene dirty and does not save it,
 	/// so nothing is written to the scene file until the designer chooses to.
 	/// </para>
 	/// </remarks>
@@ -69,18 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 				return $"'{atlasName}' has no placed atlas entry, so there is no planet to read its biomes from.";
 			}
 
-			var request = new SceneGenerationRequest
-			{
-				SceneName = entry.SceneName,
-				Body = entry.Body,
-				Layer = entry.Layer,
-				Latitude = entry.Latitude,
-				Longitude = entry.Longitude,
-				SizeKm = entry.SizeKm,
-				HeadingDegrees = entry.HeadingDegrees,
-				// The radius it was cut at, so a point maps back to exactly the ground it came from.
-				RadiusKm = entry.CutRadiusKm > 0f ? entry.CutRadiusKm : 0.0,
-			};
+			SceneGenerationRequest request = RequestFor(entry);
 			TerrainTilePlan plan = SceneGeneration.PlanTiles(entry.SizeKm);
 
 			if (!Arrange(scene, plan, out Terrain[,] terrains, out string arrangeProblem))
@@ -118,7 +108,7 @@ namespace FishMMO.Shared.WorldDesign
 				CliffPlacer.Clear(scene);
 				// The rivers and lakes the scene was cut with, marked on its ground as it stands now.
 				SceneWater water = SceneGenerator.LoadWater(request, plan, terrains, result.Notes);
-				if (!SceneGenerator.PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out _, scope, water: water))
+				if (!SceneGenerator.PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out _, out _, scope, water: water))
 				{
 					string why = result.Notes.Count > 0 ? result.Notes[0] : "No biome fits this scene.";
 					result = null;
@@ -138,6 +128,17 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				SceneGenerator.BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
+				/* A backdrop drawn with the arrays reads the scene's layers by index, and the repaint may have
+				 * reordered them: its control maps are baked again. A LOCAL copy shares the committed backdrop. */
+				if (!scope.AllowsLocal && BackdropShadingTool.IsShaded(scene))
+				{
+					var backdropWrote = new List<string>();
+					string backdropProblem = BackdropShadingTool.Shade(scene, request, plan, terrains, scope, backdropWrote);
+					if (backdropProblem != null)
+					{
+						result.Notes.Add($"Backdrop not reshaded: {backdropProblem}");
+					}
+				}
 			}
 			finally
 			{
@@ -160,10 +161,27 @@ namespace FishMMO.Shared.WorldDesign
 			return null;
 		}
 
+		/// <summary>The request a placed atlas entry was cut with.</summary>
+		internal static SceneGenerationRequest RequestFor(WorldAtlasScene entry)
+		{
+			return new SceneGenerationRequest
+			{
+				SceneName = entry.SceneName,
+				Body = entry.Body,
+				Layer = entry.Layer,
+				Latitude = entry.Latitude,
+				Longitude = entry.Longitude,
+				SizeKm = entry.SizeKm,
+				HeadingDegrees = entry.HeadingDegrees,
+				// The radius it was cut at, so a point maps back to exactly the ground it came from.
+				RadiusKm = entry.CutRadiusKm > 0f ? entry.CutRadiusKm : 0.0,
+			};
+		}
+
 		/// <summary>
 		/// Puts the scene's terrains back into the generator's tile grid by where they stand.
 		/// </summary>
-		private static bool Arrange(Scene scene, TerrainTilePlan plan, out Terrain[,] terrains, out string problem)
+		internal static bool Arrange(Scene scene, TerrainTilePlan plan, out Terrain[,] terrains, out string problem)
 		{
 			terrains = new Terrain[plan.CountX, plan.CountZ];
 			problem = null;

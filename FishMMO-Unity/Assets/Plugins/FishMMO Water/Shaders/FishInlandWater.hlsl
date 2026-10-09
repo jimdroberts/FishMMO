@@ -14,6 +14,7 @@
 #endif
 // The weather's clouds and fog, laid over the frame before the water was drawn: the same as the sea's.
 #include "FishWaterFog.hlsl"
+#include "FishWaterFoam.hlsl"
 
 CBUFFER_START(UnityPerMaterial)
 	half4 _ShallowColor;
@@ -58,7 +59,16 @@ float _FishInlandDebugFoam;
 float _FishWaterLevel;
 /// Where the scene's falls land (InlandWaterRenderer.Falls): xyz the foot, w how far round it the pool churns.
 float4 _FishFalls[16];
+/// What each of those falls brings to its pool (the same index): x the curtain's thickness where it lands (m), y its
+/// power (MW), z how high the boil heaves (m), w how white it churns the pool (0 … 1, by its power). All 0 where the
+/// renderer has not published them (FallPool then keeps the older look: churn as white as before, no boil).
+float4 _FishFallsB[16];
 float _FishFallCount;
+/// The falls on this river (InlandWaterRenderer, per renderer; count 0 on lakes and on rivers with none): x metres
+/// along the river where the curtain lands, y how far downstream its foam is carried (m), z how strongly (0 … 1),
+/// w metres across the river at the landing (the riverUV frame).
+float4 _RiverFalls[4];
+float _RiverFallCount;
 /// A river's solved flow (InlandWaterRenderer.Flow, per renderer): along and across its line over its mean speed,
 /// and its length in metres (0: no solved flow, the blended one is used).
 TEXTURE2D(_RiverFlowField);
@@ -235,6 +245,23 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, out half whi
 }
 
 /// <summary>
+/// The foam's LACE (the map's alpha, FishWaterFoam.hlsl) carried by a flow, as <see cref="FlowSample"/> carries the
+/// map: two copies half a cycle apart, but blended so the blend keeps the lace's contrast. A plain blend of two laces
+/// is a grey smear mid-cycle, and the cut through it lost every hole twice a cycle.
+/// </summary>
+half FlowLace(float2 xz, float2 flow, float scale, float cycle, float2 shift)
+{
+	cycle = FISH_INLAND_CLOCK_WRAP / max(1.0, round(FISH_INLAND_CLOCK_WRAP / max(0.05, cycle)));
+	float time = _FishInlandTime / cycle;
+	float phaseA = frac(time);
+	float phaseB = frac(time + 0.5);
+	half blend = abs(2.0 * phaseA - 1.0);
+	float2 uvA = (xz - flow * phaseA * cycle) / scale + shift;
+	float2 uvB = (xz - flow * phaseB * cycle) / scale + shift + float2(0.37, 0.61);
+	return FishFoamBlend(SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, uvA).a, SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, uvB).a, blend);
+}
+
+/// <summary>
 /// The foam's pattern streaked out along the current: the carried texture read in the river's own frame (metres across,
 /// metres along over the stretch), so each clump is drawn out the way the water moves it, faster water the longer.
 /// <paramref name="frame"/> is x across, y along; <paramref name="speed"/> the current along it (m/s).
@@ -247,12 +274,11 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, out half whi
 /// </remarks>
 half StreakFoam(float2 frame, float speed, float scale, float cycle)
 {
-	float stretch = 1.4 + 1.6 * saturate(speed / 2.0);
+	// Moving water draws its foam out into streaks along the current (windrows), the faster the longer.
+	float stretch = 1.6 + 2.4 * saturate(speed / 2.0);
 	float2 q = float2(frame.x, frame.y / stretch);
 	float2 carried = float2(0.0, speed / stretch);
-	half coarse = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), q, carried, scale, cycle, float2(0.0, 0.0)).r;
-	half fine = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), q * 1.9 + 3.7, carried * 1.9, scale * 0.45, cycle, float2(0.43, 0.17)).r;
-	return saturate(coarse * 0.85 + (fine - 0.5) * 0.4 * coarse + fine * 0.1);
+	return FlowLace(q, carried, scale, cycle, float2(0.0, 0.0));
 }
 
 /// <summary>
@@ -267,20 +293,46 @@ half BoilFoam(float2 xz, float2 flow, float scale, float cycle)
 		FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), xz, flow * 0.5, scale * 3.7, cycle * 1.9, float2(0.13, 0.57)).r,
 		FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), xz, flow * 0.5, scale * 3.1, cycle * 2.3, float2(0.71, 0.29)).r) - 0.5;
 	float2 at = xz + warp * (scale * 2.2);
-	half broad = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), at, flow, scale * 1.4, cycle * 0.8, float2(0.37, 0.83)).r;
-	half fine = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), at * 1.07 + 3.3, flow * 0.6, scale * 0.5, cycle * 1.3, float2(0.61, 0.07)).r;
-	return saturate(broad * 0.75 + fine * 0.35 + broad * fine * 0.4);
+	// The lace through the warp: froth welling up in patches with no direction, holes and strands where it thins.
+	return FlowLace(at, flow, scale * 1.4, cycle * 0.8, float2(0.37, 0.83));
 }
 
-/// <summary>
-/// How hard the water churns here under a fall (0 … 1), and the way it boils out from the nearest foot: white,
-/// pale and rough where the curtain lands, easing out to the pool's edge. Only water near a foot's own level
-/// churns, so a lake far below a fall is not stirred by it.
-/// </summary>
-half FallChurn(float3 positionWS, out float2 outward)
+/// A texture offset that drifts at <paramref name="perSecond"/> (texture units a second) on the inland clock, its rate
+/// rounded to a whole number of units over the clock's wrap: at the wrap the offset is a whole number of tiles, the
+/// same texture as at the start, so the drift does not jump. Wrapped to 0 … 1 so the coordinate stays small.
+float2 InlandDrift(float2 perSecond)
 {
-	outward = float2(0.0, 0.0);
-	half churn = 0.0;
+	float2 rate = round(perSecond * FISH_INLAND_CLOCK_WRAP) / FISH_INLAND_CLOCK_WRAP;
+	return frac(_FishInlandTime * rate);
+}
+
+/// What the falls do to the water here (FallPool).
+struct FallPoolState
+{
+	half churn;        // how near a landing, 0 … 1 (the old churn: the boil's foam pattern and the outward drift take it)
+	half stir;         // that churn by the fall's power (_FishFallsB.w): how broken, rough and milky the water is
+	half white;        // how much foam the churn carries: the churn squared by the fall's power
+	float2 outward;    // the way the water runs out from the nearest landing
+	half plume;        // the bubble plume under the surface, 0 … 1, strongest over its core
+	half crown;        // the crowns of the boil's domes, 0 … 1: where the bubbles break the surface
+	float2 slope;      // the surface's slope from the boil's domes and the surges spreading out (a height gradient)
+};
+
+/// <summary>
+/// The plunge pools round the scene's falls: where the curtain lands the water churns, a plume of bubbles glows pale
+/// under the surface, the surface heaves in domes as the plume wells up, and surges spread out across the pool. Only
+/// water near a landing's own level is touched, so a lake far below a fall, or a river running past above it, is not.
+/// <paramref name="dxzX"/>, <paramref name="dxzY"/> are the pixel's screen derivatives of world xz (taken outside the
+/// loop: a texture read with implicit derivatives inside a loop that can break early makes FXC unroll it or refuse),
+/// and <paramref name="footprint"/> the metres one pixel spans, which fades the surges where they would alias.
+/// </summary>
+/// <remarks>
+/// Every pattern is laid out round the landing in metres from it (positionWS.xz − the landing: small numbers, read in
+/// place, never turned), so nothing here slides with the distance from the world's origin.
+/// </remarks>
+FallPoolState FallPool(float3 positionWS, float2 dxzX, float2 dxzY, float footprint)
+{
+	FallPoolState pool = (FallPoolState)0;
 	int count = (int)_FishFallCount;
 	[loop]
 	for (int i = 0; i < 16; i++)
@@ -290,21 +342,178 @@ half FallChurn(float3 positionWS, out float2 outward)
 			break;
 		}
 		float4 fall = _FishFalls[i];
+		float churnRadius = max(0.5, fall.w);
 		float2 d = positionWS.xz - fall.xz;
-		float distance = length(d);
-		if (distance >= fall.w || abs(positionWS.y - fall.y) > 0.5 * fall.w + 1.0)
+		float distanceSq = dot(d, d);
+		// The surges run on past the churn, out to two and a half of its radii; nothing reaches further.
+		float reach = 2.5 * churnRadius;
+		if (distanceSq >= reach * reach || abs(positionWS.y - fall.y) > 0.5 * fall.w + 1.0)
 		{
 			continue;
 		}
-		half k = saturate(1.0 - distance / max(0.5, fall.w));
+		float distance = sqrt(distanceSq);
+		float2 radial = distance > 1e-3 ? d / distance : float2(0.0, 0.0);
+		float4 more = _FishFallsB[i];
+		/* Unpublished (power 0: the renderer's smallest is a kilowatt): the churn as white as it always was, a plume
+		 * sized off the churn, and no boil or surge of any height, rather than a pool that suddenly has nothing. */
+		bool known = more.y > 0.0;
+		float thickness = known ? max(0.05, more.x) : 0.12 * churnRadius;
+		float boilHeight = known ? max(0.0, more.z) : 0.0;
+		half whiteness = known ? saturate(more.w) : 1.0;
+		// A different stretch of the noise for each fall, so two pools never boil in step.
+		float salt = (float)i * 0.618;
+
+		// ── The churn, as before, but only as white as the fall is strong ──
+		/* A trickle over a high ledge lands with almost no power: its pool barely stirs, where it used to churn as
+		 * white as a river's. The churn's reach stays (the pattern's shape); how white, broken and milky it is, the
+		 * power says. */
+		half k = saturate(1.0 - distance / churnRadius);
 		k = k * k * (3.0 - 2.0 * k);
-		if (k > churn)
+		if (k > pool.churn)
 		{
-			churn = k;
-			outward = distance > 1e-3 ? d / distance : float2(0.0, 0.0);
+			pool.churn = k;
+			pool.outward = radial;
+		}
+		pool.stir = max(pool.stir, k * whiteness);
+		pool.white = max(pool.white, k * k * whiteness);
+
+		/* ── The bubble plume ──
+		 * The curtain drives air deep into the pool, and the bubbles rise back round the landing as a cloud a few
+		 * curtain-thicknesses wide: under the surface, not on it, so it is seen through the water as a pale glow
+		 * (the water above tints it turquoise; the fragment does that). Its edge is ragged and boils: two drifts of
+		 * the noise against each other, so the shape changes rather than slides. Strongest at the core. */
+		float plumeRadius = min(churnRadius, 3.0 * thickness + 0.3 * churnRadius);
+		if (distance < 1.6 * plumeRadius)
+		{
+			float plumeScale = 0.3 / (1.2 * plumeRadius);
+			float2 plumeUV = d * plumeScale + float2(0.19, 0.53) + salt;
+			half drift = SAMPLE_TEXTURE2D_GRAD(_FoamTexture, sampler_FoamTexture, plumeUV + InlandDrift(float2(0.021, 0.013)), dxzX * plumeScale, dxzY * plumeScale).g;
+			half churning = SAMPLE_TEXTURE2D_GRAD(_FoamTexture, sampler_FoamTexture, plumeUV * 1.9 + InlandDrift(float2(-0.027, 0.019)), dxzX * (plumeScale * 1.9), dxzY * (plumeScale * 1.9)).g;
+			// The edge wanders between three quarters and one and a third of the radius.
+			float edge = plumeRadius * (0.75 + 0.6 * drift);
+			half core = saturate(1.0 - distance / max(0.1, edge));
+			core = core * core * (3.0 - 2.0 * core);
+			// Puffs: the cloud thickens and thins as it boils, more at its edge than its core, which is always full.
+			half puff = lerp(0.55 + 0.6 * churning, 1.0, core * core);
+			// A trickle's plume is small (its thickness) and faint; a river's dense.
+			pool.plume = max(pool.plume, core * puff * lerp(0.4, 1.0, whiteness));
+		}
+
+		/* ── The boil ──
+		 * Where the plume reaches the surface it lifts it in domes that swell, spread and settle, each on its own
+		 * clock and in its own place: a scatter of domes over a jittered grid round the landing, each rising fast and
+		 * flattening out as it spreads over a cycle of 1.6 to 3.8 s. Not rings: the flow-mapped ripples once ran out
+		 * radially and pulsed as concentric rings, a swirl disc on every pool, and the boil must not do the same. */
+		float boilRadius = 1.3 * plumeRadius;
+		if (boilHeight > 0.001 && distance < 1.6 * boilRadius)
+		{
+			// Strongest over the core, gone by the boil's edge.
+			float boilShare = exp(-distanceSq / (boilRadius * boilRadius));
+			float cell = max(0.6, 0.6 * plumeRadius);
+			float2 g = d / cell;
+			float2 base = floor(g);
+			[unroll]
+			for (int j = -1; j <= 1; j++)
+			{
+				[unroll]
+				for (int m = -1; m <= 1; m++)
+				{
+					float2 c = base + float2(m, j);
+					float4 h = InlandHash4(c + salt * 31.0);
+					float2 centre = c + 0.25 + 0.5 * h.xy;
+					// A whole number of cycles in the clock's wrap, as FlowSample's.
+					float domePeriod = 1.6 + 2.2 * h.z;
+					domePeriod = FISH_INLAND_CLOCK_WRAP / max(1.0, round(FISH_INLAND_CLOCK_WRAP / domePeriod));
+					float life = frac(_FishInlandTime / domePeriod + h.w);
+					half rise = smoothstep(0.0, 0.18, life) * (1.0 - life) * (1.0 - life);
+					float sigma = 0.22 + 0.33 * life;
+					float2 e = g - centre;
+					float r2 = dot(e, e) / (sigma * sigma);
+					float dome = rise * exp(-r2);
+					// d(height)/d(world) = d/dg over the cell: the dome's own slope, as high as the fall's boil there.
+					pool.slope += (-2.0 / (sigma * sigma * cell)) * e * (dome * boilHeight * boilShare);
+					pool.crown = max(pool.crown, dome * saturate(1.0 - r2) * boilShare * saturate(boilHeight / 0.15));
+				}
+			}
+		}
+
+		/* ── The surges ──
+		 * The fall's pulses send trains of waves out across the pool: crests spreading out from the plume, dying away
+		 * over one or two churn radii. Their period grows with the fall's power (a thundering river heaves slowly,
+		 * a trickle shivers), their length from deep water's dispersion (λ = gT²/2π). Broken up by the noise so they
+		 * are not perfect circles: the crests wander by most of a wavelength and come in trains with gaps between.
+		 * Added to the surface's slope analytically, faded where a pixel spans a quarter of a wave (they would alias
+		 * into moiré) and with the ripples' own fade. */
+		float ringStart = 0.6 * plumeRadius;
+		half ringShare = smoothstep(0.5 * ringStart, 1.5 * ringStart, distance)
+			* exp(-max(0.0, distance - ringStart) / (1.2 * churnRadius))
+			* saturate(1.0 - distance / reach);
+		float period = clamp(0.8 + 0.35 * sqrt(max(0.0, more.y)), 0.8, 2.2);
+		period = FISH_INLAND_CLOCK_WRAP / max(1.0, round(FISH_INLAND_CLOCK_WRAP / period));
+		float waveLength = 1.56 * period * period;
+		ringShare *= saturate(1.0 - footprint * 4.0 / waveLength);
+		if (ringShare > 0.001)
+		{
+			float wobbleScale = 0.37 / (2.5 * waveLength);
+			float trainScale = 0.29 / (1.5 * waveLength);
+			half wobble = SAMPLE_TEXTURE2D_GRAD(_FoamTexture, sampler_FoamTexture, d * wobbleScale + float2(0.71, 0.11) + salt + InlandDrift(float2(0.006, -0.004)), dxzX * wobbleScale, dxzY * wobbleScale).g;
+			half gaps = SAMPLE_TEXTURE2D_GRAD(_FoamTexture, sampler_FoamTexture, d * trainScale + float2(0.43, 0.89) + salt + InlandDrift(float2(-0.005, 0.007)), dxzX * trainScale, dxzY * trainScale).g;
+			half trains = smoothstep(0.2, 0.7, gaps);
+			// The frac keeps the cosine's argument small; the crests run outward at λ/T.
+			float phase = 6.2831853 * ((distance + (wobble - 0.5) * 0.9 * waveLength) / waveLength - frac(_FishInlandTime / period));
+			// A slope, not a height: 0.03 for any fall, up to 0.28 for one that heaves its pool half a metre.
+			half ringSlope = (0.03 + 0.25 * saturate(boilHeight / 0.4)) * lerp(0.3, 1.0, whiteness);
+			pool.slope += radial * (-sin(phase) * ringSlope * ringShare * trains);
 		}
 	}
-	return churn;
+	return pool;
+}
+
+/// <summary>
+/// How much foam the falls on this river carry downstream to here (0 … 1): the boil's foam swept away by the current,
+/// carried a long way below a big fall, spreading across the river as it goes and thinning out along it. Laid out in
+/// the river's own frame (<paramref name="riverUV"/> metres along, metres across), which bends with the river and
+/// turns nowhere; stops at the banks (<paramref name="halfWidth"/>). The patches themselves are the carried foam
+/// texture, which the fragment thresholds with this as the allowance: the envelope stays put while the foam runs
+/// through it, as a real trail below a fall does.
+/// </summary>
+half FallTrail(float2 riverUV, float halfWidth)
+{
+	int count = (int)_RiverFallCount;
+	// Inside the banks only, eased in over the last few percent toward each (no seam at the bank's line).
+	half inBanks = smoothstep(0.0, 0.12, 1.0 - abs(riverUV.y) / max(0.1, halfWidth));
+	half trail = 0.0;
+	if (count <= 0 || inBanks <= 0.0)
+	{
+		return 0.0;
+	}
+	[loop]
+	for (int i = 0; i < 4; i++)
+	{
+		if (i >= count)
+		{
+			break;
+		}
+		float4 fall = _RiverFalls[i];
+		float run = riverUV.x - fall.x;
+		float trailLength = max(1.0, fall.y);
+		if (run < -2.0 || run > trailLength)
+		{
+			continue;
+		}
+		/* Spread across by the current's turbulence, which widens a trail as the root of how far it has run, from a
+		 * third of the river at the landing; and thinned as it spreads (the same foam over more water), though not
+		 * all the way, as the current gathers it into lines. */
+		float startWidth = max(1.0, 0.3 * halfWidth);
+		float spread = startWidth + 0.7 * sqrt(max(0.0, run) * max(1.0, halfWidth));
+		float off = riverUV.y - fall.w;
+		half profile = exp(-off * off / (spread * spread));
+		half fade = saturate(1.0 - run / trailLength);
+		fade *= fade;
+		half start = smoothstep(-2.0, 2.0, run);
+		trail = max(trail, saturate(fall.z) * profile * fade * start * saturate(0.4 + 0.6 * startWidth / spread));
+	}
+	return trail * inBanks;
 }
 
 /// <summary>
@@ -417,24 +626,30 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		flow = lerp(flow, solved, ends * inside * saturate(input.state.w));
 		shear *= ends * inside;
 	}
-	// Under a fall the water boils out from where the curtain lands: that flow, stirred in, and broken water.
-	float2 outward;
-	half churn = FallChurn(positionWS, outward);
+	/* Under a fall the water boils out from where the curtain lands: that flow, stirred in, broken water, the plume
+	 * under it, the boil's domes and the surges. The pixel's footprint and world derivatives are taken here, outside
+	 * FallPool's loop, for its texture reads (and reused for the geometric normal below). */
+	float3 positionDdx = ddx(positionWS);
+	float3 positionDdy = ddy(positionWS);
+	float footprint = max(length(positionDdx.xz), length(positionDdy.xz));
+	FallPoolState pool = FallPool(positionWS, positionDdx.xz, positionDdy.xz, footprint);
+	half churn = pool.churn;
 	// The river's own speed, before the boil: the silt it carries is its own, not the fall's.
 	float riverSpeed = length(flow);
 	float2 riverFlow = flow;
 	/* A little outward drift from where the curtain lands, not a strong one: the ripples and foam ride the flow by
-	 * flow-mapping, and a strong radial flow drew them as pulsing concentric rings, a swirl disc on every pool. */
-	flow += outward * (0.6 * churn);
+	 * flow-mapping, and a strong radial flow drew them as pulsing concentric rings, a swirl disc on every pool. As
+	 * strong as the fall: a trickle's pool barely moves. */
+	flow += pool.outward * (0.6 * pool.stir);
 	float speed = length(flow);
-	half broken = saturate(max(input.state.x, churn));
+	half broken = saturate(max(input.state.x, pool.stir));
 
 	// ── Ripples, riding the current ───────────────────────────────────
 	// Two scales: the current's own, and a finer one the air stirs that hardly moves. Faster water is
 	// rougher, broken water roughest.
 	half detailFade = saturate(1.0 - distanceToCamera / max(1.0, _NormalFadeDistance));
 	// Choppier along a shear line (the wavelets its turbulence raises), as well as duller (the roughness below).
-	half strength = _NormalStrength * detailFade * (1.0 + 0.6 * saturate(speed / 2.0) + 0.6 * broken + 1.5 * churn + 0.4 * saturate(shear / 2.0));
+	half strength = _NormalStrength * detailFade * (1.0 + 0.6 * saturate(speed / 2.0) + 0.6 * broken + 1.5 * pool.stir + 0.4 * saturate(shear / 2.0));
 	half3 a = UnpackNormalScale(FlowSample(TEXTURE2D_ARGS(_NormalMap, sampler_NormalMap), positionWS.xz, flow, max(0.2, _NormalScale), _FlowCycle, float2(0.0, 0.0)), strength);
 	half3 b = UnpackNormalScale(FlowSample(TEXTURE2D_ARGS(_NormalMap, sampler_NormalMap), positionWS.xz, flow * 0.25 + float2(0.05, 0.03), max(0.1, _NormalScale * 0.37), _FlowCycle * 1.7, float2(0.21, 0.13)), strength * 0.6);
 	half3 ripple = normalize(half3(a.xy + b.xy, a.z * b.z));
@@ -472,6 +687,8 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	half stoneWhite;
 	float2 stones = BedStones(positionWS.xz, along, speed, input.depth, stoneWhite) * detailFade;
 	tilt += stones;
+	// And the boil's domes and the surges spreading across a plunge pool.
+	tilt += pool.slope * detailFade;
 	// And the wakes of anything moving in a river (rivers only: a lake's surface takes none).
 	half wakeWhite = 0.0;
 	if (input.bank.x > 0.05)
@@ -485,7 +702,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	/* Seen from beneath, decided by the surface's own geometry rather than its winding (the face the rasteriser calls
 	 * front is not reliably the top): the triangle's normal, from the position's screen derivatives, turned to face up
 	 * as water always does, against the way to the camera. */
-	float3 geometric = cross(ddx(positionWS), ddy(positionWS));
+	float3 geometric = cross(positionDdx, positionDdy);
 	geometric = geometric.y < 0.0 ? -geometric : geometric;
 	bool fromBeneath = dot(geometric, _WorldSpaceCameraPos - positionWS) < 0.0;
 	// The underside only from inside the water (InlandWaterRenderer.MarkCamera): from a dry gorge below a lip it is not seen.
@@ -524,10 +741,11 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 
 	/* A river always carries some silt, and more the faster it runs: browner than the lake it runs into, as real ones
 	 * are, and never the clear glass that let a slow river vanish over its bed when seen from above. */
-	half silt = _Turbidity * (0.3 + 0.7 * saturate(riverSpeed / 1.5)) * input.state.y * (1.0 - churn);
+	half silt = _Turbidity * (0.3 + 0.7 * saturate(riverSpeed / 1.5)) * input.state.y * (1.0 - pool.stir);
 	/* Bubbles under a fall scatter the light back out: milky where the curtain lands, clearing fast with distance (the
-	 * churn squared), so the pool reads as a boil round the foot rather than a pale disc. */
-	half milk = churn * churn;
+	 * churn squared), so the pool reads as a boil round the foot rather than a pale disc; and only as milky as the fall
+	 * is strong. */
+	half milk = pool.white;
 	half3 density = max(1e-3, _WaterDensity.rgb * (1.0 + silt * 3.0) + milk * 2.5);
 	half3 transmittance = exp(-waterColumn * density);
 	/* The bed is lit by light that came DOWN through the water as well as seen back UP through it: the sun's path to the
@@ -557,6 +775,25 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		behind = refracted * bedTransmittance + bodyColor * (1.0 - transmittance);
 		alpha = 1.0;
 	#endif
+	/* The bubble plume under a plunge pool, seen through the water above it: a cloud of bubbles scatters the light
+	 * that reaches it back up, pale turquoise-white, and hides the bed behind it. It lies deep at its ragged edge and
+	 * welling up to just under the surface over its core (never below the bed), and the water over it tints it as
+	 * it does the bed: the light's path down to it and back up. Where the boil's domes crown, the bubbles reach the
+	 * surface and the glow is brightest. */
+	half plumeCover = saturate(1.0 - exp(-2.5 * pool.plume));
+	plumeCover = max(plumeCover, pool.crown * 0.5);
+	if (plumeCover > 0.001)
+	{
+		float plumeDepth = min(lerp(1.2, 0.15, pool.plume), 0.6 * waterColumn);
+		half3 plumeTint = exp(-plumeDepth * (1.0 + 1.0 / max(0.25, mainLight.direction.y)) * _WaterDensity.rgb);
+		/* Lit only by what reaches it: the sun's light down through the water and the sky's. The water's own light
+		 * carries a floor (+0.12) that keeps a dark river from going black; on bubbles that scatter it all back up it
+		 * made every plunge pool glow turquoise at night (Jim's screenshot, 2026-10-08). */
+		half3 plumeSource = lightColor * saturate(mainLight.direction.y) * 0.9 + _GlossyEnvironmentColor.rgb * 0.8;
+		half3 plumeLight = half3(0.80, 0.95, 0.93) * plumeTint * plumeSource;
+		behind = lerp(behind, plumeLight, plumeCover * 0.85);
+		alpha = max(alpha, plumeCover * _MaxAlpha);
+	}
 
 	// ── Reflection, Fresnel and glint ─────────────────────────────────
 	half NdotV = saturate(dot(normalWS, view));
@@ -595,30 +832,46 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		float2 foamFrame = onRiver ? float2(input.riverUV.y, input.riverUV.x) : positionWS.xz;
 		float foamSpeed = onRiver ? max(0.0, dot(flow, normalize(input.bank.zw + float2(1e-5, 0.0)))) : 0.0;
 		half lace = StreakFoam(foamFrame, foamSpeed, max(0.3, _FoamScale), _FlowCycle);
+		/* The foam a fall's boil sends downstream: an allowance laid along the river below each landing, with the
+		 * streaked foam running through it, gathered into rafts (the smooth field at three times the size) so the trail
+		 * is drifting patches of more and less foam, not a white band. */
+		half trail = 0.0;
+		if (onRiver && _RiverFallCount > 0.5)
+		{
+			trail = FallTrail(input.riverUV, input.bank.x);
+			half rafts = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), foamFrame, float2(0.0, foamSpeed), max(0.3, _FoamScale) * 3.0, _FlowCycle * 3.0, float2(0.29, 0.61)).g;
+			/* Gathered into rafts by a smooth modulation of how much foam there is, not a cut: cut, the broad noise drew
+			 * every raft as a puffy cloud lying on the water (Jim's screenshot, 2026-10-08). The lace makes the holes. */
+			trail *= 0.35 + 0.65 * smoothstep(0.2, 0.75, rafts);
+		}
 		// Round a fall's foot the pool boils rather than streaks.
-		lace = lerp(lace, BoilFoam(positionWS.xz, riverFlow, max(0.3, _FoamScale), _FlowCycle), saturate(1.6 * churn));
+		lace = FishFoamBlend(lace, BoilFoam(positionWS.xz, riverFlow, max(0.3, _FoamScale), _FlowCycle), saturate(1.6 * churn));
 		half shore = 0.0;
 		#if defined(_WATER_DEPTH)
 			shore = (1.0 - saturate(waterColumn / max(0.02, _ShoreFoam))) * saturate(speed / 0.8) * 0.5;
 		#endif
 		// How much white the water can carry here: breaking crests in rapids, aeration under a fall, churn in fast water.
 		// The boil is thickest where the curtain lands and thins fast toward the pool's edge: patches, not an even carpet.
-		half fallChurn = churn * churn;
+		half fallChurn = pool.white;
 		// The river's own breaking water only (input.state.x): `broken` carries the fall's churn too, and through it the
 		// whole pool read as churned as the impact, an even carpet of white to its edge.
 		// The crests only lean on it: weighted 0.8, their bands about a metre apart drew white rows straight across every
 		// rapid (fish scales from above, 2026-10-07); the streaks' own pattern is what should show.
 		churn = saturate(input.state.x * (0.5 + 0.3 * crest) + saturate((speed - _FoamSpeed) / max(0.1, 2.0 * _FoamSpeed)) * 0.25);
 		// Under a fall the pool boils white: most of it foam near the foot, thinning to its edge.
-		half amount = max(max(max(max(churn, shore), stoneWhite * 0.8), fallChurn), wakeWhite);
-		// Thinned softly, never cut into specks: below a little churn the pattern fades out rather than leaving its peaks.
-		half cut = lerp(0.72, 0.25, amount);
-		foam = smoothstep(cut - 0.15, cut + 0.3, lace) * smoothstep(0.02, 0.3, amount);
-		half3 foamLit = _FoamColor.rgb * (lightColor * (NdotL * 0.6 + 0.3) + _GlossyEnvironmentColor.rgb * 0.5 + 0.1);
-		color = lerp(color, foamLit, foam * 0.9);
+		// And on the crowns of the boil's domes, where its bubbles break the surface; and in the trail downstream.
+		fallChurn = max(fallChurn, pool.crown * 0.6 * pool.stir);
+		half amount = max(max(max(max(max(churn, shore), stoneWhite * 0.8), fallChurn), wakeWhite), trail);
+		/* As COVERAGE, the share of the water that is white (FishWaterFoam.hlsl): the lace says what that much foam
+		 * looks like — froth with round holes where there is much, a web, then strands. Lit as foam is (the sun
+		 * wrapped round it, the sky as ambient, no light of its own: it glowed at night), opaque where thick and
+		 * lace over the water where thin, the water round it milky with bubbles. */
+		FishFoam foamCut = FishFoamCut(lace, saturate(amount) * 0.85, length(fwidth(positionWS.xz)), max(0.3, _FoamScale));
+		half3 foamLit = FishFoamLight(_FoamColor.rgb, lightColor, NdotL, 0.0h, _GlossyEnvironmentColor.rgb * 0.6);
+		color = FishFoamOver(color, foamCut, foamLit, foam);
 		if (_FishInlandDebugFoam > 0.5 && _FishInlandDebugFoam < 1.5)
 		{
-			color = half3(churn, fallChurn, max(stoneWhite * 0.8, shore));
+			color = half3(churn, max(fallChurn, trail), max(stoneWhite * 0.8, shore));
 			foam = 1.0;
 		}
 	}

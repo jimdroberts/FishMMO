@@ -39,6 +39,7 @@ namespace FishMMO.Water
 		private static readonly int CloudShadowId = Shader.PropertyToID("_FishWaterCloudShadow");
 		private static readonly int WindId = Shader.PropertyToID("_FishWaterWind");
 		private static readonly int WhitecapId = Shader.PropertyToID("_FishWaterWhitecap");
+		private static readonly int WhitecapThresholdId = Shader.PropertyToID("_WhitecapThreshold");
 		private static readonly int GravityId = Shader.PropertyToID("_FishWaterGravity");
 		private static readonly int PatchId = Shader.PropertyToID("_FishWaterPatch");
 		private static readonly string[] DisplacementNames =
@@ -1076,6 +1077,10 @@ namespace FishMMO.Water
 					builtChoppiness = FFTChoppiness;
 				}
 
+				/* Where the white caps start, for the foam memory: the material's threshold raised by the wind as the
+				 * shader raises it (FishWaterShading.hlsl), so the memory keeps exactly what the caps showed. */
+				float threshold = Material != null && Material.HasProperty(WhitecapThresholdId) ? Material.GetFloat(WhitecapThresholdId) : 0.7f;
+				fft.FoamStart = 1f - Mathf.Lerp(threshold, 0.8f, Mathf.Clamp01((WindSpeed - 12f) / 13f));
 				// Wrapped at its own loop, not the ten-thousand-second clock: see SpectrumSeconds.
 				fft.Evaluate((float)SpectrumSeconds);
 				for (int i = 0; i < WaterFFT.Cascades; i++)

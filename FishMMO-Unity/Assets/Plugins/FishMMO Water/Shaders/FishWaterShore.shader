@@ -61,6 +61,7 @@ Shader "FishMMO/Water/Shore"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "FishWaterShoreCommon.hlsl"
             #include "FishWaterFog.hlsl"
+            #include "FishWaterFoam.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _FoamColor;
@@ -220,37 +221,30 @@ Shader "FishMMO/Water/Shore"
                 /* The lip carries the foam; the sheet behind it keeps only a trace, or the whole band
                  * clears the contrast curve and the lip has nothing to stand out against.
                  *
-                 * THRESHOLDED against the mottle, not scaled by it. Scaled, the leanest part of the
-                 * pattern still kept 42% of the foam, and once the lip's strength saturated — which it
-                 * did at a tenth of its height — every pixel of it was 45-75% white: a solid band, a
-                 * line painted along the beach. The froth on a real swash edge is bubbles in clumps,
-                 * with the water and sand showing between them. So the stronger the lip, the more of
-                 * the pattern passes (a finer octave breaks the clumps into bubbles), even the
-                 * thickest froth lets a little through, and between the clumps is only a thin milky
-                 * veil. Set to this pattern's spread: the froth covers about three fifths of the lip at its
-                 * strongest, a third at three quarters, a tenth at half. */
+                 * As COVERAGE (FishWaterFoam.hlsl), cut from the lace in the foam map's alpha: the stronger
+                 * the lip, the larger the share of it that is white, and the lace says what that much froth
+                 * looks like — dense with round holes at the lip's crest, a web behind it, strands where it
+                 * thins. Thresholding the blotch mask drew every lip as cotton wool with a milky veil laid
+                 * between the clumps. */
                 half strength = saturate(lip * _EdgeFoam + sheet * sheet * sheet * 0.05);
-                half bubbles = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV * 5.1 + float2(0.73, 0.19)).r;
-                half lace = mask * 0.7 + bubbles * 0.3;
-                half threshold = 0.62 - 0.5 * strength;
-                half froth = smoothstep(threshold, threshold + _FoamSharpness, lace) * _FoamOpacity;
-                half veil = _FoamVeil * smoothstep(0.05, 0.6, strength);
-                half foam = max(froth, veil) * smoothstep(0.02, 0.15, strength);
+                half lipCover = smoothstep(0.02, 1.0, strength) * 0.9;
 
-                /* The foam the swash LEFT here, from the memory WaterShore keeps. Thresholded against
-                 * the mottle rather than scaled by it, so as a line fades it breaks into lace and
-                 * then into scattered bubbles. Thinned where the next sheet is washing over it. */
+                /* The foam the swash LEFT here, from the memory WaterShore keeps: as a line fades it breaks
+                 * into lace and then into strands, by itself. Thinned where the next sheet is washing over it. */
                 float2 fieldUV = (positionWS.xz - _FishWaterShoreRect.xy) / max(1.0, _FishWaterShoreRect.zw);
                 half left = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamMemory, sampler_FishWaterFoamMemory, fieldUV, 0).r;
-                half stranded = smoothstep(0.12, 0.5, left * _Residual * (0.35 + 0.65 * mask)) * (1.0 - sheet * 0.6) * _FoamOpacity;
-                foam = max(foam, stranded);
+                half strandedCover = saturate(left * _Residual) * 0.6 * (1.0 - sheet * 0.6);
+                half foamLace = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV).a;
+                FishFoam foamCut = FishFoamCut(foamLace, max(lipCover, strandedCover), length(fwidth(positionWS.xz)), _FoamScale);
 
                 /* The FILM: where the sheet actually covers the sand. Thick down by the sea it does,
                  * everywhere; toward the top of its run it thins to a few millimetres and the sand's
                  * own ripples break through it, so it lies in patches and rivulets with bare wet sand
                  * between — the mottle decides which. Drawn as one unbroken sheet, its reflection was
                  * a solid silver band along every beach, which read as a line of foam. */
-                half film = sheet * smoothstep(0.25, 0.6, sheet + (lace - 0.32) * 0.9);
+                half bubbles = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV * 5.1 + float2(0.73, 0.19)).r;
+                half mottle = mask * 0.7 + bubbles * 0.3;
+                half film = sheet * smoothstep(0.25, 0.6, sheet + (mottle - 0.32) * 0.9);
 
                 half3 color = _WetColor.rgb * lit;
                 half alpha = wet * 0.72;
@@ -258,7 +252,12 @@ Shader "FishMMO/Water/Shore"
                 color = lerp(color, _SwashColor.rgb * lit, film);
                 alpha = lerp(alpha, _SwashOpacity, film * film);
 
-                color = lerp(color, _FoamColor.rgb * lit, foam);
+                /* The foam: lit as foam is (the sun wrapped round it, the sky as ambient, no light of its own),
+                 * opaque where it is thick and lace that lets the sand through where it is thin. */
+                half3 foamLit = FishFoamLight(_FoamColor.rgb, mainLight.color, saturate(mainLight.direction.y), 0.0h, _GlossyEnvironmentColor.rgb * 0.6);
+                half foam;
+                color = FishFoamOver(color, foamCut, foamLit, foam);
+                foam *= _FoamOpacity;
                 alpha = max(alpha, foam);
 
                 // Feathered above the wet line, so it has no hard edge; handed over to the sea below.

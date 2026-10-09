@@ -401,6 +401,59 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 160
+    - stableGuid: f1d941bd2a8449b292b40767376a61fc
+      enableSpawning: 1
+      ruleName: 'Bush: Hibiscus'
+      prefabs:
+      - {fileID: 4885839367585065095, guid: 959d1ffb5a623f3e831af2f058a5870a, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.2
+      maxPerChunk: 0
+      minSpacing: 1.3
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 52640
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      specFingerprint: 29827410ae153453
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
   roadTextureLayer:
     terrainLayer: {fileID: 0}
     albedoTexture: {fileID: 0}

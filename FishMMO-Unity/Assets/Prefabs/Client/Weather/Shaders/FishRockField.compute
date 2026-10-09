@@ -1,0 +1,155 @@
+// Rock crevices: where one rock meets another (RockContactField, FishMMO.Client/World/Terrain).
+//
+//   FishRockClear   every frame: empties the grid (slots to ~0, counts to 0) and the list counter.
+//   FishRockGather  every frame, once per instance buffer (cliff rocks, terrain rocks): each tagged rock whose box reaches
+//                   the grid is listed (its world-to-local transform and its shape's brick) and written into up to
+//                   FISH_ROCK_SLOTS slots of every cell its box (grown by the crevice width) covers.
+//
+// The rock shader (FishRockContact.hlsl) finds the cell under a pixel and measures how far it is from each OTHER rock
+// there through that rock's own field. (A separate "skirt" of geometry round rock and trunk bases was tried and removed,
+// 2026-10-08: no extra geometry can follow the terrain's DRAWN surface — its distance LOD, its snow lift — nor be lit by
+// its lighting path; the base blend in FishGroundColour.hlsl renders the terrain itself there instead.)
+// Each shape's field is drawn, not computed (FishRockSdf.shader): an 8-bit 3D atlas is a render target on every API,
+// while WebGPU's compute can only store 32-bit floats. Client only; the grid follows the camera.
+
+#pragma kernel FishRockClear
+#pragma kernel FishRockGather
+
+#define FISH_ROCK_SLOTS 8
+
+// One listed object: rows 0–2 its world-to-local transform (xyz the 3×3, w the translation), origin its world position
+// (xyz) and world metres per local unit (w), brickMin its brick's local min corner (xyz) and range (w), brickSize its
+// local size (xyz) and atlas brick index (w), flags x 1 for a rock (crevices).
+struct FishRock
+{
+    float4 row0;
+    float4 row1;
+    float4 row2;
+    float4 origin;
+    float4 brickMin;
+    float4 brickSize;
+    float4 flags;
+};
+
+struct FishInstance { float4 row0; float4 row1; float4 row2; };   // FishIndirectInstancing.hlsl
+
+RWStructuredBuffer<FishRock> _RockList;
+RWStructuredBuffer<uint> _RockListCount;      // [0] rocks listed this frame
+RWStructuredBuffer<uint> _RockSlots;          // FISH_ROCK_SLOTS per cell: list indices, ~0 empty
+RWStructuredBuffer<uint> _RockCellCounts;     // rocks that wanted each cell (may exceed the slots)
+StructuredBuffer<FishInstance> _RockInstances;
+StructuredBuffer<uint> _RockTags;             // per instance: its shape + 1, 0 none
+StructuredBuffer<float4> _RockBricks;         // per shape: [3s] min xyz + range w, [3s+1] size xyz + 1 when built, [3s+2] flags
+uint _RockInstanceCount;
+uint _RockListCapacity;
+float4 _RockGrid;                             // xyz the grid's world min corner, w the cell size (m)
+uint4 _RockGridDims;                          // xyz cells, w total cells
+float _RockReach;                             // the crevice width (m): rocks' boxes grow by it in the grid
+
+// ── Clear and gather ───────────────────────────────────────────────────────
+
+[numthreads(64, 1, 1)]
+void FishRockClear(uint3 id : SV_DispatchThreadID)
+{
+    uint cell = id.x;
+    if (cell == 0u)
+    {
+        _RockListCount[0] = 0u;
+    }
+    if (cell >= _RockGridDims.w)
+    {
+        return;
+    }
+    _RockCellCounts[cell] = 0u;
+    [unroll]
+    for (uint s = 0; s < FISH_ROCK_SLOTS; s++)
+    {
+        _RockSlots[cell * FISH_ROCK_SLOTS + s] = 0xFFFFFFFFu;
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishRockGather(uint3 id : SV_DispatchThreadID)
+{
+    uint i = id.x;
+    if (i >= _RockInstanceCount)
+    {
+        return;
+    }
+    uint tag = _RockTags[i];
+    if (tag == 0u)
+    {
+        return;
+    }
+    uint shape = tag - 1u;
+    float4 bMin = _RockBricks[shape * 3u];
+    float4 bSize = _RockBricks[shape * 3u + 1u];
+    float4 bFlags = _RockBricks[shape * 3u + 2u];
+    if (bSize.w < 0.5)
+    {
+        return;   // its field is not built yet
+    }
+    FishInstance inst = _RockInstances[i];
+    float3x3 m = float3x3(inst.row0.xyz, inst.row1.xyz, inst.row2.xyz);
+    float3 t = float3(inst.row0.w, inst.row1.w, inst.row2.w);
+    // The world box of the local box: centre moved, half-extents through |M|.
+    float3 localCentre = bMin.xyz + bSize.xyz * 0.5;
+    float3 centre = mul(m, localCentre) + t;
+    float3 extent = mul(abs(m), bSize.xyz * 0.5) + _RockReach;
+    float3 lo = centre - extent, hi = centre + extent;
+    float3 gridMax = _RockGrid.xyz + float3(_RockGridDims.xyz) * _RockGrid.w;
+    if (any(hi < _RockGrid.xyz) || any(lo > gridMax))
+    {
+        return;
+    }
+    uint index;
+    InterlockedAdd(_RockListCount[0], 1u, index);
+    if (index >= _RockListCapacity)
+    {
+        return;
+    }
+    // World to local: the 3×3 is rotation × positive per-axis scale with no shear (FishIndirectInstancing.hlsl's
+    // contract), so its columns are orthogonal and the inverse is the transpose with each row over its column's length².
+    float3 c0 = float3(m[0][0], m[1][0], m[2][0]);
+    float3 c1 = float3(m[0][1], m[1][1], m[2][1]);
+    float3 c2 = float3(m[0][2], m[1][2], m[2][2]);
+    float3 r0 = c0 / max(dot(c0, c0), 1e-12);
+    float3 r1 = c1 / max(dot(c1, c1), 1e-12);
+    float3 r2 = c2 / max(dot(c2, c2), 1e-12);
+    FishRock rock;
+    rock.row0 = float4(r0, -dot(r0, t));
+    rock.row1 = float4(r1, -dot(r1, t));
+    rock.row2 = float4(r2, -dot(r2, t));
+    rock.origin = float4(t, (length(c0) + length(c1) + length(c2)) / 3.0);
+    rock.brickMin = bMin;
+    rock.brickSize = float4(bSize.xyz, (float)shape);
+    rock.flags = bFlags;
+    _RockList[index] = rock;
+
+    // Crevices are between rocks only.
+    if (bFlags.x < 0.5)
+    {
+        return;
+    }
+    int3 cLo = max(int3(floor((lo - _RockGrid.xyz) / _RockGrid.w)), int3(0, 0, 0));
+    int3 cHi = min(int3(floor((hi - _RockGrid.xyz) / _RockGrid.w)), int3(_RockGridDims.xyz) - 1);
+    [loop]
+    for (int z = cLo.z; z <= cHi.z; z++)
+    {
+        [loop]
+        for (int y = cLo.y; y <= cHi.y; y++)
+        {
+            [loop]
+            for (int x = cLo.x; x <= cHi.x; x++)
+            {
+                uint cell = (uint)x + _RockGridDims.x * ((uint)y + _RockGridDims.y * (uint)z);
+                uint slot;
+                InterlockedAdd(_RockCellCounts[cell], 1u, slot);
+                if (slot < FISH_ROCK_SLOTS)
+                {
+                    _RockSlots[cell * FISH_ROCK_SLOTS + slot] = index;
+                }
+            }
+        }
+    }
+}

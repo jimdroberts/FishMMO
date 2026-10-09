@@ -49,6 +49,12 @@ namespace FishMMO.Shared
 		/// <summary>The shader every tile drawn by this binder uses.</summary>
 		public const string ShaderName = "FishMMO/Weather Terrain Array";
 
+		/// <summary>
+		/// The shader of the ground past the scene's edge (<see cref="SceneBackdrop"/>), which draws with this
+		/// scene's arrays too: its renderers are bound like the tiles, with their own control maps.
+		/// </summary>
+		public const string BackdropShaderName = "FishMMO/Backdrop Ground";
+
 		/// <summary>The most alphamaps (control maps) the shader reads.</summary>
 		public const int MaximumControlMaps = TerrainArrayLayerParams.MaximumLayers / 4;
 
@@ -115,9 +121,10 @@ namespace FishMMO.Shared
 
 		// One block per tile, made on first use: Unity refuses to allocate a property block in a field
 		// initializer, and a block per tile is right whether or not the terrain copies what it is given.
-		private readonly Dictionary<Terrain, MaterialPropertyBlock> blocks = new Dictionary<Terrain, MaterialPropertyBlock>();
+		private readonly Dictionary<Object, MaterialPropertyBlock> blocks = new Dictionary<Object, MaterialPropertyBlock>();
 		private TerrainArraySet set;
 		private readonly List<Terrain> bound = new List<Terrain>();
+		private readonly List<Renderer> boundBackdrop = new List<Renderer>();
 #if !UNITY_EDITOR
 		private AsyncOperationHandle<TerrainArraySet> handle;
 #endif
@@ -185,6 +192,58 @@ namespace FishMMO.Shared
 					bound.Add(terrain);
 				}
 			}
+			foreach (Renderer renderer in BackdropRenderers())
+			{
+				PushTo(renderer);
+				boundBackdrop.Add(renderer);
+			}
+		}
+
+		/// <summary>The renderers of this scene's backdrop that draw with <see cref="BackdropShaderName"/>.</summary>
+		/// <remarks>
+		/// A backdrop baked before it had control maps still uses URP/Lit and is left alone. Looked up on every
+		/// push rather than kept, because a rebake swaps the material's shader under the same renderers.
+		/// While the scene is still loading (OnEnable runs then) its roots cannot be listed, so the backdrops
+		/// are found among the loaded objects instead; they are all deserialized before any OnEnable.
+		/// </remarks>
+		public List<Renderer> BackdropRenderers()
+		{
+			var result = new List<Renderer>();
+			Scene scene = gameObject.scene;
+			if (!scene.IsValid())
+			{
+				return result;
+			}
+			var backdrops = new List<SceneBackdrop>();
+			if (scene.isLoaded)
+			{
+				foreach (GameObject root in scene.GetRootGameObjects())
+				{
+					backdrops.AddRange(root.GetComponentsInChildren<SceneBackdrop>(true));
+				}
+			}
+			else
+			{
+				foreach (SceneBackdrop backdrop in FindObjectsByType<SceneBackdrop>(FindObjectsInactive.Include))
+				{
+					if (backdrop.gameObject.scene == scene)
+					{
+						backdrops.Add(backdrop);
+					}
+				}
+			}
+			foreach (SceneBackdrop backdrop in backdrops)
+			{
+				foreach (Renderer renderer in backdrop.GetComponentsInChildren<Renderer>(true))
+				{
+					Material material = renderer.sharedMaterial;
+					if (material != null && material.shader != null && material.shader.name == BackdropShaderName)
+					{
+						result.Add(renderer);
+					}
+				}
+			}
+			return result;
 		}
 
 #if UNITY_EDITOR
@@ -265,6 +324,36 @@ namespace FishMMO.Shared
 				block.SetVector(ControlTexelSizeId, new Vector4(1f / first.width, 1f / first.height, first.width, first.height));
 			}
 
+			PushArrays(block, controls);
+			terrain.SetSplatMaterialPropertyBlock(block);
+			return true;
+		}
+
+		/// <summary>
+		/// A backdrop renderer: its control maps are its material's own (baked over the backdrop by
+		/// SceneBackdropBuilder), so only their count and size go in the block, with the arrays.
+		/// </summary>
+		private void PushTo(Renderer renderer)
+		{
+			MaterialPropertyBlock block = BlockFor(renderer);
+			Material material = renderer.sharedMaterial;
+			int controls = 0;
+			while (controls < MaximumControlMaps && material.GetTexture(ControlIds[controls]) is Texture2D)
+			{
+				controls++;
+			}
+			if (controls > 0)
+			{
+				Texture first = material.GetTexture(ControlIds[0]);
+				block.SetVector(ControlTexelSizeId, new Vector4(1f / first.width, 1f / first.height, first.width, first.height));
+			}
+			PushArrays(block, controls);
+			renderer.SetPropertyBlock(block);
+		}
+
+		/// <summary>The scene's arrays and per-layer numbers, and the info vector that says what is bound.</summary>
+		private void PushArrays(MaterialPropertyBlock block, int controls)
+		{
 			bool usable = set != null && set.IsUsable;
 			if (usable)
 			{
@@ -288,18 +377,15 @@ namespace FishMMO.Shared
 				controls,
 				usable && set.Normal != null ? 1f : 0f,
 				usable && set.Mask != null ? 1f : 0f));
-
-			terrain.SetSplatMaterialPropertyBlock(block);
-			return true;
 		}
 
-		/// <summary>The tile's own block, emptied.</summary>
-		private MaterialPropertyBlock BlockFor(Terrain terrain)
+		/// <summary>The tile's (or backdrop renderer's) own block, emptied.</summary>
+		private MaterialPropertyBlock BlockFor(Object owner)
 		{
-			if (!blocks.TryGetValue(terrain, out MaterialPropertyBlock block) || block == null)
+			if (!blocks.TryGetValue(owner, out MaterialPropertyBlock block) || block == null)
 			{
 				block = new MaterialPropertyBlock();
-				blocks[terrain] = block;
+				blocks[owner] = block;
 			}
 			block.Clear();
 			return block;
@@ -316,6 +402,14 @@ namespace FishMMO.Shared
 				}
 			}
 			bound.Clear();
+			foreach (Renderer renderer in boundBackdrop)
+			{
+				if (renderer != null)
+				{
+					renderer.SetPropertyBlock(null);
+				}
+			}
+			boundBackdrop.Clear();
 		}
 
 #if UNITY_EDITOR

@@ -280,6 +280,7 @@ void FishAssemble(uint2 id,
 	float jzz = 1.0 + (dzNorth - dzSouth) / (2.0 * spacing);
 	float jxz = dxNorthSouth / (2.0 * spacing);
 	float jzx = dzEastWest / (2.0 * spacing);
+	// w: the foam memory, which only the compute version keeps (FishWaterFFT.compute Assemble); none here.
 	derivatives = float4(slope, jxx * jzz - jxz * jzx, 0.0);
 }
 

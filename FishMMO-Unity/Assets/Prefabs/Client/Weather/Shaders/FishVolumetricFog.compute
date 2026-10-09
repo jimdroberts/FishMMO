@@ -21,6 +21,16 @@
 //
 // It needs compute, so it is WebGPU and desktop only. WebGL2 has no compute at all and falls back
 // to the analytic pass, which draws the same layer, without its structure, in closed form.
+//
+// AND THE WATERFALLS' MIST (FallMist). A fall throws up a cloud of spray where it lands and a veil of
+// it down its curtain, and that cloud is air with water in it like any fog: it belongs in the same
+// volume, where the light the fog is lit by lights it too — the terrain's shadow (FishTerrainSunlit),
+// and the shadow map's shafts when the feature samples it — so a fall at the bottom of a gorge stands
+// in shade with the sun cutting through the top of its plume, which sprites cannot do. This is the one
+// thing the volume draws that the cloud march does not: the march only walks the weather's layer, so
+// the volume runs for the mist alone when the march has drawn the fog, or when there is no fog at all,
+// with the layer left out (_FishFallMist.y) — never the same drops twice, and never fog the weather has
+// not got.
 
 #pragma kernel Scatter
 #pragma kernel Integrate
@@ -50,6 +60,36 @@ float4   _FishVolFogSize;      // xyz froxel counts, w unused
 float4   _FishVolFogRange;     // x near, y far (m of eye depth), z depth curve exponent, w a froxel's width per metre of depth
 float4   _FishVolFogCamera;    // xyz camera world position, w 1 when the shape volume is bound (0: an even fog)
 float4   _FishVolFogForward;   // xyz the camera's forward, w unused (it said whether the detail volume was bound, for the top's eddies: there are none)
+
+// ── The waterfalls' mist ─────────────────────────────────────────────
+//
+// Up to FISH_FALL_PLUMES falls, the nearest the camera, handed over as arrays set on the kernel itself
+// (a compute kernel is not handed global arrays). Per fall:
+//   A  xyz where the water lands (world m), w how far its mist spreads (m: Waterfalls.PlumeRadius)
+//   B  xy how far the top of the plume leans off the landing (world x and z, m: the wind and the
+//      water's own throw downstream), z how high it stands (m: Waterfalls.PlumeHeight), w its
+//      extinction where the water lands (1/m)
+//   C  xyz the middle of the lip (world m), w the veil's radius round the curtain (m)
+//   D  xyz the middle of a sphere holding all of it, w that sphere's radius (m): what a froxel skips
+//      the fall by
+#define FISH_FALL_PLUMES 16
+float4 _FishFallPlumeA[FISH_FALL_PLUMES];
+float4 _FishFallPlumeB[FISH_FALL_PLUMES];
+float4 _FishFallPlumeC[FISH_FALL_PLUMES];
+float4 _FishFallPlumeD[FISH_FALL_PLUMES];
+// x how many falls are set (0..16), y 1 when the weather's own fog layer is drawn here too and 0 when
+// this volume draws the mist alone (the march has drawn the layer, or the weather has none), z how far
+// the mist's billows have risen (m, wrapped to FISH_FALL_NOISE_TILE), w unused.
+float4 _FishFallMist;
+
+// The billows' size: one tile of the shape volume over this many metres, a few metres to a blob —
+// the scale spray breaks into whatever the fall's size, since it is the eddies that tear it.
+#define FISH_FALL_NOISE_TILE 48.0
+// How far the billows move the mist either way, in e-foldings: a log-normal factor with a mean of one,
+// so they tear it into puffs and gaps without changing how much spray there is.
+#define FISH_FALL_NOISE_SPREAD 0.6
+// The veil down the curtain against the plume at its foot: thinner, the spray still leaving the jets.
+#define FISH_FALL_VEIL_SHARE 0.45
 
 /* Froxel slices are spaced exponentially in eye depth, not evenly. Fog matters most within a few
  * tens of metres and hardly changes out at the far plane, so even spacing spends most of its slices
@@ -113,6 +153,148 @@ float FogShadow(float3 world)
     #endif
 }
 
+/// A smooth bump falling from 1 at the middle to 0 at x² = 1, with no slope at either end: (1 − x²)³.
+/// Compact, so a fall's mist stops exactly where its bounds say, and with no crease at its edge, where
+/// a Gaussian cut short would leave a faint shell hanging in the air.
+float FallBump(float x2)
+{
+    float k = saturate(1.0 - x2);
+    return k * k * k;
+}
+
+/// The plume over where a fall lands, at a point: x its share of the peak there (0..1), y how wide it
+/// is at that height (m). It rises and spreads as a turbulent plume does — narrow and dense in the
+/// spray boiling up off the pool, a third of its full spread there, widening with height as it takes
+/// in air, and thinning as it widens (the same water through a wider cloud) until it is gone at the
+/// plume's height — and leans off its landing with the height it has climbed, as far as the wind and
+/// the water's own throw have carried it by the top. `widen` is half the froxel's footprint: a plume
+/// narrower than that is spread over it at the same total, rather than a froxel's two looks catching
+/// it in one frame and missing it in the next.
+float2 FallPlume(float3 p, float4 a, float4 b, float widen)
+{
+    float rise = p.y - a.y;
+    float t = saturate(rise / max(1.0, b.z));
+    float2 axis = a.xz + b.xy * t;
+    float radius = a.w * (0.35 + 0.65 * sqrt(t));
+    float spread = max(radius, widen);
+    float2 off = p.xz - axis;
+    float across = FallBump(dot(off, off) / (spread * spread)) * (radius * radius) / (spread * spread);
+    // Densest in the boil at the bottom, falling away with height, faded smoothly out by the top; and
+    // a metre or so under the landing at most, where the pool is.
+    float up = exp(-2.5 * t) * (1.0 - smoothstep(0.55, 1.0, t)) * smoothstep(-1.5, 0.5, rise);
+    return float2(across * up, radius);
+}
+
+/// The veil down the curtain, at a point: x its share of the peak (0..1), y its radius (m). A capsule
+/// from the lip to the landing, nothing at the lip, where the water is still one sheet, and thickening
+/// toward the foot as the sheet breaks into jets and the jets into spray — so the square of how far down.
+float2 FallVeil(float3 p, float4 c, float3 landing, float widen)
+{
+    float3 drop = landing - c.xyz;
+    float down = saturate(dot(p - c.xyz, drop) / max(1e-4, dot(drop, drop)));
+    float3 off = p - (c.xyz + drop * down);
+    float spread = max(c.w, widen);
+    float around = FallBump(dot(off, off) / (spread * spread)) * (c.w * c.w) / (spread * spread);
+    return float2(around * down * down, c.w);
+}
+
+/// The billows the mist is torn into, at a point: a factor with a mean of one, from the sky's shape
+/// volume (the same Perlin–Worley the fog's banks are read from, at the scale spray breaks into),
+/// rising through the air as the plume does. 1 without the shape volume, whose stand-in is a flat
+/// white that would read as the thickest billow everywhere. Read at the froxel's own size, as the
+/// banks are, so a far plume averages its billows out rather than flickering.
+float FallBillows(float3 p, float footprint)
+{
+    float factor = 1.0;
+    if (_FishVolFogCamera.w > 0.5)
+    {
+        float3 uv = float3(p.x, p.y - _FishFallMist.z, p.z) / FISH_FALL_NOISE_TILE;
+        float n = SAMPLE_TEXTURE3D_LOD(_FishCloudShape, sampler_FishCloudShape, uv, FishFogLod(footprint, FISH_FALL_NOISE_TILE)).r;
+        float s = clamp((n - FISH_FOG_BANK_MEAN) / FISH_FOG_BANK_SPREAD, -2.5, 2.5);
+        factor = exp(FISH_FALL_NOISE_SPREAD * s - 0.5 * FISH_FALL_NOISE_SPREAD * FISH_FALL_NOISE_SPREAD);
+    }
+    return factor;
+}
+
+/// The falls' mist at a froxel's two looks: its extinction at each (1/m), and how deep in it the
+/// froxel lies, its own mist between it and the open air (m of extinction, both looks averaged) —
+/// what lights its inside with the light it has turned rather than the beam (FallMistLight).
+///
+/// Each fall is skipped unless the froxel's middle is inside its bounds, so a froxel far from every
+/// fall pays sixteen distance tests and nothing else. A loop over a uniform count, with no exit from
+/// inside it: FXC flags an early return inlined into a kernel's loop.
+void FallMist(float3 a, float3 b, float3 middle, float footprint, out float atA, out float atB, out float depth)
+{
+    atA = 0.0;
+    atB = 0.0;
+    depth = 0.0;
+    uint count = (uint)clamp(_FishFallMist.x, 0.0, (float)FISH_FALL_PLUMES);
+    float widen = 0.5 * footprint;
+    [loop]
+    for (uint i = 0; i < count; i++)
+    {
+        float4 bounds = _FishFallPlumeD[i];
+        float3 off = middle - bounds.xyz;
+        float reach = bounds.w + footprint;
+        [branch]
+        if (dot(off, off) < reach * reach)
+        {
+            float4 plumeA = _FishFallPlumeA[i];
+            float4 plumeB = _FishFallPlumeB[i];
+            float4 plumeC = _FishFallPlumeC[i];
+            float2 plume = FallPlume(a, plumeA, plumeB, widen);
+            float2 veil = FallVeil(a, plumeC, plumeA.xyz, widen);
+            atA += plumeB.w * (plume.x + FISH_FALL_VEIL_SHARE * veil.x);
+            // The mist between a point and the plume's edge, roughly: the extinction here over half the
+            // width there, which falls to nothing at the edge with the bump.
+            depth += plumeB.w * (plume.x * plume.y + FISH_FALL_VEIL_SHARE * veil.x * veil.y) * 0.25;
+            plume = FallPlume(b, plumeA, plumeB, widen);
+            veil = FallVeil(b, plumeC, plumeA.xyz, widen);
+            atB += plumeB.w * (plume.x + FISH_FALL_VEIL_SHARE * veil.x);
+            depth += plumeB.w * (plume.x * plume.y + FISH_FALL_VEIL_SHARE * veil.x * veil.y) * 0.25;
+        }
+    }
+    // One read of the billows a look, for every fall at once: they are the air's, not a fall's.
+    if (atA > 0.0)
+    {
+        atA *= FallBillows(a, footprint);
+    }
+    if (atB > 0.0)
+    {
+        atB *= FallBillows(b, footprint);
+    }
+}
+
+/// The light a point in a fall's mist scatters toward the eye, per unit of its scattering: FishFogLight
+/// with the mist's own depth (`ownDepth`) between the point and the open air added to the fog above.
+///
+/// Spray is far denser than the weather's fog — a tenth of a metre of visibility's worth per metre in
+/// the boil — and a cloud that thick is white from every side, because most of the light in it has been
+/// turned more than once (the two-stream share FishFogLight takes for the fog above). Lit by the beam's
+/// forward peak alone, it was bright looking into the sun and a dim grey everywhere else. The light it
+/// turns came in through its sunlit side, so that share is shadowed with the beam — what lets a plume
+/// in a shaded gorge glow only where the sun cuts across it — while the share the weather's fog above has
+/// turned arrives from all round, as FishFogLight has it.
+float3 FallMistLight(float y, float3 ray, FishFogColumn c, float extinction, float shadow, float ownDepth)
+{
+    float g = _FishFogLight.w;
+    float carry = 0.75 * (1.0 - g);
+    float above = extinction * FishFogColumnAbove(y, c);
+    float3 toLight = _FishFogLight.xyz;
+    float risen = saturate(toLight.y * 20.0 + 1.0);
+    float slant = above / max(0.05, toLight.y);
+    float beamAbove = exp(-slant);
+    float turnedAbove = max(0.0, 1.0 / (1.0 + carry * slant) - beamAbove);
+    float beam = beamAbove * exp(-ownDepth);
+    float turnedHere = max(0.0, 1.0 / (1.0 + carry * (slant + ownDepth)) - beam - turnedAbove);
+    float3 sun = _FishFogLightColor.rgb * risen * (beam * FishFogPhase(dot(ray, toLight), g) * shadow + turnedAbove + turnedHere * shadow);
+    /* The sky's light is dimmed by the fog above, not by the mist's own depth: a dense white cloud lit from every side
+     * by the sky stays about as bright as the sky inside (its light turned many times, hardly absorbed). Dimmed by its
+     * own depth, the thickest mist at a fall's foot was the darkest, grey in a shaded gorge (Jim, 2026-10-08). */
+    float3 sky = _FishFogAmbient.rgb / (1.0 + carry * above);
+    return sun + sky;
+}
+
 [numthreads(8, 8, 4)]
 void Scatter(uint3 id : SV_DispatchThreadID)
 {
@@ -136,7 +318,17 @@ void Scatter(uint3 id : SV_DispatchThreadID)
     float3 b = camera + ray * (lerp(nearDepth, farDepth, 0.7) * along);
     float3 middle = 0.5 * (a + b);
     FishFogColumn column = FishFogColumnAt(middle.xz);
-    float density = 0.5 * (FogDensity(a, footprint, column) + FogDensity(b, footprint, column));
+    // The weather's layer only where this volume is what draws it: left out when the march has drawn
+    // it, or when there is none and the volume runs for the falls' mist alone.
+    float fog = 0.0;
+    if (_FishFallMist.y > 0.5)
+    {
+        fog = 0.5 * (FogDensity(a, footprint, column) + FogDensity(b, footprint, column));
+    }
+    float mistA, mistB, mistDepth;
+    FallMist(a, b, middle, footprint, mistA, mistB, mistDepth);
+    float mist = 0.5 * (mistA + mistB);
+    float density = fog + mist;
 
     float3 scattered = 0.0;
     if (density > 0.0)
@@ -144,8 +336,19 @@ void Scatter(uint3 id : SV_DispatchThreadID)
         // Drops absorb next to nothing: what the fog takes out of the light it scatters.
         // Lit by the light's average through the cloud (sunShare 1): this volume is handed its inputs
         // one by one and has no cloud shadow, and it only draws where the cloud march — which the
-        // shadow is drawn from — does not run (FishFogSunShare).
-        scattered = FishFogLight(middle.y, ray, column, _FishFogLayer.x, FogShadow(middle) * FishTerrainSunlit(middle), 1.0) * density;
+        // shadow is drawn from — does not run (FishFogSunShare). The mist likewise: the march draws no
+        // mist, and a fall is small beside the cloud shadow's texels.
+        // The beam stopped by the shadow map (the shafts) and by the terrain (a gorge's shade), the
+        // fog and the mist alike.
+        float shadow = FogShadow(middle) * FishTerrainSunlit(middle);
+        if (fog > 0.0)
+        {
+            scattered = FishFogLight(middle.y, ray, column, _FishFogLayer.x, shadow, 1.0) * fog;
+        }
+        if (mist > 0.0)
+        {
+            scattered += FallMistLight(middle.y, ray, column, _FishFogLayer.x, shadow, mistDepth) * mist;
+        }
     }
     _FishVolFogScatter[id] = float4(scattered, density);
 }

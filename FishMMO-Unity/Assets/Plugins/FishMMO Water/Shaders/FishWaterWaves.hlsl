@@ -14,6 +14,9 @@ struct FishWaterSurface
 	/// Determinant of the horizontal displacement. At or below zero the surface would fold, which
 	/// is where a real wave breaks.
 	float jacobian;
+	/// How hard the surface here broke lately: the folding past where white caps start, kept and decaying
+	/// (WaterFFT's foam memory), so a crest's foam stays on the water after it has run on. 0 with no memory.
+	float breakingKept;
 	/// Whitewater from the breakers here, 0 to 1. Zero from the wave model; the fragment adds it.
 	float surf;
 	/// How much of the open sea's waves reach this depth: 1 offshore, 0 at the break line and inshore.
@@ -146,7 +149,7 @@ float FishWaterAmplitudeFade(float distanceToCamera)
 /// <param name="patch">The cascade's tile size in metres.</param>
 /// <param name="weight">How much of this cascade to take, for resolution fading.</param>
 void FishWaterCascade(Texture2D displacementMap, Texture2D derivativeMap, float2 xz, float patch,
-	float weight, inout float3 displacement, inout float2 slope, inout float folding)
+	float weight, inout float3 displacement, inout float2 slope, inout float folding, inout float kept)
 {
 	if (weight <= 0.001)
 	{
@@ -160,6 +163,7 @@ void FishWaterCascade(Texture2D displacementMap, Texture2D derivativeMap, float2
 	// Folding below one is a compressing surface; at or under zero it has turned inside out, which
 	// is physically where a wave breaks. Accumulated as a deficit so cascades can agree.
 	folding += max(0.0, 1.0 - n.z) * weight;
+	kept += n.w * weight;
 }
 
 /// <summary>
@@ -187,6 +191,7 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	float3 displacement = 0.0;
 	float2 slope = 0.0;
 	float folding = 0.0;
+	float kept = 0.0;
 
 	/* A cascade is dropped once one pixel covers more than about a quarter of its tile: below
 	 * that it is being point-sampled far under its own Nyquist limit and returns noise, which is
@@ -200,11 +205,11 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	}
 
 	FishWaterCascade(_FishWaterDisplacement0, _FishWaterDerivatives0, flatPositionWS.xz,
-		_FishWaterPatch.x, resolved.x, displacement, slope, folding);
+		_FishWaterPatch.x, resolved.x, displacement, slope, folding, kept);
 	FishWaterCascade(_FishWaterDisplacement1, _FishWaterDerivatives1, flatPositionWS.xz,
-		_FishWaterPatch.y, resolved.y, displacement, slope, folding);
+		_FishWaterPatch.y, resolved.y, displacement, slope, folding, kept);
 	FishWaterCascade(_FishWaterDisplacement2, _FishWaterDerivatives2, flatPositionWS.xz,
-		_FishWaterPatch.z, resolved.z, displacement, slope, folding);
+		_FishWaterPatch.z, resolved.z, displacement, slope, folding, kept);
 
 	/* Only where the open sea's waves can reach, at this tide: a pool or a lagoon cut off from it lies
 	 * still, its folding (and so its white caps) with it (FishWaterOpenSea). */
@@ -212,6 +217,7 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	displacement *= amplitudeScale * openSea;
 	slope *= amplitudeScale * openSea;
 	folding *= openSea;
+	kept *= openSea;
 
 	/* ── The shallows: the sea fades out, it does not break ──
 	 *
@@ -239,6 +245,7 @@ FishWaterSurface FishWaterDisplace(float3 flatPositionWS, float amplitudeScale, 
 	surface.height = displacement.y;
 	surface.normalWS = normalize(float3(-slope.x, 1.0, -slope.y));
 	surface.jacobian = 1.0 - saturate(folding);
+	surface.breakingKept = kept;
 	return surface;
 }
 

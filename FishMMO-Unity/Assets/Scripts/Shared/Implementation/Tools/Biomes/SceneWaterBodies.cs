@@ -126,7 +126,57 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>The water's surface over a scene position: a lake's level, or a river's surface where its channel is.</summary>
-		public bool TryGetSurface(float x, float z, out float level)
+		public bool TryGetSurface(float x, float z, out float level) => TryGetSurfaceNear(x, z, 0f, out level);
+
+		/// <summary>
+		/// Whether any lake or perennial river may stand within <paramref name="area"/> (scene xz, <c>yMin</c>/<c>yMax</c>
+		/// north), its banks and <see cref="MaxReachMetres"/> included: lets a map over a dry terrain skip asking at every point.
+		/// </summary>
+		public bool Reaches(Rect area)
+		{
+			if (Hydrology == null)
+			{
+				return false;
+			}
+			foreach (SceneHydrology.Lake lake in Hydrology.Lakes)
+			{
+				Rect bounds = lake.Bounds;
+				if (bounds.xMax + MaxReachMetres >= area.xMin && bounds.xMin - MaxReachMetres <= area.xMax &&
+					bounds.yMax + MaxReachMetres >= area.yMin && bounds.yMin - MaxReachMetres <= area.yMax)
+				{
+					return true;
+				}
+			}
+			foreach (SceneHydrology.River river in Hydrology.Rivers)
+			{
+				if (!river.Perennial || river.Points == null)
+				{
+					continue;
+				}
+				for (int i = 0; i + 1 < river.Points.Length; i++)
+				{
+					Vector3 a = river.Points[i], b = river.Points[i + 1];
+					float margin = 0.5f * Mathf.Max(Width(river, i), Width(river, i + 1)) + MaxReachMetres;
+					if (Mathf.Max(a.x, b.x) + margin >= area.xMin && Mathf.Min(a.x, b.x) - margin <= area.xMax &&
+						Mathf.Max(a.z, b.z) + margin >= area.yMin && Mathf.Min(a.z, b.z) - margin <= area.yMax)
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The most <see cref="TryGetSurfaceNear"/> reaches past a river's banks: the index over the river lines covers no further.</summary>
+		public const float MaxReachMetres = 2f;
+
+		/// <summary>
+		/// The highest water surface over a scene position or within <paramref name="reach"/> metres of it (at most
+		/// <see cref="MaxReachMetres"/>): a river's past its banks by that much, a lake's where its mask covers the
+		/// point or a point that far off. For maps sampled on a grid coarser than a creek: a 2 m heightmap can have no
+		/// sample inside a 1.5 m channel, and the water still has to reach the samples either side of it.
+		/// </summary>
+		public bool TryGetSurfaceNear(float x, float z, float reach, out float level)
 		{
 			level = float.NegativeInfinity;
 			bool any = false;
@@ -134,9 +184,10 @@ namespace FishMMO.Shared.Biomes
 			{
 				return false;
 			}
+			reach = Mathf.Clamp(reach, 0f, MaxReachMetres);
 			foreach (SceneHydrology.Lake lake in Hydrology.Lakes)
 			{
-				if (lake.Level > level && lake.Bounds.Contains(new Vector2(x, z)) && lake.Covers(x, z))
+				if (lake.Level > level && LakeCovers(lake, x, z, reach))
 				{
 					level = lake.Level;
 					any = true;
@@ -161,7 +212,7 @@ namespace FishMMO.Shared.Biomes
 				Vector3 a = river.Points[segment.Point], b = river.Points[segment.Point + 1];
 				float t = Project(a, b, x, z, out float distance);
 				float half = 0.5f * Mathf.Lerp(Width(river, segment.Point), Width(river, segment.Point + 1), t);
-				if (distance <= half)
+				if (distance <= half + reach)
 				{
 					float here = Mathf.Lerp(a.y, b.y, t);
 					if (here > level)
@@ -172,6 +223,93 @@ namespace FishMMO.Shared.Biomes
 				}
 			}
 			return any;
+		}
+
+		/// <summary>
+		/// Metres from a scene position out to the nearest perennial river's bank: negative inside a channel, positive
+		/// outside it. Exact for any channel within <see cref="IndexCell"/> metres; <see cref="float.PositiveInfinity"/>
+		/// where none is. Rivers that start or end in the lake <paramref name="exceptLake"/> names are left out (−1
+		/// leaves none out).
+		/// </summary>
+		/// <remarks>
+		/// Asks the index cells round the point's as well as its own: a segment is filed only within about one and a
+		/// quarter widths plus two metres of its banks, so a creek's own cells alone would lose it a few metres out.
+		/// </remarks>
+		public float OutsideChannels(float x, float z, int exceptLake = -1)
+		{
+			float outside = float.PositiveInfinity;
+			if (Hydrology == null)
+			{
+				return outside;
+			}
+			if (!built)
+			{
+				Build();
+			}
+			int cx = Mathf.FloorToInt(x / IndexCell), cz = Mathf.FloorToInt(z / IndexCell);
+			for (int dz = -1; dz <= 1; dz++)
+			{
+				for (int dx = -1; dx <= 1; dx++)
+				{
+					long key = ((long)(cx + dx) << 32) ^ (uint)(cz + dz);
+					if (!index.TryGetValue(key, out List<Segment> near))
+					{
+						continue;
+					}
+					foreach (Segment segment in near)
+					{
+						if (segment.Jet)
+						{
+							continue;
+						}
+						SceneHydrology.River river = Hydrology.Rivers[segment.River];
+						if (!river.Perennial || exceptLake >= 0 && (river.StartLake == exceptLake || river.EndLake == exceptLake))
+						{
+							continue;
+						}
+						Vector3 a = river.Points[segment.Point], b = river.Points[segment.Point + 1];
+						float t = Project(a, b, x, z, out float distance);
+						float half = 0.5f * Mathf.Lerp(Width(river, segment.Point), Width(river, segment.Point + 1), t);
+						outside = Mathf.Min(outside, distance - half);
+					}
+				}
+			}
+			return outside;
+		}
+
+		/// <summary>Eight unit directions round a point.</summary>
+		private static readonly Vector2[] Around =
+		{
+			new Vector2(1f, 0f), new Vector2(-1f, 0f), new Vector2(0f, 1f), new Vector2(0f, -1f),
+			new Vector2(0.70710678f, 0.70710678f), new Vector2(-0.70710678f, 0.70710678f),
+			new Vector2(0.70710678f, -0.70710678f), new Vector2(-0.70710678f, -0.70710678f),
+		};
+
+		/// <summary>Whether a lake's mask covers a point, or (with a reach) any of the eight points that far round it.</summary>
+		private static bool LakeCovers(SceneHydrology.Lake lake, float x, float z, float reach)
+		{
+			Rect bounds = lake.Bounds;
+			if (x < bounds.xMin - reach || x > bounds.xMax + reach || z < bounds.yMin - reach || z > bounds.yMax + reach)
+			{
+				return false;
+			}
+			if (bounds.Contains(new Vector2(x, z)) && lake.Covers(x, z))
+			{
+				return true;
+			}
+			if (reach <= 0f)
+			{
+				return false;
+			}
+			for (int k = 0; k < 8; k++)
+			{
+				float px = x + Around[k].x * reach, pz = z + Around[k].y * reach;
+				if (bounds.Contains(new Vector2(px, pz)) && lake.Covers(px, pz))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>True when a point is under a lake's or a river's surface.</summary>

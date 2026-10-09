@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -93,6 +95,7 @@ namespace FishMMO.Client
 
 			ApplySavedVSync();
 			ApplySavedAnisotropicFiltering();
+			ApplySavedMsaa();
 			ApplySavedFrameRate();
 			ApplySavedBrightness();
 			InstallSceneHook();
@@ -290,6 +293,69 @@ namespace FishMMO.Client
 			 * things that silently revert the next time somebody touches the quality dropdown. */
 			ApplySavedVSync();
 			ApplySavedAnisotropicFiltering();
+			// Each quality level has its own pipeline asset, with its own authored MSAA.
+			ApplySavedMsaa();
+		}
+
+		/// <summary>Multisampling choices offered to the player, in the order the dropdown shows them. Ours, not Unity's ordinals.</summary>
+		public enum MsaaOption
+		{
+			Off = 0,
+			Two = 1,
+			Four = 2,
+		}
+
+		/// <summary>The stored value while the player has chosen nothing: each quality level's own authored MSAA applies.</summary>
+		private const int MsaaUnchosen = -1;
+
+		/// <summary>
+		/// Applies the stored multisampling choice to the active pipeline asset; with none, leaves the quality level's own
+		/// (Jim, 2026-10-09: 4× on High Fidelity, off on Balanced and Performant). The leaves' and the grass's soft edges are
+		/// alpha-to-coverage, which only MSAA can draw; 4× cost about 0.3 ms at 2560×1440 in Flo Monolith (`msaa1`).
+		/// </summary>
+		public static void ApplySavedMsaa()
+		{
+			int stored = ClientSettings.GetInt(ClientSettings.MsaaKey, MsaaUnchosen);
+			if (stored == MsaaUnchosen)
+			{
+				return;
+			}
+			ApplyMsaa((MsaaOption)Mathf.Clamp(stored, (int)MsaaOption.Off, (int)MsaaOption.Four));
+		}
+
+		/// <summary>What the options show: the player's choice, or with none the active quality level's own MSAA.</summary>
+		public static MsaaOption CurrentMsaa()
+		{
+			int stored = ClientSettings.GetInt(ClientSettings.MsaaKey, MsaaUnchosen);
+			if (stored != MsaaUnchosen)
+			{
+				return (MsaaOption)Mathf.Clamp(stored, (int)MsaaOption.Off, (int)MsaaOption.Four);
+			}
+			int samples = GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline ? pipeline.msaaSampleCount : 1;
+			return samples >= 4 ? MsaaOption.Four : samples >= 2 ? MsaaOption.Two : MsaaOption.Off;
+		}
+
+		/// <summary>
+		/// Writes a multisampling choice onto the active quality level's pipeline asset. MSAA lives there and nowhere else
+		/// in URP; the vegetation follows it on its own (VegetationDistanceFade reads the asset every frame for the leaves'
+		/// alpha-to-coverage).
+		/// </summary>
+		public static void ApplyMsaa(MsaaOption option)
+		{
+			if (!(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline))
+			{
+				return;
+			}
+#if UNITY_EDITOR
+			// The asset is a project file: remembered here so play mode can put its authored value back (CaptureAuthoredQuality).
+			if (!authoredMsaa.ContainsKey(pipeline))
+			{
+				authoredMsaa.Add(pipeline, pipeline.msaaSampleCount);
+				UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+				UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+			}
+#endif
+			pipeline.msaaSampleCount = option == MsaaOption.Off ? 1 : option == MsaaOption.Two ? 2 : 4;
 		}
 
 #if UNITY_EDITOR
@@ -299,6 +365,9 @@ namespace FishMMO.Client
 
 		/// <summary>The anisotropic filtering mode authored in the project, before any change.</summary>
 		private static AnisotropicFiltering authoredAnisotropicFiltering;
+
+		/// <summary>Each pipeline asset's authored MSAA, captured before the player's choice is first written to it.</summary>
+		private static readonly Dictionary<UniversalRenderPipelineAsset, int> authoredMsaa = new Dictionary<UniversalRenderPipelineAsset, int>();
 
 		/// <summary>
 		/// The editor's own frame-rate cap: none. <see cref="Application.targetFrameRate"/> is native and outlives
@@ -377,6 +446,14 @@ namespace FishMMO.Client
 				QualitySettings.anisotropicFiltering = authoredAnisotropicFiltering;
 			}
 			Application.targetFrameRate = EditorTargetFrameRate;
+			foreach (KeyValuePair<UniversalRenderPipelineAsset, int> pair in authoredMsaa)
+			{
+				if (pair.Key != null)
+				{
+					pair.Key.msaaSampleCount = pair.Value;
+				}
+			}
+			authoredMsaa.Clear();
 
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 

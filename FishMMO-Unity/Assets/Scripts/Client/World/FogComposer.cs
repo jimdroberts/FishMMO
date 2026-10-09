@@ -162,7 +162,10 @@ namespace FishMMO.Client
 				float dim = Mathf.Clamp01(skyLight / 0.7f);
 				weather = new Color(weatherColor.r * dim, weatherColor.g * dim, weatherColor.b * dim, weatherColor.a);
 			}
-			Compose(region, weatherAmount, weather, weatherDensity, weatherEnd).WriteToRenderSettings();
+			FogState composed = Compose(region, weatherAmount, weather, weatherDensity, weatherEnd);
+			// The fog switch (SkySystem.DrawFog) takes the region's fog out too.
+			composed.Enabled &= SkySystem.DrawFog;
+			composed.WriteToRenderSettings();
 		}
 	}
 }

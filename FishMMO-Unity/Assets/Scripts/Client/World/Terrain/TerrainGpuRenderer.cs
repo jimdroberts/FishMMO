@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
@@ -105,6 +106,8 @@ namespace FishMMO.Client
 			public int ShadowMask;
 			/// <summary>Instances this camera's work submits for the model: no slot of it can receive more.</summary>
 			public int WorkInstances;
+			/// <summary>Its shape in the rock crevice field (<see cref="RockContactField"/>), −1 when it is not a rock taking part.</summary>
+			public int RockShape = -1;
 		}
 
 		/// <summary>An upload buffer, released once the GPU is surely done with it.</summary>
@@ -128,6 +131,8 @@ namespace FishMMO.Client
 			public Mesh Mesh;
 			public int Submesh;
 			public RenderParams Params;
+			/// <summary>The depth-prime twin drawn ahead of this lit draw (<see cref="PrimeOf"/>), or null: the camera view's alpha-tested vegetation only.</summary>
+			public Material Prime;
 		}
 
 		private struct Resident
@@ -160,6 +165,31 @@ namespace FishMMO.Client
 		private readonly List<Command> commands = new List<Command>();
 		private readonly Dictionary<int, Resident> residents = new Dictionary<int, Resident>();
 		private readonly Dictionary<Material, Material> clones = new Dictionary<Material, Material>();
+		/// <summary>Lit clone → its depth-prime twin (<see cref="PrimeOf"/>).</summary>
+		private readonly Dictionary<Material, Material> primes = new Dictionary<Material, Material>();
+
+		/// <summary>
+		/// Whether the camera view's alpha-tested vegetation is drawn twice: its depth first (FishMMO/Vegetation Prime, one
+		/// render queue earlier, the lit pass's exact coverage), then its lit pass with depth writes off, which then shades
+		/// only the leaf in front at each pixel. A discarding shader that writes depth gets no early depth rejection, so
+		/// every layer of every crown ran the whole lit shader: ~2 ms of the trees' 2.9 ms lit pass at Flo Monolith's meadow
+		/// was pixels (ScenePerfProbe, 2026-10-08, from the pass's cost at half resolution). URP's own depth priming is off
+		/// under MSAA, which the leaves' alpha-to-coverage edges need. Off is the old single draw (probe variant `noprime`).
+		/// </summary>
+		public static bool PrimeAlphaTested = true;
+		private bool primedState = true;
+
+		private static readonly int VegZWriteId = Shader.PropertyToID("_VegZWrite");
+		/// <summary>Per slot: its level's bounding sphere in object space, grown, for the shadow caster's per-cascade culling (ShadowCascadeCulling).</summary>
+		private static readonly int CasterSphereId = Shader.PropertyToID("_FishCasterSphere");
+		/// <summary>
+		/// How much a level's mesh sphere is grown for what the vegetation shader does to each plant: VegVary widens a crown
+		/// by up to 60 % and heightens it by up to 40 %, leans it and swings its limbs, and the wind sways it. Too big only
+		/// culls less; too small would drop a shadow.
+		/// </summary>
+		private const float CasterSphereGrowth = 1.6f, CasterSphereMetres = 1f;
+		private const string VegetationIndirectName = "FishMMO/Vegetation Indirect";
+		private const string VegetationPrimeName = "FishMMO/Vegetation Prime";
 		private readonly RangeAllocator allocator = new RangeAllocator(0);
 		private readonly Vector4[] planeVectors = new Vector4[6];
 		private MaterialPropertyBlock[] slotBlocks = Array.Empty<MaterialPropertyBlock>();
@@ -169,6 +199,17 @@ namespace FishMMO.Client
 		private NativeArray<FishWork> work;
 		private int workCount;
 		private bool layoutDirty = true;
+
+		/// <summary>
+		/// Per instance, the shape (+1) of the rock it is in the crevice field (0: not a rock), alongside the mirror;
+		/// the GPU copy (<see cref="RockSource"/>) is replaced whole when it changes, a frame late, so the instances it
+		/// tags have been uploaded by then. Only renderers that registered a rock keep one.
+		/// </summary>
+		private NativeArray<uint> tagMirror;
+		private GraphicsBuffer tagBuffer;
+		private bool tagsDirty;
+		private int tagsDirtyFrame;
+		private bool anyRock;
 
 		/// <summary>Draws issued for the last camera.</summary>
 		public int LastDrawCount { get; private set; }
@@ -183,17 +224,21 @@ namespace FishMMO.Client
 		private static long Size(GraphicsBuffer b) => b != null ? (long)b.count * b.stride : 0;
 
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO terrain GPU culling" };
+		/// <summary>The culling's GPU time, as a marker the profiler and ScenePerfProbe see: it runs before the camera's own render, outside every URP marker.</summary>
+		private static readonly CustomSampler CullingSampler = CustomSampler.Create("FishMMO terrain culling (GPU)", true);
 
 		/// <summary>
-		/// Which contact blend with the ground this renderer's draws take (FishGroundColour.hlsl <c>_FishContactOn</c>):
-		/// 0 none, 1 the small details' settings, 2 the trees' and rocks' (their bases take the terrain's colour and
-		/// shading). Set by the owner right after <see cref="TryCreate"/>; written on its clones and per-draw blocks.
+		/// Whether this renderer's draws take the contact blend with the ground (FishGroundColour.hlsl <c>_FishContactOn</c>):
+		/// 1 for trees and rocks (their bases draw the terrain and flare into it), 0 none. Set by the owner right after
+		/// <see cref="TryCreate"/>; written on its clones and per-draw blocks.
 		/// </summary>
 		public float ContactMode;
 
 		private TerrainGpuRenderer(ComputeShader compute)
 		{
 			this.compute = compute;
+			// The rock shader's crevice inputs, bound before this renderer's first draw.
+			RockContactField.EnsureBindings();
 			clearKernel = compute.FindKernel("FishClearCounts");
 			cullKernel = compute.FindKernel("FishCull");
 			finalizeKernel = compute.FindKernel("FishFinalize");
@@ -218,8 +263,12 @@ namespace FishMMO.Client
 			{
 				return null;
 			}
-			// The indirect twins' variants, compiled now rather than as the first tree of each kind comes into view.
-			if (profile != null && profile.IndirectShaderVariants != null && !profile.IndirectShaderVariants.isWarmedUp)
+			// The indirect twins' variants, compiled now rather than as the first tree of each kind comes into view. A
+			// player only: there the variants are prebuilt and warming creates their GPU programs, but the editor COMPILES
+			// every variant of each listed keyword set (crossed with every global multi_compile) synchronously, which
+			// held the first frame 5.7 s (StartupTimeline, 2026-10-08). The editor compiles them in the background as
+			// they are first drawn instead.
+			if (!Application.isEditor && profile != null && profile.IndirectShaderVariants != null && !profile.IndirectShaderVariants.isWarmedUp)
 			{
 				profile.IndirectShaderVariants.WarmUp();
 			}
@@ -251,6 +300,61 @@ namespace FishMMO.Client
 			clone.SetFloat(ContactOnId, ContactMode);
 			clones.Add(material, clone);
 			return clone;
+		}
+
+		/// <summary>
+		/// The depth-prime twin of a lit vegetation clone (<see cref="PrimeAlphaTested"/>), or null where there is nothing to
+		/// gain or no prime shader: bark and rocks do not discard, so their own depth test already rejects what is hidden.
+		/// Setting it up turns the clone's lit-pass depth writes off: from then on the clone is only ever drawn after it.
+		/// </summary>
+		private Material PrimeOf(Material clone)
+		{
+			if (clone == null || clone.shader == null || clone.shader.name != VegetationIndirectName || !clone.IsKeywordEnabled("_ALPHATEST_ON"))
+			{
+				return null;
+			}
+			if (primes.TryGetValue(clone, out Material prime))
+			{
+				return prime;
+			}
+			Shader shader = PrimeShader();
+			if (shader == null)
+			{
+				primes.Add(clone, null);
+				return null;
+			}
+			prime = new Material(clone) { shader = shader, name = clone.name + " (prime)", hideFlags = HideFlags.DontSave };
+			// The keyword by name: a local keyword's state does not survive the change of shader.
+			prime.EnableKeyword("_ALPHATEST_ON");
+			// Ahead of every lit draw in the opaque pass, which sorts by render queue first.
+			prime.renderQueue = clone.renderQueue - 1;
+			clone.SetFloat(VegZWriteId, PrimeAlphaTested ? 0f : 1f);
+			primes.Add(clone, prime);
+			return prime;
+		}
+
+		private static Shader PrimeShader()
+		{
+			WeatherRenderProfile profile = WeatherRenderProfile.Active;
+			Shader shader = profile != null && profile.VegetationPrimeShader != null ? profile.VegetationPrimeShader : Shader.Find(VegetationPrimeName);
+			return shader != null && shader.isSupported ? shader : null;
+		}
+
+		/// <summary>Follows <see cref="PrimeAlphaTested"/> (a probe switch): the lit clones write depth again while it is off.</summary>
+		private void SyncPrimeState()
+		{
+			if (primedState == PrimeAlphaTested)
+			{
+				return;
+			}
+			primedState = PrimeAlphaTested;
+			foreach (KeyValuePair<Material, Material> pair in primes)
+			{
+				if (pair.Key != null && pair.Value != null)
+				{
+					pair.Key.SetFloat(VegZWriteId, primedState ? 0f : 1f);
+				}
+			}
 		}
 
 		/// <summary>
@@ -323,9 +427,101 @@ namespace FishMMO.Client
 				data.Transitions[l] = transitions[l];
 				data.FadeWidths[l] = fadeWidths != null && l < fadeWidths.Length ? fadeWidths[l] : 0f;
 			}
-			models.Add(new Model { Name = name ?? $"model {models.Count}", Data = data, Levels = resolved });
+			var model = new Model { Name = name ?? $"model {models.Count}", Data = data, Levels = resolved };
+			// A rock (drawn by the Weather Lit twin) of a renderer that takes the contact blend joins the crevice field;
+			// trees (the vegetation twin) never do.
+			if (ContactMode > 0.5f && IsRock(resolved))
+			{
+				model.RockShape = RockContactField.RegisterShape(levels, localBounds);
+				if (model.RockShape >= 0 && !anyRock)
+				{
+					anyRock = true;
+					RockContactField.AddRenderer(this);
+					// Only now: a renderer with no shape in the contact field (the details) never carries the tags.
+					if (mirror.IsCreated)
+					{
+						EnsureTags(mirror.Length);
+					}
+				}
+			}
+			models.Add(model);
 			layoutDirty = true;
 			return models.Count - 1;
+		}
+
+		private static bool IsRock(PartSource[][] levels)
+		{
+			Material m = levels[0].Length > 0 ? levels[0][0].Material : null;
+			return m != null && m.shader != null && m.shader.name.EndsWith("Weather Lit Indirect");
+		}
+
+		/// <summary>
+		/// Marks a resident run as instances of <paramref name="model"/> for the rock crevice field (a no-op unless the
+		/// model is a rock taking part). Owners call it after <see cref="Upload"/>, once per run of one model.
+		/// </summary>
+		public void TagRun(int offset, int count, int model)
+		{
+			if (!anyRock || offset < 0 || count <= 0 || model < 0 || model >= models.Count || models[model].RockShape < 0 || !tagMirror.IsCreated)
+			{
+				return;
+			}
+			uint tag = (uint)models[model].RockShape + 1u;
+			int end = Mathf.Min(offset + count, tagMirror.Length);
+			for (int i = offset; i < end; i++)
+			{
+				tagMirror[i] = tag;
+			}
+			tagsDirty = true;
+			tagsDirtyFrame = Time.frameCount;
+		}
+
+		/// <summary>The tag mirror at the instance mirror's capacity, keeping what it held.</summary>
+		private void EnsureTags(int capacity)
+		{
+			if (tagMirror.IsCreated && tagMirror.Length >= capacity)
+			{
+				return;
+			}
+			var grownTags = new NativeArray<uint>(capacity, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+			if (tagMirror.IsCreated)
+			{
+				NativeArray<uint>.Copy(tagMirror, grownTags, tagMirror.Length);
+				tagMirror.Dispose();
+			}
+			tagMirror = grownTags;
+			tagsDirty = true;
+			tagsDirtyFrame = Time.frameCount;
+		}
+
+		/// <summary>
+		/// This renderer's GPU instances and their rock tags for the crevice field's gather, or false while there is
+		/// nothing to read (no rock, the GPU buffer about to be recreated).
+		/// </summary>
+		public bool RockSource(out GraphicsBuffer instanceBuffer, out GraphicsBuffer tags, out int count)
+		{
+			instanceBuffer = instances;
+			tags = null;
+			count = 0;
+			if (!anyRock || instances == null || instancesStale || !tagMirror.IsCreated)
+			{
+				return false;
+			}
+			if (tagBuffer == null || tagBuffer.count != tagMirror.Length)
+			{
+				tagBuffer?.Release();
+				tagBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, tagMirror.Length, sizeof(uint));
+				tagsDirty = true;
+				tagsDirtyFrame = Time.frameCount - 1;
+			}
+			// A frame late: the instances tagged this frame reach the GPU with this frame's camera.
+			if (tagsDirty && Time.frameCount > tagsDirtyFrame)
+			{
+				tagBuffer.SetData(tagMirror);
+				tagsDirty = false;
+			}
+			tags = tagBuffer;
+			count = Mathf.Min(instances.count, tagMirror.Length);
+			return true;
 		}
 
 		/// <summary>Sets how many instances a model's slots hold (its resident count); grows the visible buffer on the next camera.</summary>
@@ -404,6 +600,15 @@ namespace FishMMO.Client
 			{
 				residents.Remove(offset);
 				allocator.Free(offset, r.Count);
+				if (anyRock && tagMirror.IsCreated)
+				{
+					for (int i = offset, end = Mathf.Min(offset + r.Count, tagMirror.Length); i < end; i++)
+					{
+						tagMirror[i] = 0u;
+					}
+					tagsDirty = true;
+					tagsDirtyFrame = Time.frameCount;
+				}
 				if (LogUploads)
 				{
 					Debug.Log($"[Terrain GPU] frame {Time.frameCount} free {r.Owner}: offset {offset}, count {r.Count}.");
@@ -426,6 +631,10 @@ namespace FishMMO.Client
 				mirror.Dispose();
 			}
 			mirror = grown;
+			if (anyRock)
+			{
+				EnsureTags(capacity);
+			}
 			allocator.Grow(capacity);
 			instancesStale = true;
 			TerrainInstancingProbe.Grows++;
@@ -675,6 +884,7 @@ namespace FishMMO.Client
 			{
 				double recordStart = TerrainInstancingProbe.Now;
 				cmd.Clear();
+				cmd.BeginSample(CullingSampler);
 				Flush(cmd);
 				cmd.SetBufferData(workBuffer, work, 0, 0, workCount);
 				cmd.SetComputeVectorParam(compute, CameraPositionId, view.Position);
@@ -719,6 +929,7 @@ namespace FishMMO.Client
 					diagnosticReport = null;
 					StartDiagnostics(in view, report, cmd);
 				}
+				cmd.EndSample(CullingSampler);
 				context.ExecuteCommandBuffer(cmd);
 				cmd.Clear();
 				TerrainInstancingProbe.RecordMs += TerrainInstancingProbe.Now - recordStart;
@@ -727,6 +938,7 @@ namespace FishMMO.Client
 			double drawStart = TerrainInstancingProbe.Now;
 
 			var bounds = new Bounds(view.Position, Vector3.one * (2f * reach));
+			SyncPrimeState();
 			int draws = 0;
 			for (int c = 0; c < commands.Count; c++)
 			{
@@ -743,6 +955,13 @@ namespace FishMMO.Client
 				rp.matProps = slotBlocks[command.Slot];
 				Graphics.RenderMeshIndirect(rp, command.Mesh, argsBuffer, 1, c);
 				draws++;
+				if (primedState && command.Prime != null)
+				{
+					// The same command, so the same visible instances (its args and its slot's base), through the prime.
+					rp.material = command.Prime;
+					Graphics.RenderMeshIndirect(rp, command.Mesh, argsBuffer, 1, c);
+					draws++;
+				}
 			}
 			LastDrawCount = draws;
 			TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
@@ -757,6 +976,7 @@ namespace FishMMO.Client
 			TerrainInstancingProbe.Relayouts++;
 			slotCount = 0;
 			var capacities = new List<int>();
+			var bounded = new Dictionary<int, Bounds>();
 			commands.Clear();
 			var args = new List<GraphicsBuffer.IndirectDrawIndexedArgs>();
 			var argSlots = new List<uint>();
@@ -782,7 +1002,17 @@ namespace FishMMO.Client
 							RenderParams rp = part.Template;
 							rp.material = part.Material;
 							rp.shadowCastingMode = v == 0 ? ShadowCastingMode.Off : ShadowCastingMode.ShadowsOnly;
-							commands.Add(new Command { Model = id, Level = l, View = v, Slot = slot, Mesh = part.Mesh, Submesh = part.Submesh, Params = rp });
+							commands.Add(new Command { Model = id, Level = l, View = v, Slot = slot, Mesh = part.Mesh, Submesh = part.Submesh, Params = rp, Prime = v == 0 ? PrimeOf(part.Material) : null });
+							Bounds partBounds = part.Mesh.bounds;
+							if (bounded.TryGetValue(slot, out Bounds sofar))
+							{
+								sofar.Encapsulate(partBounds);
+								bounded[slot] = sofar;
+							}
+							else
+							{
+								bounded[slot] = partBounds;
+							}
 							args.Add(new GraphicsBuffer.IndirectDrawIndexedArgs
 							{
 								indexCountPerInstance = part.Mesh.GetIndexCount(part.Submesh),
@@ -861,6 +1091,13 @@ namespace FishMMO.Client
 				// A real-int SetInteger value is not known to reach a uint parameter there: if it does not, every
 				// draw reads slot 0's region, which is exactly "only one prototype's places, drawn by all".
 				slotBlocks[s].SetFloat(VisibleBaseId, bases[s]);
+				// No bounds (a slot nothing draws from): w 0, and the caster culls nothing for it.
+				Vector4 sphere = Vector4.zero;
+				if (bounded.TryGetValue(s, out Bounds b))
+				{
+					sphere = new Vector4(b.center.x, b.center.y, b.center.z, b.extents.magnitude * CasterSphereGrowth + CasterSphereMetres);
+				}
+				slotBlocks[s].SetVector(CasterSphereId, sphere);
 			}
 			EnsureGpuBuffer();
 			BindBlocks();
@@ -890,6 +1127,26 @@ namespace FishMMO.Client
 				if (commandBaseBuffer != null)
 				{
 					clone.SetBuffer(CommandBasesId, commandBaseBuffer);
+				}
+			}
+			foreach (Material prime in primes.Values)
+			{
+				if (prime == null)
+				{
+					continue;
+				}
+				prime.SetFloat(ContactOnId, ContactMode);
+				if (instances != null)
+				{
+					prime.SetBuffer(InstancesId, instances);
+				}
+				if (visibleBuffer != null)
+				{
+					prime.SetBuffer(VisibleId, visibleBuffer);
+				}
+				if (commandBaseBuffer != null)
+				{
+					prime.SetBuffer(CommandBasesId, commandBaseBuffer);
 				}
 			}
 		}
@@ -947,6 +1204,13 @@ namespace FishMMO.Client
 			{
 				mirror.Dispose();
 			}
+			if (tagMirror.IsCreated)
+			{
+				tagMirror.Dispose();
+			}
+			tagBuffer?.Release();
+			tagBuffer = null;
+			RockContactField.RemoveRenderer(this);
 			foreach (Material clone in clones.Values)
 			{
 				if (clone != null)
@@ -955,6 +1219,14 @@ namespace FishMMO.Client
 				}
 			}
 			clones.Clear();
+			foreach (Material prime in primes.Values)
+			{
+				if (prime != null)
+				{
+					Object.Destroy(prime);
+				}
+			}
+			primes.Clear();
 			residents.Clear();
 			models.Clear();
 			commands.Clear();

@@ -1,6 +1,8 @@
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Celestial;
 
 namespace FishMMO.Shared.Weather
 {
@@ -48,8 +50,18 @@ namespace FishMMO.Shared.Weather
 			return extent.Found;
 		}
 
+		/// <summary>The most steps one scene advance takes (<see cref="WeatherCover.StepsFor"/>): five field samples each.</summary>
+		public const int MaxSteps = 240;
+
 		/// <summary>The scene's average weather and temperature at a tick, over its five cover points.</summary>
 		public static void Sample(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, uint tick,
+			out WeatherFrame frame, out float temperature)
+		{
+			SampleAtSeconds(timeline, settings, scene, timeline != null ? timeline.WorldSecondsAt(tick) : 0.0, out frame, out temperature);
+		}
+
+		/// <summary>The scene's average weather and temperature at a moment of world time, over its five cover points.</summary>
+		public static void SampleAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, double worldSeconds,
 			out WeatherFrame frame, out float temperature)
 		{
 			if (!TryGetArea(settings, scene, out Rect area))
@@ -62,11 +74,43 @@ namespace FishMMO.Shared.Weather
 			for (int i = 0; i < Offsets.Length; i++)
 			{
 				Vector2 p = c + Vector2.Scale(Offsets[i], area.size);
-				WeatherSample sample = WeatherField.Sample(timeline, settings, scene, new Vector3(p.x, 0f, p.y), tick);
+				WeatherSample sample = WeatherField.SampleAtSeconds(timeline, settings, scene, new Vector3(p.x, 0f, p.y), worldSeconds);
 				average.Add(sample.Frame, 1f / Offsets.Length);
 				temperature += sample.Temperature / Offsets.Length;
 			}
 			frame = average.Resolve();
+		}
+
+		/// <summary>
+		/// Brings the scene's cover from the world time it was last advanced to (<see cref="WeatherTimeline.CoverSeconds"/>)
+		/// up to <paramref name="worldSeconds"/>, in steps each under the weather and the daylight of its own moment. The
+		/// server and every client run this, so they integrate the same forcing over the same world time.
+		/// </summary>
+		/// <remarks>
+		/// World time throughout: a held world holds its ground, a raced one races it, and an admin's jump forward
+		/// brings the ground through the weather of the hours it skipped. A jump BACK leaves the ground as it is — the
+		/// cover of a past moment is not something the ground can return to — and restarts the count from there.
+		/// </remarks>
+		public static void Advance(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, double worldSeconds)
+		{
+			if (timeline == null)
+			{
+				return;
+			}
+			double from = timeline.CoverSeconds;
+			int steps = WeatherCover.StepsFor(worldSeconds - from, MaxSteps);
+			if (steps > 0)
+			{
+				from = Math.Max(from, worldSeconds - WeatherCover.MaxAdvanceSeconds);
+				double step = (worldSeconds - from) / steps;
+				for (int i = 1; i <= steps; i++)
+				{
+					double at = from + step * i;
+					SampleAtSeconds(timeline, settings, scene, at, out WeatherFrame frame, out float temperature);
+					timeline.Cover.Integrate(frame, temperature, (float)step, SceneTime.IsDaylight(settings, at / 3600.0) ? 1f : 0f);
+				}
+			}
+			timeline.CoverSeconds = worldSeconds;
 		}
 	}
 }

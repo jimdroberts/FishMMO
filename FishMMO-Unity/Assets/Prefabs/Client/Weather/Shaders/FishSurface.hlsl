@@ -158,6 +158,127 @@ float FishCoverAmount(float depth, float3 worldPos, float3 normalWS)
     return saturate(facing * (depth * 1.4 - 0.1));
 }
 
+// ── Spray round a waterfall ────────────────────────────────────────────
+
+// A fall throws spray over the rock beside its curtain and the ground round its pool, and keeps it
+// wet whatever the sky is doing: the wet zone here, set by WaterfallPresenter from the falls the water
+// plugin published (FishMMO.Shared.Weather.Waterfalls), the nearest sixteen to the camera.
+//
+// Each zone is a tapered capsule: from the middle of the lip (A, radius A.w, the thin spray beside the
+// sheet) down to where the water lands (B, radius B.w, the cloud the impact throws out). Clamped to its
+// ends, the capsule closes in a sphere round the landing, which is the zone round the pool.
+//
+// Spray drives sideways and up under an overhang, so unlike the rain this is never asked whether the
+// sky is open above a point. Count 0 when there is no fall near, which is almost everywhere: then the
+// cost is one uniform branch, and the box round every zone (Min/Max) turns away the rest of the world
+// with six compares before anything is looped over.
+float _FishFallWetCount;        // how many of the zones below are in use, 0..16
+float4 _FishFallWetA[16];       // xyz the lip's middle (world metres), w the zone's radius there (m)
+float4 _FishFallWetB[16];       // xyz where the water lands (world metres), w the zone's radius there (m)
+float4 _FishFallWetMin;         // xyz the low corner of a box round every zone, w unused
+float4 _FishFallWetMax;         // xyz the high corner, w unused
+
+// How wet the spray keeps a point, 0..1, and where in the zone it lies. `reach` is the distance from
+// the fall's axis as a share of the zone's radius there (0 on the axis, 1 at the edge; the nearest
+// zone's), and `anchor` that fall's landing, which the trickles are laid out from so their pattern is
+// pinned to the rock without the precision a few kilometres of world coordinate would cost it.
+float FishFallSpray(float3 worldPos, out float reach, out float3 anchor)
+{
+    reach = 1.0;
+    anchor = worldPos;
+    int count = (int)_FishFallWetCount;
+    if (count <= 0)
+    {
+        return 0.0;
+    }
+    if (any(worldPos < _FishFallWetMin.xyz) || any(worldPos > _FishFallWetMax.xyz))
+    {
+        return 0.0;
+    }
+    UNITY_LOOP
+    for (int i = 0; i < count; i++)
+    {
+        float4 a = _FishFallWetA[i];
+        float4 b = _FishFallWetB[i];
+        float3 ab = b.xyz - a.xyz;
+        float t = saturate(dot(worldPos - a.xyz, ab) / max(dot(ab, ab), 1e-4));
+        float radius = max(lerp(a.w, b.w, t), 0.1);
+        float r = length(worldPos - (a.xyz + ab * t)) / radius;
+        if (r < reach)
+        {
+            reach = r;
+            anchor = b.xyz;
+        }
+    }
+    // Soaked inside about half the radius, drying smoothly to nothing at its edge: spray thins out
+    // with distance rather than stopping at a line.
+    return 1.0 - smoothstep(0.5, 1.0, reach);
+}
+
+// One set of trickles down a steep face, 0..1: thin rills a quarter of a metre apart across the face,
+// each with a brighter head of water sliding down it. `across` runs along the face, `down` is height;
+// both relative to the fall, so the pattern is fixed to the rock and only the water moves. Each rill's
+// pace is snapped to whole cycles in the weather clock's wrap, so it never jumps when the clock does.
+float FishFallTrickle(float across, float down, float time)
+{
+    float column = across * 4.0;
+    float cell = floor(column);
+    float seed = FishSurfaceHash(float2(cell, 7.25));
+    // Not every column carries a rill, and each lies a little to one side of its column's middle.
+    float present = step(0.3, seed);
+    float offset = frac(column) - 0.5 - (seed - 0.5) * 0.5;
+    float rill = 1.0 - smoothstep(0.04, 0.16, abs(offset));
+    float period = 1.2 + seed * 1.8;
+    float phase = frac(down / period + time * FishWrapCycles(0.35 + seed * 0.4) + seed);
+    float head = phase * phase * phase * phase;
+    return present * rill * (0.35 + 0.65 * head);
+}
+
+// What the spray does beyond darkening, applied in place on a surface that is `spray` wet: running
+// water on steep rock close in, and a film of moss and algae a little further out, where the rock
+// stays damp but the water does not run hard enough to scour it. Darkening itself is FishDampen's,
+// so the caller combines this with the rain's wetness first.
+void FishFallSurface(float3 worldPos, float spray, float reach, float3 anchor, inout half3 albedo, inout half smoothness, half3 normalWS)
+{
+    if (spray <= 0.001)
+    {
+        return;
+    }
+    // Only above the pool: the rock under its surface is the water's to draw.
+    float above = saturate((worldPos.y - anchor.y) * 2.0 + 1.0);
+    float3 n = normalWS;
+
+    // ── Moss ──
+    // A band, not a disc: none in the inner zone where the water sheets over the rock, most from about
+    // half the radius out, fading to nothing before the spray's edge. Thickest on what faces up (water
+    // settles there) and on what faces the fall (where the spray lands), broken into patches.
+    float band = smoothstep(0.3, 0.55, reach) * (1.0 - smoothstep(0.75, 1.0, reach));
+    float3 toFall = normalize(anchor - worldPos + float3(0.0, 1e-3, 0.0));
+    float facing = saturate(0.35 + 0.65 * max(n.y, dot(n, toFall)));
+    float patch = FishSurfaceNoise((worldPos.xz - anchor.xz) * 0.7 + worldPos.y * 0.3);
+    float moss = band * facing * saturate(patch * 1.6 - 0.25) * above;
+    // A dark wet green, at most half the way: the rock still shows through.
+    half3 mossColour = half3(0.06, 0.11, 0.035) + albedo * half3(0.25, 0.35, 0.2);
+    albedo = lerp(albedo, mossColour, moss * 0.5);
+
+    // ── Running water ──
+    // The inner zone on a steep face: a sheen of water over the rock and the trickles running down it.
+    float steep = 1.0 - smoothstep(0.35, 0.75, n.y);
+    float run = (1.0 - smoothstep(0.25, 0.6, reach)) * steep * above;
+    if (run > 0.001)
+    {
+        // A face whose normal points along x runs along z, and the other way about: two sets of rills
+        // in world axes blended by the normal, as a triplanar map would, rather than turning world
+        // coordinates to each pixel's normal (which would make the pattern swim as the normal varies).
+        float3 rel = worldPos - anchor;
+        float wx = abs(n.x), wz = abs(n.z);
+        float time = _FishWeatherMisc.w;
+        float trickle = (FishFallTrickle(rel.z, rel.y, time) * wx + FishFallTrickle(rel.x + 13.7, rel.y, time) * wz) / max(wx + wz, 1e-3);
+        smoothness = lerp(smoothness, 0.88 + 0.1 * trickle, run * 0.8);
+        albedo *= 1.0 - 0.15 * trickle * run;
+    }
+}
+
 // ── The surface itself ─────────────────────────────────────────────────
 
 /// <summary>What the weather leaves on a surface, applied in place.</summary>
@@ -176,6 +297,12 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
     // them, the low-frequency noise stands in for where water gathers, and it only gathers where
     // the ground is something like level.
     float wet = saturate(here.y) * exposure * occlusion;
+    // A waterfall's spray wets what is round it, rain or none and roof or none: the wetter of the two
+    // speaks, so a shower over a fall does not soak its rock twice.
+    float fallReach;
+    float3 fallAnchor;
+    float spray = FishFallSpray(worldPos, fallReach, fallAnchor);
+    wet = max(wet, spray);
     if (wet > 0.001)
     {
         /* Water only stands on nearly level ground. This let it pool up to 45 degrees (a normal
@@ -189,6 +316,10 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
 
         // Damp ground: darker, smoother, the same shape.
         FishDampen(wet, albedo, smoothness);
+        // Round a fall: water running down the steep rock, and moss where the spray keeps it damp.
+        // The puddles below take the same level test as the rain's, so spray pools on flat ground
+        // by the fall and never on its slopes.
+        FishFallSurface(worldPos, spray, fallReach, fallAnchor, albedo, smoothness, normalWS);
 
         // A puddle is water, not wet ground: flat, mirror-smooth, and it hides what is under it.
         albedo = lerp(albedo, albedo * 0.35, puddle);
@@ -240,7 +371,11 @@ void FishWeatherFoliage(float3 worldPos, inout half3 albedo, inout half3 normalW
     float4 here = FishCoverAt(worldPos);
 
     // Leaves shed water faster than ground soaks it: damp, at most two thirds as dark.
-    float wet = saturate(here.y) * exposure * 0.65;
+    // A waterfall's spray as well as the rain (FishFallSpray), shed the same way. No moss or running
+    // water on a leaf: those are the rock's.
+    float fallReach;
+    float3 fallAnchor;
+    float wet = max(saturate(here.y) * exposure, FishFallSpray(worldPos, fallReach, fallAnchor)) * 0.65;
     if (wet > 0.001)
     {
         FishDampen(wet, albedo, smoothness);

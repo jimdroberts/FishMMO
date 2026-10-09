@@ -28,6 +28,12 @@ CBUFFER_START(UnityPerMaterial)
     half _FishWeatherAmount;
     half _FishSnowDepth;
     half _HeightTransition;
+#ifdef FISH_TERRAIN_BACKDROP
+    // FishMMO/Backdrop Ground only: the ground past the scene's edge (FishBackdropSurface below).
+    float4 _FishBackdropColour_ST;
+    // x: the camera distance (m) the arrays start fading into the colour bake at, y: where they are gone.
+    float4 _FishBackdropDetail;
+#endif
 CBUFFER_END
 
 #define _Surface 0.0 // Terrain is always opaque
@@ -132,10 +138,11 @@ void ClipHoles(float2 uv)
 }
 #endif
 
-// URP's terrain instancing, unchanged: the patch's vertices come from the heightmap texture.
+// URP's terrain instancing, unchanged: the patch's vertices come from the heightmap texture. The backdrop is
+// a mesh whose vertices are already where they belong, so it never reads a heightmap, instanced or not.
 void TerrainInstancing(inout float4 positionOS, inout float3 normal, inout float2 uv)
 {
-#ifdef UNITY_INSTANCING_ENABLED
+#if defined(UNITY_INSTANCING_ENABLED) && !defined(FISH_TERRAIN_BACKDROP)
     float2 patchVertex = positionOS.xy;
     float4 instanceData = UNITY_ACCESS_INSTANCED_PROP(Terrain, _TerrainPatchInstanceData);
 
@@ -176,6 +183,9 @@ struct FishArraySurface
     half metallic;
     half smoothness;
     half occlusion;
+    // The share of the ground the control maps account for: 1 on a terrain tile, whose weights always sum to
+    // one; less on the backdrop wherever a biome past the edge paints with art the scene's arrays lack.
+    half covered;
 };
 
 // Keeps the four strongest weights seen so far, sorted, and the fifth strongest.
@@ -198,10 +208,20 @@ void FishConsiderLayer(half weight, int index, inout half4 top, inout int4 ids, 
     top.x = b0 ? weight : t.x;                ids.x = b0 ? index : i.x;
 }
 
+// The backdrop reads its control maps inside a branch (FishBackdropSurface), where an implicit-gradient
+// sample is not allowed; level 0 is also the right level there, since a 26 m control texel is magnified
+// everywhere the arrays are drawn.
+#ifdef FISH_TERRAIN_BACKDROP
+    #define FISH_SAMPLE_CONTROL(k) SAMPLE_TEXTURE2D_LOD(_FishControl##k, sampler_FishControl0, controlUV, 0)
+#else
+    #define FISH_SAMPLE_CONTROL(k) SAMPLE_TEXTURE2D(_FishControl##k, sampler_FishControl0, controlUV)
+#endif
+
 #define FISH_CONSIDER_CONTROL(k) \
     if ((k) < controlCount) \
     { \
-        half4 c = SAMPLE_TEXTURE2D(_FishControl##k, sampler_FishControl0, controlUV); \
+        half4 c = FISH_SAMPLE_CONTROL(k); \
+        covered += dot(c, 1.0h); \
         FishConsiderLayer(c.r, (k) * 4 + 0, top, ids, fifth); \
         FishConsiderLayer(c.g, (k) * 4 + 1, top, ids, fifth); \
         FishConsiderLayer(c.b, (k) * 4 + 2, top, ids, fifth); \
@@ -222,16 +242,25 @@ void FishConsiderLayer(half weight, int index, inout half4 top, inout int4 ids, 
 /// blend is continuous everywhere. Ground that only ever has four layers is untouched (the fifth is zero).
 ///
 /// An unpainted texel (every weight zero) draws layer 0 rather than black.
+///
+/// <paramref name="covered"/> is the sum of every weight before the normalising: what share of the ground
+/// the control maps account for at all.
 /// </remarks>
-half4 FishTopLayers(float2 uv, out int4 ids)
+half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
 {
+#ifdef FISH_TERRAIN_BACKDROP
+    // The backdrop's control maps are baked at texel centres over its own 0..1 coordinate (SceneBackdropBuilder).
+    float2 controlUV = uv;
+#else
     // Texel centres, exactly as TerrainLit addresses _Control.
     float2 controlUV = (uv * (_FishControl0_TexelSize.zw - 1.0f) + 0.5f) * _FishControl0_TexelSize.xy;
+#endif
     int controlCount = (int)_FishArrayInfo.y;
 
     half4 top = 0;
     half fifth = 0;
     ids = 0;
+    covered = 0;
     FISH_CONSIDER_CONTROL(0)
     FISH_CONSIDER_CONTROL(1)
     FISH_CONSIDER_CONTROL(2)
@@ -285,7 +314,7 @@ void FishHeightBlend(inout half4 weights, half4 heights)
 /// is zero, which is most layers in most places.
 /// </para>
 /// </remarks>
-FishArraySurface FishSampleArraySurface(float2 uv, float3 positionWS)
+FishArraySurface FishSampleArraySurfaceGrad(float2 uv, float3 positionWS, float2 worldDx, float2 worldDy)
 {
     FishArraySurface s;
     s.albedo = half3(0.5h, 0.5h, 0.5h);
@@ -293,6 +322,7 @@ FishArraySurface FishSampleArraySurface(float2 uv, float3 positionWS)
     s.metallic = 0.0h;
     s.smoothness = 0.0h;
     s.occlusion = 1.0h;
+    s.covered = 0.0h;
 
     // Nothing baked yet (a fresh clone before its first bake, or a build without arrays): plain grey ground
     // that still takes light and weather, rather than garbage from unbound slices.
@@ -302,11 +332,10 @@ FishArraySurface FishSampleArraySurface(float2 uv, float3 positionWS)
     }
 
     int4 ids;
-    half4 weights = FishTopLayers(uv, ids);
+    half covered;
+    half4 weights = FishTopLayers(uv, ids, covered);
 
     float2 world = positionWS.xz;
-    float2 worldDx = ddx(world);
-    float2 worldDy = ddy(world);
     bool hasNormals = _FishArrayInfo.z > 0.5;
     bool hasMasks = _FishArrayInfo.w > 0.5;
 
@@ -386,7 +415,74 @@ FishArraySurface FishSampleArraySurface(float2 uv, float3 positionWS)
     s.metallic = saturate(metallic);
     s.smoothness = saturate(smoothness);
     s.occlusion = saturate(occlusion);
+    s.covered = saturate(covered);
     return s;
 }
+
+/// <summary>The ground at one pixel, with the world gradients taken here (see FishSampleArraySurfaceGrad).</summary>
+FishArraySurface FishSampleArraySurface(float2 uv, float3 positionWS)
+{
+    return FishSampleArraySurfaceGrad(uv, positionWS, ddx(positionWS.xz), ddy(positionWS.xz));
+}
+
+#ifdef FISH_TERRAIN_BACKDROP
+// The backdrop's colour bake (SceneBackdropBuilder): the horizon's biomes as one colour per 26 m texel.
+TEXTURE2D(_FishBackdropColour);   SAMPLER(sampler_FishBackdropColour);
+
+/// <summary>
+/// The ground past the scene's edge: the scene's own texture arrays near the camera, the colour bake far off.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why the arrays.</b> The terrain the backdrop meets is drawn from these arrays, tiled by world position,
+/// so with them the same textures run on across the scene's edge instead of stopping at a flat colour.
+/// </para>
+/// <para>
+/// <b>Why the colour bake as well.</b> Far off a layer's texture is below a pixel and its mip is its average
+/// colour, which is what the bake already holds: <c>_FishBackdropDetail</c> fades the arrays out with distance
+/// and the branch skips them past it, so the far backdrop costs one sample. The bake also stands in wherever
+/// the control maps do not cover the ground (<see cref="FishArraySurface.covered"/>): a biome found only past
+/// the edge has no slice in the scene's arrays.
+/// </para>
+/// </remarks>
+FishArraySurface FishBackdropSurface(float2 uv, float3 positionWS)
+{
+    FishArraySurface s;
+    s.albedo = SAMPLE_TEXTURE2D(_FishBackdropColour, sampler_FishBackdropColour, uv).rgb;
+    s.normalTS = half3(0.0h, 0.0h, 1.0h);
+    s.metallic = 0.0h;
+    s.smoothness = 0.0h;
+    s.occlusion = 1.0h;
+    s.covered = 0.0h;
+
+    // Outside the branch: gradients are undefined where neighbouring pixels take different sides of it.
+    float2 worldDx = ddx(positionWS.xz);
+    float2 worldDy = ddy(positionWS.xz);
+    float distance = length(positionWS - GetCameraPositionWS());
+    half detail = 1.0h - (half)smoothstep(_FishBackdropDetail.x, _FishBackdropDetail.y, distance);
+
+    // The depth-normals pass keeps the mesh's normal: layer normals a kilometre off do nothing SSAO can show,
+    // and reading them there cost 0.13 ms of the backdrop's 0.2 ms in that pass.
+#ifndef FISH_TERRAIN_NORMALS_ONLY
+    UNITY_BRANCH
+    if (detail > 0.0h && _FishArrayInfo.x > 0.5)
+    {
+        FishArraySurface arrays = FishSampleArraySurfaceGrad(uv, positionWS, worldDx, worldDy);
+        half w = detail * arrays.covered;
+        s.albedo = lerp(s.albedo, arrays.albedo, w);
+        s.normalTS = normalize(lerp(s.normalTS, arrays.normalTS, w));
+        s.metallic = arrays.metallic * w;
+        s.smoothness = arrays.smoothness * w;
+        s.occlusion = lerp(1.0h, arrays.occlusion, w);
+        s.covered = arrays.covered;
+    }
+#endif
+    return s;
+}
+
+#define FISH_GROUND_SURFACE(uv, positionWS) FishBackdropSurface(uv, positionWS)
+#else
+#define FISH_GROUND_SURFACE(uv, positionWS) FishSampleArraySurface(uv, positionWS)
+#endif
 
 #endif

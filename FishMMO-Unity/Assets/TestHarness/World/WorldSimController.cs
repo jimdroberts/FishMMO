@@ -54,8 +54,11 @@ namespace FishMMO.TestHarness.World
 		[Tooltip("World hours per real second while the clock runs (0.05 is 180 times real time).")]
 		[UnityEngine.Serialization.FormerlySerializedAs("TimeScale")]
 		[SerializeField] private float timeScale = 0.05f;
-		[Tooltip("The most the ground's clock may run ahead of real time. The sky's clock defaults to a hundred and eighty times real time, and a ground kept to that is wet and dry again inside a second — true to the clock and useless to look at. Capped, a road takes half a minute or so to dry while the day races by overhead.")]
-		[Range(1f, 200f)] public float GroundTimeScale = 12f;
+		/// <summary>
+		/// The pace past which lightning is thinned (SkySchedule.RateScale): bolts are scheduled in world time, so at a
+		/// hundred and eighty times real time a storm's whole night would fire in a few seconds.
+		/// </summary>
+		private const float LightningPace = 12f;
 		[Min(1f)] public float TickRate = 30f;
 		[Tooltip("What is added to the air when the scene starts. Zero starts with the air as it is.")]
 		public AirOffsets StartAir;
@@ -748,19 +751,18 @@ namespace FishMMO.TestHarness.World
 		}
 
 		/// <summary>
-		/// Runs the ground's cover forward, everywhere the cover map reaches. Snow takes a quarter
-		/// of an hour of weather to lie; this is how a designer sees the end of that without
-		/// waiting for it, and how the probe checks that cover really follows the storm.
+		/// Moves the world on by <paramref name="seconds"/> and brings the ground through them at once — the panel's
+		/// "+15 min" and the probe's settle. The ground keeps the world's one clock, so fast-forwarding it means
+		/// fast-forwarding the world: the storms move on and the sun with them, and the cover is what that weather
+		/// left (it was the cover alone, run on under the weather standing still).
 		/// </summary>
-		public void AdvanceCover(float seconds)
+		public void FastForward(float seconds)
 		{
-			WeatherCoverMap map = Presentation != null ? Presentation.CoverMap : null;
-			if (map == null)
-			{
-				return;
-			}
+			StepWorld(seconds);
 			ForcePresent();
-			map.Advance(timeline, Settings, Tick, lastSample.Temperature, seconds);
+			SceneCoverSampling.Advance(timeline, Settings, gameObject.scene, timeline.WorldSecondsAt(Tick));
+			WeatherCoverMap map = Presentation != null ? Presentation.CoverMap : null;
+			map?.CatchUp(timeline, Settings, Tick);
 		}
 
 		// ── Life ──────────────────────────────────────────────────────
@@ -836,8 +838,7 @@ namespace FishMMO.TestHarness.World
 			{
 				LocalWorldClock.Activate(null);
 			}
-			// Back to the game's own: the bed scales these to its clock's pace.
-			WeatherCover.TimeScale = 1f;
+			// Back to the game's own: the bed scales this to its clock's pace.
 			SkySchedule.RateScale = 1f;
 			WorldDayNightCycle.PreviewLatitude = null;
 			WorldDayNightCycle.PreviewLongitude = null;
@@ -944,18 +945,14 @@ namespace FishMMO.TestHarness.World
 			if (coverTimer >= 1f)
 			{
 				timeline.Prune(tick);
-				// The ground keeps the bed's clock, not the wall's: at the default rate the sky runs
-				// a hundred and eighty times real time, and a road that dried at the speed of the
-				// wall clock never seemed to dry at all.
-				// Held, the ground holds too: nothing dries or settles while the world stands still.
-				double pace = Rate;
-				WeatherCover.TimeScale = pace <= 0.0 ? 0f : Mathf.Clamp((float)pace, 0f, Mathf.Max(1f, GroundTimeScale));
 				// The bolts are scheduled in world time, so the bed's fast clock would fire a
 				// storm's whole night of lightning in a few seconds. Scaled back to about what it
 				// would look like at the world's own pace.
-				SkySchedule.RateScale = pace <= 0.0 ? 1f : 1f / Mathf.Max(1f, (float)pace / Mathf.Max(1f, GroundTimeScale));
-				timeline.Cover.Integrate(lastSample.Frame, lastSample.Temperature, coverTimer * WeatherCover.TimeScale, DayNight == null || DayNight.DaylightNow ? 1f : 0f);
-				timeline.CoverSeconds = WorldSeconds;
+				double pace = Rate;
+				SkySchedule.RateScale = pace <= 0.0 ? 1f : 1f / Mathf.Max(1f, (float)pace / LightningPace);
+				// The ground keeps the world's clock, as the server's does (SceneCoverSampling.Advance):
+				// held, nothing dries or settles; raced, it races. To watch a road dry, slow the world.
+				SceneCoverSampling.Advance(timeline, Settings, gameObject.scene, timeline.WorldSecondsAt(tick));
 				coverTimer = 0f;
 			}
 			presentTimer -= dt;

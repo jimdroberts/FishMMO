@@ -118,6 +118,7 @@ half4 BreakerFragment(BreakerVaryings input) : SV_Target
 	wave.height = input.state.z;
 	// Its white is its own, from the breaker: no white caps on a sheet with no FFT in it.
 	wave.jacobian = 1.0;
+	wave.breakingKept = 0.0;
 	wave.surf = saturate(input.state.x) * _BreakerFoam;
 	wave.calm = 0.0;
 	wave.depth = input.state.w;

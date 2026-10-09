@@ -16,6 +16,12 @@ namespace FishMMO.Shared.WorldDesign
 		Strap = 7,
 		Twigs = 8,
 		BambooLeaves = 9,
+		/// <summary>A dense round mass of broad leaves, ragged at its edge: a shrub's crown (BushMeshes).</summary>
+		BushBroad = 10,
+		/// <summary>A dense mass of small leaves on fine twigs (box, sagebrush, willow).</summary>
+		BushSmall = 11,
+		/// <summary>A dense mass of needle shoots (juniper, mountain pine, gorse).</summary>
+		BushNeedle = 12,
 		Solid = 15,
 	}
 
@@ -88,6 +94,9 @@ namespace FishMMO.Shared.WorldDesign
 					case FoliageCell.Strap: DrawStrap(canvas); break;
 					case FoliageCell.Twigs: DrawTwigs(canvas); break;
 					case FoliageCell.BambooLeaves: DrawBambooLeaves(canvas); break;
+					case FoliageCell.BushBroad: DrawLeafMass(canvas, 110, 0.17f, 0.26f, 0.55f); break;
+					case FoliageCell.BushSmall: DrawLeafMass(canvas, 620, 0.06f, 0.1f, 0.5f); break;
+					case FoliageCell.BushNeedle: DrawNeedleMass(canvas); break;
 					case FoliageCell.Solid: canvas.Fill(1f, 1f); break;
 					default: break;
 				}
@@ -398,6 +407,64 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				float angle = Mathf.Deg2Rad * (20f + k * 23f + c.Rng.Range(-6f, 6f));
 				c.Leaf(0.5f, 0.28f, angle, c.Rng.Range(0.38f, 0.47f), 0.08f, 0.86f * c.Jitter(0.08f), Color.white, 0.25f);
+			}
+		}
+
+		/// <summary>
+		/// A shrub's leaf mass: leaves heaped over a round patch, every one pointing out from the middle at its own angle,
+		/// so the edge is a ragged fringe of leaf tips and the middle is solid. The sparse sprays the trees hang left a
+		/// shrub's card mostly empty (a broad-leaf spray covers a quarter of its card, a needle spray a ninth) and a bush
+		/// built from them needed four to nine times the cards to hide anything behind it. Leaves laid first are the
+		/// ones behind and are drawn darker, so the mass has depth.
+		/// </summary>
+		private static void DrawLeafMass(Canvas c, int count, float minLength, float maxLength, float width)
+		{
+			float reach = 0.47f - maxLength;
+			// A few twigs showing between the leaves.
+			for (int k = 0; k < 5; k++)
+			{
+				float a = c.Rng.Range(0f, Mathf.PI * 2f);
+				c.Segment(0.5f, 0.5f, 0.5f + Mathf.Cos(a) * reach, 0.5f + Mathf.Sin(a) * reach, 0.012f, 0.004f, 0.45f, Color.white);
+			}
+			for (int k = 0; k < count; k++)
+			{
+				float r = reach * Mathf.Sqrt(c.Rng.NextFloat());
+				float a = c.Rng.Range(0f, Mathf.PI * 2f);
+				float x = 0.5f + Mathf.Cos(a) * r, y = 0.5f + Mathf.Sin(a) * r;
+				// Outward near the edge, any way in the middle.
+				float angle = a + Mathf.Deg2Rad * c.Rng.Range(-55f, 55f) * (0.4f + 0.6f * r / reach) + (r < reach * 0.3f ? c.Rng.Range(-3f, 3f) : 0f);
+				float length = c.Rng.Range(minLength, maxLength);
+				float lum = (0.62f + 0.3f * (k + 1f) / count) * c.Jitter(0.08f);
+				c.Leaf(x, y, angle, length, length * width, lum, Color.white, 0.2f);
+			}
+		}
+
+		/// <summary>A shrub's mass of needle shoots: short twigs radiating over a round patch, each bristling with needles.</summary>
+		private static void DrawNeedleMass(Canvas c)
+		{
+			const int shoots = 80;
+			for (int k = 0; k < shoots; k++)
+			{
+				float r = 0.31f * Mathf.Sqrt(c.Rng.NextFloat());
+				float a = c.Rng.Range(0f, Mathf.PI * 2f);
+				float x0 = 0.5f + Mathf.Cos(a) * r, y0 = 0.5f + Mathf.Sin(a) * r;
+				float angle = a + Mathf.Deg2Rad * c.Rng.Range(-40f, 40f);
+				float length = c.Rng.Range(0.12f, 0.17f);
+				float x1 = x0 + Mathf.Cos(angle) * length, y1 = y0 + Mathf.Sin(angle) * length;
+				float shade = (0.6f + 0.3f * (k + 1f) / shoots) * c.Jitter(0.06f);
+				c.Segment(x0, y0, x1, y1, 0.01f, 0.004f, shade * 0.7f, Color.white);
+				const int needles = 16;
+				for (int n = 0; n < needles; n++)
+				{
+					float t = (n + 0.5f) / needles;
+					float bx = Mathf.Lerp(x0, x1, t), by = Mathf.Lerp(y0, y1, t);
+					float nl = 0.055f * (1f - t * 0.4f) * c.Jitter(0.2f);
+					foreach (float side in new[] { -1f, 1f })
+					{
+						float na = angle + side * Mathf.Deg2Rad * c.Rng.Range(35f, 65f);
+						c.Segment(bx, by, bx + Mathf.Cos(na) * nl, by + Mathf.Sin(na) * nl, 0.008f, 0.003f, shade * c.Jitter(0.06f), Color.white);
+					}
+				}
 			}
 		}
 	}

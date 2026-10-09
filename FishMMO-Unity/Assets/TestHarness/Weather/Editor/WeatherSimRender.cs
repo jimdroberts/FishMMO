@@ -650,7 +650,7 @@ namespace FishMMO.TestHarness.Weather.Editor
 			string path = Path.Combine(outputDirectory, $"WeatherSim-{stageIndex:00}-{stage.Name}.png");
 			if (stage.AdvanceCover > 0f)
 			{
-				controller.AdvanceCover(stage.AdvanceCover);
+				controller.FastForward(stage.AdvanceCover);
 			}
 			Capture(controller, path);
 

@@ -98,6 +98,7 @@ namespace FishMMO.Client
 		private const string QUALITY_DROPDOWN_NAME = "quality-dropdown";
 		private const string ANISOTROPIC_DROPDOWN_NAME = "anisotropic-dropdown";
 		private const string ANTIALIASING_DROPDOWN_NAME = "antialiasing-dropdown";
+		private const string MSAA_DROPDOWN_NAME = "msaa-dropdown";
 		private const string GRASS_DISTANCE_SLIDER_NAME = "grass-distance-slider";
 		private const string GRASS_DISTANCE_VALUE_NAME = "grass-distance-value";
 		private const string CLOUDS_TOGGLE_NAME = "clouds-toggle";
@@ -431,6 +432,7 @@ namespace FishMMO.Client
 		private DropdownField qualityDropdown;
 		private DropdownField anisotropicDropdown;
 		private DropdownField antialiasingDropdown;
+		private DropdownField msaaDropdown;
 		private Slider grassDistanceSlider;
 		private Toggle cloudsToggle;
 		private Label grassDistanceValueLabel;
@@ -624,6 +626,7 @@ namespace FishMMO.Client
 			qualityDropdown = Root.Q<DropdownField>(QUALITY_DROPDOWN_NAME);
 			anisotropicDropdown = Root.Q<DropdownField>(ANISOTROPIC_DROPDOWN_NAME);
 			antialiasingDropdown = Root.Q<DropdownField>(ANTIALIASING_DROPDOWN_NAME);
+			msaaDropdown = Root.Q<DropdownField>(MSAA_DROPDOWN_NAME);
 			grassDistanceSlider = Root.Q<Slider>(GRASS_DISTANCE_SLIDER_NAME);
 			cloudsToggle = Root.Q<Toggle>(CLOUDS_TOGGLE_NAME);
 			grassDistanceValueLabel = Root.Q<Label>(GRASS_DISTANCE_VALUE_NAME);
@@ -692,6 +695,7 @@ namespace FishMMO.Client
 			InitializeAnisotropicFiltering();
 			InitializeBrightness();
 			InitializeAntialiasing();
+			InitializeMsaa();
 			InitializeGrassDistance();
 			InitializeClouds();
 			InitializeLookSensitivity();
@@ -1473,6 +1477,11 @@ namespace FishMMO.Client
 				{
 					vsyncToggle.SetValueWithoutNotify(QualitySettings.vSyncCount > 0);
 				}
+				// And the MSAA row: with no choice of the player's it is the new level's own.
+				if (msaaDropdown != null)
+				{
+					msaaDropdown.SetValueWithoutNotify(MsaaLabels[(int)ClientDisplaySettings.CurrentMsaa()]);
+				}
 
 				ClientSettings.SetString(ClientSettings.QualityLevelKey, names[index]);
 				RefreshGraphicsHint();
@@ -1559,6 +1568,39 @@ namespace FishMMO.Client
 				ClientCameraSettings.ApplyAntialiasing((ClientCameraSettings.AntialiasingOption)index);
 			});
 		}
+
+		/// <summary>
+		/// Fills the MSAA dropdown and applies the player's choice as they make it: a performance control for the 3D view,
+		/// separate from the post-process smoothing above (they stack: MSAA for geometry and leaf edges, SMAA over the image).
+		/// </summary>
+		private void InitializeMsaa()
+		{
+			if (msaaDropdown == null)
+			{
+				return;
+			}
+			msaaDropdown.choices = new List<string>(MsaaLabels);
+			// The player's choice, or with none the quality level's own. Without notify: see InitializeAntialiasing.
+			msaaDropdown.SetValueWithoutNotify(MsaaLabels[(int)ClientDisplaySettings.CurrentMsaa()]);
+			msaaDropdown.RegisterValueChangedCallback((evt) =>
+			{
+				int index = msaaDropdown.index;
+				if (index < 0 || index >= MsaaLabels.Length)
+				{
+					return;
+				}
+				ClientSettings.Set(ClientSettings.MsaaKey, index);
+				ClientDisplaySettings.ApplyMsaa((ClientDisplaySettings.MsaaOption)index);
+			});
+		}
+
+		/// <summary>Dropdown labels, in the order of <see cref="ClientDisplaySettings.MsaaOption"/>: the cost, then what it buys.</summary>
+		private static readonly string[] MsaaLabels =
+		{
+			"Off (Fastest, hard leaf edges)",
+			"2x (Balanced)",
+			"4x (Soft leaf and grass edges)",
+		};
 
 		/// <summary>
 		/// Dropdown labels, in the order of <see cref="ClientCameraSettings.AntialiasingOption"/>.

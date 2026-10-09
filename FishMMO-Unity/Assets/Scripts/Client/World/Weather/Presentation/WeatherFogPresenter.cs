@@ -72,6 +72,10 @@ namespace FishMMO.Client
 		/// <param name="layerDrawn">Whether anything is drawing the fog's layer (<see cref="FogLayerView.Drawn"/>).</param>
 		public static float UniformExtinction(in WeatherFrame frame, bool layerDrawn)
 		{
+			if (!SkySystem.DrawFog)
+			{
+				return 0f;
+			}
 			float falling = FallingExtinction(frame);
 			if (layerDrawn && FogLayerView.Of(frame).Visible)
 			{

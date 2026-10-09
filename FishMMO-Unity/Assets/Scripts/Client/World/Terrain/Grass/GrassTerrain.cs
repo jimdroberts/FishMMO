@@ -211,7 +211,31 @@ namespace FishMMO.Client
 		/// </summary>
 		public Texture2D SurfaceLayers;
 
+		/// <summary>
+		/// Per heightmap sample (same grid as <see cref="Heightmap"/>), the ground's height over the river or lake water
+		/// standing at it: R8, 0..1 = −<see cref="FreeboardRangeMetres"/> … +<see cref="FreeboardRangeMetres"/>, 1 where there
+		/// is none. Null when no water reaches the terrain. Read bilinearly like the heights, its zero is the line where the
+		/// water meets the ground, and the compute grows no blade below it.
+		/// </summary>
+		/// <remarks>
+		/// The density maps cannot cut a creek: they are 2 m texels smoothed over 2 m (the scatter's points made into a
+		/// field), so a channel a few metres wide was filled from both banks and its water drawn under a lawn.
+		/// </remarks>
+		public Texture2D Freeboard;
+
+		/// <summary>The freeboard map's range either side of the water line, metres (FishGrassBlades.compute GRASS_FREEBOARD_RANGE).</summary>
+		public const float FreeboardRangeMetres = 2f;
+
+		/// <summary>
+		/// How far past a river's banks (or round a lake's mask) a heightmap sample takes its water's level: a little over
+		/// one 2 m sample, so a creek narrower than the grid still gives the samples either side of it a level to cut against.
+		/// Ground there above the water stays positive, so the reach moves no bank.
+		/// </summary>
+		public const float WaterReachMetres = FishMMO.Shared.Biomes.SceneWaterBodies.MaxReachMetres;
+
 		private float[] minHeights, maxHeights;
+		private byte[] freeboardTexels;
+		private bool anyWater;
 		private int gridX, gridZ;
 
 		/* The grass's own copy of the terrain's heights (TerrainData.GetHeights, normalised 0..1 of size.y), filled
@@ -267,7 +291,7 @@ namespace FishMMO.Client
 			public const float DensityTexelMetres = 2f;
 
 			/// <summary>Progress, for the log: which stage and how far.</summary>
-			public string Progress => layer < layerPrototypes.Count ? $"reading layer {layer + 1}/{layerPrototypes.Count}" : smoothChannel < count ? $"smoothing channel {smoothChannel + 1}/{count}" : textures ? (heightRow < gt.HeightResolution ? "heights" : "surface layers") : "packing";
+			public string Progress => layer < layerPrototypes.Count ? $"reading layer {layer + 1}/{layerPrototypes.Count}" : smoothChannel < count ? $"smoothing channel {smoothChannel + 1}/{count}" : textures ? (heightRow < gt.HeightResolution ? "heights" : waters != null && waterRow < gt.HeightResolution ? "water line" : "surface layers") : "packing";
 
 			public readonly Terrain Terrain;
 			public GrassTerrain Result { get; private set; }
@@ -288,7 +312,9 @@ namespace FishMMO.Client
 			private readonly float top;
 			/// <summary>Each channel's density while building, 0..1, at full precision: smoothing a point field in bytes rounded it to nothing.</summary>
 			private readonly float[][] density;
-			private int layer, row, heightRow, surfaceRow;
+			private int layer, row, heightRow, waterRow, surfaceRow;
+			/// <summary>The scene's lakes and rivers that reach this terrain; null for none.</summary>
+			private List<FishMMO.Shared.Biomes.SceneWaterBodies> waters;
 			private Color32[] surfacePixels;
 			private float[] surfaceWeights;
 			private bool any, textures;
@@ -349,6 +375,16 @@ namespace FishMMO.Client
 				for (int c = 0; c < count; c++)
 				{
 					density[c] = new float[dres * dres];
+				}
+				/* The water is in the terrains' scene, enabled with it on load, so it is there before any terrain is
+				 * taken. Its levels are world metres (the scene is cut at the origin). */
+				var area = new Rect(gt.Origin.x, gt.Origin.z, gt.Size.x, gt.Size.z);
+				foreach (FishMMO.Shared.Biomes.SceneWaterBodies bodies in UnityEngine.Object.FindObjectsByType<FishMMO.Shared.Biomes.SceneWaterBodies>())
+				{
+					if (bodies.isActiveAndEnabled && bodies.Reaches(area))
+					{
+						(waters ??= new List<FishMMO.Shared.Biomes.SceneWaterBodies>()).Add(bodies);
+					}
 				}
 			}
 
@@ -569,6 +605,14 @@ namespace FishMMO.Client
 					heightRow += rows;
 					return;
 				}
+				// The water line, against the heights just read (before they are uploaded and dropped).
+				if (waters != null && waterRow < hres)
+				{
+					int rows = Mathf.Min(StripRows, hres - waterRow);
+					gt.AccumulateFreeboard(waters, waterRow, rows);
+					waterRow += rows;
+					return;
+				}
 				int ares = data.alphamapResolution, alayers = data.alphamapLayers;
 				if (alayers > 0 && surfaceRow < ares)
 				{
@@ -679,9 +723,61 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// The ground's height over the water at heightmap rows <paramref name="zBase"/> … +<paramref name="rows"/>
+		/// (<see cref="Freeboard"/>), from the heights already gathered: the highest surface of any lake or river within
+		/// <see cref="WaterReachMetres"/> of the sample.
+		/// </summary>
+		private void AccumulateFreeboard(List<FishMMO.Shared.Biomes.SceneWaterBodies> waters, int zBase, int rows)
+		{
+			int res = Data.heightmapResolution;
+			freeboardTexels ??= new byte[res * res];
+			float stepX = Size.x / Mathf.Max(1, res - 1), stepZ = Size.z / Mathf.Max(1, res - 1);
+			float scale = 0.5f / FreeboardRangeMetres;
+			for (int z = zBase; z < zBase + rows; z++)
+			{
+				float worldZ = Origin.z + z * stepZ;
+				for (int x = 0; x < res; x++)
+				{
+					int i = z * res + x;
+					float worldX = Origin.x + x * stepX;
+					float level = float.NegativeInfinity;
+					foreach (FishMMO.Shared.Biomes.SceneWaterBodies bodies in waters)
+					{
+						if (bodies != null && bodies.TryGetSurfaceNear(worldX, worldZ, WaterReachMetres, out float here) && here > level)
+						{
+							level = here;
+						}
+					}
+					if (float.IsNegativeInfinity(level))
+					{
+						freeboardTexels[i] = 255;
+						continue;
+					}
+					float ground = Origin.y + (heightTexels16 != null ? heightTexels16[i] / 65535f : heightTexels32[i]) * Size.y;
+					freeboardTexels[i] = (byte)Mathf.RoundToInt(Mathf.Clamp01((ground - level) * scale + 0.5f) * 255f);
+					anyWater |= ground - level < FreeboardRangeMetres;
+				}
+			}
+		}
+
 		/// <summary>Uploads the heights gathered by <see cref="AccumulateHeights"/> (row z = texture row, as the terrain's own).</summary>
 		private void FinishHeightTexture()
 		{
+			if (freeboardTexels != null && anyWater)
+			{
+				int fres = Data.heightmapResolution;
+				Freeboard = new Texture2D(fres, fres, TextureFormat.R8, false, true)
+				{
+					name = $"{(Terrain != null ? Terrain.name : "terrain")} grass water line",
+					filterMode = FilterMode.Point,
+					wrapMode = TextureWrapMode.Clamp,
+					hideFlags = HideFlags.DontSave,
+				};
+				Freeboard.SetPixelData(freeboardTexels, 0);
+				Freeboard.Apply(false, true);
+			}
+			freeboardTexels = null;
 			int res = Data.heightmapResolution;
 			bool r16 = heightTexels16 != null;
 			heightTexture = new Texture2D(res, res, r16 ? TextureFormat.R16 : TextureFormat.RFloat, false, true)
@@ -777,6 +873,11 @@ namespace FishMMO.Client
 				UnityEngine.Object.Destroy(SurfaceLayers);
 			}
 			SurfaceLayers = null;
+			if (Freeboard != null)
+			{
+				UnityEngine.Object.Destroy(Freeboard);
+			}
+			Freeboard = null;
 		}
 	}
 }

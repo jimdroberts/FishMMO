@@ -30,7 +30,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class BiomeArtGenerator
 	{
 		/// <summary>The steps <see cref="RockSurfaceSteps"/> and <see cref="RockSteps"/> yield.</summary>
-		private static int RockStepCount() => 1 + 1 + RockTypes.All.Length + 2;
+		private static int RockStepCount() => 1 + 1 + RockTypes.All.Length + 3;
 
 		/// <summary>The rock and ice surface maps: one step, before the texture import.</summary>
 		private static IEnumerable<string> RockSurfaceSteps(Context c)
@@ -48,7 +48,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>Materials, formations type by type, ice, then cliff rocks: after the legacy rocks.</summary>
+		/// <summary>Materials, formations type by type, ice, cliff rocks, then cliff sections: after the legacy rocks.</summary>
 		private static IEnumerable<string> RockSteps(Context c)
 		{
 			yield return "Rock, ice and cliff materials";
@@ -62,6 +62,8 @@ namespace FishMMO.Shared.WorldDesign
 			WriteIce(c);
 			yield return "Cliff rocks";
 			WriteCliffRocks(c);
+			yield return "Cliff sections";
+			WriteCliffSections(c);
 		}
 
 		// ── Surfaces ──────────────────────────────────────────────────
@@ -356,6 +358,36 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				WriteMesh(c, CliffRocks.Build(in piece, lod, c.Seed), name, true);
+			}
+		}
+
+		// ── Cliff sections ────────────────────────────────────────────
+
+		/// <summary>
+		/// Every cliff section level (<see cref="CliffSections.AllMeshes"/>): a variant's levels are built together (one
+		/// field, one net) when any of them is due, each validated as closed. Files that are current are not rebuilt.
+		/// </summary>
+		private static void WriteCliffSections(Context c)
+		{
+			foreach (string style in CliffSections.Styles)
+			{
+				for (int v = 0; v < CliffSections.VariantCount; v++)
+				{
+					bool due = false;
+					for (int lod = 0; lod < CliffSections.LevelCount; lod++)
+					{
+						due |= ShouldWrite(c, ProceduralArtCatalogue.MeshPath(CliffSections.MeshName(style, v, lod)));
+					}
+					if (!due)
+					{
+						continue;
+					}
+					MeshBuilder[] levels = CliffSections.BuildMeshes(style, v, c.Seed, out _);
+					for (int lod = 0; lod < levels.Length; lod++)
+					{
+						WriteMesh(c, levels[lod], CliffSections.MeshName(style, v, lod), true);
+					}
+				}
 			}
 		}
 	}

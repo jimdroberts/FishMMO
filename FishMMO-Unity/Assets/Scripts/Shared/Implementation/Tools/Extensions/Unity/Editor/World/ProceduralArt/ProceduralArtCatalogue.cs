@@ -447,6 +447,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path; // Rock formations, ice and cliff pieces (ProceduralArtCatalogue.Rocks.cs).
 			}
+			foreach (string path in BushPayloadPaths())
+			{
+				yield return path; // Shrubs (ProceduralArtCatalogue.Bushes.cs).
+			}
 		}
 
 		/// <summary>Every wrapper the generator writes, by project path: terrain layers, materials and prefabs.</summary>
@@ -480,6 +484,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return MaterialPath(material);
 			}
+			foreach (string path in BushWrapperPaths())
+			{
+				yield return path;
+			}
 			foreach (string prefab in AllPrefabNames())
 			{
 				yield return PrefabPath(prefab);
@@ -507,6 +515,10 @@ namespace FishMMO.Shared.WorldDesign
 				yield return PebblesPrefab(m.Name);
 			}
 			foreach (string prefab in RockPrefabNames())
+			{
+				yield return prefab;
+			}
+			foreach (string prefab in BushPrefabNames())
 			{
 				yield return prefab;
 			}

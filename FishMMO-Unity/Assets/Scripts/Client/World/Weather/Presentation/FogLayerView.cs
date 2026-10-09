@@ -343,7 +343,8 @@ namespace FishMMO.Client
 		/// <param name="time">The presentation's clock, s (unused: the banks read <see cref="WorldMotion.Seconds"/>, in double).</param>
 		public static void Publish(in WeatherFrame frame, float time)
 		{
-			FogLayerView view = Of(frame);
+			// With fog switched off, no layer: every pass and the march ask Current or the globals, and stand down.
+			FogLayerView view = SkySystem.DrawFog ? Of(frame) : default;
 			Current = view;
 
 			/* Carried by the surface air, worked out from the shared motion clock: every player's banks

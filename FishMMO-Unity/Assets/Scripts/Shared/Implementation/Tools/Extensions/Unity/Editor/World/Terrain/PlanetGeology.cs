@@ -310,7 +310,10 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly float[] WithinFamily =
 		{
 			0.4f, 0.4f, 0.1f, 0.1f,             // granite, basalt, andesite, tuff
-			0.35f, 0.25f, 0.2f, 0.05f, 0.15f,   // sandstone, shale, limestone, chalk, conglomerate
+			/* Shale is the commonest sedimentary rock at the surface, then sandstone and limestone. Sandstone 0.35 and
+			 * conglomerate 0.15 made them the likeliest provinces on an Earth-like world (19% and 8%), so a quarter of
+			 * scenes stood on sandstone-coloured rock (Jim, 2026-10-08). Now 12% and 6%. */
+			0.22f, 0.35f, 0.25f, 0.07f, 0.11f,  // sandstone, shale, limestone, chalk, conglomerate
 			0.15f, 0.3f, 0.35f, 0.1f, 0.1f,     // slate, schist, gneiss, marble, quartzite
 			1f,                                 // ice
 		};

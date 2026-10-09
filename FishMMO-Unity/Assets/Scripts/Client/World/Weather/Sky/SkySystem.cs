@@ -232,6 +232,16 @@ namespace FishMMO.Client
 		/// go on.</summary>
 		public static bool DrawClouds => !EditorCloudsOff && ClientCloudSettings.Enabled;
 
+		/// <summary>The editor's fog switch (Dashboard → Weather Tools → Fog, FogToggle): kept in EditorPrefs and set again
+		/// after every domain reload, like <see cref="EditorCloudsOff"/>. Always false in a build.</summary>
+		public static bool EditorFogOff;
+
+		/// <summary>Whether any fog is drawn: the weather's layer (by the cloud march, the height fog and the froxel volume),
+		/// the ground mist, and the pipeline's distance fog, region and weather alike. Off, all of it stops at once
+		/// (FogLayerView.Publish, PublishMist, WeatherFogPresenter.UniformExtinction, FogComposer.Apply); the clouds and the
+		/// waterfalls' mist go on.</summary>
+		public static bool DrawFog => !EditorFogOff;
+
 		/// <summary>An explicit render profile (the test scene); otherwise the loaded one.</summary>
 		public WeatherRenderProfile Profile;
 		/// <summary>The camera to present for; otherwise <see cref="Camera.main"/>.</summary>
@@ -395,6 +405,11 @@ namespace FishMMO.Client
 		private float bodyTimer;
 		private double bodiesBuiltAt = double.NaN;
 		private SkyProfile bodiesBuiltFor;
+		// The sky's orientation when the bodies were last built (CelestialState.EquatorialToScene), and the turn from it to
+		// the sky's orientation now: every body is drawn through that turn, so between rebuilds they go round with the
+		// stars, which are turned every frame, instead of standing still and jumping four times a second.
+		private Matrix4x4 bodiesBuiltSky = Matrix4x4.identity;
+		private Matrix4x4 bodyTurn = Matrix4x4.identity;
 
 		/// <summary>World seconds the clock may move between two body rebuilds before it counts as a leap and they are rebuilt at once.</summary>
 		public const double BodyLeapSeconds = 120.0;
@@ -798,12 +813,14 @@ namespace FishMMO.Client
 			bool burning = meteorsSeen > 0f && meteors.Count > 0;
 			if (bodyTimer > 0f && !burning && blendTo == bodiesBuiltFor && System.Math.Abs(worldSeconds - bodiesBuiltAt) < BodyLeapSeconds)
 			{
+				TurnBodies(state);
 				BodiesMarker.End();
 				return;
 			}
 			bodyTimer = BodyRefreshSeconds;
 			bodiesBuiltAt = worldSeconds;
 			bodiesBuiltFor = blendTo;
+			bodiesBuiltSky = state != null ? state.EquatorialToScene : Matrix4x4.identity;
 			// In the order they are drawn, furthest first: a belt's specks, then the bodies by their own
 			// distances, then the meteors, which burn in this world's air and are nearer than anything.
 			bodies.Clear();
@@ -819,7 +836,40 @@ namespace FishMMO.Client
 			}
 			bodies.Upload();
 			UploadOccluders();
+			TurnBodies(state);
 			BodiesMarker.End();
+		}
+
+		/// <summary>
+		/// Works out how far the sky has turned since the bodies were built (<see cref="bodyTurn"/>), which they are drawn
+		/// through (<see cref="DrawBodies"/>), and puts the discs that hide what is behind them where that turn takes them.
+		/// </summary>
+		/// <remarks>
+		/// The bodies are rebuilt only every <see cref="BodyRefreshSeconds"/>, but the world turns under them all the time,
+		/// and the stars are turned with it every frame (<c>StarMatrixId</c>). Left where they were built, a belt's specks
+		/// jumped four times a second against stars that glide. The turn is the whole of that motion: a body's own
+		/// orbit moves it nowhere near a pixel in a quarter of a second. Both orientations are reflection-rotations
+		/// (<see cref="CelestialState.EquatorialToScene"/>), so the turn from one to the other is a proper rotation.
+		/// </remarks>
+		private void TurnBodies(CelestialState state)
+		{
+			bodyTurn = state != null && state.System != null ? state.EquatorialToScene * bodiesBuiltSky.transpose : Matrix4x4.identity;
+			int count = Mathf.Min(bodies.Occluders.Count, SkyBodyMesh.MaxOccluders);
+			for (int i = 0; i < count; i++)
+			{
+				turnedOccluders[i] = Turned(occluders[i]);
+				turnedOccluderRings[i] = Turned(occluderRings[i]);
+			}
+			// Arrays are sized by their first upload, so the whole of each goes up every time.
+			Shader.SetGlobalVectorArray(OccludersId, turnedOccluders);
+			Shader.SetGlobalVectorArray(OccluderRingsId, turnedOccluderRings);
+		}
+
+		/// <summary>A direction in xyz, carried round by <see cref="bodyTurn"/>; w as it was.</summary>
+		private Vector4 Turned(Vector4 value)
+		{
+			Vector3 turned = bodyTurn.MultiplyVector(new Vector3(value.x, value.y, value.z));
+			return new Vector4(turned.x, turned.y, turned.z, value.w);
 		}
 
 		private void Bind(WorldDayNightCycle next, WeatherRenderProfile profile)
@@ -1424,7 +1474,7 @@ namespace FishMMO.Client
 			float night = GroundMist.NightCalm(wind, clear, sunAltitude);
 			MistPotential = GroundMist.Potential(spread, wind, wetness, rain, clear, sunAltitude);
 			MistBestPotential = GroundMist.BestPotential(deficit, stirred, night);
-			bool on = MistBestPotential > 0.001f;
+			bool on = DrawFog && MistBestPotential > 0.001f;
 			// Kept for the fog too: the fine ground round the camera carries the near terrain shadow every fog
 			// is shaded by (FishTerrainSunlit), mist or none.
 			if (on || fogDrawn)
@@ -2316,6 +2366,9 @@ namespace FishMMO.Client
 		private readonly Vector4[] occluderRanks = new Vector4[SkyBodyMesh.MaxOccluders];
 		private readonly Vector4[] occluderRings = new Vector4[SkyBodyMesh.MaxOccluders];
 		private readonly Vector4[] occluderRingShapes = new Vector4[SkyBodyMesh.MaxOccluders];
+		// The two above that hold directions, as the sky has turned since they were built (TurnBodies): what the shaders read.
+		private readonly Vector4[] turnedOccluders = new Vector4[SkyBodyMesh.MaxOccluders];
+		private readonly Vector4[] turnedOccluderRings = new Vector4[SkyBodyMesh.MaxOccluders];
 		private static readonly int OccluderRingsId = Shader.PropertyToID("_FishOccluderRings");
 		private static readonly int OccluderRingShapesId = Shader.PropertyToID("_FishOccluderRingShapes");
 
@@ -2335,10 +2388,9 @@ namespace FishMMO.Client
 				occluderRings[i] = bodies.OccluderRings[total - count + i];
 				occluderRingShapes[i] = bodies.OccluderRingShapes[total - count + i];
 			}
-			Shader.SetGlobalVectorArray(OccluderRingsId, occluderRings);
+			// The directions go up turned, every frame (TurnBodies). Arrays are sized by their first upload, so the whole of
+			// each goes up every time.
 			Shader.SetGlobalVectorArray(OccluderRingShapesId, occluderRingShapes);
-			// Arrays are sized by their first upload, so the whole of each goes up every time.
-			Shader.SetGlobalVectorArray(OccludersId, occluders);
 			Shader.SetGlobalVectorArray(OccluderRanksId, occluderRanks);
 			Shader.SetGlobalFloat(OccluderCountId, count);
 		}
@@ -2417,7 +2469,9 @@ namespace FishMMO.Client
 						quad.Clear();
 						// The ring plane's normal is the body's own pole, brought from the ecliptic into
 						// this sky the way every other direction in it is.
-						Vector3 pole = state.HeliocentricDirection(CelestialMath.PoleOf(body.Body));
+						// Taken back to the sky as it stood when the bodies were built, like the body's own direction:
+						// the draw turns both on to now (bodyTurn).
+						Vector3 pole = bodyTurn.transpose.MultiplyVector(state.HeliocentricDirection(CelestialMath.PoleOf(body.Body)));
 						quad.AddRing(body.Direction, body.AngularRadius * scale, pole, rings, body.LightDirection, step.Rank, (float)body.DistanceKm);
 						properties = ringBlocks[ringed];
 						properties.Clear();
@@ -2440,7 +2494,9 @@ namespace FishMMO.Client
 					receiveShadows = false,
 					rendererPriority = i,
 				};
-				Graphics.RenderMesh(rp, mesh, subMesh, Matrix4x4.identity);
+				// Through the turn the sky has made since the bodies were built (TurnBodies): the shader turns every
+				// direction it is handed by the object matrix.
+				Graphics.RenderMesh(rp, mesh, subMesh, bodyTurn);
 			}
 		}
 	}

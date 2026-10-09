@@ -25,6 +25,15 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
+	/// The scene's terrain layer weights at a point past its edge: one per layer of the scene's palette (its
+	/// tiles' <c>terrainLayers</c>, in order), summing to one or less. What is missing from one is ground the
+	/// scene's layers do not draw (a biome found only past the edge), which the backdrop's colour bake draws.
+	/// </summary>
+	/// <param name="altitude">Scene metres above sea level.</param>
+	/// <param name="steepness">Degrees.</param>
+	public delegate void BackdropLayerWeigher(float east, float altitude, float north, float steepness, float[] sceneLayerWeights);
+
+	/// <summary>
 	/// Builds the terrain around a generated scene, out to the horizon: meshes, a colour bake
 	/// and a material, under a <see cref="SceneBackdrop"/> so server builds drop it.
 	/// </summary>
@@ -47,6 +56,15 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Meshes, not Unity terrains.</b> Terrain tiles carry heightmaps, colliders and per-tile
 	/// draw costs that a surface nobody stands on does not need, and a ring is not square.
+	/// Measured 2026-10-08 (ScenePerfProbe, Flo Monolith, 1440p High): filling ~60% of the frame
+	/// from 150 m up at the scene's edge, the whole backdrop draw was 0.14–0.22 ms opaque plus
+	/// 0.05–0.07 ms depth-normals.
+	/// </para>
+	/// <para>
+	/// <b>Shaded like the terrain it meets.</b> With the scene's layer weights
+	/// (<see cref="BackdropLayerWeigher"/>) it is drawn with <see cref="ShadedShaderName"/>: control
+	/// maps over the backdrop, read against the scene's own texture arrays, so the textures run on
+	/// across the edge, fading into the colour bake with distance. Without them, URP/Lit and the bake.
 	/// </para>
 	/// </remarks>
 	public static class SceneBackdropBuilder
@@ -78,6 +96,12 @@ namespace FishMMO.Shared.WorldDesign
 		public const int AlbedoResolution = 1024;
 
 		public const string LitShaderName = "Universal Render Pipeline/Lit";
+
+		/// <summary>The backdrop drawn with the scene's texture arrays (TerrainArrayBinder.BackdropShaderName).</summary>
+		public const string ShadedShaderName = "FishMMO/Backdrop Ground";
+
+		/// <summary>The most control maps the shader reads: eight, four layers each.</summary>
+		public const int MaximumControlMaps = 8;
 
 		/// <summary>How far the backdrop reaches for this scene.</summary>
 		public static float ReachFor(SceneGenerationRequest request)
@@ -114,7 +138,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// </param>
 		public static SceneBackdropResult Build(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan,
 			float floorMetres, float reliefMetres, string folder, System.Func<float, float, float, float, Color> groundColour = null,
-			System.Func<float, float, float> ground = null, BackdropWater water = null, Material waterMaterial = null)
+			System.Func<float, float, float> ground = null, BackdropWater water = null, Material waterMaterial = null,
+			BackdropLayerWeigher layerWeights = null, int layerCount = 0)
 		{
 			if (ground == null)
 			{
@@ -143,7 +168,8 @@ namespace FishMMO.Shared.WorldDesign
 			float halfD = plan.DepthMetres * 0.5f;
 			string stem = $"{folder}/{WorldEditorAssets.Sanitize(request.SceneName)} Backdrop";
 
-			Material material = BakeMaterial(ground, halfW, halfD, reach, floorMetres, reliefMetres, stem, result, groundColour, water);
+			Material material = BakeMaterial(ground, halfW, halfD, reach, floorMetres, reliefMetres, stem, result, groundColour, water,
+				layerWeights, layerCount);
 
 			var root = new GameObject("Backdrop");
 			SceneManager.MoveGameObjectToScene(root, scene);
@@ -383,28 +409,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		private static Material BakeMaterial(System.Func<float, float, float> ground, float halfW, float halfD, float reach,
 			float floorMetres, float reliefMetres, string stem, SceneBackdropResult result,
-			System.Func<float, float, float, float, Color> groundColour, BackdropWater water)
+			System.Func<float, float, float, float, Color> groundColour, BackdropWater water,
+			BackdropLayerWeigher layerWeights, int layerCount)
 		{
-			float extentX = halfW + reach, extentZ = halfD + reach;
-			int width = AlbedoResolution;
-			int height = Mathf.Max(16, Mathf.RoundToInt(AlbedoResolution * extentZ / extentX));
-			float texelX = 2f * extentX / width, texelZ = 2f * extentZ / height;
-
-			// The scene itself is under its own terrain; only its outermost texels are ever seen.
-			float skipX = halfW - texelX * 2f, skipZ = halfD - texelZ * 2f;
-
-			var heights = new float[width * height];
-			for (int z = 0; z < height; z++)
-			{
-				float wz = -extentZ + (z + 0.5f) * texelZ;
-				for (int x = 0; x < width; x++)
-				{
-					float wx = -extentX + (x + 0.5f) * texelX;
-					heights[z * width + x] = Mathf.Abs(wx) < skipX && Mathf.Abs(wz) < skipZ
-						? float.NaN
-						: ground(wx, wz);
-				}
-			}
+			BakeGrid grid = SampleGround(ground, halfW, halfD, reach);
+			int width = grid.Width, height = grid.Height;
 
 			var pixels = new Color32[width * height];
 			var weights = new float[4];
@@ -413,19 +422,15 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				for (int x = 0; x < width; x++)
 				{
-					float h = heights[z * width + x];
+					float h = grid.Heights[z * width + x];
 					if (float.IsNaN(h))
 					{
 						pixels[z * width + x] = GeneratedTerrainLayers.Colours[GeneratedTerrainLayers.Grass];
 						continue;
 					}
-					float east = Neighbour(heights, width, height, x + 1, z, h) - Neighbour(heights, width, height, x - 1, z, h);
-					float north = Neighbour(heights, width, height, x, z + 1, h) - Neighbour(heights, width, height, x, z - 1, h);
-					float gradient = Mathf.Sqrt(Sq(east / (2f * texelX)) + Sq(north / (2f * texelZ)));
-					float steepness = Mathf.Atan(gradient) * Mathf.Rad2Deg;
-
-					float px = -extentX + (x + 0.5f) * texelX;
-					float pz = -extentZ + (z + 0.5f) * texelZ;
+					float steepness = grid.Steepness[z * width + x];
+					float px = grid.East(x);
+					float pz = grid.North(z);
 					Color colour;
 					if (groundColour != null)
 					{
@@ -443,7 +448,7 @@ namespace FishMMO.Shared.WorldDesign
 					// A river's wet bed and banks, so a river narrower than the water drawn far off still reads as a line.
 					if (water != null)
 					{
-						colour = Color.Lerp(colour, WetGround, 0.7f * water.Wetness(px, pz, Mathf.Max(texelX, texelZ)));
+						colour = Color.Lerp(colour, WetGround, 0.7f * water.Wetness(px, pz, Mathf.Max(grid.TexelX, grid.TexelZ)));
 					}
 					colour.a = 1f;
 					pixels[z * width + x] = colour;
@@ -467,6 +472,22 @@ namespace FishMMO.Shared.WorldDesign
 			result.Wrote.Add(texturePath);
 			Texture2D albedo = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
 
+			if (layerWeights != null && layerCount > 0)
+			{
+				Shader shaded = Shader.Find(ShadedShaderName);
+				if (shaded != null)
+				{
+					List<Texture2D> controls = BakeControls(grid, layerWeights, layerCount, stem, result.Wrote);
+					var arrayMaterial = new Material(shaded) { name = Path.GetFileName(stem) };
+					Shade(arrayMaterial, shaded, albedo, controls);
+					string arrayMaterialPath = $"{stem}.mat";
+					AssetDatabase.CreateAsset(arrayMaterial, arrayMaterialPath);
+					result.Wrote.Add(arrayMaterialPath);
+					return arrayMaterial;
+				}
+				Debug.LogWarning($"[Scene backdrop] '{ShadedShaderName}' was not found; the backdrop falls back to '{LitShaderName}' and its colour bake.");
+			}
+
 			Shader shader = Shader.Find(LitShaderName);
 			if (shader == null)
 			{
@@ -486,6 +507,222 @@ namespace FishMMO.Shared.WorldDesign
 			AssetDatabase.CreateAsset(material, materialPath);
 			result.Wrote.Add(materialPath);
 			return material;
+		}
+
+		// ── Layer weights ─────────────────────────────────────────────
+
+		/// <summary>The backdrop's ground sampled at the colour bake's texel centres, with its steepness.</summary>
+		private sealed class BakeGrid
+		{
+			public int Width, Height;
+			public float ExtentX, ExtentZ, TexelX, TexelZ;
+			/// <summary>Scene metres above sea level; NaN under the scene's own terrain, which hides it.</summary>
+			public float[] Heights;
+			/// <summary>Degrees.</summary>
+			public float[] Steepness;
+
+			public float East(int x) => -ExtentX + (x + 0.5f) * TexelX;
+			public float North(int z) => -ExtentZ + (z + 0.5f) * TexelZ;
+		}
+
+		/// <summary>
+		/// The ground over the whole backdrop at the bake's resolution: the one grid the colour bake, the
+		/// control maps and the meshes' 0..1 coordinate share (texel centres from the far corner).
+		/// </summary>
+		private static BakeGrid SampleGround(System.Func<float, float, float> ground, float halfW, float halfD, float reach)
+		{
+			var grid = new BakeGrid { ExtentX = halfW + reach, ExtentZ = halfD + reach, Width = AlbedoResolution };
+			grid.Height = Mathf.Max(16, Mathf.RoundToInt(AlbedoResolution * grid.ExtentZ / grid.ExtentX));
+			grid.TexelX = 2f * grid.ExtentX / grid.Width;
+			grid.TexelZ = 2f * grid.ExtentZ / grid.Height;
+			int width = grid.Width, height = grid.Height;
+
+			// The scene itself is under its own terrain; only its outermost texels are ever seen.
+			float skipX = halfW - grid.TexelX * 2f, skipZ = halfD - grid.TexelZ * 2f;
+
+			grid.Heights = new float[width * height];
+			for (int z = 0; z < height; z++)
+			{
+				float wz = grid.North(z);
+				for (int x = 0; x < width; x++)
+				{
+					float wx = grid.East(x);
+					grid.Heights[z * width + x] = Mathf.Abs(wx) < skipX && Mathf.Abs(wz) < skipZ
+						? float.NaN
+						: ground(wx, wz);
+				}
+			}
+
+			grid.Steepness = new float[width * height];
+			for (int z = 0; z < height; z++)
+			{
+				for (int x = 0; x < width; x++)
+				{
+					float h = grid.Heights[z * width + x];
+					if (float.IsNaN(h))
+					{
+						continue;
+					}
+					float east = Neighbour(grid.Heights, width, height, x + 1, z, h) - Neighbour(grid.Heights, width, height, x - 1, z, h);
+					float north = Neighbour(grid.Heights, width, height, x, z + 1, h) - Neighbour(grid.Heights, width, height, x, z - 1, h);
+					float gradient = Mathf.Sqrt(Sq(east / (2f * grid.TexelX)) + Sq(north / (2f * grid.TexelZ)));
+					grid.Steepness[z * width + x] = Mathf.Atan(gradient) * Mathf.Rad2Deg;
+				}
+			}
+			return grid;
+		}
+
+		/// <summary>
+		/// Writes the backdrop's control maps: channel c of map k is the scene's layer 4k + c, as on a tile's
+		/// alphamaps, so the scene's arrays draw them as they stand. Linear and uncompressed (a weight is a
+		/// number, not a colour), without mips: the shader reads level 0 (FISH_SAMPLE_CONTROL).
+		/// </summary>
+		private static List<Texture2D> BakeControls(BakeGrid grid, BackdropLayerWeigher layerWeights, int layerCount,
+			string stem, List<string> wrote)
+		{
+			int maps = Mathf.Min(MaximumControlMaps, (layerCount + 3) / 4);
+			int width = grid.Width, height = grid.Height;
+			var pixels = new Color32[maps][];
+			for (int k = 0; k < maps; k++)
+			{
+				pixels[k] = new Color32[width * height];
+			}
+			var weights = new float[maps * 4];
+			var sceneWeights = new float[layerCount];
+			for (int z = 0; z < height; z++)
+			{
+				for (int x = 0; x < width; x++)
+				{
+					float h = grid.Heights[z * width + x];
+					System.Array.Clear(weights, 0, weights.Length);
+					if (!float.IsNaN(h))
+					{
+						layerWeights(grid.East(x), h, grid.North(z), grid.Steepness[z * width + x], sceneWeights);
+						System.Array.Copy(sceneWeights, weights, Mathf.Min(sceneWeights.Length, weights.Length));
+					}
+					for (int k = 0; k < maps; k++)
+					{
+						pixels[k][z * width + x] = new Color32(Byte(weights[k * 4]), Byte(weights[k * 4 + 1]), Byte(weights[k * 4 + 2]), Byte(weights[k * 4 + 3]));
+					}
+				}
+			}
+
+			var controls = new List<Texture2D>(maps);
+			for (int k = 0; k < maps; k++)
+			{
+				var texture = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
+				texture.SetPixels32(pixels[k]);
+				texture.Apply(false, false);
+				string path = $"{stem} Control {k}.png";
+				File.WriteAllBytes(path, texture.EncodeToPNG());
+				Object.DestroyImmediate(texture);
+				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+				if (AssetImporter.GetAtPath(path) is TextureImporter importer)
+				{
+					importer.textureType = TextureImporterType.Default;
+					importer.sRGBTexture = false;
+					importer.alphaSource = TextureImporterAlphaSource.FromInput;
+					importer.alphaIsTransparency = false;
+					importer.mipmapEnabled = false;
+					importer.wrapMode = TextureWrapMode.Clamp;
+					importer.filterMode = FilterMode.Bilinear;
+					importer.npotScale = TextureImporterNPOTScale.None;
+					importer.textureCompression = TextureImporterCompression.Uncompressed;
+					importer.maxTextureSize = Mathf.Max(2048, Mathf.NextPowerOfTwo(Mathf.Max(width, height)));
+					importer.SaveAndReimport();
+				}
+				wrote.Add(path);
+				controls.Add(AssetDatabase.LoadAssetAtPath<Texture2D>(path));
+			}
+			return controls;
+		}
+
+		private static byte Byte(float weight) => (byte)Mathf.Clamp(Mathf.RoundToInt(weight * 255f), 0, 255);
+
+		/// <summary>Puts a material on <see cref="ShadedShaderName"/> with the colour bake and control maps.</summary>
+		private static void Shade(Material material, Shader shaded, Texture2D colour, List<Texture2D> controls)
+		{
+			material.shader = shaded;
+			material.SetTexture("_FishBackdropColour", colour);
+			for (int k = 0; k < MaximumControlMaps; k++)
+			{
+				material.SetTexture($"_FishControl{k}", k < controls.Count ? controls[k] : null);
+			}
+		}
+
+		/// <summary>
+		/// Puts an existing backdrop on <see cref="ShadedShaderName"/> without rebuilding it: control maps baked
+		/// over its own grid, its material switched in place (the same asset, so the renderers keep it), its
+		/// meshes and colour bake left as they are. Returns why it did nothing, or null.
+		/// </summary>
+		/// <param name="ground">The ground the backdrop was built on, in scene metres at (east, north).</param>
+		public static string Reshade(Scene scene, System.Func<float, float, float> ground, BackdropLayerWeigher layerWeights, int layerCount,
+			List<string> wrote)
+		{
+			if (layerWeights == null || layerCount <= 0)
+			{
+				return "the scene has no terrain layers to shade its backdrop with";
+			}
+			SceneBackdrop backdrop = null;
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				backdrop = root.GetComponentInChildren<SceneBackdrop>(true);
+				if (backdrop != null)
+				{
+					break;
+				}
+			}
+			if (backdrop == null)
+			{
+				return "the scene has no backdrop";
+			}
+			Material material = null;
+			foreach (MeshRenderer renderer in backdrop.GetComponentsInChildren<MeshRenderer>(true))
+			{
+				if (renderer.name.StartsWith("Ring ", System.StringComparison.Ordinal) && renderer.sharedMaterial != null)
+				{
+					material = renderer.sharedMaterial;
+					break;
+				}
+			}
+			string materialPath = material != null ? AssetDatabase.GetAssetPath(material) : null;
+			if (string.IsNullOrEmpty(materialPath))
+			{
+				return "the backdrop's ground has no material asset";
+			}
+			Texture2D colour = (material.HasProperty("_FishBackdropColour") ? material.GetTexture("_FishBackdropColour") : null) as Texture2D;
+			if (colour == null && material.HasProperty("_BaseMap"))
+			{
+				colour = material.GetTexture("_BaseMap") as Texture2D;
+			}
+			if (colour == null)
+			{
+				return $"'{materialPath}' has no colour bake";
+			}
+			Shader shaded = Shader.Find(ShadedShaderName);
+			if (shaded == null)
+			{
+				return $"'{ShadedShaderName}' was not found";
+			}
+
+			string stem = materialPath.Substring(0, materialPath.Length - ".mat".Length);
+			BakeGrid grid = SampleGround(ground, backdrop.SceneSizeMetres.x * 0.5f, backdrop.SceneSizeMetres.y * 0.5f, backdrop.ReachMetres);
+			// Against the PNG as baked: its import scales it to a power of two, which its 0..1 sampling does not mind.
+			int bakedWidth = colour.width, bakedHeight = colour.height;
+			if (AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(colour)) is TextureImporter colourImporter)
+			{
+				colourImporter.GetSourceTextureWidthAndHeight(out bakedWidth, out bakedHeight);
+			}
+			if (grid.Width != bakedWidth || grid.Height != bakedHeight)
+			{
+				return $"the colour bake is {bakedWidth}x{bakedHeight} but the backdrop's grid is {grid.Width}x{grid.Height}; re-cut the scene";
+			}
+			List<Texture2D> controls = BakeControls(grid, layerWeights, layerCount, stem, wrote);
+			Shade(material, shaded, colour, controls);
+			EditorUtility.SetDirty(material);
+			AssetDatabase.SaveAssetIfDirty(material);
+			wrote.Add(materialPath);
+			return null;
 		}
 
 		private static float Neighbour(float[] heights, int width, int height, int x, int z, float fallback)

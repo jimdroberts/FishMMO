@@ -365,7 +365,7 @@ namespace FishMMO.Shared.WorldDesign
 				 * and the map the runtime reads. The flat bands only where no biome fits at all —
 				 * no template registered, or none this world allows — so the scene still reads. */
 				if (!PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out Func<float, float, float, float, Color> groundColour,
-					ground: ground.MetresAt, water: water))
+					out BackdropLayerWeigher backdropWeights, ground: ground.MetresAt, water: water))
 				{
 					foreach (Terrain terrain in terrains)
 					{
@@ -393,8 +393,10 @@ namespace FishMMO.Shared.WorldDesign
 				// With the planet's lakes and rivers past the edge, so the water does not stop where the scene does.
 				BackdropWater backdropWater = BackdropWater.Build(request, water, ground.MetresAt, plan.WidthMetres * 0.5f, plan.DepthMetres * 0.5f,
 					SceneBackdropBuilder.ReachFor(request));
+				// Drawn with the scene's own texture arrays wherever its layers reach past the edge (FishMMO/Backdrop Ground).
 				SceneBackdropResult backdrop = SceneBackdropBuilder.Build(scene, request, plan, lowest, relief, terrainFolder, groundColour, ground.MetresAt,
-					backdropWater, backdropWater != null && !backdropWater.Empty ? EnsureInlandWaterMaterial() : null);
+					backdropWater, backdropWater != null && !backdropWater.Empty ? EnsureInlandWaterMaterial() : null,
+					backdropWeights, SceneLayerCount(terrains));
 				if (backdrop.WaterMeshes > 0)
 				{
 					result.Notes.Add($"Backdrop water: {backdropWater.Rivers.Count} river run(s) and the lakes past the edge, in {backdrop.WaterMeshes} surface(s).");
@@ -770,7 +772,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </param>
 		internal static bool PaintBiomes(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan, Terrain[,] terrains,
 			string terrainFolder, SceneGenerationResult result, out Func<float, float, float, float, Color> groundColour,
-			LocalArtScope scope = null, Func<float, float, float> ground = null, SceneWater water = null)
+			out BackdropLayerWeigher backdropWeights, LocalArtScope scope = null, Func<float, float, float> ground = null, SceneWater water = null)
 		{
 			if (water != null && !water.Any)
 			{
@@ -778,6 +780,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			Func<float, float, float> inland = water != null ? InlandSurface(water) : null;
 			groundColour = null;
+			backdropWeights = null;
 			SolarSystemProfile system = SolarSystemProfile.Resolve(request.Body);
 			var tiles = new List<Terrain>();
 			foreach (Terrain terrain in terrains)
@@ -861,16 +864,10 @@ namespace FishMMO.Shared.WorldDesign
 			 * raised below them, each rock a server-kept collider with a client-only visual. Here and
 			 * not after PaintBiomes returns, so a repaint (BiomeRepaintTool) re-places them on sculpted
 			 * ground too; the placer replaces its own root (and lowers its old cones), never duplicates
-			 * it. Granite weathers rounder where the climate is warm and wet: the placer reads it here. */
+			 * it. */
 			CliffPlacerOptions cliffOptions = scope.CliffOptions() ?? new CliffPlacerOptions();
 			if (request.Body != null)
 			{
-				ScenePlacementClimate placement = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
-				cliffOptions.ClimateAt = p =>
-				{
-					ClimateSample sample = placement.SampleAt(p, out _);
-					return new Vector2(sample.Temperature, sample.Humidity);
-				};
 				/* The cliffs are the rock the ground is made of: the same planet geology erosion wore the
 				 * ground with, so a wall stands in sandstone where the benches it bounds are sandstone. */
 				cliffOptions.RockTypeAt = GeologyRockTypes(request, system);
@@ -914,14 +911,20 @@ namespace FishMMO.Shared.WorldDesign
 			 * to run round. Here, so a repaint places them again on sculpted ground (replacing its own root). */
 			if (water != null)
 			{
+				// The same rock as the cliffs: the geology's where the biome accepts it, else the biome's own.
+				Func<float, float, float, string> rockAt = BiomeRockTypes(field, cliffOptions.RockTypeAt);
 				List<RiverBoulder> boulders = RiverBoulders.Plan(water, (east, north) => GroundAltitude(terrains, plan, east, north),
-					cliffOptions.RockTypeAt, options.Seed);
+					rockAt, options.Seed);
 				RiverBoulders.Place(scene, water, boulders, result.Notes);
+				// The falls' ledges, lip boulders and overhangs (FallLedges): after the boulders, whose Place clears the water's list.
+				FallLedges.Place(scene, water, FallLedges.Plan(water, (east, north) => GroundAltitude(terrains, plan, east, north),
+					rockAt, options.Seed), result.Notes);
 			}
 			else
 			{
 				// No water to put them in: an earlier cut's boulders go.
 				ScenePropBaker.Clear(scene, RiverBoulders.PropSource);
+				ScenePropBaker.Clear(scene, FallLedges.PropSource);
 			}
 
 			result.BiomeSummary = Summarise(field);
@@ -959,30 +962,34 @@ namespace FishMMO.Shared.WorldDesign
 			result.Wrote.Add(mapPath);
 			result.BiomeMap = map;
 
-			/* The backdrop's own field, out to the horizon: the ground past the edge is the same
-			 * planet, so it is asked the same question, at the backdrop's own heights — the scene's
-			 * ground where it has it, the planet's past it — rather than the terrain's, which end at
-			 * the scene's edge. */
-			float reach = SceneBackdropBuilder.ReachFor(request);
-			if (reach > 1f)
-			{
-				if (ground == null)
-				{
-					var planet = new SceneAltitude(request);
-					ground = planet.At;
-				}
-				SceneBiomeField horizon = SceneBiomeField.Build(request, plan.WidthMetres + 2f * reach, plan.DepthMetres + 2f * reach,
-					(east, north) => ground(east, north), system);
-				var colours = new BiomeGroundColours(horizon, BiomeTerrainLayers.Resolve, BiomeTerrainLayers.Placeholder);
-				groundColour = (east, north, altitude, steepness) =>
-					colours.At(east, north, steepness, climate.HeightOfAltitude(altitude / verticalScale));
-			}
+			groundColour = HorizonShading(request, plan, ground, palette.Layers, scope.PaletteResolver(BiomeTerrainLayers.Resolve), out backdropWeights);
 
 			Debug.Log($"[Scene generator] '{request.SceneName}' biomes: {result.BiomeSummary}; {palette.Layers.Count} terrain layer(s); splat {splat}.\n{scatter}");
 			return true;
 		}
 
 		/// <summary>The rock type of the planet's geology under a scene position, read on a 32 m grid.</summary>
+		/// <summary>
+		/// The rock at a scene position (x, altitude, z) as its biome takes it (<see cref="CliffRocks.RockFor"/>): the
+		/// geology's where the biome there accepts it, else the biome's own. For river boulders and fall ledges, so they
+		/// are the rock of the cliffs beside them; null geology gives every biome its own rock.
+		/// </summary>
+		private static Func<float, float, float, string> BiomeRockTypes(SceneBiomeField field, Func<float, float, float, string> geology)
+		{
+			var specs = new BiomeArtSpec.Entry[field.Biomes.Count];
+			for (int b = 0; b < specs.Length; b++)
+			{
+				specs[b] = field.Biomes[b] != null ? BiomeArtSpec.For(field.Biomes[b].name) : null;
+			}
+			var scratch = new float[Math.Max(1, specs.Length)];
+			return (x, altitude, z) =>
+			{
+				int b = field.DominantIndexAt(x, z, scratch);
+				BiomeArtSpec.Entry spec = b >= 0 && b < specs.Length ? specs[b] : null;
+				return CliffRocks.RockFor(spec, geology?.Invoke(x, altitude, z));
+			};
+		}
+
 		private static Func<float, float, float, string> GeologyRockTypes(SceneGenerationRequest request, SolarSystemProfile system)
 		{
 			PlanetGeology geology = PlanetGeology.For(request, system);
@@ -1231,8 +1238,131 @@ namespace FishMMO.Shared.WorldDesign
 			return SceneHeightField.FromMetres(plan, metres);
 		}
 
+		/// <summary>
+		/// The ground past a scene's edge as its biomes paint it: the colour of every point (the backdrop's
+		/// colour bake) and, for the scene's own layers, their weights there (its control maps).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The backdrop's own field, out to the horizon.</b> The ground past the edge is the same planet,
+		/// so it is asked the same question, at the backdrop's own heights — the scene's ground where it has
+		/// it, the planet's past it — rather than the terrain's, which end at the scene's edge.
+		/// </para>
+		/// <para>
+		/// <b>Weighed as the scene is weighed.</b> The horizon's biomes get a palette of their own and the
+		/// splat painter's <see cref="BiomeSplatPainter.Weigher"/> with the scene's seed and height rule, so a
+		/// layer's patches, bands and cliffs carry on across the edge. Each horizon layer is then folded onto
+		/// the scene's layer drawing the same art; one the scene does not have (a biome found only past the
+		/// edge) is left out of the weights, and the colour bake draws it.
+		/// </para>
+		/// </remarks>
+		/// <param name="ground">Scene metres at (east, north); null asks the planet.</param>
+		/// <param name="sceneLayers">The scene's palette: its tiles' terrain layers, in order.</param>
+		/// <param name="resolveSlot">The layer a biome slot draws with (<see cref="LocalArtScope.PaletteResolver"/>).</param>
+		/// <returns>Null when the scene has no backdrop.</returns>
+		internal static Func<float, float, float, float, Color> HorizonShading(SceneGenerationRequest request, TerrainTilePlan plan,
+			Func<float, float, float> ground, IReadOnlyList<TerrainLayer> sceneLayers,
+			Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolveSlot, out BackdropLayerWeigher weigher)
+		{
+			weigher = null;
+			float reach = SceneBackdropBuilder.ReachFor(request);
+			if (reach <= 1f)
+			{
+				return null;
+			}
+			if (ground == null)
+			{
+				var planet = new SceneAltitude(request);
+				ground = planet.At;
+			}
+			SolarSystemProfile system = SolarSystemProfile.Resolve(request.Body);
+			PlanetClimateField climate = PlanetClimateField.For(system, request.Body);
+			float verticalScale = request.VerticalScale > 1e-6f ? request.VerticalScale : 1f;
+			SceneBiomeField horizon = SceneBiomeField.Build(request, plan.WidthMetres + 2f * reach, plan.DepthMetres + 2f * reach,
+				(east, north) => ground(east, north), system);
+			var colours = new BiomeGroundColours(horizon, BiomeTerrainLayers.Resolve, BiomeTerrainLayers.Placeholder);
+
+			if (sceneLayers != null && sceneLayers.Count > 0 && resolveSlot != null && horizon.Biomes.Count > 0)
+			{
+				SceneTerrainPalette palette = SceneTerrainPalette.Build(horizon, resolveSlot, BiomeTerrainLayers.Placeholder);
+				var options = new BiomeSplatOptions
+				{
+					NormalizedHeight = (x, y, z) => climate.HeightOfAltitude(y / verticalScale),
+					HasLiquidWater = climate.Conditions.HasLiquidWater,
+					Seed = SceneSeed(request),
+				};
+				weigher = HorizonWeigher(palette, horizon, options, sceneLayers);
+			}
+			return (east, north, altitude, steepness) => colours.At(east, north, steepness, climate.HeightOfAltitude(altitude / verticalScale));
+		}
+
+		/// <summary>The horizon's weights folded onto the scene's layers (see <see cref="HorizonShading"/>).</summary>
+		private static BackdropLayerWeigher HorizonWeigher(SceneTerrainPalette palette, SceneBiomeField horizon, BiomeSplatOptions options,
+			IReadOnlyList<TerrainLayer> sceneLayers)
+		{
+			if (palette.Layers.Count == 0)
+			{
+				return null;
+			}
+			// The same asset first; by name for a layer resolved to a different object for the same art.
+			var toScene = new int[palette.Layers.Count];
+			bool any = false;
+			for (int i = 0; i < toScene.Length; i++)
+			{
+				toScene[i] = -1;
+				TerrainLayer layer = palette.Layers[i];
+				for (int j = 0; j < sceneLayers.Count && toScene[i] < 0; j++)
+				{
+					if (sceneLayers[j] != null && sceneLayers[j] == layer)
+					{
+						toScene[i] = j;
+					}
+				}
+				for (int j = 0; j < sceneLayers.Count && toScene[i] < 0; j++)
+				{
+					if (sceneLayers[j] != null && layer != null && sceneLayers[j].name == layer.name)
+					{
+						toScene[i] = j;
+					}
+				}
+				any |= toScene[i] >= 0;
+			}
+			if (!any)
+			{
+				return null;
+			}
+			var weigher = new BiomeSplatPainter.Weigher(palette, horizon, options);
+			var own = new float[palette.Layers.Count];
+			return (east, altitude, north, steepness, sceneWeights) =>
+			{
+				Array.Clear(sceneWeights, 0, sceneWeights.Length);
+				weigher.Weigh(east, altitude, north, steepness, own);
+				for (int i = 0; i < own.Length; i++)
+				{
+					int j = toScene[i];
+					if (j >= 0 && j < sceneWeights.Length)
+					{
+						sceneWeights[j] += own[i];
+					}
+				}
+			};
+		}
+
+		/// <summary>How many terrain layers the scene's tiles carry (one palette, so any tile says).</summary>
+		internal static int SceneLayerCount(Terrain[,] terrains)
+		{
+			foreach (Terrain terrain in terrains)
+			{
+				if (terrain != null && terrain.terrainData != null)
+				{
+					return terrain.terrainData.terrainLayers.Length;
+				}
+			}
+			return 0;
+		}
+
 		/// <summary>Scene metres above sea level of the generated ground at a scene position.</summary>
-		private static float GroundAltitude(Terrain[,] terrains, TerrainTilePlan plan, float east, float north)
+		internal static float GroundAltitude(Terrain[,] terrains, TerrainTilePlan plan, float east, float north)
 		{
 			int tx = Mathf.Clamp(Mathf.FloorToInt((east + plan.WidthMetres * 0.5f) / plan.TileMetres), 0, plan.CountX - 1);
 			int tz = Mathf.Clamp(Mathf.FloorToInt((north + plan.DepthMetres * 0.5f) / plan.TileMetres), 0, plan.CountZ - 1);

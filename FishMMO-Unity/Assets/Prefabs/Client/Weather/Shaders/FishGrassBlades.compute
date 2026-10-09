@@ -70,6 +70,10 @@ RWByteAddressBuffer _GrassArgs;              // IndirectDrawIndexedArgs, 5 uints
 Texture2DArray<float> _GrassHeightmap;       // GrassTerrain's own copy of the heights (R16 or RFloat), 0..1 of the terrain's height
 Texture2DArray<float4> _GrassDensity0;       // channels 0..3: the grass prototypes' detail layers / their max
 Texture2DArray<float4> _GrassDensity1;       // channels 4..7
+// The wet terrains' water lines (GrassTerrain.Freeboard, R8 on the heights' grid): the ground's height over river or lake
+// water, 0..1 = -GRASS_FREEBOARD_RANGE..+GRASS_FREEBOARD_RANGE metres, 1 where there is none. Slice from the table.
+Texture2DArray<float> _GrassWater;
+#define GRASS_FREEBOARD_RANGE 2.0
 
 /* The atlas's shared buffer: first the terrain table (GRASS_TERRAIN_UINTS per terrain, GrassTerrainAtlas.Rebuild), then
  * the array sets' albedo copies (GrassAlbedoTexels: a header of per-layer tiling and tint, then per layer a pyramid of
@@ -77,10 +81,10 @@ Texture2DArray<float4> _GrassDensity1;       // channels 4..7
  * dispatch per terrain, rebinding and re-uploading constants between them, disturbed the trees' and cliff rocks'
  * culling on OpenGL, and per-dispatch constant arrays broke the grass's own. */
 StructuredBuffer<uint> _GrassShared;
-#define GRASS_TERRAIN_UINTS 24u
+#define GRASS_TERRAIN_UINTS 25u
 
 float4 _GrassCamera;                         // xyz position, w grass distance
-float4 _GrassSea;                            // x the sea's low-tide ceiling (world y), y 1 while there is a sea (FishSea.hlsl's _FishSea)
+float4 _GrassSea;                            // x the sea's low-tide ceiling (world y), y 1 while there is a sea (FishSea.hlsl's _FishSea); z bank clearance over inland water (m), w bank thinning (m)
 float4 _GrassPlanes[6];                      // inside when dot(n, p) + w >= 0
 float4 _GrassLight;                          // xyz the sun's direction of travel, w blade shadow distance (0 none)
 float4 _GrassLattice;                        // x cell metres, y clump metres, z clump facing strength, w clump height variation
@@ -97,6 +101,7 @@ static float4 _GrassChannels1;               // 4..7
 static uint _GrassSlice;                     // its slice in the arrays
 static bool _GrassHasDensity1;
 static uint _GrassAlbedoBase;                // its array set's albedo copy in _GrassShared
+static uint _GrassWaterSlice;                // its slice in _GrassWater, 0xFFFFFFFF where no water reaches it
 float4 _GrassCapacity0;                      // slot capacities 0..3
 float4 _GrassCapacity1;                      // x slot 4
 // The terrain's texture under the root (TerrainArrayBinder's set: the same arrays, tiling and tints the
@@ -143,6 +148,7 @@ void GrassLoadTerrain(uint terrain)
     _GrassArrayInfo = float4(layers, _GrassColour.z, surfaceResolution, asfloat(_GrassShared[at + 20u]));
     _GrassArrayInfo2 = float4(asfloat(_GrassShared[at + 21u]), _GrassColour.x, _GrassColour.y, asfloat(_GrassShared[at + 22u]));
     _GrassAlbedoBase = _GrassShared[at + 23u];
+    _GrassWaterSlice = _GrassShared[at + 24u];
 }
 
 uint _GrassItemOffset;
@@ -317,6 +323,28 @@ float GrassHeightAt(float2 local)
     float h01 = _GrassHeightmap.Load(int4(i.x, j.y, _GrassSlice, 0));
     float h11 = _GrassHeightmap.Load(int4(j.x, j.y, _GrassSlice, 0));
     return _GrassTerrainOrigin.y + lerp(lerp(h00, h10, f.x), lerp(h01, h11, f.x), f.y) * _GrassTerrainOrigin.w;
+}
+
+// The ground's height over river or lake water at a point, metres (positive on dry ground); bilinear on the heights'
+// grid like GrassHeightAt, so its zero is the line the water meets the ground. GRASS_FREEBOARD_RANGE with no water.
+// One exit: FXC flagged the early return for a dry terrain as "potentially uninitialized" once inlined.
+float GrassFreeboardAt(float2 local)
+{
+    float freeboard = GRASS_FREEBOARD_RANGE;
+    [branch] if (_GrassWaterSlice != 0xFFFFFFFFu)
+    {
+        float res = _GrassTerrainSize.z;
+        float2 g = clamp(local / _GrassTerrainSize.xy, 0.0, 1.0) * (res - 1.0);
+        int2 i = (int2)floor(g);
+        int2 j = min(i + 1, (int)res - 1);
+        float2 f = g - (float2)i;
+        float w00 = _GrassWater.Load(int4(i.x, i.y, _GrassWaterSlice, 0));
+        float w10 = _GrassWater.Load(int4(j.x, i.y, _GrassWaterSlice, 0));
+        float w01 = _GrassWater.Load(int4(i.x, j.y, _GrassWaterSlice, 0));
+        float w11 = _GrassWater.Load(int4(j.x, j.y, _GrassWaterSlice, 0));
+        freeboard = (lerp(lerp(w00, w10, f.x), lerp(w01, w11, f.x), f.y) * 2.0 - 1.0) * GRASS_FREEBOARD_RANGE;
+    }
+    return freeboard;
 }
 
 // ── The terrain's colour under a root ────────────────────────────────
@@ -675,6 +703,13 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     float3 root = float3(rootXZ.x, GrassHeightAt(local), rootXZ.y);
     // Land grass does not grow under the sea, whatever a scene's scatter wrote there: below the lowest tide is sea floor.
     if (_GrassSea.y > 0.5 && root.y < _GrassSea.x)
+    {
+        return;
+    }
+    /* Nor in a river or a lake: none below the water line (less a wading type's depth), thinning in over the bank above
+     * it. The density maps (2 m texels smoothed over 2 m) filled a creek from both banks; the cut is per blade. */
+    float freeboard = GrassFreeboardAt(local) + _GrassTypeShape[type].w - _GrassSea.z;
+    if (freeboard < 0.0 || GrassUnit(GrassMix(own ^ 0x7F4A7C15u)) >= saturate(freeboard / _GrassSea.w))
     {
         return;
     }

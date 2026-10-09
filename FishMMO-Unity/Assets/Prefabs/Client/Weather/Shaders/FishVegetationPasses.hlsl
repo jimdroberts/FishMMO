@@ -29,7 +29,8 @@
 //   COLOR.rgb   the part's own colour (species leaf colour, petal colour, base darkening)
 //   COLOR.a     1 where the healthy/dry/autumn tint applies (leaves, blades), 0 where it does not (bark)
 //   TEXCOORD1.x sway: how far this vertex moves with the whole plant (0 at the root)
-//   TEXCOORD1.y flutter: how much it trembles on its own (leaves 1, trunks 0)
+//   TEXCOORD1.y flutter: how much it trembles on its own (leaves 1, trunks 0); −(1 + v per metre) on a trunk skirt's
+//               foot ring, which the generators never write: added at runtime (TrunkSkirt.cs, VegSkirtFoot below)
 //   TEXCOORD2   the part this vertex belongs to (MeshBuilder.SetPart): xyz where it attaches, w its hash
 //   TEXCOORD3   x the card's hash, y the part's keep rank, z what it is (PlantPart: 0 fixed, 1 limb,
 //               2 twig, 3 leaf, 4 frond), w the card's keep rank. Meshes without them read zero there:
@@ -91,6 +92,14 @@ float4 _FishVegetationFade;
 // Probe diagnostic (ScenePerfProbe `vegold`): 1 lights the leaves as before VegFragmentPBR — URP's UniversalFragmentPBR
 // and the main light sampled again for the light through the leaves. 0 as shipped.
 float _FishVegetationDiag;
+// Probe diagnostic (ScenePerfProbe `vegtrace`): 1 traces the terrain under every vertex for the contact band, as before
+// VegVertex skipped it high in a crown. 0 as shipped.
+float _FishVegContactAlways;
+// Probe diagnostic (ScenePerfProbe `vegplantconst`): 1 takes every per-plant value (VegVary's figures, the season tint,
+// the ground colour, the gust, the colour variation, the sink and the distance fade) as a constant instead of working it
+// out from the plant's hash at every vertex: what precomputing them once per instance could save at most. It draws every
+// plant alike. 0 as shipped.
+float _FishVegPlantConst;
 // 1 while the camera's target is multisampled (VegetationDistanceFade, from the pipeline's MSAA): leaf and
 // needle edges are then drawn by alpha-to-coverage — a soft, antialiased fringe — instead of cut at the
 // cutoff, which drew every card as a hard paper cut-out up close. 0: the plain cut.
@@ -114,7 +123,7 @@ half4 VegGroundColour(float3 originWS, float heightAboveRoot, out half coverage)
 {
     coverage = 0.0;
     half amount = (half)_FishGroundColourParams.z;
-    if ((half)_FishGroundColourParams.x <= 0.0)
+    if ((half)_FishGroundColourParams.x <= 0.0 || _FishVegPlantConst > 0.5)
     {
         return half4(0.0, 0.0, 0.0, 0.0);
     }
@@ -172,6 +181,11 @@ float VegTintVariation(float3 originWS)
 
 half4 VegSeasonTint(float3 originWS)
 {
+    UNITY_BRANCH
+    if (_FishVegPlantConst > 0.5)
+    {
+        return half4(_HealthyColor.rgb, 0.0);
+    }
     float variation = VegTintVariation(originWS);
     float strength = _FishSeason.w;
     float known = step(1e-4, strength);
@@ -204,7 +218,7 @@ half4 VegSeasonTint(float3 originWS)
 half VegDistanceVisible(float3 originWS)
 {
     float2 band = _DistanceFade > 1.5 ? _FishVegetationFade.zw : _FishVegetationFade.xy;
-    if (_DistanceFade < 0.5 || band.y <= band.x)
+    if (_DistanceFade < 0.5 || band.y <= band.x || _FishVegPlantConst > 0.5)
     {
         return 1.0;
     }
@@ -295,13 +309,34 @@ float3 VegRotate(float3 v, float3 axis, float angle)
 /// to is one this plant does not grow: the vertex is then put on its part's pivot, and the part draws nothing.
 bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, float4 partData, float3 originWS)
 {
-    uint plant = VegPlantKey(originWS);
+    // The plant's own figures (_FishVegPlantConst: as constants, what a per-instance precompute would hand in).
+    uint plant;
+    float rLimbs, rLeaves, rGirth, rTall, rCrown, rTwist, rLeanToward, rLean;
+    UNITY_BRANCH
+    if (_FishVegPlantConst > 0.5)
+    {
+        plant = asuint(_FishVegPlantConst);
+        // The average fullness: 1 kept every spare limb and leaf and drew more than the plants do.
+        rLimbs = 0.5; rLeaves = 0.5; rGirth = 0.0; rTall = 0.0; rCrown = 0.0; rTwist = 0.0; rLeanToward = 0.0; rLean = 0.0;
+    }
+    else
+    {
+        plant = VegPlantKey(originWS);
+        rLimbs = VegRandom(plant, 1u);
+        rLeaves = VegRandom(plant, 2u);
+        rGirth = VegSigned(plant, 11u);
+        rTall = VegSigned(plant, 6u);
+        rCrown = VegSigned(plant, 7u);
+        rTwist = VegSigned(plant, 8u);
+        rLeanToward = VegRandom(plant, 9u);
+        rLean = VegRandom(plant, 10u);
+    }
     float kind = partData.z;
     if (kind > 0.5)
     {
         // How full this plant is: a share of the spares between the material's fewest and all of them.
-        float limbs = lerp(saturate(_VaryFullness.x), 1.0, VegRandom(plant, 1u));
-        float leaves = lerp(saturate(_VaryFullness.y), 1.0, VegRandom(plant, 2u));
+        float limbs = lerp(saturate(_VaryFullness.x), 1.0, rLimbs);
+        float leaves = lerp(saturate(_VaryFullness.y), 1.0, rLeaves);
         bool leafCard = kind > 2.5 && kind < 3.5;
         if (partData.y > limbs + 1e-4 || (leafCard && partData.w > leaves + 1e-4))
         {
@@ -336,19 +371,19 @@ bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, f
     // the limbs start on that line, inside the trunk, so nothing comes away from it.
     if (kind < 0.5 && partData.w > 0.5)
     {
-        float girth = 1.0 + VegSigned(plant, 11u) * _VaryGirth + 0.5 * VegSigned(plant, 6u) * _VaryHeight;
+        float girth = 1.0 + rGirth * _VaryGirth + 0.5 * rTall * _VaryHeight;
         positionOS = partPivot.xyz + (positionOS - partPivot.xyz) * max(0.5, girth);
     }
     // The whole plant: its height, its crown, its twist about the trunk and its lean off true.
-    positionOS.y *= 1.0 + VegSigned(plant, 6u) * _VaryHeight;
+    positionOS.y *= 1.0 + rTall * _VaryHeight;
     float up = max(0.0, positionOS.y);
-    positionOS.xz *= 1.0 + VegSigned(plant, 7u) * _VaryCrown * saturate(up / 3.0);
-    float twist = radians(VegSigned(plant, 8u) * _VaryTwist * saturate(up / 10.0));
+    positionOS.xz *= 1.0 + rCrown * _VaryCrown * saturate(up / 3.0);
+    float twist = radians(rTwist * _VaryTwist * saturate(up / 10.0));
     positionOS = VegRotate(positionOS, float3(0.0, 1.0, 0.0), twist);
     normalOS = VegRotate(normalOS, float3(0.0, 1.0, 0.0), twist);
-    float leanToward = VegRandom(plant, 9u) * 6.2831853;
+    float leanToward = rLeanToward * 6.2831853;
     float3 leanAxis = float3(cos(leanToward), 0.0, sin(leanToward));
-    float lean = radians(VegRandom(plant, 10u) * _VaryLean);
+    float lean = radians(rLean * _VaryLean);
     positionOS = VegRotate(positionOS, leanAxis, lean);
     normalOS = VegRotate(normalOS, leanAxis, lean);
     return true;
@@ -359,24 +394,80 @@ bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, f
 /// of its own on the bark.
 half3 VegVaryColour(float3 originWS, half tintable, float4 partData)
 {
-    uint plant = VegPlantKey(originWS);
-    half value = 1.0 + VegSigned(plant, 11u) * _VaryColour.x;
-    // Hue and saturation as a shift of the three channels about their mean: toward yellow, toward blue-green,
-    // richer or greyer.
-    half3 shift = half3(VegSigned(plant, 12u), VegSigned(plant, 13u), VegSigned(plant, 14u)) * _VaryColour.y;
-    shift -= (shift.x + shift.y + shift.z) / 3.0;
+    half value = 1.0;
+    half3 shift = half3(0.0, 0.0, 0.0);
+    half barkRandom = 0.0;
+    UNITY_BRANCH
+    if (_FishVegPlantConst < 0.5)
+    {
+        uint plant = VegPlantKey(originWS);
+        value = 1.0 + VegSigned(plant, 11u) * _VaryColour.x;
+        // Hue and saturation as a shift of the three channels about their mean: toward yellow, toward blue-green,
+        // richer or greyer.
+        shift = half3(VegSigned(plant, 12u), VegSigned(plant, 13u), VegSigned(plant, 14u)) * _VaryColour.y;
+        shift -= (shift.x + shift.y + shift.z) / 3.0;
+        barkRandom = VegSigned(plant, 15u);
+    }
     half card = 1.0 + (partData.x > 0.0 ? (half)((partData.x * 2.0 - 1.0) * _VaryColour.z) : 0.0);
     half3 leaf = max(0.0, value * card * (1.0 + shift));
-    half bark = 1.0 + VegSigned(plant, 15u) * _VaryColour.w;
+    half bark = 1.0 + barkRandom * _VaryColour.w;
     return lerp(bark.xxx, leaf, tintable);
+}
+
+// ── A trunk's skirt ───────────────────────────────────────────────────
+
+// How far below the terrain a skirt's foot goes: the terrain is DRAWN as a coarser mesh of its heightmap, which can
+// lie a little under the heightmap's own surface between its vertices.
+#define FISH_SKIRT_DEPTH 0.15
+// The most a skirt drops: a trunk foot further above the ground than this is not standing on it.
+#define FISH_SKIRT_MAX_DROP 3.0
+
+// A trunk's open bottom ring ends where the tree's pivot is, and the ground under one trunk is no plane: its downhill
+// side, a dip, a heightmap texel's fold all fall away below the ring and leave a gap. The GPU tree path draws each
+// trunk with a skirt (TrunkSkirt.cs): a second ring hung off that bottom ring, every vertex a copy of the ring's own
+// (so the plant's shape, wind and burial move it exactly as they move the ring), flagged in TEXCOORD1.y. Here the copy
+// goes straight down onto the terrain under it, per instance, per vertex — the trunk carries on until it meets the
+// ground, wherever that is. Where the ground is above the ring it stays on the ring: a sliver of no area. Returns how
+// far it went down (0 for every other vertex, and with no terrain to trace: the contact blend is off for this draw, no
+// terrain was copied, or none is there).
+float VegSkirtFoot(float2 wind, inout float3 positionWS)
+{
+    if (wind.y > -0.5 || _FishContactOn < 0.5 || _FishGroundInfo.x < 0.5)
+    {
+        return 0.0;
+    }
+    float2 t;
+    int tile = FishGroundTileAt(positionWS.xz, t);
+    if (tile < 0)
+    {
+        return 0.0;
+    }
+    float drop = clamp(positionWS.y - (FishGroundHeightAt(tile, t) - FISH_SKIRT_DEPTH), 0.0, FISH_SKIRT_MAX_DROP);
+    positionWS.y -= drop;
+    return drop;
+}
+
+// The bark's v offset down a skirt that dropped by drop metres, so its texture carries on at the trunk's own scale
+// rather than one texel row stretched down it.
+float2 VegSkirtUV(float2 uv, float2 wind, float drop)
+{
+    return wind.y <= -0.5 ? uv - float2(0.0, drop * (-wind.y - 1.0)) : uv;
 }
 
 // ── The plant as it stands today ──────────────────────────────────────
 
 // Where a vertex is once the snow has buried it, the ground has taken its base and the wind has
-// bent it, and its normal there; fade is how much of it the distance leaves (x) and its dither shift (y).
-void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, out half4 tint, out half2 fade, out half4 ground)
+// bent it, and its normal there; fade is how much of it the distance leaves (x) and its dither shift (y); skirtDrop how
+// far a trunk skirt's foot went down to the ground (VegSkirtFoot; 0 for everything else).
+void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, out half4 tint, out half2 fade, out half4 ground, out float skirtDrop)
 {
+    skirtDrop = 0.0;
+    // Every path below sets these; set here too, or Unity's Vulkan compile warns "potentially uninitialized" at the
+    // early returns.
+    tint = half4(1.0h, 1.0h, 1.0h, 0.0h);
+    fade = half2(1.0h, 0.0h);
+    // A skirt's foot carries its flag in the flutter channel: it never trembles.
+    float flutter = max(input.wind.y, 0.0);
     float3 originWS = TransformObjectToWorld(float3(0.0, 0.0, 0.0));
     float3 positionOS = input.positionOS.xyz;
     float3 normalOS = input.normalOS;
@@ -423,7 +514,16 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
     // layers have no per-instance height), so its base is buried rather than standing on the height
     // surface, and neighbours do not all start at one plane. A translation, never a squash: the
     // blades keep their proportions and the wind's weights still pin the base.
-    positionWS.y -= lerp(_GroundSink.x, _GroundSink.y, FishSurfaceHash(originWS.xz * 0.61 + 7.3));
+    float sinkShare = 0.5, gust = 0.0, phase = 0.0, fadeShift = 0.0;
+    UNITY_BRANCH
+    if (_FishVegPlantConst < 0.5)
+    {
+        sinkShare = FishSurfaceHash(originWS.xz * 0.61 + 7.3);
+        gust = FishWindGust(originWS.xz, _FishWeatherMisc.w);
+        phase = FishSurfaceHash(originWS.xz * 0.23) * 6.2831853;
+        fadeShift = floor(FishSurfaceHash(originWS.xz * 1.37 + 3.1) * 15.999);
+    }
+    positionWS.y -= lerp(_GroundSink.x, _GroundSink.y, sinkShare);
 
     /* Land plants do not grow under the sea, whatever a scene's scatter wrote there: one rooted below the lowest tide
      * collapses to its root and draws nothing (the sea floor's own plants are _Aquatic). */
@@ -445,7 +545,7 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
         float lag = FishSurfaceHash(originWS.xz * 0.23) * 0.3 + input.wind.x * 0.04;
         float2 surge = FishSeaSurge(positionWS, lag);
         float3 drift = float3(surge.x, 0.0, surge.y) * (_WindSway * input.wind.x);
-        drift += normalWS * (FishSeaFlutter(positionWS, lag) * _WindFlutter * input.wind.y);
+        drift += normalWS * (FishSeaFlutter(positionWS, lag) * _WindFlutter * flutter);
         // A bent stem is no longer: what moves sideways comes down a little, as in the wind.
         drift.y -= dot(drift.xz, drift.xz) * 0.5 / max(0.5, input.wind.x * 4.0);
         positionWS += drift;
@@ -453,7 +553,7 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
         float2 lay = dot(surge, surge) > 1e-6 ? normalize(surge) : float2(0.7071, 0.7071);
         positionWS.xz += lay * (lowered * 0.8);
         tint = VegSeasonTint(originWS);
-        fade = half2(visible, floor(FishSurfaceHash(originWS.xz * 1.37 + 3.1) * 15.999));
+        fade = half2(visible, fadeShift);
         return;
     }
 
@@ -462,20 +562,20 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
     float time = _FishWeatherMisc.w;
     float2 dir = _FishWeatherWind.xy;
     float speed = _FishWeatherWind.z;
-    float gust = FishWindGust(originWS.xz, time);
-    float phase = FishSurfaceHash(originWS.xz * 0.23) * 6.2831853;
     // Snapped to whole turns in the clock's wrap (FishWrapAngular), so the wrap is seamless.
     float sway = FishWrapAngular(_WindFrequency);
     float push = speed * (0.7 + 0.3 * sin(time * sway + phase)) + gust;
     float3 offset = float3(dir.x, 0.0, dir.y) * (push * _WindSway * input.wind.x);
     float tremble = sin(time * sway * 4.0 + dot(positionWS, float3(1.7, 2.3, 1.1)) + phase);
-    offset += normalWS * (tremble * _WindFlutter * input.wind.y * (0.15 + speed + gust));
+    offset += normalWS * (tremble * _WindFlutter * flutter * (0.15 + speed + gust));
     // A bent stem is no longer: what moves sideways comes down a little, so tips do not stretch.
     offset.y -= dot(offset.xz, offset.xz) * 0.5 / max(0.5, input.wind.x * 4.0);
     positionWS += offset;
+    // Last, onto the ground as the plant now stands (the wind does not move a trunk's foot).
+    skirtDrop = VegSkirtFoot(input.wind, positionWS);
 
     tint = VegSeasonTint(originWS);
-    fade = half2(visible, floor(FishSurfaceHash(originWS.xz * 1.37 + 3.1) * 15.999));
+    fade = half2(visible, fadeShift);
 }
 
 // Alpha test, with the leaves of a bare deciduous plant clipped away. Only where the tint applies:
@@ -501,11 +601,13 @@ struct VegVaryings
     half fogFactor : TEXCOORD6;
     half2 fade : TEXCOORD7; // x drawn share by distance, y dither shift
     half4 ground : TEXCOORD8; // rgb the ground's colour under the plant, a how much this vertex takes
-    float2 contact : TEXCOORD9;         // the contact blend at a trunk's or detail's base (FishGroundColour.hlsl FishContactData):
-    half4 contactWeights : TEXCOORD10;  // the trace down to the terrain, the root's terrain layers and their weights
+    float contact : TEXCOORD9; // metres above the terrain straight below, for the contact blend at a trunk's base (FishGroundColour.hlsl)
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
 };
+
+// Metres above the contact band's own width (above the root) past which a vertex skips the terrain trace (VegVertex).
+#define FISH_VEG_CONTACT_EXACT_BELOW 6.0
 
 VegVaryings VegVertex(VegAttributes input)
 {
@@ -514,25 +616,40 @@ VegVaryings VegVertex(VegAttributes input)
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-    float3 positionWS;
+    // Precise: the depth-prime draw (FISH_VEG_PASS_PRIME) works the same position out in another program, and this pass
+    // tests against the depth it laid; reassociated differently, a leaf could land a hair behind its own primed depth.
+    precise float3 positionWS;
     half3 normalWS;
     half4 tint;
     half2 fade;
     half4 ground;
-    VegDeform(input, positionWS, normalWS, tint, fade, ground);
+    float skirtDrop;
+    VegDeform(input, positionWS, normalWS, tint, fade, ground, skirtDrop);
     output.fade = fade;
     output.ground = ground;
-    FishContactData contact = FishContactVertex(positionWS, TransformObjectToWorld(float3(0.0, 0.0, 0.0)));
-    output.contact = contact.trace;
-    output.contactWeights = contact.weights;
+    // The terrain is traced (FishContactHeight: a walk over the copied terrains, a height and a normal read) only where
+    // the contact band could reach: a vertex this far above its root takes its height above the root instead. The band
+    // reads the value only below its own width plus a margin (FishGroundContact), and across a triangle that spans from
+    // the band up to here the stand-in's share at the band is small; leaf cards high in a crown never reach the band at
+    // all. Every vertex of every crown ran the trace before.
+    float3 rootWS = TransformObjectToWorld(float3(0.0, 0.0, 0.0));
+    float aboveRoot = positionWS.y - rootWS.y;
+    // A branch, not ?: — HLSL's ?: evaluates both sides, and the trace is the whole of what is being skipped.
+    output.contact = aboveRoot;
+    UNITY_BRANCH
+    if (aboveRoot <= FishContactParams().x + FISH_VEG_CONTACT_EXACT_BELOW || _FishVegContactAlways > 0.5)
+    {
+        output.contact = FishContactHeight(positionWS, rootWS);
+    }
     output.positionWS = positionWS;
     output.normalWS = normalWS;
     // A billboard's tangent is not turned with it; billboards carry no normal map, so nothing reads it.
     output.tangentWS = half4(TransformObjectToWorldDir(input.tangentOS.xyz), input.tangentOS.w * GetOddNegativeScale());
-    output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+    output.uv = TRANSFORM_TEX(VegSkirtUV(input.uv, input.wind, skirtDrop), _BaseMap);
     output.color = half4(input.color.rgb * VegVaryColour(TransformObjectToWorld(float3(0.0, 0.0, 0.0)), input.color.a, input.partData), input.color.a);
     output.tint = tint;
-    output.positionCS = TransformWorldToHClip(positionWS);
+    precise float4 positionCS = TransformWorldToHClip(positionWS);
+    output.positionCS = positionCS;
     output.fogFactor = ComputeFogFactor(output.positionCS.z);
     return output;
 }
@@ -555,6 +672,10 @@ half3 VegNormal(VegVaryings input, half facing)
 #endif
 
 #if defined(FISH_VEG_PASS_FORWARD)
+
+// The terrain's own lighting, for the ground a trunk's base renders (FishGroundContactLit.hlsl).
+#include "FishGroundLighting.hlsl"
+#include "FishGroundContactLit.hlsl"
 
 // URP's UniversalFragmentPBR (Lighting.hlsl, this package's), step for step, but handing back the main light it
 // lit with — before the screen-space occlusion, as GetMainLight(shadowCoord, ...) gives it — so the light through
@@ -696,11 +817,19 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     }
     half3 normalWS = VegNormal(input, IS_FRONT_VFACE(face, 1.0, -1.0));
     half smoothness = _Smoothness;
-    // A trunk's base, a shell, a bit of litter: sits IN the ground, bark and all (FishGroundColour.hlsl).
-    FishContactData contact;
-    contact.trace = input.contact;
-    contact.weights = input.contactWeights;
-    FishContactApply(contact, input.positionWS, albedo, smoothness, normalWS);
+    // A trunk's base sits IN the ground: over a band there it renders the terrain's own surface, lit by the terrain's own
+    // lighting and weather, blended with the plant's lit colour before the fog below (FishGroundColour.hlsl,
+    // FishGroundContactLit.hlsl).
+    float3 groundDx = ddx(input.positionWS);
+    float3 groundDy = ddy(input.positionWS);
+    half groundWeight;
+    FishGroundSite groundSite;
+    bool hasGround = FishGroundContact(input.positionWS, input.contact, input.normalWS, groundWeight, groundSite);
+    FishGroundPixel groundPixel = (FishGroundPixel)0;
+    if (hasGround)
+    {
+        groundPixel = FishGroundSurfaceAtSite(groundSite, input.positionWS, groundDx, groundDy);
+    }
 
     if (_FishWeatherAmount > 0.0)
     {
@@ -780,6 +909,10 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     // the same way).
     back *= saturate(-dot(normalWS * IS_FRONT_VFACE(face, 1.0, -1.0), mainLight.direction) * 2.0 + 0.3);
     color.rgb += albedo * mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation * back * _Translucency * (half)(1.0 - distanceFar));
+    if (hasGround && groundWeight > 0.0h)
+    {
+        color.rgb = lerp(color.rgb, FishGroundLit(inputData, groundPixel, 1.0h), groundWeight);
+    }
 
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
     color.a = coverage;
@@ -812,7 +945,7 @@ half4 VegDepthNormalsFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FA
 
 #endif
 
-#if defined(FISH_VEG_PASS_SHADOW) || defined(FISH_VEG_PASS_DEPTH)
+#if defined(FISH_VEG_PASS_SHADOW) || defined(FISH_VEG_PASS_DEPTH) || defined(FISH_VEG_PASS_PRIME)
 
 struct VegDepthVaryings
 {
@@ -828,6 +961,80 @@ struct VegDepthVaryings
 // Set by URP's ShadowUtils for the caster being rendered.
 float3 _LightDirection;
 float3 _LightPosition;
+
+// This camera's main-light cascades (ShadowCascadeCulling, set just before the shadow maps): xyz each culling sphere's
+// centre, w its radius; how many there are (under 2: nothing is culled).
+float4 _FishCasterSpheres[4];
+float _FishCasterCascades;
+// Per draw (TerrainGpuRenderer's slot blocks): the drawn level's bounding sphere in object space, grown for what the
+// shader does to a plant (VegVary's crown, height and lean, the wind); w 0 where nobody set it, and then nothing is culled.
+float4 _FishCasterSphere;
+// Probe diagnostic (ScenePerfProbe `castercullall`): 1 culls every caster in any cascade VegCasterCulled recognises, to
+// prove the recognition works (the trees' shadows go). 0 as shipped.
+float _FishCasterCullAll;
+
+// Margin round a nearer cascade's sphere before a caster counts as wholly inside it, as a share of that sphere's radius
+// (and metres on top): room for URP's cascade blend band, where receivers still read the next cascade out.
+#define FISH_CASTER_INSIDE_MARGIN 0.15
+#define FISH_CASTER_INSIDE_METRES 1.0
+
+// Whether this instance draws nothing into the cascade being rendered, decided before any of the plant's own work: its
+// sphere is off this cascade's map, or the plant and the far end of its shadow both lie well inside a nearer cascade's
+// sphere, whose receivers (URP takes the first sphere that contains a point) never read this cascade there. Which
+// cascade is being drawn is told from the projection: a cascade's orthographic half size is its sphere's radius. Where
+// that does not match one of this camera's spheres (a camera that published none, or some other shadow) nothing is culled.
+bool VegCasterCulled()
+{
+    int count = (int)_FishCasterCascades;
+    if (count < 2 || _FishCasterSphere.w <= 0.0)
+    {
+        return false;
+    }
+    // 1 over the cascade's half size, and which cascade has that half size and is centred where this projection is.
+    float perMetre = length(UNITY_MATRIX_VP[0].xyz);
+    int cascade = -1;
+    UNITY_LOOP
+    for (int i = 0; i < count; i++)
+    {
+        float4 sphere = _FishCasterSpheres[i];
+        float2 centre = mul(UNITY_MATRIX_VP, float4(sphere.xyz, 1.0)).xy;
+        if (abs(perMetre * sphere.w - 1.0) < 0.1 && all(abs(centre) < 0.05))
+        {
+            cascade = i;
+        }
+    }
+    if (cascade < 0)
+    {
+        return false;
+    }
+    if (_FishCasterCullAll > 0.5)
+    {
+        return true;
+    }
+    float3 centreWS = TransformObjectToWorld(_FishCasterSphere.xyz);
+    float scale = max(length(UNITY_MATRIX_M._m00_m10_m20), max(length(UNITY_MATRIX_M._m01_m11_m21), length(UNITY_MATRIX_M._m02_m12_m22)));
+    float radius = _FishCasterSphere.w * scale;
+    // Off this cascade's map: the projection looks down the light, so the shadow it throws lies on the same spot of it.
+    float2 onMap = mul(UNITY_MATRIX_VP, float4(centreWS, 1.0)).xy;
+    if (any(abs(onMap) > 1.0 + radius * perMetre))
+    {
+        return true;
+    }
+    // Where its shadow ends: as far down the light as it takes to fall the plant's height (its sphere's diameter).
+    float down = max(_LightDirection.y, 0.1);
+    float3 shadowEnd = centreWS - _LightDirection * (2.0 * radius / down);
+    UNITY_LOOP
+    for (int j = 0; j < cascade; j++)
+    {
+        float4 nearer = _FishCasterSpheres[j];
+        float room = nearer.w - radius - nearer.w * FISH_CASTER_INSIDE_MARGIN - FISH_CASTER_INSIDE_METRES;
+        if (room > 0.0 && distance(centreWS, nearer.xyz) <= room && distance(shadowEnd, nearer.xyz) <= room)
+        {
+            return true;
+        }
+    }
+    return false;
+}
 #endif
 
 VegDepthVaryings VegDepthVertex(VegAttributes input)
@@ -837,12 +1044,24 @@ VegDepthVaryings VegDepthVertex(VegAttributes input)
     UNITY_TRANSFER_INSTANCE_ID(input, output);
     UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
-    float3 positionWS;
+#if defined(FISH_VEG_PASS_SHADOW) && !defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
+    // Not wanted in this cascade (VegCasterCulled): outside the clip volume, so all three corners of every triangle are
+    // and the triangle is dropped, before the plant's own work is done for it.
+    UNITY_BRANCH
+    if (VegCasterCulled())
+    {
+        output.positionCS = float4(2.0, 2.0, 2.0, 1.0);
+        return output;
+    }
+#endif
+
+    precise float3 positionWS;   // as the lit pass's (VegVertex): the prime's depth is what that pass tests against
     half3 normalWS;
     half4 tint;
     half2 fade;
     half4 ground;
-    VegDeform(input, positionWS, normalWS, tint, fade, ground);
+    float skirtDrop;
+    VegDeform(input, positionWS, normalWS, tint, fade, ground, skirtDrop);
     output.fade = fade;
 #if defined(FISH_VEG_PASS_SHADOW)
     // The shadow moves with the plant: the same bend, the same burial.
@@ -853,9 +1072,10 @@ VegDepthVaryings VegDepthVertex(VegAttributes input)
     #endif
     output.positionCS = ApplyShadowClamping(TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS)));
 #else
-    output.positionCS = TransformWorldToHClip(positionWS);
+    precise float4 positionCS = TransformWorldToHClip(positionWS);
+    output.positionCS = positionCS;
 #endif
-    output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+    output.uv = TRANSFORM_TEX(VegSkirtUV(input.uv, input.wind, skirtDrop), _BaseMap);
     output.drop = half2(tint.a, input.color.a);
     return output;
 }
@@ -872,6 +1092,40 @@ half4 VegDepthFragment(VegDepthVaryings input) : SV_Target
     VegFadeClip(input.positionCS, input.fade);
     return half4(input.positionCS.z, 0.0, 0.0, 0.0);
 }
+
+#if defined(FISH_VEG_PASS_PRIME)
+// The depth-prime draw (FishMMO/Vegetation Prime): the lit pass's coverage, exactly — the same alpha-to-coverage ramp
+// (VegForwardFragment) and the same dissolves — written as depth alone, into the camera's own (multisampled) target,
+// ahead of the lit draws. The lit pass, drawn with ZWrite off over it, then shades only the leaf in front at each pixel:
+// a discarding shader gets no early depth rejection of its own, so a crown's every layer of cards ran the whole lit
+// shader before (ScenePerfProbe 2026-10-08: ~2 ms of the trees' 2.9 ms lit pass was pixels).
+half4 VegPrimeFragment(VegDepthVaryings input) : SV_Target
+{
+    UNITY_SETUP_INSTANCE_ID(input);
+    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+    half coverage = 1.0;
+    half4 tex = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
+#if defined(_ALPHATEST_ON)
+    if (_FishVegetationAlphaToCoverage > 0.5)
+    {
+        half a = tex.a * _BaseColor.a;
+        half cutoff = lerp(_Cutoff, 1.01, input.drop.x * input.drop.y);
+        coverage = saturate((a - cutoff) / clamp(fwidth(a), 1e-4, 0.25) + 0.5);
+        clip(coverage - 0.01);
+    }
+    else
+    {
+        VegClip(tex.a, input.drop.x, input.drop.y);
+    }
+#endif
+#if defined(LOD_FADE_CROSSFADE)
+    LODFadeCrossFade(input.positionCS);
+#endif
+    FishLodFadeClip(input.positionCS);
+    VegFadeClip(input.positionCS, input.fade);
+    return half4(0.0, 0.0, 0.0, coverage);
+}
+#endif
 
 #endif
 

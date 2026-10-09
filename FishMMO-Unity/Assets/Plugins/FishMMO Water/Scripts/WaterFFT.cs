@@ -40,6 +40,25 @@ namespace FishMMO.Water
 		private static readonly int SpectrumBId = Shader.PropertyToID("_SpectrumB");
 		private static readonly int DisplacementId = Shader.PropertyToID("_Displacement");
 		private static readonly int DerivativesId = Shader.PropertyToID("_Derivatives");
+		private static readonly int FoamKeepId = Shader.PropertyToID("_FoamKeep");
+
+		/// <summary>
+		/// How long the foam of a breaking crest lingers on the water, seconds (an e-folding time: after this long
+		/// a third of how hard it broke is kept). White caps on a real sea leave patches that fade over five to ten
+		/// seconds; the compute version only (the render passes have no memory).
+		/// </summary>
+		public float FoamSeconds = 4f;
+
+		/// <summary>
+		/// The folding (1 − the surface's Jacobian) past which a crest is breaking: where the white caps start, which
+		/// the sea's material and the wind set (WaterSurface). The memory keeps how far past it each crest went.
+		/// </summary>
+		public float FoamStart = 0.3f;
+
+		private static readonly int FoamStartId = Shader.PropertyToID("_FoamStart");
+
+		/// <summary>The instant last evaluated, for the foam memory's decay; NaN before the first.</summary>
+		private float lastSeconds = float.NaN;
 
 		private static readonly int H0SourceId = Shader.PropertyToID("_H0Source");
 		private static readonly int SourceAId = Shader.PropertyToID("_SourceA");
@@ -280,6 +299,13 @@ namespace FishMMO.Water
 				EvaluatePasses(seconds, stages);
 				return;
 			}
+			/* The foam memory's decay since the last evaluation. The clock loops (LoopPeriod) and a first evaluation
+			 * has no last one: neither decays nor keeps anything stale — a step back keeps all, a first keeps none. */
+			float step = float.IsNaN(lastSeconds) ? float.PositiveInfinity : seconds - lastSeconds;
+			lastSeconds = seconds;
+			float keep = step < 0f ? 1f : Mathf.Exp(-Mathf.Min(step, 60f) / Mathf.Max(0.05f, FoamSeconds));
+			compute.SetFloat(FoamKeepId, float.IsInfinity(step) ? 0f : keep);
+			compute.SetFloat(FoamStartId, Mathf.Clamp01(FoamStart));
 			for (int i = 0; i < Cascades; i++)
 			{
 				Bind(timeKernel, i);

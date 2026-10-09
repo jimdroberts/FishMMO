@@ -32,6 +32,9 @@ namespace FishMMO.Client
 		}
 
 		public readonly List<Group> Groups = new List<Group>();
+
+		/// <summary>Counts every rebuild and table rewrite: generated instances from before a change are stale (DetailScatterRenderer's reuse).</summary>
+		public int Version { get; private set; }
 		public GraphicsBuffer Table { get; private set; }
 
 		private readonly Dictionary<DetailScatterTerrain, int> index = new Dictionary<DetailScatterTerrain, int>();
@@ -88,6 +91,7 @@ namespace FishMMO.Client
 
 		private void Rebuild(IReadOnlyList<DetailScatterTerrain> terrains)
 		{
+			Version++;
 			RetireAll();
 			index.Clear();
 			ordered.Clear();
@@ -142,6 +146,7 @@ namespace FishMMO.Client
 		/// <summary>Writes every terrain's row: its frame, its slices, its draw distance and its channels.</summary>
 		private void WriteTable(Func<DetailScatterTerrain, float> drawDistance)
 		{
+			Version++;
 			var data = new uint[ordered.Count * TerrainUints];
 			distances.Clear();
 			foreach (Group g in Groups)

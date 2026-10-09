@@ -314,6 +314,18 @@ namespace FishMMO.Client
 				}
 			}
 			GpuOffset = gpu.Upload(gpuInstances, 0, InstanceCount, $"{(Terrain != null ? Terrain.name : "terrain")} trees");
+			// Which rock each instance is, for the crevices between rocks (RockContactField; trees are never tagged).
+			if (GpuOffset >= 0 && Runs != null)
+			{
+				foreach (Run run in Runs)
+				{
+					TerrainTreeModel model = run.Prototype >= 0 && run.Prototype < Models.Length ? Models[run.Prototype] : null;
+					if (model != null)
+					{
+						gpu.TagRun(GpuOffset + run.Start, run.Count, model.GpuId);
+					}
+				}
+			}
 		}
 
 		/// <summary>Releases the GPU range.</summary>

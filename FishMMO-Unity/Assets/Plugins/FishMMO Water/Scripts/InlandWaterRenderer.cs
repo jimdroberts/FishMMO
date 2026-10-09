@@ -66,8 +66,11 @@ namespace FishMMO.Water
 
 		private void Start()
 		{
-			Rebuild();
+			/* The flow first: the falls take their water's spread across each lip from it. Loaded at once (the editor),
+			 * everything is built once with it; still loading (play), the rivers are built now and the falls when it
+			 * arrives (SetFlow), rather than every fall traced twice. */
 			LoadFlow();
+			Rebuild(!flowLoading);
 		}
 
 		private void OnDestroy()
@@ -135,8 +138,11 @@ namespace FishMMO.Water
 			Shader.SetGlobalFloat(CameraInSeaId, inSea ? 1f : 0f);
 		}
 
-		/// <summary>Builds every lake's and river's surface again from the scene's water.</summary>
-		public void Rebuild()
+		/// <summary>Builds every lake's and river's surface again from the scene's water, and its falls.</summary>
+		public void Rebuild() => Rebuild(true);
+
+		/// <summary>Builds every lake's and river's surface again; its falls too unless <paramref name="withFalls"/> is false.</summary>
+		private void Rebuild(bool withFalls)
 		{
 			if (!cameraHooked)
 			{
@@ -178,13 +184,17 @@ namespace FishMMO.Water
 					riverRenderers[river.Id] = built[built.Count - 1].GetComponent<MeshRenderer>();
 				}
 			}
-			BuildFalls(hydrology, falls);
+			if (withFalls)
+			{
+				BuildFalls(hydrology, falls);
+			}
 			ApplyFlow();
 		}
 
 		private void Clear()
 		{
 			riverRenderers.Clear();
+			ClearFalls();
 			foreach (GameObject go in built)
 			{
 				if (go == null)
@@ -263,11 +273,10 @@ namespace FishMMO.Water
 					}
 				}
 			}
-			var vertexOf = new int[(w + 1) * (h + 1)];
-			for (int i = 0; i < vertexOf.Length; i++)
-			{
-				vertexOf[i] = -1;
-			}
+			/* Vertices on a grid ChannelSubdivisions times finer than the mask, keyed by their fine position, so a cell
+			 * cut finer by a river shares its edge with a whole neighbour (a flat surface: the T-junction is no crack). */
+			const int n = ChannelSubdivisions;
+			var vertexOf = new Dictionary<long, int>();
 			var positions = new List<Vector3>();
 			var flows = new List<Vector2>();
 			var states = new List<Vector2>();
@@ -275,24 +284,38 @@ namespace FishMMO.Water
 			var colours = new List<Color32>();
 			var tides = new List<Vector2>();
 			var indices = new List<int>();
-			int Vertex(int vx, int vz)
+			int Vertex(int fx, int fz)
 			{
-				int key = vz * (w + 1) + vx;
-				if (vertexOf[key] >= 0)
+				long key = ((long)fz << 32) | (uint)fx;
+				if (vertexOf.TryGetValue(key, out int index))
 				{
-					return vertexOf[key];
+					return index;
 				}
-				float px = lake.MaskOrigin.x + vx * lake.MaskCell, pz = lake.MaskOrigin.y + vz * lake.MaskCell;
+				float px = lake.MaskOrigin.x + fx * (lake.MaskCell / n), pz = lake.MaskOrigin.y + fz * (lake.MaskCell / n);
 				Vector2 flow = water.FlowAt(px, pz, out float reach, out float broken);
-				vertexOf[key] = positions.Count;
+				index = positions.Count;
+				vertexOf[key] = index;
 				positions.Add(new Vector3(px, lake.Level, pz));
 				flows.Add(flow);
 				states.Add(new Vector2(broken, reach));
 				uvs.Add(new Vector2(px, pz));
-				colours.Add(new Color32(255, 255, 255, 255));
+				colours.Add(new Color32(255, ChannelClaim(water.OutsideChannels(px, pz, lake.Id)), 255, 255));
 				tides.Add(Vector2.zero);
-				return vertexOf[key];
+				return index;
 			}
+			void Quad(int fx, int fz, int size)
+			{
+				int a = Vertex(fx, fz), b = Vertex(fx + size, fz), c = Vertex(fx + size, fz + size), d = Vertex(fx, fz + size);
+				// Wholly inside a channel: every corner gives way, so nothing of it would be drawn.
+				if (colours[a].g < 128 && colours[b].g < 128 && colours[c].g < 128 && colours[d].g < 128)
+				{
+					return;
+				}
+				indices.Add(a); indices.Add(d); indices.Add(c);
+				indices.Add(a); indices.Add(c); indices.Add(b);
+			}
+			// A cell this near a channel is cut finer, so the edge where the lake gives way follows the bank.
+			float near = 0.7072f * lake.MaskCell + ChannelClaimMetres;
 			for (int z = 0; z < h; z++)
 			{
 				for (int x = 0; x < w; x++)
@@ -301,12 +324,44 @@ namespace FishMMO.Water
 					{
 						continue;
 					}
-					int a = Vertex(x, z), b = Vertex(x + 1, z), c = Vertex(x + 1, z + 1), d = Vertex(x, z + 1);
-					indices.Add(a); indices.Add(d); indices.Add(c);
-					indices.Add(a); indices.Add(c); indices.Add(b);
+					float cx = lake.MaskOrigin.x + (x + 0.5f) * lake.MaskCell, cz = lake.MaskOrigin.y + (z + 0.5f) * lake.MaskCell;
+					if (water.OutsideChannels(cx, cz, lake.Id) >= near)
+					{
+						Quad(x * n, z * n, n);
+						continue;
+					}
+					for (int sz = 0; sz < n; sz++)
+					{
+						for (int sx = 0; sx < n; sx++)
+						{
+							Quad(x * n + sx, z * n + sz, 1);
+						}
+					}
 				}
 			}
 			return Build($"Lake {lake.Id}", positions, uvs, flows, states, colours, tides, indices);
+		}
+
+		/// <summary>How many times finer than its mask a lake's cells are cut where a river's channel runs through or by them.</summary>
+		private const int ChannelSubdivisions = 8;
+
+		/// <summary>The band over which a lake gives its pixels up to a river's channel, metres, centred on the bank.</summary>
+		private const float ChannelClaimMetres = 1f;
+
+		/// <summary>
+		/// A lake vertex's claim on its pixels (vertex colour g): none inside a river's channel, all of them outside it, and
+		/// the half the shader clips at exactly on the bank, so the lake stops along the bank's own line.
+		/// </summary>
+		/// <remarks>
+		/// A lake is drawn before the rivers and keeps every pixel it claims (the draw-once stencil), and its surface is
+		/// its mask grown by a 4 m cell. Where a lake lies beside a river it does not drain into or from (a pond along
+		/// a ponded stretch, a lake a river passes), those cells covered the channel in square patches of lake water
+		/// with none of the river's depth, flow or colour (Jim, 2026-10-08). A river that starts or ends in the lake is
+		/// left to it, as at every mouth: its rows run on into the lake fading, and the lake keeps its pixels.
+		/// </remarks>
+		private static byte ChannelClaim(float outside)
+		{
+			return (byte)Mathf.RoundToInt(255f * Mathf.Clamp01(0.5f + outside / ChannelClaimMetres));
 		}
 
 		private static bool Bit(SceneHydrology.Lake lake, int x, int z)

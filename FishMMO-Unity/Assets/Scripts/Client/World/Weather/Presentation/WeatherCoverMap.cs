@@ -1,5 +1,6 @@
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
 
 namespace FishMMO.Client
@@ -44,6 +45,13 @@ namespace FishMMO.Client
 		/// </summary>
 		public const float SweepSeconds = 6f;
 
+		/// <summary>
+		/// The most steps one row's turn takes. A row is brought up to the world's time each turn in steps of up to
+		/// <see cref="WeatherCover.StepSeconds"/>; at the world's own pace that is one, and in a world raced a thousand
+		/// times over, a few long ones rather than a hundred short ones, each a full weather sample per texel.
+		/// </summary>
+		public const int MaxRowSteps = 4;
+
 		private Texture2D texture;
 		private Color32[] pixels;
 		private WeatherCover[] cover;
@@ -52,9 +60,12 @@ namespace FishMMO.Client
 		private float size;
 		private Vector2 corner;
 		private int nextRow;
-		private float sinceRow;
 		private float rowCredit;
 		private bool valid;
+		/// <summary>The world time each row was last brought up to, seconds.</summary>
+		private double[] rowSeconds;
+		/// <summary>Set when every texel was just given the same cover: the rows' clocks then start from now.</summary>
+		private bool restartRows;
 
 		public Texture2D Texture => texture;
 		public bool IsValid => valid;
@@ -80,12 +91,18 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Integrates part of the map and publishes it. Called every frame; only a slice of the rows
-		/// is advanced each time, each by the time since that row was last touched, so the whole map
-		/// keeps correct time at a fraction of the cost.
+		/// is advanced each time, each over the WORLD time since that row was last brought up to date, so
+		/// the whole map keeps the world's time — held, raced or jumped — at a fraction of the cost.
 		/// </summary>
+		/// <remarks>
+		/// How many rows a frame sweeps is paid in real time (<paramref name="deltaTime"/>): that is the cost. What
+		/// each row is advanced by is world time: that is the weather. It was the wall clock's for both, so a held
+		/// world went on drying and settling under a sky that stood still, and a raced one dried at the speed of
+		/// the wall while the storms raced overhead.
+		/// </remarks>
 		public void Update(WeatherTimeline timeline, WorldSceneSettings settings, Vector3 centre, uint tick,
-			float temperature, float deltaTime, in WeatherCover anchor, bool reseed,
-			int res = DefaultResolution, float sizeMeters = DefaultSizeMeters, float sunlight = 0.5f)
+			float deltaTime, in WeatherCover anchor, bool reseed,
+			int res = DefaultResolution, float sizeMeters = DefaultSizeMeters)
 		{
 			Ensure(res, sizeMeters);
 			Recentre(centre, anchor);
@@ -93,9 +110,17 @@ namespace FishMMO.Client
 			{
 				Seed(anchor);
 			}
+			double now = timeline != null ? timeline.WorldSecondsAt(tick) : 0.0;
+			if (restartRows)
+			{
+				// The anchor already stands for the ground at this moment; the sweep then works the weather in from here.
+				for (int y = 0; y < resolution; y++)
+				{
+					rowSeconds[y] = now;
+				}
+				restartRows = false;
+			}
 
-			sinceRow += Mathf.Max(0f, deltaTime);
-			// A reseed has already put the anchor everywhere (Seed); the sweep then works the weather in at its own pace.
 			rowCredit += resolution * Mathf.Max(0f, deltaTime) / SweepSeconds;
 			int rows = Mathf.Min(resolution, Mathf.FloorToInt(rowCredit));
 			if (rows <= 0)
@@ -104,31 +129,36 @@ namespace FishMMO.Client
 				return;
 			}
 			rowCredit -= rows;
-			// Each row is advanced by how long it has been since its own turn came round.
-			float sweepSeconds = sinceRow * resolution / Mathf.Max(1, rows);
 
-			WeatherFrame sceneLayers = BaseFrame(timeline, settings, centre, tick, storms);
-			float texel = TexelMeters;
 			for (int i = 0; i < rows; i++)
 			{
-				int y = nextRow;
+				AdvanceRow(timeline, settings, nextRow, now, MaxRowSteps);
 				nextRow = (nextRow + 1) % resolution;
-				for (int x = 0; x < resolution; x++)
-				{
-					var position = new Vector3(corner.x + (x + 0.5f) * texel, 0f, corner.y + (y + 0.5f) * texel);
-					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, tick, storms);
-					int index = y * resolution + x;
-					frame.RetypeForTemperature(temperature);
-					frame.DeriveSurfaceRates();
-					cover[index].Integrate(frame, temperature, sweepSeconds, sunlight);
-					pixels[index] = Encode(cover[index]);
-				}
 			}
-			sinceRow = 0f;
 
 			texture.SetPixels32(pixels);
 			texture.Apply(false, false);
 			valid = true;
+			Publish();
+		}
+
+		/// <summary>
+		/// Brings every row up to the world's time at once, rather than over the next sweep: for a test bed that has
+		/// just moved the world clock on and wants to look at the ground now. Nothing in the game calls this.
+		/// </summary>
+		public void CatchUp(WeatherTimeline timeline, WorldSceneSettings settings, uint tick)
+		{
+			if (!valid || cover == null)
+			{
+				return;
+			}
+			double now = timeline != null ? timeline.WorldSecondsAt(tick) : 0.0;
+			for (int y = 0; y < resolution; y++)
+			{
+				AdvanceRow(timeline, settings, y, now, SceneCoverSampling.MaxSteps);
+			}
+			texture.SetPixels32(pixels);
+			texture.Apply(false, false);
 			Publish();
 		}
 
@@ -179,34 +209,6 @@ namespace FishMMO.Client
 			Seed(everywhere);
 		}
 
-		/// <summary>
-		/// Runs the whole map forward, for a test bed or a preview that will not wait a quarter of
-		/// an hour to see snow lie. Nothing in the game calls this.
-		/// </summary>
-		public void Advance(WeatherTimeline timeline, WorldSceneSettings settings, uint tick, float temperature, float seconds)
-		{
-			if (!valid || seconds <= 0f)
-			{
-				return;
-			}
-			WeatherFrame sceneLayers = BaseFrame(timeline, settings, new Vector3(corner.x + size * 0.5f, 0f, corner.y + size * 0.5f), tick, storms);
-			float texel = TexelMeters;
-			for (int y = 0; y < resolution; y++)
-			{
-				for (int x = 0; x < resolution; x++)
-				{
-					var position = new Vector3(corner.x + (x + 0.5f) * texel, 0f, corner.y + (y + 0.5f) * texel);
-					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, tick, storms);
-					int index = y * resolution + x;
-					cover[index].Integrate(frame, temperature, seconds);
-					pixels[index] = Encode(cover[index]);
-				}
-			}
-			texture.SetPixels32(pixels);
-			texture.Apply(false, false);
-			Publish();
-		}
-
 		public void Clear()
 		{
 			valid = false;
@@ -230,6 +232,7 @@ namespace FishMMO.Client
 			}
 			cover = null;
 			scratch = null;
+			rowSeconds = null;
 			pixels = null;
 			resolution = 0;
 		}
@@ -237,20 +240,62 @@ namespace FishMMO.Client
 		// ── Inside ─────────────────────────────────────────────────────
 
 		/// <summary>
+		/// One row from the world time it was last brought up to, to <paramref name="now"/>, in at most
+		/// <paramref name="maxSteps"/> steps, each under the weather and daylight of its own moment. A clock set
+		/// back leaves the row as it is and counts on from the new time.
+		/// </summary>
+		private void AdvanceRow(WeatherTimeline timeline, WorldSceneSettings settings, int y, double now, int maxSteps)
+		{
+			double from = rowSeconds[y];
+			int steps = WeatherCover.StepsFor(now - from, maxSteps);
+			rowSeconds[y] = now;
+			if (steps <= 0)
+			{
+				return;
+			}
+			from = System.Math.Max(from, now - WeatherCover.MaxAdvanceSeconds);
+			double step = (now - from) / steps;
+			float texel = TexelMeters;
+			Vector3 middle = new Vector3(corner.x + size * 0.5f, 0f, corner.y + size * 0.5f);
+			for (int k = 1; k <= steps; k++)
+			{
+				double at = from + step * k;
+				WeatherFrame sceneLayers = BaseFrame(timeline, settings, middle, at, storms, out float temperature);
+				float sunlight = SceneTime.IsDaylight(settings, at / 3600.0) ? 1f : 0f;
+				for (int x = 0; x < resolution; x++)
+				{
+					var position = new Vector3(corner.x + (x + 0.5f) * texel, 0f, corner.y + (y + 0.5f) * texel);
+					WeatherFrame frame = FrameAt(timeline, sceneLayers, position, at, storms);
+					frame.RetypeForTemperature(temperature);
+					frame.DeriveSurfaceRates();
+					cover[y * resolution + x].Integrate(frame, temperature, (float)step, sunlight);
+				}
+			}
+			for (int x = 0; x < resolution; x++)
+			{
+				int index = y * resolution + x;
+				pixels[index] = Encode(cover[index]);
+			}
+		}
+
+		/// <summary>
 		/// The weather over the middle of the map without its storms: the air's own. The field turns
 		/// over across tens of kilometres and the map is a kilometre or two, so one reading at its
 		/// middle serves; the storms are then added point by point. Readies the storms' weather in
 		/// that same air.
 		/// </summary>
-		private static WeatherFrame BaseFrame(WeatherTimeline timeline, WorldSceneSettings settings, Vector3 centre, uint tick, StormFrames storms)
+		private static WeatherFrame BaseFrame(WeatherTimeline timeline, WorldSceneSettings settings, Vector3 centre, double worldSeconds,
+			StormFrames storms, out float temperature)
 		{
 			if (timeline == null)
 			{
 				storms.Reset(default);
+				temperature = 0f;
 				return WeatherFrame.Clear;
 			}
-			WeatherSample around = WeatherField.Sample(timeline, settings, default, centre, tick);
+			WeatherSample around = WeatherField.SampleAtSeconds(timeline, settings, default, centre, worldSeconds);
 			storms.Reset(around);
+			temperature = around.Temperature;
 			return around.Background;
 		}
 
@@ -258,7 +303,7 @@ namespace FishMMO.Client
 		/// The weather standing over one point: the air's own, plus what each storm reaching it makes
 		/// in that air.
 		/// </summary>
-		private static WeatherFrame FrameAt(WeatherTimeline timeline, in WeatherFrame open, Vector3 position, uint tick, StormFrames storms)
+		private static WeatherFrame FrameAt(WeatherTimeline timeline, in WeatherFrame open, Vector3 position, double worldSeconds, StormFrames storms)
 		{
 			WeatherFrame frame = open;
 			if (timeline == null || timeline.SceneMode != WeatherSceneMode.Own)
@@ -269,11 +314,10 @@ namespace FishMMO.Client
 			var accumulator = new WeatherAccumulator();
 			accumulator.Add(open, 1f);
 			bool any = false;
-			double now = timeline.WorldSecondsAt(tick);
 			for (int i = 0; i < timeline.Cells.Count; i++)
 			{
 				StormCell cell = timeline.Cells[i];
-				float weight = cell.InfluenceAtSeconds(position, now);
+				float weight = cell.InfluenceAtSeconds(position, worldSeconds);
 				if (weight <= 0f)
 				{
 					continue;
@@ -317,8 +361,9 @@ namespace FishMMO.Client
 			pixels = new Color32[resolution * resolution];
 			cover = new WeatherCover[resolution * resolution];
 			scratch = new WeatherCover[resolution * resolution];
+			rowSeconds = new double[resolution];
+			restartRows = true;
 			nextRow = 0;
-			sinceRow = 0f;
 		}
 
 		/// <summary>
@@ -371,6 +416,7 @@ namespace FishMMO.Client
 				cover[i] = anchor;
 				pixels[i] = Encode(anchor);
 			}
+			restartRows = true;
 			if (texture != null)
 			{
 				texture.SetPixels32(pixels);

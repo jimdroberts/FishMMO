@@ -89,7 +89,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BuildRock_KeepsTheColliderForTheServer_AndStripsOnlyTheVisual()
 		{
-			var piece = new CliffPiece("Granite", CliffRole.Base, 0, 1, 0);
+			var piece = new CliffPiece("Granite", CliffRole.Base, 0, 0);
 			var meshes = new Mesh[CliffRocks.LodHeights.Length];
 			for (int lod = 0; lod < meshes.Length; lod++)
 			{
@@ -172,9 +172,13 @@ namespace FishMMO.UnitTests
 			{
 				materials.Add(ProceduralArtCatalogue.RockMaterial(legacy.Name));
 			}
-			foreach ((CliffPiece piece, int lod) in CliffRocks.AllMeshes())
+			// Every piece the planner can pick, the section faces included (written by CliffSections, not CliffRocks).
+			foreach (CliffPiece piece in CliffRocks.All())
 			{
-				Assert.That(paths, Does.Contain(CliffPlacer.MeshPath(in piece, lod)));
+				for (int lod = 0; lod < CliffRocks.LodHeights.Length; lod++)
+				{
+					Assert.That(paths, Does.Contain(CliffPlacer.MeshPath(in piece, lod)), CliffRocks.MeshName(in piece, lod));
+				}
 			}
 			foreach (string type in CliffRocks.Types())
 			{
@@ -183,11 +187,11 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void SceneGenerator_HandsThePlacerTheClimate_AndKeepsTheLocalMaterialSeam()
+		public void SceneGenerator_HandsThePlacerTheGeology_AndKeepsTheLocalMaterialSeam()
 		{
 			string source = System.IO.File.ReadAllText("Assets/Scripts/Shared/Implementation/Tools/Extensions/Unity/Editor/World/SceneGenerator.cs").Replace("\r\n", "\n");
 			Assert.That(source, Does.Contain("scope.CliffOptions() ?? new CliffPlacerOptions()"), "LOCAL scenes still override the rocks' materials");
-			Assert.That(source, Does.Contain("cliffOptions.ClimateAt ="), "granite roundness follows the scene's climate");
+			Assert.That(source, Does.Contain("cliffOptions.RockTypeAt ="), "a cliff is the stone the planet's geology puts under it");
 			Assert.That(source, Does.Contain("CliffPlacer.Place(scene, tiles, palette, field, options.Seed, options.NormalizedHeight, cliffOptions)"));
 		}
 	}

@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared;
+using Unity.Profiling;
 
 namespace FishMMO.Client
 {
@@ -257,7 +258,16 @@ namespace FishMMO.Client
 
 		private static void OnSceneUnloaded(Scene scene) => scenesChanged = true;
 
-		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras) => Sync();
+		/// <summary>This system's once-a-frame work before the cameras render, named in the profiler (StartupTimeline reads it).</summary>
+		private static readonly ProfilerMarker ContextMarker = new ProfilerMarker("CliffRockInstancing.BeginContext");
+
+		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
+		{
+			using (ContextMarker.Auto())
+			{
+				Sync();
+			}
+		}
 
 		// ── Following the loaded props ────────────────────────────────
 
@@ -281,7 +291,7 @@ namespace FishMMO.Client
 				gpu = TerrainGpuRenderer.TryCreate();
 				if (gpu != null)
 				{
-					gpu.ContactMode = 2f;   // rock bases blend into the terrain (FishGroundColour.hlsl)
+					gpu.ContactMode = 1f;   // rock bases blend into the terrain (FishGroundColour.hlsl)
 				}
 			}
 
@@ -447,6 +457,17 @@ namespace FishMMO.Client
 			if (OnGpu)
 			{
 				d.GpuOffset = gpu.Upload(d.Instances, 0, d.Instances.Length, owner);
+				// Which rock each instance is, for the crevices between rocks (RockContactField).
+				foreach (Chunk c in d.Chunks)
+				{
+					foreach (Run r in c.Runs)
+					{
+						if (r.Model != null)
+						{
+							gpu.TagRun(d.GpuOffset + r.Start, r.Count, r.Model.GpuId);
+						}
+					}
+				}
 			}
 			RockCount += d.Instances.Length;
 			drivenList.Add(d);

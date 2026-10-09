@@ -12,9 +12,9 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// A waterfall built to be judged: a 50 m cliff with a river channel cut to its lip, a boulder standing in the channel
-	/// just above the lip, and a pillar of rock against the face part way down, in the curtain's path. The fall must part
-	/// round both: the water behind the boulder thins and rejoins as it falls, the streams over the pillar slide off its
-	/// sides. Renders the views to FISHMMO_FALLBED_OUT; saves nothing into the project.
+	/// just above the lip, a ledge high on the face under one side of the fall, a rock lodged lower down and a pillar of rock
+	/// against the face, in the curtain's path. The rocks are baked collision (a ScenePropCollisionSet), as a real scene's
+	/// are. Renders the views to FISHMMO_FALLBED_OUT; saves nothing into the project.
 	/// </summary>
 	public static class WaterfallBedProbe
 	{
@@ -27,6 +27,9 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly Vector4 Boulder = new Vector4(0f, Plateau, -2.2f, 0.6f);
 		/// <summary>The prop rock: x centre, y centre, how far out from the face (m), width (m).</summary>
 		private static readonly Vector4 PropRock = new Vector4(-1.7f, 20f, 3.6f, 1.4f);
+		/// <summary>A ledge high on the face under the fall's left side: its centre, and its size (it stands out of the face).</summary>
+		private static readonly Vector3 Ledge = new Vector3(-1.8f, Plateau - 6f, 1.6f);
+		private static readonly Vector3 LedgeSize = new Vector3(2.6f, 1.2f, 4.2f);
 		/// <summary>The pillar against the face: x from, x to, how far out from the face (m), its top (m).</summary>
 		private static readonly Vector4 Pillar = new Vector4(0.9f, 2.5f, 2.5f, 34f);
 
@@ -58,8 +61,30 @@ namespace FishMMO.Shared.WorldDesign
 			prop.transform.rotation = Quaternion.Euler(12f, 30f, 18f);
 			prop.transform.localScale = new Vector3(PropRock.w * 1.3f, 3.2f, PropRock.z + 0.8f);
 			UnityEngine.Object.DestroyImmediate(prop.GetComponent<Collider>());
-			prop.AddComponent<MeshCollider>().sharedMesh = prop.GetComponent<MeshFilter>().sharedMesh;
 			prop.GetComponent<Renderer>().sharedMaterial = stone.GetComponent<Renderer>().sharedMaterial;
+			/* Its collision as a real scene has it: in the scene's baked collision set, not as a live collider. The falls are
+			 * built before the streamer puts any prop chunk into physics, so a live collider here proved nothing about a
+			 * real scene's rocks. And a ledge high on the face, under one side of the fall, which splits it. */
+			var ledge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+			ledge.name = "Ledge";
+			UnityEngine.Object.DestroyImmediate(ledge.GetComponent<Collider>());
+			ledge.transform.position = Ledge;
+			ledge.transform.localScale = LedgeSize;
+			ledge.GetComponent<Renderer>().sharedMaterial = stone.GetComponent<Renderer>().sharedMaterial;
+			var owner = new GameObject(ScenePropColliders.ObjectName).AddComponent<ScenePropColliders>();
+			var set = ScriptableObject.CreateInstance<ScenePropCollisionSet>();
+			set.Source = "Bed";
+			set.Prototypes = new[]
+			{
+				new ScenePropCollisionSet.Prototype { Mesh = Readable(prop.GetComponent<MeshFilter>().sharedMesh) },
+				new ScenePropCollisionSet.Prototype { Mesh = Readable(ledge.GetComponent<MeshFilter>().sharedMesh) },
+			};
+			set.Instances = new[]
+			{
+				new ScenePropCollisionSet.Instance { Prototype = 0, Position = prop.transform.position, Rotation = prop.transform.rotation, Scale = prop.transform.localScale },
+				new ScenePropCollisionSet.Instance { Prototype = 1, Position = ledge.transform.position, Rotation = Quaternion.identity, Scale = LedgeSize },
+			};
+			owner.Sets.Add(set);
 			Physics.SyncTransforms();
 
 			var host = new GameObject("Inland Water");
@@ -133,6 +158,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Straight at each obstacle from in front, close enough to see the curtain part round it.
 				("pillar_front", new Vector3(0.5f * (Pillar.x + Pillar.y), Pillar.w - 3f, 20f), new Vector3(0.5f * (Pillar.x + Pillar.y), Pillar.w - 6f, 1f)),
 				("prop_front", new Vector3(PropRock.x, PropRock.y + 1f, 20f), new Vector3(PropRock.x, PropRock.y - 2f, 1f)),
+				("ledge", new Vector3(-12f, Ledge.y + 2f, 16f), new Vector3(Ledge.x, Ledge.y - 3f, 2f)),
 				// From beneath the lip's level along the face, side on: the slab's depth, and where it is cut.
 				("under", new Vector3(14f, Pillar.w - 8f, 8f), new Vector3(0f, Pillar.w - 4f, 1.5f)),
 			};
@@ -148,6 +174,14 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			File.WriteAllLines(Path.Combine(output, "index.txt"), log);
 			Debug.Log($"[Waterfall bed] {views.Count} views written to '{output}'; {renderer.Built.Count} surfaces.");
+		}
+
+		/// <summary>A readable copy of a mesh (a baked collision set's meshes are read on the CPU).</summary>
+		private static Mesh Readable(Mesh source)
+		{
+			var mesh = new Mesh { name = source.name + " (collision)", vertices = source.vertices, triangles = source.triangles };
+			mesh.RecalculateBounds();
+			return mesh;
 		}
 
 		/// <summary>The plateau, the cliff, the pool's basin below it, the channel to the lip, and the pillar.</summary>

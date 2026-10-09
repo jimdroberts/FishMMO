@@ -6,6 +6,7 @@ using FishMMO.Shared;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using FishMMO.Shared.Weather;
+using Unity.Profiling;
 
 namespace FishMMO.Client
 {
@@ -218,7 +219,16 @@ namespace FishMMO.Client
 
 		// ── The sea's globals ─────────────────────────────────────────
 
-		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras) => Publish();
+		/// <summary>This system's once-a-frame work before the cameras render, named in the profiler (StartupTimeline reads it).</summary>
+		private static readonly ProfilerMarker ContextMarker = new ProfilerMarker("SeaLifeSystem.BeginContext");
+
+		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
+		{
+			using (ContextMarker.Auto())
+			{
+				Publish();
+			}
+		}
 
 		/// <summary>
 		/// <c>_FishSea</c> and <c>_FishSeaSurge</c> (FishSea.hlsl), once a frame: the surface now, the low-tide

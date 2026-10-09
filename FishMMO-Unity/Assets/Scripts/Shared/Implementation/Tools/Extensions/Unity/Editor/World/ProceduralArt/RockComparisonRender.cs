@@ -10,15 +10,16 @@ using UnityEngine.Rendering;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Studio renders of every generated rock — each formation shape of each <see cref="RockTypes"/> type and
-	/// the legacy boulders — through URP with their real prefabs and materials, one PNG per rock, for
-	/// comparing against reference art.
+	/// Studio renders of every generated rock — each formation shape of each <see cref="RockTypes"/> type, the
+	/// legacy boulders, and every level of each <see cref="CliffSections"/> variant — through URP with their real
+	/// prefabs and materials, one PNG per rock, for comparing against reference art.
 	/// </summary>
 	/// <remarks>
 	/// Headless: <c>-executeMethod FishMMO.Shared.WorldDesign.RockComparisonRender.Run</c> with graphics
 	/// (under xvfb, not -nographics), the generated art already on disk. Output to
 	/// <c>FISHMMO_ROCK_RENDER_OUT</c> (default /tmp/rockrender): <c>{name}.png</c> plus <c>index.txt</c>
-	/// (name, size, triangles). <c>FISHMMO_ROCK_RENDER_ONLY</c> = comma-separated type names limits it.
+	/// (name, size, triangles). <c>FISHMMO_ROCK_RENDER_ONLY</c> = comma-separated type names limits it ("Legacy" for
+	/// the boulders, "CliffSections" for the sections, which are built live and wear the limestone material).
 	/// Every rock is seen from the same three-quarter view a little above, framed to its own size, on a dark
 	/// floor that hides the buried part, as a sculpt sheet shows a rock.
 	/// </remarks>
@@ -117,6 +118,27 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
+			if (only.Count == 0 || only.Contains("CliffSections"))
+			{
+				var limestone = AssetDatabase.LoadAssetAtPath<Material>(ProceduralArtCatalogue.MaterialPath(CliffRocks.MaterialName("Limestone")));
+				foreach (string style in CliffSections.Styles)
+				{
+					for (int v = 0; v < CliffSections.VariantCount; v++)
+					{
+						MeshBuilder[] levels = CliffSections.BuildMeshes(style, v, ProceduralArtCatalogue.DefaultSeed, out string report);
+						for (int lod = 0; lod < levels.Length; lod++)
+						{
+							string name = CliffSections.MeshName(style, v, lod);
+							Mesh mesh = levels[lod].ToMesh(name);
+							var rock = new GameObject(name);
+							rock.AddComponent<MeshFilter>().sharedMesh = mesh;
+							rock.AddComponent<MeshRenderer>().sharedMaterial = limestone;
+							Frame(camera, target, output, rock, name, $"Cliff section {style} {v} LOD{lod} ({report})", levels[lod].TriangleCount, log);
+							UnityEngine.Object.DestroyImmediate(mesh);
+						}
+					}
+				}
+			}
 			File.WriteAllLines(Path.Combine(output, "index.txt"), log);
 		}
 
@@ -129,7 +151,6 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			var rock = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-			rock.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, 20f, 0f));
 			int triangles = 0;
 			foreach (LODGroup group in rock.GetComponentsInChildren<LODGroup>())
 			{
@@ -146,6 +167,13 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
+			Frame(camera, target, output, rock, prefabName, label, triangles, log);
+		}
+
+		/// <summary>Frames a placed rock, captures it, logs it and destroys it.</summary>
+		private static void Frame(Camera camera, RenderTexture target, string output, GameObject rock, string name, string label, int triangles, List<string> log)
+		{
+			rock.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, 20f, 0f));
 			bool any = false;
 			var bounds = new Bounds();
 			foreach (Renderer r in rock.GetComponentsInChildren<Renderer>())
@@ -166,8 +194,8 @@ namespace FishMMO.Shared.WorldDesign
 			var back = new Vector3(Mathf.Sin(az) * Mathf.Cos(el), Mathf.Sin(el), -Mathf.Cos(az) * Mathf.Cos(el));
 			camera.transform.position = centre + back * distance;
 			camera.transform.LookAt(centre);
-			Capture(camera, target, Path.Combine(output, prefabName + ".png"));
-			log.Add($"{prefabName}\t{label}\t{bounds.size.x:0.0}×{bounds.size.z:0.0}×{top:0.0} m\t{triangles} tris");
+			Capture(camera, target, Path.Combine(output, name + ".png"));
+			log.Add($"{name}\t{label}\t{bounds.size.x:0.0}×{bounds.size.z:0.0}×{top:0.0} m\t{triangles} tris");
 			UnityEngine.Object.DestroyImmediate(rock);
 		}
 

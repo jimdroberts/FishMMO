@@ -665,6 +665,18 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// True for a counted detail's reduced level: a bare MeshFilter (no renderer, so nothing draws it by accident) on a
+		/// direct child named <c>LOD1</c>, <c>LOD2</c>…, which only the client's GPU detail scatter reads
+		/// (BiomeArtGenerator.WriteBush). Unity's own detail drawing ignores it and draws the root's mesh, as it should.
+		/// </summary>
+		private static bool IsDetailLevel(GameObject prefab, MeshFilter filter)
+		{
+			Transform t = filter.transform;
+			return IsCountedDetail(prefab) && t.parent == prefab.transform && t.name.StartsWith("LOD", StringComparison.Ordinal)
+				&& int.TryParse(t.name.Substring(3), out int level) && level > 0 && !filter.TryGetComponent(out Renderer _);
+		}
+
 		/// <summary>Why a prefab cannot be a mesh detail, or null when it can.</summary>
 		/// <remarks>
 		/// Unity draws a mesh detail from the root's MeshFilter and the root renderer's first
@@ -678,9 +690,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return "needs a MeshFilter with a mesh on its root";
 			}
-			if (prefab.GetComponentsInChildren<MeshFilter>(true).Length != 1)
+			foreach (MeshFilter other in prefab.GetComponentsInChildren<MeshFilter>(true))
 			{
-				return "has more than one MeshFilter; a detail draws only the root's mesh";
+				if (other != filter && !IsDetailLevel(prefab, other))
+				{
+					return "has more than one MeshFilter; a detail draws only the root's mesh";
+				}
 			}
 			if (!prefab.TryGetComponent(out MeshRenderer renderer))
 			{
@@ -772,6 +787,91 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return reach;
+		}
+
+		/// <summary>
+		/// True for a detail counted plant by plant rather than spread as cover: a shrub (its prefab name starts with
+		/// <see cref="ProceduralArtCatalogue.BushPrefix"/>). See <see cref="CalibrateCountedDetails"/>.
+		/// </summary>
+		public static bool IsCountedDetail(GameObject prefab) => prefab != null && prefab.name.StartsWith(ProceduralArtCatalogue.BushPrefix, StringComparison.Ordinal);
+
+		/// <summary>
+		/// Makes one placement of a counted detail (a shrub) hold exactly one plant, whatever its size, and takes it out
+		/// of every density scale.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// In coverage mode a cell's value is the share of it covered, and a covered cell holds Unity's coverage for the
+		/// prototype (<see cref="TerrainData.ComputeDetailCoverage"/>), which falls with the prototype's size: a 3 m bush
+		/// placed in a cell came out as a fraction of a bush, so most placements drew nothing and a rule's density meant
+		/// nothing countable. So each counted prototype's density is scaled until a cell at its rule's value holds one
+		/// instance (checked against Unity's own answer, a few rounds, since only Unity knows the formula), and the rule's
+		/// density is then plants per 100 m².
+		/// </para>
+		/// <para>
+		/// <b>No density scaling.</b> The terrain's and the quality preset's detail density thin grass, which nobody hides
+		/// in. A shrub is cover: thinned by one player's settings, someone standing in it would be in the open to them
+		/// only. The client's GPU scatter holds to that as well (FishMMO.Client DetailScatterSettings).
+		/// </para>
+		/// </remarks>
+		/// <param name="report">Where a prototype that would not calibrate is reported; null to stay quiet (every tile after the first).</param>
+		private static void CalibrateCountedDetails(TerrainData data, DetailPrototype[] prototypes, List<ScatterRule> rules, TerrainScatterReport report)
+		{
+			if (data.detailScatterMode != DetailScatterMode.CoverageMode || prototypes == null || prototypes.Length == 0)
+			{
+				return;
+			}
+			int res = Mathf.Max(1, data.detailResolution);
+			float cellArea = data.size.x / res * (data.size.z / res);
+			int maxValue = Mathf.Max(1, data.maxDetailScatterPerRes);
+			bool changed = false;
+			foreach (ScatterRule rule in rules)
+			{
+				if (rule.Carpet || rule.Rule.spawnChannel != PrefabSpawnChannel.DetailLayer)
+				{
+					continue;
+				}
+				foreach (int p in rule.Prototypes)
+				{
+					if (p < 0 || p >= prototypes.Length || !IsCountedDetail(prototypes[p].prototype))
+					{
+						continue;
+					}
+					DetailPrototype prototype = prototypes[p];
+					if (prototype.useDensityScaling)
+					{
+						prototype.useDensityScaling = false;
+						changed = true;
+					}
+					// The share of a cell one placement writes (ScatterTile's value), and the coverage that makes it one plant.
+					float unit = Mathf.Clamp(Mathf.RoundToInt(rule.DetailValue / 255f * maxValue), 1, maxValue) / (float)maxValue;
+					float wanted = 1f / (unit * cellArea);
+					float have = 0f;
+					for (int round = 0; round < 4; round++)
+					{
+						if (changed)
+						{
+							data.detailPrototypes = prototypes;
+							changed = false;
+						}
+						have = data.ComputeDetailCoverage(p);
+						if (!(have > 0f) || Mathf.Abs(have - wanted) <= wanted * 0.01f)
+						{
+							break;
+						}
+						prototype.density *= wanted / have;
+						changed = true;
+					}
+					if (report != null && !(Mathf.Abs(have - wanted) <= wanted * 0.05f))
+					{
+						report.Warnings.Add($"'{prototype.prototype.name}': {have:F3} per m² at full coverage against the {wanted:F3} that makes one plant a placement (density {prototype.density:F2}); its counts will be off.");
+					}
+				}
+			}
+			if (changed)
+			{
+				data.detailPrototypes = prototypes;
+			}
 		}
 
 		private static DetailPrototype DetailPrototypeFor(PrefabSpawnRule rule, GameObject prefab, DetailRenderMode mode, bool instanced, uint noise)
@@ -941,6 +1041,7 @@ namespace FishMMO.Shared.WorldDesign
 			data.treePrototypes = treePrototypes;
 			data.RefreshPrototypes();
 			detailResolution = data.detailResolution;
+			CalibrateCountedDetails(data, detailPrototypes, rules, firstTile ? report : null);
 			report.DetailResolution = detailResolution;
 
 			if (options.ApplyDrawSettings)

@@ -3,6 +3,9 @@
 // from — FishSampleArraySurface (FishWeatherTerrainArrayInput.hlsl) instead of four splat textures — and that
 // the splat coordinates are world-space, so there are no per-layer interpolators.
 //
+// FishMMO/Backdrop Ground compiles these same passes with FISH_TERRAIN_BACKDROP defined: a plain mesh rather
+// than a terrain, and FishBackdropSurface for its ground (FISH_GROUND_SURFACE).
+//
 // On a URP upgrade, diff the lighting half of this file against
 // Packages/com.unity.render-pipelines.universal/Shaders/Terrain/TerrainLitPasses.hlsl.
 #ifndef FISHMMO_WEATHER_TERRAIN_ARRAY_PASSES_INCLUDED
@@ -260,7 +263,7 @@ void SplatmapFragment(
     ClipHoles(IN.uvMainAndLM.xy);
 #endif
 
-    FishArraySurface ground = FishSampleArraySurface(IN.uvMainAndLM.xy, IN.positionWS);
+    FishArraySurface ground = FISH_GROUND_SURFACE(IN.uvMainAndLM.xy, IN.positionWS);
     half3 albedo = ground.albedo;
     half metallic = ground.metallic;
     half smoothness = ground.smoothness;
@@ -464,7 +467,7 @@ void DepthNormalOnlyFragment(
     #endif
 
     // The same blend the lit pass uses; only the normal survives, so the compiler drops the albedo reads.
-    FishArraySurface ground = FishSampleArraySurface(IN.uvMainAndLM.xy, IN.positionWS);
+    FishArraySurface ground = FISH_GROUND_SURFACE(IN.uvMainAndLM.xy, IN.positionWS);
 
     #if FISH_TERRAIN_TANGENT_FRAME
         half3 normalWS = TransformTangentToWorld(ground.normalTS, half3x3(-IN.tangent.xyz, IN.bitangent.xyz, IN.normal.xyz));

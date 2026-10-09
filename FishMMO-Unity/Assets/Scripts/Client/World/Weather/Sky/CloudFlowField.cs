@@ -58,6 +58,22 @@ namespace FishMMO.Client
 		private const float ShadeTurnCosine = 0.99996f;
 
 		private Texture3D field;
+
+		/// <summary>
+		/// Bound as <c>_FishCloudFlowField</c> until the flow is solved. The shaders read the field only when the rect's w
+		/// says it is there, but a compute kernel that declares a texture must have one bound to dispatch at all, and the
+		/// volumetric fog can now run before the flow is ready (for the waterfalls' mist alone, 2026-10-08): "Property
+		/// (_FishCloudFlowField) at kernel index (0) is not set".
+		/// </summary>
+		private static Texture3D placeholderField;
+
+		private static void BindIfUnset(int id)
+		{
+			if (Shader.GetGlobalTexture(id) == null)
+			{
+				Shader.SetGlobalTexture(id, Texture2D.blackTexture);
+			}
+		}
 		private Texture2D rockTexture;
 		private float[] ground;
 		private int sampled;
@@ -465,6 +481,20 @@ namespace FishMMO.Client
 			{
 				Shader.SetGlobalTexture(FieldId, field);
 			}
+			else
+			{
+				if (placeholderField == null)
+				{
+					placeholderField = new Texture3D(1, 1, 1, field != null ? field.format : TextureFormat.RGBAHalf, false)
+					{
+						name = "Cloud flow field placeholder",
+						hideFlags = HideFlags.DontSave,
+					};
+					placeholderField.SetPixel(0, 0, 0, Color.clear);
+					placeholderField.Apply(false, true);
+				}
+				Shader.SetGlobalTexture(FieldId, placeholderField);
+			}
 			// w: 1 the rock is there, 2 the flow is too. The shader reads neither below what it needs.
 			float state = fieldReady ? 2f : (rockReady ? 1f : 0f);
 			Shader.SetGlobalVector(RectId, new Vector4(corner.x, corner.y, size, state));
@@ -476,6 +506,12 @@ namespace FishMMO.Client
 			{
 				Shader.SetGlobalTexture(ShadeId, shadeTexture);
 			}
+			// The volumetric fog's compute declares these too and must have something bound to dispatch (it reads them
+			// only when the rect's flags say they are there). Only where nothing at all is bound yet: CloudTerrainMap
+			// publishes its own window under the terrain's name, and that must not be overwritten.
+			BindIfUnset(TerrainId);
+			BindIfUnset(RockId);
+			BindIfUnset(ShadeId);
 			Shader.SetGlobalVector(ShadeRectId, new Vector4(corner.x, corner.y, size, shadeReady ? 1f : 0f));
 			Shader.SetGlobalFloat(ShadeBaseId, shadeBase);
 		}

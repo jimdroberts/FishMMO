@@ -16,6 +16,7 @@
 #include "FishWaterCausticsCommon.hlsl"
 // The weather's fog, which the fog passes laid over the frame BEFORE the sea was drawn.
 #include "FishWaterFog.hlsl"
+#include "FishWaterFoam.hlsl"
 
 /// <summary>Eye-space depth of a raw depth sample, correct under an orthographic camera too.</summary>
 float WaterEyeDepth(float rawDepth)
@@ -335,11 +336,10 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		half other = abs(2.0 * phase - 1.0);
 		float2 foamUV = (flatXZ + flow * (phase * FlowCycle)) / max(0.5, _FoamScale);
 		float2 foamOtherUV = (flatXZ + flow * (phaseOther * FlowCycle)) / max(0.5, _FoamScale) + float2(0.41, 0.23);
-		half mask = lerp(
-			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV).r * 0.65
-				+ SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV * 2.7 + 0.37).r * 0.35,
-			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamOtherUV).r * 0.65
-				+ SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamOtherUV * 2.7 + 0.37).r * 0.35,
+		// The lace (the map's alpha, FishWaterFoam.hlsl): the two carried copies blended so the blend keeps its holes.
+		half lace = FishFoamBlend(
+			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV).a,
+			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamOtherUV).a,
 			other);
 
 		/* NO shoreline foam here.
@@ -369,8 +369,14 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		 * the water is still and the caps give way to the breakers' bore. */
 		float breakDepth = max(0.01, _FishWaterBreakDepth.x);
 		half fading = (1.0 - wave.calm) * smoothstep(0.5 * breakDepth, breakDepth, wave.depth);
+		half open = saturate(wave.calm + fading);
 		threshold = lerp(threshold, 0.97, _ShallowWhitecaps * fading);
-		half crest = saturate((threshold - wave.jacobian) / max(0.01, threshold)) * saturate(wave.calm + fading);
+		half crest = saturate((threshold - wave.jacobian) / max(0.01, threshold)) * open;
+		/* What the crests left: the foam memory (WaterFFT) keeps how far past the open sea's threshold each one
+		 * broke, decaying, on the same scale as the crest above. A cap is a crest that is breaking NOW, and the patch
+		 * of foam it leaves behind it as it runs on, thinning from froth to lace to strands; without the memory the
+		 * caps blinked on and off with every wave. */
+		half kept = saturate(wave.breakingKept / max(0.01, threshold)) * open;
 
 		/* Each term gets its own curve, and the sharpness is applied to the CREST term rather than
 		 * to the product. Applied afterwards it cancelled the calibration: a genuinely breaking
@@ -378,43 +384,27 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		 * zero — white caps on one crest in the frame and nowhere else. */
 		half curveTop = max(0.06, _FoamSharpness);
 		half breaking = smoothstep(0.02, curveTop, crest);
-		/* Clumped, not peppered. Scaled by the mottle, every crest kept at least 45% of its white, so each tiny
-		 * dip of the Jacobian drew a speck of its own and a calm bay came out salt-and-pepper. Thresholded against
-		 * it, a cap is a patch of white with ragged edges, and a crest that hardly breaks shows nothing; the harder
-		 * it breaks, the more of the pattern passes. */
-		half caps = smoothstep(0.62 - 0.4 * breaking, 0.86 - 0.3 * breaking, mask) * breaking;
-		/* And only as fine as a pixel can show. Past a metre or so per pixel a cap is smaller than the pixel and
-		 * the thresholded pattern aliases into crawling specks; there the caps go over to what the eye sees of a
-		 * whitecapped sea at a distance, a faint even lightening by their share. */
+		half lingering = smoothstep(0.0, 2.0 * curveTop, kept);
+		/* The COVERAGE each asks for — the share of the surface that is white — and the lace says what that much
+		 * foam looks like. A breaking crest is mostly froth; what it leaves is less and less. Past a metre or so
+		 * per pixel the lace cannot be seen and a capped sea at a distance is a faint, even lightening by the
+		 * caps' share of it (FishFoamCut), which is far less than a crest's own. */
 		float footprint = length(fwidth(flatXZ));
-		half resolved = saturate(1.0 - footprint / 0.5);
-		half whitecaps = lerp(breaking * 0.14, caps, resolved);
+		half far = saturate(footprint / 0.5);
+		half caps = max(breaking * 0.85, lingering * 0.55) * lerp(1.0, 0.2, far);
+		// The surf: the breakers' whitewater, as dense as the breaker says, up to the material's opacity.
+		half surfing = smoothstep(0.02, curveTop, surf) * _SurfFoamOpacity;
+		half coverage = max(caps, surfing);
 
-		/* The SURF is thresholded against the mottle rather than scaled by it. Scaled, as the white
-		 * caps above still are, the thinnest part of the pattern kept 45% of the foam — and the surf
-		 * saturates across its whole band, so where the waves ran into the beach the sea was one
-		 * solid white line. A breaking wave's white water is clumps of bubbles with the sea showing
-		 * between them: the harder it breaks, the more of the pattern passes (a finer octave breaks
-		 * the clumps into bubbles), the densest froth still lets a little through, and between the
-		 * clumps is only a thin veil. The shore pass's lip, which this runs into, is drawn the same
-		 * way. */
-		half surfing = smoothstep(0.02, curveTop, surf);
-		half bubbles = lerp(
-			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV * 5.3 + float2(0.19, 0.71)).r,
-			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamOtherUV * 5.3 + float2(0.19, 0.71)).r,
-			other);
-		half lace = mask * 0.7 + bubbles * 0.3;
-		half cut = 0.62 - 0.5 * surfing;
-		half froth = smoothstep(cut, cut + 0.3, lace) * _SurfFoamOpacity;
-		half surfFoam = max(froth, _SurfFoamVeil * smoothstep(0.05, 0.6, surfing)) * smoothstep(0.02, 0.15, surfing);
-		half foam = max(whitecaps, surfFoam);
-
-		/* Foam is a rough white surface: it takes the sky as diffuse ambient, not as a reflection. And
-		 * a thin one: with the sun behind it, light comes THROUGH it, as through the crest it rides on.
-		 * Lit by the front alone, the foam on a back-lit breaker's face drew duller than the glowing
-		 * water under it — dark lace on a bright wave. The same back-light the scatter uses. */
-		half3 foamLit = _FoamColor.rgb * (lightColor * (NdotL * 0.6 + back * 0.35) + _GlossyEnvironmentColor.rgb * 0.5 + 0.1);
-		color = lerp(color, foamLit, foam);
+		/* Foam is a rough white surface: it takes the sky as diffuse ambient, not as a reflection, and the
+		 * sun wraps round it. And a thin one: with the sun behind it, light comes THROUGH it, as through
+		 * the crest it rides on. Lit by the front alone, the foam on a back-lit breaker's face drew duller
+		 * than the glowing water under it — dark lace on a bright wave. The same back-light the scatter
+		 * uses. Its own light (a constant 0.1) is gone: foam at night is as dark as the night. */
+		FishFoam foamCut = FishFoamCut(lace, coverage, footprint, _FoamScale);
+		half3 foamLit = FishFoamLight(_FoamColor.rgb, lightColor, NdotL, back, _GlossyEnvironmentColor.rgb * 0.6);
+		half foam;
+		color = FishFoamOver(color, foamCut, foamLit, foam);
 		foamAlpha = foam;
 	}
 

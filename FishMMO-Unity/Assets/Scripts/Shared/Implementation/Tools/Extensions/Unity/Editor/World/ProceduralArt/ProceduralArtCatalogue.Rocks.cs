@@ -93,6 +93,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return MeshPath(CliffRocks.MeshName(in piece, lod));
 			}
+			foreach ((string style, int variant, int lod) in CliffSections.AllMeshes())
+			{
+				yield return MeshPath(CliffSections.MeshName(style, variant, lod));
+			}
 		}
 
 		/// <summary>

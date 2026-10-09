@@ -39,6 +39,7 @@ Material:
     - _BreakerHeight: 1
     - _Clarity: 0.4
     - _ClarityScale: 500
+    - _DebugView: 0
     - _EdgeFade: 0.5
     - _FoamScale: 9
     - _FoamSharpness: 0.28
@@ -54,6 +55,8 @@ Material:
     - _ShoreDepth: 2
     - _Smoothness: 0.96
     - _SpecularStrength: 1.6
+    - _SurfFoamOpacity: 0.8
+    - _SurfFoamVeil: 0.22
     - _SurfStrength: 1.4
     - _WaveFadeEnd: 4000
     - _WaveFadeStart: 900

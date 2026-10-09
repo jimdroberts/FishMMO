@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared;
+using Unity.Profiling;
 
 namespace FishMMO.Client
 {
@@ -49,14 +50,13 @@ namespace FishMMO.Client
 		private static readonly int ParamsId = Shader.PropertyToID("_FishGroundColourParams");
 		private static readonly int ShapeId = Shader.PropertyToID("_FishGroundColourShape");
 		private static readonly int DistanceBlendId = Shader.PropertyToID("_FishDistanceBlend");
-		private static readonly int ContactBlendId = Shader.PropertyToID("_FishContactBlend");
 		private static readonly int ContactLargeId = Shader.PropertyToID("_FishContactLarge");
 
 		/// <summary>The blend settings: the Weather Render Profile's "Ground colour under vegetation", read every frame (live in the inspector).</summary>
 		private static float rootBlend = 1f, plantBlend = 0.9f, blendHeight = 0.8f, bladeDetail = 0.25f, crownStart = 1.5f, crownEnd = 3f;
 		private static Vector4 distanceBlend = new Vector4(80f, 600f, 0.6f, 0.35f);
-		/// <summary>Contact with the ground (FishGroundColour.hlsl FishContactApply): band height, colour, normal, on — scattered details, and trees/rocks.</summary>
-		private static Vector4 contactBlend = new Vector4(0.15f, 0.8f, 0.7f, 1f), contactLarge = new Vector4(0.5f, 0.75f, 0.6f, 1f);
+		/// <summary>Trees' and rocks' contact with the ground (FishGroundColour.hlsl FishGroundContact): band height, strength, unused, on.</summary>
+		private static Vector4 contactLarge = new Vector4(0.5f, 0.75f, 0.6f, 1f);
 
 		/// <summary>Takes the profile's settings, republishing when one changed.</summary>
 		private static void ReadProfile()
@@ -74,11 +74,9 @@ namespace FishMMO.Client
 				distanceBlend = distance;
 				Publish();
 			}
-			var contact = new Vector4(Mathf.Max(0.01f, p.ContactBlendHeight), Mathf.Clamp01(p.ContactColour), Mathf.Clamp01(p.ContactNormal), p.ContactBlend ? 1f : 0f);
-			var large = new Vector4(Mathf.Max(0.01f, p.ContactBlendHeightLarge), Mathf.Clamp01(p.ContactColourLarge), Mathf.Clamp01(p.ContactNormalLarge), p.ContactBlendLarge ? 1f : 0f);
-			if (contact != contactBlend || large != contactLarge)
+			var large = new Vector4(Mathf.Max(0.01f, p.ContactBlendHeightLarge), Mathf.Clamp01(p.ContactColourLarge), 0f, p.ContactBlendLarge ? 1f : 0f);
+			if (large != contactLarge)
 			{
-				contactBlend = contact;
 				contactLarge = large;
 				Publish();
 			}
@@ -192,8 +190,12 @@ namespace FishMMO.Client
 
 		private static void OnSceneUnloaded(Scene scene) => dirty = true;
 
+		/// <summary>This system's once-a-frame work before the cameras render, named in the profiler (StartupTimeline reads it).</summary>
+		private static readonly ProfilerMarker ContextMarker = new ProfilerMarker("GroundColourMap.BeginContext");
+
 		private static void OnBeginContextRendering(ScriptableRenderContext context, List<Camera> cameras)
 		{
+			using var contextScope = ContextMarker.Auto();
 			ReadProfile();
 			// Terrains enable themselves during the frame a scene loads: build on the next frame's render.
 			if (!dirty && waitingForArrays && waitedFrames < ArrayWaitFrames && ++waitedFrames % 15 == 0 && ArraysReady())
@@ -216,7 +218,6 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(ParamsId, new Vector4(on ? 1f : 0f, debugMode, rootBlend, plantBlend));
 			Shader.SetGlobalVector(ShapeId, new Vector4(blendHeight, crownStart, crownEnd, bladeDetail));
 			Shader.SetGlobalVector(DistanceBlendId, distanceBlend);
-			Shader.SetGlobalVector(ContactBlendId, contactBlend);
 			Shader.SetGlobalVector(ContactLargeId, contactLarge);
 		}
 

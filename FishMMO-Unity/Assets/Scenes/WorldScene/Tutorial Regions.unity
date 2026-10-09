@@ -1689,6 +1689,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!114 &674862118
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1701,9 +1702,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -1741,6 +1746,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &723261682
 GameObject:
   m_ObjectHideFlags: 0
@@ -2338,6 +2344,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!114 &1162634457
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2350,9 +2357,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -2390,6 +2401,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &1204076224
 GameObject:
   m_ObjectHideFlags: 0
@@ -2625,6 +2637,7 @@ GameObject:
   - component: {fileID: 1458363163}
   - component: {fileID: 1458363162}
   - component: {fileID: 1458363161}
+  - component: {fileID: 1458363164}
   m_Layer: 0
   m_Name: WorldSceneSettings
   m_TagString: Untagged
@@ -2679,6 +2692,34 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1458363164
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1458363160}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4458062391465654f95653bd76754463, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldDayNightCycle
+  DayNightCycle: 1
+  SkyOverride: {fileID: 0}
+  RotateObjects: []
+  DayObjects: []
+  NightObjects: []
+  FadeThreshold: 1
+  DayFadeObjects: []
+  NightFadeObjects: []
+  isDaytime: 1
+  onSceneLoadTriggers: []
+  onDayStartTriggers: []
+  onNightStartTriggers: []
+  onCelestialEvents: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &1568098829
 GameObject:
   m_ObjectHideFlags: 0
@@ -2894,6 +2935,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!114 &1580615194
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2906,9 +2948,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -2946,6 +2992,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &1757139382
 GameObject:
   m_ObjectHideFlags: 0
@@ -3046,6 +3093,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!114 &1757139389
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3058,9 +3106,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -3098,6 +3150,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &1800892447
 GameObject:
   m_ObjectHideFlags: 0
@@ -3426,6 +3479,7 @@ MonoBehaviour:
   Layers:
     serializedVersion: 2
     m_Bits: 65
+  InvokeStayOnEnter: 0
 --- !u!114 &1856083147
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3438,9 +3492,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -3478,6 +3536,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!1 &1915681912
 GameObject:
   m_ObjectHideFlags: 0

@@ -570,14 +570,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Weather
 		/// </summary>
 		private void IntegrateCover(SceneWeather sw, uint tick, float seconds)
 		{
-			// The same five points the clients integrate between snapshots (SceneCoverSampling).
-			SceneCoverSampling.Sample(sw.Timeline, sw.Settings, sw.Scene, tick, out WeatherFrame frame, out float temperature);
-			double now = sw.Timeline.WorldSecondsAt(tick);
-			// Over the world time that passed, not the real: the ground holds while the world is held.
-			float worldSeconds = (float)Math.Max(0.0, Math.Min(120.0, now - sw.Timeline.CoverSeconds));
-			double coverHours = now / 3600.0;
-			sw.Timeline.Cover.Integrate(frame, temperature, worldSeconds, SceneTime.IsDaylight(sw.Settings, coverHours) ? 1f : 0f);
-			sw.Timeline.CoverSeconds = now;
+			// Over the world time that passed, not the real, from the same five points the clients integrate
+			// between snapshots: the ground holds while the world is held, races when it is raced, and comes
+			// through the weather of whatever hours an admin's jump skipped (SceneCoverSampling.Advance).
+			SceneCoverSampling.Advance(sw.Timeline, sw.Settings, sw.Scene, sw.Timeline.WorldSecondsAt(tick));
 			// The resend stays on real time: it is how often clients are told, not weather.
 			sw.CoverResync -= seconds;
 			if (sw.CoverResync <= 0f)

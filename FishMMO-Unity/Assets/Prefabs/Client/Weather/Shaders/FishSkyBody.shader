@@ -70,6 +70,11 @@ Shader "FishMMO/Sky Body"
             Varyings Vert(Attributes input)
             {
                 Varyings output = (Varyings)0;
+                // The object matrix is the turn the sky has made since the mesh was built (SkySystem.TurnBodies):
+                // every direction handed in goes round by it, so the bodies keep pace with the stars between rebuilds.
+                input.direction = TransformObjectToWorldDir(input.direction, false);
+                input.lighting.xyz = TransformObjectToWorldDir(input.lighting.xyz, false);
+                input.axis.xyz = TransformObjectToWorldDir(input.axis.xyz, false);
                 float3 dir = normalize(input.direction);
                 float kind = input.shape.y;
                 float distance = 4000.0;

@@ -68,6 +68,8 @@ namespace FishMMO.Client
 		public const string AnisotropicFilteringKey = "Anisotropic Filtering";
 		/// <summary>Edge smoothing mode. Stored as the ordinal of ClientCameraSettings.AntialiasingOption.</summary>
 		public const string AntialiasingKey = "Antialiasing";
+		/// <summary>Multisampling of the 3D view. Stored as the ordinal of ClientDisplaySettings.MsaaOption.</summary>
+		public const string MsaaKey = "MSAA";
 		/// <summary>Configuration key for the resolution width setting.</summary>
 		public const string ResolutionWidthKey = "Resolution Width";
 		/// <summary>Configuration key for the resolution height setting.</summary>

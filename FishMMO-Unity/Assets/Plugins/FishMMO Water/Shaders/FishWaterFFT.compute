@@ -28,7 +28,9 @@ RWTexture2D<float4> _H0;            // xy h0(k), zw conj(h0(-k))
 RWTexture2D<float4> _SpectrumA;     // xy height, zw Dx
 RWTexture2D<float4> _SpectrumB;     // xy Dz, zw unused
 RWTexture2D<float4> _Displacement;  // xyz displacement, w folding
-RWTexture2D<float4> _Derivatives;   // xy slope, z folding, w unused
+RWTexture2D<float4> _Derivatives;   // xy slope, z folding, w how hard it broke lately: the foam memory (Assemble)
+float _FoamKeep;                     // exp(-dt / lifetime): how much of the last evaluation's memory survives to this one
+float _FoamStart;                    // the folding (1 - Jacobian) past which a crest breaks: where the white caps start
 
 // ── Stage 1: the static spectrum ──────────────────────────────────────
 
@@ -145,5 +147,12 @@ void Assemble(uint3 id : SV_DispatchThreadID)
 		_SpectrumB[id.xy], _SpectrumB[east], _SpectrumB[west], _SpectrumB[north], _SpectrumB[south],
 		displacement, derivatives);
 	_Displacement[id.xy] = displacement;
+	/* The foam memory. Where a wave broke, its foam stays on the water as the crest runs on: in the tile's own
+	 * (undisplaced) frame the water itself barely moves, so keeping the folding here leaves a trail where the
+	 * crest went, which then thins away. Read back before the write (the same texel, the same thread; this kernel
+	 * already reads its RW spectrum textures). Without it the white caps were the crest's folding of this instant
+	 * only, and blinked on and off with every wave. */
+	float breaking = max(0.0, 1.0 - derivatives.z - _FoamStart);
+	derivatives.w = max(breaking, _Derivatives[id.xy].w * _FoamKeep);
 	_Derivatives[id.xy] = derivatives;
 }

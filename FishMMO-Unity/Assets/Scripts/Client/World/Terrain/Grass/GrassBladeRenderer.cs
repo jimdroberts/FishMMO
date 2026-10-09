@@ -85,6 +85,7 @@ namespace FishMMO.Client
 		};
 		private static readonly int HeightmapId = Shader.PropertyToID("_GrassHeightmap");
 		private static readonly int Density0Id = Shader.PropertyToID("_GrassDensity0");
+		private static readonly int WaterId = Shader.PropertyToID("_GrassWater");
 		private static readonly int SeaId = Shader.PropertyToID("_GrassSea");
 		private static readonly int FishSeaId = Shader.PropertyToID("_FishSea");
 		private static readonly int Density1Id = Shader.PropertyToID("_GrassDensity1");
@@ -504,7 +505,7 @@ namespace FishMMO.Client
 					continue;
 				}
 				GrassTypeTuning tuning = s.TuningFor(type.Name) ?? type.Tuning;
-				typeShape[t] = new Vector4(type.Height * (tuning?.HeightScale ?? 1f) / Mathf.Max(0.05f, type.Tuning?.HeightScale ?? 1f), Mathf.Clamp(tuning?.Density ?? 1f, 0.01f, 1f), Mathf.Clamp(tuning?.ClumpPull ?? 0.3f, 0f, 0.95f), 0f);
+				typeShape[t] = new Vector4(type.Height * (tuning?.HeightScale ?? 1f) / Mathf.Max(0.05f, type.Tuning?.HeightScale ?? 1f), Mathf.Clamp(tuning?.Density ?? 1f, 0.01f, 1f), Mathf.Clamp(tuning?.ClumpPull ?? 0.3f, 0f, 0.95f), Mathf.Max(0f, tuning?.Wade ?? 0f));
 				typeRoot[t] = new Vector4(type.Root.r, type.Root.g, type.Root.b, 0f);
 				typeTip[t] = new Vector4(type.Tip.r, type.Tip.g, type.Tip.b, s.BladeWidth * (tuning?.Width ?? 1f));
 				typeHealthy[t] = new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread);
@@ -800,8 +801,9 @@ namespace FishMMO.Client
 			}
 			cmd.SetComputeVectorParam(compute, CameraId, new Vector4(eye.x, eye.y, eye.z, grassDistance));
 			// The sea (SeaLifeSystem's _FishSea, which a compute shader never sees as a global): no land grass below its lowest tide.
+			// Then the banks of rivers and lakes: how far above their water a blade may root, and over how much more it thins in.
 			Vector4 sea = Shader.GetGlobalVector(FishSeaId);
-			cmd.SetComputeVectorParam(compute, SeaId, new Vector4(sea.y, sea.z, 0f, 0f));
+			cmd.SetComputeVectorParam(compute, SeaId, new Vector4(sea.y, sea.z, s.BankClearance, Mathf.Max(0.01f, s.BankThinning)));
 			cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
 			cmd.SetComputeVectorParam(compute, LightId, shadowDistance > 0f ? new Vector4(view.LightDirection.x, view.LightDirection.y, view.LightDirection.z, shadowDistance) : Vector4.zero);
 			cmd.SetComputeVectorParam(compute, LatticeId, new Vector4(cell, Mathf.Max(0.1f, s.ClumpMetres), s.ClumpFacing, s.ClumpHeightVariation));
@@ -842,6 +844,7 @@ namespace FishMMO.Client
 					cmd.SetComputeTextureParam(compute, generateKernel, HeightmapId, group.Heights);
 					cmd.SetComputeTextureParam(compute, generateKernel, Density0Id, group.Density0);
 					cmd.SetComputeTextureParam(compute, generateKernel, Density1Id, group.Density1);
+					cmd.SetComputeTextureParam(compute, generateKernel, WaterId, group.Water);
 					if (!SkipTerrainColour)
 					{
 						cmd.SetComputeTextureParam(compute, generateKernel, SurfaceLayersId, group.Surface);
@@ -860,6 +863,7 @@ namespace FishMMO.Client
 				cmd.SetComputeTextureParam(compute, generateKernel, HeightmapId, group.Heights);
 				cmd.SetComputeTextureParam(compute, generateKernel, Density0Id, group.Density0);
 				cmd.SetComputeTextureParam(compute, generateKernel, Density1Id, group.Density1);
+				cmd.SetComputeTextureParam(compute, generateKernel, WaterId, group.Water);
 				if (!SkipTerrainColour)
 				{
 					cmd.SetComputeTextureParam(compute, generateKernel, SurfaceLayersId, group.Surface);

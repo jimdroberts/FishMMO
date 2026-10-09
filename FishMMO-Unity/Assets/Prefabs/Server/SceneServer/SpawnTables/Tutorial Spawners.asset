@@ -35,6 +35,12 @@ MonoBehaviour:
     BoundingBoxSize: {x: 50, y: 15, z: 50}
     Spawnables:
     - rid: 1
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   - Name: Ability Crafter Spawner
     Position: {x: -50, y: 0, z: 50}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -55,6 +61,12 @@ MonoBehaviour:
     BoundingBoxSize: {x: 50, y: 15, z: 50}
     Spawnables:
     - rid: 2
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   - Name: General Merchant Spawner
     Position: {x: -50, y: 0, z: -50}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -75,6 +87,12 @@ MonoBehaviour:
     BoundingBoxSize: {x: 50, y: 15, z: 50}
     Spawnables:
     - rid: 3
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   - Name: World Item Spawner
     Position: {x: 50, y: 0, z: -50}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -95,6 +113,12 @@ MonoBehaviour:
     BoundingBoxSize: {x: 50, y: 15, z: 50}
     Spawnables:
     - rid: 4
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
   references:
     version: 2
     RefIds:
@@ -116,6 +140,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 2
@@ -136,6 +161,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 3
@@ -156,6 +182,7 @@ MonoBehaviour:
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
         FactionOverride: {fileID: 0}
+        PackRole: 3
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4

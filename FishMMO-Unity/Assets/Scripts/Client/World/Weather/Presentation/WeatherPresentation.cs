@@ -45,6 +45,7 @@ namespace FishMMO.Client
 		private SkyOcclusionMap occlusion;
 		private WeatherCoverMap coverMap;
 		private WeatherAudioPresenter audioPresenter;
+		private WaterfallPresenter waterfalls;
 		private WindZone wind;
 
 		public static WeatherPresentation Instance => instance;
@@ -101,6 +102,7 @@ namespace FishMMO.Client
 			occlusion = occlusion ?? new SkyOcclusionMap();
 			coverMap = coverMap ?? new WeatherCoverMap();
 			audioPresenter = audioPresenter ?? new WeatherAudioPresenter(transform);
+			waterfalls = waterfalls ?? new WaterfallPresenter(transform);
 			if (wind == null)
 			{
 				Transform existing = transform.Find("Weather Wind");
@@ -128,6 +130,7 @@ namespace FishMMO.Client
 			occlusion?.Dispose();
 			coverMap?.Dispose();
 			audioPresenter?.Dispose();
+			waterfalls?.Dispose();
 			FogComposer.SetWeather(0f, Color.gray, 0f, 1000f);
 			WeatherShaderGlobals.Clear();
 			instance = null;
@@ -228,6 +231,9 @@ namespace FishMMO.Client
 		private void Step(float deltaTime)
 		{
 			EnsureParts();
+			// The falls' wet rock and their roar are not weather: they go on whether or not there is a
+			// profile to show the weather with, so they are presented ahead of the test for one.
+			waterfalls.Update(TargetCamera != null ? TargetCamera : Camera.main, deltaTime);
 			WeatherRenderProfile profile = ResolveProfile();
 			if (profile == null)
 			{
@@ -281,7 +287,7 @@ namespace FishMMO.Client
 				WeatherTimeline ground = context.Timeline;
 				bool reseed = ground != null && (!ReferenceEquals(ground, coverTimeline) || ground.Generation != coverGeneration);
 				coverMap.Update(ground, context.Settings, camera.transform.position, (uint)context.Tick,
-					context.Temperature, dt, context.Cover, reseed, sunlight: context.IsDaylight ? 1f : 0f);
+					dt, context.Cover, reseed);
 				if (reseed)
 				{
 					coverTimeline = ground;

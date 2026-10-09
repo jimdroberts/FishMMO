@@ -14,7 +14,10 @@
 //                         renderer's rules), distance thinning and the edge fade, frustum / sun-swept cull, append
 //   FishScatterFinalize   each indirect command's instanceCount = min(count, capacity)
 //
-// Slots: type * 2 + view (0 camera, 1 shadow casters). A slot never overflows: an append past its capacity is dropped
+// Slots: (type * 3 + level) * 2 + view (0 camera, 1 shadow casters; DetailScatterRenderer.SlotOf). Most types draw level 0
+// only. A bush (DetailScatterSettings.BushPrefix) draws up to three levels, stepping at metres per metre of its own height
+// and cross-fading over a band (DetailScatterMath.SelectLevel), to a reach set by its height alone, never thinned: it is
+// cover, and must stand the same for every player whatever their settings. A slot never overflows: an append past its capacity is dropped
 // (the CPU sizes it from the exact upper bound of the blocks it listed, so only the per-slot cap can drop anything).
 //
 // Portable (WebGPU, Vulkan, D3D11/12, Metal, GLCore): no wave intrinsics; atomics only on a RWByteAddressBuffer;
@@ -39,7 +42,7 @@
 struct FishInstance { float4 row0; float4 row1; float4 row2; };   // 48 bytes (FishIndirectInstancing.hlsl)
 struct FishVisible { uint index; float lodFade; };                 // 8 bytes
 struct ScatterItem { int blockX; int blockZ; uint packed; uint terrain; };   // packed: main 1, shadow 2, nx 4 bits from 2, nz 4 bits from 6
-struct ScatterModel { float4 sphere; float4 extra; };              // sphere: local centre xyz, radius; extra: x foot radius, y salt (bits), z casts shadows (0/1)
+struct ScatterModel { float4 sphere; float4 extra; float4 lod; };  // sphere: local centre xyz, radius; extra: x foot radius, y salt (bits), z casts shadows (0/1); lod: x levels, y bush (0/1), z mesh top (m)
 
 StructuredBuffer<ScatterItem> _ScatterItems;
 StructuredBuffer<uint> _ScatterTable;           // DetailScatterAtlas.WriteTable: SCATTER_TERRAIN_UINTS per terrain
@@ -55,7 +58,9 @@ Texture2DArray<float4> _ScatterDensity;         // two slices a terrain: channel
 float4 _ScatterCamera;                          // xyz position
 float4 _ScatterPlanes[6];                       // inside when dot(n, p) + w >= 0
 float4 _ScatterLight;                           // xyz the sun's direction of travel, w shadow distance (0 none)
-float4 _ScatterThin;                            // x thin start (m), y share kept at the draw distance, z edge fade band (share of the distance)
+float4 _ScatterThin;                            // x thin start (m), y share kept at the draw distance, z edge fade band (share of the distance), w the farthest a bush reaches (m)
+float4 _ScatterBushLod;                         // x level 0 -> 1, y level 1 -> 2 (metres per metre of height), z cross-fade band (share of a level's reach)
+float4 _ScatterBushReach;                       // x draw metres per metre of height, y min, z max
 uint _ScatterItemOffset;
 uint _ScatterItemCount;
 uint _ScatterSlotCount;
@@ -189,6 +194,40 @@ bool ScatterSweptSphereVisible(float3 c, float r, float3 d, float l)
     return inside;
 }
 
+uint ScatterSlot(uint type, uint level, uint view)
+{
+    return (type * 3u + level) * 2u + view;
+}
+
+// DetailScatterMath.SelectLevel: the level an instance draws (fade -f in a band, 0 outside), and the one it fades into
+// (partner, fade +f; -1 none). levels 1 always draws level 0 with no partner.
+uint ScatterSelectLevel(float d, float height, uint levels, out float fade, out int partner, out float partnerFade)
+{
+    fade = 0.0;
+    partner = -1;
+    partnerFade = 0.0;
+    uint level = 0u;
+    if (levels > 1u)
+    {
+        float end0 = _ScatterBushLod.x * height;
+        float end1 = _ScatterBushLod.y * height;
+        level = d < end0 ? 0u : (levels > 2u && d < end1 ? 1u : levels - 1u);
+        if (level < levels - 1u)
+        {
+            float end = level == 0u ? end0 : end1;
+            float width = _ScatterBushLod.z * end;
+            float f = width > 0.0 ? (d - (end - width)) / width : 0.0;
+            if (f > 0.0)
+            {
+                fade = -f;
+                partner = (int)level + 1;
+                partnerFade = f;
+            }
+        }
+    }
+    return level;
+}
+
 void ScatterEmit(uint slot, FishInstance instance, float fade)
 {
     uint at;
@@ -250,7 +289,8 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
     float3 eye = _ScatterCamera.xyz;
     // Nothing in a block whose nearest ground point is past the distance (in the ground plane: never more than the 3D one).
     float2 nearest = clamp(eye.xz - _TerrainOrigin.xz, blockMin, blockMax);
-    if (distance(nearest, eye.xz - _TerrainOrigin.xz) > distanceLimit)
+    // A terrain's own distance is the detail distance; its bushes may reach further (their own reach, w).
+    if (distance(nearest, eye.xz - _TerrainOrigin.xz) > max(distanceLimit, _ScatterThin.w))
     {
         return;
     }
@@ -286,6 +326,8 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
         ScatterModel model = _ScatterModels[type];
         uint salt = asuint(model.extra.y);
         bool casts = model.extra.z > 0.5;
+        bool bush = model.lod.y > 0.5;
+        uint levels = clamp((uint)(model.lod.x + 0.5), 1u, 3u);
 
         // DetailScatterMath.Count: the whole part, plus one when the block's coin lands under the fraction.
         float stored = min(expected, (float)SCATTER_MAX_PER_BLOCK);
@@ -300,29 +342,32 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
             float2 worldXZ = _TerrainOrigin.xz + local;
             float3 position = float3(worldXZ.x, ScatterHeightAt(local), worldXZ.y);
             float d = distance(position, eye);
-            if (d > distanceLimit)
+            // Size by the noise (neighbours share it): a bush's reach and level steps go by its height as placed.
+            float noise = ScatterNoise(worldXZ.x * noiseSpread, worldXZ.y * noiseSpread, seed);
+            float width = lerp(widthRange.x, widthRange.y, noise);
+            float height = lerp(heightRange.x, heightRange.y, noise);
+            float tall = model.lod.z * height;
+            float limit = bush ? clamp(tall * _ScatterBushReach.x, _ScatterBushReach.y, _ScatterBushReach.z) : distanceLimit;
+            if (d > limit)
             {
                 continue;
             }
-            // Distance thinning (DetailScatterMath.Keep / ThinFade) and the dissolve at the distance's edge.
+            // Distance thinning (DetailScatterMath.Keep / ThinFade; never a bush) and the dissolve at the distance's edge.
             float keep = 1.0;
-            if (_ScatterThin.y < 1.0 && d > _ScatterThin.x)
+            if (!bush && _ScatterThin.y < 1.0 && d > _ScatterThin.x)
             {
-                keep = lerp(1.0, _ScatterThin.y, saturate((d - _ScatterThin.x) / max(1e-3, distanceLimit - _ScatterThin.x)));
+                keep = lerp(1.0, _ScatterThin.y, saturate((d - _ScatterThin.x) / max(1e-3, limit - _ScatterThin.x)));
             }
             float thin = keep >= 1.0 ? 0.0 : saturate(1.0 - (keep - ScatterPositionHash(position)) / SCATTER_THIN_BAND);
-            float band = max(1e-3, _ScatterThin.z * distanceLimit);
-            float edge = saturate((d - (distanceLimit - band)) / band);
+            float band = max(1e-3, _ScatterThin.z * limit);
+            float edge = saturate((d - (limit - band)) / band);
             float fadeOut = max(thin, edge);
             if (fadeOut >= 1.0)
             {
                 continue;
             }
 
-            // Size by the noise (neighbours share it), the turn by the hash.
-            float noise = ScatterNoise(worldXZ.x * noiseSpread, worldXZ.y * noiseSpread, seed);
-            float width = lerp(widthRange.x, widthRange.y, noise);
-            float height = lerp(heightRange.x, heightRange.y, noise);
+            // The turn by the hash.
             float yaw = ScatterUnit(h, 2u) * 6.2831853;
             float cy = cos(yaw), sy = sin(yaw);
             // Unity's turn about +Y (Quaternion.AngleAxis(yaw, up)): x' = x cos + z sin, z' = -x sin + z cos.
@@ -360,10 +405,21 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
 
             float3 centre = position + mul(rotation, model.sphere.xyz * scale);
             float radius = model.sphere.w * max(width, height);
-            float fade = -fadeOut;
+            // The level and its cross-fade partner; the dissolve at the reach's edge on a level fading alone.
+            float fade, partnerFade;
+            int partner;
+            uint level = ScatterSelectLevel(d, tall, levels, fade, partner, partnerFade);
+            if (partner < 0)
+            {
+                fade = -max(-fade, fadeOut);
+            }
             if (main && ScatterSphereVisible(centre, radius))
             {
-                ScatterEmit((uint)type * 2u, instance, fade);
+                ScatterEmit(ScatterSlot((uint)type, level, 0u), instance, fade);
+                if (partner >= 0)
+                {
+                    ScatterEmit(ScatterSlot((uint)type, (uint)partner, 0u), instance, partnerFade);
+                }
             }
             if (shadow && casts && shadowDistance > 0.0 && d <= shadowDistance + radius)
             {
@@ -372,7 +428,11 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
                 float sweep = min(shadowDistance, 2.0 * radius / down);
                 if (ScatterSweptSphereVisible(centre, radius, l, sweep))
                 {
-                    ScatterEmit((uint)type * 2u + 1u, instance, fade);
+                    ScatterEmit(ScatterSlot((uint)type, level, 1u), instance, fade);
+                    if (partner >= 0)
+                    {
+                        ScatterEmit(ScatterSlot((uint)type, (uint)partner, 1u), instance, partnerFade);
+                    }
                 }
             }
         }

@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests
 		{
 			"TerrainTreeInstancing", "TerrainTreeModel", "TerrainTreeField", "TerrainTreeMath",
 			"TerrainDetailInstancing", "TerrainDetailModel", "TerrainDetailField", "TerrainDetailMath",
-			"TerrainGpuRenderer", "TerrainGpuMath", "TerrainInstancingShared", "FishInstance", "FishVisible", "RangeAllocator",
+			"TerrainGpuRenderer", "TerrainGpuMath", "TerrainInstancingShared", "FishInstance", "FishVisible", "RangeAllocator", "TrunkSkirt",
 		};
 		private static readonly float[] TreeLods = { 0.25f, 0.08f, 0.002f };
 

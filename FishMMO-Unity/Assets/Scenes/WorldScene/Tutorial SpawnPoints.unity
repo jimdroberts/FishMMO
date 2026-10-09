@@ -565,6 +565,7 @@ GameObject:
   - component: {fileID: 558696556}
   - component: {fileID: 558696555}
   - component: {fileID: 558696557}
+  - component: {fileID: 558696558}
   m_Layer: 0
   m_Name: WorldSceneSettings
   m_TagString: Untagged
@@ -619,6 +620,34 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   BoundarySize: {x: 180, y: 50, z: 180}
+--- !u!114 &558696558
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 558696554}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4458062391465654f95653bd76754463, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldDayNightCycle
+  DayNightCycle: 1
+  SkyOverride: {fileID: 0}
+  RotateObjects: []
+  DayObjects: []
+  NightObjects: []
+  FadeThreshold: 1
+  DayFadeObjects: []
+  NightFadeObjects: []
+  isDaytime: 1
+  onSceneLoadTriggers: []
+  onDayStartTriggers: []
+  onNightStartTriggers: []
+  onCelestialEvents: []
+  references:
+    version: 2
+    RefIds: []
 --- !u!1 &559917514
 GameObject:
   m_ObjectHideFlags: 0
@@ -1414,9 +1443,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
+  _localReconcileCorrectionType: 2
   _graphicalObject: {fileID: 0}
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
@@ -1454,6 +1487,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
+  _initializedTimestamp: 0
 --- !u!4 &1764671041
 Transform:
   m_ObjectHideFlags: 0

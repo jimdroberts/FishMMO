@@ -1580,7 +1580,8 @@ float4 _FishCloudDebug;
 // light march's sample positions turn with.
 float _FishCloudFramePhase;
 // x the most optical depth one step may take in cloud (0: the default, 0.35); y the most a step may grow
-// inside cloud, as a multiple of its base (0: the default, 2). From the profile's diagnostics.
+// inside cloud, as a multiple of its base (0: the default, 2); w the diagnostics' Max March Distance, a hard cap on
+// every ray for testing what the clouds cost by distance (m; 0 none). From the profile's diagnostics.
 float4 _FishCloudStepTau;
 
 float FishCloudPhaseMie(float cosAngle, float diameter)
@@ -2040,6 +2041,12 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     }
     float shellFar = far;
     far = min(far, depth);
+    // The diagnostics' test cap (Max March Distance): no ray marches past it. Only where it ends: the steps stay sized
+    // from the whole ray, so the cloud within the cap costs what it costs uncapped.
+    if (_FishCloudStepTau.w > 0.0)
+    {
+        far = min(far, _FishCloudStepTau.w);
+    }
     near = max(near, 0.0);
     // Where the ray itself begins in the shell, for what is about the camera (its immersion in fog); and the
     // whole ray's length, which the steps are sized from, before a far band moves the start on.

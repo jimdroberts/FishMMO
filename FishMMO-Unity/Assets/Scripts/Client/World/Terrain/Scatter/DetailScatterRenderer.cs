@@ -24,6 +24,15 @@ namespace FishMMO.Client
 		/// <summary>Views per type: the camera (0) and the shadow casters (1).</summary>
 		public const int Views = 2;
 
+		/// <summary>Levels of detail per type (most types draw only level 0; a bush draws three).</summary>
+		public const int Levels = DetailScatterSettings.MaxLevels;
+
+		/// <summary>Slots per type: one per level and view.</summary>
+		public const int SlotsPerType = Levels * Views;
+
+		/// <summary>The slot of a type's level in a view (FishDetailScatter.compute ScatterSlot).</summary>
+		public static int SlotOf(int type, int level, int view) => (type * Levels + level) * Views + view;
+
 		[StructLayout(LayoutKind.Sequential)]
 		private struct Item
 		{
@@ -35,7 +44,7 @@ namespace FishMMO.Client
 		[StructLayout(LayoutKind.Sequential)]
 		private struct ModelData
 		{
-			public const int Stride = 32;
+			public const int Stride = 48;
 			/// <summary>The mesh's bounding sphere in its own space: centre, radius.</summary>
 			public Vector4 Sphere;
 			/// <summary>The compute's <c>extra</c>: x foot radius (m), y the salt (its raw bits, read with asuint), z casts shadows (0/1).</summary>
@@ -43,6 +52,8 @@ namespace FishMMO.Client
 			public uint Salt;
 			public float CastsShadows;
 			public float Padding;
+			/// <summary>The compute's <c>lod</c>: x levels (1..3), y bush (0/1), z the mesh's top at scale 1 (m).</summary>
+			public Vector4 Lod;
 		}
 
 		private struct Command
@@ -71,6 +82,8 @@ namespace FishMMO.Client
 		private static readonly int PlanesId = Shader.PropertyToID("_ScatterPlanes");
 		private static readonly int LightId = Shader.PropertyToID("_ScatterLight");
 		private static readonly int ThinId = Shader.PropertyToID("_ScatterThin");
+		private static readonly int BushLodId = Shader.PropertyToID("_ScatterBushLod");
+		private static readonly int BushReachId = Shader.PropertyToID("_ScatterBushReach");
 		private static readonly int ItemOffsetId = Shader.PropertyToID("_ScatterItemOffset");
 		private static readonly int ItemCountId = Shader.PropertyToID("_ScatterItemCount");
 		private static readonly int SlotCountId = Shader.PropertyToID("_ScatterSlotCount");
@@ -82,7 +95,6 @@ namespace FishMMO.Client
 		private static readonly int InstancesId = Shader.PropertyToID("_FishInstances");
 		private static readonly int VisibleId = Shader.PropertyToID("_FishVisibleInstances");
 		private static readonly int CommandBasesId = Shader.PropertyToID(TerrainGpuRenderer.CommandBasesName);
-		private static readonly int ContactOnId = Shader.PropertyToID("_FishContactOn");
 
 		/// <summary>OpenGL only: the args fence (see FishDetailScatter.compute FishScatterArgsFence).</summary>
 		private static bool NeedsArgsFence => SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore || SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3;
@@ -100,7 +112,7 @@ namespace FishMMO.Client
 		private GraphicsBuffer itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer;
 		private NativeArray<Item> items;
 		private int itemCount;
-		/// <summary>Per slot (type × 2 + view): the instances it holds, and its first entry in the output buffers.</summary>
+		/// <summary>Per slot (<see cref="SlotOf"/>): the instances it holds, and its first entry in the output buffers.</summary>
 		private int[] capacities = Array.Empty<int>(), bases = Array.Empty<int>();
 		/// <summary>Per slot, the exact upper bound of this camera's work (the items it listed).</summary>
 		private long[] need = Array.Empty<long>();
@@ -108,6 +120,27 @@ namespace FishMMO.Client
 		private int layoutTypes = -1;
 		private bool layoutDirty = true;
 		private bool capWarned;
+
+		/// <summary>
+		/// How far a camera may move, metres, and turn, degrees, before its instances are generated again. Between, the last
+		/// generation is drawn as it stands: nothing in it moves with time (the wind is the vertex stage's), so a camera
+		/// standing still or creeping regenerated the same instances every frame — about 0.8 ms of GPU and 0.4 ms of the main
+		/// thread at Flo Monolith's meadow (ScenePerfProbe, 2026-10-08). Generated against a frustum widened by what that
+		/// move and turn sweep at the farthest reach, so nothing the camera can turn to is missing. The move is kept short,
+		/// shorter than the grass's and the props' (RegatherMetres 1.5), because unlike theirs this reuse skips the per-instance
+		/// work too: the distance fades, the thinning and a bush's level are as from where the camera stood, and a shorter
+		/// step keeps each refresh's change in them below anything seen.
+		/// </summary>
+		public const float RegatherMetres = 0.5f, RegatherDegrees = 3f;
+
+		/// <summary>Debug and profiling: generate on every render, as before the reuse.</summary>
+		public static bool AlwaysRegenerate;
+
+		private Camera generatedFor;
+		private Vector3 generatedEye, generatedForward, generatedLight;
+		private float generatedFov, generatedAspect, generatedShadow, generatedReach;
+		private int generatedAtlas = -1, generatedTypes = -1, generatedSettings, generatedDraws;
+		private readonly Plane[] widened = new Plane[6];
 
 		/// <summary>The last game camera's work items and its total upper bound (instances).</summary>
 		public int LastItems { get; private set; }
@@ -162,6 +195,8 @@ namespace FishMMO.Client
 				reason = cs == null ? $"the compute ({ComputeAssetPath}) is not loaded: Weather Render Profile → GPU detail scatter" : "no compute shaders or too few vertex-stage buffers on this device (the chunk renderer draws every detail)";
 				return null;
 			}
+			// Its pebbles draw through the rock shader, which declares the crevice inputs: bound before the first draw.
+			RockContactField.EnsureBindings();
 			ComputeShader own = Object.Instantiate(cs);
 			own.hideFlags = HideFlags.DontSave;
 			own.name = cs.name + " (instance)";
@@ -177,14 +212,43 @@ namespace FishMMO.Client
 			ReleaseRetired(false);
 			if (types.Count == 0 || !atlas.Sync(terrains, distanceOf))
 			{
+				generatedFor = null;
 				return 0;
 			}
+			int settings = SettingsSignature(s);
+			if (StillGenerated(camera, in view, types.Count, settings))
+			{
+				// The buffers still hold this camera's instances (no other camera has generated since): only the draws.
+				return generatedDraws > 0 ? Draw(camera, generatedEye, generatedReach) : 0;
+			}
+			generatedFor = null;
 			EnsureSlots(types.Count);
 			Array.Clear(need, 0, need.Length);
 			itemCount = 0;
 			ranges.Clear();
 			Vector3 eye = view.Position;
 			float reach = 0f;
+			float bushReach = Mathf.Max(s.BushDrawMin, s.BushDrawMax);
+			foreach (DetailScatterAtlas.Group group in atlas.Groups)
+			{
+				foreach (DetailScatterTerrain st in group.Terrains)
+				{
+					float distance = st.Terrain != null && st.Terrain.drawTreesAndFoliage ? distanceOf(st) : 0f;
+					if (distance > 0f)
+					{
+						reach = Mathf.Max(reach, HasBush(st, types) ? Mathf.Max(distance, bushReach) : distance);
+					}
+				}
+			}
+			// Listed and generated against the frustum widened by what the reuse's move and turn sweep at the farthest
+			// reach (RegatherMetres): the blocks just off screen are there when the camera turns to them.
+			float margin = RegatherMetres + reach * RegatherDegrees * Mathf.Deg2Rad;
+			for (int i = 0; i < 6; i++)
+			{
+				widened[i] = new Plane(view.Planes[i].normal, view.Planes[i].distance + margin);
+			}
+			TerrainTreeField.View listView = view;
+			listView.Planes = widened;
 			foreach (DetailScatterAtlas.Group group in atlas.Groups)
 			{
 				int groupStart = itemCount;
@@ -199,8 +263,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
-					reach = Mathf.Max(reach, distance);
-					ListItems(st, (uint)atlas.IndexOf(st), distance, in view, types);
+					ListItems(st, (uint)atlas.IndexOf(st), distance, in listView, types, s);
 				}
 				if (itemCount > groupStart)
 				{
@@ -219,6 +282,7 @@ namespace FishMMO.Client
 			}
 			if (itemCount == 0)
 			{
+				Remember(camera, in view, types.Count, settings, reach, 0);
 				return 0;
 			}
 
@@ -233,7 +297,7 @@ namespace FishMMO.Client
 				if (need[slot] > cap && !capWarned)
 				{
 					capWarned = true;
-					Debug.LogWarning($"[Detail scatter] '{types[slot / Views].Name}' {(slot % Views == 0 ? "camera" : "shadow")} slot needs up to {need[slot]} instances, over the cap of {cap} (GPU detail scatter > Max Instances Per Slot): the instances past it are dropped.");
+					Debug.LogWarning($"[Detail scatter] '{types[slot / SlotsPerType].Name}' level {slot % SlotsPerType / Views} {(slot % Views == 0 ? "camera" : "shadow")} slot needs up to {need[slot]} instances, over the cap of {cap} (GPU detail scatter > Max Instances Per Slot): the instances past it are dropped.");
 				}
 				capacities[slot] = (int)Math.Min(cap, Math.Max(need[slot], Math.Max(2L * capacities[slot], 1024L)));
 				layoutDirty = true;
@@ -249,7 +313,7 @@ namespace FishMMO.Client
 			}
 			for (int i = 0; i < 6; i++)
 			{
-				Plane p = view.Planes[i];
+				Plane p = widened[i];
 				planeVectors[i] = new Vector4(p.normal.x, p.normal.y, p.normal.z, p.distance);
 			}
 
@@ -259,7 +323,10 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorParam(compute, CameraId, eye);
 			cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
 			cmd.SetComputeVectorParam(compute, LightId, view.Shadows ? new Vector4(view.LightDirection.x, view.LightDirection.y, view.LightDirection.z, view.ShadowDistance) : Vector4.zero);
-			cmd.SetComputeVectorParam(compute, ThinId, new Vector4(Mathf.Max(0f, s.ThinStartMetres), Mathf.Clamp(s.ThinKeepAtDistance, 0.02f, 1f), Mathf.Clamp(s.EdgeFadeBand, 0.02f, 0.5f), 0f));
+			// w: the farthest any bush reaches, for the compute's per-block early out (a terrain's own distance is the detail distance).
+			cmd.SetComputeVectorParam(compute, ThinId, new Vector4(Mathf.Max(0f, s.ThinStartMetres), Mathf.Clamp(s.ThinKeepAtDistance, 0.02f, 1f), Mathf.Clamp(s.EdgeFadeBand, 0.02f, 0.5f), bushReach));
+			cmd.SetComputeVectorParam(compute, BushLodId, new Vector4(Mathf.Max(0f, s.BushLodMetresPerMetre.x), Mathf.Max(0f, s.BushLodMetresPerMetre.y), Mathf.Clamp(s.BushLodFadeBand, 0.02f, 0.5f), 0f));
+			cmd.SetComputeVectorParam(compute, BushReachId, new Vector4(Mathf.Max(1f, s.BushDrawMetresPerMetre), Mathf.Max(10f, s.BushDrawMin), bushReach, 0f));
 			cmd.SetComputeIntParam(compute, SlotCountId, slotCount);
 			cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
 
@@ -303,6 +370,14 @@ namespace FishMMO.Client
 			cmd.Clear();
 			TerrainInstancingProbe.RecordMs += TerrainInstancingProbe.Now - recordStart;
 
+			int draws = Draw(camera, eye, reach);
+			Remember(camera, in view, types.Count, settings, reach, draws);
+			return draws;
+		}
+
+		/// <summary>Issues the indirect draws of every slot this camera's generation filled. Returns the draws.</summary>
+		private int Draw(Camera camera, Vector3 eye, float reach)
+		{
 			double drawStart = TerrainInstancingProbe.Now;
 			var worldBounds = new Bounds(eye, Vector3.one * (2f * reach + 20f));
 			int draws = 0;
@@ -324,14 +399,92 @@ namespace FishMMO.Client
 			return draws;
 		}
 
-		/// <summary>Lists one terrain's work items within <paramref name="distance"/> that the view (or the sun's shadow of it) can see, adding their bounds to the slots' needs.</summary>
-		private void ListItems(DetailScatterTerrain st, uint terrainIndex, float distance, in TerrainTreeField.View view, IReadOnlyList<DetailScatterType> types)
+		/// <summary>Whether the last generation still serves this camera (see <see cref="RegatherMetres"/>).</summary>
+		private bool StillGenerated(Camera camera, in TerrainTreeField.View view, int typeCount, int settings)
+		{
+			if (AlwaysRegenerate || generatedFor != camera || generatedAtlas != atlas.Version || generatedTypes != typeCount || generatedSettings != settings
+				|| layoutDirty || generatedShadow != (view.Shadows ? view.ShadowDistance : 0f) || generatedFov != camera.fieldOfView || generatedAspect != camera.aspect)
+			{
+				return false;
+			}
+			if ((view.Position - generatedEye).sqrMagnitude > RegatherMetres * RegatherMetres)
+			{
+				return false;
+			}
+			float turn = Mathf.Cos(RegatherDegrees * Mathf.Deg2Rad);
+			return Vector3.Dot(camera.transform.forward, generatedForward) >= turn
+				&& (!view.Shadows || Vector3.Dot(view.LightDirection, generatedLight) >= turn);
+		}
+
+		private void Remember(Camera camera, in TerrainTreeField.View view, int typeCount, int settings, float reach, int draws)
+		{
+			generatedFor = camera;
+			generatedAtlas = atlas.Version;
+			generatedTypes = typeCount;
+			generatedSettings = settings;
+			generatedEye = view.Position;
+			generatedForward = camera.transform.forward;
+			generatedLight = view.LightDirection;
+			generatedShadow = view.Shadows ? view.ShadowDistance : 0f;
+			generatedFov = camera.fieldOfView;
+			generatedAspect = camera.aspect;
+			generatedReach = reach;
+			generatedDraws = draws;
+		}
+
+		/// <summary>Every setting the generation reads, folded together, so an edit in the profile regenerates at once.</summary>
+		private static int SettingsSignature(DetailScatterSettings s)
+		{
+			unchecked
+			{
+				int h = s.ThinStartMetres.GetHashCode();
+				h = h * 31 + s.ThinKeepAtDistance.GetHashCode();
+				h = h * 31 + s.EdgeFadeBand.GetHashCode();
+				h = h * 31 + s.BushDrawMetresPerMetre.GetHashCode();
+				h = h * 31 + s.BushDrawMin.GetHashCode();
+				h = h * 31 + s.BushDrawMax.GetHashCode();
+				h = h * 31 + s.BushLodMetresPerMetre.GetHashCode();
+				h = h * 31 + s.BushLodFadeBand.GetHashCode();
+				h = h * 31 + s.MaxInstancesPerSlot;
+				return h;
+			}
+		}
+
+		/// <summary>True when any of a terrain's channels is a bush.</summary>
+		private static bool HasBush(DetailScatterTerrain st, IReadOnlyList<DetailScatterType> types)
+		{
+			for (int c = 0; c < st.Channels; c++)
+			{
+				int type = st.ChannelSettings[c].Type;
+				if (type >= 0 && type < types.Count && types[type].Bush)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The farthest point of a box from a point.</summary>
+		private static float MaxDistance(Bounds b, Vector3 p)
+		{
+			Vector3 d = Vector3.Max(b.max - p, p - b.min);
+			return d.magnitude;
+		}
+
+		/// <summary>
+		/// Lists one terrain's work items within <paramref name="distance"/> (the detail distance; a bush's own reach for
+		/// its channels) that the view (or the sun's shadow of it) can see, adding their bounds to the slots' needs: to
+		/// level 0 for most types, to every level a bush's instances there can draw (<see cref="DetailScatterMath.LevelsReached"/>).
+		/// </summary>
+		private void ListItems(DetailScatterTerrain st, uint terrainIndex, float distance, in TerrainTreeField.View view, IReadOnlyList<DetailScatterType> types, DetailScatterSettings s)
 		{
 			Vector3 eye = view.Position;
+			bool bushes = HasBush(st, types);
+			float listed = bushes ? Mathf.Max(distance, Mathf.Max(s.BushDrawMin, s.BushDrawMax)) : distance;
 			float itemX = DetailScatterMath.ItemSide * st.BlockX, itemZ = DetailScatterMath.ItemSide * st.BlockZ;
 			int side = st.ItemsSide;
-			int ix0 = Mathf.Max(0, Mathf.FloorToInt((eye.x - distance - st.Origin.x) / itemX)), ix1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.x + distance - st.Origin.x) / itemX));
-			int iz0 = Mathf.Max(0, Mathf.FloorToInt((eye.z - distance - st.Origin.z) / itemZ)), iz1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.z + distance - st.Origin.z) / itemZ));
+			int ix0 = Mathf.Max(0, Mathf.FloorToInt((eye.x - listed - st.Origin.x) / itemX)), ix1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.x + listed - st.Origin.x) / itemX));
+			int iz0 = Mathf.Max(0, Mathf.FloorToInt((eye.z - listed - st.Origin.z) / itemZ)), iz1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.z + listed - st.Origin.z) / itemZ));
 			float pad = st.MaxInstanceReach + 0.5f;
 			for (int iz = iz0; iz <= iz1; iz++)
 			{
@@ -353,10 +506,11 @@ namespace FishMMO.Client
 					var bounds = new Bounds();
 					bounds.SetMinMax(new Vector3(x0 - pad, heights.x - 0.5f, z0 - pad), new Vector3(x1 + pad, heights.y + st.MaxInstanceHeight + 0.5f, z1 + pad));
 					float near = TerrainTreeMath.MinDistance(bounds, eye);
-					if (near > distance)
+					if (near > listed)
 					{
 						continue;
 					}
+					float far = MaxDistance(bounds, eye);
 					bool main = TerrainTreeMath.IntersectsFrustum(view.Planes, bounds);
 					bool shadow = view.Shadows && st.CastsShadows && near <= view.ShadowDistance
 						&& TerrainTreeMath.IntersectsFrustum(view.Planes, TerrainTreeMath.ShadowSweep(bounds, view.LightDirection, view.ShadowDistance));
@@ -364,6 +518,7 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
+					bool any = false;
 					for (int c = 0; c < st.Channels; c++)
 					{
 						int bound = st.ItemBounds[boundsAt + c];
@@ -372,14 +527,42 @@ namespace FishMMO.Client
 						{
 							continue;
 						}
-						if (main)
+						DetailScatterType t = types[type];
+						int levels = 1;
+						if (t.Bush)
 						{
-							need[type * Views] += bound;
+							ref DetailScatterTerrain.Channel ch = ref st.ChannelSettings[c];
+							float tallest = t.MeshTop * Mathf.Max(ch.MinHeight, ch.MaxHeight);
+							if (near > s.BushDrawDistance(tallest))
+							{
+								continue;
+							}
+							levels = DetailScatterMath.LevelsReached(near, far, t.MeshTop * Mathf.Min(ch.MinHeight, ch.MaxHeight), tallest, t.Levels.Length, s.BushLodMetresPerMetre, s.BushLodFadeBand);
 						}
-						if (shadow && types[type].CastsShadows)
+						else if (near > distance)
 						{
-							need[type * Views + 1] += bound;
+							continue;
 						}
+						any = true;
+						for (int level = 0; level < Levels; level++)
+						{
+							if ((levels & (1 << level)) == 0)
+							{
+								continue;
+							}
+							if (main)
+							{
+								need[SlotOf(type, level, 0)] += bound;
+							}
+							if (shadow && t.CastsShadows)
+							{
+								need[SlotOf(type, level, 1)] += bound;
+							}
+						}
+					}
+					if (!any)
+					{
+						continue;
 					}
 					int nx = Mathf.Min(DetailScatterMath.ItemSide, st.Blocks - ix * DetailScatterMath.ItemSide);
 					int nz = Mathf.Min(DetailScatterMath.ItemSide, st.Blocks - iz * DetailScatterMath.ItemSide);
@@ -400,7 +583,7 @@ namespace FishMMO.Client
 		/// <summary>Grows the per-slot arrays to the types' count (a new type starts with no capacity).</summary>
 		private void EnsureSlots(int typeCount)
 		{
-			int wanted = typeCount * Views;
+			int wanted = typeCount * SlotsPerType;
 			if (slotCount == wanted)
 			{
 				return;
@@ -457,33 +640,38 @@ namespace FishMMO.Client
 					FootRadius = type.FootRadius,
 					Salt = type.Salt,
 					CastsShadows = type.CastsShadows ? 1f : 0f,
+					Lod = new Vector4(type.Levels.Length, type.Bush ? 1f : 0f, type.MeshTop, 0f),
 				};
 				Material clone = CloneOf(type.Material);
 				if (clone == null)
 				{
 					continue;
 				}
-				for (int v = 0; v < Views; v++)
+				for (int level = 0; level < type.Levels.Length && level < Levels; level++)
 				{
-					if (v == 1 && !type.CastsShadows)
+					Mesh mesh = type.Levels[level];
+					for (int v = 0; v < Views; v++)
 					{
-						continue;
+						if (v == 1 && !type.CastsShadows)
+						{
+							continue;
+						}
+						int slot = SlotOf(t, level, v);
+						RenderParams rp = type.Template;
+						rp.material = clone;
+						rp.shadowCastingMode = v == 0 ? ShadowCastingMode.Off : ShadowCastingMode.ShadowsOnly;
+						commands.Add(new Command { Slot = slot, Mesh = mesh, Params = rp });
+						args.Add(new GraphicsBuffer.IndirectDrawIndexedArgs
+						{
+							indexCountPerInstance = mesh.GetIndexCount(0),
+							startIndex = mesh.GetIndexStart(0),
+							baseVertexIndex = (uint)mesh.GetBaseVertex(0),
+							instanceCount = 0,
+							startInstance = 0,
+						});
+						argSlots.Add((uint)slot);
+						commandBases.Add((uint)bases[slot]);
 					}
-					int slot = t * Views + v;
-					RenderParams rp = type.Template;
-					rp.material = clone;
-					rp.shadowCastingMode = v == 0 ? ShadowCastingMode.Off : ShadowCastingMode.ShadowsOnly;
-					commands.Add(new Command { Slot = slot, Mesh = type.Mesh, Params = rp });
-					args.Add(new GraphicsBuffer.IndirectDrawIndexedArgs
-					{
-						indexCountPerInstance = type.Mesh.GetIndexCount(0),
-						startIndex = type.Mesh.GetIndexStart(0),
-						baseVertexIndex = (uint)type.Mesh.GetBaseVertex(0),
-						instanceCount = 0,
-						startInstance = 0,
-					});
-					argSlots.Add((uint)slot);
-					commandBases.Add((uint)bases[slot]);
 				}
 			}
 			Recreate(ref modelBuffer, GraphicsBuffer.Target.Structured, models.Length, ModelData.Stride);
@@ -529,9 +717,6 @@ namespace FishMMO.Client
 				return null;
 			}
 			clone = new Material(material) { shader = shader, name = material.name + " (scatter)", hideFlags = HideFlags.DontSave };
-			// Its base takes the terrain's colour and shading (FishGroundColour.hlsl contact blend, the small details'
-			// settings; 1 here and on every draw's block). Only this renderer's draws: the shared materials never.
-			clone.SetFloat(ContactOnId, 1f);
 			clones.Add(material, clone);
 			return clone;
 		}
@@ -553,7 +738,6 @@ namespace FishMMO.Client
 				blocks[c].SetBuffer(InstancesId, instanceBuffer);
 				blocks[c].SetBuffer(VisibleId, visibleBuffer);
 				blocks[c].SetBuffer(CommandBasesId, commandBaseBuffer);
-				blocks[c].SetFloat(ContactOnId, 1f);
 			}
 		}
 
@@ -573,10 +757,10 @@ namespace FishMMO.Client
 				for (int i = 0; i < n; i++)
 				{
 					last[i] = (int)counts[i];
-					if (counts[i] > capacitiesNow[i] && i < overflowWarned.Length && !overflowWarned[i] && i / Views < types.Count)
+					if (counts[i] > capacitiesNow[i] && i < overflowWarned.Length && !overflowWarned[i] && i / SlotsPerType < types.Count)
 					{
 						overflowWarned[i] = true;
-						Debug.LogWarning($"[Detail scatter] '{types[i / Views].Name}' {(i % Views == 0 ? "camera" : "shadow")} slot overflowed: {counts[i]} appended, capacity {capacitiesNow[i]}; the rest were dropped (GPU detail scatter > Max Instances Per Slot).");
+						Debug.LogWarning($"[Detail scatter] '{types[i / SlotsPerType].Name}' level {i % SlotsPerType / Views} {(i % Views == 0 ? "camera" : "shadow")} slot overflowed: {counts[i]} appended, capacity {capacitiesNow[i]}; the rest were dropped (GPU detail scatter > Max Instances Per Slot).");
 					}
 				}
 				LastCounts = last;

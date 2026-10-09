@@ -32,16 +32,11 @@ namespace FishMMO.Shared.WorldDesign
 		public int MeshSeed = ProceduralArtCatalogue.DefaultSeed;
 
 		/// <summary>
-		/// The climate at a scene position as (temperature, humidity), both −1…1 on the climate scale,
-		/// or null where unknown. Drives granite's roundness (<see cref="CliffRocks.RoundnessFor"/>).
-		/// Null: the middle level everywhere.
-		/// </summary>
-		public Func<Vector3, Vector2?> ClimateAt;
-
-		/// <summary>
 		/// The rock the ground is made of at a scene position (x, altitude, z) — a <see cref="RockTypes"/>
-		/// name — or null where unknown. When it names a cliff rock it wins over the biome's own, so a
-		/// canyon cut through sandstone is walled in sandstone whatever grows on its rim. Biomes whose
+		/// name — or null where unknown. Where the biome there accepts it (<see cref="CliffRocks.Accepts"/>:
+		/// its own rock or one of its <see cref="BiomeArtSpec.Entry.Rocks"/>) it wins over the biome's own,
+		/// so a granite country's grassland stands in granite and a desert's canyon in its sandstone; a rock
+		/// the biome does not accept (sandstone under a bog) gives way to the biome's own. Biomes whose
 		/// cliffs are ice keep their ice. Null: every cliff is its biome's rock.
 		/// </summary>
 		public Func<float, float, float, string> RockTypeAt;
@@ -105,8 +100,9 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Builds a generated scene's cliffs from large rocks: one "Cliffs" root of rock objects on the
-	/// steep ground the biomes paint as cliff, talus cones raised into the terrain below them.
+	/// Builds a generated scene's cliffs from jointed cliff sections (<see cref="CliffSections"/>) on the
+	/// steep ground the biomes paint as cliff, each in the stone of its biome's cliff, with talus cones
+	/// raised into the terrain below them and fallen debris on the cones.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -137,13 +133,17 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Assets are referenced, never made.</b> The art generator writes every rock mesh
-	/// (<see cref="CliffRocks.AllMeshes"/>) with a path-derived GUID; the rocks wear the rock type's
-	/// formation material (or glacier ice). A rock whose assets are missing is left out and reported.
+	/// (<see cref="CliffRocks.AllMeshes"/>, <see cref="CliffSections.AllMeshes"/>) with a path-derived GUID.
+	/// A rock missing its assets is left out and reported.
 	/// </para>
 	/// <para>
-	/// <b>Climate.</b> Granite's roundness comes from <see cref="CliffPlacerOptions.ClimateAt"/>
-	/// through <see cref="CliffRocks.RoundnessFor"/>, read on a 64 m grid and snapped to the nearest
-	/// baked level.
+	/// <b>Stone by biome.</b> A rock wears the material of its site's rock type
+	/// (<see cref="CliffRocks.MaterialName"/>): the rock the biome's cliff layer stands for
+	/// (<see cref="CliffRocks.RockTypeFor"/>: the family's rock, or the biome's own bedrock), or the
+	/// planet geology's rock under it where the biome accepts that rock (<see cref="CliffPlacerOptions.RockTypeAt"/>,
+	/// <see cref="CliffRocks.RockFor"/>). Sections are shared by
+	/// every type, so one section mesh is sandstone in a desert canyon and granite on a mountain; each
+	/// mesh-and-material pair is its own prefab.
 	/// </para>
 	/// </remarks>
 	public static class CliffPlacer
@@ -211,6 +211,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Each biome's cliff: the first of its cliff layers whose family stands for a rock.
 			int biomes = field.Biomes.Count;
 			var rock = new string[biomes];
+			var spec = new BiomeArtSpec.Entry[biomes];
 			var minAngle = new float[biomes];
 			var paintLayer = new int[biomes];
 			var heightBand = new CliffTextureLayer[biomes];
@@ -225,7 +226,8 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					string family = FamilyOf(entry);
-					string type = CliffRocks.RockTypeFor(family, entry.Biome != null ? BiomeArtSpec.For(entry.Biome.name) : null);
+					spec[b] = entry.Biome != null ? BiomeArtSpec.For(entry.Biome.name) : null;
+					string type = CliffRocks.RockTypeFor(family, spec[b]);
 					if (type == null)
 					{
 						unmapped.Add(family ?? $"{entry.Biome?.ResolvedDisplayName} {entry.Slot} (unknown family)");
@@ -246,25 +248,6 @@ namespace FishMMO.Shared.WorldDesign
 			if (Array.TrueForAll(rock, r => r == null))
 			{
 				return report;
-			}
-
-			// Roundness from the climate on a 64 m grid (granite only reads it).
-			var roundness = new Dictionary<long, int>();
-			int RoundnessAt(float x, float y, float z)
-			{
-				if (options.ClimateAt == null)
-				{
-					return 1;
-				}
-				int gx = Mathf.FloorToInt(x / 64f), gz = Mathf.FloorToInt(z / 64f);
-				long key = ((long)gx << 32) ^ (uint)gz;
-				if (!roundness.TryGetValue(key, out int level))
-				{
-					Vector2? c = options.ClimateAt(new Vector3((gx + 0.5f) * 64f, y, (gz + 0.5f) * 64f));
-					level = c.HasValue ? CliffRocks.RoundnessLevelFor(CliffRocks.RoundnessFor(c.Value.x, c.Value.y)) : 1;
-					roundness[key] = level;
-				}
-				return level;
 			}
 
 			var scratch = new float[Math.Max(1, biomes)];
@@ -295,8 +278,9 @@ namespace FishMMO.Shared.WorldDesign
 				string type = rock[b];
 				if (options.RockTypeAt != null && type != CliffRocks.Ice)
 				{
+					// The geology's rock, where this biome accepts it; else the biome's own.
 					string bedrock = options.RockTypeAt(x, y, z);
-					if (bedrock != null && RockTypes.TryGet(bedrock, out _))
+					if (bedrock != null && RockTypes.TryGet(bedrock, out _) && CliffRocks.Accepts(spec[b], bedrock))
 					{
 						type = bedrock;
 					}
@@ -304,21 +288,27 @@ namespace FishMMO.Shared.WorldDesign
 				site = new CliffRockSite
 				{
 					Type = type,
-					Roundness = CliffRocks.Climatic(type) ? RoundnessAt(x, y, z) : -1,
 					MinAngle = minAngle[b],
 				};
 				return true;
 			};
 
-			var seating = new Dictionary<CliffPiece, MeshBuilder>();
+			var assets = new RockAssets(options.MaterialFor);
+			var seating = new Dictionary<string, MeshBuilder>(StringComparer.Ordinal);
 			// The talus too keeps out of the water the rock sites keep out of.
 			options.Placement ??= new CliffRockPlacementOptions();
 			options.Placement.Excluded = options.Excluded;
 			CliffRockPlan plan = CliffRockPlacement.Plan(ground, ground.Area, siteAt, seed, piece =>
 			{
-				if (!seating.TryGetValue(piece, out MeshBuilder m))
+				// Keyed by mesh name: a section's collider is one mesh for every type.
+				string key = CliffRocks.MeshName(in piece, CliffRocks.CollisionLod);
+				if (!seating.TryGetValue(key, out MeshBuilder m))
 				{
-					seating[piece] = m = CliffRocks.Build(in piece, CliffRocks.CollisionLod, options.MeshSeed);
+					/* A section's generated collider, read back: building one live builds its whole net (seconds each,
+					 * two dozen of them). The asset is the same mesh (same seed); a rock is left out below anyway
+					 * when its assets are missing, so the live build is only a fallback. */
+					Mesh generated = CliffRocks.IsSection(in piece) ? assets.Mesh(in piece, CliffRocks.CollisionLod) : null;
+					seating[key] = m = generated != null && generated.isReadable ? Seating(generated) : CliffRocks.Build(in piece, CliffRocks.CollisionLod, options.MeshSeed);
 				}
 				return m;
 			}, options.Placement);
@@ -338,7 +328,6 @@ namespace FishMMO.Shared.WorldDesign
 				CleanScatter(ground, plan, report);
 			}
 
-			var assets = new RockAssets(options.MaterialFor);
 			int layer = ColliderLayer;
 			var root = new GameObject(RootName) { layer = layer };
 			root.AddComponent<GeneratedCliffs>();
@@ -408,6 +397,20 @@ namespace FishMMO.Shared.WorldDesign
 			report.Elapsed = clock.Elapsed;
 			report.Notes.Add(report.ToString());
 			return report;
+		}
+
+		/// <summary>A generated mesh as the planner reads it: positions, normals and triangles.</summary>
+		private static MeshBuilder Seating(Mesh mesh)
+		{
+			var m = new MeshBuilder(1);
+			Vector3[] positions = mesh.vertices, normals = mesh.normals;
+			var white = new Color32(255, 255, 255, 0);
+			for (int i = 0; i < positions.Length; i++)
+			{
+				m.AddVertex(positions[i], normals.Length == positions.Length ? normals[i] : Vector3.up, Vector2.zero, white);
+			}
+			m.Submeshes[0].AddRange(mesh.GetTriangles(0));
+			return m;
 		}
 
 		/// <summary>The source the cliffs' props and colliders are baked under (<see cref="ScenePropBaker"/>).</summary>
