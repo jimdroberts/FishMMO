@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared.Biomes;
@@ -7,16 +8,9 @@ using FishMMO.Shared.Celestial;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// The weather a scene's snow, wetness, ash and sand are integrated from: the average over five
-	/// points of its area. One copy for the server and the client.
+	/// Where a scene's own snow, wetness, ash and sand figure is read: its area, and five points of it. One copy for the
+	/// server and the client.
 	/// </summary>
-	/// <remarks>
-	/// The server integrated from these five points and the client, between the server's snapshots,
-	/// from the weather where its camera stood — two different forcings of the same figure, so each
-	/// client's ground drifted from the server's and from every other client's until the next
-	/// snapshot pulled it back (audit 2026-10-06). The weather at each point is a pure function of the
-	/// tick, so both sides integrating from the same points track the same figure.
-	/// </remarks>
 	public static class SceneCoverSampling
 	{
 		/// <summary>
@@ -50,67 +44,46 @@ namespace FishMMO.Shared.Weather
 			return extent.Found;
 		}
 
-		/// <summary>The most steps one scene advance takes (<see cref="WeatherCover.StepsFor"/>): five field samples each.</summary>
-		public const int MaxSteps = 240;
-
-		/// <summary>The scene's average weather and temperature at a tick, over its five cover points.</summary>
-		public static void Sample(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, uint tick,
-			out WeatherFrame frame, out float temperature)
+		/// <summary>The scene's cover points in world space (y 0), for an area.</summary>
+		public static void PointsOf(Rect area, List<Vector3> into)
 		{
-			SampleAtSeconds(timeline, settings, scene, timeline != null ? timeline.WorldSecondsAt(tick) : 0.0, out frame, out temperature);
-		}
-
-		/// <summary>The scene's average weather and temperature at a moment of world time, over its five cover points.</summary>
-		public static void SampleAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, double worldSeconds,
-			out WeatherFrame frame, out float temperature)
-		{
-			if (!TryGetArea(settings, scene, out Rect area))
+			into.Clear();
+			if (!(area.width > 0f && area.height > 0f))
 			{
 				area = new Rect(-50f, -50f, 100f, 100f);
 			}
-			var average = new WeatherAccumulator();
-			temperature = 0f;
 			Vector2 c = area.center;
 			for (int i = 0; i < Offsets.Length; i++)
 			{
 				Vector2 p = c + Vector2.Scale(Offsets[i], area.size);
-				WeatherSample sample = WeatherField.SampleAtSeconds(timeline, settings, scene, new Vector3(p.x, 0f, p.y), worldSeconds);
-				average.Add(sample.Frame, 1f / Offsets.Length);
-				temperature += sample.Temperature / Offsets.Length;
+				into.Add(new Vector3(p.x, 0f, p.y));
 			}
-			frame = average.Resolve();
 		}
+	}
 
-		/// <summary>
-		/// Brings the scene's cover from the world time it was last advanced to (<see cref="WeatherTimeline.CoverSeconds"/>)
-		/// up to <paramref name="worldSeconds"/>, in steps each under the weather and the daylight of its own moment. The
-		/// server and every client run this, so they integrate the same forcing over the same world time.
-		/// </summary>
-		/// <remarks>
-		/// World time throughout: a held world holds its ground, a raced one races it, and an admin's jump forward
-		/// brings the ground through the weather of the hours it skipped. A jump BACK leaves the ground as it is — the
-		/// cover of a past moment is not something the ground can return to — and restarts the count from there.
-		/// </remarks>
-		public static void Advance(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, double worldSeconds)
+	/// <summary>
+	/// A scene's snow, wetness, ash and sand at a moment: the ground (<see cref="GroundCover"/>) averaged over the
+	/// scene's five cover points (<see cref="SceneCoverSampling.PointsOf"/>). The server and every client work out the
+	/// same figure from the world time, so it is never sent: gameplay reads the server's, the eye the client's, and
+	/// they are one number.
+	/// </summary>
+	public sealed class SceneCover
+	{
+		private readonly CoverPoints points = new CoverPoints();
+		private readonly List<Vector3> scratch = new List<Vector3>();
+
+		/// <summary>The scene's cover at <paramref name="worldSeconds"/>, written to <see cref="WeatherTimeline.Cover"/> and returned.</summary>
+		public WeatherCover Update(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, double worldSeconds)
 		{
 			if (timeline == null)
 			{
-				return;
+				return default;
 			}
-			double from = timeline.CoverSeconds;
-			int steps = WeatherCover.StepsFor(worldSeconds - from, MaxSteps);
-			if (steps > 0)
-			{
-				from = Math.Max(from, worldSeconds - WeatherCover.MaxAdvanceSeconds);
-				double step = (worldSeconds - from) / steps;
-				for (int i = 1; i <= steps; i++)
-				{
-					double at = from + step * i;
-					SampleAtSeconds(timeline, settings, scene, at, out WeatherFrame frame, out float temperature);
-					timeline.Cover.Integrate(frame, temperature, (float)step, SceneTime.IsDaylight(settings, at / 3600.0) ? 1f : 0f);
-				}
-			}
-			timeline.CoverSeconds = worldSeconds;
+			SceneCoverSampling.PointsOf(timeline.Area, scratch);
+			points.SetPoints(scratch);
+			points.Update(timeline, settings, scene, worldSeconds);
+			timeline.Cover = points.Mean(worldSeconds);
+			return timeline.Cover;
 		}
 	}
 }

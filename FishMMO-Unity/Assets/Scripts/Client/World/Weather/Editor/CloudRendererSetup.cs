@@ -203,6 +203,45 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Adds the heat-shimmer pass to every renderer that has none, with its shader assigned so a build
+		/// carries it. Returns how many were changed.
+		/// </summary>
+		/// <remarks>
+		/// Added switched OFF on the Performant renderer (the feature's own active toggle): a full-screen copy
+		/// and a displaced redraw of the frame is the kind of cost that tier exists to leave out. Anyone can tick
+		/// it on there in the renderer's inspector; an existing feature is never touched.
+		/// </remarks>
+		public static int EnsureHeatShimmer()
+		{
+			int added = 0;
+			Shader shader = Shader.Find(FishHeatShimmerFeature.ShaderName);
+			foreach (string guid in ProjectRenderers())
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				var data = AssetDatabase.LoadAssetAtPath<ScriptableRendererData>(path);
+				if (data == null || Has<FishHeatShimmerFeature>(data) != false)
+				{
+					continue;   // present, or not resolved yet (a null in the list): never add a second one
+				}
+				var created = ScriptableObject.CreateInstance<FishHeatShimmerFeature>();
+				created.name = "Fish Heat Shimmer";
+				created.ShimmerShader = shader;
+				bool performant = System.IO.Path.GetFileNameWithoutExtension(path).IndexOf("Performant", System.StringComparison.OrdinalIgnoreCase) >= 0;
+				created.SetActive(!performant);
+				AssetDatabase.AddObjectToAsset(created, data);
+				AssetDatabase.SaveAssets();
+				Append(data, created);
+				added++;
+				Debug.Log($"[Heat] Added the heat-shimmer pass to {System.IO.Path.GetFileNameWithoutExtension(path)}{(performant ? " (switched off on this tier)" : "")}.");
+			}
+			if (added > 0)
+			{
+				AssetDatabase.SaveAssets();
+			}
+			return added;
+		}
+
+		/// <summary>
 		/// True when the renderer has a feature of this type, false when it surely has none, null when it
 		/// cannot tell: a null entry is a feature that did not resolve (mid-compile, deleted), which may be it.
 		/// </summary>

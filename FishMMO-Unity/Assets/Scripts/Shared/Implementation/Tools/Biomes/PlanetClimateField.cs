@@ -97,6 +97,25 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>What the world makes for itself: 0 dead, 1 molten.</summary>
 		public float InternalHeat;
 
+		/// <summary>
+		/// The farthest the sun stands from the celestial equator over the year, degrees: the body's
+		/// effective axial tilt as its own orbit shows it (its host planet's year, for a moon). The
+		/// summer sun at a latitude stands this much nearer it, so this is the whole of the seasons.
+		/// </summary>
+		public float MaxSolarDeclination;
+
+		/// <summary>
+		/// The latitude term averaged over the year, scale units, one entry a degree from −90 to +90
+		/// (<see cref="YearlyMeanLatitudeTemperature"/>). Built once in <see cref="For"/>; null without a body.
+		/// </summary>
+		private float[] meanLatitude;
+
+		/// <summary>
+		/// The warmest the latitude term gets over the year, with perihelion's extra starlight folded in,
+		/// scale units, one entry a degree (<see cref="WarmestLatitudeTemperature"/>). Null without a body.
+		/// </summary>
+		private float[] warmestLatitude;
+
 		/// <summary>What the world offers a biome, atmosphere and water included.</summary>
 		public BiomeWorldConditions Conditions;
 
@@ -108,6 +127,9 @@ namespace FishMMO.Shared.Biomes
 
 		private SolarSystemProfile system;
 		private WorldBody body;
+		// Whether there is a sun path to read seasons from, decided once in For: the season terms are asked
+		// off the main thread (the scene's ground), where comparing a Unity object with null is not safe.
+		private bool seasons;
 
 		/// <summary>True when there is a body to answer about.</summary>
 		public bool Valid => body != null;
@@ -131,7 +153,10 @@ namespace FishMMO.Shared.Biomes
 				ReliefMetres = PlanetSurface.ReliefMetres(body),
 				InternalHeat = ClimateModel.InternalHeat(system, body),
 				Conditions = BiomeWorldConditions.For(system, body),
+				MaxSolarDeclination = MaxDeclinationOf(system, body),
+				seasons = system != null && body != null,
 			};
+			field.BuildLatitudeTables();
 
 			field.Profile = PlanetSurface.ProfileOf(field.Seed, body);
 
@@ -158,6 +183,135 @@ namespace FishMMO.Shared.Biomes
 			field.Parameters = ClimateModel.For(system, body, field.ReliefMetres);
 			field.Moisture = MoistureModel.For(system, body, field.Seed, field.Profile, field.ReliefMetres, field.Conditions);
 			return field;
+		}
+
+		/// <summary>Points round the host's year the sun path is read at for the latitude tables: about a week apart.</summary>
+		private const int YearSamples = 48;
+
+		/// <summary>
+		/// How much of the swing in starlight between perihelion and aphelion reaches the warmest season,
+		/// 0..1. The equilibrium answer (temperature as starlight to the quarter power) is the most it
+		/// could be; oceans and air store heat over a season and give back about half of it — Earth's
+		/// perihelion summer in the south is milder than the 6.9 % flux swing alone would make it.
+		/// </summary>
+		private const double PerihelionShare = 0.5;
+
+		/// <summary>
+		/// Fills the yearly latitude tables from the body's own sun path: <see cref="YearSamples"/> points
+		/// round the host's year, each giving the sun's declination and how much starlight arrives then.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why a year, not a moment (2026-10-10).</b> The latitude term was read at hour 0 of the orbit,
+		/// so the climate every biome was chosen from was whatever season the epoch happened to fall in:
+		/// Arthis's hour 0 sits near southern midsummer (declination −7.2° of a 9.1° tilt), which made its
+		/// south read up to 7 K warm and its north 7 K cold; Rheis's sits on the northern solstice, ±28 K.
+		/// A world's ground is its year's average, so the term is averaged here — and the summer, which
+		/// decides what grows, is the warmest point of the same year.
+		/// </para>
+		/// <para>
+		/// <b>Tables, not a loop per point.</b> One entry a degree, interpolated: the globe bake asks two
+		/// million points and pays a lookup, never 48 sun positions.
+		/// </para>
+		/// </remarks>
+		private void BuildLatitudeTables()
+		{
+			if (!seasons)
+			{
+				return;
+			}
+			double year = CelestialMath.OrbitHours(system, CelestialMath.HostPlanet(body));
+			bool hasYear = !(double.IsNaN(year) || double.IsInfinity(year) || year <= 0.0);
+			int samples = hasYear ? YearSamples : 1;
+			var declinations = new double[samples];
+			var perihelion = new double[samples];
+			double meanFlux = ClimateModel.MeanInsolation(system, body);
+			double meanKelvin = ClimateModel.MeanSurfaceKelvin(system, body);
+			for (int i = 0; i < samples; i++)
+			{
+				double hours = hasYear ? year * i / samples : 0.0;
+				CelestialMath.SunEquatorial(system, body, hours, out _, out double declination);
+				declinations[i] = declination * CelestialMath.Rad2Deg;
+				// Starlight now against the year's mean, to temperature by the quarter power, in scale units.
+				double flux = CelestialMath.Insolation(system, body, hours);
+				double ratio = meanFlux > 1e-9 && flux > 0.0 ? flux / meanFlux : 1.0;
+				perihelion[i] = PerihelionShare * meanKelvin * (System.Math.Pow(ratio, 0.25) - 1.0) / ClimateModel.KelvinPerUnit;
+			}
+			meanLatitude = new float[181];
+			warmestLatitude = new float[181];
+			for (int lat = -90; lat <= 90; lat++)
+			{
+				double sum = 0.0;
+				double warmest = double.NegativeInfinity;
+				for (int i = 0; i < samples; i++)
+				{
+					double noonAltitude = 90.0 - System.Math.Abs(lat - declinations[i]);
+					double term = CelestialMath.LatitudeCooling * (System.Math.Max(0.0, System.Math.Sin(noonAltitude * CelestialMath.Deg2Rad)) - 1.0);
+					sum += term;
+					warmest = System.Math.Max(warmest, term + perihelion[i]);
+				}
+				meanLatitude[lat + 90] = (float)(sum / samples);
+				warmestLatitude[lat + 90] = (float)warmest;
+			}
+		}
+
+		private static float Lookup(float[] table, double latitudeDegrees)
+		{
+			double x = System.Math.Max(-90.0, System.Math.Min(90.0, latitudeDegrees)) + 90.0;
+			int i = System.Math.Min(179, (int)x);
+			return Mathf.Lerp(table[i], table[i + 1], (float)(x - i));
+		}
+
+		/// <summary>The farthest the sun gets from the celestial equator over the host's year, in degrees; 0 without a body.</summary>
+		private static float MaxDeclinationOf(SolarSystemProfile system, WorldBody body)
+		{
+			if (system == null || body == null)
+			{
+				return 0f;
+			}
+			double year = CelestialMath.OrbitHours(system, CelestialMath.HostPlanet(body));
+			if (double.IsNaN(year) || double.IsInfinity(year) || year <= 0.0)
+			{
+				return 0f;
+			}
+			double most = 0.0;
+			for (int i = 0; i < YearSamples; i++)
+			{
+				CelestialMath.SunEquatorial(system, body, year * i / YearSamples, out _, out double declination);
+				most = System.Math.Max(most, System.Math.Abs(declination * CelestialMath.Rad2Deg));
+			}
+			return (float)most;
+		}
+
+		/// <summary>
+		/// The latitude term averaged over the year, scale units: what <see cref="TemperatureAt"/> cools a
+		/// latitude by. 0 without a body.
+		/// </summary>
+		public float YearlyMeanLatitudeTemperature(double latitudeDegrees)
+		{
+			return meanLatitude != null ? Lookup(meanLatitude, latitudeDegrees) : 0f;
+		}
+
+		/// <summary>
+		/// The latitude term at the height of the year's warmest season, scale units: the sun as near the
+		/// latitude as the year brings it, plus perihelion's extra starlight where the summer meets it.
+		/// 0 without a body.
+		/// </summary>
+		public float WarmestLatitudeTemperature(double latitudeDegrees)
+		{
+			return warmestLatitude != null ? Lookup(warmestLatitude, latitudeDegrees) : 0f;
+		}
+
+		/// <summary>
+		/// The warmest season's temperature at a point, scale units: <see cref="TemperatureAt"/> with the
+		/// summer sun. What the Köppen line between ice cap, tundra and forest is drawn on.
+		/// </summary>
+		public float WarmestSeasonAt(double latitudeDegrees, Vector3 direction, float altitudeMetres)
+		{
+			return Mathf.Clamp(SubSolarTemperature
+				+ WarmestLatitudeTemperature(latitudeDegrees)
+				- Mathf.Max(0f, altitudeMetres) * LapsePerMetre
+				+ RegionalOffset(direction), -1f, 1f);
 		}
 
 		/// <summary>
@@ -357,6 +511,8 @@ namespace FishMMO.Shared.Biomes
 			ClimateSample climate = point.Climate;
 			climate.Temperature = Nudge(climate.Temperature, temperatureNoise, SelectionTemperature);
 			climate.Humidity = Nudge(climate.Humidity, humidityNoise, SelectionHumidity);
+			// The summer moves with the year's temperature: the same slope aspect and cold pooling.
+			climate.WarmestSeason = Nudge(climate.WarmestSeason, temperatureNoise, SelectionTemperature);
 			climate.ElevationTier = ClimateSettings.TierForHeight(normalized, Parameters.ElevationBoundaries);
 
 			return new PlanetSurfacePoint
@@ -398,9 +554,8 @@ namespace FishMMO.Shared.Biomes
 		/// <param name="altitudeMetres">Metres above sea level. Below it costs nothing: the sea is the sea.</param>
 		public float TemperatureAt(double latitudeDegrees, Vector3 direction, float altitudeMetres)
 		{
-			float latitude = system != null && body != null
-				? (float)CelestialMath.LatitudeTemperature(system, body, 0.0, latitudeDegrees)
-				: 0f;
+			// The year's mean, never a moment's: see BuildLatitudeTables.
+			float latitude = YearlyMeanLatitudeTemperature(latitudeDegrees);
 			// Clamped here, once, with every term in.
 			return Mathf.Clamp(SubSolarTemperature
 				+ latitude
@@ -608,6 +763,9 @@ namespace FishMMO.Shared.Biomes
 				Temperature = temperature,
 				Humidity = Humidity(temperature, normalized, moistureAnomaly),
 				ElevationTier = ClimateSettings.TierForHeight(normalized, Parameters.ElevationBoundaries),
+				// Never below the moment's own reading: the summer is the warmest the year gets.
+				WarmestSeason = Mathf.Max(temperature, WarmestSeasonAt(latitudeDegrees, direction, altitude)),
+				SeasonKnown = seasons,
 			};
 		}
 

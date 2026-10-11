@@ -50,6 +50,8 @@ namespace FishMMO.TestHarness.World.Editor
 		private static RenderTexture target;
 		private static readonly Dictionary<string, Recorder> recorders = new Dictionary<string, Recorder>();
 		private static readonly Dictionary<string, double> gpuSum = new Dictionary<string, double>();
+		// FISHMMO_PERF_SERIES=<marker>[|<marker>…]: those markers' GPU time frame by frame, for work that lands on some frames only.
+		private static readonly Dictionary<string, List<double>> gpuSeries = new Dictionary<string, List<double>>();
 		private static readonly Dictionary<string, double> cpuSum = new Dictionary<string, double>();
 		private static int sampled;
 		private static float baseMilliseconds;
@@ -59,12 +61,19 @@ namespace FishMMO.TestHarness.World.Editor
 
 		/// <summary>
 		/// FISHMMO_PERF_WEATHER: the weather every measurement is taken in, set through the scene's World Sim bed before the
-		/// settle (clear, fair, overcast, rain, storm overhead, storm-far 5 km off); unset, the scene's own.
+		/// settle (clear, fair, overcast, rain, mist, storm overhead, storm-far 5 km off); unset, the scene's own.
 		/// </summary>
 		private static void ApplyWeather()
 		{
 			string asked = Environment.GetEnvironmentVariable("FISHMMO_PERF_WEATHER");
 			WorldSimController controller = UnityEngine.Object.FindAnyObjectByType<WorldSimController>();
+			if (controller != null && HeldHours.HasValue && string.IsNullOrEmpty(asked))
+			{
+				// The scene's own (driven) weather at that world hour, before the settle.
+				controller.Paused = true;
+				controller.JumpToHours(HeldHours.Value);
+				controller.ForcePresent();
+			}
 			if (string.IsNullOrEmpty(asked) || controller == null)
 			{
 				return;
@@ -80,6 +89,8 @@ namespace FishMMO.TestHarness.World.Editor
 				case "fair": controller.SetAir(Air(humidity: -0.1f, pressure: 0.2f), 0f); break;
 				case "overcast": controller.SetAir(Air(humidity: 0.25f, pressure: -0.1f), 0f); break;
 				case "rain": controller.SetAir(Air(humidity: 0.45f, pressure: -0.5f, instability: 0.3f), 0f); break;
+				// Near-saturated, settled and calm under a clear sky: the air the ground mist forms in (GroundMist).
+				case "mist": controller.SetAir(Air(humidity: 0.35f, pressure: 0.9f, wind: -8f), 0f); break;
 				case "storm":
 					controller.SetAir(Air(humidity: 0.45f, pressure: -0.5f, instability: 0.3f), 0f);
 					controller.SpawnCell(StormKind.Thunderstorm, 0f, 0f, overhead: true);
@@ -98,9 +109,44 @@ namespace FishMMO.TestHarness.World.Editor
 					break;
 				}
 			}
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_TIME") != null || HeldHours.HasValue)
+			{
+				// The hour too, before the settle, so the eased weather (fog, mist) has caught up with it by the first frame.
+				controller.Paused = true;
+				if (HeldHours.HasValue)
+				{
+					controller.JumpToHours(HeldHours.Value);
+				}
+				else
+				{
+					controller.JumpTo(HeldTime);
+				}
+			}
 			controller.ForcePresent();
 		}
+
+		/// <summary>FISHMMO_PERF_HOURS, a world hour outright (a run trace's `hours`), in place of FISHMMO_PERF_TIME.</summary>
+		private static double? HeldHours => double.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_HOURS"), System.Globalization.NumberStyles.Float,
+			System.Globalization.CultureInfo.InvariantCulture, out double hours) ? hours : (double?)null;
+
+		/// <summary>FISHMMO_PERF_TIME, the local time of day (0..1) every measurement is held at; noon unset.</summary>
+		private static double HeldTime => double.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_TIME"), System.Globalization.NumberStyles.Float,
+			System.Globalization.CultureInfo.InvariantCulture, out double local) ? local : 0.5;
+
+		/// <summary>What each fog was handed this frame: the inputs behind a step's picture.</summary>
+		private static string DescribeFog()
+		{
+			SkySystem sky = UnityEngine.Object.FindAnyObjectByType<SkySystem>();
+			Vector4 light = Shader.GetGlobalVector("_FishFogLight");
+			string V(string name) { Vector4 v = Shader.GetGlobalVector(name); return $"{name}=({v.x:0.####}, {v.y:0.####}, {v.z:0.####}, {v.w:0.####})"; }
+			WorldSimController bed = UnityEngine.Object.FindAnyObjectByType<WorldSimController>();
+			return $"  clock {(bed != null ? bed.Hours : 0.0):0.000} h; fog: unity {(RenderSettings.fog ? $"{RenderSettings.fogMode} density {RenderSettings.fogDensity:0.######} colour {RenderSettings.fogColor}" : "off")}; " +
+				$"sun {Mathf.Asin(Mathf.Clamp(light.y, -1f, 1f)) * Mathf.Rad2Deg:0.0} deg; mist potential {sky?.MistPotential:0.000} best {sky?.MistBestPotential:0.000}; " +
+				$"layer drawn by clouds {FogLayerView.DrawnByClouds}, marched {FogLayerView.MarchedThisFrame}; " +
+				string.Join(" ", new[] { "_FishFogLayer", "_FishFogShell", "_FishMist", "_FishCloudSub", "_FishFogLightColor", "_FishFogAmbient", "_FishSkyFogColor" }.Select(V));
+		}
 		private static Action revert;
+		private static bool renderDocDone;
 
 		private struct Step
 		{
@@ -195,6 +241,20 @@ namespace FishMMO.TestHarness.World.Editor
 				}
 				Step step = steps[stepIndex];
 				frame++;
+				// FISHMMO_PERF_MOVE (m/s): the camera walks sideways at that speed, turning back every two seconds, as a
+				// player walking past sees the sky (a moving camera shortens the clouds' history).
+				// FISHMMO_PERF_TURN (degrees a second): the camera turns about the vertical, as a player looking round.
+				if (float.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_TURN"), System.Globalization.NumberStyles.Float,
+					System.Globalization.CultureInfo.InvariantCulture, out float turn) && turn > 0f)
+				{
+					camera.transform.Rotate(Vector3.up, turn * Time.deltaTime, Space.World);
+				}
+				if (float.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_MOVE"), System.Globalization.NumberStyles.Float,
+					System.Globalization.CultureInfo.InvariantCulture, out float walk) && walk > 0f)
+				{
+					float sway = Mathf.Sign(Mathf.Sin((float)EditorApplication.timeSinceStartup * Mathf.PI * 0.5f));
+					camera.transform.position += camera.transform.right * (walk * sway * Time.deltaTime);
+				}
 				if (step.Breakdown && frame == WaitFrames - SampledFrames / 2)
 				{
 					// Unity's profiler over the same natural frames: the CPU's time by marker, scripts included.
@@ -207,6 +267,46 @@ namespace FishMMO.TestHarness.World.Editor
 				if (frame > WaitFrames - SampledFrames / 2 && frame <= WaitFrames - SampledFrames / 2 + SampledFrames)
 				{
 					Sample();
+				}
+				// FISHMMO_PERF_RENDERDOC=N (editor launched with -load-renderdoc): N consecutive whole editor frames captured during the
+				// first settled rebase, one .rdc each (in /tmp/RenderDoc) — each begun as the last ends, so everything the frames send the
+				// GPU is in them, the work outside the camera's markers included. Replay timings run at full clocks; the live natural
+				// frames here do not (the GPU idles down to P3 under xvfb).
+				if (int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_RENDERDOC"), out int captures) && captures > 0
+					&& !renderDocDone && step.Variant == "rebase")
+				{
+					captures = Mathf.Min(captures, 16);
+					int first = WaitFrames - 2 - captures;
+					EditorWindow window = EditorWindow.GetWindow(Type.GetType("UnityEditor.GameView,UnityEditor"), false, null, false);
+					if (frame > first && frame <= first + captures)
+					{
+						UnityEditorInternal.RenderDoc.EndCaptureRenderDoc(window);
+					}
+					if (frame == first)
+					{
+						report.Add($"renderdoc: loaded {UnityEditorInternal.RenderDoc.IsLoaded()}, capturing {captures} editor frames ({step.View})");
+					}
+					if (frame >= first && frame < first + captures)
+					{
+						UnityEditorInternal.RenderDoc.BeginCaptureRenderDoc(window);
+					}
+					if (frame == first + captures)
+					{
+						renderDocDone = true;
+						report.Add("renderdoc: captures ended");
+					}
+				}
+				// FISHMMO_PERF_LIVE=1: two consecutive natural frames, as the game draws them (a frame at a time, the clock
+				// moving), before the timed renders — which run back to back inside one editor frame and so show a history
+				// settled as no running game's ever is.
+				if (Environment.GetEnvironmentVariable("FISHMMO_PERF_LIVE") == "1" && (frame == WaitFrames - 1 || frame == WaitFrames))
+				{
+					var live = new Texture2D(target.width, target.height, TextureFormat.RGBA32, false);
+					RenderTexture.active = target;
+					live.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
+					string liveTag = new string(step.Variant.Select(ch => char.IsLetterOrDigit(ch) || ch == '.' || ch == '=' ? ch : '_').ToArray());
+					File.WriteAllBytes(Path.Combine(output, $"perf-{step.View}-{liveTag}-live{(frame == WaitFrames ? "B" : "A")}.png"), live.EncodeToPNG());
+					UnityEngine.Object.DestroyImmediate(live);
 				}
 				if (frame < WaitFrames + SampledFrames / 2)
 				{
@@ -243,9 +343,27 @@ namespace FishMMO.TestHarness.World.Editor
 			}
 			if (controller != null)
 			{
-				// Noon, the clock held: every viewpoint and variant sees the same sky.
+				// Noon, the clock held: every viewpoint and variant sees the same sky. FISHMMO_PERF_TIME (local time 0..1)
+				// holds another hour instead — a dawn for the ground mist, which needs a low sun.
 				controller.Paused = true;
-				controller.JumpTo(0.5);
+				if (HeldHours.HasValue)
+				{
+					controller.JumpToHours(HeldHours.Value);
+				}
+				else
+				{
+					controller.JumpTo(HeldTime);
+				}
+				// FISHMMO_PERF_RATE (world seconds per real second): the clock left running at that rate instead, as a
+				// player sees it (1) or as the bed's own default runs it (180) — the clouds then drift and change between
+				// frames, which a held clock never shows.
+				if (double.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_RATE"), System.Globalization.NumberStyles.Float,
+					System.Globalization.CultureInfo.InvariantCulture, out double rate) && rate > 0.0)
+				{
+					controller.RunRate = rate;
+					controller.Paused = false;
+					report.Add($"clock running at {rate:0.###} world seconds a second");
+				}
 			}
 			string res = Environment.GetEnvironmentVariable("FISHMMO_PERF_RES") ?? "2560x1440";
 			string[] wh = res.Split('x');
@@ -260,17 +378,7 @@ namespace FishMMO.TestHarness.World.Editor
 			report.Add($"render-pipeline hooks: {Hooks()}");
 			report.Add(DescribeBackdrop());
 
-			var names = new List<string>();
-			Sampler.GetNames(names);
-			foreach (string name in names)
-			{
-				Recorder recorder = Recorder.Get(name);
-				if (recorder != null && recorder.isValid)
-				{
-					recorder.enabled = true;
-					recorders[name] = recorder;
-				}
-			}
+			EnableRecorders();
 
 			string views = Environment.GetEnvironmentVariable("FISHMMO_PERF_VIEWS") ?? "meadow,fall,overview";
 			string variants = Environment.GetEnvironmentVariable("FISHMMO_PERF_VARIANTS") ?? "all";
@@ -357,16 +465,46 @@ namespace FishMMO.TestHarness.World.Editor
 
 		// ── A step ──────────────────────────────────────────────────
 
+		/// <summary>A recorder on every sampler there is now: a command buffer's sample exists only once it has run, so a
+		/// system that first ran after the settle would be missing from the tables.</summary>
+		private static void EnableRecorders()
+		{
+			var names = new List<string>();
+			Sampler.GetNames(names);
+			foreach (string name in names)
+			{
+				if (recorders.ContainsKey(name))
+				{
+					continue;
+				}
+				Recorder recorder = Recorder.Get(name);
+				if (recorder != null && recorder.isValid)
+				{
+					recorder.enabled = true;
+					recorders[name] = recorder;
+				}
+			}
+		}
+
 		private static void Enter(Step step)
 		{
+			EnableRecorders();
 			// The editor's cloud switch (CloudToggle) is a person's preference, restored after every domain reload: the
 			// probe measures the clouds as shipped, so it is held on here, for this session only (nothing is saved). The fog
 			// switch (FogToggle) likewise. FISHMMO_PERF_CLOUDS=0 holds them off for the whole run instead.
 			SkySystem.EditorCloudsOff = CloudsHeldOff;
 			SkySystem.EditorFogOff = false;
 			Place(step.View);
+			// A running clock (FISHMMO_PERF_RATE) with a world hour asked for: every step starts from that hour, so each
+			// variant sees the same weather go by and the pictures compare.
+			WorldSimController clock = UnityEngine.Object.FindAnyObjectByType<WorldSimController>();
+			if (clock != null && HeldHours.HasValue && !clock.Paused)
+			{
+				clock.JumpToHours(HeldHours.Value);
+			}
 			revert = Apply(step.Variant);
 			gpuSum.Clear();
+			gpuSeries.Clear();
 			cpuSum.Clear();
 			sampled = 0;
 		}
@@ -745,6 +883,19 @@ namespace FishMMO.TestHarness.World.Editor
 			return 0f;
 		}
 
+		/// <summary>Runs <paramref name="act"/> as every camera begins to render; returns what stops it.</summary>
+		private static Action BeforeEachCamera(Action act)
+		{
+			bool fogWas = RenderSettings.fog;
+			Action<ScriptableRenderContext, Camera> hook = (_, _) => act();
+			RenderPipelineManager.beginCameraRendering += hook;
+			return () =>
+			{
+				RenderPipelineManager.beginCameraRendering -= hook;
+				RenderSettings.fog = fogWas;
+			};
+		}
+
 		/// <summary>Switches one system off; returns what switches it back on.</summary>
 		private static Action Apply(string variant)
 		{
@@ -848,6 +999,33 @@ namespace FishMMO.TestHarness.World.Editor
 				return () => QualitySettings.SetQualityLevel(was, true);
 			}
 			var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+			if (variant == "before-frames")
+			{
+				// The look before 2026-10-09's frame changes: native resolution, MSAA 4x, no STP, the clouds marched in full to 20 km.
+				var asset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+				float scaleWas = asset.renderScale;
+				UpscalingFilterSelection filterWas = asset.upscalingFilter;
+				int msaaWas = asset.msaaSampleCount;
+				asset.renderScale = 1f;
+				asset.upscalingFilter = UpscalingFilterSelection.Auto;
+				asset.msaaSampleCount = 4;
+				Action clouds = Apply("cloud:fullmarch=20000");
+				return () =>
+				{
+					clouds?.Invoke();
+					asset.renderScale = scaleWas;
+					asset.upscalingFilter = filterWas;
+					asset.msaaSampleCount = msaaWas;
+				};
+			}
+			if (variant.StartsWith("far:"))
+			{
+				// The camera's far plane held at a distance (SceneBackdrop raises it to its FarPlaneMetres, 20 km, while loaded).
+				float far = float.Parse(variant.Substring("far:".Length), System.Globalization.CultureInfo.InvariantCulture);
+				float farWas = camera.farClipPlane;
+				Action restore = BeforeEachCamera(() => camera.farClipPlane = far);
+				return () => { restore(); camera.farClipPlane = farWas; };
+			}
 			if (variant.StartsWith("feature:"))
 			{
 				string name = variant.Substring("feature:".Length);
@@ -911,6 +1089,75 @@ namespace FishMMO.TestHarness.World.Editor
 					// Every fog at once (FogToggle): the layer's passes, the ground mist and the distance fog.
 					SkySystem.EditorFogOff = true;
 					return () => SkySystem.EditorFogOff = false;
+				// One fog at a time, each taken out just before every camera renders (SkySystem and FogComposer publish them
+				// once a frame in Update, so this runs after them and nothing of the game's own changes):
+				case "unityfog":
+					// Unity's distance fog (RenderSettings.fog, FogComposer): the MixFog every surface shader applies.
+					return BeforeEachCamera(() => RenderSettings.fog = false);
+				case "foglayer":
+					// The weather's fog layer, as the cloud march walks it (FogLayerView: _FishFogLayer, _FishFogShell).
+					return BeforeEachCamera(() =>
+					{
+						Shader.SetGlobalVector("_FishFogLayer", Vector4.zero);
+						Shader.SetGlobalVector("_FishFogShell", Vector4.zero);
+					});
+				case "mist":
+					// The ground mist (SkySystem.PublishMist, FishMist.hlsl).
+					return BeforeEachCamera(() => Shader.SetGlobalVector("_FishMist", Vector4.zero));
+				case "rainhaze":
+					// The rain haze hanging under wet cloud columns (_FishCloudSub).
+					return BeforeEachCamera(() => Shader.SetGlobalVector("_FishCloudSub", Vector4.zero));
+				case "cloudhaze":
+					// The aerial perspective on the clouds themselves (_FishCloudHaze: its distance pushed out of reach).
+					return BeforeEachCamera(() =>
+					{
+						Vector4 haze = Shader.GetGlobalVector("_FishCloudHaze");
+						Shader.SetGlobalVector("_FishCloudHaze", new Vector4(haze.x, haze.y, haze.z, 1e9f));
+					});
+				case "skyfog":
+					// The sky's own horizon blend toward the fog colour (_FishSkyFogColor.a).
+					return BeforeEachCamera(() =>
+					{
+						Vector4 fog = Shader.GetGlobalVector("_FishSkyFogColor");
+						Shader.SetGlobalVector("_FishSkyFogColor", new Vector4(fog.x, fog.y, fog.z, 0f));
+					});
+				case "clouds":
+					// The cloud march off (the editor's cloud switch): the height fog and the froxel volume then draw the
+					// fog layer in its place, and the mist and rain haze, which live only in the march, go with it.
+					SkySystem.EditorCloudsOff = true;
+					return () => SkySystem.EditorCloudsOff = CloudsHeldOff;
+				// FORCED conditions, for pictures of a layer the probe's weather does not raise by itself (labelled as such):
+				case "forcefog":
+				{
+					// A moderate calm fog (channel 0.4, ~200 m visibility, 60 m deep) published as the game would publish it, with a
+					// shell from the highest terrain.
+					float highest = Terrain.activeTerrains.Length > 0 ? Terrain.activeTerrains.Max(t => t.GetPosition().y + t.terrainData.size.y) : 200f;
+					return BeforeEachCamera(() =>
+					{
+						// FogLayerView.Of takes the depth from the frame's own air (FogLayer.In), which is 0 when the weather made no
+						// fog: built here with a 60 m radiation fog's depth instead, everything else as Of builds it.
+						const float depth = 60f;
+						var view = new FogLayerView
+						{
+							Extinction = AirPhysics.FogExtinction(0.4f),
+							Depth = depth,
+							Lift = 0f,
+							TopSoftness = Mathf.Max(0.5f, depth * FogLayerView.TopShare(depth, 0f, 0f)),
+							Patchiness = Mathf.Lerp(0.9f, 0.35f, 0.4f),
+							WindSpeed = FogLayerView.DriftWind(1f, depth, 0f),
+						};
+						FogLayerView.ReplaceCurrent(view);
+						Vector2 shell = view.Shell(highest, highest);
+						Shader.SetGlobalVector("_FishFogLayer", new Vector4(view.Extinction, view.Depth, view.Lift, view.TopSoftness));
+						Shader.SetGlobalVector("_FishFogShell", new Vector4(shell.x, shell.y, 1f, 0f));
+					});
+				}
+				case "forcemist":
+					// Ground mist as ready as open ground gets: 0.8 K short of saturation, unstirred, a calm clear night's cooling.
+					return BeforeEachCamera(() => Shader.SetGlobalVector("_FishMist", new Vector4(0.8f, 1f, 1f, 300f)));
+				case "cloudfix":
+					// The four diagnostics the profile asset holds away from their defaults, put back to them together.
+					return Apply("cloud:clip=1.25+cloud:blur=3+cloud:maxod=0.35+cloud:lightphase=0");
 				case "details":
 					TerrainInstancingShared.SetDrawsDetails(camera, false);
 					return () => TerrainInstancingShared.SetDrawsDetails(camera, true);
@@ -969,6 +1216,34 @@ namespace FishMMO.TestHarness.World.Editor
 				case "noocclusion":
 					FishDepthPyramid.Enabled = false;
 					return () => FishDepthPyramid.Enabled = true;
+				case "notrails":
+				{
+					// The trail map off (GroundTrailMap): every reader early-outs on its validity, so this prices the reads.
+					WeatherRenderProfile profile = WeatherRenderProfile.Active;
+					if (profile == null)
+					{
+						return null;
+					}
+					bool was = profile.GroundTrails;
+					profile.GroundTrails = false;
+					return () => profile.GroundTrails = was;
+				}
+				case "deepsnow":
+				{
+					// White ground with a metre of deep snow past the blanket, held (pair with nobury to price the grass cut).
+					WorldSimController sim = UnityEngine.Object.FindAnyObjectByType<WorldSimController>();
+					if (sim == null)
+					{
+						return null;
+					}
+					sim.CoverOverride = new WeatherCover { Snow = 1f };
+					sim.HoldDeepSnow(1f);
+					return () => sim.ResetCover();
+				}
+				case "nobury":
+					// Buried grass generated and drawn again (FishGrassBlades.compute GrassBuried off).
+					GrassBladeRenderer.CullBuried = false;
+					return () => GrassBladeRenderer.CullBuried = true;
 				case "nocamera":
 					// The editor's own GPU time alone in the natural frames (the timed renders still draw the camera).
 					camera.enabled = false;
@@ -1173,7 +1448,8 @@ namespace FishMMO.TestHarness.World.Editor
 		/// <summary>
 		/// One of the clouds' own settings changed on the live render profile, in memory (put back afterwards, never
 		/// saved): res=× (march resolution), steps=× (march steps), light=n (light-march steps), lightmarch=0,
-		/// maxdist=metres, stepscale=×, detail=0…1 (the tier's), growth=0 (no distance step growth), exit=0.001…0.5.
+		/// maxdist=metres, stepscale=×, detail=0…1 (the tier's), growth=0 (no distance step growth), exit=0.001…0.5,
+		/// clip=γ (history clip), historyclip=0, blur=pixels, maxod=τ (max step optical depth), lightphase=0 stratified / 1 fixed.
 		/// </summary>
 		private static Action Cloud(string setting)
 		{
@@ -1194,6 +1470,21 @@ namespace FishMMO.TestHarness.World.Editor
 				case "res": { float was = tier.CloudResolution; tier.CloudResolution = Mathf.Clamp(was * value, 0.05f, 1f); return () => tier.CloudResolution = was; }
 				case "steps": { int was = tier.CloudSteps; tier.CloudSteps = Mathf.Max(4, Mathf.RoundToInt(was * value)); return () => tier.CloudSteps = was; }
 				case "detail": { float was = tier.CloudDetail; tier.CloudDetail = value; return () => tier.CloudDetail = was; }
+				case "imposterstart": { float was = clouds.FarImposterStartMetres; clouds.FarImposterStartMetres = value; return () => clouds.FarImposterStartMetres = was; }
+				case "nearevery": { int was = clouds.NearMarchEvery; clouds.NearMarchEvery = (int)value; return () => clouds.NearMarchEvery = was; }
+				case "imposter": { bool was = FishCloudsFeature.FarImposterEnabled; FishCloudsFeature.FarImposterEnabled = value > 0.5f; return () => FishCloudsFeature.FarImposterEnabled = was; }
+				case "imposterrefresh": { int was = clouds.FarImposterRefreshFrames; clouds.FarImposterRefreshFrames = (int)value; return () => clouds.FarImposterRefreshFrames = was; }
+				case "impostersize": { int was = clouds.FarImposterSize; clouds.FarImposterSize = (int)value; return () => clouds.FarImposterSize = was; }
+				case "fullmarch": { float was = clouds.FullMarchMetres; clouds.FullMarchMetres = value; return () => clouds.FullMarchMetres = was; }
+				case "nearstep": { float was = d.NearStepScale; d.NearStepScale = value; return () => d.NearStepScale = was; }
+				case "rayjitter": { bool was = d.RayJitter; d.RayJitter = value > 0.5f; return () => d.RayJitter = was; }
+				case "temporal": { CloudTemporalOverride was = d.Temporal; d.Temporal = value > 0.5f ? CloudTemporalOverride.On : CloudTemporalOverride.Off; return () => d.Temporal = was; }
+				case "economy": { bool was = d.DenseCloudEconomy; d.DenseCloudEconomy = value > 0.5f; return () => d.DenseCloudEconomy = was; }
+				case "clip": { float was = d.ClipGamma; d.ClipGamma = value; return () => d.ClipGamma = was; }
+				case "historyclip": { bool was = d.HistoryClip; d.HistoryClip = value > 0.5f; return () => d.HistoryClip = was; }
+				case "blur": { float was = d.BlurPixels; d.BlurPixels = value; return () => d.BlurPixels = was; }
+				case "maxod": { float was = d.MaxStepOpticalDepth; d.MaxStepOpticalDepth = value; return () => d.MaxStepOpticalDepth = was; }
+				case "lightphase": { CloudLightMarchPhase was = d.LightMarchPhase; d.LightMarchPhase = (CloudLightMarchPhase)(int)value; return () => d.LightMarchPhase = was; }
 				case "light": { int was = clouds.LightSteps; clouds.LightSteps = Mathf.Max(1, (int)value); return () => clouds.LightSteps = was; }
 				case "maxdist": { float was = clouds.MaxDistance; clouds.MaxDistance = value; return () => clouds.MaxDistance = was; }
 				case "lightmarch": { bool was = d.LightMarch; d.LightMarch = value > 0.5f; return () => d.LightMarch = was; }
@@ -1229,6 +1520,15 @@ namespace FishMMO.TestHarness.World.Editor
 				if (r.gpuSampleBlockCount > 0)
 				{
 					gpuSum[pair.Key] = (gpuSum.TryGetValue(pair.Key, out double g) ? g : 0.0) + r.gpuElapsedNanoseconds;
+					string series = Environment.GetEnvironmentVariable("FISHMMO_PERF_SERIES");
+					if (!string.IsNullOrEmpty(series) && Array.IndexOf(series.Split('|'), pair.Key) >= 0)
+					{
+						if (!gpuSeries.TryGetValue(pair.Key, out List<double> list))
+						{
+							gpuSeries[pair.Key] = list = new List<double>();
+						}
+						list.Add(r.gpuElapsedNanoseconds / 1e6);
+					}
 				}
 				if (r.sampleBlockCount > 0)
 				{
@@ -1348,6 +1648,7 @@ namespace FishMMO.TestHarness.World.Editor
 					report.Add($"  cloud light volume: off (C.x {on.x:0}, texture {(volume != null ? "set" : "none")})");
 				}
 			}
+			report.Add(DescribeFog());
 			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
 			report.Add($"  shadow cascades: {ShadowCascadeCulling.LastReport}");
 			report.Add($"  indirect draws a camera: props {CliffRockInstancing.LastDrawCount}, trees {TerrainTreeInstancing.LastDrawCount}, details {TerrainDetailInstancing.LastDrawCount}, scatter {DetailScatterSystem.LastDrawCount}, grass {GrassBladeSystem.LastDrawCount}");
@@ -1369,6 +1670,14 @@ namespace FishMMO.TestHarness.World.Editor
 					tag = tag.Substring(0, 80) + "_" + ((uint)step.Variant.GetHashCode()).ToString("x8");
 				}
 				File.WriteAllBytes(Path.Combine(output, $"perf-{step.View}-{tag}.png"), image.EncodeToPNG());
+				if (Environment.GetEnvironmentVariable("FISHMMO_PERF_NEXT") == "1")
+				{
+					// One more frame, for how much the picture changes from frame to frame (temporal shimmer).
+					camera.Render();
+					RenderTexture.active = target;
+					image.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
+					File.WriteAllBytes(Path.Combine(output, $"perf-{step.View}-{tag}-next.png"), image.EncodeToPNG());
+				}
 				UnityEngine.Object.DestroyImmediate(image);
 			}
 			if (step.Breakdown)
@@ -1380,6 +1689,12 @@ namespace FishMMO.TestHarness.World.Editor
 					report.Add($"    {pair.Value / frames / 1e6:0.000} ms  {pair.Key}");
 				}
 				report.AddRange(cpu);
+			}
+			foreach (KeyValuePair<string, List<double>> pair in gpuSeries)
+			{
+				List<double> sorted = pair.Value.OrderBy(v => v).ToList();
+				report.Add($"  GPU series {pair.Key}: min {sorted[0]:0.000} median {sorted[sorted.Count / 2]:0.000} max {sorted[sorted.Count - 1]:0.000} ms over {sorted.Count} frames: "
+					+ string.Join(" ", pair.Value.Select(v => v.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))));
 			}
 			File.WriteAllLines(Path.Combine(output, "ScenePerf-report.txt"), report);
 		}

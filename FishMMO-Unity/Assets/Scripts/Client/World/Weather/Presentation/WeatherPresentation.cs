@@ -42,6 +42,7 @@ namespace FishMMO.Client
 		// which reads as an unrelated NullReferenceException in whatever touched it first.
 		private PrecipitationField precipitation;
 		private PrecipitationSplashField splashes;
+		private AirMotesField airMotes;
 		private SkyOcclusionMap occlusion;
 		private WeatherCoverMap coverMap;
 		private WeatherAudioPresenter audioPresenter;
@@ -73,6 +74,8 @@ namespace FishMMO.Client
 			WeatherPresentation presentation = go.AddComponent<WeatherPresentation>();
 			// The volcanic plumes the ash falls from, and the fountains over an airless world's vents.
 			go.AddComponent<VolcanicPlumePresenter>();
+			// The steam off hot ground: fumaroles, hot springs and geysers (GeothermalVents).
+			go.AddComponent<GeothermalSteamPresenter>();
 			SkySystem.Ensure(go);
 			return presentation;
 		}
@@ -99,6 +102,7 @@ namespace FishMMO.Client
 		{
 			precipitation = precipitation ?? new PrecipitationField();
 			splashes = splashes ?? new PrecipitationSplashField();
+			airMotes = airMotes ?? new AirMotesField();
 			occlusion = occlusion ?? new SkyOcclusionMap();
 			coverMap = coverMap ?? new WeatherCoverMap();
 			audioPresenter = audioPresenter ?? new WeatherAudioPresenter(transform);
@@ -127,6 +131,7 @@ namespace FishMMO.Client
 			RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
 			precipitation?.Dispose();
 			splashes?.Dispose();
+			airMotes?.Dispose();
 			occlusion?.Dispose();
 			coverMap?.Dispose();
 			audioPresenter?.Dispose();
@@ -142,7 +147,19 @@ namespace FishMMO.Client
 			context = ctx;
 			hasContext = true;
 			contextRealtime = Time.realtimeSinceStartupAsDouble;
+			// The clock was set, or another scene took over: this weather is shown as it is, on this frame, rather than
+			// eased into from the old one over the next second or two (and everything that reads Shown with it).
+			if (WeatherClient.Snaps != snappedAt)
+			{
+				snappedAt = WeatherClient.Snaps;
+				shown = frame;
+				snapAudio = true;
+				Flush();
+			}
 		}
+
+		private uint snappedAt;
+		private bool snapAudio;
 
 		private double contextRealtime;
 		private double presentedTickSeconds = double.NaN;
@@ -245,7 +262,8 @@ namespace FishMMO.Client
 			// when the world's time does. It was a private float summed from zero — each client's own
 			// uptime, and frozen once that float could no longer hold a frame (~36 h at 144 fps).
 			// Wrapped in double before a shader's float sees it. The weather itself still eases to its
-			// target on the wall clock: held still, a new preset should still appear, just not move.
+			// target on the wall clock — held still, a new preset should still appear, just not move — except when
+			// the clock is set to another moment, which lands at once (Apply, WeatherClient.Snaps).
 			time = WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds);
 			AdvancePresentTick();
 			shown = dt > 0f ? WeatherFrame.Lerp(shown, target, 1f - Mathf.Exp(-dt / SmoothingSeconds)) : shown;
@@ -271,34 +289,14 @@ namespace FishMMO.Client
 				shelter = Mathf.Max(shelter, 1f);
 			}
 
-			// Where the cover lies, as opposed to how much of it the scene holds. The server's single
-			// figure anchors this map; the map is what the ground is actually drawn from.
+			// Where the cover lies, as opposed to how much of it the scene holds: the ground of this moment at each
+			// place round the camera, worked out from the world time as every other player's is (GroundCover).
 			if (camera != null && hasContext)
 			{
-				// The map starts over only when the timeline itself was replaced — a join, a resync,
-				// another scene — and is pulled toward the server's figure only when the server
-				// actually sent one. It used to start over on every change of revision, which is
-				// every delta: each cell that spawned or retired and each preset clicked redrew the
-				// whole ground from one number. And on every other frame it was anchored to that
-				// same number, which the anchor's own summary says is for "when a snapshot arrives,
-				// which is rarely" — so the ground never dried place by place at all. It tracked a
-				// single scene-wide figure, and went dry the instant that figure did.
 				CoverMarker.Begin();
 				WeatherTimeline ground = context.Timeline;
-				bool reseed = ground != null && (!ReferenceEquals(ground, coverTimeline) || ground.Generation != coverGeneration);
-				coverMap.Update(ground, context.Settings, camera.transform.position, (uint)context.Tick,
-					dt, context.Cover, reseed);
-				if (reseed)
-				{
-					coverTimeline = ground;
-					coverGeneration = ground.Generation;
-					coverSnapshots = ground.CoverSnapshots;
-				}
-				else if (ground != null && ground.CoverSnapshots != coverSnapshots)
-				{
-					coverSnapshots = ground.CoverSnapshots;
-					coverMap.Anchor(context.Cover);
-				}
+				double groundSeconds = ground != null ? ground.WorldSecondsAt(context.Tick) : 0.0;
+				coverMap.Update(ground, context.Settings, context.Scene, camera.transform.position, groundSeconds, dt);
 				CoverMarker.End();
 			}
 
@@ -311,14 +309,12 @@ namespace FishMMO.Client
 			GlobalsMarker.End();
 			currentTier = tier;
 			AudioMarker.Begin();
-			audioPresenter.Update(shown, shelter, profile.Audio, dt);
+			audioPresenter.Update(shown, shelter, profile.Audio, dt, snapAudio);
+			snapAudio = false;
 			AudioMarker.End();
 		}
 
 		private WeatherTierSettings currentTier;
-		private WeatherTimeline coverTimeline;
-		private uint coverGeneration = uint.MaxValue;
-		private uint coverSnapshots = uint.MaxValue;
 
 		/// <summary>
 		/// Precipitation is submitted as each camera starts rendering, so any render of the target
@@ -360,6 +356,8 @@ namespace FishMMO.Client
 			splashes?.Render(shown, camera, currentTier, Profile, time, occlusion != null && occlusion.IsValid,
 				hasContext ? this.context.Temperature : 0f, PrecipitationField.SubstanceOf(WeatherChannel.RainWeight, falling));
 			PrecipitationMarker.End();
+			// What floats in the air: dust, pollen, diamond dust, fireflies, wisps — from the climate here.
+			airMotes?.Render(camera, currentTier, Profile, shown, hasContext, this.context, occlusion);
 		}
 
 		/// <summary>
@@ -382,8 +380,9 @@ namespace FishMMO.Client
 			float gust = frame[WeatherChannel.WindGust];
 			wind.transform.rotation = Quaternion.Euler(0f, frame[WeatherChannel.WindHeading], 0f);
 			// Scaled by the world's motion: Unity animates the trees on its own clock, and a wind of
-			// nothing is the nearest thing to holding them still.
-			float motion = WorldMotion.Rate;
+			// nothing is the nearest thing to holding them still. The pace, not the preview's dial alone,
+			// so an admin's hold stills them too.
+			float motion = WorldMotion.Pace;
 			wind.windMain = speed * 2f * motion;
 			wind.windTurbulence = gust * 1.5f * motion;
 			wind.windPulseMagnitude = gust * motion;

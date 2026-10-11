@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Cyclops
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Heavy, slow, one-note thunder-speech'
+  Description: Heavy, slow, one-note thunder-speech
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -61,7 +61,7 @@ MonoBehaviour:
       - gos
       - mon
       - pes
-      - 'on'
+      - on
       - ax
       - oth
       - arr
@@ -81,7 +81,7 @@ MonoBehaviour:
       - mon
       - gos
       - us
-      Description: 'Heavy, slow, one-note thunder-speech'
+      Description: Heavy, slow, one-note thunder-speech
       Tags:
       - Forge-names
       - Mountain-bonds
@@ -115,6 +115,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Cyclopes
+    Adjective: Cyclops
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 2
@@ -124,3 +127,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 493502347
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

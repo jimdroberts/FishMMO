@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Giant Eel
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Ship-length eels of the sea caves — writhing, sibilant names'
+  Description: "Ship-length eels of the sea caves \u2014 writhing, sibilant names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - el
       - ur
       - ath
-      Description: 'Ship-length eels of the sea caves — writhing, sibilant names'
+      Description: "Ship-length eels of the sea caves \u2014 writhing, sibilant names"
       Tags:
       - Writhe-names
       - Cave-marks
@@ -160,6 +160,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Giant Eels
+    Adjective: Giant Eel
   BiomeAffinities:
   - BiomeID: -1552223677
     Weight: 3

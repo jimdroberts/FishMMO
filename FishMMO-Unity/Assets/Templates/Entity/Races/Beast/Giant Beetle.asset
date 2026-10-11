@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Giant Beetle
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: An armoured beetle as big as a boar with mandibles that shear through shield-rims.
+  Description: An armoured beetle as big as a boar with mandibles that shear through
+    shield-rims.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - us
-      Description: 'Clacking, hard — shell-tap consonants'
+      Description: "Clacking, hard \u2014 shell-tap consonants"
       Tags:
       - Vermin
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - husk
       - shell
     AllowGenericOccupations: 0
+    Plural: Giant Beetles
+    Adjective: Giant Beetle
   BiomeAffinities:
   - BiomeID: -1640008461
     Weight: 2
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1156965030
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

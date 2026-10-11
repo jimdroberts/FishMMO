@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Scorpion
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A giant scorpion of the dry wastes, its sting a spear and its pincers a vice.'
+  Description: A giant scorpion of the dry wastes, its sting a spear and its pincers
+    a vice.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - us
-      Description: 'Dry, clicking — desert-hard consonants'
+      Description: "Dry, clicking \u2014 desert-hard consonants"
       Tags:
       - Vermin
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - husk
       - shell
     AllowGenericOccupations: 0
+    Plural: Scorpions
+    Adjective: Scorpion
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 3
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 992717471
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

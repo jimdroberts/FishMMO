@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Angel
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Winged messengers of the bright host — ringing, luminous names'
+  Description: "Winged messengers of the bright host \u2014 ringing, luminous names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - ion
       - eus
       - el
-      Description: 'Winged messengers of the bright host — ringing, luminous names'
+      Description: "Winged messengers of the bright host \u2014 ringing, luminous
+        names"
       Tags:
       - Wing-names
       - Choir-marks
@@ -164,6 +165,8 @@ MonoBehaviour:
       - pit
       - silence
     AllowGenericOccupations: 0
+    Plural: Angels
+    Adjective: Angel
   BiomeAffinities:
   - BiomeID: 18062707
     Weight: 3
@@ -173,3 +176,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1645414801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

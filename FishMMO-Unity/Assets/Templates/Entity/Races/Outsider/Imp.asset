@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Imp
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Shrill, mocking — familiar-speech'
+  Description: "Shrill, mocking \u2014 familiar-speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -91,7 +91,7 @@ MonoBehaviour:
       - ik
       - us
       - et
-      Description: 'Shrill, mocking — familiar-speech'
+      Description: "Shrill, mocking \u2014 familiar-speech"
       Tags:
       - Familiar-bonds
       - Pact-names
@@ -101,7 +101,7 @@ MonoBehaviour:
     - Scrib Hole
     - the Inkwell
     - Pactwick
-    - 'Shrieker''s Nook'
+    - Shrieker's Nook
     Titles:
       Honorific:
       - Pocket-devil
@@ -116,7 +116,7 @@ MonoBehaviour:
       Rank:
       - Familiar of the Third Circle
       Legend:
-      - 'Who Pocketed the Wizard''s True Name'
+      - Who Pocketed the Wizard's True Name
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -125,6 +125,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Imps
+    Adjective: Imp
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 1
@@ -134,3 +137,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 525873855
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

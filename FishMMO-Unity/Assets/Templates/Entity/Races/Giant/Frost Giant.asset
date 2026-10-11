@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Frost Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Cold, sharp Nordic tongue — bitter winds'
+  Description: "Cold, sharp Nordic tongue \u2014 bitter winds"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - ur
       - brand
       - ulf
-      Description: 'Cold, sharp northern tongue — bitter winds'
+      Description: "Cold, sharp northern tongue \u2014 bitter winds"
       Tags:
       - Winter-names
       - Rime-bonds
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Frost Giants
+    Adjective: Frost Giant
   BiomeAffinities:
   - BiomeID: -212386137
     Weight: 3
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1693619367
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

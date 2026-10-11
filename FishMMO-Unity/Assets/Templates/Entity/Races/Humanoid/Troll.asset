@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Troll
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Stone-like and grinding — rolling r-sounds, hard stops'
+  Description: "Stone-like and grinding \u2014 rolling r-sounds, hard stops"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -91,7 +91,7 @@ MonoBehaviour:
       - uk
       - rak
       - rok
-      Description: 'Stone-like and grinding — rolling r-sounds, hard stops'
+      Description: "Stone-like and grinding \u2014 rolling r-sounds, hard stops"
       Tags:
       - Bridge-names
       - Stone-bonds
@@ -147,7 +147,7 @@ MonoBehaviour:
         - bog
         - sog
         - mire
-        Description: 'Bogrim — swamp dwellers, mutterers, regrow-all-limbs'
+        Description: "Bogrim \u2014 swamp dwellers, mutterers, regrow-all-limbs"
         Tags:
         - Muck-names
         - Mud-bonds
@@ -238,6 +238,9 @@ MonoBehaviour:
       - ruin
       - heap
       - dust
+    AllowGenericOccupations: 1
+    Plural: Trolls
+    Adjective: Troll
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 2
@@ -249,3 +252,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -138594552
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Glimmerling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Light-fey of lanterns and glow-worms — soft, shining names'
+  Description: "Light-fey of lanterns and glow-worms \u2014 soft, shining names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - el
       - eer
       - yn
-      Description: 'Light-fey of lanterns and glow-worms — soft, shining names'
+      Description: "Light-fey of lanterns and glow-worms \u2014 soft, shining names"
       Tags:
       - Glow-names
       - Lantern-marks
@@ -164,6 +164,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Glimmerlings
+    Adjective: Glimmerling
   BiomeAffinities:
   - BiomeID: -2077848218
     Weight: 2
@@ -175,3 +177,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 247344987
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

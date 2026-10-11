@@ -24,6 +24,8 @@ MonoBehaviour:
   MaxTemperature: 0.3
   MinHumidity: 0.5
   MaxHumidity: 1
+  MinWarmestSeason: -1
+  MaxWarmestSeason: 1
   SelectionWeight: 0.8
   Atmosphere: 12
   RequiresLiquidWater: 1
@@ -162,6 +164,79 @@ MonoBehaviour:
       - Abyssal
       - Vertiginous
       - Maze-like
+      POITypeWords:
+      - Key: cave
+        Values:
+        - Sea Cave
+        - Undersea Grotto
+        - Kelp Cave
+        - Deep Hollow
+        - Coral Cave
+        - Trench Cave
+      - Key: coralreef
+        Values:
+        - Reef
+        - Coral Gardens
+        - Shoals
+        - Atoll
+        - Coral Bank
+        - Coral Shelf
+      - Key: monsterden
+        Values:
+        - Deep Lair
+        - Trench Den
+        - Kelp Lair
+        - Abyss Hole
+        - Reef Den
+        - Coral Lair
+      - Key: nest
+        Values:
+        - Spawning Ground
+        - Brood Reef
+        - Egg Bed
+        - Clutch
+        - Kelp Nest
+        - Deep Nest
+      - Key: ruins
+        Values:
+        - Sunken Ruins
+        - Drowned Halls
+        - Sea Ruins
+        - Coral-grown Ruins
+        - Deep Ruins
+        - Lost Halls
+      - Key: shrine
+        Values:
+        - Drowned Shrine
+        - Sea Altar
+        - Tide Shrine
+        - Coral Altar
+        - Abyss Shrine
+        - Deep Fane
+      - Key: sunkencity
+        Values:
+        - Drowned City
+        - Sunken City
+        - Deep City
+        - Coral City
+        - Abyssal City
+        - Lost City
+      - Key: sunkenruins
+        Values:
+        - Drowned Halls
+        - Coral Ruins
+        - Sea-ruins
+        - Deep Walls
+        - Kelp Ruins
+        - Sunken Halls
+      - Key: sunkenship
+        Values:
+        - Wreck
+        - Hulk
+        - Drowned Ship
+        - Sunken Galleon
+        - Coral Wreck
+        - Lost Ship
       Description: "Deep underwater valleys \u2014 sheer walls, strong currents,
         narrow passages"
   LooseGround: {fileID: 0}
@@ -420,6 +495,11 @@ MonoBehaviour:
       sinkRange: {x: 0.03, y: 0.06}
       sinkSlopeFactor: 0
       depthRange: {x: 4, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: f9411e10130c86cc
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -473,6 +553,11 @@ MonoBehaviour:
       sinkRange: {x: 0.05, y: 0.1}
       sinkSlopeFactor: 0
       depthRange: {x: 4, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 2216e958bedba47d
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -526,8 +611,303 @@ MonoBehaviour:
       sinkRange: {x: 0.01, y: 0.025}
       sinkSlopeFactor: 0
       depthRange: {x: 2, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 2ca7aa8eb07d9a01
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 128
+    - stableGuid: dab3152c26344b0e98326322159ab8d2
+      enableSpawning: 1
+      ruleName: ColdCoral
+      prefabs:
+      - {fileID: 6956070098517524722, guid: 3964416e8597cdd0303497ee34e3ca2d, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 44077
+      clusterMetres: 10
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.08}
+      sinkSlopeFactor: 0
+      depthRange: {x: 50, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: af7f057d3800cee5
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: ec37485ad94845a19216ee8bf9ddc795
+      enableSpawning: 1
+      ruleName: Crinoid
+      prefabs:
+      - {fileID: 7468682386621795035, guid: 36d4ccf61fa1271d1cbff863b2fe83e5, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.5
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 11115
+      clusterMetres: 4
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.02, y: 0.04}
+      sinkSlopeFactor: 0
+      depthRange: {x: 30, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: e86f66cf6feecac6
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 2af4d895cc49442490ef68cc4d93ea5c
+      enableSpawning: 1
+      ruleName: SeaPen
+      prefabs:
+      - {fileID: 5217919503521742238, guid: 5aaf0b79e5642644ff662c859c230e51, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 861
+      clusterMetres: 5
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
+      sinkSlopeFactor: 0
+      depthRange: {x: 20, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: ef220cdb37d57cc1
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 9a0654ac5ad449a69afb49c9af064cd2
+      enableSpawning: 1
+      ruleName: BrittleStar
+      prefabs:
+      - {fileID: 7196060717301456092, guid: 7c93a21b742ad431e149704de008ac95, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 2
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 41874
+      clusterMetres: 3
+      clusterSize: 20
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.0005, y: 0.002}
+      sinkSlopeFactor: 0
+      depthRange: {x: 20, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: b3f1ea8ef5f37aa0
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 8e23b594032f4f8996f629f9196dbbfa
+      enableSpawning: 1
+      ruleName: BacterialMat
+      prefabs:
+      - {fileID: 6371232870052281883, guid: ce487bc30a7c4b686bf89a3cced9c64b, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.05
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 38090
+      clusterMetres: 5
+      clusterSize: 10
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.001, y: 0.003}
+      sinkSlopeFactor: 0
+      depthRange: {x: 200, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 4233436e3caec69f
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160

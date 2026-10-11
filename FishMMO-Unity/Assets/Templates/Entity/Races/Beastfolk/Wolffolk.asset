@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wolffolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Pack-bound wolf people — growled, clipped names with long howled vowels'
+  Description: "Pack-bound wolf people \u2014 growled, clipped names with long howled
+    vowels"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -83,7 +84,8 @@ MonoBehaviour:
       - ar
       - ok
       - ulf
-      Description: 'Pack-bound wolf people — growled, clipped names with long howled vowels'
+      Description: "Pack-bound wolf people \u2014 growled, clipped names with long
+        howled vowels"
       Tags:
       - Pack-names
       - Moon-marks
@@ -128,7 +130,7 @@ MonoBehaviour:
       - Who Howled the Blizzard Silent
       - Who Fought the Bear for the Den and Shared It
       - Who Led the Pack Through the Burning Forest
-      - 'Who Refused the Hunters'' Collar'
+      - Who Refused the Hunters' Collar
       Occupational:
       - Tracker
       - Hide-tanner
@@ -164,6 +166,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Wolffolk
+    Adjective: Wolffolk
   BiomeAffinities:
   - BiomeID: 144196518
     Weight: 3
@@ -173,3 +177,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -540190004
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Stormling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Small wind-sprites of the gust and squall — whistling, darting names'
+  Description: "Small wind-sprites of the gust and squall \u2014 whistling, darting
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - el
       - ist
       - yn
-      Description: 'Small wind-sprites of the gust and squall — whistling, darting names'
+      Description: "Small wind-sprites of the gust and squall \u2014 whistling, darting
+        names"
       Tags:
       - Gust-names
       - Squall-marks
@@ -161,6 +163,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Stormlings
+    Adjective: Stormling
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 2
@@ -170,3 +174,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -1951431387
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

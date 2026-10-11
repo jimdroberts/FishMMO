@@ -4,7 +4,12 @@
 //   1 the umbrella: puffs spreading at neutral buoyancy and carried downwind
 //   2 the fall beneath it: a thin veil of ash settling out of the umbrella over the fallout footprint
 //   3 a fountain on an airless world: grains on ballistic arcs with no drag, landing in a ring
-// The motion is VolcanicPlume's (Shared/Weather), the same functions the weather's ash falls by.
+//   4 a steam plume off hot ground (GeothermalSteamPresenter): puffs climbing a leaning axis, widening as
+//     they entrain air, evaporating as they reach the length the air lets them be seen (SteamPhysics)
+//   5 a geyser's water column: every drop on its own parabola, launched at the speed the eruption had
+//     when it left the vent (GeothermalVents.ColumnEnvelope), so the column grows and sinks without a scrub
+// The motion is VolcanicPlume's (Shared/Weather), the same functions the weather's ash falls by; the
+// steam's and the geyser's are SteamPhysics' and GeothermalVents'.
 // No geometry or compute shaders, so it runs the same on WebGPU, WebGL2 and desktop.
 Shader "FishMMO/Weather/Volcanic Plume"
 {
@@ -62,6 +67,11 @@ Shader "FishMMO/Weather/Volcanic Plume"
             // start, and fading in and out over it. The rise.w, drift.y and ballistic.x periods are the live ones, and time nothing.
             float4 _PlumePace;      // x seconds into layer A's window, y into layer B's, z the window (s)
             float4 _PlumeHeld;      // x the period layer A holds, y layer B (s): the drawn population's climb, drift or fall
+            // Steam (population 4): rise x the visible length along the plume (m), y the source's radius (m), z how fast it widens
+            // per metre along; lean xy where the visible end stands from the vent, XZ m, z how high (m), w how strong the steam is (0..1).
+            // A geyser (population 5): ballistic x the full launch speed (m/s), y gravity, z the jet's half-angle (rad), w the launch
+            // period (s, longer than any drop's flight); drift x seconds since the eruption began, y its length (s), z the wind on
+            // the spray (m/s, along lean.zw); rise x a drop puff's size (m).
 
             struct Attributes
             {
@@ -131,6 +141,56 @@ Shader "FishMMO/Weather/Volcanic Plume"
                     alpha = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.8, 1.0, s)) * paced;
                     glow = pow(saturate(1.0 - s * 6.0), 3.0) * paced;
                 }
+                else if (population == 4)
+                {
+                    // Steam: climbing from the vent along an axis that leans downwind (straight up at the mouth,
+                    // where the jet's own momentum carries it, bending over as the wind takes it), widening by
+                    // entrainment, and evaporating over the last part of the length the air lets it be seen.
+                    float s = frac(into / period + r.x);
+                    float along = s * _PlumeRise.x;
+                    float width = _PlumeRise.y + _PlumeRise.z * along;
+                    float2 axis = _PlumeLean.xy * (s * sqrt(s));
+                    float2 offset = float2(cos(r.y * TAU), sin(r.y * TAU)) * sqrt(r.z) * width;
+                    sideways = offset / max(0.1, width);
+                    centre = vent + float3(axis.x + offset.x, s * _PlumeLean.z + 0.3 * _PlumeRise.y * r.z, axis.y + offset.y);
+                    size = 1.6 * width + 0.6;
+                    alpha = smoothstep(0.0, 0.06, s) * (1.0 - smoothstep(0.35, 1.0, s)) * paced * _PlumeLean.w;
+                }
+                else if (population == 5)
+                {
+                    // A geyser's water: the drop launched most recently from this quad's slot in the launch
+                    // period, at the speed the eruption had at that moment, on its own parabola since.
+                    float since = _PlumeDrift.x;
+                    float launchPeriod = max(0.5, _PlumeBallistic.w);
+                    float sinceSlot = since - r.x * launchPeriod;
+                    float age = sinceSlot - floor(sinceSlot / launchPeriod) * launchPeriod;
+                    float launched = since - age;
+                    float duration = _PlumeDrift.y;
+                    // GeothermalVents.ColumnEnvelope's twin: up in a few seconds, sinking over the last three tenths.
+                    float ramp = min(4.0, 0.1 * duration);
+                    float envelope = (sinceSlot < 0.0 || launched >= duration) ? 0.0
+                        : smoothstep(0.0, 1.0, saturate(launched / ramp)) * (1.0 - smoothstep(0.7 * duration, duration, launched));
+                    // The column surges as the plumbing boils in pulses: the whole column together, by launch time.
+                    envelope *= 0.88 + 0.12 * sin(launched * 2.7);
+                    float g = max(0.01, _PlumeBallistic.y);
+                    float v = _PlumeBallistic.x * sqrt(saturate(envelope)) * (0.72 + 0.28 * r.z);
+                    float angle = _PlumeBallistic.z * sqrt(r.w);
+                    float flight = 2.0 * v * cos(angle) / g;
+                    if (envelope <= 0.01 || age >= flight)
+                    {
+                        output.positionCS = float4(0.0, 0.0, 0.0, 1.0);
+                        return output;
+                    }
+                    float phi = r.y * TAU;
+                    float outward = v * sin(angle) * age;
+                    float up = v * cos(angle) * age - 0.5 * g * age * age;
+                    float2 carried = down * (_PlumeDrift.z * 0.25 * age);
+                    centre = vent + float3(cos(phi) * outward + carried.x, up, sin(phi) * outward + carried.y);
+                    float u = age / flight;
+                    size = _PlumeRise.x * (1.0 + 0.2 * age);
+                    alpha = smoothstep(0.0, 0.03, u) * (1.0 - smoothstep(0.85, 1.0, u)) * lerp(1.0, 0.45, u);
+                    shade = 0.9;
+                }
                 else if (population == 1)
                 {
                     // The umbrella: spreading from the column's top at neutral buoyancy, carried downwind,
@@ -185,7 +245,7 @@ Shader "FishMMO/Weather/Volcanic Plume"
                     alpha = exp(-x / max(1.0, _PlumeDrift.w)) * saturate(radius0 / width) * smoothstep(0.0, 0.1, 1.0 - fallen) * smoothstep(0.0, 0.1, fallen) * paced;
                     shade = 0.75;
                 }
-                else
+                else if (population == 3)
                 {
                     // A fountain with no air: every grain on its own parabola, v·t up and out, g·t²/2
                     // down, landing as far out as its angle throws it — most in a ring near the widest.
@@ -208,6 +268,11 @@ Shader "FishMMO/Weather/Volcanic Plume"
                     alpha = smoothstep(0.0, 0.04, u) * (1.0 - smoothstep(0.96, 1.0, u));
                     glow = pow(saturate(1.0 - u * 8.0), 2.0);
                 }
+                else
+                {
+                    output.positionCS = float4(0.0, 0.0, 0.0, 1.0);
+                    return output;
+                }
 
                 float3 eye = _WorldSpaceCameraPos.xyz;
                 float3 toCentre = centre - eye;
@@ -226,7 +291,7 @@ Shader "FishMMO/Weather/Volcanic Plume"
                 Light mainLight = GetMainLight();
                 float2 sunFlat = mainLight.direction.xz;
                 float sunSide = dot(sunFlat, sunFlat) > 1e-6 ? dot(sideways, normalize(sunFlat)) : 0.0;
-                float selfShadow = population == 0 ? lerp(0.35, 1.0, saturate(0.5 + 0.5 * sunSide)) : shade;
+                float selfShadow = population == 0 || population == 4 ? lerp(0.35, 1.0, saturate(0.5 + 0.5 * sunSide)) : shade;
                 float forward = 0.55 + 0.9 * pow(saturate(dot(view, mainLight.direction)), 6.0);
                 float3 light = max(0.0, FishTrilight(-view)) + mainLight.color * selfShadow * forward * saturate(mainLight.direction.y * 4.0 + 0.2);
 

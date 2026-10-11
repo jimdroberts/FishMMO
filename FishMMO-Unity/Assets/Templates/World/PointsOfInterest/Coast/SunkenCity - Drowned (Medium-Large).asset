@@ -1,0 +1,135 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: SunkenCity - Drowned (Medium-Large)
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 95
+  Weight: 1
+  DefaultBiomeWeight: 1
+  BiomeWeights: []
+  RaceCategories: []
+  Races: []
+  Small: 0
+  Medium: 1
+  Large: 1
+  PadFlatness: 0
+  Style: stone
+  Layout: 5
+  Pieces:
+  - Tag: wall!gate!tower!fence
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0.4
+    MaxDecay: 0.9
+    MinScale: 1
+    MaxScale: 1
+    Role: 3
+    Style: 
+  - Tag: gate
+    MinCount: 2
+    MaxCount: 2
+    MinDecay: 0.5
+    MaxDecay: 0.8
+    MinScale: 1
+    MaxScale: 1
+    Role: 4
+    Style: 
+  - Tag: keep
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0.6
+    MaxDecay: 0.8
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: =Statue
+    MinCount: 1
+    MaxCount: 3
+    MinDecay: 0.3
+    MaxDecay: 0.9
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: house
+    MinCount: 15
+    MaxCount: 35
+    MinDecay: 0.5
+    MaxDecay: 1
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: column
+    MinCount: 4
+    MaxCount: 10
+    MinDecay: 0.3
+    MaxDecay: 0.9
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: rubble
+    MinCount: 6
+    MaxCount: 12
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506032503358000
+  - rid: 4061506032503358001
+  - rid: 4061506032503358002
+  - rid: 4061506032503358003
+  - rid: 4061506032503358004
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503358000
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 4
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506032503358001
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503358002
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506032503358003
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 5
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503358004
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 6
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

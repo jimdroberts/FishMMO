@@ -122,15 +122,26 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The level used as the collider (and by the placer to seat a rock).</summary>
 		public const int CollisionLod = 2;
 
-		/// <summary>Every cliff rock type: the rock types, then ice.</summary>
+		/// <summary>Every cliff rock type: the rock types that can be cliffs (<see cref="IsCliffRock"/>), then ice.</summary>
 		public static IEnumerable<string> Types()
 		{
 			foreach (RockType t in RockTypes.All)
 			{
-				yield return t.Name;
+				if (!t.FormationsOnly)
+				{
+					yield return t.Name;
+				}
 			}
 			yield return Ice;
 		}
+
+		/// <summary>
+		/// True for a rock that can be a cliff, a river boulder or a biome's bedrock: one of the crust's rock types. The
+		/// mineral, ice and alien rocks (<see cref="RockType.FormationsOnly"/>: halite, sulphur, sinter, a termite's clay,
+		/// firn …) are scattered formations only — a salt flat's polygons are not a salt cliff — so they are refused here
+		/// even where a ground family shares their name (Sulphur, Sinter).
+		/// </summary>
+		public static bool IsCliffRock(string type) => type != null && RockTypes.TryGet(type, out RockType t) && !t.FormationsOnly;
 
 		/// <summary>The structure a type's cliffs have.</summary>
 		public static CliffStructure StructureOf(string type)
@@ -425,7 +436,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return Ice;
 			}
-			if (RockTypes.TryGet(family, out _))
+			if (IsCliffRock(family))
 			{
 				return family;
 			}
@@ -437,7 +448,7 @@ namespace FishMMO.Shared.WorldDesign
 			return bedrock ?? (family == Ground.Rock ? "Granite" : "Limestone");
 		}
 
-		/// <summary>The rock type a biome's formation rules name most often, or null.</summary>
+		/// <summary>The cliff rock (<see cref="IsCliffRock"/>) a biome's formation rules name most often, or null.</summary>
 		public static string BedrockOf(BiomeArtSpec.Entry entry)
 		{
 			if (entry == null)
@@ -460,7 +471,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					int end = prefab.IndexOf('_', prefix.Length);
 					string type = end > 0 ? prefab.Substring(prefix.Length, end - prefix.Length) : null;
-					if (type != null && RockTypes.TryGet(type, out _))
+					if (IsCliffRock(type))
 					{
 						counts[type] = counts.TryGetValue(type, out int n) ? n + 1 : 1;
 					}
@@ -530,7 +541,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return Ice;
 			}
-			return geology != null && RockTypes.TryGet(geology, out _) && Accepts(entry, geology) ? geology : own;
+			return IsCliffRock(geology) && Accepts(entry, geology) ? geology : own;
 		}
 	}
 }

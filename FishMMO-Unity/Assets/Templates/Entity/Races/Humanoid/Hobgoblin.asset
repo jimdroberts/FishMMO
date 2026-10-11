@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hobgoblin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Militant, disciplined — like a legion''s barked orders'
+  Description: "Militant, disciplined \u2014 like a legion's barked orders"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -46,7 +46,7 @@ MonoBehaviour:
       - Rok
       - Gark
       - Shal
-      - 'No'
+      - No
       - Mo
       - Tho
       - Ho
@@ -69,7 +69,7 @@ MonoBehaviour:
       - ol
       - ar
       - mu
-      - 'on'
+      - on
       SyllMin: 2
       SyllMax: 3
       FeminineSuffixes:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - hur
       - ol
       - kor
-      Description: 'Militant, disciplined — like a legion''s barked orders'
+      Description: "Militant, disciplined \u2014 like a legion's barked orders"
       Tags:
       - Legion-names
       - Rank-bonds
@@ -120,6 +120,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Hobgoblins
+    Adjective: Hobgoblin
   BiomeAffinities:
   - BiomeID: -835082438
     Weight: 2
@@ -129,3 +132,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 599899035
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -224,6 +224,27 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
+		/// The biome the generator would paint at a position of a generated scene: the field's own choice
+		/// (<see cref="PlanetClimateField.SelectBiome"/>, selection noise and summer included) from the
+		/// honest climate there — never one shifted by today's weather or season.
+		/// </summary>
+		/// <remarks>
+		/// For a position the baked map does not cover (2026-10-10). Choosing from the weather-shifted
+		/// sample with no selection noise made ground off the map change biome with the season and
+		/// disagree with the painted ground at every ecotone.
+		/// </remarks>
+		public BiomeTemplate SelectBiomeAt(Vector3 worldPosition)
+		{
+			Vector3 direction = Generated
+				? AtlasGeometry.SceneToUnit(footprint, worldPosition.x / 1000.0, worldPosition.z / 1000.0, radiusKm).ToVector3().normalized
+				: AtlasGeometry.ToUnit(footprint.Latitude, footprint.Longitude).ToVector3().normalized;
+			float altitude = AltitudeOf(worldPosition.y);
+			ClimateSample climate = field.ClimateAt(direction, altitude, MoistureAt(worldPosition.x, worldPosition.z), out float normalized);
+			var point = new PlanetSurfacePoint { AltitudeMetres = altitude, NormalizedHeight = normalized, Climate = climate };
+			return field.SelectBiome(direction, point);
+		}
+
+		/// <summary>
 		/// The wind-driven moisture at a scene position, from the grid: exact at its nodes, bilinear
 		/// between them; <see cref="CentreMoisture"/> for a scene that is only placed.
 		/// </summary>

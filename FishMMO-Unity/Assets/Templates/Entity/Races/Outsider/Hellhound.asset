@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hellhound
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Fire-breathing hounds of the pit — snarling, smoke-hoarse names'
+  Description: "Fire-breathing hounds of the pit \u2014 snarling, smoke-hoarse names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - ak
       - ulf
       - ang
-      Description: 'Fire-breathing hounds of the pit — snarling, smoke-hoarse names'
+      Description: "Fire-breathing hounds of the pit \u2014 snarling, smoke-hoarse
+        names"
       Tags:
       - Pit-names
       - Bay-marks
@@ -91,9 +92,9 @@ MonoBehaviour:
     Places:
     - the Brass Kennel
     - the Sulphur Road
-    - 'the Burning Ledger''s Gate'
+    - the Burning Ledger's Gate
     - Pitbay
-    - 'the Ash Throne''s Step'
+    - the Ash Throne's Step
     - the Hunt of Souls
     - the Chain Post
     Titles:
@@ -119,7 +120,7 @@ MonoBehaviour:
       Rank:
       - Lord of the Brass Kennel
       - Hound of the Sulphur Road
-      - 'Guard of the Burning Ledger''s Gate'
+      - Guard of the Burning Ledger's Gate
       - Leader of the Hunt of Souls
       - Warden of the Chain Post
       Legend:
@@ -161,6 +162,8 @@ MonoBehaviour:
       - pit
       - silence
     AllowGenericOccupations: 0
+    Plural: Hellhounds
+    Adjective: Hellhound
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3
@@ -170,3 +173,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 599899035
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

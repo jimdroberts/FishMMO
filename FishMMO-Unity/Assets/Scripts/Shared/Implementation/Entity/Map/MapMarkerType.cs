@@ -65,5 +65,26 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		DungeonEntrance,
+
+		/*
+		 * Generated points of interest, one type per kind (Jim, 2026-10-10), each named after its
+		 * NameGeneration.POIType value so PointOfInterestKinds.MarkerFor maps them by name. Landmark and
+		 * DungeonEntrance above serve the kinds of the same name. Appended in POIType's order; the ordinal is
+		 * draw order, so new kinds go on the end here too.
+		 */
+		Camp, Shrine, Tower, Bridge, Clearing, Spring, Cave, Monument, Wreck,
+		Waterfall, Rapids, River, Lake, HotSpring, RiverMouth, Delta,
+		Peak, Pass, Gorge, Mesa, Butte, Valley, Island, Bay, Headland, NaturalArch, Sinkhole, Crater, DuneSea, SaltFlat, Glacier,
+		Volcano, LavaLake, FumaroleField, ObsidianField,
+		SunkenTemple, DrownedVillage, WitchHut, StiltVillage, BogShrine, MangroveMaze, WispHollow,
+		Grotto, SeaCave, IceCave, LavaTube, Overhang,
+		BanditCamp, HuntingLodge, LumberCamp, FishingCamp, MonsterDen, Nest,
+		RitualSite, StoneCircle, Temple, Monastery, FeyRing, LeyNexus, FallenStar, CorruptedGrove, Portal,
+		Graveyard, Barrow, Crypt, Battlefield, Ossuary,
+		Ruins, RuinedTower, Statue, Obelisk, AncientRoad, AbandonedFarm, Hermitage, Oasis,
+		Village, Town, City, Capital, Port, Keep, Castle, Fortress, TradingPost, Waystation, Mine, Quarry, Lighthouse,
+		SmugglersCove, PirateCove, CoralReef, SunkenShip, SunkenRuins, SunkenCity,
+		BossLair, OreVein, CrystalFormation, AncientTree, HerbGrove,
+		IceGeyserField, Cryovolcano, MethaneLake, ImpactBasin, TidalRift,
 	}
 }

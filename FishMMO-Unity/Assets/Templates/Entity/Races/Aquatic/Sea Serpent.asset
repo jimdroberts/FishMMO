@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sea Serpent
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A serpent of the open ocean long enough to wrap a warship, surfacing only in storms.'
+  Description: A serpent of the open ocean long enough to wrap a warship, surfacing
+    only in storms.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - arr
       - ash
-      Description: 'Booming, hissing — waves and breath'
+      Description: "Booming, hissing \u2014 waves and breath"
       Tags:
       - Draconic
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - scorch
       - bone
     AllowGenericOccupations: 0
+    Plural: Sea Serpents
+    Adjective: Sea Serpent
   BiomeAffinities:
   - BiomeID: 458680092
     Weight: 2

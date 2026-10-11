@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Stagfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Antlered forest people — proud, resonant names'
+  Description: "Antlered forest people \u2014 proud, resonant names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -70,7 +70,7 @@ MonoBehaviour:
       Middles:
       - er
       - al
-      - 'on'
+      - on
       - ae
       SyllMin: 2
       SyllMax: 3
@@ -82,7 +82,7 @@ MonoBehaviour:
       - orn
       - und
       - ath
-      Description: 'Antlered forest people — proud, resonant names'
+      Description: "Antlered forest people \u2014 proud, resonant names"
       Tags:
       - Antler-names
       - Glade-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Champion of the Rut Hill
       - Reeve of Velvetwood
       Legend:
-      - 'Who Locked Antlers with the King''s Champion and Won'
+      - Who Locked Antlers with the King's Champion and Won
       - Who Led the Herd Across the Frozen Mere
       - Who Carried the Wounded Knight on Their Back
       - Who Bellowed the Wolves Away
@@ -163,6 +163,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Stagfolk
+    Adjective: Stagfolk
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 144196518
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

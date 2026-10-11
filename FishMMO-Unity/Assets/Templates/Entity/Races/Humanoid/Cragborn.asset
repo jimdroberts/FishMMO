@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Cragborn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Towering grey-skinned mountain folk who measure worth in feats and remember every one of them.
+  Description: Towering grey-skinned mountain folk who measure worth in feats and
+    remember every one of them.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +96,7 @@ MonoBehaviour:
       - orn
       - alk
       - ard
-      Description: Heavy and unyielding — mountain stone given voice
+      Description: "Heavy and unyielding \u2014 mountain stone given voice"
       Tags:
       - Peak-names
       - Trial-bonds
@@ -191,6 +192,9 @@ MonoBehaviour:
       - ruin
       - landslide
       - waste
+    AllowGenericOccupations: 1
+    Plural: Cragborn
+    Adjective: Cragborn
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 3
@@ -200,3 +204,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 493502347
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

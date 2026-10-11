@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wyvern
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Cousins to dragons — sharp, poison-tongued'
+  Description: "Cousins to dragons \u2014 sharp, poison-tongued"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -81,8 +81,8 @@ MonoBehaviour:
       - or
       - ax
       - us
-      - 'on'
-      Description: 'Cousins to dragons — sharp, poison-tongued'
+      - on
+      Description: "Cousins to dragons \u2014 sharp, poison-tongued"
       Tags:
       - Poison-names
       - Sky-bonds
@@ -115,6 +115,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Wyverns
+    Adjective: Wyvern
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 2
@@ -126,3 +129,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 681889367
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

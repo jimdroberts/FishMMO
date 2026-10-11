@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Mothkin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Dusk-winged fey drawn to flame — hushed, powdery names'
+  Description: "Dusk-winged fey drawn to flame \u2014 hushed, powdery names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - en
       - orr
       - wing
-      Description: 'Dusk-winged fey drawn to flame — hushed, powdery names'
+      Description: "Dusk-winged fey drawn to flame \u2014 hushed, powdery names"
       Tags:
       - Dusk-names
       - Flame-marks
@@ -125,7 +125,7 @@ MonoBehaviour:
       Legend:
       - Who Flew Into the Fire and Out Again
       - Who Carried the Message Across the Dark Wood
-      - 'Who Powdered the Sleeping Giant''s Eyes'
+      - Who Powdered the Sleeping Giant's Eyes
       - Who Circled the Lighthouse Until Dawn
       - Who Was Mistaken for the Moon
       Occupational:
@@ -163,6 +163,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Mothkin
+    Adjective: Mothkin
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 2
@@ -174,3 +176,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -2037808285
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

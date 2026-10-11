@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: FeyRing - Ring
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 59
+  Weight: 1
+  DefaultBiomeWeight: 1
+  BiomeWeights: []
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 1
+  Large: 1
+  PadFlatness: 0
+  Style: stone
+  Layout: 1
+  Pieces:
+  - Tag: =StandingStone
+    MinCount: 7
+    MaxCount: 13
+    MinDecay: 0
+    MaxDecay: 0.2
+    MinScale: 0.35
+    MaxScale: 0.55
+    Role: 2
+    Style: 
+  Features:
+  - rid: 4061506032503357789
+  - rid: 4061506032503357790
+  - rid: 4061506032503357791
+  - rid: 4061506032503357792
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503357789
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 2
+        FinishChance: 0.7
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506032503357790
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503357791
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506032503357792
+      type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Families: 
+        Count: 0
+        RespawnSeconds: {x: 300, y: 600}
+        AreaShare: 0.7

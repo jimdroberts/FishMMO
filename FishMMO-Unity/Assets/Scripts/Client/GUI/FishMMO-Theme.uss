@@ -229,6 +229,25 @@
     --map-grid:         rgba(88, 179, 241, 0.14);
     --map-frame:        rgba(88, 179, 241, 0.30);
 
+    /* Point-of-interest groups (UIMapPOI.uss): one colour per PointOfInterestGroup, the
+       group's shape carries the rest. Built and natural places are kept apart from the
+       creature and relationship colours above where the hue allows; where it does not
+       (water is blue, the sea is blue), the shape is what separates them. */
+    --map-poi-water:         rgb(80, 168, 255);
+    --map-poi-landform:      rgb(205, 170, 120);
+    --map-poi-volcanic:      rgb(255, 110, 50);
+    --map-poi-wetland:       rgb(146, 180, 84);
+    --map-poi-terrainshaped: rgb(132, 148, 176);
+    --map-poi-wild:          rgb(222, 132, 74);
+    --map-poi-sacred:        rgb(255, 238, 150);
+    --map-poi-dead:          rgb(160, 132, 196);
+    --map-poi-ruins:         rgb(190, 176, 150);
+    --map-poi-settlement:    rgb(255, 206, 120);
+    --map-poi-coast:         rgb(64, 214, 200);
+    --map-poi-encounter:     rgb(232, 70, 110);
+    --map-poi-alien:         rgb(190, 110, 255);
+    --map-poi-other:         rgb(236, 220, 180);
+
     /* ── Extras ───────────────────────────────────────── */
     --black: rgb(0, 0, 0);
     --white: rgb(255, 255, 255);

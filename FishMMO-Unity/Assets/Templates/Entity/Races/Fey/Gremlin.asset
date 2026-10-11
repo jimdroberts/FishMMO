@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Gremlin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A malicious little fey that breaks machines, sours milk and loosens every nail in a house, purely for the joy of it.'
+  Description: A malicious little fey that breaks machines, sours milk and loosens
+    every nail in a house, purely for the joy of it.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - ock
-      Description: 'Snickering, quick — name and giggle in one'
+      Description: "Snickering, quick \u2014 name and giggle in one"
       Tags:
       - Fey
       - Monster
@@ -128,7 +129,7 @@ MonoBehaviour:
       - Chief of the Attic Rafters
       - Voice Under the Stairs
       Legend:
-      - 'Who Hid the Blacksmith''s Hammer'
+      - Who Hid the Blacksmith's Hammer
       - Who Curdled a Year of Milk
       - Who Was Caught in a Bottle
       - Who Unpicked the Wedding Dress
@@ -149,6 +150,8 @@ MonoBehaviour:
       Ruin:
       - ash-heap
     AllowGenericOccupations: 0
+    Plural: Gremlins
+    Adjective: Gremlin
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -156,3 +159,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -835082438
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

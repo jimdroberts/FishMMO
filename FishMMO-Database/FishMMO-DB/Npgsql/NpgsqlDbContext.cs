@@ -59,6 +59,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<KickRequestEntity> KickRequests { get; set; }
 		/// <summary>The one world clock row (id 1). See <see cref="WorldClockControlEntity"/>.</summary>
 		public DbSet<WorldClockControlEntity> WorldClockControl { get; set; }
+		/// <summary>Portals opened for the whole world, per (scene, portal index).</summary>
+		public DbSet<WorldPortalStateEntity> WorldPortalStates { get; set; }
 		/// <summary>Login server signing keys.</summary>
 		public DbSet<LoginServerSigningKeyEntity> LoginServerSigningKeys { get; set; }
 		/// <summary>Authentication tokens.</summary>
@@ -167,6 +169,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterDialogueChoiceEntity> CharacterDialogueChoices { get; set; }
 		/// <summary>Per-character discovered-waypoint bitmask pages.</summary>
 		public DbSet<CharacterWaypointEntity> CharacterWaypoints { get; set; }
+		/// <summary>Per-character activated-portal bitmask pages.</summary>
+		public DbSet<CharacterPortalEntity> CharacterPortals { get; set; }
 		/// <summary>
 		/// Every item a character owns, in whichever container holds it.
 		/// </summary>

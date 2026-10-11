@@ -25,13 +25,13 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The biome for a height and climate reading, or null when no selectable biome is registered.</summary>
 		public static BiomeTemplate Select(float height, ClimateSample sample)
 		{
-			return Select(height, sample.Temperature, sample.Humidity, sample.ElevationTier, BiomeWorldConditions.Earthlike);
+			return Select(height, sample, BiomeWorldConditions.Earthlike);
 		}
 
-		/// <summary>The same, on a world that is not the home world.</summary>
+		/// <summary>The same, on a world that is not the home world. A sample whose seasons are known is held to each biome's warmest-season range too.</summary>
 		public static BiomeTemplate Select(float height, ClimateSample sample, in BiomeWorldConditions world)
 		{
-			return Select(height, sample.Temperature, sample.Humidity, sample.ElevationTier, world);
+			return SelectCore(height, sample, world);
 		}
 
 		/// <summary>The biome for a height, temperature and humidity under a climate's tier boundaries.</summary>
@@ -64,6 +64,23 @@ namespace FishMMO.Shared.Biomes
 		/// </remarks>
 		public static BiomeTemplate Select(float height, float temperature, float humidity, int elevationTier, in BiomeWorldConditions world)
 		{
+			return SelectCore(height, new ClimateSample { Temperature = temperature, Humidity = humidity, ElevationTier = elevationTier }, world);
+		}
+
+		/// <summary>
+		/// The one selection: <paramref name="sample"/>'s tier, temperature and humidity, and its warmest
+		/// season when <see cref="ClimateSample.SeasonKnown"/>.
+		/// </summary>
+		/// <remarks>
+		/// <b>The summer is part of the envelope (2026-10-10).</b> The yearly temperature alone cannot
+		/// tell an ice cap from a taiga: a scene at 72° south on Arthis read −15 °C, inside Peat Bog's
+		/// and Taiga's envelopes, and was painted a bog with trees beside its own sea ice, under a
+		/// summer of −6 °C that thaws nothing. A biome whose warmest-season range the sample falls
+		/// outside scores as outside its envelope, exactly as a temperature or humidity miss does.
+		/// </remarks>
+		private static BiomeTemplate SelectCore(float height, in ClimateSample sample, in BiomeWorldConditions world)
+		{
+			int elevationTier = sample.ElevationTier;
 			IReadOnlyList<BiomeTemplate> candidates = BiomeRegistry.Selectable;
 			if (candidates.Count == 0)
 			{
@@ -86,7 +103,7 @@ namespace FishMMO.Shared.Biomes
 					{
 						continue;
 					}
-					float score = Score(biome, temperature, humidity);
+					float score = Score(biome, sample);
 					if (score > bestScore)
 					{
 						bestScore = score;
@@ -135,15 +152,15 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>Inside the envelope: 1 + centrality, scaled by weight. Outside: falls off with distance, capped below any inside score.</summary>
-		private static float Score(BiomeTemplate biome, float temperature, float humidity)
+		private static float Score(BiomeTemplate biome, in ClimateSample sample)
 		{
 			float weight = Mathf.Max(0.0001f, biome.SelectionWeight);
-			if (biome.ContainsClimate(temperature, humidity))
+			if (biome.ContainsClimate(sample))
 			{
-				return weight * (1f + biome.ClimateCentrality(temperature, humidity));
+				return weight * (1f + biome.ClimateCentrality(sample.Temperature, sample.Humidity));
 			}
-			// Two units is the farthest any reading can be from any envelope.
-			float closeness = 1f - Mathf.Clamp01(biome.ClimateDistance(temperature, humidity) / 2f);
+			// Two units is the farthest any reading can be from any envelope (a summer miss adds to it, the cap holds).
+			float closeness = 1f - Mathf.Clamp01(biome.ClimateDistance(sample) / 2f);
 			return weight * closeness * 0.5f;
 		}
 

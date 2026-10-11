@@ -58,7 +58,9 @@ namespace FishMMO.Client
 			{
 				Prefab = prefab,
 				Name = prefab != null ? prefab.name : "grass",
-				Height = Mathf.Clamp(meshHeight * scale * tuning.HeightScale, 0.05f, GrassMath.MaxPackedHeight / 1.6f),
+				// Room for the clump and own height variation (up to about 1.43x) and margin under the packed height's ceiling;
+				// a Tall type packs its tallest blades at half resolution (GrassMath.TallShift) and so may stand twice as high.
+				Height = Mathf.Clamp(meshHeight * scale * tuning.HeightScale, 0.05f, GrassMath.MaxPackedHeight * (tuning.Tall ? GrassMath.TallHeightScale : 1f) / 1.6f),
 				Root = FallbackRoot,
 				Tip = FallbackTip,
 				Healthy = new Color(0.9f, 0.95f, 0.9f),
@@ -71,6 +73,13 @@ namespace FishMMO.Client
 			if (mesh != null && mesh.isReadable)
 			{
 				type.ColoursFromMesh = ReadColours(mesh, out type.Root, out type.Tip, type.HeadColours);
+			}
+			// A mesh that gives no colours (none written, not readable): the tuning's own, where it has them (the new types'
+			// design colours, GrassTypeDefaults), rather than the built-in greens on a golden savanna or a grey dune grass.
+			if (!type.ColoursFromMesh && tuning.BladeRoot.a > 0f && tuning.BladeTip.a > 0f)
+			{
+				type.Root = tuning.BladeRoot.linear;
+				type.Tip = tuning.BladeTip.linear;
 			}
 			if (material != null)
 			{
@@ -169,8 +178,15 @@ namespace FishMMO.Client
 	/// </summary>
 	public sealed class GrassTerrain : IDisposable
 	{
+		/// <summary>
+		/// Blade types one terrain can carry, a density channel each (<see cref="MaxDensityMaps"/> maps of four). Was 8: a
+		/// terrain across wetland, forest and meadow (sedge, rush, reeds, Phragmites, wet and woodland flowers, three
+		/// grasses…) ran past it, and every type past the eighth stayed meshes on that terrain.
+		/// </summary>
+		public const int MaxChannels = 16;
 
-		public const int MaxChannels = 8;
+		/// <summary>Density maps (RGBA8, four channels each) a terrain can have: only as many as its channels need are built.</summary>
+		public const int MaxDensityMaps = MaxChannels / 4;
 
 		/// <summary>The min/max grid's cell, metres.</summary>
 		public const float BoundsCellMetres = 8f;
@@ -189,7 +205,14 @@ namespace FishMMO.Client
 		public int Channels;
 		/// <summary>The prototypes read into the channels (drawn as blades).</summary>
 		public int Layers;
-		public Texture2D Density0, Density1;
+		/// <summary>
+		/// The density maps, channels 4m..4m+3 in map m: as many as the terrain's channels need (1..<see cref="MaxDensityMaps"/>),
+		/// so a terrain of four types or fewer costs one map, as it always did. Null until built.
+		/// </summary>
+		public Texture2D[] Density;
+
+		/// <summary>How many density maps the terrain has (0 until built).</summary>
+		public int DensityMaps => Density != null ? Density.Length : 0;
 		/// <summary>The prototypes drawn as blades (by prototype index), what the detail renderer skips.</summary>
 		public bool[] Skip;
 		public int DensityResolution;
@@ -199,6 +222,11 @@ namespace FishMMO.Client
 		/// before any of its bounds or frustum work: a beach or a rock face paid the whole gather and drew no blade.
 		/// </summary>
 		public byte[] Occupied;
+		/// <summary>
+		/// Per density texel (as <see cref="Occupied"/>), the grass standing there in metres: the tallest type's height
+		/// weighted by its density. What hides an animal on the ground; null until built (<see cref="CoverAt"/> reads 0).
+		/// </summary>
+		public float[] Cover;
 		public int HeightResolution;
 		public float MaxGrassHeight;
 		public bool HeightChecked;
@@ -312,6 +340,8 @@ namespace FishMMO.Client
 			private readonly float top;
 			/// <summary>Each channel's density while building, 0..1, at full precision: smoothing a point field in bytes rounded it to nothing.</summary>
 			private readonly float[][] density;
+			/// <summary>Each channel's blade type height, metres (for <see cref="GrassTerrain.Cover"/>).</summary>
+			private readonly float[] channelHeights;
 			private int layer, row, heightRow, waterRow, surfaceRow;
 			/// <summary>The scene's lakes and rivers that reach this terrain; null for none.</summary>
 			private List<FishMMO.Shared.Biomes.SceneWaterBodies> waters;
@@ -325,7 +355,7 @@ namespace FishMMO.Client
 			internal Builder(Terrain terrain, TerrainData data, List<int> prototypes, List<GrassType> types)
 			{
 				Terrain = terrain;
-				// One channel per type, in order of first appearance; a type past the eighth stays meshes.
+				// One channel per type, in order of first appearance; a type past the sixteenth stays meshes.
 				var channelTypes = new List<GrassType>();
 				for (int i = 0; i < prototypes.Count; i++)
 				{
@@ -343,6 +373,11 @@ namespace FishMMO.Client
 					layerChannels.Add(c);
 				}
 				count = channelTypes.Count;
+				channelHeights = new float[count];
+				for (int c = 0; c < count; c++)
+				{
+					channelHeights[c] = channelTypes[c] != null ? Mathf.Max(0f, channelTypes[c].Height) : 0f;
+				}
 				res = Mathf.Max(1, data.detailResolution);
 				top = Mathf.Max(1, data.maxDetailScatterPerRes);
 				factor = Mathf.Max(1, Mathf.RoundToInt(DensityTexelMetres / Mathf.Max(0.05f, data.size.x / res)));
@@ -578,22 +613,35 @@ namespace FishMMO.Client
 				if (!textures)
 				{
 					textures = true;
-					Color32[] pixels0 = Pack(0), pixels1 = count > 4 ? Pack(4) : null;
-					gt.Density0 = MakeTexture(pixels0, dres, $"{Terrain.name} grass density 0-3");
+					// As many maps as the channels need (at least one): map m holds channels 4m..4m+3.
+					int maps = Mathf.Clamp((count + 3) / 4, 1, MaxDensityMaps);
+					gt.Density = new Texture2D[maps];
 					var occupied = new byte[dres * dres];
-					for (int i = 0; i < occupied.Length; i++)
+					for (int m = 0; m < maps; m++)
 					{
-						Color32 a = pixels0[i];
-						bool grows = a.r > 1 || a.g > 1 || a.b > 1 || a.a > 1;
-						if (!grows && pixels1 != null)
+						Color32[] pixels = Pack(4 * m);
+						gt.Density[m] = MakeTexture(pixels, dres, $"{Terrain.name} grass density {4 * m}-{4 * m + 3}");
+						for (int i = 0; i < occupied.Length; i++)
 						{
-							Color32 b = pixels1[i];
-							grows = b.r > 1 || b.g > 1 || b.b > 1 || b.a > 1;
+							Color32 a = pixels[i];
+							if (a.r > 1 || a.g > 1 || a.b > 1 || a.a > 1)
+							{
+								occupied[i] = 1;
+							}
 						}
-						occupied[i] = grows ? (byte)1 : (byte)0;
 					}
 					gt.Occupied = occupied;
-					gt.Density1 = pixels1 != null ? MakeTexture(pixels1, dres, $"{Terrain.name} grass density 4-7") : null;
+					var cover = new float[dres * dres];
+					for (int c = 0; c < count; c++)
+					{
+						float[] d = density[c];
+						float h = channelHeights[c];
+						for (int i = 0; i < cover.Length; i++)
+						{
+							cover[i] = Mathf.Max(cover[i], d[i] * h);
+						}
+					}
+					gt.Cover = cover;
 					gt.BeginHeightGrid();
 					return;
 				}
@@ -851,18 +899,39 @@ namespace FishMMO.Client
 			return lo <= hi ? new Vector2(lo, hi) : new Vector2(Origin.y, Origin.y + Size.y);
 		}
 
+		/// <summary>The grass standing at a world point on this terrain, metres (0 off it, or before the map is built).</summary>
+		public float CoverAt(float x, float z)
+		{
+			float[] cover = Cover;
+			int res = DensityResolution;
+			if (cover == null || res <= 0 || Size.x <= 0f || Size.z <= 0f)
+			{
+				return 0f;
+			}
+			float u = (x - Origin.x) / Size.x, v = (z - Origin.z) / Size.z;
+			if (u < 0f || u > 1f || v < 0f || v > 1f)
+			{
+				return 0f;
+			}
+			int ix = Mathf.Clamp((int)(u * res), 0, res - 1), iz = Mathf.Clamp((int)(v * res), 0, res - 1);
+			return cover[iz * res + ix];
+		}
+
 		public void Dispose()
 		{
-			if (Density0 != null)
+			if (Density != null)
 			{
-				UnityEngine.Object.Destroy(Density0);
+				foreach (Texture2D map in Density)
+				{
+					if (map != null)
+					{
+						UnityEngine.Object.Destroy(map);
+					}
+				}
 			}
-			if (Density1 != null)
-			{
-				UnityEngine.Object.Destroy(Density1);
-			}
-			Density0 = Density1 = null;
+			Density = null;
 			Occupied = null;
+			Cover = null;
 			if (heightTexture != null)
 			{
 				UnityEngine.Object.Destroy(heightTexture);

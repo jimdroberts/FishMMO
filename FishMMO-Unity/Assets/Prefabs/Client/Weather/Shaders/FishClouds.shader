@@ -17,12 +17,18 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
+            // Vulkan through DXC, not FXC + HLSLcc: this pass inlines the whole march (a dozen copies of the
+            // density), about 32 000 instructions, and HLSLcc took a minute a pass to turn that into 3 MB of
+            // GLSL for glslang to compile again — the editor sat on "compiling" for many minutes after any
+            // cloud edit (2026-10-10). DXC goes to SPIR-V in about a second and a half. Other APIs unchanged.
+            #pragma use_dxc vulkan
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "FishCloudVolume.hlsl"
             #include "FishMist.hlsl"
+            #include "FishCloudPhase.hlsl"
 
             float4 _FishCloudMarchParams;   // x steps, y detail amount, z frame index, w max distance
             float4 _FishCloudJitter;        // xy where inside its texel each ray looks this frame (texels, -0.5..0.5), zw this pass's size
@@ -33,6 +39,24 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             // The far band (pass 10, CloudFarBand): x where it begins (m; 0 none), y frames between a texel's
             // marches, z this frame's turn, w 1 when last frame's band can be carried on.
             float4 _FishCloudFarBand;
+            // The near band at a quarter rate (FishCloudsFeature, NearMarchEvery 4): x 1 when last frame's march may stand
+            // in for the texels not marched this frame, y which eight-by-eight tile of each two-by-two of them is marched.
+            float4 _FishCloudNearReuse;
+            float4x4 _FishCloudNearPrevVP;     // the view last frame's march was drawn with (no jitter)
+            float4 _FishCloudNearPrevJitter;   // xy where in its texel last frame's rays looked (texels)
+            float4 _FishCloudMotion;           // xy how far the air carried the low clouds since last frame (m, world x and z)
+            TEXTURE2D(_FishCloudNearPrev);      SAMPLER(sampler_FishCloudNearPrev);
+            TEXTURE2D(_FishCloudNearPrevMotion);
+
+            float2 FishNearPrevUV(float4 clip)
+            {
+                float2 uv = clip.xy / max(1e-5, clip.w) * 0.5 + 0.5;
+                #if UNITY_UV_STARTS_AT_TOP
+                    uv.y = 1.0 - uv.y;
+                #endif
+                // Last frame's texels hold what their rays saw at last frame's place in the texel, not at its middle.
+                return uv - _FishCloudNearPrevJitter.xy / max(1.0, _FishCloudJitter.zw);
+            }
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -97,22 +121,43 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // times the draw distance: that figure is the deck's, and grows with height.
                 float maxDistance = isSky ? _FishCloudMarchParams.w * 4.6 : depth / max(1e-4, dot(direction, -UNITY_MATRIX_V[2].xyz));
 
-                // Hashed on this pass's own pixel, which is a whole number: the noise is built to spread
-                // its values evenly over every three-by-three block of whole pixels, and that block is
-                // exactly the neighbourhood pass 1 clips the history to — so the spread of those nine
-                // rays is the ray-phase noise the clip must let through. Fed the screen position
-                // instead, the pixels were two and a half apart and the spread was lost.
-                //
-                // The spatial pattern moved on in time by one phase for the whole frame, worked out by
-                // the feature (CloudOptions.JitterPhase): the place's Bayer value over sixteen, so
-                // neighbouring places in a texel are far apart in phase and a cycle covers the step
-                // evenly, and golden-ratio from each cycle to the next, the sequence that stays as evenly
-                // spread as any however many have been taken. A texel's phase is thus a new one every
-                // frame, and the steadying's moving average over sixteen frames and more averages it out;
-                // held still, one pixel's phase stood in the picture as the woven rings of interleaved
-                // gradient noise. frac(u + c) of a uniform u is uniform, so every ray's phase still covers
-                // one full step evenly, which is what keeps the march unbiased.
-                float jitter = frac(Jitter(input.positionCS.xy, 0.0) + _FishCloudOptions.w);
+                // At a quarter rate: one texel in each two-by-two block marched this frame, the other three carried on
+                // from last frame's march, fetched from where what they show stood then — by its distance, with the air's
+                // drift undone (as the steadying fetches its history). Clouds change slowly; what moves on the screen is
+                // the camera and the wind, and both are put back.
+                if (_FishCloudNearReuse.x > 0.5)
+                {
+                    // By eight-by-eight tiles, not texel by texel: a GPU runs pixels in groups and a group takes as long as
+                    // its slowest; one texel marched in every two-by-two left every group marching (2.6 → 2.2 ms only).
+                    int2 block = (int2(input.positionCS.xy) >> 3) & 1;
+                    if (block.x + 2 * block.y != (int)_FishCloudNearReuse.y)
+                    {
+                        float4 atInfinity = mul(_FishCloudNearPrevVP, float4(direction, 0.0));
+                        float2 prevUV = FishNearPrevUV(atInfinity);
+                        if (atInfinity.w > 1e-5 && all(prevUV >= 0.0) && all(prevUV <= 1.0))
+                        {
+                            float2 prevMotion = SAMPLE_TEXTURE2D_LOD(_FishCloudNearPrevMotion, sampler_FishCloudNearPrev, prevUV, 0).xy;
+                            if (prevMotion.x > 0.0)
+                            {
+                                float3 cloud = _WorldSpaceCameraPos.xyz + direction * (prevMotion.x * 1000.0)
+                                    - prevMotion.y * float3(_FishCloudMotion.x, 0.0, _FishCloudMotion.y);
+                                float4 then = mul(_FishCloudNearPrevVP, float4(cloud, 1.0));
+                                float2 thenUV = FishNearPrevUV(then);
+                                prevUV = then.w > 1e-5 && all(thenUV >= 0.0) && all(thenUV <= 1.0) ? thenUV : prevUV;
+                            }
+                            MarchOutput carried;
+                            carried.clouds = SAMPLE_TEXTURE2D_LOD(_FishCloudNearPrev, sampler_FishCloudNearPrev, prevUV, 0);
+                            carried.motion = SAMPLE_TEXTURE2D_LOD(_FishCloudNearPrevMotion, sampler_FishCloudNearPrev, prevUV, 0).xy;
+                            return carried;
+                        }
+                    }
+                }
+
+                // Hashed on this pass's own pixel, which is a whole number, and moved on every frame
+                // (FishCloudRayPhase, FishCloudPhase.hlsl): a pixel's phase is a new one each frame, so the
+                // steadying's average over sixteen frames and more averages it out, and the pattern it leaves
+                // is never the same twice — held in one place, the pattern stood in the picture as a lattice.
+                float jitter = FishCloudRayPhase(input.positionCS.xy);
                 // The render profile's diagnostics (Ray Jitter off, _FishCloudDiag.x): every sample at the
                 // middle of its step. The steps are laid out from the bands' edges and each cloud's own
                 // (FishCloudMarch), so what is left is smooth; bands that remain are undersampling.
@@ -132,6 +177,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // the steps the whole ray would have had; pass 10 lays the far band behind it.
                 bool split = _FishCloudFarBand.x > 0.0 && maxDistance > _FishCloudFarBand.x;
                 FishCloudMarchWhole = split ? maxDistance : -1.0;
+                FishCloudRainHangScale = isSky ? 1.0 : 0.0;
                 float4 result = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, split ? _FishCloudFarBand.x : maxDistance, jitter, lightSeed,
                     (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance, cloudMotion);
                 FishCloudMarchWhole = -1.0;
@@ -948,18 +994,21 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
+            // Vulkan through DXC: the whole march is inlined here as in pass 0 (see there).
+            #pragma use_dxc vulkan
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "FishCloudVolume.hlsl"
+            #include "FishCloudPhase.hlsl"
 
             float4 _FishCloudMarchParams;
             float4 _FishCloudJitter;
             float4x4 _FishCloudInverseVP;
             float4 _FishCloudOptions;
             float4 _FishCloudFarBand;           // x where the far band begins (m), z the slice marched this frame
-            float4 _FishCloudFarBounds;         // x, y, z where slices 1, 2, 3 begin (m); slice 3 runs to the ray's end
+            float4 _FishCloudFarBounds;         // x, y, z where slices 1, 2, 3 begin (m); w where slice 3 ends (0: the ray's end)
             float4 _FishCloudFarValid;          // 1 for each slice kept from an earlier frame
             float4x4 _FishCloudFarVP[4];        // the view each slice was drawn with
             TEXTURE2D(_FishCloudFar0); TEXTURE2D(_FishCloudFar1); TEXTURE2D(_FishCloudFar2); TEXTURE2D(_FishCloudFar3);
@@ -1096,13 +1145,14 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     return output;
                 }
 
-                float jitter = frac(Jitter(input.positionCS.xy, 0.0) + _FishCloudOptions.w);
+                float jitter = FishCloudRayPhase(input.positionCS.xy);
                 jitter = _FishCloudDiag.x > 0.5 ? 0.5 : jitter;
                 float2 pixel = input.positionCS.xy;
                 float2 lightSeed = frac(float2(frac(dot(pixel, float2(0.7548777, 0.5698403))), Jitter(pixel.yx, 0.0))
                     + _FishCloudOptions.w * float2(1.0, 1.6180340));
 
-                float bounds[5] = { band, _FishCloudFarBounds.x, _FishCloudFarBounds.y, _FishCloudFarBounds.z, 1e9 };
+                // w: where the band ends (m) when the far imposter takes over past it; 0 runs slice 3 to the ray's end.
+                float bounds[5] = { band, _FishCloudFarBounds.x, _FishCloudFarBounds.y, _FishCloudFarBounds.z, _FishCloudFarBounds.w > 0.0 ? _FishCloudFarBounds.w : 1e9 };
                 int marching = (int)_FishCloudFarBand.z;
                 float3 light = nearBand.rgb;
                 float through = nearBand.a;
@@ -1142,6 +1192,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                             float2 cloudMotion;
                             FishCloudMarchFrom = from;
                             FishCloudMarchWhole = maxDistance;
+                            FishCloudRainHangScale = isSky ? 1.0 : 0.0;
                             slice = FishCloudMarch(_WorldSpaceCameraPos.xyz, direction, to, jitter, lightSeed,
                                 (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance, cloudMotion);
                             FishCloudMarchFrom = 0.0;
@@ -1172,6 +1223,382 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     output.clouds = marchedSlices == 0 ? float4(0.0, 0.0, 1.0, 0.0) : marchedSlices == 1 ? float4(0.0, 1.0, 0.0, 0.0)
                         : marchedSlices == 2 ? float4(1.0, 1.0, 0.0, 0.0) : float4(1.0, 0.0, 0.0, 0.0);
                 }
+                return output;
+            }
+            ENDHLSL
+        }
+
+        // ── 11: the far imposter, built: a band of rows of the next panorama of the clouds past the far band's start ──
+        // Each texel is a direction from the camera, marched as the far band marches it (the same march, the same light),
+        // in three layers by distance. The panorama being built is not the one on screen (FishCloudsFeature keeps three:
+        // the two newest whole ones, faded between, and this one): a texel marched this sweep is blended with what the
+        // newest whole panorama holds there, so each sweep's ray phase averages with the last few; one not marched (off
+        // the view, three sweeps in four) is carried over from it. Both are fetched where that cloud stood when the newest
+        // panorama was begun — the wind and the camera both move between sweeps — so the panorama is all of one moment:
+        // the one it was begun at. Targets 0–2 the layers' light (rgb), target 3 their transmittance (rgb).
+        Pass
+        {
+            Name "CloudFarImposterUpdate"
+            ZWrite Off
+            ZTest Always
+            Cull Off
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 3.5
+            // Vulkan through DXC: the whole march is inlined here as in pass 0 (see there).
+            #pragma use_dxc vulkan
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            #include "FishCloudVolume.hlsl"
+            #include "FishCloudPhase.hlsl"
+
+            float4 _FishCloudMarchParams;
+            float4 _FishCloudJitter;
+            float4x4 _FishCloudInverseVP;
+            float4 _FishCloudOptions;
+            // The far imposter (FishCloudsFeature, FarImposter): x its size (texels), y the first row drawn this frame,
+            // z how much of this refresh is kept over what the texel held (1: all of it), w the refresh count.
+            float4 _FishCloudImposter;
+            // x where it begins (the far band's start, m), y and z where its second and third layers begin (m).
+            float4 _FishCloudImposterBounds;
+            // xyz the camera's forward, w the cosine of the view's half-diagonal and a margin: a direction inside it is
+            // refreshed every sweep, one outside only every fourth (w −2 while the imposter is first filled: all of it).
+            float4 _FishCloudImposterView;
+            // Each layer's distance, standing for where its cloud is (m): the shifts below move a cloud by metres, and a
+            // direction is turned by them as far as a cloud that far away is.
+            float4 _FishCloudImposterDepths;
+            // xyz what to add to a layer's point (its direction times its distance) to march the cloud that was there when
+            // this panorama was begun: where the wind has carried it since, less how far the camera has gone. w unused.
+            float4 _FishCloudImposterWarp;
+            // xyz the same into the newest whole panorama: where a cloud of this one's moment stood at that one's.
+            // w 1 when there is one to carry from (0 while the first is filled: everything is marched).
+            float4 _FishCloudImposterCarry;
+            TEXTURE2D(_FishCloudImposterSrcNear);
+            TEXTURE2D(_FishCloudImposterSrcMid);
+            TEXTURE2D(_FishCloudImposterSrcFar);
+            TEXTURE2D(_FishCloudImposterSrcThrough);
+            SAMPLER(sampler_linear_clamp);
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                output.uv = GetFullScreenTriangleTexCoord(input.vertexID);
+                return output;
+            }
+
+            // Octahedral map of the whole sphere, y up: the upper hemisphere is the inner diamond.
+            float2 FishOctEncode(float3 n)
+            {
+                n /= abs(n.x) + abs(n.y) + abs(n.z);
+                float2 p = n.xz;
+                if (n.y < 0.0)
+                {
+                    p = (1.0 - abs(p.yx)) * float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+                }
+                return p * 0.5 + 0.5;
+            }
+
+            float3 FishOctDecode(float2 uv)
+            {
+                float2 f = uv * 2.0 - 1.0;
+                float3 n = float3(f.x, 1.0 - abs(f.x) - abs(f.y), f.y);
+                float t = saturate(-n.y);
+                n.x += n.x >= 0.0 ? -t : t;
+                n.z += n.z >= 0.0 ? -t : t;
+                return normalize(n);
+            }
+
+            // Lowest a direction the imposter keeps may look: below it is the ground from anywhere a player stands; the
+            // margin keeps a deck under a summit (a cloud 1 km down, 3 km off, is 18 degrees down).
+            #define FISH_IMPOSTER_LOWEST -0.3
+
+            struct UpdateOutput
+            {
+                float4 near : SV_Target0;
+                float4 mid : SV_Target1;
+                float4 far : SV_Target2;
+                float4 through : SV_Target3;
+            };
+
+            UpdateOutput Frag(Varyings input)
+            {
+                float2 texel = input.positionCS.xy;
+                float size = max(1.0, _FishCloudImposter.x);
+                float3 direction = FishOctDecode(texel / size);
+                UpdateOutput output;
+                // Nothing well under the horizon is kept: clear, as the panorama was cleared. Every texel of the band is
+                // written, never discarded — the panorama being built held a sweep two back, not this one's last.
+                if (direction.y < FISH_IMPOSTER_LOWEST)
+                {
+                    output.near = float4(0.0, 0.0, 0.0, 1.0);
+                    output.mid = float4(0.0, 0.0, 0.0, 1.0);
+                    output.far = float4(0.0, 0.0, 0.0, 1.0);
+                    output.through = float4(1.0, 1.0, 1.0, 1.0);
+                    return output;
+                }
+                float depths[3] = { _FishCloudImposterDepths.x, _FishCloudImposterDepths.y, _FishCloudImposterDepths.z };
+
+                // What the newest whole panorama has for each layer, fetched where that layer's cloud stood then.
+                bool carry = _FishCloudImposterCarry.w > 0.5;
+                float3 oldLight[3] = { float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0) };
+                float3 oldThrough = float3(1.0, 1.0, 1.0);
+                if (carry)
+                {
+                    float2 at0 = FishOctEncode(normalize(direction * depths[0] + _FishCloudImposterCarry.xyz));
+                    float2 at1 = FishOctEncode(normalize(direction * depths[1] + _FishCloudImposterCarry.xyz));
+                    float2 at2 = FishOctEncode(normalize(direction * depths[2] + _FishCloudImposterCarry.xyz));
+                    oldLight[0] = SAMPLE_TEXTURE2D_LOD(_FishCloudImposterSrcNear, sampler_linear_clamp, at0, 0).rgb;
+                    oldLight[1] = SAMPLE_TEXTURE2D_LOD(_FishCloudImposterSrcMid, sampler_linear_clamp, at1, 0).rgb;
+                    oldLight[2] = SAMPLE_TEXTURE2D_LOD(_FishCloudImposterSrcFar, sampler_linear_clamp, at2, 0).rgb;
+                    oldThrough = float3(SAMPLE_TEXTURE2D_LOD(_FishCloudImposterSrcThrough, sampler_linear_clamp, at0, 0).r,
+                        SAMPLE_TEXTURE2D_LOD(_FishCloudImposterSrcThrough, sampler_linear_clamp, at1, 0).g,
+                        SAMPLE_TEXTURE2D_LOD(_FishCloudImposterSrcThrough, sampler_linear_clamp, at2, 0).b);
+                }
+
+                // Only what a player can see is worth marching often: away from the view only every fourth sweep — the
+                // panorama is the whole sphere, the screen a fifteenth of it. The rest is carried, moved with the wind.
+                bool inView = dot(direction, _FishCloudImposterView.xyz) >= _FishCloudImposterView.w;
+                if (carry && !inView && fmod(_FishCloudImposter.w, 4.0) > 0.5)
+                {
+                    output.near = float4(oldLight[0], 1.0);
+                    output.mid = float4(oldLight[1], 1.0);
+                    output.far = float4(oldLight[2], 1.0);
+                    output.through = float4(oldThrough, 1.0);
+                    return output;
+                }
+
+                float3 origin = _WorldSpaceCameraPos.xyz;
+                float skyEnd = _FishCloudMarchParams.w * 4.6;
+                float cycle = _FishCloudImposter.w;
+                // A new phase for this texel each refresh, from a pattern with no lattice (the rays' own blue noise):
+                // the blend averages them as the steadying averages the screen's.
+                float jitter = frac(FishCloudRayPhase(texel) + cycle * 0.6180340);
+                jitter = _FishCloudDiag.x > 0.5 ? 0.5 : jitter;
+                float2 lightSeed = frac(float2(frac(dot(texel, float2(0.7548777, 0.5698403))), FishCloudIgn(texel.yx))
+                    + cycle * float2(0.6180340, 0.7548777));
+                float bounds[4] = { _FishCloudImposterBounds.x, _FishCloudImposterBounds.y, _FishCloudImposterBounds.z, skyEnd };
+                float4 layer[3];
+                // A loop, not unrolled: three whole marches unrolled is more than the compiler will take.
+                UNITY_LOOP
+                for (int j = 0; j < 3; j++)
+                {
+                    float cloudDistance;
+                    float2 cloudMotion;
+                    // Marched now, toward where the cloud this texel shows at the panorama's moment has gone since.
+                    float3 marchDirection = normalize(direction * depths[j] + _FishCloudImposterWarp.xyz);
+                    FishCloudMarchFrom = bounds[j];
+                    FishCloudMarchWhole = skyEnd;
+                    FishCloudRainHangScale = 1.0;
+                    layer[j] = FishCloudMarch(origin, marchDirection, bounds[j + 1], jitter, lightSeed,
+                        (int)_FishCloudMarchParams.x, _FishCloudMarchParams.y, cloudDistance, cloudMotion);
+                }
+                FishCloudMarchFrom = 0.0;
+                FishCloudMarchWhole = -1.0;
+                float keep = carry ? _FishCloudImposter.z : 1.0;
+                output.near = float4(lerp(oldLight[0], layer[0].rgb, keep), 1.0);
+                output.mid = float4(lerp(oldLight[1], layer[1].rgb, keep), 1.0);
+                output.far = float4(lerp(oldLight[2], layer[2].rgb, keep), 1.0);
+                output.through = float4(lerp(oldThrough, float3(layer[0].a, layer[1].a, layer[2].a), keep), 1.0);
+                return output;
+            }
+            ENDHLSL
+        }
+
+        // ── 12: the far imposter, laid behind the near band: what pass 10 does by marching, read off the panorama ──
+        Pass
+        {
+            Name "CloudFarImposter"
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 3.5
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            #include "FishCloudVolume.hlsl"
+            #include "FishCloudPhase.hlsl"
+
+            float4 _FishCloudMarchParams;
+            float4 _FishCloudJitter;
+            float4x4 _FishCloudInverseVP;
+            float4 _FishCloudOptions;
+            // The far imposter (FishCloudsFeature, FarImposter): x its size (texels), y the first row drawn this frame,
+            // z how much of this refresh is kept over what the texel held (1: all of it), w the refresh count.
+            float4 _FishCloudImposter;
+            // x where it begins (the far band's start, m), y and z where its second and third layers begin (m).
+            float4 _FishCloudImposterBounds;
+            // Each layer's distance, standing for where its cloud is (m), as the build has it.
+            float4 _FishCloudImposterDepths;
+            // xyz what to add to a layer's point (its direction times its distance) to find, in the newer panorama, the
+            // cloud that is there now: back along the wind since that panorama's moment, plus how far the camera has gone.
+            // w how far the fade has come from the older panorama to the newer (1: the newer alone).
+            float4 _FishCloudImposterShift;
+            // xyz the same for the older panorama.
+            float4 _FishCloudImposterOldShift;
+
+            struct Attributes { uint vertexID : SV_VertexID; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+
+            Varyings Vert(Attributes input)
+            {
+                Varyings output;
+                output.positionCS = GetFullScreenTriangleVertexPosition(input.vertexID);
+                output.uv = GetFullScreenTriangleTexCoord(input.vertexID);
+                return output;
+            }
+
+            // Octahedral map of the whole sphere, y up: the upper hemisphere is the inner diamond.
+            float2 FishOctEncode(float3 n)
+            {
+                n /= abs(n.x) + abs(n.y) + abs(n.z);
+                float2 p = n.xz;
+                if (n.y < 0.0)
+                {
+                    p = (1.0 - abs(p.yx)) * float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+                }
+                return p * 0.5 + 0.5;
+            }
+
+            float3 FishOctDecode(float2 uv)
+            {
+                float2 f = uv * 2.0 - 1.0;
+                float3 n = float3(f.x, 1.0 - abs(f.x) - abs(f.y), f.y);
+                float t = saturate(-n.y);
+                n.x += n.x >= 0.0 ? -t : t;
+                n.z += n.z >= 0.0 ? -t : t;
+                return normalize(n);
+            }
+
+            // The newer whole panorama, and the older one it is fading in over. Names of their own, not pass 11's: a
+            // material's textures are read when the frame's commands run, and pass 11 binds the newer one as its source.
+            TEXTURE2D(_FishCloudImposterNear);
+            TEXTURE2D(_FishCloudImposterMid);
+            TEXTURE2D(_FishCloudImposterFar);
+            TEXTURE2D(_FishCloudImposterThrough);
+            TEXTURE2D(_FishCloudImposterOldNear);
+            TEXTURE2D(_FishCloudImposterOldMid);
+            TEXTURE2D(_FishCloudImposterOldFar);
+            TEXTURE2D(_FishCloudImposterOldThrough);
+            // What lies in front: pass 0's near band, or the far band laid behind it. Not _FishCloudNear: the far band reads
+            // that, and a material's textures are read when the frame's commands run, so two passes binding one name in a
+            // frame both saw the last binding — the far band read its own target and the frame came out black.
+            TEXTURE2D(_FishCloudImposterFront);         // rgb, a transmittance
+            TEXTURE2D(_FishCloudImposterFrontMotion);   // x its mean distance (km), y its wind gain
+            SAMPLER(sampler_linear_clamp);
+
+            struct FarOutput
+            {
+                float4 clouds : SV_Target0;     // near and far together: rgb, a transmittance
+                float2 motion : SV_Target1;     // x their mean distance (km), y their mean wind gain
+            };
+
+            float3 RayFor(float2 uv)
+            {
+                float4 clip = float4(uv * 2.0 - 1.0, 1.0, 1.0);
+                #if UNITY_UV_STARTS_AT_TOP
+                    clip.y = -clip.y;
+                #endif
+                float4 world = mul(_FishCloudInverseVP, clip);
+                return normalize(world.xyz / world.w - _WorldSpaceCameraPos.xyz);
+            }
+
+            FarOutput Frag(Varyings input)
+            {
+                FarOutput output;
+                int2 texel = int2(input.positionCS.xy);
+                float4 nearBand = LOAD_TEXTURE2D(_FishCloudImposterFront, texel);
+                float2 nearMotion = LOAD_TEXTURE2D(_FishCloudImposterFrontMotion, texel).xy;
+                output.clouds = nearBand;
+                output.motion = nearMotion;
+
+                float2 uv = input.uv + _FishCloudJitter.xy / max(1.0, _FishCloudJitter.zw);
+                float3 direction = RayFor(uv);
+                float rawDepth = SampleSceneDepth(uv);
+                float depth = LinearEyeDepth(rawDepth, _ZBufferParams);
+                #if UNITY_REVERSED_Z
+                    bool isSky = rawDepth <= 1e-6;
+                #else
+                    bool isSky = rawDepth >= 1.0 - 1e-6;
+                #endif
+                float skyEnd = _FishCloudMarchParams.w * 4.6;
+                float maxDistance = isSky ? skyEnd : depth / max(1e-4, dot(direction, -UNITY_MATRIX_V[2].xyz));
+                float band = _FishCloudImposterBounds.x;
+                if (band <= 0.0 || maxDistance <= band || nearBand.a <= 0.0005)
+                {
+                    return output;
+                }
+
+                // Each layer read where its cloud stood at the panorama's moment, and faded from the older panorama to the
+                // newer over a sweep: the panorama changes everywhere at once and a little at a time, never in a front of
+                // rows crossing the sky, and the far clouds keep moving with the wind between sweeps.
+                float3 depths = _FishCloudImposterDepths.xyz;
+                float2 at0 = FishOctEncode(normalize(direction * depths.x + _FishCloudImposterShift.xyz));
+                float2 at1 = FishOctEncode(normalize(direction * depths.y + _FishCloudImposterShift.xyz));
+                float2 at2 = FishOctEncode(normalize(direction * depths.z + _FishCloudImposterShift.xyz));
+                float3 layerLight[3];
+                layerLight[0] = SAMPLE_TEXTURE2D_LOD(_FishCloudImposterNear, sampler_linear_clamp, at0, 0).rgb;
+                layerLight[1] = SAMPLE_TEXTURE2D_LOD(_FishCloudImposterMid, sampler_linear_clamp, at1, 0).rgb;
+                layerLight[2] = SAMPLE_TEXTURE2D_LOD(_FishCloudImposterFar, sampler_linear_clamp, at2, 0).rgb;
+                float3 layerThrough = float3(SAMPLE_TEXTURE2D_LOD(_FishCloudImposterThrough, sampler_linear_clamp, at0, 0).r,
+                    SAMPLE_TEXTURE2D_LOD(_FishCloudImposterThrough, sampler_linear_clamp, at1, 0).g,
+                    SAMPLE_TEXTURE2D_LOD(_FishCloudImposterThrough, sampler_linear_clamp, at2, 0).b);
+                float fade = _FishCloudImposterShift.w;
+                if (fade < 0.999)
+                {
+                    float2 old0 = FishOctEncode(normalize(direction * depths.x + _FishCloudImposterOldShift.xyz));
+                    float2 old1 = FishOctEncode(normalize(direction * depths.y + _FishCloudImposterOldShift.xyz));
+                    float2 old2 = FishOctEncode(normalize(direction * depths.z + _FishCloudImposterOldShift.xyz));
+                    layerLight[0] = lerp(SAMPLE_TEXTURE2D_LOD(_FishCloudImposterOldNear, sampler_linear_clamp, old0, 0).rgb, layerLight[0], fade);
+                    layerLight[1] = lerp(SAMPLE_TEXTURE2D_LOD(_FishCloudImposterOldMid, sampler_linear_clamp, old1, 0).rgb, layerLight[1], fade);
+                    layerLight[2] = lerp(SAMPLE_TEXTURE2D_LOD(_FishCloudImposterOldFar, sampler_linear_clamp, old2, 0).rgb, layerLight[2], fade);
+                    float3 oldThrough = float3(SAMPLE_TEXTURE2D_LOD(_FishCloudImposterOldThrough, sampler_linear_clamp, old0, 0).r,
+                        SAMPLE_TEXTURE2D_LOD(_FishCloudImposterOldThrough, sampler_linear_clamp, old1, 0).g,
+                        SAMPLE_TEXTURE2D_LOD(_FishCloudImposterOldThrough, sampler_linear_clamp, old2, 0).b);
+                    layerThrough = lerp(oldThrough, layerThrough, fade);
+                }
+                // Where the clouds stop being drawn (the draw distance's dissolve), so a ridge in the last layer cuts
+                // it at its share of the cloud there, not of the hundred-odd kilometres a sky ray runs.
+                float drawn = max(band * 3.0 + 1000.0, _FishCloudLodParams.w > 1.0 ? _FishCloudLodParams.w : 44000.0);
+                float bounds[4] = { band, _FishCloudImposterBounds.y, _FishCloudImposterBounds.z, drawn };
+                float3 light = nearBand.rgb;
+                float through = nearBand.a;
+                float weight = 1.0 - nearBand.a;
+                float2 motionSum = nearMotion * weight;
+                UNITY_UNROLL
+                for (int j = 0; j < 3; j++)
+                {
+                    float from = bounds[j];
+                    if (maxDistance <= from)
+                    {
+                        break;
+                    }
+                    float to = bounds[j + 1];
+                    float3 l = layerLight[j];
+                    float t = saturate(layerThrough[j]);
+                    // A surface inside the layer: the layer's share in front of it, as if its cloud were spread evenly.
+                    float share = isSky || j == 2 && maxDistance >= skyEnd ? 1.0 : saturate((maxDistance - from) / max(1.0, to - from));
+                    if (share < 1.0)
+                    {
+                        float tShare = pow(max(t, 1e-4), share);
+                        l = t < 0.9999 ? l * (1.0 - tShare) / (1.0 - t) : l * share;
+                        t = tShare;
+                    }
+                    float added = through * (1.0 - t);
+                    light += through * l;
+                    motionSum += float2(0.5 * (from + min(to, maxDistance)) * 0.001, 1.0) * added;
+                    weight += added;
+                    through *= t;
+                }
+                output.clouds = float4(light, through);
+                output.motion = weight > 1e-5 ? motionSum / weight : nearMotion;
                 return output;
             }
             ENDHLSL

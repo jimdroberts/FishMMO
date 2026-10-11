@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Brain Leech
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Slug-things that drink memory — sucking, whispering names'
+  Description: "Slug-things that drink memory \u2014 sucking, whispering names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - oth
       - ax
       - urq
-      Description: 'Slug-things that drink memory — sucking, whispering names'
+      Description: "Slug-things that drink memory \u2014 sucking, whispering names"
       Tags:
       - Memory-names
       - Suck-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       Legend:
       - Who Drank the Archive from the Archivist
       - Who Emptied the Court of Every Name
-      - 'Who Whispered the General''s Plans Back to Him Wrong'
+      - Who Whispered the General's Plans Back to Him Wrong
       - Who Was Forgotten by Everyone It Touched
       - Who Kept the Last Thought of the Old King
       Occupational:
@@ -158,6 +158,8 @@ MonoBehaviour:
       - hollow
       - void
     AllowGenericOccupations: 0
+    Plural: Brain Leeches
+    Adjective: Brain Leech
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -167,3 +169,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 18062707
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

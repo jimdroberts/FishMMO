@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hill Goblin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Upland goblins — quick, cackling names'
+  Description: "Upland goblins \u2014 quick, cackling names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - it
       - ug
-      Description: 'Upland goblins — quick, cackling names'
+      Description: "Upland goblins \u2014 quick, cackling names"
       Tags:
       - Cackle-names
       - Rock-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Master of the Goat Path
       - Elder of Snaggle Hill
       Legend:
-      - 'Who Stole the Baron''s Boots While He Wore Them'
+      - Who Stole the Baron's Boots While He Wore Them
       - Who Rode a Goat Off the Cliff and Lived
       - Who Filled the Loot Cave in One Summer
       - Who Ambushed the Ambushers
@@ -169,6 +169,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Hill Goblins
+    Adjective: Hill Goblin
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 3
@@ -178,3 +180,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 596668801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

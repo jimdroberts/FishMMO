@@ -38,18 +38,20 @@ namespace FishMMO.Shared.Weather
 		/// moving from one value to another. On top of what the scene is authored with, never instead.
 		/// </summary>
 		public AirOffsetEntry Air;
+		/// <summary>
+		/// The scene's snow, wetness, ash and sand now, averaged over its cover points: worked out by each side from
+		/// the world time (<see cref="SceneCover"/>), never sent.
+		/// </summary>
 		public WeatherCover Cover;
-		/// <summary>The world seconds <see cref="Cover"/> was worked out to.</summary>
-		public double CoverSeconds;
 		/// <summary>
 		/// Counts the times this timeline was replaced whole — a join, a resync, a change of scene.
-		/// Not the revision, which moves on every delta: the ground map used to start itself over
-		/// whenever the revision changed, so every storm cell that spawned or retired, and every
-		/// preset clicked, threw away the ground it had been drying and redrew it from one number.
+		/// Not the revision, which moves on every delta.
 		/// </summary>
 		public uint Generation;
-		/// <summary>Counts the cover snapshots the server has actually sent. Local integration does not move it.</summary>
-		public uint CoverSnapshots;
+		/// <summary>Whether the scene makes storms of its own (<see cref="StormSchedule"/>): the director's switch, sent so every side agrees.</summary>
+		public bool Director;
+		/// <summary>The scene's world X/Z rectangle, as the server measured it: where its own storms are born and its cover is read.</summary>
+		public Rect Area;
 
 		/// <summary>
 		/// Where and when this scene is, for the weather driver.
@@ -119,11 +121,16 @@ namespace FishMMO.Shared.Weather
 		/// <summary>How strong a cell is at a tick, 0..1.</summary>
 		public float EnvelopeOf(in StormCell cell, double tick) => cell.EnvelopeAtSeconds(WorldSecondsAt(tick));
 
-		/// <summary>Forgets dead cells. Both sides run it, so they stay equal without messages.</summary>
+		/// <summary>
+		/// Forgets dead cells. Both sides run it, so they stay equal without messages. A storm someone started is kept
+		/// for the ground's memory after it dies (<see cref="GroundCover.MemorySeconds"/>), and goes to a player who joins
+		/// in that time, so the ground it wetted is worked out the same by everyone; the world's own storms are worked
+		/// out again whenever they are wanted (<see cref="StormSchedule"/>).
+		/// </summary>
 		public void Prune(uint tick)
 		{
 			double now = WorldSecondsAt(tick);
-			Cells.RemoveAll(c => c.IsDeadAtSeconds(now));
+			Cells.RemoveAll(c => StormSchedule.IsScheduled(c.ID) ? c.IsDeadAtSeconds(now) : c.IsDeadAtSeconds(now - GroundCover.MemorySeconds));
 		}
 
 		public bool TryGetCell(ushort id, out int index)
@@ -154,10 +161,14 @@ namespace FishMMO.Shared.Weather
 				Revision = Revision,
 				Seed = Seed,
 				SceneMode = (byte)SceneMode,
-				Cells = new List<StormCell>(Cells),
+				// Only the cells that were started by hand: the schedule's are worked out by the client itself.
+				Cells = Cells.FindAll(c => !StormSchedule.IsScheduled(c.ID)),
 				Air = Air,
-				Cover = Cover,
-				CoverSeconds = CoverSeconds,
+				Director = Director,
+				AreaX = Area.x,
+				AreaZ = Area.y,
+				AreaWidth = Area.width,
+				AreaDepth = Area.height,
 				// Where and when, so the client's driver computes the server's weather rather than
 				// the weather of world-time zero on the equator.
 				Driver = Driver,
@@ -178,10 +189,9 @@ namespace FishMMO.Shared.Weather
 			Cells.Clear();
 			if (msg.Cells != null) Cells.AddRange(msg.Cells);
 			Air = msg.Air;
-			Cover = msg.Cover;
-			CoverSeconds = msg.CoverSeconds;
 			Generation++;
-			CoverSnapshots++;
+			Director = msg.Director;
+			Area = new Rect(msg.AreaX, msg.AreaZ, msg.AreaWidth, msg.AreaDepth);
 			Driver = msg.Driver;
 			WorldSecondsAtTick = msg.WorldSecondsAtTick;
 			WorldSecondsTick = msg.WorldSecondsTick;
@@ -215,11 +225,9 @@ namespace FishMMO.Shared.Weather
 			{
 				Air = msg.Air;
 			}
-			if (msg.HasCover)
+			if (msg.HasDirector)
 			{
-				Cover = msg.Cover;
-				CoverSeconds = msg.CoverSeconds;
-				CoverSnapshots++;
+				Director = msg.Director;
 			}
 			return true;
 		}

@@ -1,0 +1,171 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: Village - Yurts
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 77
+  Weight: 1
+  DefaultBiomeWeight: 0.02
+  BiomeWeights:
+  - Biome: Steppe
+    Weight: 1.2
+  - Biome: Savanna
+    Weight: 1.2
+  - Biome: Tundra
+    Weight: 1.2
+  - Biome: Desert
+    Weight: 0.6
+  - Biome: High Desert
+    Weight: 0.6
+  - Biome: Badlands
+    Weight: 0.6
+  - Biome: Salt Flat
+    Weight: 0.6
+  - Biome: Oasis
+    Weight: 0.6
+  - Biome: Scrubland
+    Weight: 0.6
+  - Biome: Arid
+    Weight: 0.6
+  - Biome: Dust Sea
+    Weight: 0.6
+  - Biome: Wasteland
+    Weight: 0.6
+  - Biome: Barren
+    Weight: 0.6
+  - Biome: Tundra
+    Weight: 1
+  - Biome: Taiga
+    Weight: 1
+  - Biome: Snow
+    Weight: 1
+  - Biome: Periglacial
+    Weight: 1
+  - Biome: Glacier
+    Weight: 1
+  - Biome: Ice Sheet
+    Weight: 1
+  - Biome: Ice Shelf
+    Weight: 1
+  - Biome: Permanent Ice
+    Weight: 1
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 1
+  Large: 1
+  PadFlatness: 0.8
+  Style: hide
+  Layout: 1
+  Pieces:
+  - Tag: =TentLarge
+    MinCount: 6
+    MaxCount: 12
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 2
+    Style: 
+  - Tag: fire
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: market
+    MinCount: 0
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: storage
+    MinCount: 3
+    MaxCount: 8
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: bedding
+    MinCount: 2
+    MaxCount: 6
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506032503357461
+  - rid: 4061506032503357462
+  - rid: 4061506032503357463
+  - rid: 4061506032503357464
+  - rid: 4061506032503357465
+  - rid: 4061506032503357466
+  - rid: 4061506032503357467
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503357461
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings:
+        - {x: -3, y: 2, z: 3.8836575}
+        - {x: 3, y: 1.5, z: 3.8836575}
+    - rid: 4061506032503357462
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503357463
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506032503357464
+      type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: -3, y: 3.8836575}
+    - rid: 4061506032503357465
+      type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: 3, y: 3.8836575}
+    - rid: 4061506032503357466
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 1
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503357467
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 4
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

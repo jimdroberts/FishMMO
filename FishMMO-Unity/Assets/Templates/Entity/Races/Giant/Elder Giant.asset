@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Elder Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'The oldest giants, mountain-born before kingdoms — names like slow bells'
+  Description: "The oldest giants, mountain-born before kingdoms \u2014 names like
+    slow bells"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -71,7 +72,7 @@ MonoBehaviour:
       - or
       - um
       - ael
-      - 'on'
+      - on
       SyllMin: 2
       SyllMax: 3
       FeminineSuffixes:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - und
       - eld
       - orr
-      Description: 'The oldest giants, mountain-born before kingdoms — names like slow bells'
+      Description: "The oldest giants, mountain-born before kingdoms \u2014 names
+        like slow bells"
       Tags:
       - Age-names
       - Bell-marks
@@ -162,6 +164,8 @@ MonoBehaviour:
       - tumble
       - scar
     AllowGenericOccupations: 1
+    Plural: Elder Giants
+    Adjective: Elder Giant
   BiomeAffinities:
   - BiomeID: -1474826537
     Weight: 3
@@ -171,3 +175,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -544771122
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

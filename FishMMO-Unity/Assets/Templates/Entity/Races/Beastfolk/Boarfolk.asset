@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Boarfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Tusked boar people of the thicket — snorting, heavy names'
+  Description: "Tusked boar people of the thicket \u2014 snorting, heavy names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ug
       - unt
-      Description: 'Tusked boar people of the thicket — snorting, heavy names'
+      Description: "Tusked boar people of the thicket \u2014 snorting, heavy names"
       Tags:
       - Tusk-names
       - Thicket-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Reeve of the Acorn Ground
       - Master of the Charging Field
       Legend:
-      - 'Who Charged the Knight''s Line and Broke It'
+      - Who Charged the Knight's Line and Broke It
       - Who Dug Up the Buried Treasure Looking for Roots
       - Who Wallowed Through the Winter
       - Who Gored the Dire Wolf
@@ -163,6 +163,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Boarfolk
+    Adjective: Boarfolk
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -540190004
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bramble Beast
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Plant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Thorn-thicket predators that walk — scratching, tangled names'
+  Description: "Thorn-thicket predators that walk \u2014 scratching, tangled names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Plant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - orn
       - ax
       - urr
-      Description: 'Thorn-thicket predators that walk — scratching, tangled names'
+      Description: "Thorn-thicket predators that walk \u2014 scratching, tangled
+        names"
       Tags:
       - Thorn-names
       - Snag-marks
@@ -94,7 +95,7 @@ MonoBehaviour:
     - the Hooked Hedge
     - the Blood Bramble
     - Thornwalk
-    - 'the Caught Sheep''s Field'
+    - the Caught Sheep's Field
     - the Tangle
     Titles:
       Honorific:
@@ -122,7 +123,7 @@ MonoBehaviour:
       - Elder of the Blood Bramble
       Legend:
       - Who Caught the Shepherd and Kept the Flock
-      - 'Who Grew Across the King''s Road in a Night'
+      - Who Grew Across the King's Road in a Night
       - Who Snagged the Knight and Rusted Him
       - Who Walked Out of the Hedge at Harvest
       - Who Drank the Battlefield
@@ -159,6 +160,8 @@ MonoBehaviour:
       - blight
       - ash
     AllowGenericOccupations: 0
+    Plural: Bramble Beasts
+    Adjective: Bramble Beast
   BiomeAffinities:
   - BiomeID: 1156965030
     Weight: 3
@@ -168,3 +171,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -1123947451
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

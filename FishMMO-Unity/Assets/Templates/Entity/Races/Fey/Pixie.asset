@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Pixie
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Tiny fey — quick, chiming cadence'
+  Description: "Tiny fey \u2014 quick, chiming cadence"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -91,7 +91,7 @@ MonoBehaviour:
       - ick
       - pip
       - wing
-      Description: 'Tiny fey — quick, chiming cadence'
+      Description: "Tiny fey \u2014 quick, chiming cadence"
       Tags:
       - Wing-names
       - Dust-bonds
@@ -115,7 +115,7 @@ MonoBehaviour:
       Rank:
       - Queen of the Dewdrop Court
       Legend:
-      - 'Who Stole the Knight''s Nose for an Hour'
+      - Who Stole the Knight's Nose for an Hour
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -124,6 +124,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Pixies
+    Adjective: Pixie
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 2
@@ -133,3 +136,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

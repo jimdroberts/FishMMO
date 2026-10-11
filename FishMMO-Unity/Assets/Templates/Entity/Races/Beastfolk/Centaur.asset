@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Centaur
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Open and galloping — Greek-inspired, wind on open steppe'
+  Description: "Open and galloping \u2014 Greek-inspired, wind on open steppe"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -67,7 +67,7 @@ MonoBehaviour:
       - ou
       - io
       Codas:
-      - 'on'
+      - on
       - os
       - us
       - eus
@@ -91,11 +91,11 @@ MonoBehaviour:
       - eia
       - one
       MasculineSuffixes:
-      - 'on'
+      - on
       - os
       - us
       - eus
-      Description: Open and galloping — wind on the open steppe
+      Description: "Open and galloping \u2014 wind on the open steppe"
       Tags:
       - Herd-names
       - Star-bonds
@@ -141,7 +141,7 @@ MonoBehaviour:
       - Who Carried Warriors Across the Great Divide
       - Whose Hooves Shook the Mountains
       - Who Guided Ten Thousand to the New Pastures
-      - 'Who Read the Stars and Changed a Nation''s Fate'
+      - Who Read the Stars and Changed a Nation's Fate
       Occupational: []
     CitySuffixes:
       Capital:
@@ -189,6 +189,9 @@ MonoBehaviour:
       - ruin
       - hollow
       - bone
+    AllowGenericOccupations: 1
+    Plural: Centaurs
+    Adjective: Centaur
   BiomeAffinities:
   - BiomeID: -1951431387
     Weight: 3
@@ -198,3 +201,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -439598380
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

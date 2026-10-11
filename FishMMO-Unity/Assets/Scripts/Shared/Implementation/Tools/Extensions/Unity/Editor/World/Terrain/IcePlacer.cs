@@ -34,6 +34,11 @@ namespace FishMMO.Shared.WorldDesign
 		public float BergSupply;
 		/// <summary>The largest IIP size class that reaches this water before it melts; null for none.</summary>
 		public IcebergSize? LargestBerg;
+		/// <summary>
+		/// True when the scene's own coast is the calving front: the source is its own (no drift) and its
+		/// summer never thaws, so the ice sheet meets this sea (<see cref="IceSheetSurface"/>).
+		/// </summary>
+		public bool CalvingFront;
 
 		public bool HasSeaIce => NoIceReason == null && SeaIceConcentration > 0f;
 		public bool HasBergs => NoIceReason == null && BergSupply > 0f && LargestBerg.HasValue;
@@ -52,7 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 				  $"berg supply {BergSupply:0.00}, largest {(LargestBerg.HasValue ? LargestBerg.Value.ToString() : "none")}"
 				: "no calving coast within drift range";
 			return $"air {AirMeanC:0.#} °C (coldest {AirColdestC:0.#}, warmest {AirWarmestC:0.#}), sea {SeaSurfaceC:0.#} °C, " +
-				$"sea ice {SeaIceConcentration:0.00}; {bergs}";
+				$"sea ice {SeaIceConcentration:0.00}; {bergs}{(CalvingFront ? ", calving front here" : string.Empty)}";
 		}
 	}
 
@@ -117,6 +122,33 @@ namespace FishMMO.Shared.WorldDesign
 		/// measurement: fragments outnumber their parents, and a small scene sees a large berg only rarely.
 		/// </summary>
 		public static float BergsPerKm2(IcebergSize size)
+		{
+			return BergsPerKm2(size, false);
+		}
+
+		/// <summary>
+		/// How many times the drifting abundance a calving front's own water holds, by size: the fragments a
+		/// face sheds (growlers, bergy bits, brash) choke the water in front of it for kilometres, while the big
+		/// bergs are no commoner there than anywhere they drift to.
+		/// </summary>
+		public static float CalvingFrontBoost(IcebergSize size)
+		{
+			switch (size)
+			{
+				case IcebergSize.Growler: return 8f;
+				case IcebergSize.BergyBit: return 6f;
+				case IcebergSize.Small: return 3f;
+				default: return 1f;
+			}
+		}
+
+		/// <summary>Bergs per km² at a supply of 1, in front of a calving face when <paramref name="calvingFront"/>.</summary>
+		public static float BergsPerKm2(IcebergSize size, bool calvingFront)
+		{
+			return BaseBergsPerKm2(size) * (calvingFront ? CalvingFrontBoost(size) : 1f);
+		}
+
+		private static float BaseBergsPerKm2(IcebergSize size)
 		{
 			switch (size)
 			{
@@ -372,7 +404,11 @@ namespace FishMMO.Shared.WorldDesign
 			double latitude = PlanetClimateField.LatitudeOf(direction);
 			float[] seasons = SeasonalAirC(field, system, request.Body, latitude, direction);
 			bool source = FindCalvingSource(field, system, request.Body, latitude, request.Longitude, out float drift, out float sourceC);
-			return Decide(seasons, source, drift, sourceC);
+			IceClimate climate = Decide(seasons, source, drift, sourceC);
+			// Its own coast calving: the source is here and no month thaws, so the ice sheet reaches this sea.
+			climate.CalvingFront = climate.HasCalvingSource && drift < SourceStepDegrees && climate.AirWarmestC <= 0f
+				&& BiomeRegistry.Contains(IceSheetSurface.BiomeName);
+			return climate;
 		}
 	}
 
@@ -893,7 +929,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int s = (int)IcebergSize.Large; s >= (int)IcebergSize.Growler; s--)
 			{
 				var size = (IcebergSize)s;
-				float expected = IceOccurrence.BergsPerKm2(size) * report.SeaKm2 * climate.BergSupply;
+				float expected = IceOccurrence.BergsPerKm2(size, climate.CalvingFront) * report.SeaKm2 * climate.BergSupply;
 				// Drawn even when too large, so a warmer climate does not reshuffle the smaller sizes' draws.
 				int count = Draw(expected, ref rng);
 				float pick = rng.NextFloat();

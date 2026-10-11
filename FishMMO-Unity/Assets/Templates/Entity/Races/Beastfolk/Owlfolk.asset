@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Owlfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Night-watching owl people — soft, hooting names'
+  Description: "Night-watching owl people \u2014 soft, hooting names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - orn
       - ix
       - oth
-      Description: 'Night-watching owl people — soft, hooting names'
+      Description: "Night-watching owl people \u2014 soft, hooting names"
       Tags:
       - Night-names
       - Watch-marks
@@ -124,7 +124,7 @@ MonoBehaviour:
       - Reeve of the Mouse Meadow
       Legend:
       - Who Watched the Border for a Hundred Nights
-      - 'Who Heard the Thief''s Heartbeat Through the Wall'
+      - Who Heard the Thief's Heartbeat Through the Wall
       - Who Flew Silent Past the Dragon
       - Who Counted Every Mouse in the Meadow
       - Who Answered the Riddle of the Moon
@@ -163,6 +163,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Owlfolk
+    Adjective: Owlfolk
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -2037808285
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

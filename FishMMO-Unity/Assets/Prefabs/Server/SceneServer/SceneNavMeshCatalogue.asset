@@ -13,16 +13,16 @@ MonoBehaviour:
   m_Name: SceneNavMeshCatalogue
   m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue
   Entries:
-  - SceneName: Baoakraal Hyena-den
-    Data: {fileID: -3336068400606198296, guid: 11d9bfc9b6072c5dea7405d9ae333eb8, type: 2}
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Dungeon
     Data: {fileID: 23800000, guid: c43b6eb487815084ca437ada41086fa4, type: 2}
     Position: {x: -256, y: -35, z: -256}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Flo Monolith
-    Data: {fileID: -3265376928076544187, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
+    Data: {fileID: -9140957652716246173, guid: 3e356a6f98eda495790f5aa8fe8a0a42, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Isle of Aradune
+    Data: {fileID: -503823978164141886, guid: 38bcb38630edd8d5f84e23dba3385a40, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: StartScene A
@@ -37,7 +37,15 @@ MonoBehaviour:
     Data: {fileID: 23800000, guid: bccc2ce460150eb43bb0d7f0db28b05b, type: 2}
     Position: {x: -500, y: 0, z: -500}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Treacherous Bri Lookout
+    Data: {fileID: -8821399485936347316, guid: aa6142b61c7fc2b0cb7c0a5d865e93bc, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Tutorial Spawners
     Data: {fileID: 23800000, guid: 9bb793da43a030e459af61d22643af10, type: 2}
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+  - SceneName: Volax Obelisk
+    Data: {fileID: -8607072189901287397, guid: 7a3730f3cbc747a039e70782308f6220, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}

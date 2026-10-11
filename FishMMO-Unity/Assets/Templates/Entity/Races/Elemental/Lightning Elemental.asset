@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Lightning Elemental
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Living lightning — crackling, instant names'
+  Description: "Living lightning \u2014 crackling, instant names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ax
       - ik
       - ang
-      Description: 'Living lightning — crackling, instant names'
+      Description: "Living lightning \u2014 crackling, instant names"
       Tags:
       - Spark-names
       - Flash-marks
@@ -161,6 +161,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Lightning Elementals
+    Adjective: Lightning Elemental
   BiomeAffinities:
   - BiomeID: -1474826537
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1496239796
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

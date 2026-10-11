@@ -15,10 +15,16 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Formations</b>: meshes <c>Formation_{Type}_{Shape}_{v}_LOD{n}</c>, prefabs
-	/// <c>Formation_{Type}_{Shape}_{v}</c> (capsule collider) and <c>…_Decor</c> (none), surface
+	/// <c>Formation_{Type}_{Shape}_{v}</c> (a mesh collider from the last level, none for a
+	/// <see cref="FormationShape.Colliderless"/> shape), surface
 	/// textures <c>RockSurface_{Type}_{Albedo|Normal|Mask}</c>. A type's material is
 	/// <c>Rock_{Type}</c>, except that the four types standing for a legacy rock material reuse it:
-	/// Granite wears <c>Rock_Grey</c>, and Sandstone, Basalt and Limestone their own names.
+	/// Granite wears <c>Rock_Grey</c>, and Sandstone, Basalt and Limestone their own names. A shape may
+	/// wear another surface (<see cref="FormationShape.Dress"/>) and carry a second body in another
+	/// (<see cref="FormationShape.Cap"/>): <see cref="FormationMaterials"/>. The mineral, ice and alien
+	/// types (2026-10-10: Halite, Gypsum, Sulphur, Sinter, Scoria, Breccia, Anorthosite, Sulphide, Pyrite,
+	/// DarkLag, Termitaria, Firn, WaterIce) are named the same way; none is called Ice, Nodule or Coral,
+	/// whose <c>Rock_</c> names belong to small-rock materials.
 	/// </para>
 	/// <para>
 	/// <b>Ice</b>: prefabs are the <see cref="IceMeshes"/> mesh names without the level-of-detail
@@ -43,6 +49,35 @@ namespace FishMMO.Shared.WorldDesign
 		public static bool HasOwnMaterial(in RockType type) => type.LegacyMaterial == null;
 
 		/// <summary>
+		/// The material a surface key names: a <see cref="RockTypes"/> name wears that type's material
+		/// (<see cref="RockTypeMaterial"/>), an <see cref="IceSurfaces"/> recipe name its ice material; null for
+		/// neither. The keys of <see cref="FormationShape.Dress"/> and <see cref="FormationShape.Cap"/>.
+		/// </summary>
+		public static string SurfaceMaterial(string key)
+		{
+			if (string.IsNullOrEmpty(key))
+			{
+				return null;
+			}
+			if (RockTypes.TryGet(key, out RockType type))
+			{
+				return RockTypeMaterial(in type);
+			}
+			return IceSurfaces.TryGet(key, out _) ? IceMaterial(key) : null;
+		}
+
+		/// <summary>
+		/// The materials a formation's submeshes wear, in order: its <see cref="FormationShape.Dress"/> or else its type's
+		/// material, then its <see cref="FormationShape.Cap"/>'s when it has a second body.
+		/// </summary>
+		public static string[] FormationMaterials(in RockType type, in FormationShape shape)
+		{
+			string main = SurfaceMaterial(shape.Dress) ?? RockTypeMaterial(in type);
+			string cap = SurfaceMaterial(shape.Cap);
+			return cap != null ? new[] { main, cap } : new[] { main };
+		}
+
+		/// <summary>
 		/// Legacy rock materials that wear their rock type's own surface instead of a ground family's
 		/// textures.
 		/// </summary>
@@ -56,11 +91,24 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly string[] LegacyOnRockSurface = { "Grey", "Sandstone", "Basalt", "Limestone" };
 
 		/// <summary>
-		/// The rock type whose surface a legacy rock material wears, or null when it keeps its ground
-		/// family's textures (<see cref="LegacyOnRockSurface"/>).
+		/// Newer small-rock materials that wear a rock type's surface: the ice cobbles (<see cref="ProceduralArtCatalogue.IceRockMaterials"/>)
+		/// are water ice, the same stone as the ice formations, rather than the Ice ground family's sheet ice.
+		/// </summary>
+		private static readonly (string Material, string Type)[] NewerOnRockSurface = { ("Ice", "WaterIce") };
+
+		/// <summary>
+		/// The rock type whose surface a small-rock material wears, or null when it keeps its ground
+		/// family's textures (<see cref="LegacyOnRockSurface"/>, <see cref="NewerOnRockSurface"/>).
 		/// </summary>
 		public static string RockSurfaceTypeForLegacy(string legacyMaterial)
 		{
+			foreach ((string material, string type) in NewerOnRockSurface)
+			{
+				if (material == legacyMaterial)
+				{
+					return type;
+				}
+			}
 			if (System.Array.IndexOf(LegacyOnRockSurface, legacyMaterial) < 0)
 			{
 				return null;

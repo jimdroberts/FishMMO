@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Cinderling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Small fire-sprites of the hearth and forge — popping, spitting names'
+  Description: "Small fire-sprites of the hearth and forge \u2014 popping, spitting
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ik
       - ok
       - er
-      Description: 'Small fire-sprites of the hearth and forge — popping, spitting names'
+      Description: "Small fire-sprites of the hearth and forge \u2014 popping, spitting
+        names"
       Tags:
       - Cinder-names
       - Hearth-marks
@@ -124,10 +126,10 @@ MonoBehaviour:
       - Elder of the Last Coal
       Legend:
       - Who Kept the Hearth Lit Through the Winter of Knives
-      - 'Who Set the Baker''s Beard Alight and Was Forgiven'
+      - Who Set the Baker's Beard Alight and Was Forgiven
       - Who Climbed the Chimney and Lit the Beacon
       - Who Hid in the Last Coal Until Spring
-      - 'Who Sparked the Forge That Made the King''s Sword'
+      - Who Sparked the Forge That Made the King's Sword
       Occupational:
       - Hearth-keeper
       - Forge-lighter
@@ -162,6 +164,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Cinderlings
+    Adjective: Cinderling
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 2

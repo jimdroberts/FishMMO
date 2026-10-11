@@ -158,6 +158,15 @@ scene was baked. The map draws a waypoint only once the character's `WaypointCon
 is unlocked, so `MapMarkerType.Waypoint` is never produced from a `MapMarker` component; the
 client filter drops that type. See the Interactable README for the system.
 
+## Points of interest
+
+Generated sites (`ScenePointOfInterest`, under `WorldSceneDetails/PointsOfInterest`) and hand-placed
+`MapPointOfInterest` landmarks are harvested into `WorldSceneDetails.PointsOfInterest` by the cache
+rebuild (`WorldSceneDetailsCacheReader.HarvestPointsOfInterest`), for the same reason waypoints are:
+the definition is build output, and landmarks kept only there vanished after Remove Baked Maps. The
+rebuild still copies hand-placed landmarks into a definition that exists; the client draws each once.
+`MapMarkerType` carries one value per point-of-interest kind, appended after `DungeonEntrance`.
+
 ## Bounds resolution
 
 `MapBoundsResolver` answers "what rectangle is this scene's map?" in order of preference: the

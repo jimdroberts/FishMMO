@@ -1,0 +1,90 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: Barrow - Ringed (Small)
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 65
+  Weight: 1
+  DefaultBiomeWeight: 1
+  BiomeWeights: []
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 0
+  Large: 0
+  PadFlatness: 1
+  Style: stone
+  Layout: 1
+  Pieces:
+  - Tag: =StandingStone
+    MinCount: 5
+    MaxCount: 9
+    MinDecay: 0
+    MaxDecay: 0.3
+    MinScale: 1
+    MaxScale: 1
+    Role: 2
+    Style: 
+  - Tag: =CryptEntrance
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: =GraveMound
+    MinCount: 1
+    MaxCount: 3
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506032503357831
+  - rid: 4061506032503357832
+  - rid: 4061506032503357833
+  - rid: 4061506032503357834
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503357831
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506032503357832
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503357833
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506032503357834
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 5
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

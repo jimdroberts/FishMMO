@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Skeleton
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Clattering Latinate — dry bone-speech
+  Description: "Clattering Latinate \u2014 dry bone-speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +80,7 @@ MonoBehaviour:
       - us
       - os
       - mor
-      Description: Clattering ossuary-chant — dry bone-speech
+      Description: "Clattering ossuary-chant \u2014 dry bone-speech"
       Tags:
       - Bone-names
       - Animation-marks
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Skeletons
+    Adjective: Skeleton
   BiomeAffinities:
   - BiomeID: 621224406
     Weight: 1
@@ -127,3 +130,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 173642607
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

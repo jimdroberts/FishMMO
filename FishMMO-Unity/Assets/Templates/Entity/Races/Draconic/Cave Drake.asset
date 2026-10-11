@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Cave Drake
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Eyeless deep-cave drakes — scraping, echoing names'
+  Description: "Eyeless deep-cave drakes \u2014 scraping, echoing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ax
       - ok
       - orn
-      Description: 'Eyeless deep-cave drakes — scraping, echoing names'
+      Description: "Eyeless deep-cave drakes \u2014 scraping, echoing names"
       Tags:
       - Echo-names
       - Scrape-marks
@@ -127,7 +127,7 @@ MonoBehaviour:
       - Who Collapsed the Deep Road on the Dwarves
       - Who Hoarded Ore Instead of Gold
       - Who Was Never Seen and Always Heard
-      - 'Who Slept Beneath the Mountain''s Root'
+      - Who Slept Beneath the Mountain's Root
       Occupational:
       - Echo-hunter
       - Ore-hoarder
@@ -162,6 +162,8 @@ MonoBehaviour:
       - cinder
       - fall
     AllowGenericOccupations: 1
+    Plural: Cave Drakes
+    Adjective: Cave Drake
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -171,3 +173,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -138594552
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

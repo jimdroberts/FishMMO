@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Devil
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Legalistic infernal baritone — chains and contracts
+  Description: "Legalistic infernal baritone \u2014 chains and contracts"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - oth
       - ias
       - iel
-      Description: Legalistic infernal baritone — chains and contracts
+      Description: "Legalistic infernal baritone \u2014 chains and contracts"
       Tags:
       - Contract-names
       - Brand-marks
@@ -117,6 +117,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Devils
+    Adjective: Devil
   BiomeAffinities:
   - BiomeID: -1042859854
     Weight: 3
@@ -124,3 +127,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -857237992
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

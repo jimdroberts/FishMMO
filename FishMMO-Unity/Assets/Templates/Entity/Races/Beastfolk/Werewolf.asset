@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Werewolf
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Guttural lycanthrope tongue — growls and lunar oaths
+  Description: "Guttural lycanthrope tongue \u2014 growls and lunar oaths"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - olf
       - ak
       - us
-      Description: Guttural lycanthrope tongue — growls and lunar oaths
+      Description: "Guttural lycanthrope tongue \u2014 growls and lunar oaths"
       Tags:
       - Lunar-names
       - Pack-bonds
@@ -97,7 +97,7 @@ MonoBehaviour:
     - the Wolfsong Peaks
     - the Silver Hunt
     - Dire Grove
-    - 'the Hunter''s Cairn'
+    - the Hunter's Cairn
     Titles:
       Honorific:
       - Pack-chief
@@ -119,7 +119,7 @@ MonoBehaviour:
       Legend:
       - Who Ran with the Moon
       - Who Slew the Silvercaster
-      - 'Who Ended the Hunter''s Line'
+      - Who Ended the Hunter's Line
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -128,6 +128,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Werewolves
+    Adjective: Werewolf
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -137,3 +140,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -439598380
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

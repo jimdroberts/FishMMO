@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Tidewalker
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Coastal salt-folk — names like gull-cries and rope-knots
+  Description: "Coastal salt-folk \u2014 names like gull-cries and rope-knots"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ick
       - ar
       - orn
-      Description: Coastal salt-folk — names like gull-cries and rope-knots
+      Description: "Coastal salt-folk \u2014 names like gull-cries and rope-knots"
       Tags:
       - Tide-names
       - Net-marks
@@ -169,6 +169,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Tidewalkers
+    Adjective: Tidewalker
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3
@@ -178,3 +180,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1508835452
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

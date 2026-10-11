@@ -45,13 +45,14 @@ float FishAirFogSlice(float eyeDepth)
 }
 
 /// <summary>
-/// A colour at a world point, seen through the fog between it and the camera.
+/// A colour at a world point, seen through the fog between it and the camera: the fog layer's analytic
+/// share when <paramref name="layer"/>, then the froxel volume's.
 /// </summary>
 /// <param name="keep">How much of the point's own light still reaches the eye, 0 to 1.</param>
-half3 FishWaterAirFog(half3 color, float3 positionWS, float2 screenUV, out half keep)
+half3 FishWaterAirFogParts(half3 color, float3 positionWS, float2 screenUV, bool layer, out half keep)
 {
 	keep = 1.0;
-	if (_FishAirFogParams.x > 1e-5)
+	if (layer && _FishAirFogParams.x > 1e-5)
 	{
 		float3 camera = _WorldSpaceCameraPos;
 		float3 toPoint = positionWS - camera;
@@ -95,6 +96,26 @@ half3 FishWaterAirFog(half3 color, float3 positionWS, float2 screenUV, out half 
 // sea bed, and there are no clouds below sea level — so everything a ray gathered lies between the
 // camera and the water's surface, which is precisely what the water should be behind. In the frame the
 // fog passes come after the clouds, so the water takes the clouds first and the fog after them.
+
+/// <summary>A colour at a world point, seen through all the fog between it and the camera.</summary>
+half3 FishWaterAirFog(half3 color, float3 positionWS, float2 screenUV, out half keep)
+{
+	return FishWaterAirFogParts(color, positionWS, screenUV, true, keep);
+}
+
+/// <summary>
+/// The fog for a surface the cloud buffer has already been laid over (FishWaterBehindClouds,
+/// FishWaterCloudsInFront). Once the cloud march draws the fog layer (_FishAirFogRange.z = 1) that buffer
+/// holds it, so only the froxel volume is left to apply — and while the march draws the layer the volume
+/// carries the falls' mist alone, which the buffer does not. The sea, the rivers and the falls skipped both
+/// (mist rising off a fall stood in front of the water behind it unseen); the swash, the caustics and the
+/// lava skipped neither, so on a foggy shore the swash took the fog twice and glowed through it as a pale
+/// band (audit 2026-10-09).
+/// </summary>
+half3 FishWaterAirFogOver(half3 color, float3 positionWS, float2 screenUV, out half keep)
+{
+	return FishWaterAirFogParts(color, positionWS, screenUV, _FishAirFogRange.z < 0.5, keep);
+}
 
 TEXTURE2D(_FishCloudBuffer);
 SAMPLER(sampler_FishCloudBuffer);

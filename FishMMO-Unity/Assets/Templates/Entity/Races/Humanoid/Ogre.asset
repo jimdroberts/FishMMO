@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ogre
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Thick and heavy — blunt sounds, simple structure, rumbling bass'
+  Description: "Thick and heavy \u2014 blunt sounds, simple structure, rumbling bass"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -94,7 +94,8 @@ MonoBehaviour:
       - ug
       - ork
       - og
-      Description: 'Thick and heavy — blunt sounds, simple structure, rumbling bass'
+      Description: "Thick and heavy \u2014 blunt sounds, simple structure, rumbling
+        bass"
       Tags:
       - Size-names
       - Hunger-marks
@@ -150,7 +151,7 @@ MonoBehaviour:
         - fist
         - skull
         - maw
-        Description: 'Mountainfist — territorial, wall-builders, booming laughs'
+        Description: "Mountainfist \u2014 territorial, wall-builders, booming laughs"
         Tags:
         - Band-names
         - Bash-bonds
@@ -162,7 +163,7 @@ MonoBehaviour:
     - Gutbelly Cave
     - the Big Hill
     - the Bonegnaw Den
-    - 'Stomper''s Ridge'
+    - Stomper's Ridge
     Titles:
       Honorific:
       - Big Boss
@@ -240,6 +241,9 @@ MonoBehaviour:
       - dust
       - heap
       - hollow
+    AllowGenericOccupations: 1
+    Plural: Ogres
+    Adjective: Ogre
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 2
@@ -251,3 +255,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 599899035
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

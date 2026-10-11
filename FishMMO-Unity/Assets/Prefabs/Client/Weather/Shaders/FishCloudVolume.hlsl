@@ -136,6 +136,9 @@ float4 _FishCloudDiag;
 float4 _FishCloudDiagLight;
 // x detail strength − 1, y the mixing shell's width − 1, z the step's length − 1, w the early exit − 0.05.
 float4 _FishCloudDiagScale;
+// The near-field step (the profile's Near Step Scale): x its scale over Step Scale (1 or 0: none), y the distance it holds
+// to (m), z how far it then eases back to Step Scale over (m).
+float4 _FishCloudNearStep;
 // The 2026-09-29 audit's fixes, each 1 to go back to the old behaviour (the profile's diagnostics, "Fixes
 // under trial"; all zeros is as shipped): x each sample's extinction held over its whole step instead of
 // the trapezoid between samples, y one light-march phase for the whole screen instead of each pixel's,
@@ -152,6 +155,12 @@ float4 _FishCloudFixB;
 float4 _FishCloudBase;
 // What the march hands pass 0 in place of the clouds when _FishCloudDiag.w asks for a debug view.
 static float4 FishCloudMarchDebug = float4(0.0, 0.0, 0.0, 1.0);
+// 1 for a ray into open sky, 0 for one that ends on the world (set by the march passes). The rain haze under a wet
+// column is the falling rain's own extinction AT THE CAMERA (_FishCloudSub.w) — the very figure the pipeline's
+// distance fog lays over every surface while it rains (WeatherFogPresenter.UniformExtinction) — so drawn in front
+// of the ground as well, the rain was counted twice there (audit 2026-10-09). Over the sky no surface fog is drawn
+// and the haze is the rain's only trace.
+static float FishCloudRainHangScale = 1.0;
 
 /// A heat map for the debug views, 0 blue through green and yellow to 1 red.
 float3 FishCloudDebugHeat(float t)
@@ -1301,7 +1310,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
             // Tapered away over the last tenth below the base: densest AT the base, it made a level
             // sheet there, and a level sheet seen edge-on is a line.
             float deep = saturate(reachM / 2500.0);
-            float hang = _FishCloudSub.w * deep * mass * saturate((under - 0.3) / 0.6) * saturate((1.0 - under) / 0.1) * clearance;
+            float hang = _FishCloudSub.w * FishCloudRainHangScale * deep * mass * saturate((under - 0.3) / 0.6) * saturate((1.0 - under) / 0.1) * clearance;
             float extinction = hang;
             if (extinction > best)
             {
@@ -2266,12 +2275,19 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     int tailSteps = (int)_FishCloudFarTail.y;
     bool tailOn = tailSteps > 0 && tailPlane > 0.0 && tailPlane < far;
     int tailFrom = -1;
+    float tailStep = 0.0;
     FishCloudField rayField = (FishCloudField)0;
     float2 rayFieldAt = float2(1e9, 1e9);
     float fieldReuse = _FishCloudFieldReuse == 0.0 ? FISH_CLOUD_FIELD_REUSE : _FishCloudFieldReuse;
+    // The near cloud finer still (Near Step Scale): where the march's grain is big enough on screen to see.
+    float nearStep = _FishCloudNearStep.x > 0.0 ? clamp(_FishCloudNearStep.x, 0.25, 4.0) : 1.0;
     if (stepScale < 1.0 || !stepGrows)
     {
         budget = min(1024, (int)(budget * (stepGrows ? 1.0 : 4.0) / min(1.0, stepScale)));
+    }
+    if (nearStep < 1.0)
+    {
+        budget = min(1024, (int)(budget / nearStep));
     }
     // The debug views' tallies (_FishCloudDiag.w): the steps taken, and, weighted by what each cloud
     // sample adds to the picture, its light march's depth, its step's length and its detail octaves.
@@ -2426,6 +2442,9 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // ninety-metre steps. (The step's own scale is already in fine and fineNear; with the growth
         // off the near step stands.)
         float cloudStepBase = stepGrows ? max(clamp(travelled * 0.006 * stepScale, fineNear, fine), travelled * 0.004 * stepScale) : fineNear;
+        // Finer near the camera (Near Step Scale), eased back to the profile's step over as far again, smoothly with
+        // distance as the growth above is, so no sphere round the camera where the look changes.
+        cloudStepBase *= lerp(nearStep, 1.0, smoothstep(_FishCloudNearStep.y, _FishCloudNearStep.y + _FishCloudNearStep.z, travelled));
         // In the fog's shell the fog's own step (see where `fogCap` is set) — and no coarser than the
         // clouds' where a cloud can be there too; where none can, the clouds' edge-finding step has
         // nothing to find, and a trace of a fog would be walked at it for kilometres.
@@ -2539,8 +2558,32 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // Past the far plane, never so short that the rest of the ray cannot be walked in the tail's steps.
         if (tailOn && travelled >= tailPlane)
         {
-            tailFrom = tailFrom < 0 ? i : tailFrom;
-            stepHere = max(stepHere, (far - travelled) / max(1.0, (float)(tailSteps - (i - tailFrom))));
+            // The steps grow by one ratio from the ordinary step at the plane, so the steps left reach the ray's end:
+            // fine just past the plane, long only far out, where the haze has the cloud. They were the distance left
+            // over the steps left — evenly, so from 13 km to a ray ending 150 km off the first was 6 km — which thinned
+            // the horizon's thin cloud more and lit its edges in sparkles where a long step landed (2026-10-09: against
+            // the clouds marched in full to 20 km, the horizon band differed 1.51/255 on average that way, 1.15 this way).
+            if (tailFrom < 0)
+            {
+                tailFrom = i;
+                tailStep = stepHere;
+            }
+            float tailLeft = max(1.0, (float)(tailSteps - (i - tailFrom)));
+            float tailRest = max(0.0, far - travelled);
+            float growth = 1.0;
+            if (tailStep * tailLeft < tailRest)
+            {
+                // tailStep (r^n − 1)/(r − 1) = rest, solved by fixed point from above: r = (1 + rest (r − 1)/tailStep)^(1/n).
+                growth = 2.0;
+                [unroll]
+                for (int g = 0; g < 6; g++)
+                {
+                    growth = pow(1.0 + tailRest * (growth - 1.0) / max(tailStep, 1.0), 1.0 / tailLeft);
+                }
+                growth = max(growth, 1.0);
+            }
+            stepHere = max(stepHere, tailStep);
+            tailStep = stepHere * growth;
         }
         // Never across the fog's floor or ceiling, or past the end of the ray: the next step begins on
         // it, so how the ray is sampled on either side of it goes by where it is and not by how many
@@ -2737,8 +2780,12 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                     travelled = 0.5 * (outside + within);
                     lastSigma = density;
                     emptyRun = 0.0;
-                    // The cloud's edge: its extinction starts from nothing here.
+                    // The cloud's edge: its extinction starts from nothing here, and what the ray learnt walking
+                    // a smooth medium under a base (its stride, its count of samples) is not this cloud's.
                     lastWasHaze = false;
+                    wasUnderBase = false;
+                    insideSamples = 0.0;
+                    tauInCloud = 0.0;
                     prevAt = travelled;
                     prevTotal = 0.0;
                     prevDensity = 0.0;
@@ -2771,7 +2818,15 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // level rays that see a base from the side. The haze is closed up to the base, the base is
             // found in five halvings between the last haze sample and this one, and the steps begin
             // again on it, with the cloud's own extinction to size them.
-            if (cloudHere && wasUnderBase && lastWasHaze && prevKnown && at > prevAt + 1.0)
+            //
+            // Whether the sample before held any haze does not decide it (2026-10-09). The haze tapers to nothing
+            // over the last tenth under the base, so the sample before the base was haze on one texel and clear
+            // air on the next, by each texel's phase, new every frame — and only the first kind was found this
+            // way; the second walked on into the cloud with the haze's stride (mistStride) and its own count of
+            // samples, from wherever its step had landed. Under a raining storm the base was then grain all over
+            // (a lattice with interleaved gradient noise for the phase, a speckle with blue noise), and its
+            // step-length view speckled. Any ray coming into the cloud from under a base finds the base.
+            if (cloudHere && wasUnderBase && prevKnown && at > prevAt + 1.0)
             {
                 float hazeSide = prevAt;
                 float cloudSide = at;

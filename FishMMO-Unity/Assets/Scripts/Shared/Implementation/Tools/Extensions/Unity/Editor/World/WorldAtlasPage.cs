@@ -103,6 +103,8 @@ namespace FishMMO.Shared.WorldDesign
 			Toggle(tools, "Time zones", true, v => { globe.ShowTimeZones = v; globe.Refresh(); });
 			Toggle(tools, "Reference", true, v => { globe.ShowReference = v; globe.Refresh(); });
 			Toggle(tools, "Daylight", true, v => { globe.ShowDaylight = v; globe.Refresh(); });
+			Toggle(tools, "Places", true, v => { globe.ShowPointsOfInterest = v; globe.Refresh(); }).tooltip =
+				"Points of interest: a dot per site in its group's colour, named as you zoom in. A star marks the capital's scene.";
 			Toggle(tools, "Spin", false, v => { spinning = v; });
 			tools.Add(new ToolbarSpacer { flex = true });
 			tools.Add(new ToolbarButton(() => { hours = NowHours(); RefreshGlobe(); }) { text = "Now", tooltip = "World time right now, from this machine's clock." });
@@ -151,6 +153,8 @@ namespace FishMMO.Shared.WorldDesign
 				"⚠  teleporters without a valid destination",
 				"red outline: overlap or too big",
 				"▲  the scene's north (+Z)",
+				"●  points of interest, coloured by group; names appear as you zoom in",
+				"★  the scene holding the capital",
 				"Drag the globe to turn it; Alt- or middle-drag turns it over a scene.",
 				"Drag a scene to move it. R turns it 90°, Shift+R 15°.",
 				"Scroll to zoom, double-click to centre, arrows to turn.",
@@ -336,6 +340,16 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					stamp = stamp * 31 + EditorUtility.GetDirtyCount(model.Teleporters);
 				}
+				// Points of interest: settings edited in an inspector (the capital star), and any POI
+				// asset or baked map written to disk by a cut, a re-cut or the map baker.
+				foreach (WorldAtlasScene entry in model.Entries)
+				{
+					if (entry != null && entry.PointsOfInterest != null)
+					{
+						stamp = stamp * 31 + EditorUtility.GetDirtyCount(entry.PointsOfInterest);
+					}
+				}
+				stamp = stamp * 31 + AtlasAssetWatcher.Version;
 				return stamp;
 			}
 		}
@@ -422,6 +436,56 @@ namespace FishMMO.Shared.WorldDesign
 		private bool Visible(WorldAtlasScene entry) => layer == null || entry.Layer == layer;
 
 		/// <summary>
+		/// The scene's world rectangle: its boundaries from the details cache, else its atlas size centred
+		/// on the origin, which is how the generator lays a scene out (x and z from minus to plus half its
+		/// size). The fallback is what a fresh cut, not yet in the cache, is placed by.
+		/// </summary>
+		private Rect SceneRectOrFootprint(WorldAtlasScene entry)
+		{
+			Rect rect = SceneWorldRect(entry.SceneName);
+			if (rect.width > 0f && rect.height > 0f)
+			{
+				return rect;
+			}
+			float w = entry.SizeKm.x * 1000f, d = entry.SizeKm.y * 1000f;
+			return new Rect(-w * 0.5f, -d * 0.5f, w, d);
+		}
+
+		/// <summary>A world position in a scene as a point on the globe, through <see cref="SceneRectOrFootprint"/>.</summary>
+		private static Vector3d PointToUnit(WorldAtlasScene entry, Rect rect, Vector3 position, double radius)
+		{
+			AtlasFootprint footprint = AtlasFootprint.Of(entry);
+			double x = Mathf.Clamp((position.x - rect.center.x) / 1000f, -footprint.SizeKm.x * 0.5f, footprint.SizeKm.x * 0.5f);
+			double z = Mathf.Clamp((position.z - rect.center.y) / 1000f, -footprint.SizeKm.y * 0.5f, footprint.SizeKm.y * 0.5f);
+			return AtlasGeometry.SceneToUnit(footprint, x, z, radius);
+		}
+
+		/// <summary>Fills a globe scene's points of interest and capital flag from its assets; no scene is opened.</summary>
+		private void FillPointsOfInterest(GlobeScene scene, WorldAtlasScene entry)
+		{
+			scene.Points.Clear();
+			PointOfInterestSettings settings = AtlasPointsOfInterest.SettingsOf(entry);
+			scene.Capital = settings != null && settings.Capital;
+			List<AtlasPoint> points = AtlasPointsOfInterest.For(model.BodyOf(entry), entry.SceneName, model.Details);
+			if (points.Count == 0)
+			{
+				return;
+			}
+			double radius = AtlasModel.RadiusOf(body);
+			Rect rect = SceneRectOrFootprint(entry);
+			foreach (AtlasPoint point in points)
+			{
+				scene.Points.Add(new GlobePoint
+				{
+					Unit = PointToUnit(entry, rect, point.Position, radius),
+					Colour = AtlasPointsOfInterest.GroupColour(point.Group),
+					Name = point.Name,
+					Tier = point.Tier,
+				});
+			}
+		}
+
+		/// <summary>
 		/// A rectangle was drawn on the globe: name it, check it, and cut a scene out of it.
 		/// </summary>
 		/// <remarks>
@@ -447,7 +511,7 @@ namespace FishMMO.Shared.WorldDesign
 				SizeKm = sizeKm,
 			};
 
-			List<WorldAtlasScene> hits = SceneGeneration.Collisions(request, model.Entries, AtlasModel.RadiusOf(body));
+			List<WorldAtlasScene> hits = SceneGeneration.Collisions(request, model.Entries, AtlasModel.RadiusOf(body), model.BodyOf);
 			if (hits.Count > 0)
 			{
 				var names = new List<string>();
@@ -475,6 +539,17 @@ namespace FishMMO.Shared.WorldDesign
 			request.SceneName = sceneName;
 			request.FineDetail = fineDetail;
 
+			/* The pre-cut prompt (Jim, 2026-10-10): capital and density, asked before anything is
+			 * written. The settings asset is saved before the cut because the generator links the
+			 * scene to it; one this cut created is removed again if the cut is refused. */
+			string settingsPath = AtlasPointsOfInterest.SettingsPathFor(sceneName);
+			PointOfInterestSettings existingSettings = AssetDatabase.LoadAssetAtPath<PointOfInterestSettings>(settingsPath);
+			if (!PointOfInterestPrompt.Ask($"\"{sceneName}\": what should it hold?", "Cut scene", existingSettings, out PointOfInterestChoice choice))
+			{
+				return;
+			}
+			request.PointsOfInterest = AtlasPointsOfInterest.Save(settingsPath, choice, out bool createdSettings);
+
 			SceneGenerationResult result;
 			try
 			{
@@ -488,9 +563,14 @@ namespace FishMMO.Shared.WorldDesign
 
 			if (!result.Success)
 			{
+				if (createdSettings)
+				{
+					AssetDatabase.DeleteAsset(settingsPath);
+				}
 				EditorUtility.DisplayDialog("Cut scene", result.Problem, "OK");
 				return;
 			}
+			AtlasPointsOfInterest.Assign(result.Entry, AssetDatabase.LoadAssetAtPath<PointOfInterestSettings>(settingsPath));
 
 			Debug.Log($"[World atlas] Generated '{sceneName}': {plan}, cut at {result.RadiusKm:0.##} km with a vertical scale of {result.VerticalScale:0.###}, {result.ReliefMetres:0} m of relief, " +
 				$"standing at {result.BaseAltitudeMetres:0} m above sea level (its ground floor is {result.GroundAltitudeMetres:0} m).\n  "
@@ -520,19 +600,36 @@ namespace FishMMO.Shared.WorldDesign
 				"OK");
 
 			model.Reload();
-			RefreshGlobe();
+			/* Rendered now, as a re-cut is: without it a fresh scene showed as a plain patch until
+			 * somebody remembered More → Render preview. */
+			if (!string.IsNullOrEmpty(result.ScenePath) && AtlasPreviews.Render(new[] { result.ScenePath }) == 0)
+			{
+				Debug.LogWarning($"[World atlas] The preview of '{sceneName}' could not be rendered; render it from More when the scene can be opened.");
+			}
+			if (result.Entry != null)
+			{
+				selected = result.Entry;
+			}
+			Rebuild();
 		}
 
 		/// <summary>Cuts a generated scene's terrain from the globe again, after asking.</summary>
 		private void RecutScene(WorldAtlasScene entry)
 		{
-			if (!EditorUtility.DisplayDialog("Re-cut terrain",
+			/* One modal: the re-cut warning and the pre-cut questions together (Jim, 2026-10-10). It
+			 * opens on the scene's current settings; a re-cut regenerates every point of interest. */
+			if (!PointOfInterestPrompt.Ask(
 				$"Generate \"{entry.SceneName}\" again from the globe, where its rectangle is now?\n\n" +
-				"The scene file is replaced, so anything added to it by hand is lost. The old scene and terrain are copied to " +
-				$"{SceneGenerator.RecutBackupRoot} first.", "Re-cut", "Cancel"))
+				"The scene file is replaced, so anything added to it by hand is lost, and every point of interest is " +
+				$"generated again. The old scene and terrain are copied to {SceneGenerator.RecutBackupRoot} first.",
+				"Re-cut", AtlasPointsOfInterest.SettingsOf(entry), out PointOfInterestChoice choice))
 			{
 				return;
 			}
+			string settingsPath = entry.PointsOfInterest != null
+				? AssetDatabase.GetAssetPath(entry.PointsOfInterest)
+				: AtlasPointsOfInterest.SettingsPathFor(entry.SceneName);
+			AtlasPointsOfInterest.Assign(entry, AtlasPointsOfInterest.Save(settingsPath, choice, out _));
 			SceneGenerationResult result;
 			try
 			{
@@ -558,7 +655,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Debug.LogWarning($"[World atlas] The preview of '{entry.SceneName}' could not be rendered; the globe still shows its old picture.");
 			}
-			RefreshGlobe();
+			Rebuild();
 		}
 
 		/// <summary>Writes the globe/cut/terrain comparison for a scene and shows the folder.</summary>
@@ -778,6 +875,12 @@ namespace FishMMO.Shared.WorldDesign
 						HasExternalLinks = external.Contains(entry.SceneName),
 						Caption = entry.SceneName,
 					});
+					GlobeScene added = globe.Scenes[globe.Scenes.Count - 1];
+					FillPointsOfInterest(added, entry);
+					if (added.Capital)
+					{
+						added.Caption = "★ " + entry.SceneName;
+					}
 				}
 				MarkProblems();
 			}
@@ -1137,12 +1240,81 @@ namespace FishMMO.Shared.WorldDesign
 				inspectorHost.Add(row);
 			}
 
+			BuildPointsOfInterestSection(entry, path);
+
 			var settings = new Label("Settings");
 			settings.style.unityFontStyleAndWeight = FontStyle.Bold;
 			settings.style.marginTop = 8f;
 			inspectorHost.Add(settings);
 			inspector = new InspectorElement(entry);
 			inspectorHost.Add(inspector);
+		}
+
+		/// <summary>
+		/// The scene's points of interest: its settings in a line, a group filter, and a flat preview of the
+		/// scene with every point drawn on it. Clicking a point selects its object when the scene is open.
+		/// </summary>
+		private void BuildPointsOfInterestSection(WorldAtlasScene entry, string scenePath)
+		{
+			var header = new Label("Points of interest");
+			header.style.unityFontStyleAndWeight = FontStyle.Bold;
+			header.style.marginTop = 8f;
+			inspectorHost.Add(header);
+
+			PointOfInterestSettings settings = AtlasPointsOfInterest.SettingsOf(entry);
+			List<AtlasPoint> points = AtlasPointsOfInterest.For(model.BodyOf(entry), entry.SceneName, model.Details);
+			var summary = new VisualElement();
+			string multiplier = settings != null && !Mathf.Approximately(settings.Multiplier, 1f) ? $" × {settings.Multiplier:0.##}" : string.Empty;
+			string overrides = settings != null && settings.Overrides != null && settings.Overrides.Count > 0 ? $", {settings.Overrides.Count} override(s)" : string.Empty;
+			Pair(summary, "Settings", settings == null
+				? "None yet: asked before the next cut."
+				: $"{(settings.Capital ? "★ Capital, " : string.Empty)}{settings.Density}{multiplier}{overrides}");
+			Pair(summary, "Sites", points.Count == 0 ? "None generated." : points.Count.ToString());
+			inspectorHost.Add(summary);
+			if (settings != null)
+			{
+				var select = new Button(() => Selection.activeObject = settings) { text = "Edit settings…", tooltip = "Selects the settings asset. They are used the next time the scene is cut." };
+				select.style.alignSelf = Align.FlexStart;
+				inspectorHost.Add(select);
+			}
+			if (points.Count == 0)
+			{
+				return;
+			}
+
+			var preview = new AtlasScenePreview();
+			preview.style.marginTop = 4f;
+			preview.Set(AtlasPreviews.Find(entry.SceneName, model.Details), SceneRectOrFootprint(entry), points);
+			preview.SetPaths(AtlasPointsOfInterest.PathsFor(model.BodyOf(entry), entry.SceneName));
+			var hint = new Label("Hover a point for its name; click it to select it in the open scene.");
+			hint.style.opacity = 0.75f;
+			hint.style.whiteSpace = WhiteSpace.Normal;
+			preview.PointClicked += point =>
+			{
+				hint.text = AtlasPointsOfInterest.SelectInOpenScene(scenePath, point)
+					? $"Selected {point.Name}."
+					: $"{point.Name}: open the scene to select it.";
+			};
+
+			var filters = new VisualElement();
+			filters.style.flexDirection = FlexDirection.Row;
+			filters.style.flexWrap = Wrap.Wrap;
+			foreach (PointOfInterestGroup group in preview.Groups())
+			{
+				PointOfInterestGroup captured = group;
+				int count = 0;
+				foreach (AtlasPoint point in points)
+				{
+					if (point.Group == group) count++;
+				}
+				var toggle = new ToolbarToggle { text = $"{group} {count}", value = true };
+				toggle.style.color = Color.Lerp(AtlasPointsOfInterest.GroupColour(group), Color.white, 0.35f);
+				toggle.RegisterValueChangedCallback(evt => preview.SetGroupVisible(captured, evt.newValue));
+				filters.Add(toggle);
+			}
+			inspectorHost.Add(filters);
+			inspectorHost.Add(preview);
+			inspectorHost.Add(hint);
 		}
 
 		private void BuildBodyInspector()

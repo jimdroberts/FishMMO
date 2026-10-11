@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Lava Elemental
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Living molten rock — glowing, slow-pouring names'
+  Description: "Living molten rock \u2014 glowing, slow-pouring names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ax
       - orn
       - uss
-      Description: 'Living molten rock — glowing, slow-pouring names'
+      Description: "Living molten rock \u2014 glowing, slow-pouring names"
       Tags:
       - Lava-names
       - Flow-marks
@@ -125,7 +125,7 @@ MonoBehaviour:
       Legend:
       - Who Poured Through the City and Made It Stone
       - Who Melted the Iron Gate by Leaning
-      - 'Who Slept in the Volcano''s Throat for an Age'
+      - Who Slept in the Volcano's Throat for an Age
       - Who Boiled the Cinder Sea
       - Who Was the First Fire of the World
       Occupational:
@@ -161,6 +161,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Lava Elementals
+    Adjective: Lava Elemental
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3

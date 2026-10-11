@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Molefolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Blind-eyed tunnelling mole people — soft, earthy names'
+  Description: "Blind-eyed tunnelling mole people \u2014 soft, earthy names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ub
       - un
       - ock
-      Description: 'Blind-eyed tunnelling mole people — soft, earthy names'
+      Description: "Blind-eyed tunnelling mole people \u2014 soft, earthy names"
       Tags:
       - Tunnel-names
       - Root-marks
@@ -163,6 +163,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Molefolk
+    Adjective: Molefolk
   BiomeAffinities:
   - BiomeID: -2037808285
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -540190004
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

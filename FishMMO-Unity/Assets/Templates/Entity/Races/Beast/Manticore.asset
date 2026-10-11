@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Manticore
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +89,7 @@ MonoBehaviour:
     Places:
     - the Spine-Thorned Waste
     - Red Dune Camp
-    - 'the Hunter''s Maw'
+    - the Hunter's Maw
     - Crimson Sands
     Titles:
       Honorific:
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Manticores
+    Adjective: Manticore
   BiomeAffinities:
   - BiomeID: 599899035
     Weight: 2
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1275219499
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

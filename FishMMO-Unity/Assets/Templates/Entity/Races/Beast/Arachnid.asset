@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Arachnid
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Clicking and hissing — sibilants and fricatives, venomous precision'
+  Description: "Clicking and hissing \u2014 sibilants and fricatives, venomous precision"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -92,7 +92,8 @@ MonoBehaviour:
       - is
       - ral
       - eks
-      Description: 'Clicking and hissing — sibilants and fricatives, venomous precision'
+      Description: "Clicking and hissing \u2014 sibilants and fricatives, venomous
+        precision"
       Tags:
       - Web-names
       - Venom-marks
@@ -105,7 +106,7 @@ MonoBehaviour:
     - the Hive
     - the Labyrinth
     - Venomreach
-    - 'the Spinner''s Cathedral'
+    - the Spinner's Cathedral
     - the Eight-Fold Web
     Titles:
       Honorific:
@@ -185,6 +186,9 @@ MonoBehaviour:
       - void
       - dust
       - tatter
+    AllowGenericOccupations: 1
+    Plural: Arachnids
+    Adjective: Arachnid
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -194,3 +198,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 621224406
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

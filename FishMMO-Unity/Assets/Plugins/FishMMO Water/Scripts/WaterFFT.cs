@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using FishMMO.Shared.Celestial;
 using UnityEngine.Experimental.Rendering;
 
 namespace FishMMO.Water
@@ -59,6 +60,7 @@ namespace FishMMO.Water
 
 		/// <summary>The instant last evaluated, for the foam memory's decay; NaN before the first.</summary>
 		private float lastSeconds = float.NaN;
+		private uint seenJumps;
 
 		private static readonly int H0SourceId = Shader.PropertyToID("_H0Source");
 		private static readonly int SourceAId = Shader.PropertyToID("_SourceA");
@@ -294,6 +296,13 @@ namespace FishMMO.Water
 		/// </param>
 		public void Evaluate(float seconds, int stages = 4)
 		{
+			// The clock was set to another moment: the whitecaps of the old one are not this sea's.
+			uint jumps = WorldClock.Shared.Jumps;
+			if (jumps != seenJumps)
+			{
+				seenJumps = jumps;
+				lastSeconds = float.NaN;
+			}
 			if (passes != null)
 			{
 				EvaluatePasses(seconds, stages);

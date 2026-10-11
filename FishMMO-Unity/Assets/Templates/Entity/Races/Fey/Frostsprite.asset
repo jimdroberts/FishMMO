@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Frostsprite
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Winter fey who paint the frost — tinkling, brittle names'
+  Description: "Winter fey who paint the frost \u2014 tinkling, brittle names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ik
       - el
       - yn
-      Description: 'Winter fey who paint the frost — tinkling, brittle names'
+      Description: "Winter fey who paint the frost \u2014 tinkling, brittle names"
       Tags:
       - Frost-names
       - Window-marks
@@ -163,6 +163,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Frostsprites
+    Adjective: Frostsprite
   BiomeAffinities:
   - BiomeID: 1645414801
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 144196518
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

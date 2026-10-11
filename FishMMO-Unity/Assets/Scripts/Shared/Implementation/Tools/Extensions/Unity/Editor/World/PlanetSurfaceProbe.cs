@@ -58,14 +58,15 @@ namespace FishMMO.Shared.WorldDesign
 				Debug.Log($"[Surface probe] {planet.ResolvedName}: system={(system != null ? system.name : "NONE")} " +
 					$"insolation={insolation:0.###} mean={meanK:0.#} K ({mean:+0.00;-0.00}) tilt={planet.AxialTiltDegrees:0.#}");
 
-				uint seed = planet.ResolvedTerrainSeed;
-				foreach (double lat in new[] { 0.0, 20.0, 40.0, 55.0, 70.0, 85.0 })
+				// The field itself, both hemispheres: the year's mean and the warmest season, exactly as biomes read them.
+				PlanetClimateField field = PlanetClimateField.For(system, planet);
+				foreach (double lat in new[] { 85.0, 70.0, 55.0, 40.0, 20.0, 0.0, -20.0, -40.0, -55.0, -70.0, -85.0 })
 				{
-					double latTerm = system != null ? CelestialMath.LatitudeTemperature(system, planet, 0.0, lat) : 0.0;
 					Vector3 dir = PlanetSurface.Direction(lat, 0.0);
-					float regional = (PlanetSurface.FieldNoise(seed ^ 0x51CEEDA7u, dir, 2.6f) - 0.5f) * 2f * 0.09f;
-					Debug.Log($"[Surface probe]   lat {lat,5:0}: latTerm={latTerm:+0.00;-0.00} regional={regional:+0.000;-0.000} " +
-						$"-> sea-level T {mean + latTerm + regional:+0.00;-0.00}");
+					float regional = field.RegionalOffset(dir);
+					Debug.Log($"[Surface probe]   lat {lat,5:0}: yearly latTerm={field.YearlyMeanLatitudeTemperature(lat):+0.00;-0.00} " +
+						$"summer latTerm={field.WarmestLatitudeTemperature(lat):+0.00;-0.00} regional={regional:+0.000;-0.000} " +
+						$"-> sea-level T {field.TemperatureAt(lat, dir, 0f):+0.00;-0.00}, warmest season {field.WarmestSeasonAt(lat, dir, 0f):+0.00;-0.00}");
 				}
 			}
 

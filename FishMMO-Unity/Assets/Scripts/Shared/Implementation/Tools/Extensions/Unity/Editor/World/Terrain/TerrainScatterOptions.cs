@@ -175,6 +175,20 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Land plants fade in from this height above an inland water's surface to <see cref="InlandFullMetres"/>: a bank, not a tidal beach.</summary>
 		public float InlandFadeStartMetres = 0.3f;
 		public float InlandFullMetres = 0.9f;
+
+		/// <summary>
+		/// True where nothing may be scattered at a world position (x, z): a point of interest's footprint
+		/// (<see cref="PointOfInterestStage.Excludes"/>). Null for nowhere. Called from the scatter's workers, so it must
+		/// be safe to call from several threads.
+		/// </summary>
+		public Func<float, float, bool> Excluded;
+
+		/// <summary>
+		/// <see cref="Excluded"/> for detail rules (grass, flowers, small plants), when it differs: a point of interest's
+		/// footprint and a road's trodden width, but not a trail, whose own grass the shaders thin (FishGroundPaths.hlsl).
+		/// Null uses <see cref="Excluded"/>. Thread-safe like it.
+		/// </summary>
+		public Func<float, float, bool> DetailExcluded;
 	}
 }
 #endif

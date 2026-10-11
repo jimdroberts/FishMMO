@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Demon
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Infernal and binding — names that carry weight and corruption
+  Description: "Infernal and binding \u2014 names that carry weight and corruption"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -92,7 +92,7 @@ MonoBehaviour:
       - or
       - ur
       - azar
-      Description: Infernal and binding — names that carry weight and corruption
+      Description: "Infernal and binding \u2014 names that carry weight and corruption"
       Tags:
       - True-names
       - Contract-marks
@@ -173,7 +173,7 @@ MonoBehaviour:
         - oth
         - oss
         - riel
-        Description: 'Abyssal — true-named by bargain, speak-at-peril'
+        Description: "Abyssal \u2014 true-named by bargain, speak-at-peril"
         Tags:
         - True-names
         - Pact-bonds
@@ -269,6 +269,9 @@ MonoBehaviour:
       - waste
       - char
       - blight
+    AllowGenericOccupations: 1
+    Plural: Demons
+    Adjective: Demon
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 2
@@ -278,3 +281,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 493502347
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

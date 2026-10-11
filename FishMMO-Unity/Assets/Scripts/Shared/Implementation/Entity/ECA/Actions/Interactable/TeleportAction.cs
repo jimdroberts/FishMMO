@@ -49,6 +49,12 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// A dormant portal (PortalActivation) refuses, or activates when the player qualifies; the gate toasts its own refusals.
+			if (!PortalGate.TryPass(player, data.Interactable.GameObject, eventData))
+			{
+				return;
+			}
+
 			if (teleporter.Target != null)
 			{
 				/* Motor is fetched with GetComponent, not required by attribute, so a prefab can

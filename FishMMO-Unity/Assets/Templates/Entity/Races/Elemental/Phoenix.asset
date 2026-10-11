@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Phoenix
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Fire-bird hymn-cadence — resurrection-song
+  Description: "Fire-bird hymn-cadence \u2014 resurrection-song"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - rora
       - phos
       - us
-      Description: Fire-bird hymn-cadence — resurrection-song
+      Description: "Fire-bird hymn-cadence \u2014 resurrection-song"
       Tags:
       - Ash-names
       - Flame-bonds
@@ -112,6 +112,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Phoenixes
+    Adjective: Phoenix
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3

@@ -92,6 +92,8 @@ namespace FishMMO.Water
 		private float windHeading;
 		private bool primed;
 		private bool seaPrimed;
+		// The world clock at the last weather step, hours (NaN before one): the sea eases in world time.
+		private double easedHours = double.NaN;
 		private float fetchHeading = float.NaN;
 		private WorldBody fetchBody;
 		// The fetch at whole bins of heading, for PeakPeriodAt: a pure function of the heading, where the
@@ -130,6 +132,7 @@ namespace FishMMO.Water
 			meshRenderer = GetComponent<MeshRenderer>();
 			primed = false;
 			seaPrimed = false;
+			easedHours = double.NaN;
 			settings = null;
 			tideSettings = null;
 			tideLava = surface != null && surface.IsLava;
@@ -195,7 +198,8 @@ namespace FishMMO.Water
 			}
 
 			// The sky's clock: the sea's wind, period and tide keep the same time as the clouds.
-			double hours = WorldDayNightCycle.SkyClockHours ?? WorldTime.UnanchoredHours();
+			// Without a cycle in the scene, still the world clock (an admin's set or hold included), not this machine's.
+			double hours = WorldDayNightCycle.SkyClockHours ?? WorldTime.Hours;
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			/* The world the sky says this is. It was the atlas entry's body alone, so a scene with no
 			 * entry — or a preview of another world — had Earth's 9.81 and a sea that looked the
@@ -265,8 +269,23 @@ namespace FishMMO.Water
 			return Mathf.Clamp(SurfacePhysics.Gravity(body), 0.05f, 30f);
 		}
 
+		/// <summary>
+		/// Seconds the sea's easing moves by this step: the world's own, so it keeps the world's pace (still
+		/// when held, quick when raced) and a clock set either way lands it at the new sea at once, as the
+		/// set moves everything else. Held, the frame's real time instead, so a change made by hand to a
+		/// held world (an override, the bed) still settles rather than sticking half-way.
+		/// </summary>
+		private float EaseSeconds(double hours)
+		{
+			double last = easedHours;
+			easedHours = hours;
+			double world = double.IsNaN(last) ? 0.0 : System.Math.Abs(hours - last) * 3600.0;
+			return world > 0.0 ? (float)System.Math.Min(world, 1e6) : Time.deltaTime;
+		}
+
 		private void ApplyWeather(float latitude, double hours)
 		{
+			float ease = Mathf.Clamp01(EaseSeconds(hours) * Responsiveness);
 			/* The prevailing synoptic field: banded by latitude, drifting with the world clock, the
 			 * same numbers the clouds and the weather director run on. Nothing is random, so two
 			 * clients looking at the same coast at the same moment see the same sea.
@@ -298,9 +317,8 @@ namespace FishMMO.Water
 					 * and the swell will still run the old way for hours; snapping the wave
 					 * directions to the current wind pivots the whole surface at once, which
 					 * nothing in nature does. */
-					float step = Mathf.Clamp01(Time.deltaTime * Responsiveness);
-					windSpeed = Mathf.Lerp(windSpeed, speed, step);
-					windHeading = Mathf.MoveTowardsAngle(windHeading, heading, 360f * step);
+					windSpeed = Mathf.Lerp(windSpeed, speed, ease);
+					windHeading = Mathf.MoveTowardsAngle(windHeading, heading, 360f * ease);
 				}
 			}
 
@@ -324,14 +342,14 @@ namespace FishMMO.Water
 
 			if (DriveWind)
 			{
-				ApplySeaState(latitude);
+				ApplySeaState(latitude, ease);
 			}
 		}
 
 		/// <summary>
 		/// Turns the wind into a sea, through the fetch the planet actually has upwind.
 		/// </summary>
-		private void ApplySeaState(float latitude)
+		private void ApplySeaState(float latitude, float ease)
 		{
 			float gravity = surface.Gravity;
 			WorldBody body = WorldDayNightCycle.BodyFor(settings);
@@ -370,9 +388,8 @@ namespace FishMMO.Water
 			}
 			else
 			{
-				float step = Mathf.Clamp01(Time.deltaTime * Responsiveness);
-				SignificantHeight = Mathf.Lerp(SignificantHeight, height, step);
-				PeakPeriod = Mathf.Lerp(PeakPeriod, period, step);
+				SignificantHeight = Mathf.Lerp(SignificantHeight, height, ease);
+				PeakPeriod = Mathf.Lerp(PeakPeriod, period, ease);
 			}
 
 			/* The FFT is handed the wind that would raise THIS sea if it were developed, so its

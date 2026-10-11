@@ -83,6 +83,22 @@ namespace FishMMO.Shared.Biomes
 	/// and scales with each tree's crown, so species do not stand inside one another.
 	/// </para>
 	/// <para>
+	/// <b>Climate bands.</b> A biome's envelope can be enormous — hills from −15 to 33 °C, a beach
+	/// from 3 to 33 °C — and one species list cannot be right across all of it: a coconut palm on a
+	/// 3 °C beach, gorse at −30 °C. With <see cref="useClimateBand"/> set the rule grows only within
+	/// <see cref="temperatureRange"/> and <see cref="humidityRange"/>, read per candidate from the
+	/// scene's placement climate (the same field the generator chose the biome from), so one biome
+	/// carries a warm set and a cold set and the scene's own climate picks between them. The
+	/// temperature is the mean at the candidate's true altitude, so a band also climbs a slope with
+	/// the lapse rate: larch above, oak below, in one biome. Each closed end is a soft edge
+	/// (<see cref="temperatureFalloff"/>, <see cref="humidityFalloff"/>) centred on the end, so a
+	/// species thins out across a few degrees rather than stopping at a line; an end at or past ±1
+	/// is open, because the climate never passes ±1. The band only ever multiplies the rule's chance
+	/// or coverage — it draws no random number — so with it off every placement is exactly what it
+	/// was, and the off state is the field's default, so a rule saved before the band existed loads
+	/// with it off.
+	/// </para>
+	/// <para>
 	/// <b>The spec fingerprint.</b> A rule the Biome Art authoring tool created carries a hidden hash
 	/// of the values it wrote. While the rule still hashes to it, nobody has tuned it, and a later run
 	/// may bring it up to date with the spec; once anything differs it is somebody's work and the tool
@@ -193,6 +209,18 @@ namespace FishMMO.Shared.Biomes
 		[Header("Depth")]
 		[Tooltip("Rules on a biome's submerged (lakebed) layer only. Metres below mean sea level the rule grows between: x the shallowest, y the deepest; 0 for either end leaves that end open. The rule thins out over the outer fifth of the range at each closed end, as light fades for kelp and seagrass. (0, 0) = no depth band; the shore gate still keeps it under water at every tide.")]
 		public Vector2 depthRange = Vector2.zero;
+
+		[Header("Climate Band")]
+		[Tooltip("Grow only within a band of the climate where each instance stands: the scene's mean annual temperature at its true place on the globe and its true altitude (so the band climbs a slope with the lapse rate), and the humidity there. Off = the rule grows in every climate its biome reaches, exactly as before the band existed. A scene with no placement climate grows the rule as if it were off.")]
+		public bool useClimateBand = false;
+		[Tooltip("Climate band only. Mean annual temperature the rule grows between, on the climate's scale: 0 = 0 °C, 1 = 33.1 °C, −1 = −33.1 °C (the climate never leaves −1 … 1). x the coldest, y the warmest. An end at or past ±1 is open.")]
+		public Vector2 temperatureRange = new Vector2(-1f, 1f);
+		[Tooltip("Climate band only. Width of the soft edge at each closed end of the temperature range, on the same scale (0.1 ≈ 3.3 °C), centred on the end: half density at the end itself, none a half-width outside it, full a half-width inside. 0 = a hard line.")]
+		[Range(0f, 1f)] public float temperatureFalloff = 0.1f;
+		[Tooltip("Climate band only. Humidity the rule grows between, −1 driest … 1 wettest. x the driest, y the wettest. An end at or past ±1 is open.")]
+		public Vector2 humidityRange = new Vector2(-1f, 1f);
+		[Tooltip("Climate band only. Width of the soft edge at each closed end of the humidity range, centred on the end like the temperature's. 0 = a hard line.")]
+		[Range(0f, 1f)] public float humidityFalloff = 0.1f;
 
 		[SerializeField, HideInInspector]
 		private string specFingerprint = string.Empty;

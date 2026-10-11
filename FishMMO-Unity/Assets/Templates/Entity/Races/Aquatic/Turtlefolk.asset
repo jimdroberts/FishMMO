@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Turtlefolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Shelled wanderers of coast and river who carry their homes on their backs and outlive their friends.
+  Description: Shelled wanderers of coast and river who carry their homes on their
+    backs and outlive their friends.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -55,7 +56,7 @@ MonoBehaviour:
       - o
       - a
       - un
-      - 'on'
+      - on
       Codas:
       - tle
       - kan
@@ -63,7 +64,7 @@ MonoBehaviour:
       - ba
       - pan
       - un
-      - 'on'
+      - on
       - an
       Middles:
       - ku
@@ -80,7 +81,7 @@ MonoBehaviour:
       - tle
       - mon
       - ka
-      Description: 'Slow, considered shell-folk speech'
+      Description: Slow, considered shell-folk speech
       Tags:
       - Shell-names
       - Sea-bonds
@@ -116,6 +117,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Turtlefolk
+    Adjective: Turtlefolk
   BiomeAffinities:
   - BiomeID: 1384639345
     Weight: 3

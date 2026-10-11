@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dire Boar
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Monstrous tusked boar — grunting, brutal names'
+  Description: "Monstrous tusked boar \u2014 grunting, brutal names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ug
       - unt
-      Description: 'Monstrous tusked boar — grunting, brutal names'
+      Description: "Monstrous tusked boar \u2014 grunting, brutal names"
       Tags:
       - Tusk-names
       - Charge-marks
@@ -123,9 +123,9 @@ MonoBehaviour:
       Legend:
       - Who Killed Nine Hounds and the Huntsman
       - Who Ploughed the Field by Accident
-      - 'Who Broke Through the Castle''s Kitchen Door'
+      - Who Broke Through the Castle's Kitchen Door
       - Who Was Speared Seven Times and Ran On
-      - 'Who Ate the Baron''s Orchard in a Week'
+      - Who Ate the Baron's Orchard in a Week
       Occupational:
       - Root-tearer
       - Fence-breaker
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Dire Boars
+    Adjective: Dire Boar
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -2037808285
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

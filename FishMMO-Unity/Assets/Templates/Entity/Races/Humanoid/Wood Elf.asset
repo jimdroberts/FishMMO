@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wood Elf
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Earthy consonants, nature sounds — bark, wind, and leaf'
+  Description: "Earthy consonants, nature sounds \u2014 bark, wind, and leaf"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -64,7 +64,7 @@ MonoBehaviour:
       - or
       - ar
       - un
-      - 'on'
+      - on
       - an
       Codas:
       - orn
@@ -93,7 +93,7 @@ MonoBehaviour:
       - orn
       - ir
       - dar
-      Description: 'Earthy consonants, nature sounds — bark, wind, and leaf'
+      Description: "Earthy consonants, nature sounds \u2014 bark, wind, and leaf"
       Tags:
       - Grove-names
       - Beast-bonds
@@ -153,7 +153,7 @@ MonoBehaviour:
         - root
         - thorn
         - shade
-        Description: 'Barkborn — inward-turned, ring-counted memory, moss-speech'
+        Description: "Barkborn \u2014 inward-turned, ring-counted memory, moss-speech"
         Tags:
         - Grove-names
         - Silent-bonds
@@ -210,7 +210,7 @@ MonoBehaviour:
         - guard
         - spear
         - thor
-        Description: 'Glaivewarden — martial forest order, patrol-cant'
+        Description: "Glaivewarden \u2014 martial forest order, patrol-cant"
         Tags:
         - Patrol-names
         - Blade-oaths
@@ -311,6 +311,9 @@ MonoBehaviour:
       - blight
       - husk
       - stump
+    AllowGenericOccupations: 1
+    Plural: Wood Elves
+    Adjective: Wood Elven
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -320,3 +323,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

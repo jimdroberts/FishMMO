@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wasp Swarm
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +89,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - us
-      Description: 'Buzzing, droning — the same syllable repeated'
+      Description: "Buzzing, droning \u2014 the same syllable repeated"
       Tags:
       - Vermin
       - Monster
@@ -151,6 +151,8 @@ MonoBehaviour:
       - husk
       - shell
     AllowGenericOccupations: 0
+    Plural: Wasp Swarms
+    Adjective: Wasp Swarm
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 1
@@ -162,3 +164,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -439598380
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

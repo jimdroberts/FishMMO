@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Cave Lion
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Pale lion of the deep caves — echoing, low names'
+  Description: "Pale lion of the deep caves \u2014 echoing, low names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -60,7 +60,7 @@ MonoBehaviour:
       - e
       Codas:
       - ar
-      - 'on'
+      - on
       - ath
       - um
       - orr
@@ -69,7 +69,7 @@ MonoBehaviour:
       - ess
       Middles:
       - ra
-      - 'on'
+      - on
       - ul
       - ae
       SyllMin: 2
@@ -80,9 +80,9 @@ MonoBehaviour:
       - ael
       MasculineSuffixes:
       - ar
-      - 'on'
+      - on
       - um
-      Description: 'Pale lion of the deep caves — echoing, low names'
+      Description: "Pale lion of the deep caves \u2014 echoing, low names"
       Tags:
       - Echo-names
       - Pale-marks
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Cave Lions
+    Adjective: Cave Lion
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -540190004
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

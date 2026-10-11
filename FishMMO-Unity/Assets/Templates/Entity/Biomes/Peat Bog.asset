@@ -23,6 +23,8 @@ MonoBehaviour:
   MaxTemperature: 0.1
   MinHumidity: 0.55
   MaxHumidity: 1
+  MinWarmestSeason: 0
+  MaxWarmestSeason: 1
   SelectionWeight: 1
   Atmosphere: 12
   RequiresLiquidWater: 1
@@ -97,13 +99,126 @@ MonoBehaviour:
       - Clinging
       - Silent
       - Peat-dark
+      POITypeWords:
+      - Key: ancientroad
+        Values:
+        - Causeway
+        - Trackway
+        - Corduroy Road
+        - Boardwalk
+        - Plank Road
+        - Fen Road
+      - Key: bogshrine
+        Values:
+        - Bog-altar
+        - Fen-shrine
+        - Mire Shrine
+        - Peat-altar
+        - Reed Altar
+        - Sump Shrine
+      - Key: bridge
+        Values:
+        - Boardwalk
+        - Causeway
+        - Duckboards
+        - Log Bridge
+        - Plank-walk
+        - Corduroy Road
+      - Key: camp
+        Values:
+        - Fen Camp
+        - Reed Camp
+        - Stilt Camp
+        - Mire Camp
+        - Bog Camp
+        - Raft Camp
+      - Key: cave
+        Values:
+        - Sump
+        - Mire-hole
+        - Bog Hollow
+        - Root Cave
+        - Peat Hollow
+        - Drowned Cave
+      - Key: clearing
+        Values:
+        - Hummock
+        - Tussock
+        - Dry Isle
+        - Holm
+        - Reed-bed
+        - Fen Glade
+      - Key: graveyard
+        Values:
+        - Bog-graves
+        - Drowned Graves
+        - Mire-yard
+        - Fen Barrows
+        - Peat Graves
+        - Sunken Yard
+      - Key: island
+        Values:
+        - Holm
+        - Hummock
+        - Dry Isle
+        - Eyot
+        - Tussock
+        - Mound
+      - Key: monsterden
+        Values:
+        - Wallow
+        - Mire-den
+        - Bog Hole
+        - Sump
+        - Root-lair
+        - Fen Lair
+      - Key: ruins
+        Values:
+        - Mire-ruins
+        - Drowned Walls
+        - Silted Halls
+        - Bog Ruins
+        - Moss Walls
+        - Sunken Ruins
+      - Key: shrine
+        Values:
+        - Bog-altar
+        - Fen-shrine
+        - Mire Altar
+        - Reed Shrine
+        - Peat Altar
+        - Moss Shrine
+      - Key: spring
+        Values:
+        - Seep
+        - Sump
+        - Wellhead
+        - Bog-spring
+        - Fen Well
+        - Mire-spring
+      - Key: waystation
+        Values:
+        - Fen Inn
+        - Ferry House
+        - Stilt Inn
+        - Causeway Inn
+        - Reed Inn
+        - Landing
+      - Key: witchhut
+        Values:
+        - Bog Hut
+        - Fen Hovel
+        - Mire Croft
+        - Reed Hut
+        - Stilt Hut
+        - Hag's Hut
       Description: Wet ground that keeps everything it swallows.
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
   TerrainProcess: {fileID: 11400000, guid: 6f14dcf5964927279b1b178690d58d2b, type: 2}
   mainTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 75da8de7d8c72a583ee854e37dd57707,
+    terrainLayer: {fileID: 8574412962073106934, guid: b2c3a4417265ed123847f5500dbba595,
       type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
@@ -175,14 +290,19 @@ MonoBehaviour:
       sinkRange: {x: 0.04, y: 0.08}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 427c4578f678fc8e
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 160
     - stableGuid: d6bfce1267c34cb8a559fc1c8e0e356f
-      enableSpawning: 1
-      ruleName: 'Trees: Dead, Birch'
+      enableSpawning: 0
+      ruleName: '[disabled by Biome Art: moved by the spec] Trees: Dead, Birch'
       prefabs:
       - {fileID: 5896427361368366535, guid: 89f21ae88051c38e67451f01e10c05cf, type: 3}
       - {fileID: 8646138383080746032, guid: d06cacd197c0a1bb375a3cc8dbed91d8, type: 3}
@@ -229,6 +349,11 @@ MonoBehaviour:
       sinkRange: {x: 0.05, y: 0.15}
       sinkSlopeFactor: 0.3
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: d66cd350d3df48e3
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -282,11 +407,250 @@ MonoBehaviour:
       sinkRange: {x: 0.04, y: 0.1}
       sinkSlopeFactor: 0.3
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 9e7c35ed97633b50
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
       detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
       detailInstancesPerSpawn: 64
+    - stableGuid: 36b87ae344ff46d593d1744176956a45
+      enableSpawning: 1
+      ruleName: 'Trees: Dead, Birch, Pine'
+      prefabs:
+      - {fileID: 5896427361368366535, guid: 89f21ae88051c38e67451f01e10c05cf, type: 3}
+      - {fileID: 8646138383080746032, guid: d06cacd197c0a1bb375a3cc8dbed91d8, type: 3}
+      - {fileID: 7553972036497717201, guid: b1214f57204fa7bc1db11ecf31249fea, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.251
+      maxPerChunk: 20000
+      minSpacing: 2.7
+      minTextureWeight: 0.5
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.46750003, y: 0.6325}
+      heightScaleRange: {x: 0.44000003, y: 0.66}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 3417
+      clusterMetres: 0
+      clusterSize: 0
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 520
+      forestCover: 0.1
+      forestEdge: 0.3
+      forestOpen: 0.024489796
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.05, y: 0.15}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: ad46123027d56754
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: 8f329d02765546ee93a6fda2b508d5d9
+      enableSpawning: 1
+      ruleName: GrassCotton
+      prefabs:
+      - {fileID: 6518059578399050900, guid: c226c232eae4b2d73eb33f24c28ecff2, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 1
+      carpetCoverage: 0.39215687
+      carpetClumpMetres: 18
+      carpetClumpFloor: 0.325
+      carpetWeightRamp: 0.3
+      densityPer100m2: 10
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.25
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 22865
+      clusterMetres: 0
+      clusterSize: 0
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.02, y: 0.04}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 7089bcedc057c347
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 200
+    - stableGuid: 29098a82e0d9470a812dc73da7805bb3
+      enableSpawning: 1
+      ruleName: 'Bush: Heather'
+      prefabs:
+      - {fileID: 7036480803968670226, guid: ab03b4f87d5217350ee773df7ad4fda8, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1.5
+      maxPerChunk: 0
+      minSpacing: 0.5
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 4520
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 91bf1dd8d7c8986e
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: 53fa66b79154414399d525a6a225aa70
+      enableSpawning: 1
+      ruleName: CushionSphagnum
+      prefabs:
+      - {fileID: 7145773900917002969, guid: 46444b3f127ee115fbf9ab10f78cf30d, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 3
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 63109
+      clusterMetres: 6
+      clusterSize: 10
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.02, y: 0.05}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 3389f021b0d93806
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 160
   detailTextureLayers:
   - terrainLayer: {fileID: 8574412962073106934, guid: b7c6da84cc4c4005a287abfab095836d,
       type: 2}
@@ -360,11 +724,132 @@ MonoBehaviour:
       sinkRange: {x: 0.02, y: 0.05}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 8097f7abee00c645
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
+    - stableGuid: c6602f61b1b24430a61f864ee264ab02
+      enableSpawning: 1
+      ruleName: 'Bush: DwarfBirch'
+      prefabs:
+      - {fileID: 6697675111774548779, guid: 470880752b276155e1606f9524ea2975, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.3
+      maxPerChunk: 0
+      minSpacing: 0.8
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 47833
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: dd72ec8c0329e4c4
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: 522b47b368c942f296ff210000affd38
+      enableSpawning: 1
+      ruleName: 'Bush: Bilberry'
+      prefabs:
+      - {fileID: 6696772983793752942, guid: f5ace9eea15a1f296e3a47b73a16d08b, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.8
+      maxPerChunk: 0
+      minSpacing: 0.4
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 41855
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: fc408866fdad25a1
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
   - terrainLayer: {fileID: 8574412962073106934, guid: 5806dadc18f33441edaabda730fc11bd,
       type: 2}
     albedoTexture: {fileID: 0}
@@ -378,6 +863,30 @@ MonoBehaviour:
     blendNoiseOffsetX: 0
     blendNoiseOffsetY: 0
     blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  - terrainLayer: {fileID: 8574412962073106934, guid: 75da8de7d8c72a583ee854e37dd57707,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 32
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 3
     useHeightConstraint: 0
     heightRange:
       min: 0

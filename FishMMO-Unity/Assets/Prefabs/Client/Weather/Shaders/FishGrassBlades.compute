@@ -18,9 +18,9 @@
 //
 // Portable (WebGPU, Vulkan, D3D11/12, Metal, GLCore): no wave intrinsics; atomics only on a
 // RWByteAddressBuffer; textures read with Load (no samplers); 8 storage buffers in the generate kernel
-// (WebGPU's default per-stage limit); 4 textures (heightmap, 2 density maps, the packed surface layers), all
-// owned by the grass. Nothing the terrain draws with is bound here: on OpenGL the terrain's control maps and
-// then its albedo array, read here, made whole terrains' blades flicker.
+// (WebGPU's default per-stage limit); the grass's own textures (heightmap, density maps, water line, packed surface
+// layers, the per-type table) and the weather's snow maps. Nothing the terrain draws with is bound here: on OpenGL the
+// terrain's control maps and then its albedo array, read here, made whole terrains' blades flicker.
 
 #pragma kernel FishGrassClear
 #pragma kernel FishGrassGenerate
@@ -39,9 +39,12 @@
 #define GRASS_TILE_CELLS 128
 #define GRASS_THIN_BAND 0.3
 #define GRASS_MAX_PACKED_HEIGHT 2.5
+#define GRASS_TALL_SCALE 2.0                 // GrassMath.TallHeightScale
 #define GRASS_SLOTS 5
 #define GRASS_RINGS 6
-#define GRASS_TYPES 16
+#define GRASS_TYPES 32                       // GrassBladeRenderer.MaxTypes (GrassMath.MaxTypes)
+#define GRASS_CHANNELS 16                    // GrassTerrain.MaxChannels: four density maps of four
+#define GRASS_DENSITY_MAPS 4
 
 #define SALT_PRIORITY 0x9E3779B9u
 #define SALT_JITTER_X 0x85EBCA6Bu
@@ -67,9 +70,12 @@ RWStructuredBuffer<GrassBlade> _GrassOut4;
 RWByteAddressBuffer _GrassArgs;              // IndirectDrawIndexedArgs, 5 uints per slot
 
 // Every terrain of the dispatch's resolution group, one slice each (GrassTerrainAtlas): the item's terrain says which.
+#include "FishGroundPaths.hlsl"
+
 Texture2DArray<float> _GrassHeightmap;       // GrassTerrain's own copy of the heights (R16 or RFloat), 0..1 of the terrain's height
-Texture2DArray<float4> _GrassDensity0;       // channels 0..3: the grass prototypes' detail layers / their max
-Texture2DArray<float4> _GrassDensity1;       // channels 4..7
+// The grass prototypes' detail layers / their max, four channels a slice: a terrain's maps are consecutive slices from
+// _GrassDensityBase (channels 4m..4m+3 in its map m), as many as it has (_GrassDensityMaps, 1..4).
+Texture2DArray<float4> _GrassDensity;
 // The wet terrains' water lines (GrassTerrain.Freeboard, R8 on the heights' grid): the ground's height over river or lake
 // water, 0..1 = -GRASS_FREEBOARD_RANGE..+GRASS_FREEBOARD_RANGE metres, 1 where there is none. Slice from the table.
 Texture2DArray<float> _GrassWater;
@@ -81,7 +87,7 @@ Texture2DArray<float> _GrassWater;
  * dispatch per terrain, rebinding and re-uploading constants between them, disturbed the trees' and cliff rocks'
  * culling on OpenGL, and per-dispatch constant arrays broke the grass's own. */
 StructuredBuffer<uint> _GrassShared;
-#define GRASS_TERRAIN_UINTS 25u
+#define GRASS_TERRAIN_UINTS 34u
 
 float4 _GrassCamera;                         // xyz position, w grass distance
 float4 _GrassSea;                            // x the sea's low-tide ceiling (world y), y 1 while there is a sea (FishSea.hlsl's _FishSea); z bank clearance over inland water (m), w bank thinning (m)
@@ -91,15 +97,27 @@ float4 _GrassLattice;                        // x cell metres, y clump metres, z
 float4 _GrassShapeParams;                    // x max lean, y LOD0 distance, z LOD1 distance, w max blade height (cull)
 float4 _GrassRingDistance[GRASS_RINGS];      // x distance (metres); count in _GrassRingCount
 float4 _GrassRingDensity[GRASS_RINGS];       // x blades per square metre; [0].y the fullness (density share that grows the full field)
-float4 _GrassTypeShape[GRASS_TYPES];         // x height (m), y density factor (0..1], z clump pull, w unused
-float4 _GrassTypeShape2[GRASS_TYPES];        // x sprinkle chance per candidate where fully painted (0: a tussock species), y head (0 none, 1 seed head, 2 flower), z head size (m)
+/* The per-type table (GrassBladeRenderer.typeTable): a texel per type (x) per row (y), shared with the blades' vertex
+ * shader. It was constant arrays set on this compute every camera; at 32 types they were 64 float4s a dispatch, and
+ * per-dispatch constant arrays are what made whole terrains' blades flicker on OpenGL. */
+Texture2D<float4> _GrassTypeTable;
+#define GRASS_ROW_SHAPE 0                    // x height (m), y density factor (0..1], z clump pull, w wade (m)
+#define GRASS_ROW_SHAPE2 1                   // x sprinkle chance per candidate where fully painted (0: a tussock species), y head (0 none, 1 seed head, 2 flower, 3 plume), z head size (m), w how far snow buries it (GrassType.SnowBury)
+#define GRASS_ROW_MORE 2                     // x the share of stems with a head (1 for every type tuned before GrassTypeTuning.HeadShare)
+float4 GrassTypeRow(int type, int row)
+{
+    return _GrassTypeTable.Load(int3(type, row, 0));
+}
 // The thread's terrain, from the table (GrassLoadTerrain).
 static float4 _GrassTerrainOrigin;           // xyz terrain position, w metres per heightmap unit (size.y)
 static float4 _GrassTerrainSize;             // x size x, y size z, z heightmap resolution, w density map resolution
 static float4 _GrassChannels0;               // type index of density channels 0..3 (-1 none)
 static float4 _GrassChannels1;               // 4..7
+static float4 _GrassChannels2;               // 8..11
+static float4 _GrassChannels3;               // 12..15
 static uint _GrassSlice;                     // its slice in the arrays
-static bool _GrassHasDensity1;
+static uint _GrassDensityMaps;               // its density maps (1..4)
+static uint _GrassDensityBase;               // its first density slice
 static uint _GrassAlbedoBase;                // its array set's albedo copy in _GrassShared
 static uint _GrassWaterSlice;                // its slice in _GrassWater, 0xFFFFFFFF where no water reaches it
 float4 _GrassCapacity0;                      // slot capacities 0..3
@@ -142,13 +160,23 @@ void GrassLoadTerrain(uint terrain)
     _GrassChannels0 = asfloat(uint4(_GrassShared[at + 8u], _GrassShared[at + 9u], _GrassShared[at + 10u], _GrassShared[at + 11u]));
     _GrassChannels1 = asfloat(uint4(_GrassShared[at + 12u], _GrassShared[at + 13u], _GrassShared[at + 14u], _GrassShared[at + 15u]));
     _GrassSlice = _GrassShared[at + 16u];
-    _GrassHasDensity1 = _GrassShared[at + 17u] != 0u;
+    _GrassDensityMaps = _GrassShared[at + 17u];
     float surfaceResolution = asfloat(_GrassShared[at + 18u]);
     float layers = asfloat(_GrassShared[at + 19u]);
     _GrassArrayInfo = float4(layers, _GrassColour.z, surfaceResolution, asfloat(_GrassShared[at + 20u]));
     _GrassArrayInfo2 = float4(asfloat(_GrassShared[at + 21u]), _GrassColour.x, _GrassColour.y, asfloat(_GrassShared[at + 22u]));
     _GrassAlbedoBase = _GrassShared[at + 23u];
     _GrassWaterSlice = _GrassShared[at + 24u];
+    // Appended for the 16-channel terrains, so every field above kept its place.
+    _GrassChannels2 = asfloat(uint4(_GrassShared[at + 25u], _GrassShared[at + 26u], _GrassShared[at + 27u], _GrassShared[at + 28u]));
+    _GrassChannels3 = asfloat(uint4(_GrassShared[at + 29u], _GrassShared[at + 30u], _GrassShared[at + 31u], _GrassShared[at + 32u]));
+    _GrassDensityBase = _GrassShared[at + 33u];
+}
+
+// A density map's four channels' types (m is a literal in every caller's unrolled loop).
+float4 GrassChannelTypes(uint m)
+{
+    return m == 0u ? _GrassChannels0 : m == 1u ? _GrassChannels1 : m == 2u ? _GrassChannels2 : _GrassChannels3;
 }
 
 uint _GrassItemOffset;
@@ -297,11 +325,14 @@ float GrassAngleLerp(float a, float b, float t)
     return a + d * t;
 }
 
+// GrassMath.Pack: the type's low four bits (the fifth is in the colour word, GrassRecordBits), and a blade taller than
+// GRASS_MAX_PACKED_HEIGHT packs half its height (marked tall there). Types 0..15 at or under it pack as they always did.
 uint GrassPack(int type, float facing, float height, float lean, float fade, float clumpColour)
 {
-    uint t = (uint)clamp(type, 0, 15);
+    uint t = (uint)clamp(type, 0, GRASS_TYPES - 1) & 15u;
+    float packedHeight = height > GRASS_MAX_PACKED_HEIGHT ? height / GRASS_TALL_SCALE : height;
     uint f = (uint)((int)round(facing / 6.2831853 * 128.0) & 127);
-    uint h = (uint)clamp((int)round(sqrt(max(0.0, height) / GRASS_MAX_PACKED_HEIGHT) * 127.0), 0, 127);
+    uint h = (uint)clamp((int)round(sqrt(max(0.0, packedHeight) / GRASS_MAX_PACKED_HEIGHT) * 127.0), 0, 127);
     uint l = (uint)clamp((int)round(lean * 15.0), 0, 15);
     uint d = (uint)clamp((int)round(fade * 31.0), 0, 31);
     uint c = (uint)clamp((int)round(clumpColour * 31.0), 0, 31);
@@ -323,6 +354,109 @@ float GrassHeightAt(float2 local)
     float h01 = _GrassHeightmap.Load(int4(i.x, j.y, _GrassSlice, 0));
     float h11 = _GrassHeightmap.Load(int4(j.x, j.y, _GrassSlice, 0));
     return _GrassTerrainOrigin.y + lerp(lerp(h00, h10, f.x), lerp(h01, h11, f.x), f.y) * _GrassTerrainOrigin.w;
+}
+
+// ── Buried by snow ────────────────────────────────────────────────────
+
+/* What buries a blade, from the weather's maps (GrassBladeRenderer binds them: a compute shader never sees the weather's
+ * globals). A blade the snow hides entirely is not generated at all — not drawn, not in the shadow pass — instead of
+ * being drawn at a fiftieth of its height or under the lifted snow's surface. Past either map's edge nothing is cut. */
+Texture2D<float4> _GrassCover;               // WeatherCoverMap: r snow 0..1
+Texture2D<float> _GrassDeepSnow;             // its deep snow, 0..1 of _GrassSnow.z
+Texture2D<float4> _GrassOcclusion;           // the sky occlusion map: heights in 16 bits across r and g
+float4 _GrassSnow;                           // x 1 when the cover map is valid, y the ground's lift at full cover (m; 0 where this tier does not lift it), z metres deep snow's 1 stands for, w unused
+float4 _GrassCoverRect;                      // xy the cover map's corner (world x/z), zw its size (m)
+float4 _GrassOcclusionRect;                  // xy the occlusion map's corner, zw its size
+float4 _GrassOcclusionRange;                 // x lowest height, y height range, z 1 when valid, w metres per texel
+
+// The cover's snow and the deep snow at a point, bilinear by hand (FishCoverAt and FishSnowDepthAt read them filtered).
+// One exit, like GrassFreeboardAt: FXC flagged the early return as "potentially uninitialized" once inlined.
+bool GrassSnowAt(float2 xz, out float snow, out float deep)
+{
+    snow = 0.0;
+    deep = 0.0;
+    float2 uv = (xz - _GrassCoverRect.xy) / max(_GrassCoverRect.zw, 1e-3);
+    bool valid = _GrassSnow.x >= 0.5 && all(uv >= 0.0) && all(uv <= 1.0);
+    [branch] if (valid)
+    {
+        uint w = 1u, h = 1u;
+        _GrassCover.GetDimensions(w, h);
+        int2 last = int2(w, h) - 1;
+        float2 st = uv * float2(w, h) - 0.5;
+        int2 i = (int2)floor(st);
+        float2 f = st - floor(st);
+        int2 a = clamp(i, 0, last), b = clamp(i + 1, 0, last);
+        snow = lerp(lerp(_GrassCover.Load(int3(a.x, a.y, 0)).r, _GrassCover.Load(int3(b.x, a.y, 0)).r, f.x),
+            lerp(_GrassCover.Load(int3(a.x, b.y, 0)).r, _GrassCover.Load(int3(b.x, b.y, 0)).r, f.x), f.y);
+        deep = lerp(lerp(_GrassDeepSnow.Load(int3(a.x, a.y, 0)), _GrassDeepSnow.Load(int3(b.x, a.y, 0)), f.x),
+            lerp(_GrassDeepSnow.Load(int3(a.x, b.y, 0)), _GrassDeepSnow.Load(int3(b.x, b.y, 0)), f.x), f.y) * _GrassSnow.z;
+    }
+    return valid;
+}
+
+float GrassOcclusionTexel(int2 texel, int2 last)
+{
+    float4 t = _GrassOcclusion.Load(int3(clamp(texel, 0, last), 0));
+    return _GrassOcclusionRange.x + (t.r * (255.0 / 256.0) + t.g * (1.0 / 256.0)) * _GrassOcclusionRange.y;
+}
+
+// How open to the sky a point is (FishSurfaceExposure, less the water: no blade grows in it): a roof or a crown over a
+// blade keeps the snow off it. One exit (see GrassSnowAt).
+float GrassExposure(float3 root)
+{
+    float exposure = 1.0;
+    float2 uv = (root.xz - _GrassOcclusionRect.xy) / max(_GrassOcclusionRect.zw, 1e-3);
+    [branch] if (_GrassOcclusionRange.z >= 0.5 && all(uv >= 0.0) && all(uv <= 1.0))
+    {
+        float texelMetres = max(1e-3, _GrassOcclusionRange.w);
+        int side = (int)max(1.0, round(_GrassOcclusionRect.z / texelMetres));
+        int2 last = int2(side - 1, side - 1);
+        float2 st = (root.xz - _GrassOcclusionRect.xy) / texelMetres - 0.5;
+        int2 i = (int2)floor(st);
+        float2 f = st - floor(st);
+        float top = lerp(lerp(GrassOcclusionTexel(i, last), GrassOcclusionTexel(i + int2(1, 0), last), f.x),
+            lerp(GrassOcclusionTexel(i + int2(0, 1), last), GrassOcclusionTexel(i + int2(1, 1), last), f.x), f.y);
+        exposure = saturate((root.y - top) * 0.65 + 1.0);
+    }
+    return exposure;
+}
+
+/* Whether snow hides the whole blade, as the drawing would bury it (FishGrassBlades.hlsl GrassBuild, FishSurface.hlsl
+ * FishSnowLiftMetres), never more: shrunk by the cover it stands in to almost nothing, or — on the tier that lifts the
+ * ground under snow — standing wholly under the snow's surface. `height` is the most the blade is drawn at (the vertex
+ * shader only shortens it further). Footprints are not asked: a print in deep snow does not bare the grass under it. */
+bool GrassBuried(float3 root, float2 local, int type, float height)
+{
+    // One exit (see GrassSnowAt).
+    bool buried = false;
+    float snow = 0.0, deep = 0.0;
+    bool covered = GrassSnowAt(root.xz, snow, deep);
+    [branch] if (covered && snow > 0.0)
+    {
+        float exposure = GrassExposure(root);
+        float bury = 1.0 - saturate(snow * exposure * 1.4) * GrassTypeRow(type, GRASS_ROW_SHAPE2).w;
+        [branch] if (bury <= 0.03)
+        {
+            buried = true;
+        }
+        else
+        {
+            float drawn = height * max(0.02, bury) + 0.02;
+            float lift = (saturate(snow) * _GrassSnow.y + deep) * exposure;
+            [branch] if (_GrassSnow.y > 0.0 && lift > drawn)
+            {
+                // The snow sheds off a slope (FishCoverFacing): the ground's own slope, from the heights a metre either way.
+                float hL = GrassHeightAt(local - float2(1.0, 0.0));
+                float hR = GrassHeightAt(local + float2(1.0, 0.0));
+                float hD = GrassHeightAt(local - float2(0.0, 1.0));
+                float hU = GrassHeightAt(local + float2(0.0, 1.0));
+                float3 normal = normalize(float3(hL - hR, 2.0, hD - hU));
+                float facing = saturate((normal.y - 0.5) / 0.5);
+                buried = lift * facing * facing > drawn;
+            }
+        }
+    }
+    return buried;
 }
 
 // The ground's height over river or lake water at a point, metres (positive on dry ground); bilinear on the heights'
@@ -500,20 +634,32 @@ uint GrassWithHeadPart(uint colour, uint part)
     return (colour & ~(3u << 29)) | ((part & 3u) << 29);
 }
 
-// The density channels at a point: texel centres at (k + 0.5) cells, as the detail layer's cells.
-void GrassDensityAt(float2 local, out float4 d0, out float4 d1)
+// GrassMath.RecordBits: the colour word's shape bits, on every record of the blade (its shadow casters' too): bit 28 the
+// type's fifth bit, bit 27 a tall blade's mark. Zero for a type under 16 no taller than GRASS_MAX_PACKED_HEIGHT.
+uint GrassRecordBits(int type, float height)
 {
-    float res = _GrassTerrainSize.w;
-    float2 g = clamp(local / _GrassTerrainSize.xy * res - 0.5, 0.0, res - 1.0);
-    int2 i = (int2)floor(g);
-    int2 j = min(i + 1, (int)res - 1);
-    float2 f = g - (float2)i;
-    uint z = _GrassSlice;
-    d0 = lerp(lerp(_GrassDensity0.Load(int4(i.x, i.y, z, 0)), _GrassDensity0.Load(int4(j.x, i.y, z, 0)), f.x),
-              lerp(_GrassDensity0.Load(int4(i.x, j.y, z, 0)), _GrassDensity0.Load(int4(j.x, j.y, z, 0)), f.x), f.y);
-    d1 = lerp(lerp(_GrassDensity1.Load(int4(i.x, i.y, z, 0)), _GrassDensity1.Load(int4(j.x, i.y, z, 0)), f.x),
-              lerp(_GrassDensity1.Load(int4(i.x, j.y, z, 0)), _GrassDensity1.Load(int4(j.x, j.y, z, 0)), f.x), f.y);
-    d1 = _GrassHasDensity1 ? d1 : 0.0;
+    uint high = ((uint)clamp(type, 0, GRASS_TYPES - 1) >> 4) & 1u;
+    uint tall = height > GRASS_MAX_PACKED_HEIGHT ? 1u : 0u;
+    return (high << 28) | (tall << 27);
+}
+
+// One density map's four channels at a point: texel centres at (k + 0.5) cells, as the detail layer's cells. A map the
+// terrain does not have reads 0 and is never loaded (the branch is the same for the whole thread group: one terrain).
+float4 GrassDensityMapAt(float2 local, uint map)
+{
+    float4 d = 0.0;
+    [branch] if (map < _GrassDensityMaps)
+    {
+        float res = _GrassTerrainSize.w;
+        float2 g = clamp(local / _GrassTerrainSize.xy * res - 0.5, 0.0, res - 1.0);
+        int2 i = (int2)floor(g);
+        int2 j = min(i + 1, (int)res - 1);
+        float2 f = g - (float2)i;
+        uint z = _GrassDensityBase + map;
+        d = lerp(lerp(_GrassDensity.Load(int4(i.x, i.y, z, 0)), _GrassDensity.Load(int4(j.x, i.y, z, 0)), f.x),
+                 lerp(_GrassDensity.Load(int4(i.x, j.y, z, 0)), _GrassDensity.Load(int4(j.x, j.y, z, 0)), f.x), f.y);
+    }
+    return d;
 }
 
 // ── Culling ───────────────────────────────────────────────────────────
@@ -623,11 +769,17 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     float typePick = GrassUnit(GrassMix(clump ^ 0xE6546B64u));
 
     float2 local0 = cellRoot - _GrassTerrainOrigin.xz;
-    float4 d0, d1;
-    GrassDensityAt(local0, d0, d1);
-    float weights[8] = { d0.x, d0.y, d0.z, d0.w, d1.x, d1.y, d1.z, d1.w };
-    float channelTypes[8] = { _GrassChannels0.x, _GrassChannels0.y, _GrassChannels0.z, _GrassChannels0.w,
-                              _GrassChannels1.x, _GrassChannels1.y, _GrassChannels1.z, _GrassChannels1.w };
+    float weights[GRASS_CHANNELS];
+    float channelTypes[GRASS_CHANNELS];
+    [unroll] for (uint m = 0u; m < GRASS_DENSITY_MAPS; m++)
+    {
+        float4 dm = GrassDensityMapAt(local0, m);
+        float4 tm = GrassChannelTypes(m);
+        weights[4u * m] = dm.x;          channelTypes[4u * m] = tm.x;
+        weights[4u * m + 1u] = dm.y;     channelTypes[4u * m + 1u] = tm.y;
+        weights[4u * m + 2u] = dm.z;     channelTypes[4u * m + 2u] = tm.z;
+        weights[4u * m + 3u] = dm.w;     channelTypes[4u * m + 3u] = tm.w;
+    }
     // Fullness: grass painted at or above this share of its layer's maximum grows the full ring density;
     // the detail layers say where grass grows, the rings how thick it is.
     float fullness = max(0.05, _GrassRingDensity[0].y);
@@ -642,11 +794,18 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     // cell holds a blade.
     float total = 0.0;
     float spawn = 0.0;
-    [unroll] for (int c = 0; c < 8; c++)
+    [unroll] for (int c = 0; c < GRASS_CHANNELS; c++)
     {
         int t = channelTypes[c] >= 0.0 ? (int)channelTypes[c] : 0;
         float w = channelTypes[c] >= 0.0 ? max(0.0, weights[c]) : 0.0;
-        float chance = w > 0.0 ? _GrassTypeShape2[t].x : 0.0;
+        // The table is read only for a painted channel (most of a terrain's channels are empty at any one point).
+        float chance = 0.0;
+        float density = 0.0;
+        [branch] if (w > 0.0)
+        {
+            chance = GrassTypeRow(t, GRASS_ROW_SHAPE2).x;
+            density = GrassTypeRow(t, GRASS_ROW_SHAPE).y;
+        }
         if (chance > 0.0)
         {
             sprinkleAt += min(1.0, w / fullness) * chance;
@@ -660,7 +819,7 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
         total += w;
         if (w > 0.0)
         {
-            spawn += w * _GrassTypeShape[t].y;
+            spawn += w * density;
         }
     }
     spawn /= fullness;
@@ -675,7 +834,7 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
         // weight if rounding runs past the end.
         float at = typePick * total;
         bool found = false;
-        [unroll] for (int k = 0; k < 8; k++)
+        [unroll] for (int k = 0; k < GRASS_CHANNELS; k++)
         {
             at -= weights[k];
             if (weights[k] > 0.0 && !found)
@@ -690,8 +849,8 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     {
         return;
     }
-    float4 typeShape = _GrassTypeShape[type];
-    float4 typeShape2 = _GrassTypeShape2[type];
+    float4 typeShape = GrassTypeRow(type, GRASS_ROW_SHAPE);
+    float4 typeShape2 = GrassTypeRow(type, GRASS_ROW_SHAPE2);
     uint head = (uint)round(typeShape2.y);
 
     float2 rootXZ = lerp(cellRoot, centre, typeShape.z * (0.4 + 0.6 * GrassUnit(pullHash)));
@@ -708,7 +867,7 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     }
     /* Nor in a river or a lake: none below the water line (less a wading type's depth), thinning in over the bank above
      * it. The density maps (2 m texels smoothed over 2 m) filled a creek from both banks; the cut is per blade. */
-    float freeboard = GrassFreeboardAt(local) + _GrassTypeShape[type].w - _GrassSea.z;
+    float freeboard = GrassFreeboardAt(local) + typeShape.w - _GrassSea.z;
     if (freeboard < 0.0 || GrassUnit(GrassMix(own ^ 0x7F4A7C15u)) >= saturate(freeboard / _GrassSea.w))
     {
         return;
@@ -737,12 +896,31 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     float ownHeight = 0.72 + 0.38 * GrassUnit(GrassMix(own ^ 0x68E31DA4u));
     float lean = saturate(_GrassShapeParams.x * (0.25 + 0.75 * min(1.0, r * 1.2)) * (0.5 + 0.5 * GrassUnit(GrassMix(own ^ 0xB5297A4Du))));
     float height = typeShape.x * max(0.1, clumpHeight * middle * ownHeight);
+    /* The scene's paths (FishGroundPaths.hlsl): a blade on a worn way is not there, or lies trampled short; a lost trail
+     * keeps most of its grass, lower, which is how it still reads; a cart track keeps the strip between its ruts. */
+    float trodden, flattened;
+    FishPathWearAt(rootXZ, trodden, flattened);
+    if (trodden > 0.0 && GrassUnit(GrassMix(own ^ 0x2F6B1C3Du)) < trodden)
+    {
+        return;
+    }
+    height *= 1.0 - 0.55 * flattened;
+    if (GrassBuried(root, local, type, height))
+    {
+        return;
+    }
     float clumpColour = GrassUnit(GrassMix(clump ^ 0x1B873593u));
 
     GrassBlade blade;
     blade.root = root;
     blade.packed = GrassPack(type, facing, height, lean, fade, clumpColour);
-    blade.colour = 0u;   // shadow casters need no colour
+    // Shadow casters need no colour: only the record's shape bits (a type past 15, a tall blade).
+    uint recordBits = GrassRecordBits(type, height);
+    blade.colour = recordBits;
+    /* Whether this stem carries its type's head: every stem of a type tuned before GrassTypeTuning.HeadShare (share 1),
+     * a share of them for a tussock species with a head (feather grass's plumes, a rush's tufts, wheat's ears), which
+     * would otherwise put three records on every blade of a dense lawn. */
+    bool headed = head != 0u && GrassUnit(GrassMix(own ^ 0x3C6EF372u)) < GrassTypeRow(type, GRASS_ROW_MORE).x;
 
     /* Everything the vertex shader draws: the curve is scaled to the blade's length, so every point lies
      * within `height` of the root, above the ground, in any wind (laid over to 75 degrees, the tip is ~h
@@ -761,9 +939,9 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     {
         // Only a blade the camera draws reads the ground's texture (shadow casters are colourless).
         GrassBlade lit = blade;
-        lit.colour = GrassPackColour(GrassTerrainColourAt(local, rootXZ, share));
+        lit.colour = GrassPackColour(GrassTerrainColourAt(local, rootXZ, share)) | recordBits;
         GrassEmit(lod, lit);
-        if (head != 0u)
+        if (headed)
         {
             // The head's two crossed cards: the same stem, drawn at its tip (FishGrassBlades.hlsl GrassBuild).
             lit.colour = GrassWithHeadPart(lit.colour, 1u);
@@ -782,11 +960,11 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
         {
             uint shadowSlot = lod == 0u ? 3u : 4u;
             GrassEmit(shadowSlot, blade);
-            if (head != 0u)
+            if (headed)
             {
-                blade.colour = GrassWithHeadPart(0u, 1u);
+                blade.colour = GrassWithHeadPart(recordBits, 1u);
                 GrassEmit(shadowSlot, blade);
-                blade.colour = GrassWithHeadPart(0u, 2u);
+                blade.colour = GrassWithHeadPart(recordBits, 2u);
                 GrassEmit(shadowSlot, blade);
             }
         }

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wraith
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Gasped and half-voiced — fading echo of speech
+  Description: "Gasped and half-voiced \u2014 fading echo of speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -68,7 +68,7 @@ MonoBehaviour:
       Middles:
       - sha
       - mi
-      - 'no'
+      - no
       - aes
       SyllMin: 2
       SyllMax: 3
@@ -80,7 +80,7 @@ MonoBehaviour:
       - wraith
       - mir
       - is
-      Description: Gasped and half-voiced — fading echo of speech
+      Description: "Gasped and half-voiced \u2014 fading echo of speech"
       Tags:
       - Shade-names
       - Silent-marks
@@ -88,12 +88,12 @@ MonoBehaviour:
     Cultures: []
     Places:
     - the Shadeward
-    - 'Widow''s Gate'
+    - Widow's Gate
     - Grey Battlefield
     - Echoing Cloister
     Titles:
       Honorific:
-      - 'Widow''s Herald'
+      - Widow's Herald
       HonorificMasculine:
       - Shade-Lord
       HonorificFeminine:
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Wraiths
+    Adjective: Wraith
   BiomeAffinities:
   - BiomeID: -567058185
     Weight: 1
@@ -125,3 +128,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1141955836
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

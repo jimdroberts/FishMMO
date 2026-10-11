@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Blightbloom
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Plant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Sickly flowers that spread rot — sweet, decaying names'
+  Description: "Sickly flowers that spread rot \u2014 sweet, decaying names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Plant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - us
       - ith
       - ax
-      Description: 'Sickly flowers that spread rot — sweet, decaying names'
+      Description: "Sickly flowers that spread rot \u2014 sweet, decaying names"
       Tags:
       - Bloom-names
       - Rot-marks
@@ -126,7 +126,7 @@ MonoBehaviour:
       - Who Rotted the Royal Garden in a Night
       - Who Bloomed on the Plague Grave and Smelled of Honey
       - Who Blighted the Orchard That Fed the City
-      - 'Who Wilted the Bride''s Bouquet at the Altar'
+      - Who Wilted the Bride's Bouquet at the Altar
       - Who Spread from One Petal to the Whole Valley
       Occupational:
       - Garden-rotter
@@ -161,6 +161,8 @@ MonoBehaviour:
       - blight
       - ash
     AllowGenericOccupations: 0
+    Plural: Blightblooms
+    Adjective: Blightbloom
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 173642607
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

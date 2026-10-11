@@ -388,9 +388,8 @@ namespace FishMMO.Shared.WorldDesign
 			return problems;
 		}
 
-		/// <summary>The area, in square kilometres, below which the weather director never runs.</summary>
-		/// <remarks>Mirrors <c>WeatherHost.DirectorMinimumSquareKm</c>, which lives in the server assembly.</remarks>
-		public const float DirectorMinimumSquareKm = 2f;
+		/// <summary>The area, in square kilometres, below which a scene makes no storms of its own.</summary>
+		public const float DirectorMinimumSquareKm = FishMMO.Shared.Weather.StormSchedule.MinimumSquareKm;
 
 		/// <summary>
 		/// The weather mode a scene resolves to, by the same rule the server applies.

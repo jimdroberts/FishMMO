@@ -475,10 +475,19 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static int StepCount()
 		{
-			// Migration, ground, bark, atlas, import, verify, layers, materials, rocks, details, bushes, trees, built
-			// layers; and the rock-formation, ice and cliff-piece steps (BiomeArtGenerator.Rocks.cs).
-			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 9 + ProceduralArtCatalogue.Bushes.Length + ProceduralArtCatalogue.Trees.Length + RockStepCount();
+			// Migration, ground, bark, atlas, import, verify, layers, materials, rocks, details, bushes, trees, deadwood,
+			// built layers; the rock-formation, ice and cliff-piece steps (BiomeArtGenerator.Rocks.cs); the structure kit's
+			// (BiomeArtGenerator.Structures.cs).
+			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 10 + ProceduralArtCatalogue.Bushes.Length + ProceduralArtCatalogue.Trees.Length + RockStepCount()
+				+ StructureStepCount();
 		}
+
+		/// <summary>
+		/// Writes the deadwood props — meshes, materials and prefabs (BiomeArtGenerator.Deadwood.cs, the flora package's).
+		/// A partial method so this file need not change when it is written; its paths are listed by
+		/// ProceduralArtCatalogue.DeadwoodPayloadPaths / DeadwoodWrapperPaths / DeadwoodPrefabNames.
+		/// </summary>
+		static partial void WriteDeadwood(Context c);
 
 		/// <summary>The generation as steps; each <c>yield</c> names the step whose work follows it.</summary>
 		private static IEnumerable<string> StepsOf(Context c)
@@ -497,6 +506,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// Rock and ice surface maps, before the import step imports them with the rest.
 			foreach (string step in RockSurfaceSteps(c))
+			{
+				yield return step;
+			}
+			// The structure kit's surfaces, likewise (BiomeArtGenerator.Structures.cs).
+			foreach (string step in StructureSurfaceSteps(c))
 			{
 				yield return step;
 			}
@@ -530,6 +544,15 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return "Tree: " + species.Name;
 				WriteTree(c, species);
+			}
+			// Fallen logs, stumps, driftwood and petrified logs (BiomeArtGenerator.Deadwood.cs): after the barks, the
+			// rock surfaces and the materials, which they wear.
+			yield return "Deadwood";
+			WriteDeadwood(c);
+			// The structure kit (BiomeArtGenerator.Structures.cs): its materials, then a step a piece.
+			foreach (string step in StructureSteps(c))
+			{
+				yield return step;
 			}
 			yield return "Built terrain layers";
 			c.Built = BiomeTerrainLayers.EnsureAll(c.Report.Problems);
@@ -867,7 +890,9 @@ namespace FishMMO.Shared.WorldDesign
 				case DetailKind.Fern:
 					return 18f;
 				default:
-					return DefaultTintPatchMetres;
+					// A newer kind's own (DetailKindTraits), else the default.
+					float own = ProceduralArtCatalogue.Traits(spec.Plant.Kind).TintPatchMetres;
+					return own > 0f ? own : DefaultTintPatchMetres;
 			}
 		}
 
@@ -971,7 +996,7 @@ namespace FishMMO.Shared.WorldDesign
 					expectNormal: true, distanceFade: FadeTree));
 			}
 
-			foreach (RockMaterialSpec spec in ProceduralArtCatalogue.RockMaterials)
+			foreach (RockMaterialSpec spec in ProceduralArtCatalogue.AllRockMaterials)
 			{
 				// Each wears its rock type's surface (Grey: granite), the one its formations and cliffs wear, so
 				// the three read as one stone (RockArtNames.RockSurfaceTypeForLegacy).
@@ -1003,17 +1028,19 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				DetailSpec spec = d;
 				Vector2 sink = DetailSinkRange(in spec);
-				if (ProceduralArtCatalogue.WearsBark(in spec))
+				string barkFamily = ProceduralArtCatalogue.DetailBark(in spec);
+				if (barkFamily != null)
 				{
-					// The cactus tree's bark, on a material of the detail's own so it fades as a detail does.
-					Texture2D cactus = LoadTexture(ProceduralArtCatalogue.BarkTexture(Bark.Cactus, "Albedo"));
-					Texture2D cactusNormal = LoadTexture(ProceduralArtCatalogue.BarkTexture(Bark.Cactus, "Normal"));
+					// A tree's bark (the barrel cactus the cactus's), on a material of the detail's own so it fades as a detail does.
+					Texture2D cactus = LoadTexture(ProceduralArtCatalogue.BarkTexture(barkFamily, "Albedo"));
+					Texture2D cactusNormal = LoadTexture(ProceduralArtCatalogue.BarkTexture(barkFamily, "Normal"));
 					WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), veg, m => Vegetation(m, cactus, 0.5f, false, 1f, 0f, 0f, white, white, 0f, spec.SnowBury, false, cactusNormal, clip: false,
 						expectNormal: true, distanceFade: FadeDetail, groundSink: sink));
 					continue;
 				}
 				bool grassy = spec.Plant.Kind == DetailKind.Grass || spec.Plant.Kind == DetailKind.Reeds;
-				float sway = grassy ? 0.35f : spec.Plant.Kind == DetailKind.Kelp ? 0.25f : 0.2f;
+				float ownSway = ProceduralArtCatalogue.Traits(spec.Plant.Kind).Sway; // a newer kind's own; 0 for every legacy kind
+				float sway = grassy ? 0.35f : spec.Plant.Kind == DetailKind.Kelp ? 0.25f : ownSway > 0f ? ownSway : 0.2f;
 				bool aquatic = SeaFloorMeshes.IsAquatic(spec.Plant.Kind);
 				WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), veg, m =>
 				{
@@ -1640,7 +1667,7 @@ namespace FishMMO.Shared.WorldDesign
 			Mesh smallMesh = WriteMesh(c, RockMeshes.Build(in small, 3, c.Seed), ProceduralArtCatalogue.SmallRocksMesh, true);
 			Mesh pebbleMesh = WriteMesh(c, RockMeshes.BuildCluster(in pebble, 3, 2, 0.18f, c.Seed), ProceduralArtCatalogue.PebblesMesh, false);
 
-			foreach (RockMaterialSpec spec in ProceduralArtCatalogue.RockMaterials)
+			foreach (RockMaterialSpec spec in ProceduralArtCatalogue.AllRockMaterials)
 			{
 				Material material = MaterialOrNull(c, ProceduralArtCatalogue.RockMaterial(spec.Name));
 				foreach (RockShape shape in ProceduralArtCatalogue.BoulderShapes)

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Elder Wyrm
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'The oldest wyrms, mountain-sized and half-asleep — vast, slow names'
+  Description: "The oldest wyrms, mountain-sized and half-asleep \u2014 vast, slow
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -71,7 +72,7 @@ MonoBehaviour:
       - or
       - um
       - ael
-      - 'on'
+      - on
       SyllMin: 2
       SyllMax: 3
       FeminineSuffixes:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ax
       - und
       - eld
-      Description: 'The oldest wyrms, mountain-sized and half-asleep — vast, slow names'
+      Description: "The oldest wyrms, mountain-sized and half-asleep \u2014 vast,
+        slow names"
       Tags:
       - Age-names
       - Sleep-marks
@@ -161,6 +163,8 @@ MonoBehaviour:
       - cinder
       - fall
     AllowGenericOccupations: 1
+    Plural: Elder Wyrms
+    Adjective: Elder Wyrm
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3
@@ -170,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 596668801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

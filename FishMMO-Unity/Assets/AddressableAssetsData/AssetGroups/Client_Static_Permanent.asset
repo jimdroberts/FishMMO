@@ -27,6 +27,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 00cce3d3a2875ca42a8cf5023cb7383d
+    m_Address: RockSurface_Scoria_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0113c04346d1ba31435bcfd2ed3e4711
     m_Address: Ground_Pebbles_Mask
     m_ReadOnly: 0
@@ -46,6 +52,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 025e606925e217c657243571abb425a1
     m_Address: Ground_Sulphur_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 04859875860743329abb7a158f65baa3
+    m_Address: Ice_GlacialBlue
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0524dcfcf008915b3a2c66555591d777
+    m_Address: Bark_Birch_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -78,8 +96,32 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 07d07a40fc0eda3e9396efc191844950
+    m_Address: RockSurface_Anorthosite_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 084dee6d9ccfb42045c093a110db0960
+    m_Address: RockSurface_Halite_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0953f09522e18f80b6d22f1eb994a61b
     m_Address: Ground_Coral_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0aa1384a8f5cc29c8ac4995551131af6
+    m_Address: Detail_Barnacles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0b68279b2a0748052468f7b99d85484c
+    m_Address: Detail_BeachVine
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -95,14 +137,62 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0c3642053b52eb5305c3ca4d488dcf63
+    m_Address: Rock_Halite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0d03d00e1b4aba60640aed5e9b896d21
+    m_Address: Ground_Lichen_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0db1abc34a29b81c7d7a84175cefc934
     m_Address: Ground_Sulphur_Normal
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e41b59554f1488298243bae64032f88
+    m_Address: Glowcap Cluster 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 0f5ec2ad5f1c47dfc224bbd2d8b7aa82
     m_Address: Leaves_Palm
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 100cd6c218f8f120e0536ef5e34e635a
+    m_Address: Bark_Birch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 10c517704fa3c1620f14d8a9e13af7cf
+    m_Address: Detail_Euphorbia
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 113418d36026c3ed57f3a7f3f295f2bb
+    m_Address: RockSurface_Shale_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1158f01a11b4614e9633fea48024bfad
+    m_Address: RockSurface_Conglomerate_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 117aacb56282f559d0a4cca59ed5ee02
+    m_Address: Ground_Peat_Mask
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -114,6 +204,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 130b504fa95c2fb3083e502c7ec3a367
     m_Address: Sky
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1389cd1f85b9229f16b08cb50517726a
+    m_Address: Rock_Breccia
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -136,6 +232,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1446210affab588c8b35acf5931095de
+    m_Address: FishRockField
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1518f27ba41098845a45fc75a3d2edce
     m_Address: BiomeTexture_Valley_408C40
     m_ReadOnly: 0
@@ -153,6 +255,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1598a2089bd4f5bc3fa9529f9946e078
+    m_Address: RockSurface_Gypsum_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1673bb19f23752e4a65780b45521c6f2
     m_Address: Detail_Coral
     m_ReadOnly: 0
@@ -161,6 +269,24 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 16eb23baeafad21469a3509842b500e3
     m_Address: NightSkybox
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 17552084ff2c3e6fb667c9c024d54bee
+    m_Address: Bark_Pine_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 17ffb1231382dc03489c8eeeca5db3c5
+    m_Address: Rock_Pumice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 180db21331c7dc8e52e5c75ec2578757
+    m_Address: Rock_Gneiss
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -175,6 +301,18 @@ MonoBehaviour:
     m_Address: BiomeTexture_AlpineMeadow_80CC4C
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 18d789dd11ca03ba44265252c9d2a1e4
+    m_Address: Bark_Dead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 193ad2cc68f93b8afceecd3e022cf47d
+    m_Address: IceSurface_Sea_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1a25c9f32fbc86941820446872df368c
     m_Address: Woodland
@@ -193,13 +331,109 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1a72489e932570deb33ff6c524d105a7
+    m_Address: Detail_Seaweed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1b3e14b1ea557ef6037d875fe14bda99
+    m_Address: Billboard_Beech
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c43a729d98c482760fe763c94d31910
+    m_Address: Ground_Dust_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1c6528260f519fa1985ec5e759c18e66
+    m_Address: Isle of Aradune Backdrop Control 2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d18c71f26eef667b01c2a066d0b8ce5
+    m_Address: Billboard_WeepingWillow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1d2effd2492a0cb32400abe19a12e53b
+    m_Address: Detail_Bush_Bilberry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1e85e0e5a64cb989284ad0c5aca84c67
+    m_Address: Billboard_Alder
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2168dc524587be60d9c4cc50aa7b0566
+    m_Address: Detail_Bush_Rhododendron
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21d1d818c31df151a8d79b5707f6de1e
+    m_Address: FishAirMotes
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 221ffb1b2e601449da9167ac26dd9dcf
+    m_Address: Billboard_Pine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22432932025b70c0120703c2cb4de016
+    m_Address: Ground_Pahoehoe_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 22c2e676d9b34e14b87e4b97acdc05ed
     m_Address: Glacier
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 233d1a5384a5f83420789ed41dd0bcf1
+    m_Address: Detail_Bush_Willow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 236d769fffea754795780fe83a24cafd
+    m_Address: Detail_GrassSedge
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 23d01117a107c2f0c70ad0575df77793
     m_Address: Ground_Pebbles_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 24a31bb254642f303b13f3ab0f4fe727
+    m_Address: Ground_Dust_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2564cd0e5ed546d14f53d093bb7d60fa
+    m_Address: Ground_Moss_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 257b226d33f2436294e63ecdec63cea7
+    m_Address: Detail_Starfish
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -216,8 +450,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 26d47fdbcba41b45dc3445d1104dee99
+    m_Address: Billboard_Pine_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2756ec564b8a96d3a2134ae4de2362f3
+    m_Address: Billboard_Spruce_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 27a2bebfc54a206bc96bfe9d353e7478
+    m_Address: Volax Obelisk Backdrop Control 2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 27e0432adfd730e73a1f0ec570b4cfc0
     m_Address: Ground_Mud_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 27e82e567236f62057adbeca3740a3c5
+    m_Address: Detail_MusselBedOyster
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -234,6 +492,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 28d26d1085123c5d0905dbe3ec8924e3
+    m_Address: Gold Vein 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2911dcf50b03949d3c0c12d41293d4a6
     m_Address: Ground_CrackedEarth_Normal
     m_ReadOnly: 0
@@ -242,6 +506,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2982c7ee975dc96ea3e236d45d981944
     m_Address: Ground_Basalt_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 29c757cdadfd2e4928f1bb045fc5b13b
+    m_Address: Isle of Aradune Backdrop Control 5
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 29d402664d2a58016de2c344d0fdeeb4
+    m_Address: Detail_BacterialMat
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -258,13 +534,49 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2abae167a3b5a58f25b677b26ea084ca
+    m_Address: RockSurface_Anorthosite_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2ada0aee473c5c64f836dbc1cf387aa6
     m_Address: BiomeTexture_Lake_408CCC
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2c6e6c3fcd5f083bbe20127654e7f1e4
+    m_Address: Detail_LichenLava
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2c8bc0542d45ba9bda7ea5ab5e1e45b0
+    m_Address: Ground_Sphagnum_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2cf26855a94de123130319f7bf1e7663
+    m_Address: Detail_FlowersWoodland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2d0c4b627dfa757c826c4ef603d5d5b7
     m_Address: Detail_Fern
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2fe85330cac720a9f3b507c95237844f
+    m_Address: Ground_Pahoehoe_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 301b40ddd8e133a86568c0d891483abc
+    m_Address: Billboard_Pinyon_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -273,6 +585,18 @@ MonoBehaviour:
     m_Address: BiomeTexture_HighDesert_CCB280
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 30a75f7be87badccfe328718606896bb
+    m_Address: Detail_SeaFan
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 30bba20f70310878d3cf97477787ff48
+    m_Address: RockSurface_Gypsum_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 316068aec7de8294ba9429fc2bc910b9
     m_Address: DaySkybox
@@ -292,6 +616,24 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 332d4501f7f6b4aeb7e7bef7adea3e65
+    m_Address: Deadwood_Bark_Brown
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 339274331eb936a33656a411b5134c7b
+    m_Address: Ground_Lichen_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 339ff38e5a4384c4aea079405dbfa71e
+    m_Address: RockSurface_Sulphur_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 33b71795bf4f44ac50bc9aee5113efd4
     m_Address: Ground_Soil_Normal
     m_ReadOnly: 0
@@ -304,8 +646,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 35688a962c07d42735f0023127a05294
-    m_Address: Rock_Limestone
+  - m_GUID: 34200d3cd9a5ee0cab65c2da8cc695ef
+    m_Address: Isle of Aradune Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 345b2d8009ad04cde7de62bf1baf1c59
+    m_Address: RockSurface_Obsidian_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 35343c2c3771fdf1b1c164f1a30b2365
+    m_Address: Detail_Bush_Heather
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -334,6 +688,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3767b67efa1dfe4f1555f0a420a93763
+    m_Address: Detail_Bush_Hawthorn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 382ae2a6ad87f03a6496bfa218910b43
     m_Address: Ground_Grass_Mask
     m_ReadOnly: 0
@@ -346,8 +706,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3902aa828a73cafa5d039cb52b2bd5f8
+    m_Address: Billboard_Larch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3942d0442de83c59d9892444589a9524
+    m_Address: Leaves_DragonTree
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 395175e8b508aa5328196d48501b8699
     m_Address: Ground_Regolith_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3a15fcf601e96d72de7f3002803572cf
+    m_Address: Ground_ForestFloor_Mask
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -358,8 +736,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3bbe0d3ddb540cb6f87040f94eec970c
+    m_Address: Rock_Slate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3bef62955ce3d825abb51e050fae9f90
     m_Address: Detail_Reeds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c1e62fa9546cb9ea17853a0b0d45105
+    m_Address: Rock_Coral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c67ae9c759d4229aae740ce8a7e3177
+    m_Address: Bloodroot Patch 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c834ca1aacb49dc8d01b74ed1cf4513
+    m_Address: Leaves_Pine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3cc3b0286399120f11c47005d8b0578c
+    m_Address: RockSurface_Breccia_Mask
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -374,10 +782,40 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e61b786c89f72a2fdf50ba90627c0fa
+    m_Address: Detail_Bush_Gorse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e7069419022af42196477e26af3607f
+    m_Address: Elder Ironbark 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3e76f2204e7ef2c5f04e6cc889e17a18
+    m_Address: Detail_DebrisNeedle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3ec701c92d53021bf912338492df3b9b
+    m_Address: RockSurface_Sulphur_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3f19be6764f2bcd49b45e22b6ca8b2e8
     m_Address: BiomeTexture_Mangrove_669966
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3f2737576078bf9c91272f4dc29efcbb
+    m_Address: Detail_DebrisForest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3f97cefcaf7c19d07fb4104aed0b4273
     m_Address: Rock_Basalt
@@ -391,8 +829,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 41360a69bf985236d81f76a99e7ea133
+    m_Address: Ground_Peat_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4179c159dc0c613cb6a8d4a6ed5310ec
     m_Address: Ground_GrassMeadow_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 41ad2fd124f6599b9b2e67409ab639ed
+    m_Address: Volax Obelisk Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -407,14 +857,50 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 424bf7d758284c0998edc08e2b689e33
+    m_Address: IceSurface_Sea_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4251c45dc778a851266cc28762358e79
+    m_Address: Ground_Sphagnum_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 42b24845bff0a680316f912939e812a5
     m_Address: Ground_CliffRock_Normal
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 42fa4ebaeb7a228ee775ead1075bc444
+    m_Address: Ice_Sea
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4368af7c86a7f6e58d7f7424ab6b325c
+    m_Address: Rock_Tuff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 43c213f9f905cf76d90247e841731274
+    m_Address: Detail_CushionSpiny
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 44588e249a51c502114cbc25b68d60f0
     m_Address: Bark_Palm_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 44ec31231927e068f750c54f9ee98f28
+    m_Address: Deadwood_Wood
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -431,8 +917,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 459746d63e4444790b54d3734835bf75
+    m_Address: Frostbloom Patch 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 46216680e19fa3a76b7ed68e1c98c98b
     m_Address: FishSky
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4633af5c70c6729b5dd1c589e74aa1eb
+    m_Address: Rock_Quartzite
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -443,8 +941,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 473eae76b13ddf57b1af708353e877a1
+    m_Address: Leaves_Larch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 47452ee4e25ac0b9cd9dbec776aa5632
+    m_Address: Detail_BrittleStar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 476b106b789377bd6fd6e968d1599d8b
     m_Address: Bark_Brown_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 47bd97caa614b5782af1370a497c2fc3
+    m_Address: Detail_FlowersWet
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -461,13 +977,31 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48a455bc371acd928ca4d4b76ec1b8a1
+    m_Address: Billboard_Birch_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 48da25f64b4a48cfbbf8a53642e2414b
     m_Address: UILauncher
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 492ab1d2cc1493b40d2d2e54a48d35dd
+    m_Address: Detail_Anemone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4a09c2dcd4df4128917c0b15564b7211
     m_Address: Volcanic Plume
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b173f2533cf4a9bb0ef6cb07f841651
+    m_Address: FishWeatherLitIndirect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -478,8 +1012,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4c3a3cf886264ebf5ec57fc7a2b361b4
+    m_Address: IceSurface_BubblyWhite_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4d792219765289944feb6a34ef8e2027
+    m_Address: Detail_DebrisBranch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e091161ab76c4ed0618fefa54c4fcbf
+    m_Address: Billboard_Spruce
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4e14e946dc5ac8c730a406459c367163
     m_Address: Ground_Gravel_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e720e41168635cec2f30a3362187daf
+    m_Address: Detail_DebrisPalm
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -490,8 +1048,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4f50adaa613eeca1b4e0a2255b44456b
+    m_Address: Billboard_WeepingWillow_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5072c63a60e54d80b9c7042039dacc4b
+    m_Address: Silverleaf Patch 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 509f90284532a3d39cafd89f86fb7390
     m_Address: Detail_Kelp
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 51057be1ae19e7ace97f24798b5cd1e2
+    m_Address: Billboard_Pandanus_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 514decc284b053df62559fcd85ea8d28
+    m_Address: Rock_Termitaria
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5185ab49d5d6084b766cfe7fc1052b36
+    m_Address: Bark_Smooth
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 525b7646e9d10c78533f765705515646
+    m_Address: Detail_FlowersTall
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -507,17 +1101,23 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5322058dc7c84f959fa7bd2a63e3ee49
-    m_Address: RockSurface_Limestone_Normal
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 53fa60808c930f3baaf43eed7423bc2a
     m_Address: Weather Audio Profile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 540ef024c26d502ffa769b116036be36
+    m_Address: FishBackdropGround
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5412e7c97a36ef8aee8c4fb8260ab8f8
+    m_Address: RockSurface_Termitaria_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 545226bc09f1e4c3795b4370bdecfd77
@@ -528,6 +1128,30 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
     m_Address: MinimapRenderTexture
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 55cc56c38f2d044f0453d55d1a3e9e33
+    m_Address: Detail_Urchin
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 570dfab7c67765760564febcee446ae1
+    m_Address: Ground_Moss_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 572f4376916da06bd1ae01438dae199e
+    m_Address: Billboard_Dead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 585b45911492e8d8df81576188453ae3
+    m_Address: RockSurface_Slate_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -544,8 +1168,38 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5a13cd14e8e13e2a863562d1c5ff96af
+    m_Address: Leaves_Beech
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5aa2577828491bf17a50c15b5401a5c2
+    m_Address: Elder Ironbark 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d125c31b488d6f43b7e27b456624416
+    m_Address: Ancient Oak 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d3e9b55e3318c78e913780acbb36eb5
+    m_Address: Leaves_Poplar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5d9b33d14c07264e87c0b0f46f5c23f4
     m_Address: Ground_Grass_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5ded0ed6583720155d290dd5768d09c8
+    m_Address: Detail_Shells
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -554,6 +1208,12 @@ MonoBehaviour:
     m_Address: BoundaryGlass
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5fc67956b797f714eb28b9eddf06754e
+    m_Address: Lumen Quartz Cluster 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5fc805ea39fd9514589524dc6c3933f7
     m_Address: BiomeTexture_MountainSlope_808066
@@ -566,8 +1226,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 608bb45c33c2721e1f7f18742a491a87
+    m_Address: IceSurface_BubblyWhite_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 623fe745f8934c9188d434afd11249ac
     m_Address: Vortex Debris
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 630c0d189c0b3737a0216ca0eb1447d3
+    m_Address: Leaves_Bristlecone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 63be79ef507d2486f2e5febcb6fbbb02
+    m_Address: Detail_SeaPen
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 63de86099e6054338f81422f32c5f552
+    m_Address: RockSurface_Termitaria_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -578,8 +1262,68 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 647bae00ca5d0a53b811d9542abe5554
+    m_Address: Leaves_Alder
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 64b113056d1bbd0c4ba226fc2e375cbf
     m_Address: Billboard_Oak
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 64d83de9083ab3e27403d85e41e59a8f
+    m_Address: RockSurface_Gypsum_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 654aedf53eeb18f55bc0b27e74a9cfd3
+    m_Address: Frostpine Elder 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 66b9339788821589e8ba35df5f201dbb
+    m_Address: RockSurface_Obsidian_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 66baee70fb6cf77f4057395264a37930
+    m_Address: Leaves_Spruce
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 66df8e501b47ead5cfc73b35414c0882
+    m_Address: Leaves_Dead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 67551df7a419194aed79a330b7057f6d
+    m_Address: Deadwood_Bark_Dead
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6766fad8d4b98e13f77f2b15ac63b8cc
+    m_Address: IceSurface_GlacialBlue_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 681f391a78bd8707634e130aec9c8235
+    m_Address: Ground_Cinder_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6943ce254cd5feb65911006becc4dd49
+    m_Address: FishAmbientLife
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -615,6 +1359,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6b90784db1d9dbbb2102807f198b6ecc
+    m_Address: Billboard_Larch_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6b96e7e0b68c2d0968ee7f51f90a2d3d
     m_Address: FishCloudCookie
     m_ReadOnly: 0
@@ -623,6 +1373,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6b9f793e90daa35db8b09951b48ba58d
     m_Address: FishWeatherTerrainArray
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6bf745dba4b4c673d8a27fa47b9a3789
+    m_Address: Frostpine Elder 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6bf785bd56415775a7ded9ae93a2a537
+    m_Address: Leaves_Pinyon
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -639,18 +1401,84 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6dd784ba41e9cba4a88adb1bf1fdc556
+    m_Address: Treacherous Bri Lookout Backdrop Control 2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6e289d3446076e35da6fd32d6ac0d080
+    m_Address: Billboard_Pinyon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6e4d19437f172087e9fdc0075a0d47d8
+    m_Address: Detail_Ivy
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6f2a893185ed8dc5e89839da192b2d62
     m_Address: Wall
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6fe3041b6752b380f1d0ab43fefe7eb1
+    m_Address: Detail_FlowersAlpine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7008d4227441a95589839590d7ff3677
+    m_Address: Isle of Aradune Backdrop Control 4
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 70eeeadb6186fa22a80675c90ac8cff9
     m_Address: Ground
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 713c81c490c74311b936e0315f3029c4
+    m_Address: FishGrassBlades
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 71c79bdad0f6178fabcdb601bb1a4f52
+    m_Address: Isle of Aradune Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 72ce0e7b06cfe671caecac5644a57f34
     m_Address: RockSurface_Basalt_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 72cf395c2713a9e3cc7b3365d287d910
+    m_Address: IceSurface_GlacialBlue_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 73c29772d47b2634cc344261c3c12cf9
+    m_Address: Detail_Bush_DwarfBirch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 74296a7aa0af6b6b0bbde80035c5b4e7
+    m_Address: FishGroundTrail
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 748fa8e3103d827ca2721babf872f715
+    m_Address: Deadwood_Bark_Birch
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -673,8 +1501,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 772b5df135f23ab2db16f1046c5530c1
+    m_Address: Detail_GrassRush
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 77d2de1e9c99042cb99592565ec65216
     m_Address: Clouds
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 781ee50bf1503f282831dcf519c71166
+    m_Address: RockSurface_Quartzite_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 797ece709babeccf56a42c568934c0c9
+    m_Address: Ground_Peat_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7984b2c7e2a2e53d969f3f2d24be996f
+    m_Address: RockSurface_Anorthosite_Mask
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -683,6 +1535,54 @@ MonoBehaviour:
     m_Address: BiomeTexture_Wasteland_594033
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a4a92f1757d8d1a1928a3aa2d051f65
+    m_Address: RockSurface_WaterIce_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a8c2312255ad4815c2e5744d97c0326
+    m_Address: RockSurface_Halite_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7b87dbf5a14edf9b4bbf1315ceb58333
+    m_Address: Mirewort Patch 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7b8e553f194f0582e4248caf0a14bc05
+    m_Address: Billboard_DragonTree_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c79a2f566fba2ff55089257871208c5
+    m_Address: RockSurface_Pumice_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7cbaeb60b14210212b4ea2e3000a01f1
+    m_Address: Starsilver Vein 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7ec44a5d3e66f10b3bde18b75eb06390
+    m_Address: Ground_Frost_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 803d643f92cf7e0b3b8408315368d371
+    m_Address: FishTerrainInstancing
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 811a44021a3b8e6b6a640ccb7ab5f601
     m_Address: Ground_GrassDry_Albedo
@@ -701,10 +1601,46 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 831f2f37e5c7dd9b4842e7ca45f1df3c
+    m_Address: Billboard_Pandanus
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 84a0650bad418b092499784df1f61e34
+    m_Address: Ground_NeedleLitter_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8501dbede686a0b198c37a3f01cab7d1
+    m_Address: Billboard_Bristlecone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 860a6b9324098a7bfbfd0b156b3ab1af
+    m_Address: Isle of Aradune Backdrop Control 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 880ecc3bf473abd4da332ec06e2b5ff2
     m_Address: Snow
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 88b8059992bd4bff91db664b10675b2b
+    m_Address: FishDetailScatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 896068704b684dc8d574477169d23a2b
+    m_Address: Ground_ForestFloor_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 89627b2292680a9df991d24027572f7d
     m_Address: Detail_ShrubSmall
@@ -718,6 +1654,48 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 89de1f3a8e3722c05b03a5c9fae0090e
+    m_Address: Ground_ForestFloor_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a138ee19d2610723b00592a7f83c7f7
+    m_Address: Detail_Bush_Holly
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a39aca35296f546feb19082e169f2d8
+    m_Address: RockSurface_Slate_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8b7d47c20988583409e353f9f6ce024a
+    m_Address: Isle of Aradune Backdrop Control 3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8bbbe16b2a627745a809a8e8bf7b2a4c
+    m_Address: Detail_GrassDune
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8bd7189a93a941d9b60c4f759d719be6
+    m_Address: FishGrassBlades
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8ce754cdf6bf630e7a12e2236f95e94c
+    m_Address: Ground_Frost_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8d5caee492efece2fa2218379b6727fe
     m_Address: FishClouds
     m_ReadOnly: 0
@@ -726,6 +1704,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8d857c52bfad28fe51867aad839c8f64
     m_Address: Ground_Silt_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8db6c7bc8640dae62d98bc3752d62c1e
+    m_Address: Billboard_Birch
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -754,8 +1738,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fa00f9a26a04cc8ddf825cf9002a6ed
+    m_Address: Detail_ReedsPlume
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8ff886cd4e7558e694c6d503af41fb9c
     m_Address: RockSurface_Granite_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9033d158b970f6cb2eccea423155268d
+    m_Address: Billboard_Poplar_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -783,6 +1779,30 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 943b6fa5b41409a49568a84110e31189
+    m_Address: Detail_CushionMossCampion
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 94f2d75dfee04d714f945f3a75ddc819
+    m_Address: Bark_Pine_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 95b5a184d6150e0b447fd1b978ae79a0
+    m_Address: Ground_NeedleLitter_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 964812e95b9c50d4244c7df135db672a
+    m_Address: Leaves_Baobab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9651a3dab058dbdb579661832bf2cd25
     m_Address: Billboard_Palm_Albedo
     m_ReadOnly: 0
@@ -791,6 +1811,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 96759cd7cb1d577a1aac4d534c118311
     m_Address: Ground_Mud_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 96beb210afd84808601cea7b44a2b5bf
+    m_Address: Detail_MushroomForest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9739b5582ce50476de9e3242521e7cbf
+    m_Address: Detail_Bush_Bramble
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -805,10 +1837,52 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 99f6a08392e054957d904b6e50248622
+    m_Address: RockSurface_WaterIce_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a39582bcfc44cd1baea38a6d1a8d247
+    m_Address: FishVegetationPrime
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9a681237b604de04880797b962f6b667
     m_Address: BiomeTexture_Wetlands_4C8059
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9aad77d755ea37068a813006be5194cf
+    m_Address: Bark_Cactus_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b04d35f96e7bc8e2a43c4c3bfa9e6cb
+    m_Address: IceSurface_Sea_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b085aef10ed53cb935c05c0ef4daea8
+    m_Address: RockSurface_Shale_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b120350726b884e3a9395648df97866
+    m_Address: RockSurface_Tuff_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9b1b57cbcc5405e12fc25e8cce7d15b8
+    m_Address: Billboard_Bristlecone_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9c6d27fe4582029b78c8f9cb7f59b4a3
     m_Address: Ground_Gravel_Normal
@@ -828,14 +1902,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d41fa65c1c7e9be4724a7f0c7f5cdeb
+    m_Address: Detail_ColdCoral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9d7b4675c91149f25af0e2a82433630e
     m_Address: Lightning Bolt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9d8b0431b187dd6c430d2071e0f1701e
+    m_Address: Detail_Bush_Juniper
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9e95b43caf8227b5d30a3778dd2868eb
+    m_Address: Detail_Sponge
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9efec3aca52347929ba271ce999eebba
     m_Address: Ground_Silt_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9fb0e94b2ee51e45b51324d006fa01fb
+    m_Address: Leaves_Birch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a0e900eb8db0383064a12cf0942dff36
+    m_Address: Detail_FernBracken
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -851,8 +1955,56 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a2f07a85df6ee1106b43657941447eed
+    m_Address: Volax Obelisk Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a390b531eb3d45fe75bc99258a7544c0
+    m_Address: RockSurface_Gneiss_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a497dd6a9186303d240e5f1c0a1f6e81
+    m_Address: Detail_SeaCucumber
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a534f5f85550d9af50afbb8cf12a3405
+    m_Address: RockSurface_Quartzite_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a546ecae3ef4fb9e753e60a9cf1d1dbe
     m_Address: Rock_Sandstone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a63b9692fc2377557112bc7cb811b6b3
+    m_Address: Billboard_DragonTree
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a68048da264f17ebcb0ab30db7af5a41
+    m_Address: Treacherous Bri Lookout Backdrop Control 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a6da49cc714d6e6998c17c337a14ad94
+    m_Address: Billboard_Beech_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a76ed4d1c5dd760614cb319fae7004db
+    m_Address: Bark_Birch_Normal
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -875,8 +2027,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a96f56888bafd6780f014c09b1d82712
+    m_Address: RockSurface_Conglomerate_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab32675c6f7f5c79e4e652a35b09b473
+    m_Address: Detail_LichenClump
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ab5d1d3bca62709c051d13268e372ce4
+    m_Address: Detail_SeaLettuce
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ab6367f5ea0ee91ea515bd83bc0d114a
     m_Address: Ground_Regolith_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac23947eb994d27146485318a375c0d0
+    m_Address: Detail_BrainCoral
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -891,6 +2067,12 @@ MonoBehaviour:
     m_Address: BiomeTexture_Plains_80CC66
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ac99cea88a05f90f6a6644cd707402cf
+    m_Address: Ground_Lichen_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ac99ed97fdaf249478422c10b6724858
     m_Address: BiomeTexture_Taiga_405940
@@ -909,8 +2091,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad73c2c984e09334714dffb3e2a22cbb
+    m_Address: Billboard_Alder_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: adaf598e46b14d4dd34372170110302b
     m_Address: Ground_Soil_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: adb495f8c517bc8b014d1477314e8087
+    m_Address: Detail_CushionSphagnum
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -944,18 +2138,60 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b171fac48936f3cef2f5f1cd22d7aae4
+    m_Address: RockSurface_Shale_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b23bf60c19b2578af6c8ae6f324d6e8d
+    m_Address: Detail_ShrubSamphire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b2c3d4e5f60718a9293a4b5c6d7e8f02
     m_Address: Dirt
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2dbb765c60a452c4a9084bd5007f066
+    m_Address: Sunpetal Patch 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b33352ab540cd3d4fb8c872eaf34569a
     m_Address: BiomeTexture_Desert_E6B266
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b47972f71ad8004391de584d300628e2
+    m_Address: Billboard_Baobab_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b47997aceae6f573f4f19c67200e422c
+    m_Address: Ground_Cinder_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b57d7a0ebf324414fb3f358921cc80fc
     m_Address: Grass.jpg
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b5889f5468cecf090a76c3701f6e8412
+    m_Address: Voidstone Cluster 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6a1ad9d11aef3c0d915fe550242e56e
+    m_Address: Detail_Bush_MountainPine
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -966,10 +2202,64 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b717a72ff889b64d76d294c116c9bba9
+    m_Address: RockSurface_Slate_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b7725aa710597723a9e469e2b04e1626
+    m_Address: Treacherous Bri Lookout Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b8390063134b401eadabbd7308815475
     m_Address: UILauncher
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b94ebc2a1797eff9f8fe5047bd0427f8
+    m_Address: Emberglass Cluster 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b95ed509b5cff62c4a8a1e51c4c9c9c1
+    m_Address: FishFallingLeaves
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b99c9c78f606a5aaf25693112d2f2e0a
+    m_Address: Rock_Conglomerate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b9c207a1c9a86096fadf9409d02934d8
+    m_Address: RockSurface_Scoria_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b9eb9fdd375d442448f64fb410f1717d
+    m_Address: RockSurface_Sulphur_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ba494690f1a4bcedeec64d09a6de965a
+    m_Address: RockSurface_Gneiss_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bad351dbc06298c4f2d274c33bb1a3bf
+    m_Address: Leaves_WeepingWillow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bb1254a0f5ecb3b239b87631320dba90
     m_Address: Cloud Cookie
@@ -983,14 +2273,86 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc1853472236b2b465f9321f1360f181
+    m_Address: Detail_DebrisWrack
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc94ef4a95fba7afeaaca6a43b9dcdee
+    m_Address: Detail_GrassFeather
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bd72a67ce4cfd66efe03876fa51857fd
+    m_Address: Detail_CushionThrift
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: bdb1c818f3530ac3cc0d02fc6ad66d53
     m_Address: Ground_GrassDry_Mask
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdc3badb2a777ddce5a941e4a960d3dc
+    m_Address: RockSurface_Breccia_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdce6b352d58af8400f5ce58c642c774
+    m_Address: Bark_Pine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdd5bbcff1e4a8dfb270fc21bf851c2d
+    m_Address: RockSurface_Quartzite_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bdf9b3cf199b1df90700206d556fce3e
+    m_Address: RockSurface_Breccia_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: beaa43eb6ed82366360b646fa8a93a11
     m_Address: Ground_Coral_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c00b23a46bb27f88edd8754bd3a0ac37
+    m_Address: Bark_Smooth_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c01d760043289767191f11578eff3f56
+    m_Address: Iron Vein 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c0b1c11f7d4e3da94242c4595bb95d08
+    m_Address: Detail_GrassCotton
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1e8fa517bec056426062fa2f7a4f562
+    m_Address: Ground_Moss_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c1eaf27cf106a7c6de006257fb432237
+    m_Address: Billboard_Dead_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1007,8 +2369,26 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c2e9d98408311eff299344dda7e58db2
+    m_Address: Copper Lode 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3d4e5f60718a9b0293a4b5c6d7e8f03
     m_Address: Stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4444990ebaecb6a41e6f732b30504cb
+    m_Address: Leaves_Pandanus
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4d8006d004e590f03f66e009cb56a48
+    m_Address: Detail_SoftCoral
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1024,14 +2404,44 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c7c3281985dd0672796e8c983ce814bb
+    m_Address: Bog Puffball Cluster 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c9be351a3f935f3ac3277f87fb01f748
+    m_Address: RockSurface_Tuff_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cb4b839a316d03dcb618cc5a956079c6
+    m_Address: RockSurface_Gneiss_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cbca89165f7d5cd23aad1b1efde2f5c7
     m_Address: Ground_Ash_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cd2fa4eecb0480670acba11ca0962062
+    m_Address: Rock_Sulphur
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cd69da14c8470201783e63a65f7361e6
     m_Address: Ground_Sand_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cd73c4ae024445f4ae5906f81f9924cb
+    m_Address: FishVegetationIndirect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1054,6 +2464,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cec4c11cb10b9f0c9ad24ede84543f54
+    m_Address: Volax Obelisk Backdrop Control 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cf215995e2791c0b3443c743c465e6db
     m_Address: Bark_Brown_Normal
     m_ReadOnly: 0
@@ -1071,6 +2487,30 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d22c16bd3d972b94b450be6b2a26cdbd
+    m_Address: IceSurface_BubblyWhite_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d23a41f9bb1fe52447c3df013de30c22
+    m_Address: Bark_Smooth_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d34ce14cec9bf921c21ad701f1485274
+    m_Address: Detail_Bush_Rabbitbrush
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d3586859e608d2d193deec1419502f9e
+    m_Address: Detail_Bush_Thornbush
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d3894f686596c64063145e9de61ebcb3
     m_Address: Ground_GrassDry_Normal
     m_ReadOnly: 0
@@ -1083,10 +2523,28 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d4b4a947107ae1dd09c3e5dc14d40547
+    m_Address: Billboard_Poplar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d4e5f60718a9b0c1293a4b5c6d7e8f04
     m_Address: Sand
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d6369b89d89de885d33751773937c38c
+    m_Address: RockSurface_Pumice_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d64026a082a86795c637951d602e94e9
+    m_Address: RockSurface_Halite_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d71fec1a8e79edb7fb7afad20acdaea6
     m_Address: Detail_ShrubDry
@@ -1101,6 +2559,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d8444836ec0760a57d31f54c4a89ff09
     m_Address: Ground_SandBeach_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d8f22a4edb389b0c5ffa09134ba1b95f
+    m_Address: Detail_MusselBed
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1123,6 +2587,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d9d8898a957f3166f1d64fcaf320aeda
+    m_Address: Detail_Seagrass
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: da39615ae16bb59a804439306a8f46a8
     m_Address: Detail_FlowersWarm
     m_ReadOnly: 0
@@ -1134,8 +2604,20 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dbfdee9e6c8f763dd6b1d3b115fe4338
+    m_Address: Detail_Bush_Laurel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: dd5bbea1c628528d90b1d2b64f81fbf1
     m_Address: Ground_Basalt_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dd658f96e1cac84a634b28d8d2543a6b
+    m_Address: Ground_NeedleLitter_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1147,6 +2629,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: de7a31870448737c0b1ab5db9156fd63
     m_Address: FishWeatherLit
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de8095f7431a256c3bbd467bcaf3cae3
+    m_Address: RockSurface_Scoria_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de94024c8ae948a2e27b9b3c4e89307c
+    m_Address: RockSurface_Conglomerate_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1180,14 +2674,32 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e58b9ead8f522b5e7885b95420063147
-    m_Address: FishVortex
+  - m_GUID: e2153659f3033ef6980229cf1a6c35a8
+    m_Address: IceSurface_GlacialBlue_Albedo
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e58e98f122109ed5365a235c5754e31b
-    m_Address: RockSurface_Limestone_Mask
+  - m_GUID: e2e2ba096ff4c9854b851b48718c9347
+    m_Address: Ancient Oak 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3f88eb4a43e552b573255d4e712f892
+    m_Address: Rock_Shale
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e4834e5436340ac836afcb87847f4a13
+    m_Address: Ground_Pahoehoe_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e58b9ead8f522b5e7885b95420063147
+    m_Address: FishVortex
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1198,10 +2710,76 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e67e57fd29c48288a89b9e3efbb09183
+    m_Address: RockSurface_Pumice_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e6f9e01475574a5ae898780e16900786
+    m_Address: Isle of Aradune Backdrop Control 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e7452179b91c3d90bae8246f8ee8dec8
+    m_Address: Treacherous Bri Lookout Backdrop Control 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e78baf4e8851569c3901938d7fac228b
+    m_Address: Volax Obelisk Backdrop Control 1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e7ebe6ff4984d70a9d552d6caba91844
+    m_Address: Ground_Cinder_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e82e059a4b277a72cba3a6f64b80b994
+    m_Address: Silver Vein 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e85444d0198397c15b45f5dac874fd8d
+    m_Address: Rock_Anorthosite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e8f3c0fa3b1179168b7fe3d0271b0ab1
+    m_Address: Treacherous Bri Lookout Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e99128eaea7a5f558883712a82004caa
+    m_Address: RockSurface_Termitaria_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e992be615149b0846884cc772e34ace5
     m_Address: BiomeTexture_Cave_1A1A1A
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea4d3461658fb70c953ea7158746eef0
+    m_Address: Rock_Scoria
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eb6ef757e5d8f8f41e9c61706f23c033
+    m_Address: Detail_Bush_Hazel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ebb1a63b1477ea845b9e725d0bed88aa
     m_Address: BiomeTexture_Oasis_4CCC80
@@ -1219,6 +2797,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ee0689aa0c1e7693b89b9bf4779772e8
+    m_Address: Ground_Dust_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eec6be4a1d5245f069e0d9d489ec67db
     m_Address: White
     m_ReadOnly: 0
@@ -1226,6 +2810,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eecd4f26b56d1c8fa98304c774e91cc9
     m_Address: Ground_Lava_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef9ed7d5f33fd481985fefd2924c5c44
+    m_Address: Morel Cluster 0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1242,13 +2832,91 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f07c60a2da54899830b1f3373f47e173
+    m_Address: Bark_Dead_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f08f7623e9f3c612b5dc3bb72233fce2
+    m_Address: Ground_Frost_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f119e423f26d3cd1c7c597cc714e3b43
+    m_Address: Detail_GiantClam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f124167db6b7096dab3c06931c039179
+    m_Address: Bark_Dead_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f500ec655bda4369d01aa1f745dc3043
+    m_Address: Detail_TableCoral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f5c047d0dac03fd231c6ca4588e5aa6b
+    m_Address: Ground_Sphagnum_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f652e9b048a567ac3a70a716473fdd21
+    m_Address: Ice_BubblyWhite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f7529314f7bd5546b2fcdb09091e6676
+    m_Address: Detail_Crinoid
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f80c5471f230c2adc7819998a6e0bcb8
+    m_Address: RockSurface_Tuff_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f86c769a177b3e84085abaa1ddeefdc6
     m_Address: BiomeTexture_AbyssalPlain_050D33
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: fdfd98d413716335cf988225b2bce568
-    m_Address: RockSurface_Limestone_Albedo
+  - m_GUID: f8fa2bd5a081247bcf8e3d9d7e285533
+    m_Address: RockSurface_Obsidian_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fb04a5ed9cb4deb3f9a85b639f510c31
+    m_Address: FishRockSdf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fc2581330b728b9424cdfc81a11854e8
+    m_Address: Billboard_Baobab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fc25e852b37dfc051323fa73911d1d22
+    m_Address: RockSurface_WaterIce_Mask
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fcc878daff612d33f923a2a27f00b011
+    m_Address: Detail_GrassSavanna
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1263,6 +2931,24 @@ MonoBehaviour:
     m_Address: Leaves
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fec9112d3e6f59a0e4714d2ed60c1e95
+    m_Address: Bark_Cactus_Albedo
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fed391ef859a41a0b7e7b819fe159a24
+    m_Address: FishSeaLife
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ff11102b527c7c32034e41dc120bfba4
+    m_Address: Detail_SandDollar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}

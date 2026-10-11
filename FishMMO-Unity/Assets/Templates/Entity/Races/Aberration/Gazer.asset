@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Gazer
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,10 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A floating orb of muscle and hide crowned with a ring of eyestalks, each eye a different spell. Gazers are paranoid tyrants that rule cave-lairs through dominated thralls; no two agree on anything, least of all each other''s right to exist.'
+  Description: A floating orb of muscle and hide crowned with a ring of eyestalks,
+    each eye a different spell. Gazers are paranoid tyrants that rule cave-lairs
+    through dominated thralls; no two agree on anything, least of all each other's
+    right to exist.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +37,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +84,7 @@ MonoBehaviour:
       - roth
       - zar
       - vyn
-      Description: 'Paranoid, many-voiced warble — every eye has an opinion'
+      Description: "Paranoid, many-voiced warble \u2014 every eye has an opinion"
       Tags:
       - Eye-names
       - Levitate-bonds
@@ -89,7 +92,7 @@ MonoBehaviour:
     Cultures: []
     Places:
     - the Paranoid Tower
-    - 'Gaze-Tyrant''s Chamber'
+    - Gaze-Tyrant's Chamber
     - Spherical Lair
     Titles:
       Honorific:
@@ -113,6 +116,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Gazers
+    Adjective: Gazer
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -120,3 +126,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: -1141955836
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

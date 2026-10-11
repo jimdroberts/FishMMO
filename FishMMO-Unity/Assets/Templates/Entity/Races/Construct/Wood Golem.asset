@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wood Golem
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Construct
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Carved timber guardians — creaking, knotted names'
+  Description: "Carved timber guardians \u2014 creaking, knotted names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Construct
   Naming:
     Phonology:
       Onsets:
@@ -82,14 +82,14 @@ MonoBehaviour:
       - oth
       - orn
       - und
-      Description: 'Carved timber guardians — creaking, knotted names'
+      Description: "Carved timber guardians \u2014 creaking, knotted names"
       Tags:
       - Timber-names
       - Carve-marks
       WeightedCodas: []
     Cultures: []
     Places:
-    - 'the Carver''s Shed'
+    - the Carver's Shed
     - Knothall
     - the Timber Yard
     - the Sawdust Road
@@ -117,7 +117,7 @@ MonoBehaviour:
       - the Sap-dry
       - the Never-burned
       Rank:
-      - 'Warden of the Carver''s Shed'
+      - Warden of the Carver's Shed
       - Sentinel of the Timber Yard
       - Guard of Knothall
       - Pegger of the Peg Gate
@@ -161,6 +161,8 @@ MonoBehaviour:
       - heap
       - fall
     AllowGenericOccupations: 0
+    Plural: Wood Golems
+    Adjective: Wood Golem
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 621224406
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

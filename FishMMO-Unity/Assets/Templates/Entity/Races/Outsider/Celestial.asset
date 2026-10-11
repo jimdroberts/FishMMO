@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Celestial
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A winged being of the higher realms sent as herald, guardian or judge; radiant, patient, and not to be bargained with.'
+  Description: A winged being of the higher realms sent as herald, guardian or judge;
+    radiant, patient, and not to be bargained with.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -88,8 +89,8 @@ MonoBehaviour:
       - ia
       MasculineSuffixes:
       - iel
-      - 'on'
-      Description: 'Chorused, luminous — every syllable a held note'
+      - on
+      Description: "Chorused, luminous \u2014 every syllable a held note"
       Tags:
       - Celestial
       - Monster
@@ -152,6 +153,8 @@ MonoBehaviour:
       - fall
       - ash
     AllowGenericOccupations: 0
+    Plural: Celestials
+    Adjective: Celestial
   BiomeAffinities:
   - BiomeID: 1139958860
     Weight: 2
@@ -159,3 +162,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1645414801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

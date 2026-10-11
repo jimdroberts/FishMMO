@@ -21,6 +21,9 @@ namespace FishMMO.Client
 		public const string GrassBladesComputePath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute";
 		public const string GrassBladesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.shader";
 		public const string SeaLifeShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSeaLife.shader";
+		public const string AmbientLifeShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishAmbientLife.shader";
+		public const string AirMotesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishAirMotes.shader";
+		public const string FallingLeavesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishFallingLeaves.shader";
 		public const string IndirectShaderVariantsPath = "Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants";
 		public const string AudioPath = Folder + "/Weather Audio Profile.asset";
 		public const string ShaderName = "FishMMO/Weather/Precipitation";
@@ -178,6 +181,12 @@ namespace FishMMO.Client
 			if (profile.GrassBladesShader == null) profile.GrassBladesShader = AssetDatabase.LoadAssetAtPath<Shader>(GrassBladesShaderPath);
 			// The sea's background creatures: same rule.
 			if (profile.SeaLifeShader == null) profile.SeaLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaLifeShaderPath);
+			// The land's birds, bats and small animals: same rule.
+			if (profile.AmbientLifeShader == null) profile.AmbientLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(AmbientLifeShaderPath);
+			// What floats in the air round the camera: same rule.
+			if (profile.AirMotesShader == null) profile.AirMotesShader = AssetDatabase.LoadAssetAtPath<Shader>(AirMotesShaderPath);
+			// The leaves coming down from the trees: same rule.
+			if (profile.FallingLeavesShader == null) profile.FallingLeavesShader = AssetDatabase.LoadAssetAtPath<Shader>(FallingLeavesShaderPath);
 			// Generated with the biome art (gitignored, path-derived GUID), so it may not exist yet; assigned once it does.
 			if (profile.IndirectShaderVariants == null) profile.IndirectShaderVariants = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(IndirectShaderVariantsPath);
 			EditorUtility.SetDirty(profile);

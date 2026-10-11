@@ -1053,6 +1053,7 @@ namespace FishMMO.Client
 			int kernel = shader.FindKernel("Raster");
 			rasterCommands ??= new CommandBuffer { name = "Weather map (raster)" };
 			rasterCommands.Clear();
+			rasterCommands.BeginSample("Weather map (raster)");
 			if (packed.Count > 0)
 			{
 				rasterCommands.SetBufferData(buffer, packed);
@@ -1064,6 +1065,7 @@ namespace FishMMO.Client
 			rasterCommands.SetComputeTextureParam(shader, kernel, OutBId, cascade.GpuB);
 			int groups = (cascade.Resolution + RasterGroup - 1) / RasterGroup;
 			rasterCommands.DispatchCompute(shader, kernel, groups, groups, 1);
+			rasterCommands.EndSample("Weather map (raster)");
 			Graphics.ExecuteCommandBuffer(rasterCommands);
 			cascade.Valid = true;
 		}

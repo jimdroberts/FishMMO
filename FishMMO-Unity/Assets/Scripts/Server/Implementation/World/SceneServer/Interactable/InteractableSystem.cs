@@ -172,6 +172,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Waypoints: the fast-travel request and the discovery hooks. See InteractableSystem.Waypoint.cs.
 			InitializeWaypoints();
 
+			// Portals: the activation store, its persistence, and the client reports. See InteractableSystem.Portal.cs.
+			InitializePortals();
+
 			maxMainThreadActionsPerFrame = Mathf.Max(1, maxMainThreadActionsPerFrame);
 			interactionDebounceMilliseconds = Mathf.Max(0, interactionDebounceMilliseconds);
 			debounceSweepIntervalSeconds = Mathf.Max(0.25f, debounceSweepIntervalSeconds);
@@ -239,6 +242,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			DeinitializeWaypoints();
 
+			DeinitializePortals();
+
 			// Corpse loot cleanup
 			ClearCorpseSubscriptions();
 
@@ -270,6 +275,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		{
 			DrainMainThreadQueue(drainAll: false);
 			SweepDebounceTrackers();
+			UpdatePortals(deltaTime);
 		}
 
 		/// <summary>

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Briarwitch
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Thorn-hedge fey — prickly, whispering names'
+  Description: "Thorn-hedge fey \u2014 prickly, whispering names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - orn
       - eth
       - ag
-      Description: 'Thorn-hedge fey — prickly, whispering names'
+      Description: "Thorn-hedge fey \u2014 prickly, whispering names"
       Tags:
       - Thorn-names
       - Hedge-marks
@@ -125,9 +125,9 @@ MonoBehaviour:
       Legend:
       - Who Grew the Hedge Around the Sleeping Castle
       - Who Pricked the Prince and Sent Him Home
-      - 'Who Made Sloe Gin for the King''s Funeral'
+      - Who Made Sloe Gin for the King's Funeral
       - Who Walked the Hedge Maze Backwards
-      - 'Who Turned the Hunters'' Hounds to Briars'
+      - Who Turned the Hunters' Hounds to Briars
       Occupational:
       - Hedge-layer
       - Berry-picker
@@ -164,6 +164,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Briarwitches
+    Adjective: Briarwitch
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 2
@@ -173,3 +175,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1156965030
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

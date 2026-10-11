@@ -7,6 +7,12 @@ namespace FishMMO.Shared.Celestial
 	public static class WorldTime
 	{
 		/// <summary>
+		/// The world time now, hours, at the tick the connection's clock is read at (<see cref="WorldMotion.TimeManager"/>):
+		/// for code that has no <see cref="TimeManager"/> of its own, or no reference to FishNet to name one.
+		/// </summary>
+		public static double Hours => CurrentHours(WorldMotion.TimeManager);
+
+		/// <summary>
 		/// From the world clock at the current (fractional) tick when it is anchored; offline, at the
 		/// <see cref="LocalWorldClock"/>'s tick when one is active; otherwise from this machine's clock.
 		/// </summary>

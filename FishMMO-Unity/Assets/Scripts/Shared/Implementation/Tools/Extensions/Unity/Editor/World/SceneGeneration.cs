@@ -68,6 +68,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public bool ReplaceExisting;
 
+		/// <summary>
+		/// The scene's point-of-interest choices (capital, density, per-kind overrides), asked before the cut and kept on
+		/// its atlas entry. Null cuts the scene with the catalogue's Normal defaults and no capital.
+		/// </summary>
+		public PointOfInterestSettings PointsOfInterest;
+
 		/// <summary>The radius actually used: <see cref="RadiusKm"/>, or the body's atlas radius.</summary>
 		public double ResolvedRadiusKm => RadiusKm > 0.0 ? RadiusKm : PlanetSurface.SceneRadiusKm(Body);
 
@@ -218,21 +224,27 @@ namespace FishMMO.Shared.WorldDesign
 		/// The already-placed scenes a new rectangle would land on.
 		/// </summary>
 		/// <remarks>
-		/// Only scenes in the same layer, because layers are how a cave system sits under a forest
-		/// without the two being the same place.
+		/// Only scenes on the same body and in the same layer, because layers are how a cave system
+		/// sits under a forest without the two being the same place.
+		///
+		/// The body check cannot be left to the layer: bodies without layers of their own share the
+		/// atlas's default layers, so the same surface layer is on every planet and a layer match
+		/// alone made a cut on one world collide with scenes on all of them. <paramref name="bodyOf"/>
+		/// resolves a scene's body, since an entry with no body belongs to the home world.
 		/// </remarks>
 		public static List<WorldAtlasScene> Collisions(
-			SceneGenerationRequest request, IEnumerable<WorldAtlasScene> placed, double radiusKm)
+			SceneGenerationRequest request, IEnumerable<WorldAtlasScene> placed, double radiusKm,
+			Func<WorldAtlasScene, WorldBody> bodyOf)
 		{
 			var hits = new List<WorldAtlasScene>();
-			if (request == null || placed == null)
+			if (request == null || placed == null || bodyOf == null)
 			{
 				return hits;
 			}
 			AtlasFootprint footprint = request.Footprint;
 			foreach (WorldAtlasScene other in placed)
 			{
-				if (other == null || !other.Placed || other.Layer != request.Layer)
+				if (other == null || !other.Placed || other.Layer != request.Layer || bodyOf(other) != request.Body)
 				{
 					continue;
 				}
@@ -402,6 +414,7 @@ namespace FishMMO.Shared.WorldDesign
 		private readonly float sceneRelief;
 		private readonly bool fineDetail;
 		private readonly bool frozenSeas;
+		private readonly IceSheetSurface iceSheet;
 
 		/// <summary>Resolves the request's ground. Main thread only; <see cref="At"/> is then safe anywhere.</summary>
 		public SceneAltitude(SceneGenerationRequest request)
@@ -427,6 +440,7 @@ namespace FishMMO.Shared.WorldDesign
 			sceneRelief = request.SceneReliefMetres;
 			fineDetail = request.FineDetail;
 			frozenSeas = request.FrozenSeas;
+			iceSheet = new IceSheetSurface(body != null ? SolarSystemProfile.Resolve(body) : null, body, frozenSeas);
 		}
 
 		/// <summary>The altitude in scene metres above the body's sea level: see <see cref="SceneGeneration.AltitudeMetres"/>.</summary>
@@ -453,6 +467,8 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				altitude = Mathf.Max(altitude, SceneGeneration.IceShelfMetres(seed, eastMetres, northMetres));
 			}
+			// Land whose summer never thaws is buried under the Ice Sheet's ice; at a cold coast that is the calving front.
+			altitude += iceSheet.ThicknessMetres(direction.normalized, planet, altitude, eastMetres, northMetres);
 			return altitude;
 		}
 	}

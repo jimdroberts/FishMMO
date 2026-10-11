@@ -21,7 +21,20 @@ namespace FishMMO.Client
 	{
 		public const string ComputeAssetPath = "Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute";
 		public const string ShaderName = "FishMMO/Grass Blades";
-		public const int MaxTypes = 16;
+		/// <summary>
+		/// Blade types in one scene (GrassMath.MaxTypes: four bits of the record's packed word and one of its colour word).
+		/// Was 16; the vegetation expansion's sedges, rushes, dune, feather, savanna and plume grasses and five flower sets
+		/// make 20, and a scene past the cap drew its later types as meshes.
+		/// </summary>
+		public const int MaxTypes = GrassMath.MaxTypes;
+
+		/// <summary>
+		/// Rows of the per-type table (<see cref="typeTable"/>, FishGrassBlades.compute / .hlsl GRASS_ROW_*): a texel per
+		/// type per row. 0 shape, 1 shape2, 2 more (read by the compute), 3 root, 4 tip, 5 healthy, 6 dry, 7 params, 8 head,
+		/// 9..12 the head colours (the blades').
+		/// </summary>
+		public const int TypeRows = 9 + GrassType.MaxHeadColours;
+		private const int RowShape = 0, RowShape2 = 1, RowMore = 2, RowRoot = 3, RowTip = 4, RowHealthy = 5, RowDry = 6, RowParams = 7, RowHead = 8, RowHeadColour = 9;
 		public const int MaxRings = 6;
 		public const int Slots = 5;
 
@@ -84,11 +97,10 @@ namespace FishMMO.Client
 			Shader.PropertyToID("_GrassOut3"), Shader.PropertyToID("_GrassOut4"),
 		};
 		private static readonly int HeightmapId = Shader.PropertyToID("_GrassHeightmap");
-		private static readonly int Density0Id = Shader.PropertyToID("_GrassDensity0");
+		private static readonly int DensityId = Shader.PropertyToID("_GrassDensity");
 		private static readonly int WaterId = Shader.PropertyToID("_GrassWater");
 		private static readonly int SeaId = Shader.PropertyToID("_GrassSea");
 		private static readonly int FishSeaId = Shader.PropertyToID("_FishSea");
-		private static readonly int Density1Id = Shader.PropertyToID("_GrassDensity1");
 		private static readonly int CameraId = Shader.PropertyToID("_GrassCamera");
 		private static readonly int PlanesId = Shader.PropertyToID("_GrassPlanes");
 		private static readonly int LightId = Shader.PropertyToID("_GrassLight");
@@ -97,10 +109,26 @@ namespace FishMMO.Client
 		private static readonly int RingDistanceId = Shader.PropertyToID("_GrassRingDistance");
 		private static readonly int RingDensityId = Shader.PropertyToID("_GrassRingDensity");
 		private static readonly int RingCountId = Shader.PropertyToID("_GrassRingCount");
-		private static readonly int TypeShapeId = Shader.PropertyToID("_GrassTypeShape");
-		private static readonly int TypeShape2Id = Shader.PropertyToID("_GrassTypeShape2");
-		private static readonly int TypeHeadId = Shader.PropertyToID("_GrassTypeHead");
-		private static readonly int TypeHeadColourId = Shader.PropertyToID("_GrassTypeHeadColour");
+		private static readonly int TypeTableId = Shader.PropertyToID("_GrassTypeTable");
+		// What buries a blade (FishGrassBlades.compute GrassBuried): the weather's maps, handed over by name.
+		private static readonly int GrassCoverId = Shader.PropertyToID("_GrassCover");
+		private static readonly int GrassDeepSnowId = Shader.PropertyToID("_GrassDeepSnow");
+		private static readonly int GrassOcclusionId = Shader.PropertyToID("_GrassOcclusion");
+		private static readonly int GrassSnowId = Shader.PropertyToID("_GrassSnow");
+		private static readonly int GrassCoverRectId = Shader.PropertyToID("_GrassCoverRect");
+		private static readonly int GrassOcclusionRectId = Shader.PropertyToID("_GrassOcclusionRect");
+		private static readonly int GrassOcclusionRangeId = Shader.PropertyToID("_GrassOcclusionRange");
+		private static readonly int FishCoverTexId = Shader.PropertyToID("_FishCoverTex");
+		private static readonly int FishCoverRectId = Shader.PropertyToID("_FishCoverRect");
+		private static readonly int FishCoverParamsId = Shader.PropertyToID("_FishCoverParams");
+		private static readonly int FishSnowDepthTexId = Shader.PropertyToID("_FishSnowDepthTex");
+		private static readonly int FishSnowDepthParamsId = Shader.PropertyToID("_FishSnowDepthParams");
+		private static readonly int FishOcclusionTexId = Shader.PropertyToID("_FishOcclusionTex");
+		private static readonly int FishOcclusionRectId = Shader.PropertyToID("_FishOcclusionRect");
+		private static readonly int FishOcclusionRangeId = Shader.PropertyToID("_FishOcclusionRange");
+		private static readonly int FishWeatherTierId = Shader.PropertyToID("_FishWeatherTier");
+		private static readonly int FishWeatherCoverId = Shader.PropertyToID("_FishWeatherCover");
+		private static readonly int FishGroundBlendId = Shader.PropertyToID("_FishGroundBlend");
 		private static readonly int Capacity0Id = Shader.PropertyToID("_GrassCapacity0");
 		private static readonly int Capacity1Id = Shader.PropertyToID("_GrassCapacity1");
 		private static readonly int TilesId = Shader.PropertyToID("_GrassTiles");
@@ -124,11 +152,6 @@ namespace FishMMO.Client
 		private static readonly int ProbeCountId = Shader.PropertyToID("_GrassProbeCount");
 
 		private static readonly int BladesId = Shader.PropertyToID("_GrassBlades");
-		private static readonly int TypeRootId = Shader.PropertyToID("_GrassTypeRoot");
-		private static readonly int TypeTipId = Shader.PropertyToID("_GrassTypeTip");
-		private static readonly int TypeHealthyId = Shader.PropertyToID("_GrassTypeHealthy");
-		private static readonly int TypeDryId = Shader.PropertyToID("_GrassTypeDry");
-		private static readonly int TypeParamsId = Shader.PropertyToID("_GrassTypeParams");
 		private static readonly int Params0Id = Shader.PropertyToID("_GrassParams0");
 		private static readonly int Params1Id = Shader.PropertyToID("_GrassParams1");
 		private static readonly int Params2Id = Shader.PropertyToID("_GrassParams2");
@@ -171,6 +194,18 @@ namespace FishMMO.Client
 		private readonly GraphicsBuffer[] outBuffers = new GraphicsBuffer[Slots];
 		private readonly MaterialPropertyBlock[] blocks = new MaterialPropertyBlock[Slots];
 		private readonly int[] capacities = new int[Slots];
+		/// <summary>
+		/// The per-type table, a texel per type (x) per row (y, <see cref="TypeRows"/>), RGBAFloat: read with Load by the
+		/// compute and the blades' vertex shader alike. It was nine constant arrays (MaxTypes float4 each, the head colours
+		/// four times that), two set on the compute every camera and seven on the material; at 32 types that is 352
+		/// float4s of constants, and per-dispatch constant arrays are what blanked whole terrains of grass on OpenGL
+		/// (GrassTerrainAtlas). The values are the same floats, so every blade draws exactly as it did. Uploaded only when
+		/// a value changes (the profile is live in the inspector, so <see cref="Publish"/> compares every frame).
+		/// </summary>
+		private readonly Texture2D typeTable;
+		private readonly Vector4[] typeTexels = new Vector4[MaxTypes * TypeRows];
+		private readonly Vector4[] uploadedTexels = new Vector4[MaxTypes * TypeRows];
+		private bool typeTableUploaded;
 		private GraphicsBuffer itemBuffer, countBuffer, argsBuffer;
 		private NativeArray<Item> items;
 		private int itemCount;
@@ -178,6 +213,7 @@ namespace FishMMO.Client
 		/// <summary>All terrains' textures as array slices and their parameters in one table: one dispatch for all of them.</summary>
 		private readonly GrassTerrainAtlas atlas = new GrassTerrainAtlas();
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO procedural grass" };
+		private const string GpuSample = "FishMMO grass (compute)";
 		private readonly Vector4[] planeVectors = new Vector4[6];
 		private readonly Vector4[] ringDistance = new Vector4[MaxRings];
 		private readonly Vector4[] ringDensity = new Vector4[MaxRings];
@@ -255,17 +291,13 @@ namespace FishMMO.Client
 		}
 		private readonly float[] ringDensityF = new float[MaxRings];
 		private int ringCount;
-		private readonly Vector4[] typeShape = new Vector4[MaxTypes];
-		/// <summary>Per type for the compute: x the sprinkle chance per candidate (0: a tussock species), y the head, z its size (m).</summary>
-		private readonly Vector4[] typeShape2 = new Vector4[MaxTypes];
-		/// <summary>Per type for the blades: x the head, y its size (m), z how many head colours, w 1 = blunt strap tip.</summary>
-		private readonly Vector4[] typeHead = new Vector4[MaxTypes];
-		private readonly Vector4[] typeHeadColour = new Vector4[MaxTypes * GrassType.MaxHeadColours];
-		private readonly Vector4[] typeRoot = new Vector4[MaxTypes];
-		private readonly Vector4[] typeTip = new Vector4[MaxTypes];
-		private readonly Vector4[] typeHealthy = new Vector4[MaxTypes];
-		private readonly Vector4[] typeDry = new Vector4[MaxTypes];
-		private readonly Vector4[] typeParams = new Vector4[MaxTypes];
+		/// <summary>
+		/// A per-type table texel (<see cref="TypeRows"/>). For the compute: shape x height (m), y density factor, z clump
+		/// pull, w wade (m); shape2 x the sprinkle chance per candidate (0: a tussock species), y the head, z its size (m),
+		/// w how far snow buries it; more x the share of stems with a head. For the blades: head x the head, y its size
+		/// (m), z how many head colours, w 1 = blunt strap tip.
+		/// </summary>
+		private void SetType(int type, int row, Vector4 value) => typeTexels[row * MaxTypes + type] = value;
 		/// <summary>Each array set's layer albedo as the grass's own buffer (<see cref="GrassAlbedoTexels"/>), built in <see cref="Publish"/>.</summary>
 		private readonly Dictionary<FishMMO.Shared.TerrainArraySet, GrassAlbedoTexels> albedoTexels = new Dictionary<FishMMO.Shared.TerrainArraySet, GrassAlbedoTexels>();
 		private readonly HashSet<FishMMO.Shared.TerrainArraySet> albedoWanted = new HashSet<FishMMO.Shared.TerrainArraySet>();
@@ -351,6 +383,13 @@ namespace FishMMO.Client
 		private GrassBladeRenderer(ComputeShader compute, Shader shader)
 		{
 			this.compute = compute;
+			typeTable = new Texture2D(MaxTypes, TypeRows, TextureFormat.RGBAFloat, false, true)
+			{
+				name = "Grass type table",
+				filterMode = FilterMode.Point,
+				wrapMode = TextureWrapMode.Clamp,
+				hideFlags = HideFlags.DontSave,
+			};
 			clearKernel = compute.FindKernel("FishGrassClear");
 			generateKernel = compute.FindKernel("FishGrassGenerate");
 			finalizeKernel = compute.FindKernel("FishGrassFinalize");
@@ -494,44 +533,60 @@ namespace FishMMO.Client
 				GrassType type = t < types.Count ? types[t] : null;
 				if (type == null)
 				{
-					typeShape[t] = new Vector4(0.3f, 1f, 0f, 0f);
-					typeShape2[t] = typeHead[t] = Vector4.zero;
-					typeRoot[t] = typeTip[t] = typeHealthy[t] = typeDry[t] = Vector4.one;
-					typeParams[t] = new Vector4(1f, 0f, 0.4f, 1f);
+					SetType(t, RowShape, new Vector4(0.3f, 1f, 0f, 0f));
+					SetType(t, RowShape2, Vector4.zero);
+					SetType(t, RowMore, Vector4.zero);
+					SetType(t, RowHead, Vector4.zero);
+					SetType(t, RowRoot, Vector4.one);
+					SetType(t, RowTip, Vector4.one);
+					SetType(t, RowHealthy, Vector4.one);
+					SetType(t, RowDry, Vector4.one);
+					SetType(t, RowParams, new Vector4(1f, 0f, 0.4f, 1f));
 					for (int k = 0; k < GrassType.MaxHeadColours; k++)
 					{
-						typeHeadColour[t * GrassType.MaxHeadColours + k] = Vector4.one;
+						SetType(t, RowHeadColour + k, Vector4.one);
 					}
 					continue;
 				}
 				GrassTypeTuning tuning = s.TuningFor(type.Name) ?? type.Tuning;
-				typeShape[t] = new Vector4(type.Height * (tuning?.HeightScale ?? 1f) / Mathf.Max(0.05f, type.Tuning?.HeightScale ?? 1f), Mathf.Clamp(tuning?.Density ?? 1f, 0.01f, 1f), Mathf.Clamp(tuning?.ClumpPull ?? 0.3f, 0f, 0.95f), Mathf.Max(0f, tuning?.Wade ?? 0f));
-				typeRoot[t] = new Vector4(type.Root.r, type.Root.g, type.Root.b, 0f);
-				typeTip[t] = new Vector4(type.Tip.r, type.Tip.g, type.Tip.b, s.BladeWidth * (tuning?.Width ?? 1f));
-				typeHealthy[t] = new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread);
-				typeDry[t] = new Vector4(type.Dry.r, type.Dry.g, type.Dry.b, type.PatchMetres);
-				typeParams[t] = new Vector4(tuning?.Stiffness ?? 1f, type.SnowBury, tuning?.Bend ?? 0.4f, 1f);
+				SetType(t, RowShape, new Vector4(type.Height * (tuning?.HeightScale ?? 1f) / Mathf.Max(0.05f, type.Tuning?.HeightScale ?? 1f), Mathf.Clamp(tuning?.Density ?? 1f, 0.01f, 1f), Mathf.Clamp(tuning?.ClumpPull ?? 0.3f, 0f, 0.95f), Mathf.Max(0f, tuning?.Wade ?? 0f)));
+				SetType(t, RowRoot, new Vector4(type.Root.r, type.Root.g, type.Root.b, 0f));
+				SetType(t, RowTip, new Vector4(type.Tip.r, type.Tip.g, type.Tip.b, s.BladeWidth * (tuning?.Width ?? 1f)));
+				SetType(t, RowHealthy, new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread));
+				SetType(t, RowDry, new Vector4(type.Dry.r, type.Dry.g, type.Dry.b, type.PatchMetres));
+				SetType(t, RowParams, new Vector4(tuning?.Stiffness ?? 1f, type.SnowBury, tuning?.Bend ?? 0.4f, 1f));
 				// Sprinkled species: stems per square metre at full paint, as a chance per candidate of the near lattice.
 				float sprinkle = tuning != null && tuning.Sprinkle > 0f ? Mathf.Clamp01(tuning.Sprinkle / s.NearDensity) : 0f;
 				GrassHead head = tuning?.Head ?? GrassHead.None;
 				float headSize = Mathf.Max(0.002f, tuning?.HeadSize ?? 0.035f);
-				typeShape2[t] = new Vector4(sprinkle, (float)head, head != GrassHead.None ? headSize : 0f, 0f);
+				SetType(t, RowShape2, new Vector4(sprinkle, (float)head, head != GrassHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
+				// The share of stems with a head (1 for every type tuned before HeadShare existed).
+				SetType(t, RowMore, new Vector4(head != GrassHead.None ? (tuning?.EffectiveHeadShare ?? 1f) : 0f, 0f, 0f, 0f));
+				// The head's colours: the mesh's petals, else the tuning's palette (the new types' design colours), else its one colour.
 				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
+				Color[] palette = colours == 0 ? tuning?.HeadPalette : null;
+				int paletteColours = palette != null ? Mathf.Min(palette.Length, GrassType.MaxHeadColours) : 0;
 				Color fallback = (tuning?.HeadColour ?? new Color(0.36f, 0.25f, 0.14f)).linear;
 				for (int k = 0; k < GrassType.MaxHeadColours; k++)
 				{
-					Color c = k < colours ? type.HeadColours[k] : fallback;
-					typeHeadColour[t * GrassType.MaxHeadColours + k] = new Vector4(c.r, c.g, c.b, 1f);
+					Color c = k < colours ? type.HeadColours[k] : k < paletteColours ? palette[k].linear : fallback;
+					SetType(t, RowHeadColour + k, new Vector4(c.r, c.g, c.b, 1f));
 				}
-				typeHead[t] = new Vector4((float)head, headSize, Mathf.Max(1, colours), tuning != null && tuning.BluntTip ? 1f : 0f);
+				SetType(t, RowHead, new Vector4((float)head, headSize, Mathf.Max(1, Mathf.Max(colours, paletteColours)), tuning != null && tuning.BluntTip ? 1f : 0f));
 			}
-			material.SetVectorArray(TypeRootId, typeRoot);
-			material.SetVectorArray(TypeTipId, typeTip);
-			material.SetVectorArray(TypeHealthyId, typeHealthy);
-			material.SetVectorArray(TypeDryId, typeDry);
-			material.SetVectorArray(TypeParamsId, typeParams);
-			material.SetVectorArray(TypeHeadId, typeHead);
-			material.SetVectorArray(TypeHeadColourId, typeHeadColour);
+			bool changed = !typeTableUploaded;
+			for (int i = 0; i < typeTexels.Length && !changed; i++)
+			{
+				changed = typeTexels[i] != uploadedTexels[i];
+			}
+			if (changed)
+			{
+				typeTable.SetPixelData(typeTexels, 0);
+				typeTable.Apply(false, false);
+				Array.Copy(typeTexels, uploadedTexels, typeTexels.Length);
+				typeTableUploaded = true;
+			}
+			material.SetTexture(TypeTableId, typeTable);
 			material.SetVectorArray(RingDistanceId, ringDistance);
 			material.SetVectorArray(RingDensityId, ringDensity);
 			material.SetFloat(RingCountId, ringCount);
@@ -565,6 +620,8 @@ namespace FishMMO.Client
 			{
 				slotMaterials[slot].CopyPropertiesFromMaterial(material);
 				slotMaterials[slot].SetBuffer(BladesId, outBuffers[slot]);
+				// Set on each slot's own material too, as its buffer is (see slotMaterials): a draw must never read an unbound table.
+				slotMaterials[slot].SetTexture(TypeTableId, typeTable);
 			}
 		}
 
@@ -794,6 +851,8 @@ namespace FishMMO.Client
 			}
 			double recordStart = TerrainInstancingProbe.Now;
 			cmd.Clear();
+			// Named on the GPU, so the profiler (and ScenePerfProbe's GPU table) can price the grass's compute.
+			cmd.BeginSample(GpuSample);
 			// A reused work list is already in the buffer (only a new gather can grow it, which reallocates).
 			if (!gpuGather && !reuse)
 			{
@@ -811,8 +870,6 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorArrayParam(compute, RingDistanceId, ringDistance);
 			cmd.SetComputeVectorArrayParam(compute, RingDensityId, ringDensity);
 			cmd.SetComputeIntParam(compute, RingCountId, ringCount);
-			cmd.SetComputeVectorArrayParam(compute, TypeShapeId, typeShape);
-			cmd.SetComputeVectorArrayParam(compute, TypeShape2Id, typeShape2);
 			cmd.SetComputeVectorParam(compute, Capacity0Id, new Vector4(capacities[0], capacities[1], capacities[2], capacities[3]));
 			cmd.SetComputeVectorParam(compute, Capacity1Id, new Vector4(capacities[4], 0f, 0f, 0f));
 
@@ -834,6 +891,10 @@ namespace FishMMO.Client
 				cmd.SetComputeBufferParam(compute, generateKernel, OutIds[slot], outBuffers[slot]);
 			}
 			cmd.SetComputeBufferParam(compute, generateKernel, SharedId, atlas.Shared);
+			cmd.SetComputeTextureParam(compute, generateKernel, TypeTableId, typeTable);
+			// The scene's baked paths: blades on a worn way are thinned and trampled short (FishGroundPaths.hlsl).
+			FishMMO.Shared.ScenePathSurfaceBinder.BindCompute(cmd, compute, generateKernel);
+			BindSnow();
 			cmd.SetComputeVectorParam(compute, ColourId, new Vector4(colourFootprint, cell, ConstantTerrainColour ? 1f : 0f, 0f));
 			if (gpuGather)
 			{
@@ -842,8 +903,7 @@ namespace FishMMO.Client
 				{
 					GrassTerrainAtlas.Group group = atlas.Groups[g];
 					cmd.SetComputeTextureParam(compute, generateKernel, HeightmapId, group.Heights);
-					cmd.SetComputeTextureParam(compute, generateKernel, Density0Id, group.Density0);
-					cmd.SetComputeTextureParam(compute, generateKernel, Density1Id, group.Density1);
+					cmd.SetComputeTextureParam(compute, generateKernel, DensityId, group.Density);
 					cmd.SetComputeTextureParam(compute, generateKernel, WaterId, group.Water);
 					if (!SkipTerrainColour)
 					{
@@ -861,8 +921,7 @@ namespace FishMMO.Client
 				GroupRange range = ranges[ReverseDispatchOrder ? ranges.Count - 1 - r : r];
 				GrassTerrainAtlas.Group group = range.Group;
 				cmd.SetComputeTextureParam(compute, generateKernel, HeightmapId, group.Heights);
-				cmd.SetComputeTextureParam(compute, generateKernel, Density0Id, group.Density0);
-				cmd.SetComputeTextureParam(compute, generateKernel, Density1Id, group.Density1);
+				cmd.SetComputeTextureParam(compute, generateKernel, DensityId, group.Density);
 				cmd.SetComputeTextureParam(compute, generateKernel, WaterId, group.Water);
 				if (!SkipTerrainColour)
 				{
@@ -944,6 +1003,7 @@ namespace FishMMO.Client
 					}
 				});
 			}
+			cmd.EndSample(GpuSample);
 			context.ExecuteCommandBuffer(cmd);
 			cmd.Clear();
 			generated = true;
@@ -1099,6 +1159,36 @@ namespace FishMMO.Client
 				}
 			}
 			return (int)Mathf.Min(int.MaxValue / 2, sum * 11 / 10 + 64);
+		}
+
+		/// <summary>Diagnostic (ScenePerfProbe <c>nobury</c>): off, blades the snow hides are generated and drawn as before.</summary>
+		public static bool CullBuried = true;
+
+		/// <summary>
+		/// The weather's maps the generate kernel buries blades by (FishGrassBlades.compute GrassBuried), read from the
+		/// globals the weather publishes and handed over by name: the cover's snow, the deep snow past it, the sky occlusion
+		/// that keeps snow off what is sheltered. Placeholders and a zero validity where one is not published yet, so
+		/// nothing is cut. The ground's lift at full cover only where this tier lifts it and there is snow in the scene,
+		/// exactly when the terrain shader lifts it (FishSnowLift).
+		/// </summary>
+		private void BindSnow()
+		{
+			Texture cover = Shader.GetGlobalTexture(FishCoverTexId);
+			Texture deep = Shader.GetGlobalTexture(FishSnowDepthTexId);
+			Texture occlusion = Shader.GetGlobalTexture(FishOcclusionTexId);
+			Vector4 coverParams = Shader.GetGlobalVector(FishCoverParamsId);
+			Vector4 deepParams = Shader.GetGlobalVector(FishSnowDepthParamsId);
+			bool coverValid = CullBuried && cover != null && coverParams.x > 0.5f;
+			bool deepValid = coverValid && deep != null;
+			bool lifts = Shader.GetGlobalVector(FishWeatherTierId).x > 0f && Shader.GetGlobalVector(FishWeatherCoverId).x > 0f;
+			float blanket = lifts ? Mathf.Max(0f, Shader.GetGlobalVector(FishGroundBlendId).w) : 0f;
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassCoverId, coverValid ? cover : Texture2D.blackTexture);
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassDeepSnowId, deepValid ? deep : Texture2D.blackTexture);
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassOcclusionId, occlusion != null ? occlusion : Texture2D.blackTexture);
+			cmd.SetComputeVectorParam(compute, GrassSnowId, new Vector4(coverValid ? 1f : 0f, blanket, deepValid ? deepParams.x : 0f, 0f));
+			cmd.SetComputeVectorParam(compute, GrassCoverRectId, Shader.GetGlobalVector(FishCoverRectId));
+			cmd.SetComputeVectorParam(compute, GrassOcclusionRectId, Shader.GetGlobalVector(FishOcclusionRectId));
+			cmd.SetComputeVectorParam(compute, GrassOcclusionRangeId, occlusion != null ? Shader.GetGlobalVector(FishOcclusionRangeId) : Vector4.zero);
 		}
 
 		/// <summary>The gather on the GPU: counts cleared, the tile table culled into the work list, the dispatches written.</summary>
@@ -1317,6 +1407,10 @@ namespace FishMMO.Client
 			}
 			atlas.Dispose();
 			albedoTexels.Clear();
+			if (typeTable != null)
+			{
+				Object.Destroy(typeTable);
+			}
 		}
 	}
 }

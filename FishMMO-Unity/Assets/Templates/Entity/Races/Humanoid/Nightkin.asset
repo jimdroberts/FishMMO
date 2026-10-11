@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Nightkin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Cave-city dwellers — hushed names, dark vowels, no hard endings'
+  Description: "Cave-city dwellers \u2014 hushed names, dark vowels, no hard endings"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - en
       - ur
       - orm
-      Description: 'Cave-city dwellers — hushed names, dark vowels, no hard endings'
+      Description: "Cave-city dwellers \u2014 hushed names, dark vowels, no hard
+        endings"
       Tags:
       - Lantern-names
       - Echo-marks
@@ -169,6 +170,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Nightkin
+    Adjective: Nightkin
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -178,3 +181,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: -138594552
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

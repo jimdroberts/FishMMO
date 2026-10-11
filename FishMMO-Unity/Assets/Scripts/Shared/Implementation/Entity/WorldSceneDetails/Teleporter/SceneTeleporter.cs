@@ -72,6 +72,12 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// A dormant portal (PortalActivation) refuses, or activates when the player qualifies; the gate toasts its own refusals.
+			if (!PortalGate.TryPass(character, gameObject))
+			{
+				return;
+			}
+
 			// Teleport the character to the destination baked under this teleporter's key.
 			character.Teleport(TeleporterKey.Normalize(gameObject.name));
 		}

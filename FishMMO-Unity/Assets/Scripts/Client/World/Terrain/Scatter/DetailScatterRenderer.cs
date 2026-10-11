@@ -103,6 +103,7 @@ namespace FishMMO.Client
 		private readonly int clearKernel, generateKernel, finalizeKernel, argsFenceKernel;
 		private readonly DetailScatterAtlas atlas = new DetailScatterAtlas();
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO detail scatter" };
+		private const string GpuSample = "FishMMO detail scatter (compute)";
 		private readonly Vector4[] planeVectors = new Vector4[6];
 		private readonly List<GroupRange> ranges = new List<GroupRange>();
 		private readonly List<Command> commands = new List<Command>();
@@ -319,6 +320,8 @@ namespace FishMMO.Client
 
 			double recordStart = TerrainInstancingProbe.Now;
 			cmd.Clear();
+			// Named on the GPU, so the profiler (and ScenePerfProbe's GPU table) can price the scatter's compute.
+			cmd.BeginSample(GpuSample);
 			cmd.SetBufferData(itemBuffer, items, 0, 0, itemCount);
 			cmd.SetComputeVectorParam(compute, CameraId, eye);
 			cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
@@ -340,6 +343,8 @@ namespace FishMMO.Client
 			cmd.SetComputeBufferParam(compute, generateKernel, CountsId, countBuffer);
 			cmd.SetComputeBufferParam(compute, generateKernel, InstancesOutId, instanceBuffer);
 			cmd.SetComputeBufferParam(compute, generateKernel, VisibleOutId, visibleBuffer);
+			// The scene's baked paths: nothing stands on a worn way (FishGroundPaths.hlsl).
+			FishMMO.Shared.ScenePathSurfaceBinder.BindCompute(cmd, compute, generateKernel);
 			foreach (GroupRange range in ranges)
 			{
 				cmd.SetComputeTextureParam(compute, generateKernel, HeightsId, range.Group.Heights);
@@ -366,6 +371,7 @@ namespace FishMMO.Client
 				lastStatsFrame = Time.frameCount;
 				RequestStats(types);
 			}
+			cmd.EndSample(GpuSample);
 			context.ExecuteCommandBuffer(cmd);
 			cmd.Clear();
 			TerrainInstancingProbe.RecordMs += TerrainInstancingProbe.Now - recordStart;

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sabre Cat
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Long-fanged great cat — hissing, rasping names'
+  Description: "Long-fanged great cat \u2014 hissing, rasping names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ar
       - ax
       - ur
-      Description: 'Long-fanged great cat — hissing, rasping names'
+      Description: "Long-fanged great cat \u2014 hissing, rasping names"
       Tags:
       - Fang-names
       - Ambush-marks
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Sabre Cats
+    Adjective: Sabre Cat
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -138594552
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

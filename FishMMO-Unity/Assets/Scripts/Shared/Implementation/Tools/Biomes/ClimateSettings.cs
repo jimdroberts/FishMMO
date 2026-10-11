@@ -14,6 +14,19 @@ namespace FishMMO.Shared.Biomes
 		public float Humidity;
 		/// <summary>Elevation tier 0-8 of the height the sample was taken at.</summary>
 		public int ElevationTier;
+		/// <summary>
+		/// The warmest season's temperature on the same scale (0 freezing, 0.30 ten degrees), when
+		/// <see cref="SeasonKnown"/>: what decides whether anything grows (Köppen; the treeline is a
+		/// summer isotherm, not an annual one). A −15 °C mean is taiga under a +19 °C summer and an ice
+		/// cap under a −6 °C one.
+		/// </summary>
+		public float WarmestSeason;
+		/// <summary>
+		/// True when <see cref="WarmestSeason"/> was worked out from the body's seasons
+		/// (<see cref="PlanetClimateField"/>). A sample without seasons (a scene's own climate asset)
+		/// leaves it false, and the biome resolver then reads the envelope without the summer test.
+		/// </summary>
+		public bool SeasonKnown;
 	}
 
 	/// <summary>

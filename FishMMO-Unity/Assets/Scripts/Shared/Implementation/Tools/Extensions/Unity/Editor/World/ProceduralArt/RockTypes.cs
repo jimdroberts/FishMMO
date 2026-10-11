@@ -50,6 +50,56 @@ namespace FishMMO.Shared.WorldDesign
 		FallenColumns,
 		/// <summary>A heap of fragments: talus at the foot of an outcrop.</summary>
 		Scree,
+
+		// ── Mineral, ice and alien formations (2026-10-10), built by CrystalFormations ──
+
+		/// <summary>Crystals grown from a common matrix, in the shape's <see cref="FormationShape.Habit"/>: selenite blades, sulphur needles, pyrite cubes, ice prisms, halite pinnacles.</summary>
+		CrystalCluster,
+		/// <summary>A vent cone with a crater or an orifice at its top: spatter cone, hornito, fumarole, geyser cone, ice vent, a black smoker's chimney (with <see cref="FormationShape.Count"/> flanges).</summary>
+		Cone,
+		/// <summary>Rimmed pools stepping down a slope, each a lobe with a raised lip: sinter and travertine terraces, cave gours, salt terraces.</summary>
+		Terrace,
+		/// <summary>A small crater's raised rim and apron, its bowl floor flush with the ground, ejecta blocks on the rim.</summary>
+		CraterRim,
+		/// <summary>A patch of salt-crust polygons whose edges have buckled up into a network of low ridges.</summary>
+		PolygonRidges,
+		/// <summary>A fluted termite mound with turrets round its main spire.</summary>
+		Mound,
+		/// <summary>Dripstone: a cluster of stalagmites on a shared flowstone foot (lava dribble spires, ice stalagmites).</summary>
+		Stalagmite,
+		/// <summary>A flowstone mound draped with ribs and rippled with small rims.</summary>
+		Flowstone,
+		/// <summary>A conical knob from the implicit field; with a <see cref="FormationShape.Cap"/>, a second body capping its top (a frost cap).</summary>
+		Knob,
+		/// <summary>A wind-cut stone: three faces polished flat by blown sand, meeting at sharp keels (a dreikanter).</summary>
+		Ventifact,
+		/// <summary>Wind-carved snow ridges, aligned, each with a steep undercut prow into the wind.</summary>
+		Sastrugi,
+		/// <summary>A field of tall blades of snow or ice in rows, leaning toward the noon sun, on a shared foot.</summary>
+		Penitentes,
+		/// <summary>A lobate flow front: a low tongue with a steep rounded edge and pressure ridges on its top.</summary>
+		Lobe,
+		/// <summary>A glacier table: a boulder (the <see cref="FormationShape.Cap"/>) on the ice pedestal its shade preserved.</summary>
+		Table,
+		/// <summary>Broken slabs heaped into a ridge on the ground (a grounded pressure ridge, from <see cref="IceMeshes"/>).</summary>
+		RubbleRidge,
+	}
+
+	/// <summary>How the crystals of a <see cref="FormationKind.CrystalCluster"/> grow.</summary>
+	public enum CrystalHabit
+	{
+		/// <summary>Six-sided columns with flat or shallow-pointed ends: ice, quartz-like prisms.</summary>
+		Prismatic,
+		/// <summary>Flattened blades with chisel tips: selenite gypsum.</summary>
+		Bladed,
+		/// <summary>Thin needles in radiating sprays: sulphur.</summary>
+		Acicular,
+		/// <summary>Interlocking cubes: pyrite, halite.</summary>
+		Cubic,
+		/// <summary>Irregular steep spires from a rough crust: halite pinnacles etched by rain.</summary>
+		Jagged,
+		/// <summary>Thin six-sided plates standing every way: hoar frost, frost flowers.</summary>
+		Plates,
 	}
 
 	/// <summary>What a scree fragment of this rock looks like.</summary>
@@ -245,6 +295,20 @@ namespace FishMMO.Shared.WorldDesign
 		public float Elongation;
 		/// <summary>Superellipsoid exponent override; zero uses the style's range.</summary>
 		public float Exponent;
+		/// <summary>A crystal cluster's habit (<see cref="FormationKind.CrystalCluster"/> only).</summary>
+		public CrystalHabit Habit;
+		/// <summary>
+		/// The surface the shape wears instead of its type's: a <see cref="RockTypes"/> name or an
+		/// <see cref="IceSurfaces"/> recipe name (<see cref="RockArtNames.SurfaceMaterial"/>). Null wears the type's.
+		/// </summary>
+		public string Dress;
+		/// <summary>
+		/// The surface of a second body, submesh 1 (a glacier table's boulder, a knob's frost cap), named as for
+		/// <see cref="Dress"/>. Null when the shape is one body.
+		/// </summary>
+		public string Cap;
+		/// <summary>Flat ground cover a player walks over (sastrugi, salt polygons, frost flowers): its prefab gets no collider.</summary>
+		public bool Colliderless;
 	}
 
 	/// <summary>A rock type: how it breaks, the shapes it comes in, and its surface.</summary>
@@ -265,6 +329,16 @@ namespace FishMMO.Shared.WorldDesign
 		public FormationShape[] Shapes;
 		/// <summary>Its surface, tiling every <see cref="RockMeshes.TextureMetres"/> as rock UVs do.</summary>
 		public SurfaceRecipe Surface;
+		/// <summary>
+		/// A mineral, ice or alien rock made only as scattered formations: never a cliff, a river boulder or a
+		/// biome's bedrock (<see cref="CliffRocks.IsCliffRock"/>). False for the sixteen rocks of the crust.
+		/// </summary>
+		public bool FormationsOnly;
+		/// <summary>
+		/// For snow and ice: its material is set up as ice (<see cref="IceSurfaces"/>' Specular workflow) over its
+		/// own surface textures. <see cref="IceMaterialProposal.Surface"/> null for rock.
+		/// </summary>
+		public IceMaterialProposal Ice;
 	}
 
 	/// <summary>
@@ -360,9 +434,27 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
-		private static FormationShape S(string name, FormationKind kind, float size, float height, int count = 0, float dip = -1f, float elongation = 0f, float exponent = 0f)
+		private static FormationShape S(string name, FormationKind kind, float size, float height, int count = 0, float dip = -1f, float elongation = 0f, float exponent = 0f,
+			CrystalHabit habit = CrystalHabit.Prismatic, string dress = null, string cap = null, bool colliderless = false)
 		{
-			return new FormationShape { Name = name, Kind = kind, Size = size, Height = height, Count = count, Dip = dip, Elongation = elongation, Exponent = exponent };
+			return new FormationShape
+			{
+				Name = name, Kind = kind, Size = size, Height = height, Count = count, Dip = dip, Elongation = elongation, Exponent = exponent,
+				Habit = habit, Dress = dress, Cap = cap, Colliderless = colliderless,
+			};
+		}
+
+		/// <summary>A recipe with a metallic lustre (the mask's R channel), which <see cref="R"/> leaves at zero.</summary>
+		private static SurfaceRecipe Metal(SurfaceRecipe recipe, float metallic)
+		{
+			recipe.Metallic = metallic;
+			return recipe;
+		}
+
+		/// <summary>An ice material set-up over a type's own surface: ice's 1.8 % reflectance (#252525), as <see cref="IceSurfaces.Materials"/>.</summary>
+		private static IceMaterialProposal IceLook(string name, float smoothness, float emission)
+		{
+			return new IceMaterialProposal { Surface = "Rock" + name, Specular = Hex("#252525"), Smoothness = smoothness, EmissionShare = emission };
 		}
 
 		private static Vector2 V(float a, float b) => new Vector2(a, b);
@@ -413,6 +505,16 @@ namespace FishMMO.Shared.WorldDesign
 				S("Causeway", FormationKind.Columns, 4f, 1.1f, 20),
 				S("Fallen", FormationKind.FallenColumns, 2.8f, 1.2f, 4),
 				S("Block", FormationKind.Faceted, 1.6f, 0.65f),
+				// Flow on flow: the stacked units of a rille's rim or a tube's benches, each a ledge.
+				S("Ledges", FormationKind.Ledges, 3.2f, 2.2f, 5),
+				S("Scree", FormationKind.Scree, 2.6f, 1.0f, 14),
+				// Venera's platy slabs: thin crust plates of a flow top, lying almost flat.
+				S("Slabs", FormationKind.SlabStack, 2.0f, 0.3f, 3, dip: 3f),
+				// A tessera fin: a narrow upstanding blade between parallel fractures.
+				S("Fin", FormationKind.Boulder, 3.0f, 1.6f, elongation: 2.4f),
+				// Lava dribble spires: drips of a cooling tube's roof, piled up from its floor.
+				S("Dribble", FormationKind.Stalagmite, 0.8f, 1.6f, 3),
+				S("Ventifact", FormationKind.Ventifact, 1.0f, 0.55f),
 			},
 			// Weathered columnar basalt: charcoal with a faint warm cast, olivine grains, vesicles.
 			Surface = R("Basalt", 0.02f, "#26262a", "#3a3a3c", "#58585a", 4, SurfaceMotif.Fractured, 8, 0.05f, 0.6f, "#18181a", "#4a4a4c", 0.22f,
@@ -531,6 +633,8 @@ namespace FishMMO.Shared.WorldDesign
 				S("Ledges", FormationKind.Ledges, 3.0f, 2.4f, 6),
 				S("Tilted", FormationKind.Bedded, 2.6f, 1.7f, 5, dip: 24f),
 				S("Pedestal", FormationKind.Pedestal, 2.2f, 2.6f, 6),
+				// A cannonball concretion: grains cemented round a nucleus, harder than the sandstone that weathered from it.
+				S("Concretion", FormationKind.Boulder, 1.6f, 1.4f, elongation: 0.72f, exponent: 2f),
 			},
 			// The ground family's red-orange sandstone, so the legacy material maps on unchanged.
 			Surface = R("Sandstone", 0.03f, "#8a4a2a", "#b86a3e", "#d89a64", 4, SurfaceMotif.Strata, 10, 0.1f, 0.6f, "#7a3c22", "#e0b080", 0.1f, 0.05f, 0.8f),
@@ -555,6 +659,11 @@ namespace FishMMO.Shared.WorldDesign
 				S("Block", FormationKind.Bedded, 2.2f, 1.4f),
 				S("Pinnacle", FormationKind.Pinnacle, 1.5f, 2.8f),
 				S("Pavement", FormationKind.Pavement, 3.2f, 0.55f, 6),
+				// Speleothems: calcite laid down film by film from dripping and flowing cave water, banded cream and
+				// orange as sinter is (the same chemistry, a precipitate in laminae), so they wear sinter's surface.
+				S("Stalagmite", FormationKind.Stalagmite, 1.2f, 2.6f, 3, dress: "Sinter"),
+				S("Flowstone", FormationKind.Flowstone, 3.0f, 1.6f, dress: "Sinter"),
+				S("Gours", FormationKind.Terrace, 3.6f, 0.5f, 5, dress: "Sinter"),
 			},
 			// The ground family's pale grey limestone, with fossil-shell fragments.
 			Surface = R("Limestone", 0.03f, "#9a968a", "#bcb8aa", "#dcd8ca", 4, SurfaceMotif.Fractured, 5, 0.08f, 0.5f, "#8a8676", "#d0ccbc", 0.2f,
@@ -622,6 +731,9 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				S("Block", FormationKind.Bedded, 2.2f, 1.4f),
 				S("Lump", FormationKind.Boulder, 1.4f, 0.9f),
+				// Lost City's carbonate towers: white brucite and calcite chimneys where warm alkaline vent fluid meets sea
+				// water, built like a smoker's (a narrow vent, flanges where fluid ponds under ledges), 2–60 m in life.
+				S("Pinnacle", FormationKind.Cone, 2.6f, 8.0f, 2),
 			},
 			// Chalk cliff white with grey-black flint.
 			Surface = R("Chalk", 0.01f, "#b9b6aa", "#dddace", "#f3f1e9", 4, SurfaceMotif.Strata, 6, 0.1f, 0.2f, "#c8c4b6", "#f6f4ee", 0.08f, 0.05f, 0.6f,
@@ -746,13 +858,346 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#c49a8a"), speckleCount: 800, speckleSize: 0.0025f),
 		};
 
-		/// <summary>Every rock type: igneous, then sedimentary, then metamorphic.</summary>
-		public static readonly RockType[] All =
+		// ── Mineral, ice and alien formations (2026-10-10) ───────────
+		//
+		// Rocks that are made only as scattered formations, never as cliffs (FormationsOnly): evaporites and vent
+		// precipitates, volcanic clinker, impact rocks, a dead moon's lag, a termite's clay, and snow and ice. Each is
+		// what a lifeless, alien or frozen biome has in place of plants (vegetation design §2h).
+
+		public static readonly RockType Halite = new RockType
+		{
+			Name = "Halite",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "Rock salt: a drying pan's crust cracks into polygons whose edges buckle up into ridges as it grows; rain etches rough crust into jagged pinnacles; hot brine springs build rimmed terraces.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2.2f, 2.8f), Lumpiness = 0.5f, Facets = 8, FacetDepth = 0.5f, Sharpness = 0.7f,
+				Fragments = FragmentForm.Angular,
+				Fracture = new FractureStyle { Dish = 0.02f, Roughness = 0.02f, Jointed = false },
+				Pits = new PitStyle { Spacing = 0.12f, Fill = 0.6f, Radius = 0.4f, Depth = 0.02f },
+			},
+			Shapes = new[]
+			{
+				// Uyuni and Bonneville: polygons 2–3 m across, ridges 5–15 cm high.
+				S("Polygons", FormationKind.PolygonRidges, 5.0f, 0.22f, 5, colliderless: true),
+				// Badwater's Devil's Golf Course: spires 0.3–1 m of salt and mud.
+				S("Pinnacles", FormationKind.CrystalCluster, 1.6f, 0.8f, 12, habit: CrystalHabit.Jagged),
+				// Dallol's terraces round its hot brine springs.
+				S("Terrace", FormationKind.Terrace, 3.6f, 1.0f, 4),
+			},
+			// Salt-pan white, greyed and browned by blown mud; glassy cubic grains.
+			Surface = R("Halite", 0.02f, "#a8a49a", "#d4d0c6", "#f2f0ea", 5, SurfaceMotif.Granular, 96, 0.1f, 0.45f, "#bcb8ae", "#fbfaf6", 0.25f, 0.1f, 0.6f,
+				speckles: Hexes("#ffffff", "#8a7f6c", "#c9c2b2"), speckleCount: 6000, speckleSize: 0.002f),
+		};
+
+		public static readonly RockType Gypsum = new RockType
+		{
+			Name = "Gypsum",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "Selenite: soft gypsum growing from brine and cave water as clear-to-milky blades with chisel tips, a metre or more long where it grew undisturbed.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2.2f, 2.8f), Lumpiness = 0.35f, Facets = 3, FacetDepth = 0.3f, Sharpness = 0.6f,
+				Fragments = FragmentForm.Platy,
+				Cleavage = new CleavageStyle { Thickness = V(0.03f, 0.06f), Tilt = V(5f, 20f), EdgeFacets = 6, EdgeBevel = 0.3f },
+			},
+			Shapes = new[]
+			{
+				S("Crystal", FormationKind.CrystalCluster, 1.4f, 1.3f, 9, habit: CrystalHabit.Bladed),
+			},
+			// Milky selenite: pearly white with faint fibrous striations along the blades.
+			Surface = R("Gypsum", 0.006f, "#a9a69c", "#d8d6cc", "#f2f1ea", 3, SurfaceMotif.Fibres, 24, 0.1f, 0.25f, "#c4c1b6", "#fbfaf5", 0.6f, 0.08f, 0.4f),
+		};
+
+		public static readonly RockType Sulphur = new RockType
+		{
+			Name = "Sulphur",
+			Family = RockFamily.Igneous,
+			FormationsOnly = true,
+			Summary = "Native sulphur sublimed from fumarole gas: crusts round vents, hollow chimneys and cones, sprays of needle crystals; yellow, greenish where wet, orange where hot.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2f, 2.5f), Lumpiness = 0.55f, Facets = 4, FacetDepth = 0.3f, Sharpness = 0.3f,
+				Fragments = FragmentForm.Rounded,
+				Pits = new PitStyle { Spacing = 0.15f, Fill = 0.4f, Radius = 0.4f, Depth = 0.025f },
+			},
+			Shapes = new[]
+			{
+				// Dallol and Io: a vent pillar 0.5–3 m, open at its top.
+				S("Chimney", FormationKind.Cone, 0.9f, 1.8f),
+				S("Crystals", FormationKind.CrystalCluster, 0.9f, 0.6f, 26, habit: CrystalHabit.Acicular),
+				// A fumarole's cone, 1–3 m, crusted in sulphur round its throat.
+				S("Cone", FormationKind.Cone, 2.4f, 1.4f),
+			},
+			// Fumarole sulphur: lemon yellow, with green and orange where the vent is wet or hot.
+			Surface = R("Sulphur", 0.02f, "#b08c18", "#d8bc30", "#f2e266", 5, SurfaceMotif.Granular, 72, 0.1f, 0.45f, "#a07c12", "#f8ee90", 0.3f, 0.1f, 0.65f,
+				speckles: Hexes("#f6f0a0", "#8a9a30", "#c0701c"), speckleCount: 2500, speckleSize: 0.003f),
+		};
+
+		public static readonly RockType Sinter = new RockType
+		{
+			Name = "Sinter",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "Siliceous sinter: opal laid down by boiling water a film at a time — nodular geyserite cones round geyser vents, scalloped rimmed terraces where the run-off spreads, banded orange and brown by microbial mats where it is still warm.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2.2f, 2.8f), Lumpiness = 0.45f, Facets = 0, Sharpness = 0.2f,
+				Fragments = FragmentForm.Rounded,
+				Pits = new PitStyle { Spacing = 0.2f, Fill = 0.5f, Radius = 0.4f, Depth = 0.03f },
+			},
+			Shapes = new[]
+			{
+				// Yellowstone's geyser cones, 1–4 m.
+				S("Cone", FormationKind.Cone, 2.2f, 1.6f),
+				S("Terrace", FormationKind.Terrace, 4.0f, 1.1f, 5),
+			},
+			// Grey-white sinter with orange and brown bands of microbial mat.
+			Surface = R("Sinter", 0.02f, "#8f877a", "#c4bdb0", "#e8e4dc", 4, SurfaceMotif.Strata, 9, 0.1f, 0.35f, "#a0582a", "#d8b08a", 0.2f, 0.1f, 0.65f,
+				speckles: Hexes("#f4f2ec", "#7a4a2a"), speckleCount: 1500, speckleSize: 0.0025f),
+		};
+
+		public static readonly RockType Scoria = new RockType
+		{
+			Name = "Scoria",
+			Family = RockFamily.Igneous,
+			FormationsOnly = true,
+			Summary = "Gas-blown basaltic clinker: spatter cones of welded clots round a vent, spindle bombs twisted in flight, rough vesicular lumps; red where steam oxidised it, black where it did not.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2f, 2.4f), Lumpiness = 0.7f, Facets = 3, FacetDepth = 0.25f, Sharpness = 0.1f,
+				Fragments = FragmentForm.Rounded,
+				Pits = new PitStyle { Spacing = 0.14f, Fill = 0.75f, Radius = 0.45f, Depth = 0.045f },
+			},
+			Shapes = new[]
+			{
+				// A spatter cone or hornito, 2–6 m, round its vent.
+				S("Cone", FormationKind.Cone, 5.0f, 3.2f),
+				S("Bomb", FormationKind.Boulder, 1.2f, 0.6f, elongation: 2.2f, exponent: 2f),
+				S("Lump", FormationKind.Boulder, 1.0f, 0.7f),
+			},
+			// Oxidised red-brown scoria with black clinker and vesicle shadows.
+			Surface = R("Scoria", 0.03f, "#2a1a16", "#5a2c20", "#8a4630", 6, SurfaceMotif.Granular, 80, 0.1f, 0.6f, "#1e1210", "#9a5236", 0.08f, 0.05f, 0.8f,
+				speckles: Hexes("#160f0e", "#a4542e"), speckleCount: 9000, speckleSize: 0.0025f),
+		};
+
+		public static readonly RockType Breccia = new RockType
+		{
+			Name = "Breccia",
+			Family = RockFamily.Metamorphic,
+			FormationsOnly = true,
+			Summary = "Impact breccia: angular clasts of shattered rock welded in a fine glassy matrix by the shock — the ejecta blocks round a fresh crater and its raised, block-strewn rim.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.65f, 0.95f), Roundness = V(2.2f, 2.8f), Lumpiness = 0.35f, Facets = 10, FacetDepth = 0.5f, Sharpness = 0.7f,
+				Fragments = FragmentForm.Angular,
+				Fracture = new FractureStyle { Dish = 0.025f, Roughness = 0.015f, Jointed = false },
+				Clasts = new ClastStyle { Size = 0.22f, Fill = 0.6f, Protrusion = 0.25f },
+			},
+			Shapes = new[]
+			{
+				S("Block", FormationKind.Faceted, 1.6f, 1.0f),
+				S("Boulder", FormationKind.Boulder, 1.8f, 1.2f),
+				// A crater 2–40 m: the rim crest about a twenty-fifth of its diameter high, ejecta blocks on it.
+				S("CraterRim", FormationKind.CraterRim, 14f, 1.1f, 7),
+			},
+			// Grey shocked rock: angular light and dark clasts in a darker matrix.
+			Surface = R("Breccia", 0.025f, "#4a4844", "#6e6b66", "#94918b", 4, SurfaceMotif.Fractured, 9, 0.06f, 0.55f, "#3a3936", "#b2aea6", 0.12f,
+				speckles: Hexes("#c8c4bc", "#2a2926"), speckleCount: 4000, speckleSize: 0.003f),
+		};
+
+		public static readonly RockType Anorthosite = new RockType
+		{
+			Name = "Anorthosite",
+			Family = RockFamily.Igneous,
+			FormationsOnly = true,
+			Summary = "Lunar highland rock, almost all plagioclase: bright grey-white and coarse, shock-crushed, worn to rounded blocks by micrometeorite rain.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2.4f, 3f), Lumpiness = 0.3f, Facets = 4, FacetDepth = 0.3f, Sharpness = 0.2f,
+				Fragments = FragmentForm.Angular,
+				Pits = new PitStyle { Spacing = 0.35f, Fill = 0.25f, Radius = 0.3f, Depth = 0.02f },
+			},
+			Shapes = new[]
+			{
+				S("Boulder", FormationKind.Boulder, 1.8f, 1.2f),
+			},
+			// Bright plagioclase grey-white with sparse dark pyroxene grains.
+			Surface = R("Anorthosite", 0.02f, "#8f8d88", "#bdbbb5", "#e0ded8", 5, SurfaceMotif.Granular, 140, 0.1f, 0.35f, "#7e7c78", "#ecebe6", 0.15f,
+				speckles: Hexes("#f4f2ee", "#5a5854"), speckleCount: 7000, speckleSize: 0.002f),
+		};
+
+		public static readonly RockType Sulphide = new RockType
+		{
+			Name = "Sulphide",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "Massive sulphide of a black smoker: 350 °C vent fluid meets cold sea water and drops iron, copper and zinc sulphides as a knobbly chimney, with flanges where hot water ponds under ledges; black, rusty where it oxidises.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2f, 2.5f), Lumpiness = 0.7f, Facets = 3, FacetDepth = 0.3f, Sharpness = 0.3f,
+				Fragments = FragmentForm.Angular,
+				Pits = new PitStyle { Spacing = 0.25f, Fill = 0.5f, Radius = 0.4f, Depth = 0.04f },
+			},
+			Shapes = new[]
+			{
+				// East Pacific Rise smokers: 3–15 m, three flanges.
+				S("Smoker", FormationKind.Cone, 2.6f, 9.0f, 3),
+			},
+			// Black sulphide crust with rust, brass and sulphur-yellow staining.
+			Surface = R("Sulphide", 0.03f, "#141210", "#2a2420", "#4a3a2c", 5, SurfaceMotif.Granular, 64, 0.1f, 0.5f, "#0e0c0a", "#5a4430", 0.2f, 0.1f, 0.8f,
+				speckles: Hexes("#7a3a18", "#a08a40", "#b0a040"), speckleCount: 3000, speckleSize: 0.003f),
+		};
+
+		public static readonly RockType Pyrite = new RockType
+		{
+			Name = "Pyrite",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "Brassy iron sulphide in striated interlocking cubes — on Venus's highlands the radar-bright metal frost that condenses where the air is cool enough.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.75f, 0.95f), Roundness = V(2.4f, 3f), Lumpiness = 0.25f, Facets = 6, FacetDepth = 0.4f, Sharpness = 0.9f,
+				Fragments = FragmentForm.Angular,
+				Fracture = new FractureStyle { Roughness = 0.004f, Jointed = true },
+			},
+			Shapes = new[]
+			{
+				S("Cubes", FormationKind.CrystalCluster, 1.2f, 0.8f, 10, habit: CrystalHabit.Cubic),
+			},
+			// Brass-yellow metal, finely striated on every cube face, tarnished brown in patches.
+			Surface = Metal(R("Pyrite", 0.004f, "#6a5a2a", "#a08a46", "#d2bc72", 3, SurfaceMotif.Strata, 60, 0.1f, 0.25f, "#7a6a36", "#e0cc84", 0.55f, 0.1f, 0.5f,
+				speckles: Hexes("#5a4a3a"), speckleCount: 400, speckleSize: 0.004f), 0.85f),
+		};
+
+		public static readonly RockType DarkLag = new RockType
+		{
+			Name = "DarkLag",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "Sublimation lag: on a cold icy moon the ice of a hill sublimates away and leaves its dark dust behind, so hills erode into dark conical knobs, and the vapour refreezes on their cold tops as bright frost.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.75f, 1f), Roundness = V(2f, 2.4f), Lumpiness = 0.45f, Facets = 3, FacetDepth = 0.25f, Sharpness = 0.15f,
+				Fragments = FragmentForm.Rounded,
+			},
+			Shapes = new[]
+			{
+				// Callisto's knobs, a frost cap on each.
+				S("FrostKnob", FormationKind.Knob, 6.0f, 8.0f, cap: IceSurfaces.BubblyWhite),
+			},
+			// Dark sputtered lag, brown-black with a few paler grains.
+			Surface = R("DarkLag", 0.025f, "#1e1c1a", "#34302c", "#4e4842", 6, SurfaceMotif.Granular, 64, 0.1f, 0.5f, "#161412", "#5a524a", 0.05f, 0.05f, 0.8f,
+				speckles: Hexes("#6a625a", "#141210"), speckleCount: 3000, speckleSize: 0.0025f),
+		};
+
+		public static readonly RockType Termitaria = new RockType
+		{
+			Name = "Termitaria",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "A termite mound: lateritic clay cemented grain by grain with saliva into fluted spires and buttresses round the shafts that ventilate the nest; hard as brick and as red as the soil it was carried from.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2.2f, 2.6f), Lumpiness = 0.5f, Facets = 0, Sharpness = 0.2f,
+				Fragments = FragmentForm.Rounded,
+				Pits = new PitStyle { Spacing = 0.18f, Fill = 0.35f, Radius = 0.35f, Depth = 0.02f },
+				Flutes = new FluteStyle { Count = 9, Depth = 0.12f, Reach = 0.9f },
+			},
+			Shapes = new[]
+			{
+				// Macrotermes and cathedral termites: 1.5–4 m.
+				S("Cathedral", FormationKind.Mound, 2.2f, 3.2f),
+			},
+			// Red-brown laterite, darker where damp, paler where sun-baked.
+			Surface = R("Termitaria", 0.02f, "#6a3a20", "#9a5a32", "#c08050", 5, SurfaceMotif.Granular, 64, 0.1f, 0.5f, "#5a2e18", "#d0a070", 0.06f, 0.05f,
+				speckles: Hexes("#5a2e18", "#d0a070"), speckleCount: 4000, speckleSize: 0.0025f),
+		};
+
+		public static readonly RockType Firn = new RockType
+		{
+			Name = "Firn",
+			Family = RockFamily.Sedimentary,
+			FormationsOnly = true,
+			Summary = "Wind-packed snow and firn: wind scours it into sastrugi, sharp-prowed ridges pointing into the wind; under a high sun in dry cold air it sublimates into rows of leaning blades, penitentes; on an icy world's plains it rims sublimation pits.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2f, 2.4f), Lumpiness = 0.3f, Facets = 0, Sharpness = 0.4f,
+				Fragments = FragmentForm.Rounded,
+			},
+			Shapes = new[]
+			{
+				// Sastrugi 0.1–1 m high, aligned with the wind.
+				S("Sastrugi", FormationKind.Sastrugi, 4.0f, 0.6f, 4, colliderless: true),
+				// Penitentes 1–5 m, in rows.
+				S("Penitentes", FormationKind.Penitentes, 4.5f, 3.0f, 9),
+				// The rim of a sublimation pit in nitrogen ice, as a crater rim without ejecta.
+				S("PitRim", FormationKind.CraterRim, 10f, 0.8f),
+			},
+			// Wind crust: blue-white snow, rippled, with sparkling grains.
+			Surface = R("Firn", 0.015f, "#b6c2cc", "#dfe7ee", "#f8fbfd", 4, SurfaceMotif.Ripples, 10, 0.1f, 0.35f, "#c4d0da", "#ffffff", 0.3f, 0.1f, 0.45f,
+				speckles: Hexes("#ffffff"), speckleCount: 800, speckleSize: 0.0015f),
+			Ice = IceLook("Firn", 0.32f, 0.03f),
+		};
+
+		public static readonly RockType WaterIce = new RockType
+		{
+			Name = "WaterIce",
+			Family = RockFamily.Metamorphic,
+			FormationsOnly = true,
+			Summary = "Water ice, dense and bubbly: dripstone in ice caves, hoar crystals grown from cold air, vent cones and lobate flows on icy moons, pedestals under a glacier's boulders, ridges of broken slabs where floes are pressed together.",
+			Style = new RockGeometryStyle
+			{
+				Aspect = V(0.7f, 0.95f), Roundness = V(2f, 2.6f), Lumpiness = 0.25f, Facets = 2, FacetDepth = 0.2f, Sharpness = 0.3f,
+				Fragments = FragmentForm.Rounded,
+			},
+			Shapes = new[]
+			{
+				S("Stalagmite", FormationKind.Stalagmite, 1.0f, 2.2f, 3),
+				S("Crystal", FormationKind.CrystalCluster, 1.2f, 1.1f, 10, habit: CrystalHabit.Prismatic),
+				// Frost flowers on new sea ice, and hoar: a few centimetres of feathery plates.
+				S("FrostFlowers", FormationKind.CrystalCluster, 0.45f, 0.14f, 24, habit: CrystalHabit.Plates, colliderless: true),
+				// Fresh frost and cryolava on an icy moon are bubbly white, not glacial blue.
+				S("Cone", FormationKind.Cone, 4.0f, 2.6f, dress: IceSurfaces.BubblyWhite),
+				S("Lobe", FormationKind.Lobe, 6.0f, 1.0f, dress: IceSurfaces.BubblyWhite),
+				S("GlacierTable", FormationKind.Table, 2.8f, 2.4f, cap: "Granite"),
+				// A dirt cone: ice under a few centimetres of meltwater gravel, which shaded it as the glacier melted down.
+				S("DirtCone", FormationKind.Knob, 2.6f, 1.8f, dress: "Conglomerate"),
+				// Sea ice pressed into a ridge on a frozen-through shelf or an ice moon's lineae.
+				S("Ridge", FormationKind.RubbleRidge, 12f, 1.8f, 120, dress: IceSurfaces.SeaIce),
+			},
+			// Bubbly water ice: pale blue-white, faint fracture planes, white bubble trains.
+			Surface = R("WaterIce", 0.012f, "#6f9ab4", "#a9c9dc", "#e2eff6", 3, SurfaceMotif.Fractured, 4, 0.03f, 0.25f, "#7fa8c0", "#f2f8fb", 0.8f, 0.08f, 0.35f,
+				speckles: Hexes("#ffffff", "#d6e6f0"), speckleCount: 900, speckleSize: 0.0015f),
+			Ice = IceLook("WaterIce", 0.85f, 0.05f),
+		};
+
+		/// <summary>The sixteen rocks of the crust: igneous, then sedimentary, then metamorphic. Every one can be a cliff.</summary>
+		public static readonly RockType[] Crust =
 		{
 			Granite, Basalt, Andesite, Obsidian, Pumice, Tuff,
 			Sandstone, Limestone, Shale, Conglomerate, Chalk,
 			Slate, Schist, Gneiss, Marble, Quartzite,
 		};
+
+		/// <summary>The rocks made only as formations (<see cref="RockType.FormationsOnly"/>), after the crust in <see cref="All"/>.</summary>
+		public static readonly RockType[] FormationRocks =
+		{
+			Halite, Gypsum, Sulphur, Sinter, Scoria, Breccia, Anorthosite, Sulphide, Pyrite, DarkLag, Termitaria, Firn, WaterIce,
+		};
+
+		/// <summary>Every rock type: the crust (igneous, sedimentary, metamorphic), then the formation-only rocks.</summary>
+		public static readonly RockType[] All = Concat(Crust, FormationRocks);
+
+		private static RockType[] Concat(RockType[] a, RockType[] b)
+		{
+			var all = new RockType[a.Length + b.Length];
+			Array.Copy(a, all, a.Length);
+			Array.Copy(b, 0, all, a.Length, b.Length);
+			return all;
+		}
 
 		/// <summary>The type with this name.</summary>
 		public static bool TryGet(string name, out RockType type)

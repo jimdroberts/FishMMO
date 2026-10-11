@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sand Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Desert-dune giants — dry, wind-hissing names'
+  Description: "Desert-dune giants \u2014 dry, wind-hissing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - im
       - ar
       - oum
-      Description: 'Desert-dune giants — dry, wind-hissing names'
+      Description: "Desert-dune giants \u2014 dry, wind-hissing names"
       Tags:
       - Dune-names
       - Wind-marks
@@ -163,6 +163,8 @@ MonoBehaviour:
       - tumble
       - scar
     AllowGenericOccupations: 1
+    Plural: Sand Giants
+    Adjective: Sand Giant
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 525873855
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -412,6 +412,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8500df0f2569ffc14a14d4247ab310a9
+    m_Address: Isle of Aradune Terrain Arrays
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 868803874ca36864a8f2825459be3cea
     m_Address: UILoot
     m_ReadOnly: 0
@@ -431,6 +437,12 @@ MonoBehaviour:
     m_Address: UIWorldQueueDisplay
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 91a04fe3321898a0283561d92c7fdcee
+    m_Address: Flo Monolith Terrain Arrays
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 91f2120783e5985ac9d2c33e75e3b707
     m_Address: UICrosshair
@@ -629,6 +641,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d72a5adc1e85433abc8c82fe0c8fe660
+    m_Address: UIMapPOI
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d8ed4493f7ac62fb1bf30c48e6ad8061
     m_Address: UIInventory
     m_ReadOnly: 0
@@ -680,6 +698,12 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e47ab7470c4f44421ae8141ce8191f93
+    m_Address: Baoakraal Hyena-den Terrain Arrays
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e48eab42eacc528ac874692cc04cf0ad
     m_Address: UIColorPicker
     m_ReadOnly: 0
@@ -714,6 +738,18 @@ MonoBehaviour:
     m_Address: UIInstance
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f5363c1e16c7a1d10b976ac09dd7251c
+    m_Address: Volax Obelisk Terrain Arrays
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f53a4c15de3fd69fcb084f97a9137a21
+    m_Address: Treacherous Bri Lookout Terrain Arrays
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f9f15f51447a4e7e93a5e950fb59fb2f
     m_Address: UIArenaScoreboard

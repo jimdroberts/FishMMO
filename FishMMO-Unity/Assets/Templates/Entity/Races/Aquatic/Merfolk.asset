@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Merfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Flowing and liquid — the sound of tides, coral bells, and deep currents'
+  Description: "Flowing and liquid \u2014 the sound of tides, coral bells, and deep
+    currents"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +96,8 @@ MonoBehaviour:
       - or
       - ean
       - ius
-      Description: 'Flowing and liquid — the sound of tides, coral bells, and deep currents'
+      Description: "Flowing and liquid \u2014 the sound of tides, coral bells, and
+        deep currents"
       Tags:
       - Tide-names
       - Coral-bonds
@@ -156,7 +158,7 @@ MonoBehaviour:
         - al
         - reef
         - eal
-        Description: 'Coral Merfolk — tropical, bright, reef-dwelling'
+        Description: "Coral Merfolk \u2014 tropical, bright, reef-dwelling"
         Tags:
         - Reef-names
         - Coral-bonds
@@ -215,7 +217,7 @@ MonoBehaviour:
         - usk
         - orm
         - oom
-        Description: 'Deep Merfolk — abyssal, dark, pressure-forged'
+        Description: "Deep Merfolk \u2014 abyssal, dark, pressure-forged"
         Tags:
         - Abyss-names
         - Pressure-bonds
@@ -318,6 +320,9 @@ MonoBehaviour:
       - void
       - hollow
       - silt
+    AllowGenericOccupations: 1
+    Plural: Merfolk
+    Adjective: Merfolk
   BiomeAffinities:
   - BiomeID: -1552223677
     Weight: 3

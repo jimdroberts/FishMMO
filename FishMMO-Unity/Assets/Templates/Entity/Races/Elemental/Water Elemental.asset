@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Water Elemental
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: A rushing body of living water that drowns the unwary and washes away walls.
+  Description: A rushing body of living water that drowns the unwary and washes away
+    walls.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - os
       - ar
-      Description: 'Flowing, gurgling — liquid consonants'
+      Description: "Flowing, gurgling \u2014 liquid consonants"
       Tags:
       - Elemental
       - Monster
@@ -100,7 +101,7 @@ MonoBehaviour:
     - the Elemental Gate
     - the First Flame
     - the Deep Vein
-    - 'the Storm''s Eye'
+    - the Storm's Eye
     Titles:
       Honorific:
       - Elder Flame
@@ -152,6 +153,8 @@ MonoBehaviour:
       - ash
       - cinder
     AllowGenericOccupations: 0
+    Plural: Water Elementals
+    Adjective: Water Elemental
   BiomeAffinities:
   - BiomeID: 247344987
     Weight: 2
@@ -163,3 +166,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 888339253
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

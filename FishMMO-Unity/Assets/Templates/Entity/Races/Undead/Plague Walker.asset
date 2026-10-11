@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Plague Walker
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Pestilent dead that carry the sickness — rasping, coughing names'
+  Description: "Pestilent dead that carry the sickness \u2014 rasping, coughing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - oth
       - ek
       - orr
-      Description: 'Pestilent dead that carry the sickness — rasping, coughing names'
+      Description: "Pestilent dead that carry the sickness \u2014 rasping, coughing
+        names"
       Tags:
       - Plague-names
       - Cart-marks
@@ -161,6 +162,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Plague Walkers
+    Adjective: Plague Walker
   BiomeAffinities:
   - BiomeID: 525873855
     Weight: 3
@@ -170,3 +173,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 719042512
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

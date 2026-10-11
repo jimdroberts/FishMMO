@@ -319,6 +319,8 @@ MonoBehaviour:
       - boneyard
       - char
     AllowGenericOccupations: 1
+    Plural: Orcs
+    Adjective: Orc
   BiomeAffinities:
   - BiomeID: 599899035
     Weight: 2
@@ -332,3 +334,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1275219499
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

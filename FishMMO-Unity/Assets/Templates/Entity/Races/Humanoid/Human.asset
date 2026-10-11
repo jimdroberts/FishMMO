@@ -474,6 +474,8 @@ MonoBehaviour:
       - scar
       - waste
     AllowGenericOccupations: 1
+    Plural: Humans
+    Adjective: Human
   BiomeAffinities:
   - BiomeID: -1951431387
     Weight: 2
@@ -493,3 +495,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: 888339253
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

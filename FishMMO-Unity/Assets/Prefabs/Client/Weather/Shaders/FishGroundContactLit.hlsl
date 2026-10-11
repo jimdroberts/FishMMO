@@ -24,6 +24,7 @@ half3 FishGroundLit(InputData host, FishGroundPixel ground, half shade)
     {
         half3 weathered = normalWS;
         FishWeatherSurface(host.positionWS, albedo, weathered, smoothness, metallic, occlusion);
+        FishTrailSurface(host.positionWS, host.viewDirectionWS, albedo, weathered, smoothness);
         normalWS = normalize(lerp(normalWS, weathered, (half)_FishGroundInfo.w));
     }
     data.normalWS = normalWS;

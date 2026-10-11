@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dwarf
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Harsh consonants, short vowels — carved in stone'
+  Description: "Harsh consonants, short vowels \u2014 carved in stone"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -93,7 +93,7 @@ MonoBehaviour:
       - ur
       - in
       - ak
-      Description: 'Harsh consonants, short vowels — carved in stone'
+      Description: "Harsh consonants, short vowels \u2014 carved in stone"
       Tags:
       - Clan prefixes
       - Forge titles
@@ -173,7 +173,7 @@ MonoBehaviour:
         - um
         - ur
         - uk
-        Description: 'Deep Dwarf — rumbling, dark, of the deep halls'
+        Description: "Deep Dwarf \u2014 rumbling, dark, of the deep halls"
         Tags:
         - Underhall names
         - Stone-bonds
@@ -234,7 +234,7 @@ MonoBehaviour:
         - ald
         - son
         - bert
-        Description: 'Hill Dwarf — folk-friendly, merchant dialect'
+        Description: "Hill Dwarf \u2014 folk-friendly, merchant dialect"
         Tags:
         - Trade names
         - Craft-titles
@@ -249,8 +249,8 @@ MonoBehaviour:
     - Greyhold
     - the Molten Deep
     - Hammerfall
-    - 'the Underking''s Throne'
-    - 'Anvil''s Rest'
+    - the Underking's Throne
+    - Anvil's Rest
     Titles:
       Honorific:
       - Forgemaster
@@ -347,6 +347,9 @@ MonoBehaviour:
       - scar
       - hollow
       - void
+    AllowGenericOccupations: 1
+    Plural: Dwarves
+    Adjective: Dwarven
   BiomeAffinities:
   - BiomeID: -138594552
     Weight: 3
@@ -358,3 +361,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1474826537
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

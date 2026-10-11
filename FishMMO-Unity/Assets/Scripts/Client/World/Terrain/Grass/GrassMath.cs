@@ -44,8 +44,19 @@ namespace FishMMO.Client
 		/// <summary>The share of the share at which a blade starts shrinking before it is thinned out.</summary>
 		public const float ThinBand = 0.3f;
 
-		/// <summary>Blade height is packed in 7 bits on a square-root scale up to this many metres.</summary>
+		/// <summary>
+		/// Blade height is packed in 7 bits on a square-root scale up to this many metres. A blade taller than this (a
+		/// <see cref="GrassTypeTuning.Tall"/> type: Phragmites, elephant grass) packs half its height and sets
+		/// <see cref="TallShift"/> in its colour word, so it reaches <see cref="TallHeightScale"/> times this; every blade
+		/// at or under it packs exactly as it always did.
+		/// </summary>
 		public const float MaxPackedHeight = 2.5f;
+
+		/// <summary>What a tall blade's packed height is multiplied by (<see cref="TallShift"/>).</summary>
+		public const float TallHeightScale = 2f;
+
+		/// <summary>The most blade types a record can name: four bits in the packed word, the fifth in the colour word (<see cref="TypeHighShift"/>).</summary>
+		public const int MaxTypes = 32;
 
 		public const uint SaltPriority = 0x9E3779B9u;
 		public const uint SaltJitterX = 0x85EBCA6Bu;
@@ -367,35 +378,69 @@ namespace FishMMO.Client
 		public const int BladeStride = 20;
 
 		/// <summary>
-		/// Packs a blade: type 4 bits, facing 7 (1/128 turn), height 7 (square-root scale to
-		/// <see cref="MaxPackedHeight"/>), lean 4, thin fade 5, clump colour 5.
+		/// Packs a blade: type 4 bits (its low four; the fifth rides the colour word, <see cref="RecordBits"/>), facing 7
+		/// (1/128 turn), height 7 (square-root scale to <see cref="MaxPackedHeight"/>; a taller blade packs half its height
+		/// and is marked tall in the colour word), lean 4, thin fade 5, clump colour 5.
 		/// </summary>
+		/// <remarks>
+		/// The word is full, and every one of its fields is already as coarse as it can be without showing (facing in
+		/// 1/128 turns, lean in 16ths), so the 32 types and the tall blades took two of the colour word's unused bits
+		/// (24..28) instead of a field's precision: a blade of type 0..15 at or under 2.5 m packs bit for bit as it did
+		/// when there were 16 types.
+		/// </remarks>
 		public static uint Pack(int type, float facing, float height, float lean, float fade, float clumpColour)
 		{
-			uint t = (uint)Math.Max(0, Math.Min(15, type));
+			uint t = (uint)Math.Max(0, Math.Min(MaxTypes - 1, type)) & 15u;
+			float packedHeight = height > MaxPackedHeight ? height / TallHeightScale : height;
 			uint f = (uint)((int)Math.Round(facing / 6.2831853f * 128f) & 127);
-			uint h = (uint)Math.Max(0, Math.Min(127, (int)Math.Round(Math.Sqrt(Math.Max(0f, height) / MaxPackedHeight) * 127f)));
+			uint h = (uint)Math.Max(0, Math.Min(127, (int)Math.Round(Math.Sqrt(Math.Max(0f, packedHeight) / MaxPackedHeight) * 127f)));
 			uint l = (uint)Math.Max(0, Math.Min(15, (int)Math.Round(lean * 15f)));
 			uint d = (uint)Math.Max(0, Math.Min(31, (int)Math.Round(fade * 31f)));
 			uint c = (uint)Math.Max(0, Math.Min(31, (int)Math.Round(clumpColour * 31f)));
 			return t | f << 4 | h << 11 | l << 18 | d << 22 | c << 27;
 		}
 
+		/// <summary>The packed word alone, as a record whose colour word carries no <see cref="RecordBits"/> (types 0..15, blades to 2.5 m).</summary>
 		public static void Unpack(uint packed, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
 		{
-			type = (int)(packed & 15u);
+			Unpack(packed, 0u, out type, out facing, out height, out lean, out fade, out clumpColour);
+		}
+
+		/// <summary>A whole record: the packed word and its colour word's <see cref="RecordBits"/> (FishGrassBlades.hlsl GrassUnpack).</summary>
+		public static void Unpack(uint packed, uint colour, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
+		{
+			type = (int)(packed & 15u) | (int)(colour >> TypeHighShift & 1u) << 4;
 			facing = ((packed >> 4) & 127u) / 128f * 6.2831853f;
 			float q = ((packed >> 11) & 127u) / 127f;
-			height = q * q * MaxPackedHeight;
+			height = q * q * MaxPackedHeight * ((colour >> TallShift & 1u) != 0u ? TallHeightScale : 1f);
 			lean = ((packed >> 18) & 15u) / 15f;
 			fade = ((packed >> 22) & 31u) / 31f;
 			clumpColour = ((packed >> 27) & 31u) / 31f;
 		}
 
+		/// <summary>Where a record's type's fifth bit sits in its colour word (types 16..31).</summary>
+		public const int TypeHighShift = 28;
+
+		/// <summary>Where a record's tall mark sits in its colour word: its packed height is half its own (<see cref="TallHeightScale"/>).</summary>
+		public const int TallShift = 27;
+
+		/// <summary>
+		/// The bits of a blade's colour word that belong to its shape, not its colour: the type's fifth bit and the tall
+		/// mark. Every record of the blade carries them, its shadow casters' colourless ones too (their colour word is
+		/// these bits and the head part, never the valid flag). Zero for a type under 16 no taller than
+		/// <see cref="MaxPackedHeight"/>, so such a record is what it always was. FishGrassBlades.compute GrassRecordBits.
+		/// </summary>
+		public static uint RecordBits(int type, float height)
+		{
+			uint high = (uint)Math.Max(0, Math.Min(MaxTypes - 1, type)) >> 4 & 1u;
+			uint tall = height > MaxPackedHeight ? 1u : 0u;
+			return high << TypeHighShift | tall << TallShift;
+		}
+
 		/// <summary>
 		/// Packs the terrain's linear albedo under a blade: square root (so dark soils keep their steps) at
 		/// 8 bits a channel, bit 31 set when <paramref name="valid"/> (FishGrassBlades.compute GrassPackColour).
-		/// Bits 29..30 are the record's head part (<see cref="WithHeadPart"/>), 24..28 unused.
+		/// Bits 29..30 are the record's head part (<see cref="WithHeadPart"/>), 27..28 its <see cref="RecordBits"/>, 24..26 unused.
 		/// </summary>
 		public static uint PackColour(float r, float g, float b, bool valid)
 		{

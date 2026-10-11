@@ -137,8 +137,11 @@ namespace FishMMO.Client
 				cookieView.MarkDirtyRepaint();
 			}).Every(250);
 			parent.Add(cookieView);
-			parent.Add(Toggle("God rays", SkySystem.DrawGodRays, v => SkySystem.DrawGodRays = v,
-				"Shafts of light through broken cloud, and around a body during an eclipse."));
+			Toggle godRays = Toggle("God rays", SkySystem.DrawGodRays, v => SkySystem.DrawGodRays = v,
+				"Shafts of light through broken cloud, and around a body during an eclipse.");
+			// The host's panel may switch the same flag; this follows it rather than showing a stale state.
+			godRays.schedule.Execute(() => godRays.SetValueWithoutNotify(SkySystem.DrawGodRays)).Every(250);
+			parent.Add(godRays);
 		}
 
 		// ── Small pieces ───────────────────────────────────────────────

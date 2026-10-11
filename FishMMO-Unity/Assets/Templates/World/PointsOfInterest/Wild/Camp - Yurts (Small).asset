@@ -1,0 +1,121 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: Camp - Yurts (Small)
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 2
+  Weight: 1
+  DefaultBiomeWeight: 0.05
+  BiomeWeights:
+  - Biome: Tundra
+    Weight: 2
+  - Biome: Taiga
+    Weight: 2
+  - Biome: Snow
+    Weight: 2
+  - Biome: Periglacial
+    Weight: 2
+  - Biome: Glacier
+    Weight: 2
+  - Biome: Ice Sheet
+    Weight: 2
+  - Biome: Ice Shelf
+    Weight: 2
+  - Biome: Permanent Ice
+    Weight: 2
+  - Biome: Steppe
+    Weight: 1.5
+  - Biome: Savanna
+    Weight: 1.5
+  - Biome: Tundra
+    Weight: 1.5
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 0
+  Large: 0
+  PadFlatness: 0.8
+  Style: hide
+  Layout: 1
+  Pieces:
+  - Tag: =TentLarge
+    MinCount: 3
+    MaxCount: 6
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 2
+    Style: 
+  - Tag: fire
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: bedding
+    MinCount: 2
+    MaxCount: 5
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: storage
+    MinCount: 2
+    MaxCount: 5
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: timber
+  Features:
+  - rid: 4061506032503357660
+  - rid: 4061506032503357661
+  - rid: 4061506032503357662
+  - rid: 4061506032503357663
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503357660
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506032503357661
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503357662
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506032503357663
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 5
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

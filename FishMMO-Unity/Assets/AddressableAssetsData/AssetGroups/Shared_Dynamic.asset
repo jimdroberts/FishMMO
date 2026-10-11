@@ -121,12 +121,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: dd56fc68d89ae111fbb3d6af004e1636
-    m_Address: Assets/Scenes/WorldScene/Arthis/Baoakraal Hyena-den Terrain/Baoakraal
-      Hyena-den Biome Map.asset
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e24c70deddf6cf726a84a9e1e96936fc
     m_Address: CombatSimNetwork
     m_ReadOnly: 0

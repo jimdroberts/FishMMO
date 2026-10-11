@@ -155,6 +155,7 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Frozen;
 			public float GrainMetres = 1e-4f;
 			public float GrainDensity = 2500f;
+			public bool Vapour;
 		}
 
 		private static Color C(float r, float g, float b) => new Color(r, g, b, 1f);
@@ -166,6 +167,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Something that is not cloud: lifted off the ground, or put out by it.</summary>
 		private static SubstanceSpec Grain(string name, float metres, float density)
 			=> new SubstanceSpec { Name = name, GrainMetres = metres, GrainDensity = density };
+
+		/// <summary>A vapour off hot ground, seen as the drops it condenses into where it meets colder air: cloud drops of ten microns.</summary>
+		private static SubstanceSpec Vapour(string name)
+			=> new SubstanceSpec { Name = name, Vapour = true, GrainMetres = 1e-5f, GrainDensity = 1000f };
 
 		/* The grains are measured ones, not tuned ones. Sand is a fifth of a millimetre of quartz;
 		 * lunar regolith dust is finer and heavier, basalt glass at about 70 microns; volcanic ash a
@@ -201,6 +206,8 @@ namespace FishMMO.Shared.WorldDesign
 				C(0.55f, 0.53f, 0.5f), C(0.42f, 0.4f, 0.38f), 1f, 1f, 0.05f, WeatherCoverKind.Ash, C(0.35f, 0.34f, 0.33f), 2f, false, 0.6f),
 			With(Grain("Cryo Tephra", 2e-4f, 920f), "Ice thrown out by a cryovolcano and drifting back down. Ash in how it falls, snow in what it leaves.",
 				C(0.8f, 0.88f, 0.94f), C(0.62f, 0.72f, 0.8f), 0.55f, 1f, 0.02f, WeatherCoverKind.Snow, C(0.86f, 0.92f, 0.96f), -0.5f, false, 0.7f),
+			With(Vapour("Steam"), "Water vapour off hot springs, fumaroles and geysers: white where it mixes into colder air, gone again once the drier air has evaporated it. It never falls and never lies.",
+				C(0.96f, 0.97f, 0.98f), C(0.86f, 0.88f, 0.9f), 1f, 1f, 0f, WeatherCoverKind.None, Color.white, 2f, true, 0.1f),
 		};
 
 		private static SubstanceSpec With(SubstanceSpec spec, string description, Color tint, Color fog, float fallSpeed, float stretch,
@@ -277,6 +284,7 @@ namespace FishMMO.Shared.WorldDesign
 			substance.Frozen = spec.Frozen;
 			substance.GrainMetres = spec.GrainMetres;
 			substance.GrainDensity = spec.GrainDensity;
+			substance.Vapour = spec.Vapour;
 		}
 
 		private static T FindOrCreate<T>(string folder, string name, Report report, Action<T> setup) where T : ScriptableObject
@@ -358,6 +366,12 @@ namespace FishMMO.Shared.WorldDesign
 			{ "Sulphuric Cloud Deck", Emitting("Sulphur Dust", 0.08f) },
 			{ "Methane Lake", Emitting("Tholin Haze", 0.08f) },
 			{ "Tholin Plain", Emitting("Tholin Haze", 0.08f) },
+
+			/* Steam. A geyser basin is a field of hot springs, fumaroles and geysers (GeothermalVents); its
+			 * steam is a vapour, which the weather never treats as falling or erupting. At 0.5 seven sites in
+			 * ten of the basin's 80 m cells, a quarter of them geysers: Yellowstone's Upper Geyser Basin, a
+			 * few square kilometres, holds some 150 geysers among several hundred springs. */
+			{ "Geyser Basin", Emitting("Steam", 0.5f) },
 		};
 
 		/// <summary>True when somebody has already said what this biome's ground gives the air.</summary>

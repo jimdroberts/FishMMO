@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Frost Wolf
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'White wolves of the snow-line — howling, ice-clear names'
+  Description: "White wolves of the snow-line \u2014 howling, ice-clear names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ulf
       - und
-      Description: 'White wolves of the snow-line — howling, ice-clear names'
+      Description: "White wolves of the snow-line \u2014 howling, ice-clear names"
       Tags:
       - Howl-names
       - Snow-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       Legend:
       - Who Ran the Sledge Down Across the Ice
       - Who Howled Through the Longest Night
-      - 'Who Led the Pack Around the Frost Giant''s Hall'
+      - Who Led the Pack Around the Frost Giant's Hall
       - Who Dug the Frozen Kill Out of the Drift
       - Who Fought the Snow Troll for the Den
       Occupational:
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Frost Wolves
+    Adjective: Frost Wolf
   BiomeAffinities:
   - BiomeID: 1645414801
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -212386137
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

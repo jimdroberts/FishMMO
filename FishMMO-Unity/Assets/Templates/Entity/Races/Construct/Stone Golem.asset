@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Stone Golem
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Construct
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A statue given a purpose and the strength to keep it; guardian of tombs and gates, slow to wake and slower to stop.'
+  Description: A statue given a purpose and the strength to keep it; guardian of
+    tombs and gates, slow to wake and slower to stop.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Construct
   Naming:
     Phonology:
       Onsets:
@@ -88,15 +89,15 @@ MonoBehaviour:
       - ix
       MasculineSuffixes:
       - us
-      - 'on'
-      Description: 'Grinding, granite — long, heavy stops'
+      - on
+      Description: "Grinding, granite \u2014 long, heavy stops"
       Tags:
       - Construct
       - Monster
       WeightedCodas: []
     Cultures: []
     Places:
-    - 'the Maker''s Vault'
+    - the Maker's Vault
     - the Sealed Door
     - the Ninth Stair
     - the Silent Hall
@@ -123,7 +124,7 @@ MonoBehaviour:
       Rank:
       - Guardian of the Sealed Door
       - Sentinel of the Ninth Stair
-      - 'Keeper of the Maker''s Vault'
+      - Keeper of the Maker's Vault
       - Warden of the Silent Hall
       Legend:
       - Who Held the Gate for a Century
@@ -149,6 +150,8 @@ MonoBehaviour:
       - scrap
       - rust
     AllowGenericOccupations: 0
+    Plural: Stone Golems
+    Adjective: Stone Golem
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 2
@@ -158,3 +161,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1056999638
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

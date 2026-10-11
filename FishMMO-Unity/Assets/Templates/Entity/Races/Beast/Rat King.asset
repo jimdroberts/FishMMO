@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Rat King
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Many rats knotted at the tails into one many-minded horror that rules the warrens beneath a city.
+  Description: Many rats knotted at the tails into one many-minded horror that rules
+    the warrens beneath a city.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - us
-      Description: 'Overlapping squeals — many voices, one name'
+      Description: "Overlapping squeals \u2014 many voices, one name"
       Tags:
       - Vermin
       - Monster
@@ -152,6 +153,8 @@ MonoBehaviour:
       - husk
       - shell
     AllowGenericOccupations: 0
+    Plural: Rat Kings
+    Adjective: Rat King
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -161,3 +164,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -2037808285
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

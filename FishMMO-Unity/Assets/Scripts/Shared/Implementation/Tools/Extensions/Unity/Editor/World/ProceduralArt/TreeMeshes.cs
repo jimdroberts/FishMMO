@@ -26,6 +26,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// tips — not the spruce's spire (<see cref="Conifer"/>), which every pine was drawn as.
 		/// </summary>
 		Pine,
+		/// <summary>
+		/// A narrow column held from near the ground (Italian cypress, Lombardy poplar): a fastigiate tree, whose
+		/// branches grow up nearly alongside the stem instead of out from it, so its sprays leave the trunk a few
+		/// degrees off vertical in close whorls, the column widest a third of the way up and closing to a blunt tip.
+		/// </summary>
+		Columnar,
+		/// <summary>
+		/// A stout stem that forks and forks again into crooked limbs, each ending in a spiky rosette of strap leaves
+		/// over a skirt of older, browning ones (Joshua tree, dragon tree, screw pine).
+		/// </summary>
+		Rosette,
 	}
 
 	/// <summary>One tree species' recipe.</summary>
@@ -49,6 +60,49 @@ namespace FishMMO.Shared.WorldDesign
 		public float LeafSize;
 		/// <summary>Turns in autumn and drops its leaves in winter.</summary>
 		public bool Deciduous;
+
+		// ── Added by the vegetation expansion (2026-10-10) ──
+		// Every field below is zero on every species made before them, and zero means "as the form always grew",
+		// so no tree made before them changes: each is read only when a species sets it.
+
+		/// <summary>
+		/// How far a palm's stem leans, as a share of the stem's height; 0 = the form's own (a coconut's 0.15). A date
+		/// palm stands near straight (0.02): the coconut's lean is the sea wind and the light over a beach.
+		/// </summary>
+		public float Lean;
+		/// <summary>
+		/// How a palm holds its fronds: the middle of the range each frond rises by before it droops (±0.3 round it),
+		/// in the frond's own lengths; 0 = the coconut's 0.3–0.8. A stiff date palm frond near level (0.95), a tree
+		/// fern's shuttlecock (0.7), a banana's steep paddles (1.5), a nipa's erect fronds from the mud (2.8).
+		/// </summary>
+		/// <remarks>
+		/// A palm that sets it is measured to its frond tips, as every other species is to its crown's top: its stem
+		/// stops at <see cref="CrownBase"/> and the fronds rise above it. The coconut, made before, stands its stem to
+		/// the full height and keeps doing so.
+		/// </remarks>
+		public float FrondLift;
+		/// <summary>Gnarling, 0..1: a twisted, partly hollow trunk and a share of bare limbs (olive, bristlecone).</summary>
+		public float Gnarl;
+		/// <summary>A bottle trunk: the most the stem swells over its plain taper (baobab 0.6 = ×1.6 at a third of the height).</summary>
+		public float TrunkSwell;
+		/// <summary>Plank buttresses round the foot (kapok 5–7, bald cypress flutes); 0 = none.</summary>
+		public int ButtressCount;
+		/// <summary>How far up the trunk the buttresses reach, as a share of the height.</summary>
+		public float ButtressHeight;
+		/// <summary>How far out from the trunk the buttresses reach at the ground, metres.</summary>
+		public float ButtressReach;
+		/// <summary>Arching prop roots from the stem to a ring on the ground (mangrove 8–16); 0 = none.</summary>
+		public int PropRootCount;
+		/// <summary>Where the highest prop root leaves the stem, as a share of the height.</summary>
+		public float PropRootTop;
+		/// <summary>The radius of the ring the prop roots land on, metres (<see cref="ProceduralArtCatalogue.CrownRadius"/> is at least this).</summary>
+		public float PropRootRing;
+		/// <summary>Weeping: hanging leaf curtains from the limb ends, as a share of the height they fall (0.3–0.5).</summary>
+		public float Weeping;
+		/// <summary>Hanging strands (Spanish moss, Usnea) from the limbs, as a share of the limbs carrying them; 0 = none.</summary>
+		public float Hanging;
+		/// <summary>The hanging strands' colour.</summary>
+		public Color HangingColour;
 	}
 
 	/// <summary>
@@ -112,6 +166,8 @@ namespace FishMMO.Shared.WorldDesign
 				case TreeForm.Cactus: builder.Cactus(); break;
 				case TreeForm.Umbrella: builder.Umbrella(); break;
 				case TreeForm.Bamboo: builder.Bamboo(); break;
+				case TreeForm.Columnar: builder.Columnar(); break;
+				case TreeForm.Rosette: builder.Rosette(); break;
 			}
 			mesh.RecalculateNormals(true, onlyMissing: true);
 			mesh.RecalculateTangents();
@@ -265,6 +321,16 @@ namespace FishMMO.Shared.WorldDesign
 				return PlantParts.C32(Color.Lerp(sp.LeafA, sp.LeafB, pick) * shade, 1f);
 			}
 
+			/// <summary>A colour shaded as <see cref="ShadedLeaf"/> shades the leaf colour, by its place in the crown.</summary>
+			private Color32 ShadedTone(Color tone, Vector3 at, Vector3 crown, float alpha = 1f)
+			{
+				float crownRadius = Mathf.Max(0.5f, sp.CrownWidth * sp.Height);
+				Vector3 offset = at - crown;
+				float outside = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(new Vector2(offset.x, offset.z).magnitude / crownRadius));
+				float top = Mathf.Clamp01(offset.y / Mathf.Max(0.5f, sp.Height * (1f - sp.CrownBase) * 0.5f) * 0.5f + 0.5f);
+				return PlantParts.C32(tone * (Mathf.Lerp(0.5f, 1f, outside) * Mathf.Lerp(0.8f, 1.05f, top)), alpha);
+			}
+
 			/// <summary>A tube along a quadratic curve from a to c bending through b.</summary>
 			private void Limb(Vector3 a, Vector3 b, Vector3 c, float r0, float r1, int sides, int segments, bool point)
 			{
@@ -340,7 +406,9 @@ namespace FishMMO.Shared.WorldDesign
 				return Vector3.Lerp(points[i], points[i + 1], f - i);
 			}
 
-			private void Spray(Vector3 root, Vector3 direction, float length, float width, Vector3 crown, FoliageCell cell, float bend = 0.6f)
+			/// <param name="tone">A colour the spray takes in place of the species' leaf colour (a rosette's browning skirt), shaded by
+			/// its place in the crown the same way; null for the leaf colour.</param>
+			private void Spray(Vector3 root, Vector3 direction, float length, float width, Vector3 crown, FoliageCell cell, float bend = 0.6f, Color? tone = null)
 			{
 				// A card on its part: a frond or a bough is kept or dropped whole by the branch fullness; a leaf
 				// card on a limb by the leaf fullness too, by its own rank.
@@ -350,7 +418,7 @@ namespace FishMMO.Shared.WorldDesign
 				width *= leafScale;
 				mesh.SetCard(Hash(partId * 4099 + card, 11), leaf ? 0.02f + 0.98f * Hash(partId * 4099 + card, 13) : 0f);
 				float pick = rng.NextFloat();
-				Color32 shaded = ShadedLeaf(pick, root + direction * length * 0.5f, crown);
+				Color32 shaded = tone.HasValue ? ShadedTone(tone.Value, root + direction * length * 0.5f, crown) : ShadedLeaf(pick, root + direction * length * 0.5f, crown);
 				PlantParts.SprayCard(mesh, LeafSubmesh, root, direction, length, width, rng.Range(-30f, 30f), cell, shaded,
 					Sway(root, 0.3f), Sway(root + direction * length, 1f), crown, bend);
 				// A second card across the first gives the spray depth from every side. On every level: alone, a card
@@ -366,6 +434,13 @@ namespace FishMMO.Shared.WorldDesign
 				float h = sp.Height;
 				BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
 				Limb(Vector3.zero, new Vector3(0f, h * 0.5f, 0f), new Vector3(0f, h, 0f), sp.TrunkRadius, sp.TrunkRadius * 0.08f, 8, lod == 0 ? 8 : 4, true);
+				if (sp.Gnarl > 0f)
+				{
+					// A bristlecone's strip-bark: living bands twisting round a stem mostly dead, from the ground to
+					// half its height (the straight trunk under them is the dead wood they wrap).
+					GnarledStrands(Vector3.zero, new Vector3(0f, h * 0.5f, 0f), sp.TrunkRadius * 0.55f, sp.TrunkRadius * 0.5f);
+				}
+				Buttresses(y => Vector3.up * y);
 				// Every level has every whorl: halved, the reduced crown showed bare trunk between its tiers.
 				int whorls = Mathf.Max(6, sp.Branches);
 				float baseY = h * sp.CrownBase;
@@ -391,8 +466,19 @@ namespace FishMMO.Shared.WorldDesign
 						var root = new Vector3(0f, y, 0f) + outward * sp.TrunkRadius * (1f - t);
 						// Each bough a part of its own, kept or dropped whole, turned about where it leaves the trunk.
 						BeginPart(1000 + w * 64 + a, root, Rank(a, arms, coreArms, 1000 + w), PlantPart.Frond);
+						if (BareShare > 0f && Hash(1000 + w * 64 + a, 23) < BareShare)
+						{
+							// A dead bough: a bare crooked stick with a few twigs (half a bristlecone's crown is these).
+							BareBough(root, dir * reach * 0.85f, crown);
+							continue;
+						}
 						// Wide boughs: at real sizes a spray half as wide as it was long read as a bare stick.
 						Spray(root, dir, reach, Mathf.Max(0.6f, reach * 0.8f), crown, sp.LeafCell, 0.5f);
+						if (sp.Hanging > 0f && Hash(1000 + w * 64 + a, 41) < sp.Hanging)
+						{
+							// Spanish moss from the bough's outer half, where it hangs clear of the crown below.
+							Strands(root + dir * reach * rng.Range(0.5f, 0.95f), crown);
+						}
 						if (lod == 0 && t < 0.6f && reach > 1.2f)
 						{
 							// The longer lower boughs carry a second, shorter spray turned off the first, so a crown
@@ -416,7 +502,27 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 lean = new Vector3(rng.Range(-0.05f, 0.05f), 0f, rng.Range(-0.05f, 0.05f)) * h;
 				Vector3 top = new Vector3(0f, split, 0f) + lean;
 				BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
-				Limb(Vector3.zero, new Vector3(0f, split * 0.5f, 0f), top, sp.TrunkRadius, sp.TrunkRadius * 0.7f, 10, lod == 0 ? 5 : 3, false);
+				if (sp.TrunkSwell > 0f)
+				{
+					SwollenTrunk(top);
+				}
+				else if (sp.Gnarl > 0f)
+				{
+					// An old olive's trunk: twisted lobes parting and rejoining round a hollow, no single stem.
+					GnarledStrands(Vector3.zero, top, sp.TrunkRadius, sp.TrunkRadius * 0.7f);
+				}
+				else
+				{
+					Limb(Vector3.zero, new Vector3(0f, split * 0.5f, 0f), top, sp.TrunkRadius, sp.TrunkRadius * 0.7f, 10, lod == 0 ? 5 : 3, false);
+				}
+				// The trunk's centre at a height: the curve above runs t = y / split, its lean growing as t².
+				Vector3 TrunkAt(float y)
+				{
+					float t = Mathf.Clamp01(y / Mathf.Max(0.01f, split));
+					return new Vector3(lean.x * t * t, y, lean.z * t * t);
+				}
+				Buttresses(TrunkAt);
+				PropRoots(TrunkAt);
 				var crown = new Vector3(lean.x, (split + h) * 0.55f, lean.z);
 				float crownRadius = sp.CrownWidth * h;
 				(int limbs, int coreLimbs) = Spared(Mathf.Max(3, sp.Branches));
@@ -426,10 +532,15 @@ namespace FishMMO.Shared.WorldDesign
 					float yaw = Mathf.Deg2Rad * (l * 360f / limbs + rng.Range(-20f, 20f));
 					var outward = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
 					float rise = rng.Range(0.6f, 1.1f);
-					// Limbs leave the trunk over its upper third, not all from one point.
-					Vector3 start = top + Vector3.down * rng.Range(0f, split * 0.35f);
+					// Limbs leave the trunk over its upper third, not all from one point — a bottle trunk's from its
+					// shoulders only, or they would break out of its swollen sides halfway up, and a buttressed
+					// emergent's too: a kapok's bole stands bare to its crown.
+					bool shoulders = sp.TrunkSwell > 0f || sp.ButtressCount > 0;
+					Vector3 start = top + Vector3.down * rng.Range(0f, split * (shoulders ? 0.08f : 0.35f));
 					Vector3 end = crown + outward * crownRadius * rng.Range(0.55f, 0.9f) + Vector3.up * (h - crown.y) * rise * 0.6f;
-					if (!leaves)
+					// A gnarled tree's dead limbs (half a bristlecone's), drawn as a dead tree's.
+					bool leafy = leaves && !(BareShare > 0f && Hash(100 + l, 23) < BareShare);
+					if (!leafy)
 					{
 						// Dead limbs reach and twist instead of filling a crown.
 						end += new Vector3(rng.Range(-1f, 1f), rng.Range(-0.5f, 0.8f), rng.Range(-1f, 1f)) * crownRadius * 0.25f;
@@ -437,7 +548,12 @@ namespace FishMMO.Shared.WorldDesign
 					// The limb, its forks, its twigs and their leaves: one part, turned about where it leaves the trunk.
 					BeginPart(100 + l, start, Rank(l, limbs, coreLimbs, 100), PlantPart.Limb);
 					float r0 = sp.TrunkRadius * 0.55f, r1 = sp.TrunkRadius * 0.12f;
-					Crooked(start, end, r0, r1, 6, lod == 0 ? 7 : 4, leaves ? 0.08f : 0.13f, 0.1f, true);
+					float limbWander = leafy ? 0.08f : 0.13f;
+					if (sp.Gnarl > 0f)
+					{
+						limbWander += sp.Gnarl * 0.08f; // contorted, as an old olive's limbs are
+					}
+					Crooked(start, end, r0, r1, 6, lod == 0 ? 7 : 4, limbWander, 0.1f, true);
 					var limbPath = new List<Vector3>(lastPath);
 					float limbLength = Vector3.Distance(start, end);
 
@@ -453,10 +569,14 @@ namespace FishMMO.Shared.WorldDesign
 						Vector3 bend = Quaternion.AngleAxis(rng.Range(-180f, 180f), heading) * Quaternion.AngleAxis(rng.Range(25f, 55f), PlantParts.Perpendicular(heading).normalized) * heading;
 						Vector3 forkEnd = at + (bend + Vector3.up * 0.25f).normalized * limbLength * rng.Range(0.35f, 0.6f);
 						float forkRadius = Mathf.Lerp(r0, r1, t) * 0.6f;
-						Crooked(at, forkEnd, forkRadius, forkRadius * 0.25f, 4, lod == 0 ? 4 : 2, leaves ? 0.1f : 0.15f, 0.08f, true);
-						if (leaves)
+						Crooked(at, forkEnd, forkRadius, forkRadius * 0.25f, 4, lod == 0 ? 4 : 2, leafy ? 0.1f : 0.15f, 0.08f, true);
+						if (leafy)
 						{
 							Cluster(forkEnd, crown, Spared(lod == 0 ? 7 : 3).total);
+							if (sp.Weeping > 0f)
+							{
+								Curtains(forkEnd, outward, crown);
+							}
 						}
 						else if (lod == 0)
 						{
@@ -472,11 +592,11 @@ namespace FishMMO.Shared.WorldDesign
 						Vector3 at = OnPath(limbPath, t);
 						Vector3 side = Quaternion.AngleAxis(rng.Range(-70f, 70f), Vector3.up) * outward;
 						Vector3 twigEnd = at + (side + Vector3.up * rng.Range(0.1f, 0.7f)).normalized * crownRadius * rng.Range(0.3f, 0.5f);
-						if (lod == 0 || !leaves)
+						if (lod == 0 || !leafy)
 						{
 							Crooked(at, twigEnd, sp.TrunkRadius * 0.15f, sp.TrunkRadius * 0.05f, 4, 3, 0.12f, 0.06f, true);
 						}
-						if (leaves)
+						if (leafy)
 						{
 							Cluster(twigEnd, crown, Spared(lod == 0 ? 5 : 3).total);
 						}
@@ -485,10 +605,19 @@ namespace FishMMO.Shared.WorldDesign
 							Spray(twigEnd, (twigEnd - at).normalized, sp.LeafSize, sp.LeafSize * 0.8f, crown, FoliageCell.Twigs, 0.2f);
 						}
 					}
-					if (leaves)
+					if (leafy)
 					{
 						Reseed(20000 + l);
 						Cluster(end, crown, Spared(lod == 0 ? 9 : 4).total);
+						if (sp.Weeping > 0f)
+						{
+							Curtains(end, outward, crown);
+						}
+					}
+					if (leafy && sp.Hanging > 0f && Hash(100 + l, 41) < sp.Hanging)
+					{
+						Reseed(40000 + l);
+						Strands(OnPath(limbPath, rng.Range(0.35f, 0.85f)), crown);
 					}
 				}
 			}
@@ -516,8 +645,12 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					leanDir = Vector3.forward;
 				}
-				Vector3 top = new Vector3(0f, h, 0f) + leanDir * h * 0.15f;
-				Vector3 mid = new Vector3(0f, h * 0.55f, 0f) + leanDir * h * 0.02f;
+				// A palm that sets how its fronds rise stands them above its stem (TreeSpecies.FrondLift); the coconut's
+				// stem is its height.
+				float stem = sp.FrondLift > 0f ? h * Mathf.Clamp(sp.CrownBase, 0.02f, 1f) : h;
+				float lean = sp.Lean > 0f ? sp.Lean : 0.15f;
+				Vector3 top = new Vector3(0f, stem, 0f) + leanDir * stem * lean;
+				Vector3 mid = new Vector3(0f, stem * 0.55f, 0f) + leanDir * stem * (sp.Lean > 0f ? sp.Lean * (0.02f / 0.15f) : 0.02f);
 				BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
 				Limb(Vector3.zero, mid, top, sp.TrunkRadius, sp.TrunkRadius * 0.75f, 8, lod == 0 ? 10 : 5, false);
 				(int fronds, int coreFronds) = Spared(lod == 0 ? Mathf.Max(8, sp.Branches) : Mathf.Max(6, sp.Branches - 3));
@@ -534,7 +667,7 @@ namespace FishMMO.Shared.WorldDesign
 					float yaw = Mathf.Deg2Rad * (f * 360f / fronds + rng.Range(-12f, 12f));
 					var outward = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
 					float length = sp.CrownWidth * h * rng.Range(0.85f, 1.15f);
-					float rise = rng.Range(0.3f, 0.8f);
+					float rise = sp.FrondLift > 0f ? rng.Range(sp.FrondLift - 0.3f, sp.FrondLift + 0.3f) : rng.Range(0.3f, 0.8f);
 					Color32 colour = Leaf(rng.NextFloat());
 					spine.Clear(); widths.Clear(); frondColours.Clear(); frondWind.Clear();
 					for (int s = 0; s <= segments; s++)
@@ -546,7 +679,8 @@ namespace FishMMO.Shared.WorldDesign
 						frondColours.Add(colour);
 						frondWind.Add(Sway(p, t));
 					}
-					PlantParts.Strip(mesh, LeafSubmesh, spine, widths, Vector3.Cross(Vector3.up, outward), FoliageCell.PalmFrond, frondColours, frondWind,
+					// The species' own leaf: a coconut's or a date palm's pinnate frond, a tree fern's, a banana's paddle.
+					PlantParts.Strip(mesh, LeafSubmesh, spine, widths, Vector3.Cross(Vector3.up, outward), sp.LeafCell, frondColours, frondWind,
 						(Vector3.up + outward * 0.4f).normalized);
 				}
 			}
@@ -654,6 +788,423 @@ namespace FishMMO.Shared.WorldDesign
 						Spray(at, dir, sp.LeafSize, sp.LeafSize, crown, sp.LeafCell, 0.6f);
 					}
 				}
+			}
+
+			// ── Forms and features added by the vegetation expansion (2026-10-10) ──────────────────
+			// Each runs only for a species that asks for it (a field set, or one of the two new forms), so every tree
+			// made before is drawn exactly as it was: none of these draws from a stream an older species reads.
+
+			/// <summary>
+			/// The share of a gnarled tree's limbs or boughs that are dead (<see cref="TreeSpecies.Gnarl"/> above a half):
+			/// an old olive keeps nearly all its limbs in leaf (0.1 at 0.6), a five-thousand-year bristlecone carries half
+			/// its crown dead (0.45 at 0.95).
+			/// </summary>
+			private float BareShare => Mathf.Max(0f, sp.Gnarl - 0.5f);
+
+			/// <summary>
+			/// A gnarled trunk: two to four lobes twisting up round the axis from <paramref name="foot"/> to
+			/// <paramref name="top"/>, each its own tube, standing apart where they wander out and merging where they
+			/// close, so the trunk reads as fluted, split and partly hollow — an old olive's, or a bristlecone's living
+			/// strip-bark round its dead wood — rather than one smooth stem. Fixed parts, so the collider has them.
+			/// </summary>
+			/// <param name="r0">The bundle's radius at the foot (the lobes are sized to fill about it).</param>
+			/// <param name="r1">At the top.</param>
+			private void GnarledStrands(Vector3 foot, Vector3 top, float r0, float r1)
+			{
+				int strands = 2 + Mathf.RoundToInt(Mathf.Clamp01(sp.Gnarl) * 2f);
+				float lobe = 1.05f / Mathf.Sqrt(strands);
+				float twist = Mathf.Clamp01(sp.Gnarl) * Mathf.PI * 0.9f;
+				int segments = lod == 0 ? 8 : 5;
+				for (int k = 0; k < strands; k++)
+				{
+					Reseed(9000 + k);
+					BeginPart(0, foot, 0f, PlantPart.Fixed);
+					float start = (k + rng.Range(-0.2f, 0.2f)) * Mathf.PI * 2f / strands;
+					float phase = rng.NextFloat() * Mathf.PI * 2f;
+					float waves = rng.Range(1.5f, 3f);
+					path.Clear(); radii.Clear(); colours.Clear(); wind.Clear();
+					for (int s = 0; s <= segments; s++)
+					{
+						float t = (float)s / segments;
+						Vector3 axis = Vector3.Lerp(foot, top, t);
+						float bundle = Mathf.Lerp(r0, r1, t);
+						float angle = start + twist * t;
+						// Out from the axis by about half the bundle, swelling and closing along the trunk; flared at the foot.
+						float flare = t < 0.15f ? (1f - t / 0.15f) * (1f - t / 0.15f) * 0.45f : 0f;
+						float offset = bundle * (0.5f * (1f - 0.45f * t) * (1f + 0.35f * Mathf.Sin(waves * Mathf.PI * t + phase)) + flare);
+						Vector3 p = axis + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * offset;
+						path.Add(p);
+						radii.Add(bundle * lobe * Mathf.Lerp(1f, 0.8f, t));
+						colours.Add(Bark);
+						wind.Add(Sway(p, 0f));
+					}
+					int firstRing = mesh.VertexCount;
+					PlantParts.Tube(mesh, BarkSubmesh, path, radii, Sides(7), 1f, colours, wind);
+					mesh.MarkTrunkRings(firstRing, path);
+				}
+			}
+
+			/// <summary>
+			/// A bottle trunk (baobab): the plain taper of a broadleaf's trunk swollen by up to <see cref="TrunkSwell"/> of
+			/// itself about a third of the tree's height, a little flared at the foot and drawn in to its shoulders, where
+			/// the limbs leave it.
+			/// </summary>
+			private void SwollenTrunk(Vector3 top)
+			{
+				float h = sp.Height;
+				float split = Mathf.Max(0.01f, top.y);
+				int segments = lod == 0 ? 10 : 6;
+				path.Clear(); radii.Clear(); colours.Clear(); wind.Clear();
+				Vector3 b = new Vector3(0f, split * 0.5f, 0f);
+				for (int s = 0; s <= segments; s++)
+				{
+					float t = (float)s / segments;
+					Vector3 p = Curve(Vector3.zero, b, top, t);
+					float height = p.y / Mathf.Max(0.1f, h);
+					float taper = Mathf.Lerp(1f, 0.5f, Mathf.Pow(t, 1.4f));
+					float bulge = (height - 0.35f) / 0.22f;
+					float flare = 1f + 0.15f * Mathf.Pow(1f - t, 6f);
+					path.Add(p);
+					radii.Add(sp.TrunkRadius * taper * flare * (1f + sp.TrunkSwell * Mathf.Exp(-bulge * bulge)));
+					colours.Add(Bark);
+					wind.Add(Sway(p, 0f));
+				}
+				int firstRing = mesh.VertexCount;
+				PlantParts.Tube(mesh, BarkSubmesh, path, radii, Sides(12), 1f, colours, wind);
+				mesh.MarkTrunkRings(firstRing, path);
+			}
+
+			/// <summary>
+			/// Plank buttresses round the foot (<see cref="TreeSpecies.ButtressCount"/>): thin fins standing out from the
+			/// trunk, each reaching <see cref="TreeSpecies.ButtressReach"/> along the ground and up the trunk to
+			/// <see cref="TreeSpecies.ButtressHeight"/> of the height, their top edge sagging between in a concave curve
+			/// and wandering a little sideways, as a kapok's do. Few and tall they are a rainforest emergent's planks;
+			/// many and low, a bald cypress's fluted, swollen base. Fixed parts, so the trunk collider has them.
+			/// </summary>
+			/// <param name="trunkAt">The trunk's centre at a height (a broadleaf's leans).</param>
+			private void Buttresses(System.Func<float, Vector3> trunkAt)
+			{
+				int count = sp.ButtressCount;
+				if (count <= 0 || sp.ButtressReach <= 0f || sp.ButtressHeight <= 0f)
+				{
+					return;
+				}
+				float r = sp.TrunkRadius;
+				int rings = lod == 0 ? 7 : 4;
+				var section = new Vector3[6];
+				for (int i = 0; i < count; i++)
+				{
+					Reseed(8000 + i);
+					BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
+					float yaw = (i + rng.Range(-0.25f, 0.25f)) * Mathf.PI * 2f / count;
+					var outward = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
+					Vector3 side = Vector3.Cross(Vector3.up, outward);
+					float reach = sp.ButtressReach * rng.Range(0.7f, 1.1f);
+					float tall = sp.Height * sp.ButtressHeight * rng.Range(0.75f, 1.1f);
+					float thick = Mathf.Clamp(r * 0.28f, 0.1f, 0.45f);
+					float phase = rng.NextFloat() * Mathf.PI * 2f;
+					int first = mesh.VertexCount;
+					for (int k = 0; k <= rings; k++)
+					{
+						float s = (float)k / rings;
+						// From inside the trunk (half its radius) out to the tip on the ground.
+						float x = Mathf.Lerp(r * 0.5f, r + reach, s);
+						float topY = tall * (1f - s) * (1f - s) + 0.04f;
+						float w = k == rings ? 0.01f : thick * Mathf.Lerp(1f, 0.35f, s);
+						Vector3 centre = trunkAt(topY * 0.5f);
+						centre.y = 0f;
+						centre += outward * x + side * (Mathf.Sin(phase + s * 3f) * reach * 0.07f * s);
+						const float below = -0.35f;
+						section[0] = centre - side * w + Vector3.up * below;
+						section[1] = centre - side * w + Vector3.up * Mathf.Max(below, topY - w * 1.2f);
+						section[2] = centre - side * w * 0.35f + Vector3.up * topY;
+						section[3] = centre + side * w * 0.35f + Vector3.up * topY;
+						section[4] = centre + side * w + Vector3.up * Mathf.Max(below, topY - w * 1.2f);
+						section[5] = centre + side * w + Vector3.up * below;
+						for (int j = 0; j < 6; j++)
+						{
+							// Bark in metres: along the fin and up it, the fibres standing as the trunk's do.
+							Vector3 p = section[j];
+							mesh.AddVertex(p, Vector3.zero, new Vector2(x + (j < 3 ? 0f : thick * 2f), p.y), Bark, Sway(p, 0f));
+						}
+					}
+					for (int k = 0; k < rings; k++)
+					{
+						for (int j = 0; j < 5; j++)
+						{
+							int a = first + k * 6 + j, bb = a + 1, c = a + 7, d = a + 6;
+							// Out from the fin's middle plane at its foot: sideways on its flanks, up across its edge.
+							Vector3 mid = (mesh.Positions[a] + mesh.Positions[c]) * 0.5f;
+							Vector3 core = (mesh.Positions[first + k * 6] + mesh.Positions[first + k * 6 + 5] + mesh.Positions[first + (k + 1) * 6] + mesh.Positions[first + (k + 1) * 6 + 5]) * 0.25f;
+							mesh.AddQuad(BarkSubmesh, a, bb, c, d, mid - core);
+						}
+					}
+				}
+			}
+
+			/// <summary>
+			/// Prop roots (<see cref="TreeSpecies.PropRootCount"/>): a red mangrove's stilts, arching out and down from
+			/// the stem between a twentieth of the height and <see cref="TreeSpecies.PropRootTop"/> of it to a ring
+			/// <see cref="TreeSpecies.PropRootRing"/> across on the mud; every other one forks halfway into a second
+			/// root. Fixed parts: a mangrove's root tangle is not walked through.
+			/// </summary>
+			private void PropRoots(System.Func<float, Vector3> trunkAt)
+			{
+				int count = sp.PropRootCount;
+				if (count <= 0 || sp.PropRootRing <= 0f)
+				{
+					return;
+				}
+				float h = sp.Height;
+				float topShare = Mathf.Max(0.06f, sp.PropRootTop);
+				float radius = Mathf.Clamp(sp.TrunkRadius * 0.35f, 0.05f, 0.14f);
+				for (int i = 0; i < count; i++)
+				{
+					Reseed(7000 + i);
+					BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
+					float share = Mathf.Lerp(0.05f, topShare, (i + rng.NextFloat()) / count);
+					float yaw = i * 2.39996f + rng.Range(-0.35f, 0.35f); // the golden angle: no two land on one bearing
+					var outward = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
+					float ring = sp.PropRootRing * rng.Range(0.55f, 1f) * Mathf.Lerp(0.8f, 1.1f, share / topShare);
+					float y0 = h * share;
+					Vector3 a = trunkAt(y0) + outward * sp.TrunkRadius * 0.6f;
+					Vector3 c = new Vector3(a.x, 0f, a.z) + outward * ring + Vector3.down * 0.25f;
+					// Out first and over, then down steeply into the mud: the control point stands above the root's foot.
+					Vector3 b = a + outward * ring * 0.6f + Vector3.up * (y0 * 0.3f + 0.3f);
+					Limb(a, b, c, radius, radius * 0.75f, 5, lod == 0 ? 6 : 4, false);
+					if ((i & 1) == 0)
+					{
+						Vector3 at = Curve(a, b, c, 0.5f);
+						Vector3 aside = Vector3.Cross(Vector3.up, outward) * (rng.NextFloat() < 0.5f ? -1f : 1f);
+						Vector3 to = new Vector3(at.x, 0f, at.z) + (outward + aside * 0.7f).normalized * ring * rng.Range(0.4f, 0.6f) + Vector3.down * 0.25f;
+						Limb(at, at + (to - at) * 0.4f + Vector3.up * 0.25f, to, radius * 0.7f, radius * 0.55f, 4, lod == 0 ? 4 : 3, false);
+					}
+				}
+			}
+
+			/// <summary>A dead bough on a gnarled conifer: a bare crooked stick to <paramref name="reach"/> with a spray of twigs at its end.</summary>
+			private void BareBough(Vector3 root, Vector3 reach, Vector3 crown)
+			{
+				Vector3 end = root + reach + Vector3.up * reach.magnitude * rng.Range(-0.1f, 0.3f);
+				Crooked(root, end, sp.TrunkRadius * 0.12f, sp.TrunkRadius * 0.03f, 4, lod == 0 ? 4 : 2, 0.15f, 0.06f, true);
+				if (lod == 0)
+				{
+					Spray(end - reach.normalized * 0.3f, (end - root).normalized, Mathf.Max(0.6f, sp.LeafSize), Mathf.Max(0.5f, sp.LeafSize * 0.8f), crown, FoliageCell.Twigs, 0.2f);
+				}
+			}
+
+			/// <summary>
+			/// Hanging strands (<see cref="TreeSpecies.Hanging"/>): Spanish moss or old man's beard from a limb, two
+			/// crossed strips of the <see cref="FoliageCell.Strand"/> cell in <see cref="TreeSpecies.HangingColour"/>.
+			/// Not tintable (vertex alpha 0): an epiphyte does not turn with the tree in autumn or drop with its leaves,
+			/// so a bald cypress stands bare in winter still hung with its moss. Swing loose in the wind.
+			/// </summary>
+			private void Strands(Vector3 at, Vector3 crown)
+			{
+				// Festoons a metre to three long on a grown tree (Spanish moss reaches six).
+				float length = Mathf.Clamp(sp.Height * 0.08f, 0.8f, 3.2f) * rng.Range(0.6f, 1.1f);
+				length = Mathf.Min(length, at.y - 0.4f);
+				if (length < 0.3f)
+				{
+					return;
+				}
+				float width = Mathf.Max(0.3f, length * 0.35f) * leafScale;
+				int segments = lod == 0 ? 3 : 2;
+				bool leaf = partKind != PlantPart.Frond;
+				mesh.SetPart(partPivot, partHash, partRank, leaf ? PlantPart.Leaf : PlantPart.Frond);
+				Color32 colour = ShadedTone(sp.HangingColour * rng.Range(0.85f, 1.1f), at, crown, 0f);
+				float drift = rng.Range(-0.15f, 0.15f);
+				float yaw = rng.NextFloat() * Mathf.PI * 2f;
+				var side = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
+				var spine = new List<Vector3>(segments + 1);
+				var widths = new List<float>(segments + 1);
+				var tones = new List<Color32>(segments + 1);
+				var sway = new List<Vector2>(segments + 1);
+				for (int s = 0; s <= segments; s++)
+				{
+					float t = (float)s / segments;
+					Vector3 p = at + Vector3.down * length * t + side * (drift * length * t * t);
+					spine.Add(p);
+					widths.Add(width * Mathf.Lerp(1f, 0.6f, t));
+					tones.Add(colour);
+					sway.Add(Sway(at, 0.5f + 0.5f * t));
+				}
+				for (int k = 0; k < 2; k++)
+				{
+					int card = cardSerial++;
+					mesh.SetCard(Hash(partId * 4099 + card, 11), leaf ? 0.02f + 0.98f * Hash(partId * 4099 + card, 13) : 0f);
+					Vector3 across = k == 0 ? side : Vector3.Cross(Vector3.up, side);
+					PlantParts.Strip(mesh, LeafSubmesh, spine, widths, across, FoliageCell.Strand, tones, sway, (at - crown).normalized);
+				}
+			}
+
+			/// <summary>
+			/// A weeping tree's curtains (<see cref="TreeSpecies.Weeping"/>): from a limb's leafy end, two crossed strips
+			/// of the <see cref="FoliageCell.Strand"/> cell — pendulous shoots hung with narrow leaves — falling about
+			/// <see cref="TreeSpecies.Weeping"/> of the tree's height, out a little from the crown first and then straight
+			/// down, stopping short of the ground. Leaf-coloured and tintable: a willow's curtains yellow and fall with its
+			/// leaves. They flutter more toward their tips.
+			/// </summary>
+			private void Curtains(Vector3 at, Vector3 outward, Vector3 crown)
+			{
+				float length = sp.Weeping * sp.Height * rng.Range(0.6f, 1f);
+				length = Mathf.Min(length, at.y - 0.4f);
+				if (length < 0.5f)
+				{
+					return;
+				}
+				float width = sp.LeafSize * 0.8f * leafScale;
+				int segments = lod == 0 ? 4 : 3;
+				mesh.SetPart(partPivot, partHash, partRank, PlantPart.Leaf);
+				float pick = rng.NextFloat();
+				Vector3 flare = (outward + new Vector3(rng.Range(-0.5f, 0.5f), 0f, rng.Range(-0.5f, 0.5f))).normalized;
+				var spine = new List<Vector3>(segments + 1);
+				var widths = new List<float>(segments + 1);
+				var tones = new List<Color32>(segments + 1);
+				var sway = new List<Vector2>(segments + 1);
+				for (int s = 0; s <= segments; s++)
+				{
+					float t = (float)s / segments;
+					Vector3 p = at + flare * (length * 0.2f * Mathf.Sin(t * Mathf.PI * 0.5f)) + Vector3.down * length * t;
+					spine.Add(p);
+					widths.Add(width * Mathf.Lerp(1f, 0.7f, t));
+					tones.Add(ShadedLeaf(pick, p, crown));
+					sway.Add(Sway(at, 0.3f + 0.7f * t) + new Vector2(0.15f * t * Mathf.Min(sp.Height / 10f, 2.4f), 0f));
+				}
+				for (int k = 0; k < 2; k++)
+				{
+					int card = cardSerial++;
+					mesh.SetCard(Hash(partId * 4099 + card, 11), 0.02f + 0.98f * Hash(partId * 4099 + card, 13));
+					Vector3 across = k == 0 ? Vector3.Cross(Vector3.up, flare) : flare;
+					PlantParts.Strip(mesh, LeafSubmesh, spine, widths, across, FoliageCell.Strand, tones, sway, (spine[segments / 2] - crown).normalized);
+				}
+			}
+
+			/// <summary>
+			/// A columnar tree (<see cref="TreeForm.Columnar"/>): a straight stem to near the top, and close whorls of
+			/// sprays leaving it twelve to twenty-two degrees off vertical, each as long as it must be to reach the
+			/// column's radius at its height — so the sprays overlap up the column like a fastigiate tree's shoots. The
+			/// column is widest a third of the way up, narrower at its foot, and closes to a blunt tip.
+			/// </summary>
+			public void Columnar()
+			{
+				float h = sp.Height;
+				BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
+				Limb(Vector3.zero, new Vector3(0f, h * 0.5f, 0f), new Vector3(0f, h * 0.97f, 0f), sp.TrunkRadius, sp.TrunkRadius * 0.1f, 8, lod == 0 ? 8 : 4, true);
+				Buttresses(y => Vector3.up * y);
+				int whorls = Mathf.Max(8, sp.Branches);
+				float baseY = h * sp.CrownBase;
+				var crown = new Vector3(0f, (baseY + h) * 0.5f, 0f);
+				for (int w = 0; w < whorls; w++)
+				{
+					float t = (w + 0.5f) / whorls;
+					Reseed(3000 + Mathf.RoundToInt(t * 997f));
+					float y = Mathf.Lerp(baseY, h * 0.93f, t);
+					float profile = t < 0.3f
+						? Mathf.Lerp(0.6f, 1f, Mathf.SmoothStep(0f, 1f, t / 0.3f))
+						: 1f - 0.85f * Mathf.Pow((t - 0.3f) / 0.7f, 2f);
+					float radius = sp.CrownWidth * h * profile * rng.Range(0.9f, 1.1f) + 0.1f;
+					(int arms, int coreArms) = Spared(lod == 0 ? 6 : 4);
+					float twist = rng.NextFloat() * 360f;
+					for (int a = 0; a < arms; a++)
+					{
+						float yaw = Mathf.Deg2Rad * (twist + a * 360f / arms + rng.Range(-15f, 15f));
+						var outward = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
+						float tilt = Mathf.Deg2Rad * rng.Range(12f, 22f);
+						Vector3 dir = outward * Mathf.Sin(tilt) + Vector3.up * Mathf.Cos(tilt);
+						// Long enough to reach the column's edge, never past the tree's top.
+						float length = Mathf.Min(radius / Mathf.Sin(tilt), Mathf.Max(0.6f, (h - y) / Mathf.Cos(tilt) + 0.3f));
+						var root = new Vector3(0f, y, 0f) + outward * sp.TrunkRadius * 0.6f;
+						BeginPart(3000 + w * 64 + a, root, Rank(a, arms, coreArms, 3000 + w), PlantPart.Frond);
+						Spray(root, dir, length, Mathf.Max(0.45f, radius * 0.95f), crown, sp.LeafCell, 0.55f);
+					}
+				}
+				// The blunt tip.
+				BeginPart(2999, new Vector3(0f, h * 0.88f, 0f), 0f, PlantPart.Frond);
+				Spray(new Vector3(0f, h * 0.88f, 0f), Vector3.up, h * 0.12f, Mathf.Max(0.4f, sp.CrownWidth * h * 0.6f), crown, sp.LeafCell, 0.3f);
+			}
+
+			/// <summary>
+			/// A rosette tree (<see cref="TreeForm.Rosette"/>): a stout, slightly crooked stem to
+			/// <see cref="TreeSpecies.CrownBase"/> of the height, then <see cref="TreeSpecies.Branches"/> limbs that each
+			/// fork twice more — every fork two ways, now and then three, each branch seven tenths of the last — aimed so
+			/// the tips reach the crown's edge and top, and every tip a rosette (<see cref="Tuft"/>). A Joshua tree's
+			/// angular, upturned branching; with more limbs and a wider crown, a dragon tree's dense umbrella.
+			/// </summary>
+			public void Rosette()
+			{
+				float h = sp.Height;
+				Reseed(0);
+				float stem = h * Mathf.Clamp(sp.CrownBase, 0.1f, 0.9f);
+				Vector3 lean = new Vector3(rng.Range(-0.05f, 0.05f), 0f, rng.Range(-0.05f, 0.05f)) * stem;
+				Vector3 top = new Vector3(0f, stem, 0f) + lean;
+				BeginPart(0, Vector3.zero, 0f, PlantPart.Fixed);
+				Crooked(Vector3.zero, top, sp.TrunkRadius, sp.TrunkRadius * 0.75f, 9, lod == 0 ? 6 : 3, 0.04f, 0f, false);
+				Vector3 TrunkAt(float y) => Vector3.Lerp(Vector3.zero, top, y / Mathf.Max(0.01f, stem));
+				Buttresses(TrunkAt);
+				PropRoots(TrunkAt);
+				var crown = new Vector3(lean.x, (stem + h) * 0.5f, lean.z);
+				float crownRadius = sp.CrownWidth * h;
+				(int limbs, int coreLimbs) = Spared(Mathf.Max(2, sp.Branches));
+				for (int l = 0; l < limbs; l++)
+				{
+					Reseed(100 + l);
+					float yaw = Mathf.Deg2Rad * (l * 360f / limbs + rng.Range(-25f, 25f));
+					var outward = new Vector3(Mathf.Cos(yaw), 0f, Mathf.Sin(yaw));
+					// Where this limb's tips should end up: out at the crown's edge, up near the top.
+					Vector3 goal = outward * crownRadius * rng.Range(0.6f, 0.95f) + Vector3.up * (h - stem - sp.LeafSize * 0.4f) * rng.Range(0.75f, 1f);
+					float reach = goal.magnitude / (1f + 0.7f + 0.49f);
+					BeginPart(100 + l, top, Rank(l, limbs, coreLimbs, 100), PlantPart.Limb);
+					Fork(top, goal.normalized, reach, sp.TrunkRadius * 0.62f, 3, 100 + l, crown);
+				}
+			}
+
+			/// <summary>One branch of a rosette tree and, below <paramref name="level"/> 1, the forks it splits into.</summary>
+			private void Fork(Vector3 from, Vector3 dir, float length, float radius, int level, int id, Vector3 crown)
+			{
+				Reseed(50000 + id);
+				Vector3 end = from + dir * length;
+				Crooked(from, end, radius, radius * 0.72f, lod == 0 ? 6 : 4, lod == 0 ? 4 : 2, 0.06f, 0.04f, false);
+				if (level <= 1)
+				{
+					Tuft(end, dir, crown);
+					return;
+				}
+				int forks = Hash(id, 31) < 0.25f ? 3 : 2;
+				float spin = rng.NextFloat() * 360f;
+				Vector3 across = PlantParts.Perpendicular(dir);
+				for (int k = 0; k < forks; k++)
+				{
+					// Splayed off the parent, turned round it, and bent up: the branches climb toward the light.
+					Vector3 splay = Quaternion.AngleAxis(spin + k * 360f / forks + rng.Range(-20f, 20f), dir) * Quaternion.AngleAxis(rng.Range(22f, 40f), across) * dir;
+					Vector3 child = (splay + Vector3.up * 0.25f).normalized;
+					Fork(end, child, length * rng.Range(0.62f, 0.78f), radius * 0.7f, level - 1, id * 4 + k + 1, crown);
+				}
+			}
+
+			/// <summary>
+			/// A rosette at a branch tip: fans of strap leaves (the species' <see cref="TreeSpecies.LeafCell"/>, a fan
+			/// springing from a point a little up its card) splayed up and round the tip into a spiky ball, and under it a
+			/// fan hanging down in a browner tone — the dead leaves a yucca keeps as a skirt below its living ones.
+			/// </summary>
+			private void Tuft(Vector3 at, Vector3 dir, Vector3 crown)
+			{
+				float size = sp.LeafSize;
+				int fans = lod == 0 ? 4 : 3;
+				Vector3 axis = (dir + Vector3.up * 0.8f).normalized;
+				Vector3 across = PlantParts.Perpendicular(axis);
+				float spin = rng.NextFloat() * 360f;
+				for (int f = 0; f < fans; f++)
+				{
+					Vector3 d = f == 0 ? axis
+						: Quaternion.AngleAxis(spin + f * 360f / (fans - 1), axis) * Quaternion.AngleAxis(rng.Range(45f, 70f), across) * axis;
+					// The cell's fan springs from 0.28 up the card: set back so it springs from the tip.
+					Spray(at - d * size * 0.28f, d, size, size, crown, sp.LeafCell, 0.4f);
+				}
+				var horizontal = new Vector3(dir.x, 0f, dir.z);
+				Vector3 droop = (Vector3.down + horizontal.normalized * 0.45f).normalized;
+				Color dead = Color.Lerp(sp.LeafA, new Color(0.6f, 0.53f, 0.38f, 1f), 0.6f);
+				Spray(at - droop * size * 0.2f, droop, size * 0.85f, size * 0.85f, crown, sp.LeafCell, 0.3f, dead);
 			}
 		}
 	}

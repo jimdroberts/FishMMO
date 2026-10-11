@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sand Worm
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A burrowing worm long enough to swallow a wagon, that hunts by the tremor of footsteps on the dunes.'
+  Description: A burrowing worm long enough to swallow a wagon, that hunts by the
+    tremor of footsteps on the dunes.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - us
-      Description: 'Rumbling, sibilant — sand pouring'
+      Description: "Rumbling, sibilant \u2014 sand pouring"
       Tags:
       - Vermin
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - husk
       - shell
     AllowGenericOccupations: 0
+    Plural: Sand Worms
+    Adjective: Sand Worm
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 3
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 525873855
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

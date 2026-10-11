@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hollow Priest
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Dead clergy still keeping a forgotten rite — sepulchral, chanted names'
+  Description: "Dead clergy still keeping a forgotten rite \u2014 sepulchral, chanted
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ius
       - oth
       - um
-      Description: 'Dead clergy still keeping a forgotten rite — sepulchral, chanted names'
+      Description: "Dead clergy still keeping a forgotten rite \u2014 sepulchral,
+        chanted names"
       Tags:
       - Rite-names
       - Chapel-marks
@@ -162,6 +164,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Hollow Priests
+    Adjective: Hollow Priest
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 2
@@ -173,3 +177,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1169976905
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

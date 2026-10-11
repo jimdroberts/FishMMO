@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Giant Rat
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: A rat grown dog-sized on refuse and worse; they come in swarms and carry every sickness the sewers know.
+  Description: A rat grown dog-sized on refuse and worse; they come in swarms and
+    carry every sickness the sewers know.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - us
-      Description: 'Squeaking, scrabbling — short, sharp'
+      Description: "Squeaking, scrabbling \u2014 short, sharp"
       Tags:
       - Vermin
       - Monster
@@ -150,6 +151,8 @@ MonoBehaviour:
       - husk
       - shell
     AllowGenericOccupations: 0
+    Plural: Giant Rats
+    Adjective: Giant Rat
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -159,3 +162,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -857237992
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

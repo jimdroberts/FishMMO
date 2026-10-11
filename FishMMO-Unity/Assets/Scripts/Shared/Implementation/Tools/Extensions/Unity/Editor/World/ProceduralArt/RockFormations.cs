@@ -101,12 +101,27 @@ namespace FishMMO.Shared.WorldDesign
 				case FormationKind.Columns: return 0.05f;
 				case FormationKind.FallenColumns: return 0.08f;
 				case FormationKind.Scree: return 0.08f;
+				case FormationKind.CrystalCluster: return 0.15f;
+				case FormationKind.Cone: return 0.06f;
+				case FormationKind.Terrace: return 0.12f;
+				case FormationKind.CraterRim: return 0.2f;
+				case FormationKind.PolygonRidges: return 0.45f;
+				case FormationKind.Mound: return 0.05f;
+				case FormationKind.Stalagmite: return 0.05f;
+				case FormationKind.Flowstone: return 0.12f;
+				case FormationKind.Knob: return 0.06f;
+				case FormationKind.Ventifact: return 0.15f;
+				case FormationKind.Sastrugi: return 0.25f;
+				case FormationKind.Penitentes: return 0.08f;
+				case FormationKind.Lobe: return 0.2f;
+				case FormationKind.Table: return 0.08f;
+				case FormationKind.RubbleRidge: return 0.12f;
 				default: return 0.12f;
 			}
 		}
 
-		private static readonly Color32 White = new Color32(255, 255, 255, 0);
-		private const float Tau = Mathf.PI * 2f;
+		internal static readonly Color32 White = new Color32(255, 255, 255, 0);
+		internal const float Tau = Mathf.PI * 2f;
 
 		/// <summary>The seed a variant of a shape of a type is built from.</summary>
 		public static int VariantSeed(string type, string shape, int variant, int seed)
@@ -142,6 +157,21 @@ namespace FishMMO.Shared.WorldDesign
 				case FormationKind.Faceted: mesh = Faceted(in type, in shape, res, s); break;
 				case FormationKind.SlabStack: mesh = SlabStack(in type, in shape, res, s, false); break;
 				case FormationKind.Standing: mesh = SlabStack(in type, in shape, res, s, true); break;
+				case FormationKind.CrystalCluster: mesh = CrystalFormations.CrystalCluster(in type, in shape, res, s); break;
+				case FormationKind.Cone: mesh = CrystalFormations.Cone(in type, in shape, res, s); break;
+				case FormationKind.Terrace: mesh = CrystalFormations.Terrace(in type, in shape, res, s); break;
+				case FormationKind.CraterRim: mesh = CrystalFormations.CraterRim(in type, in shape, res, s); break;
+				case FormationKind.PolygonRidges: mesh = CrystalFormations.PolygonRidges(in type, in shape, res, s); break;
+				case FormationKind.Mound: mesh = CrystalFormations.Mound(in type, in shape, res, s); break;
+				case FormationKind.Stalagmite: mesh = CrystalFormations.Stalagmites(in type, in shape, res, s); break;
+				case FormationKind.Flowstone: mesh = CrystalFormations.Flowstone(in type, in shape, res, s); break;
+				case FormationKind.Knob: mesh = CrystalFormations.Knob(in type, in shape, res, s); break;
+				case FormationKind.Ventifact: mesh = CrystalFormations.Ventifact(in type, in shape, res, s); break;
+				case FormationKind.Sastrugi: mesh = CrystalFormations.Sastrugi(in type, in shape, res, s); break;
+				case FormationKind.Penitentes: mesh = CrystalFormations.Penitentes(in type, in shape, res, s); break;
+				case FormationKind.Lobe: mesh = CrystalFormations.Lobe(in type, in shape, res, s); break;
+				case FormationKind.Table: mesh = CrystalFormations.Table(in type, in shape, res, s); break;
+				case FormationKind.RubbleRidge: mesh = IceMeshes.BuildGroundedRidge(shape.Size, shape.Height * (1f - Burial(shape.Kind)), shape.Height * Burial(shape.Kind), shape.Count, res, s); break;
 				default: mesh = Boulder(in type, in shape, res, s); break;
 			}
 			return Finish(mesh, in shape, Burial(shape.Kind));
@@ -183,7 +213,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Finishing ────────────────────────────────────────────────
 
 		/// <summary>Centres it, sinks it, fits it to the declared size and recomputes tangents.</summary>
-		private static MeshBuilder Finish(MeshBuilder mesh, in FormationShape shape, float burial)
+		internal static MeshBuilder Finish(MeshBuilder mesh, in FormationShape shape, float burial)
 		{
 			Bounds b = mesh.Bounds;
 			float height = Mathf.Max(1e-4f, b.size.y);
@@ -197,27 +227,27 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Small helpers ────────────────────────────────────────────
 
-		private static int Level(int res) => res >= 8 ? 2 : res >= 4 ? 1 : 0;
+		internal static int Level(int res) => res >= 8 ? 2 : res >= 4 ? 1 : 0;
 
 		/// <summary>
 		/// Cube-sphere cells per chart edge for a lone rock: a little finer than the legacy
 		/// boulders, and finer again where the style has relief the mesh must carry (pits, clasts,
 		/// foliation ribs), which would otherwise alias away between vertices.
 		/// </summary>
-		private static int CubeRes(int res, in RockGeometryStyle st)
+		internal static int CubeRes(int res, in RockGeometryStyle st)
 		{
 			bool detailed = (st.Pits.Spacing > 0f && st.Pits.Depth > 0f) || st.Clasts.Size > 0f || st.Foliation.Relief > 0f;
 			return Mathf.Max(2, Mathf.RoundToInt(res * (detailed ? 1.8f : 1.4f)));
 		}
 
 		/// <summary>A real smoothstep (Unity's <c>Mathf.SmoothStep</c> interpolates between its first two arguments instead).</summary>
-		private static float Smooth(float e0, float e1, float x)
+		internal static float Smooth(float e0, float e1, float x)
 		{
 			float t = Mathf.Clamp01((x - e0) / (e1 - e0));
 			return t * t * (3f - 2f * t);
 		}
 
-		private static float SMin(float a, float b, float k)
+		internal static float SMin(float a, float b, float k)
 		{
 			if (k <= 1e-6f)
 			{
@@ -227,14 +257,14 @@ namespace FishMMO.Shared.WorldDesign
 			return Mathf.Lerp(b, a, h) - k * h * (1f - h);
 		}
 
-		private static float SMax(float a, float b, float k) => -SMin(-a, -b, k);
+		internal static float SMax(float a, float b, float k) => -SMin(-a, -b, k);
 
-		private static float Frac(float x) => x - Mathf.Floor(x);
+		internal static float Frac(float x) => x - Mathf.Floor(x);
 
-		private static float Range(DeterministicRNG rng, Vector2 range) => rng.Range(range.x, Mathf.Max(range.x, range.y));
+		internal static float Range(DeterministicRNG rng, Vector2 range) => rng.Range(range.x, Mathf.Max(range.x, range.y));
 
 		/// <summary>A rotation by the right-hand rule about <paramref name="axis"/>: v' = v cos θ + (k × v) sin θ + k (k·v)(1 − cos θ).</summary>
-		private static Matrix4x4 Rotation(Vector3 axis, float degrees)
+		internal static Matrix4x4 Rotation(Vector3 axis, float degrees)
 		{
 			axis.Normalize();
 			float a = degrees * Mathf.Deg2Rad;
@@ -248,13 +278,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A unit direction tilted <paramref name="tiltDegrees"/> from up toward azimuth <paramref name="azimuth"/> (radians).</summary>
-		private static Vector3 Tilted(float tiltDegrees, float azimuth)
+		internal static Vector3 Tilted(float tiltDegrees, float azimuth)
 		{
 			float t = tiltDegrees * Mathf.Deg2Rad;
 			return new Vector3(Mathf.Sin(t) * Mathf.Cos(azimuth), Mathf.Cos(t), Mathf.Sin(t) * Mathf.Sin(azimuth));
 		}
 
-		private static Vector3 RandomAxis(DeterministicRNG rng)
+		internal static Vector3 RandomAxis(DeterministicRNG rng)
 		{
 			float y = rng.Range(-1f, 1f);
 			float a = rng.NextFloat() * Tau;
@@ -262,14 +292,14 @@ namespace FishMMO.Shared.WorldDesign
 			return new Vector3(Mathf.Cos(a) * h, y, Mathf.Sin(a) * h);
 		}
 
-		private static Vector3 HorizontalAxis(DeterministicRNG rng)
+		internal static Vector3 HorizontalAxis(DeterministicRNG rng)
 		{
 			float a = rng.NextFloat() * Tau;
 			return new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
 		}
 
 		/// <summary>The radius of the superellipse |x/a|^e + |z/b|^e = 1 toward angle θ.</summary>
-		private static float Superellipse(float a, float b, float e, float theta)
+		internal static float Superellipse(float a, float b, float e, float theta)
 		{
 			float c = Mathf.Abs(Mathf.Cos(theta)) / a, s = Mathf.Abs(Mathf.Sin(theta)) / b;
 			float sum = Mathf.Pow(c, e) + Mathf.Pow(s, e);
@@ -277,13 +307,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Smooth noise round a circle, periodic in the angle: a plan outline's wobble.</summary>
-		private static float CircleNoise(float phi, float frequency, int seed)
+		internal static float CircleNoise(float phi, float frequency, int seed)
 		{
 			return ProceduralNoise.Fbm3(new Vector3(Mathf.Cos(phi) * frequency, Mathf.Sin(phi) * frequency, 0.37f), 3, 0.5f, seed);
 		}
 
 		/// <summary>The support distance of an ellipsoid of semi-axes <paramref name="half"/> along <paramref name="n"/>.</summary>
-		private static float Support(Vector3 half, Vector3 n)
+		internal static float Support(Vector3 half, Vector3 n)
 		{
 			float x = half.x * n.x, y = half.y * n.y, z = half.z * n.z;
 			return Mathf.Sqrt(x * x + y * y + z * z);
@@ -295,7 +325,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// with probability <paramref name="fill"/>. Taking the maximum over every cell in reach,
 		/// rather than only the nearest, keeps the field continuous where two domes overlap.
 		/// </summary>
-		private static float CellBump(Vector3 p, int seed, float fill, float rMin, float rMax, float power)
+		internal static float CellBump(Vector3 p, int seed, float fill, float rMin, float rMax, float power)
 		{
 			int cx = Mathf.FloorToInt(p.x), cy = Mathf.FloorToInt(p.y), cz = Mathf.FloorToInt(p.z);
 			float best = 0f;
@@ -333,7 +363,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A vertical solution flute, 0 on the sharp ridges between grooves and 1 at a groove's floor.</summary>
-		private static float Groove(float phi, Vector3 p, int count, float warpScale, int seed)
+		internal static float Groove(float phi, Vector3 p, int count, float warpScale, int seed)
 		{
 			float warp = ProceduralNoise.Fbm3(p / Mathf.Max(0.05f, warpScale), 2, 0.5f, seed) * 0.5f;
 			float x = Frac(phi * count / Tau + warp);
@@ -345,7 +375,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// whatever the real positions have since become. The same rule as
 		/// <see cref="MeshBuilder.AddTriangle"/>, judged on the undeformed shape.
 		/// </summary>
-		private static void AddOriented(MeshBuilder mesh, List<Vector3> reference, int a, int b, int c, Vector3 facing)
+		internal static void AddOriented(MeshBuilder mesh, List<Vector3> reference, int a, int b, int c, Vector3 facing)
 		{
 			Vector3 n = Vector3.Cross(reference[b] - reference[a], reference[c] - reference[a]);
 			List<int> list = mesh.Submeshes[0];
@@ -361,7 +391,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Engine 1: implicit field, ray-cast from a centre ─────────
 
-		private struct Cut
+		internal struct Cut
 		{
 			public Vector3 N;
 			public float D, Soft, Rough;
@@ -371,7 +401,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A rock's signed field in metres along a ray from <see cref="Origin"/>: negative inside.
 		/// A superellipsoid round <see cref="Centre"/>, displaced, then cut.
 		/// </summary>
-		private sealed class Field
+		internal sealed class Field
 		{
 			public Vector3 Centre, Origin;
 			public Vector3 Half = Vector3.one;
@@ -571,7 +601,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static Vector3 CubePoint(int face, float a, float b)
+		internal static Vector3 CubePoint(int face, float a, float b)
 		{
 			// Written per component, so a point on a shared edge is bit-identical from both charts.
 			switch (face)
@@ -585,7 +615,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static readonly Vector3[] ChartAxis = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
+		internal static readonly Vector3[] ChartAxis = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
 
 		/// <summary>
 		/// The field's surface as a cube-sphere of six charts, smooth-shaded across their seams.
@@ -596,7 +626,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// cube grid's own (i, j) would turn a strata texture's bands into squares on top of the
 		/// rock and chevrons down its sides — the construction showing through.
 		/// </remarks>
-		private static MeshBuilder BuildField(Field field, int res)
+		internal static MeshBuilder BuildField(Field field, int res)
 		{
 			res = Mathf.Max(1, res);
 			float reach = 1.8f * field.MaxHalf + (field.Origin - field.Centre).magnitude + 2f * field.Lump;
@@ -657,7 +687,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The field every lone rock starts from: the style's proportions, lumps, cleavage and surface features.</summary>
-		private static Field BaseField(in RockType type, in FormationShape shape, DeterministicRNG rng, int seed, float halfWidth, float halfHeight)
+		internal static Field BaseField(in RockType type, in FormationShape shape, DeterministicRNG rng, int seed, float halfWidth, float halfHeight)
 		{
 			RockGeometryStyle st = type.Style;
 			float aspect = Range(rng, st.Aspect);
@@ -697,7 +727,7 @@ namespace FishMMO.Shared.WorldDesign
 			return f;
 		}
 
-		private static MeshBuilder Boulder(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Boulder(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			Field field = BaseField(in type, in shape, rng, seed, shape.Size * 0.5f, shape.Height * 0.5f);
@@ -709,7 +739,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// bottom, smaller and a little offset and turned on the one below. Perched: a big rounder
 		/// boulder resting on a low wide one by a small contact, a logan stone.
 		/// </summary>
-		private static MeshBuilder Tor(in RockType type, in FormationShape shape, int res, int seed, bool perched)
+		internal static MeshBuilder Tor(in RockType type, in FormationShape shape, int res, int seed, bool perched)
 		{
 			var rng = new DeterministicRNG(seed);
 			int n = perched ? 2 : Mathf.Max(2, shape.Count > 0 ? shape.Count : 3);
@@ -778,7 +808,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A corestone split by one vertical joint, both halves cast from the same field so they still match across the gap, leaning apart.</summary>
-		private static MeshBuilder Split(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Split(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			Field proto = BaseField(in type, in shape, rng, seed, shape.Size * 0.46f, shape.Height * 0.5f);
@@ -806,13 +836,13 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Engine 2: lathe ──────────────────────────────────────────
 
-		private struct Ring
+		internal struct Ring
 		{
 			public float Y, Scale, Inset, Wall;
 		}
 
 		/// <summary>A closed surface of revolution with a star-shaped plan outline, rings bottom to top.</summary>
-		private sealed class Lathe
+		internal sealed class Lathe
 		{
 			public Vector3 Centre;
 			public int Segments = 16;
@@ -833,7 +863,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static MeshBuilder BuildLathe(Lathe lathe)
+		internal static MeshBuilder BuildLathe(Lathe lathe)
 		{
 			int n = Mathf.Max(3, lathe.Segments);
 			int k = lathe.Rings.Count;
@@ -904,7 +934,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A capped fan over one rim ring: concentric rings shrinking toward the axis, planar UVs in metres.</summary>
-		private static void AddCap(MeshBuilder part, List<Vector3> reference, Lathe lathe, Vector3[,] grid, int rim, int n, float side)
+		internal static void AddCap(MeshBuilder part, List<Vector3> reference, Lathe lathe, Vector3[,] grid, int rim, int n, float side)
 		{
 			float y = lathe.Rings[rim].Y;
 			Vector3 centre = lathe.Centre + new Vector3(0f, y, 0f);
@@ -960,7 +990,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// pinnacle both land inside it.
 		/// </summary>
 		/// <param name="pitted">The tops carry solution pans: more cap rings, so a pan is more than one vertex.</param>
-		private static void LatheDetail(int res, int parts, bool pitted, out int segments, out int bevelSteps, out int wallRings, out int capRings)
+		internal static void LatheDetail(int res, int parts, bool pitted, out int segments, out int bevelSteps, out int wallRings, out int capRings)
 		{
 			int level = Level(res);
 			bevelSteps = level == 2 ? 2 : 1;
@@ -978,10 +1008,10 @@ namespace FishMMO.Shared.WorldDesign
 			segments = Mathf.Clamp(budget / perSegment, 8, 6 + 3 * res);
 		}
 
-		private static bool PittedTops(in RockGeometryStyle st) => st.Pits.Spacing > 0f && st.Pits.Depth > 0f && st.Pits.Tops > 0f;
+		internal static bool PittedTops(in RockGeometryStyle st) => st.Pits.Spacing > 0f && st.Pits.Depth > 0f && st.Pits.Tops > 0f;
 
 		/// <summary>One bed's profile: a rounded bottom edge, a wall, a rounded top edge; insets from the outline in metres.</summary>
-		private static void BedRings(Lathe lathe, float thickness, float roundBottom, float roundTop, int bevelSteps, int wallRings)
+		internal static void BedRings(Lathe lathe, float thickness, float roundBottom, float roundTop, int bevelSteps, int wallRings)
 		{
 			float limit = thickness * 0.85f;
 			if (roundBottom + roundTop > limit)
@@ -1015,7 +1045,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// soft bed below. Ledges also set each bed back on one face, a staircase; a pedestal sets
 		/// its middle beds far back under a hard cap. Dip tilts the whole stack.
 		/// </summary>
-		private static MeshBuilder Bedded(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Bedded(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;
@@ -1143,7 +1173,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A bed's wall: weathering relief, and solution flutes running down from its top edge.</summary>
-		private static Func<Vector3, float, float> BedWall(in RockGeometryStyle st, float size, float top, float thickness, int seed)
+		internal static Func<Vector3, float, float> BedWall(in RockGeometryStyle st, float size, float top, float thickness, int seed)
 		{
 			float lump = st.Lumpiness * 0.02f * size;
 			FluteStyle fl = st.Flutes;
@@ -1164,7 +1194,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A bed's top: gentle relief, and solution pans where the style pits upward faces.</summary>
-		private static Func<Vector3, float> BedTop(in RockGeometryStyle st, float size, int seed)
+		internal static Func<Vector3, float> BedTop(in RockGeometryStyle st, float size, int seed)
 		{
 			PitStyle pits = st.Pits;
 			float lump = st.Lumpiness * 0.012f * size;
@@ -1181,7 +1211,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Distance from <paramref name="c"/> to a convex polygon's boundary toward angle φ.</summary>
-		private static float RayToPolygon(Vector2 c, float phi, List<Vector2> polygon)
+		internal static float RayToPolygon(Vector2 c, float phi, List<Vector2> polygon)
 		{
 			var d = new Vector2(Mathf.Cos(phi), Mathf.Sin(phi));
 			float best = float.MaxValue;
@@ -1206,7 +1236,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The cell of a site among others, each bisector moved back by half the gap: a convex polygon, counter-clockwise.</summary>
-		private static List<Vector2> VoronoiCell(Vector2 site, List<Vector2> sites, float gap, float extent)
+		internal static List<Vector2> VoronoiCell(Vector2 site, List<Vector2> sites, float gap, float extent)
 		{
 			var poly = new List<Vector2>
 			{
@@ -1250,7 +1280,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Limestone pavement: clints, the blocks between widened joints, each a low lathe with
 		/// solution-rounded edges and a top pocked with pans; the grikes between them are the gaps.
 		/// </summary>
-		private static MeshBuilder Pavement(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Pavement(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;
@@ -1312,7 +1342,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A karst pinnacle: a tapering lathe scored top to bottom by deep solution flutes, to a sharp tip.</summary>
-		private static MeshBuilder Pinnacle(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Pinnacle(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;
@@ -1363,7 +1393,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A fairy chimney: a flared cone of soft tuff, scored by rain runnels and banded by ash
 		/// layers, under a capstone of harder rock that shields it.
 		/// </summary>
-		private static MeshBuilder Chimney(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Chimney(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;
@@ -1441,7 +1471,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Engine 3: convex polytope ────────────────────────────────
 
 		/// <summary>One plane of a polytope (keep n·x ≤ d) and how its face is shaped.</summary>
-		private struct Facet
+		internal struct Facet
 		{
 			public Vector3 N;
 			public float D;
@@ -1454,13 +1484,13 @@ namespace FishMMO.Shared.WorldDesign
 			public float Roughness;
 		}
 
-		private static Facet FacetOf(Vector3 n, float d, float dish = 0f, int ripples = 0, float rippleRelief = 0f, float roughness = 0f)
+		internal static Facet FacetOf(Vector3 n, float d, float dish = 0f, int ripples = 0, float rippleRelief = 0f, float roughness = 0f)
 		{
 			return new Facet { N = n.normalized, D = d, Dish = dish, Ripples = ripples, RippleRelief = rippleRelief, Roughness = roughness };
 		}
 
 		/// <summary>Double-precision vector for clipping, so corners computed from different faces agree to far below the weld tolerance.</summary>
-		private readonly struct D3
+		internal readonly struct D3
 		{
 			public readonly double X, Y, Z;
 
@@ -1483,7 +1513,7 @@ namespace FishMMO.Shared.WorldDesign
 			public Vector3 ToVector3() => new Vector3((float)X, (float)Y, (float)Z);
 		}
 
-		private static List<D3> Clip(List<D3> poly, D3 n, double d)
+		internal static List<D3> Clip(List<D3> poly, D3 n, double d)
 		{
 			var result = new List<D3>(poly.Count + 1);
 			for (int i = 0; i < poly.Count; i++)
@@ -1502,7 +1532,7 @@ namespace FishMMO.Shared.WorldDesign
 			return result;
 		}
 
-		private static long EdgeKey(int a, int b) => ((long)a << 32) | (uint)b;
+		internal static long EdgeKey(int a, int b) => ((long)a << 32) | (uint)b;
 
 		/// <summary>
 		/// The convex solid the planes bound, tessellated: flat faces as fans, dished faces as rings
@@ -1510,7 +1540,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <param name="spacing">Edge subdivision length where a dished face needs the points.</param>
 		/// <param name="rings">Concentric rings on a dished face; zero lays every face flat.</param>
-		private static bool TryPolytope(List<Facet> facets, float spacing, int rings, int seed, out MeshBuilder part)
+		internal static bool TryPolytope(List<Facet> facets, float spacing, int rings, int seed, out MeshBuilder part)
 		{
 			part = null;
 			int count = facets.Count;
@@ -1707,7 +1737,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>One face: a fan when flat; when dished, rings from the boundary (undisplaced) to the point of impact.</summary>
 		/// <param name="corners">The boundary is only the face's corners, no edge subdivisions.</param>
-		private static void AddPolytopeFace(MeshBuilder part, List<Vector3> reference, List<Vector3> boundary, bool corners, Vector3 n, in Facet f, int rings, int seed)
+		internal static void AddPolytopeFace(MeshBuilder part, List<Vector3> reference, List<Vector3> boundary, bool corners, Vector3 n, in Facet f, int rings, int seed)
 		{
 			// UVs in metres on the face's plane, v as near to up as the face allows, so strata lie level.
 			Vector3 vAxis = Vector3.up - n * n.y;
@@ -1796,7 +1826,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>True when a fan from the first corner gives triangles that all face along n with real area (welding can nudge a corner a hair off convex).</summary>
-		private static bool ConvexFan(List<Vector3> boundary, Vector3 n)
+		internal static bool ConvexFan(List<Vector3> boundary, Vector3 n)
 		{
 			float scale = (boundary[1] - boundary[0]).sqrMagnitude;
 			for (int i = 1; i + 1 < boundary.Count; i++)
@@ -1815,7 +1845,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// point of impact): a scoop deepest at the impact, concentric ripples round it (the
 		/// "rings" of a conchoidal fracture), and roughness faded in from the edge.
 		/// </summary>
-		private static float Depth(float t, Vector3 p, float dish, int ripples, float ripple, float roughness, float width, int seed)
+		internal static float Depth(float t, Vector3 p, float dish, int ripples, float ripple, float roughness, float width, int seed)
 		{
 			float s = 1f - t;
 			float d = dish * (1f - s * s);
@@ -1833,7 +1863,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A box, which always closes: the fallback if every redraw of a plane set failed.</summary>
-		private static MeshBuilder BoxFallback(Vector3 half)
+		internal static MeshBuilder BoxFallback(Vector3 half)
 		{
 			var facets = new List<Facet>
 			{
@@ -1846,7 +1876,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Planes tangent to an ellipsoid in well-spread directions, some cut deeper: a conchoidally broken lump.</summary>
-		private static List<Facet> ConchoidalFacets(DeterministicRNG rng, Vector3 half, int count, float facetDepth, in FractureStyle fr, bool flatBase)
+		internal static List<Facet> ConchoidalFacets(DeterministicRNG rng, Vector3 half, int count, float facetDepth, in FractureStyle fr, bool flatBase)
 		{
 			var facets = new List<Facet>();
 			Matrix4x4 spin = Rotation(RandomAxis(rng), rng.NextFloat() * 360f);
@@ -1873,7 +1903,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Three near-orthogonal joint sets make a block; a few chips take its corners and edges.</summary>
-		private static List<Facet> JointedFacets(DeterministicRNG rng, Vector3 half, int count, float facetDepth, in FractureStyle fr, float elongation)
+		internal static List<Facet> JointedFacets(DeterministicRNG rng, Vector3 half, int count, float facetDepth, in FractureStyle fr, float elongation)
 		{
 			var facets = new List<Facet>();
 			Matrix4x4 frame = Rotation(Vector3.up, rng.NextFloat() * 360f) * Rotation(HorizontalAxis(rng), rng.Range(0f, 8f));
@@ -1904,7 +1934,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A polygonal prism along y of the given radius and length, its ends broken or cupped.</summary>
-		private static List<Facet> PrismFacets(DeterministicRNG rng, int sides, float radius, float length, in ColumnStyle cs, float topBroken)
+		internal static List<Facet> PrismFacets(DeterministicRNG rng, int sides, float radius, float length, in ColumnStyle cs, float topBroken)
 		{
 			var facets = new List<Facet>();
 			float turn = rng.NextFloat() * Tau;
@@ -1926,7 +1956,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A cleaved plate: two parallel cleavage faces and a ring of broken edge faces at various bevels.</summary>
-		private static List<Facet> PlateFacets(DeterministicRNG rng, float a, float b, float thickness, in CleavageStyle cl, float roughness)
+		internal static List<Facet> PlateFacets(DeterministicRNG rng, float a, float b, float thickness, in CleavageStyle cl, float roughness)
 		{
 			var facets = new List<Facet>
 			{
@@ -1952,7 +1982,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// rotation turns downward), and a top (−z) broken by two or three chips, as a slate post
 		/// is split from the bed and its top knocked off.
 		/// </summary>
-		private static List<Facet> StandingFacets(DeterministicRNG rng, float a, float b, float thickness, float roughness)
+		internal static List<Facet> StandingFacets(DeterministicRNG rng, float a, float b, float thickness, float roughness)
 		{
 			var facets = new List<Facet>
 			{
@@ -1975,7 +2005,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Builds a polytope from a plane-set generator, redrawing until it closes cleanly; a box if it never does.</summary>
-		private static MeshBuilder Polytope(Func<List<Facet>> draw, float spacing, int rings, int seed, Vector3 fallbackHalf)
+		internal static MeshBuilder Polytope(Func<List<Facet>> draw, float spacing, int rings, int seed, Vector3 fallbackHalf)
 		{
 			for (int attempt = 0; attempt < 24; attempt++)
 			{
@@ -1987,14 +2017,14 @@ namespace FishMMO.Shared.WorldDesign
 			return BoxFallback(fallbackHalf);
 		}
 
-		private static int DishRings(int level) => level == 2 ? 4 : level == 1 ? 2 : 0;
+		internal static int DishRings(int level) => level == 2 ? 4 : level == 1 ? 2 : 0;
 
 		/// <summary>
 		/// A faceted rock: conchoidal (planes falling every way, deeply scooped and rippled, edges
 		/// left razor sharp), jointed (a block of three joint sets with chipped corners), or, for
 		/// a columnar rock, a broken length of column lying on its side.
 		/// </summary>
-		private static MeshBuilder Faceted(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Faceted(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;
@@ -2026,7 +2056,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Columns are mostly hexagonal, with pentagons and heptagons as the defects.</summary>
-		private static int SidesFor(DeterministicRNG rng)
+		internal static int SidesFor(DeterministicRNG rng)
 		{
 			float u = rng.NextFloat();
 			return u < 0.55f ? 6 : u < 0.8f ? 5 : 7;
@@ -2037,7 +2067,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// little smaller and pushed a little further over, then tilted together; or one thick
 		/// plate stood on end.
 		/// </summary>
-		private static MeshBuilder SlabStack(in RockType type, in FormationShape shape, int res, int seed, bool standing)
+		internal static MeshBuilder SlabStack(in RockType type, in FormationShape shape, int res, int seed, bool standing)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;
@@ -2078,7 +2108,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A column cluster: Voronoi prisms of a jittered hexagonal lattice, tops tilted, broken and cupped.</summary>
-		private static MeshBuilder Columns(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Columns(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			ColumnStyle cs = type.Style.Columns;
@@ -2178,7 +2208,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Broken lengths of column lying on their sides, a layer on the ground and a few resting in the grooves on top.</summary>
-		private static MeshBuilder FallenColumns(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder FallenColumns(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			ColumnStyle cs = type.Style.Columns;
@@ -2220,7 +2250,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Fragments and scree ──────────────────────────────────────
 
 		/// <summary>One loose fragment of the type, centred on the origin: angular, platy or rounded as the rock breaks.</summary>
-		private static MeshBuilder Fragment(in RockType type, float size, int res, int seed)
+		internal static MeshBuilder Fragment(in RockType type, float size, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;
@@ -2266,7 +2296,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// on whatever is already beneath it and tipped outward down the slope (imbricated, as
 		/// plates come to rest on a talus cone). No smooth core: the heap is chips all through.
 		/// </summary>
-		private static MeshBuilder PlatyPile(in RockType type, int count, float radius, float aspect, int res, int seed, DeterministicRNG rng)
+		internal static MeshBuilder PlatyPile(in RockType type, int count, float radius, float aspect, int res, int seed, DeterministicRNG rng)
 		{
 			var mesh = new MeshBuilder(1);
 			count = Mathf.Max(count, 12);
@@ -2306,7 +2336,7 @@ namespace FishMMO.Shared.WorldDesign
 			return mesh;
 		}
 
-		private static MeshBuilder Scree(in RockType type, in FormationShape shape, int res, int seed)
+		internal static MeshBuilder Scree(in RockType type, in FormationShape shape, int res, int seed)
 		{
 			var rng = new DeterministicRNG(seed);
 			RockGeometryStyle st = type.Style;

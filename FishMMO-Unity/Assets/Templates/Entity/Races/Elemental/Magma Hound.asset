@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Magma Hound
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Hounds of living lava — baying, crackling names'
+  Description: "Hounds of living lava \u2014 baying, crackling names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ulf
       - ang
-      Description: 'Hounds of living lava — baying, crackling names'
+      Description: "Hounds of living lava \u2014 baying, crackling names"
       Tags:
       - Lava-names
       - Bay-marks
@@ -127,7 +127,7 @@ MonoBehaviour:
       - Who Bayed the Volcano Awake
       - Who Burned a Track Through the Ice Field
       - Who Guarded the Slag Gate Through the Cold Age
-      - 'Who Was Whelped in the Volcano''s Throat'
+      - Who Was Whelped in the Volcano's Throat
       Occupational:
       - Gate-guard
       - Track-runner
@@ -161,6 +161,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Magma Hounds
+    Adjective: Magma Hound
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3

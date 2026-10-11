@@ -42,6 +42,9 @@ namespace FishMMO.UnitTests
 		/// <summary>The shared marker sheet both map panels load.</summary>
 		private const string MarkerSheetPath = "Assets/Scripts/Client/GUI/World/Map/UIMapShared.uss";
 
+		/// <summary>The generated point-of-interest sheet, loaded beside the shared one by both map panels.</summary>
+		private const string PointOfInterestSheetPath = "Assets/Scripts/Client/GUI/World/Map/UIMapPOI.uss";
+
 		/// <summary>Objects built by the fixtures, unregistered and destroyed afterwards.</summary>
 		private readonly List<GameObject> hosts = new List<GameObject>();
 
@@ -267,7 +270,9 @@ namespace FishMMO.UnitTests
 		public void EveryMarkerTypeHasAStyleRule()
 		{
 			LogAssert.IsTrue(File.Exists(MarkerSheetPath), $"the shared marker sheet must be at {MarkerSheetPath}");
-			string source = StripCssComments(File.ReadAllText(MarkerSheetPath));
+			LogAssert.IsTrue(File.Exists(PointOfInterestSheetPath), $"the point-of-interest marker sheet must be at {PointOfInterestSheetPath}");
+			// Both sheets: the hundred point-of-interest types are styled in their own, generated one.
+			string source = StripCssComments(File.ReadAllText(MarkerSheetPath)) + "\n" + StripCssComments(File.ReadAllText(PointOfInterestSheetPath));
 
 			foreach (MapMarkerType type in Enum.GetValues(typeof(MapMarkerType)))
 			{
@@ -276,7 +281,7 @@ namespace FishMMO.UnitTests
 				string selector = "." + UITKMapView.MarkerTypeClassPrefix + type.ToString().ToLowerInvariant();
 
 				LogAssert.IsTrue(Regex.IsMatch(source, Regex.Escape(selector) + @"[\s,{]"),
-					$"{type} has no rule in {MarkerSheetPath}. A type with no rule draws in the fallback colour, which is an NPC's grey, so a missing style is indistinguishable from the wrong marker.");
+					$"{type} has no rule in {MarkerSheetPath} or {PointOfInterestSheetPath}. A type with no rule draws in the fallback colour, which is an NPC's grey, so a missing style is indistinguishable from the wrong marker.");
 			}
 		}
 

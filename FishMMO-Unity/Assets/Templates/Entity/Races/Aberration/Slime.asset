@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Slime
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A translucent, mindless blob that creeps along cellar floors and dissolves whatever it settles on. Common, slow, and endlessly hungry.'
+  Description: A translucent, mindless blob that creeps along cellar floors and dissolves
+    whatever it settles on. Common, slow, and endlessly hungry.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ug
       - or
-      Description: 'Wet, bubbling — names that pop and slide'
+      Description: "Wet, bubbling \u2014 names that pop and slide"
       Tags:
       - Slime
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - sludge
       - ooze
     AllowGenericOccupations: 0
+    Plural: Slimes
+    Adjective: Slime
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -2077848218
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

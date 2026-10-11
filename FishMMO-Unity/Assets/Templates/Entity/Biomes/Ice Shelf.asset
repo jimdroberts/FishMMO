@@ -24,6 +24,8 @@ MonoBehaviour:
   MaxTemperature: -0.4
   MinHumidity: -1
   MaxHumidity: 1
+  MinWarmestSeason: -1
+  MaxWarmestSeason: 1
   SelectionWeight: 1.05
   Atmosphere: 15
   RequiresLiquidWater: 0
@@ -98,6 +100,147 @@ MonoBehaviour:
       - Pale
       - Cracking
       - Still
+      POITypeWords:
+      - Key: bay
+        Values:
+        - Cove
+        - Bay
+        - Bight
+        - Haven
+        - Inlet
+        - Strand
+      - Key: camp
+        Values:
+        - Snow Camp
+        - Ice Camp
+        - Snow-huts
+        - Frost Camp
+        - Hide Tents
+        - Winter Camp
+        - Beach Camp
+        - Fishers' Camp
+        - Driftwood Camp
+        - Dune Camp
+      - Key: cave
+        Values:
+        - Ice Cave
+        - Frost Hollow
+        - Snow Cave
+        - Rime Grotto
+        - Blue Hollow
+        - Ice Hollow
+        - Sea Cave
+        - Zawn
+        - Blowhole
+        - Tide Cave
+      - Key: clearing
+        Values:
+        - Snowfield
+        - Drift
+        - Ice Flat
+        - Frost Glade
+        - White Field
+        - Rime Meadow
+      - Key: fishingcamp
+        Values:
+        - Fish Weir
+        - Net Huts
+        - Smokehouse
+        - Landing
+        - Staithe
+        - Fish Quay
+      - Key: graveyard
+        Values:
+        - Frozen Graves
+        - Ice Tombs
+        - Snow Barrows
+        - Rime-yard
+        - Cairn Field
+        - Frost Graves
+        - Drowned Men's Yard
+        - Sailors' Graves
+        - Shore Graves
+        - Wreckers' Yard
+      - Key: landmark
+        Values:
+        - Cairn
+        - Ice Pillar
+        - Frost Stone
+        - Rime Stone
+        - Snow Cairn
+        - Waymark
+        - Sea Stack
+        - Beacon Stone
+        - Tide Stone
+        - Old Man
+      - Key: monsterden
+        Values:
+        - Snow Den
+        - Ice Lair
+        - Frost Burrow
+        - Drift Den
+        - Rime Lair
+        - Winter Den
+      - Key: nest
+        Values:
+        - Ice Eyrie
+        - Snow Roost
+        - Frost Nest
+        - Rookery
+        - Drift Nest
+        - Cliff Roost
+      - Key: peak
+        Values:
+        - Nunatak
+        - Ice Peak
+        - Snow Horn
+        - Frost Spire
+        - White Peak
+        - Rime Crag
+      - Key: ruins
+        Values:
+        - Ice-bound Ruins
+        - Frozen Ruins
+        - Buried Halls
+        - Snow Ruins
+        - Rime Walls
+        - Frost Ruins
+        - Sea-worn Ruins
+        - Salt Ruins
+        - Shore Ruins
+        - Wrecked Walls
+      - Key: shrine
+        Values:
+        - Ice Shrine
+        - Frost Altar
+        - Rime Shrine
+        - Snow Cairn
+        - Winter Altar
+        - Cold Fane
+        - Sea Shrine
+        - Tide Altar
+        - Drowned Shrine
+        - Shell Shrine
+      - Key: spring
+        Values:
+        - Ice-well
+        - Frost Spring
+        - Thaw-pool
+        - Cold Spring
+        - Rime Well
+        - Meltwater
+        - Spring
+        - Well
+        - Sweetwater Spring
+        - Seep
+      - Key: tower
+        Values:
+        - Sea Tower
+        - Watchtower
+        - Lookout
+        - Signal Tower
+        - Beacon
+        - Coast Watch
       Description: A sea frozen flat to the horizon, its ridges groaning as the shelf
         shifts.
   LooseGround: {fileID: 0}
@@ -170,8 +313,20 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 39e6309e52a6d759
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -218,9 +373,143 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.3
       clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0}
       sinkSlopeFactor: 0.4
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: ad58b947a3a675c2
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: 36ae437859494937b8e700822b7ad43b
+      enableSpawning: 1
+      ruleName: 'Formations: Pressure ridges'
+      prefabs:
+      - {fileID: 8025142923513436149, guid: 16ed8f435619be5f5685b2cc7ffec430, type: 3}
+      - {fileID: 6903792820195560337, guid: c952fa18ee74c786ed52cbaf2c23d9ba, type: 3}
+      - {fileID: 4759539610848451405, guid: 375b15690a5fbf4da5338a6c1ecc8915, type: 3}
+      - {fileID: 6442643284503190769, guid: 7f00bd64c3553f9dca2126d3a9faba67, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.006
+      maxPerChunk: 2000
+      minSpacing: 4
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 10
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.75, y: 1.3}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: -15, y: 15}
+      alignToTerrainNormal: 1
+      seedOffset: 17950
+      clusterMetres: 10
+      clusterSize: 4
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 891a49777a8d308f
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: 1a17d57f41b14808bf81d284ffa33e53
+      enableSpawning: 1
+      ruleName: 'Formations: Frost flowers'
+      prefabs:
+      - {fileID: 7445673702379250859, guid: b86ddd1733f06e85c170ea06ae9c1fba, type: 3}
+      - {fileID: 5620341210621134063, guid: 3862543210f719c35b3503de3176fdae, type: 3}
+      - {fileID: 4994933814753390773, guid: 5c012bf88a5489e39d488001d6580916, type: 3}
+      - {fileID: 7588032016841701408, guid: 6534396d7ea711187dc8a1a156397a51, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.05
+      maxPerChunk: 2000
+      minSpacing: 4
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 10
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.75, y: 1.3}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 39779
+      clusterMetres: 10
+      clusterSize: 4
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: e621465309475d54
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -273,7 +562,68 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
-    prefabSpawnRules: []
+    prefabSpawnRules:
+    - stableGuid: 61ea21c7dcba4b74ba4dd710fd3fc640
+      enableSpawning: 1
+      ruleName: 'Formations: Sastrugi'
+      prefabs:
+      - {fileID: 7397492195277865307, guid: ef6233d44f2354fe2da86c73ba8f2f4e, type: 3}
+      - {fileID: 8673838740423179678, guid: c993215c84ad47244d8032fc25b09679, type: 3}
+      - {fileID: 6529549250411657770, guid: 658a139ce6a896271c15708451973fce, type: 3}
+      - {fileID: 8272458013132551302, guid: 153ad56c201de0677d99c3630c666fa6, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.06
+      maxPerChunk: 2000
+      minSpacing: 4
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.75, y: 1.3}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: -12, y: 12}
+      alignToTerrainNormal: 1
+      seedOffset: 2921
+      clusterMetres: 10
+      clusterSize: 4
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 76a139965f19ad7b
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
   roadTextureLayer:
     terrainLayer: {fileID: 0}
     albedoTexture: {fileID: 0}

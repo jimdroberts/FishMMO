@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Spawner.SpawnTableCatalogue
   Tables:
   - {fileID: 11400000, guid: e33fb943e3679306abf47876b2a7d872, type: 2}
+  - {fileID: 11400000, guid: 45cf76d33b3483ad18899f848128f2a0, type: 2}
   - {fileID: 11400000, guid: f23e4e47e1bcac9b18d2d3bee4159f51, type: 2}
   - {fileID: 11400000, guid: 48e90ed169b30a433adb7716340a2cb0, type: 2}
   - {fileID: 11400000, guid: e04a60db5b629dde0ab3ab264cdf946b, type: 2}

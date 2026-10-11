@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Talonbear
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A bear''s bulk with a raptor''s beak and talons; territorial, sleepless, and hungry enough to hunt through the night.'
+  Description: A bear's bulk with a raptor's beak and talons; territorial, sleepless,
+    and hungry enough to hunt through the night.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +82,7 @@ MonoBehaviour:
       - thok
       - ork
       - ur
-      Description: 'Hooting, growling predator — feather-and-fur cadence'
+      Description: "Hooting, growling predator \u2014 feather-and-fur cadence"
       Tags:
       - Nest-names
       - Forest-bonds
@@ -106,7 +107,7 @@ MonoBehaviour:
       Rank:
       - Tyrant of Screech Hollow
       Legend:
-      - 'Who Emptied the Hunter''s Camp in One Scream'
+      - Who Emptied the Hunter's Camp in One Scream
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -115,6 +116,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Talonbears
+    Adjective: Talonbear
   BiomeAffinities:
   - BiomeID: 144196518
     Weight: 2
@@ -124,3 +128,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 187749268
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

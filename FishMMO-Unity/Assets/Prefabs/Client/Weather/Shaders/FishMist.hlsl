@@ -74,6 +74,68 @@ float4 _FishMist;
 // The shallowest a patch lies, m (GroundMist.ShallowDepth).
 #define FISH_MIST_SHALLOW 3.0
 
+// STEAM FOG (SteamPhysics, SteamFogSource): open water warmer than the air over it by more than the
+// mixing line allows (about 9 K at 80 % humidity, 7 K in arctic air) smokes — wisps a few
+// metres tall on a lake on an autumn dawn, tens of metres of sea smoke in a winter outbreak. Not the
+// mist's readiness: a different source, the water's own vapour, so its own term. Where it rises from:
+// _FishMistWater, r off the sea and g off a lake or a river (1 over the water, gone a few metres past its
+// edge: MistGroundMap). How much each smokes this moment: _FishMistSteam x the sea (its open share
+// counted), y a lake or a river (0 frozen), z how deep the steam stands (m), w how far downwind it is
+// carried per metre it climbs (the wind over its rise).
+TEXTURE2D(_FishMistWater);
+SAMPLER(sampler_FishMistWater);
+float4 _FishMistSteam;
+// The steam's filaments: the detail volume on a 12 m tile, stretched three times upright (steam rises in
+// columns and "steam devils", not in blobs), scrolled up at a metre a second.
+#define FISH_STEAM_TILE 12.0
+#define FISH_STEAM_STRETCH 3.0
+#define FISH_STEAM_CLIMB 1.0
+// Visibility inside the steam at the onset and at its thickest, m (sea smoke can close to under 100 m).
+#define FISH_STEAM_THIN_VISIBILITY 500.0
+#define FISH_STEAM_THICK_VISIBILITY 80.0
+
+/// The steam fog's extinction at a point (1/m), `above` metres over the water or ground under it, for a
+/// sample that stands for `footprint` metres along the ray.
+float FishMistSteamDensity(float3 at, float above, float footprint)
+{
+    if ((_FishMistSteam.x <= 0.0 && _FishMistSteam.y <= 0.0) || above > _FishMistSteam.z)
+    {
+        return 0.0;
+    }
+    // The water the steam over this point rose off: upwind of it, by how far the wind has carried it
+    // while it climbed this high. So it leans downwind and spills a little way over the lee shore.
+    float2 down = dot(_FishWeatherWind.xy, _FishWeatherWind.xy) > 1e-6 ? normalize(_FishWeatherWind.xy) : float2(0.0, 0.0);
+    float2 source = at.xz - down * (above * _FishMistSteam.w);
+    float2 uv = (source - _FishMistGroundRect.xy) / max(1.0, _FishMistGroundRect.z);
+    if (any(uv <= 0.0) || any(uv >= 1.0))
+    {
+        return 0.0;
+    }
+    float2 water = SAMPLE_TEXTURE2D_LOD(_FishMistWater, sampler_FishMistWater, uv, 0).rg;
+    float ready = saturate(water.r * _FishMistSteam.x + water.g * _FishMistSteam.y);
+    if (ready <= 0.001)
+    {
+        return 0.0;
+    }
+    // Filaments rising off the water, carried on the fog's drift. The climb is snapped to whole tiles per
+    // wrap of the clock (FishWrapCycles), so the scroll meets itself across the wrap.
+    float2 carried = at.xz - _FishFogLayerDrift.xy;
+    float climb = FishWrapCycles(FISH_STEAM_CLIMB / (FISH_STEAM_TILE * FISH_STEAM_STRETCH));
+    float3 uvw = float3(carried.x / FISH_STEAM_TILE, above / (FISH_STEAM_TILE * FISH_STEAM_STRETCH) - _FishWeatherMisc.w * climb, carried.y / FISH_STEAM_TILE);
+    float3 z = (SAMPLE_TEXTURE3D_LOD(_FishCloudDetail, sampler_FishCloudDetail, uvw, 0).rgb - FISH_MIST_WORLEY_MEAN) / FISH_MIST_WORLEY_SPREAD;
+    float field = (0.6 * z.x + 0.5 * z.y + 0.35 * z.z) / 0.856;
+    // The share of the water smoking, from scattered wisps at the onset to most of it at full strength.
+    // A step too long to see a filament takes that share as it is rather than one random read of it.
+    float cut = lerp(1.6, -0.5, ready);
+    float seen = saturate(1.0 - (footprint - 2.0) / 6.0);
+    float covered = lerp(1.0 - smoothstep(-1.5, 1.5, cut + 0.3), smoothstep(cut, cut + 0.6, field), seen);
+    // Densest at the water, evaporating as it climbs and mixes into the drier air above.
+    float depth = max(0.5, _FishMistSteam.z);
+    float profile = exp(-above / (0.35 * depth)) * (1.0 - smoothstep(0.6 * depth, depth, above));
+    float thick = 3.912 / lerp(FISH_STEAM_THIN_VISIBILITY, FISH_STEAM_THICK_VISIBILITY, ready);
+    return thick * covered * profile;
+}
+
 /// The ground under a point: x its height (m), y its hollow (m), z how near open water (0..1), w the canopy
 /// over it (0..1). `covered` is false outside the map.
 float4 FishMistGroundAt(float2 xz, out bool covered)
@@ -162,13 +224,62 @@ float FishMistDensity(float3 at, float above, float potential, float footprint)
     return thick * max(patchMask * patchProfile, 0.6 * wispMask * wispProfile);
 }
 
+/// <summary>
+/// The light a point in the mist scatters toward the eye, per unit of its (scaled) scattering, `fogAbove` the
+/// optical depth of the fog layer over it, if any.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A mist's drops throw most of what they scatter almost straight on (g about 0.8). Drawn with the whole of
+/// that as extinction plus a g = 0.8 lobe, a mist took the light of the sky and trees behind it out of the ray
+/// and gave back, away from the sun, a twentieth of the beam: lit from behind the eye it lay over the land as
+/// a dark veil, darker than the sky it stood against (audit 2026-10-09: 57 % of the pixels it touched went
+/// darker). Lit as the fog layer is did not help — its turned light comes from the fog above the point, and a
+/// mist forms where there is none.
+/// </para>
+/// <para>
+/// The forward spike is light that goes on as it was, so it is counted as not scattered at all — the
+/// delta-Eddington scaling (Joseph, Wiscombe and Weinman 1976): of what a drop scatters, the share f = g²
+/// stays in the beam; the rest is scattered with the asymmetry (g − f)/(1 − f) = g/(1 + g). Energy is kept
+/// exactly. The mist then takes out of what is behind it only what it really turns aside
+/// (FishMistExtinctionShare), and what it turns it throws about with g ≈ 0.44: away from the sun about four
+/// times what it was.
+/// </para>
+/// </remarks>
+float3 FishMistLight(float3 ray, float fogAbove, float shadow, float sunShare)
+{
+    float g = _FishFogLight.w;
+    float gMist = g / (1.0 + g);
+    float carry = 0.75 * (1.0 - g);
+    float3 toLight = _FishFogLight.xyz;
+    float risen = saturate(toLight.y * 20.0 + 1.0);
+    // The beam and the sky come down through the fog layer over the mist as they do to the layer's own drops
+    // (FishFogLight): the beam dimmed along its slant, what that fog turned arriving diffuse.
+    float slant = fogAbove / max(0.05, toLight.y);
+    float beam = exp(-slant);
+    float diffuse = max(0.0, 1.0 / (1.0 + carry * slant) - beam);
+    float3 sun = _FishFogLightColor.rgb * sunShare * risen * (beam * FishFogPhase(dot(ray, toLight), gMist) * shadow + diffuse);
+    float3 sky = _FishFogAmbient.rgb / (1.0 + carry * fogAbove);
+    return sun + sky;
+}
+
+/// The share of the mist's extinction that takes light out of a ray: all of it but the forward spike that
+/// goes on as it was (FishMistLight, delta-Eddington): 1 − g².
+float FishMistExtinctionShare()
+{
+    float g = _FishFogLight.w;
+    return 1.0 - g * g;
+}
+
 /// The mist along a ray to `depth` (m): rgb the light it scatters toward the camera, a its transmittance.
 /// `mistDistance`: the mean distance of what it added, weighted by what each step added (m), for the
 /// steadying's reprojection; 0 when it met nothing.
 float4 FishMistMarch(float3 origin, float3 direction, float depth, float jitter, out float mistDistance)
 {
     mistDistance = 0.0;
-    if (_FishMist.w <= 0.0 || _FishMist.y <= 0.0 || _FishMistGroundRect.w < 0.5)
+    // The mist's own wind leaves none of it (y), but a steam fog is fed as fast as a wind tears it up.
+    bool steaming = _FishMistSteam.x > 0.0 || _FishMistSteam.y > 0.0;
+    if (_FishMist.w <= 0.0 || (_FishMist.y <= 0.0 && !steaming) || _FishMistGroundRect.w < 0.5)
     {
         return float4(0.0, 0.0, 0.0, 1.0);
     }
@@ -223,14 +334,24 @@ float4 FishMistMarch(float3 origin, float3 direction, float depth, float jitter,
         float ready = FishMistReadiness(ground);
         // Thinned over the last two fifths of the range, so the mist ends in the distance and not on a ring.
         float fade = 1.0 - smoothstep(_FishMist.w * 0.6, _FishMist.w, t);
-        float beta = FishMistDensity(at, above, ready, dt) * fade;
+        float beta = FishMistDensity(at, above, ready, dt) * fade * FishMistExtinctionShare();
+        // Steam off warm water, where the two overlap the thicker of them: both are drops of the same size
+        // in the same air, and a patch of mist over a smoking lake is the one fog, not two summed.
+        if (steaming)
+        {
+            beta = max(beta, FishMistSteamDensity(at, above, dt) * fade * FishMistExtinctionShare());
+        }
         if (beta <= 0.0)
         {
             continue;
         }
         float stepT = exp(-beta * dt);
         FishFogColumn column = FishFogColumnAt(at.xz);
-        float3 light = FishFogLight(at.y, direction, column, _FishFogLayer.x, FishTerrainSunlit(at), FishFogSunShare(at));
+        // Shaded where the patch's body stands, a few metres up, not at the ground: read at the ground the
+        // 5 m shade map's soft edge halves the beam on flat land and takes it all on any rise toward a low sun.
+        float shadow = FishTerrainSunlit(float3(at.x, max(at.y, ground.x + FISH_MIST_SHALLOW), at.z));
+        float fogAbove = _FishFogLayer.x > 0.0 ? _FishFogLayer.x * FishFogColumnAbove(at.y, column) : 0.0;
+        float3 light = FishMistLight(direction, fogAbove, shadow, FishFogSunShare(at));
         float added = transmittance * (1.0 - stepT);
         scattered += light * added;
         weighted += t * added;

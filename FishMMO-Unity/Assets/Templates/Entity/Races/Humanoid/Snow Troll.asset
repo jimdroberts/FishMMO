@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Snow Troll
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'White-furred northern trolls — hissing, ice-cracking names'
+  Description: "White-furred northern trolls \u2014 hissing, ice-cracking names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ulg
       - ak
       - orr
-      Description: 'White-furred northern trolls — hissing, ice-cracking names'
+      Description: "White-furred northern trolls \u2014 hissing, ice-cracking names"
       Tags:
       - Ice-names
       - Fur-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Lord of the Howling Ledge
       - Warden of Rimehold
       Legend:
-      - 'Who Ate the Frost Giant''s Dog and Then the Frost Giant'
+      - Who Ate the Frost Giant's Dog and Then the Frost Giant
       - Who Slept in the Glacier for a Century
       - Who Broke the Ice Bridge to End the War
       - Who Walked into the Blizzard and Came Back with a Bear
@@ -168,6 +168,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 0
+    Plural: Snow Trolls
+    Adjective: Snow Troll
   BiomeAffinities:
   - BiomeID: 1645414801
     Weight: 3
@@ -177,3 +179,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1018971064
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -146,8 +146,47 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public static WeatherSample SampleAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, double worldSeconds)
 		{
-			var sample = new WeatherSample { Frame = WeatherFrame.Clear, Background = WeatherFrame.Clear };
-			BiomeReading reading = BiomeSampler.Read(position, settings);
+			if (!Open(timeline, settings, scene, position, worldSeconds, out WeatherSample sample, out OpenState state))
+			{
+				return sample;
+			}
+			return Resolve(timeline, settings, scene, position, worldSeconds, sample, state);
+		}
+
+		/// <summary>
+		/// The open air at a place and a moment, with no storm in it: <see cref="WeatherSample.OpenAir"/>,
+		/// <see cref="WeatherSample.OpenColumn"/>, <see cref="WeatherSample.Ground"/>, the planet and the temperature,
+		/// and nothing that falls. The same numbers <see cref="SampleAtSeconds"/> gives for them, for less: what the
+		/// storm schedule asks of every place it might start one (<see cref="StormSchedule"/>).
+		/// </summary>
+		public static WeatherSample OpenAtSeconds(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, double worldSeconds)
+		{
+			Open(timeline, settings, scene, position, worldSeconds, out WeatherSample sample, out _);
+			return sample;
+		}
+
+		/// <summary>What the open air's reading hands on to the rest of a full sample.</summary>
+		private struct OpenState
+		{
+			public WorldBody Body;
+			public FishMMO.Shared.Celestial.AtmosphereKind Atmosphere;
+			public SolarSystemProfile System;
+			public double Hours;
+			public float Season01;
+			public float Kelvin;
+		}
+
+		/// <summary>The open air (see <see cref="OpenAtSeconds"/>); false where the scene has no weather to read.</summary>
+		private static bool Open(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, double worldSeconds,
+			out WeatherSample sample, out OpenState state)
+		{
+			state = default;
+			sample = new WeatherSample { Frame = WeatherFrame.Clear, Background = WeatherFrame.Clear };
+			/* The climate of THIS moment: its season and the air added to it then, not whatever this machine last
+			 * wrote onto the settings (SceneClimate). A storm born, or a ground wetted, at a moment is then the same
+			 * wherever and whenever that moment is worked out. */
+			SceneClimate.OffsetsAt(settings, timeline, worldSeconds, out float runtimeTemperature, out float runtimeHumidity);
+			BiomeReading reading = BiomeSampler.Read(position, settings, runtimeTemperature, runtimeHumidity);
 			sample.Biome = reading.Biome;
 			sample.Temperature = reading.Climate.Temperature;
 
@@ -158,7 +197,7 @@ namespace FishMMO.Shared.Weather
 			bool airless = atmosphere == FishMMO.Shared.Celestial.AtmosphereKind.None;
 			if (timeline == null || mode != WeatherSceneMode.Own || airless)
 			{
-				return sample;
+				return false;
 			}
 
 			// Where and when. The season and the hour are worked out here, on both sides, from the
@@ -209,6 +248,33 @@ namespace FishMMO.Shared.Weather
 			GroundTraits ground = GroundTraits.Of(reading.IsGrounded ? reading.Biome : null, underWater);
 			sample.Ground = ground;
 			float kelvin = planet.SurfaceKelvin(sample.Temperature);
+			// The weather this air makes with no storm over it.
+			sample.OpenColumn = AirColumn.Of(planet, kelvin, air.Humidity, air.Pressure, air.Instability);
+			state = new OpenState
+			{
+				Body = weatherBody,
+				Atmosphere = atmosphere,
+				System = system,
+				Hours = worldHours,
+				Season01 = season01,
+				Kelvin = kelvin,
+			};
+			return true;
+		}
+
+		/// <summary>The rest of a full sample, from its open air: what falls, the storms, the volumes.</summary>
+		private static WeatherSample Resolve(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 position, double worldSeconds,
+			WeatherSample sample, in OpenState state)
+		{
+			WorldBody weatherBody = state.Body;
+			FishMMO.Shared.Celestial.AtmosphereKind atmosphere = state.Atmosphere;
+			SolarSystemProfile system = state.System;
+			double worldHours = state.Hours;
+			float season01 = state.Season01;
+			float kelvin = state.Kelvin;
+			PlanetAir planet = sample.Planet;
+			GroundTraits ground = sample.Ground;
+			WeatherDriver.Synoptic air = sample.OpenAir;
 
 			// The plumes over the scene's vents and its eruptions, leaning on this wind: what falls out
 			// of them here falls out of the plume the sky draws (VolcanicPlume, VolcanicVents).
@@ -218,9 +284,7 @@ namespace FishMMO.Shared.Weather
 			float steadyFallout = VolcanicVents.FalloutAt(plumes, position2, false, out WeatherSubstance steadySubstance);
 			float fallout = VolcanicVents.FalloutAt(plumes, position2, true, out WeatherSubstance falloutSubstance);
 
-			// The weather this air makes with no storm over it.
-			AirColumn open = AirColumn.Of(planet, kelvin, air.Humidity, air.Pressure, air.Instability);
-			sample.OpenColumn = open;
+			AirColumn open = sample.OpenColumn;
 			sample.Background = WeatherPhysics.Frame(air, open, planet, ground, sample.Temperature, 1f, steadyFallout, steadySubstance, out _);
 			AddAurora(ref sample.Background, timeline, system, weatherBody, worldSeconds, worldHours, season01);
 			sample.Background = WeatherDriver.UnderAtmosphere(sample.Background, atmosphere);

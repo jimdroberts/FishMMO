@@ -47,6 +47,18 @@ float FishCoverFacing(float3 worldNormal, float3 worldPos, float slopeBias)
     return facing * facing * FishSurfaceExposure(worldPos);
 }
 
+// How high the snow's surface stands over the ground at a point, metres, for the tier that lifts the ground under
+// snow: the blanket the cover makes (`blanket` metres when the ground is white), the deep snow past it
+// (FishSnowDepthAt), trodden down where feet have pressed it (FishTrailAt) to a packed floor, and none on a slope
+// that sheds it. The terrain shaders and the ground-contact band all ask this, so they agree where the surface is.
+float FishSnowLiftMetres(float3 worldPos, float3 worldNormal, float blanket)
+{
+    float lift = saturate(FishCoverAt(worldPos).x) * blanket + FishSnowDepthAt(worldPos);
+    float trodden = saturate(FishTrailAt(worldPos.xz).x);
+    lift *= 1.0 - 0.8 * trodden;
+    return lift * FishCoverFacing(worldNormal, worldPos, 0.5);
+}
+
 // ── Noise ──────────────────────────────────────────────────────────────
 
 // A number in [0, 1) from a point on the ground plane, by integer arithmetic. It was a sin() hash,
@@ -353,6 +365,71 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
             // Enough of it, and the shape underneath stops showing through.
             normalWS = normalize(lerp(normalWS, float3(0, 1, 0), amount * saturate(depth * 0.8)));
         }
+    }
+}
+
+/// <summary>Where feet have gone (GroundTrailMap), on the ground, applied in place after FishWeatherSurface.</summary>
+/// Snow, ash and sand take a packed, shadowed furrow with walls; wet ground takes darker, glossier prints that hold
+/// water when it is wet enough to puddle; dry firm ground takes nothing. The ground's shaders call this and nothing
+/// else does: a print is the ground's, not the top of a rock someone walked past. `viewDirWS` points from the surface
+/// to the eye; on the tier that lifts the ground under snow the print is looked into (a few steps of parallax), so its
+/// near wall hides its floor as a real one would.
+void FishTrailSurface(float3 worldPos, float3 viewDirWS, inout half3 albedo, inout half3 normalWS, inout half smoothness)
+{
+    if (_FishTrailRect.w < 0.5)
+    {
+        return;
+    }
+    float2 at = worldPos.xz;
+    float press = saturate(FishTrailAt(at).x);
+    if (press < 0.004)
+    {
+        return;
+    }
+    float4 here = FishCoverAt(worldPos);
+    float cover = saturate(max(here.x, max(here.z, here.w))) * FishSurfaceExposure(worldPos);
+    float wet = saturate(here.y);
+    // How readily this ground takes a print at all: any cover does, wet ground does, dry firm ground does not.
+    float soft = saturate(cover * 1.5 + wet * 1.2);
+    if (soft < 0.01)
+    {
+        return;
+    }
+    // How deep a print sinks, metres: a few centimetres into mud, deeper into a blanket, half the deep snow's depth.
+    float sink = 0.03 + cover * 0.06 + FishSnowDepthAt(worldPos) * 0.5;
+
+    // Looked into: the point the eye sees on the print's floor lies further along the view than the surface point.
+    if (_FishWeatherTier.x > 0.5 && viewDirWS.y > 0.05)
+    {
+        float2 reach = -viewDirWS.xz / max(viewDirWS.y, 0.25) * sink;
+        UNITY_UNROLL
+        for (int k = 0; k < 3; k++)
+        {
+            press = saturate(FishTrailAt(at + reach * press).x);
+        }
+        at += reach * press;
+    }
+
+    // The print's walls, from how fast the press changes across a texel either way.
+    float texel = _FishTrailParams.x;
+    float px = saturate(FishTrailAt(at + float2(texel, 0.0)).x);
+    float pz = saturate(FishTrailAt(at + float2(0.0, texel)).x);
+    float2 slope = float2(px - press, pz - press) * (sink / texel) * soft;
+    normalWS = normalize(normalWS + float3(slope.x, 0.0, slope.y));
+
+    float trodden = press * soft;
+    // Packed snow, ash or sand: greyer and duller than the loose stuff round it, and in its own shade.
+    albedo *= lerp(1.0, 0.8, trodden * cover);
+    smoothness = lerp(smoothness, smoothness * 0.6, trodden * cover);
+    // Wet ground: churned darker and glossier, and in a wet enough spell the prints fill with water.
+    albedo *= lerp(1.0, 0.72, trodden * wet);
+    smoothness = lerp(smoothness, 0.8, trodden * wet * 0.7);
+    float pooled = saturate((wet - 0.5) * 3.0) * smoothstep(0.35, 0.8, press) * (1.0 - cover);
+    if (pooled > 0.001)
+    {
+        albedo = lerp(albedo, albedo * 0.45, pooled);
+        smoothness = lerp(smoothness, 0.95, pooled);
+        normalWS = normalize(lerp(normalWS, float3(0.0, 1.0, 0.0), pooled));
     }
 }
 

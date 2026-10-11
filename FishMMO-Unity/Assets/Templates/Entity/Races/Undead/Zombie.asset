@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Zombie
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Moaning and incomplete — reanimated speech
+  Description: "Moaning and incomplete \u2014 reanimated speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -91,7 +91,7 @@ MonoBehaviour:
       - ot
       - uk
       - og
-      Description: Moaning and incomplete — reanimated speech
+      Description: "Moaning and incomplete \u2014 reanimated speech"
       Tags:
       - Rise-names
       - Grave-marks
@@ -101,7 +101,7 @@ MonoBehaviour:
     - the Slow Horde
     - Pestilence Quarter
     - Rotten Commons
-    - 'Shambler''s Crossing'
+    - Shambler's Crossing
     Titles:
       Honorific:
       - Risen
@@ -124,6 +124,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Zombies
+    Adjective: Zombie
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 2
@@ -135,3 +138,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: 596668801
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

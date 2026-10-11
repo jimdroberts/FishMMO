@@ -108,7 +108,10 @@ namespace FishMMO.Shared.WorldDesign
 				CliffPlacer.Clear(scene);
 				// The rivers and lakes the scene was cut with, marked on its ground as it stands now.
 				SceneWater water = SceneGenerator.LoadWater(request, plan, terrains, result.Notes);
-				if (!SceneGenerator.PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out _, out _, scope, water: water))
+				/* The points of interest the scene was cut with, read back: the scatter and rocks keep out of them again, and
+				 * they are built again below. Never planned again here: the ground already carries their pads. */
+				PointOfInterestStage poi = PointOfInterestStage.ForRepaint(request, terrainFolder, result.Notes);
+				if (!SceneGenerator.PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out _, out _, scope, water: water, poi: poi))
 				{
 					string why = result.Notes.Count > 0 ? result.Notes[0] : "No biome fits this scene.";
 					result = null;
@@ -127,6 +130,7 @@ namespace FishMMO.Shared.WorldDesign
 						RiverFlowBake.Bake(hydrology, result.BiomeMap != null ? result.BiomeMap : entry.BiomeMap, result.Notes);
 					}
 				}
+				poi.Place(scene, plan, terrains, water, result.Notes, result.Wrote);
 				SceneGenerator.BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
 				/* A backdrop drawn with the arrays reads the scene's layers by index, and the repaint may have
 				 * reordered them: its control maps are baked again. A LOCAL copy shares the committed backdrop. */
@@ -173,6 +177,7 @@ namespace FishMMO.Shared.WorldDesign
 				Longitude = entry.Longitude,
 				SizeKm = entry.SizeKm,
 				HeadingDegrees = entry.HeadingDegrees,
+				PointsOfInterest = entry.PointsOfInterest,
 				// The radius it was cut at, so a point maps back to exactly the ground it came from.
 				RadiusKm = entry.CutRadiusKm > 0f ? entry.CutRadiusKm : 0.0,
 			};

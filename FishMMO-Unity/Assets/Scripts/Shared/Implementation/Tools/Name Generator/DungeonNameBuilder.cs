@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Biomes;
 
@@ -84,6 +85,21 @@ namespace FishMMO.Shared.NameGeneration
 			return (raw, fragments);
 		}
 
+		/// <summary>
+		/// "the hollow" → "hollow". Removes the leading WORD "the"; it used to be
+		/// <c>TrimStart("the ".ToCharArray())</c>, which strips any run of the characters t, h, e and
+		/// space, so "The Hollow" glossed as "ollow" and "The Ethereal" as "real".
+		/// </summary>
+		internal static string StripLeadingArticle(string text)
+		{
+			if (string.IsNullOrEmpty(text))
+			{
+				return text ?? "";
+			}
+			string trimmed = text.TrimStart();
+			return trimmed.StartsWith("the ", StringComparison.OrdinalIgnoreCase) ? trimmed.Substring(4).TrimStart() : trimmed;
+		}
+
 		private static string DeriveMeaning(string root, string suffix,
 			string prefix, BiomePhonology ph)
 		{
@@ -91,7 +107,7 @@ namespace FishMMO.Shared.NameGeneration
 
 			if (!string.IsNullOrEmpty(prefix))
 			{
-				parts.Add(prefix.ToLower().TrimStart("the ".ToCharArray()));
+				parts.Add(StripLeadingArticle(prefix.ToLower()));
 			}
 
 			string onsetMeaning = NameGrammar.MatchPrefix(NameGrammar.BiomeMeaningOnsets, root);

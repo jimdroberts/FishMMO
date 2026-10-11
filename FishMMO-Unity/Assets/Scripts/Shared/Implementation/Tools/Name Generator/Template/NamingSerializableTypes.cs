@@ -212,6 +212,57 @@ namespace FishMMO.Shared.NameGeneration
 		public int Weight = 10;
 	}
 
+	/// <summary>
+	/// One way of composing a point-of-interest name, authored in the grammar asset like a
+	/// <see cref="TitleTemplate"/>. The pattern names its slots in braces — <c>{Type} of {RacePlural}</c>
+	/// gives "Cave of Orcs" — and a composition whose slots cannot be filled for a request (a race slot
+	/// with no race) is simply not used.
+	/// </summary>
+	[Serializable]
+	public class PlaceNameTemplate
+	{
+		[Tooltip("Slots: {Type} {Root} {Suffix} {Adjective} {Noun} {RacePlural} {RaceAdjective} {Founder} {City} {Dungeon}. {Root}{Suffix} written together fuse into one word (Morrowmere).")]
+		public string Pattern;
+		[Tooltip("Kinds this composition names.")]
+		public List<POIType> Kinds = new();
+		[Tooltip("Whole catalogue groups this composition names, on top of Kinds. Both empty = every kind.")]
+		public List<PointOfInterestGroup> Groups = new();
+		[Tooltip("Relative chance among the usable compositions for a kind.")]
+		public int Weight = 10;
+
+		/// <summary>Whether this composition may name the kind.</summary>
+		public bool Applies(POIType kind)
+		{
+			bool noKinds = Kinds == null || Kinds.Count == 0;
+			bool noGroups = Groups == null || Groups.Count == 0;
+			if (noKinds && noGroups)
+			{
+				return true;
+			}
+			if (!noKinds && Kinds.Contains(kind))
+			{
+				return true;
+			}
+			return !noGroups && Groups.Contains(PointOfInterestKinds.Info(kind).Group);
+		}
+	}
+
+	/// <summary>How often a request for <see cref="POIType.Any"/> draws one kind.</summary>
+	[Serializable]
+	public class POIKindWeight
+	{
+		public POIType Kind;
+		public int Weight = 4;
+
+		public POIKindWeight() { }
+
+		public POIKindWeight(POIType kind, int weight)
+		{
+			Kind = kind;
+			Weight = weight;
+		}
+	}
+
 	/// <summary>City-name endings for one race, by city type.</summary>
 	[Serializable]
 	public class SerializableRaceCitySuffixes
@@ -262,6 +313,8 @@ namespace FishMMO.Shared.NameGeneration
 		public string[] POISuffixes;
 		[Tooltip("Descriptive words this biome lends to city and POI names.")]
 		public string[] Adjectives;
+		[Tooltip("This biome's own words for point-of-interest kinds, keyed by lowercase POIType name: 'spring' → Oasis, Wells in a desert. Preferred over the grammar's global type words.")]
+		public List<StringListMapping> POITypeWords = new();
 		[TextArea]
 		public string Description;
 
@@ -277,6 +330,7 @@ namespace FishMMO.Shared.NameGeneration
 			DungeonPrefixes = DungeonPrefixes ?? Array.Empty<string>(),
 			POISuffixes = POISuffixes ?? Array.Empty<string>(),
 			Adjectives = Adjectives ?? Array.Empty<string>(),
+			POITypeWords = NamingTableUtility.ToListDictionary(POITypeWords, StringComparer.OrdinalIgnoreCase),
 			Description = Description,
 		};
 
@@ -292,6 +346,7 @@ namespace FishMMO.Shared.NameGeneration
 			DungeonPrefixes = runtime.DungeonPrefixes,
 			POISuffixes = runtime.POISuffixes,
 			Adjectives = runtime.Adjectives,
+			POITypeWords = NamingTableUtility.FromListDictionary(runtime.POITypeWords),
 			Description = runtime.Description,
 		};
 
@@ -339,6 +394,24 @@ namespace FishMMO.Shared.NameGeneration
 				{
 					result[row.Key] = row.Values ?? Array.Empty<string>();
 				}
+			}
+			return result;
+		}
+
+		/// <summary>List rows from a lookup, in ordinal key order so a round trip writes the same asset every time.</summary>
+		public static List<StringListMapping> FromListDictionary(IReadOnlyDictionary<string, string[]> table)
+		{
+			var result = new List<StringListMapping>();
+			if (table == null)
+			{
+				return result;
+			}
+			var keys = new List<string>(table.Keys);
+			keys.Sort(StringComparer.Ordinal);
+			for (int i = 0; i < keys.Count; i++)
+			{
+				string[] values = table[keys[i]];
+				result.Add(new StringListMapping(keys[i], values == null ? Array.Empty<string>() : (string[])values.Clone()));
 			}
 			return result;
 		}

@@ -15,13 +15,6 @@ MonoBehaviour:
   m_GroupName: Server_Static_Permanent
   m_GUID: f2edf6310b68f6b4bae56ba99aeaeab9
   m_SerializeEntries:
-  - m_GUID: 11d9bfc9b6072c5dea7405d9ae333eb8
-    m_Address: Assets/Scenes/WorldScene/Arthis/Baoakraal Hyena-den Terrain/Baoakraal
-      Hyena-den NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
     m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
     m_ReadOnly: 0
@@ -61,6 +54,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 420cd0631f5b4dad8450377751ae5851
     m_Address: HousingSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 45cf76d33b3483ad18899f848128f2a0
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Flo Monolith.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -167,12 +166,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9bb793da43a030e459af61d22643af10
-    m_Address: Assets/Scenes/WorldScene/Tutorial Spawners/NavMesh-Floor.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9eff8c9262694279a2d40893e55c00ed
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/SpawnTableCatalogue.asset
     m_ReadOnly: 0
@@ -197,12 +190,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
-    m_Address: Assets/Scenes/WorldScene/Test Dungeon/NavMesh-Terrain.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c2da67465d50a8ed8b0a146bc785ce23
     m_Address: Assets/Prefabs/Server/SceneServer/InteractableSystem.asset
     m_ReadOnly: 0
@@ -211,12 +198,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c35c56275b1f41c4a54a550becfb9cfa
     m_Address: Assets/Prefabs/Server/SceneServer/NavMeshSystem.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c43b6eb487815084ca437ada41086fa4
-    m_Address: Assets/Scenes/WorldScene/Dungeon/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -263,12 +244,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
-    m_Address: Assets/Scenes/WorldScene/StartScene A/NavMesh-Terrain.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f23e4e47e1bcac9b18d2d3bee4159f51
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene A.asset
     m_ReadOnly: 0
@@ -277,12 +252,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f854f419ab83b93908afd02eb77367aa
     m_Address: Assets/Prefabs/Server/SceneServer/GuildSystem.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f8dd271abfab0f44287f337e86b02aa5
-    m_Address: Assets/Scenes/WorldScene/StartScene B/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

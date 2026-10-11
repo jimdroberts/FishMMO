@@ -55,6 +55,8 @@ namespace FishMMO.Shared.Celestial
 		public const double WarnThresholdSeconds = 5.0;
 		/// <summary>How long a correction is eased in over.</summary>
 		public const double SlewSeconds = 10.0;
+		/// <summary>An outright change of the time by more than this is a jump (<see cref="Jumps"/>): a set, not a pace change.</summary>
+		public const double JumpThresholdSeconds = 2.0;
 
 		private WorldClockAnchor current;
 		private WorldClockAnchor previous;
@@ -70,6 +72,14 @@ namespace FishMMO.Shared.Celestial
 		public double TickDelta { get; set; } = 1.0 / 30.0;
 		/// <summary>The most recent measured error, in seconds (reference − clock). Diagnostics only.</summary>
 		public double LastMeasuredError { get; private set; }
+
+		/// <summary>
+		/// Counts the times the clock was set outright to another moment — an admin's set, the bed's, or the first
+		/// anchor a client gets — as opposed to held, raced or eased onto its reference. Whatever eases what it shows
+		/// toward the weather of the moment compares this with the count it last saw, and on a change shows the new
+		/// moment at once: a set is meant to land everything there, not to fade toward it.
+		/// </summary>
+		public uint Jumps { get; private set; }
 
 		/// <summary>Raised whenever a new anchor is published or adopted.</summary>
 		public event Action<WorldClock> OnAnchorChanged;
@@ -177,6 +187,12 @@ namespace FishMMO.Shared.Celestial
 
 		private void Set(WorldClockAnchor anchor, WorldClockAnchor from, bool blend, uint ticks)
 		{
+			// Unslewed, and a different moment at the anchor's own tick from the one the clock read there: a set. A hold,
+			// a resume or a new pace lands on the same moment, and a correction is slewed.
+			if (!blend && (!HasAnchor || Math.Abs(WorldSecondsAt(anchor.Tick) - anchor.WorldSeconds) > JumpThresholdSeconds))
+			{
+				Jumps++;
+			}
 			previous = from;
 			hasPrevious = blend;
 			slewTicks = blend ? ticks : 0;

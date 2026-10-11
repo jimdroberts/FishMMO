@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Batfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Cave-roosting bat people — chittering, echoing names'
+  Description: "Cave-roosting bat people \u2014 chittering, echoing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ur
       - orr
-      Description: 'Cave-roosting bat people — chittering, echoing names'
+      Description: "Cave-roosting bat people \u2014 chittering, echoing names"
       Tags:
       - Echo-names
       - Roost-marks
@@ -163,6 +163,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Batfolk
+    Adjective: Batfolk
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -857237992
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

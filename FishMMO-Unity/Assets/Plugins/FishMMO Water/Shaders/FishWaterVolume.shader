@@ -24,27 +24,12 @@ Shader "FishMMO/Water/Underwater"
          * is in the sea. */
         Tags { "Queue" = "Transparent-90" "RenderType" = "Transparent" "RenderPipeline" = "UniversalPipeline" "IgnoreProjector" = "True" }
 
-        Pass
-        {
-            Name "Underwater"
-            Tags { "LightMode" = "UniversalForward" }
-
-            // The project's own fog convention: rgb adds the light scattered toward the eye, alpha
-            // carries how much of what is behind survives.
-            Blend One SrcAlpha
-            ZTest Always
-            ZWrite Off
-            Cull Off
-
-            HLSLPROGRAM
-            #pragma vertex Vert
-            #pragma fragment Frag
-            #pragma target 3.5
-            /* No screen-space variant: URP turns it off before the transparent queue, and a march
-             * needs the shadow at points in the water, which only the shadow map has. No soft
-             * variant either — sixteen steps of one hardware-filtered tap is the softening. */
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
-
+        /* Two passes, one pixel's MSAA samples split between them by the depth buffer itself. The depth TEXTURE has one
+         * depth a pixel, and at a frond's edge a pixel is part frond, part open water: shaded once by the frond's depth,
+         * the water behind it took almost no fog and the bright horizon past it rimmed every edge (Jim, 2026-10-10).
+         * Both passes draw at the far plane: ZTest LEqual passes only the samples nothing was drawn on (fogged the
+         * whole way), ZTest Greater only the samples something was (fogged to its depth). */
+        HLSLINCLUDE
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
@@ -105,7 +90,7 @@ Shader "FishMMO/Water/Underwater"
                 Varyings output;
                 // Straight to clip space: the mesh is a full-screen triangle and must not be moved
                 // by wherever its transform happens to be sitting.
-                output.positionCS = float4(input.positionOS.xy, UNITY_NEAR_CLIP_VALUE, 1.0);
+                output.positionCS = float4(input.positionOS.xy, UNITY_RAW_FAR_CLIP_VALUE, 1.0);
                 output.screenUV = input.positionOS.xy * 0.5 + 0.5;
                 #if UNITY_UV_STARTS_AT_TOP
                     output.screenUV.y = 1.0 - output.screenUV.y;
@@ -226,13 +211,46 @@ Shader "FishMMO/Water/Underwater"
                 return cover;
             }
 
-            half4 Frag(Varyings input) : SV_Target
+            /* The depth of what a geometry sample shows. The depth texture's own, unless that is the far plane — the
+             * pixel's centre missed a frond its edge samples hit — then the nearest of the pixels around it. */
+            float UnderwaterGeometryDepth(float2 screenUV)
+            {
+                float raw = SampleSceneDepth(screenUV);
+                #if UNITY_REVERSED_Z
+                    if (raw > 1e-7)
+                    {
+                        return raw;
+                    }
+                #else
+                    if (raw < 1.0 - 1e-7)
+                    {
+                        return raw;
+                    }
+                #endif
+                float2 texel = _CameraDepthTexture_TexelSize.xy;
+                [unroll] for (int y = -1; y <= 1; y++)
+                {
+                    [unroll] for (int x = -1; x <= 1; x++)
+                    {
+                        float there = SampleSceneDepth(screenUV + float2(x, y) * texel);
+                        #if UNITY_REVERSED_Z
+                            raw = max(raw, there);
+                        #else
+                            raw = min(raw, there);
+                        #endif
+                    }
+                }
+                return raw;
+            }
+
+            // open: shading a sample nothing was drawn on (the ray runs to the far plane).
+            half4 Underwater(Varyings input, bool open)
             {
                 /* FishWaterSceneWorldPosition converts OpenGL's depth first. Passed straight
                  * through, every point came back about twice as far away as it is and the water
                  * took twice the fog it should: on the Linux editor, which is OpenGL Core, the
                  * visibility was half what the material says. */
-                float rawDepth = SampleSceneDepth(input.screenUV);
+                float rawDepth = open ? UNITY_RAW_FAR_CLIP_VALUE : UnderwaterGeometryDepth(input.screenUV);
                 float3 positionWS = FishWaterSceneWorldPosition(input.screenUV, rawDepth);
                 float3 origin = _WorldSpaceCameraPos;
                 float3 toPoint = positionWS - origin;
@@ -371,6 +389,52 @@ Shader "FishMMO/Water/Underwater"
 
                 return half4(inscatter + motes, transmittance);
             }
+
+            half4 FragOpen(Varyings input) : SV_Target { return Underwater(input, true); }
+            half4 FragGeometry(Varyings input) : SV_Target { return Underwater(input, false); }
+        ENDHLSL
+
+        // The samples nothing was drawn on: open water out to the surface or the deep.
+        Pass
+        {
+            Name "Underwater"
+            Tags { "LightMode" = "UniversalForward" }
+
+            // The project's own fog convention: rgb adds the light scattered toward the eye, alpha
+            // carries how much of what is behind survives.
+            Blend One SrcAlpha
+            ZTest LEqual
+            ZWrite Off
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment FragOpen
+            #pragma target 3.5
+            /* No screen-space variant: URP turns it off before the transparent queue, and a march
+             * needs the shadow at points in the water, which only the shadow map has. No soft
+             * variant either — sixteen steps of one hardware-filtered tap is the softening. */
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            ENDHLSL
+        }
+
+        // The samples something was drawn on, fogged to its depth. SRPDefaultUnlit: URP draws one pass per light mode,
+        // and its forward lists take this tag beside UniversalForward.
+        Pass
+        {
+            Name "UnderwaterGeometry"
+            Tags { "LightMode" = "SRPDefaultUnlit" }
+
+            Blend One SrcAlpha
+            ZTest Greater
+            ZWrite Off
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment FragGeometry
+            #pragma target 3.5
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             ENDHLSL
         }
     }

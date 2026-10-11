@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Eelfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Sinuous mud-channel people — slick, sibilant names'
+  Description: "Sinuous mud-channel people \u2014 slick, sibilant names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - el
       - ur
       - ath
-      Description: 'Sinuous mud-channel people — slick, sibilant names'
+      Description: "Sinuous mud-channel people \u2014 slick, sibilant names"
       Tags:
       - Slick-names
       - Channel-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Keeper of the Drowned Willow
       - Swimmer of the Night Migration
       Legend:
-      - 'Who Slipped Through the Fisher''s Hands Ninety Times'
+      - Who Slipped Through the Fisher's Hands Ninety Times
       - Who Swam to the Far Sea and Back to Breed
       - Who Shocked the Pike Dead
       - Who Lived in the Drowned Willow a Century
@@ -163,6 +163,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Eelfolk
+    Adjective: Eelfolk
   BiomeAffinities:
   - BiomeID: 888339253
     Weight: 3

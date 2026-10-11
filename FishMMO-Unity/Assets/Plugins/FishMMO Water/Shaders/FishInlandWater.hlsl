@@ -904,11 +904,8 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	if (!below)
 	{
 		color = FishWaterBehindClouds(color, screenUV);
-		if (_FishAirFogRange.z < 0.5)
-		{
-			half fogKeep;
-			color = FishWaterAirFog(color, positionWS, screenUV, fogKeep);
-		}
+		half fogKeep;
+		color = FishWaterAirFogOver(color, positionWS, screenUV, fogKeep);
 	}
 	return half4(color, alpha);
 }

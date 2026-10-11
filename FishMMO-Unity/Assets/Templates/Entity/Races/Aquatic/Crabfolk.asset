@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Crabfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Armoured shore-scuttlers — clicking, clacking names'
+  Description: "Armoured shore-scuttlers \u2014 clicking, clacking names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ik
       - orr
-      Description: 'Armoured shore-scuttlers — clicking, clacking names'
+      Description: "Armoured shore-scuttlers \u2014 clicking, clacking names"
       Tags:
       - Click-names
       - Shell-marks
@@ -123,11 +123,11 @@ MonoBehaviour:
       - Reeve of the Wreck Reef
       - Master of the Sideways Road
       Legend:
-      - 'Who Pinched the Gull-god''s Toe'
+      - Who Pinched the Gull-god's Toe
       - Who Held the Rock Through the Hurricane
       - Who Walked Sideways Around the World
       - Who Moulted Nine Times in a Year and Grew Enormous
-      - 'Who Cracked the Pirate''s Chest and Ate the Lock'
+      - Who Cracked the Pirate's Chest and Ate the Lock
       Occupational:
       - Pool-cleaner
       - Shell-polisher
@@ -164,6 +164,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Crabfolk
+    Adjective: Crabfolk
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3

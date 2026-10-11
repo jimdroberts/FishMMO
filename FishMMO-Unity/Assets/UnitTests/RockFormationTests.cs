@@ -335,11 +335,15 @@ namespace FishMMO.UnitTests
 				}
 				return x;
 			}
-			List<int> tri = m.Submeshes[0];
-			for (int t = 0; t + 2 < tri.Count; t += 3)
+			// Every submesh: a formation of two bodies (a glacier table's boulder, a knob's frost cap) draws the second
+			// in submesh 1, and its triangles must join its vertices into its own shell too.
+			foreach (List<int> tri in m.Submeshes)
 			{
-				parent[Find(weld[tri[t]])] = Find(weld[tri[t + 1]]);
-				parent[Find(weld[tri[t + 1]])] = Find(weld[tri[t + 2]]);
+				for (int t = 0; t + 2 < tri.Count; t += 3)
+				{
+					parent[Find(weld[tri[t]])] = Find(weld[tri[t + 1]]);
+					parent[Find(weld[tri[t + 1]])] = Find(weld[tri[t + 2]]);
+				}
 			}
 			var shell = new int[m.VertexCount];
 			var roots = new HashSet<int>();

@@ -1,0 +1,146 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: TradingPost - Caravanserai
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 85
+  Weight: 1
+  DefaultBiomeWeight: 0.2
+  BiomeWeights:
+  - Biome: Desert
+    Weight: 2
+  - Biome: High Desert
+    Weight: 2
+  - Biome: Badlands
+    Weight: 2
+  - Biome: Salt Flat
+    Weight: 2
+  - Biome: Oasis
+    Weight: 2
+  - Biome: Scrubland
+    Weight: 2
+  - Biome: Arid
+    Weight: 2
+  - Biome: Dust Sea
+    Weight: 2
+  - Biome: Wasteland
+    Weight: 2
+  - Biome: Barren
+    Weight: 2
+  - Biome: Steppe
+    Weight: 1.5
+  - Biome: Savanna
+    Weight: 1.5
+  - Biome: Tundra
+    Weight: 1.5
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 1
+  Large: 1
+  PadFlatness: 1
+  Style: hide
+  Layout: 1
+  Pieces:
+  - Tag: tent
+    MinCount: 4
+    MaxCount: 8
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 2
+    Style: 
+  - Tag: well
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: market
+    MinCount: 2
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: timber
+  - Tag: storage
+    MinCount: 6
+    MaxCount: 12
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506032503357567
+  - rid: 4061506032503357568
+  - rid: 4061506032503357569
+  - rid: 4061506032503357570
+  - rid: 4061506032503357571
+  - rid: 4061506032503357572
+  - rid: 4061506032503357573
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503357567
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings:
+        - {x: -3, y: 2, z: 4.1499996}
+        - {x: 3, y: 1.5, z: 4.1499996}
+    - rid: 4061506032503357568
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503357569
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506032503357570
+      type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: -3, y: 4.1499996}
+    - rid: 4061506032503357571
+      type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: 3, y: 4.1499996}
+    - rid: 4061506032503357572
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 1
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503357573
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 4
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

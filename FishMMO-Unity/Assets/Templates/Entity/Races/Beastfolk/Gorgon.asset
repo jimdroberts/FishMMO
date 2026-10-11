@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Gorgon
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Serpentine sibilants, ancient Hellenic cadence'
+  Description: Serpentine sibilants, ancient Hellenic cadence
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -78,11 +78,11 @@ MonoBehaviour:
       - nia
       - ra
       MasculineSuffixes:
-      - 'on'
+      - on
       - ion
       - us
       - rion
-      Description: 'Serpentine sibilants, ancient temple cadence'
+      Description: Serpentine sibilants, ancient temple cadence
       Tags:
       - Stone-gaze
       - Serpent-marks
@@ -91,7 +91,7 @@ MonoBehaviour:
     Cultures: []
     Places:
     - the Stone Gardens
-    - 'Medusa''s Atrium'
+    - Medusa's Atrium
     - the Serpent Terrace
     - the Petrified Grove
     - Snake-hair Hollow
@@ -110,7 +110,7 @@ MonoBehaviour:
       Rank:
       - Queen of the Petrified Court
       Legend:
-      - 'Whose Gaze Ended the Hero''s Line'
+      - Whose Gaze Ended the Hero's Line
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -119,6 +119,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Gorgons
+    Adjective: Gorgon
   BiomeAffinities:
   - BiomeID: 18062707
     Weight: 2
@@ -128,3 +131,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 596668801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

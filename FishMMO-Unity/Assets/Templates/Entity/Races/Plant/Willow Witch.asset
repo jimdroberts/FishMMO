@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Willow Witch
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Plant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Weeping-willow spirits of the riverbank — trailing, sighing names'
+  Description: "Weeping-willow spirits of the riverbank \u2014 trailing, sighing
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Plant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - eth
       - el
       - ith
-      Description: 'Weeping-willow spirits of the riverbank — trailing, sighing names'
+      Description: "Weeping-willow spirits of the riverbank \u2014 trailing, sighing
+        names"
       Tags:
       - Willow-names
       - Bank-marks
@@ -94,7 +96,7 @@ MonoBehaviour:
     - the Trailing Pool
     - the Sighing Grove
     - Osierford
-    - 'the Drowned Maiden''s Tree'
+    - the Drowned Maiden's Tree
     - the Bent Court
     Titles:
       Honorific:
@@ -162,6 +164,8 @@ MonoBehaviour:
       - blight
       - ash
     AllowGenericOccupations: 0
+    Plural: Willow Witches
+    Adjective: Willow Witch
   BiomeAffinities:
   - BiomeID: 2117371294
     Weight: 3
@@ -171,3 +175,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 888339253
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -36,6 +36,16 @@ namespace FishMMO.Shared.NameGeneration
 
 		public static IReadOnlyDictionary<string, string[]> POITypeSuffixes { get; private set; } = new Dictionary<string, string[]>();
 
+		/// <summary>Authored place-name compositions; empty when the asset has none (the builder then uses <see cref="PlaceNameDefaults.Templates"/>).</summary>
+		public static IReadOnlyList<PlaceNameTemplate> PlaceNameTemplates { get; private set; } = new List<PlaceNameTemplate>();
+		public static IReadOnlyDictionary<string, string[]> PlaceFusedSuffixes { get; private set; } = new Dictionary<string, string[]>();
+		public static string[] PlaceAdjectives { get; private set; } = EmptyStrings;
+		public static string[] PlaceNouns { get; private set; } = EmptyStrings;
+		/// <summary>Authored kind weights for <see cref="POIType.Any"/>; a kind with no row uses <see cref="PlaceNameDefaults.KindWeight"/>.</summary>
+		public static IReadOnlyDictionary<POIType, int> POIKindWeights { get; private set; } = new Dictionary<POIType, int>();
+		/// <summary>The authored water phonology, or null when the asset has no usable one.</summary>
+		public static BiomePhonology WaterPhonology { get; private set; }
+
 		public static IReadOnlyList<TitleTemplate> TitleTemplates { get; private set; } = new List<TitleTemplate>();
 		public static HashSet<string> PlaceTakingHonorifics { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		public static HashSet<string> OrdinalTakingHonorifics { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -110,6 +120,12 @@ namespace FishMMO.Shared.NameGeneration
 			BiomeMeaningCodas = NamingTableUtility.ToOrdered(t?.BiomeMeaningCodas);
 
 			POITypeSuffixes = NamingTableUtility.ToListDictionary(t?.POITypeSuffixes, ignoreCase);
+			PlaceNameTemplates = CleanPlaceTemplates(t?.PlaceNameTemplates);
+			PlaceFusedSuffixes = NamingTableUtility.ToListDictionary(t?.PlaceFusedSuffixes, ignoreCase);
+			PlaceAdjectives = t?.PlaceAdjectives ?? EmptyStrings;
+			PlaceNouns = t?.PlaceNouns ?? EmptyStrings;
+			POIKindWeights = KindWeights(t?.POIKindWeights);
+			WaterPhonology = t?.WaterPhonology != null && t.WaterPhonology.IsUsable() ? t.WaterPhonology.ToRuntime() : null;
 
 			TitleTemplates = CleanTemplates(t?.TitleTemplates);
 			PlaceTakingHonorifics = new HashSet<string>(t?.PlaceTakingHonorifics ?? EmptyStrings, ignoreCase);
@@ -152,6 +168,42 @@ namespace FishMMO.Shared.NameGeneration
 				if (row != null && !string.IsNullOrWhiteSpace(row.Pattern) && row.Weight > 0)
 				{
 					result.Add(row);
+				}
+			}
+			return result;
+		}
+
+		private static List<PlaceNameTemplate> CleanPlaceTemplates(List<PlaceNameTemplate> rows)
+		{
+			var result = new List<PlaceNameTemplate>(rows?.Count ?? 0);
+			if (rows == null)
+			{
+				return result;
+			}
+			for (int i = 0; i < rows.Count; i++)
+			{
+				PlaceNameTemplate row = rows[i];
+				if (row != null && !string.IsNullOrWhiteSpace(row.Pattern) && row.Weight > 0)
+				{
+					result.Add(row);
+				}
+			}
+			return result;
+		}
+
+		/// <summary>Kind → weight; later rows for the same kind win, as in the other tables.</summary>
+		private static Dictionary<POIType, int> KindWeights(List<POIKindWeight> rows)
+		{
+			var result = new Dictionary<POIType, int>();
+			if (rows == null)
+			{
+				return result;
+			}
+			for (int i = 0; i < rows.Count; i++)
+			{
+				if (rows[i] != null && rows[i].Kind != POIType.Any)
+				{
+					result[rows[i].Kind] = Math.Max(0, rows[i].Weight);
 				}
 			}
 			return result;

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Kelp Lurker
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Ambush predators of the kelp forests — swaying, hushed names'
+  Description: "Ambush predators of the kelp forests \u2014 swaying, hushed names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - el
       - ur
       - orr
-      Description: 'Ambush predators of the kelp forests — swaying, hushed names'
+      Description: "Ambush predators of the kelp forests \u2014 swaying, hushed names"
       Tags:
       - Kelp-names
       - Sway-marks
@@ -94,7 +94,7 @@ MonoBehaviour:
     - the Frond Ambush
     - the Tangle Deep
     - Lurkreach
-    - 'the Diver''s Grave'
+    - the Diver's Grave
     - the Drifting Wall
     Titles:
       Honorific:
@@ -118,7 +118,7 @@ MonoBehaviour:
       - Lurker of the Kelp Cathedral
       - Lord of the Frond Ambush
       - Matriarch of the Tangle Deep
-      - 'Keeper of the Diver''s Grave'
+      - Keeper of the Diver's Grave
       - Drifter of the Drifting Wall
       Legend:
       - Who Took Every Pearl-diver of the Cove
@@ -160,6 +160,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Kelp Lurkers
+    Adjective: Kelp Lurker
   BiomeAffinities:
   - BiomeID: 1508835452
     Weight: 3

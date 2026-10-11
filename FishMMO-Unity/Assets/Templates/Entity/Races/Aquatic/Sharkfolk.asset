@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sharkfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Shark-blooded raiders of the shallows who worship the hunger of the deep and raid coastal villages by night.
+  Description: Shark-blooded raiders of the shallows who worship the hunger of the
+    deep and raid coastal villages by night.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +81,7 @@ MonoBehaviour:
       - gin
       - or
       - ak
-      Description: Snarling deeps-tongue — every word a bite
+      Description: "Snarling deeps-tongue \u2014 every word a bite"
       Tags:
       - Blood-names
       - Hunt-bonds
@@ -112,6 +113,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Sharkfolk
+    Adjective: Sharkfolk
   BiomeAffinities:
   - BiomeID: 1476749746
     Weight: 2

@@ -124,26 +124,113 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Adds a scene's authored landmarks to a snapshot list.
+		/// Adds a scene's authored landmarks to a snapshot list, from its map definition only.
 		/// </summary>
 		/// <param name="results">The list to append to.</param>
 		/// <param name="definition">The scene's map definition. May be null.</param>
 		/// <param name="fog">The explored map, for the discovery rule. May be null.</param>
 		/// <param name="forWorldMap">True for the world map, false for the minimap.</param>
+		/// <remarks>Kept for callers that have no scene details; see the overload that takes them.</remarks>
 		public static void AppendPointsOfInterest(List<MapMarkerSnapshot> results, WorldMapDefinition definition,
 			FogOfWarMap fog, bool forWorldMap)
 		{
-			if (results == null || definition == null || definition.PointsOfInterest == null)
+			AppendPointsOfInterest(results, null, definition, fog, forWorldMap);
+		}
+
+		/// <summary>
+		/// Adds a scene's points of interest to a snapshot list: the scene details' own list first, then
+		/// the map definition's, each landmark once.
+		/// </summary>
+		/// <param name="results">The list to append to.</param>
+		/// <param name="details">The scene's details, holding its harvested points of interest. May be null.</param>
+		/// <param name="definition">The scene's map definition, for landmarks baked into it. May be null.</param>
+		/// <param name="fog">The explored map, for the discovery rule. May be null.</param>
+		/// <param name="forWorldMap">True for the world map, false for the minimap.</param>
+		/// <param name="labelTier">
+		/// The highest detail tier whose names are drawn; deeper tiers draw their icon without a name.
+		/// See <see cref="LabelTierForZoom"/>.
+		/// </param>
+		/// <remarks>
+		/// <para>
+		/// The details come first because they are where points of interest live now
+		/// (<see cref="WorldSceneDetails.PointsOfInterest"/>): harvested by every cache rebuild whether or
+		/// not a map is baked. The definition's list is what a baked scene carried before, and while a bake
+		/// is present it holds the same hand-placed landmarks again, so a definition entry with the same
+		/// name at the same place (to the metre) as one already added is skipped.
+		/// </para>
+		/// <para>
+		/// Two gates, and a point must pass both. The Cartography tier (<see cref="Cartography.VisibleContentTier"/>,
+		/// 0 to <see cref="Cartography.MaximumDetailTier"/>) decides whether the point is known at all; every
+		/// point-of-interest tier (0 to 3, <c>PointOfInterestKinds</c>) is inside that range, and with no
+		/// Cartography provider every tier is shown. The discovery rule hides a point until the fog has
+		/// revealed its chunk; every generated point requires discovery (Jim, 2026-10-10).
+		/// </para>
+		/// </remarks>
+		public static void AppendPointsOfInterest(List<MapMarkerSnapshot> results, WorldSceneDetails details,
+			WorldMapDefinition definition, FogOfWarMap fog, bool forWorldMap, int labelTier = int.MaxValue)
+		{
+			if (results == null)
 			{
 				return;
 			}
 
+			seen.Clear();
 			int visibleTier = Cartography.VisibleContentTier;
-
-			for (int i = 0; i < definition.PointsOfInterest.Count; ++i)
+			if (details != null)
 			{
-				MapPointOfInterestDetails landmark = definition.PointsOfInterest[i];
+				AppendPointsOfInterest(results, details.PointsOfInterest, fog, forWorldMap, visibleTier, labelTier);
+			}
+			if (definition != null)
+			{
+				AppendPointsOfInterest(results, definition.PointsOfInterest, fog, forWorldMap, visibleTier, labelTier);
+			}
+			seen.Clear();
+		}
+
+		/// <summary>
+		/// The deepest detail tier whose names the world map draws at a zoom.
+		/// </summary>
+		/// <param name="zoom">The view's half-extent, in world metres.</param>
+		/// <param name="mapHalfExtent">Half the longer side of the scene's map, in world metres.</param>
+		/// <returns>0 to 3: 1 when the whole scene is in view, 3 once zoomed in to a quarter of it or closer.</returns>
+		/// <remarks>
+		/// A generated scene holds dozens to a hundred and more points of interest, and every name at once
+		/// is a wall of text. The icons stay, so nothing found is lost; names arrive as the view closes in:
+		/// settlements and great sites (tiers 0 and 1) at any zoom, ordinary sites (tier 2) from half the
+		/// scene, small features (tier 3) from a quarter.
+		/// </remarks>
+		public static int LabelTierForZoom(float zoom, float mapHalfExtent)
+		{
+			if (mapHalfExtent <= 0.0f)
+			{
+				return 3;
+			}
+
+			float fraction = zoom / mapHalfExtent;
+			return fraction > 0.5f ? 1 : fraction > 0.25f ? 2 : 3;
+		}
+
+		/// <summary>The (name, metre x, metre z) of every landmark added by the current call, for de-duplication.</summary>
+		/// <remarks>Static and reused: the maps refresh several times a second on the main thread only.</remarks>
+		private static readonly HashSet<(string, int, int)> seen = new HashSet<(string, int, int)>();
+
+		private static void AppendPointsOfInterest(List<MapMarkerSnapshot> results, List<MapPointOfInterestDetails> points,
+			FogOfWarMap fog, bool forWorldMap, int visibleTier, int labelTier)
+		{
+			if (points == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < points.Count; ++i)
+			{
+				MapPointOfInterestDetails landmark = points[i];
 				if (landmark == null)
+				{
+					continue;
+				}
+
+				if (!seen.Add((landmark.Name ?? string.Empty, Mathf.RoundToInt(landmark.Position.x), Mathf.RoundToInt(landmark.Position.z))))
 				{
 					continue;
 				}
@@ -170,7 +257,7 @@ namespace FishMMO.Client
 					Relationship = MapRelationship.NonPlayer,
 					Icon = landmark.Icon,
 					Tint = Color.white,
-					Label = forWorldMap ? landmark.Name : null,
+					Label = forWorldMap && landmark.DetailTier <= labelTier ? landmark.Name : null,
 					Tooltip = string.IsNullOrEmpty(landmark.Description)
 						? landmark.Name
 						: landmark.Name + "\n" + landmark.Description,

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Frostkin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Tundra-dwelling people — hard consonants, breath-short names spoken through scarves'
+  Description: "Tundra-dwelling people \u2014 hard consonants, breath-short names
+    spoken through scarves"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ak
       - ulf
       - und
-      Description: 'Tundra-dwelling people — hard consonants, breath-short names spoken through scarves'
+      Description: "Tundra-dwelling people \u2014 hard consonants, breath-short names
+        spoken through scarves"
       Tags:
       - Ice-names
       - Hearth-marks
@@ -169,6 +171,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Frostkin
+    Adjective: Frostkin
   BiomeAffinities:
   - BiomeID: 187749268
     Weight: 3
@@ -180,3 +184,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: 1225680173
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

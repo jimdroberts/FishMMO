@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -64,5 +65,19 @@ namespace FishMMO.Shared
 		/// unlocked; the server resolves the live object through <see cref="WaypointRegistry"/>.
 		/// </summary>
 		public SceneWaypointDictionary Waypoints = new SceneWaypointDictionary();
+
+		/// <summary>
+		/// The scene's points of interest: every generated <see cref="ScenePointOfInterest"/> and every
+		/// hand-placed <see cref="MapPointOfInterest"/>, harvested by the cache rebuild.
+		/// </summary>
+		/// <remarks>
+		/// Here rather than only in <see cref="WorldMapDefinition.PointsOfInterest"/> for the reason
+		/// <see cref="Waypoints"/> is: a definition exists only while a map is baked (it is build output),
+		/// so landmarks kept there vanished from the map after Remove Baked Maps and never appeared in an
+		/// unbaked scene at all. The client reads this list first and the definition's for back-compat,
+		/// de-duplicated by name and position (<c>MapContent.AppendPointsOfInterest</c>). Sorted by type,
+		/// name and position, so a rebuild of an unchanged scene writes the same cache.
+		/// </remarks>
+		public List<MapPointOfInterestDetails> PointsOfInterest = new List<MapPointOfInterestDetails>();
 	}
 }

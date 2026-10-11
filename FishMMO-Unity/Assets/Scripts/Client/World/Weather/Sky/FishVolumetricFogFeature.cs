@@ -68,8 +68,17 @@ namespace FishMMO.Client
 		[Tooltip("The compute shader. Left empty, the feature finds it by name in the editor; a build needs it assigned.")]
 		public ComputeShader Compute;
 
-		[Tooltip("The compositing material. Left empty, the feature finds the shader itself.")]
+		[Tooltip("The compositing material. Left empty, the feature makes one from Apply Shader.")]
 		public Material ApplyMaterial;
+
+		[Tooltip("The compositing shader (Hidden/FishMMO/Weather/VolumetricFogApply). Referenced here so a build carries it: " +
+			"Shader.Find only finds a shader something in the build references, and nothing else does. Left empty, it is found " +
+			"by name, which works in the editor alone.")]
+		public Shader ApplyShader;
+
+		// The material made from the shader when none is assigned, kept apart from the serialized field (see
+		// FishHeightFogFeature's own).
+		[System.NonSerialized] private Material created;
 
 		[Header("Froxel grid")]
 		[Tooltip("Froxels across the screen. 160 x 90 is a sixth of 1080p and plenty: fog has no fine detail in it.")]
@@ -207,23 +216,27 @@ namespace FishMMO.Client
 			{
 				return ApplyMaterial;
 			}
-			Shader shader = Shader.Find(ApplyShaderName);
+			if (created != null)
+			{
+				return created;
+			}
+			Shader shader = ApplyShader != null ? ApplyShader : Shader.Find(ApplyShaderName);
 			if (shader == null)
 			{
 				return null;
 			}
-			ApplyMaterial = CoreUtils.CreateEngineMaterial(shader);
-			return ApplyMaterial;
+			created = CoreUtils.CreateEngineMaterial(shader);
+			return created;
 		}
 
 		protected override void Dispose(bool disposing)
 		{
 			pass?.Dispose();
 			pass = null;
-			if (ApplyMaterial != null)
+			if (created != null)
 			{
-				CoreUtils.Destroy(ApplyMaterial);
-				ApplyMaterial = null;
+				CoreUtils.Destroy(created);
+				created = null;
 			}
 		}
 

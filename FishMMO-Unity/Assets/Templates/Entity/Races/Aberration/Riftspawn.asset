@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Riftspawn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Shifting things born where the world tears — crackling, unstable names'
+  Description: "Shifting things born where the world tears \u2014 crackling, unstable
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ax
       - urq
       - oth
-      Description: 'Shifting things born where the world tears — crackling, unstable names'
+      Description: "Shifting things born where the world tears \u2014 crackling,
+        unstable names"
       Tags:
       - Rift-names
       - Shift-marks
@@ -158,6 +160,8 @@ MonoBehaviour:
       - hollow
       - void
     AllowGenericOccupations: 0
+    Plural: Riftspawn
+    Adjective: Riftspawn
   BiomeAffinities:
   - BiomeID: 493502347
     Weight: 3
@@ -167,3 +171,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 681889367
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Mirrorling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Reflection fey of still water and glass — doubled, echoing names'
+  Description: "Reflection fey of still water and glass \u2014 doubled, echoing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - el
       - ess
       - ith
-      Description: 'Reflection fey of still water and glass — doubled, echoing names'
+      Description: "Reflection fey of still water and glass \u2014 doubled, echoing
+        names"
       Tags:
       - Reflection-names
       - Glass-marks
@@ -123,7 +124,7 @@ MonoBehaviour:
       - Elder of the Echo Court
       - Speaker of the Other Room
       Legend:
-      - 'Who Stepped Out of the Queen''s Mirror'
+      - Who Stepped Out of the Queen's Mirror
       - Who Traded Places with Their Reflection and Regretted It
       - Who Broke the Glass and Became Seven
       - Who Walked the Backwards Stair to the Bottom
@@ -163,6 +164,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Mirrorlings
+    Adjective: Mirrorling
   BiomeAffinities:
   - BiomeID: 247344987
     Weight: 3
@@ -172,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -1693619367
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

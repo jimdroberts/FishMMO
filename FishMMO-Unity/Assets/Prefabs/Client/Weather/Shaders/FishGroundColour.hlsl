@@ -294,7 +294,7 @@ float FishGroundSurfaceY(int tile, float2 t, float3 positionWS, float3 groundNor
     if (_FishGroundBlend.w > 0.0 && _FishWeatherTier.x > 0.0 && _FishWeatherCover.x > 0.0)
     {
         float3 at = float3(positionWS.x, y, positionWS.z);
-        y += FishCoverAt(at).x * _FishGroundBlend.w * FishCoverFacing(groundNormal, at, 0.5);
+        y += FishSnowLiftMetres(at, groundNormal, _FishGroundBlend.w);
     }
 #endif
     return y;

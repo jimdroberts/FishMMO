@@ -80,6 +80,8 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		private List<ClimateSettings> climateAssets = new List<ClimateSettings>();
 		/// <summary>Label of the city-only biome choice that lets the race pick its own home.</summary>
 		private const string RaceHomeBiomeChoice = "(race's home biome)";
+		/// <summary>Label of the POI race choice that names from the biome alone.</summary>
+		private const string PoiNoRaceChoice = "(none)";
 		private DropdownField cultureField;
 		private DropdownField genderField;
 		private DropdownField titleTypeField;
@@ -90,6 +92,8 @@ namespace FishMMO.Shared.NameGeneration.Editor
 		private VisualElement titleOptionsGroup;
 		private DropdownField cityTypeField;
 		private DropdownField poiTypeField;
+		/// <summary>Optional race a point of interest belongs to ("Cave of Orcs"); entry 0 is "(none)".</summary>
+		private SearchableDropdownField poiRaceField;
 		private DropdownField itemTypeField;
 		private Toggle hybridToggle;
 		private Slider dominanceSlider;
@@ -406,6 +410,14 @@ namespace FishMMO.Shared.NameGeneration.Editor
 			poiTypeField = new DropdownField(Enum.GetNames(typeof(POIType)).ToList(), 0) { name = "poi-type-field" };
 			poiTypeField.labelElement.style.display = DisplayStyle.None;
 			poiGroup.Add(poiTypeField);
+
+			// Race slots ({RacePlural}, {RaceAdjective}) only compose when a race is chosen.
+			poiGroup.Add(FieldLabel("Race (optional)"));
+			poiRaceField = new SearchableDropdownField("Race",
+				new[] { PoiNoRaceChoice }.Concat(raceDisplayNames),
+				0,
+				new[] { "" }.Concat(raceGroups)) { name = "poi-race-field" };
+			poiGroup.Add(poiRaceField);
 			settingsContent.Add(poiGroup);
 		}
 
@@ -807,16 +819,24 @@ namespace FishMMO.Shared.NameGeneration.Editor
 				$"{biomeField.Value}{VariantSuffix(variant)}{RegionSuffix(regionSeed)}");
 		}
 
+		/// <summary>The POI race key, or null for "(none)".</summary>
+		private string SelectedPoiRaceKey()
+		{
+			int i = poiRaceField.Index - 1;
+			return i >= 0 && i < raceKeys.Count ? raceKeys[i] : null;
+		}
+
 		private void GeneratePOIs()
 		{
 			string biomeKey = SelectedBiomeKey();
+			string poiRace = SelectedPoiRaceKey();
 			var poiType = (POIType)Enum.Parse(typeof(POIType), poiTypeField.value);
 			int count = Mathf.Clamp(countField.value, 1, 100);
 			bool unique = uniqueToggle.value;
 			string regionSeed = RegionSeed();
 
 			BiomeClimateVariant variant = SelectedVariant();
-			var request = new POIRequest { Biome = biomeKey, POIType = poiType, RegionSeed = regionSeed, Variant = variant };
+			var request = new POIRequest { Biome = biomeKey, POIType = poiType, Race = poiRace, RegionSeed = regionSeed, Variant = variant };
 
 			poiResults.Clear();
 			poiResults.AddRange(unique
@@ -825,7 +845,7 @@ namespace FishMMO.Shared.NameGeneration.Editor
 
 			SetStatus($"Generated {poiResults.Count} POI name(s)" +
 				$"{UniqueSuffix(unique, poiResults.Count, count)} — " +
-				$"{biomeField.Value}{VariantSuffix(variant)}{RegionSuffix(regionSeed)}");
+				$"{biomeField.Value}{VariantSuffix(variant)}{(poiRace != null ? ", " + poiRaceField.Value : "")}{RegionSuffix(regionSeed)}");
 		}
 
 		private void GenerateItems()

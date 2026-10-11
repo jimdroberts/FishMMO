@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bog Mummy
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Peat-tanned dead of the marsh — leathery, muffled names'
+  Description: "Peat-tanned dead of the marsh \u2014 leathery, muffled names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - oth
       - ug
       - orr
-      Description: 'Peat-tanned dead of the marsh — leathery, muffled names'
+      Description: "Peat-tanned dead of the marsh \u2014 leathery, muffled names"
       Tags:
       - Peat-names
       - Preserve-marks
@@ -161,6 +161,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Bog Mummies
+    Adjective: Bog Mummy
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1169976905
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dust Wraith
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'The dried dead of the wastes — hissing, sand-blown names'
+  Description: "The dried dead of the wastes \u2014 hissing, sand-blown names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ar
       - oth
       - ud
-      Description: 'The dried dead of the wastes — hissing, sand-blown names'
+      Description: "The dried dead of the wastes \u2014 hissing, sand-blown names"
       Tags:
       - Dust-names
       - Waste-marks
@@ -161,6 +161,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Dust Wraiths
+    Adjective: Dust Wraith
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 992717471
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Carrion Bloat
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Gas-swollen floating things that feed on the dead — wet, bursting names'
+  Description: "Gas-swollen floating things that feed on the dead \u2014 wet, bursting
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - oth
       - ug
       - orr
-      Description: 'Gas-swollen floating things that feed on the dead — wet, bursting names'
+      Description: "Gas-swollen floating things that feed on the dead \u2014 wet,
+        bursting names"
       Tags:
       - Bloat-names
       - Drift-marks
@@ -158,6 +160,8 @@ MonoBehaviour:
       - hollow
       - void
     AllowGenericOccupations: 0
+    Plural: Carrion Bloats
+    Adjective: Carrion Bloat
   BiomeAffinities:
   - BiomeID: 525873855
     Weight: 3
@@ -167,3 +171,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 173642607
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

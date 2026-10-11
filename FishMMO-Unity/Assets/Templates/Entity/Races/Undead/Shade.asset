@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Shade
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'The thin, cold remnant of someone who died in darkness; it hates the living for their warmth and steals it by touch.'
+  Description: The thin, cold remnant of someone who died in darkness; it hates the
+    living for their warmth and steals it by touch.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -49,7 +50,7 @@ MonoBehaviour:
       - Tenn
       - Ash
       - Mo
-      - 'No'
+      - No
       - Sho
       - Vo
       - Do
@@ -89,7 +90,8 @@ MonoBehaviour:
       MasculineSuffixes:
       - oth
       - ar
-      Description: 'Whispered, half-swallowed — the shape of a name, not the sound'
+      Description: "Whispered, half-swallowed \u2014 the shape of a name, not the
+        sound"
       Tags:
       - Spirit
       - Monster
@@ -100,7 +102,7 @@ MonoBehaviour:
     - Gallows Hill
     - the Drowned Bell
     - the Old Ford
-    - 'Widow''s Lantern'
+    - Widow's Lantern
     Titles:
       Honorific:
       - Pale One
@@ -152,6 +154,8 @@ MonoBehaviour:
       - grave
       - ruin
     AllowGenericOccupations: 0
+    Plural: Shades
+    Adjective: Shade
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 1
@@ -163,3 +167,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 525873855
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ratfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Chittering and squeaking — scurrying, whiskery cadence
+  Description: "Chittering and squeaking \u2014 scurrying, whiskery cadence"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +80,7 @@ MonoBehaviour:
       - ril
       - rit
       - tch
-      Description: Chittering and squeaking — warren-cant
+      Description: "Chittering and squeaking \u2014 warren-cant"
       Tags:
       - Swarm-names
       - Plague-bonds
@@ -89,7 +89,7 @@ MonoBehaviour:
     Places:
     - the Under-Warren
     - Plague Quarter
-    - 'Rotters'' Alley'
+    - Rotters' Alley
     - Chitter-Pipe Pass
     Titles:
       Honorific:
@@ -113,6 +113,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Ratfolk
+    Adjective: Ratfolk
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -124,3 +127,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: 525873855
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

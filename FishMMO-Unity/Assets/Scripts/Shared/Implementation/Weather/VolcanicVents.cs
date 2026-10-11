@@ -244,8 +244,9 @@ namespace FishMMO.Shared.Weather
 				// ground that emits nothing still throws up ash: its substance is null, which falls as
 				// plain ash (WeatherPhysics.FallingFrom).
 				BiomeTemplate biome = map != null ? map.Sample(new Vector3(centre.x, 0f, centre.y)) : null;
-				WeatherSubstance substance = biome != null ? biome.Emits : null;
-				float rate = biome != null && biome.Emits != null ? Mathf.Max(0.05f, biome.EmissionRate) : 0.05f;
+				// Steam is not what an eruption throws up: one forced over a geyser basin throws plain ash.
+				WeatherSubstance substance = biome != null && biome.Emits != null && !biome.Emits.Vapour ? biome.Emits : null;
+				float rate = substance != null ? Mathf.Max(0.05f, biome.EmissionRate) : 0.05f;
 				float emission = Mathf.Clamp01(rate * StormPhysics.EmissionBoost(StormKind.Eruption, strength));
 				Vector2 wind = ownWind ? WindAt(timeline, settings, centre, worldSeconds) : surfaceWind;
 				VolcanicPlume.Plume plume = VolcanicPlume.Of(centre, emission, substance, planet, wind, true, cell.Seed);

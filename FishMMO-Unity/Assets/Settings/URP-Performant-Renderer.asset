@@ -15,17 +15,39 @@ MonoBehaviour:
   m_Active: 1
   Compute: {fileID: 7200000, guid: 7c0b95a88fde244e0b836d5e7c694578, type: 3}
   ApplyMaterial: {fileID: 0}
+  ApplyShader: {fileID: 4800000, guid: 261dcc0cea9c2133480615767c020944, type: 3}
   GridWidth: 160
   GridHeight: 90
   GridDepth: 64
   NearDistance: 0.5
   FarDistance: 500
   DepthCurve: 1.4
-  Albedo: {r: 0.92, g: 0.94, b: 1, a: 1}
-  Anisotropy: 0.6
-  AmbientFloor: 0.12
-  DensityScale: 0.03
+  LightShafts: 0
   FallMist: 0
+--- !u!114 &-5600280273197784233
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b841d4f58e81126b973e2711429ed90, type: 3}
+  m_Name: Fish Heat Shimmer
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishHeatShimmerFeature
+  m_Active: 0
+  ShimmerShader: {fileID: 4800000, guid: 2db916803dd3c13e79f51fd56fd2de7d, type: 3}
+  Amplitude: 1.2
+  LayerDepth: 2
+  Mirage: 0.85
+  MirageWidening: 1.5
+  MaxOffsetPixels: 6
+  CellDegrees: 0.35
+  CellFlattening: 2.5
+  Lava: 1
+  LavaAmplitude: 6
+  LavaReach: 25
 --- !u!114 &-323941509406291843
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -72,7 +94,8 @@ MonoBehaviour:
   - {fileID: -323941509406291843}
   - {fileID: 9116091173554621304}
   - {fileID: -7907391183981605542}
-  m_RendererFeatureMap: 7d88d5dbe92081fb780bcc8b9fdc827e5a8db8029d4d4392
+  - {fileID: -5600280273197784233}
+  m_RendererFeatureMap: 7d88d5dbe92081fb780bcc8b9fdc827e5a8db8029d4d439257236b59c3ce47b2
   m_UseNativeRenderPass: 0
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -115,10 +138,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishHeightFogFeature
   m_Active: 1
   FogMaterial: {fileID: 0}
-  FalloffHeight: 60
-  BaseHeight: 0
-  MaximumOpacity: 0.92
-  SunInscatter: 0.6
-  StartDistance: 4
-  EndDistance: 1200
-  DensityScale: 0.03
+  FogShader: {fileID: 4800000, guid: 0dbb995e33d6cf2ff938338521db28c1, type: 3}

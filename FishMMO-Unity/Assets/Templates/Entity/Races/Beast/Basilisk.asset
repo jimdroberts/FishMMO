@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Basilisk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Hissing sibilants — petrifying gaze-tongue
+  Description: "Hissing sibilants \u2014 petrifying gaze-tongue"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +80,7 @@ MonoBehaviour:
       - iss
       - is
       - ros
-      Description: Hissing sibilants — petrifying gaze-tongue
+      Description: "Hissing sibilants \u2014 petrifying gaze-tongue"
       Tags:
       - Stone-gaze
       - Serpent-bonds
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Basilisks
+    Adjective: Basilisk
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 2
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1275219499
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

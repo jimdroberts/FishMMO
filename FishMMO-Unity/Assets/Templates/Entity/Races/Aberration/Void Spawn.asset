@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Void Spawn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Things from the gap between stars — silent, impossible names'
+  Description: "Things from the gap between stars \u2014 silent, impossible names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - oth
       - ax
       - urq
-      Description: 'Things from the gap between stars — silent, impossible names'
+      Description: "Things from the gap between stars \u2014 silent, impossible names"
       Tags:
       - Void-names
       - Star-marks
@@ -158,6 +158,8 @@ MonoBehaviour:
       - hollow
       - void
     AllowGenericOccupations: 0
+    Plural: Void Spawn
+    Adjective: Void Spawn
   BiomeAffinities:
   - BiomeID: 493502347
     Weight: 3
@@ -167,3 +169,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 992717471
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

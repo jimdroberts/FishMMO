@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Flesh Weaver
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Things that stitch bodies into new shapes — wet, needling names'
+  Description: "Things that stitch bodies into new shapes \u2014 wet, needling names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - ax
       - ull
       - urq
-      Description: 'Things that stitch bodies into new shapes — wet, needling names'
+      Description: "Things that stitch bodies into new shapes \u2014 wet, needling
+        names"
       Tags:
       - Stitch-names
       - Graft-marks
@@ -158,6 +159,8 @@ MonoBehaviour:
       - hollow
       - void
     AllowGenericOccupations: 0
+    Plural: Flesh Weavers
+    Adjective: Flesh Weaver
   BiomeAffinities:
   - BiomeID: -830221931
     Weight: 3
@@ -167,3 +170,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -857237992
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

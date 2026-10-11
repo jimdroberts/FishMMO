@@ -23,6 +23,8 @@ MonoBehaviour:
   MaxTemperature: -0.5
   MinHumidity: -1
   MaxHumidity: 0.4
+  MinWarmestSeason: -1
+  MaxWarmestSeason: 1
   SelectionWeight: 1.2
   Atmosphere: 14
   RequiresLiquidWater: 0
@@ -97,6 +99,63 @@ MonoBehaviour:
       - Tarred
       - Orange
       - Sticky
+      POITypeWords:
+      - Key: camp
+        Values:
+        - Station
+        - Outpost
+        - Shelter
+        - Dome Camp
+        - Ice Camp
+        - Survey Camp
+      - Key: cave
+        Values:
+        - Ice Vault
+        - Cryo Grotto
+        - Fissure Cave
+        - Frost Hollow
+        - Blue Vault
+        - Rime Hollow
+      - Key: crater
+        Values:
+        - Crater
+        - Basin
+        - Ice Pit
+        - Ring
+        - Bowl
+        - Cold Pit
+      - Key: crystalformation
+        Values:
+        - Ice Crystals
+        - Frost Garden
+        - Rime Spires
+        - Clathrate Spires
+        - Ice Prisms
+        - Glitterfield
+      - Key: landmark
+        Values:
+        - Ice Monolith
+        - Frost Pillar
+        - Plume Marker
+        - Beacon
+        - Rime Stone
+        - Marker
+      - Key: peak
+        Values:
+        - Mons
+        - Ice Peak
+        - Cryo Cone
+        - Frost Massif
+        - Rime Spire
+        - Ridge
+      - Key: spring
+        Values:
+        - Cryo-spring
+        - Slush Well
+        - Brine Seep
+        - Ice Fountain
+        - Cold Vent
+        - Rime Well
       Description: Organic haze that has settled out of the sky for a billion years.
   LooseGround: {fileID: 0}
   Emits: {fileID: 11400000, guid: a751240fb82250d31bc77c5ab4d8b7c9, type: 2}
@@ -166,8 +225,20 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.2
       clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0}
       sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: ecf2eea0279e951c
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
@@ -212,13 +283,141 @@ MonoBehaviour:
       clusterSpacing: 4
       clusterBackground: 0.25
       clusterScaleBias: 0.6
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
       sinkRange: {x: 0, y: 0.05}
       sinkSlopeFactor: 0.5
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 4397dc9e526b9496
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
+    - stableGuid: 4f78d5620a044b66bbcf973ce6007d94
+      enableSpawning: 1
+      ruleName: Detail_Rocks_Ice
+      prefabs:
+      - {fileID: 8968518619574178943, guid: c37111655e51a59c20bdc584cb364030, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 3
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.45, y: 1.75}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 35632
+      clusterMetres: 3
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 9d05c8f43c68dccf
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 3349e0e60a4d460d917a6a744a3139a2
+      enableSpawning: 1
+      ruleName: Detail_Pebbles_Ice
+      prefabs:
+      - {fileID: 8104804706680211099, guid: dd2dba977a7132b4e0df38caa11bca0f, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 4
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.45, y: 1.75}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 37149
+      clusterMetres: 2
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 93cb60ba35b986a8
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
   detailTextureLayers:
   - terrainLayer: {fileID: 8574412962073106934, guid: 8707952cea16a0d8eeaad09b7fe18293,
       type: 2}
@@ -243,7 +442,68 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
-    prefabSpawnRules: []
+    prefabSpawnRules:
+    - stableGuid: dbfeff3f40ef43899d52770a0b0fd1cc
+      enableSpawning: 1
+      ruleName: 'Formations: Bladed terrain'
+      prefabs:
+      - {fileID: 7438189361166986874, guid: cb387d5ea7e8e4ab2c23688160b78922, type: 3}
+      - {fileID: 7070023575480844186, guid: 5f5f5096115a2b2bc7a916544d42aed0, type: 3}
+      - {fileID: 4680862062988903582, guid: 86568e5b41bfd602f52684f6f4668eef, type: 3}
+      - {fileID: 9122095137512573608, guid: f98452b34517afc8a8ec08718e17c106, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.006
+      maxPerChunk: 2000
+      minSpacing: 6
+      minTextureWeight: 0.5
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: -10, y: 10}
+      alignToTerrainNormal: 0
+      seedOffset: 17338
+      clusterMetres: 14
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.3
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0.05}
+      sinkSlopeFactor: 0.6
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 71199e75d913d0b4
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
   - terrainLayer: {fileID: 8574412962073106934, guid: 681250d76f3d5f0051f9560a9508f439,
       type: 2}
     albedoTexture: {fileID: 0}
@@ -254,6 +514,30 @@ MonoBehaviour:
     tileSize: {x: 15, y: 15}
     blendMode: 0
     blendNoiseScale: 64
+    blendNoiseOffsetX: 0
+    blendNoiseOffsetY: 0
+    blendSharpness: 2
+    useHeightConstraint: 0
+    heightRange:
+      min: 0
+      max: 1
+    heightFalloff: 0.05
+    useSlopeConstraint: 0
+    slopeRange:
+      min: 0
+      max: 90
+    slopeFalloff: 5
+    prefabSpawnRules: []
+  - terrainLayer: {fileID: 8574412962073106934, guid: 636cdd4115dfd1b2564f743a232ab910,
+      type: 2}
+    albedoTexture: {fileID: 0}
+    normalTexture: {fileID: 0}
+    maskTexture: {fileID: 0}
+    metallic: 0
+    smoothness: 0
+    tileSize: {x: 15, y: 15}
+    blendMode: 0
+    blendNoiseScale: 128
     blendNoiseOffsetX: 0
     blendNoiseOffsetY: 0
     blendSharpness: 2

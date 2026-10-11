@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bog Goblin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Marsh goblins — squelching, nasal names'
+  Description: "Marsh goblins \u2014 squelching, nasal names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ub
       - og
       - uk
-      Description: 'Marsh goblins — squelching, nasal names'
+      Description: "Marsh goblins \u2014 squelching, nasal names"
       Tags:
       - Squelch-names
       - Frog-marks
@@ -126,7 +126,7 @@ MonoBehaviour:
       - Who Ate a Frog the Size of a Dog
       - Who Sank the Knight in the Stink Bog
       - Who Lived a Year Underwater Breathing Through a Reed
-      - 'Who Stole the Bog Troll''s Dinner'
+      - Who Stole the Bog Troll's Dinner
       - Who Built Frogmarket on a Floating Log
       Occupational:
       - Frog-catcher
@@ -169,6 +169,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Bog Goblins
+    Adjective: Bog Goblin
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -178,3 +180,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -830221931
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

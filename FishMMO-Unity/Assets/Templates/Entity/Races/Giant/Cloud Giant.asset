@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Cloud Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Airy, aristocratic — sky-palace Latinate cadence'
+  Description: "Airy, aristocratic \u2014 sky-palace Latinate cadence"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - os
       - us
       - arus
-      Description: 'Airy, aristocratic — sky-palace court cadence'
+      Description: "Airy, aristocratic \u2014 sky-palace court cadence"
       Tags:
       - Cloud-names
       - Sky-bonds
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Cloud Giants
+    Adjective: Cloud Giant
   BiomeAffinities:
   - BiomeID: -1474826537
     Weight: 3
@@ -121,3 +124,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1693619367
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Nixie
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'River-pool water fey — rippling, liquid names'
+  Description: "River-pool water fey \u2014 rippling, liquid names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - el
       - ith
       - ora
-      Description: 'River-pool water fey — rippling, liquid names'
+      Description: "River-pool water fey \u2014 rippling, liquid names"
       Tags:
       - Ripple-names
       - Pool-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Keeper of the Stepping Stones
       - Elder of the Lily Throne
       Legend:
-      - 'Who Sang the Miller''s Son Under'
+      - Who Sang the Miller's Son Under
       - Who Kept the Mill Wheel Turning Through the Drought
       - Who Hid the Wedding Ring in the Green Pool for a Century
       - Who Danced on the Stepping Stones Without Wetting a Foot
@@ -164,6 +164,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Nixies
+    Adjective: Nixie
   BiomeAffinities:
   - BiomeID: 2117371294
     Weight: 3

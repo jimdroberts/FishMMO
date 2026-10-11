@@ -59,6 +59,7 @@ namespace FishMMO.Shared.Celestial
 		private static double lastWorld;
 		private static double lastReal = double.NaN;
 		private static int frame = -1;
+		private static uint seenJumps;
 
 		/// <summary>Seconds of motion per real second, 0 to 1: the sea and its surf, what falls, and the trees.</summary>
 		public static float Rate
@@ -79,8 +80,15 @@ namespace FishMMO.Shared.Celestial
 			Rate = (float)Math.Max(0.0, Math.Min(1.0, worldSecondsPerSecond));
 		}
 
-		/// <summary>How many seconds of motion a stretch of real time is worth.</summary>
-		public static float Scale(float realSeconds) => realSeconds * rate;
+		/// <summary>
+		/// Seconds of motion per real second now, 0 to 1: the preview's dial (<see cref="Rate"/>) and the
+		/// world clock's own pace (an admin's or the bed's hold or slow), whichever is slower. What
+		/// <see cref="Seconds"/> advances at, for whatever has to step its own state a frame at a time.
+		/// </summary>
+		public static float Pace => Math.Min(rate, (float)Math.Min(1.0, ClockRate()));
+
+		/// <summary>How many seconds of motion a stretch of real time is worth (<see cref="Pace"/>).</summary>
+		public static float Scale(float realSeconds) => realSeconds * Pace;
 
 		/// <summary>
 		/// Seconds of world motion now, since the calendar epoch: the shared world clock in the game,
@@ -99,9 +107,15 @@ namespace FishMMO.Shared.Celestial
 				frame = Time.frameCount;
 				double world = WorldSecondsNow();
 				double realStep = double.IsNaN(lastReal) ? 0.0 : Math.Max(0.0, real - lastReal);
+				// The clock was set to another moment: the motion lands on it, at any pace, as everything else does.
+				uint jumps = WorldClock.Shared.Jumps;
+				if (jumps != seenJumps)
+				{
+					seenJumps = jumps;
+					motion = double.NaN;
+				}
 				// Held or slowed by whoever set the world's pace (an admin, the bed), as by a preview's dial.
-				float pace = Math.Min(rate, (float)Math.Min(1.0, ClockRate()));
-				motion = double.IsNaN(motion) ? world : Step(motion, lastWorld, world, realStep, pace);
+				motion = double.IsNaN(motion) ? world : Step(motion, lastWorld, world, realStep, Pace);
 				lastWorld = world;
 				lastReal = real;
 				return motion;

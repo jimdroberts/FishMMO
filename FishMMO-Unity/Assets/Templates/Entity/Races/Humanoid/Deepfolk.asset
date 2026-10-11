@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Deepfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Bulging-eyed fish-folk driven mad by the deep. They worship whatever their frenzied faith invents, and their invented gods sometimes answer.'
+  Description: Bulging-eyed fish-folk driven mad by the deep. They worship whatever
+    their frenzied faith invents, and their invented gods sometimes answer.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -91,7 +92,7 @@ MonoBehaviour:
       - bb
       - gg
       - aal
-      Description: 'Mad fish-priests — ecstatic, wrong-vowel babble'
+      Description: "Mad fish-priests \u2014 ecstatic, wrong-vowel babble"
       Tags:
       - Cult-names
       - Mad-marks
@@ -99,8 +100,8 @@ MonoBehaviour:
     Cultures: []
     Places:
     - the Drowned Shrine
-    - 'Blibdoolpoolp''s Pool'
-    - 'Sea-Mother''s Altar'
+    - Blibdoolpoolp's Pool
+    - Sea-Mother's Altar
     - the Hollow Lens
     Titles:
       Honorific:
@@ -124,6 +125,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Deepfolk
+    Adjective: Deepfolk
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -131,3 +135,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 155940630
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

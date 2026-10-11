@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Fae
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Bright and mercurial — flower-names, trick-sounds, quicksilver feel'
+  Description: "Bright and mercurial \u2014 flower-names, trick-sounds, quicksilver
+    feel"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -93,7 +94,8 @@ MonoBehaviour:
       - fin
       - wick
       - rim
-      Description: 'Bright and mercurial — flower-names, trick-sounds, quicksilver feel'
+      Description: "Bright and mercurial \u2014 flower-names, trick-sounds, quicksilver
+        feel"
       Tags:
       - Court-names
       - Pact-marks
@@ -153,7 +155,7 @@ MonoBehaviour:
         - gold
         - sun
         - rim
-        Description: 'Summer Fae — bright, golden, mischievous but kind'
+        Description: "Summer Fae \u2014 bright, golden, mischievous but kind"
         Tags:
         - Seelie-names
         - Bloom-bonds
@@ -212,7 +214,7 @@ MonoBehaviour:
         - frost
         - shade
         - rime
-        Description: 'Winter Fae — cold, beautiful, dangerous, and cruel'
+        Description: "Winter Fae \u2014 cold, beautiful, dangerous, and cruel"
         Tags:
         - Unseelie-names
         - Frost-bonds
@@ -308,6 +310,9 @@ MonoBehaviour:
       - hollow
       - dust
       - husk
+    AllowGenericOccupations: 1
+    Plural: Fae
+    Adjective: Faerie
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 2
@@ -317,3 +322,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -439598380
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

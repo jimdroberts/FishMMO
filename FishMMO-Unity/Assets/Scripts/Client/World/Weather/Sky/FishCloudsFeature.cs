@@ -355,6 +355,16 @@ namespace FishMMO.Client
 		/// <summary>Where the far band's second and third slices begin, as multiples of its start (the probe tunes them).</summary>
 		public static float FarSplitA = 1.5f, FarSplitB = 2.4f;
 
+		/// <summary>The far imposter (VolumetricCloudSettings.FarImposter) for this session; the probe turns it off for A/Bs.</summary>
+		public static bool FarImposterEnabled = true;
+
+		/// <summary>
+		/// Where a cloud ray's full march ends and the far tail begins, metres: the profile's Full March Metres, never
+		/// nearer than 1 km past the far band's second slice (<paramref name="band"/> × FarSplitB). Not the camera's far
+		/// plane, which the scene backdrop raises to 20 km to draw the horizon ring.
+		/// </summary>
+		public static float FullMarchFor(SkySystem sky, float band) => Mathf.Max(band * FarSplitB + 1000f, sky.CloudFullMarchMetres);
+
 		private sealed class CloudPass : ScriptableRenderPass
 		{
 			private const string MarchName = "Fish Clouds (march)";
@@ -363,6 +373,10 @@ namespace FishMMO.Client
 			public const int FarSlices = 4;
 			/// <summary>Off: one band, the whole ray marched every frame (the probe's A/B).</summary>
 			public static bool FarBandEnabled = true;
+			/// <summary>Where the imposter's second and third layers begin, as multiples of the far band's start.</summary>
+			public const float ImposterSplitA = 1.8f, ImposterSplitB = 3.0f;
+			private const string ImposterRefreshName = "Fish Clouds (far imposter refresh)";
+			private const string ImposterName = "Fish Clouds (far imposter)";
 
 			private const string TemporalName = "Fish Clouds (steady)";
 			private const string TemporalComputeName = "Fish Clouds (steady, compute)";
@@ -447,11 +461,41 @@ namespace FishMMO.Client
 			private static readonly int NearId = Shader.PropertyToID("_FishCloudNear");
 			private static readonly int NearMotionId = Shader.PropertyToID("_FishCloudNearMotion");
 			private static readonly int FarBoundsId = Shader.PropertyToID("_FishCloudFarBounds");
+			private static readonly int ImposterId = Shader.PropertyToID("_FishCloudImposter");
+			private static readonly int ImposterBoundsId = Shader.PropertyToID("_FishCloudImposterBounds");
+			private static readonly int ImposterViewId = Shader.PropertyToID("_FishCloudImposterView");
+			private static readonly int NearReuseId = Shader.PropertyToID("_FishCloudNearReuse");
+			private static readonly int ImposterFrontId = Shader.PropertyToID("_FishCloudImposterFront");
+			private static readonly int ImposterFrontMotionId = Shader.PropertyToID("_FishCloudImposterFrontMotion");
+			private static readonly int NearPrevVPId = Shader.PropertyToID("_FishCloudNearPrevVP");
+			private static readonly int NearPrevJitterId = Shader.PropertyToID("_FishCloudNearPrevJitter");
+			private static readonly int NearPrevId = Shader.PropertyToID("_FishCloudNearPrev");
+			private static readonly int NearPrevMotionId = Shader.PropertyToID("_FishCloudNearPrevMotion");
+			private static readonly int[] ImposterLayerIds = { Shader.PropertyToID("_FishCloudImposterNear"), Shader.PropertyToID("_FishCloudImposterMid"),
+				Shader.PropertyToID("_FishCloudImposterFar"), Shader.PropertyToID("_FishCloudImposterThrough") };
+			private static readonly int[] ImposterOldLayerIds = { Shader.PropertyToID("_FishCloudImposterOldNear"), Shader.PropertyToID("_FishCloudImposterOldMid"),
+				Shader.PropertyToID("_FishCloudImposterOldFar"), Shader.PropertyToID("_FishCloudImposterOldThrough") };
+			private static readonly int[] ImposterSourceIds = { Shader.PropertyToID("_FishCloudImposterSrcNear"), Shader.PropertyToID("_FishCloudImposterSrcMid"),
+				Shader.PropertyToID("_FishCloudImposterSrcFar"), Shader.PropertyToID("_FishCloudImposterSrcThrough") };
+			private static readonly int ImposterDepthsId = Shader.PropertyToID("_FishCloudImposterDepths");
+			private static readonly int ImposterWarpId = Shader.PropertyToID("_FishCloudImposterWarp");
+			private static readonly int ImposterCarryId = Shader.PropertyToID("_FishCloudImposterCarry");
+			private static readonly int ImposterShiftId = Shader.PropertyToID("_FishCloudImposterShift");
+			private static readonly int ImposterOldShiftId = Shader.PropertyToID("_FishCloudImposterOldShift");
 			private static readonly int FarValidId = Shader.PropertyToID("_FishCloudFarValid");
 			private static readonly int FarViewProjectionId = Shader.PropertyToID("_FishCloudFarVP");
 			private static readonly int[] FarSliceIds = { Shader.PropertyToID("_FishCloudFar0"), Shader.PropertyToID("_FishCloudFar1"), Shader.PropertyToID("_FishCloudFar2"), Shader.PropertyToID("_FishCloudFar3") };
 			private static readonly int[] FarSliceInfoIds = { Shader.PropertyToID("_FishCloudFarInfo0"), Shader.PropertyToID("_FishCloudFarInfo1"), Shader.PropertyToID("_FishCloudFarInfo2"), Shader.PropertyToID("_FishCloudFarInfo3") };
 			private static readonly int FramePhaseId = Shader.PropertyToID("_FishCloudFramePhase");
+			private static readonly int PhaseStateId = Shader.PropertyToID("_FishCloudPhaseState");
+			private static readonly int BlueNoiseId = Shader.PropertyToID("_FishCloudBlueNoise");
+
+			/// <summary>
+			/// URP's 64 × 64 blue noise, which the rays' phase is drawn from (FishCloudRayPhase, FishCloudPhase.hlsl);
+			/// null outside URP, where the phase falls back to interleaved gradient noise.
+			/// </summary>
+			private static Texture2D BlueNoise =>
+				GraphicsSettings.TryGetRenderPipelineSettings<UniversalRenderPipelineRuntimeTextures>(out var textures) ? textures.blueNoise64LTex : null;
 
 			/// <summary>The kernel's thread group, a side: FISH_RESOLVE_GROUP in FishCloudResolve.compute.</summary>
 			private const int ResolveGroup = 8;
@@ -548,6 +592,39 @@ namespace FishMMO.Client
 				lastGameDrawn = null;
 			}
 
+			private class ImposterData
+			{
+				public Material Material;
+				public int Pass;
+				public Rect Viewport;
+				public TextureHandle Near, NearMotion;
+				/// <summary>The build: the newest whole panorama it carries from (null while the first is filled). The
+				/// combine: the newer panorama, then the older.</summary>
+				public TextureHandle[] Layers, OldLayers;
+			}
+
+			/// <summary>How far the low clouds drifted from <paramref name="from"/> to <paramref name="to"/>, the short way round the drift's wrap.</summary>
+			private static Vector2 DriftBetween(Vector2 to, Vector2 from)
+			{
+				Vector2 step = to - from;
+				float wrap = (float)WeatherDriver.DriftWrapMetres;
+				step.x -= Mathf.Round(step.x / wrap) * wrap;
+				step.y -= Mathf.Round(step.y / wrap) * wrap;
+				return step;
+			}
+
+			/// <summary>
+			/// What to add to a panorama's point (a direction times its layer's distance) to find, at the moment
+			/// <paramref name="then"/> was begun, the cloud that stands there at <paramref name="now"/>'s: back along the
+			/// low clouds' wind since, plus how far the camera has gone. The imposter's layers ride that wind (gain 1), as
+			/// the steadying reprojects them.
+			/// </summary>
+			private static Vector3 ImposterShift(Vector3 cameraNow, Vector2 driftNow, Vector3 cameraThen, Vector2 driftThen)
+			{
+				Vector2 drifted = DriftBetween(driftNow, driftThen);
+				return cameraNow - cameraThen - new Vector3(drifted.x, 0f, drifted.y);
+			}
+
 			private class MarchData
 			{
 				public Material Material;
@@ -573,12 +650,59 @@ namespace FishMMO.Client
 				public int GroupsX, GroupsY;
 			}
 
+			#if UNITY_EDITOR
+			/// <summary>The passes that fill the cloud buffer and lay it over the frame.</summary>
+			private static readonly string[] BufferPassNames =
+				{ "CloudMarch", "CloudTemporal", "CloudComposite", "CloudFarBand", "CloudFarImposterUpdate", "CloudFarImposter" };
+			private static double nextCompileRequest;
+
+			/// <summary>
+			/// Whether every pass that fills the cloud buffer has compiled. The editor compiles shaders in the
+			/// background, and a pass still compiling draws nothing, so the buffer kept whatever its target held —
+			/// zeros in a new one, which read as "nothing gets through": the water and the sky bodies lay the buffer
+			/// over themselves and turned black while the march compiled (2026-10-10). Until all of them are ready
+			/// the clouds are left out and nothing is published, so everything reads a frame without clouds (and the
+			/// fog falls back to the height and froxel passes). The ones not compiled are asked for here, every two
+			/// seconds, since nothing draws them meanwhile.
+			/// </summary>
+			private static bool BufferPassesCompiled(Material material)
+			{
+				double now = UnityEditor.EditorApplication.timeSinceStartup;
+				bool request = now >= nextCompileRequest;
+				bool ready = true;
+				foreach (string name in BufferPassNames)
+				{
+					int pass = material.FindPass(name);
+					if (pass < 0 || UnityEditor.ShaderUtil.IsPassCompiled(material, pass))
+					{
+						continue;
+					}
+					ready = false;
+					if (request)
+					{
+						UnityEditor.ShaderUtil.CompilePass(material, pass, false);
+					}
+				}
+				if (request && !ready)
+				{
+					nextCompileRequest = now + 2.0;
+				}
+				return ready;
+			}
+			#endif
+
 			public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
 			{
 				if (material == null || !SkySystem.CloudsReady)
 				{
 					return;
 				}
+				#if UNITY_EDITOR
+				if (!BufferPassesCompiled(material))
+				{
+					return;
+				}
+				#endif
 				UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
 				UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
 				if (resourceData.isActiveTargetBackBuffer)
@@ -648,8 +772,12 @@ namespace FishMMO.Client
 				float wrap = (float)WeatherDriver.DriftWrapMetres;
 				driftStep.x -= Mathf.Round(driftStep.x / wrap) * wrap;
 				driftStep.y -= Mathf.Round(driftStep.y / wrap) * wrap;
+				// The weather snapped to another moment (a set of the clock): what the history holds is of the old one,
+				// however little the air drifted between them, so it is cut and the new moment drawn fresh.
+				bool snapped = state.Snaps != WeatherClient.Snaps;
+				state.Snaps = WeatherClient.Snaps;
 				bool cut = state.Valid
-					&& ((position - state.PreviousPosition).sqrMagnitude > CutDistance * CutDistance
+					&& (snapped || (position - state.PreviousPosition).sqrMagnitude > CutDistance * CutDistance
 						|| driftStep.sqrMagnitude > MaxDriftStep * MaxDriftStep);
 				bool temporal = tier.Temporal && state.Valid && !cut;
 				if (!temporal)
@@ -664,8 +792,9 @@ namespace FishMMO.Client
 				// longer tells one pixel from the next, and the jitter every ray's phase depends on goes
 				// coarse the longer the game has been running. Sixty-four frames is the noise's own period.
 				material.SetVector(MarchParamsId, new Vector4(tier.Steps, tier.Detail, state.Frame % 64, sky.CloudFarDistance));
-				// Past this camera's far plane a ray has a few steps left to reach its end (FarTailSteps).
-				material.SetVector(FarTailId, new Vector4(cameraData.camera.farClipPlane, sky.CloudFarTailSteps, 0f, 0f));
+				// Past the full march (FullMarchMetres) a ray has a few steps left to reach its end (FarTailSteps). It was the
+				// camera's far plane: raised to 20 km by the scene backdrop, the clouds out to there were marched in full.
+				material.SetVector(FarTailId, new Vector4(Mathf.Max(1000f, sky.CloudFullMarchMetres), sky.CloudFarTailSteps, 0f, 0f));
 				// How wide one ray's cone opens, in metres per metre of distance. The projection's
 				// [1][1] is 1/tan(halfFov), so 2/(m11 * rows) is the height of one of `rows` pixels a
 				// metre in front of the camera. It has to be worked out here and nowhere else: this is
@@ -730,6 +859,14 @@ namespace FishMMO.Client
 				}
 				material.SetVector(OptionsId, options);
 				material.SetFloat(FramePhaseId, Mathf.Repeat(state.Frame * 0.6180340f, 1f));
+				// The rays' phase (FishCloudPhase.hlsl): a blue-noise value fixed to each texel, turned on by the
+				// frame's place-ordered phase — the same one the light march's seed turns by.
+				Texture2D blueNoise = BlueNoise;
+				if (blueNoise != null)
+				{
+					material.SetTexture(BlueNoiseId, blueNoise);
+				}
+				material.SetVector(PhaseStateId, new Vector4(Mathf.Max(0, state.Frame) % 4096, options.w, blueNoise != null ? 1f : 0f, 0f));
 
 				var marchDesc = new TextureDesc(width, height)
 				{
@@ -739,7 +876,22 @@ namespace FishMMO.Client
 					filterMode = FilterMode.Bilinear,
 					wrapMode = TextureWrapMode.Clamp,
 				};
-				TextureHandle marched = renderGraph.CreateTexture(marchDesc);
+				// At a quarter rate the march is kept for the next frame, which carries three texels in four on from it.
+				bool nearQuarter = sky.CloudNearMarchEvery >= 4;
+				TextureHandle nearPrev = TextureHandle.nullHandle, nearPrevMotion = TextureHandle.nullHandle;
+				if (nearQuarter && !state.NearFits(width, height))
+				{
+					state.AllocateNear(width, height);
+				}
+				TextureHandle marched = nearQuarter ? renderGraph.ImportTexture(state.NearMarch[state.NearIndex]) : renderGraph.CreateTexture(marchDesc);
+				material.SetVector(NearReuseId, new Vector4(nearQuarter && state.NearValid && !cut && temporal ? 1f : 0f, state.Frame % 4, 0f, 0f));
+				if (nearQuarter)
+				{
+					nearPrev = renderGraph.ImportTexture(state.NearMarch[1 - state.NearIndex]);
+					nearPrevMotion = renderGraph.ImportTexture(state.NearMarchMotion[1 - state.NearIndex]);
+					material.SetMatrix(NearPrevVPId, state.NearPrevVP);
+					material.SetVector(NearPrevJitterId, new Vector4(state.NearPrevJitter.x, state.NearPrevJitter.y, 0f, 0f));
+				}
 				var motionDesc = new TextureDesc(width, height)
 				{
 					colorFormat = MotionFormat(),
@@ -748,7 +900,7 @@ namespace FishMMO.Client
 					filterMode = FilterMode.Point,
 					wrapMode = TextureWrapMode.Clamp,
 				};
-				TextureHandle marchedMotion = renderGraph.CreateTexture(motionDesc);
+				TextureHandle marchedMotion = nearQuarter ? renderGraph.ImportTexture(state.NearMarchMotion[state.NearIndex]) : renderGraph.CreateTexture(motionDesc);
 				TextureHandle historyRead = renderGraph.ImportTexture(state.Clouds[state.Index]);
 				TextureHandle historyWrite = renderGraph.ImportTexture(state.Clouds[1 - state.Index]);
 				TextureHandle weightRead = renderGraph.ImportTexture(state.Weight[state.Index]);
@@ -758,8 +910,92 @@ namespace FishMMO.Client
 				int farPass = material.FindPass("CloudFarBand");
 				float band = FarBandEnabled && farPass >= 0 ? Mathf.Max(0f, sky.CloudFarBandMetres) : 0f;
 				int marching = FarSliceOverride >= 0 ? FarSliceOverride % FarSlices : state.Frame % FarSlices;
+				// The far imposter: refreshed a band of rows a frame, and drawn in place of the far band once it has been filled.
+				int imposterRefreshPass = material.FindPass("CloudFarImposterUpdate");
+				int imposterPass = material.FindPass("CloudFarImposter");
+				bool imposterOn = band > 0f && FarImposterEnabled && sky.CloudFarImposter && imposterRefreshPass >= 0 && imposterPass >= 0;
+				bool imposterShown = false;
+				int imposterRowStart = 0, imposterRows = 0, imposterSize = 0;
+				// Where the imposter takes over: the far band's start, or further out, the far band then marching the clouds
+				// between (FarImposterStartMetres).
+				float imposterStart = imposterOn ? Mathf.Max(band, sky.CloudFarImposterStartMetres) : 0f;
+				if (imposterOn)
+				{
+					imposterSize = sky.CloudFarImposterSize;
+					if (state.ImposterSize != imposterSize || state.Imposter[0][0] == null)
+					{
+						state.AllocateImposter(imposterSize);
+					}
+					// A jump (a teleport, the clock moved): what it holds is of another place or hour; refilled from scratch,
+					// the far band standing in meanwhile.
+					if (cut)
+					{
+						state.ResetImposter();
+					}
+					imposterShown = state.ImposterFilled;
+					int perFrame = Mathf.CeilToInt(imposterSize / (float)Mathf.Max(1, sky.CloudFarImposterRefreshFrames));
+					if (!state.ImposterFilled)
+					{
+						perFrame *= 2;
+					}
+					imposterRowStart = state.ImposterRow;
+					imposterRows = Mathf.Min(perFrame, imposterSize - imposterRowStart);
+					int build = state.ImposterBuild, newest = state.ImposterNewest, older = state.ImposterOlder;
+					// A panorama is of the moment it was begun: where the camera stood and how far the wind had carried the
+					// clouds. Every band of its rows is marched toward where that moment's clouds have gone since.
+					if (imposterRowStart == 0)
+					{
+						state.ImposterCamera[build] = position;
+						state.ImposterDrift[build] = drift;
+					}
+					float keep = state.ImposterFilled ? sky.CloudFarImposterKeep : 1f;
+					material.SetVector(ImposterId, new Vector4(imposterSize, imposterRowStart, keep, state.ImposterCycle % 4096));
+					material.SetVector(ImposterBoundsId, new Vector4(imposterStart, imposterStart * ImposterSplitA, imposterStart * ImposterSplitB, 0f));
+					// Each layer's distance, for turning a shift in metres into one of direction: the middles of the first two,
+					// and of the last (to where the clouds stop being drawn, as pass 12 has it) the geometric middle, the
+					// clouds there being mostly at its near end.
+					float drawn = Mathf.Max(imposterStart * ImposterSplitB + 1000f, sky.CloudFarDistance > 1f ? sky.CloudFarDistance : 44000f);
+					material.SetVector(ImposterDepthsId, new Vector4(imposterStart * (1f + ImposterSplitA) * 0.5f,
+						imposterStart * (ImposterSplitA + ImposterSplitB) * 0.5f, Mathf.Sqrt(imposterStart * ImposterSplitB * drawn), 0f));
+					// The build marches now toward its moment's clouds, and carries from the newest whole panorama's.
+					Vector3 warp = -ImposterShift(position, drift, state.ImposterCamera[build], state.ImposterDrift[build]);
+					material.SetVector(ImposterWarpId, new Vector4(warp.x, warp.y, warp.z, 0f));
+					Vector3 carry = newest >= 0
+						? ImposterShift(state.ImposterCamera[build], state.ImposterDrift[build], state.ImposterCamera[newest], state.ImposterDrift[newest])
+						: Vector3.zero;
+					material.SetVector(ImposterCarryId, new Vector4(carry.x, carry.y, carry.z, newest >= 0 ? 1f : 0f));
+					// On screen: the newer whole panorama faded in over the older as the next is built (by the end of this
+					// frame's rows), so at the moment the build is finished and becomes the newer, what is shown is unchanged.
+					if (newest >= 0)
+					{
+						Vector3 shift = ImposterShift(position, drift, state.ImposterCamera[newest], state.ImposterDrift[newest]);
+						float fade = older >= 0 ? Mathf.Clamp01((imposterRowStart + imposterRows) / (float)imposterSize) : 1f;
+						material.SetVector(ImposterShiftId, new Vector4(shift.x, shift.y, shift.z, fade));
+						Vector3 oldShift = older >= 0
+							? ImposterShift(position, drift, state.ImposterCamera[older], state.ImposterDrift[older])
+							: shift;
+						material.SetVector(ImposterOldShiftId, new Vector4(oldShift.x, oldShift.y, oldShift.z, 0f));
+					}
+					// The view, widened by 15 degrees, for which directions are refreshed every sweep (all of them while filling).
+					Camera viewCamera = cameraData.camera;
+					float halfHeight = Mathf.Tan(viewCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+					float halfDiagonal = Mathf.Atan(halfHeight * Mathf.Sqrt(1f + viewCamera.aspect * viewCamera.aspect)) + 15f * Mathf.Deg2Rad;
+					Vector3 forward = viewCamera.transform.forward;
+					material.SetVector(ImposterViewId, new Vector4(forward.x, forward.y, forward.z,
+						state.ImposterFilled ? Mathf.Cos(Mathf.Min(Mathf.PI, halfDiagonal)) : -2f));
+				}
+				// The far band marches on screen unless the imposter has it all; with the imposter starting further out, the far
+				// band marches only up to there and the imposter is laid behind it.
+				bool farBandBefore = imposterShown && imposterStart > band + 1f;
+				bool runFarBand = band > 0f && (!imposterShown || farBandBefore);
 				if (band > 0f)
 				{
+					if (state.FarBeforeImposter != farBandBefore)
+					{
+						// Its slices mean other distances now: nothing kept may be fetched back.
+						state.FarValid = Vector4.zero;
+						state.FarBeforeImposter = farBandBefore;
+					}
 					if (!state.FarFits(width, height))
 					{
 						state.AllocateFar(width, height);
@@ -768,11 +1004,20 @@ namespace FishMMO.Client
 					{
 						state.FarValid = Vector4.zero;
 					}
-					// The slices: from the band's start to 1.5 times it, to 2.4 times it, to the camera's far plane, and past it
+					// The slices: from the band's start to 1.5 times it, to 2.4 times it, to the full march's end, and past it
 					// to the ray's end (the far tail's few steps) — about even in a fair sky (ScenePerfProbe `cloud:farslice`).
-					float farPlane = Mathf.Max(band * FarSplitB + 1000f, cameraData.camera.farClipPlane);
+					float farPlane = FullMarchFor(sky, band);
 					material.SetVector(FarBandId, new Vector4(band, FarSlices, marching, 0f));
-					material.SetVector(FarBoundsId, new Vector4(band * FarSplitA, band * FarSplitB, farPlane, 0f));
+					if (farBandBefore)
+					{
+						// Four even slices between the band's start and the imposter's, the last ending there (w).
+						float span = imposterStart - band;
+						material.SetVector(FarBoundsId, new Vector4(band + span * 0.25f, band + span * 0.5f, band + span * 0.75f, imposterStart));
+					}
+					else
+					{
+						material.SetVector(FarBoundsId, new Vector4(band * FarSplitA, band * FarSplitB, farPlane, 0f));
+					}
 					Vector4 valid = state.FarValid;
 					valid[marching] = 0f;
 					material.SetVector(FarValidId, valid);
@@ -789,8 +1034,15 @@ namespace FishMMO.Client
 				{
 					data.Material = material;
 					data.Pass = 0;
+					data.Source = nearPrev;
+					data.Motion = nearPrevMotion;
 					builder.SetRenderAttachment(marched, 0);
 					builder.SetRenderAttachment(marchedMotion, 1);
+					if (nearQuarter)
+					{
+						builder.UseTexture(nearPrev, AccessFlags.Read);
+						builder.UseTexture(nearPrevMotion, AccessFlags.Read);
+					}
 					builder.UseAllGlobalTextures(true);
 					if (resourceData.cameraDepthTexture.IsValid())
 					{
@@ -798,7 +1050,14 @@ namespace FishMMO.Client
 					}
 					builder.AllowPassCulling(false);
 					builder.SetRenderFunc((MarchData d, RasterGraphContext context) =>
-						Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass));
+					{
+						if (d.Source.IsValid())
+						{
+							d.Material.SetTexture(NearPrevId, d.Source);
+							d.Material.SetTexture(NearPrevMotionId, d.Motion);
+						}
+						Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass);
+					});
 				}
 
 				// 1b. The far band behind the near: a quarter of its texels marched past FarBandMetres (by eight-by-eight
@@ -811,13 +1070,85 @@ namespace FishMMO.Client
 					motionDesc.name = "FishCloudsMarchMotionWithFar";
 					marched = renderGraph.CreateTexture(marchDesc);
 					marchedMotion = renderGraph.CreateTexture(motionDesc);
+					TextureHandle[] imposterNewer = null, imposterOlder = null;
+					if (imposterOn)
+					{
+						var building = new TextureHandle[4];
+						TextureHandle[] source = null;
+						for (int i = 0; i < building.Length; i++)
+						{
+							building[i] = renderGraph.ImportTexture(state.Imposter[state.ImposterBuild][i]);
+						}
+						if (state.ImposterNewest >= 0)
+						{
+							imposterNewer = new TextureHandle[4];
+							for (int i = 0; i < imposterNewer.Length; i++)
+							{
+								imposterNewer[i] = renderGraph.ImportTexture(state.Imposter[state.ImposterNewest][i]);
+							}
+							source = imposterNewer;
+							imposterOlder = imposterNewer;
+							if (state.ImposterOlder >= 0)
+							{
+								imposterOlder = new TextureHandle[4];
+								for (int i = 0; i < imposterOlder.Length; i++)
+								{
+									imposterOlder[i] = renderGraph.ImportTexture(state.Imposter[state.ImposterOlder][i]);
+								}
+							}
+						}
+						// 1a. A band of the next panorama's rows: marched and blended with what the newest whole one holds there,
+						// or carried over from it, each moved with the wind.
+						using (var builder = renderGraph.AddRasterRenderPass<ImposterData>(ImposterRefreshName, out ImposterData data))
+						{
+							data.Material = material;
+							data.Pass = imposterRefreshPass;
+							data.Viewport = new Rect(0f, imposterRowStart, imposterSize, imposterRows);
+							data.Layers = source;
+							for (int i = 0; i < building.Length; i++)
+							{
+								builder.SetRenderAttachment(building[i], i, AccessFlags.Write);
+							}
+							if (source != null)
+							{
+								for (int i = 0; i < source.Length; i++)
+								{
+									builder.UseTexture(source[i], AccessFlags.Read);
+								}
+							}
+							builder.UseAllGlobalTextures(true);
+							builder.AllowPassCulling(false);
+							builder.SetRenderFunc((ImposterData d, RasterGraphContext context) =>
+							{
+								if (d.Layers != null)
+								{
+									for (int i = 0; i < d.Layers.Length; i++)
+									{
+										d.Material.SetTexture(ImposterSourceIds[i], d.Layers[i]);
+									}
+								}
+								context.cmd.SetViewport(d.Viewport);
+								context.cmd.DrawProcedural(Matrix4x4.identity, d.Material, d.Pass, MeshTopology.Triangles, 3, 1);
+							});
+						}
+					}
+					// With the imposter behind it, the far band writes to a texture of its own, which the imposter is laid behind.
+					TextureHandle farOut = marched, farOutMotion = marchedMotion;
+					if (runFarBand && imposterShown)
+					{
+						marchDesc.name = "FishCloudsMarchToImposter";
+						motionDesc.name = "FishCloudsMarchMotionToImposter";
+						farOut = renderGraph.CreateTexture(marchDesc);
+						farOutMotion = renderGraph.CreateTexture(motionDesc);
+					}
 					var slices = new TextureHandle[FarSlices];
 					var sliceInfos = new TextureHandle[FarSlices];
-					for (int i = 0; i < FarSlices; i++)
+					for (int i = 0; i < FarSlices && runFarBand; i++)
 					{
 						slices[i] = renderGraph.ImportTexture(state.Far[i]);
 						sliceInfos[i] = renderGraph.ImportTexture(state.FarInfo[i]);
 					}
+					if (runFarBand)
 					using (var builder = renderGraph.AddRasterRenderPass<MarchData>(FarBandName, out MarchData data))
 					{
 						data.Material = material;
@@ -827,8 +1158,8 @@ namespace FishMMO.Client
 						data.FarSlices = slices;
 						data.FarSliceInfos = sliceInfos;
 						data.Marching = marching;
-						builder.SetRenderAttachment(marched, 0);
-						builder.SetRenderAttachment(marchedMotion, 1);
+						builder.SetRenderAttachment(farOut, 0);
+						builder.SetRenderAttachment(farOutMotion, 1);
 						builder.SetRenderAttachment(slices[marching], 2);
 						builder.SetRenderAttachment(sliceInfos[marching], 3);
 						builder.UseTexture(near, AccessFlags.Read);
@@ -861,6 +1192,50 @@ namespace FishMMO.Client
 							}
 							Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass);
 						});
+					}
+					if (imposterShown)
+					{
+						// 1c. The far clouds read off the imposter, behind the near band (and the far band, when it ends where the
+						// imposter begins).
+						using (var builder = renderGraph.AddRasterRenderPass<ImposterData>(ImposterName, out ImposterData data))
+						{
+							data.Material = material;
+							data.Pass = imposterPass;
+							data.Near = runFarBand ? farOut : near;
+							data.NearMotion = runFarBand ? farOutMotion : nearMotion;
+							data.Layers = imposterNewer;
+							data.OldLayers = imposterOlder;
+							builder.SetRenderAttachment(marched, 0);
+							builder.SetRenderAttachment(marchedMotion, 1);
+							builder.UseTexture(data.Near, AccessFlags.Read);
+							builder.UseTexture(data.NearMotion, AccessFlags.Read);
+							for (int i = 0; i < imposterNewer.Length; i++)
+							{
+								builder.UseTexture(imposterNewer[i], AccessFlags.Read);
+								// With one whole panorama it is both: declared once.
+								if (imposterOlder != imposterNewer)
+								{
+									builder.UseTexture(imposterOlder[i], AccessFlags.Read);
+								}
+							}
+							builder.UseAllGlobalTextures(true);
+							if (resourceData.cameraDepthTexture.IsValid())
+							{
+								builder.UseTexture(resourceData.cameraDepthTexture, AccessFlags.Read);
+							}
+							builder.AllowPassCulling(false);
+							builder.SetRenderFunc((ImposterData d, RasterGraphContext context) =>
+							{
+								d.Material.SetTexture(ImposterFrontId, d.Near);
+								d.Material.SetTexture(ImposterFrontMotionId, d.NearMotion);
+								for (int i = 0; i < d.Layers.Length; i++)
+								{
+									d.Material.SetTexture(ImposterLayerIds[i], d.Layers[i]);
+									d.Material.SetTexture(ImposterOldLayerIds[i], d.OldLayers[i]);
+								}
+								Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass);
+							});
+						}
 					}
 				}
 
@@ -1044,14 +1419,36 @@ namespace FishMMO.Client
 				state.PreviousDrift = drift;
 				state.Valid = tier.Temporal;
 				state.Index = 1 - state.Index;
-				if (band > 0f)
+				if (runFarBand)
 				{
 					state.FarViewProjection[marching] = viewProjection;
 					state.FarValid[marching] = 1f;
 				}
 				else
 				{
+					// Not drawn this frame (no band, or the imposter stood in): nothing of it may be carried on later.
 					state.FarValid = Vector4.zero;
+				}
+				if (nearQuarter)
+				{
+					state.NearPrevVP = viewProjection;
+					state.NearPrevJitter = new Vector2(jitter.x, jitter.y);
+					state.NearIndex = 1 - state.NearIndex;
+					state.NearValid = true;
+				}
+				else
+				{
+					state.NearValid = false;
+				}
+				if (imposterOn)
+				{
+					state.ImposterRow += imposterRows;
+					if (state.ImposterRow >= imposterSize)
+					{
+						state.ImposterRow = 0;
+						state.CompleteImposter();
+						state.ImposterCycle++;
+					}
 				}
 				// Wrapped at a whole number of every cycle that reads it — the jitter's 64, the places'
 				// 16, and the 64 x 16 over which SubPixel turns their order — so wrapping skips nothing.
@@ -1280,6 +1677,135 @@ namespace FishMMO.Client
 				/// slice's mean distance (km), y its wind gain, z where its ray ended (km), w 1 when real. One is written a
 				/// frame, each with the view it was drawn with.</summary>
 				public readonly RTHandle[] Far = new RTHandle[FarSlices];
+				/// <summary>
+				/// The far imposter: three panoramas, each three layers' light and their transmittance (FishClouds passes 11
+				/// and 12) — the two newest whole ones, the newer faded in over the older on screen while the third is built.
+				/// One panorama refreshed in place showed its refresh as a front of rows crossing the sky, and took most of a
+				/// dozen sweeps to follow a change.
+				/// </summary>
+				public readonly RTHandle[][] Imposter = { new RTHandle[4], new RTHandle[4], new RTHandle[4] };
+				/// <summary>Each panorama's moment: where the camera stood and how far the low clouds had drifted when it was begun.</summary>
+				public readonly Vector3[] ImposterCamera = new Vector3[3];
+				public readonly Vector2[] ImposterDrift = new Vector2[3];
+				public int ImposterSize;
+				/// <summary>The next row of the panorama being built.</summary>
+				public int ImposterRow;
+				/// <summary>Which panorama is being built, which is the newest whole one, and which the one before it (−1: none yet).</summary>
+				public int ImposterBuild;
+				public int ImposterNewest = -1;
+				public int ImposterOlder = -1;
+				/// <summary>Whether there is a whole panorama to draw.</summary>
+				public bool ImposterFilled => ImposterNewest >= 0;
+
+				/// <summary>Nothing whole: the next panorama is built from scratch, all of it marched.</summary>
+				public void ResetImposter()
+				{
+					ImposterNewest = -1;
+					ImposterOlder = -1;
+					ImposterRow = 0;
+				}
+
+				/// <summary>The panorama being built is whole: it is the newest, the newest before it the older, and the third is built next.</summary>
+				public void CompleteImposter()
+				{
+					ImposterOlder = ImposterNewest;
+					ImposterNewest = ImposterBuild;
+					for (int i = 0; i < Imposter.Length; i++)
+					{
+						if (i != ImposterNewest && i != ImposterOlder)
+						{
+							ImposterBuild = i;
+							break;
+						}
+					}
+				}
+				/// <summary>The near march kept for the next frame at a quarter rate (NearMarchEvery 4): this frame's and last.</summary>
+				public readonly RTHandle[] NearMarch = new RTHandle[2];
+				public readonly RTHandle[] NearMarchMotion = new RTHandle[2];
+				public int NearIndex;
+				public bool NearValid;
+				public Matrix4x4 NearPrevVP = Matrix4x4.identity;
+				public Vector2 NearPrevJitter;
+
+				public bool NearFits(int width, int height) => NearMarch[0] != null && NearMarch[0].rt != null && NearMarch[0].rt.width == width && NearMarch[0].rt.height == height;
+
+				public void AllocateNear(int width, int height)
+				{
+					ReleaseNear();
+					for (int i = 0; i < 2; i++)
+					{
+						NearMarch[i] = RTHandles.Alloc(width, height, colorFormat: GraphicsFormat.R16G16B16A16_SFloat,
+							filterMode: FilterMode.Bilinear, wrapMode: TextureWrapMode.Clamp, name: $"FishCloudsNear{i}");
+						NearMarchMotion[i] = RTHandles.Alloc(width, height, colorFormat: MotionFormat(),
+							filterMode: FilterMode.Point, wrapMode: TextureWrapMode.Clamp, name: $"FishCloudsNearMotion{i}");
+					}
+					NearValid = false;
+				}
+
+				public void ReleaseNear()
+				{
+					for (int i = 0; i < 2; i++)
+					{
+						NearMarch[i]?.Release();
+						NearMarch[i] = null;
+						NearMarchMotion[i]?.Release();
+						NearMarchMotion[i] = null;
+					}
+					NearValid = false;
+				}
+
+				/// <summary>Whether the far band's slices were last laid out to end at the imposter's start.</summary>
+				public bool FarBeforeImposter;
+				public int ImposterCycle;
+
+				public void AllocateImposter(int size)
+				{
+					ReleaseImposter();
+					// Packed: light in 11/11/10-bit floats (no alpha is read: the panorama is not blended in place any more)
+					// and the transmittances in 10-bit fixed point — three panoramas in half again the memory of the one at
+					// half floats (48 MB at 1024, against 32), where the platform can render to them.
+					GraphicsFormat lightFormat = ImposterFormat(GraphicsFormat.B10G11R11_UFloatPack32);
+					GraphicsFormat throughFormat = ImposterFormat(GraphicsFormat.A2B10G10R10_UNormPack32);
+					var clear = new CommandBuffer { name = "Fish Clouds (far imposter clear)" };
+					for (int set = 0; set < Imposter.Length; set++)
+					{
+						for (int i = 0; i < Imposter[set].Length; i++)
+						{
+							Imposter[set][i] = RTHandles.Alloc(size, size, colorFormat: i == 3 ? throughFormat : lightFormat,
+								filterMode: FilterMode.Bilinear, wrapMode: TextureWrapMode.Clamp, name: $"FishCloudsImposter{set}_{i}");
+							// Cleared once: a new texture may hold anything, and the build blends with it — a NaN carried into a
+							// panorama would be carried on in every one after it.
+							clear.SetRenderTarget(Imposter[set][i]);
+							clear.ClearRenderTarget(false, true, i == 3 ? Color.white : Color.clear);
+						}
+					}
+					Graphics.ExecuteCommandBuffer(clear);
+					clear.Release();
+					ImposterSize = size;
+					ImposterBuild = 0;
+					ResetImposter();
+				}
+
+				/// <summary>The packed format where it can be rendered to and filtered, half floats where not.</summary>
+				private static GraphicsFormat ImposterFormat(GraphicsFormat packed) =>
+					SystemInfo.IsFormatSupported(packed, GraphicsFormatUsage.Render) && SystemInfo.IsFormatSupported(packed, GraphicsFormatUsage.Linear)
+						? packed
+						: GraphicsFormat.R16G16B16A16_SFloat;
+
+				public void ReleaseImposter()
+				{
+					for (int set = 0; set < Imposter.Length; set++)
+					{
+						for (int i = 0; i < Imposter[set].Length; i++)
+						{
+							Imposter[set][i]?.Release();
+							Imposter[set][i] = null;
+						}
+					}
+					ImposterSize = 0;
+					ImposterBuild = 0;
+					ResetImposter();
+				}
 				public readonly RTHandle[] FarInfo = new RTHandle[FarSlices];
 				public readonly Matrix4x4[] FarViewProjection = new Matrix4x4[FarSlices];
 				public Vector4 FarValid;
@@ -1326,6 +1852,8 @@ namespace FishMMO.Client
 				public Vector2 PreviousDrift;
 				public int Frame;
 				public float LastDrawn;
+				/// <summary>The <see cref="WeatherClient.Snaps"/> this history was last drawn under.</summary>
+				public uint Snaps;
 				/// <summary>Whether the buffers were made for the kernel to write.</summary>
 				public bool RandomWrite;
 
@@ -1385,6 +1913,8 @@ namespace FishMMO.Client
 					}
 					Valid = false;
 					ReleaseFar();
+					ReleaseImposter();
+					ReleaseNear();
 				}
 			}
 		}
@@ -1568,7 +2098,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The options as the cloud shader reads them (<c>_FishCloudOptions</c>): x A (the B-spline kernel),
 		/// y B, z D, each 1 on and 0 off — y and z are no longer read, only kept so the probes still print
-		/// what was asked; w the rays' phase on <paramref name="frame"/> (<see cref="JitterPhase"/>),
+		/// what was asked; w the light march's phase on <paramref name="frame"/> (<see cref="JitterPhase"/>),
 		/// whatever the options: D's phase became the march's own on 2026-09-28.
 		/// </summary>
 		public Vector4 ShaderVector(int frame)
@@ -1577,8 +2107,9 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The rays' phase for <paramref name="frame"/>, 0..1, added to each ray's spatial noise (interleaved
-		/// gradient noise over the marched texels) and wrapped.
+		/// The frame's phase for <paramref name="frame"/>, 0..1: what turns the rays' phase and the light march's
+		/// samples. The rays' per-texel part is blue noise (FishCloudRayPhase, FishCloudPhase.hlsl); over
+		/// interleaved gradient noise this same phase drew a lattice over every cloud base (audit 2026-10-09).
 		/// </summary>
 		/// <remarks>
 		/// <para>

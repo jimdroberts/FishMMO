@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Reefborn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Coral-grown people of the warm shallows — bright, clicking names'
+  Description: "Coral-grown people of the warm shallows \u2014 bright, clicking names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - el
       - al
       - ess
-      Description: 'Coral-grown people of the warm shallows — bright, clicking names'
+      Description: "Coral-grown people of the warm shallows \u2014 bright, clicking
+        names"
       Tags:
       - Coral-names
       - Sun-marks
@@ -164,6 +165,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Reefborn
+    Adjective: Reefborn
   BiomeAffinities:
   - BiomeID: -1552223677
     Weight: 3

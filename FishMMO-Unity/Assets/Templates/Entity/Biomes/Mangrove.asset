@@ -24,6 +24,8 @@ MonoBehaviour:
   MaxTemperature: 1
   MinHumidity: 0.4
   MaxHumidity: 1
+  MinWarmestSeason: 0.3021148
+  MaxWarmestSeason: 1
   SelectionWeight: 1
   Atmosphere: 12
   RequiresLiquidWater: 1
@@ -162,6 +164,207 @@ MonoBehaviour:
       - Ancient
       - Serpentine
       - Claustrophobic
+      POITypeWords:
+      - Key: ancientroad
+        Values:
+        - Causeway
+        - Trackway
+        - Corduroy Road
+        - Boardwalk
+        - Plank Road
+        - Fen Road
+      - Key: bay
+        Values:
+        - Cove
+        - Bay
+        - Bight
+        - Haven
+        - Inlet
+        - Strand
+      - Key: bogshrine
+        Values:
+        - Bog-altar
+        - Fen-shrine
+        - Mire Shrine
+        - Peat-altar
+        - Reed Altar
+        - Sump Shrine
+      - Key: bridge
+        Values:
+        - Boardwalk
+        - Causeway
+        - Duckboards
+        - Log Bridge
+        - Plank-walk
+        - Corduroy Road
+      - Key: camp
+        Values:
+        - Fen Camp
+        - Reed Camp
+        - Stilt Camp
+        - Mire Camp
+        - Bog Camp
+        - Raft Camp
+        - Jungle Camp
+        - Machete Camp
+        - Vine Camp
+        - Expedition Camp
+      - Key: cave
+        Values:
+        - Sump
+        - Mire-hole
+        - Bog Hollow
+        - Root Cave
+        - Peat Hollow
+        - Drowned Cave
+        - Cenote
+        - Vine Cave
+        - Jungle Grotto
+        - Bat Cave
+      - Key: clearing
+        Values:
+        - Hummock
+        - Tussock
+        - Dry Isle
+        - Holm
+        - Reed-bed
+        - Fen Glade
+        - Clearing
+        - Gap
+        - Sunpatch
+        - Glade
+      - Key: fishingcamp
+        Values:
+        - Fish Weir
+        - Net Huts
+        - Smokehouse
+        - Landing
+        - Staithe
+        - Fish Quay
+      - Key: graveyard
+        Values:
+        - Bog-graves
+        - Drowned Graves
+        - Mire-yard
+        - Fen Barrows
+        - Peat Graves
+        - Sunken Yard
+        - Drowned Men's Yard
+        - Sailors' Graves
+        - Shore Graves
+        - Wreckers' Yard
+      - Key: island
+        Values:
+        - Holm
+        - Hummock
+        - Dry Isle
+        - Eyot
+        - Tussock
+        - Mound
+      - Key: landmark
+        Values:
+        - Sea Stack
+        - Beacon Stone
+        - Tide Stone
+        - Old Man
+        - Needle
+        - Skerry
+      - Key: monsterden
+        Values:
+        - Wallow
+        - Mire-den
+        - Bog Hole
+        - Sump
+        - Root-lair
+        - Fen Lair
+        - Lair
+        - Den
+        - Hollow
+        - Nest
+      - Key: ruins
+        Values:
+        - Mire-ruins
+        - Drowned Walls
+        - Silted Halls
+        - Bog Ruins
+        - Moss Walls
+        - Sunken Ruins
+        - Overgrown Ruins
+        - Vine-choked Ruins
+        - Lost City
+        - Root-split Ruins
+      - Key: shrine
+        Values:
+        - Bog-altar
+        - Fen-shrine
+        - Mire Altar
+        - Reed Shrine
+        - Peat Altar
+        - Moss Shrine
+        - Vine Shrine
+        - Idol Shrine
+        - Jungle Altar
+        - Spirit House
+      - Key: sinkhole
+        Values:
+        - Cenote
+        - Sinkhole
+        - Sacred Well
+        - Pit
+        - Blue Hole
+        - Well
+      - Key: spring
+        Values:
+        - Seep
+        - Sump
+        - Wellhead
+        - Bog-spring
+        - Fen Well
+        - Mire-spring
+        - Cenote
+        - Spring
+        - Pool
+        - Font
+      - Key: statue
+        Values:
+        - Idol
+        - Stone Head
+        - Vine-wrapped Statue
+        - Totem
+        - Effigy
+        - Jade Idol
+      - Key: temple
+        Values:
+        - Step Temple
+        - Ziggurat
+        - Pyramid
+        - Vine Temple
+        - Jungle Fane
+        - Sun Temple
+      - Key: tower
+        Values:
+        - Sea Tower
+        - Watchtower
+        - Lookout
+        - Signal Tower
+        - Beacon
+        - Coast Watch
+      - Key: waystation
+        Values:
+        - Fen Inn
+        - Ferry House
+        - Stilt Inn
+        - Causeway Inn
+        - Reed Inn
+        - Landing
+      - Key: witchhut
+        Values:
+        - Bog Hut
+        - Fen Hovel
+        - Mire Croft
+        - Reed Hut
+        - Stilt Hut
+        - Hag's Hut
       Description: "Coastal wetlands \u2014 tangled roots, brackish water, impenetrable
         growth"
   LooseGround: {fileID: 0}
@@ -194,8 +397,8 @@ MonoBehaviour:
     slopeFalloff: 5
     prefabSpawnRules:
     - stableGuid: 0b1d73a490d94cddbd9aa075ba6cb3d7
-      enableSpawning: 1
-      ruleName: 'Trees: Jungle'
+      enableSpawning: 0
+      ruleName: '[disabled by Biome Art: moved by the spec] Trees: Jungle'
       prefabs:
       - {fileID: 5321881484659866663, guid: dee3a7d8806310856839d15795d4f76d, type: 3}
       spawnChannel: 1
@@ -241,6 +444,11 @@ MonoBehaviour:
       sinkRange: {x: 0.05, y: 0.15}
       sinkSlopeFactor: 0.3
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 6a2a83a7f7b9f59b
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -294,11 +502,132 @@ MonoBehaviour:
       sinkRange: {x: 0.04, y: 0.08}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 0c7f8c98bc1048d7
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 160
+    - stableGuid: bfa5453c47294cd9b37874a2630beda3
+      enableSpawning: 1
+      ruleName: 'Trees: Mangrove'
+      prefabs:
+      - {fileID: 6937801460375776731, guid: c614010bbd64b05e602e3d6faf2b78a4, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 3.648
+      maxPerChunk: 20000
+      minSpacing: 5.4
+      minTextureWeight: 0.5
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 43633
+      clusterMetres: 0
+      clusterSize: 0
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 520
+      forestCover: 0.85
+      forestEdge: 0.3
+      forestOpen: 0.0069565214
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.05, y: 0.15}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: ab7f47defad605f2
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
+    - stableGuid: 0703edafe14d431886c38f7a96c5c372
+      enableSpawning: 1
+      ruleName: Pneumatophores
+      prefabs:
+      - {fileID: 6543275880146549919, guid: f284194e1b53681178b9e02c99846583, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 30
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 15
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 17464
+      clusterMetres: 6
+      clusterSize: 14
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.03, y: 0.06}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: dc2ef6523c234e26
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 200
   detailTextureLayers:
   - terrainLayer: {fileID: 8574412962073106934, guid: ebd101f82d3a597c1f2af54475da8abe,
       type: 2}
@@ -323,7 +652,65 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
-    prefabSpawnRules: []
+    prefabSpawnRules:
+    - stableGuid: 34866af821cf4da5a5c4a42548c03f63
+      enableSpawning: 1
+      ruleName: 'Trees: Nipa'
+      prefabs:
+      - {fileID: 8888352107442207942, guid: 1c5c72ff656097ebcac0973e1c42cc34, type: 3}
+      spawnChannel: 1
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.05
+      maxPerChunk: 20000
+      minSpacing: 5
+      minTextureWeight: 0.5
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 10
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 24664
+      clusterMetres: 15
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.05, y: 0.15}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: a85c482878363695
+      detailNoiseSpread: 0.4
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 255
   - terrainLayer: {fileID: 8574412962073106934, guid: c3399e0c6f507378106ea3d73976790a,
       type: 2}
     albedoTexture: {fileID: 0}
@@ -396,6 +783,11 @@ MonoBehaviour:
       sinkRange: {x: 0.04, y: 0.08}
       sinkSlopeFactor: 0
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 9619a7957466bc4f
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
@@ -449,6 +841,11 @@ MonoBehaviour:
       sinkRange: {x: 0.04, y: 0.1}
       sinkSlopeFactor: 0.3
       depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
       specFingerprint: 29827410ae153453
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
@@ -583,4 +980,62 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
-    prefabSpawnRules: []
+    prefabSpawnRules:
+    - stableGuid: 6445866183f8489a84c3fc425961bcc8
+      enableSpawning: 1
+      ruleName: MusselBedOyster
+      prefabs:
+      - {fileID: 9190319815001294277, guid: 000a195604b4f3084e3437f5db76179b, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1.5
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 20
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 17936
+      clusterMetres: 4
+      clusterSize: 12
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.006, y: 0.015}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 2}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: c0c6eec780d9888b
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
+      detailInstancesPerSpawn: 160

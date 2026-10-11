@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Moorfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Upland heath people — soft, rain-worn names, half-sung'
+  Description: "Upland heath people \u2014 soft, rain-worn names, half-sung"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -83,7 +83,7 @@ MonoBehaviour:
       - an
       - od
       - orn
-      Description: 'Upland heath people — soft, rain-worn names, half-sung'
+      Description: "Upland heath people \u2014 soft, rain-worn names, half-sung"
       Tags:
       - Heath-names
       - Cairn-marks
@@ -170,6 +170,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Moorfolk
+    Adjective: Moorfolk
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 3
@@ -179,3 +181,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1655673647
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

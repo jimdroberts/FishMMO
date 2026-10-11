@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Lindworm
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A long, legless dragon that coils around bridges and church towers and squeezes.'
+  Description: A long, legless dragon that coils around bridges and church towers
+    and squeezes.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - arr
       - ash
-      Description: 'Sinuous, hissing — rolling sibilants'
+      Description: "Sinuous, hissing \u2014 rolling sibilants"
       Tags:
       - Draconic
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - scorch
       - bone
     AllowGenericOccupations: 0
+    Plural: Lindworms
+    Adjective: Lindworm
   BiomeAffinities:
   - BiomeID: 144196518
     Weight: 2
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -138594552
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

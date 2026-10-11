@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Ancient Oak 0
+  m_Shader: {fileID: 4800000, guid: 6afb82f4835da552494df473a0f4bee9, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords:
+  - _NORMALMAP
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2000
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: 476b106b789377bd6fd6e968d1599d8b, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 2800000, guid: cf215995e2791c0b3443c743c465e6db, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AlphaClip: 0
+    - _Aquatic: 0
+    - _BackfaceFlip: 0
+    - _BumpScale: 1
+    - _Cull: 2
+    - _Cutoff: 0.5
+    - _Deciduous: 0
+    - _DistanceFade: 2
+    - _FacingCamera: 0
+    - _FishWeatherAmount: 1
+    - _Smoothness: 0.1
+    - _SnowBury: 0
+    - _TintPatchMetres: 12
+    - _TintSpread: 0
+    - _Translucency: 0
+    - _UseNormalMap: 1
+    - _VaryCrown: 0.16
+    - _VaryGirth: 0.22
+    - _VaryHeight: 0.14
+    - _VaryLean: 3
+    - _VaryPartDroop: 10
+    - _VaryPartLength: 0.16
+    - _VaryPartSwing: 18
+    - _VaryTwist: 25
+    - _VegZWrite: 1
+    - _WindFlutter: 0
+    - _WindFrequency: 1.2
+    - _WindSway: 1
+    m_Colors:
+    - _AutumnColor: {r: 1.6, g: 0.8, b: 0.3, a: 1}
+    - _BaseColor: {r: 1, g: 0.95, b: 0.86, a: 1}
+    - _DryColor: {r: 1, g: 1, b: 1, a: 1}
+    - _GroundSink: {r: 0, g: 0, b: 0, a: 0}
+    - _HealthyColor: {r: 1, g: 1, b: 1, a: 1}
+    - _VaryColour: {r: 0.1, g: 0.06, b: 0.08, a: 0.1}
+    - _VaryFullness: {r: 0.15, g: 0.55, b: 0, a: 0}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

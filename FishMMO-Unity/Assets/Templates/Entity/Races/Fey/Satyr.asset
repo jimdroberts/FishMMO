@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Satyr
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Musical and dancing — Greek pastoral warmth, revelry in every syllable'
+  Description: "Musical and dancing \u2014 Greek pastoral warmth, revelry in every
+    syllable"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -72,7 +73,7 @@ MonoBehaviour:
       - ys
       - is
       - an
-      - 'on'
+      - on
       - el
       - as
       - eus
@@ -93,9 +94,10 @@ MonoBehaviour:
       MasculineSuffixes:
       - os
       - us
-      - 'on'
+      - on
       - eus
-      Description: 'Musical and dancing — pastoral warmth, revelry in every syllable'
+      Description: "Musical and dancing \u2014 pastoral warmth, revelry in every
+        syllable"
       Tags:
       - Revel-names
       - Song-bonds
@@ -141,7 +143,7 @@ MonoBehaviour:
         Middles:
         - al
         - an
-        - 'on'
+        - on
         - el
         SyllMin: 2
         SyllMax: 3
@@ -153,7 +155,7 @@ MonoBehaviour:
         - os
         - ion
         - eus
-        Description: 'Revelry — wine-wit, pipe-songs, goat-measured step'
+        Description: "Revelry \u2014 wine-wit, pipe-songs, goat-measured step"
         Tags:
         - Grove-revel
         - Song-bonds
@@ -162,7 +164,7 @@ MonoBehaviour:
     Places:
     - the Revelwood
     - Vinehollow
-    - 'Pan''s Grove'
+    - Pan's Grove
     - the Wild Court
     - Moonlit Glade
     - the Dancing Green
@@ -249,6 +251,9 @@ MonoBehaviour:
       - ruin
       - husk
       - fade
+    AllowGenericOccupations: 1
+    Plural: Satyrs
+    Adjective: Satyr
   BiomeAffinities:
   - BiomeID: -439598380
     Weight: 3
@@ -258,3 +263,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

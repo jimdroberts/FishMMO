@@ -78,6 +78,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the container the filter toggles are built into.</summary>
 		private const string FILTER_LIST_NAME = "map-filters";
 
+		/// <summary>Name of the container the point-of-interest group toggles are built into.</summary>
+		private const string PLACE_FILTER_LIST_NAME = "map-place-filters";
+
 		/// <summary>Name of the container the note rows are built into.</summary>
 		private const string NOTE_LIST_NAME = "map-note-list";
 
@@ -208,6 +211,9 @@ namespace FishMMO.Client
 		/// <summary>Container the filter toggles live in.</summary>
 		private VisualElement filterList;
 
+		/// <summary>Container the point-of-interest group toggles live in, two to a row.</summary>
+		private VisualElement placeFilterList;
+
 		/// <summary>Container the note rows live in.</summary>
 		private VisualElement noteList;
 
@@ -284,6 +290,7 @@ namespace FishMMO.Client
 			};
 			mapView.style.flexGrow = 1.0f;
 			mapView.MapTextureIsViewAligned = false;
+			mapView.MapTextureNorthDegrees = ClientMapSystem.Definition != null ? ClientMapSystem.Definition.NorthOffsetDegrees : 0.0f;
 			mapView.OnMapScrolled += MapView_OnScrolled;
 			mapView.OnMapClicked += MapView_OnClicked;
 			mapView.RegisterCallback<PointerDownEvent>(MapView_OnPointerDown);
@@ -300,6 +307,7 @@ namespace FishMMO.Client
 			regionLabel = root.Q<Label>(REGION_LABEL_NAME);
 			zoomSlider = root.Q<Slider>(ZOOM_SLIDER_NAME);
 			filterList = root.Q<VisualElement>(FILTER_LIST_NAME);
+			placeFilterList = root.Q<VisualElement>(PLACE_FILTER_LIST_NAME);
 			noteList = root.Q<VisualElement>(NOTE_LIST_NAME);
 			noteTitleField = root.Q<TextField>(NOTE_TITLE_FIELD_NAME);
 			noteTextField = root.Q<TextField>(NOTE_TEXT_FIELD_NAME);
@@ -510,6 +518,7 @@ namespace FishMMO.Client
 			mapView.MapTexture = ClientMapSystem.MapImage;
 			mapView.MapTextureRect = rect;
 			mapView.MapTextureIsViewAligned = false;
+			mapView.MapTextureNorthDegrees = ClientMapSystem.Definition != null ? ClientMapSystem.Definition.NorthOffsetDegrees : 0.0f;
 			mapView.Fog = ClientMapSystem.Fog;
 
 			WorldMapDefinition definition = ClientMapSystem.Definition;
@@ -575,7 +584,10 @@ namespace FishMMO.Client
 		{
 			ClientMapSystem.Filter.Collect(markerBuffer, Character, true, ClientMapSystem.Fog);
 			MapContent.AppendNotes(markerBuffer, ClientMapSystem.Notes, true);
-			MapContent.AppendPointsOfInterest(markerBuffer, ClientMapSystem.Definition, ClientMapSystem.Fog, true);
+			Rect mapRect = ClientMapSystem.MapRect;
+			int labelTier = MapContent.LabelTierForZoom(zoom, Mathf.Max(mapRect.width, mapRect.height) * 0.5f);
+			MapContent.AppendPointsOfInterest(markerBuffer, ClientMapSystem.SceneDetails, ClientMapSystem.Definition,
+				ClientMapSystem.Fog, true, labelTier);
 			IWaypointController waypointController = null;
 			Character?.TryGet(out waypointController);
 			MapContent.AppendWaypoints(markerBuffer, ClientMapSystem.SceneDetails, ClientMapSystem.SceneName, waypointController, true);
@@ -874,8 +886,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Builds one toggle per marker category.
+		/// Builds one toggle per marker category, and one per point-of-interest group under PLACES.
 		/// </summary>
+		/// <remarks>
+		/// The place rows are compact, two to a row with a swatch of the group's colour, because there are
+		/// thirteen of them in a side bar 230 points wide: as full rows they would push the notes off the
+		/// panel at 16:9. A panel whose UXML predates the PLACES container gets the place rows in the main
+		/// list instead, so no filter is ever unreachable.
+		/// </remarks>
 		private void BuildFilterToggles()
 		{
 			if (filterList == null)
@@ -884,27 +902,53 @@ namespace FishMMO.Client
 			}
 
 			filterList.Clear();
+			placeFilterList?.Clear();
 			filterToggles.Clear();
 
-			foreach (MapFilterCategory category in MapFilters.Categories)
+			foreach (MapFilterCategory category in MapFilters.MarkerCategories)
 			{
-				Toggle toggle = new Toggle(MapFilters.Label(category))
-				{
-					value = MapFilters.IsEnabled(category),
-				};
-				toggle.AddToClassList("fish-toggle");
+				Toggle toggle = new Toggle(MapFilters.Label(category));
 				toggle.AddToClassList("map-filter");
-
-				MapFilterCategory captured = category;
-				toggle.RegisterValueChangedCallback(evt =>
-				{
-					MapFilters.SetEnabled(captured, evt.newValue);
-					nextMarkerRefreshTime = 0.0;
-				});
-
-				filterToggles[category] = toggle;
-				filterList.Add(toggle);
+				AddFilterToggle(filterList, category, toggle);
 			}
+
+			foreach (MapFilterCategory category in MapFilters.PlaceCategories)
+			{
+				Toggle toggle = new Toggle() { text = MapFilters.Label(category) };
+				toggle.AddToClassList("map-filter");
+				toggle.AddToClassList("map-filter--place");
+
+				// The group's colour, between the box and the name: the PLACES rows are the legend too.
+				if (MapFilters.TryGroupOf(category, out PointOfInterestGroup group))
+				{
+					VisualElement swatch = new VisualElement() { pickingMode = PickingMode.Ignore };
+					swatch.AddToClassList("map-filter__swatch");
+					swatch.AddToClassList("map-filter__swatch--" + MapFilters.GroupClassSuffix(group));
+					VisualElement input = toggle.Q(className: Toggle.inputUssClassName);
+					(input ?? toggle).Insert(input != null ? Mathf.Min(1, input.childCount) : 0, swatch);
+				}
+
+				AddFilterToggle(placeFilterList ?? filterList, category, toggle);
+			}
+		}
+
+		/// <summary>
+		/// Wires one filter toggle to its category and adds it to a list.
+		/// </summary>
+		private void AddFilterToggle(VisualElement list, MapFilterCategory category, Toggle toggle)
+		{
+			toggle.value = MapFilters.IsEnabled(category);
+			toggle.AddToClassList("fish-toggle");
+
+			MapFilterCategory captured = category;
+			toggle.RegisterValueChangedCallback(evt =>
+			{
+				MapFilters.SetEnabled(captured, evt.newValue);
+				nextMarkerRefreshTime = 0.0;
+			});
+
+			filterToggles[category] = toggle;
+			list.Add(toggle);
 		}
 
 		/// <summary>

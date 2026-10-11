@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Gravewalker
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Restless dead who patrol the burial grounds — shuffling, muttering names'
+  Description: "Restless dead who patrol the burial grounds \u2014 shuffling, muttering
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - oth
       - ug
       - orr
-      Description: 'Restless dead who patrol the burial grounds — shuffling, muttering names'
+      Description: "Restless dead who patrol the burial grounds \u2014 shuffling,
+        muttering names"
       Tags:
       - Grave-names
       - Patrol-marks
@@ -94,7 +96,7 @@ MonoBehaviour:
     - the Night Round
     - the Open Grave
     - Claywalk
-    - 'the Sexton''s Gate'
+    - the Sexton's Gate
     - the Mould Row
     Titles:
       Honorific:
@@ -119,7 +121,7 @@ MonoBehaviour:
       Rank:
       - Walker of the Burial Ground
       - Keeper of the Night Round
-      - 'Warden of the Sexton''s Gate'
+      - Warden of the Sexton's Gate
       - Elder of the Mould Row
       - Lord of the Open Grave
       Legend:
@@ -161,6 +163,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Gravewalkers
+    Adjective: Gravewalker
   BiomeAffinities:
   - BiomeID: 621224406
     Weight: 2
@@ -170,3 +174,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -2037808285
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

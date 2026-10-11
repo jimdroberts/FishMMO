@@ -54,11 +54,27 @@ namespace FishMMO.TestHarness.World
 		private Slider transition;
 		private Button playButton;
 		private Toggle fieldToggle;
+		private Button walkButton;
 		private VisualElement climateSection;
 		private VisualElement stats;
+		private VisualElement panel;
+		private Button showButton;
+		private Slider latitudeSlider;
+		private Slider haloSlider;
+		private Slider discSlider;
+		private Slider glowSlider;
+		private Toggle paintedToggle;
+		private Toggle godRaysToggle;
+		private Button solarEclipseButton;
+		private Button lunarEclipseButton;
+		private Coroutine eclipseSearch;
+		private Slider deepSnowSlider;
 
 		private readonly List<Button> bodyButtons = new List<Button>();
 		private readonly List<Button> tierButtons = new List<Button>();
+		private readonly List<(Button button, SkyProfile profile)> skyButtons = new List<(Button, SkyProfile)>();
+		/// <summary>Snow, wet, ash and sand, in that order.</summary>
+		private readonly Slider[] coverSliders = new Slider[4];
 		private readonly List<Button> tabButtons = new List<Button>();
 		private readonly List<VisualElement> tabPages = new List<VisualElement>();
 		/// <summary>The figures at the top, by name, so the refresh sets a value and never rebuilds a row.</summary>
@@ -76,6 +92,8 @@ namespace FishMMO.TestHarness.World
 		{
 			PointerOverPanel = false;
 			TypingInPanel = false;
+			// A disabled behaviour's coroutines are stopped, and the search with them.
+			EndEclipseSearch();
 		}
 
 		private void Start()
@@ -134,6 +152,38 @@ namespace FishMMO.TestHarness.World
 			var label = new Label(text);
 			label.AddToClassList("ws-note");
 			return label;
+		}
+
+		private WorldSimCamera CameraControls() => Controller != null && Controller.Camera != null ? Controller.Camera.GetComponent<WorldSimCamera>() : null;
+
+		private string WalkText() => CameraControls() is WorldSimCamera controls && controls.Walking ? "Fly" : "Walk";
+
+		/// <summary>The profile the sky draws now. Read when used, never kept: a body or a profile button changes it.</summary>
+		private SkyProfile ActiveSky() => Controller != null && Controller.Sky != null ? Controller.Sky.ActiveSky : null;
+
+		/// <summary>
+		/// A control the user has hold of — being dragged, or being typed into — which a refresh must
+		/// leave alone: set from the clock mid-drag, a slider fights the hand on it.
+		/// </summary>
+		private static bool Engaged(VisualElement element)
+		{
+			if (element?.panel == null)
+			{
+				return false;
+			}
+			if (element.panel.GetCapturingElement(PointerId.mousePointerId) is VisualElement captured && element.Contains(captured))
+			{
+				return true;
+			}
+			return element.focusController?.focusedElement is VisualElement focused && element.Contains(focused) && IsTextInput(focused);
+		}
+
+		private static void Show(Slider slider, float value)
+		{
+			if (slider != null && !Engaged(slider))
+			{
+				slider.SetValueWithoutNotify(value);
+			}
 		}
 
 		private static Button SmallButton(string text, Action clicked)
@@ -278,10 +328,19 @@ namespace FishMMO.TestHarness.World
 			root.style.flexDirection = FlexDirection.Row;
 			ApplyStyleSheets(root);
 
-			var panel = new VisualElement { name = "world-sim-panel" };
+			panel = new VisualElement { name = "world-sim-panel" };
 			panel.AddToClassList("fish-panel");
 			panel.AddToClassList("ws-panel");
 			root.Add(panel);
+
+			// What brings a hidden panel back. It stays on the screen's left edge, where the panel was.
+			showButton = new Button(() => SetPanelShown(true)) { text = "Show panel", name = "world-sim-show" };
+			showButton.AddToClassList("fish-button");
+			showButton.AddToClassList("fish-button--primary");
+			showButton.AddToClassList("ws-show");
+			showButton.tooltip = "Brings the World Sim panel back.";
+			showButton.style.display = DisplayStyle.None;
+			root.Add(showButton);
 
 			// The keys that fly the camera are the keys UI Toolkit navigates with: W and S move the
 			// focus from control to control, A and D change the slider it lands on. So after one
@@ -321,10 +380,31 @@ namespace FishMMO.TestHarness.World
 			});
 			collapse.style.flexGrow = 0;
 			collapse.style.flexBasis = StyleKeyword.Auto;
-			header.Add(collapse);
+			walkButton = SmallButton(WalkText(), () =>
+			{
+				WorldSimCamera controls = CameraControls();
+				if (controls != null)
+				{
+					controls.SetWalking(!controls.Walking);
+				}
+				walkButton.text = WalkText();
+			});
+			walkButton.tooltip = "V: walk a capsule about the scene with the camera behind it, or fly again from where the camera is.";
+			walkButton.style.flexGrow = 0;
+			walkButton.style.flexBasis = StyleKeyword.Auto;
+			Button hide = SmallButton("Hide panel", () => SetPanelShown(false));
+			hide.tooltip = "Hides the whole panel for an unobstructed view. The Show panel button on the left brings it back.";
+			hide.style.flexGrow = 0;
+			hide.style.flexBasis = StyleKeyword.Auto;
+			var actions = new VisualElement();
+			actions.AddToClassList("ws-header__actions");
+			actions.Add(walkButton);
+			actions.Add(collapse);
+			actions.Add(hide);
+			header.Add(actions);
 			panel.Add(header);
 
-			var help = new Label("Right-drag to look · scroll to zoom · WASD/QE to fly · Shift to hurry. The real sky and the real weather model; nothing reaches a server.");
+			var help = new Label("Right-drag to look · scroll to zoom · WASD/QE to fly · Shift to hurry · V to walk (Space jumps, scroll sets the distance, Ctrl+scroll zooms). The real sky and the real weather model; nothing reaches a server.");
 			help.AddToClassList("ws-help");
 			panel.Add(help);
 
@@ -370,8 +450,36 @@ namespace FishMMO.TestHarness.World
 			ShowTab(0);
 
 			RefreshBodyButtons();
+			RefreshSkyButtons();
 			RefreshFacts();
 		}
+
+		/// <summary>
+		/// Shows or hides the whole panel. Hidden, only the Show panel button is left on screen, and
+		/// nothing of the panel's still holds the camera back: a pointer that was over it when it went
+		/// never sends the leave event, and a box being typed in when it went keeps no keys.
+		/// </summary>
+		private void SetPanelShown(bool shown)
+		{
+			if (panel == null)
+			{
+				return;
+			}
+			panel.style.display = shown ? DisplayStyle.Flex : DisplayStyle.None;
+			showButton.style.display = shown ? DisplayStyle.None : DisplayStyle.Flex;
+			if (!shown)
+			{
+				(panel.focusController?.focusedElement as VisualElement)?.Blur();
+				PointerOverPanel = false;
+				TypingInPanel = false;
+			}
+			else
+			{
+				refresh = 0f;
+			}
+		}
+
+		private bool PanelShown => panel != null && panel.style.display != DisplayStyle.None;
 
 		private void AddTab(VisualElement bar, VisualElement host, string name, Action<VisualElement> build)
 		{
@@ -425,7 +533,8 @@ namespace FishMMO.TestHarness.World
 			bodyFacts = Well(string.Empty);
 			page.Add(bodyFacts);
 
-			page.Add(LabeledSlider("Latitude", -90f, 90f, Controller.Latitude, v => { Controller.Latitude = v; RefreshFacts(); }));
+			latitudeSlider = LabeledSlider("Latitude", -90f, 90f, Controller.Latitude, v => { Controller.Latitude = v; RefreshFacts(); });
+			page.Add(latitudeSlider);
 			page.Add(LabeledSlider("Longitude", -180f, 180f, Controller.Longitude, v => Controller.Longitude = v));
 			page.Add(LabeledSlider("Heading", 0f, 360f, Controller.Heading, v => Controller.Heading = v));
 			var places = Row();
@@ -501,10 +610,12 @@ namespace FishMMO.TestHarness.World
 			times.Add(SmallButton("Midnight", () => Jump(0.0)));
 			page.Add(times);
 			var eclipses = Row();
-			eclipses.Add(SmallButton("Next solar eclipse", () => JumpToEclipse(true)));
-			eclipses.Add(SmallButton("Next lunar eclipse", () => JumpToEclipse(false)));
+			solarEclipseButton = SmallButton(SolarEclipseText, () => JumpToEclipse(true));
+			lunarEclipseButton = SmallButton(LunarEclipseText, () => JumpToEclipse(false));
+			eclipses.Add(solarEclipseButton);
+			eclipses.Add(lunarEclipseButton);
 			page.Add(eclipses);
-			page.Add(Small("Jumps to a minute before first contact, holds the clock and sets the pace to 36× for when you run it, so the phases can be watched: the whole of a solar eclipse is about twenty real minutes at that pace, and its totality a few seconds."));
+			page.Add(Small("Jumps to a minute before first contact, holds the clock and sets the pace to 36× for when you run it, so the phases can be watched: the whole of a solar eclipse is about twenty real minutes at that pace, and its totality a few seconds. The search looks years ahead and takes a few seconds; click again to stop it."));
 			var seasons = Row();
 			// The season here, on this body: found from where its sun stands, not read off the calendar.
 			seasons.Add(SmallButton("Spring", () => SetSeason(0.25f)));
@@ -515,31 +626,37 @@ namespace FishMMO.TestHarness.World
 
 			// The sun, in the three parts it is actually made of. On the panel because judging a sky
 			// by eye and changing a constant in a shader are not the same afternoon's work.
-			SkyProfile sunProfile = Controller.Sky != null ? Controller.Sky.ActiveSky : null;
+			// Each edits the profile drawn when it is moved, not the one drawn when the panel was built:
+			// after a body or a profile button they edited a profile no longer on screen.
+			SkyProfile sunProfile = ActiveSky();
 			if (sunProfile != null)
 			{
-				page.Add(Heading("Sun", "Halo is the broad one: the light the air scatters forward at you, tens of degrees wide. Disc is the third of a degree the sun itself covers. Glow only shows toward a low sun near the horizon."));
-				page.Add(LabeledSlider("Halo", 0f, 2f, sunProfile.SunHalo, v => sunProfile.SunHalo = v));
-				page.Add(LabeledSlider("Disc", 0f, 40f, sunProfile.SunDisc, v => sunProfile.SunDisc = v));
-				page.Add(LabeledSlider("Horizon glow", 0f, 1f, sunProfile.SunGlow, v => sunProfile.SunGlow = v));
+				page.Add(Heading("Sun", "Halo is the broad one: the light the air scatters forward at you, tens of degrees wide. Disc is the third of a degree the sun itself covers. Glow only shows toward a low sun near the horizon. These edit whichever sky profile is drawn now."));
+				haloSlider = LabeledSlider("Halo", 0f, 2f, sunProfile.SunHalo, v => { if (ActiveSky() is SkyProfile p) p.SunHalo = v; });
+				discSlider = LabeledSlider("Disc", 0f, 40f, sunProfile.SunDisc, v => { if (ActiveSky() is SkyProfile p) p.SunDisc = v; });
+				glowSlider = LabeledSlider("Horizon glow", 0f, 1f, sunProfile.SunGlow, v => { if (ActiveSky() is SkyProfile p) p.SunGlow = v; });
+				page.Add(haloSlider);
+				page.Add(discSlider);
+				page.Add(glowSlider);
 			}
-			page.Add(LabeledToggle("Light shafts", SkySystem.DrawGodRays, v => SkySystem.DrawGodRays = v,
-				"Off: the frame without the shaft pass at all, neither its light nor the shadowed lanes beside it. Anything still wrong with the sun's glow with this off is the sky's, not the shafts'."));
+			godRaysToggle = LabeledToggle("Light shafts", SkySystem.DrawGodRays, v => SkySystem.DrawGodRays = v,
+				"Off: the frame without the shaft pass at all, neither its light nor the shadowed lanes beside it. Anything still wrong with the sun's glow with this off is the sky's, not the shafts'.");
+			page.Add(godRaysToggle);
 
 			page.Add(Heading("Sky profile", "A profile here is forced on whatever body you stand on, the way a region's Change Sky Profile action does."));
 			var skies = Row(true);
-			skies.Add(SmallButton("Body's own", () => Controller.SkyOverride = null));
+			AddSkyButton(skies, "Body's own", null);
 			foreach (SkyProfile profile in Controller.SkyProfiles)
 			{
-				SkyProfile captured = profile;
-				skies.Add(SmallButton(profile.name, () => Controller.SkyOverride = captured));
+				AddSkyButton(skies, profile.name, profile);
 			}
 			page.Add(skies);
-			SkyProfile painted = Controller.Sky != null ? Controller.Sky.ActiveSky : null;
+			SkyProfile painted = ActiveSky();
 			if (painted != null)
 			{
-				page.Add(LabeledToggle("Painted colours", painted.UseAuthoredColours, v => painted.UseAuthoredColours = v,
-					"Off (what ships): the sky's colours are worked out from the air of the body stood on — how much of it there is and how dusty. On: this profile's painted gradients, as they were. Flip it to compare the two on any body; on an airless one the sky is black either way."));
+				paintedToggle = LabeledToggle("Painted colours", painted.UseAuthoredColours, v => { if (ActiveSky() is SkyProfile p) p.UseAuthoredColours = v; },
+					"Off (what ships): the sky's colours are worked out from the air of the body stood on — how much of it there is and how dusty. On: this profile's painted gradients, as they were. Flip it to compare the two on any body; on an airless one the sky is black either way.");
+				page.Add(paintedToggle);
 			}
 			page.Add(LabeledToggle("Larger than life", Controller.LargerThanLife, v => Controller.LargerThanLife = v,
 				"Off (what ships): every disc is life-size. On: suns, moons and planets are drawn at the profile's scales, the way most games flatter the sky. This only changes what you see here; the assets keep their own setting."));
@@ -561,7 +678,8 @@ namespace FishMMO.TestHarness.World
 			var looks = Row();
 			looks.Add(SmallButton("Look at sun", () => LookAtBody(true)));
 			looks.Add(SmallButton("Look at moon", () => LookAtBody(false)));
-			looks.Add(SmallButton("Look north", () => Controller.LookAt(Vector3.forward)));
+			// North is the scene's +Z only at heading 0; a generated scene takes its heading from the atlas.
+			looks.Add(SmallButton("Look north", () => Controller.LookAt(CelestialState.SceneDirection(0.0, 0.0, Controller.Heading))));
 			looks.Add(SmallButton("Look up", () => Controller.LookAt(new Vector3(0f, 1f, 0.15f))));
 			page.Add(looks);
 		}
@@ -582,6 +700,7 @@ namespace FishMMO.TestHarness.World
 				cells.Add(SmallButton(StormPhysics.NameOf(kind), () => Controller.SpawnCell(captured)));
 			}
 			page.Add(cells);
+			page.Add(Small("A storm starts upwind and drifts on the world's clock: while the clock is held it stands where it started. Run to bring it over."));
 
 			page.Add(Heading("The air", "Where the air comes from."));
 			fieldToggle = LabeledToggle("Drifting weather", Controller.FieldDriven, v => Controller.FieldDriven = v,
@@ -594,9 +713,10 @@ namespace FishMMO.TestHarness.World
 			{
 				Controller.ClearAll(transition.value);
 				BuildClimateSection();
+				ShowCover(default);
 			}));
 			page.Add(reset);
-			page.Add(Small("Reset takes away everything added to the air, ends the storms and dries the ground."));
+			page.Add(Small("Reset takes away everything added to the air, ends the storms and dries the ground. The air changes over the transition while the clock runs, and at once while it is held."));
 		}
 
 		// ── Climate ───────────────────────────────────────────────────
@@ -627,17 +747,29 @@ namespace FishMMO.TestHarness.World
 			// street or a snowed-in courtyard. These hold it at a depth instead, and the surfaces show
 			// it at once. "Let it settle" hands the ground back to the weather.
 			page.Add(Heading("Held cover", "Snow, wet, ash and sand held at a depth instead of accumulating, so a wet street can be looked at without a quarter of an hour of rain."));
-			page.Add(LabeledSlider("Snow", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Snow = v)));
-			page.Add(LabeledSlider("Wet", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Wet = v)));
-			page.Add(LabeledSlider("Ash", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Ash = v)));
-			page.Add(LabeledSlider("Sand", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Sand = v)));
+			coverSliders[0] = LabeledSlider("Snow", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Snow = v));
+			coverSliders[1] = LabeledSlider("Wet", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Wet = v));
+			coverSliders[2] = LabeledSlider("Ash", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Ash = v));
+			coverSliders[3] = LabeledSlider("Sand", 0f, 1f, 0f, v => HoldCover((ref WeatherCover c) => c.Sand = v));
+			foreach (Slider slider in coverSliders)
+			{
+				page.Add(slider);
+			}
+			float deepest = WeatherRenderProfile.Active != null ? Mathf.Max(0.01f, WeatherRenderProfile.Active.DeepSnowMetres) : 1f;
+			deepSnowSlider = LabeledSlider("Deep snow (m)", 0f, deepest, 0f, v => Controller.HoldDeepSnow(v));
+			deepSnowSlider.tooltip = "Snow this deep past the white blanket, at once — only where the ground is white, so hold Snow at 1 first. Height on the High tier only; the weather builds and melts it from here. Footprints show in it from any character, or the walker (V).";
+			page.Add(deepSnowSlider);
 
 			page.Add(Heading("On the ground"));
 			coverLabel = Well(string.Empty);
 			page.Add(coverLabel);
 
 			var toolRow = Row();
-			toolRow.Add(SmallButton("Reset cover", Controller.ResetCover));
+			toolRow.Add(SmallButton("Reset cover", () =>
+			{
+				Controller.ResetCover();
+				ShowCover(default);
+			}));
 			toolRow.Add(SmallButton("Let it settle", () => Controller.CoverOverride = null));
 			toolRow.Add(SmallButton("+15 min", () => Controller.FastForward(900f)));
 			page.Add(toolRow);
@@ -656,12 +788,41 @@ namespace FishMMO.TestHarness.World
 
 		private delegate void RefAction<T>(ref T value);
 
+		/// <summary>The cover sliders to a depth: held, or what the weather has left.</summary>
+		private void ShowCover(in WeatherCover cover)
+		{
+			Show(coverSliders[0], cover.Snow);
+			Show(coverSliders[1], cover.Wet);
+			Show(coverSliders[2], cover.Ash);
+			Show(coverSliders[3], cover.Sand);
+		}
+
 		// ── Small actions ─────────────────────────────────────────────
 
 		private void SetLatitude(float value)
 		{
 			Controller.Latitude = value;
+			latitudeSlider?.SetValueWithoutNotify(value);
 			RefreshFacts();
+		}
+
+		private void AddSkyButton(VisualElement row, string text, SkyProfile profile)
+		{
+			Button button = SmallButton(text, () =>
+			{
+				Controller.SkyOverride = profile;
+				RefreshSkyButtons();
+			});
+			skyButtons.Add((button, profile));
+			row.Add(button);
+		}
+
+		private void RefreshSkyButtons()
+		{
+			foreach ((Button button, SkyProfile profile) in skyButtons)
+			{
+				button.EnableInClassList(ActiveClass, profile == Controller.SkyOverride);
+			}
 		}
 
 		private void SetSeason(float season01)
@@ -722,9 +883,9 @@ namespace FishMMO.TestHarness.World
 		/// <summary>The sliders and the field to the clock, after it moved (or while it runs).</summary>
 		private void SyncClockControls(bool includeField)
 		{
-			timeSlider?.SetValueWithoutNotify((float)Controller.TimeOfDay);
-			daySlider?.SetValueWithoutNotify(Mathf.Floor(Controller.DayOfYear));
-			yearSlider?.SetValueWithoutNotify(Controller.Year);
+			Show(timeSlider, (float)Controller.TimeOfDay);
+			Show(daySlider, Mathf.Floor(Controller.DayOfYear));
+			Show(yearSlider, Controller.Year);
 			if (includeField && worldTimeField != null && worldTimeField.focusController?.focusedElement != worldTimeField)
 			{
 				worldTimeField.SetValueWithoutNotify(WorldTimeText.Write(Controller.WorldSeconds, Epoch()));
@@ -752,13 +913,59 @@ namespace FishMMO.TestHarness.World
 		}
 
 		/// <summary>The next eclipse of the chosen kind from now, from here, with the clock set to watch it.</summary>
+		/// <remarks>
+		/// Searched over frames, a few milliseconds of each: in one go it froze the editor for seconds,
+		/// which looked like a button that did nothing. A second click on either button stops it.
+		/// </remarks>
 		private void JumpToEclipse(bool solar)
 		{
-			if (!Controller.FindNextEclipse(solar, out double hoursAtFirstContact))
+			if (eclipseSearch != null)
 			{
-				Debug.LogWarning($"[World Sim] No {(solar ? "solar" : "lunar")} eclipse found in the next few years from this place.");
+				EndEclipseSearch();
 				return;
 			}
+			Button button = solar ? solarEclipseButton : lunarEclipseButton;
+			bool finished = false;
+			Coroutine started = StartCoroutine(Controller.SearchNextEclipse(solar, found =>
+			{
+				finished = true;
+				// Over: nothing left to stop, only the labels to put back.
+				eclipseSearch = null;
+				EndEclipseSearch();
+				if (!found.HasValue)
+				{
+					Debug.LogWarning($"[World Sim] No {(solar ? "solar" : "lunar")} eclipse found in the next few years from this place.");
+					return;
+				}
+				WatchEclipse(found.Value);
+			}, progress => button.text = $"Searching… {(progress * 100f).ToString("0", CultureInfo.InvariantCulture)}%"));
+			// Found on the first frame, the search is already over and there is nothing to keep.
+			if (!finished)
+			{
+				eclipseSearch = started;
+				button.text = "Searching…";
+			}
+		}
+
+		private const string SolarEclipseText = "Next solar eclipse";
+		private const string LunarEclipseText = "Next lunar eclipse";
+
+		private void EndEclipseSearch()
+		{
+			if (eclipseSearch != null)
+			{
+				StopCoroutine(eclipseSearch);
+				eclipseSearch = null;
+			}
+			if (solarEclipseButton != null)
+			{
+				solarEclipseButton.text = SolarEclipseText;
+				lunarEclipseButton.text = LunarEclipseText;
+			}
+		}
+
+		private void WatchEclipse(double hoursAtFirstContact)
+		{
 			Controller.Paused = true;
 			Controller.JumpToHours(hoursAtFirstContact - 1.0 / 60.0);
 			// 36×: the whole of a solar eclipse is about twenty real minutes, its totality a few seconds.
@@ -827,6 +1034,42 @@ namespace FishMMO.TestHarness.World
 				return;
 			}
 			refresh = 0.15f;
+			if (!PanelShown)
+			{
+				return;
+			}
+			if (walkButton != null)
+			{
+				// V flips it from the camera too.
+				walkButton.text = WalkText();
+			}
+			// What other controls, keys and code change behind these controls' backs. Ahead of the
+			// celestial state: these hold without one, and returning first left them wrong for good.
+			fieldToggle?.SetValueWithoutNotify(Controller.FieldDriven);
+			godRaysToggle?.SetValueWithoutNotify(SkySystem.DrawGodRays);
+			int quality = QualitySettings.GetQualityLevel();
+			for (int i = 0; i < tierButtons.Count; i++)
+			{
+				tierButtons[i].EnableInClassList(ActiveClass, i == quality);
+			}
+			if (ActiveSky() is SkyProfile drawn)
+			{
+				Show(haloSlider, drawn.SunHalo);
+				Show(discSlider, drawn.SunDisc);
+				Show(glowSlider, drawn.SunGlow);
+				paintedToggle?.SetValueWithoutNotify(drawn.UseAuthoredColours);
+			}
+			if (activeTab == 3)
+			{
+				ShowCover(Controller.CoverOverride ?? Controller.Timeline.Cover);
+				// Deep snow under the camera, as the weather leaves it.
+				WeatherCoverMap coverMap = Controller.Presentation != null ? Controller.Presentation.CoverMap : null;
+				if (coverMap != null && Controller.Camera != null)
+				{
+					Show(deepSnowSlider, coverMap.SampleDeepSnow(Controller.Camera.transform.position));
+				}
+			}
+
 			CultureInfo culture = CultureInfo.InvariantCulture;
 			CelestialState state = Controller.State;
 			SkySystem sky = Controller.Sky;
@@ -938,12 +1181,6 @@ namespace FishMMO.TestHarness.World
 				WeatherCover cover = Controller.Timeline.Cover;
 				coverLabel.text = $"snow {cover.Snow.ToString("0.00", culture)} · wet {cover.Wet.ToString("0.00", culture)} · "
 					+ $"ash {cover.Ash.ToString("0.00", culture)} · sand {cover.Sand.ToString("0.00", culture)}";
-			}
-			fieldToggle?.SetValueWithoutNotify(Controller.FieldDriven);
-			int quality = QualitySettings.GetQualityLevel();
-			for (int i = 0; i < tierButtons.Count; i++)
-			{
-				tierButtons[i].EnableInClassList(ActiveClass, i == quality);
 			}
 		}
 

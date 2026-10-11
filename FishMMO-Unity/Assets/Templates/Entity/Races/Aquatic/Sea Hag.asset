@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sea Hag
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Crone of the drowned coves — croaking, salt-cracked names'
+  Description: "Crone of the drowned coves \u2014 croaking, salt-cracked names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ur
       - ith
       - ash
-      Description: 'Crone of the drowned coves — croaking, salt-cracked names'
+      Description: "Crone of the drowned coves \u2014 croaking, salt-cracked names"
       Tags:
       - Cove-names
       - Wrack-marks
@@ -92,7 +92,7 @@ MonoBehaviour:
     - the Drowned Cove
     - Wrackhut
     - the Cauldron Rock
-    - 'the Widows'' Beach'
+    - the Widows' Beach
     - Salthag Point
     - the Bone Wreck
     - the Weeping Cave
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Warden of Salthag Point
       - Weeper of the Weeping Cave
       Legend:
-      - 'Who Lured Nine Ships Onto the Widows'' Beach'
+      - Who Lured Nine Ships Onto the Widows' Beach
       - Who Boiled the Sea in the Cauldron Rock
       - Who Married the Drowned Captain
       - Who Cursed the Harbour Bell
@@ -163,6 +163,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 0
+    Plural: Sea Hags
+    Adjective: Sea Hag
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3

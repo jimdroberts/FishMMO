@@ -319,7 +319,7 @@ Varyings SplatmapVert(Attributes v)
     {
         float3 snowWorld = TransformObjectToWorld(v.positionOS.xyz);
         float3 snowNormal = TransformObjectToWorldNormal(v.normalOS);
-        float lift = FishCoverAt(snowWorld).x * _FishSnowDepth * FishCoverFacing(snowNormal, snowWorld, 0.5);
+        float lift = FishSnowLiftMetres(snowWorld, snowNormal, _FishSnowDepth);
         v.positionOS.xyz += TransformWorldToObjectDir(float3(0, 1, 0)) * lift;
     }
 
@@ -471,6 +471,7 @@ void SplatmapFragment(
     {
         half3 weathered = inputData.normalWS;
         FishWeatherSurface(inputData.positionWS, albedo, weathered, smoothness, metallic, occlusion);
+        FishTrailSurface(inputData.positionWS, inputData.viewDirectionWS, albedo, weathered, smoothness);
         inputData.normalWS = normalize(lerp(inputData.normalWS, weathered, _FishWeatherAmount));
     }
 

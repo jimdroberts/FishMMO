@@ -108,6 +108,14 @@ namespace FishMMO.Client
 			Debug.Log($"[Ground colour] Debug view {mode}; {GroundColourMap.Describe()}.");
 		}
 
+		[DashboardTool(DashboardToolAttribute.Biomes, "Toggle path debug view", Section = "Diagnostics", Order = 108, AllowInPlayMode = true,
+			Tooltip = "The terrain draws every baked path flat MAGENTA where it has its earth/gravel/cobble slices, CYAN where they are missing (repaint and save the scene). Nothing drawn = the path field is not bound. Logs what is bound each press.")]
+		public static void TogglePathDebug()
+		{
+			ScenePathSurfaceBinder.DebugView = !ScenePathSurfaceBinder.DebugView;
+			Debug.Log($"[Paths] Debug view {(ScenePathSurfaceBinder.DebugView ? "ON" : "OFF")}; {ScenePathSurfaceBinder.Describe()}.");
+		}
+
 		[DashboardTool(DashboardToolAttribute.Biomes, "Toggle old mesh grass (play mode A/B)", Section = "Diagnostics", Order = 107, AllowInPlayMode = true,
 			Tooltip = "Procedural blade grass is the default wherever compute runs. This opts the grass detail prototypes (Detail_Grass*) back into the old instanced clump meshes, and a second press returns to the blades. Remembered for the editor session; in edit mode it sets what the next play session starts with. Each press in play mode also logs the blade system's state and, a second later, the blades it appended (async readback).")]
 		public static void ToggleProceduralGrass()

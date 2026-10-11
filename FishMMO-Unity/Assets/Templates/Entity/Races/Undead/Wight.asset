@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wight
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Barrow-bound — hollowed kingly cadence
+  Description: "Barrow-bound \u2014 hollowed kingly cadence"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - dor
       - har
       - un
-      Description: Barrow-bound — hollowed kingly cadence
+      Description: "Barrow-bound \u2014 hollowed kingly cadence"
       Tags:
       - Barrow-names
       - Death-bonds
@@ -89,7 +89,7 @@ MonoBehaviour:
     Cultures: []
     Places:
     - the Barrow-Downs
-    - 'Frozen King''s Chamber'
+    - Frozen King's Chamber
     - Swordsworn Mound
     Titles:
       Honorific:
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Wights
+    Adjective: Wight
   BiomeAffinities:
   - BiomeID: -567058185
     Weight: 2
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -857237992
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -434,11 +434,9 @@ namespace FishMMO.Shared.WorldDesign
 				 * edge, projecting over the face, its back sunk under the bed upstream. As wide as the channel and a little
 				 * more (the cap runs on into the banks): it splits nothing, the water runs over it, so the one-rock limit
 				 * on ledges does not bind it. */
-				float reach = Mathf.Lerp(settings.MinOverhang, Mathf.Clamp(0.3f * faceHeight, settings.MinOverhang, settings.MaxOverhang), (float)random.NextDouble());
-				float back = reach * Mathf.Lerp(1.2f, 2f, (float)random.NextDouble());
-				float thickness = Mathf.Clamp(0.15f * faceHeight, 0.6f, 2f);
-				thickness = Mathf.Min(thickness, faceHeight - settings.PoolClearMetres - 0.05f);
-				float across = Mathf.Min(width * Mathf.Lerp(1f, 1.2f, (float)random.NextDouble()), 2f * side);
+				OverhangDimensions slab = OverhangPlacer.Draw(faceHeight, faceHeight - settings.PoolClearMetres - 0.05f, width, 2f * side,
+					new OverhangSettings { MinReach = settings.MinOverhang, MaxReach = settings.MaxOverhang }, () => (float)random.NextDouble());
+				float reach = slab.Reach, back = slab.Back, thickness = slab.Thickness, across = slab.Across;
 				float front = upper + reach;
 				// Not held to the foot as the ledges are: it stands at the lip's level, far over the pool, however short the run.
 				if (thickness >= settings.MinThickness)
@@ -566,8 +564,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					/* Stretched to the planned box each way: a slab of the rock's own art made a ledge's width, thickness and
 					 * depth. Scale is applied before the turn (T·R·S), so the box stays a box, no shear. Its middle where planned. */
-					scale = new Vector3(rock.Size.x / Mathf.Max(0.01f, size.x), rock.Size.y / Mathf.Max(0.01f, size.y), rock.Size.z / Mathf.Max(0.01f, size.z));
-					at = rock.Position - rock.Rotation * Vector3.Scale(found.bounds.center, scale);
+					OverhangPlacer.Stretch(found.bounds, rock.Position, rock.Rotation, rock.Size, out at, out scale);
 					if (rock.Kind == FallRockKind.Overhang) { overhangs++; } else { ledges++; }
 				}
 				props.Add(new ScenePropSet.Prop { Prototype = prototype, Position = at, Rotation = rock.Rotation, Scale = scale });

@@ -14,8 +14,12 @@ namespace FishMMO.UnitTests
 	/// every biome, an authoring pass that fills only what is empty and does so once, and the
 	/// season the foliage shader reads.
 	/// </summary>
+	/// <remarks>
+	/// Partial: the tree species' real sizes (<c>RealSizes</c>) live in BiomeProceduralArtTests.TreeSizes.cs, so the tree
+	/// package adds a species' size without touching the spec-table tests here.
+	/// </remarks>
 	[TestFixture]
-	public class BiomeProceduralArtTests
+	public partial class BiomeProceduralArtTests
 	{
 		private const int Seed = 1234;
 		private readonly List<Object> created = new List<Object>();
@@ -687,25 +691,6 @@ namespace FishMMO.UnitTests
 			Assert.That(rule.forestMetres, Is.EqualTo(520f));
 		}
 
-		/// <summary>
-		/// Mature sizes, metres: what each species reaches in a stand, after the measured ranges of the
-		/// real trees (Norway spruce, Scots pine, pedunculate oak, silver birch, a rainforest canopy tree,
-		/// a snag, a coconut palm, a saguaro, an umbrella thorn, a clumping bamboo).
-		/// </summary>
-		private static readonly Dictionary<string, (Vector2 height, Vector2 trunk, Vector2 crown)> RealSizes = new Dictionary<string, (Vector2, Vector2, Vector2)>
-		{
-			{ "Spruce", (new Vector2(22f, 35f), new Vector2(0.3f, 0.5f), new Vector2(2.2f, 4f)) },
-			{ "Pine", (new Vector2(22f, 35f), new Vector2(0.3f, 0.5f), new Vector2(3f, 5f)) },
-			{ "Oak", (new Vector2(18f, 30f), new Vector2(0.45f, 0.8f), new Vector2(5.5f, 10f)) },
-			{ "Birch", (new Vector2(15f, 25f), new Vector2(0.12f, 0.22f), new Vector2(2.5f, 4.5f)) },
-			{ "Jungle", (new Vector2(30f, 45f), new Vector2(0.55f, 0.95f), new Vector2(6f, 12f)) },
-			{ "Dead", (new Vector2(10f, 18f), new Vector2(0.2f, 0.45f), new Vector2(2f, 5f)) },
-			{ "Palm", (new Vector2(12f, 20f), new Vector2(0.14f, 0.25f), new Vector2(3.5f, 6f)) },
-			{ "Saguaro", (new Vector2(8f, 12f), new Vector2(0.2f, 0.4f), new Vector2(0.6f, 1.5f)) },
-			{ "Acacia", (new Vector2(6f, 12f), new Vector2(0.15f, 0.35f), new Vector2(3.5f, 7f)) },
-			{ "Bamboo", (new Vector2(10f, 15f), new Vector2(0.05f, 0.08f), new Vector2(1.5f, 3.5f)) },
-		};
-
 		[Test]
 		public void TreeSpecies_StandAtTheirRealMatureSizes()
 		{
@@ -806,7 +791,10 @@ namespace FishMMO.UnitTests
 			}
 
 			Assert.That(Cover("Taiga", "Trees: Spruce"), Is.GreaterThanOrEqualTo(0.7f));
-			Assert.That(Cover("Forest", "Trees: Oak, Birch"), Is.GreaterThanOrEqualTo(0.7f));
+			Assert.That(Cover("Forest", "Trees: Oak, Birch, Beech"), Is.GreaterThanOrEqualTo(0.7f));
+			Assert.That(Cover("Taiga", "Trees: Pine, Larch"), Is.GreaterThanOrEqualTo(0.7f), "larch joins the pine's woods rather than competing with a stand rule of its own");
+			Assert.That(BiomeArtSpec.For("Forest").Retired, Has.Member(("main", "Trees: Oak, Birch")), "the rule beech joined is retired under its old name");
+			Assert.That(BiomeArtSpec.For("Alpine Meadow").Retired, Has.Member(("main", "Trees: Spruce")));
 			Assert.That(Cover("Jungle", "Trees: Jungle"), Is.GreaterThanOrEqualTo(0.8f));
 			Assert.That(Cover("Woodland", "Trees: Oak, Birch"), Is.InRange(0.35f, 0.7f));
 			Assert.That(Cover("Grassland", "Trees: Oak"), Is.LessThanOrEqualTo(0.2f));

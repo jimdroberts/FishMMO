@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Abyssal Dreamer
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,9 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Vast eel-like horrors older than the gods, dreaming in drowned vaults. Their slime rewrites the bodies of those who touch it, and their memories run back to the first oceans.'
+  Description: Vast eel-like horrors older than the gods, dreaming in drowned vaults.
+    Their slime rewrites the bodies of those who touch it, and their memories run
+    back to the first oceans.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +36,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +83,7 @@ MonoBehaviour:
       - moch
       - vor
       - drax
-      Description: Slurred primordial — old-water memory-speech
+      Description: "Slurred primordial \u2014 old-water memory-speech"
       Tags:
       - Slime-names
       - Memory-bonds
@@ -91,7 +93,7 @@ MonoBehaviour:
     - the Slime Sea
     - Pre-Flood Deep
     - Memory Trench
-    - 'Deep-Dreamer''s Hollow'
+    - Deep-Dreamer's Hollow
     Titles:
       Honorific:
       - Pre-Flood Elder
@@ -114,6 +116,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Abyssal Dreamers
+    Adjective: Abyssal Dreamer
   BiomeAffinities:
   - BiomeID: -1141955836
     Weight: 3
@@ -121,3 +126,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -770075463
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

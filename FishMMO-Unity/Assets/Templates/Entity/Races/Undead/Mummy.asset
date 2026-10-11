@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Mummy
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Dry, chanted Egyptian cadence — tomb-speech'
+  Description: "Dry, chanted Egyptian cadence \u2014 tomb-speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -84,7 +84,7 @@ MonoBehaviour:
       - mes
       - nu
       - hen
-      Description: 'Dry, chanted tomb-speech'
+      Description: Dry, chanted tomb-speech
       Tags:
       - Tomb-names
       - Wrap-marks
@@ -93,7 +93,7 @@ MonoBehaviour:
     Places:
     - the Sand Tomb
     - Bone-Wrapped Hall
-    - 'Tomb-King''s Rest'
+    - Tomb-King's Rest
     - the Cursed Tomb
     Titles:
       Honorific:
@@ -118,6 +118,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Mummies
+    Adjective: Mummy
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 3
@@ -127,3 +130,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 599899035
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

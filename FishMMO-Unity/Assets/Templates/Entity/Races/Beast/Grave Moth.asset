@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Grave Moth
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Great pale moths that drink from the dead — whispering, dusty names'
+  Description: "Great pale moths that drink from the dead \u2014 whispering, dusty
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - en
       - orr
       - wing
-      Description: 'Great pale moths that drink from the dead — whispering, dusty names'
+      Description: "Great pale moths that drink from the dead \u2014 whispering,
+        dusty names"
       Tags:
       - Dust-names
       - Shroud-marks
@@ -125,7 +127,7 @@ MonoBehaviour:
       - Who Blotted the Funeral Candles
       - Who Wore the Winding-sheet as Wings
       - Who Filled the Belfry and Silenced the Bell
-      - 'Who Powdered the Mourners'' Eyes'
+      - Who Powdered the Mourners' Eyes
       Occupational:
       - Crypt-flutterer
       - Dust-shedder
@@ -156,6 +158,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Grave Moths
+    Adjective: Grave Moth
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 2
@@ -167,3 +171,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 596668801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

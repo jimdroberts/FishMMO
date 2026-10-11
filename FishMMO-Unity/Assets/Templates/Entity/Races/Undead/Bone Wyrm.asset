@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bone Wyrm
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Skeletal dragons roused from the hoard — rattling, cavernous names'
+  Description: "Skeletal dragons roused from the hoard \u2014 rattling, cavernous
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ax
       - ull
       - orr
-      Description: 'Skeletal dragons roused from the hoard — rattling, cavernous names'
+      Description: "Skeletal dragons roused from the hoard \u2014 rattling, cavernous
+        names"
       Tags:
       - Bone-names
       - Hoard-marks
@@ -161,6 +163,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Bone Wyrms
+    Adjective: Bone Wyrm
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -170,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 155940630
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

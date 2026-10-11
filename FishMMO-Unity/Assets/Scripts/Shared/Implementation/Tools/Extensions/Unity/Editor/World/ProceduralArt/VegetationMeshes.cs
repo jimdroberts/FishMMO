@@ -28,6 +28,78 @@ namespace FishMMO.Shared.WorldDesign
 		Starfish,
 		Shells,
 		TubeWorms,
+
+		// ── Declared ahead of their meshes (vegetation expansion, 2026-10-10) ──
+		// Every kind below is pre-declared so the packages that build them never edit this enum. Appended,
+		// never inserted: nothing stores a kind's number, but appending keeps every existing value as it was.
+		// A kind no package builds yet yields an empty mesh; none is in the catalogue until its owner adds it.
+
+		// Land flora (FloraMeshes; the flora package). Families of look-alikes share a kind and differ by
+		// DetailPlant.Variant: cushions (moss campion, thrift, spiny, sphagnum, moss), lichens (clump, lava),
+		// creepers (ivy, beach vine), root knobs (pneumatophores, cypress knees), mushrooms (forest, cluster,
+		// swamp, cave), rosettes (agave, yucca, bromeliad), column clusters (organ pipe, euphorbia).
+		/// <summary>Monstera / elephant-ear: broad Paddle leaves on petioles.</summary>
+		BroadHerb,
+		/// <summary>Prickly pear: chained oval pads; wears the cactus bark.</summary>
+		PadCactus,
+		/// <summary>Jointed branching cylinders with a golden spine speckle; wears the cactus bark.</summary>
+		Cholla,
+		/// <summary>Organ pipe / candelabra euphorbia: ribbed columns from one base; wears the cactus bark.</summary>
+		ColumnCluster,
+		/// <summary>Agave, yucca, bromeliad: thick tapered solid leaves in a rosette.</summary>
+		Rosette,
+		/// <summary>A low dome of tiny shingles, with flower dots for the flowering ones.</summary>
+		Cushion,
+		/// <summary>Fine branching lichen clumps (the branching coral's geometry, but NOT aquatic).</summary>
+		Lichen,
+		/// <summary>A flat mat of leaf cards over stone or litter.</summary>
+		Creeper,
+		/// <summary>Woody root knobs rising from mud: mangrove pneumatophores, cypress knees.</summary>
+		RootKnobs,
+		/// <summary>Lathed caps on stems, in groups.</summary>
+		Mushroom,
+		/// <summary>Cones, needles and twigs under conifers.</summary>
+		DebrisNeedle,
+		/// <summary>Fallen palm fronds and husks.</summary>
+		DebrisPalm,
+		/// <summary>A dried strandline of wrack straps (not aquatic: it lies above the tide).</summary>
+		DebrisWrack,
+		/// <summary>Colliderless fallen branches, 0.5–2 m (prefab Detail_DebrisBranch).</summary>
+		DebrisBranch,
+		/// <summary>Fallen bamboo culms and sheaths.</summary>
+		DebrisBamboo,
+
+		// The sea floor (SeaFloorMeshes; the sea package, which also decides IsAquatic and Sway for each).
+		/// <summary>A lying cluster of mussel, oyster or vent-clam shells (Variant).</summary>
+		MusselBed,
+		/// <summary>A crust of white barnacle cones.</summary>
+		Barnacles,
+		/// <summary>Bright green ruffled Ulva sheets.</summary>
+		SeaLettuce,
+		/// <summary>Flat lying discs.</summary>
+		SandDollar,
+		/// <summary>A lying warty sausage.</summary>
+		SeaCucumber,
+		/// <summary>Five long thin arms, lying, in beds.</summary>
+		BrittleStar,
+		/// <summary>A feather on a stalk, in mud.</summary>
+		SeaPen,
+		/// <summary>A stalk and a feathery crown.</summary>
+		Crinoid,
+		/// <summary>A pale vase or lattice, or stalked (Hyalonema).</summary>
+		GlassSponge,
+		/// <summary>Cold-water (Lophelia) branching coral thickets.</summary>
+		ColdCoral,
+		/// <summary>Lobed and finger soft corals, swaying.</summary>
+		SoftCoral,
+		/// <summary>A wavy shell with a blue or purple mantle.</summary>
+		GiantClam,
+		/// <summary>A fragile lumpy ball.</summary>
+		Xenophyophore,
+		/// <summary>Flat white/yellow microbial patches at seeps and vents.</summary>
+		BacterialMat,
+		/// <summary>The bacterial mat's land variant: orange slime-mould and biofilm in caves (NOT aquatic).</summary>
+		SlimeMat,
 	}
 
 	/// <summary>One detail plant's recipe.</summary>
@@ -51,6 +123,12 @@ namespace FishMMO.Shared.WorldDesign
 		public float Lean;
 		/// <summary>Segments along each blade or frond.</summary>
 		public int Segments;
+		/// <summary>
+		/// Which form of its kind, for kinds that are families of look-alikes (a mushroom's forest, cluster, swamp
+		/// and cave forms; a cushion's moss campion, thrift, spiny and sphagnum). 0 is the kind's first or only
+		/// form, which is what every plant made before variants is, so no existing mesh changes.
+		/// </summary>
+		public int Variant;
 	}
 
 	/// <summary>
@@ -60,9 +138,16 @@ namespace FishMMO.Shared.WorldDesign
 	/// layout <c>FishVegetation.shader</c> reads (see FishVegetationPasses.hlsl).
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// Normals on blades and cards are bent toward the sky: a clump of grass is lit as a soft
 	/// mass the way it reads from a few metres away, not as forty flat cards each catching the
 	/// sun at its own angle. Bark-textured parts (cactus) use real normals.
+	/// </para>
+	/// <para>
+	/// <b>Shared parts.</b> The part helpers and every legacy kind's builder are <c>internal</c>, so the files that
+	/// build the newer kinds (<see cref="FloraMeshes"/>, <see cref="SeaFloorMeshes"/>) reuse them — a lichen is the
+	/// branching coral's geometry, a cold-water coral its larger white cousin — without editing this file.
+	/// </para>
 	/// </remarks>
 	public static class VegetationMeshes
 	{
@@ -73,24 +158,45 @@ namespace FishMMO.Shared.WorldDesign
 			DetailPlant p = plant;
 			switch (p.Kind)
 			{
-				case DetailKind.Grass: Blades(mesh, in p, rng, FoliageCell.Blade); break;
-				case DetailKind.Reeds: Blades(mesh, in p, rng, FoliageCell.Strap); break;
-				case DetailKind.Fern: Fern(mesh, in p, rng); break;
+				// A legacy kind's variant 0 is its legacy builder, exactly as before; its newer forms (headed grasses and
+				// rushes, the common reed's plume, bracken and hart's-tongue, ruderal herbs, samphire, horsetail, the
+				// tumbleweed) are the land flora's (FloraMeshes, FloraVariant).
+				case DetailKind.Grass:
+					if (p.Variant == 0) Blades(mesh, in p, rng, FoliageCell.Blade); else FloraMeshes.Grass(mesh, in p, rng);
+					break;
+				case DetailKind.Reeds:
+					if (p.Variant == 0) Blades(mesh, in p, rng, FoliageCell.Strap); else FloraMeshes.Reeds(mesh, in p, rng);
+					break;
+				case DetailKind.Fern:
+					if (p.Variant == 0) Fern(mesh, in p, rng); else FloraMeshes.Fern(mesh, in p, rng);
+					break;
 				case DetailKind.Flowers: Flowers(mesh, in p, rng); break;
-				case DetailKind.Shrub: Shrub(mesh, in p, rng, FoliageCell.SmallLeaves, 1f); break;
-				case DetailKind.DryShrub: Shrub(mesh, in p, rng, FoliageCell.Twigs, 0f); break;
+				case DetailKind.Shrub:
+					if (p.Variant == 0) Shrub(mesh, in p, rng, FoliageCell.SmallLeaves, 1f); else FloraMeshes.Herb(mesh, in p, rng);
+					break;
+				case DetailKind.DryShrub:
+					if (p.Variant == 0) Shrub(mesh, in p, rng, FoliageCell.Twigs, 0f); else FloraMeshes.DryShrub(mesh, in p, rng);
+					break;
 				case DetailKind.Debris: Debris(mesh, in p, rng); break;
 				case DetailKind.Kelp: SeaFloorMeshes.Kelp(mesh, in p, rng); break;
 				case DetailKind.Coral: Coral(mesh, in p, rng); break;
 				case DetailKind.BarrelCactus: BarrelCactus(mesh, in p, rng); break;
-				default: SeaFloorMeshes.Build(mesh, in p, rng); break;
+				default:
+					// Every other kind is built by the file that owns it: the sea floor's (SeaFloorMeshes), then the land
+					// flora's (FloraMeshes). Neither touches the stream before it knows the kind is its own, so the order
+					// changes nothing. A kind no file builds yet comes out empty, which the generator reports.
+					if (!SeaFloorMeshes.Build(mesh, in p, rng))
+					{
+						FloraMeshes.Build(mesh, in p, rng);
+					}
+					break;
 			}
 			mesh.RecalculateNormals(true, onlyMissing: true);
 			mesh.RecalculateTangents();
 			return mesh;
 		}
 
-		private static Color Pick(in DetailPlant p, DeterministicRNG rng) => Color.Lerp(p.ColourA, p.ColourB, rng.NextFloat());
+		internal static Color Pick(in DetailPlant p, DeterministicRNG rng) => Color.Lerp(p.ColourA, p.ColourB, rng.NextFloat());
 
 		// ── Parts ─────────────────────────────────────────────────────
 		// Every blade, frond, flower, card and strand is a part attached at its root, grown half again as many
@@ -99,36 +205,36 @@ namespace FishMMO.Shared.WorldDesign
 		// so one clump of grass is thin and the next lush, and no two lean alike (TreeMeshes does the same).
 
 		/// <summary>A hash of a part's number, 0..1, drawn without touching the plant's own stream.</summary>
-		private static float Hash(int n, int salt) => (ProceduralNoise.Mix(((uint)n * 0x9e3779b1u) ^ ((uint)salt * 0x85ebca6bu) ^ 0x51ed27u) >> 8) * (1f / 16777216f);
+		internal static float Hash(int n, int salt) => (ProceduralNoise.Mix(((uint)n * 0x9e3779b1u) ^ ((uint)salt * 0x85ebca6bu) ^ 0x51ed27u) >> 8) * (1f / 16777216f);
 
 		/// <summary>How many of a set to grow, and how many always to draw.</summary>
-		private static (int total, int core) Spared(int asked) => Spared(asked, TreeMeshes.Spare);
+		internal static (int total, int core) Spared(int asked) => Spared(asked, TreeMeshes.Spare);
 
 		/// <summary>The same with its own share of spares.</summary>
-		private static (int total, int core) Spared(int asked, float spare) =>
+		internal static (int total, int core) Spared(int asked, float spare) =>
 			(Mathf.Max(asked, Mathf.RoundToInt(asked * spare)), Mathf.Max(1, Mathf.RoundToInt(asked * TreeMeshes.Core)));
 
 		/// <summary>
 		/// Spares for grass and reed blades: few, because blades are what a meadow draws millions of and a
 		/// clump's triangles are capped at 100. A clump varies mostly by dropping toward its core.
 		/// </summary>
-		private const float BladeSpare = 1.1f;
+		internal const float BladeSpare = 1.1f;
 
 		/// <summary>The keep rank of the index-th of total, core of them always drawn and spread evenly through the indices.</summary>
-		private static float Rank(int index, int total, int core, int salt)
+		internal static float Rank(int index, int total, int core, int salt)
 		{
 			bool always = core >= total || (int)((long)(index + 1) * core / total) > (int)((long)index * core / total);
 			return always ? 0f : 0.02f + 0.98f * Hash(index, salt);
 		}
 
 		/// <summary>The part the next geometry belongs to: a whole blade or card, from its root.</summary>
-		private static void Part(MeshBuilder mesh, int index, int total, int core, Vector3 root, PlantPart kind, int salt)
+		internal static void Part(MeshBuilder mesh, int index, int total, int core, Vector3 root, PlantPart kind, int salt)
 		{
 			mesh.SetPart(root, Hash(index, salt + 1), Rank(index, total, core, salt), kind);
 			mesh.SetCard(Hash(index, salt + 2), 0f);
 		}
 
-		private static void Blades(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng, FoliageCell cell)
+		internal static void Blades(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng, FoliageCell cell)
 		{
 			int segments = Mathf.Max(1, p.Segments);
 			var spine = new List<Vector3>();
@@ -176,7 +282,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static void Fern(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
+		internal static void Fern(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
 		{
 			int segments = Mathf.Max(2, p.Segments);
 			var spine = new List<Vector3>();
@@ -208,7 +314,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static void Flowers(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
+		internal static void Flowers(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
 		{
 			var spine = new List<Vector3>();
 			var widths = new List<float>();
@@ -259,7 +365,7 @@ namespace FishMMO.Shared.WorldDesign
 			Blades(mesh, in leaves, rng, FoliageCell.Blade);
 		}
 
-		private static void Shrub(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng, FoliageCell cell, float tintable)
+		internal static void Shrub(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng, FoliageCell cell, float tintable)
 		{
 			int first = mesh.VertexCount;
 			var centre = new Vector3(0f, p.Height * 0.5f, 0f);
@@ -291,7 +397,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static void Debris(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
+		internal static void Debris(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
 		{
 			for (int k = 0; k < p.Count; k++)
 			{
@@ -307,7 +413,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static void Coral(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
+		internal static void Coral(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
 		{
 			var path = new List<Vector3>();
 			var radii = new List<float>();
@@ -346,7 +452,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static void BarrelCactus(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
+		internal static void BarrelCactus(MeshBuilder mesh, in DetailPlant p, DeterministicRNG rng)
 		{
 			var path = new List<Vector3>();
 			var radii = new List<float>();

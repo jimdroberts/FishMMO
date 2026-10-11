@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using NUnit.Framework;
 using FishMMO.Shared.Biomes;
 using FishMMO.Shared.WorldDesign;
@@ -96,6 +97,83 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(shares[sandstone], Is.LessThan(0.13f));
 			Assert.That(shares[shale], Is.GreaterThan(shares[sandstone]), "shale is the commonest sediment");
 			Assert.That(shares[sandstone] + shares[conglomerate], Is.LessThan(0.2f));
+		}
+
+		[Test]
+		public void ABiomeIsNeverWalledInAFormationOnlyRock()
+		{
+			// A biome whose formation rules name halite polygons or sinter cones most still takes its cliffs, river
+			// boulders and ledges from the crust's rocks (or ice): BedrockOf counts only cliff rocks.
+			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
+			{
+				string own = CliffRocks.OwnRock(entry);
+				Assert.That(own == CliffRocks.Ice || CliffRocks.IsCliffRock(own), Is.True, $"{entry.Biome}: its own rock {own}");
+				string bedrock = CliffRocks.BedrockOf(entry);
+				Assert.That(bedrock == null || CliffRocks.IsCliffRock(bedrock), Is.True, $"{entry.Biome}: bedrock {bedrock}");
+			}
+		}
+
+		/// <summary>The vegetation design's §2h list: every mineral, ice and alien formation the lifeless and frozen biomes take.</summary>
+		private static readonly (string Type, string Shape)[] Formations2h =
+		{
+			("Halite", "Polygons"), ("Halite", "Pinnacles"), ("Halite", "Terrace"),
+			("Gypsum", "Crystal"),
+			("Sulphur", "Chimney"), ("Sulphur", "Crystals"), ("Sulphur", "Cone"),
+			("Sinter", "Cone"), ("Sinter", "Terrace"),
+			("Scoria", "Cone"), ("Scoria", "Bomb"), ("Scoria", "Lump"),
+			("Breccia", "Block"), ("Breccia", "Boulder"), ("Breccia", "CraterRim"),
+			("Anorthosite", "Boulder"),
+			("Sulphide", "Smoker"),
+			("Chalk", "Pinnacle"),
+			("Pyrite", "Cubes"),
+			("DarkLag", "FrostKnob"),
+			("Termitaria", "Cathedral"),
+			("Limestone", "Stalagmite"), ("Limestone", "Flowstone"), ("Limestone", "Gours"),
+			("Basalt", "Ledges"), ("Basalt", "Scree"), ("Basalt", "Slabs"), ("Basalt", "Fin"), ("Basalt", "Dribble"), ("Basalt", "Ventifact"),
+			("Sandstone", "Concretion"),
+			("Firn", "Sastrugi"), ("Firn", "Penitentes"), ("Firn", "PitRim"),
+			("WaterIce", "GlacierTable"), ("WaterIce", "DirtCone"), ("WaterIce", "Stalagmite"), ("WaterIce", "Crystal"), ("WaterIce", "FrostFlowers"),
+			("WaterIce", "Cone"), ("WaterIce", "Lobe"), ("WaterIce", "Ridge"),
+		};
+
+		[Test]
+		public void EveryMineralIceAndAlienFormationIsMade_AndWearsAMaterialThatIsWritten()
+		{
+			var made = new System.Collections.Generic.HashSet<string>(RockArtNames.AllFormations().Select(f => RockArtNames.FormationPrefab(f.Type.Name, f.Shape.Name, f.Variant)));
+			var materials = new System.Collections.Generic.HashSet<string>(ProceduralArtCatalogue.RockMaterialNames());
+			foreach (RockMaterialSpec legacy in ProceduralArtCatalogue.RockMaterials)
+			{
+				materials.Add(ProceduralArtCatalogue.RockMaterial(legacy.Name));
+			}
+			foreach ((string typeName, string shapeName) in Formations2h)
+			{
+				Assert.That(RockTypes.TryGet(typeName, out RockType type), Is.True, typeName);
+				Assert.That(RockTypes.TryShape(in type, shapeName, out FormationShape shape), Is.True, $"{typeName}/{shapeName}");
+				foreach (string prefab in RockArtNames.Formations(in type, shapeName))
+				{
+					Assert.That(made, Does.Contain(prefab));
+				}
+				foreach (string material in RockArtNames.FormationMaterials(in type, in shape))
+				{
+					Assert.That(material, Is.Not.Null, $"{typeName}/{shapeName}");
+					Assert.That(materials, Does.Contain(material), $"{typeName}/{shapeName}");
+				}
+			}
+			// Two bodies where the formation is two materials; colliderless ground cover; ice cobbles of water ice.
+			Assert.That(RockArtNames.FormationMaterials(RockTypes.WaterIce, Shape(RockTypes.WaterIce, "GlacierTable")), Has.Length.EqualTo(2));
+			Assert.That(RockArtNames.FormationMaterials(RockTypes.DarkLag, Shape(RockTypes.DarkLag, "FrostKnob")), Has.Length.EqualTo(2));
+			Assert.That(Shape(RockTypes.Firn, "Sastrugi").Colliderless && Shape(RockTypes.Halite, "Polygons").Colliderless && Shape(RockTypes.WaterIce, "FrostFlowers").Colliderless, Is.True);
+			Assert.That(RockArtNames.RockSurfaceTypeForLegacy("Ice"), Is.EqualTo("WaterIce"));
+			foreach (RockType t in RockTypes.FormationRocks)
+			{
+				Assert.That(new[] { "Ice", "Nodule", "Coral" }, Does.Not.Contain(t.Name), "Rock_Ice, Rock_Nodule and Rock_Coral belong to small-rock materials");
+			}
+		}
+
+		private static FormationShape Shape(RockType type, string name)
+		{
+			Assert.That(RockTypes.TryShape(in type, name, out FormationShape shape), Is.True, name);
+			return shape;
 		}
 
 		[Test]

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Animated Armor
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Construct
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'An empty suit of plate that walks, fights and guards as though someone were inside. Nobody is.'
+  Description: An empty suit of plate that walks, fights and guards as though someone
+    were inside. Nobody is.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Construct
   Naming:
     Phonology:
       Onsets:
@@ -88,15 +89,15 @@ MonoBehaviour:
       - ix
       MasculineSuffixes:
       - us
-      - 'on'
-      Description: 'Metallic, hollow — a voice from inside a helm'
+      - on
+      Description: "Metallic, hollow \u2014 a voice from inside a helm"
       Tags:
       - Construct
       - Monster
       WeightedCodas: []
     Cultures: []
     Places:
-    - 'the Maker''s Vault'
+    - the Maker's Vault
     - the Sealed Door
     - the Ninth Stair
     - the Silent Hall
@@ -123,7 +124,7 @@ MonoBehaviour:
       Rank:
       - Guardian of the Sealed Door
       - Sentinel of the Ninth Stair
-      - 'Keeper of the Maker''s Vault'
+      - Keeper of the Maker's Vault
       - Warden of the Silent Hall
       Legend:
       - Who Held the Gate for a Century
@@ -149,6 +150,8 @@ MonoBehaviour:
       - scrap
       - rust
     AllowGenericOccupations: 0
+    Plural: Animated Armors
+    Adjective: Animated Armor
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 3
@@ -156,3 +159,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 18062707
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

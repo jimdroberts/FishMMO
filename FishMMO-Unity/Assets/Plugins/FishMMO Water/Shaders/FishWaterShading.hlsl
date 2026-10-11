@@ -449,14 +449,9 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	if (!underwater)
 	{
 		color = FishWaterBehindClouds(color, screenUV);
-		// The air's fog on top, only where the cloud buffer did not already carry it: once the cloud
-		// march draws the fog (_FishAirFogRange.z = 1), the buffer just laid over the sea holds it,
-		// and applying the analytic fog as well fogged the sea twice.
-		if (_FishAirFogRange.z < 0.5)
-		{
-			half fogKeep;
-			color = FishWaterAirFog(color, positionWS, screenUV, fogKeep);
-		}
+		// The air's fog on top, only what the cloud buffer did not already carry (FishWaterAirFogOver).
+		half fogKeep;
+		color = FishWaterAirFogOver(color, positionWS, screenUV, fogKeep);
 	}
 	return half4(color, alpha);
 }

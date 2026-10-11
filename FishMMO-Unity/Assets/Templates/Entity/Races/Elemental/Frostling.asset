@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Frostling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Small cold-sprites of the winter window — tinkling, chill names'
+  Description: "Small cold-sprites of the winter window \u2014 tinkling, chill names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - ik
       - el
       - yn
-      Description: 'Small cold-sprites of the winter window — tinkling, chill names'
+      Description: "Small cold-sprites of the winter window \u2014 tinkling, chill
+        names"
       Tags:
       - Frost-names
       - Window-marks
@@ -125,7 +126,7 @@ MonoBehaviour:
       Legend:
       - Who Frosted Every Window of the City in One Night
       - Who Hung the Longest Icicle from the Bell Tower
-      - 'Who Chilled the Baron''s Bath'
+      - Who Chilled the Baron's Bath
       - Who Hid Spring Under the Snow Bed
       - Who Was the First Snowflake of the Year
       Occupational:
@@ -161,6 +162,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Frostlings
+    Adjective: Frostling
   BiomeAffinities:
   - BiomeID: 1645414801
     Weight: 3
@@ -170,3 +173,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 144196518
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

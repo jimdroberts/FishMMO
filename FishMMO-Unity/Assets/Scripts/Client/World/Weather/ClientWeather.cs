@@ -17,8 +17,15 @@ namespace FishMMO.Client
 	/// <para>
 	/// Nothing here predicts or decides anything. The server sends the clock anchor and the
 	/// timeline; this evaluates them against the server tick FishNet already keeps in step, writes
-	/// the scene's climate offsets exactly as the server does, keeps surface cover integrating
-	/// between the server's snapshots, and hands the weather at the camera to the presenters.
+	/// the scene's climate offsets exactly as the server does, works out the scene's own storms and
+	/// its ground from the world time as the server does (<see cref="StormSchedule"/>,
+	/// <see cref="SceneCover"/>), and hands the weather at the camera to the presenters.
+	/// </para>
+	/// <para>
+	/// <b>A set of the clock lands at once.</b> When the world clock is set to another moment
+	/// (<see cref="WorldClock.Jumps"/>), the climate, the storms, the ground and the weather at the
+	/// camera are all worked out for the new moment on that frame, and the presenters are told to
+	/// show it rather than ease toward it (<see cref="WeatherClient.Snap"/>).
 	/// </para>
 	/// <para>
 	/// A delta that skips a revision is never guessed at: the client asks for the whole timeline.
@@ -39,6 +46,8 @@ namespace FishMMO.Client
 		private float climateTimer;
 		private float resyncCooldown;
 		private readonly System.Collections.Generic.List<StormCell> newCells = new System.Collections.Generic.List<StormCell>();
+		private readonly SceneCover cover = new SceneCover();
+		private uint seenJumps;
 
 		public WeatherTimeline Timeline => hasTimeline ? timeline : null;
 
@@ -141,9 +150,12 @@ namespace FishMMO.Client
 			timeline.TickDelta = networkManager != null ? networkManager.TimeManager.TickDelta : timeline.TickDelta;
 			hasTimeline = true;
 			WeatherQuery.Register(scene, timeline);
-			CatchUpCover();
 			ApplyClimate();
+			PresentStorms(announce: false);
+			UpdateCover();
 			WeatherEvents.RaiseTimelineChanged(scene, timeline);
+			// A new scene's weather is shown as it is, not eased into from the last one's.
+			ForceStep(snap: true);
 		}
 
 		private void OnDelta(WeatherDeltaBroadcast msg, Channel channel)
@@ -173,9 +185,10 @@ namespace FishMMO.Client
 			{
 				WeatherEvents.RaiseCellSpawned(scene, cell);
 			}
-			if (msg.HasCover)
+			if (msg.HasDirector)
 			{
-				CatchUpCover();
+				// The scene's own storms started or stopped: on this frame, as on the server's pass.
+				PresentStorms(announce: false);
 			}
 			WeatherEvents.RaiseTimelineChanged(scene, timeline);
 		}
@@ -190,17 +203,34 @@ namespace FishMMO.Client
 			networkManager.ClientManager.Broadcast(new WeatherResyncRequestBroadcast { HaveRevision = timeline.Revision }, Channel.Reliable);
 		}
 
-		/// <summary>Advances the server's cover snapshot from the world time it was taken at to now.</summary>
-		private void CatchUpCover()
+		/// <summary>The scene's own ground figure now, worked out from the world time over its cover points as the server's is.</summary>
+		private void UpdateCover()
 		{
 			if (scene.IsValid())
 			{
-				// World time, from the scene's five cover points, exactly as the server integrates it — not
-				// from where this camera stands — so the figure tracks the server's between snapshots, held,
-				// raced or jumped.
-				SceneCoverSampling.Advance(timeline, settings, scene, timeline.WorldSecondsAt(CurrentTick()));
+				cover.Update(timeline, settings, scene, timeline.WorldSecondsAt(PreciseTick()));
 			}
 		}
+
+		/// <summary>The scene's own storms of this moment into the timeline, as the server's pass puts them there.</summary>
+		private void PresentStorms(bool announce)
+		{
+			if (!scene.IsValid())
+			{
+				return;
+			}
+			newCells.Clear();
+			if (StormSchedule.Present(timeline, settings, scene, timeline.WorldSecondsAt(PreciseTick()), announce ? newCells : null))
+			{
+				foreach (StormCell cell in newCells)
+				{
+					WeatherEvents.RaiseCellSpawned(scene, cell);
+				}
+				WeatherEvents.RaiseTimelineChanged(scene, timeline);
+			}
+		}
+
+		private double PreciseTick() => networkManager != null ? networkManager.TimeManager.Tick + networkManager.TimeManager.GetTickPercentAsDouble() : 0.0;
 
 		private uint CurrentTick() => networkManager != null ? networkManager.TimeManager.Tick : 0u;
 
@@ -218,16 +248,14 @@ namespace FishMMO.Client
 				return;
 			}
 			uint tick = CurrentTick();
-			float temperature = (settings.AuthoredAir + timeline.AirAt(tick)).TemperatureScale;
-			float humidity = 0f;
+			// The one sum the server, this client and the bed all make (SceneClimate), of this moment.
+			SceneClimate.Apply(settings, timeline, timeline.WorldSecondsAt(tick));
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			WorldBody body = SceneTime.BodyOf(settings);
 			if (system != null && body != null && WorldClock.Shared.HasAnchor)
 			{
 				double hours = WorldClock.Shared.WorldHoursAt(tick);
-				CelestialMath.SeasonalClimateOffsets(system, body, hours, settings.Latitude, out float bt, out float bh);
-				temperature += bt;
-				humidity += bh;
+				CelestialMath.SeasonalClimateOffsets(system, body, hours, settings.Latitude, out _, out float bh);
 				// The season for foliage: the same clock and the same humidity swing the climate uses.
 				WeatherShaderGlobals.ApplySeason(CelestialMath.Season01(system, body, hours), (float)settings.Latitude, bh);
 			}
@@ -235,8 +263,6 @@ namespace FishMMO.Client
 			{
 				WeatherShaderGlobals.ClearSeason();
 			}
-			settings.RuntimeTemperatureOffset = Mathf.Clamp(temperature, -2f, 2f);
-			settings.RuntimeHumidityOffset = Mathf.Clamp(humidity, -2f, 2f);
 		}
 
 		public void Tick(float deltaTime)
@@ -249,13 +275,20 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			// The clock was set to another moment: everything of the new moment now, shown as it is.
+			uint jumps = WorldClock.Shared.Jumps;
+			if (jumps != seenJumps)
+			{
+				seenJumps = jumps;
+				ForceStep(snap: true);
+				return;
+			}
 			climateTimer -= deltaTime;
 			if (climateTimer <= 0f)
 			{
 				climateTimer = ClimateInterval;
 				timeline.Prune(CurrentTick());
 				ApplyClimate();
-				CatchUpCover();
 			}
 			presentTimer -= deltaTime;
 			if (presentTimer > 0f)
@@ -263,6 +296,34 @@ namespace FishMMO.Client
 				return;
 			}
 			presentTimer = PresentInterval;
+			Present();
+		}
+
+		/// <summary>
+		/// Works the climate, the storms, the ground and the weather at the camera out now, off their timers; with
+		/// <paramref name="snap"/>, the presenters show it at once instead of easing toward it.
+		/// </summary>
+		private void ForceStep(bool snap)
+		{
+			if (!hasTimeline || !scene.IsValid() || networkManager == null)
+			{
+				return;
+			}
+			climateTimer = ClimateInterval;
+			presentTimer = PresentInterval;
+			timeline.Prune(CurrentTick());
+			ApplyClimate();
+			if (snap)
+			{
+				WeatherClient.Snap();
+			}
+			Present();
+		}
+
+		private void Present()
+		{
+			PresentStorms(announce: true);
+			UpdateCover();
 
 			TimeManager tm = networkManager.TimeManager;
 			uint tick = tm.Tick;

@@ -37,6 +37,11 @@ namespace FishMMO.Shared.WorldDesign
 		public float Lean;
 		/// <summary>Chance of an arch through the section, and its size as a share of the height.</summary>
 		public float ArchChance, ArchHeight;
+		/// <summary>
+		/// The arch through the middle of the section rather than anywhere in its middle half: a section placed as a
+		/// natural arch stands with its arch where the placer measured the room for it.
+		/// </summary>
+		public bool ArchCentred;
 
 		/// <summary>A continuous canyon wall: broad joints, coarse beds, big slabs, leaning out at the top.</summary>
 		public static CliffStyle Massif => new CliffStyle
@@ -149,6 +154,37 @@ namespace FishMMO.Shared.WorldDesign
 			Weather = 0.15f, Detail = 0.04f, CrackDepth = 1.6f,
 			SubSpacing = new Vector2(1.7f, 1.3f), SubWidth = 0.03f, SubDepth = 0.25f, SubStep = 0.12f,
 			Lean = 2.4f, ArchChance = 0.2f, ArchHeight = 0.35f,
+		};
+
+		/// <summary>
+		/// A rock shelter for a point of interest (Jim, 2026-10-10: "a placeable lean/arch cliff section"): an unbroken wall
+		/// whose upper half leans 4.5 m out over its front, so the ground under its brow is roofed. No bays (a gap in the
+		/// front row would open the shelter's roof) and an even skyline.
+		/// </summary>
+		public static CliffStyle Overhang => new CliffStyle
+		{
+			Length = 16f, Depth = 9f, Height = 12f,
+			JointSpacing = new Vector2(4.5f, 3.4f), JointGap = 0.06f,
+			BedThickness = new Vector2(1.0f, 2.6f), BedRecess = new Vector2(0f, 0.45f),
+			Bevel = 0.28f, HeightVar = 0.15f, FrontDrop = 0.05f, TopTilt = 4f,
+			Weather = 0.15f, Detail = 0.03f, Gaps = 0f, CrackDepth = 1.2f,
+			SubSpacing = new Vector2(1.2f, 0.9f), SubWidth = 0.02f, SubDepth = 0.15f, SubStep = 0.08f,
+			Lean = 4.5f,
+		};
+
+		/// <summary>
+		/// A natural arch for a point of interest: a thin fin of rock (6 m through), even in height, always pierced from the
+		/// ground up through its middle by an arch half its height, wide enough to walk through.
+		/// </summary>
+		public static CliffStyle Arch => new CliffStyle
+		{
+			Length = 22f, Depth = 6f, Height = 15f,
+			JointSpacing = new Vector2(4.2f, 3.0f), JointGap = 0.06f,
+			BedThickness = new Vector2(1.0f, 2.8f), BedRecess = new Vector2(0f, 0.35f),
+			Bevel = 0.25f, HeightVar = 0.2f, FrontDrop = 0f, TopTilt = 5f,
+			Weather = 0.15f, Detail = 0.03f, Gaps = 0f, CrackDepth = 1.0f,
+			SubSpacing = new Vector2(1.0f, 0.8f), SubWidth = 0.02f, SubDepth = 0.14f, SubStep = 0.07f,
+			Lean = 0.4f, ArchChance = 1f, ArchHeight = 0.5f, ArchCentred = true,
 		};
 
 		/// <summary>Talus: a fallen block of the wall about 3 m across, one or two columns of a few thin beds.</summary>
@@ -434,6 +470,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				solid.arch = true;
 				solid.archX = rng.Range(-0.25f, 0.25f) * st.Length;
+				if (st.ArchCentred)
+				{
+					// Drawn all the same, so the radii that follow are what every other style's draws would give.
+					solid.archX = 0f;
+				}
 				solid.archRx = rng.Range(0.12f, 0.2f) * st.Length;
 				solid.archRy = st.ArchHeight * st.Height * rng.Range(0.85f, 1.1f);
 			}
@@ -537,8 +578,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	public static class CliffSections
 	{
-		/// <summary>The styles: the face's clutter, largest first; the talus's fallen blocks (<see cref="IsDebris"/>); the sheer backdrops by height.</summary>
-		public static readonly string[] Styles = { "Massif", "Bluff", "Wall", "Pillars", "Block", "Ledges", "Rubble", "Rockfall", "ScarpLow", "Scarp", "ScarpHigh" };
+		/// <summary>
+		/// The styles: the face's clutter, largest first; the talus's fallen blocks (<see cref="IsDebris"/>); the sheer
+		/// backdrops by height; the points of interest's shelter and arch (<see cref="IsPointOfInterest"/>), which no cliff
+		/// role places.
+		/// </summary>
+		public static readonly string[] Styles = { "Massif", "Bluff", "Wall", "Pillars", "Block", "Ledges", "Rubble", "Rockfall", "ScarpLow", "Scarp", "ScarpHigh", "Overhang", "Arch" };
 		/// <summary>Variants per style: a cliff is read section by section, and two of one mesh side by side read as a stamp.</summary>
 		public const int VariantCount = 4;
 		/// <summary>Triangle budget of each level of a face section.</summary>
@@ -547,6 +592,9 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly int[] DebrisLodTriangles = { 500, 220, 90 };
 		/// <summary>Levels of detail every style has.</summary>
 		public const int LevelCount = 3;
+
+		/// <summary>True for the styles only a point of interest places (its rock shelter and natural arch), at a site the planner chose.</summary>
+		public static bool IsPointOfInterest(string style) => style == "Overhang" || style == "Arch";
 
 		/// <summary>True for the talus styles (fallen blocks), false for the face's.</summary>
 		public static bool IsDebris(string style) => style == "Rubble" || style == "Rockfall";
@@ -571,6 +619,8 @@ namespace FishMMO.Shared.WorldDesign
 				case "ScarpLow": return CliffStyle.ScarpLow;
 				case "Scarp": return CliffStyle.Scarp;
 				case "ScarpHigh": return CliffStyle.ScarpHigh;
+				case "Overhang": return CliffStyle.Overhang;
+				case "Arch": return CliffStyle.Arch;
 				default: throw new ArgumentException("No cliff section style " + style, nameof(style));
 			}
 		}

@@ -618,7 +618,8 @@ namespace FishMMO.Shared.Celestial
 			{
 				return;
 			}
-			double period = OrbitHours(system, body);
+			// The host's year for a moon: its own month samples a few days of its seasons (2026-10-10).
+			double period = OrbitHours(system, HostPlanet(body));
 			if (double.IsInfinity(period) || double.IsNaN(period) || period <= 0.0)
 			{
 				ClimateOffsets(system, body, 0.0, out temperature, out humidity, latitudeDegrees);
@@ -627,9 +628,9 @@ namespace FishMMO.Shared.Celestial
 			/* Sampled around the orbit, which is what makes this mean anything at a latitude: the
 			 * whole point of an axial tilt is that a pole leans into its sun for half a year and
 			 * away for the other half. One sample would catch a pole in perpetual summer or
-			 * perpetual winter and call that its climate. Eight is enough to average a tilt out
+			 * perpetual winter and call that its climate. Twenty-four (every half-month) averages a tilt out
 			 * while still separating a genuinely cold pole from a warm equator. */
-			const int Samples = 8;
+			const int Samples = 24;
 			double t = 0.0, h = 0.0;
 			for (int i = 0; i < Samples; i++)
 			{

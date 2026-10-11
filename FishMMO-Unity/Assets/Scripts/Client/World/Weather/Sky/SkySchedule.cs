@@ -163,12 +163,7 @@ namespace FishMMO.Client
 							{
 								continue;
 							}
-							float rate = uniform;
-							if (air != null && !air.SceneRate(timeline, i, j, time, out rate))
-							{
-								// Not read yet (LightningAir spreads its reads over frames): this viewer misses it.
-								continue;
-							}
+							float rate = air != null ? air.SceneRate(timeline, i, j, time) : uniform;
 							if (Unit(h) >= Mathf.Clamp01(rate) * perRate * share)
 							{
 								continue;
@@ -422,16 +417,11 @@ namespace FishMMO.Client
 		/// </summary>
 		public const double HoldSeconds = 30.0;
 
-		/// <summary>The most patches read afresh in one frame (a whole weather sample each): a teleport into a storm costs no hitch.</summary>
-		public const int FreshReadsPerFrame = 8;
-
 		public WorldSceneSettings Settings { get; private set; }
 		public Scene Scene { get; private set; }
 
 		private WeatherTimeline timeline;
 		private readonly Dictionary<long, (long window, float rate)> rates = new Dictionary<long, (long, float)>();
-		private int reads;
-		private int readsFrame = -1;
 
 		/// <summary>Reads the weather of this scene from now on; a different one forgets what was read.</summary>
 		public void Bind(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene)
@@ -453,10 +443,15 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The storm-free lightning rate over a patch at a moment, 0..1: the weather sampled at the
-		/// patch's middle, at the start of the hold window the moment is in. False when this frame has
-		/// read all it may — the strike is then missed by this viewer alone, as one out of sight is.
+		/// patch's middle, at the start of the hold window the moment is in.
 		/// </summary>
-		public bool SceneRate(WeatherTimeline timeline, int i, int j, double worldSeconds, out float rate)
+		/// <remarks>
+		/// Always read when it is wanted. Reads were capped at a few a frame, and a strike whose patch
+		/// had not been read yet was dropped — by this viewer, not by the others, so one bolt struck for
+		/// one player and not for the one beside them. A patch is only asked about when a slot's hash
+		/// could strike there at all, a handful of times a minute round a viewer, so the cap bought little.
+		/// </remarks>
+		public float SceneRate(WeatherTimeline timeline, int i, int j, double worldSeconds)
 		{
 			uint patch = SkySchedule.PatchKey(i, j);
 			// Each patch changes its rate at a moment of its own, so a viewer's few dozen are not all read at once.
@@ -465,33 +460,22 @@ namespace FishMMO.Client
 			long key = ((long)i << 32) | (uint)j;
 			if (rates.TryGetValue(key, out var held) && held.window == window)
 			{
-				rate = held.rate;
-				return true;
+				return held.rate;
 			}
-			if (readsFrame != Time.frameCount)
-			{
-				readsFrame = Time.frameCount;
-				reads = 0;
-			}
-			if (reads >= FreshReadsPerFrame)
-			{
-				rate = 0f;
-				return false;
-			}
-			reads++;
-			// Read at the moment the window began: the same number whoever reads it, and whenever.
+			/* Read at the very moment the window began, in world seconds: the same number whoever reads it, and
+			 * whenever. It went through the tick that moment fell on, floored, which is the same only while every
+			 * machine holds the same clock anchor. */
 			double start = window * HoldSeconds - offset;
-			uint tick = (uint)Math.Floor(SkySchedule.TickAt(timeline, start));
 			var middle = new Vector2((i + 0.5f) * SkySchedule.ScenePatchMeters, (j + 0.5f) * SkySchedule.ScenePatchMeters);
 			float ground = VortexPresenter.GroundAt(middle, out _);
-			WeatherSample sample = WeatherField.Sample(timeline, Settings, Scene, new Vector3(middle.x, ground, middle.y), tick);
-			rate = Mathf.Clamp01(sample.Background[WeatherChannel.LightningRate]);
+			WeatherSample sample = WeatherField.SampleAtSeconds(timeline, Settings, Scene, new Vector3(middle.x, ground, middle.y), start);
+			float rate = Mathf.Clamp01(sample.Background[WeatherChannel.LightningRate]);
 			if (rates.Count > 1024)
 			{
 				rates.Clear();
 			}
 			rates[key] = (window, rate);
-			return true;
+			return rate;
 		}
 	}
 

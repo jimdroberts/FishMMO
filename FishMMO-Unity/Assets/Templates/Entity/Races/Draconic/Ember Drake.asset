@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ember Drake
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Small fire-drakes of the cinder slopes — crackling, spitting names'
+  Description: "Small fire-drakes of the cinder slopes \u2014 crackling, spitting
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ax
       - ok
       - urn
-      Description: 'Small fire-drakes of the cinder slopes — crackling, spitting names'
+      Description: "Small fire-drakes of the cinder slopes \u2014 crackling, spitting
+        names"
       Tags:
       - Ember-names
       - Spit-marks
@@ -125,7 +127,7 @@ MonoBehaviour:
       Legend:
       - Who Set the Harvest Alight with a Sneeze
       - Who Nested in the Forge Chimney
-      - 'Who Spat the Knight''s Visor Shut'
+      - Who Spat the Knight's Visor Shut
       - Who Hoarded Coal and Guarded It Fiercely
       - Who Lit the Beacon Chain in a Night
       Occupational:
@@ -162,6 +164,8 @@ MonoBehaviour:
       - cinder
       - fall
     AllowGenericOccupations: 1
+    Plural: Ember Drakes
+    Adjective: Ember Drake
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3
@@ -171,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 493502347
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

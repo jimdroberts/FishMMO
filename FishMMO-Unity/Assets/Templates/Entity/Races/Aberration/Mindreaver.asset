@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Mindreaver
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,9 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Pale, tentacle-mouthed humanoids that feed on the thoughts of thinking creatures. They rule lightless cities through telepathy and enslaved minds, and remember a time when they ruled the surface too.'
+  Description: Pale, tentacle-mouthed humanoids that feed on the thoughts of thinking
+    creatures. They rule lightless cities through telepathy and enslaved minds, and
+    remember a time when they ruled the surface too.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +36,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +83,7 @@ MonoBehaviour:
       - thrax
       - nyl
       - vax
-      Description: Alien-sibilant — the telepathic echo of speech
+      Description: "Alien-sibilant \u2014 the telepathic echo of speech"
       Tags:
       - Tentacle-names
       - Brain-bonds
@@ -94,7 +96,7 @@ MonoBehaviour:
     - Abyssal Colony
     Titles:
       Honorific:
-      - 'the Hive-Mind''s Voice'
+      - the Hive-Mind's Voice
       - Elder Reaver
       HonorificMasculine: []
       HonorificFeminine: []
@@ -105,7 +107,7 @@ MonoBehaviour:
       Rank:
       - Voice of Oorlanth
       Legend:
-      - 'Whose Thought Broke the King''s Conviction'
+      - Whose Thought Broke the King's Conviction
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -114,6 +116,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Mindreavers
+    Adjective: Mindreaver
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -121,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -770075463
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

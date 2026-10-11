@@ -98,6 +98,7 @@ namespace FishMMO.Client
 				part = 0;
 			}
 			commands.Clear();
+			commands.BeginSample("Cloud Light Volume");
 			commands.SetRenderTarget(back);
 			commands.SetGlobalVector(BuildAId, buildA);
 			commands.SetGlobalVector(BuildBId, buildB);
@@ -112,6 +113,7 @@ namespace FishMMO.Client
 				commands.SetViewport(new Rect(slice % TilesAcross * Texels, slice / TilesAcross * Texels, Texels, Texels));
 				commands.DrawProcedural(Matrix4x4.identity, cloudMaterial, pass, MeshTopology.Triangles, 3);
 			}
+			commands.EndSample("Cloud Light Volume");
 			Graphics.ExecuteCommandBuffer(commands);
 			part++;
 			if (part >= Frames)

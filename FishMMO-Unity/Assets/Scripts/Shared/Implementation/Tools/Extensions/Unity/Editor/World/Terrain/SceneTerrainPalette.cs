@@ -22,6 +22,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// runs through (<see cref="SceneTerrainPalette.SlotSand"/>, <see cref="SceneTerrainPalette.SlotGravel"/>).
 		/// </summary>
 		Sediment,
+		/// <summary>
+		/// A ground the scene's ways are surfaced with (<see cref="SceneTerrainPalette.SlotPathEarth"/> …): carried in the
+		/// arrays for the path overlay to sample, never painted into the splat and never scattered on.
+		/// </summary>
+		Path,
 	}
 
 	/// <summary>
@@ -64,6 +69,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The scene's river sediment slots: the sand and gravel every biome's bars are painted with.</summary>
 		public const string SlotSand = "sediment/sand";
 		public const string SlotGravel = "sediment/gravel";
+		/// <summary>
+		/// The path surface slots (PathSurfaces in SceneGenerator): each biome's trodden ground and road ground, keyed as the
+		/// biome's own Small Path and Road slots so a LOCAL sidecar dresses them; and the cobbles every biome shares.
+		/// </summary>
+		public const string SlotPathEarth = BiomeLocalArt.SlotPath;
+		public const string SlotPathGravel = BiomeLocalArt.SlotRoad;
+		public const string SlotPathStone = "path/stone";
 
 		/// <summary>The texture layer a slot key names on a biome, or null when the biome has no such slot.</summary>
 		public static TerrainTextureLayer SlotLayer(BiomeTemplate biome, string slot)
@@ -75,6 +87,8 @@ namespace FishMMO.Shared.WorldDesign
 			if (slot == SlotMain) return biome.MainTextureLayer;
 			if (slot == SlotLakebed) return biome.LakebedTextureLayer;
 			if (slot == SlotRiverbed) return biome.RiverbedTextureLayer;
+			if (slot == SlotPathEarth) return biome.SmallPathTextureLayer;
+			if (slot == SlotPathGravel) return biome.RoadTextureLayer;
 			if (slot.StartsWith(SlotDetail, StringComparison.Ordinal) && int.TryParse(slot.Substring(SlotDetail.Length), out int d))
 			{
 				return biome.DetailTextureLayers != null && d >= 0 && d < biome.DetailTextureLayers.Count ? biome.DetailTextureLayers[d] : null;
@@ -178,7 +192,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// </param>
 		public static SceneTerrainPalette Build(SceneBiomeField field,
 			Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolveSlot, Func<BiomeTemplate, TerrainLayer> placeholder,
-			IReadOnlyList<(string slot, TerrainTextureLayer source)> sediment = null)
+			IReadOnlyList<(string slot, TerrainTextureLayer source)> sediment = null,
+			Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> paths = null)
 		{
 			if (field == null)
 			{
@@ -228,6 +243,19 @@ namespace FishMMO.Shared.WorldDesign
 						if (layer != null)
 						{
 							candidates.Add((new Entry { BiomeIndex = b, Biome = biome, Source = source, Role = PaletteRole.Sediment, Slot = slot }, layer, 1));
+						}
+					}
+				}
+
+				IReadOnlyList<(string slot, TerrainTextureLayer source)> biomePaths = paths?.Invoke(biome);
+				if (biomePaths != null)
+				{
+					foreach ((string slot, TerrainTextureLayer source) in biomePaths)
+					{
+						TerrainLayer layer = Resolve(resolveSlot, biome, slot, source);
+						if (layer != null)
+						{
+							candidates.Add((new Entry { BiomeIndex = b, Biome = biome, Source = source, Role = PaletteRole.Path, Slot = slot }, layer, 1));
 						}
 					}
 				}
@@ -309,6 +337,68 @@ namespace FishMMO.Shared.WorldDesign
 				palette.byBiome[entry.BiomeIndex].Add(entry);
 			}
 			return palette;
+		}
+
+		/// <summary>
+		/// The fallback path slices: x earth, y road, z cobbles (the most-covering biome's earth and road), −1 for one the
+		/// palette lacks. Where a pixel's ground has its own biome's, <see cref="PathLayerMap"/> wins.
+		/// </summary>
+		public Vector4 PathLayers(float[] coverage)
+		{
+			int Find(string slot)
+			{
+				int best = -1;
+				float bestShare = float.NegativeInfinity;
+				foreach (Entry entry in entries)
+				{
+					float share = coverage != null && entry.BiomeIndex < coverage.Length ? coverage[entry.BiomeIndex] : 0f;
+					if (entry.Role == PaletteRole.Path && entry.Slot == slot && share > bestShare)
+					{
+						best = entry.LayerIndex;
+						bestShare = share;
+					}
+				}
+				return best;
+			}
+			return new Vector4(Find(SlotPathEarth), Find(SlotPathGravel), Find(SlotPathStone), -1f);
+		}
+
+		/// <summary>
+		/// For each layer (array slice) of the scene, the slice of the path ground of the biome that layer belongs to (the
+		/// most-covering one when biomes share it), for one path slot; −1 where none. What lets the shader wear a path
+		/// through a desert into packed sand and through a forest into a littered track, by the ground under each pixel.
+		/// </summary>
+		public float[] PathLayerMap(string slot, float[] coverage)
+		{
+			var map = new float[MaximumLayers];
+			var share = new float[MaximumLayers];
+			for (int i = 0; i < map.Length; i++)
+			{
+				map[i] = -1f;
+				share[i] = float.NegativeInfinity;
+			}
+			foreach (Entry entry in entries)
+			{
+				if (entry.Role == PaletteRole.Path || entry.LayerIndex < 0 || entry.LayerIndex >= MaximumLayers)
+				{
+					continue;
+				}
+				float biomeShare = coverage != null && entry.BiomeIndex < coverage.Length ? coverage[entry.BiomeIndex] : 0f;
+				if (biomeShare <= share[entry.LayerIndex])
+				{
+					continue;
+				}
+				foreach (Entry own in byBiome[entry.BiomeIndex])
+				{
+					if (own.Role == PaletteRole.Path && own.Slot == slot)
+					{
+						map[entry.LayerIndex] = own.LayerIndex;
+						share[entry.LayerIndex] = biomeShare;
+						break;
+					}
+				}
+			}
+			return map;
 		}
 
 		private static TerrainLayer Resolve(Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolve, BiomeTemplate biome, string slot, TerrainTextureLayer layer)

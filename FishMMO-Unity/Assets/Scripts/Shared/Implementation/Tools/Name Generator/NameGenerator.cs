@@ -155,26 +155,167 @@ namespace FishMMO.Shared.NameGeneration
 
 		public POINameEntry Generate(POIRequest req) => Generate(req, 0);
 
+		/// <remarks>
+		/// <para>
+		/// Every generated point of interest is named here (Jim, 2026-10-10). The name is composed from the
+		/// grammar's place-name compositions (<see cref="POINameBuilder"/>); settlements are named by the
+		/// city builder in the request's race, or a race at home in the biome, and dressed by the
+		/// composition ("Ashgard Keep"); dungeon-like kinds may take a dungeon name.
+		/// </para>
+		/// <para>
+		/// Seeded names derive from (RegionSeed, "poi", biome, kind, race, ObjectSeed, Index). The
+		/// biome-free kinds (<see cref="PlaceNameDefaults.IsBiomeFree"/>) derive from (RegionSeed, kind,
+		/// ObjectSeed, Index) only and need no biome at all, so a planet river named with the body seed
+		/// and its PlanetRiver reads the same in every scene it crosses.
+		/// </para>
+		/// </remarks>
 		private POINameEntry Generate(POIRequest req, int batchOffset)
 		{
 			if (req == null) throw new ArgumentNullException(nameof(req));
-			BiomeTemplate biome = RequireBiome(req);
+			bool biomeFree = PlaceNameDefaults.IsBiomeFree(req.POIType);
+			BiomeTemplate biome = biomeFree ? OptionalBiome(req) : RequireBiome(req);
 
-			POINameEntry injected = RuntimeInjection.TryPopPOI(biome.Key, req.POIType);
+			POINameEntry injected = RuntimeInjection.TryPopPOI(biome?.Key ?? "", req.POIType);
 			if (injected != null) return injected;
 
-			DeterministicRNG draw = DeriveRng(req, batchOffset, "poi", biome.Key, req.POIType.ToString());
-			BiomeClimateVariant variant = ResolveVariant(req, biome);
-			var (name, meaning, fragments) = POINameBuilder.Build(biome.Naming.RuntimePhonology, req.POIType, draw, variant);
+			RaceTemplate race = !biomeFree && RaceRegistry.TryGet(req.Race, out RaceTemplate named) ? named : null;
+			DeterministicRNG draw = biomeFree
+				? DeriveRng(req, batchOffset, "poi-water", req.POIType.ToString())
+				: DeriveRng(req, batchOffset, "poi", biome.Key, req.POIType.ToString(), race?.NamingKey ?? "");
+			POIType kind = req.POIType == POIType.Any ? POINameBuilder.PickKind(draw) : req.POIType;
+
+			var context = new PlaceContext
+			{
+				Kind = kind,
+				Rng = draw,
+				// The water root is drawn apart from the composition and without the kind, so a river and
+				// the falls named with its seeds share it.
+				RootRng = biomeFree ? DeriveRng(req, batchOffset, "hydronym") : draw,
+				FounderPhonology = FounderPhonology(race, draw),
+			};
+			if (!biomeFree)
+			{
+				BiomeClimateVariant variant = ResolveVariant(req, biome);
+				BiomePhonology phonology = biome.Naming.RuntimePhonology;
+				context.Biome = phonology;
+				context.Variant = variant;
+				context.Race = race;
+				context.City = () => SettlementName(biome, race, kind, variant, draw);
+				if (phonology.DungeonSuffixes != null && phonology.DungeonSuffixes.Length > 0)
+				{
+					context.Dungeon = () => DungeonNameBuilder.Build(phonology, draw, variant).name;
+				}
+			}
+
+			var (name, meaning, fragments) = POINameBuilder.Build(context);
 
 			return new POINameEntry
 			{
 				Name = name,
 				Meaning = meaning,
-				Biome = biome.ResolvedDisplayName,
+				Biome = biome?.ResolvedDisplayName ?? "",
 				POIType = req.POIType == POIType.Any ? "mixed" : req.POIType.ToString().ToLower(),
 				NameFragments = fragments,
 			};
+		}
+
+		/// <summary>
+		/// Names a settlement-like place with the city builder: in the given race, else one at home in the
+		/// biome (civilised races first, so a swamp village is not a slime's), else human.
+		/// </summary>
+		private static string SettlementName(BiomeTemplate biome, RaceTemplate race, POIType kind, BiomeClimateVariant variant, DeterministicRNG draw)
+		{
+			RaceTemplate settler = race ?? PickSettler(biome, draw);
+			if (settler == null)
+			{
+				return "";
+			}
+			RacePhonology phonology = RaceRegistry.ResolvePhonology(settler, null);
+			if (phonology == null)
+			{
+				return "";
+			}
+			return CityNameBuilder.Build(phonology, settler.NamingKey, CityTypeFor(kind), biome?.Key, draw, variant).name;
+		}
+
+		private static RaceTemplate PickSettler(BiomeTemplate biome, DeterministicRNG draw)
+		{
+			List<(RaceTemplate race, float weight)> candidates = biome == null
+				? new List<(RaceTemplate race, float weight)>()
+				: RaceRegistry.RacesForBiome(BiomeRegistry.IDOf(biome));
+			candidates.RemoveAll(c => !c.race.Naming.AllowGenericOccupations);
+			if (candidates.Count > 0)
+			{
+				float total = 0f;
+				for (int i = 0; i < candidates.Count; i++) total += candidates[i].weight;
+				float roll = (float)(draw.NextDouble() * total);
+				for (int i = 0; i < candidates.Count; i++)
+				{
+					roll -= candidates[i].weight;
+					if (roll <= 0f) return candidates[i].race;
+				}
+				return candidates[candidates.Count - 1].race;
+			}
+			if (RaceRegistry.TryGet("human", out RaceTemplate human))
+			{
+				return human;
+			}
+			IReadOnlyList<string> keys = RaceRegistry.SupportedRaces;
+			return keys.Count > 0 ? RaceRegistry.Get(keys[0]) : null;
+		}
+
+		/// <summary>The city type a settlement kind is named as.</summary>
+		internal static CityType CityTypeFor(POIType kind)
+		{
+			switch (kind)
+			{
+				case POIType.Capital:
+				case POIType.City:
+				case POIType.SunkenCity:
+					return CityType.Capital;
+				case POIType.Keep:
+				case POIType.Castle:
+				case POIType.Fortress:
+					return CityType.Fortress;
+				case POIType.Port:
+					return CityType.Port;
+				case POIType.Monastery:
+				case POIType.Temple:
+					return CityType.Sacred;
+				default:
+					return CityType.Village;
+			}
+		}
+
+		/// <summary>
+		/// Who a place is named after: one of the race when there is one, else a human of one of the
+		/// human cultures (drawn with the request's RNG, so it replays). Null when no human is registered.
+		/// </summary>
+		private static RacePhonology FounderPhonology(RaceTemplate race, DeterministicRNG draw)
+		{
+			if (race != null)
+			{
+				return RaceRegistry.ResolvePhonology(race, null);
+			}
+			if (!RaceRegistry.TryGet("human", out RaceTemplate human))
+			{
+				return null;
+			}
+			IReadOnlyList<string> cultures = RaceRegistry.GetCultures(human.NamingKey);
+			string culture = cultures.Count > 0 ? cultures[draw.Next(cultures.Count)] : null;
+			return RaceRegistry.ResolvePhonology(human, culture);
+		}
+
+		/// <summary>The request's biome when it names a usable one; a biome-free kind needs only the grammar.</summary>
+		private static BiomeTemplate OptionalBiome(BiomeGenerationRequest req)
+		{
+			if (!NameGrammar.IsLoaded)
+			{
+				throw new InvalidOperationException(
+					"No NameGrammarTemplate is registered. Load the naming templates before generating names.");
+			}
+			BiomeTemplate biome = ResolveBiomeOrNull(req);
+			return biome != null && biome.Naming != null && biome.Naming.IsUsable ? biome : null;
 		}
 
 		/// <summary>Generate a single legendary item name.</summary>

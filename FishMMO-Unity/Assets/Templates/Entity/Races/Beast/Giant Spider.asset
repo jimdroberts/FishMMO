@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Giant Spider
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A spider the size of a cart, webbing whole corridors and caves; patient, quick, and venomous.'
+  Description: A spider the size of a cart, webbing whole corridors and caves; patient,
+    quick, and venomous.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - us
-      Description: 'Clicking, hissing — mandible-sounds'
+      Description: "Clicking, hissing \u2014 mandible-sounds"
       Tags:
       - Vermin
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - husk
       - shell
     AllowGenericOccupations: 0
+    Plural: Giant Spiders
+    Adjective: Giant Spider
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 2
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 621224406
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

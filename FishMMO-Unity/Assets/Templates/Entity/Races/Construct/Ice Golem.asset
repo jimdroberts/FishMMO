@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ice Golem
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Construct
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Sculpted ice guardians of the frozen halls — cracking, brittle names'
+  Description: "Sculpted ice guardians of the frozen halls \u2014 cracking, brittle
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Construct
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ak
       - ost
       - und
-      Description: 'Sculpted ice guardians of the frozen halls — cracking, brittle names'
+      Description: "Sculpted ice guardians of the frozen halls \u2014 cracking, brittle
+        names"
       Tags:
       - Ice-names
       - Sculpt-marks
@@ -92,7 +94,7 @@ MonoBehaviour:
     - the Frozen Hall
     - Rimewatch
     - the Ice Gate
-    - 'the Sculptor''s Cellar'
+    - the Sculptor's Cellar
     - Glacierstair
     - the Cracking Threshold
     - the Cold Vault
@@ -119,7 +121,7 @@ MonoBehaviour:
       Rank:
       - Warden of the Frozen Hall
       - Sentinel of the Ice Gate
-      - 'Keeper of the Sculptor''s Cellar'
+      - Keeper of the Sculptor's Cellar
       - Guard of Glacierstair
       - Cracker of the Cracking Threshold
       Legend:
@@ -127,7 +129,7 @@ MonoBehaviour:
       - Who Held the Ice Gate Against the Fire-giant
       - Who Cracked and Held
       - Who Guarded the Cold Vault Through the Hot Century
-      - 'Who Was Carved from the Glacier''s Heart'
+      - Who Was Carved from the Glacier's Heart
       Occupational:
       - Gate-guard
       - Vault-keeper
@@ -161,6 +163,8 @@ MonoBehaviour:
       - heap
       - fall
     AllowGenericOccupations: 0
+    Plural: Ice Golems
+    Adjective: Ice Golem
   BiomeAffinities:
   - BiomeID: -1693619367
     Weight: 3
@@ -170,3 +174,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1645414801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

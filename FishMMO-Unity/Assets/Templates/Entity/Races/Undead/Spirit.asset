@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Spirit
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Breathlike and vowel-heavy — names that fade at the edges
+  Description: "Breathlike and vowel-heavy \u2014 names that fade at the edges"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -94,7 +94,7 @@ MonoBehaviour:
       - ir
       - al
       - oel
-      Description: Breathlike and vowel-heavy — names that fade at the edges
+      Description: "Breathlike and vowel-heavy \u2014 names that fade at the edges"
       Tags:
       - Essence-bonds
       - Memory-names
@@ -153,7 +153,7 @@ MonoBehaviour:
         - eth
         - mir
         - nyx
-        Description: 'Echokin — remembered more than seen, name-is-song'
+        Description: "Echokin \u2014 remembered more than seen, name-is-song"
         Tags:
         - Echo-names
         - Memory-bonds
@@ -246,6 +246,9 @@ MonoBehaviour:
       - hollow
       - void
       - dust
+    AllowGenericOccupations: 1
+    Plural: Spirits
+    Adjective: Spirit
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 1
@@ -257,3 +260,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 621224406
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

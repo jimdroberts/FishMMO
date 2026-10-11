@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Succubus
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Sweet infernal song — seduction and binding
+  Description: "Sweet infernal song \u2014 seduction and binding"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - or
       - aros
       - ion
-      Description: Sweet infernal song — seduction and binding
+      Description: "Sweet infernal song \u2014 seduction and binding"
       Tags:
       - Pact-names
       - Kiss-marks
@@ -116,6 +116,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Succubi
+    Adjective: Succubus
   BiomeAffinities:
   - BiomeID: -1042859854
     Weight: 2
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -857237992
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

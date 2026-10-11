@@ -90,7 +90,7 @@ Shader "FishMMO/Water/Caustics"
                          * already been laid over it: scaled whole, the caustics would brighten them as
                          * well as the sea bed under them. They fade by what those let through instead. */
                         half fogKeep;
-                        FishWaterAirFog(half3(0.0, 0.0, 0.0), positionWS, input.screenUV, fogKeep);
+                        FishWaterAirFogOver(half3(0.0, 0.0, 0.0), positionWS, input.screenUV, fogKeep);
                         // And by what the clouds in front of it let through, which were laid there first.
                         light = 1.0 + (light - 1.0) * fogKeep * FishWaterCloudsInFront(input.screenUV).a;
                     }

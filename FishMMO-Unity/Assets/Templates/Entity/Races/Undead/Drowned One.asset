@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Drowned One
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'The waterlogged dead who walk the shore — gurgling, bloated names'
+  Description: "The waterlogged dead who walk the shore \u2014 gurgling, bloated
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,14 +83,15 @@ MonoBehaviour:
       - oth
       - ug
       - orr
-      Description: 'The waterlogged dead who walk the shore — gurgling, bloated names'
+      Description: "The waterlogged dead who walk the shore \u2014 gurgling, bloated
+        names"
       Tags:
       - Drowned-names
       - Tide-marks
       WeightedCodas: []
     Cultures: []
     Places:
-    - 'the Widows'' Beach'
+    - the Widows' Beach
     - the Drowned Chapel
     - the Wreck Walk
     - Saltgrave
@@ -117,7 +119,7 @@ MonoBehaviour:
       - the Never-buried
       - the Sodden
       Rank:
-      - 'Walker of the Widows'' Beach'
+      - Walker of the Widows' Beach
       - Warden of the Wreck Walk
       - Sentinel of the Tide-line
       - Keeper of the Drowned Chapel
@@ -162,6 +164,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Drowned Ones
+    Adjective: Drowned One
   BiomeAffinities:
   - BiomeID: 1384639345
     Weight: 3
@@ -171,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 173642607
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Specter
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Haunting and formal — ecclesiastical ghost-speech
+  Description: "Haunting and formal \u2014 ecclesiastical ghost-speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +80,7 @@ MonoBehaviour:
       - us
       - or
       - tor
-      Description: Haunting and formal — ecclesiastical ghost-speech
+      Description: "Haunting and formal \u2014 ecclesiastical ghost-speech"
       Tags:
       - Binding-names
       - Chain-marks
@@ -89,8 +89,8 @@ MonoBehaviour:
     Places:
     - the Phantom Cloister
     - Mortuary Gallery
-    - 'Hangman''s Cross'
-    - 'Widow''s Walk'
+    - Hangman's Cross
+    - Widow's Walk
     Titles:
       Honorific:
       - Phantom-warden
@@ -113,6 +113,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Specters
+    Adjective: Specter
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 1
@@ -122,3 +125,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 18062707
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

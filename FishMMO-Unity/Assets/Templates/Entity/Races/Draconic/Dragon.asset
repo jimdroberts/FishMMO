@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dragon
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Ancient and resonant — the sound of mountain-shaking thunder
+  Description: "Ancient and resonant \u2014 the sound of mountain-shaking thunder"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -92,7 +92,7 @@ MonoBehaviour:
       - or
       - ux
       - rak
-      Description: Ancient and resonant — the sound of mountain-shaking thunder
+      Description: "Ancient and resonant \u2014 the sound of mountain-shaking thunder"
       Tags:
       - Hoard-names
       - Breath-marks
@@ -174,7 +174,7 @@ MonoBehaviour:
         - ax
         - rax
         - oth
-        Description: 'Ancestral — elder wyrms, ten-syllable deep-names'
+        Description: "Ancestral \u2014 elder wyrms, ten-syllable deep-names"
         Tags:
         - True-names
         - Doom-bonds
@@ -229,7 +229,7 @@ MonoBehaviour:
         - rak
         - tor
         - vryn
-        Description: 'Wyvernic — swift lineage, hunters, sky-lords'
+        Description: "Wyvernic \u2014 swift lineage, hunters, sky-lords"
         Tags:
         - Eyrie-names
         - Hunt-bonds
@@ -327,6 +327,9 @@ MonoBehaviour:
       - ruin
       - char
       - waste
+    AllowGenericOccupations: 1
+    Plural: Dragons
+    Adjective: Dragon
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 2
@@ -338,3 +341,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -941601695
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

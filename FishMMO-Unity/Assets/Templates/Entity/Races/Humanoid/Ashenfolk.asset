@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ashenfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Volcanic-slope people — soot-grey skin, ember-warm speech, names like cooling lava'
+  Description: "Volcanic-slope people \u2014 soot-grey skin, ember-warm speech, names
+    like cooling lava"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -84,7 +85,8 @@ MonoBehaviour:
       - ok
       - ar
       - orn
-      Description: 'Volcanic-slope people — soot-grey skin, ember-warm speech, names like cooling lava'
+      Description: "Volcanic-slope people \u2014 soot-grey skin, ember-warm speech,
+        names like cooling lava"
       Tags:
       - Ember-names
       - Slope-marks
@@ -126,7 +128,7 @@ MonoBehaviour:
       - Elder of the Ember Fields
       Legend:
       - Who Walked the Lava Flow Barefoot
-      - 'Who Read the Mountain''s Warning'
+      - Who Read the Mountain's Warning
       - Who Dug the Cooling Stair in a Night
       - Who Kept the Kilns Lit Through the Ashfall
       - Who Bargained with the Fire Giants
@@ -172,6 +174,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Ashenfolk
+    Adjective: Ashenfolk
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3
@@ -181,3 +185,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 525873855
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

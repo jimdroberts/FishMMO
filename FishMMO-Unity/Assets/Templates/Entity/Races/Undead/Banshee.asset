@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Banshee
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Keening Gaelic lament — fore-sung grief
+  Description: "Keening Gaelic lament \u2014 fore-sung grief"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - n/a
       - a
       - ai
-      Description: Keening lament — fore-sung grief
+      Description: "Keening lament \u2014 fore-sung grief"
       Tags:
       - Mourning-names
       - Wail-marks
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Banshees
+    Adjective: Banshee
   BiomeAffinities:
   - BiomeID: -567058185
     Weight: 1
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -2077848218
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

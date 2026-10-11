@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ettin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Two-headed argument — stereo-speech
+  Description: "Two-headed argument \u2014 stereo-speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +80,7 @@ MonoBehaviour:
       - ok
       - ug
       - oz
-      Description: Two-headed argument — stereo-speech
+      Description: "Two-headed argument \u2014 stereo-speech"
       Tags:
       - Twin-names
       - Bicephalic-marks
@@ -111,6 +111,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Ettins
+    Adjective: Ettin
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 2
@@ -120,3 +123,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -138594552
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

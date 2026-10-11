@@ -174,6 +174,96 @@ namespace FishMMO.Shared.WorldDesign
 			mesh.AddQuad(submesh, a, b, c, d, face);
 		}
 
+		/// <summary>
+		/// A surface of revolution: <paramref name="profile"/> (x the radius, y the height) turned about the up
+		/// axis through <paramref name="centre"/>. Faces turn outward by the profile's direction — up the outside
+		/// faces out, across the top faces up, down an inside wall faces in. Normals are left to
+		/// <see cref="MeshBuilder.RecalculateNormals"/>.
+		/// </summary>
+		/// <remarks>
+		/// The sea floor's domes, cups and barrels were built with this first (it lived in SeaFloorMeshes); it moved
+		/// here unchanged so mushrooms, cushions, sea cucumbers, clams and stumps can turn their profiles too. Every
+		/// existing call passes neither <paramref name="submesh"/> nor <paramref name="uvMap"/>, so their meshes are
+		/// the same bytes as before the move.
+		/// </remarks>
+		/// <param name="radiusScale">Scales the radius at (profile share 0..1, round 0..1); null for round.</param>
+		/// <param name="colour">The colour at (profile share, round).</param>
+		/// <param name="wind">Sway and flutter weights at a profile share; null for none.</param>
+		/// <param name="submesh">The sub-mesh the faces go in (a detail has only 0; a tree's bark is <see cref="TreeMeshes.BarkSubmesh"/>).</param>
+		/// <param name="uvMap">(round 0..1, profile share 0..1) to a UV; null for the atlas's <see cref="FoliageCell.Solid"/> cell.</param>
+		public static void Lathe(MeshBuilder mesh, Vector3 centre, IList<Vector2> profile, int sides,
+			Func<float, float, float> radiusScale, Func<float, float, Color32> colour, Func<float, Vector2> wind = null, float yaw = 0f,
+			int submesh = 0, Func<float, float, Vector2> uvMap = null)
+		{
+			int count = profile.Count;
+			if (count < 2)
+			{
+				return;
+			}
+			sides = Mathf.Max(3, sides);
+			int first = mesh.VertexCount;
+			for (int i = 0; i < count; i++)
+			{
+				float s = (float)i / (count - 1);
+				for (int k = 0; k <= sides; k++)
+				{
+					float u = (float)k / sides;
+					float angle = yaw + u * Mathf.PI * 2f;
+					var radial = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+					float r = Mathf.Max(1e-4f, profile[i].x) * (radiusScale != null ? radiusScale(s, u) : 1f);
+					Vector2 uv = uvMap != null ? uvMap(u, s) : FoliageAtlas.CellUV(FoliageCell.Solid, Mathf.Clamp01(u), Mathf.Repeat(s, 1f));
+					mesh.AddVertex(centre + radial * r + Vector3.up * profile[i].y, Vector3.zero, uv, colour(s, u),
+						wind != null ? wind(s) : Vector2.zero);
+				}
+			}
+			int row = sides + 1;
+			for (int i = 0; i + 1 < count; i++)
+			{
+				Vector2 along = profile[i + 1] - profile[i];
+				if (along.sqrMagnitude < 1e-12f)
+				{
+					continue;
+				}
+				// Outward in the profile's plane: right of the direction the profile runs (x radius, y up).
+				var outward = new Vector2(along.y, -along.x);
+				for (int k = 0; k < sides; k++)
+				{
+					float angle = yaw + (k + 0.5f) / sides * Mathf.PI * 2f;
+					var radial = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+					Vector3 facing = radial * outward.x + Vector3.up * outward.y;
+					int a = first + i * row + k, b = a + 1, c = a + row + 1, d = a + row;
+					mesh.AddQuad(submesh, a, b, c, d, facing);
+				}
+			}
+		}
+
+		/// <summary>
+		/// The centre line of a wandering limb from <paramref name="a"/> to <paramref name="c"/>, appended to
+		/// <paramref name="into"/>: an arc lifted at its middle by <paramref name="lift"/> of its length and bent off it by
+		/// two waves of their own phase and pitch, <paramref name="wander"/> of its length at most and nothing at either
+		/// end. The same curve the tree generator's crooked limbs follow (TreeMeshes' Grower.Crooked, which keeps its own
+		/// copy so no tree changes), here for fallen logs, driftwood and branches (DeadwoodMeshes, FloraMeshes).
+		/// Draws three numbers from <paramref name="rng"/>.
+		/// </summary>
+		public static void CrookedPath(Vector3 a, Vector3 c, int segments, float wander, float lift, DeterministicRNG rng, List<Vector3> into)
+		{
+			Vector3 axis = c - a;
+			float length = Mathf.Max(0.01f, axis.magnitude);
+			Vector3 along = axis / length;
+			Vector3 side = Perpendicular(along).normalized;
+			Vector3 other = Vector3.Cross(along, side).normalized;
+			float phaseA = rng.NextFloat() * Mathf.PI * 2f, phaseB = rng.NextFloat() * Mathf.PI * 2f;
+			float waves = rng.Range(1.2f, 2.6f);
+			segments = Mathf.Max(1, segments);
+			for (int s = 0; s <= segments; s++)
+			{
+				float t = (float)s / segments;
+				float envelope = Mathf.Sin(Mathf.PI * t);
+				into.Add(Vector3.Lerp(a, c, t) + Vector3.up * (lift * length * 4f * t * (1f - t))
+					+ (side * Mathf.Sin(waves * Mathf.PI * t + phaseA) + other * Mathf.Sin((waves + 0.7f) * Mathf.PI * t + phaseB)) * (wander * length * envelope));
+			}
+		}
+
 		/// <summary>A card hanging from <paramref name="root"/> along <paramref name="direction"/> (a leaf spray on a branch).</summary>
 		public static void SprayCard(MeshBuilder mesh, int submesh, Vector3 root, Vector3 direction, float length, float width, float roll,
 			FoliageCell cell, Color32 colour, Vector2 windRoot, Vector2 windTip, Vector3 crownCentre, float bend)

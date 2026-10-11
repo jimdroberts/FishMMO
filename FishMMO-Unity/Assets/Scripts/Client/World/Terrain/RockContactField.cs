@@ -458,6 +458,7 @@ namespace FishMMO.Client
 			int cells = GridCells.x * GridCells.y * GridCells.z;
 
 			cmd.Clear();
+			cmd.BeginSample("FishMMO rock crevices (gather)");
 			cmd.SetComputeVectorParam(compute, RockGridId, new Vector4(min.x, min.y, min.z, CellSize));
 			cmd.SetComputeIntParams(compute, RockGridDimsId, GridCells.x, GridCells.y, GridCells.z, cells);
 			cmd.SetComputeFloatParam(compute, RockReachId, crevice.x);
@@ -482,6 +483,7 @@ namespace FishMMO.Client
 				cmd.SetComputeIntParam(compute, RockInstanceCountId, count);
 				cmd.DispatchCompute(compute, gatherKernel, (count + 63) / 64, 1, 1);
 			}
+			cmd.EndSample("FishMMO rock crevices (gather)");
 			Graphics.ExecuteCommandBuffer(cmd);
 			cmd.Clear();
 			Shader.SetGlobalBuffer(ListId, list);

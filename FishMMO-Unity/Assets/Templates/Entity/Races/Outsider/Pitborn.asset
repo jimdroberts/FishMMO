@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Pitborn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Lesser fiends spawned in the pit''s depths — guttural, sulphurous names'
+  Description: "Lesser fiends spawned in the pit's depths \u2014 guttural, sulphurous
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ax
       - urn
       - ug
-      Description: 'Lesser fiends spawned in the pit''s depths — guttural, sulphurous names'
+      Description: "Lesser fiends spawned in the pit's depths \u2014 guttural, sulphurous
+        names"
       Tags:
       - Pit-names
       - Spawn-marks
@@ -91,11 +93,11 @@ MonoBehaviour:
     Places:
     - the Spawning Pit
     - the Sulphur Road
-    - 'the Brass Gate''s Foot'
+    - the Brass Gate's Foot
     - Gralldeep
     - the Contract Floor
-    - 'the Ninth Circle''s Edge'
-    - 'the Ash Throne''s Shadow'
+    - the Ninth Circle's Edge
+    - the Ash Throne's Shadow
     Titles:
       Honorific:
       - Pit-spawn
@@ -121,12 +123,12 @@ MonoBehaviour:
       - Toll of the Sulphur Road
       - Foot of the Brass Gate
       - Scribe of the Contract Floor
-      - 'Warden of the Ninth Circle''s Edge'
+      - Warden of the Ninth Circle's Edge
       Legend:
       - Who Crawled Up from the Ninth Circle to the First
       - Who Carried the Contract Through the Fire Unburned
-      - 'Who Ate the Greater Fiend''s Dinner'
-      - 'Who Guarded the Gate''s Foot for an Age Hoping for Promotion'
+      - Who Ate the Greater Fiend's Dinner
+      - Who Guarded the Gate's Foot for an Age Hoping for Promotion
       - Who Was Summoned by a Child and Obeyed
       Occupational:
       - Contract-carrier
@@ -162,6 +164,8 @@ MonoBehaviour:
       - pit
       - silence
     AllowGenericOccupations: 0
+    Plural: Pitborn
+    Adjective: Pitborn
   BiomeAffinities:
   - BiomeID: -1042859854
     Weight: 3
@@ -171,3 +175,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 525873855
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

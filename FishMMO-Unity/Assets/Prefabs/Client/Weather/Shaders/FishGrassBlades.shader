@@ -1,8 +1,8 @@
 // The procedural blade grass (GrassBladeRenderer, FishMMO.Client/World/Terrain/Grass): every blade is a
-// strip shaped in the vertex shader from a 16-byte record FishGrassBlades.compute wrote this frame.
+// strip shaped in the vertex shader from a 20-byte record FishGrassBlades.compute wrote this frame.
 // The pass code and the buffer contract are in FishGrassBlades.hlsl. Drawn only with
 // Graphics.RenderMeshIndirect by the renderer, which binds _GrassBlades per draw and the per-type
-// arrays on its own material instance; nothing else should use this shader.
+// table (_GrassTypeTable) on its own material instances; nothing else should use this shader.
 //
 // Alpha-free geometry: no cutout; the only clip is the dithered fade at the grass distance.
 // Read-only StructuredBuffer in the vertex stage only (WebGPU's floor); no geometry stage.

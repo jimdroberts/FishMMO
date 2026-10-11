@@ -48,6 +48,9 @@ namespace FishMMO.Shared.Atlas
 		[Tooltip("How deep erosion cuts this scene's ground when it is generated or re-cut: rivers, glaciers and rain together. 1 is the default; 0 cuts the planet's ground exactly as the globe has it.")]
 		[Range(0f, 3f)] public float ErosionStrength = 1f;
 
+		[Tooltip("The scene's points of interest: whether it holds the capital, how dense its sites are, per-kind overrides. Asked before every cut; empty = never cut with points of interest.")]
+		public PointOfInterestSettings PointsOfInterest;
+
 		[Header("Time")]
 		public bool OverrideTimeZone;
 		[Tooltip("Hours from longitude 0. Used when overridden.")]

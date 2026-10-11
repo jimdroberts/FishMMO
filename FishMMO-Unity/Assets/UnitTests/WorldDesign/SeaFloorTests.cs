@@ -102,6 +102,103 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(TerrainScatter.DepthBand(new Vector2(0f, 20f), -0.1f), Is.EqualTo(1f), "an open shallow end");
 		}
 
+		/// <summary>The sea floor's kinds added by the vegetation expansion (2026-10-10), MusselBed … BacterialMat in <see cref="DetailKind"/>.</summary>
+		private static readonly DetailKind[] NewSeaKinds =
+		{
+			DetailKind.MusselBed, DetailKind.Barnacles, DetailKind.SeaLettuce, DetailKind.SandDollar, DetailKind.SeaCucumber, DetailKind.BrittleStar,
+			DetailKind.SeaPen, DetailKind.Crinoid, DetailKind.GlassSponge, DetailKind.ColdCoral, DetailKind.SoftCoral, DetailKind.GiantClam,
+			DetailKind.Xenophyophore, DetailKind.BacterialMat,
+		};
+
+		[Test]
+		public void EveryDesignedSeaKind_IsCatalogued_Built_AndUnderTheSea()
+		{
+			var seen = new HashSet<(DetailKind, int)>();
+			foreach (DetailSpec spec in ProceduralArtCatalogue.Details)
+			{
+				seen.Add((spec.Plant.Kind, spec.Plant.Variant));
+			}
+			foreach (DetailKind kind in NewSeaKinds)
+			{
+				Assert.That(seen.Contains((kind, 0)), Is.True, $"no detail is a {kind}");
+				Assert.That(SeaFloorMeshes.IsAquatic(kind), Is.True, $"{kind} lives under the sea");
+			}
+			// The bed's other forms (oysters, a vent's clams) and the stalked glass sponges of the mud.
+			Assert.That(seen.Contains((DetailKind.MusselBed, 1)) && seen.Contains((DetailKind.MusselBed, 2)), Is.True, "mussel bed variants");
+			Assert.That(seen.Contains((DetailKind.GlassSponge, 1)), Is.True, "stalked glass sponges");
+			// The mat's land cousin is built with the sea floor but grows in a cave, never under water.
+			Assert.That(seen.Contains((DetailKind.SlimeMat, 0)), Is.True, "a cave's slime mould");
+			Assert.That(SeaFloorMeshes.IsAquatic(DetailKind.SlimeMat), Is.False, "slime mould is not aquatic");
+
+			foreach (DetailSpec spec in ProceduralArtCatalogue.Details)
+			{
+				DetailPlant plant = spec.Plant;
+				if (Array.IndexOf(NewSeaKinds, plant.Kind) < 0 && plant.Kind != DetailKind.SlimeMat)
+				{
+					continue;
+				}
+				MeshBuilder mesh = VegetationMeshes.Build(in plant, 7);
+				Assert.That(mesh.TriangleCount, Is.GreaterThan(0), spec.Name);
+				Assert.That(mesh.Validate(false), Is.Empty, spec.Name);
+				// Each carries its own grouping and sink, since the spec's helpers know only the legacy names.
+				Assert.That(spec.GroupMetres, Is.GreaterThan(0f), $"{spec.Name}: group radius");
+				Assert.That(spec.GroupSize, Is.GreaterThan(0f), $"{spec.Name}: group size");
+				Assert.That(spec.Sink.y, Is.GreaterThan(0f).And.GreaterThanOrEqualTo(spec.Sink.x), $"{spec.Name}: sink {spec.Sink}");
+			}
+		}
+
+		[Test]
+		public void LyingThings_LieLow_AndStandingThings_Stand()
+		{
+			foreach (DetailSpec spec in ProceduralArtCatalogue.Details)
+			{
+				DetailPlant plant = spec.Plant;
+				MeshBuilder mesh;
+				switch (plant.Kind)
+				{
+					case DetailKind.SandDollar:
+					case DetailKind.BrittleStar:
+					case DetailKind.MusselBed:
+					case DetailKind.SeaCucumber:
+					case DetailKind.BacterialMat:
+					case DetailKind.SlimeMat:
+						mesh = VegetationMeshes.Build(in plant, 7);
+						Bounds lying = mesh.Bounds;
+						Assert.That(lying.size.y, Is.LessThan(0.35f * Mathf.Max(lying.size.x, lying.size.z)), $"{spec.Name} should lie on the bed: {lying.size}");
+						Assert.That(lying.max.y, Is.LessThan(0.15f), $"{spec.Name} stands {lying.max.y} m tall");
+						break;
+					case DetailKind.SeaPen:
+					case DetailKind.Crinoid:
+					case DetailKind.GlassSponge:
+						mesh = VegetationMeshes.Build(in plant, 7);
+						Bounds standing = mesh.Bounds;
+						Assert.That(standing.max.y, Is.GreaterThan(0.5f * plant.Height), $"{spec.Name} should stand about {plant.Height} m tall: {standing.max.y}");
+						// Rooted: some of it below the bed (a sea pen's bulb, a stalk's foot, a basket's rooting tuft).
+						Assert.That(standing.min.y, Is.LessThan(0f), $"{spec.Name} is not rooted");
+						break;
+				}
+			}
+		}
+
+		[Test]
+		public void TheSeasSmallRocks_AreNodulesAndCoralRubble()
+		{
+			var materials = new Dictionary<string, string>();
+			foreach (RockMaterialSpec m in ProceduralArtCatalogue.AllRockMaterials)
+			{
+				materials[m.Name] = m.GroundFamily;
+			}
+			// A manganese nodule is a matte brown-black knobbly crust: the ash's grains, not basalt's fractured gloss.
+			Assert.That(materials["Nodule"], Is.EqualTo(Ground.Ash));
+			Assert.That(materials["Coral"], Is.EqualTo(Ground.Coral));
+			var prefabs = new HashSet<string>(ProceduralArtCatalogue.AllPrefabNames());
+			foreach (string name in new[] { "Nodule", "Coral" })
+			{
+				Assert.That(prefabs, Does.Contain(ProceduralArtCatalogue.PebblesPrefab(name)));
+				Assert.That(prefabs, Does.Contain(ProceduralArtCatalogue.SmallRocksPrefab(name)));
+			}
+		}
+
 		[Test]
 		public void SeaFloorMeshes_FaceOutward_AndOnlyWhatGivesSways()
 		{
@@ -113,9 +210,13 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				Vector2 give = SeaFloorMeshes.Sway(plant.Kind);
-				bool rigid = plant.Kind == DetailKind.BrainCoral || plant.Kind == DetailKind.TableCoral || plant.Kind == DetailKind.Sponge
-					|| plant.Kind == DetailKind.Urchin || plant.Kind == DetailKind.Starfish || plant.Kind == DetailKind.Shells || plant.Kind == DetailKind.Coral;
-				Assert.That(give.x == 0f, Is.EqualTo(rigid), $"{spec.Name}: sway {give.x}");
+				// What gives with the surge: weed and kelp, fans, anemones' tentacles, a vent's plumes, sea lettuce's sheets,
+				// a sea pen's and a crinoid's feathers, a soft coral's flesh. Stony corals, sponges, shells, lying animals,
+				// beds, barnacled stones and mats do not.
+				bool gives = plant.Kind == DetailKind.Kelp || plant.Kind == DetailKind.Seaweed || plant.Kind == DetailKind.SeaFan
+					|| plant.Kind == DetailKind.Anemone || plant.Kind == DetailKind.TubeWorms || plant.Kind == DetailKind.SeaLettuce
+					|| plant.Kind == DetailKind.SeaPen || plant.Kind == DetailKind.Crinoid || plant.Kind == DetailKind.SoftCoral;
+				Assert.That(give.x > 0f, Is.EqualTo(gives), $"{spec.Name}: sway {give.x}");
 				if (plant.Kind != DetailKind.BrainCoral && plant.Kind != DetailKind.Sponge && plant.Kind != DetailKind.TableCoral)
 				{
 					continue;

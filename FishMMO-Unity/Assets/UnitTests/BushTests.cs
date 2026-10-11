@@ -81,6 +81,10 @@ namespace FishMMO.UnitTests
 		/// level; a reduced level, which players farther off see, may not be much more see-through than the full one.
 		/// The broad-leaved and box domes hide best; open shrubs (creosote, hazel's coppice stems), needle shrubs and a
 		/// juniper's narrow column less, as the real ones do. Thresholds measured at two seeds (memory tools/bushproto).
+		/// Ground cover under 0.6 m (heather, bilberry) hides nobody standing in it, and an open species
+		/// (<see cref="BushSpecies.Open"/>: ocotillo's canes, a thornbush's sparse twigs) hides nobody by nature: both are
+		/// exempt from the threshold, but their reduced levels still may not be much more see-through than the full plant,
+		/// which is the fairness rule.
 		/// </summary>
 		[Test]
 		public void Bushes_HideSomeoneStandingInThem_AtEveryLevel()
@@ -90,7 +94,9 @@ namespace FishMMO.UnitTests
 			foreach (BushSpecies species in ProceduralArtCatalogue.Bushes)
 			{
 				BushSpecies sp = species;
-				bool dense = sp.Habit == BushHabit.Mound && sp.LeafCell != FoliageCell.BushNeedle;
+				// The leaf-mass domes (broad or small leaves; the legacy domes are all one of the two) hide best.
+				bool dense = sp.Habit == BushHabit.Mound && (sp.LeafCell == FoliageCell.BushBroad || sp.LeafCell == FoliageCell.BushSmall);
+				bool exempt = sp.Height < 0.6f || sp.Open;
 				float full = 0f;
 				for (int lod = 0; lod < BushMeshes.Levels; lod++)
 				{
@@ -99,12 +105,18 @@ namespace FishMMO.UnitTests
 					if (lod == 0)
 					{
 						full = blocked;
-						Assert.That(blocked, Is.GreaterThanOrEqualTo(dense ? 0.82f : 0.7f), $"{sp.Name}: only {blocked:P0} of sight lines to someone inside are blocked");
+						if (!exempt)
+						{
+							Assert.That(blocked, Is.GreaterThanOrEqualTo(dense ? 0.82f : 0.7f), $"{sp.Name}: only {blocked:P0} of sight lines to someone inside are blocked");
+						}
 					}
 					else
 					{
 						Assert.That(blocked, Is.GreaterThanOrEqualTo(Mathf.Min(full - 0.15f, 0.85f)), $"{sp.Name} LOD{lod}: {blocked:P0} blocked against {full:P0} at full detail");
-						Assert.That(blocked, Is.GreaterThanOrEqualTo(0.7f), $"{sp.Name} LOD{lod}: {blocked:P0} blocked");
+						if (!exempt)
+						{
+							Assert.That(blocked, Is.GreaterThanOrEqualTo(0.7f), $"{sp.Name} LOD{lod}: {blocked:P0} blocked");
+						}
 					}
 				}
 			}
@@ -170,6 +182,48 @@ namespace FishMMO.UnitTests
 			return t > 0f;
 		}
 
+		/// <summary>
+		/// A whip shrub (ocotillo) is canes from one foot: every level keeps its canes (its leaves would float without
+		/// them), and its leaves hang along the canes rather than on a crown shell, so the plant is taller than it is wide.
+		/// </summary>
+		[Test]
+		public void WhipShrubs_KeepTheirCanesAtEveryLevel_AndStandTallerThanWide()
+		{
+			int whips = 0;
+			foreach (BushSpecies species in ProceduralArtCatalogue.Bushes)
+			{
+				if (species.Habit != BushHabit.Whip)
+				{
+					continue;
+				}
+				whips++;
+				BushSpecies sp = species;
+				for (int lod = 0; lod < BushMeshes.Levels; lod++)
+				{
+					MeshBuilder mesh = BushMeshes.Build(in sp, lod, Seed);
+					int wood = 0;
+					foreach (int i in mesh.Submeshes[0])
+					{
+						wood += mesh.Colors[i].a == 0 ? 1 : 0;
+					}
+					Assert.That(wood, Is.GreaterThan(0), $"{sp.Name} LOD{lod} has no canes");
+				}
+				Bounds b = BushMeshes.Build(in sp, 0, Seed).Bounds;
+				Assert.That(b.size.y, Is.GreaterThan(Mathf.Max(b.size.x, b.size.z)), $"{sp.Name}: a fountain of canes, not a dome");
+			}
+			Assert.That(whips, Is.GreaterThan(0), "no whip shrub in the catalogue");
+		}
+		
+		/// <summary>The design's shrub list (vegetation expansion, 2026-10-10) is in the catalogue under its names: the spec table refers to them by name.</summary>
+		[Test]
+		public void TheExpansionsShrubs_AreAllInTheCatalogue()
+		{
+			foreach (string name in new[] { "Heather", "DwarfBirch", "Bilberry", "Holly", "Hawthorn", "Rabbitbrush", "Saltbush", "Tamarisk", "Ocotillo", "Oleander", "Cistus", "DwarfBamboo", "Thornbush", "Palmetto" })
+			{
+				Assert.That(ProceduralArtCatalogue.TryBush(name, out _), name);
+			}
+		}
+		
 		[Test]
 		public void BushNames_AreWhatTheClientScatterTakesAsCover()
 		{

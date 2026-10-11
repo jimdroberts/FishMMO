@@ -165,11 +165,8 @@ Shader "FishMMO/Water/Waterfall"
                 color = MixFog(color, input.fogFactor);
                 float2 fogUV = input.screenPos.xy / input.screenPos.w;
                 color = FishWaterBehindClouds(color, fogUV);
-                if (_FishAirFogRange.z < 0.5)
-                {
-                    half fogKeep;
-                    color = FishWaterAirFog(color, positionWS, fogUV, fogKeep);
-                }
+                half fogKeep;
+                color = FishWaterAirFogOver(color, positionWS, fogUV, fogKeep);
                 return half4(color, saturate(alpha));
             }
             ENDHLSL

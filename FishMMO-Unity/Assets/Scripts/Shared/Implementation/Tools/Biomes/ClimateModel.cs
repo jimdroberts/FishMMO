@@ -253,12 +253,13 @@ namespace FishMMO.Shared.Biomes
 			{
 				return 1.0;
 			}
-			double period = CelestialMath.OrbitHours(system, body);
+			// The host's year for a moon: its own month would average a few days of the year it is carried round (2026-10-10).
+			double period = CelestialMath.OrbitHours(system, CelestialMath.HostPlanet(body));
 			if (double.IsInfinity(period) || double.IsNaN(period) || period <= 0.0)
 			{
 				return CelestialMath.Insolation(system, body, 0.0);
 			}
-			const int Samples = 8;
+			const int Samples = 24;
 			double sum = 0.0;
 			for (int i = 0; i < Samples; i++)
 			{

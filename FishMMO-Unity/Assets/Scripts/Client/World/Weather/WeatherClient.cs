@@ -66,6 +66,19 @@ namespace FishMMO.Client
 
 		public static IReadOnlyList<IWeatherPresenter> Presenters => presenters;
 
+		/// <summary>
+		/// Counts the times the weather must be SHOWN as it is, not eased into: the world clock set to another moment
+		/// (<see cref="FishMMO.Shared.Celestial.WorldClock.Jumps"/>, noticed on the first <see cref="Present"/> after
+		/// it), or another scene's weather taking over (<see cref="Snap"/>). Whatever eases, blends, builds over frames
+		/// or keeps history compares this with the count it last saw, and on a change shows the new moment at once.
+		/// </summary>
+		public static uint Snaps { get; private set; }
+
+		private static uint seenJumps;
+
+		/// <summary>Asks every presenter to show the next weather as it is (see <see cref="Snaps"/>).</summary>
+		public static void Snap() => Snaps++;
+
 		/// <summary>A one-shot weather sound (thunder) with its volume. Presenters with audio play it.</summary>
 		public static event Action<WeatherAudioCue, float> AudioCue;
 
@@ -84,6 +97,12 @@ namespace FishMMO.Client
 
 		public static void Present(in WeatherFrame frame, in WeatherContext context)
 		{
+			uint jumps = FishMMO.Shared.Celestial.WorldClock.Shared.Jumps;
+			if (jumps != seenJumps)
+			{
+				seenJumps = jumps;
+				Snaps++;
+			}
 			LastFrame = frame;
 			LastContext = context;
 			for (int i = presenters.Count - 1; i >= 0; i--)

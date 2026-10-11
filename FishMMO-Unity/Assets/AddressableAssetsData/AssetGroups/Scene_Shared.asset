@@ -15,8 +15,38 @@ MonoBehaviour:
   m_GroupName: Scene_Shared
   m_GUID: 78ff5ab0fb2e04bf384d2bb38bea229a
   m_SerializeEntries:
+  - m_GUID: 08c0f9d952f00d3eea707f01d3652b4f
+    m_Address: Isle of Aradune
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0b27f770712af1fb3b07ae5882f1088f
+    m_Address: Isle of Aradune 6_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1543472ad0644ec4fbae5c4413d88243
     m_Address: MainBootstrap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1f9373f2236d661d0aef7ddadb8be473
+    m_Address: Isle of Aradune 8_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 20f26a174c17546f198db0946c8c0559
+    m_Address: Isle of Aradune 5_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 21fe974cdcab2ed9fb80d68fbd05a50c
+    m_Address: Isle of Aradune 3_3
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -27,8 +57,27 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2ece0f16840edb6c8a5e261e071ec73d
+    m_Address: Isle of Aradune 3_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3552784c543d590798ee891695a9e9fc
+    m_Address: Isle of Aradune Props Cliffs
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 372294cecb987eb418c8609b8fb4d289
     m_Address: Test Dungeon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 38bcb38630edd8d5f84e23dba3385a40
+    m_Address: Assets/Scenes/WorldScene/Arthis/Isle of Aradune Terrain/Isle of Aradune
+      NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -39,8 +88,80 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b91bd63bda957e4d8bcbf3d286c9b9f
+    m_Address: Volax Obelisk 0_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 43a22c3ade50bf807b008a324af03995
+    m_Address: Isle of Aradune 0_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4421ff33e86120247a8ae615ef06f2c7
     m_Address: Dungeon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 45612f0ede8d9fefbb06b8e43400673e
+    m_Address: Treacherous Bri Lookout
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 48825cecc03067aae90a73c09c5f9a54
+    m_Address: Isle of Aradune 0_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b70f5f2727671cb3a02a62dcffde86d
+    m_Address: Isle of Aradune 3_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4ebe656e6db2e301190e9e10783c689a
+    m_Address: Isle of Aradune 0_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 50882bb7e481202c0948c788d1a6e6ee
+    m_Address: Isle of Aradune 4_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 524b1e53469e90f3d9d5106f0b93250f
+    m_Address: Volax Obelisk Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52ed1371646158ac3b061f98259b6712
+    m_Address: Isle of Aradune 4_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5bb269584b3652c39990f62ece375e96
+    m_Address: Treacherous Bri Lookout Biome Map
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 60a506dc28d219013abd1ea2ee1bcb69
+    m_Address: Isle of Aradune Props Scatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 62dedd607747374f5bad613aefa5f408
+    m_Address: Isle of Aradune 6_0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -51,8 +172,111 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 690b364214cbb45c5b138ab4fb53a637
+    m_Address: Isle of Aradune Collision Scatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6f5c3c384b5b5518683d4ede0fad821f
+    m_Address: Isle of Aradune 1_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 738db7edf1ceaee63840a2544d1395a9
+    m_Address: Flo Monolith
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 75bd89f043e8d34b58bc4c5b200e9fc7
+    m_Address: Isle of Aradune 2_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 765e5dfa09eecb7cbab676aac2cc12da
+    m_Address: Treacherous Bri Lookout Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7737296fa09026e22a6d1f064d630ae8
+    m_Address: Volax Obelisk Props Scatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a3730f3cbc747a039e70782308f6220
+    m_Address: Assets/Scenes/WorldScene/Rheis/Volax Obelisk Terrain/Volax Obelisk
+      NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7b949e062334e10ffa6dd1b85bf28636
+    m_Address: Volax Obelisk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7ca108b45b403a1e9a2f0cbd73e4add8
+    m_Address: Isle of Aradune Biome Map
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7f7ae0a10fc88dd4a954d635460d9ca1
     m_Address: Tutorial Spawners
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 81f9755eaa25374e482a7182d50beac8
+    m_Address: Isle of Aradune 6_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8594b8e47e7c2cce2bb3a9cd676db902
+    m_Address: Isle of Aradune 0_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 89a6279db8cd68983b4228a311d82ca9
+    m_Address: Isle of Aradune 8_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8cf3f727cbae4b75a91338e4e8dd5667
+    m_Address: Isle of Aradune 8_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 92dcf15a21d3c274ab89ad19b8e1d948
+    m_Address: Isle of Aradune 7_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 92dfef412a4c9da02844a902d8f415fe
+    m_Address: Isle of Aradune 1_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9bb793da43a030e459af61d22643af10
+    m_Address: Assets/Scenes/WorldScene/Tutorial Spawners/NavMesh-Floor.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a058e12685aac4acaa5cb9c31e6eee08
+    m_Address: Treacherous Bri Lookout 0_0
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -63,14 +287,123 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a47b6045153262f528dd0f02602de15b
+    m_Address: Isle of Aradune Collision Cliffs
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aa6142b61c7fc2b0cb7c0a5d865e93bc
+    m_Address: Assets/Scenes/WorldScene/Arthis/Treacherous Bri Lookout Terrain/Treacherous
+      Bri Lookout NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ad53c4250020928b6b4e92d78141194d
+    m_Address: Isle of Aradune 7_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af75763028b11fe4593f73a807975c53
+    m_Address: Isle of Aradune 2_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b33af3d671feac40086b546bce0b8828
+    m_Address: Isle of Aradune 5_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3a9cd0e704ae2ea2b9a4b1e7080f8bb
+    m_Address: Isle of Aradune 1_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b3ec8496f0c695fd3a1d97c7d41e699a
+    m_Address: Isle of Aradune 6_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b509a4298c85b27c59debaf799ca3703
+    m_Address: Volax Obelisk Biome Map
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b6a7b407afcf0a14e9b034d20ed554c8
     m_Address: Tutorial SpawnPoints
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6c32c75c612f333ba861599edc37cce
+    m_Address: Isle of Aradune 8_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
+    m_Address: Assets/Scenes/WorldScene/Test Dungeon/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c3b59647102e594e1a44ce255118d761
+    m_Address: Isle of Aradune 7_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3f7f35295862928c98a14ef55691e63
     m_Address: InteractableSim
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c43b6eb487815084ca437ada41086fa4
+    m_Address: Assets/Scenes/WorldScene/Dungeon/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4627fd6b0a45b73ba65e634db85c842
+    m_Address: Isle of Aradune 4_3
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4ae5de832d2c2ce59895457903f4557
+    m_Address: Isle of Aradune 2_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: caa5f7fbe11a73d27997edc725a39e0f
+    m_Address: Isle of Aradune 4_0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cfb99ec47784fd74c954fd26440fb41c
+    m_Address: Volax Obelisk Props Cliffs
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d80aeeda429e5a1ee9dc145a74a15b72
+    m_Address: Isle of Aradune 1_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: db396068a1f9ee160b956f1e60cacde5
+    m_Address: Isle of Aradune 5_1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -87,8 +420,74 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: de0f06e0d8c35cc0a948db9a016af9f0
+    m_Address: Isle of Aradune 2_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e5469116108bf948dbd3465e9ff915a9
+    m_Address: Treacherous Bri Lookout Props Scatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e8a5917e2e784024a83eee958f6f9689
     m_Address: StartScene A
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
+    m_Address: Assets/Scenes/WorldScene/StartScene A/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9d984a4779956e5c8237a665ec707b0
+    m_Address: Isle of Aradune 7_2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9fd81204ddff126dbaeb5f9874dccda
+    m_Address: Isle of Aradune Backdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ecbc8fe0ee2aa35329f172be6c870023
+    m_Address: Volax Obelisk Collision Scatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f3a1fa559cf7d92618d0ee9a8085a7b3
+    m_Address: Volax Obelisk Collision Cliffs
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6684c490e1db1d6483808b5050336b3
+    m_Address: Isle of Aradune 3_1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8dd271abfab0f44287f337e86b02aa5
+    m_Address: Assets/Scenes/WorldScene/StartScene B/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fc07e9272a86cad4ca56f0d6b581b290
+    m_Address: Treacherous Bri Lookout Collision Scatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Shared
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fd3888dc8d0d9cbc8bbe77e5596dc456
+    m_Address: Isle of Aradune 5_3
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared

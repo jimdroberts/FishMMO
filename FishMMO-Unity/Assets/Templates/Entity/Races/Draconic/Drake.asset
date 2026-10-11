@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Drake
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A lesser dragon: wingless or small-winged, dog-loyal to whoever feeds it and dragon-vicious to everyone else.'
+  Description: 'A lesser dragon: wingless or small-winged, dog-loyal to whoever feeds
+    it and dragon-vicious to everyone else.'
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - arr
       - ash
-      Description: 'Snapping, resonant — dragon-speech in miniature'
+      Description: "Snapping, resonant \u2014 dragon-speech in miniature"
       Tags:
       - Draconic
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - scorch
       - bone
     AllowGenericOccupations: 0
+    Plural: Drakes
+    Adjective: Drake
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 2
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -544771122
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

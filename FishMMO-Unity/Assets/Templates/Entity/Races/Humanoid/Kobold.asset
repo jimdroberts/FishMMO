@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Kobold
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Yipping and quick — draconic influence on frenzied, small-creature speech'
+  Description: "Yipping and quick \u2014 draconic influence on frenzied, small-creature
+    speech"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -94,7 +95,8 @@ MonoBehaviour:
       - ik
       - rib
       - rix
-      Description: 'Yipping and quick — draconic influence on frenzied, small-creature speech'
+      Description: "Yipping and quick \u2014 draconic influence on frenzied, small-creature
+        speech"
       Tags:
       - Trap-names
       - Dragon-bonds
@@ -131,7 +133,7 @@ MonoBehaviour:
       Rank:
       - Boss of the Deepest Tunnel
       - Chief Trap-setter of the Warren
-      - 'Dragon''s Chosen'
+      - Dragon's Chosen
       - Keeper of the Shiny Hoard
       - First Digger of Shinyhoard Mine
       - Warden of Snaptooth Cavern
@@ -194,6 +196,9 @@ MonoBehaviour:
       - rubble
       - hole
       - mess
+    AllowGenericOccupations: 1
+    Plural: Kobolds
+    Adjective: Kobold
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -203,3 +208,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -540190004
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

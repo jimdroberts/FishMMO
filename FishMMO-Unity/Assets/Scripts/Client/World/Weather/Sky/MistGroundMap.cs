@@ -27,6 +27,13 @@ namespace FishMMO.Client
 	/// 0..1, from the terrain's own tree instances. What each does to the air is GroundMist.LocalClosing.
 	/// </para>
 	/// <para>
+	/// <c>_FishMistWater</c> (same window): where steam fog rises from, r off the sea and g off a lake or a
+	/// river, 1 over the water and e^(−d / <see cref="SteamReach"/>) at d metres from its edge, so the steam
+	/// starts at the water and not on the 5 m cells' stair. Two channels because the two waters are not the
+	/// same temperature (<see cref="WaterTemperature"/>): a frozen lake beside an open winter sea smokes
+	/// not at all. What each is worth this moment is <c>_FishMistSteam</c> (SteamFogSource).
+	/// </para>
+	/// <para>
 	/// <c>_FishShadeNear</c>: the height below which the air over each cell is in the terrain's shadow
 	/// from the light that leads the sky (<see cref="TerrainShadowSolver"/>), above <c>_FishShadeNearBase</c> —
 	/// the near grid every fog and the mist are shaded by (FishTerrainSunlit, FishFogLayer.hlsl),
@@ -47,6 +54,8 @@ namespace FishMMO.Client
 		private const int HollowRadius = 3;
 		/// <summary>How far from its edge open water still moistens the air, m (the e-folding).</summary>
 		private const float WaterReach = 25f;
+		/// <summary>How far off its edge steam fog still rises from the water, m (the e-folding): the cells' bilinear edge, no more.</summary>
+		private const float SteamReach = 4f;
 		/// <summary>A tree's crown, m: its radius at a width scale of one.</summary>
 		private const float CrownRadius = 3f;
 		/// <summary>How far toward the light the terrain is looked over for what shades a cell, m.</summary>
@@ -60,9 +69,12 @@ namespace FishMMO.Client
 		private static readonly int ShadowId = Shader.PropertyToID("_FishShadeNear");
 		private static readonly int ShadowRectId = Shader.PropertyToID("_FishShadeNearRect");
 		private static readonly int ShadowBaseId = Shader.PropertyToID("_FishShadeNearBase");
+		private static readonly int WaterId = Shader.PropertyToID("_FishMistWater");
 
 		private Texture2D texture;
 		private Texture2D shadowTexture;
+		private Texture2D waterTexture;
+		private byte[] waterBytes;
 		private float[] reading;
 		private float[] current;
 		private int read = -1;
@@ -72,6 +84,9 @@ namespace FishMMO.Client
 		private float groundBase;
 		private int terrainSignature;
 		private float shadingStarted = float.NegativeInfinity;
+
+		/// <summary>Lets the shade be solved again at once if the light has turned: the clock was set to another moment.</summary>
+		public void ShadeSoon() => shadingStarted = float.NegativeInfinity;
 		private ushort[] groundHalves;
 		private ushort[] shadowHalves;
 
@@ -117,6 +132,7 @@ namespace FishMMO.Client
 			if (ready)
 			{
 				Shader.SetGlobalTexture(TextureId, texture);
+				Shader.SetGlobalTexture(WaterId, waterTexture);
 			}
 			Shader.SetGlobalVector(RectId, new Vector4(corner.x, corner.y, SizeMeters, ready ? 1f : 0f));
 			Shader.SetGlobalFloat(BaseId, groundBase);
@@ -133,6 +149,7 @@ namespace FishMMO.Client
 			if (readingWet == null || readingWet.Length != reading.Length)
 			{
 				readingWet = new bool[reading.Length];
+				readingSea = new bool[reading.Length];
 			}
 			int end = Mathf.Min(reading.Length, read + SamplesPerFrame);
 			for (; read < end; read++)
@@ -146,6 +163,8 @@ namespace FishMMO.Client
 				// The sea, a lake or a river: whichever stands over this ground.
 				bool wet = SurfaceWater.TryGetSurfaceAt(wx, wz, out float level) && level >= height;
 				readingWet[read] = wet;
+				// The sea, unless a lake or a river is the surface standing here.
+				readingSea[read] = wet && !(SurfaceWater.TryGetInlandSurfaceAt(wx, wz, out float inland) && inland >= level - 0.01f);
 				reading[read] = wet ? level : height;
 			}
 			if (read >= reading.Length)
@@ -159,8 +178,9 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>Per cell of the read in progress, whether water stands over it.</summary>
+		/// <summary>Per cell of the read in progress, whether water stands over it, and whether that water is the sea.</summary>
 		private bool[] readingWet;
+		private bool[] readingSea;
 
 		private void Upload(TerrainSet terrains, float cell, bool[] wetCells)
 		{
@@ -194,6 +214,38 @@ namespace FishMMO.Client
 			}
 			texture.SetPixelData(groundHalves, 0);
 			texture.Apply(false, false);
+			UploadWater(wetCells, n, cell);
+		}
+
+		/// <summary>Where steam fog rises from (<c>_FishMistWater</c>): r off the sea, g off a lake or a river.</summary>
+		private void UploadWater(bool[] wetCells, int n, float cell)
+		{
+			if (waterTexture == null)
+			{
+				// Eight bits a channel: a share of the water's steam, filterable everywhere WebGL2 runs.
+				waterTexture = new Texture2D(n, n, TextureFormat.RG16, false, true)
+				{
+					name = "Mist Water",
+					filterMode = FilterMode.Bilinear,
+					wrapMode = TextureWrapMode.Clamp,
+					hideFlags = HideFlags.DontSave,
+				};
+			}
+			var inlandCells = new bool[n * n];
+			for (int i = 0; i < n * n; i++)
+			{
+				inlandCells[i] = wetCells[i] && !readingSea[i];
+			}
+			float[] sea = EdgeDistance(readingSea, n, cell);
+			float[] inland = EdgeDistance(inlandCells, n, cell);
+			waterBytes ??= new byte[n * n * 2];
+			for (int i = 0; i < n * n; i++)
+			{
+				waterBytes[i * 2] = (byte)Mathf.RoundToInt(255f * (sea != null ? Mathf.Exp(-sea[i] / SteamReach) : 0f));
+				waterBytes[i * 2 + 1] = (byte)Mathf.RoundToInt(255f * (inland != null ? Mathf.Exp(-inland[i] / SteamReach) : 0f));
+			}
+			waterTexture.SetPixelData(waterBytes, 0);
+			waterTexture.Apply(false, false);
 		}
 
 		/// <summary>
@@ -203,18 +255,33 @@ namespace FishMMO.Client
 		private static float[] WaterNearness(bool[] wetCells, int n, float cell)
 		{
 			var near = new float[n * n];
+			float[] distance = EdgeDistance(wetCells, n, cell);
+			if (distance == null)
+			{
+				return near;
+			}
+			for (int i = 0; i < n * n; i++)
+			{
+				near[i] = Mathf.Exp(-distance[i] / WaterReach);
+			}
+			return near;
+		}
+
+		/// <summary>Each cell's distance from the nearest marked cell, m (a two-pass chamfer over the grid); null when none is marked.</summary>
+		private static float[] EdgeDistance(bool[] marked, int n, float cell)
+		{
 			const float far = 1e9f;
 			var distance = new float[n * n];
 			bool any = false;
 			for (int i = 0; i < n * n; i++)
 			{
-				bool wet = wetCells[i];
+				bool wet = marked[i];
 				distance[i] = wet ? 0f : far;
 				any |= wet;
 			}
 			if (!any)
 			{
-				return near;
+				return null;
 			}
 			float straight = cell, diagonal = cell * 1.41421356f;
 			for (int z = 0; z < n; z++)
@@ -243,11 +310,7 @@ namespace FishMMO.Client
 					distance[i] = d;
 				}
 			}
-			for (int i = 0; i < n * n; i++)
-			{
-				near[i] = Mathf.Exp(-distance[i] / WaterReach);
-			}
-			return near;
+			return distance;
 		}
 
 		/// <summary>
@@ -428,6 +491,11 @@ namespace FishMMO.Client
 			{
 				if (Application.isPlaying) Object.Destroy(shadowTexture); else Object.DestroyImmediate(shadowTexture);
 				shadowTexture = null;
+			}
+			if (waterTexture != null)
+			{
+				if (Application.isPlaying) Object.Destroy(waterTexture); else Object.DestroyImmediate(waterTexture);
+				waterTexture = null;
 			}
 			ready = false;
 			shadowReady = false;

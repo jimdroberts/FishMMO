@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dewling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Dawn-fey of grass and web — wet, quick names'
+  Description: "Dawn-fey of grass and web \u2014 wet, quick names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - et
       - ip
       - ing
-      Description: 'Dawn-fey of grass and web — wet, quick names'
+      Description: "Dawn-fey of grass and web \u2014 wet, quick names"
       Tags:
       - Dawn-names
       - Drop-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Keeper of the Cold Bead
       - Counter of the Pearl Grass
       Legend:
-      - 'Who Strung the Spider''s Web with Pearls'
+      - Who Strung the Spider's Web with Pearls
       - Who Woke the Sun by Splashing It
       - Who Lasted Until Noon
       - Who Filled the Dry Well One Drop at a Time
@@ -163,6 +163,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Dewlings
+    Adjective: Dewling
   BiomeAffinities:
   - BiomeID: 1655673647
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

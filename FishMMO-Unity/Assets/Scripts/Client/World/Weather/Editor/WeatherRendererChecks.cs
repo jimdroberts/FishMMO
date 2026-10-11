@@ -39,6 +39,7 @@ namespace FishMMO.Client
 			(typeof(FishCloudsFeature), "Fish Clouds", "the volumetric clouds"),
 			(typeof(FishHeightFogFeature), "Fish Height Fog", "the fog layer lying on the ground, out to the horizon"),
 			(typeof(FishVolumetricFogFeature), "Fish Volumetric Fog", "the fog near the camera, its banks, wisps and light shafts"),
+			(typeof(FishHeatShimmerFeature), "Fish Heat Shimmer", "the heat haze over sun-baked ground and lava, and its mirage"),
 		};
 
 		private static void Inspect(List<WorldSystemProblem> into)
@@ -73,7 +74,7 @@ namespace FishMMO.Client
 				SceneName = null,
 				Severity = WorldSystemSeverity.Warning,
 				Message = $"is missing {missing.Count} weather render pass(es): {string.Join("; ", missing)}.",
-				Remedy = "Add the weather's cloud, height fog and volumetric fog passes to every URP renderer.",
+				Remedy = "Add the weather's cloud, height fog, volumetric fog and heat-shimmer passes to every URP renderer.",
 				CanFix = true,
 				WritesScene = false,
 				ProjectFix = AddPasses,
@@ -105,6 +106,7 @@ namespace FishMMO.Client
 			WeatherRenderAssets.Ensure();
 			CloudRendererSetup.EnsureHeightFog();
 			CloudRendererSetup.EnsureVolumetricFog();
+			CloudRendererSetup.EnsureHeatShimmer();
 			AssetDatabase.SaveAssets();
 
 			/* Asked of the renderers rather than counted from the calls above, because Ensure()

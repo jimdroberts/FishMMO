@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Siren
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Sea-women whose song drags sailors overboard and ships onto rocks; beautiful at a distance and only at a distance.
+  Description: Sea-women whose song drags sailors overboard and ships onto rocks;
+    beautiful at a distance and only at a distance.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - os
       - ar
-      Description: 'Lilting, luring — song-vowels'
+      Description: "Lilting, luring \u2014 song-vowels"
       Tags:
       - Sea
       - Monster
@@ -150,6 +151,8 @@ MonoBehaviour:
       - wreck
       - hulk
     AllowGenericOccupations: 0
+    Plural: Sirens
+    Adjective: Siren
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3

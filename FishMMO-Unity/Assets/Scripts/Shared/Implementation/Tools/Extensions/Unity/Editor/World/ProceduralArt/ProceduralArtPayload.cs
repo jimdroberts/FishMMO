@@ -133,6 +133,26 @@ namespace FishMMO.Shared.WorldDesign
 			"RockArtNames.cs",
 			"RockFormations.cs",
 			"RockTypes.cs",
+			// The vegetation expansion (2026-10-10), listed before their content was written so the hash covers
+			// every one from the first line: land flora and deadwood, the sea floor's catalogue, crystal formations.
+			"FloraMeshes.cs",
+			"DeadwoodMeshes.cs",
+			"ProceduralArtCatalogue.Flora.cs",
+			"ProceduralArtCatalogue.Sea.cs",
+			"BiomeArtGenerator.Deadwood.cs",
+			"CrystalFormations.cs",
+			// The structure kit for generated points of interest (2026-10-10).
+			"BiomeArtGenerator.Structures.cs",
+			"ProceduralArtCatalogue.Structures.cs",
+			"StructurePieces.cs",
+			"StructurePieces.Common.cs",
+			"StructurePieces.Camp.cs",
+			"StructurePieces.Sacred.cs",
+			"StructurePieces.Buildings.cs",
+			"StructurePieces.Ruins.cs",
+			"StructureRuins.cs",
+			"StructureSolids.cs",
+			"StructureSurfaces.cs",
 		};
 
 		private static readonly Regex MetaGuid = new Regex(@"^guid:\s*([0-9a-fA-F]{32})\s*$", RegexOptions.Multiline | RegexOptions.CultureInvariant);

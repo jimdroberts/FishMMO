@@ -206,7 +206,87 @@ namespace FishMMO.Shared.WorldDesign
 			new Identity("Ice Shelf", "Ice Shelf",
 				"A frozen sea: flat shelf ice to the horizon, pressure ridges and refrozen leads",
 				new Color(0.55f, 0.8f, 0.92f, 1f), new Color(0.55f, 0.8f, 0.92f, 1f)),
+			new Identity("Ice Sheet", "Ice Sheet",
+				"Land buried under ice that never thaws: wind-carved snow over glacier ice, nunataks breaking through, ice cliffs where it meets the sea",
+				new Color(0.86f, 0.93f, 0.98f, 1f), new Color(0.86f, 0.93f, 0.98f, 1f)),
 		};
+
+		/// <summary>One biome's warmest-season range, scale units (0 freezing, 0.302 ten degrees).</summary>
+		public readonly struct Season
+		{
+			public readonly string Name;
+			public readonly float MinWarmest, MaxWarmest;
+
+			public Season(string name, float minWarmest, float maxWarmest)
+			{
+				Name = name;
+				MinWarmest = minWarmest;
+				MaxWarmest = maxWarmest;
+			}
+		}
+
+		/// <summary>Ten degrees on the temperature scale: the warmest month a forest needs (Köppen, the treeline isotherm).</summary>
+		public const float TenDegrees = 10f / 33.1f;
+
+		/// <summary>
+		/// The warmest-season ranges (2026-10-10, Jim): what grows is decided by the summer, not the
+		/// year — Köppen's ice cap (no month above 0 °C), tundra (0–10 °C) and forest (10 °C and up),
+		/// the same lines that put the treeline at the 10 °C summer isotherm on every continent. A
+		/// tabled biome not listed here keeps −1…1 (asks nothing): rock, water, deserts and the aliens.
+		/// </summary>
+		/// <remarks>
+		/// <list type="bullet">
+		/// <item>Trees (a summer of 10 °C or more): taiga, woodland, forest, bamboo, jungle, mangrove, savanna, oasis, valley.</item>
+		/// <item>Low growth (any thaw): tundra (and never above 10 °C, where the forest takes it), peat bog, wetlands, estuary, meadows, grassland, plains, steppe, scrub, hills, karst, beach, high desert, alpine.</item>
+		/// <item>Rocky Coast to about −2 °C: a shore that thaws a little stays rock; colder, the ice reaches the sea.</item>
+		/// <item>Ice (no thaw at all): the new lowland Ice Sheet, and the Snow plain.</item>
+		/// </list>
+		/// </remarks>
+		public static readonly Season[] Seasons =
+		{
+			new Season("Taiga", TenDegrees, 1f),
+			new Season("Woodland", TenDegrees, 1f),
+			new Season("Forest", TenDegrees, 1f),
+			new Season("Bamboo Forest", TenDegrees, 1f),
+			new Season("Jungle", TenDegrees, 1f),
+			new Season("Mangrove", TenDegrees, 1f),
+			new Season("Savanna", TenDegrees, 1f),
+			new Season("Oasis", TenDegrees, 1f),
+			new Season("Valley", TenDegrees, 1f),
+			new Season("Tundra", 0f, TenDegrees),
+			new Season("Peat Bog", 0f, 1f),
+			new Season("Wetlands", 0f, 1f),
+			new Season("Estuary", 0f, 1f),
+			new Season("Alpine Meadow", 0f, TenDegrees),
+			new Season("Grassland", 0f, 1f),
+			new Season("Plains", 0f, 1f),
+			new Season("Steppe", 0f, 1f),
+			new Season("Scrubland", 0f, 1f),
+			new Season("Hills", 0f, 1f),
+			new Season("Karst", 0f, 1f),
+			new Season("Beach", 0f, 1f),
+			new Season("High Desert", 0f, 1f),
+			new Season("Alpine", 0f, 1f),
+			new Season("Rocky Coast", -2f / 33.1f, 1f),
+			new Season("Snow", -1f, 0f),
+			new Season("Ice Sheet", -1f, 0f),
+		};
+
+		/// <summary>The warmest-season range tabled for a biome, or −1…1 when it has none.</summary>
+		public static void SeasonFor(string name, out float minWarmest, out float maxWarmest)
+		{
+			foreach (Season season in Seasons)
+			{
+				if (season.Name == name)
+				{
+					minWarmest = season.MinWarmest;
+					maxWarmest = season.MaxWarmest;
+					return;
+				}
+			}
+			minWarmest = -1f;
+			maxWarmest = 1f;
+		}
 
 		/// <summary>The creation identity for a tabled name, if the table may create it.</summary>
 		public static bool TryGetIdentity(string name, out Identity identity)
@@ -254,9 +334,10 @@ namespace FishMMO.Shared.WorldDesign
 
 			// Lowland and plateau (tier 4, 30 m to 1.5 km): the vegetation, laid out the way Whittaker's diagram lays it out, with the peat bogs of the cold wet lowlands. The snow plain sits with the tundra at the coldest end; permanent ice belongs to the summits.
 			new Entry("Snow", 4, 0.45f, 0.6f, -1f, -0.7f, -1f, 1f, 1f, A.Any, false, R.SurfaceWater),
-			new Entry("Tundra", 4, 0.45f, 0.6f, -0.75f, -0.4f, -1f, 1f, 1f, A.Living, true, R.None),
-			new Entry("Taiga", 4, 0.45f, 0.6f, -0.45f, 0.05f, -0.2f, 1f, 1f, A.Living, true, R.None),
-			new Entry("Steppe", 4, 0.45f, 0.6f, -0.45f, 0.45f, -1f, -0.2f, 1f, A.Living, true, R.None),
+			// Tundra, Taiga and Steppe (and the highland Hills and Valley) reach the coldest yearly temperatures (2026-10-10): what separates them is the summer (Seasons — trees from a 10 °C summer, tundra below it, ice where nothing thaws), not the year's mean, which left holes once the summer test arrived — a strongly tilted world's −30 °C year can still have a thawing summer. Measured on a T × H × summer grid: no holes, no wrong picks in any tier.
+			new Entry("Tundra", 4, 0.45f, 0.6f, -1f, 0.3f, -1f, 1f, 1f, A.Living, true, R.None),
+			new Entry("Taiga", 4, 0.45f, 0.6f, -1f, 0.05f, -0.2f, 1f, 1f, A.Living, true, R.None),
+			new Entry("Steppe", 4, 0.45f, 0.6f, -1f, 0.45f, -1f, -0.2f, 1f, A.Living, true, R.None),
 			new Entry("Plains", 4, 0.45f, 0.6f, 0f, 0.45f, -0.25f, 0.05f, 1f, A.Living, true, R.None),
 			new Entry("Grassland", 4, 0.45f, 0.6f, 0f, 0.45f, 0f, 0.25f, 1f, A.Living, true, R.None),
 			new Entry("Woodland", 4, 0.45f, 0.6f, 0.05f, 0.6f, 0.15f, 0.45f, 0.8f, A.Living, true, R.None),
@@ -273,11 +354,13 @@ namespace FishMMO.Shared.WorldDesign
 			new Entry("Oasis", 4, 0.45f, 0.6f, 0.5f, 0.9f, 0.8f, 1f, 0f, A.Living, true, R.None),
 
 			// Highland (tier 5, 1.5 to 2.5 km): high desert where dry (volcanic plateaus where it is also warm and the world volcanic), alpine meadow above the treeline, valleys where wet with geyser basins in their core, karst where warm and wet, hills between.
-			new Entry("High Desert", 5, 0.6f, 0.75f, -1f, 0.2f, -1f, -0.45f, 1f, A.Living, false, R.None),
+			// High Desert runs to the hot end too (2026-10-10): a dry highland is a high desert whether it is the Altiplano or the Iranian plateau; capped at 0.2 it left hot dry highland on non-volcanic worlds to a nearest miss.
+			new Entry("High Desert", 5, 0.6f, 0.75f, -1f, 1f, -1f, -0.45f, 1f, A.Living, false, R.None),
 			new Entry("Volcanic", 5, 0.6f, 0.75f, 0.2f, 1f, -1f, -0.45f, 1f, A.Any, false, R.Volcanic),
-			new Entry("Alpine Meadow", 5, 0.6f, 0.75f, -1f, -0.45f, -0.45f, 1f, 1f, A.Living, true, R.None),
-			new Entry("Hills", 5, 0.6f, 0.75f, -0.45f, 1f, -0.45f, 0f, 1f, A.Living, true, R.None),
-			new Entry("Valley", 5, 0.6f, 0.75f, -0.45f, 0.2f, 0f, 1f, 1f, A.Living, true, R.None),
+			// Alpine Meadow takes the cool wet highland up to 0.2 (2026-10-10), bounded by its summer (Seasons: a thaw, under 10 °C) — Hills is dry and Valley needs a forest's summer, which left the cool wet highland with no biome under the summer test.
+			new Entry("Alpine Meadow", 5, 0.6f, 0.75f, -1f, 0.2f, -0.45f, 1f, 1f, A.Living, true, R.None),
+			new Entry("Hills", 5, 0.6f, 0.75f, -1f, 1f, -0.45f, 0f, 1f, A.Living, true, R.None),
+			new Entry("Valley", 5, 0.6f, 0.75f, -1f, 0.2f, 0f, 1f, 1f, A.Living, true, R.None),
 			new Entry("Geyser Basin", 5, 0.6f, 0.75f, -0.3f, 0.1f, 0f, 0.3f, 0.8f, A.Living, true, R.Volcanic),
 			new Entry("Karst", 5, 0.6f, 0.75f, 0.2f, 1f, 0f, 1f, 1f, A.Living, true, R.None),
 
@@ -288,6 +371,8 @@ namespace FishMMO.Shared.WorldDesign
 			new Entry("Scree", 7, 0.9f, 1f, -0.65f, 1f, -1f, 1f, 1f, A.Any, false, R.None),
 			new Entry("Permanent Ice", 7, 0.9f, 0.95f, -1f, -0.65f, -1f, 1f, 1f, A.Any, false, R.SurfaceWater),
 			new Entry("Glacier", 8, 0.95f, 1f, -1f, 0.3f, -1f, 1f, 1f, A.Any, false, R.SurfaceWater),
+			// Ice Sheet (2026-10-10): land whose summer never thaws, from the shore to the mountains (tier 9, band shore…mountain; Permanent Ice and Glacier keep the summits). Its warmest-season cap (Seasons) is what places it; the envelope only keeps it to cold ground (any humidity: a frozen summer keeps whatever snow falls). Weighted over the Snow plain it shares a reading with.
+			new Entry("Ice Sheet", 9, 0.42f, 0.9f, -1f, 0.1f, -1f, 1f, 1.1f, A.Any, false, R.SurfaceWater),
 
 			// Alien biomes, kept off any world that is not theirs by BiomeTemplate.Requires; each envelope sits where its own world's readings fall (an airless body reads humidity -1, a moon past the frost line temperature -1). Impact Basin, Methane Lake and Subsurface Ocean Vent also claim the ground below their tier in the fallback pass: on a world with no sea, everything under the datum is a basin. Molten Surface is the lowest ground of a world with molten rock open at its surface — a magma ocean, or lava lakes over an interior heated past the lake threshold (R.MoltenRock, the lava code's own test) — where the melt stands; any temperature, since the heat is the rock's, not the sunlight's. Ice Shelf is the frozen sea of a world frozen through, whose below-datum ground the scene raises to the shore tier; it outweighs Rocky Coast there. Runaway Greenhouse Plain claims every height in the fallback pass.
 			new Entry("Dust Sea", 0, 0f, 0.2f, -1f, 1f, -1f, -0.6f, 1f, A.Airless | A.Thin, false, R.RockSurface),
@@ -314,7 +399,7 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Apply biome envelopes and world requirements", Section = "Content", Order = 3,
-			Tooltip = "Writes the tabled elevation tier, height band, climate envelope, selection weight, atmosphere, liquid-water and world requirements onto the named biome assets, logging every field it changes, and creates the new biomes the table defines (Ice Shelf) if their asset does not exist yet. Re-running it changes nothing once applied; biomes not in the table are left alone.",
+			Tooltip = "Writes the tabled elevation tier, height band, climate envelope, warmest-season range, selection weight, atmosphere, liquid-water and world requirements onto the named biome assets, logging every field it changes, and creates the new biomes the table defines (Ice Shelf, Ice Sheet) if their asset does not exist yet. Re-running it changes nothing once applied; biomes not in the table are left alone.",
 			Confirm = "Write the biome spec table onto the biome assets in Assets/Templates/Entity/Biomes, creating any new biome it defines that has no asset yet? Every changed field is logged before and after.")]
 		public static void ApplyFromDashboard()
 		{
@@ -514,6 +599,9 @@ namespace FishMMO.Shared.WorldDesign
 			if (biome.Atmosphere != e.Atmosphere) { Note(log, name, "Atmosphere", biome.Atmosphere, e.Atmosphere); if (write) biome.Atmosphere = e.Atmosphere; n++; }
 			if (biome.RequiresLiquidWater != e.RequiresLiquidWater) { Note(log, name, "RequiresLiquidWater", biome.RequiresLiquidWater, e.RequiresLiquidWater); if (write) biome.RequiresLiquidWater = e.RequiresLiquidWater; n++; }
 			if (biome.Requires != e.Requires) { Note(log, name, "Requires", biome.Requires, e.Requires); if (write) biome.Requires = e.Requires; n++; }
+			SeasonFor(name, out float minWarmest, out float maxWarmest);
+			if (biome.MinWarmestSeason != minWarmest) { Note(log, name, "MinWarmestSeason", biome.MinWarmestSeason, minWarmest); if (write) biome.MinWarmestSeason = minWarmest; n++; }
+			if (biome.MaxWarmestSeason != maxWarmest) { Note(log, name, "MaxWarmestSeason", biome.MaxWarmestSeason, maxWarmest); if (write) biome.MaxWarmestSeason = maxWarmest; n++; }
 			return n;
 		}
 

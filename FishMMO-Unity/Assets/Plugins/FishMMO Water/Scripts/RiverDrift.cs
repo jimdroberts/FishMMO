@@ -58,8 +58,9 @@ namespace FishMMO.Water
 				return;
 			}
 			// Integrated on this client's frames: where it has drifted to is its own history, not a function of
-			// the shared clock, and nothing on the server knows of it to correct it (presentation only).
-			float dt = Time.deltaTime;
+			// the shared clock, and nothing on the server knows of it to correct it (presentation only). At the
+			// world's pace, so it stops with the river it rides when the world is held.
+			float dt = WorldMotion.Scale(Time.deltaTime);
 			Vector2 current = SurfaceWater.CurrentAt(p.x, p.z) * Carry;
 			p.x += current.x * dt;
 			p.z += current.y * dt;

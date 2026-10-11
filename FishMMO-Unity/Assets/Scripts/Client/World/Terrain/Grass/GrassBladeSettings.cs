@@ -12,6 +12,11 @@ namespace FishMMO.Client
 		SeedHead = 1,
 		/// <summary>A disc tilted toward the sky (a meadow flower), coloured from the prototype mesh's petal colours.</summary>
 		Flower = 2,
+		/// <summary>
+		/// A soft panicle nodding over at the stem's top (feather grass's silky awns, a Phragmites reed's plume): longer and
+		/// much wider than a seed head, its far end drooping toward the stem's facing, lit through like a thin leaf.
+		/// </summary>
+		Plume = 3,
 	}
 
 	/// <summary>How one kind of grass prototype differs from the others as blades (matched by name prefix, longest first).</summary>
@@ -48,6 +53,17 @@ namespace FishMMO.Client
 		[Tooltip("How deep into a river's or lake's water this type may stand, metres (reeds and rushes in the shallows). 0: none of it grows below the bank (Bank Clearance).")]
 		[Range(0f, 1.5f)] public float Wade = 0f;
 
+		[Header("Added with the 32-type renderer (2026-10-10)")]
+		[Tooltip("The share of this type's stems that carry its head (0..1; 0 reads as 1, every stem, as before this field existed). A tussock species with a head (feather grass, rushes, wheat) would otherwise put three records on every blade of a dense lawn; a sprinkled species keeps 1.")]
+		[Range(0f, 1f)] public float HeadShare = 1f;
+		[Tooltip("Up to four head colours (sRGB), used where the prototype mesh has no petal colours of its own (its petal colours win; with neither, Head Colour). A clump's heads share one of them.")]
+		public Color[] HeadPalette = new Color[0];
+		[Tooltip("The blade colours at the root and the tip (sRGB) where the prototype mesh gives none (no vertex colours, or not readable). Alpha 0: the built-in greens, as before this field existed.")]
+		public Color BladeRoot = Color.clear;
+		public Color BladeTip = Color.clear;
+		[Tooltip("May stand taller than 1.56 m (to 3.1 m: Phragmites, elephant grass). A blade over 2.5 m packs its height at half the resolution; off, the type's height is capped at 1.56 m as it always was.")]
+		public bool Tall;
+
 		public GrassTypeTuning() { }
 
 		public GrassTypeTuning(string prefix, float density, float stiffness, float width, float clumpPull, float bend, float heightScale = 1f)
@@ -70,6 +86,151 @@ namespace FishMMO.Client
 			BluntTip = bluntTip;
 			return this;
 		}
+
+		/// <summary>The same tuning with a head on <paramref name="share"/> of its stems (a tussock species' seed heads or plumes).</summary>
+		public GrassTypeTuning Headed(GrassHead head, float headSize, float share, string colour = null)
+		{
+			Head = head;
+			HeadSize = headSize;
+			HeadShare = share;
+			if (colour != null)
+			{
+				HeadColour = Hex(colour);
+			}
+			return this;
+		}
+
+		/// <summary>The same tuning with its head colours where the mesh has none (sRGB hex, up to four).</summary>
+		public GrassTypeTuning Palette(params string[] colours)
+		{
+			HeadPalette = new Color[colours.Length];
+			for (int i = 0; i < colours.Length; i++)
+			{
+				HeadPalette[i] = Hex(colours[i]);
+			}
+			HeadColour = colours.Length > 0 ? HeadPalette[0] : HeadColour;
+			return this;
+		}
+
+		/// <summary>The same tuning with blade colours where the mesh has none (sRGB hex).</summary>
+		public GrassTypeTuning Colours(string root, string tip)
+		{
+			BladeRoot = Hex(root);
+			BladeTip = Hex(tip);
+			return this;
+		}
+
+		/// <summary>The same tuning standing <paramref name="metres"/> into a river's or lake's water.</summary>
+		public GrassTypeTuning Wading(float metres)
+		{
+			Wade = metres;
+			return this;
+		}
+
+		/// <summary>The same tuning allowed past 1.56 m (<see cref="Tall"/>).</summary>
+		public GrassTypeTuning Taller()
+		{
+			Tall = true;
+			return this;
+		}
+
+		/// <summary>A deep copy (the defaults table's entries are shared; whoever writes one into a profile gets its own).</summary>
+		public GrassTypeTuning Clone()
+		{
+			var copy = (GrassTypeTuning)MemberwiseClone();
+			copy.HeadPalette = HeadPalette != null ? (Color[])HeadPalette.Clone() : new Color[0];
+			return copy;
+		}
+
+		/// <summary>The share of stems with a head: <see cref="HeadShare"/>, with 0 (an entry saved before the field) read as every stem.</summary>
+		public float EffectiveHeadShare => HeadShare > 0f ? Mathf.Min(1f, HeadShare) : 1f;
+
+		/// <summary>"#rrggbb" as an opaque colour, parsed here rather than by ColorUtility (a native call) so the defaults table builds anywhere, tests included.</summary>
+		private static Color Hex(string hex)
+		{
+			string h = hex.TrimStart('#');
+			if (h.Length != 6 || !uint.TryParse(h, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out uint v))
+			{
+				return Color.magenta;
+			}
+			return new Color((v >> 16 & 255u) / 255f, (v >> 8 & 255u) / 255f, (v & 255u) / 255f, 1f);
+		}
+	}
+
+	/// <summary>
+	/// The blade types added by the vegetation expansion (2026-10-10, design §2c/§2d), as tunings the code supplies when the
+	/// profile has none of its own: <see cref="GrassBladeSettings.TuningFor"/> takes an entry here only where its prefix
+	/// matches a prototype more closely than any of the profile's (so an entry Jim adds to the profile always wins, and a
+	/// prototype the profile already matches as closely is untouched). Each is derived from the nearest of the profile's
+	/// seven (GrassTuft, GrassTall, GrassDry, Reeds, Detail_Flowers) so the new ones read as the same family.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Why in code.</b> The tunings live in the Weather Render Profile asset, which Jim's editor holds loaded: an edit on
+	/// disk is overwritten by the stale in-memory copy on the next save. Without these a new <c>Detail_GrassSedge</c> took
+	/// the bare <c>Detail_Grass</c> tuning (an even lawn), a <c>Detail_ReedsPlume</c> the cattail's brown spindle, and every
+	/// new flower set the meadow flowers' size. <see cref="GrassBladeSettings.AddMissingDefaultTypes"/> writes them into a
+	/// profile for an editor tool (with Undo) when they should become editable.
+	/// </para>
+	/// <para>
+	/// <b>Colours.</b> A blade's colours come from its prototype mesh's vertex colours (the art generator's hex picks, so the
+	/// flora package's meshes decide them), its heads from the mesh's petal vertices. The <see cref="GrassTypeTuning.BladeRoot"/>,
+	/// <see cref="GrassTypeTuning.BladeTip"/> and <see cref="GrassTypeTuning.HeadPalette"/> here are the design's colours,
+	/// used only where a mesh gives none, so a missing or colourless mesh still draws the right plant. A prototype whose
+	/// prefab does not exist is never a type at all.
+	/// </para>
+	/// <para>
+	/// <b>Heights</b> are the meshes' (the art generator builds each at its design height): every <see cref="GrassTypeTuning.HeightScale"/>
+	/// here is 1. The two taller than 1.56 m (ReedsPlume 2.5 m, GrassSavanna 1.8 m) are <see cref="GrassTypeTuning.Tall"/>.
+	/// </para>
+	/// </remarks>
+	public static class GrassTypeDefaults
+	{
+		/// <summary>The new types' tunings, by prefix (prefab names are <c>Detail_&lt;Name&gt;</c>).</summary>
+		public static readonly GrassTypeTuning[] Types =
+		{
+			// Carex: tussocks of arching, keeled blue-green blades (GrassTuft, less stiff and more bent, pulled into tussocks).
+			new GrassTypeTuning("Detail_GrassSedge", 0.85f, 1.3f, 1.1f, 0.45f, 0.6f).Colours("#5e7a4a", "#8a9a62").Wading(0.1f),
+			// Cottongrass: thin stems sprinkled through the bog, each with a white cotton tuft (a large white flower head).
+			new GrassTypeTuning("Detail_GrassCotton", 1f, 1.2f, 0.7f, 0.1f, 0.1f).Sprinkled(30f, GrassHead.Flower, 0.045f)
+				.Palette("#f6f6f0", "#ecebe0").Colours("#5a6a3a", "#8a9450").Wading(0.05f),
+			// Marram, cordgrass, Stipagrostis: stiff, narrow rolled blades in tussocks with sand between (GrassDry stiffer, GrassTuft's pull).
+			new GrassTypeTuning("Detail_GrassDune", 0.7f, 1.8f, 0.7f, 0.55f, 0.3f).Colours("#8a9a6e", "#a8b088"),
+			// Stipa: fine bunch grass whose silky awns stream in the wind; a quarter of the stems carry a silver-straw plume.
+			new GrassTypeTuning("Detail_GrassFeather", 0.8f, 0.8f, 0.6f, 0.4f, 0.55f).Headed(GrassHead.Plume, 0.22f, 0.25f, "#dcd8c0")
+				.Colours("#8a8a5a", "#c8c49a"),
+			// Red-oat / elephant grass: GrassTall's broad swathes at twice its height, golden.
+			new GrassTypeTuning("Detail_GrassSavanna", 0.8f, 0.8f, 1.3f, 0.15f, 0.5f).Colours("#b8963c", "#d8bc6a").Taller(),
+			// Phragmites: the Reeds' stiff blunt straps, taller, standing in the shallows, a purple-brown plume on each stem.
+			new GrassTypeTuning("Detail_ReedsPlume", 1f, 2.4f, 2f, 0.35f, 0.2f).Sprinkled(110f, GrassHead.Plume, 0.3f, bluntTip: true)
+				.Palette("#6a4a5a").Colours("#4e6430", "#8a9050").Wading(0.4f).Taller(),
+			// Juncus: tussocks of stiff, thin, dark cylindrical stems, some with a small brown tuft near the top.
+			new GrassTypeTuning("Detail_GrassRush", 0.9f, 2.2f, 0.55f, 0.5f, 0.08f).Headed(GrassHead.SeedHead, 0.04f, 0.3f, "#6a4a2a")
+				.Colours("#2e4a1e", "#3e5a2a").Wading(0.25f),
+			// Wheat: an even golden stand (fields are hand-masked, so no tussocks), most stems with an ear.
+			new GrassTypeTuning("Detail_GrassWheat", 0.9f, 1.2f, 1f, 0.05f, 0.35f).Headed(GrassHead.SeedHead, 0.08f, 0.6f, "#c8a050")
+				.Colours("#9a8a40", "#d8c070"),
+
+			// Flower sets: the meadow flowers' stems (Detail_Flowers), sized to each set; a clump's flowers share one of four colours.
+			// Gentian, saxifrage, moss campion, alpine buttercup: tiny heads on short stiff stems.
+			new GrassTypeTuning("Detail_FlowersAlpine", 1f, 1.5f, 0.7f, 0.1f, 0.08f).Sprinkled(20f, GrassHead.Flower, 0.018f)
+				.Palette("#3050c0", "#f4f4f0", "#c0408a", "#f0c830").Colours("#4a6a2a", "#66843a"),
+			// Purple loosestrife, flag iris, meadowsweet, marsh marigold: tall wet-ground flowers at the water's edge.
+			new GrassTypeTuning("Detail_FlowersWet", 1f, 1.1f, 0.9f, 0.1f, 0.15f).Sprinkled(10f, GrassHead.Flower, 0.04f)
+				.Palette("#b0408a", "#f0d030", "#f0ead0", "#f2b81e").Colours("#3e6a2a", "#5e8a3a").Wading(0.1f),
+			// Bluebell, wood anemone, wild garlic, primrose: low shade flowers.
+			new GrassTypeTuning("Detail_FlowersWoodland", 1f, 1.3f, 0.8f, 0.1f, 0.2f).Sprinkled(12f, GrassHead.Flower, 0.025f)
+				.Palette("#5a5ac8", "#f6f6f2", "#eef0e6", "#f0e890").Colours("#3a6224", "#58803a"),
+			// Fireweed, goldenrod, lupin, umbellifers: tall, softer stems with big heads, fewer of them.
+			new GrassTypeTuning("Detail_FlowersTall", 1f, 1f, 0.9f, 0.1f, 0.2f).Sprinkled(8f, GrassHead.Flower, 0.05f)
+				.Palette("#c84890", "#e0b020", "#7a5ac8", "#f2f0e6").Colours("#4a7a2c", "#6a9040"),
+			// A desert superbloom: poppy, lupine, desert marigold, verbena.
+			new GrassTypeTuning("Detail_FlowersDesert", 1f, 1.4f, 0.8f, 0.1f, 0.1f).Sprinkled(18f, GrassHead.Flower, 0.03f)
+				.Palette("#f08020", "#4a60c8", "#f0c020", "#d0609a").Colours("#6a7a3a", "#8a9450"),
+		};
+
+		/// <summary>The longest-prefix default for a prototype name, or null.</summary>
+		public static GrassTypeTuning For(string name) => GrassBladeSettings.LongestPrefix(Types, name);
 	}
 
 	/// <summary>
@@ -135,8 +296,8 @@ namespace FishMMO.Client
 		[Tooltip("Blades nearer than this draw the 15-vertex strip; to Lod1 Distance the 7-vertex one; beyond, a triangle.")]
 		[Min(1f)] public float Lod0Distance = 12f;
 		[Min(2f)] public float Lod1Distance = 45f;
-		[Tooltip("Blades nearer than this cast shadows (0: none).")]
-		[Min(0f)] public float ShadowDistance = 20f;
+		[Tooltip("Blades nearer than this cast shadows (0: none, the default). A blade is narrower than a texel of the nearest shadow cascade and the wind moves it every frame, so cast blade shadows flicker; grass still receives the shadows of trees, rocks and clouds, and Root Occlusion shades its base.")]
+		[Min(0f)] public float ShadowDistance = 0f;
 		[Tooltip("The most blades the camera view can draw in a frame (all levels); the shadow views get 0.3 of it each. Appends past it are dropped.")]
 		[Min(1024)] public int BladeCap = 5000000;
 		[Tooltip("The share of the grass distance over which the field dissolves at its edge.")]
@@ -225,15 +386,29 @@ namespace FishMMO.Client
 
 		public float NearDensity => Rings != null && Rings.Length > 0 ? Mathf.Max(1f, Rings[0].y) : 200f;
 
-		/// <summary>The tuning for a prototype name: the longest matching prefix, or null.</summary>
+		/// <summary>
+		/// The tuning for a prototype name: the longest matching prefix among the profile's <see cref="Types"/> and the code's
+		/// <see cref="GrassTypeDefaults.Types"/>, the profile's on a tie; null when neither matches. A default is taken only
+		/// for a prototype it names more closely than any profile entry (a new type the profile has never heard of: e.g.
+		/// <c>Detail_GrassSedge</c> over the profile's bare <c>Detail_Grass</c>), so every prototype the profile already
+		/// tunes resolves exactly as before.
+		/// </summary>
 		public GrassTypeTuning TuningFor(string name)
 		{
+			GrassTypeTuning own = LongestPrefix(Types, name);
+			GrassTypeTuning fallback = GrassTypeDefaults.For(name);
+			return fallback != null && (own == null || fallback.Prefix.Length > own.Prefix.Length) ? fallback : own;
+		}
+
+		/// <summary>The entry of <paramref name="tunings"/> whose prefix starts <paramref name="name"/> and is the longest, or null.</summary>
+		public static GrassTypeTuning LongestPrefix(GrassTypeTuning[] tunings, string name)
+		{
 			GrassTypeTuning best = null;
-			if (Types == null || string.IsNullOrEmpty(name))
+			if (tunings == null || string.IsNullOrEmpty(name))
 			{
 				return null;
 			}
-			foreach (GrassTypeTuning t in Types)
+			foreach (GrassTypeTuning t in tunings)
 			{
 				if (t != null && !string.IsNullOrEmpty(t.Prefix) && name.StartsWith(t.Prefix, StringComparison.Ordinal) && (best == null || t.Prefix.Length > best.Prefix.Length))
 				{
@@ -241,6 +416,39 @@ namespace FishMMO.Client
 				}
 			}
 			return best;
+		}
+
+		/// <summary>
+		/// Appends a copy of every <see cref="GrassTypeDefaults.Types"/> entry whose prefix <see cref="Types"/> lacks, and
+		/// returns how many. For an editor tool that makes the defaults editable in the profile: record the profile for Undo
+		/// and mark it dirty around the call (through the loaded object, never by editing the asset's file). Rendering is the
+		/// same before and after: <see cref="TuningFor"/> already resolved these names to the same values.
+		/// </summary>
+		public int AddMissingDefaultTypes()
+		{
+			var added = new System.Collections.Generic.List<GrassTypeTuning>();
+			foreach (GrassTypeTuning d in GrassTypeDefaults.Types)
+			{
+				bool present = false;
+				if (Types != null)
+				{
+					foreach (GrassTypeTuning t in Types)
+					{
+						present |= t != null && string.Equals(t.Prefix, d.Prefix, StringComparison.Ordinal);
+					}
+				}
+				if (!present)
+				{
+					added.Add(d.Clone());
+				}
+			}
+			if (added.Count > 0)
+			{
+				var merged = new System.Collections.Generic.List<GrassTypeTuning>(Types ?? new GrassTypeTuning[0]);
+				merged.AddRange(added);
+				Types = merged.ToArray();
+			}
+			return added.Count;
 		}
 
 		/// <summary>True when a prototype of this name is drawn as blades.</summary>

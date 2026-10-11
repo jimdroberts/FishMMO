@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ooze
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A larger, older slime gone dark and acidic, patient enough to wait days beneath a stone for something warm to pass.'
+  Description: A larger, older slime gone dark and acidic, patient enough to wait
+    days beneath a stone for something warm to pass.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ug
       - or
-      Description: 'Thick, low, slurring — long vowels, swallowed endings'
+      Description: "Thick, low, slurring \u2014 long vowels, swallowed endings"
       Tags:
       - Slime
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - sludge
       - ooze
     AllowGenericOccupations: 0
+    Plural: Oozes
+    Adjective: Ooze
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 525873855
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

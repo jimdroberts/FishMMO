@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Golem
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Construct
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Hebraic cadence — truth-carved servant
+  Description: "Hebraic cadence \u2014 truth-carved servant"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Construct
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - us
       - or
       - heim
-      Description: Word-carved cadence — truth-bound servant
+      Description: "Word-carved cadence \u2014 truth-bound servant"
       Tags:
       - Shem-names
       - Clay-bonds
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Golems
+    Adjective: Golem
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 1
@@ -121,3 +124,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 596668801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

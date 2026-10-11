@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Lizardfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Hissing and clicking — cold precision, predatory patience'
+  Description: "Hissing and clicking \u2014 cold precision, predatory patience"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +95,7 @@ MonoBehaviour:
       - ax
       - ix
       - ek
-      Description: 'Hissing and clicking — cold precision, predatory patience'
+      Description: "Hissing and clicking \u2014 cold precision, predatory patience"
       Tags:
       - Scale-names
       - Brood-bonds
@@ -195,6 +195,9 @@ MonoBehaviour:
       - ash
       - waste
       - husk
+    AllowGenericOccupations: 1
+    Plural: Lizardfolk
+    Adjective: Lizardfolk
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -206,3 +209,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 888339253
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

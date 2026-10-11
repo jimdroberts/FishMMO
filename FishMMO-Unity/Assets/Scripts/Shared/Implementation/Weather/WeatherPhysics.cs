@@ -53,6 +53,13 @@ namespace FishMMO.Shared.Weather
 			{
 				return new GroundTraits { Water = true };
 			}
+			// A vapour (a geyser basin's steam) is not weather: it rises off its springs and vents and
+			// evaporates into the air (GeothermalVents, SteamPhysics). Counted here it would fall as a
+			// grain and raise volcanic eruptions over a field of hot springs.
+			if (biome != null && biome.Emits != null && biome.Emits.Vapour)
+			{
+				return new GroundTraits { Loose = biome.LooseGround };
+			}
 			return biome == null ? default : new GroundTraits
 			{
 				Loose = biome.LooseGround,

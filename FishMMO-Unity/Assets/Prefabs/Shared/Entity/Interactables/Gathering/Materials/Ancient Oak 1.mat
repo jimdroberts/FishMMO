@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Ancient Oak 1
+  m_Shader: {fileID: 4800000, guid: 6afb82f4835da552494df473a0f4bee9, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords:
+  - _ALPHATEST_ON
+  m_InvalidKeywords:
+  - _DECIDUOUS_ON
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2450
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: b053b2d2d381192fd67461f34133d8d9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AlphaClip: 1
+    - _Aquatic: 0
+    - _BackfaceFlip: 0
+    - _BumpScale: 1
+    - _Cull: 0
+    - _Cutoff: 0.5
+    - _Deciduous: 1
+    - _DistanceFade: 2
+    - _FacingCamera: 0
+    - _FishWeatherAmount: 1
+    - _Smoothness: 0.1
+    - _SnowBury: 0
+    - _TintPatchMetres: 12
+    - _TintSpread: 0.25
+    - _Translucency: 0.6
+    - _UseNormalMap: 0
+    - _VaryCrown: 0.16
+    - _VaryGirth: 0.22
+    - _VaryHeight: 0.14
+    - _VaryLean: 3
+    - _VaryPartDroop: 10
+    - _VaryPartLength: 0.16
+    - _VaryPartSwing: 18
+    - _VaryTwist: 25
+    - _VegZWrite: 1
+    - _WindFlutter: 0.04
+    - _WindFrequency: 1.2
+    - _WindSway: 0.35
+    m_Colors:
+    - _AutumnColor: {r: 1.6, g: 0.8, b: 0.3, a: 1}
+    - _BaseColor: {r: 1, g: 0.95, b: 0.86, a: 1}
+    - _DryColor: {r: 0.8, g: 0.75, b: 0.55, a: 1}
+    - _GroundSink: {r: 0, g: 0, b: 0, a: 0}
+    - _HealthyColor: {r: 0.95, g: 1, b: 0.95, a: 1}
+    - _VaryColour: {r: 0.1, g: 0.06, b: 0.08, a: 0.1}
+    - _VaryFullness: {r: 0.15, g: 0.55, b: 0, a: 0}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

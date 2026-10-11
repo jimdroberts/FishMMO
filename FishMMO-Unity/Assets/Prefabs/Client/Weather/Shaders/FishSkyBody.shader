@@ -34,6 +34,7 @@ Shader "FishMMO/Sky Body"
             TEXTURE2D(_FishCloudBuffer);
             SAMPLER(sampler_FishCloudBuffer);
             float4 _FishCloudScreen;   // x: 1 while the buffer holds this frame's clouds, else 0
+            float4 _FishCloudBufferTexel;   // xy one over the buffer's size, zw its size (FishCloudsFeature)
             CBUFFER_START(UnityPerMaterial)
                 float4 _BodyTex_ST;
                 float _UseTexture;
@@ -391,8 +392,31 @@ Shader "FishMMO/Sky Body"
                 // The flag matters. With no clouds drawn this frame the buffer is unbound and
                 // samples as zero, which would mean "fully occluded" and take every body out of
                 // the sky, so nothing is applied unless the buffer is known to hold this frame.
+                //
+                // A body is behind everything, so what hides it is what the SKY ray met — and every ray of the
+                // buffer stops at the world. Beside a branch the pixel's own texel (and a bilinear tap mixing it
+                // in) holds the short ray to the tree, clear air, and with MSAA the pixel's sky samples still
+                // pass the depth test: a ring behind an overcast shone at full strength along every spruce tip.
+                // The sky ray marched farthest, so it is the least transmittance among the texels around.
                 float2 screenUV = input.positionCS.xy / _ScreenParams.xy;
-                float through = SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, screenUV).a;
+                float through;
+                if (_FishCloudBufferTexel.z > 0.5)
+                {
+                    int2 last = (int2)_FishCloudBufferTexel.zw - 1;
+                    int2 centre = (int2)floor(screenUV * _FishCloudBufferTexel.zw);
+                    through = 1.0;
+                    [unroll] for (int ty = -1; ty <= 1; ty++)
+                    {
+                        [unroll] for (int tx = -1; tx <= 1; tx++)
+                        {
+                            through = min(through, LOAD_TEXTURE2D(_FishCloudBuffer, clamp(centre + int2(tx, ty), int2(0, 0), last)).a);
+                        }
+                    }
+                }
+                else
+                {
+                    through = SAMPLE_TEXTURE2D(_FishCloudBuffer, sampler_FishCloudBuffer, screenUV).a;
+                }
                 alpha *= lerp(1.0, saturate(through), saturate(_FishCloudScreen.x));
                 return half4(color * alpha * _FishSkyParams.w, alpha);
             }

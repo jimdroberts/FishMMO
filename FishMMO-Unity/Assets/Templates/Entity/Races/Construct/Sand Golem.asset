@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sand Golem
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Construct
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Shifting desert constructs — hissing, pouring names'
+  Description: "Shifting desert constructs \u2014 hissing, pouring names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Construct
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - im
       - ar
       - ud
-      Description: 'Shifting desert constructs — hissing, pouring names'
+      Description: "Shifting desert constructs \u2014 hissing, pouring names"
       Tags:
       - Sand-names
       - Shift-marks
@@ -126,7 +126,7 @@ MonoBehaviour:
       - Who Was Scattered by the Storm and Gathered by Dawn
       - Who Buried the Tomb-robbers Under Themselves
       - Who Poured Through the Keyhole to Guard the Room
-      - 'Who Guarded the Buried Gate Through Ten Dunes'' Passing'
+      - Who Guarded the Buried Gate Through Ten Dunes' Passing
       - Who Became Glass in the Lightning and Guarded On
       Occupational:
       - Gate-guard
@@ -161,6 +161,8 @@ MonoBehaviour:
       - heap
       - fall
     AllowGenericOccupations: 0
+    Plural: Sand Golems
+    Adjective: Sand Golem
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 525873855
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ghoul
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Slavering graveyard-speech — hungry and wet
+  Description: "Slavering graveyard-speech \u2014 hungry and wet"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -49,7 +49,7 @@ MonoBehaviour:
       - Ro
       - Glo
       - Mo
-      - 'No'
+      - No
       - Ko
       - Do
       - Ru
@@ -91,7 +91,7 @@ MonoBehaviour:
       - ok
       - ug
       - ar
-      Description: Slavering graveyard-speech — hungry and wet
+      Description: "Slavering graveyard-speech \u2014 hungry and wet"
       Tags:
       - Feast-names
       - Graveyard-bonds
@@ -115,7 +115,7 @@ MonoBehaviour:
       Rank:
       - Lord of the Boneyard
       Legend:
-      - 'Who Ate the Priest and the Priest''s Holy Book'
+      - Who Ate the Priest and the Priest's Holy Book
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -124,6 +124,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Ghouls
+    Adjective: Ghoul
   BiomeAffinities:
   - BiomeID: 525873855
     Weight: 2
@@ -133,3 +136,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 621224406
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Redcap
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Murderous border fey in blood-dyed caps — harsh, short names'
+  Description: "Murderous border fey in blood-dyed caps \u2014 harsh, short names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ap
       - ock
       - ur
-      Description: 'Murderous border fey in blood-dyed caps — harsh, short names'
+      Description: "Murderous border fey in blood-dyed caps \u2014 harsh, short names"
       Tags:
       - Cap-names
       - Border-marks
@@ -124,7 +124,7 @@ MonoBehaviour:
       - Dyer of the Dye Vat
       Legend:
       - Who Dyed the Cap Three Times in One Night
-      - 'Who Ran Down the Knight''s Horse in Iron Boots'
+      - Who Ran Down the Knight's Horse in Iron Boots
       - Who Haunted the Border Tower for Six Centuries
       - Who Was Read the Holy Word and Lost a Tooth
       - Who Fought the Bog Troll for the Bridge
@@ -163,6 +163,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 0
+    Plural: Redcaps
+    Adjective: Redcap
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 2
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1156965030
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

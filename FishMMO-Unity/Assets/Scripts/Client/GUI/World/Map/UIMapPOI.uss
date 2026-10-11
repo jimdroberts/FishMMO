@@ -1,0 +1,255 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIMapPOI.uss
+    Point-of-interest marker styling  —  shared by the minimap and the world map
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    GENERATED from PointOfInterestKinds.cs and MapMarkerType.cs (Jim, 2026-10-10: one
+    marker type per point-of-interest kind). Regenerate rather than hand-edit when a kind
+    is added: every kind's type is listed in its GROUP's rule, so the shape and the colour
+    belong to the group (one --map-poi-group token each, in FishMMO-Theme.uss) and the
+    kind only says which group it is in. The plain Landmark and DungeonEntrance types keep
+    their own rules in UIMapShared.uss.
+
+    Loaded after UIMapShared.uss by UIMap.uxml and UIMinimap.uxml. NO colour literals.
+    The guards: DungeonEntranceMapMarkerTests.EveryMarkerTypeHasAStyleRule (a rule per type)
+    and PointOfInterestMapTests (each type's rule carries its own group's token).
+
+    Shapes are drawn with border radii alone, the one tool USS has for shape: round for
+    what water and growth make, squared for what people build, part-round for the ground
+    itself. A sprite set on the marker replaces the shape, as for every other type.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+/* WATER: A round dot: water lies in hollows and runs in lines, never in corners. */
+.map-marker--spring .map-marker__icon,
+.map-marker--waterfall .map-marker__icon,
+.map-marker--rapids .map-marker__icon,
+.map-marker--river .map-marker__icon,
+.map-marker--lake .map-marker__icon,
+.map-marker--hotspring .map-marker__icon,
+.map-marker--rivermouth .map-marker__icon,
+.map-marker--delta .map-marker__icon {
+    background-color: var(--map-poi-water);
+    border-radius: 50%;
+}
+
+/* LANDFORM: A drop with one sharp corner: the ground rising to a point or falling away. */
+.map-marker--clearing .map-marker__icon,
+.map-marker--peak .map-marker__icon,
+.map-marker--pass .map-marker__icon,
+.map-marker--gorge .map-marker__icon,
+.map-marker--mesa .map-marker__icon,
+.map-marker--butte .map-marker__icon,
+.map-marker--valley .map-marker__icon,
+.map-marker--island .map-marker__icon,
+.map-marker--bay .map-marker__icon,
+.map-marker--headland .map-marker__icon,
+.map-marker--naturalarch .map-marker__icon,
+.map-marker--sinkhole .map-marker__icon,
+.map-marker--crater .map-marker__icon,
+.map-marker--dunesea .map-marker__icon,
+.map-marker--saltflat .map-marker__icon,
+.map-marker--glacier .map-marker__icon {
+    background-color: var(--map-poi-landform);
+    border-radius: 50%;
+    border-bottom-left-radius: 0;
+}
+
+/* VOLCANIC: The landform drop, edged hard: ground that is still being made. */
+.map-marker--volcano .map-marker__icon,
+.map-marker--lavalake .map-marker__icon,
+.map-marker--fumarolefield .map-marker__icon,
+.map-marker--obsidianfield .map-marker__icon {
+    background-color: var(--map-poi-volcanic);
+    border-radius: 50%;
+    border-bottom-left-radius: 0;
+    border-width: 2px;
+}
+
+/* WETLAND: A hollow ring: still water with something standing in it. */
+.map-marker--sunkentemple .map-marker__icon,
+.map-marker--drownedvillage .map-marker__icon,
+.map-marker--witchhut .map-marker__icon,
+.map-marker--stiltvillage .map-marker__icon,
+.map-marker--bogshrine .map-marker__icon,
+.map-marker--mangrovemaze .map-marker__icon,
+.map-marker--wisphollow .map-marker__icon {
+    background-color: var(--map-poi-wetland);
+    border-radius: 50%;
+    border-width: 3px;
+    border-color: var(--map-poi-wetland);
+    background-color: var(--map-surface);
+}
+
+/* TERRAINSHAPED: An arch, round above and flat below: a cave mouth seen from the front. */
+.map-marker--cave .map-marker__icon,
+.map-marker--grotto .map-marker__icon,
+.map-marker--seacave .map-marker__icon,
+.map-marker--icecave .map-marker__icon,
+.map-marker--lavatube .map-marker__icon,
+.map-marker--overhang .map-marker__icon {
+    background-color: var(--map-poi-terrainshaped);
+    border-radius: 0;
+    border-top-left-radius: 50%;
+    border-top-right-radius: 50%;
+}
+
+/* WILD: A plain square: somebody built it, but not to last. */
+.map-marker--camp .map-marker__icon,
+.map-marker--banditcamp .map-marker__icon,
+.map-marker--huntinglodge .map-marker__icon,
+.map-marker--lumbercamp .map-marker__icon,
+.map-marker--fishingcamp .map-marker__icon,
+.map-marker--monsterden .map-marker__icon,
+.map-marker--nest .map-marker__icon {
+    background-color: var(--map-poi-wild);
+    border-radius: 1px;
+}
+
+/* SACRED: A round dot with a bright rim. */
+.map-marker--shrine .map-marker__icon,
+.map-marker--ritualsite .map-marker__icon,
+.map-marker--stonecircle .map-marker__icon,
+.map-marker--temple .map-marker__icon,
+.map-marker--monastery .map-marker__icon,
+.map-marker--feyring .map-marker__icon,
+.map-marker--leynexus .map-marker__icon,
+.map-marker--fallenstar .map-marker__icon,
+.map-marker--corruptedgrove .map-marker__icon,
+.map-marker--portal .map-marker__icon {
+    background-color: var(--map-poi-sacred);
+    border-radius: 50%;
+    border-width: 2px;
+    border-color: var(--text-bright);
+}
+
+/* DEAD: A hollow square: a grave plot, an empty frame. */
+.map-marker--graveyard .map-marker__icon,
+.map-marker--barrow .map-marker__icon,
+.map-marker--crypt .map-marker__icon,
+.map-marker--battlefield .map-marker__icon,
+.map-marker--ossuary .map-marker__icon {
+    background-color: var(--map-poi-dead);
+    border-radius: 1px;
+    border-width: 2px;
+    border-color: var(--map-poi-dead);
+    background-color: var(--map-surface);
+}
+
+/* RUINS: A square with one corner worn round: built, and falling down. */
+.map-marker--monument .map-marker__icon,
+.map-marker--ruins .map-marker__icon,
+.map-marker--ruinedtower .map-marker__icon,
+.map-marker--statue .map-marker__icon,
+.map-marker--obelisk .map-marker__icon,
+.map-marker--ancientroad .map-marker__icon,
+.map-marker--abandonedfarm .map-marker__icon,
+.map-marker--hermitage .map-marker__icon,
+.map-marker--oasis .map-marker__icon {
+    background-color: var(--map-poi-ruins);
+    border-radius: 0;
+    border-top-right-radius: 50%;
+}
+
+/* SETTLEMENT: A square framed in white: the places people live, the strongest mark on the map. */
+.map-marker--tower .map-marker__icon,
+.map-marker--bridge .map-marker__icon,
+.map-marker--village .map-marker__icon,
+.map-marker--town .map-marker__icon,
+.map-marker--city .map-marker__icon,
+.map-marker--capital .map-marker__icon,
+.map-marker--port .map-marker__icon,
+.map-marker--keep .map-marker__icon,
+.map-marker--castle .map-marker__icon,
+.map-marker--fortress .map-marker__icon,
+.map-marker--tradingpost .map-marker__icon,
+.map-marker--waystation .map-marker__icon,
+.map-marker--mine .map-marker__icon,
+.map-marker--quarry .map-marker__icon,
+.map-marker--lighthouse .map-marker__icon {
+    background-color: var(--map-poi-settlement);
+    border-radius: 2px;
+    border-width: 2px;
+    border-color: var(--text-bright);
+}
+
+/* COAST: Flat above and round below: a hull on the water line. */
+.map-marker--wreck .map-marker__icon,
+.map-marker--smugglerscove .map-marker__icon,
+.map-marker--piratecove .map-marker__icon,
+.map-marker--coralreef .map-marker__icon,
+.map-marker--sunkenship .map-marker__icon,
+.map-marker--sunkenruins .map-marker__icon,
+.map-marker--sunkencity .map-marker__icon {
+    background-color: var(--map-poi-coast);
+    border-radius: 0;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+}
+
+/* ENCOUNTER: A square with a heavy dark edge: somewhere to go on purpose. */
+.map-marker--bosslair .map-marker__icon,
+.map-marker--orevein .map-marker__icon,
+.map-marker--crystalformation .map-marker__icon,
+.map-marker--ancienttree .map-marker__icon,
+.map-marker--herbgrove .map-marker__icon {
+    background-color: var(--map-poi-encounter);
+    border-radius: 2px;
+    border-width: 3px;
+}
+
+/* ALIEN: The landform drop, hollow: ground that follows other rules. */
+.map-marker--icegeyserfield .map-marker__icon,
+.map-marker--cryovolcano .map-marker__icon,
+.map-marker--methanelake .map-marker__icon,
+.map-marker--impactbasin .map-marker__icon,
+.map-marker--tidalrift .map-marker__icon {
+    background-color: var(--map-poi-alien);
+    border-radius: 50%;
+    border-bottom-left-radius: 0;
+    border-width: 2px;
+    border-color: var(--map-poi-alien);
+    background-color: var(--map-surface);
+}
+
+/*
+    The capital and the cities are the largest thing a scene names: the settlement square with
+    a heavier frame, so they read first at the widest zoom.
+*/
+.map-marker--capital .map-marker__icon,
+.map-marker--city .map-marker__icon {
+    border-width: 3px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LEGEND SWATCHES  (the world map's PLACES filter rows)
+   ═══════════════════════════════════════════════════════════ */
+
+.map-filter__swatch {
+    width: 8px;
+    height: 8px;
+    margin-left: 4px;
+    margin-right: 2px;
+    border-radius: 2px;
+    border-width: 1px;
+    border-color: var(--shadow-text-hard);
+    flex-shrink: 0;
+    align-self: center;
+}
+.map-filter__swatch--water { background-color: var(--map-poi-water); }
+.map-filter__swatch--landform { background-color: var(--map-poi-landform); }
+.map-filter__swatch--volcanic { background-color: var(--map-poi-volcanic); }
+.map-filter__swatch--wetland { background-color: var(--map-poi-wetland); }
+.map-filter__swatch--terrainshaped { background-color: var(--map-poi-terrainshaped); }
+.map-filter__swatch--wild { background-color: var(--map-poi-wild); }
+.map-filter__swatch--sacred { background-color: var(--map-poi-sacred); }
+.map-filter__swatch--dead { background-color: var(--map-poi-dead); }
+.map-filter__swatch--ruins { background-color: var(--map-poi-ruins); }
+.map-filter__swatch--settlement { background-color: var(--map-poi-settlement); }
+.map-filter__swatch--coast { background-color: var(--map-poi-coast); }
+.map-filter__swatch--encounter { background-color: var(--map-poi-encounter); }
+.map-filter__swatch--alien { background-color: var(--map-poi-alien); }
+.map-filter__swatch--other { background-color: var(--map-poi-other); }

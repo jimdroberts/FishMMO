@@ -27,6 +27,45 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>Written to the prefab's renderer, which is what the instanced detail renderer reads.</remarks>
 		public bool CastsShadows;
+
+		// ── Optional, for details added from 2026-10-10 on ──
+		// The spec table's helpers (BiomeArtSpec.Plants, PlantSink) know the legacy details by name; a detail added
+		// since carries its own values here instead, and the helpers read them only for names absent from their
+		// tables, so every legacy rule writes exactly what it did (its fingerprint unchanged). Zero = not given.
+
+		/// <summary>Group radius in metres the spec gathers this detail into (BiomeArtSpec.Plants' "metres"); 0 = the helper's default.</summary>
+		public float GroupMetres;
+		/// <summary>Cells an average group holds (BiomeArtSpec.Plants' "size"); 0 = the helper's default.</summary>
+		public float GroupSize;
+		/// <summary>
+		/// Metres into the ground, min..max per instance: the spec's sink for a rule scattering this detail
+		/// (BiomeArtSpec.PlantSink) and, its max, the material's fallback (<see cref="ProceduralArtCatalogue.DetailSink"/>).
+		/// Zero = by name or kind as before.
+		/// </summary>
+		public Vector2 Sink;
+	}
+
+	/// <summary>
+	/// What the generator needs to know of a detail kind besides its mesh: written once per kind by the file that
+	/// builds it (<see cref="ProceduralArtCatalogue"/>'s FloraKindTraits / SeaKindTraits hooks), read wherever a
+	/// legacy kind used to be named in a switch.
+	/// </summary>
+	/// <remarks>
+	/// Only consulted for kinds the legacy switches do not name, so the legacy kinds' materials and prefabs are what
+	/// they were. Every field's zero is the default a kind got before it had traits.
+	/// </remarks>
+	public struct DetailKindTraits
+	{
+		/// <summary>The prefab's renderer casts shadows (see <see cref="DetailSpec.CastsShadows"/>).</summary>
+		public bool CastsShadows;
+		/// <summary>The material's fallback ground sink, metres (<see cref="ProceduralArtCatalogue.DetailSink"/>); 0 = 0.03.</summary>
+		public float Sink;
+		/// <summary>The <see cref="Bark"/> family the material wears instead of the foliage atlas (a cactus's pads); null = the atlas.</summary>
+		public string BarkFamily;
+		/// <summary>The material's wind sway (<c>_WindSway</c>, BiomeArtGenerator); 0 = the 0.2 every non-grass detail gets.</summary>
+		public float Sway;
+		/// <summary>The healthy/dry patch size, metres (<c>_TintPatchMetres</c>, BiomeArtGenerator.DetailTintPatchMetres); 0 = its default.</summary>
+		public float TintPatchMetres;
 	}
 
 	/// <summary>
@@ -115,6 +154,32 @@ namespace FishMMO.Shared.WorldDesign
 			new RockMaterialSpec { Name = "Limestone", GroundFamily = Ground.Limestone },
 		};
 
+		private static RockMaterialSpec[] allRockMaterials;
+
+		/// <summary>
+		/// Every small-rock material the generator makes boulders, rocks and pebbles in: the four legacy ones
+		/// (<see cref="RockMaterials"/>, which keep meaning "the legacy materials" — each stands for a rock type,
+		/// RockTypes.ForLegacyMaterial) and those added since, each listed in the file of the package that owns it:
+		/// the sea's manganese nodules and coral rubble (SeaRockMaterials, ProceduralArtCatalogue.Sea.cs) and ice
+		/// cobbles (IceRockMaterials, ProceduralArtCatalogue.Rocks.cs). A newer material wears its ground family's
+		/// textures (it is not one of RockArtNames' legacy-on-rock-surface four).
+		/// </summary>
+		/// <remarks>Built on first use for the same reason as <see cref="Details"/>: its parts are fields of other files.</remarks>
+		public static RockMaterialSpec[] AllRockMaterials
+		{
+			get
+			{
+				if (allRockMaterials == null)
+				{
+					var all = new List<RockMaterialSpec>(RockMaterials);
+					all.AddRange(SeaRockMaterials);
+					all.AddRange(IceRockMaterials);
+					allRockMaterials = all.ToArray();
+				}
+				return allRockMaterials;
+			}
+		}
+
 		/// <summary>Boulder shapes, each built at three levels of detail for the tree channel.</summary>
 		public static readonly RockShape[] BoulderShapes =
 		{
@@ -138,7 +203,8 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly Color SeaTint = new Color(0.95f, 0.95f, 0.95f, 1f);
 
 		private static DetailSpec D(string name, DetailKind kind, int count, float height, float width, float radius, string a, string b,
-			float lean = 0.3f, int segments = 3, Color[] accents = null, float snowBury = 0.8f, Color? healthy = null, Color? dry = null)
+			float lean = 0.3f, int segments = 3, Color[] accents = null, float snowBury = 0.8f, Color? healthy = null, Color? dry = null,
+			int variant = 0, float groupMetres = 0f, float groupSize = 0f, Vector2 sink = default)
 		{
 			return new DetailSpec
 			{
@@ -156,16 +222,114 @@ namespace FishMMO.Shared.WorldDesign
 					Accents = accents,
 					Lean = lean,
 					Segments = segments,
+					Variant = variant,
 				},
 				Healthy = healthy ?? HealthyTint,
 				Dry = dry ?? DryTint,
 				SnowBury = snowBury,
-				CastsShadows = kind == DetailKind.Fern || kind == DetailKind.Shrub || kind == DetailKind.DryShrub || kind == DetailKind.BarrelCactus
-					|| kind == DetailKind.BrainCoral || kind == DetailKind.TableCoral || kind == DetailKind.Sponge,
+				CastsShadows = CastsShadows(kind),
+				GroupMetres = groupMetres,
+				GroupSize = groupSize,
+				Sink = sink,
 			};
 		}
 
-		public static readonly DetailSpec[] Details =
+		/// <summary>
+		/// Whether a detail kind's prefab casts shadows: the legacy kinds as they always did (the few tall and solid
+		/// enough to throw a readable shadow), every newer kind as its owner's traits say.
+		/// </summary>
+		public static bool CastsShadows(DetailKind kind)
+		{
+			switch (kind)
+			{
+				case DetailKind.Fern:
+				case DetailKind.Shrub:
+				case DetailKind.DryShrub:
+				case DetailKind.BarrelCactus:
+				case DetailKind.BrainCoral:
+				case DetailKind.TableCoral:
+				case DetailKind.Sponge:
+					return true;
+				case DetailKind.Grass:
+				case DetailKind.Reeds:
+				case DetailKind.Flowers:
+				case DetailKind.Debris:
+				case DetailKind.Kelp:
+				case DetailKind.Coral:
+				case DetailKind.Seaweed:
+				case DetailKind.SeaFan:
+				case DetailKind.Anemone:
+				case DetailKind.Urchin:
+				case DetailKind.Starfish:
+				case DetailKind.Shells:
+				case DetailKind.TubeWorms:
+					return false;
+				default:
+					return Traits(kind).CastsShadows;
+			}
+		}
+
+		/// <summary>
+		/// A detail kind's traits as the file that builds it declares them (all zero for a kind nobody declares,
+		/// the legacy kinds included: their values live in the legacy switches, which are consulted first).
+		/// </summary>
+		/// <remarks>
+		/// Each owner fills its own kinds in its own file, so no package edits a shared switch: the land flora in
+		/// ProceduralArtCatalogue.Flora.cs (FloraKindTraits), the sea floor in ProceduralArtCatalogue.Sea.cs
+		/// (SeaKindTraits). Both are partial methods — pure switches, reading no static field, because this is called
+		/// while the type's static fields are still being initialised (from <see cref="D"/>, for CoreDetails).
+		/// </remarks>
+		public static DetailKindTraits Traits(DetailKind kind)
+		{
+			var traits = new DetailKindTraits();
+			FloraKindTraits(kind, ref traits);
+			SeaKindTraits(kind, ref traits);
+			return traits;
+		}
+
+		/// <summary>The land flora's kinds' traits (ProceduralArtCatalogue.Flora.cs). Sets only the kinds it owns.</summary>
+		static partial void FloraKindTraits(DetailKind kind, ref DetailKindTraits traits);
+
+		/// <summary>The sea floor's newer kinds' traits (ProceduralArtCatalogue.Sea.cs). Sets only the kinds it owns.</summary>
+		static partial void SeaKindTraits(DetailKind kind, ref DetailKindTraits traits);
+
+		private static DetailSpec[] details;
+
+		/// <summary>
+		/// Every detail prefab the generator makes: the legacy ones (<see cref="CoreDetails"/>, first and in their old
+		/// order), then the land flora's (FloraDetails, ProceduralArtCatalogue.Flora.cs) and the sea floor's
+		/// (SeaDetails, ProceduralArtCatalogue.Sea.cs) — one list per package, so none edits another's.
+		/// </summary>
+		/// <remarks>
+		/// <b>Built on first use, not in a field initialiser.</b> The C# compiler runs a partial class's static field
+		/// initialisers file by file in an order the language leaves unspecified, so a field here that concatenated
+		/// arrays declared in the other files could read them as null, and one of those built with <see cref="D"/>
+		/// could read the tints above as zero. A property is first read after the type's initialiser has run every
+		/// file's fields, and FloraDetails / SeaDetails are methods for the same reason. (BiomeArtSpec.Entries notes
+		/// the same trap.) The array is cached, so callers see one array as before.
+		/// </remarks>
+		public static DetailSpec[] Details
+		{
+			get
+			{
+				if (details == null)
+				{
+					var all = new List<DetailSpec>(CoreDetails);
+					all.AddRange(FloraDetails());
+					all.AddRange(SeaDetails());
+					details = all.ToArray();
+				}
+				return details;
+			}
+		}
+
+		/// <summary>The details that were in the catalogue before the vegetation expansion, in their old order.</summary>
+		/// <remarks>
+		/// A field, initialised with the rest of this file in textual order, so it may read <see cref="HealthyTint"/>
+		/// and the other tints above it. The other parts' detail lists are built by methods for the reason in
+		/// <see cref="Details"/>.
+		/// </remarks>
+		private static readonly DetailSpec[] CoreDetails =
 		{
 			D("GrassLush", DetailKind.Grass, 18, 0.45f, 0.035f, 0.45f, "#4c7a2c", "#78a040"),
 			D("GrassDry", DetailKind.Grass, 16, 0.5f, 0.03f, 0.45f, "#a08a4c", "#cdb672", healthy: new Color(1f, 0.97f, 0.9f), dry: new Color(0.85f, 0.78f, 0.62f)),
@@ -231,6 +395,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public static float DetailSink(in DetailSpec spec)
 		{
+			if (spec.Sink.y > 0f)
+			{
+				return spec.Sink.y; // a newer detail's own (no legacy detail sets it)
+			}
 			switch (spec.Plant.Kind)
 			{
 				case DetailKind.Grass: return 0.03f;
@@ -252,7 +420,9 @@ namespace FishMMO.Shared.WorldDesign
 				case DetailKind.Urchin: return 0.015f;
 				case DetailKind.Starfish: return 0.004f;
 				case DetailKind.Shells: return 0.006f;
-				default: return 0.03f;
+				default:
+					float own = Traits(spec.Plant.Kind).Sink;
+					return own > 0f ? own : 0.03f;
 			}
 		}
 
@@ -330,6 +500,107 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.Brown, LeafA = H("#55702a"), LeafB = H("#748a38"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2.2f },
 			new TreeSpecies { Name = "Bamboo", Form = TreeForm.Bamboo, Height = 13f, TrunkRadius = 0.065f, CrownWidth = 0.3f, CrownBase = 0.45f, Branches = 12,
 				BarkFamily = Bark.Bamboo, LeafA = H("#4a7a2a"), LeafB = H("#6a9638"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 1.4f },
+
+			// ── The vegetation expansion (2026-10-10): a species for every biome that had none of its own ──
+			// Appended, so no older species' order (or anything keyed by it) moves. Sizes are mature trees of each real
+			// species as they grow in their habitat; the biomes each stands in are in the design's per-biome table.
+
+			// European larch: a deciduous conifer, the open spire of a spruce but sparser, softer and lighter green,
+			// gold in autumn and bare in winter. Taiga, alpine meadow and valley treelines, upper mountain slopes.
+			new TreeSpecies { Name = "Larch", Form = TreeForm.Conifer, Height = 30f, TrunkRadius = 0.4f, CrownWidth = 0.12f, CrownBase = 0.3f, Branches = 22,
+				BarkFamily = Bark.Pine, LeafA = H("#7a9a4a"), LeafB = H("#9ab45a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.5f, Deciduous = true },
+			// European beech: a tall smooth grey bole under a dense dome that shades out the floor. Forests and woodland.
+			new TreeSpecies { Name = "Beech", Form = TreeForm.Broadleaf, Height = 32f, TrunkRadius = 0.55f, CrownWidth = 0.27f, CrownBase = 0.3f, Branches = 8,
+				BarkFamily = Bark.Smooth, LeafA = H("#3e6a28"), LeafB = H("#5a8a34"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 2.6f, Deciduous = true },
+			// Common alder: a narrow oval crown of dark leaves on wet ground — riverbanks, lakeshores, fen carr.
+			new TreeSpecies { Name = "Alder", Form = TreeForm.Broadleaf, Height = 20f, TrunkRadius = 0.3f, CrownWidth = 0.2f, CrownBase = 0.3f, Branches = 7,
+				BarkFamily = Bark.Brown, LeafA = H("#2e5224"), LeafB = H("#44682c"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 1.7f, Deciduous = true },
+			// Olive: squat and wide on a short, fluted, half-hollow trunk, its small leaves silver-grey. Mediterranean
+			// hills and karst, scrubland, palace gardens.
+			new TreeSpecies { Name = "Olive", Form = TreeForm.Broadleaf, Height = 9f, TrunkRadius = 0.45f, CrownWidth = 0.45f, CrownBase = 0.35f, Branches = 7,
+				BarkFamily = Bark.Olive, LeafA = H("#7a8a6a"), LeafB = H("#a0aa90"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.3f, Gnarl = 0.6f },
+			// African baobab: a vast bottle trunk, swollen a half again about a third of its height, under a short
+			// crown of stubby limbs, leafless through the dry season. The savanna.
+			new TreeSpecies { Name = "Baobab", Form = TreeForm.Broadleaf, Height = 20f, TrunkRadius = 2.2f, CrownWidth = 0.45f, CrownBase = 0.72f, Branches = 8,
+				BarkFamily = Bark.Smooth, LeafA = H("#4e7a2c"), LeafB = H("#6a9038"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.8f, Deciduous = true, TrunkSwell = 0.5f },
+			// Date palm: a straight stem of diamond leaf bases and a crown of many stiff glaucous fronds. Oases, wet
+			// desert hollows, palace gardens (the coconut grows on tropical shores, not at desert springs).
+			new TreeSpecies { Name = "DatePalm", Form = TreeForm.Palm, Height = 20f, TrunkRadius = 0.35f, CrownWidth = 0.24f, CrownBase = 0.8f, Branches = 28,
+				BarkFamily = Bark.DatePalm, LeafA = H("#6a8a6a"), LeafB = H("#8aa080"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1f, Lean = 0.02f, FrondLift = 1.05f },
+			// Joshua tree: a shaggy trunk forking into angular limbs, each tipped by a rosette of dagger leaves over a
+			// skirt of dead ones. The cool high desert (Mojave).
+			new TreeSpecies { Name = "JoshuaTree", Form = TreeForm.Rosette, Height = 9f, TrunkRadius = 0.4f, CrownWidth = 0.35f, CrownBase = 0.35f, Branches = 3,
+				BarkFamily = Bark.Fibrous, LeafA = H("#6a7a3a"), LeafB = H("#8a9a4a"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 0.8f },
+			// Red mangrove: a dense, glossy, low crown stood on arching prop roots in the tidal mud.
+			new TreeSpecies { Name = "Mangrove", Form = TreeForm.Broadleaf, Height = 12f, TrunkRadius = 0.25f, CrownWidth = 0.32f, CrownBase = 0.45f, Branches = 6,
+				BarkFamily = Bark.Brown, LeafA = H("#2a5222"), LeafB = H("#3a6a2a"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 1.5f,
+				PropRootCount = 12, PropRootTop = 0.3f, PropRootRing = 2.5f },
+			// Bald cypress: a deciduous conifer of southern swamps, its foot swollen into fluted buttresses, its crown
+			// flat-topped and feathery, rust in autumn, hung with grey Spanish moss all year.
+			new TreeSpecies { Name = "BaldCypress", Form = TreeForm.Pine, Height = 30f, TrunkRadius = 0.6f, CrownWidth = 0.2f, CrownBase = 0.4f, Branches = 18,
+				BarkFamily = Bark.Fibrous, LeafA = H("#5a7a3a"), LeafB = H("#7a9a4a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.6f, Deciduous = true,
+				ButtressCount = 9, ButtressHeight = 0.07f, ButtressReach = 1.3f, Hanging = 0.5f, HangingColour = H("#8a8e80") },
+			// Kapok (silk-cotton tree): the rainforest's emergent, a smooth bare bole rising through the canopy to an
+			// umbrella crown at three quarters of its height, braced at the foot by tall plank buttresses.
+			new TreeSpecies { Name = "Kapok", Form = TreeForm.Broadleaf, Height = 55f, TrunkRadius = 1.2f, CrownWidth = 0.26f, CrownBase = 0.72f, Branches = 7,
+				BarkFamily = Bark.Smooth, LeafA = H("#2e5a24"), LeafB = H("#4a7a30"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 3.8f,
+				ButtressCount = 6, ButtressHeight = 0.08f, ButtressReach = 4f },
+			// Tree fern: a slender fibrous stem and a shuttlecock of long arching fronds. Jungle understory, bamboo
+			// forest, warm wet karst and mountain slopes.
+			new TreeSpecies { Name = "TreeFern", Form = TreeForm.Palm, Height = 7f, TrunkRadius = 0.15f, CrownWidth = 0.4f, CrownBase = 0.8f, Branches = 12,
+				BarkFamily = Bark.Fibrous, LeafA = H("#3e6e26"), LeafB = H("#5a8a34"), LeafCell = FoliageCell.Frond, LeafSize = 0.9f, Lean = 0.03f, FrondLift = 0.7f },
+			// Pinyon pine: low, rounded and bushy, crowned nearly to the ground with short grey-green needles. High
+			// desert and dry ranges, badland caprock.
+			new TreeSpecies { Name = "Pinyon", Form = TreeForm.Pine, Height = 9f, TrunkRadius = 0.25f, CrownWidth = 0.35f, CrownBase = 0.15f, Branches = 14,
+				BarkFamily = Bark.Pine, LeafA = H("#3a5a3a"), LeafB = H("#5a7448"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.2f },
+
+			// Quaking aspen: slender and pale-barked, a narrow crown of round leaves that turns gold. Taiga after fire,
+			// valleys, mountain slopes.
+			new TreeSpecies { Name = "Aspen", Form = TreeForm.Broadleaf, Height = 20f, TrunkRadius = 0.2f, CrownWidth = 0.15f, CrownBase = 0.5f, Branches = 6,
+				BarkFamily = Bark.Aspen, LeafA = H("#6a9a3a"), LeafB = H("#8ab04a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.4f, Deciduous = true },
+			// Weeping willow: a broad crown whose shoots fall in curtains of narrow leaves nearly to the ground. Rivers,
+			// lakes, wetlands, swamps.
+			new TreeSpecies { Name = "WeepingWillow", Form = TreeForm.Broadleaf, Height = 20f, TrunkRadius = 0.5f, CrownWidth = 0.32f, CrownBase = 0.3f, Branches = 6,
+				BarkFamily = Bark.Brown, LeafA = H("#6a8a3a"), LeafB = H("#8aa24a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2.1f, Deciduous = true, Weeping = 0.4f },
+			// Black poplar / cottonwood: tall, broad and irregular on a deeply fissured trunk. River corridors, valleys,
+			// prairie creeks, farmland.
+			new TreeSpecies { Name = "Poplar", Form = TreeForm.Broadleaf, Height = 28f, TrunkRadius = 0.6f, CrownWidth = 0.28f, CrownBase = 0.35f, Branches = 8,
+				BarkFamily = Bark.Brown, LeafA = H("#4a7a2c"), LeafB = H("#6a9438"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 2.4f, Deciduous = true },
+			// Italian cypress: a dark green flame of a column. Palace avenues, karst, scrubland.
+			new TreeSpecies { Name = "Cypress", Form = TreeForm.Columnar, Height = 20f, TrunkRadius = 0.3f, CrownWidth = 0.065f, CrownBase = 0.03f, Branches = 24,
+				BarkFamily = Bark.Fibrous, LeafA = H("#1e3a1e"), LeafB = H("#2a4a26"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1f },
+			// Banana: a soft pseudostem under a few huge paddle leaves torn by the wind. Jungle gaps and ruins, the
+			// landward edge of mangroves.
+			new TreeSpecies { Name = "Banana", Form = TreeForm.Palm, Height = 5f, TrunkRadius = 0.12f, CrownWidth = 0.42f, CrownBase = 0.6f, Branches = 8,
+				BarkFamily = Bark.Fibrous, LeafA = H("#3a7a2a"), LeafB = H("#5a9a34"), LeafCell = FoliageCell.Paddle, LeafSize = 0.6f, Lean = 0.03f, FrondLift = 1.5f },
+			// Great Basin bristlecone pine: squat, wind-twisted, its trunk mostly dead wood wrapped in living bark
+			// strips and half its boughs bare, bottle-brush tufts of dark needles on the rest. Dry ranges above the trees.
+			new TreeSpecies { Name = "Bristlecone", Form = TreeForm.Pine, Height = 10f, TrunkRadius = 0.6f, CrownWidth = 0.32f, CrownBase = 0.2f, Branches = 14,
+				BarkFamily = Bark.Dead, LeafA = H("#24402a"), LeafB = H("#36543a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1f, Gnarl = 0.95f },
+			// Honey mesquite: low and spreading on several stems, its feathery leaves light green. Scrubland, desert
+			// washes, badlands.
+			new TreeSpecies { Name = "Mesquite", Form = TreeForm.Umbrella, Height = 7f, TrunkRadius = 0.2f, CrownWidth = 0.55f, CrownBase = 0.5f, Branches = 4,
+				BarkFamily = Bark.Brown, LeafA = H("#6a8a3a"), LeafB = H("#8aa24a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2.2f },
+
+			// Lombardy poplar: a tall narrow column of small leaves — the farmland windbreak and valley avenue tree.
+			new TreeSpecies { Name = "LombardyPoplar", Form = TreeForm.Columnar, Height = 25f, TrunkRadius = 0.45f, CrownWidth = 0.09f, CrownBase = 0.04f, Branches = 24,
+				BarkFamily = Bark.Brown, LeafA = H("#4a7a2c"), LeafB = H("#6a9438"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1f, Deciduous = true },
+			// Holm oak: a dense dark evergreen dome of small leathery leaves. Karst, scrubland, palace gardens.
+			new TreeSpecies { Name = "HolmOak", Form = TreeForm.Broadleaf, Height = 18f, TrunkRadius = 0.5f, CrownWidth = 0.33f, CrownBase = 0.25f, Branches = 8,
+				BarkFamily = Bark.Brown, LeafA = H("#2a4422"), LeafB = H("#3e5a2c"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2f },
+			// Dragon tree: a stout grey trunk under a dense umbrella of forking limbs, every tip a rosette of
+			// blue-green swords. Dry volcanic slopes, scrubland.
+			new TreeSpecies { Name = "DragonTree", Form = TreeForm.Rosette, Height = 10f, TrunkRadius = 0.5f, CrownWidth = 0.45f, CrownBase = 0.42f, Branches = 6,
+				BarkFamily = Bark.Smooth, LeafA = H("#4a6a4a"), LeafB = H("#6a8a68"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 1.3f },
+			// Screw pine (Pandanus): a slender branching trunk on a cone of prop roots, every branch a spiral rosette
+			// of long strap leaves. Tropical beaches behind the strand.
+			new TreeSpecies { Name = "Pandanus", Form = TreeForm.Rosette, Height = 8f, TrunkRadius = 0.18f, CrownWidth = 0.4f, CrownBase = 0.45f, Branches = 3,
+				BarkFamily = Bark.Palm, LeafA = H("#4a7a3a"), LeafB = H("#6a9a48"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 1.6f,
+				PropRootCount = 7, PropRootTop = 0.12f, PropRootRing = 1f },
+			// Nipa palm: no trunk above the mud — its long erect fronds rise straight from a creeping stem. The landward
+			// mangrove and tidal creeks.
+			new TreeSpecies { Name = "Nipa", Form = TreeForm.Palm, Height = 7f, TrunkRadius = 0.25f, CrownWidth = 0.36f, CrownBase = 0.05f, Branches = 11,
+				BarkFamily = Bark.Palm, LeafA = H("#4a7a2a"), LeafB = H("#6a8e38"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1.1f, Lean = 0.02f, FrondLift = 2.8f },
 		};
 
 		/// <summary>
@@ -340,7 +611,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// The crown width is a radius over the height for every form the generator grows round a single
 		/// stem (TreeMeshes: a conifer's lowest whorl, a broadleaf's or an umbrella's crown radius, a palm's
 		/// frond length). A bamboo's crown is its clump — culm feet spread over a quarter of the crown
-		/// width times the height — plus one leaf spray; a cactus's is its arms, about three trunk radii.
+		/// width times the height — plus one leaf spray; a cactus's is its arms, about three trunk radii. A rosette
+		/// tree's limbs are aimed at the crown width too (TreeMeshes' Rosette), and a columnar tree's whorls reach it.
+		/// A tree on prop roots stands over a ring of them (<see cref="TreeSpecies.PropRootRing"/>): its footprint is
+		/// the wider of the crown and that ring, not their sum — the roots stand under the crown, and a mangrove's
+		/// closed canopy would open into gaps if its trees were spaced by both.
 		/// </remarks>
 		public static float CrownRadius(in TreeSpecies species)
 		{
@@ -348,7 +623,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				case TreeForm.Bamboo: return species.CrownWidth * species.Height * 0.25f + species.LeafSize;
 				case TreeForm.Cactus: return species.TrunkRadius * 3f;
-				default: return species.CrownWidth * species.Height;
+				default: return Mathf.Max(species.CrownWidth * species.Height, species.PropRootCount > 0 ? species.PropRootRing : 0f);
 			}
 		}
 
@@ -400,7 +675,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// tree fades out at the tree distance (<c>_DistanceFade</c> on the vegetation shader), so one
 		/// material cannot serve both.
 		/// </remarks>
-		public static bool WearsBark(in DetailSpec spec) => spec.Plant.Kind == DetailKind.BarrelCactus;
+		public static bool WearsBark(in DetailSpec spec) => DetailBark(in spec) != null;
+
+		/// <summary>
+		/// The <see cref="Bark"/> family a detail's material wears instead of the foliage atlas, or null: the barrel
+		/// cactus the cactus bark, as always; a newer kind whatever its traits name (<see cref="DetailKindTraits.BarkFamily"/>).
+		/// </summary>
+		public static string DetailBark(in DetailSpec spec) => spec.Plant.Kind == DetailKind.BarrelCactus ? Bark.Cactus : Traits(spec.Plant.Kind).BarkFamily;
 
 		/// <summary>True for a tree species with a leaf material (a cactus has none).</summary>
 		public static bool HasLeaves(in TreeSpecies species) => species.Form != TreeForm.Cactus;
@@ -451,6 +732,14 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path; // Shrubs (ProceduralArtCatalogue.Bushes.cs).
 			}
+			foreach (string path in DeadwoodPayloadPaths())
+			{
+				yield return path; // Logs, stumps, driftwood (ProceduralArtCatalogue.Flora.cs).
+			}
+			foreach (string path in StructurePayloadPaths())
+			{
+				yield return path; // The structure kit (ProceduralArtCatalogue.Structures.cs).
+			}
 		}
 
 		/// <summary>Every wrapper the generator writes, by project path: terrain layers, materials and prefabs.</summary>
@@ -464,7 +753,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return MaterialPath(BarkMaterial(r.Name));
 			}
-			foreach (RockMaterialSpec m in RockMaterials)
+			foreach (RockMaterialSpec m in AllRockMaterials)
 			{
 				yield return MaterialPath(RockMaterial(m.Name));
 			}
@@ -488,6 +777,14 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path;
 			}
+			foreach (string path in DeadwoodWrapperPaths())
+			{
+				yield return path;
+			}
+			foreach (string path in StructureWrapperPaths())
+			{
+				yield return path;
+			}
 			foreach (string prefab in AllPrefabNames())
 			{
 				yield return PrefabPath(prefab);
@@ -505,7 +802,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return TreePrefab(t.Name);
 			}
-			foreach (RockMaterialSpec m in RockMaterials)
+			foreach (RockMaterialSpec m in AllRockMaterials)
 			{
 				foreach (RockShape s in BoulderShapes)
 				{
@@ -519,6 +816,14 @@ namespace FishMMO.Shared.WorldDesign
 				yield return prefab;
 			}
 			foreach (string prefab in BushPrefabNames())
+			{
+				yield return prefab;
+			}
+			foreach (string prefab in DeadwoodPrefabNames())
+			{
+				yield return prefab;
+			}
+			foreach (string prefab in StructurePrefabNames())
 			{
 				yield return prefab;
 			}

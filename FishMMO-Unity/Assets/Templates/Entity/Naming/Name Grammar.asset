@@ -152,7 +152,7 @@ MonoBehaviour:
     Value: endurance
   - Key: pearl
     Value: treasure
-  - Key: 'on'
+  - Key: on
     Value: greatness
   - Key: us
     Value: valor
@@ -211,7 +211,7 @@ MonoBehaviour:
     Value: of the wild
   - Key: ra
     Value: of flame
-  - Key: 'no'
+  - Key: no
     Value: of the void
   - Key: wa
     Value: of water
@@ -401,7 +401,7 @@ MonoBehaviour:
   - Key: glen
     Value: hidden valley
   - Key: roost
-    Value: 'dragon''s perch'
+    Value: dragon's perch
   - Key: peak
     Value: mountain summit
   - Key: aerie
@@ -719,6 +719,1897 @@ MonoBehaviour:
     - Shell
     - Skeleton
     - Husk
+  - Key: waterfall
+    Values:
+    - Falls
+    - Force
+    - Cascade
+    - Linn
+    - Spout
+    - Foss
+    - Cataract
+    - Chute
+  - Key: rapids
+    Values:
+    - Rapids
+    - Race
+    - Shoals
+    - Riffles
+    - Narrows
+    - Whitewater
+    - Cauldron
+  - Key: river
+    Values:
+    - River
+    - Water
+    - Run
+    - Flow
+    - Stream
+    - Rill
+  - Key: lake
+    Values:
+    - Lake
+    - Mere
+    - Water
+    - Tarn
+    - Loch
+    - Pool
+    - Broad
+  - Key: hotspring
+    Values:
+    - Hot Spring
+    - Springs
+    - Steam Pool
+    - Baths
+    - Kettle
+    - Warm Wells
+    - Cauldron
+  - Key: rivermouth
+    Values:
+    - Mouth
+    - Firth
+    - Estuary
+    - Outfall
+    - Inlet
+    - Water-foot
+  - Key: delta
+    Values:
+    - Delta
+    - Fens
+    - Braids
+    - Mouths
+    - Splay
+    - Channels
+  - Key: peak
+    Values:
+    - Peak
+    - Crag
+    - Pike
+    - Horn
+    - Summit
+    - Fell
+    - Tor
+    - Spire
+  - Key: pass
+    Values:
+    - Pass
+    - Gap
+    - Col
+    - Saddle
+    - Notch
+    - Gate
+    - Defile
+  - Key: gorge
+    Values:
+    - Gorge
+    - Ravine
+    - Canyon
+    - Chasm
+    - Cleft
+    - Gulch
+    - Gill
+  - Key: mesa
+    Values:
+    - Mesa
+    - Table
+    - Tableland
+    - Plateau
+    - Bench
+    - Shelf
+  - Key: butte
+    Values:
+    - Butte
+    - Stack
+    - Tor
+    - Pinnacle
+    - Needle
+    - Chimney
+    - Knob
+  - Key: valley
+    Values:
+    - Valley
+    - Vale
+    - Dale
+    - Glen
+    - Hollow
+    - Combe
+    - Strath
+  - Key: island
+    Values:
+    - Isle
+    - Island
+    - Holm
+    - Eyot
+    - Key
+    - Skerry
+    - Ait
+  - Key: bay
+    Values:
+    - Bay
+    - Cove
+    - Bight
+    - Inlet
+    - Sound
+    - Haven
+  - Key: headland
+    Values:
+    - Head
+    - Point
+    - Ness
+    - Cape
+    - Promontory
+    - Bluff
+  - Key: naturalarch
+    Values:
+    - Arch
+    - Stone Bridge
+    - Span
+    - Eye
+    - Gate
+    - Window
+  - Key: sinkhole
+    Values:
+    - Sinkhole
+    - Swallet
+    - Pit
+    - Doline
+    - Shakehole
+    - Sink
+  - Key: crater
+    Values:
+    - Crater
+    - Bowl
+    - Pit
+    - Basin
+    - Cauldron
+    - Ring
+  - Key: dunesea
+    Values:
+    - Dunes
+    - Sand Sea
+    - Erg
+    - Sands
+    - Drifts
+    - Barchans
+  - Key: saltflat
+    Values:
+    - Salt Flat
+    - Salt Pan
+    - Playa
+    - Salar
+    - White Flats
+    - Pan
+  - Key: glacier
+    Values:
+    - Glacier
+    - Icefield
+    - Ice River
+    - Icefall
+    - Ice Tongue
+    - Firn
+  - Key: volcano
+    Values:
+    - Volcano
+    - Cone
+    - Caldera
+    - Firemount
+    - Smokepeak
+    - Ashcone
+  - Key: lavalake
+    Values:
+    - Lava Lake
+    - Fire Lake
+    - Molten Pool
+    - Crucible
+    - Ember Mere
+    - Magma Pool
+  - Key: fumarolefield
+    Values:
+    - Fumaroles
+    - Vents
+    - Steam Field
+    - Smokes
+    - Reek
+    - Breathing Ground
+  - Key: obsidianfield
+    Values:
+    - Glassfield
+    - Obsidian Field
+    - Black Glass
+    - Shards
+    - Glass Flats
+    - Knapping Field
+  - Key: sunkentemple
+    Values:
+    - Sunken Temple
+    - Drowned Fane
+    - Mire Temple
+    - Silted Sanctum
+    - Sunken Shrine
+    - Drowned Temple
+  - Key: drownedvillage
+    Values:
+    - Hamlet
+    - Steads
+    - Village
+    - Crofts
+    - Thorpe
+    - Wick
+  - Key: witchhut
+    Values:
+    - Hut
+    - Hovel
+    - Cottage
+    - Croft
+    - Shack
+    - Hutch
+  - Key: stiltvillage
+    Values:
+    - Stilt Village
+    - Stilt-town
+    - Pile Village
+    - Raised Hamlet
+    - Stilthouses
+    - Platforms
+  - Key: bogshrine
+    Values:
+    - Bog-altar
+    - Fen-shrine
+    - Mire Altar
+    - Peat Shrine
+    - Reed Altar
+    - Bog Shrine
+  - Key: mangrovemaze
+    Values:
+    - Mangroves
+    - Tangle
+    - Root-maze
+    - Snarl
+    - Labyrinth
+    - Knot
+  - Key: wisphollow
+    Values:
+    - Wisp Hollow
+    - Lantern Hollow
+    - Glimmer Dell
+    - Will-light Hollow
+    - Corpse-light Glade
+    - Wisp Dell
+  - Key: grotto
+    Values:
+    - Grotto
+    - Hollow
+    - Alcove
+    - Chamber
+    - Bower
+    - Nook
+  - Key: seacave
+    Values:
+    - Sea Cave
+    - Sea Cavern
+    - Blowhole
+    - Zawn
+    - Surge Cave
+    - Tide Cave
+  - Key: icecave
+    Values:
+    - Ice Cave
+    - Ice Cavern
+    - Frost Grotto
+    - Ice Hollow
+    - Rime Cave
+    - Ice Vault
+  - Key: lavatube
+    Values:
+    - Lava Tube
+    - Fire Tube
+    - Ember Tunnel
+    - Conduit
+    - Cinder Tube
+    - Magma Run
+  - Key: overhang
+    Values:
+    - Overhang
+    - Ledge
+    - Lip
+    - Brow
+    - Shelf
+    - Hood
+  - Key: banditcamp
+    Values:
+    - Hideout
+    - Den
+    - Roost
+    - Camp
+    - Hole
+    - Lair
+    - Bolt-hole
+  - Key: huntinglodge
+    Values:
+    - Hunting Lodge
+    - Lodge
+    - Hunters' Rest
+    - Hunting Blind
+    - Trapper's Cabin
+    - Hunt Hall
+  - Key: lumbercamp
+    Values:
+    - Lumber Camp
+    - Logging Camp
+    - Sawpit
+    - Woodyard
+    - Timber Camp
+    - Axe Camp
+  - Key: fishingcamp
+    Values:
+    - Fishing Camp
+    - Fish Weir
+    - Net-huts
+    - Smokehouse
+    - Landing
+    - Fishery
+  - Key: monsterden
+    Values:
+    - Den
+    - Lair
+    - Burrow
+    - Warren
+    - Hole
+    - Lurk
+  - Key: nest
+    Values:
+    - Nest
+    - Eyrie
+    - Rookery
+    - Roost
+    - Hive
+    - Brood
+  - Key: ritualsite
+    Values:
+    - Ritual Site
+    - Blood Ring
+    - Altar
+    - Offering Stone
+    - Rite-ground
+    - Sacrifice Stone
+  - Key: stonecircle
+    Values:
+    - Stone Circle
+    - Ring
+    - Henge
+    - Stones
+    - Standing Stones
+    - Dancers
+  - Key: temple
+    Values:
+    - Temple
+    - Fane
+    - Sanctum
+    - Sanctuary
+    - Basilica
+    - House
+  - Key: monastery
+    Values:
+    - Monastery
+    - Abbey
+    - Priory
+    - Cloister
+    - Friary
+    - Retreat
+  - Key: feyring
+    Values:
+    - Fairy Ring
+    - Fey Ring
+    - Toadstool Ring
+    - Dancing Ring
+    - Elf-circle
+    - Mushroom Ring
+  - Key: leynexus
+    Values:
+    - Nexus
+    - Confluence
+    - Wellspring
+    - Lodestone
+    - Heart
+    - Crossing
+  - Key: fallenstar
+    Values:
+    - Fallen Star
+    - Starfall
+    - Skystone
+    - Star-crater
+    - Thunderstone
+    - Starstone
+  - Key: corruptedgrove
+    Values:
+    - Blighted Grove
+    - Rotwood
+    - Withered Grove
+    - Canker Grove
+    - Sickwood
+    - Blightwood
+  - Key: portal
+    Values:
+    - Portal
+    - Gate
+    - Door
+    - Threshold
+    - Waygate
+    - Rift
+  - Key: graveyard
+    Values:
+    - Graveyard
+    - Boneyard
+    - Cemetery
+    - Barrow-field
+    - Gravefield
+    - Burying Ground
+  - Key: barrow
+    Values:
+    - Barrow
+    - Mound
+    - Tumulus
+    - Howe
+    - Cairn
+    - Long Barrow
+  - Key: crypt
+    Values:
+    - Crypt
+    - Tomb
+    - Vault
+    - Catacombs
+    - Sepulchre
+    - Mausoleum
+  - Key: battlefield
+    Values:
+    - Battlefield
+    - Field
+    - Killing Field
+    - War-field
+    - Last Stand
+    - Bloodfield
+  - Key: ossuary
+    Values:
+    - Ossuary
+    - Charnel House
+    - Bone Hall
+    - Bonehouse
+    - Skull-hall
+    - Charnel
+  - Key: ruins
+    Values:
+    - Ruins
+    - Ruin
+    - Remains
+    - Rubble
+    - Old Walls
+    - Foundations
+  - Key: ruinedtower
+    Values:
+    - Ruined Tower
+    - Broken Tower
+    - Fallen Spire
+    - Old Tower
+    - Tower Stump
+    - Shell
+  - Key: statue
+    Values:
+    - Statue
+    - Effigy
+    - Colossus
+    - Idol
+    - Likeness
+    - Figure
+  - Key: obelisk
+    Values:
+    - Obelisk
+    - Needle
+    - Pillar
+    - Column
+    - Stele
+    - Monolith
+  - Key: ancientroad
+    Values:
+    - Old Road
+    - Way
+    - Causeway
+    - Highway
+    - Road
+    - Track
+  - Key: abandonedfarm
+    Values:
+    - Farm
+    - Croft
+    - Homestead
+    - Steading
+    - Farmstead
+    - Grange
+  - Key: hermitage
+    Values:
+    - Hermitage
+    - Cell
+    - Anchorhold
+    - Retreat
+    - Refuge
+    - Hermit's Hut
+  - Key: oasis
+    Values:
+    - Oasis
+    - Wells
+    - Palms
+    - Green
+    - Spring
+    - Garden
+  - Key: village
+    Values:
+    - Village
+    - Hamlet
+    - Thorpe
+    - Steading
+    - Wick
+    - Stead
+  - Key: town
+    Values:
+    - Town
+    - Burgh
+    - Market Town
+    - Borough
+    - Stead
+    - Ton
+  - Key: city
+    Values:
+    - City
+    - Burg
+    - Citadel
+    - Metropolis
+    - Walled City
+    - Seat
+  - Key: capital
+    Values:
+    - Capital
+    - Throne-city
+    - Crown City
+    - High Seat
+    - Royal City
+    - Seat
+  - Key: port
+    Values:
+    - Port
+    - Harbour
+    - Haven
+    - Docks
+    - Quay
+    - Anchorage
+  - Key: keep
+    Values:
+    - Keep
+    - Hold
+    - Stronghold
+    - Donjon
+    - Bastion
+    - Tower
+  - Key: castle
+    Values:
+    - Castle
+    - Citadel
+    - Palace
+    - Hall
+    - Bastion
+    - Court
+  - Key: fortress
+    Values:
+    - Fortress
+    - Fort
+    - Fastness
+    - Bulwark
+    - Stronghold
+    - Redoubt
+  - Key: tradingpost
+    Values:
+    - Trading Post
+    - Post
+    - Market
+    - Exchange
+    - Bazaar
+    - Mart
+  - Key: waystation
+    Values:
+    - Waystation
+    - Inn
+    - Waypost
+    - Coaching Inn
+    - Halt
+    - Hostel
+  - Key: mine
+    Values:
+    - Mine
+    - Pit
+    - Delving
+    - Shaft
+    - Diggings
+    - Workings
+    - Adit
+  - Key: quarry
+    Values:
+    - Quarry
+    - Stonepit
+    - Cut
+    - Delf
+    - Stoneworks
+    - Diggings
+  - Key: lighthouse
+    Values:
+    - Lighthouse
+    - Light
+    - Beacon
+    - Pharos
+    - Lamp
+    - Watchlight
+  - Key: smugglerscove
+    Values:
+    - Smugglers' Cove
+    - Hidden Cove
+    - Cove
+    - Smugglers' Hole
+    - Free-traders' Landing
+    - Run
+  - Key: piratecove
+    Values:
+    - Pirate Cove
+    - Corsair Cove
+    - Reavers' Bay
+    - Raiders' Cove
+    - Hideaway
+    - Anchorage
+  - Key: coralreef
+    Values:
+    - Reef
+    - Coral Reef
+    - Shoals
+    - Coral Gardens
+    - Atoll
+    - Bank
+  - Key: sunkenship
+    Values:
+    - Sunken Ship
+    - Wreck
+    - Hulk
+    - Drowned Galleon
+    - Sunken Hull
+    - Lost Ship
+  - Key: sunkenruins
+    Values:
+    - Sunken Ruins
+    - Drowned Ruins
+    - Sea Ruins
+    - Drowned Halls
+    - Drowned Walls
+    - Tide Ruins
+  - Key: sunkencity
+    Values:
+    - Sunken City
+    - Drowned City
+    - Lost City
+    - Deep City
+    - Sea-city
+    - Drowned Halls
+  - Key: dungeonentrance
+    Values:
+    - Entrance
+    - Gate
+    - Mouth
+    - Descent
+    - Door
+    - Stair
+    - Delve
+  - Key: bosslair
+    Values:
+    - Lair
+    - Throne
+    - Domain
+    - Sanctum
+    - Den
+    - Seat
+    - Roost
+  - Key: orevein
+    Values:
+    - Vein
+    - Lode
+    - Seam
+    - Outcrop
+    - Strike
+    - Ore Vein
+  - Key: crystalformation
+    Values:
+    - Crystals
+    - Crystal Garden
+    - Geode
+    - Crystal Spires
+    - Prisms
+    - Shardfield
+  - Key: ancienttree
+    Values:
+    - Elder Tree
+    - Great Oak
+    - Old One
+    - Father Tree
+    - Mother Tree
+    - Grandfather Tree
+  - Key: herbgrove
+    Values:
+    - Herb Grove
+    - Physic Garden
+    - Herb Garden
+    - Simples Grove
+    - Wortgarth
+    - Herbwood
+  - Key: icegeyserfield
+    Values:
+    - Ice Geysers
+    - Plumes
+    - Frost Jets
+    - Geyser Field
+    - Cryo-vents
+    - Ice Fountains
+  - Key: cryovolcano
+    Values:
+    - Cryovolcano
+    - Ice Volcano
+    - Frost Cone
+    - Slush Mount
+    - Ice Cone
+    - Cold Caldera
+  - Key: methanelake
+    Values:
+    - Mare
+    - Black Lake
+    - Still Mere
+    - Tar Lake
+    - Lacus
+    - Dark Sea
+  - Key: impactbasin
+    Values:
+    - Basin
+    - Crater
+    - Ring
+    - Strike
+    - Scar
+    - Impact
+  - Key: tidalrift
+    Values:
+    - Rift
+    - Fracture
+    - Linea
+    - Chasm
+    - Rent
+    - Fissure
+  PlaceNameTemplates:
+  - Pattern: '{Root} River'
+    Kinds: 0d000000
+    Groups: 
+    Weight: 30
+  - Pattern: River {Root}
+    Kinds: 0d000000
+    Groups: 
+    Weight: 20
+  - Pattern: The {Root}
+    Kinds: 0d000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 0d000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 0d000000
+    Groups: 
+    Weight: 8
+  - Pattern: The {Adjective} {Type}
+    Kinds: 0d000000
+    Groups: 
+    Weight: 6
+  - Pattern: Lake {Root}
+    Kinds: 0e000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Root} Mere'
+    Kinds: 0e000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} Water'
+    Kinds: 0e000000
+    Groups: 
+    Weight: 12
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 0e000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 0e000000
+    Groups: 
+    Weight: 12
+  - Pattern: The {Adjective} {Type}
+    Kinds: 0e000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 0e000000
+    Groups: 
+    Weight: 4
+  - Pattern: '{Root} Falls'
+    Kinds: 0b000000
+    Groups: 
+    Weight: 30
+  - Pattern: The {Adjective} Falls
+    Kinds: 0b000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 0b000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 0b000000
+    Groups: 
+    Weight: 8
+  - Pattern: The {Adjective} {Type}
+    Kinds: 0b000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{Founder}''s Leap'
+    Kinds: 0b000000
+    Groups: 
+    Weight: 4
+  - Pattern: '{Root} {Type}'
+    Kinds: 0c0000001000000011000000
+    Groups: 
+    Weight: 30
+  - Pattern: The {Adjective} {Type}
+    Kinds: 0c00000011000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 0c000000
+    Groups: 
+    Weight: 5
+  - Pattern: Mouth of the {Root}
+    Kinds: 10000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 10000000
+    Groups: 
+    Weight: 8
+  - Pattern: The {Root} {Type}
+    Kinds: 11000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Root} {Type}'
+    Kinds: 070000000f0000004c000000
+    Groups: 
+    Weight: 30
+  - Pattern: The {Adjective} {Type}
+    Kinds: 070000004c000000
+    Groups: 
+    Weight: 18
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 070000000f0000004c000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 070000000f0000004c000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 070000000f000000
+    Groups: 
+    Weight: 4
+  - Pattern: Mount {Root}
+    Kinds: 12000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Root} {Type}'
+    Kinds: 12000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 12000000
+    Groups: 
+    Weight: 15
+  - Pattern: The {Adjective} {Type}
+    Kinds: 12000000
+    Groups: 
+    Weight: 12
+  - Pattern: The {Adjective} Spire
+    Kinds: 12000000
+    Groups: 
+    Weight: 4
+  - Pattern: Mount {Root}
+    Kinds: 2100000067000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Root} {Type}'
+    Kinds: 2100000067000000
+    Groups: 
+    Weight: 25
+  - Pattern: The {Adjective} {Type}
+    Kinds: 2100000067000000
+    Groups: 
+    Weight: 12
+  - Pattern: The {Adjective} Mountain
+    Kinds: 21000000
+    Groups: 
+    Weight: 5
+  - Pattern: '{Root} Mons'
+    Kinds: 67000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Root} {Type}'
+    Kinds: 18000000
+    Groups: 
+    Weight: 25
+  - Pattern: Isle of {Root}
+    Kinds: 18000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 18000000
+    Groups: 
+    Weight: 15
+  - Pattern: The {Adjective} {Type}
+    Kinds: 18000000
+    Groups: 
+    Weight: 12
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 18000000
+    Groups: 
+    Weight: 6
+  - Pattern: '{Root} {Type}'
+    Kinds: 060000001300000014000000150000001600000017000000190000001a0000001b0000001c0000001d0000001e0000001f000000200000002200000023000000240000002a0000002c0000002d000000300000005c0000006600000068000000690000006a0000002b000000
+    Groups: 
+    Weight: 35
+  - Pattern: The {Adjective} {Type}
+    Kinds: 060000001300000014000000150000001600000017000000190000001a0000001b0000001c0000001d0000001e000000200000002a0000002c000000300000005c00000068000000690000006a000000
+    Groups: 
+    Weight: 22
+  - Pattern: '{Type} of {Root}'
+    Kinds: 060000001300000014000000150000001600000017000000190000001a0000001b0000001c0000001d0000001e0000001f000000200000002200000023000000240000002a0000002c0000002d000000300000005c0000006600000068000000690000006a0000002b000000
+    Groups: 
+    Weight: 6
+  - Pattern: '{Root}{Suffix}'
+    Kinds: 1700000013000000190000001a00000006000000
+    Groups: 
+    Weight: 10
+  - Pattern: Bay of {Root}
+    Kinds: 19000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 13000000300000002c000000060000002d000000
+    Groups: 
+    Weight: 5
+  - Pattern: '{Type} of {RacePlural}'
+    Kinds: 080000002e0000002f000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Type} of the {RacePlural}'
+    Kinds: 080000002e0000002f000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 080000002e0000002f000000
+    Groups: 
+    Weight: 18
+  - Pattern: '{Root} {Type}'
+    Kinds: 080000002e0000002f000000
+    Groups: 
+    Weight: 25
+  - Pattern: The {Adjective} {Type}
+    Kinds: 08000000
+    Groups: 
+    Weight: 18
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 080000002e0000002f000000
+    Groups: 
+    Weight: 4
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 0200000031000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Type} of {RacePlural}'
+    Kinds: 0200000031000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 0200000031000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 0200000031000000
+    Groups: 
+    Weight: 20
+  - Pattern: The {Adjective} {Type}
+    Kinds: 0200000031000000
+    Groups: 
+    Weight: 12
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 3500000036000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Type} of {RacePlural}'
+    Kinds: 3500000036000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 3500000036000000
+    Groups: 
+    Weight: 20
+  - Pattern: The {Adjective} {Type}
+    Kinds: 3500000036000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 320000003300000034000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Root} {Type}'
+    Kinds: 320000003300000034000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 27000000
+    Groups: 
+    Weight: 20
+  - Pattern: Mother {Founder}'s {Type}
+    Kinds: 27000000
+    Groups: 
+    Weight: 6
+  - Pattern: '{Root} {Type}'
+    Kinds: 27000000
+    Groups: 
+    Weight: 15
+  - Pattern: The {Adjective} {Type}
+    Kinds: 27000000
+    Groups: 
+    Weight: 10
+  - Pattern: Drowned {City}
+    Kinds: 26000000
+    Groups: 
+    Weight: 25
+  - Pattern: Sunken {City}
+    Kinds: 26000000
+    Groups: 
+    Weight: 10
+  - Pattern: The Drowned {Type}
+    Kinds: 26000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Dungeon}'
+    Kinds: 25000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 030000003900000038000000370000003a0000003b0000003c0000003d0000003e0000003f0000002900000025000000
+    Groups: 
+    Weight: 18
+  - Pattern: '{Root} {Type}'
+    Kinds: 030000003900000038000000370000003a0000003b0000003c0000003d0000003e0000003f0000002900000025000000
+    Groups: 
+    Weight: 22
+  - Pattern: '{Type} of {Root}'
+    Kinds: 030000003900000038000000370000003a0000003b0000003c0000003d0000003e0000003f0000002900000025000000
+    Groups: 
+    Weight: 8
+  - Pattern: The {Adjective} {Type}
+    Kinds: 0300000039000000380000003a0000003f0000003c000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 03000000390000003a0000003f00000038000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{Type} of {Founder}'
+    Kinds: 03000000390000003a000000
+    Groups: 
+    Weight: 6
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 0300000039000000370000003a0000002500000038000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 40000000410000004200000044000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Type} of {Founder}'
+    Kinds: 4100000042000000
+    Groups: 
+    Weight: 6
+  - Pattern: '{Root} {Type}'
+    Kinds: 4000000041000000420000004300000044000000
+    Groups: 
+    Weight: 20
+  - Pattern: The {Adjective} {Type}
+    Kinds: 4000000041000000420000004300000044000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 4000000041000000420000004300000044000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 4000000041000000420000004300000044000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Type} of the {RacePlural}'
+    Kinds: 4000000041000000420000004300000044000000
+    Groups: 
+    Weight: 6
+  - Pattern: '{Dungeon}'
+    Kinds: 42000000
+    Groups: 
+    Weight: 12
+  - Pattern: Ruins of {Root}
+    Kinds: 45000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Root} {Type}'
+    Kinds: 45000000
+    Groups: 
+    Weight: 15
+  - Pattern: The {Adjective} {Type}
+    Kinds: 45000000
+    Groups: 
+    Weight: 12
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 450000004600000049000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Type} of the {RacePlural}'
+    Kinds: 45000000
+    Groups: 
+    Weight: 5
+  - Pattern: '{Root} {Type}'
+    Kinds: 4600000049000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 4600000049000000
+    Groups: 
+    Weight: 10
+  - Pattern: The {Adjective} {Type}
+    Kinds: 49000000
+    Groups: 
+    Weight: 12
+  - Pattern: '{Type} of {Founder}'
+    Kinds: 090000004700000048000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 090000004700000048000000
+    Groups: 
+    Weight: 10
+  - Pattern: The {Adjective} {Type}
+    Kinds: 090000004700000048000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 090000004700000048000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 090000004700000048000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 090000004700000048000000
+    Groups: 
+    Weight: 6
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 4a0000004b000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Root} {Type}'
+    Kinds: 4a0000004b000000
+    Groups: 
+    Weight: 18
+  - Pattern: The {Adjective} {Type}
+    Kinds: 4a0000004b000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{Type} of {Founder}'
+    Kinds: 4b000000
+    Groups: 
+    Weight: 5
+  - Pattern: '{City}'
+    Kinds: 4d0000004e0000004f000000500000005100000028000000
+    Groups: 
+    Weight: 100
+  - Pattern: '{Root} {Type}'
+    Kinds: 4d0000004e0000004f000000500000005100000028000000
+    Groups: 
+    Weight: 4
+  - Pattern: '{City} Keep'
+    Kinds: 52000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{City}'
+    Kinds: 5200000053000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 5200000053000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 52000000
+    Groups: 
+    Weight: 10
+  - Pattern: The {Adjective} {Type}
+    Kinds: 520000005300000054000000
+    Groups: 
+    Weight: 6
+  - Pattern: Castle {Root}
+    Kinds: 53000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{City} Castle'
+    Kinds: 53000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{City}'
+    Kinds: 54000000
+    Groups: 
+    Weight: 25
+  - Pattern: Fort {Root}
+    Kinds: 54000000
+    Groups: 
+    Weight: 12
+  - Pattern: '{City} {Type}'
+    Kinds: 5400000055000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 55000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Root} {Type}'
+    Kinds: 55000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 040000000500000057000000580000005900000056000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 040000000500000057000000580000005900000056000000
+    Groups: 
+    Weight: 15
+  - Pattern: The {Adjective} {Type}
+    Kinds: 040000000500000059000000
+    Groups: 
+    Weight: 12
+  - Pattern: The {Adjective} {Noun}
+    Kinds: 56000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 040000005700000058000000
+    Groups: 
+    Weight: 10
+  - Pattern: Wreck of the {Adjective} {Noun}
+    Kinds: 0a000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 0a0000005d000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 0a0000005d000000
+    Groups: 
+    Weight: 15
+  - Pattern: The {Adjective} {Noun}
+    Kinds: 0a0000005d000000
+    Groups: 
+    Weight: 5
+  - Pattern: '{Root} {Type}'
+    Kinds: 5a0000005b000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 5a0000005b000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Type} of {Root}'
+    Kinds: 5a0000005b000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{Type} of {Root}'
+    Kinds: 5e0000005f000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Root} {Type}'
+    Kinds: 5e000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 5e0000005f000000
+    Groups: 
+    Weight: 10
+  - Pattern: Drowned {City}
+    Kinds: 5f000000
+    Groups: 
+    Weight: 20
+  - Pattern: Sunken {City}
+    Kinds: 5f000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Type} of {RacePlural}'
+    Kinds: 5f000000
+    Groups: 
+    Weight: 5
+  - Pattern: '{Dungeon}'
+    Kinds: 60000000
+    Groups: 
+    Weight: 40
+  - Pattern: '{Root} {Type}'
+    Kinds: 6000000061000000
+    Groups: 
+    Weight: 15
+  - Pattern: The {Adjective} {Type}
+    Kinds: 6000000061000000
+    Groups: 
+    Weight: 12
+  - Pattern: '{Type} of {Root}'
+    Kinds: 60000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{Dungeon}'
+    Kinds: 61000000
+    Groups: 
+    Weight: 20
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 61000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{RaceAdjective} {Type}'
+    Kinds: 61000000
+    Groups: 
+    Weight: 5
+  - Pattern: '{Root} {Type}'
+    Kinds: 620000006300000065000000
+    Groups: 
+    Weight: 25
+  - Pattern: The {Adjective} {Type}
+    Kinds: 620000006300000065000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 620000006300000065000000
+    Groups: 
+    Weight: 8
+  - Pattern: The {Adjective} {Type}
+    Kinds: 64000000
+    Groups: 
+    Weight: 25
+  - Pattern: '{Root} {Type}'
+    Kinds: 64000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 64000000
+    Groups: 
+    Weight: 10
+  - Pattern: The {Type} of {Root}
+    Kinds: 64000000
+    Groups: 
+    Weight: 8
+  - Pattern: '{Root} {Type}'
+    Kinds: 01000000
+    Groups: 
+    Weight: 25
+  - Pattern: The {Adjective} {Type}
+    Kinds: 01000000
+    Groups: 
+    Weight: 15
+  - Pattern: '{Founder}''s {Type}'
+    Kinds: 01000000
+    Groups: 
+    Weight: 10
+  - Pattern: '{Type} of the {Adjective} {Noun}'
+    Kinds: 01000000
+    Groups: 
+    Weight: 4
+  PlaceFusedSuffixes:
+  - Key: clearing
+    Values:
+    - lea
+    - ley
+    - glade
+    - field
+    - hurst
+  - Key: spring
+    Values:
+    - well
+    - wells
+    - spring
+    - font
+    - seep
+  - Key: waterfall
+    Values:
+    - force
+    - foss
+    - linn
+    - spout
+  - Key: river
+    Values:
+    - brook
+    - burn
+    - wash
+    - rill
+    - bourne
+    - beck
+    - water
+  - Key: lake
+    Values:
+    - mere
+    - tarn
+    - water
+    - pool
+    - loch
+    - lyn
+  - Key: hotspring
+    Values:
+    - kettle
+    - well
+    - springs
+  - Key: rivermouth
+    Values:
+    - mouth
+    - firth
+    - wick
+    - haven
+  - Key: peak
+    Values:
+    - horn
+    - fell
+    - crag
+    - pike
+    - tor
+    - berg
+  - Key: pass
+    Values:
+    - gate
+    - gap
+    - col
+  - Key: valley
+    Values:
+    - dale
+    - combe
+    - vale
+    - glen
+    - dell
+  - Key: island
+    Values:
+    - holm
+    - ey
+    - isle
+    - skerry
+    - ay
+  - Key: bay
+    Values:
+    - wick
+    - haven
+    - cove
+    - bight
+  - Key: headland
+    Values:
+    - ness
+    - head
+    - point
+  - Key: oasis
+    Values:
+    - well
+    - wells
+    - spring
+    - garth
+  PlaceAdjectives:
+  - Old
+  - Lost
+  - Forgotten
+  - Silent
+  - Hidden
+  - Broken
+  - Black
+  - White
+  - Red
+  - Grey
+  - Green
+  - High
+  - Deep
+  - Lonely
+  - Weeping
+  - Whispering
+  - Sleeping
+  - Sunken
+  - Hollow
+  - Shining
+  - Bitter
+  - Cold
+  - Golden
+  - Silver
+  - Iron
+  - Long
+  - Crooked
+  - Twin
+  - Still
+  - Wild
+  - Bright
+  - Dark
+  - Pale
+  - Ashen
+  - Howling
+  - Restless
+  - Drowned
+  - Ancient
+  - Wandering
+  - Singing
+  PlaceNouns:
+  - Moon
+  - Sun
+  - Star
+  - Serpent
+  - Crown
+  - Raven
+  - Wolf
+  - Stag
+  - Flame
+  - Tide
+  - Storm
+  - Oak
+  - Thorn
+  - Bone
+  - Mist
+  - Lantern
+  - Hand
+  - Eye
+  - Chain
+  - Bell
+  - Mother
+  - Maiden
+  - King
+  - Queen
+  - Hound
+  - Heron
+  - Gull
+  - Rose
+  - Blade
+  - Shield
+  - Harp
+  - Crow
+  - Owl
+  - Hart
+  - Boar
+  - Bear
+  - Wyrm
+  - Saint
+  - Shepherd
+  - Pilgrim
+  - Widow
+  - Giant
+  - Spear
+  - Anvil
+  - Hearth
+  - Fox
+  - Hawk
+  POIKindWeights:
+  - Kind: 1
+    Weight: 15
+  - Kind: 2
+    Weight: 10
+  - Kind: 3
+    Weight: 10
+  - Kind: 4
+    Weight: 10
+  - Kind: 5
+    Weight: 10
+  - Kind: 6
+    Weight: 10
+  - Kind: 7
+    Weight: 10
+  - Kind: 8
+    Weight: 10
+  - Kind: 9
+    Weight: 8
+  - Kind: 10
+    Weight: 7
+  - Kind: 11
+    Weight: 4
+  - Kind: 12
+    Weight: 4
+  - Kind: 13
+    Weight: 4
+  - Kind: 14
+    Weight: 4
+  - Kind: 15
+    Weight: 4
+  - Kind: 16
+    Weight: 4
+  - Kind: 17
+    Weight: 4
+  - Kind: 18
+    Weight: 4
+  - Kind: 19
+    Weight: 4
+  - Kind: 20
+    Weight: 4
+  - Kind: 21
+    Weight: 4
+  - Kind: 22
+    Weight: 4
+  - Kind: 23
+    Weight: 4
+  - Kind: 24
+    Weight: 4
+  - Kind: 25
+    Weight: 4
+  - Kind: 26
+    Weight: 4
+  - Kind: 27
+    Weight: 4
+  - Kind: 28
+    Weight: 4
+  - Kind: 29
+    Weight: 4
+  - Kind: 30
+    Weight: 4
+  - Kind: 31
+    Weight: 4
+  - Kind: 32
+    Weight: 4
+  - Kind: 33
+    Weight: 4
+  - Kind: 34
+    Weight: 4
+  - Kind: 35
+    Weight: 4
+  - Kind: 36
+    Weight: 4
+  - Kind: 37
+    Weight: 4
+  - Kind: 38
+    Weight: 4
+  - Kind: 39
+    Weight: 4
+  - Kind: 40
+    Weight: 4
+  - Kind: 41
+    Weight: 4
+  - Kind: 42
+    Weight: 4
+  - Kind: 43
+    Weight: 4
+  - Kind: 44
+    Weight: 4
+  - Kind: 45
+    Weight: 4
+  - Kind: 46
+    Weight: 4
+  - Kind: 47
+    Weight: 4
+  - Kind: 48
+    Weight: 4
+  - Kind: 49
+    Weight: 4
+  - Kind: 50
+    Weight: 4
+  - Kind: 51
+    Weight: 4
+  - Kind: 52
+    Weight: 4
+  - Kind: 53
+    Weight: 4
+  - Kind: 54
+    Weight: 4
+  - Kind: 55
+    Weight: 4
+  - Kind: 56
+    Weight: 4
+  - Kind: 57
+    Weight: 4
+  - Kind: 58
+    Weight: 4
+  - Kind: 59
+    Weight: 4
+  - Kind: 60
+    Weight: 2
+  - Kind: 61
+    Weight: 2
+  - Kind: 62
+    Weight: 4
+  - Kind: 63
+    Weight: 2
+  - Kind: 64
+    Weight: 4
+  - Kind: 65
+    Weight: 4
+  - Kind: 66
+    Weight: 4
+  - Kind: 67
+    Weight: 4
+  - Kind: 68
+    Weight: 4
+  - Kind: 69
+    Weight: 4
+  - Kind: 70
+    Weight: 4
+  - Kind: 71
+    Weight: 4
+  - Kind: 72
+    Weight: 4
+  - Kind: 73
+    Weight: 4
+  - Kind: 74
+    Weight: 4
+  - Kind: 75
+    Weight: 4
+  - Kind: 76
+    Weight: 4
+  - Kind: 77
+    Weight: 4
+  - Kind: 78
+    Weight: 3
+  - Kind: 79
+    Weight: 2
+  - Kind: 80
+    Weight: 1
+  - Kind: 81
+    Weight: 4
+  - Kind: 82
+    Weight: 4
+  - Kind: 83
+    Weight: 2
+  - Kind: 84
+    Weight: 2
+  - Kind: 85
+    Weight: 4
+  - Kind: 86
+    Weight: 4
+  - Kind: 87
+    Weight: 4
+  - Kind: 88
+    Weight: 4
+  - Kind: 89
+    Weight: 4
+  - Kind: 90
+    Weight: 4
+  - Kind: 91
+    Weight: 4
+  - Kind: 92
+    Weight: 4
+  - Kind: 93
+    Weight: 4
+  - Kind: 94
+    Weight: 4
+  - Kind: 95
+    Weight: 1
+  - Kind: 96
+    Weight: 4
+  - Kind: 97
+    Weight: 2
+  - Kind: 98
+    Weight: 4
+  - Kind: 99
+    Weight: 4
+  - Kind: 100
+    Weight: 4
+  - Kind: 101
+    Weight: 4
+  - Kind: 102
+    Weight: 1
+  - Kind: 103
+    Weight: 1
+  - Kind: 104
+    Weight: 1
+  - Kind: 105
+    Weight: 1
+  - Kind: 106
+    Weight: 1
+  WaterPhonology:
+    Onsets:
+    - Av
+    - Tam
+    - Der
+    - Is
+    - Sev
+    - Wen
+    - Ald
+    - Cal
+    - Dun
+    - Esk
+    - Glas
+    - Ken
+    - Lod
+    - Mor
+    - Nen
+    - Ar
+    - Brath
+    - Col
+    - Dov
+    - El
+    - Fen
+    - Gar
+    - Hal
+    - Lin
+    - Sar
+    - Tem
+    - Ur
+    - Var
+    Nuclei:
+    - a
+    - e
+    - i
+    - o
+    - ae
+    - ea
+    - y
+    - ou
+    Codas:
+    - on
+    - ar
+    - er
+    - en
+    - an
+    - el
+    - ey
+    - ach
+    - wy
+    - is
+    - et
+    - ell
+    - ent
+    - ock
+    - ay
+    - ern
+    - a
+    - e
+    Middles:
+    - an
+    - er
+    - ow
+    - el
+    - in
+    - ad
+    - or
+    - ith
+    SyllMin: 2
+    SyllMax: 3
+    DungeonSuffixes: []
+    DungeonPrefixes: []
+    POISuffixes: []
+    Adjectives: []
+    POITypeWords: []
+    Description: Water names
   TitleTemplates:
   - Category: 1
     Register: 1
@@ -742,7 +2633,7 @@ MonoBehaviour:
     Weight: 32
   - Category: 2
     Register: 0
-    Pattern: 'the {adjective}-{qualifier}'
+    Pattern: the {adjective}-{qualifier}
     Weight: 30
   - Category: 2
     Register: 0
@@ -774,7 +2665,7 @@ MonoBehaviour:
     Weight: 6
   - Category: 2
     Register: 0
-    Pattern: 'the {adjective}-{qualifier} of {place}'
+    Pattern: the {adjective}-{qualifier} of {place}
     Weight: 10
   - Category: 3
     Register: 2
@@ -794,23 +2685,23 @@ MonoBehaviour:
     Weight: 30
   - Category: 4
     Register: 3
-    Pattern: 'Who {deed} {object}'
+    Pattern: Who {deed} {object}
     Weight: 18
   - Category: 4
     Register: 3
-    Pattern: 'Who {deed} {object} at {place}'
+    Pattern: Who {deed} {object} at {place}
     Weight: 18
   - Category: 4
     Register: 3
-    Pattern: 'Who {deed} {object} in the {era}'
+    Pattern: Who {deed} {object} in the {era}
     Weight: 12
   - Category: 4
     Register: 3
-    Pattern: 'Who {deed} {object} and {outcome}'
+    Pattern: Who {deed} {object} and {outcome}
     Weight: 12
   - Category: 4
     Register: 3
-    Pattern: 'Who {deed} {object} at the {battle} of {place}'
+    Pattern: Who {deed} {object} at the {battle} of {place}
     Weight: 10
   - Category: 5
     Register: 1
@@ -818,7 +2709,7 @@ MonoBehaviour:
     Weight: 30
   - Category: 5
     Register: 1
-    Pattern: 'Master {profession}'
+    Pattern: Master {profession}
     Weight: 20
   - Category: 5
     Register: 1
@@ -830,7 +2721,7 @@ MonoBehaviour:
     Weight: 20
   - Category: 5
     Register: 1
-    Pattern: 'Master {occupation}'
+    Pattern: Master {occupation}
     Weight: 10
   - Category: 5
     Register: 1
@@ -838,7 +2729,7 @@ MonoBehaviour:
     Weight: 16
   - Category: 5
     Register: 1
-    Pattern: 'Guild {occupation}'
+    Pattern: Guild {occupation}
     Weight: 5
   PlaceTakingHonorifics:
   - Lord
@@ -980,20 +2871,20 @@ MonoBehaviour:
   - their
   - the
   PlaceEpithetPatterns:
-  - 'of {0}'
-  - 'from {0}'
-  - 'born in {0}'
-  - 'bane of {0}'
-  - 'guardian of {0}'
-  - 'last seen in {0}'
-  - 'exiled from {0}'
-  - 'sworn to {0}'
-  - 'pride of {0}'
-  - 'scourge of {0}'
-  - 'risen from {0}'
-  - 'child of {0}'
-  - 'wanderer of {0}'
-  - 'herald of {0}'
+  - of {0}
+  - from {0}
+  - born in {0}
+  - bane of {0}
+  - guardian of {0}
+  - last seen in {0}
+  - exiled from {0}
+  - sworn to {0}
+  - pride of {0}
+  - scourge of {0}
+  - risen from {0}
+  - child of {0}
+  - wanderer of {0}
+  - herald of {0}
   ComposedAdjectives:
   - Iron
   - Stone

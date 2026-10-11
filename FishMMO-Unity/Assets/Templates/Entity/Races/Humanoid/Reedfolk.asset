@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Reedfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Marsh-dwellers on stilts — sibilant, damp names'
+  Description: "Marsh-dwellers on stilts \u2014 sibilant, damp names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ar
       - en
       - ock
-      Description: 'Marsh-dwellers on stilts — sibilant, damp names'
+      Description: "Marsh-dwellers on stilts \u2014 sibilant, damp names"
       Tags:
       - Reed-names
       - Stilt-marks
@@ -126,7 +126,7 @@ MonoBehaviour:
       - Who Punted Through the Reed Maze Blind
       - Who Caught the Eel as Long as a Boat
       - Who Raised the Stilt Town After the Flood
-      - 'Who Found the Drowned Chapel''s Bell'
+      - Who Found the Drowned Chapel's Bell
       - Who Outwaited the Fever Summer
       Occupational:
       - Eel-catcher
@@ -169,6 +169,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Reedfolk
+    Adjective: Reedfolk
   BiomeAffinities:
   - BiomeID: -2077848218
     Weight: 3
@@ -178,3 +180,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -2019209325
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

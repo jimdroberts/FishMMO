@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Goblin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Quick and clipped — high vowels, tapping sounds, scheming energy'
+  Description: "Quick and clipped \u2014 high vowels, tapping sounds, scheming energy"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -93,7 +93,8 @@ MonoBehaviour:
       - ik
       - rib
       - rix
-      Description: 'Quick and clipped — high vowels, tapping sounds, scheming energy'
+      Description: "Quick and clipped \u2014 high vowels, tapping sounds, scheming
+        energy"
       Tags:
       - Trick-names
       - Shiny-bonds
@@ -149,7 +150,7 @@ MonoBehaviour:
         - blitz
         - tok
         - wok
-        Description: 'Scrapmarket — tinker-folk, barter-cant, pocket-full'
+        Description: "Scrapmarket \u2014 tinker-folk, barter-cant, pocket-full"
         Tags:
         - Stall-names
         - Coin-bonds
@@ -189,7 +190,7 @@ MonoBehaviour:
       - Head of the Heist
       - Lord of Pocketdeep
       Legend:
-      - 'Who Stole a Dragon''s Tooth'
+      - Who Stole a Dragon's Tooth
       - Who Tricked Three Wizards
       - Who Found the Hidden Vault
       - Who Survived by Running Very Fast
@@ -250,6 +251,9 @@ MonoBehaviour:
       - trash
       - heap
       - mess
+    AllowGenericOccupations: 1
+    Plural: Goblins
+    Adjective: Goblin
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -261,3 +265,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 599899035
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

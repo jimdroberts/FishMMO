@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sprite
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Tiny winged fey — bright, tinkling names'
+  Description: "Tiny winged fey \u2014 bright, tinkling names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ip
       - et
       - ix
-      Description: 'Tiny winged fey — bright, tinkling names'
+      Description: "Tiny winged fey \u2014 bright, tinkling names"
       Tags:
       - Wing-names
       - Dew-marks
@@ -124,9 +124,9 @@ MonoBehaviour:
       - Elder of Thistledown
       Legend:
       - Who Rode a Moth Through the Storm
-      - 'Who Stole the Miller''s Wedding Ring and Gave It Back Twice'
+      - Who Stole the Miller's Wedding Ring and Gave It Back Twice
       - Who Rang Every Bluebell in the Ring
-      - 'Who Slept in the Cat''s Ear for a Winter'
+      - Who Slept in the Cat's Ear for a Winter
       - Who Wove the Bridge in a Night
       Occupational:
       - Dew-gatherer
@@ -164,6 +164,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Sprites
+    Adjective: Sprite
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -173,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

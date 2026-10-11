@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dark Elf
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Sibilant and sharp — dark vowels, venomous endings'
+  Description: "Sibilant and sharp \u2014 dark vowels, venomous endings"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +95,7 @@ MonoBehaviour:
       - rax
       - dra
       - nax
-      Description: 'Sibilant and sharp — dark vowels, venomous endings'
+      Description: "Sibilant and sharp \u2014 dark vowels, venomous endings"
       Tags:
       - House names
       - Spider-bonds
@@ -153,7 +153,7 @@ MonoBehaviour:
         - pall
         - bind
         - wane
-        Description: 'Shadowcaster — arcane exiles, glyph-bound nomads'
+        Description: "Shadowcaster \u2014 arcane exiles, glyph-bound nomads"
         Tags:
         - Glyph-names
         - Pact-bonds
@@ -210,7 +210,7 @@ MonoBehaviour:
         - ryn
         - rix
         - thul
-        Description: 'Spider Court — matriarchal, whispered, venomed'
+        Description: "Spider Court \u2014 matriarchal, whispered, venomed"
         Tags:
         - House-matron
         - Web-bonds
@@ -312,6 +312,9 @@ MonoBehaviour:
       - hollow
       - ruin
       - dust
+    AllowGenericOccupations: 1
+    Plural: Dark Elves
+    Adjective: Dark Elven
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -319,3 +322,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: -830221931
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

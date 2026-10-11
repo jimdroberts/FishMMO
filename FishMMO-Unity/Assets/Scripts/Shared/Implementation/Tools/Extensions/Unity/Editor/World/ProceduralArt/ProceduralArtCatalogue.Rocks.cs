@@ -42,6 +42,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Sea ice and pressure ridges.</summary>
 		public const string SeaIceSurface = IceSurfaces.SeaIce;
 
+		/// <summary>
+		/// Ice cobbles and pebbles as a small-rock material (boulders, <c>Detail_Rocks_Ice</c>, <c>Detail_Pebbles_Ice</c>):
+		/// Titan's rounded water-ice cobbles, cold-trap ice on a dead world, an ice cave's floor. Declared by the
+		/// vegetation expansion (2026-10-10) and joined into <see cref="AllRockMaterials"/>. It wears the WaterIce rock
+		/// type's surface (<see cref="RockArtNames.RockSurfaceTypeForLegacy"/>), so a cobble and an ice formation are the
+		/// same ice; its ground family stays <see cref="Ground.Ice"/> for anything that asks. Constants only, so a field
+		/// is safe here (see <see cref="Details"/> on the initialisation-order trap).
+		/// </summary>
+		public static readonly RockMaterialSpec[] IceRockMaterials =
+		{
+			new RockMaterialSpec { Name = "Ice", GroundFamily = Ground.Ice },
+		};
+
 		private static readonly string[] SurfaceMaps = { "Albedo", "Normal", "Mask" };
 
 		/// <summary>Every rock, ice and cliff payload file: surface textures and meshes.</summary>

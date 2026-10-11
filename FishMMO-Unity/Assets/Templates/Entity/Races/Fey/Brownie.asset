@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Brownie
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Household fey of hearth and hob — homely, clucking names'
+  Description: "Household fey of hearth and hob \u2014 homely, clucking names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - kin
       - ock
       - ub
-      Description: 'Household fey of hearth and hob — homely, clucking names'
+      Description: "Household fey of hearth and hob \u2014 homely, clucking names"
       Tags:
       - Hearth-names
       - Chore-marks
@@ -127,7 +127,7 @@ MonoBehaviour:
       - Who Left When Given a Coat and Came Back for the Cream
       - Who Churned Butter for Nine Generations
       - Who Swept the Castle in a Single Night
-      - 'Who Turned the Lazy Maid''s Hair to Straw'
+      - Who Turned the Lazy Maid's Hair to Straw
       Occupational:
       - Shoe-mender
       - Butter-churner
@@ -164,6 +164,8 @@ MonoBehaviour:
       - hush
       - loss
     AllowGenericOccupations: 1
+    Plural: Brownies
+    Adjective: Brownie
   BiomeAffinities:
   - BiomeID: -2037808285
     Weight: 3
@@ -173,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

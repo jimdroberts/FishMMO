@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Jelly
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A quivering, half-clear mass that mimics puddles and pools; it stings, paralyses, and pulls its prey under.'
+  Description: A quivering, half-clear mass that mimics puddles and pools; it stings,
+    paralyses, and pulls its prey under.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ug
       - or
-      Description: 'Trembling, sibilant — light and shivering'
+      Description: "Trembling, sibilant \u2014 light and shivering"
       Tags:
       - Slime
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - sludge
       - ooze
     AllowGenericOccupations: 0
+    Plural: Jellies
+    Adjective: Jelly
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -160,3 +163,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1141955836
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

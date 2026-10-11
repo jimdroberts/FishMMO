@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sea Troll
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Barnacled coast trolls — gargling, tide-thick names'
+  Description: "Barnacled coast trolls \u2014 gargling, tide-thick names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ub
       - ork
       - og
-      Description: 'Barnacled coast trolls — gargling, tide-thick names'
+      Description: "Barnacled coast trolls \u2014 gargling, tide-thick names"
       Tags:
       - Barnacle-names
       - Gargle-marks
@@ -163,6 +163,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 0
+    Plural: Sea Trolls
+    Adjective: Sea Troll
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3

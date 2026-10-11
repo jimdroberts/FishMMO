@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Mantisfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Four-armed insect hunters of the dry wastes, tireless and unsleeping, who think in packs.'
+  Description: Four-armed insect hunters of the dry wastes, tireless and unsleeping,
+    who think in packs.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,15 +35,16 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
       - Kka
-      - 'Ch''k'
+      - Ch'k
       - Ttk
-      - 'Jh''k'
-      - 'K''ch'
-      - 'T''ka'
+      - Jh'k
+      - K'ch
+      - T'ka
       - Zzi
       - Kr
       - Cha
@@ -79,7 +80,7 @@ MonoBehaviour:
       - kkk
       - ch
       - chik
-      Description: Mantis clicks and stridulations — pack-mind cadence
+      Description: "Mantis clicks and stridulations \u2014 pack-mind cadence"
       Tags:
       - Clutch-names
       - Sand-bonds
@@ -112,6 +113,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Mantisfolk
+    Adjective: Mantisfolk
   BiomeAffinities:
   - BiomeID: -1640008461
     Weight: 3
@@ -119,3 +123,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1156965030
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

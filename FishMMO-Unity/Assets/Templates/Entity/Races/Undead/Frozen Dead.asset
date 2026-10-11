@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Frozen Dead
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Ice-locked dead of the high passes — creaking, brittle names'
+  Description: "Ice-locked dead of the high passes \u2014 creaking, brittle names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ost
       - und
-      Description: 'Ice-locked dead of the high passes — creaking, brittle names'
+      Description: "Ice-locked dead of the high passes \u2014 creaking, brittle names"
       Tags:
       - Ice-names
       - Pass-marks
@@ -161,6 +161,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Frozen Dead
+    Adjective: Frozen Dead
   BiomeAffinities:
   - BiomeID: -212386137
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -1474826537
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

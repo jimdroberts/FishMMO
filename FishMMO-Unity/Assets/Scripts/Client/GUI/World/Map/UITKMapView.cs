@@ -131,6 +131,18 @@ namespace FishMMO.Client
 		/// </summary>
 		public bool MapTextureIsViewAligned { get; set; }
 
+		/// <summary>
+		/// How far the baked image is turned from world north, in degrees clockwise: the map
+		/// definition's <c>NorthOffsetDegrees</c>.
+		/// </summary>
+		/// <remarks>
+		/// The baker photographs a scene with its camera turned by the definition's north offset, so
+		/// the image's up is world (sin, 0, cos) of that angle, not +Z. Sampled as though it were
+		/// north-up, an offset map drew its terrain turned under markers that were not. The view
+		/// itself stays north-up; only the sampling follows the photograph.
+		/// </remarks>
+		public float MapTextureNorthDegrees { get; set; }
+
 		/// <summary>Colour drawn behind the map image.</summary>
 		public Color MapBackground { get; set; } = new Color(0.02f, 0.04f, 0.06f, 1.0f);
 
@@ -927,7 +939,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			DrawWindowedQuad(context, imageLayer.contentRect, MapTexture, MapTint, MapTextureRect);
+			DrawWindowedQuad(context, imageLayer.contentRect, MapTexture, MapTint, MapTextureRect, MapTextureNorthDegrees);
 		}
 
 		/// <summary>
@@ -956,8 +968,9 @@ namespace FishMMO.Client
 		/// <param name="texture">The texture to sample.</param>
 		/// <param name="tint">Colour multiplied into the result.</param>
 		/// <param name="worldRect">The world rectangle the texture covers.</param>
+		/// <param name="northDegrees">How far the texture's up is turned clockwise from world +Z.</param>
 		private void DrawWindowedQuad(MeshGenerationContext context, Rect content, Texture texture,
-			Color tint, Rect worldRect)
+			Color tint, Rect worldRect, float northDegrees = 0.0f)
 		{
 			if (content.width <= 0.0f || content.height <= 0.0f || texture == null)
 			{
@@ -976,10 +989,10 @@ namespace FishMMO.Client
 			 * makes a rotated view work: the four points describe a rotated square in texture
 			 * space, and UI Toolkit interpolates between them affinely, which is exactly right for
 			 * a rotation. Note the Y flip — UI Toolkit's top-left corner is the view's (0, 1). */
-			uvScratch[0] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(0.0f, 1.0f)));
-			uvScratch[1] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(1.0f, 1.0f)));
-			uvScratch[2] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(1.0f, 0.0f)));
-			uvScratch[3] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(0.0f, 0.0f)));
+			uvScratch[0] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(0.0f, 1.0f)), northDegrees);
+			uvScratch[1] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(1.0f, 1.0f)), northDegrees);
+			uvScratch[2] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(1.0f, 0.0f)), northDegrees);
+			uvScratch[3] = WorldToTextureUV(worldRect, View.ViewToWorld(new Vector2(0.0f, 0.0f)), northDegrees);
 
 			Color32 color = tint;
 			for (int i = 0; i < 4; ++i)
@@ -1017,16 +1030,33 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <param name="worldRect">The world rectangle the texture covers.</param>
 		/// <param name="worldPosition">The world position.</param>
+		/// <param name="northDegrees">How far the texture's up is turned clockwise from world +Z.</param>
 		/// <returns>Texture coordinates, not clamped.</returns>
-		private static Vector2 WorldToTextureUV(Rect worldRect, Vector3 worldPosition)
+		/// <remarks>
+		/// A turned texture is the bake camera's frame: centred on the rectangle, with the same width
+		/// and height, its right along (cos, -sin) and its up along (sin, cos) in world XZ. At zero
+		/// this is exactly the axis-aligned mapping.
+		/// </remarks>
+		public static Vector2 WorldToTextureUV(Rect worldRect, Vector3 worldPosition, float northDegrees = 0.0f)
 		{
 			if (worldRect.width <= 0.0f || worldRect.height <= 0.0f)
 			{
 				return new Vector2(0.5f, 0.5f);
 			}
 
-			return new Vector2((worldPosition.x - worldRect.xMin) / worldRect.width,
-							   (worldPosition.z - worldRect.yMin) / worldRect.height);
+			if (northDegrees == 0.0f)
+			{
+				return new Vector2((worldPosition.x - worldRect.xMin) / worldRect.width,
+								   (worldPosition.z - worldRect.yMin) / worldRect.height);
+			}
+
+			float radians = northDegrees * Mathf.Deg2Rad;
+			float cos = Mathf.Cos(radians);
+			float sin = Mathf.Sin(radians);
+			float dx = worldPosition.x - worldRect.center.x;
+			float dz = worldPosition.z - worldRect.center.y;
+			return new Vector2((((dx * cos) - (dz * sin)) / worldRect.width) + 0.5f,
+							   (((dx * sin) + (dz * cos)) / worldRect.height) + 0.5f);
 		}
 
 		/// <summary>

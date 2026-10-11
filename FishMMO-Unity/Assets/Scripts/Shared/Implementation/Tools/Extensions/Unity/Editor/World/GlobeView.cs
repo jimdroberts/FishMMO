@@ -26,6 +26,22 @@ namespace FishMMO.Shared.WorldDesign
 		public int Warnings;
 		public bool HasExternalLinks;
 		public string Caption;
+		/// <summary>The scene's points of interest, as globe points (unit vectors).</summary>
+		public readonly List<GlobePoint> Points = new List<GlobePoint>();
+		/// <summary>The scene holds its world's capital: a star is drawn on it.</summary>
+		public bool Capital;
+	}
+
+	/// <summary>One point of interest on the globe.</summary>
+	public sealed class GlobePoint
+	{
+		/// <summary>Where it is, as a unit vector.</summary>
+		public Vector3d Unit;
+		/// <summary>Its group's colour.</summary>
+		public Color Colour;
+		public string Name;
+		/// <summary>The map detail tier: names of tiers 0 and 1 show first as the globe zooms in.</summary>
+		public int Tier;
 	}
 
 	/// <summary>A connection line on the globe.</summary>
@@ -100,6 +116,8 @@ namespace FishMMO.Shared.WorldDesign
 		public bool ShowTimeZones = true;
 		public bool ShowDaylight = true;
 		public bool LockScenes;
+		/// <summary>Draw each scene's points of interest, and name them once a scene is big enough on screen.</summary>
+		public bool ShowPointsOfInterest = true;
 		public bool Snap = true;
 		public double SnapKm = 0.25;
 		public WorldAtlasScene Selected;
@@ -110,6 +128,11 @@ namespace FishMMO.Shared.WorldDesign
 
 		private readonly List<Label> labels = new List<Label>();
 		private readonly List<Label> zoneLabels = new List<Label>();
+		private readonly List<Label> pointLabels = new List<Label>();
+		private readonly List<Rect> placedLabels = new List<Rect>();
+
+		/// <summary>The most point-of-interest names on screen at once; past it the globe is text, not a map.</summary>
+		private const int MaxPointLabels = 160;
 		private static Texture2D blank;
 
 		// Interaction state.
@@ -409,6 +432,118 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				zoneLabels[i].style.display = DisplayStyle.None;
 			}
+
+			LayoutPointLabels();
+		}
+
+		/// <summary>
+		/// Names points of interest once their scene is large on screen: settlements and great sites (tiers
+		/// 0 and 1) from 300 pixels across, ordinary sites from 700, small features from 1400.
+		/// </summary>
+		/// <remarks>
+		/// A generated scene has a hundred or more points, so every name at the zoom that shows the whole
+		/// planet is a smear of text over the scene it is meant to describe. Names never overlap: a later,
+		/// deeper-tier name that would collide with one already placed is left out, and the low tiers are
+		/// placed first so they are the ones that win.
+		/// </remarks>
+		private void LayoutPointLabels()
+		{
+			int used = 0;
+			placedLabels.Clear();
+			if (ShowPointsOfInterest)
+			{
+				for (int tier = 0; tier <= 3 && used < MaxPointLabels; tier++)
+				{
+					foreach (GlobeScene scene in Scenes)
+					{
+						if (scene.Ghost || scene.Points.Count == 0 || used >= MaxPointLabels)
+						{
+							continue;
+						}
+						float pixels = ScenePixels(scene);
+						int deepest = pixels > 1400f ? 3 : pixels > 700f ? 2 : pixels > 300f ? 1 : -1;
+						if (tier > deepest)
+						{
+							continue;
+						}
+						foreach (GlobePoint point in scene.Points)
+						{
+							if (used >= MaxPointLabels)
+							{
+								break;
+							}
+							if (Mathf.Min(point.Tier, 3) != tier || string.IsNullOrEmpty(point.Name)
+								|| !Project(point.Unit, out Vector2 at) || !contentRect.Contains(at))
+							{
+								continue;
+							}
+							var box = new Rect(at.x + 4f, at.y - 6f, point.Name.Length * 5.2f + 4f, 12f);
+							if (Overlaps(box))
+							{
+								continue;
+							}
+							placedLabels.Add(box);
+							Label label = PointLabelAt(used++);
+							label.text = point.Name;
+							label.style.left = box.x;
+							label.style.top = box.y;
+							label.style.color = Color.Lerp(point.Colour, Color.white, 0.55f);
+							label.style.display = DisplayStyle.Flex;
+						}
+					}
+				}
+			}
+			for (int i = used; i < pointLabels.Count; i++)
+			{
+				pointLabels[i].style.display = DisplayStyle.None;
+			}
+		}
+
+		private bool Overlaps(Rect box)
+		{
+			foreach (Rect placed in placedLabels)
+			{
+				if (placed.Overlaps(box))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private Label PointLabelAt(int index)
+		{
+			while (pointLabels.Count <= index)
+			{
+				var label = new Label { pickingMode = PickingMode.Ignore };
+				label.style.position = Position.Absolute;
+				label.style.fontSize = 9;
+				label.style.unityTextAlign = TextAnchor.MiddleLeft;
+				label.style.whiteSpace = WhiteSpace.NoWrap;
+				label.style.paddingLeft = 0;
+				label.style.paddingRight = 0;
+				label.style.paddingTop = 0;
+				label.style.paddingBottom = 0;
+				label.style.marginLeft = 0;
+				label.style.marginTop = 0;
+				label.style.textShadow = new TextShadow { offset = new Vector2(1f, 1f), blurRadius = 1f, color = new Color(0f, 0f, 0f, 0.95f) };
+				pointLabels.Add(label);
+				Add(label);
+			}
+			return pointLabels[index];
+		}
+
+		/// <summary>How wide a scene is on screen, in pixels, along its own east-west axis; 0 when turned away.</summary>
+		private float ScenePixels(GlobeScene scene)
+		{
+			AtlasFootprint f = scene.Footprint;
+			Vector3d west = AtlasGeometry.SceneToUnit(f, -f.SizeKm.x * 0.5, 0.0, RadiusKm);
+			Vector3d east = AtlasGeometry.SceneToUnit(f, f.SizeKm.x * 0.5, 0.0, RadiusKm);
+			if (!Project(west, out Vector2 a) | !Project(east, out Vector2 b))
+			{
+				return 0f;
+			}
+			return Vector2.Distance(a, b);
 		}
 
 		private Label LabelAt(List<Label> pool, int index)
@@ -483,6 +618,10 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (GlobeScene scene in Scenes)
 			{
 				DrawOutline(painter, scene);
+			}
+			foreach (GlobeScene scene in Scenes)
+			{
+				DrawPoints(painter, scene);
 			}
 			// After the scenes, so the rectangle being cut is visible over whatever it overlaps —
 			// which is exactly when somebody needs to see it.
@@ -965,6 +1104,71 @@ namespace FishMMO.Shared.WorldDesign
 					painter.Fill();
 				}
 			}
+		}
+
+		/// <summary>
+		/// A scene's points of interest as dots in their group's colour, and a star on a capital's scene.
+		/// </summary>
+		/// <remarks>
+		/// The dots grow a little with the scene on screen and are not drawn at all while the scene is
+		/// under 40 pixels across, where a hundred of them would only tint the patch. The star is drawn
+		/// at any size: which scene holds the capital is a fact about the planet, not a detail.
+		/// </remarks>
+		private void DrawPoints(Painter2D painter, GlobeScene scene)
+		{
+			if (scene.Ghost)
+			{
+				return;
+			}
+			float pixels = ScenePixels(scene);
+			if (ShowPointsOfInterest && pixels >= 40f)
+			{
+				float radius = Mathf.Clamp(pixels / 160f, 1.5f, 4f);
+				foreach (GlobePoint point in scene.Points)
+				{
+					if (!Project(point.Unit, out Vector2 at))
+					{
+						continue;
+					}
+					float r = point.Tier <= 1 ? radius * 1.4f : radius;
+					painter.fillColor = new Color(0f, 0f, 0f, 0.8f);
+					painter.BeginPath();
+					painter.Arc(at, r + 1f, 0f, 360f);
+					painter.Fill();
+					painter.fillColor = point.Colour;
+					painter.BeginPath();
+					painter.Arc(at, r, 0f, 360f);
+					painter.Fill();
+				}
+			}
+			if (scene.Capital)
+			{
+				AtlasFootprint f = scene.Footprint;
+				Vector3d corner = AtlasGeometry.SceneToUnit(f, -f.SizeKm.x * 0.36, f.SizeKm.y * 0.36, RadiusKm);
+				if (Project(corner, out Vector2 at))
+				{
+					Star(painter, at, Mathf.Clamp(pixels / 18f, 5f, 11f));
+				}
+			}
+		}
+
+		/// <summary>A five-pointed gold star with a dark edge.</summary>
+		private static void Star(Painter2D painter, Vector2 centre, float size)
+		{
+			painter.BeginPath();
+			for (int i = 0; i < 10; i++)
+			{
+				float angle = -Mathf.PI * 0.5f + i * Mathf.PI / 5f;
+				float r = (i % 2 == 0) ? size : size * 0.45f;
+				var p = new Vector2(centre.x + Mathf.Cos(angle) * r, centre.y + Mathf.Sin(angle) * r);
+				if (i == 0) painter.MoveTo(p); else painter.LineTo(p);
+			}
+			painter.ClosePath();
+			painter.fillColor = new Color(1f, 0.84f, 0.3f, 1f);
+			painter.Fill();
+			painter.strokeColor = new Color(0.25f, 0.15f, 0f, 0.95f);
+			painter.lineWidth = 1.2f;
+			painter.Stroke();
 		}
 
 		private void DrawRoute(Painter2D painter, GlobeRoute route)

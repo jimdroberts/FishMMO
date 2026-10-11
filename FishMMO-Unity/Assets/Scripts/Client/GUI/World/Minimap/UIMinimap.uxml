@@ -8,6 +8,7 @@
     ║    1. FishMMO-Theme.uss  — colors, fonts, transitions         ║
     ║    2. UIMinimap.uss      — sizes, flex, spacing               ║
     ║    3. UIMapShared.uss    — marker styling, shared with UIMap  ║
+    ║    4. UIMapPOI.uss       — point of interest marker shapes    ║
     ║                                                              ║
     ║  The map surface itself is NOT authored here. UITKMinimap     ║
     ║  builds a UITKMapView in C# and mounts it into #minimap-view, ║
@@ -19,6 +20,7 @@
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIMinimap.uss" />
     <Style src="../Map/UIMapShared.uss" />
+    <Style src="../Map/UIMapPOI.uss" />
 
     <ui:VisualElement name="minimap-root" class="minimap-root" picking-mode="Ignore">
         <ui:VisualElement name="minimap-frame" class="fish-panel minimap-frame">

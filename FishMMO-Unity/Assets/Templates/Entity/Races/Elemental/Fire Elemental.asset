@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Fire Elemental
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Living flame with a will: it does not hate what it burns, but it burns everything.'
+  Description: 'Living flame with a will: it does not hate what it burns, but it
+    burns everything.'
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - os
       - ar
-      Description: 'Crackling, spitting — sharp, rising'
+      Description: "Crackling, spitting \u2014 sharp, rising"
       Tags:
       - Elemental
       - Monster
@@ -100,7 +101,7 @@ MonoBehaviour:
     - the Elemental Gate
     - the First Flame
     - the Deep Vein
-    - 'the Storm''s Eye'
+    - the Storm's Eye
     Titles:
       Honorific:
       - Elder Flame
@@ -152,6 +153,8 @@ MonoBehaviour:
       - ash
       - cinder
     AllowGenericOccupations: 0
+    Plural: Fire Elementals
+    Adjective: Fire Elemental
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Naga
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Serpentine and sibilant — ancient temple whispers, coiled wisdom'
+  Description: "Serpentine and sibilant \u2014 ancient temple whispers, coiled wisdom"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +95,8 @@ MonoBehaviour:
       - sha
       - an
       - dev
-      Description: 'Serpentine and sibilant — ancient temple whispers, coiled wisdom'
+      Description: "Serpentine and sibilant \u2014 ancient temple whispers, coiled
+        wisdom"
       Tags:
       - Temple-names
       - Coil-bonds
@@ -191,6 +192,9 @@ MonoBehaviour:
       - void
       - decay
       - husk
+    AllowGenericOccupations: 1
+    Plural: Nagas
+    Adjective: Naga
   BiomeAffinities:
   - BiomeID: -1640008461
     Weight: 2
@@ -200,3 +204,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -2019209325
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

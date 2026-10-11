@@ -1,0 +1,270 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: Capital - Timber
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 80
+  Weight: 1
+  DefaultBiomeWeight: 0.4
+  BiomeWeights:
+  - Biome: Forest
+    Weight: 1.5
+  - Biome: Woodland
+    Weight: 1.5
+  - Biome: Taiga
+    Weight: 1.5
+  - Biome: Jungle
+    Weight: 1.5
+  - Biome: Rainforest
+    Weight: 1.5
+  - Biome: Bamboo Forest
+    Weight: 1.5
+  - Biome: Forest Ruins
+    Weight: 1.5
+  - Biome: Jungle Ruins
+    Weight: 1.5
+  - Biome: Jungle Temple
+    Weight: 1.5
+  - Biome: Temperate
+    Weight: 1.5
+  - Biome: Tundra
+    Weight: 1
+  - Biome: Taiga
+    Weight: 1
+  - Biome: Snow
+    Weight: 1
+  - Biome: Periglacial
+    Weight: 1
+  - Biome: Glacier
+    Weight: 1
+  - Biome: Ice Sheet
+    Weight: 1
+  - Biome: Ice Shelf
+    Weight: 1
+  - Biome: Permanent Ice
+    Weight: 1
+  - Biome: Desert
+    Weight: 0.05
+  - Biome: High Desert
+    Weight: 0.05
+  - Biome: Badlands
+    Weight: 0.05
+  - Biome: Salt Flat
+    Weight: 0.05
+  - Biome: Oasis
+    Weight: 0.05
+  - Biome: Scrubland
+    Weight: 0.05
+  - Biome: Arid
+    Weight: 0.05
+  - Biome: Dust Sea
+    Weight: 0.05
+  - Biome: Wasteland
+    Weight: 0.05
+  - Biome: Barren
+    Weight: 0.05
+  RaceCategories:
+  - Humanoid
+  - Beastfolk
+  - Fey
+  - Giant
+  Races: []
+  Small: 0
+  Medium: 0
+  Large: 1
+  PadFlatness: 1
+  Style: timber
+  Layout: 5
+  Pieces:
+  - Tag: wall!gate!tower!fence
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 3
+    Style: stone
+  - Tag: gate
+    MinCount: 4
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 4
+    Style: stone
+  - Tag: tower+wall
+    MinCount: 12
+    MaxCount: 20
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 5
+    Style: stone
+  - Tag: keep
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: stone
+  - Tag: =Statue
+    MinCount: 2
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: well
+    MinCount: 3
+    MaxCount: 5
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: market
+    MinCount: 12
+    MaxCount: 20
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: house
+    MinCount: 80
+    MaxCount: 140
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: 
+  - Tag: storage
+    MinCount: 20
+    MaxCount: 30
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: banner
+    MinCount: 8
+    MaxCount: 12
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506032503357529
+  - rid: 4061506032503357530
+  - rid: 4061506032503357531
+  - rid: 4061506032503357532
+  - rid: 4061506032503357533
+  - rid: 4061506032503357534
+  - rid: 4061506032503357535
+  - rid: 4061506032503357536
+  - rid: 4061506032503357537
+  - rid: 4061506032503357538
+  - rid: 4061506032503357539
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503357529
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings:
+        - {x: -3, y: 2, z: 9.696667}
+        - {x: 3, y: 1.5, z: 9.696667}
+    - rid: 4061506032503357530
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503357531
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506032503357532
+      type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: -3, y: 9.696667}
+    - rid: 4061506032503357533
+      type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Offset: {x: 3, y: 9.696667}
+    - rid: 4061506032503357534
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 1
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503357535
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 1
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503357536
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 0
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503357537
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 2
+        Count: 0
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503357538
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 3
+        Count: 6
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1
+    - rid: 4061506032503357539
+      type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Role: 4
+        Count: 10
+        Offset: {x: 0, y: 0}
+        AreaShare: 0.5
+        ApplySiteRace: 1

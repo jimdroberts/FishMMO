@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hareling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Long-eared hare people of the open fields — light, hopping names'
+  Description: "Long-eared hare people of the open fields \u2014 light, hopping names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - ip
       - er
       - ock
-      Description: 'Long-eared hare people of the open fields — light, hopping names'
+      Description: "Long-eared hare people of the open fields \u2014 light, hopping
+        names"
       Tags:
       - Field-names
       - Moon-marks
@@ -163,6 +164,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Harelings
+    Adjective: Hareling
   BiomeAffinities:
   - BiomeID: 1655673647
     Weight: 3
@@ -172,3 +175,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -540190004
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

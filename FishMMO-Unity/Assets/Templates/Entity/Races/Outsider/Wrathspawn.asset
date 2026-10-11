@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wrathspawn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Fiends of pure fury — roaring, hammering names'
+  Description: "Fiends of pure fury \u2014 roaring, hammering names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - orr
       - ang
-      Description: 'Fiends of pure fury — roaring, hammering names'
+      Description: "Fiends of pure fury \u2014 roaring, hammering names"
       Tags:
       - Fury-names
       - Hammer-marks
@@ -93,7 +93,7 @@ MonoBehaviour:
     - the Broken Gate
     - Furyhall
     - the Hammer Road
-    - 'the Ash Throne''s Step'
+    - the Ash Throne's Step
     - the Smashed Ledger
     - the Last Blow
     Titles:
@@ -121,13 +121,13 @@ MonoBehaviour:
       - Breaker of the Broken Gate
       - Lord of Furyhall
       - Hammer of the Hammer Road
-      - 'Warden of the Ash Throne''s Step'
+      - Warden of the Ash Throne's Step
       Legend:
       - Who Broke the Brass Gate with a Forehead
       - Who Smashed the Burning Ledger and Was Made to Rewrite It
       - Who Roared the Choir Silent
       - Who Fought the Angel to a Standstill for an Age
-      - 'Who Was Summoned to Guard and Broke the Summoner''s House'
+      - Who Was Summoned to Guard and Broke the Summoner's House
       Occupational:
       - Gate-breaker
       - Pit-guard
@@ -161,6 +161,8 @@ MonoBehaviour:
       - pit
       - silence
     AllowGenericOccupations: 0
+    Plural: Wrathspawn
+    Adjective: Wrathspawn
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 493502347
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

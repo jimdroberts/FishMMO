@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Air Elemental
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A whirlwind with intent; it howls, lifts and hurls, and is gone before the dust settles.'
+  Description: A whirlwind with intent; it howls, lifts and hurls, and is gone before
+    the dust settles.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - os
       - ar
-      Description: 'Whistling, thin — breath-sounds and sighs'
+      Description: "Whistling, thin \u2014 breath-sounds and sighs"
       Tags:
       - Elemental
       - Monster
@@ -100,7 +101,7 @@ MonoBehaviour:
     - the Elemental Gate
     - the First Flame
     - the Deep Vein
-    - 'the Storm''s Eye'
+    - the Storm's Eye
     Titles:
       Honorific:
       - Elder Flame
@@ -152,6 +153,8 @@ MonoBehaviour:
       - ash
       - cinder
     AllowGenericOccupations: 0
+    Plural: Air Elementals
+    Adjective: Air Elemental
   BiomeAffinities:
   - BiomeID: -1474826537
     Weight: 2
@@ -161,3 +164,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -138594552
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

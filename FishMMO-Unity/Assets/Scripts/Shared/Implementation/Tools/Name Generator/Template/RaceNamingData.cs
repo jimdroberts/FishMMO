@@ -32,6 +32,12 @@ namespace FishMMO.Shared.NameGeneration
 		[Tooltip("Whether this race may take trades it did not author itself, from the shared title pools or the grammar's generic list. Off for monsters: a slime is never a potter, nor a pool's ferryman.")]
 		public bool AllowGenericOccupations = true;
 
+		[Tooltip("How place names say many of this race: 'Cave of Orcs', 'Barrow of the Dwarves'. Empty = English rules on the race name (RaceNaming.PluralOf).")]
+		public string Plural;
+
+		[Tooltip("How place names use this race as a describing word: 'Goblin Warren', 'Elven Ruins'. Empty = the race name, with a few fixed forms (RaceNaming.AdjectiveOf).")]
+		public string Adjective;
+
 		private RacePhonology runtimePhonology;
 		private Dictionary<string, RacePhonology> runtimeCultures;
 		private RaceTitles runtimeTitles;
@@ -142,6 +148,7 @@ namespace FishMMO.Shared.NameGeneration
 			Places = source.Places == null ? null : (string[])source.Places.Clone();
 			Titles = source.Titles == null ? new SerializableRaceTitles() : SerializableRaceTitles.From(source.Titles.ToRuntime());
 			AllowGenericOccupations = source.AllowGenericOccupations;
+			// Plural and Adjective are not copied: they are the race's own name, not part of a preset.
 			CitySuffixes = source.CitySuffixes == null ? new SerializableRaceCitySuffixes() : SerializableRaceCitySuffixes.From(source.CitySuffixes.ToRuntime());
 			runtimePhonology = null;
 		}

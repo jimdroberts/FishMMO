@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Soulbroker
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Silver-tongued contract fiends — smooth, sibilant names'
+  Description: "Silver-tongued contract fiends \u2014 smooth, sibilant names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - el
       - ias
       - urn
-      Description: 'Silver-tongued contract fiends — smooth, sibilant names'
+      Description: "Silver-tongued contract fiends \u2014 smooth, sibilant names"
       Tags:
       - Contract-names
       - Ledger-marks
@@ -91,10 +91,10 @@ MonoBehaviour:
     Places:
     - the Burning Ledger
     - the Contract Floor
-    - 'the Silver Threshold''s Shadow'
+    - the Silver Threshold's Shadow
     - Brokerhall
     - the Signing Room
-    - 'the Sulphur Road''s Toll'
+    - the Sulphur Road's Toll
     - the Fine Print
     Titles:
       Honorific:
@@ -126,7 +126,7 @@ MonoBehaviour:
       - Who Bought a Kingdom for a Single Soul
       - Who Sold the Same Soul Three Times
       - Who Wrote the Contract No Lawyer Could Break
-      - 'Who Was Outbargained Once by a Farmer''s Daughter'
+      - Who Was Outbargained Once by a Farmer's Daughter
       - Who Read the Fine Print to the Damned
       Occupational:
       - Contract-scribe
@@ -162,6 +162,8 @@ MonoBehaviour:
       - pit
       - silence
     AllowGenericOccupations: 0
+    Plural: Soulbrokers
+    Adjective: Soulbroker
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 2
@@ -171,3 +173,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -2037808285
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

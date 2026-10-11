@@ -292,7 +292,9 @@ namespace FishMMO.Shared
 			temperature = 0f;
 			humidity = 0f;
 			SolarSystemProfile system = SolarSystemProfile.Active;
-			WorldBody body = Body;
+			// An empty atlas body means the home world, as the placement climate reads it (2026-10-10): taken
+			// literally, a hand-made scene on the home world got no latitude cooling at all.
+			WorldBody body = ScenePlacementClimate.ResolveBody(system, AtlasEntry);
 			if (system == null || body == null)
 			{
 				return;
@@ -340,12 +342,13 @@ namespace FishMMO.Shared
 				{
 					return placement.Conditions;
 				}
-				WorldBody body = Body;
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				// An empty atlas body is the home world (ScenePlacementClimate.ResolveBody), not "no world".
+				WorldBody body = ScenePlacementClimate.ResolveBody(system, AtlasEntry);
 				if (body == null)
 				{
 					return BiomeWorldConditions.Earthlike;
 				}
-				SolarSystemProfile system = SolarSystemProfile.Active;
 #if UNITY_EDITOR
 				// Outside play mode a designer may be editing the body itself; read it live.
 				if (!Application.isPlaying)
@@ -423,19 +426,30 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public ClimateSample SampleClimateAt(Vector3 worldPosition, float height01, out float normalizedHeight)
 		{
+			return SampleClimateAt(worldPosition, height01, out normalizedHeight, RuntimeTemperatureOffset, RuntimeHumidityOffset);
+		}
+
+		/// <summary>
+		/// The same, with the runtime offsets given rather than read from <see cref="RuntimeTemperatureOffset"/> and
+		/// <see cref="RuntimeHumidityOffset"/>: those of a particular moment (<see cref="FishMMO.Shared.Weather.SceneClimate.OffsetsAt"/>),
+		/// so the climate of that moment is the same whenever it is read.
+		/// </summary>
+		public ClimateSample SampleClimateAt(Vector3 worldPosition, float height01, out float normalizedHeight,
+			float runtimeTemperature, float runtimeHumidity)
+		{
 			ScenePlacementClimate placement = PlacementClimate;
 			if (placement != null && placement.Generated)
 			{
 				ClimateSample sample = placement.SampleAt(worldPosition, out normalizedHeight);
-				sample.Temperature = Mathf.Clamp(sample.Temperature + RuntimeTemperatureOffset, -1f, 1f);
-				sample.Humidity = Mathf.Clamp(sample.Humidity + RuntimeHumidityOffset, -1f, 1f);
+				sample.Temperature = Mathf.Clamp(sample.Temperature + runtimeTemperature, -1f, 1f);
+				sample.Humidity = Mathf.Clamp(sample.Humidity + runtimeHumidity, -1f, 1f);
 				return sample;
 			}
 
 			normalizedHeight = height01;
 			SceneBiomeMap map = BiomeMap;
 			float latitude01 = map != null ? map.Latitude01(worldPosition) : 0.5f;
-			ClimateSample authored = SampleClimate(height01, latitude01);
+			ClimateSample authored = SampleClimate(height01, latitude01, runtimeTemperature, runtimeHumidity);
 			if (placement != null)
 			{
 				authored.Humidity = Mathf.Clamp(authored.Humidity + placement.CentreMoisture, -1f, 1f);
@@ -489,6 +503,12 @@ namespace FishMMO.Shared
 		/// <remarks>Prefer <see cref="SampleClimateAt"/>, which knows where a generated scene really is.</remarks>
 		public ClimateSample SampleClimate(float height01, float latitude01)
 		{
+			return SampleClimate(height01, latitude01, RuntimeTemperatureOffset, RuntimeHumidityOffset);
+		}
+
+		/// <summary>The same, with the runtime offsets given (see <see cref="SampleClimateAt(Vector3, float, out float, float, float)"/>).</summary>
+		public ClimateSample SampleClimate(float height01, float latitude01, float runtimeTemperature, float runtimeHumidity)
+		{
 			/* The derived model when nothing is authored, not a guess.
 			 *
 			 * This used to fall back to Temperature = -height01 * 0.8, which reads -0.4 at mid
@@ -513,8 +533,8 @@ namespace FishMMO.Shared
 			 * The offsets are the body's mean, so latitude and elevation still do their own work on
 			 * top; and they are derived from the orbit, so moving a planet moves its biomes. */
 			CelestialOffsets(latitude01, out float bodyTemperature, out float bodyHumidity);
-			sample.Temperature = Mathf.Clamp(sample.Temperature + bodyTemperature + RuntimeTemperatureOffset, -1f, 1f);
-			sample.Humidity = Mathf.Clamp(sample.Humidity + bodyHumidity + RuntimeHumidityOffset, -1f, 1f);
+			sample.Temperature = Mathf.Clamp(sample.Temperature + bodyTemperature + runtimeTemperature, -1f, 1f);
+			sample.Humidity = Mathf.Clamp(sample.Humidity + bodyHumidity + runtimeHumidity, -1f, 1f);
 			return sample;
 		}
 

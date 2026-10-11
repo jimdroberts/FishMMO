@@ -109,6 +109,24 @@ namespace FishMMO.Client
 		public static int TerrainCount => taken.Count;
 		public static int TypeCount => types.Count;
 		public static GrassBladeRenderer Renderer => renderer;
+
+		/// <summary>
+		/// The blade grass standing at a world point, metres: the tallest type there weighted by its density (0 where none
+		/// grows, off every taken terrain, or before its maps are built). The ambient life reads it so ground animals forage
+		/// where they can be seen.
+		/// </summary>
+		public static float CoverAt(float x, float z)
+		{
+			for (int i = 0; i < grassTerrains.Count; i++)
+			{
+				GrassTerrain gt = grassTerrains[i];
+				if (gt != null && x >= gt.Origin.x && z >= gt.Origin.z && x <= gt.Origin.x + gt.Size.x && z <= gt.Origin.z + gt.Size.z)
+				{
+					return gt.CoverAt(x, z);
+				}
+			}
+			return 0f;
+		}
 		public static int LastDrawCount { get; private set; }
 
 		/// <summary>A line for the dashboard: state, terrains, types, the last camera's work and (with stats on) blades.</summary>

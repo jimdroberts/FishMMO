@@ -87,6 +87,69 @@ float4 FishCoverAt(float3 worldPos)
     return SAMPLE_TEXTURE2D_LOD(_FishCoverTex, sampler_FishCoverTex, uv, 0);
 }
 
+// Deep snow (WeatherCoverMap): how deep the snow lies past the blanket the cover's x stands for, on the same map,
+// one byte of the deepest it can lie. Only the tier that lifts the ground under snow shows it (FishSnowLiftMetres).
+float4 _FishSnowDepthParams;    // x metres the map's 1 stands for (the deepest snow lies), 0 with no map
+// Read with the cover's own sampler: the same map, filter and clamp, and the ground's shaders are near the limit of
+// samplers a pass may have.
+TEXTURE2D(_FishSnowDepthTex);
+
+// Metres of snow past the blanket at a world position; none past the map.
+float FishSnowDepthAt(float3 worldPos)
+{
+    if (_FishCoverParams.x < 0.5 || _FishSnowDepthParams.x <= 0.0)
+    {
+        return 0.0;
+    }
+    float2 uv = (worldPos.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
+    if (any(uv < 0.0) || any(uv > 1.0))
+    {
+        return 0.0;
+    }
+    return SAMPLE_TEXTURE2D_LOD(_FishSnowDepthTex, sampler_FishCoverTex, uv, 0).r * _FishSnowDepthParams.x;
+}
+
+// Trails (GroundTrailMap): r how hard the ground is trodden (0..1), g how flat the grass lies (0..1). A world-aligned
+// map round the camera that wraps — a texel holds the world texel it is equal to modulo the map's size — so moving
+// the camera only clears the strip it moves into, never copies the map along.
+float4 _FishTrailRect;      // xy the window's corner (world x/z), z its size (m), w 1 when the map is valid
+float4 _FishTrailParams;    // x metres per texel, y texels a side
+TEXTURE2D(_FishTrailTex);
+
+// One texel of the trail map by world texel: wrapped to where it is kept.
+float2 FishTrailTexel(float2 worldTexel)
+{
+    float size = _FishTrailParams.y;
+    int2 kept = int2(worldTexel - floor(worldTexel / size) * size);
+    return LOAD_TEXTURE2D_LOD(_FishTrailTex, kept, 0).rg;
+}
+
+// The trail at a point on the ground plane, filtered; nothing outside the window. Filtered by hand from four loads,
+// not by a sampler: a sampler would need wrapping to filter across where the map wraps, and the ground's shaders
+// have no sampler left to spare. The window's last texel on each side is left out: there the filter would reach
+// round the wrap into ground at the other side of the map.
+float2 FishTrailAt(float2 worldXZ)
+{
+    if (_FishTrailRect.w < 0.5)
+    {
+        return 0.0;
+    }
+    float2 local = worldXZ - _FishTrailRect.xy;
+    float margin = _FishTrailParams.x;
+    if (any(local < margin) || any(local > _FishTrailRect.z - margin))
+    {
+        return 0.0;
+    }
+    float2 p = worldXZ / _FishTrailParams.x - 0.5;
+    float2 i = floor(p);
+    float2 f = p - i;
+    float2 a = FishTrailTexel(i);
+    float2 b = FishTrailTexel(i + float2(1.0, 0.0));
+    float2 c = FishTrailTexel(i + float2(0.0, 1.0));
+    float2 d = FishTrailTexel(i + float2(1.0, 1.0));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
 // Sky occlusion: a top-down height map of the highest surface around the camera.
 // Rect: xy = world x/z of the map's corner, zw = size in metres.
 float4 _FishOcclusionRect;

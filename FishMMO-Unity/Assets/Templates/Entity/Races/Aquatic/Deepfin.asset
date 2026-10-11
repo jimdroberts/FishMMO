@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Deepfin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Merfolk of the lightless trench — pressure-slow, glowing names'
+  Description: "Merfolk of the lightless trench \u2014 pressure-slow, glowing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - oth
       - ir
       - ull
-      Description: 'Merfolk of the lightless trench — pressure-slow, glowing names'
+      Description: "Merfolk of the lightless trench \u2014 pressure-slow, glowing
+        names"
       Tags:
       - Trench-names
       - Glow-marks
@@ -163,6 +164,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Deepfins
+    Adjective: Deepfin
   BiomeAffinities:
   - BiomeID: -770075463
     Weight: 3

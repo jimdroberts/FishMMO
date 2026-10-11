@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hellborn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Mortals whose bloodline carries an infernal bargain: horns, tails, eyes like coals, and a reputation they did nothing to earn.'
+  Description: 'Mortals whose bloodline carries an infernal bargain: horns, tails,
+    eyes like coals, and a reputation they did nothing to earn.'
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +96,8 @@ MonoBehaviour:
       - or
       - ix
       - ash
-      Description: Mortal elegance touched by an infernal edge — sharp meets smooth
+      Description: "Mortal elegance touched by an infernal edge \u2014 sharp meets
+        smooth"
       Tags:
       - Brand-names
       - Pact-marks
@@ -153,7 +155,7 @@ MonoBehaviour:
         - ion
         - mor
         - eus
-        Description: 'Infernal Heir — named by bloodline bargain, inheritance-marked'
+        Description: "Infernal Heir \u2014 named by bloodline bargain, inheritance-marked"
         Tags:
         - Heir-names
         - Blood-bonds
@@ -251,6 +253,9 @@ MonoBehaviour:
       - void
       - char
       - blight
+    AllowGenericOccupations: 1
+    Plural: Hellborn
+    Adjective: Hellborn
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 2
@@ -258,3 +263,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -1042859854
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

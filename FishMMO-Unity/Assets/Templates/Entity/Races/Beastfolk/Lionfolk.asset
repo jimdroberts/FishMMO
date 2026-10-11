@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Lionfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Golden-maned pride people — regal, roaring names'
+  Description: "Golden-maned pride people \u2014 regal, roaring names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -60,7 +60,7 @@ MonoBehaviour:
       - ae
       Codas:
       - ar
-      - 'on'
+      - on
       - ess
       - ath
       - ir
@@ -70,7 +70,7 @@ MonoBehaviour:
       Middles:
       - ra
       - le
-      - 'on'
+      - on
       - ar
       SyllMin: 2
       SyllMax: 3
@@ -80,9 +80,9 @@ MonoBehaviour:
       - ora
       MasculineSuffixes:
       - ar
-      - 'on'
+      - on
       - um
-      Description: 'Golden-maned pride people — regal, roaring names'
+      Description: "Golden-maned pride people \u2014 regal, roaring names"
       Tags:
       - Pride-names
       - Sun-marks
@@ -163,6 +163,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Lionfolk
+    Adjective: Lionfolk
   BiomeAffinities:
   - BiomeID: -1911521020
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -1951431387
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

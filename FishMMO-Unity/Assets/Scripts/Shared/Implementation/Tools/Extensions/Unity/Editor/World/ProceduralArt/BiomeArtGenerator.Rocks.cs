@@ -19,8 +19,9 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Prefabs.</b> Formations, ice boulders and seracs are tree-channel props like the legacy
-	/// boulders: a root <see cref="LODGroup"/> with a <see cref="CapsuleCollider"/>, and a
-	/// <c>_Decor</c> twin without one. Icebergs, sea ice and pressure ridges are scene objects: a
+	/// boulders: a root <see cref="LODGroup"/> with a mesh collider from the last level (none for a
+	/// colliderless formation), one material per submesh. The mineral, ice and alien formations
+	/// (2026-10-10) are formations like any other; snow and ice types wear ice's material set-up. Icebergs, sea ice and pressure ridges are scene objects: a
 	/// root holding a still, non-convex <see cref="MeshCollider"/> from LOD1 (no rigidbody), and a
 	/// child "Visual" holding the <see cref="LODGroup"/>. A berg or floe root also carries a
 	/// <see cref="WaterFloater"/> whose body is LOD0's measured one and whose target is "Visual",
@@ -104,6 +105,13 @@ namespace FishMMO.Shared.WorldDesign
 				Texture2D albedo = LoadTexture(RockArtNames.RockSurfaceTexture(type.Name, "Albedo"));
 				Texture2D normal = LoadTexture(RockArtNames.RockSurfaceTexture(type.Name, "Normal"));
 				Texture2D mask = LoadTexture(RockArtNames.RockSurfaceTexture(type.Name, "Mask"));
+				if (!string.IsNullOrEmpty(type.Ice.Surface))
+				{
+					// Snow and ice (Firn, WaterIce): ice's own set-up over the type's surface.
+					IceMaterialProposal ice = type.Ice;
+					WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => IceLit(m, ice, albedo, normal, mask));
+					continue;
+				}
 				WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => RockLit(m, albedo, normal, mask, 1f));
 			}
 			foreach (IceMaterialProposal p in IceSurfaces.Materials)
@@ -178,6 +186,13 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (FormationShape s in type.Shapes)
 			{
 				FormationShape shape = s;
+				// A shape dressed in another surface, or carrying a second body (a glacier table's boulder, a frost
+				// cap), wears one material per submesh; every other shape its type's, as before.
+				Material[] bySubmesh = { material };
+				if (shape.Dress != null || shape.Cap != null)
+				{
+					bySubmesh = Array.ConvertAll(RockArtNames.FormationMaterials(in type, in shape), name => MaterialOrNull(c, name));
+				}
 				for (int v = 0; v < RockTypes.VariantCount; v++)
 				{
 					var meshes = new Mesh[res.Length];
@@ -186,21 +201,30 @@ namespace FishMMO.Shared.WorldDesign
 						MeshBuilder b = RockFormations.Build(in type, in shape, res[lod], v, c.Seed);
 						meshes[lod] = WriteMesh(c, b, RockArtNames.FormationMesh(type.Name, shape.Name, v, lod), true);
 					}
-					WriteProp(c, RockArtNames.FormationPrefab(type.Name, shape.Name, v), meshes, material);
+					WriteProp(c, RockArtNames.FormationPrefab(type.Name, shape.Name, v), meshes, bySubmesh, !shape.Colliderless);
 				}
 			}
 		}
 
 		/// <summary>A tree-channel prop: LODGroup root with a mesh collider on its lowest level (whether it collides in a scene is the bake's call, by size).</summary>
-		private static void WriteProp(Context c, string prefab, Mesh[] meshes, Material material)
+		private static void WriteProp(Context c, string prefab, Mesh[] meshes, Material material) => WriteProp(c, prefab, meshes, new[] { material }, true);
+
+		/// <summary>
+		/// A tree-channel prop wearing one material per submesh, with the boulders' mesh collider unless it is ground
+		/// cover a player walks over (<see cref="FormationShape.Colliderless"/>: sastrugi, salt polygons, frost flowers).
+		/// </summary>
+		private static void WriteProp(Context c, string prefab, Mesh[] meshes, Material[] bySubmesh, bool collider)
 		{
-			Material[][] mats = LodMaterials(meshes, material);
+			Material[][] mats = LodMaterials(meshes, bySubmesh);
 			ShadowCastingMode[] shadows = LodShadows(meshes.Length);
 			float[] heights = ProceduralArtCatalogue.BoulderLodHeights;
 			WritePrefab(c, prefab, root =>
 			{
 				Lods(root, meshes, mats, heights, shadows);
-				AddBoulderCollider(root, meshes);
+				if (collider)
+				{
+					AddBoulderCollider(root, meshes);
+				}
 			});
 		}
 

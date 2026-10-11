@@ -161,7 +161,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Whether the cloud march has drawn the fog for the camera being recorded now: the fallback
 		/// passes, recorded after it, stand down when it has. The cloud feature raises
-		/// <c>_FishCloudScreen</c> once it has recorded for a camera, and the sky clears it each frame.
+		/// <c>_FishCloudScreen</c> once it has recorded for a camera, and the sky clears it as each camera begins.
 		/// </summary>
 		public static bool MarchedThisFrame => DrawnByClouds && Shader.GetGlobalVector(CloudScreenId).x > 0.5f;
 

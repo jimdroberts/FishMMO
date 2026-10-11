@@ -52,6 +52,8 @@ RWByteAddressBuffer _ScatterCounts;             // one uint per slot
 RWStructuredBuffer<FishInstance> _ScatterInstancesOut;
 RWStructuredBuffer<FishVisible> _ScatterVisibleOut;
 
+#include "FishGroundPaths.hlsl"
+
 Texture2DArray<float> _ScatterHeights;          // the scatter's own copy of the heights, 0..1 of the terrain's height
 Texture2DArray<float4> _ScatterDensity;         // two slices a terrain: channels 0..3, 4..7; expected instances per block
 
@@ -349,6 +351,12 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
             float tall = model.lod.z * height;
             float limit = bush ? clamp(tall * _ScatterBushReach.x, _ScatterBushReach.y, _ScatterBushReach.z) : distanceLimit;
             if (d > limit)
+            {
+                continue;
+            }
+            // Nothing stands on a worn path (FishGroundPaths.hlsl): bare ways clear, a lost trail only thinned.
+            float trodden = FishPathTrodden(worldXZ);
+            if (trodden > 0.0 && ScatterUnit(h, 6u) < trodden)
             {
                 continue;
             }

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Fire Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Forge-bellow and ember-anger — basso Nordic cadence
+  Description: "Forge-bellow and ember-anger \u2014 basso Nordic cadence"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - mor
       - ak
       - brand
-      Description: Forge-bellow and ember-anger — basso forge-hall cadence
+      Description: "Forge-bellow and ember-anger \u2014 basso forge-hall cadence"
       Tags:
       - Ember-names
       - Forge-bonds
@@ -89,7 +89,7 @@ MonoBehaviour:
     Cultures: []
     Places:
     - the Brass Forge
-    - 'Smelter''s Keep'
+    - Smelter's Keep
     - Cinderhall
     - the Ash Citadel
     Titles:
@@ -116,6 +116,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Fire Giants
+    Adjective: Fire Giant
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 3
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 599899035
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

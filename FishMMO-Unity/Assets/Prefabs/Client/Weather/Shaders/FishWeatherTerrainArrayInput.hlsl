@@ -71,6 +71,13 @@ CBUFFER_START(_FishTerrainArray)
     float4 _FishLayerMaskScale[FISH_TERRAIN_ARRAY_MAX_LAYERS];
     // x: metallic, y: smoothness (1 when the albedo's alpha holds it), z: 1 when the layer has a mask map.
     float4 _FishLayerSurface[FISH_TERRAIN_ARRAY_MAX_LAYERS];
+    // FishMMO edit: the slices the scene's paths are surfaced from (x trodden earth, y gravel, z stone; -1 none), set
+    // per tile by TerrainArrayBinder from the scene's path surface (each scene's palette puts them elsewhere).
+    float4 _FishPathLayers;
+    // Per terrain layer (four to a vector), the slice of its own biome's path ground and road ground (-1 none): a way
+    // through desert wears to packed sand, through forest to a littered track (SceneTerrainPalette.PathLayerMap).
+    float4 _FishPathEarthFor[8];
+    float4 _FishPathRoadFor[8];
 CBUFFER_END
 
 // Unity's own alphamaps, bound as they are: terrainData.alphamapTextures[k] is control map k, channel c of
@@ -295,6 +302,159 @@ void FishHeightBlend(inout half4 weights, half4 heights)
 }
 #endif
 
+#if !defined(FISH_TERRAIN_BACKDROP)
+// FishMMO edit: the scene's paths over the ground (FishGroundPaths.hlsl; baked by the cut, ScenePathField).
+#define FISH_PATH_SAMPLER sampler_FishControl0
+#include "FishGroundPaths.hlsl"
+
+/// <summary>
+/// One path surface's art from the arrays: albedo (tinted) and smoothness, tangent normal, occlusion. blur widens the
+/// sampling footprint (4 = two mips down): trodden ground has lost its fine detail, the litter and crumbs trampled flat.
+/// </summary>
+void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float blur, out half3 albedo, out half3 normal, out half smoothness, out half occlusion)
+{
+    float4 st = _FishLayerST[id];
+    float2 layerUV = world * st.xy + st.zw;
+    float2 dx = worldDx * st.xy * blur;
+    float2 dy = worldDy * st.xy * blur;
+    albedo = half3(0.45h, 0.38h, 0.3h);
+    smoothness = 0.1h;
+#ifndef FISH_TERRAIN_NORMALS_ONLY
+    half4 a = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishAlbedoArray, sampler_FishAlbedoArray, layerUV, id, dx, dy);
+    albedo = a.rgb * (half3)_FishLayerTint[id].rgb;
+    smoothness = a.a * (half)_FishLayerSurface[id].y;
+#endif
+    normal = half3(0.0h, 0.0h, 1.0h);
+    occlusion = 1.0h;
+    if (_FishArrayInfo.z > 0.5)
+    {
+        half4 packed = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishNormalArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy);
+        half3 n;
+        n.xy = (packed.rg * 2.0h - 1.0h) * (half)_FishLayerTint[id].a;
+        n.z = sqrt(max(1.0e-3h, 1.0h - saturate(dot(n.xy, n.xy))));
+        normal = n;
+    }
+    if (_FishArrayInfo.w > 0.5 && _FishLayerSurface[id].z > 0.5)
+    {
+        half4 m = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishMaskArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy);
+        m = m * (half4)_FishLayerMaskScale[id] + (half4)_FishLayerMaskOffset[id];
+        smoothness = m.a;
+        occlusion = m.g;
+    }
+}
+
+/// <summary>
+/// Lays the scene's paths over the ground: a crisp, frayed edge from the half-metre distance field; trodden earth taking
+/// some of the ground's own colour, so a desert trail is sandy and a forest one dark; a cart track's two ruts with grass
+/// between; packed gravel; cobbles. A lost trail is broken by patches of the ground it crosses. Far off, a way narrower
+/// than a pixel fades by the share of the pixel it covers rather than shimmering.
+/// </summary>
+void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx, float2 worldDy, int groundId)
+{
+    FishPathSample p = FishPathAt(positionWS.xz);
+    UNITY_BRANCH
+    if (!p.found || p.edge > 1.2)
+    {
+        return;
+    }
+    // The path and road grounds of the biome this pixel's ground belongs to, else the scene's.
+    int layer = clamp(groundId, 0, 31);
+    float earthSlice = _FishPathEarthFor[layer >> 2][layer & 3];
+    float roadSlice = _FishPathRoadFor[layer >> 2][layer & 3];
+    earthSlice = earthSlice > -0.5 ? earthSlice : _FishPathLayers.x;
+    roadSlice = roadSlice > -0.5 ? roadSlice : (_FishPathLayers.y > -0.5 ? _FishPathLayers.y : earthSlice);
+    float stoneSlice = _FishPathLayers.z > -0.5 ? _FishPathLayers.z : roadSlice;
+    // No path slices bound, or slices past what the scene's arrays hold (arrays older than the palette): leave the ground.
+    bool surfaced = earthSlice > -0.5 && max(earthSlice, max(roadSlice, stoneSlice)) < _FishArrayInfo.x;
+    if (_FishPathDebug > 0.5)
+    {
+        s.albedo = lerp(s.albedo, surfaced ? half3(1.0h, 0.0h, 1.0h) : half3(0.0h, 1.0h, 1.0h), (half)(1.0 - smoothstep(-0.05, 0.05, p.edge)));
+        return;
+    }
+    if (!surfaced)
+    {
+        return;
+    }
+    float2 xz = positionWS.xz;
+    float pixel = max(1e-3, max(length(worldDx), length(worldDy)));
+    float wear = saturate(p.wear);
+    float fromCentre = max(0.0, p.edge + p.halfWidth);
+
+    float edge = FishPathFrayedEdge(p, xz);
+    float soft = max(pixel * 1.5, lerp(0.3, 0.06, wear));
+    float cover = 1.0 - smoothstep(-soft, soft, edge);
+    cover *= 1.0 - FishPathOvergrown(p, xz) * 0.92;
+    float median = FishPathMedian(p);
+    cover *= 1.0 - median * 0.85;
+    // A way under a pixel wide covers that share of it.
+    cover *= saturate(2.0 * max(p.halfWidth, 0.25) / pixel);
+    // Barely walked: the earth shows through in a broken scatter rather than a band.
+    cover *= lerp(0.55 + 0.45 * FishPathNoise(xz * 3.1 + 9.0), 1.0, wear);
+    if (cover <= 0.004)
+    {
+        return;
+    }
+
+    float code = p.surface * 3.0;
+    float track = FishPathTrackness(p.surface);
+    float earthShare = saturate(1.0 - code) + track;
+    float gravelShare = saturate(1.0 - abs(code - 2.0));
+    float stoneShare = saturate(code - 2.0);
+    int earthId = (int)(earthSlice + 0.5);
+    int gravelId = (int)(roadSlice + 0.5);
+    int stoneId = (int)(stoneSlice + 0.5);
+
+    half3 albedo = 0;
+    half3 normal = 0;
+    half smoothness = 0;
+    half occlusion = 0;
+    half3 a; half3 n; half sm; half oc;
+    /* The path grounds are made for this (SurfaceCatalogue: PathLoam, PathSand, PathSnow …): drawn as authored, with a
+     * touch of the ground's own colour so the edge sits in it. Only where a biome's override makes its path the very
+     * ground it crosses would the way vanish; there feet work grit up through it. */
+    float grit = groundId == earthId ? 0.4 : 0.0;
+    gravelShare += earthShare * grit * (1.0 - track);
+    earthShare *= 1.0 - grit * (1.0 - track);
+    UNITY_BRANCH
+    if (earthShare > 0.0)
+    {
+        FishPathLayer(earthId, xz, worldDx, worldDy, 1.0, a, n, sm, oc);
+        a = lerp(a, s.albedo, 0.12h);
+        albedo += a * earthShare; normal += n * earthShare; smoothness += sm * earthShare; occlusion += oc * earthShare;
+    }
+    UNITY_BRANCH
+    if (gravelShare > 0.0)
+    {
+        FishPathLayer(gravelId, xz, worldDx, worldDy, 1.0, a, n, sm, oc);
+        albedo += a * gravelShare; normal += n * gravelShare; smoothness += sm * gravelShare; occlusion += oc * gravelShare;
+    }
+    UNITY_BRANCH
+    if (stoneShare > 0.0)
+    {
+        FishPathLayer(stoneId, xz, worldDx, worldDy, 1.0, a, n, sm, oc);
+        albedo += a * stoneShare; normal += n * stoneShare; smoothness += sm * stoneShare; occlusion += oc * stoneShare;
+    }
+    half total = max(1e-3h, (half)(earthShare + gravelShare + stoneShare));
+    albedo /= total; normal /= total; smoothness /= total; occlusion /= total;
+
+    // A cart track's ruts: two lanes a gauge apart, darker, packed glossy, shadowed in their bottoms.
+    float rut = track * (1.0 - smoothstep(0.1, 0.23, abs(fromCentre - 0.72)));
+    albedo *= (half)(1.0 - 0.22 * rut);
+    smoothness = lerp(smoothness, max(smoothness, 0.35h), (half)rut);
+    occlusion *= (half)(1.0 - 0.25 * rut);
+    // A worn verge: the last of the path, darker where feet crowd the edge.
+    float verge = smoothstep(-0.6, 0.0, p.edge) * (1.0 - smoothstep(0.0, 0.4, p.edge));
+    albedo *= (half)(1.0 - 0.08 * verge * wear);
+
+    half c = (half)saturate(cover);
+    s.albedo = lerp(s.albedo, albedo, c);
+    s.normalTS = normalize(lerp(s.normalTS, normalize(normal + half3(0.0h, 0.0h, 1e-4h)), c));
+    s.smoothness = lerp(s.smoothness, saturate(smoothness), c);
+    s.occlusion = lerp(s.occlusion, saturate(occlusion), c);
+    s.metallic = lerp(s.metallic, 0.0h, c);
+}
+#endif
+
 /// <summary>
 /// The ground at one pixel: its four strongest layers sampled from the arrays and blended.
 /// </summary>
@@ -416,6 +576,9 @@ FishArraySurface FishSampleArraySurfaceGrad(float2 uv, float3 positionWS, float2
     s.smoothness = saturate(smoothness);
     s.occlusion = saturate(occlusion);
     s.covered = saturate(covered);
+#if !defined(FISH_TERRAIN_BACKDROP)
+    FishApplyPaths(s, positionWS, worldDx, worldDy, ids.x);
+#endif
     return s;
 }
 

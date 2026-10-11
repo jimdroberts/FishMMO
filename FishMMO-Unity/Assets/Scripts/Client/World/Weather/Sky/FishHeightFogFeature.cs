@@ -49,8 +49,18 @@ namespace FishMMO.Client
 	{
 		public const string ShaderName = "Hidden/FishMMO/Weather/HeightFog";
 
-		[Tooltip("The height-fog material. Left empty, the feature finds the shader itself.")]
+		[Tooltip("The height-fog material. Left empty, the feature makes one from Fog Shader.")]
 		public Material FogMaterial;
+
+		[Tooltip("The height-fog shader (Hidden/FishMMO/Weather/HeightFog). Referenced here so a build carries it: Shader.Find " +
+			"only finds a shader something in the build references, and nothing else does. Left empty, it is found by name, " +
+			"which works in the editor alone.")]
+		public Shader FogShader;
+
+		// The material made from the shader when none is assigned. Kept apart from FogMaterial: written into that
+		// serialized field, a saved renderer asset referenced a material that is never saved, and Dispose destroyed
+		// whatever the field held — an assigned material asset included.
+		[System.NonSerialized] private Material created;
 
 		/// <summary>How far a ray into open sky is followed through the layer when the sky has no reach of its own to say, m.</summary>
 		public const float DefaultSkyDistance = 44000f;
@@ -118,22 +128,26 @@ namespace FishMMO.Client
 			{
 				return FogMaterial;
 			}
-			Shader shader = Shader.Find(ShaderName);
+			if (created != null)
+			{
+				return created;
+			}
+			Shader shader = FogShader != null ? FogShader : Shader.Find(ShaderName);
 			if (shader == null || !shader.isSupported)
 			{
 				return null;
 			}
-			FogMaterial = CoreUtils.CreateEngineMaterial(shader);
-			return FogMaterial;
+			created = CoreUtils.CreateEngineMaterial(shader);
+			return created;
 		}
 
 		protected override void Dispose(bool disposing)
 		{
 			live.Remove(this);
-			if (FogMaterial != null)
+			if (created != null)
 			{
-				CoreUtils.Destroy(FogMaterial);
-				FogMaterial = null;
+				CoreUtils.Destroy(created);
+				created = null;
 			}
 			pass = null;
 		}

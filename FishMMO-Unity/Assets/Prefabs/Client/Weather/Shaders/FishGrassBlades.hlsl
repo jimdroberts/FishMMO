@@ -22,7 +22,6 @@
 #include "FishSurface.hlsl"
 #include "FishAmbient.hlsl"
 
-#define GRASS_TYPES 16
 #define GRASS_RINGS 6
 
 struct GrassBlade
@@ -34,14 +33,22 @@ struct GrassBlade
 
 StructuredBuffer<GrassBlade> _GrassBlades;
 
-// Per type (GrassBladeRenderer.PublishTypes).
-float4 _GrassTypeRoot[GRASS_TYPES];     // rgb colour at the root, a unused
-float4 _GrassTypeTip[GRASS_TYPES];      // rgb colour at the tip, a base width (m)
-float4 _GrassTypeHealthy[GRASS_TYPES];  // rgb healthy tint, a tint spread between neighbours
-float4 _GrassTypeDry[GRASS_TYPES];      // rgb dry tint, a healthy/dry patch size (m)
-float4 _GrassTypeParams[GRASS_TYPES];   // x stiffness, y sinks into snow, z bend, w translucency
-float4 _GrassTypeHead[GRASS_TYPES];     // x head (0 none, 1 seed head, 2 flower), y head size (m), z head colours (1..4), w 1 = blunt strap tip
-float4 _GrassTypeHeadColour[GRASS_TYPES * 4];   // the type's head colours, linear rgb (GrassType.HeadColours, else the tuning's)
+/* Per type (GrassBladeRenderer.Publish): the table the compute reads too, a texel per type (x) per row (y). It was seven
+ * constant arrays on the material (16 types, the head colours four times that); at 32 types a table read with Load
+ * keeps the material's constants small and is the same floats. Rows 0..2 are the compute's. */
+Texture2D<float4> _GrassTypeTable;
+#define GRASS_ROW_ROOT 3          // rgb colour at the root, a unused
+#define GRASS_ROW_TIP 4           // rgb colour at the tip, a base width (m)
+#define GRASS_ROW_HEALTHY 5       // rgb healthy tint, a tint spread between neighbours
+#define GRASS_ROW_DRY 6           // rgb dry tint, a healthy/dry patch size (m)
+#define GRASS_ROW_PARAMS 7        // x stiffness, y sinks into snow, z bend, w translucency
+#define GRASS_ROW_HEAD 8          // x head (0 none, 1 seed head, 2 flower, 3 plume), y head size (m), z head colours (1..4), w 1 = blunt strap tip
+#define GRASS_ROW_HEAD_COLOUR 9   // ..12: the type's head colours, linear rgb (GrassType.HeadColours, else the tuning's palette or colour)
+
+float4 GrassTypeRow(int type, int row)
+{
+    return _GrassTypeTable.Load(int3(type, row, 0));
+}
 
 float4 _GrassRingDistance[GRASS_RINGS];
 float4 _GrassRingDensity[GRASS_RINGS];
@@ -81,12 +88,14 @@ uint GrassHeadPart(uint c)
     return (c >> 29) & 3u;
 }
 
-void GrassUnpack(uint packed, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
+// The colour word carries the record's shape bits (GrassMath.RecordBits): bit 28 the type's fifth bit (types 16..31),
+// bit 27 a tall blade, whose packed height is half its own.
+void GrassUnpack(uint packed, uint colour, out int type, out float facing, out float height, out float lean, out float fade, out float clumpColour)
 {
-    type = (int)(packed & 15u);
+    type = (int)(packed & 15u) | (int)(((colour >> 28) & 1u) << 4);
     facing = (float)((packed >> 4) & 127u) / 128.0 * 6.2831853;
     float q = (float)((packed >> 11) & 127u) / 127.0;
-    height = q * q * 2.5;
+    height = q * q * 2.5 * (((colour >> 27) & 1u) != 0u ? 2.0 : 1.0);
     lean = (float)((packed >> 18) & 15u) / 15.0;
     fade = (float)((packed >> 22) & 31u) / 31.0;
     clumpColour = (float)((packed >> 27) & 31u) / 31.0;
@@ -171,9 +180,9 @@ void GrassCurve(float height, float3 tipDirection, float bend, out float3 contro
 
 // VegSeasonTint's arithmetic (FishVegetationPasses.hlsl) with the type's own colours: patches of
 // healthy and dry ground over metres, a quarter of each blade's own, browned by winter and drought.
-float3 GrassSeasonTint(float3 rootWS, int type, float own)
+float3 GrassSeasonTint(float3 rootWS, float4 healthy, float4 dryTint, float own)
 {
-    float patchMetres = _GrassTypeDry[type].a;
+    float patchMetres = dryTint.a;
     float variation = own;
     if (patchMetres > 0.0)
     {
@@ -185,8 +194,8 @@ float3 GrassSeasonTint(float3 rootWS, int type, float own)
     float known = step(1e-4, _FishSeason.w);
     float dormant = saturate(-_FishSeason.y) * 0.7;
     float drought = saturate(-_FishSeason.z * 3.0);
-    float dry = saturate(variation * _GrassTypeHealthy[type].a + max(dormant, drought) * known);
-    return lerp(_GrassTypeHealthy[type].rgb, _GrassTypeDry[type].rgb, dry);
+    float dry = saturate(variation * healthy.a + max(dormant, drought) * known);
+    return lerp(healthy.rgb, dryTint.rgb, dry);
 }
 
 GrassVertex GrassBuild(uint instanceID, float2 vertex)
@@ -195,7 +204,12 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     GrassBlade blade = _GrassBlades[instanceID];
     int type;
     float facingAngle, height, lean, thinFade, clumpColour;
-    GrassUnpack(blade.packed, type, facingAngle, height, lean, thinFade, clumpColour);
+    GrassUnpack(blade.packed, blade.colour, type, facingAngle, height, lean, thinFade, clumpColour);
+    // The type's rows, each read once.
+    float4 typeParams = GrassTypeRow(type, GRASS_ROW_PARAMS);
+    float4 typeTip = GrassTypeRow(type, GRASS_ROW_TIP);
+    float4 typeRoot = GrassTypeRow(type, GRASS_ROW_ROOT);
+    float4 typeHealthy = GrassTypeRow(type, GRASS_ROW_HEALTHY);
     float3 root = blade.root;
     float t = vertex.y;
     float u = vertex.x;
@@ -216,7 +230,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
 
     // Deep snow buries it.
     float snow = saturate(FishCoverAt(root).x) * FishSurfaceExposure(root);
-    float bury = 1.0 - saturate(snow * 1.4) * _GrassTypeParams[type].y;
+    float bury = 1.0 - saturate(snow * 1.4) * typeParams.y;
     float bladeHeight = height * thinFade * lerp(0.35, 1.0, visible) * max(0.02, bury);
 
     // The wind: a world-space wave field carried downwind (gust bands rolling across the meadow), a
@@ -241,7 +255,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     // the same place for every player, and never scrub as the wind eases.
     float travel = FishWindTravel((1.5 + _FishWindHold.z * 6.0) * max(0.0, _GrassParams4.z), lambda);
     float wobble = (FishSurfaceNoise(float2(acrossWind, alongWind) / (lambda * 2.5) + time * 0.05) - 0.5) * lambda * 1.2;
-    float stiffness = max(0.1, _GrassTypeParams[type].x);
+    float stiffness = max(0.1, typeParams.x);
     float phase = (alongWind - travel + wobble) / lambda - r1 * 0.06 * stiffness;
     float crest = pow(saturate(0.5 + 0.5 * sin(phase * 6.2831853)), max(1.0, _GrassParams4.y));
     float swell = FishSurfaceNoise(root.xz / (lambda * 4.0) - dir * time * 0.04);
@@ -278,6 +292,18 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float2 comb = float2(cos(combAngle), sin(combAngle)) + dir * (0.4 + 1.5 * speed);
     comb = dot(comb, comb) > 1e-6 ? normalize(comb) : facing;
     float2 lay = facing * lean + comb * viewLay + dir * sin(windAngle) + across * flutter;
+    /* Trodden (GroundTrailMap): pushed over away from where a body stands or has just gone through, lying almost flat
+     * along its track and rising again over a few seconds as the map lets it go. Away is down the slope of how flat the
+     * grass lies, so blades part to either side of a path and outward round someone standing still. */
+    float flattened = saturate(FishTrailAt(root.xz).y);
+    if (flattened > 0.01)
+    {
+        float texel = _FishTrailParams.x;
+        float2 gradient = float2(FishTrailAt(root.xz + float2(texel, 0.0)).y - FishTrailAt(root.xz - float2(texel, 0.0)).y,
+            FishTrailAt(root.xz + float2(0.0, texel)).y - FishTrailAt(root.xz - float2(0.0, texel)).y);
+        float2 away = dot(gradient, gradient) > 1e-6 ? -normalize(gradient) : facing;
+        lay = lerp(lay, away * 0.95, smoothstep(0.0, 0.8, flattened));
+    }
     float layLength = length(lay);
     if (layLength > 0.97)
     {
@@ -286,7 +312,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float3 tipDirection = float3(lay.x, sqrt(max(0.0, 1.0 - dot(lay, lay))), lay.y);
 
     // Bent further, the blade curves more: the base still rises before it arcs over.
-    float bend = saturate(_GrassTypeParams[type].z * (0.5 + 0.5 * r1) + 0.6 * windAngle / max(0.1, _GrassParams4.x) + 0.5 * viewLay);
+    float bend = saturate(typeParams.z * (0.5 + 0.5 * r1) + 0.6 * windAngle / max(0.1, _GrassParams4.x) + 0.5 * viewLay);
     float3 control, tip;
     GrassCurve(bladeHeight, tipDirection, bend, control, tip);
     float3 curvePoint = 2.0 * t * (1.0 - t) * control + t * t * tip;
@@ -300,8 +326,8 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     float pixelMetres = d * _GrassScreen.x + _GrassScreen.y;
     float screenCap = max(1.0, pixelMetres * _GrassScreen.z);
     float widen = min(min(_GrassParams0.y, screenCap), pow(max(1e-6, GrassShareV(d)), -_GrassParams0.x));
-    float width = _GrassTypeTip[type].a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade);
-    float4 headInfo = _GrassTypeHead[type];
+    float width = typeTip.a * widen * (0.75 + 0.5 * r0) * lerp(0.5, 1.0, thinFade);
+    float4 headInfo = GrassTypeRow(type, GRASS_ROW_HEAD);
     // A strap (a reed's leaf) keeps its width to a rounded end; a blade tapers to a point.
     float taper = headInfo.w > 0.5 ? 1.0 - 0.45 * pow(saturate(t), 3.0) : 1.0 - pow(saturate(t), 1.6);
     o.positionWS = root + curvePoint + sideWS * (u * 0.5 * width * taper);
@@ -323,11 +349,12 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
 
     /* A head record (GrassMath.WithHeadPart): the same stem, rebuilt above with the same wind, and one of its head's
      * two crossed cards drawn at its tip from the strip's own vertices: the row t runs across the card's length, the
-     * side u across its width, shaped to an ellipse (flower) or a spindle (seed head). The strip's root row and its
-     * tip point close the outline, so the LOD meshes need nothing new. It widens with the field as the blades do, so
-     * thinned far flowers keep their share of colour. */
+     * side u across its width, shaped to an ellipse (flower), a spindle (seed head) or a nodding panicle (plume). The
+     * strip's root row and its tip point close the outline, so the LOD meshes need nothing new. It widens with the
+     * field as the blades do, so thinned far flowers keep their share of colour. */
     uint headPart = GrassHeadPart(blade.colour);
     bool isHead = headPart != 0u && headInfo.x > 0.5;
+    bool isPlume = isHead && headInfo.x > 2.5;
     if (isHead)
     {
         float3 tipWS = root + tip;
@@ -350,6 +377,24 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
             centre = tipWS - tipTangent * (size * 0.15);
             profile = pow(saturate(sin(t * 3.14159265)), 0.6);
             o.positionWS = centre + axisA * t + axisB * u * profile;
+        }
+        else if (headInfo.x > 2.5)
+        {
+            /* A plume (feather grass's silky awns, a Phragmites reed's panicle): a soft feathery spray, much wider than a
+             * seed head and longer, starting a little below the tip and nodding over toward the stem's facing (the
+             * blade's lean, so a clump's plumes droop outward together) as it goes, broadest past its middle and
+             * closing to a soft point. Its spine is a parabola: up the stem's last direction, bent down and out by the
+             * nod; the two cards cross along it. Lit through like a thin leaf (o.thin below), so a backlit stand of
+             * Stipa or a reed bed against a low sun glows, as it does. */
+            float3 cross0 = normalize(cross(tipTangent, abs(tipTangent.y) < 0.95 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0)));
+            float3 cross1 = cross(tipTangent, cross0);
+            float3 nod = float3(cos(facingAngle), -0.55, sin(facingAngle)) * (0.45 + 0.25 * r1);
+            float3 spine = tipTangent * t + nod * (t * t);
+            axisA = (tipTangent + nod * (2.0 * t)) * size;   // the spine's direction at t, for the card's normal
+            axisB = lerp(cross0, cross1, second) * (size * 0.24);
+            centre = tipWS - tipTangent * (size * 0.12);
+            profile = pow(saturate(sin(t * 3.14159265)), 0.7) * (0.45 + 0.55 * t);
+            o.positionWS = centre + spine * size + axisB * u * profile;
         }
         else
         {
@@ -374,11 +419,11 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     o.side = isHead ? u * 0.3 : u;
     // 2 marks a head for the fragment (no root shading, no terrain colour, kept through the far field).
     o.along = isHead ? 2.0 : t;
-    o.thin = isHead ? 0.6 : saturate(1.0 - width / 0.04);
+    o.thin = isPlume ? 1.0 : isHead ? 0.6 : saturate(1.0 - width / 0.04);
 
     // Colour, root to tip, with the clump's and the blade's own variation and the season.
-    float3 colour = lerp(_GrassTypeRoot[type].rgb, _GrassTypeTip[type].rgb, pow(saturate(t), 0.8));
-    float3 season = GrassSeasonTint(root, type, r1);
+    float3 colour = lerp(typeRoot.rgb, typeTip.rgb, pow(saturate(t), 0.8));
+    float3 season = GrassSeasonTint(root, typeHealthy, GrassTypeRow(type, GRASS_ROW_DRY), r1);
     colour *= season;
     colour *= 0.85 + 0.3 * clumpColour;
     colour *= 0.9 + 0.2 * r2;
@@ -396,7 +441,7 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
         // The head's own colour, one of the type's (a clump's flowers share it), browned as the season goes dormant.
         int colours = clamp((int)round(headInfo.z), 1, 4);
         int pick = min(colours - 1, (int)floor(clumpColour * (float)colours));
-        colour = _GrassTypeHeadColour[type * 4 + pick].rgb * (0.85 + 0.3 * r1);
+        colour = GrassTypeRow(type, GRASS_ROW_HEAD_COLOUR + pick).rgb * (0.85 + 0.3 * r1);
         float known = step(1e-4, _FishSeason.w);
         float dormant = saturate(-_FishSeason.y) * 0.7 * known;
         float3 lumWeights = float3(0.2126, 0.7152, 0.0722);
@@ -405,9 +450,9 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     else if (terrain.a > 0.5)
     {
         float3 lumWeights = float3(0.2126, 0.7152, 0.0722);
-        float3 typeMid = lerp(_GrassTypeRoot[type].rgb, _GrassTypeTip[type].rgb, 0.57) * season;
+        float3 typeMid = lerp(typeRoot.rgb, typeTip.rgb, 0.57) * season;
         float shade = dot(colour, lumWeights) / max(1e-3, dot(typeMid, lumWeights));
-        float3 browning = season / max(1e-3, _GrassTypeHealthy[type].rgb);
+        float3 browning = season / max(1e-3, typeHealthy.rgb);
         browning /= max(1e-3, dot(browning, lumWeights));
         float3 target = terrain.rgb * shade * lerp(1.0, browning, 0.6) * _GrassParams6.y;
         colour = lerp(colour, target, saturate(_GrassParams6.x));
@@ -440,7 +485,8 @@ GrassVertex GrassBuild(uint instanceID, float2 vertex)
     }
     // Gust sheen: blades laid over in a crest turn their flat side to the sky and catch the light, which
     // is what makes the waves read across a meadow; strongest toward the tips.
-    float sheen = isHead ? 0.0 : gustBand * saturate(fullAngle / max(0.1, _GrassParams4.x)) * _GrassParams4.w * t;
+    // A plume's silky awns catch it too (a gust running through a feather-grass steppe is a silver wave).
+    float sheen = (isHead && !isPlume) ? 0.0 : gustBand * saturate(fullAngle / max(0.1, _GrassParams4.x)) * _GrassParams4.w * (isPlume ? 0.6 : t);
     colour = lerp(colour, colour * 1.55 + 0.03, saturate(sheen));
     o.albedo = colour;
     return o;

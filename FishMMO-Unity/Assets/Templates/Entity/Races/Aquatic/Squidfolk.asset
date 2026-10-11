@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Squidfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Ink-dark deep-water people — soft, many-syllabled names'
+  Description: "Ink-dark deep-water people \u2014 soft, many-syllabled names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - oth
       - ax
       - orr
-      Description: 'Ink-dark deep-water people — soft, many-syllabled names'
+      Description: "Ink-dark deep-water people \u2014 soft, many-syllabled names"
       Tags:
       - Ink-names
       - Tentacle-marks
@@ -125,7 +125,7 @@ MonoBehaviour:
       Legend:
       - Who Inked the Whole Bay Black
       - Who Wrestled the Whale with Every Arm
-      - 'Who Changed Colour to Match the King''s Banner'
+      - Who Changed Colour to Match the King's Banner
       - Who Guarded the Nursery Against the Sharks
       - Who Opened the Sunken Gate
       Occupational:
@@ -164,6 +164,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Squidfolk
+    Adjective: Squidfolk
   BiomeAffinities:
   - BiomeID: 458680092
     Weight: 3

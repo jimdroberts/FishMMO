@@ -167,6 +167,16 @@ namespace FishMMO.Client
 
 		/// <summary>Where a cloud ray's far band begins, metres (VolumetricCloudSettings.FarBandMetres; 0 none).</summary>
 		public float CloudFarBandMetres { get; private set; } = 5000f;
+		/// <summary>How far a cloud ray is marched in full, metres (VolumetricCloudSettings.FullMarchMetres).</summary>
+		public float CloudFullMarchMetres { get; private set; } = 13000f;
+		/// <summary>The far imposter's switch, size, refresh and blend (VolumetricCloudSettings.FarImposter…).</summary>
+		public bool CloudFarImposter { get; private set; } = true;
+		public int CloudFarImposterSize { get; private set; } = 1024;
+		public int CloudFarImposterRefreshFrames { get; private set; } = 48;
+		public float CloudFarImposterKeep { get; private set; } = 0.4f;
+		public float CloudFarImposterStartMetres { get; private set; }
+		/// <summary>Frames between a near texel's marches: 1, or 4 for one in each two-by-two block (VolumetricCloudSettings.NearMarchEvery).</summary>
+		public int CloudNearMarchEvery { get; private set; } = 1;
 
 		/// <summary>Half way up the cloud layer: where a screen point is reprojected against.</summary>
 		public float CloudLayerCentre { get; private set; } = 3000f;
@@ -429,6 +439,10 @@ namespace FishMMO.Client
 		private CloudTerrainMap cloudTerrain;
 		private CloudFlowField cloudFlow;
 		private MistGroundMap mistGround;
+		/// <summary>The steam fog off open water warmer than the air (SteamFogSource), drawn by the mist's march.</summary>
+		private readonly SteamFogSource steamFog = new SteamFogSource();
+		/// <summary>How much the water round the camera smokes, and how warm it is (<see cref="SteamFogSource"/>).</summary>
+		public SteamFogSource SteamFog => steamFog;
 		private WeatherMap weatherMap;
 		private readonly Vector4[] layerA = new Vector4[MaxCloudLayers];
 		private readonly Vector4[] layerB = new Vector4[MaxCloudLayers];
@@ -489,6 +503,26 @@ namespace FishMMO.Client
 			cloudAir?.Invalidate();
 			// And the storms' cloud, which is worked out in that air.
 			weatherMap?.Invalidate();
+		}
+
+		private uint snappedAt;
+
+		/// <summary>
+		/// The clock was set to another moment (<see cref="WeatherClient.Snaps"/>): everything the sky builds over frames
+		/// or keeps from before is built again for the new moment, now, instead of fading across over seconds — the air
+		/// over the sky and the storms' cloud in it, the light through the cloud, the reflection, the shade the terrain
+		/// throws into the fog, the water the steam rises from, and the lightning and thunder of the old moment. The
+		/// clouds' own history is cut by the cloud pass, which reads the same count.
+		/// </summary>
+		private void SnapToMoment()
+		{
+			RebuildCloudAir();
+			cloudLight?.Clear();
+			lightning?.Reset();
+			probeTimer = 0f;
+			cloudFlow?.ShadeSoon();
+			mistGround?.ShadeSoon();
+			steamFog.ReadWaterSoon();
 		}
 
 		/// <summary>The extremes of the air over the whole visible sky: where its cloud can be at all.</summary>
@@ -676,6 +710,11 @@ namespace FishMMO.Client
 			CelestialState state = cycle.State;
 			float dt = Time.deltaTime;
 			worldSeconds = cycle.ClockHours * 3600.0;
+			if (WeatherClient.Snaps != snappedAt)
+			{
+				snappedAt = WeatherClient.Snaps;
+				SnapToMoment();
+			}
 			Camera camera = TargetCamera != null ? TargetCamera : Camera.main;
 			WeatherTierSettings tier = profile.TierFor(QualitySettings.GetQualityLevel());
 
@@ -1451,7 +1490,9 @@ namespace FishMMO.Client
 			float night = GroundMist.NightCalm(wind, clear, sunAltitude);
 			MistPotential = GroundMist.Potential(spread, wind, wetness, rain, clear, sunAltitude);
 			MistBestPotential = GroundMist.BestPotential(deficit, stirred, night);
-			bool on = DrawFog && MistBestPotential > 0.001f;
+			// Steam off water warmer than the air is the march's too: its own source, drawn whatever the mist is doing.
+			bool steaming = steamFog.Publish(presentation, column, wind, clear, sunAltitude, viewerAt, DrawFog);
+			bool on = DrawFog && (MistBestPotential > 0.001f || steaming);
 			// Kept for the fog too: the fine ground round the camera carries the near terrain shadow every fog
 			// is shaded by (FishTerrainSunlit), mist or none.
 			if (on || fogDrawn)
@@ -1639,6 +1680,7 @@ namespace FishMMO.Client
 		private static readonly int CloudDiagLightId = Shader.PropertyToID("_FishCloudDiagLight");
 		private static readonly int CloudDiagScaleId = Shader.PropertyToID("_FishCloudDiagScale");
 		private static readonly int CloudStepTauId = Shader.PropertyToID("_FishCloudStepTau");
+		private static readonly int CloudNearStepId = Shader.PropertyToID("_FishCloudNearStep");
 		private static readonly int CloudFixId = Shader.PropertyToID("_FishCloudFix");
 		private static readonly int CloudFixBId = Shader.PropertyToID("_FishCloudFixB");
 		private static readonly int CloudBaseId = Shader.PropertyToID("_FishCloudBase");
@@ -1673,12 +1715,20 @@ namespace FishMMO.Client
 			CloudFarDistance = clouds.MaxDistance;
 			CloudFarTailSteps = clouds.FarTailSteps;
 			CloudFarBandMetres = clouds.FarBandMetres;
+			CloudFullMarchMetres = Mathf.Max(1000f, clouds.FullMarchMetres);
+			CloudFarImposter = clouds.FarImposter;
+			CloudFarImposterSize = Mathf.Clamp(clouds.FarImposterSize, 128, 4096);
+			CloudFarImposterRefreshFrames = Mathf.Clamp(clouds.FarImposterRefreshFrames, 4, 512);
+			CloudFarImposterKeep = Mathf.Clamp(clouds.FarImposterKeep, 0.05f, 1f);
+			CloudFarImposterStartMetres = Mathf.Max(0f, clouds.FarImposterStartMetres);
+			CloudNearMarchEvery = clouds.NearMarchEvery >= 4 ? 4 : 1;
 			// The inspector's diagnostic switches, live every frame; all zeros is the clouds as they
 			// ship, so a shader that never sees these draws the default (VolumetricCloudDiagnostics).
 			Shader.SetGlobalVector(CloudDiagId, diagnostics.MarchVector);
 			Shader.SetGlobalVector(CloudDiagLightId, diagnostics.LightVector);
 			Shader.SetGlobalVector(CloudDiagScaleId, diagnostics.ScaleVector);
 			Shader.SetGlobalVector(CloudStepTauId, diagnostics.StepVector);
+			Shader.SetGlobalVector(CloudNearStepId, diagnostics.NearStepVector);
 			Shader.SetGlobalVector(CloudFixId, diagnostics.FixVector);
 			Shader.SetGlobalVector(CloudFixBId, diagnostics.FixVectorB);
 			Shader.SetGlobalVector(CloudBaseId, diagnostics.BaseVector);
@@ -2252,6 +2302,11 @@ namespace FishMMO.Client
 
 		private void OnBeginCamera(ScriptableRenderContext context, Camera camera)
 		{
+			// Every camera starts with no cloud buffer of its own: the feature raises the flag once it has published
+			// one FOR THIS CAMERA. Cleared once a frame only, a second camera (the Scene view, a probe) inherited the
+			// first's — its height and froxel fog stood down for a fog its own march never drew, and its water laid
+			// another camera's clouds over itself (FogLayerView.MarchedThisFrame, FishWaterFog.hlsl).
+			Shader.SetGlobalVector(CloudScreenId, Vector4.zero);
 			if (cycle == null || camera == null)
 			{
 				return;

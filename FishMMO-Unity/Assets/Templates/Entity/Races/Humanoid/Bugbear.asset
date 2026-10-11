@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bugbear
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Ambush-speech — whispered then roared
+  Description: "Ambush-speech \u2014 whispered then roared"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +80,7 @@ MonoBehaviour:
       - ar
       - ok
       - ash
-      Description: Ambush-speech — whispered then roared
+      Description: "Ambush-speech \u2014 whispered then roared"
       Tags:
       - Ambush-names
       - Stealth-bonds
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Bugbears
+    Adjective: Bugbear
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 2
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 144196518
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

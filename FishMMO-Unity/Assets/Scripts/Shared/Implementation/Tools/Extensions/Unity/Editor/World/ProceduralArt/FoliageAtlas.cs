@@ -22,6 +22,19 @@ namespace FishMMO.Shared.WorldDesign
 		BushSmall = 11,
 		/// <summary>A dense mass of needle shoots (juniper, mountain pine, gorse).</summary>
 		BushNeedle = 12,
+		/// <summary>
+		/// One broad paddle leaf filling the cell from its stalk (v = 0) to its rounded tip (v = 1), pale midrib up the
+		/// middle, torn between its veins (banana, heliconia, monstera). The last two free cells were claimed by the
+		/// vegetation expansion (2026-10-10): after it and <see cref="Strand"/> the atlas is full, and another shape
+		/// means growing the grid.
+		/// </summary>
+		Paddle = 13,
+		/// <summary>
+		/// Fine strands hanging from the cell's foot (v = 0) toward its top, ragged where they end, each set with short
+		/// narrow leaflets angled along it: Spanish moss and old man's beard as a short card, a weeping willow's
+		/// pendulous shoots as a long one.
+		/// </summary>
+		Strand = 14,
 		Solid = 15,
 	}
 
@@ -97,6 +110,10 @@ namespace FishMMO.Shared.WorldDesign
 					case FoliageCell.BushBroad: DrawLeafMass(canvas, 110, 0.17f, 0.26f, 0.55f); break;
 					case FoliageCell.BushSmall: DrawLeafMass(canvas, 620, 0.06f, 0.1f, 0.5f); break;
 					case FoliageCell.BushNeedle: DrawNeedleMass(canvas); break;
+					// Drawn last of the shapes (2026-10-10): each cell's stream is seeded by its index, so these change no
+					// other cell's pixels.
+					case FoliageCell.Paddle: DrawPaddle(canvas); break;
+					case FoliageCell.Strand: DrawStrands(canvas); break;
 					case FoliageCell.Solid: canvas.Fill(1f, 1f); break;
 					default: break;
 				}
@@ -407,6 +424,115 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				float angle = Mathf.Deg2Rad * (20f + k * 23f + c.Rng.Range(-6f, 6f));
 				c.Leaf(0.5f, 0.28f, angle, c.Rng.Range(0.38f, 0.47f), 0.08f, 0.86f * c.Jitter(0.08f), Color.white, 0.25f);
+			}
+		}
+
+		/// <summary>
+		/// A banana leaf: a short stalk, then an oblong blade rounded at both ends, with a pale raised midrib and fine
+		/// lateral veins running out and a little up to the margin. The wind tears such a leaf along those veins, so a
+		/// few ragged slits run in from the edge on either side, each its own depth, with whole stretches between —
+		/// a whole paddle reads as a cut-out, a torn one as a banana. Drawn for a card about three to four times as
+		/// long as wide (a banana's leaf on its frond strip): the veins' slope here is a third of what it looks once
+		/// stretched. Heliconias and monstera (the jungle's broad herbs) wear the same cell at their own sizes.
+		/// </summary>
+		private static void DrawPaddle(Canvas c)
+		{
+			const float baseV = 0.07f, tipV = 0.985f, halfMax = 0.45f, slope = 0.1f;
+			// The tears, per side: where each meets the margin (its vein's v at the edge), how far in it runs, how wide it gapes.
+			var tears = new (float v, float depth, float gape)[2][];
+			for (int side = 0; side < 2; side++)
+			{
+				int count = 3 + c.Rng.Next(4);
+				tears[side] = new (float, float, float)[count];
+				for (int k = 0; k < count; k++)
+				{
+					float v = Mathf.Lerp(baseV + 0.18f, tipV - 0.1f, (k + c.Rng.Range(0.1f, 0.9f)) / count);
+					tears[side][k] = (v, c.Rng.Range(0.3f, 1f), c.Rng.Range(0.002f, 0.007f));
+				}
+			}
+			int size = c.Size;
+			float px = 1f / size;
+			for (int y = 0; y < size; y++)
+			{
+				for (int x = 0; x < size; x++)
+				{
+					float u = (x + 0.5f) * px, v = (y + 0.5f) * px;
+					float across = u - 0.5f;
+					float d = Mathf.Abs(across);
+					int i = y * size + x;
+					if (v < baseV)
+					{
+						// The stalk.
+						float stalk = Mathf.Clamp01(0.5f - (d - 0.02f) * size);
+						c.Alpha[i] = stalk;
+						c.Lum[i] = 0.78f;
+						continue;
+					}
+					float s = (v - baseV) / (tipV - baseV);
+					// Rounded into the stalk over the first quarter and over the tip in the last, near parallel between.
+					float shoulder = Mathf.Sqrt(Mathf.Clamp01(1f - (1f - Mathf.Clamp01(s / 0.25f)) * (1f - Mathf.Clamp01(s / 0.25f))));
+					float tip = s > 0.7f ? Mathf.Sqrt(Mathf.Clamp01(1f - (s - 0.7f) * (s - 0.7f) / 0.09f)) : 1f;
+					float half = Mathf.Max(0.02f, halfMax * Mathf.Max(0.05f, shoulder) * tip * (0.94f + 0.06f * Mathf.Sin(Mathf.PI * s)));
+					float coverage = Mathf.Clamp01(0.5f - (d - half) * size);
+					if (s > 1f)
+					{
+						coverage = 0f;
+					}
+					// A lateral vein through this point meets the midrib at vRib and runs out and up at the slope.
+					float vRib = v - d * slope;
+					foreach ((float tv, float depth, float gape) in tears[across < 0f ? 0 : 1])
+					{
+						// Distance across the tear's line, which runs along the vein that meets the margin at tv.
+						float lineV = tv - (half - d) * slope;
+						if (d < half * (1f - depth))
+						{
+							continue;
+						}
+						float gap = Mathf.Abs(v - lineV) - gape * Mathf.Clamp01((d - half * (1f - depth)) / Mathf.Max(1e-3f, half * depth) + 0.2f);
+						coverage = Mathf.Min(coverage, Mathf.Clamp01(0.5f + gap * size));
+					}
+					c.Alpha[i] = coverage;
+					float veins = 0.035f * Mathf.Sin(vRib * 180f);
+					float rib = d < 0.016f ? 0.12f : d < 0.026f ? 0.05f : 0f;
+					float edge = -0.06f * Mathf.Clamp01((d / Mathf.Max(0.02f, half) - 0.8f) * 5f);
+					c.Lum[i] = 0.8f + veins + rib + edge + 0.05f * s;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Strands hanging from the cell's foot: a dozen fine wavy threads of their own lengths (a ragged lower edge
+		/// when hung), each set along its length with short narrow leaflets angled down it in pairs. On a short card
+		/// they read as Spanish moss's grey tangle; stretched down a weeping willow, as its shoots of narrow leaves.
+		/// </summary>
+		private static void DrawStrands(Canvas c)
+		{
+			const int strands = 14;
+			for (int k = 0; k < strands; k++)
+			{
+				float x0 = 0.07f + 0.86f * (k + c.Rng.Range(-0.35f, 0.35f)) / (strands - 1);
+				float length = c.Rng.Range(0.62f, 0.97f);
+				float waves = c.Rng.Range(1.5f, 3.5f), phase = c.Rng.Range(0f, Mathf.PI * 2f), sway = c.Rng.Range(0.015f, 0.04f);
+				float lum = 0.82f * c.Jitter(0.08f);
+				const int pieces = 20;
+				float px0 = x0, py0 = 0f;
+				for (int n = 1; n <= pieces; n++)
+				{
+					float t = (float)n / pieces;
+					float py = t * length;
+					float pxn = x0 + sway * Mathf.Sin(waves * Mathf.PI * t + phase) * t;
+					c.Segment(px0, py0, pxn, py, Mathf.Lerp(0.012f, 0.006f, t - 1f / pieces), Mathf.Lerp(0.012f, 0.006f, t), lum * 0.85f, Color.white);
+					// Leaflets in pairs along the piece, angled down the thread (toward its free end).
+					float heading = Mathf.Atan2(py - py0, pxn - px0);
+					for (int side = -1; side <= 1; side += 2)
+					{
+						float a = heading + side * Mathf.Deg2Rad * c.Rng.Range(18f, 38f);
+						float leafLength = c.Rng.Range(0.06f, 0.1f) * (1f - 0.35f * t);
+						c.Leaf(px0, py0, a, leafLength, leafLength * 0.3f, lum * c.Jitter(0.1f), Color.white, 0.1f);
+					}
+					px0 = pxn;
+					py0 = py;
+				}
 			}
 		}
 

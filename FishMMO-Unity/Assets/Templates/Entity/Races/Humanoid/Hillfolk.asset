@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hillfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Terraced-hill farmers — short, hearty names ending in stops'
+  Description: "Terraced-hill farmers \u2014 short, hearty names ending in stops"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ock
       - ard
       - ob
-      Description: 'Terraced-hill farmers — short, hearty names ending in stops'
+      Description: "Terraced-hill farmers \u2014 short, hearty names ending in stops"
       Tags:
       - Terrace-names
       - Harvest-marks
@@ -170,6 +170,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 1
+    Plural: Hillfolk
+    Adjective: Hillfolk
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 3
@@ -179,3 +181,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

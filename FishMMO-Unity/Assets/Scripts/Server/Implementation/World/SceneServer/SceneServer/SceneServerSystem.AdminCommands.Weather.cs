@@ -224,7 +224,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Reply(character, "Usage: /admin weather cell steer <id> [m/s 0-100]");
 					return;
 				}
-				Reply(character, weather.SteerCell(scene, id, here, speed) ? $"Cell {id} heading for you at {speed:0.#} m/s." : $"No cell {id} here.");
+				Reply(character, weather.SteerCell(scene, id, here, speed) ? $"Cell {id} heading for you at {speed:0.#} m/s."
+					: StormSchedule.IsScheduled(id) ? $"Cell {id} is one of the world's own storms, worked out from the world clock on every side: it cannot be steered. Start one of your own (/admin weather cell spawn)." : $"No cell {id} here.");
 				return;
 			}
 			if (verb == "retire")
@@ -235,7 +236,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Reply(character, "Usage: /admin weather cell retire <id> [seconds]");
 					return;
 				}
-				Reply(character, weather.RetireCell(scene, id, seconds) ? $"Cell {id} fading over {seconds:0}s." : $"No cell {id} here (or it is already fading).");
+				Reply(character, weather.RetireCell(scene, id, seconds) ? $"Cell {id} fading over {seconds:0}s."
+					: StormSchedule.IsScheduled(id) ? $"Cell {id} is one of the world's own storms, worked out from the world clock on every side: it cannot be ended. Turn the director off to stop them (/admin weather director off)." : $"No cell {id} here (or it is already fading).");
 				return;
 			}
 			Reply(character, "Usage: /admin weather cell spawn|steer|retire …  (/admin weather help)");

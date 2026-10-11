@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sand Elemental
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Living desert wind — hissing, sifting names'
+  Description: "Living desert wind \u2014 hissing, sifting names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - im
       - ar
       - ud
-      Description: 'Living desert wind — hissing, sifting names'
+      Description: "Living desert wind \u2014 hissing, sifting names"
       Tags:
       - Sand-names
       - Sift-marks
@@ -161,6 +161,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Sand Elementals
+    Adjective: Sand Elemental
   BiomeAffinities:
   - BiomeID: -941601695
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 525873855
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

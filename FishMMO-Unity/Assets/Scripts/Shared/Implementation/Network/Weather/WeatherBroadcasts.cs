@@ -23,10 +23,12 @@ namespace FishMMO.Shared
 		public List<StormCell> Cells;
 		/// <summary>What has been added to the scene's air at runtime.</summary>
 		public AirOffsetEntry Air;
-		public WeatherCover Cover;
-		/// <summary>The server tick <see cref="Cover"/> was measured at.</summary>
-		/// <summary>The world seconds the cover was worked out to.</summary>
-		public double CoverSeconds;
+		/// <summary>
+		/// Whether the scene makes storms of its own, and the rectangle it makes them in (world X/Z): with these and
+		/// the world clock a client works out the same storms as the server (StormSchedule) without one being sent.
+		/// </summary>
+		public bool Director;
+		public float AreaX, AreaZ, AreaWidth, AreaDepth;
 
 		/// <summary>
 		/// Where and when this scene is, so the client's weather driver lands on the server's answer.
@@ -63,10 +65,9 @@ namespace FishMMO.Shared
 		public List<ushort> RemovedCells;
 		public bool HasAir;
 		public AirOffsetEntry Air;
-		public bool HasCover;
-		public WeatherCover Cover;
-		/// <summary>The world seconds the cover was worked out to.</summary>
-		public double CoverSeconds;
+		/// <summary>The director was switched (an admin): the scene's own storms start or stop on every side at once.</summary>
+		public bool HasDirector;
+		public bool Director;
 	}
 
 	/// <summary>Client → server: my weather timeline has a gap; send it whole.</summary>

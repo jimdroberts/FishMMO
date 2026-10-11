@@ -64,6 +64,8 @@ namespace FishMMO.TestHarness.World
 		public AirOffsets StartAir;
 
 		private readonly WeatherTimeline timeline = new WeatherTimeline();
+		/// <summary>The scene's ground figure, worked out from the world time as the server's is (SceneCover).</summary>
+		private readonly SceneCover sceneCover = new SceneCover();
 		private readonly List<ICachedObject> registered = new List<ICachedObject>();
 		private WeatherPresentation presentation;
 		private ushort nextCell = 1;
@@ -232,43 +234,57 @@ namespace FishMMO.TestHarness.World
 
 		/// <summary>
 		/// The next eclipse from now, as seen from where the camera stands: the world hour of first
-		/// contact. Searched, a few minutes at a time, over the next few years.
+		/// contact, handed to <paramref name="found"/> (null when there is none). Searched, a few
+		/// minutes at a time, over the next few years; run it as a coroutine.
 		/// </summary>
 		/// <remarks>
 		/// With the discs as they are drawn, so what is found is what will be seen; and a solar
 		/// eclipse only counts with the sun up, since one below the horizon is not an eclipse to
 		/// anybody here. A lunar one counts with the moon up.
 		/// </remarks>
-		public bool FindNextEclipse(bool solar, out double hoursAtFirstContact)
+		public System.Collections.IEnumerator SearchNextEclipse(bool solar, Action<double?> found, Action<float> progress = null)
 		{
-			hoursAtFirstContact = 0.0;
 			SolarSystemProfile system = SolarSystemProfile.Active;
 			if (system == null || Body == null)
 			{
-				return false;
+				found(null);
+				yield break;
 			}
+			// Two-minute steps over four years is a quarter of a million sky computations: seconds of
+			// a frozen editor in one go, so the search is spread over frames a few milliseconds at a time.
 			var probe = new CelestialState();
+			WorldBody body = Body;
 			float sunScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.SunScale : 1f;
 			float bodyScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.BodyScale : 1f;
 			double step = 2.0 / 60.0;
 			double now = Hours;
 			double limit = now + CelestialMath.YearHours(system) * 4.0;
 			bool wasIn = true;
+			var watch = System.Diagnostics.Stopwatch.StartNew();
 			for (double at = now; at < limit; at += step)
 			{
-				probe.Compute(system, Body, at, latitude, longitude, heading);
+				probe.Compute(system, body, at, latitude, longitude, heading);
 				bool isIn = solar
 					? probe.Sun >= 0 && probe.SunAltitude > -0.5f && probe.SolarEclipseAsDrawn(sunScale, bodyScale).Obscuration > 0f
 					: probe.Moon >= 0 && probe.Bodies[probe.Moon].AltitudeDegrees > -0.5f && probe.LunarPhase != LunarEclipsePhase.None;
 				if (isIn && !wasIn)
 				{
-					hoursAtFirstContact = at;
-					return true;
+					found(at);
+					yield break;
 				}
 				wasIn = isIn;
+				if (watch.Elapsed.TotalMilliseconds >= EclipseSearchMilliseconds)
+				{
+					progress?.Invoke((float)((at - now) / (limit - now)));
+					yield return null;
+					watch.Restart();
+				}
 			}
-			return false;
+			found(null);
 		}
+
+		/// <summary>How much of a frame the eclipse search takes.</summary>
+		private const double EclipseSearchMilliseconds = 6.0;
 
 		/// <summary>The date into the clock. In double: a float day stops holding the hour after a few years.</summary>
 		private void ComposeHours()
@@ -541,6 +557,13 @@ namespace FishMMO.TestHarness.World
 			{
 				return;
 			}
+			// Through the camera's own controls when it has them: it keeps its own yaw and pitch, and
+			// set behind its back the next right-drag snapped the view back to where it was.
+			if (Camera.TryGetComponent(out WorldSimCamera controls))
+			{
+				controls.Face(direction);
+				return;
+			}
 			Camera.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
 		}
 
@@ -636,12 +659,10 @@ namespace FishMMO.TestHarness.World
 				BodyTemperature = bodyTemperature;
 				BodyHumidity = bodyHumidity;
 			}
-			if (Settings != null)
-			{
-				float added = (Settings.AuthoredAir + timeline.AirAt(Tick)).TemperatureScale;
-				Settings.RuntimeTemperatureOffset = Mathf.Clamp(added + BodyTemperature, -2f, 2f);
-				Settings.RuntimeHumidityOffset = Mathf.Clamp(BodyHumidity, -2f, 2f);
-			}
+			// The settings get the one sum the server and the client make (SceneClimate), on the bed's body and latitude.
+			timeline.BodyOverride = Body;
+			timeline.LatitudeDegrees = latitude;
+			SceneClimate.Apply(Settings, timeline, timeline.WorldSecondsAt(Tick));
 		}
 
 		/// <summary>
@@ -683,7 +704,10 @@ namespace FishMMO.TestHarness.World
 			// Long enough to cross the camera and go, and no longer than the storm would live.
 			// In world seconds, as the server's storms are: it holds with the world, and races with it.
 			double lifetime = overhead ? Mathf.Max(600f, life) : Mathf.Min(life * 2f, (distance * 2f) / Mathf.Max(0.5f, speed) + 30f);
+			// Born already grown, so it shows at once: a storm born now under a held clock had no
+			// strength and never gained any (its growth is in world seconds, and those stand still).
 			double born = WorldSeconds;
+			double grow = overhead ? 0.1 : 10.0;
 			timeline.UpsertCell(new StormCell
 			{
 				ID = nextCell++,
@@ -699,8 +723,8 @@ namespace FishMMO.TestHarness.World
 				PeakIntensity = 1f,
 				MeanderMeters = 20f,
 				MotionSeconds = born,
-				BirthSeconds = born,
-				MatureSeconds = born + (overhead ? 0.1 : 10.0),
+				BirthSeconds = born - grow,
+				MatureSeconds = born,
 				DecaySeconds = born + lifetime - 10.0,
 				DeathSeconds = born + lifetime,
 			});
@@ -710,23 +734,38 @@ namespace FishMMO.TestHarness.World
 		/// <summary>The bed's reset: the air back to the world's own, no storms, bare ground.</summary>
 		public void ClearAll(float seconds)
 		{
-			SetAir(default, seconds);
+			// The transition runs in world seconds, so under a held clock it never ran and the air
+			// stayed as it was: held, the reset is immediate.
+			SetAir(default, Paused ? 0f : seconds);
 			timeline.Cells.Clear();
 			timeline.Revision++;
 			// Clear means clear: the ground goes back to bare as well. Weather stopping does not dry
 			// the ground — that takes a quarter of an hour, and the panel can fast-forward it — but
 			// this button is the bed's reset, not a forecast.
 			ResetCover();
-			if (Presentation != null && Presentation.CoverMap != null)
-			{
-				Presentation.CoverMap.Hold(default);
-			}
 		}
 
+		/// <summary>
+		/// The ground the weather made, with nothing held over it. The ground is the world clock's (GroundCover): it
+		/// cannot be set bare and left to the weather, only shown as the weather of its moment left it.
+		/// </summary>
 		public void ResetCover()
 		{
-			timeline.Cover = default;
 			CoverOverride = null;
+			UpdateSceneCover(Tick);
+		}
+
+		/// <summary>The scene's ground figure of this moment, unless one is held.</summary>
+		private void UpdateSceneCover(uint tick)
+		{
+			if (timeline.Area.width <= 0f && SceneCoverSampling.TryGetArea(Settings, gameObject.scene, out Rect area))
+			{
+				timeline.Area = area;
+			}
+			if (!CoverOverride.HasValue)
+			{
+				sceneCover.Update(timeline, Settings, gameObject.scene, timeline.WorldSecondsAt(tick));
+			}
 		}
 
 		/// <summary>
@@ -742,11 +781,32 @@ namespace FishMMO.TestHarness.World
 				coverOverride = value;
 				// The ground is drawn from the cover map, not from this figure, so holding a depth
 				// has to reach the map or nothing changes on screen.
-				if (value.HasValue && Presentation != null && Presentation.CoverMap != null)
+				if (Presentation != null && Presentation.CoverMap != null)
 				{
-					timeline.Cover = value.Value;
-					Presentation.CoverMap.Hold(value.Value);
+					if (value.HasValue)
+					{
+						timeline.Cover = value.Value;
+						Presentation.CoverMap.Hold(value.Value);
+					}
+					else
+					{
+						// Let it settle: the ground of the moment again.
+						Presentation.CoverMap.Release();
+					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// Snow this deep past the white blanket everywhere at once, metres — only where the ground is white, so hold
+		/// the snow cover first. Shown as height only on the tier that lifts the ground under snow; the weather builds
+		/// and melts it from there.
+		/// </summary>
+		public void HoldDeepSnow(float metres)
+		{
+			if (Presentation != null && Presentation.CoverMap != null)
+			{
+				Presentation.CoverMap.HoldDeepSnow(metres);
 			}
 		}
 
@@ -760,9 +820,9 @@ namespace FishMMO.TestHarness.World
 		{
 			StepWorld(seconds);
 			ForcePresent();
-			SceneCoverSampling.Advance(timeline, Settings, gameObject.scene, timeline.WorldSecondsAt(Tick));
+			UpdateSceneCover(Tick);
 			WeatherCoverMap map = Presentation != null ? Presentation.CoverMap : null;
-			map?.CatchUp(timeline, Settings, Tick);
+			map?.CatchUp();
 		}
 
 		// ── Life ──────────────────────────────────────────────────────
@@ -950,9 +1010,9 @@ namespace FishMMO.TestHarness.World
 				// would look like at the world's own pace.
 				double pace = Rate;
 				SkySchedule.RateScale = pace <= 0.0 ? 1f : 1f / Mathf.Max(1f, (float)pace / LightningPace);
-				// The ground keeps the world's clock, as the server's does (SceneCoverSampling.Advance):
-				// held, nothing dries or settles; raced, it races. To watch a road dry, slow the world.
-				SceneCoverSampling.Advance(timeline, Settings, gameObject.scene, timeline.WorldSecondsAt(tick));
+				// The ground of the world's moment, as the server's is (GroundCover): held, nothing dries or settles;
+				// raced, it races; set, it is the ground of the new moment. To watch a road dry, slow the world.
+				UpdateSceneCover(tick);
 				coverTimer = 0f;
 			}
 			presentTimer -= dt;

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sea Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Coastal giants who wade the shallows — booming, wave-long names'
+  Description: "Coastal giants who wade the shallows \u2014 booming, wave-long names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - oth
       - ar
       - orm
-      Description: 'Coastal giants who wade the shallows — booming, wave-long names'
+      Description: "Coastal giants who wade the shallows \u2014 booming, wave-long
+        names"
       Tags:
       - Wave-names
       - Wading-marks
@@ -163,6 +164,8 @@ MonoBehaviour:
       - tumble
       - scar
     AllowGenericOccupations: 1
+    Plural: Sea Giants
+    Adjective: Sea Giant
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3
@@ -172,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1496239796
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

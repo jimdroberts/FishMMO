@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dire Hound
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Huge black hounds of the moor — baying, panting names'
+  Description: "Huge black hounds of the moor \u2014 baying, panting names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - ulf
       - ang
-      Description: 'Huge black hounds of the moor — baying, panting names'
+      Description: "Huge black hounds of the moor \u2014 baying, panting names"
       Tags:
       - Bay-names
       - Moor-marks
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Dire Hounds
+    Adjective: Dire Hound
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -857237992
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

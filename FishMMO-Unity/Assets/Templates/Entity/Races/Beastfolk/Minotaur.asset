@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Minotaur
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Deep and resonant — labyrinthine rumble, horn-blast power'
+  Description: "Deep and resonant \u2014 labyrinthine rumble, horn-blast power"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -93,7 +93,7 @@ MonoBehaviour:
       - ox
       - aur
       - usk
-      Description: 'Deep and resonant — labyrinthine rumble, horn-blast power'
+      Description: "Deep and resonant \u2014 labyrinthine rumble, horn-blast power"
       Tags:
       - Maze-names
       - Horn-bonds
@@ -104,7 +104,7 @@ MonoBehaviour:
     - the Great Labyrinth
     - Horn Gate
     - the Bone Passages
-    - 'the Bull''s Domain'
+    - the Bull's Domain
     - Maze-Heart
     - the Trial Grounds
     - the Chained Halls
@@ -189,6 +189,9 @@ MonoBehaviour:
       - collapse
       - dust
       - waste
+    AllowGenericOccupations: 1
+    Plural: Minotaurs
+    Adjective: Minotaur
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 2
@@ -198,3 +201,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -835082438
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

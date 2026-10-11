@@ -19,6 +19,12 @@ namespace FishMMO.Shared.WorldDesign
 		Arching,
 		/// <summary>A tight rounded cushion of short stiff shoots (gorse).</summary>
 		Cushion,
+		/// <summary>
+		/// Straight unbranched canes splaying 10–25° from vertical out of one foot, small leaves all along them and a
+		/// flower spike at each tip, airy (ocotillo). The canes are drawn straight to the species' height, inside its
+		/// width; the leaves hang on the canes, not on a crown shell.
+		/// </summary>
+		Whip,
 	}
 
 	/// <summary>One shrub species' recipe, at its mature size: one unit is one metre.</summary>
@@ -58,6 +64,18 @@ namespace FishMMO.Shared.WorldDesign
 		public float FlowerSize;
 		/// <summary>Turns in autumn and drops its leaves in winter.</summary>
 		public bool Deciduous;
+		/// <summary>
+		/// An open, see-through shrub that hides nobody, as the real one does not (ocotillo's bare canes, a thornbush's
+		/// sparse twigs): exempt from the cover a player standing in a bush is owed (BushTests). Its cover is still the
+		/// same for every player, which is the fairness rule; it is only low.
+		/// </summary>
+		public bool Open;
+		/// <summary>
+		/// Each leaf spray is a palmate fan (palmetto): pointed segments radiating from the spray's root in its plane,
+		/// drooping at their tips, instead of a pair of crossed leaf cards. The atlas has no fan cell (it is full), so the
+		/// segments are blade-cell strips.
+		/// </summary>
+		public bool FanLeaves;
 	}
 
 	/// <summary>
@@ -354,6 +372,13 @@ namespace FishMMO.Shared.WorldDesign
 						e.Top = 0.58f * h; e.Bottom = 0.55f * h; e.PowerTop = 2.6f; e.PowerBottom = 3f;
 						footRadius = 0.2f * e.A;
 						break;
+					case BushHabit.Whip:
+						// An inverted cone: every cane from one narrow foot. Only the reduced levels' spray choice reads it
+						// (the canes are drawn straight, and their leaves hang on them).
+						e.Centre = new Vector3(0f, 0.55f * h, 0f);
+						e.Top = 0.45f * h; e.Bottom = 0.55f * h; e.PowerTop = 1.6f; e.PowerBottom = 1.1f; e.FootWidth = 0.1f;
+						footRadius = 0.05f * e.A;
+						break;
 					default:
 						e.Centre = new Vector3(0f, 0.45f * h, 0f);
 						e.Top = 0.55f * h; e.Bottom = 0.6f * h; e.PowerTop = 2.2f; e.PowerBottom = 2.4f;
@@ -417,6 +442,7 @@ namespace FishMMO.Shared.WorldDesign
 					case BushHabit.Upright: return new Vector2(30f, 85f);
 					case BushHabit.Spreading: return new Vector2(-10f, 40f);
 					case BushHabit.Cushion: return new Vector2(-10f, 80f);
+					case BushHabit.Whip: return new Vector2(65f, 80f);
 					default: return new Vector2(-15f, 75f);
 				}
 			}
@@ -454,6 +480,10 @@ namespace FishMMO.Shared.WorldDesign
 					if (sp.Habit == BushHabit.Arching)
 					{
 						Cane(stem, foot, outward, r0);
+					}
+					else if (sp.Habit == BushHabit.Whip)
+					{
+						Whip(stem, foot, yaw, r0);
 					}
 					else
 					{
@@ -494,6 +524,26 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 p2 = (outward + side) * ((apexOut + tipOut) * 0.6f) + Vector3.up * (apexY * 1.05f);
 				Vector3 p3 = (outward + side * 1.5f) * tipOut + Vector3.up * tipY;
 				Curve(w, foot, p1, p2, p3, r0, r0 * 0.5f, 0.04f);
+			}
+
+			/// <summary>
+			/// An ocotillo cane: straight from the foot, splayed 10–25° from vertical (no shallower than keeps its tip inside
+			/// the species' width), three-quarters to all of the species' height, tapering to a third of its foot.
+			/// </summary>
+			private void Whip(Wood w, Vector3 foot, float yaw, float r0)
+			{
+				float overhang = 0.6f * Mathf.Max(0f, sp.LeafSize);
+				float h = Mathf.Max(0.1f, sp.Height - overhang);
+				// The widest canes reach the species' half-width (their leaves stand out a little past it; the shortened canes fall short).
+				float reach = Mathf.Max(0.05f, sp.Width * 0.5f);
+				Vector2 elevations = StemElevations();
+				float lowest = Mathf.Max(elevations.x, Mathf.Atan2(h, reach) * Mathf.Rad2Deg);
+				// Most canes splay wide, a few stand near upright in the middle.
+				float elevation = Mathf.Deg2Rad * Mathf.Lerp(lowest, Mathf.Max(lowest, elevations.y), Mathf.Pow(rng.NextFloat(), 1.6f));
+				Vector3 dir = Direction(yaw + rng.Range(-0.2f, 0.2f), elevation);
+				float length = h / Mathf.Sin(elevation) * rng.Range(0.78f, 1f);
+				Vector3 bow = Vector3.Cross(dir, Vector3.Cross(Vector3.up, dir)).normalized * (length * rng.Range(-0.02f, 0.02f));
+				Curve(w, foot, foot + dir * (length * 0.33f) + bow, foot + dir * (length * 0.66f) + bow, foot + dir * length, r0, r0 * 0.35f, 0.012f);
 			}
 
 			/// <summary>A cubic from p0 to p3 with a gentle wander across it, in segments of about a third of a metre.</summary>
@@ -668,6 +718,11 @@ namespace FishMMO.Shared.WorldDesign
 
 			private void Foliage()
 			{
+				if (sp.Habit == BushHabit.Whip)
+				{
+					CaneFoliage();
+					return;
+				}
 				(float area, float share) = Surface();
 				float leaf = Mathf.Max(0.05f, sp.LeafSize);
 				int asked = Mathf.Clamp(Mathf.RoundToInt(sp.Fullness * area / (2f * leaf * leaf)), 24, 1200);
@@ -750,6 +805,88 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
+			/// <summary>
+			/// A whip shrub's leaves: small clusters spaced all along every cane above its bare foot (as many as the cane's
+			/// length times <see cref="BushSpecies.Fullness"/> over the leaf size, plus spares), each pointing out and up from
+			/// the cane, and a flower spike at the tips of as many canes as the flower share asks for.
+			/// </summary>
+			private void CaneFoliage()
+			{
+				float leaf = Mathf.Max(0.05f, sp.LeafSize);
+				int index = 0;
+				int wantFlowers = 0;
+				for (int c = 0; c < wood.Count; c++)
+				{
+					Wood cane = wood[c];
+					if (cane.Twig)
+					{
+						continue;
+					}
+					float length = 0f;
+					for (int i = 1; i < cane.Path.Count; i++)
+					{
+						length += Vector3.Distance(cane.Path[i - 1], cane.Path[i]);
+					}
+					float from = Mathf.Clamp01(sp.BareBase + 0.02f);
+					int asked = Mathf.Max(2, Mathf.RoundToInt(length * (1f - from) * Mathf.Max(0.1f, sp.Fullness) / leaf));
+					int total = Mathf.Max(asked, Mathf.RoundToInt(asked * Spare));
+					wantFlowers += sp.Flowers != null && sp.Flowers.Length > 0 ? Mathf.RoundToInt(asked * Mathf.Max(0f, sp.FlowerShare)) : 0;
+					Vector3 axis = (cane.Path[cane.Path.Count - 1] - cane.Path[0]).normalized;
+					for (int k = 0; k < total; k++, index++)
+					{
+						Reseed(70000 + index);
+						float t = Mathf.Lerp(from, 0.98f, (k + rng.Range(0.1f, 0.9f)) / total);
+						Vector3 at = OnPath(cane.Path, t);
+						Vector3 radial = Vector3.ProjectOnPlane(Random3(), axis);
+						radial = radial.sqrMagnitude > 1e-6f ? radial.normalized : PlantParts.Perpendicular(axis);
+						Vector3 dir = (axis * rng.Range(0.3f, 0.7f) + radial).normalized;
+						float height01 = Mathf.Clamp01(at.y / Mathf.Max(0.05f, sp.Height));
+						Color colour = Color.Lerp(sp.LeafA, sp.LeafB, rng.NextFloat()) * (Mathf.Lerp(0.8f, 1.05f, height01) * (1f + 0.05f * parts[cane.Part].Tint));
+						colour.a = 1f;
+						bool always = (long)(k + 1) * asked / total > (long)k * asked / total;
+						sprays.Add(new Spray
+						{
+							Position = at + radial * RadiusOn(cane, t),
+							Direction = dir,
+							Outward = (at - crown.Centre).sqrMagnitude > 1e-6f ? (at - crown.Centre).normalized : Vector3.up,
+							Normal = radial,
+							Size = leaf * rng.Range(0.8f, 1.2f),
+							Roll = rng.Range(-40f, 40f),
+							Colour = PlantParts.C32(colour, 1f),
+							Part = cane.Part,
+							CardHash = Hash(index, 11),
+							CardRank = always ? 0f : 0.02f + 0.98f * Hash(index, 12),
+						});
+					}
+				}
+				// Flower spikes at the cane tips, round the canes in turn.
+				for (int flowers = 0; flowers < wantFlowers && wood.Count > 0; flowers++)
+				{
+					Wood cane = wood[flowers % wood.Count];
+					Reseed(90000 + flowers);
+					Vector3 tip = cane.Path[cane.Path.Count - 1];
+					Vector3 axis = (tip - cane.Path[cane.Path.Count - 2]).normalized;
+					Vector3 facing = new Vector3(tip.x, 0f, tip.z);
+					facing = facing.sqrMagnitude > 1e-6f ? facing.normalized : Vector3.forward;
+					float size = Mathf.Max(0.02f, sp.FlowerSize) * rng.Range(0.8f, 1.2f);
+					// A second round of flowers on the same canes sits a little lower on them.
+					float lower = 0.3f + 0.8f * (flowers / wood.Count);
+					sprays.Add(new Spray
+					{
+						Position = tip - axis * (size * lower),
+						Direction = facing,
+						Outward = (tip - crown.Centre).normalized,
+						Normal = facing,
+						Size = size,
+						Roll = rng.Range(-15f, 15f),
+						Colour = PlantParts.C32(sp.Flowers[rng.Next(sp.Flowers.Length)] * rng.Range(0.9f, 1.05f), FlowerAlpha),
+						Part = cane.Part,
+						CardHash = Hash(flowers, 13),
+						Flower = true,
+					});
+				}
+			}
+
 			private int NearestPart(Vector3 p)
 			{
 				int best = 0;
@@ -782,7 +919,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			public void Emit(MeshBuilder mesh, int lod)
 			{
-				if (lod < 2)
+				// A whip shrub keeps its canes at the far level too: they are the plant, and its leaves would float without them.
+				if (lod < 2 || sp.Habit == BushHabit.Whip)
 				{
 					EmitWood(mesh, lod);
 				}
@@ -803,7 +941,8 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					path.Clear(); radii.Clear(); colours.Clear(); winds.Clear();
-					int step = lod == 0 || w.Path.Count <= 3 ? 1 : 2;
+					// At the far level (whip canes only) each cane is one straight piece, foot to tip.
+					int step = lod == 0 || w.Path.Count <= 3 ? 1 : lod == 1 ? 2 : w.Path.Count - 1;
 					for (int i = 0; i < w.Path.Count; i += step)
 					{
 						path.Add(w.Path[i]);
@@ -833,6 +972,44 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 face = Vector3.Cross(side, along).normalized;
 				Vector3 n = Vector3.Slerp(Vector3.Dot(face, outward) >= 0f ? face : -face, outward, bend);
 				PlantParts.Card(mesh, 0, centre, side * size, along * size, sp.LeafCell, colour, windRoot, windTip, n);
+			}
+
+			/// <summary>Segments a palmate fan leaf is cut into.</summary>
+			private const int FanSegments = 7;
+			
+			/// <summary>Segments a fan keeps at the far level, each widened so the fan keeps its area.</summary>
+			private const int FarFanSegments = 5;
+
+			/// <summary>
+			/// A palmate fan leaf (palmetto) from <paramref name="root"/>: <see cref="FanSegments"/> pointed segments spread
+			/// over 150° about <paramref name="axis"/> in the plane it makes with <paramref name="side"/>, folded up a little
+			/// along their middles and drooping at their tips; lit bent toward the outside of the crown.
+			/// </summary>
+			private void Fan(MeshBuilder mesh, Vector3 root, Vector3 axis, Vector3 side, Vector3 outward, float length, Color32 colour, Vector2 windRoot, Vector2 windTip, int segments)
+			{
+				Vector3 face = Vector3.Cross(axis, side).normalized;
+				if (Vector3.Dot(face, outward) < 0f)
+				{
+					face = -face;
+				}
+				var spine = new List<Vector3>(3);
+				var widths = new List<float>(3);
+				var colours = new List<Color32> { colour, colour, colour };
+				var winds = new List<Vector2> { windRoot, (windRoot + windTip) * 0.5f, windTip };
+				Vector3 light = Vector3.Slerp(face, outward, 0.7f);
+				float widen = (float)FanSegments / segments;
+				for (int k = 0; k < segments; k++)
+				{
+					float a = Mathf.Deg2Rad * Mathf.Lerp(-75f, 75f, (float)k / (segments - 1));
+					Vector3 dir = (axis * Mathf.Cos(a) + side * Mathf.Sin(a)).normalized;
+					float droop = 0.12f + 0.18f * Mathf.Abs(Mathf.Sin(a));
+					spine.Clear(); widths.Clear();
+					spine.Add(root);
+					spine.Add(root + dir * (length * 0.55f) + face * (length * 0.04f));
+					spine.Add(root + dir * length - face * (length * droop));
+					widths.Add(length * 0.1f * widen); widths.Add(length * 0.13f * widen); widths.Add(0f);
+					PlantParts.Strip(mesh, 0, spine, widths, Vector3.Cross(face, dir), FoliageCell.Blade, colours, winds, light);
+				}
 			}
 
 			/// <summary>
@@ -923,7 +1100,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					Spray s = sprays[i];
 					Vector3 at = s.Position;
-					if (lod > 0)
+					if (lod > 0 && sp.Habit != BushHabit.Whip)
 					{
 						// Larger sprays sit nearer the surface, so they do not reach out past it from deep inside.
 						float r = crown.Radius(s.Outward);
@@ -954,6 +1131,11 @@ namespace FishMMO.Shared.WorldDesign
 					Vector3 centre = root + s.Direction * (length * 0.5f);
 					Vector3 outward = (centre - crown.Centre).sqrMagnitude > 1e-6f ? (centre - crown.Centre).normalized : Vector3.up;
 					Vector2 windRoot = Sway(root, 0.3f), windTip = Sway(root + s.Direction * length, 1f);
+					if (sp.FanLeaves)
+					{
+						Fan(mesh, at - s.Direction * (length * 0.2f), s.Direction, side, outward, length, s.Colour, windRoot, windTip, lod == 2 ? FarFanSegments : FanSegments);
+						continue;
+					}
 					Shingle(mesh, centre, side, s.Direction, length, s.Colour, windRoot, windTip, outward, bend);
 					// A second card across the first, standing out of the crown: alone, a card seen edge-on is a line.
 					Shingle(mesh, centre, Quaternion.AngleAxis(90f, s.Direction) * side, s.Direction, length, s.Colour, windRoot, windTip, outward, bend);

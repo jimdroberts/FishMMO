@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Drakekin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Upright, scaled warriors hatched from dragon-blooded clans; breath-weapons, iron honour codes, and names chosen by their clan-elders.'
+  Description: Upright, scaled warriors hatched from dragon-blooded clans; breath-weapons,
+    iron honour codes, and names chosen by their clan-elders.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +96,7 @@ MonoBehaviour:
       - ir
       - orn
       - ash
-      Description: 'Clipped draconic speech — proud, resonant, breath-marked'
+      Description: "Clipped draconic speech \u2014 proud, resonant, breath-marked"
       Tags:
       - Clutch-names
       - Breath-bonds
@@ -151,7 +152,7 @@ MonoBehaviour:
         - arr
         - ash
         - vor
-        Description: 'Clanskar — proud lineage, clan-honor, flame-oath'
+        Description: "Clanskar \u2014 proud lineage, clan-honor, flame-oath"
         Tags:
         - Clan-names
         - Flame-bonds
@@ -163,7 +164,7 @@ MonoBehaviour:
     - Clutch-Haven
     - the Dragon Council
     - Wyrmspire
-    - 'the Ancestor''s Roost'
+    - the Ancestor's Roost
     - the Flame Sanctum
     Titles:
       Honorific:
@@ -191,7 +192,7 @@ MonoBehaviour:
       - First Breath of the Season
       - Keeper of the Draconic Code
       - Elder of the Scale-Hall
-      - 'Voice of the Ancestor''s Roost'
+      - Voice of the Ancestor's Roost
       Legend:
       - Who Spoke the Dragon Tongue at Birth
       - Who Breathed Fire That Melted a Fortress
@@ -251,6 +252,9 @@ MonoBehaviour:
       - ruin
       - char
       - waste
+    AllowGenericOccupations: 1
+    Plural: Drakekin
+    Adjective: Drakekin
   BiomeAffinities:
   - BiomeID: 681889367
     Weight: 2
@@ -260,3 +264,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -941601695
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

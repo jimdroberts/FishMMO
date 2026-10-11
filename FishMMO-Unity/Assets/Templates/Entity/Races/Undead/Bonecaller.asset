@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bonecaller
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Skeletal sorcerers who rouse the buried — rattling, chanting names'
+  Description: "Skeletal sorcerers who rouse the buried \u2014 rattling, chanting
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ax
       - ull
       - orr
-      Description: 'Skeletal sorcerers who rouse the buried — rattling, chanting names'
+      Description: "Skeletal sorcerers who rouse the buried \u2014 rattling, chanting
+        names"
       Tags:
       - Bone-names
       - Chant-marks
@@ -162,6 +164,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Bonecallers
+    Adjective: Bonecaller
   BiomeAffinities:
   - BiomeID: 621224406
     Weight: 3
@@ -171,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -567058185
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

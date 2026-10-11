@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Dawnborn
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Mortals touched by a celestial bloodline: faint radiance, uncanny calm, and a purpose they did not choose.'
+  Description: 'Mortals touched by a celestial bloodline: faint radiance, uncanny
+    calm, and a purpose they did not choose.'
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -78,11 +79,11 @@ MonoBehaviour:
       - ara
       - ina
       MasculineSuffixes:
-      - 'on'
+      - on
       - el
       - ar
       - us
-      Description: 'Half-celestial — luminous, calm tongue'
+      Description: "Half-celestial \u2014 luminous, calm tongue"
       Tags:
       - Light-names
       - Heritage-bonds
@@ -114,6 +115,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Dawnborn
+    Adjective: Dawnborn
   BiomeAffinities:
   - BiomeID: 1139958860
     Weight: 2
@@ -121,3 +125,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1655673647
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

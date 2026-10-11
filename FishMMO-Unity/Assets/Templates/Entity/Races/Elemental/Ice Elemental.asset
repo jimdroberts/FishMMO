@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ice Elemental
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Elemental
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Living cold of the glacier — cracking, ringing names'
+  Description: "Living cold of the glacier \u2014 cracking, ringing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Elemental
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ir
       - ost
       - ald
-      Description: 'Living cold of the glacier — cracking, ringing names'
+      Description: "Living cold of the glacier \u2014 cracking, ringing names"
       Tags:
       - Ice-names
       - Crack-marks
@@ -161,6 +161,8 @@ MonoBehaviour:
       - cinder
       - still
     AllowGenericOccupations: 0
+    Plural: Ice Elementals
+    Adjective: Ice Elemental
   BiomeAffinities:
   - BiomeID: -212386137
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1018971064
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

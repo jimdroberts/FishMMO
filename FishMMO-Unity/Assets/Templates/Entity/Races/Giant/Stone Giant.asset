@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Stone Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Slow, sculpted — speech worn smooth by time'
+  Description: "Slow, sculpted \u2014 speech worn smooth by time"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -67,7 +67,7 @@ MonoBehaviour:
       - orr
       Middles:
       - or
-      - 'on'
+      - on
       - um
       - ak
       SyllMin: 2
@@ -81,7 +81,7 @@ MonoBehaviour:
       - um
       - thon
       - rok
-      Description: 'Slow, sculpted — speech worn smooth by time'
+      Description: "Slow, sculpted \u2014 speech worn smooth by time"
       Tags:
       - Stone-names
       - Dream-bonds
@@ -90,7 +90,7 @@ MonoBehaviour:
     Places:
     - the Sculpted Gallery
     - Stoneheart Cave
-    - 'the Dreamer''s Hall'
+    - the Dreamer's Hall
     - Boulder Fold
     Titles:
       Honorific:
@@ -114,6 +114,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Stone Giants
+    Adjective: Stone Giant
   BiomeAffinities:
   - BiomeID: 1275219499
     Weight: 3
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 596668801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

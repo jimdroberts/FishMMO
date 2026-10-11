@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hydra
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -78,7 +78,7 @@ MonoBehaviour:
       - issa
       MasculineSuffixes:
       - us
-      - 'on'
+      - on
       - es
       Description: Many-headed cadence; layered voices
       Tags:
@@ -112,6 +112,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Hydras
+    Adjective: Hydra
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -121,3 +124,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 888339253
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

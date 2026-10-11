@@ -324,12 +324,25 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void PruningForgetsDeadCells()
 		{
+			// The world's own storms go when they die: they are worked out again whenever they are wanted.
 			var timeline = new WeatherTimeline();
-			timeline.Cells.Add(new StormCell { ID = 7, BirthSeconds = 0 * TickDelta, MatureSeconds = 10 * TickDelta, DecaySeconds = 20 * TickDelta, DeathSeconds = 30 * TickDelta });
-			timeline.Cells.Add(new StormCell { ID = 8, BirthSeconds = 0 * TickDelta, MatureSeconds = 10 * TickDelta, DecaySeconds = 200 * TickDelta, DeathSeconds = 300 * TickDelta });
+			timeline.Cells.Add(new StormCell { ID = StormSchedule.FirstID + 7, BirthSeconds = 0 * TickDelta, MatureSeconds = 10 * TickDelta, DecaySeconds = 20 * TickDelta, DeathSeconds = 30 * TickDelta });
+			timeline.Cells.Add(new StormCell { ID = StormSchedule.FirstID + 8, BirthSeconds = 0 * TickDelta, MatureSeconds = 10 * TickDelta, DecaySeconds = 200 * TickDelta, DeathSeconds = 300 * TickDelta });
 			timeline.Prune(50);
 			LogAssert.AreEqual(1, timeline.Cells.Count);
-			LogAssert.AreEqual((ushort)8, timeline.Cells[0].ID);
+			LogAssert.AreEqual((ushort)(StormSchedule.FirstID + 8), timeline.Cells[0].ID);
+		}
+
+		[Test]
+		public void AStormSomeoneStarted_IsKeptForTheGroundsMemory()
+		{
+			// Its rain is in the ground for hours, and a player who joins then has to know of it to work the same ground out.
+			var timeline = new WeatherTimeline { TickDelta = 1.0 };
+			timeline.Cells.Add(new StormCell { ID = 7, BirthSeconds = 0, MatureSeconds = 10, DecaySeconds = 20, DeathSeconds = 30 });
+			timeline.Prune(1000);
+			LogAssert.AreEqual(1, timeline.Cells.Count, "kept within the memory");
+			timeline.Prune((uint)(30 + GroundCover.MemorySeconds + 1));
+			LogAssert.AreEqual(0, timeline.Cells.Count, "forgotten after it");
 		}
 
 		[Test]
@@ -397,12 +410,12 @@ namespace FishMMO.UnitTests.Weather
 		public void AGapChangesNothingAndAsksForTheWholeTimeline()
 		{
 			WeatherTimeline timeline = TimelineAt(5);
-			var skipped = new WeatherDeltaBroadcast { SceneName = "Test", Revision = 7, RemovedCells = new List<ushort> { 1 }, HasCover = true, Cover = new WeatherCover { Snow = 1f } };
+			var skipped = new WeatherDeltaBroadcast { SceneName = "Test", Revision = 7, RemovedCells = new List<ushort> { 1 }, HasDirector = true, Director = true };
 			LogAssert.IsTrue(timeline.IsGap(skipped));
 			LogAssert.IsFalse(timeline.TryApply(skipped));
 			LogAssert.AreEqual(5u, timeline.Revision);
 			LogAssert.AreEqual(1, timeline.Cells.Count);
-			LogAssert.AreEqual(0f, timeline.Cover.Snow);
+			LogAssert.IsFalse(timeline.Director);
 		}
 
 		[Test]
@@ -412,8 +425,8 @@ namespace FishMMO.UnitTests.Weather
 			source.Seed = 42;
 			source.SceneMode = WeatherSceneMode.None;
 			source.Air = new AirOffsetEntry { From = new AirOffsets { Humidity = 0.1f }, To = new AirOffsets { Humidity = 0.3f }, StartSeconds = 10, EndSeconds = 20 };
-			source.Cover = new WeatherCover { Snow = 0.2f, Wet = 0.4f };
-			source.CoverSeconds = 1234.5;
+			source.Director = true;
+			source.Area = new Rect(10f, 20f, 3000f, 4000f);
 
 			WeatherTimeline target = TimelineAt(2);
 			target.Cells.Add(new StormCell { ID = 99 });
@@ -425,8 +438,8 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.AreEqual(0.3f, target.Air.To.Humidity);
 			LogAssert.AreEqual(20.0, target.Air.EndSeconds);
 			LogAssert.AreEqual(1, target.Cells.Count);
-			LogAssert.AreEqual(0.2f, target.Cover.Snow);
-			LogAssert.AreEqual(1234.5, target.CoverSeconds);
+			LogAssert.IsTrue(target.Director);
+			LogAssert.AreEqual(new Rect(10f, 20f, 3000f, 4000f), target.Area);
 
 			WeatherTimelineBroadcast copy = source.ToBroadcast();
 			copy.Cells.Clear();

@@ -187,6 +187,13 @@ namespace FishMMO.UnitTests
 			Assert.That(VegetationDistanceFade.TreeBand(0f), Is.EqualTo(Vector2.zero));
 		}
 
+		/// <summary>
+		/// Every detail has a material of its own and a sink. A plant or a stone sinks 1–10 cm; a thing lying on the bed
+		/// thinner than 4 cm (a starfish 2 cm thick, a shell, a sand dollar, a brittle star, a microbial mat) sinks a
+		/// share of its own thickness instead, a tenth to a third of it: the 1 cm floor would bury half a starfish, and
+		/// it is why the legacy starfish (0.004 m) and shells (0.006 m) were always below it. A thin thing may still use
+		/// the ordinary range; everything else must, so a fern or a reed bed still cannot stand on the surface.
+		/// </summary>
 		[Test]
 		public void EveryDetail_HasItsOwnMaterial_AndASink()
 		{
@@ -197,8 +204,15 @@ namespace FishMMO.UnitTests
 				Assert.That(materials, Does.Contain(ProceduralArtCatalogue.MaterialPath(ProceduralArtCatalogue.DetailPrefab(spec.Name))),
 					$"{spec.Name}: a detail fades as a detail, so it cannot share a tree's material");
 				float sink = ProceduralArtCatalogue.DetailSink(in spec);
-				Assert.That(sink, Is.InRange(0.01f, 0.1f), $"{spec.Name} sinks {sink} m");
+				float thickness = spec.Plant.Height;
+				bool bedded = sink >= 0.01f && sink <= 0.1f;
+				bool thinAndBedded = thickness > 0f && thickness < ThinDetailMetres && sink >= 0.1f * thickness && sink <= 0.35f * thickness;
+				Assert.That(bedded || thinAndBedded, Is.True,
+					$"{spec.Name} sinks {sink} m: 0.01–0.1 m, or for a thing under {ThinDetailMetres} m thick ({thickness} m) a tenth to a third of its thickness");
 			}
 		}
+
+		/// <summary>Below this height (metres) a detail is a thin thing lying on the bed, and sinks by its own thickness.</summary>
+		private const float ThinDetailMetres = 0.04f;
 	}
 }

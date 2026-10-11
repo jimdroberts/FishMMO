@@ -829,7 +829,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			// Fields a pre-fingerprint run could not have set: anything but their defaults is somebody's.
 			if (rule.detailPlacement != DetailPlacement.Scattered || rule.sinkRange != Vector2.zero || rule.sinkSlopeFactor != 0f || rule.clusterMetres != 0f || rule.forestMetres != 0f
-				|| rule.depthRange != Vector2.zero)
+				|| rule.depthRange != Vector2.zero || rule.useClimateBand)
 			{
 				return false;
 			}
@@ -911,6 +911,17 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				text.Append("|D").Append(Q(rule.depthRange.x)).Append(',').Append(Q(rule.depthRange.y));
 			}
+			/* Climate bands likewise, and keyed on the switch, not the ranges: a rule marked before bands
+			 * existed (switch off) still hashes to its mark, and ranges edited while the switch is off are
+			 * inert, as a group's settings are without a radius. Switching a band on, or moving one, is a
+			 * tuning. */
+			if (rule.useClimateBand)
+			{
+				text.Append("|K").Append(QBound(rule.temperatureRange.x)).Append(',').Append(QBound(rule.temperatureRange.y))
+					.Append(',').Append(Q(rule.temperatureFalloff))
+					.Append(',').Append(QBound(rule.humidityRange.x)).Append(',').Append(QBound(rule.humidityRange.y))
+					.Append(',').Append(Q(rule.humidityFalloff));
+			}
 			return Hash64(text);
 		}
 
@@ -918,6 +929,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// The hash of only the fields a rule had before fingerprints (and carpets and sinks) existed,
 		/// for recognising a rule an older run of the tool wrote.
 		/// </summary>
+		/// <remarks>
+		/// Deliberately without the climate band, as without every field added since (depth, groups,
+		/// stands): a run before fingerprints could not have written one, so a rule that has a band is
+		/// refused as legacy before this is compared (<see cref="IsLegacySpecRule"/>), and leaving it out
+		/// is what lets an untouched legacy rule be recognised against a spec that has since gained one.
+		/// </remarks>
 		public static string LegacyFingerprint(PrefabSpawnRule rule)
 		{
 			var text = new StringBuilder(512);
@@ -953,6 +970,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		private static long Q(float value) => (long)Math.Round(value * 10000.0);
+
+		/// <summary>
+		/// <see cref="Q"/> for a band's end, which may be infinite (open): clamped to ±10⁶ first, because
+		/// an infinite or NaN double has no defined conversion to <c>long</c> and could hash differently
+		/// from one machine to the next. NaN hashes as 0.
+		/// </summary>
+		private static long QBound(float value) => float.IsNaN(value) ? 0L : Q(Mathf.Clamp(value, -1e6f, 1e6f));
 
 		/// <summary>FNV-1a, 64-bit, as hex: stable across runs and platforms, unlike GetHashCode.</summary>
 		private static string Hash64(StringBuilder text)
@@ -1006,7 +1030,8 @@ namespace FishMMO.Shared.WorldDesign
 				uniformScaleRange = s.Scale,
 				widthScaleRange = s.WidthScale,
 				heightScaleRange = s.HeightScale,
-				yRotationRange = new Vector2(0f, 360f),
+				// Any heading (0–360) unless the spec aligns the rule (BiomeArtSpec.Aligned): the default hashes as before.
+				yRotationRange = s.Yaw,
 				alignToTerrainNormal = s.AlignToNormal,
 				seedOffset = ProceduralNoise.SeedFor(biome + "/" + s.Name, 0) & 0xFFFF,
 				detailNoiseSpread = Mathf.Clamp(s.NoiseSpread, 0.05f, 5f),
@@ -1033,6 +1058,12 @@ namespace FishMMO.Shared.WorldDesign
 				forestMix = Mathf.Clamp01(s.ForestMix),
 				forestScaleBias = Mathf.Clamp01(s.ForestScaleBias),
 				depthRange = new Vector2(Mathf.Max(0f, s.Depth.x), Mathf.Max(0f, s.Depth.y)),
+				// No band leaves every band field at its default, so a rule without one is exactly what it was.
+				useClimateBand = s.Temperature.HasValue || s.Humidity.HasValue,
+				temperatureRange = s.Temperature ?? new Vector2(-1f, 1f),
+				temperatureFalloff = s.Temperature.HasValue || s.Humidity.HasValue ? Mathf.Clamp01(s.TemperatureFalloff) : 0.1f,
+				humidityRange = s.Humidity ?? new Vector2(-1f, 1f),
+				humidityFalloff = s.Temperature.HasValue || s.Humidity.HasValue ? Mathf.Clamp01(s.HumidityFalloff) : 0.1f,
 			});
 			rule.SpecFingerprint = Fingerprint(rule);
 		}
@@ -1086,6 +1117,11 @@ namespace FishMMO.Shared.WorldDesign
 			to.forestMix = from.forestMix;
 			to.forestScaleBias = from.forestScaleBias;
 			to.depthRange = from.depthRange;
+			to.useClimateBand = from.useClimateBand;
+			to.temperatureRange = from.temperatureRange;
+			to.temperatureFalloff = from.temperatureFalloff;
+			to.humidityRange = from.humidityRange;
+			to.humidityFalloff = from.humidityFalloff;
 		}
 	}
 }

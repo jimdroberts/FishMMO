@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Sea Drake
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Draconic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Finned drakes of the coastal caves — surging, wet-scaled names'
+  Description: "Finned drakes of the coastal caves \u2014 surging, wet-scaled names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Draconic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - ax
       - und
       - orm
-      Description: 'Finned drakes of the coastal caves — surging, wet-scaled names'
+      Description: "Finned drakes of the coastal caves \u2014 surging, wet-scaled
+        names"
       Tags:
       - Fin-names
       - Tide-marks
@@ -162,6 +163,8 @@ MonoBehaviour:
       - cinder
       - fall
     AllowGenericOccupations: 1
+    Plural: Sea Drakes
+    Adjective: Sea Drake
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3
@@ -171,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1384639345
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

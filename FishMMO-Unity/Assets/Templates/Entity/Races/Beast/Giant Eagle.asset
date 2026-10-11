@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Giant Eagle
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Vast eagles of the peaks — piercing, wind-cut names'
+  Description: "Vast eagles of the peaks \u2014 piercing, wind-cut names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -59,7 +59,7 @@ MonoBehaviour:
       - au
       - ae
       Codas:
-      - 'on'
+      - on
       - ax
       - wing
       - talon
@@ -79,10 +79,10 @@ MonoBehaviour:
       - ael
       - ira
       MasculineSuffixes:
-      - 'on'
+      - on
       - ax
       - or
-      Description: 'Vast eagles of the peaks — piercing, wind-cut names'
+      Description: "Vast eagles of the peaks \u2014 piercing, wind-cut names"
       Tags:
       - Wing-names
       - Peak-marks
@@ -125,7 +125,7 @@ MonoBehaviour:
       - Who Flew Above the Storm
       - Who Fought the Wyvern and Kept the Crag
       - Who Saw the Ship Sink from the Peak
-      - 'Who Nested on the King''s Tower'
+      - Who Nested on the King's Tower
       Occupational:
       - Peak-watcher
       - Sky-scout
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Giant Eagles
+    Adjective: Giant Eagle
   BiomeAffinities:
   - BiomeID: -1474826537
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1139958860
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

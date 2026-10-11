@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Goatfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Cliff-climbing goat people — bleating, clattering names'
+  Description: "Cliff-climbing goat people \u2014 bleating, clattering names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - orn
       - ock
-      Description: 'Cliff-climbing goat people — bleating, clattering names'
+      Description: "Cliff-climbing goat people \u2014 bleating, clattering names"
       Tags:
       - Cliff-names
       - Horn-marks
@@ -94,7 +94,7 @@ MonoBehaviour:
     - the Salt Ledge
     - the Rope Bridge
     - Bleatmoor
-    - 'the Old Bridge Troll''s Bridge'
+    - the Old Bridge Troll's Bridge
     - Hornfast
     Titles:
       Honorific:
@@ -163,6 +163,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Goatfolk
+    Adjective: Goatfolk
   BiomeAffinities:
   - BiomeID: -138594552
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 1275219499
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -4,8 +4,9 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Marks a landmark in the scene — a town, a dungeon entrance, a flight point, a vista.
-	/// Harvested into the scene's <see cref="WorldMapDefinition"/> when the world scene details
-	/// cache is rebuilt.
+	/// Harvested into <see cref="WorldSceneDetails.PointsOfInterest"/> (and into the scene's
+	/// <see cref="WorldMapDefinition"/>, while one is baked) when the world scene details cache is
+	/// rebuilt.
 	/// </summary>
 	/// <remarks>
 	/// Unlike a <see cref="MapMarker"/>, nothing needs to be spawned for this to appear: the

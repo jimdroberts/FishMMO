@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Fishfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Peaceable fish-people of the reefs, nomadic, cautious, and endlessly raided by everyone.'
+  Description: Peaceable fish-people of the reefs, nomadic, cautious, and endlessly
+    raided by everyone.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +81,7 @@ MonoBehaviour:
       - ak
       - or
       - thah
-      Description: Fish-folk — burbling and cautious
+      Description: "Fish-folk \u2014 burbling and cautious"
       Tags:
       - Current-names
       - Reef-bonds
@@ -112,6 +113,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Fishfolk
+    Adjective: Fishfolk
   BiomeAffinities:
   - BiomeID: 1508835452
     Weight: 2

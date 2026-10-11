@@ -367,29 +367,10 @@ namespace FishMMO.Shared.Weather
 		public const float DustClearSeconds = 3600f;
 
 		/// <summary>
-		/// The longest step cover is integrated in, world seconds. Every advance runs in WORLD time — the time the
-		/// world clock moved over, not the wall clock's — so a held world holds its ground and a raced one races
-		/// it; a long span is cut into steps of this, each under the weather of its own moment, so a storm the
-		/// world raced through still wets the ground it crossed.
+		/// The step cover is integrated in, world seconds: the grid the ground is worked out on, fixed from the epoch
+		/// (<see cref="GroundCover"/>), each step under the weather of its own moment.
 		/// </summary>
 		public const double StepSeconds = 60.0;
-
-		/// <summary>
-		/// The most world time one advance looks back over: two days. Past that the ground has long since come to
-		/// whatever the weather of the last day made it, so a jump of a month is integrated over its last two days
-		/// (in the same number of steps, each longer).
-		/// </summary>
-		public const double MaxAdvanceSeconds = 2.0 * 86400.0;
-
-		/// <summary>How many steps an advance over <paramref name="span"/> world seconds takes, at most <paramref name="maxSteps"/>.</summary>
-		public static int StepsFor(double span, int maxSteps)
-		{
-			if (!(span > 0.0))
-			{
-				return 0;
-			}
-			return (int)Math.Min(Math.Max(1, maxSteps), Math.Ceiling(Math.Min(span, MaxAdvanceSeconds) / StepSeconds));
-		}
 
 		/// <summary>
 		/// Advances cover by <paramref name="seconds"/> under a frame. Snow melts above freezing;
@@ -424,10 +405,7 @@ namespace FishMMO.Shared.Weather
 			float evaporation = (1f + sun * 2.5f) * (1f + Mathf.Max(0f, temperature) * 0.6f) * (1f + wind * 0.5f) * Mathf.Lerp(1.2f, 0.7f, damp);
 
 			float snowRate = frame[WeatherChannel.SnowCoverRate];
-			// Snow goes above freezing, and — slowly — just below it in direct sun: that is what
-			// takes the snow off a south slope on a bright cold day.
-			float thaw = temperature > 0f ? Mathf.Lerp(0.3f, 3f, Mathf.Clamp01(temperature)) : 0f;
-			float melt = thaw * (0.6f + sun * 0.9f) + (temperature > -0.12f ? sun * 0.25f : 0f);
+			float melt = Melt(temperature, sun);
 			Snow = Mathf.Clamp01(Snow + seconds * (snowRate / SnowFillSeconds - melt / MeltSeconds));
 
 			float wetTarget = Mathf.Max(frame[WeatherChannel.WetnessTarget], melt > 0f && Snow > 0f ? 0.4f : 0f);
@@ -437,6 +415,43 @@ namespace FishMMO.Shared.Weather
 
 			Ash = Mathf.Clamp01(Ash + seconds * (frame[WeatherChannel.AshCoverRate] / DustFillSeconds - (frame[WeatherChannel.AshCoverRate] <= 0f ? 1f / DustClearSeconds : 0f)));
 			Sand = Mathf.Clamp01(Sand + seconds * (frame[WeatherChannel.SandCoverRate] / DustFillSeconds - (frame[WeatherChannel.SandCoverRate] <= 0f ? 1f / DustClearSeconds : 0f)));
+		}
+
+		/// <summary>
+		/// How fast snow goes, 0 in a frost: above freezing, and — slowly — just below it in direct sun, which is what
+		/// takes the snow off a south slope on a bright cold day. <paramref name="sun"/> is what reaches the ground.
+		/// </summary>
+		private static float Melt(float temperature, float sun)
+		{
+			float thaw = temperature > 0f ? Mathf.Lerp(0.3f, 3f, Mathf.Clamp01(temperature)) : 0f;
+			return thaw * (0.6f + sun * 0.9f) + (temperature > -0.12f ? sun * 0.25f : 0f);
+		}
+
+		/// <summary>Seconds deep snow takes to melt away from its deepest at a melt of 1.</summary>
+		public const float DeepMeltSeconds = 3f * 3600f;
+
+		/// <summary>
+		/// Advances how deep the snow lies past the blanket <see cref="Snow"/> stands for, in metres, by
+		/// <paramref name="seconds"/> after <see cref="Integrate"/> has run over the same span: it builds only once the
+		/// ground is white, at <paramref name="maxMetres"/> in <paramref name="hoursToFill"/> world hours of the heaviest
+		/// fall, melts when the blanket does, and never stands deeper than the blanket allows as that thins.
+		/// </summary>
+		/// <remarks>
+		/// Nothing on the wire: the server's cover has no depth. A client works it out per texel of its cover map, the
+		/// same weather over the same world time, and the eye is the only thing that reads it.
+		/// </remarks>
+		public static float AdvanceDeepSnow(float depth, float snowCover, in WeatherFrame frame, float temperature, float seconds,
+			float sunlight, float maxMetres, float hoursToFill)
+		{
+			if (seconds <= 0f || maxMetres <= 0f)
+			{
+				return Mathf.Max(0f, depth);
+			}
+			float sun = Mathf.Clamp01(sunlight) * (1f - Mathf.Clamp01(frame[WeatherChannel.CloudCover]) * 0.8f);
+			float white = Mathf.Clamp01((snowCover - 0.85f) / 0.15f);
+			float grow = frame[WeatherChannel.SnowCoverRate] * white * maxMetres / (Mathf.Max(0.1f, hoursToFill) * 3600f);
+			float melt = Melt(temperature, sun) * maxMetres / DeepMeltSeconds;
+			return Mathf.Clamp(depth + seconds * (grow - melt), 0f, maxMetres * Mathf.Clamp01(snowCover));
 		}
 	}
 }

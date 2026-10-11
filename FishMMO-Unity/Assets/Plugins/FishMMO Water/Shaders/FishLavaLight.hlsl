@@ -224,7 +224,7 @@ half4 LavaLightFragment(LavaLightVaryings input) : SV_Target
 			float molten = FishLavaMolten(positionWS.xz + normal.xz * height, 2.0 * height);
 			glow = _GroundAlbedo * radiance * (facing * molten);
 			half fogKeep;
-			FishWaterAirFog(half3(0.0, 0.0, 0.0), positionWS, screenUV, fogKeep);
+			FishWaterAirFogOver(half3(0.0, 0.0, 0.0), positionWS, screenUV, fogKeep);
 			glow *= fogKeep * FishWaterCloudsInFront(screenUV).a;
 		}
 
@@ -288,7 +288,7 @@ half4 LavaLightFragment(LavaLightVaryings input) : SV_Target
 				}
 				// Seen through the fog and the clouds in front of it, measured at the middle of the slab.
 				half fumeKeep;
-				FishWaterAirFog(half3(0.0, 0.0, 0.0), camera + direction * (0.5 * (t0 + t1)), screenUV, fumeKeep);
+				FishWaterAirFogOver(half3(0.0, 0.0, 0.0), camera + direction * (0.5 * (t0 + t1)), screenUV, fumeKeep);
 				float through = fumeKeep * FishWaterCloudsInFront(screenUV).a;
 				scattered *= through;
 				transmittance = 1.0 - (1.0 - transmittance) * through;

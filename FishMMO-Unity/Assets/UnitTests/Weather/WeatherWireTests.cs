@@ -3,6 +3,7 @@ using System.Reflection;
 using NUnit.Framework;
 using FishNet.Serializing;
 using UnityEditor;
+using UnityEngine;
 using UnityEngine.Rendering;
 using FishMMO.Shared;
 using FishMMO.Shared.Celestial;
@@ -130,10 +131,12 @@ namespace FishMMO.UnitTests.Weather
 				Seed = 31337,
 				SceneMode = WeatherSceneMode.Own,
 				Air = Air(),
-				Cover = new WeatherCover { Snow = 0.1f, Wet = 0.2f, Ash = 0.3f, Sand = 0.4f },
-				CoverSeconds = 123456.125,
+				Director = true,
+				Area = new Rect(-1234.5f, 2048.25f, 4000f, 3500.75f),
 			};
 			timeline.Cells.Add(Cell(9));
+			// One of the world's own storms: worked out by each side, never sent.
+			timeline.Cells.Add(Cell((ushort)(StormSchedule.FirstID + 7)));
 
 			var copy = new WeatherTimeline();
 			copy.Apply(RoundTrip(timeline.ToBroadcast()));
@@ -143,9 +146,9 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.AreEqual(timeline.Seed, copy.Seed);
 			LogAssert.AreEqual(timeline.SceneMode, copy.SceneMode);
 			LogAssert.AreEqual(timeline.Air, copy.Air);
-			LogAssert.AreEqual(timeline.Cover, copy.Cover);
-			LogAssert.AreEqual(timeline.CoverSeconds, copy.CoverSeconds);
-			LogAssert.AreEqual(1, copy.Cells.Count);
+			LogAssert.AreEqual(timeline.Director, copy.Director);
+			LogAssert.AreEqual(timeline.Area, copy.Area);
+			LogAssert.AreEqual(1, copy.Cells.Count, "only the storm someone started is sent");
 			LogAssert.AreEqual(Cell(9), copy.Cells[0]);
 		}
 
@@ -171,9 +174,8 @@ namespace FishMMO.UnitTests.Weather
 				RemovedCells = new List<ushort> { 6, 65535 },
 				HasAir = true,
 				Air = Air(),
-				HasCover = true,
-				Cover = new WeatherCover { Wet = 1f },
-				CoverSeconds = 4321.125,
+				HasDirector = true,
+				Director = true,
 			};
 			WeatherDeltaBroadcast back = RoundTrip(delta);
 			LogAssert.AreEqual(delta.SceneName, back.SceneName);
@@ -182,9 +184,8 @@ namespace FishMMO.UnitTests.Weather
 			CollectionAssert.AreEqual(delta.RemovedCells, back.RemovedCells);
 			LogAssert.IsTrue(back.HasAir);
 			LogAssert.AreEqual(delta.Air, back.Air);
-			LogAssert.IsTrue(back.HasCover);
-			LogAssert.AreEqual(delta.Cover, back.Cover);
-			LogAssert.AreEqual(delta.CoverSeconds, back.CoverSeconds);
+			LogAssert.IsTrue(back.HasDirector);
+			LogAssert.IsTrue(back.Director);
 		}
 
 		[Test]

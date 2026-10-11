@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Scarecrow
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Construct
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Straw-stuffed field guardians that walk at night — rustling, creaking names'
+  Description: "Straw-stuffed field guardians that walk at night \u2014 rustling,
+    creaking names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Construct
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ock
       - orr
       - ang
-      Description: 'Straw-stuffed field guardians that walk at night — rustling, creaking names'
+      Description: "Straw-stuffed field guardians that walk at night \u2014 rustling,
+        creaking names"
       Tags:
       - Straw-names
       - Field-marks
@@ -161,6 +163,8 @@ MonoBehaviour:
       - heap
       - fall
     AllowGenericOccupations: 0
+    Plural: Scarecrows
+    Adjective: Scarecrow
   BiomeAffinities:
   - BiomeID: -2037808285
     Weight: 3
@@ -170,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -540190004
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

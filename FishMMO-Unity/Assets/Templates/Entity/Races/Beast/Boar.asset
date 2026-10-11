@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Boar
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: A wild boar of unusual size and temper; tusks like sabres and no fear of anything on two legs.
+  Description: A wild boar of unusual size and temper; tusks like sabres and no fear
+    of anything on two legs.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ug
       - ar
-      Description: 'Squealing, grunting — bristly and blunt'
+      Description: "Squealing, grunting \u2014 bristly and blunt"
       Tags:
       - Beast
       - Monster
@@ -127,8 +128,8 @@ MonoBehaviour:
       - Scourge of the Shepherds
       - Master of the Winter Hunt
       Legend:
-      - 'Who Took the Miller''s Son'
-      - 'Who Broke the Hunter''s Spear'
+      - Who Took the Miller's Son
+      - Who Broke the Hunter's Spear
       - Who Was Never Caught
       - Who Killed Three Dogs
       Occupational: []
@@ -148,6 +149,8 @@ MonoBehaviour:
       Ruin:
       - carcass
     AllowGenericOccupations: 0
+    Plural: Boars
+    Adjective: Boar
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 2
@@ -157,3 +160,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1156965030
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

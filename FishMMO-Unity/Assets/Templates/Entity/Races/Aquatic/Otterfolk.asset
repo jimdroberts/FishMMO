@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Otterfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aquatic
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Playful river people — chirping, sleek names'
+  Description: "Playful river people \u2014 chirping, sleek names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aquatic
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - er
       - et
       - ock
-      Description: 'Playful river people — chirping, sleek names'
+      Description: "Playful river people \u2014 chirping, sleek names"
       Tags:
       - Slide-names
       - River-marks
@@ -164,6 +164,8 @@ MonoBehaviour:
       - sink
       - silt
     AllowGenericOccupations: 1
+    Plural: Otterfolk
+    Adjective: Otterfolk
   BiomeAffinities:
   - BiomeID: 2117371294
     Weight: 3

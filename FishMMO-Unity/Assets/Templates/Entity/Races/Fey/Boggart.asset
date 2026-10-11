@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Boggart
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A house-spirit gone bad: it hides in cupboards, pinches sleepers and turns a home against its family.'
+  Description: 'A house-spirit gone bad: it hides in cupboards, pinches sleepers
+    and turns a home against its family.'
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -54,7 +55,7 @@ MonoBehaviour:
       - Sko
       - Lo
       - Mo
-      - 'No'
+      - No
       - Po
       Nuclei:
       - i
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ik
       - ock
-      Description: 'Muttering, hidden — spoken from under the stairs'
+      Description: "Muttering, hidden \u2014 spoken from under the stairs"
       Tags:
       - Fey
       - Monster
@@ -128,7 +129,7 @@ MonoBehaviour:
       - Chief of the Attic Rafters
       - Voice Under the Stairs
       Legend:
-      - 'Who Hid the Blacksmith''s Hammer'
+      - Who Hid the Blacksmith's Hammer
       - Who Curdled a Year of Milk
       - Who Was Caught in a Bottle
       - Who Unpicked the Wedding Dress
@@ -149,6 +150,8 @@ MonoBehaviour:
       Ruin:
       - ash-heap
     AllowGenericOccupations: 0
+    Plural: Boggarts
+    Adjective: Boggart
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -156,3 +159,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -830221931
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

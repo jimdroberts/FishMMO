@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Seraph
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Six-winged burning ones of the highest choir — blazing, many-syllabled names'
+  Description: "Six-winged burning ones of the highest choir \u2014 blazing, many-syllabled
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ion
       - eus
       - iah
-      Description: 'Six-winged burning ones of the highest choir — blazing, many-syllabled names'
+      Description: "Six-winged burning ones of the highest choir \u2014 blazing,
+        many-syllabled names"
       Tags:
       - Flame-names
       - Choir-marks
@@ -128,7 +130,7 @@ MonoBehaviour:
       - Who Burned Before the First Sunrise
       - Who Veiled Their Face and Blinded the Host Anyway
       - Who Circled the Throne for an Age Without Rest
-      - 'Who Touched the Prophet''s Lips with Fire'
+      - Who Touched the Prophet's Lips with Fire
       - Who Held the First Light
       Occupational:
       - Throne-circler
@@ -163,6 +165,8 @@ MonoBehaviour:
       - pit
       - silence
     AllowGenericOccupations: 0
+    Plural: Seraphim
+    Adjective: Seraph
   BiomeAffinities:
   - BiomeID: 18062707
     Weight: 3
@@ -172,3 +176,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1645414801
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

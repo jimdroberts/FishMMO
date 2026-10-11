@@ -118,6 +118,9 @@ namespace FishMMO.Shared
 		private static readonly int LayerMaskOffsetId = Shader.PropertyToID("_FishLayerMaskOffset");
 		private static readonly int LayerMaskScaleId = Shader.PropertyToID("_FishLayerMaskScale");
 		private static readonly int LayerSurfaceId = Shader.PropertyToID("_FishLayerSurface");
+		private static readonly int PathLayersId = Shader.PropertyToID("_FishPathLayers");
+		private static readonly int PathEarthForId = Shader.PropertyToID("_FishPathEarthFor");
+		private static readonly int PathRoadForId = Shader.PropertyToID("_FishPathRoadFor");
 
 		// One block per tile, made on first use: Unity refuses to allocate a property block in a field
 		// initializer, and a block per tile is right whether or not the terrain copies what it is given.
@@ -293,6 +296,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Re-binds every enabled binder in every loaded scene; the baker calls it after writing sets.</summary>
+		/// <summary>Pushes again to every tile of one scene (its path slices changed or arrived), without looking for the set again.</summary>
+		public static void RepushScene(Scene scene)
+		{
+			for (int i = active.Count - 1; i >= 0; i--)
+			{
+				if (active[i] != null && active[i].gameObject.scene == scene)
+				{
+					active[i].Push();
+				}
+			}
+		}
+
 		public static void BindAllLoaded()
 		{
 			for (int i = active.Count - 1; i >= 0; i--)
@@ -372,6 +387,11 @@ namespace FishMMO.Shared
 				block.SetVectorArray(LayerMaskScaleId, set.LayerMaskScale);
 				block.SetVectorArray(LayerSurfaceId, set.LayerSurface);
 			}
+			// The slices the scene's paths are surfaced from (the scene's own palette); -1 where it has none or nothing is baked.
+			block.SetVector(PathLayersId, usable ? ScenePathSurfaceBinder.LayersOf(gameObject.scene) : new Vector4(-1f, -1f, -1f, -1f));
+			// And each ground layer's own biome's path and road slices: a desert's way is packed sand, a forest's a littered track.
+			block.SetVectorArray(PathEarthForId, ScenePathSurfaceBinder.EarthMapOf(gameObject.scene));
+			block.SetVectorArray(PathRoadForId, ScenePathSurfaceBinder.RoadMapOf(gameObject.scene));
 			block.SetVector(InfoId, new Vector4(
 				usable ? set.LayerCount : 0f,
 				controls,

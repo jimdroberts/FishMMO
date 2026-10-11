@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Giant Toad
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A toad big enough to swallow a goat, lurking in reed-beds with only its eyes above the water.'
+  Description: A toad big enough to swallow a goat, lurking in reed-beds with only
+    its eyes above the water.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ug
       - ar
-      Description: 'Croaking, gulping — wet and round'
+      Description: "Croaking, gulping \u2014 wet and round"
       Tags:
       - Beast
       - Monster
@@ -128,8 +129,8 @@ MonoBehaviour:
       - Scourge of the Shepherds
       - Master of the Winter Hunt
       Legend:
-      - 'Who Took the Miller''s Son'
-      - 'Who Broke the Hunter''s Spear'
+      - Who Took the Miller's Son
+      - Who Broke the Hunter's Spear
       - Who Was Never Caught
       - Who Killed Three Dogs
       Occupational: []
@@ -149,6 +150,8 @@ MonoBehaviour:
       Ruin:
       - carcass
     AllowGenericOccupations: 0
+    Plural: Giant Toads
+    Adjective: Giant Toad
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -156,3 +159,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 888339253
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

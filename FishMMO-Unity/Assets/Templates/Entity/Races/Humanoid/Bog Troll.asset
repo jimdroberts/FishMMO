@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bog Troll
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Marsh trolls — gurgling, mud-thick names'
+  Description: "Marsh trolls \u2014 gurgling, mud-thick names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ub
       - ork
       - og
-      Description: 'Marsh trolls — gurgling, mud-thick names'
+      Description: "Marsh trolls \u2014 gurgling, mud-thick names"
       Tags:
       - Mud-names
       - Gurgle-marks
@@ -168,6 +168,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 0
+    Plural: Bog Trolls
+    Adjective: Bog Troll
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -177,3 +179,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -830221931
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

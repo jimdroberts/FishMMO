@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Marsh Leech
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Man-length blood-leeches of the fen — sucking, wet names'
+  Description: "Man-length blood-leeches of the fen \u2014 sucking, wet names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - uk
       - ub
       - orr
-      Description: 'Man-length blood-leeches of the fen — sucking, wet names'
+      Description: "Man-length blood-leeches of the fen \u2014 sucking, wet names"
       Tags:
       - Suck-names
       - Fen-marks
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Marsh Leeches
+    Adjective: Marsh Leech
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 888339253
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

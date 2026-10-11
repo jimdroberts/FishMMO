@@ -1687,6 +1687,60 @@ namespace FishMMO.Shared.WorldDesign
 			return mesh;
 		}
 
+		/// <summary>
+		/// A pressure ridge grounded on land or on ice frozen to the bed: the sail of <see cref="BuildPressureRidge"/>
+		/// without its level ice or keel, a formation (<see cref="FormationKind.RubbleRidge"/>) bedded like a rock. Blocks
+		/// broken from parent ice a quarter of the sail's height thick are heaped on a rubble core at the angle of
+		/// repose; a buried slab under the core is the foot, <paramref name="buried"/> deep.
+		/// </summary>
+		/// <remarks>
+		/// Every block is drawn before the level decides how many it keeps (largest first), so the levels share one
+		/// silhouette: all of <paramref name="blocks"/> at resolution 10, fewer as the resolution falls ((res/10)^1.5),
+		/// the core and the foot always. Each block, the core and the foot are closed boxes and a prism. Used for the
+		/// Ice Shelf's ridges, Europa's lineae and Enceladus's tiger-stripe flanks, where the ice is not afloat.
+		/// </remarks>
+		public static MeshBuilder BuildGroundedRidge(float length, float sail, float buried, int blocks, int resolution, int seed)
+		{
+			var rng = new DeterministicRNG(seed);
+			float t = Mathf.Clamp(sail * 0.25f, 0.2f, 0.8f);
+			float sailHalf = sail / Mathf.Tan(25f * Mathf.Deg2Rad);
+			float hl = length * 0.5f;
+			int count = Mathf.Max(1, blocks);
+			var heap = new List<(float size, int index, Matrix4x4 m, Vector3 extent)>();
+			for (int i = 0; i < count; i++)
+			{
+				float x = rng.Range(-hl * 0.95f, hl * 0.95f);
+				float zf = rng.Range(-1f, 1f);
+				float z = zf * sailHalf * 0.92f;
+				float pile = sail * (1f - Mathf.Abs(zf));
+				float h = pile * rng.Range(0.55f, 1f);
+				float len = rng.Range(1f, 2.6f) * Mathf.Max(0.5f, t * 2.2f);
+				float wid = rng.Range(0.7f, 1.5f) * Mathf.Max(0.4f, t * 1.8f);
+				var extent = new Vector3(len, t * rng.Range(0.8f, 1.1f), wid);
+				Quaternion rot = Quaternion.Euler(rng.Range(-50f, 50f), rng.Range(0f, 360f), rng.Range(-45f, 45f));
+				Matrix4x4 r = Matrix4x4.Rotate(rot);
+				// No block reaches deeper than the foot: its lowest corner is held above the slab's bottom.
+				float reachDown = 0.5f * (Mathf.Abs(r.m10) * extent.x + Mathf.Abs(r.m11) * extent.y + Mathf.Abs(r.m12) * extent.z);
+				float y = Mathf.Max(h, reachDown - buried * 0.85f);
+				heap.Add((len * wid * extent.y, i, Matrix4x4.TRS(new Vector3(x, y, z), rot, Vector3.one), extent));
+			}
+			heap.Sort((a, b) => a.size != b.size ? b.size.CompareTo(a.size) : a.index.CompareTo(b.index));
+
+			var mesh = new MeshBuilder(1);
+			// The foot: a slab under the core, its top a hair under the ground so it never fights the terrain.
+			float footTop = -0.05f * buried;
+			AddBox(mesh, Matrix4x4.Translate(new Vector3(0f, (footTop - buried) * 0.5f, 0f)), new Vector3(length * 0.98f, buried + footTop, sailHalf * 1.8f));
+			AddPrism(mesh, hl * 2f * 0.98f, sailHalf * 0.85f, sail * 0.8f, 0f, true);
+			int keep = resolution >= 10 ? count : Mathf.Clamp(Mathf.RoundToInt(count * Mathf.Pow(Mathf.Max(1, resolution) / 10f, 1.5f)), Mathf.Min(count, 3), count);
+			for (int i = 0; i < keep; i++)
+			{
+				AddBox(mesh, heap[i].m, heap[i].extent);
+			}
+			mesh.RecalculateNormals(false);
+			mesh.RecalculateTangents();
+			return mesh;
+		}
+
 		private static readonly Vector3[] BoxNormal = { Vector3.right, Vector3.left, Vector3.up, Vector3.down, Vector3.forward, Vector3.back };
 
 		private static void AddBox(MeshBuilder mesh, Matrix4x4 m, Vector3 size)

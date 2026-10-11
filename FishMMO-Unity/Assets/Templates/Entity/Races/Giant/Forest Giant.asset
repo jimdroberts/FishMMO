@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Forest Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Moss-backed woodland giants — soft, rustling names'
+  Description: "Moss-backed woodland giants \u2014 soft, rustling names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - oth
       - orn
       - und
-      Description: 'Moss-backed woodland giants — soft, rustling names'
+      Description: "Moss-backed woodland giants \u2014 soft, rustling names"
       Tags:
       - Moss-names
       - Canopy-marks
@@ -91,7 +91,7 @@ MonoBehaviour:
     Places:
     - the Moss Throne
     - Deepshade
-    - 'the Fallen Giant''s Bridge'
+    - the Fallen Giant's Bridge
     - the Canopy Hall
     - Rootwatch
     - the Deer Glade
@@ -120,7 +120,7 @@ MonoBehaviour:
       - Thane of the Canopy Hall
       - Lord of the Moss Throne
       - Warden of the Deer Glade
-      - 'Keeper of the Fallen Giant''s Bridge'
+      - Keeper of the Fallen Giant's Bridge
       - Elder of Rootwatch
       Legend:
       - Who Replanted the Burned Forest Tree by Tree
@@ -163,6 +163,8 @@ MonoBehaviour:
       - tumble
       - scar
     AllowGenericOccupations: 1
+    Plural: Forest Giants
+    Adjective: Forest Giant
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 144196518
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

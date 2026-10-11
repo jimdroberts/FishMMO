@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Half-Elf
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -181,6 +181,9 @@ MonoBehaviour:
       - scar
       - end
       - fade
+    AllowGenericOccupations: 1
+    Plural: Half-Elves
+    Adjective: Half-Elven
   BiomeAffinities:
   - BiomeID: -439598380
     Weight: 2
@@ -192,3 +195,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1123947451
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

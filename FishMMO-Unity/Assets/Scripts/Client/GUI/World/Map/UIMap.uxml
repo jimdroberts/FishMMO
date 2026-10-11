@@ -7,6 +7,7 @@
     ║  Stylesheet load order (MUST be first-to-last):               ║
     ║    1. FishMMO-Theme.uss  — colors, fonts, transitions         ║
     ║    2. UIMapShared.uss    — marker styling, shared w/ minimap   ║
+    ║       UIMapPOI.uss       — point of interest shapes, shared    ║
     ║    3. UIMap.uss          — sizes, flex, spacing               ║
     ║                                                              ║
     ║  Class naming convention:                                     ║
@@ -22,6 +23,7 @@
 
     <Style src="../../FishMMO-Theme.uss" />
     <Style src="UIMapShared.uss" />
+    <Style src="UIMapPOI.uss" />
     <Style src="UIMap.uss" />
 
     <ui:VisualElement name="panel-root" class="fish-panel map-panel">
@@ -54,6 +56,8 @@
                 <ui:VisualElement name="map-legend-section" class="fish-section map-section">
                     <ui:Label class="fish-label fish-label--title map-section__title" text="SHOW" />
                     <ui:VisualElement name="map-filters" class="map-filters" />
+                    <ui:Label class="fish-label fish-label--caption map-section__subtitle" text="PLACES" />
+                    <ui:VisualElement name="map-place-filters" class="map-filters map-place-filters" />
                 </ui:VisualElement>
 
                 <!-- Waypoint: the selected fast-travel point. Built by C# from the clicked marker. -->

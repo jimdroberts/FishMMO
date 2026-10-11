@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Vampire
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Elegant and Slavic — aristocratic dread, each syllable a velvet blade'
+  Description: "Elegant and Slavic \u2014 aristocratic dread, each syllable a velvet
+    blade"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -95,7 +96,8 @@ MonoBehaviour:
       - ov
       - ius
       - arn
-      Description: 'Elegant and old-blooded — aristocratic dread, each syllable a velvet blade'
+      Description: "Elegant and old-blooded \u2014 aristocratic dread, each syllable
+        a velvet blade"
       Tags:
       - Blood-names
       - Court-bonds
@@ -192,6 +194,9 @@ MonoBehaviour:
       - void
       - hollow
       - waste
+    AllowGenericOccupations: 1
+    Plural: Vampires
+    Adjective: Vampire
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 3
@@ -201,3 +206,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 144196518
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

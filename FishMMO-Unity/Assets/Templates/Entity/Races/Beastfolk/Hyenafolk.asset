@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hyenafolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Cackling scavenger people of the dry grass — laughing, barked names'
+  Description: "Cackling scavenger people of the dry grass \u2014 laughing, barked
+    names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - ak
       - ug
       - ek
-      Description: 'Cackling scavenger people of the dry grass — laughing, barked names'
+      Description: "Cackling scavenger people of the dry grass \u2014 laughing, barked
+        names"
       Tags:
       - Laugh-names
       - Bone-marks
@@ -124,10 +126,10 @@ MonoBehaviour:
       - Leader of Whoopridge
       Legend:
       - Who Laughed the Lion Off the Kill
-      - 'Who Cracked the Giant''s Thighbone'
+      - Who Cracked the Giant's Thighbone
       - Who Followed the Army and Ate Better Than It
       - Who Whooped Until the Village Fled
-      - 'Who Stole the Hunter''s Dinner From His Fire'
+      - Who Stole the Hunter's Dinner From His Fire
       Occupational:
       - Bone-cracker
       - Carrion-finder
@@ -163,6 +165,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Hyenafolk
+    Adjective: Hyenafolk
   BiomeAffinities:
   - BiomeID: -1911521020
     Weight: 3
@@ -172,3 +176,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 1655673647
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

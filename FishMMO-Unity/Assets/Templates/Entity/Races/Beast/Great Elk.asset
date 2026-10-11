@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Great Elk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Vast antlered elk of the high forest — deep, bugling names'
+  Description: "Vast antlered elk of the high forest \u2014 deep, bugling names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - orn
       - und
       - orm
-      Description: 'Vast antlered elk of the high forest — deep, bugling names'
+      Description: "Vast antlered elk of the high forest \u2014 deep, bugling names"
       Tags:
       - Antler-names
       - Bugle-marks
@@ -121,7 +121,7 @@ MonoBehaviour:
       - Master of the River Crossing
       - Crown of the Antler Bone-yard
       Legend:
-      - 'Who Carried a Hunter''s Hut on Their Antlers'
+      - Who Carried a Hunter's Hut on Their Antlers
       - Who Led the Herd Through the Avalanche
       - Who Trampled the Wolf-pack Flat
       - Who Crossed the River in Full Flood
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Great Elk
+    Adjective: Great Elk
   BiomeAffinities:
   - BiomeID: 144196518
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 187749268
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

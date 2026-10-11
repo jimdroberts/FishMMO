@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Phantom
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Half-seen apparitions — thin, fading names'
+  Description: "Half-seen apparitions \u2014 thin, fading names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - el
       - orr
       - eth
-      Description: 'Half-seen apparitions — thin, fading names'
+      Description: "Half-seen apparitions \u2014 thin, fading names"
       Tags:
       - Fade-names
       - Veil-marks
@@ -161,6 +161,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Phantoms
+    Adjective: Phantom
   BiomeAffinities:
   - BiomeID: 18062707
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 621224406
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

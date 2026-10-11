@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Hill Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Plain, thumping, dim-witted giant-speech'
+  Description: Plain, thumping, dim-witted giant-speech
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -80,7 +80,7 @@ MonoBehaviour:
       - ak
       - og
       - mar
-      Description: 'Plain, thumping, dim-witted giant-speech'
+      Description: Plain, thumping, dim-witted giant-speech
       Tags:
       - Dung-names
       - Mound-bonds
@@ -113,6 +113,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Hill Giants
+    Adjective: Hill Giant
   BiomeAffinities:
   - BiomeID: -540190004
     Weight: 3
@@ -120,3 +123,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1156965030
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

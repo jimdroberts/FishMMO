@@ -74,10 +74,17 @@ namespace FishMMO.Shared.WorldDesign
 	/// accident.
 	/// </para>
 	/// <para>
-	/// <b>It places what the systems need and nothing else:</b> the terrain, the boundary the scene
-	/// cannot be read without, and the components that drive weather, clouds, climate and the sky.
-	/// Spawn points, teleporters and the rest are decisions about a place, and a generator that
-	/// guesses them leaves work to undo rather than work already done.
+	/// <b>It places what the systems need, and the places the ground already holds:</b> the terrain,
+	/// the boundary the scene cannot be read without, the components that drive weather, clouds,
+	/// climate and the sky, and its points of interest (<see cref="PointOfInterestStage"/>). Those are
+	/// PLANNED with the ground, inside the paint once the biome field exists: the falls, lakes, peaks
+	/// and biome hearts the data holds are marked, and the budgeted kinds (villages, caves, shrines,
+	/// the capital when the pre-cut prompt asked for one) are sited on a scored grid, their pads
+	/// flattened and their footprints kept clear of scatter, cliffs and boulders. They are PLACED with
+	/// the scene, before the props and NavMesh are baked: the scene's POI asset, a "Points of Interest"
+	/// root with one site object each, and whatever each site's template builds. A kind with no
+	/// template is still named and on the map; it builds nothing. Teleporter destinations, dungeon
+	/// interiors and a boss for a lair stay decisions for a person.
 	/// </para>
 	/// <para>
 	/// <b>The ground comes from the globe.</b> Every height is <see cref="PlanetSurface"/> asked
@@ -292,6 +299,9 @@ namespace FishMMO.Shared.WorldDesign
 
 			/* Only now, after the last chance to cancel, is anything removed or created: a re-cut
 			 * cancelled at the save prompt must leave the old scene exactly as it was. */
+			/* Before a re-cut clears the old terrain folder: the stage reads the old scene's sites (their unlock indices
+			 * carry over) and the settings asset's path, which a refresh or a Single-mode NewScene can leave fake-null. */
+			PointOfInterestStage poi = PointOfInterestStage.ForCut(request, terrainFolder);
 			if (request.ReplaceExisting)
 			{
 				string refusal = ClearForRecut(scenePath, terrainFolder, request.SceneName, out result.BackupFolder);
@@ -325,6 +335,8 @@ namespace FishMMO.Shared.WorldDesign
 				 * row — before the tiles are cut from it. */
 				SceneHeightField ground = SceneGround.Shape(request, plan, SolarSystemProfile.Resolve(request.Body), result.Notes, out SceneErosionReport erosion,
 					out SceneWater water);
+				poi.Erosion = erosion;
+				poi.Field = ground;
 
 				/* Every tile shares one floor and one height range, measured from the ground itself:
 				 * tiles normalised against their own range are what makes a stitched landmass step
@@ -365,7 +377,7 @@ namespace FishMMO.Shared.WorldDesign
 				 * and the map the runtime reads. The flat bands only where no biome fits at all —
 				 * no template registered, or none this world allows — so the scene still reads. */
 				if (!PaintBiomes(scene, request, plan, terrains, terrainFolder, result, out Func<float, float, float, float, Color> groundColour,
-					out BackdropLayerWeigher backdropWeights, ground: ground.MetresAt, water: water))
+					out BackdropLayerWeigher backdropWeights, ground: ground.MetresAt, water: water, poi: poi))
 				{
 					foreach (Terrain terrain in terrains)
 					{
@@ -386,6 +398,8 @@ namespace FishMMO.Shared.WorldDesign
 					// And the flow down every river, solved round its boulders, kept in the biome map for clients.
 					RiverFlowBake.Bake(hydrology, result.BiomeMap, result.Notes);
 				}
+				// The sites, built on the finished ground: the POI asset, their objects and their props (in the NavMesh below).
+				poi.Place(scene, plan, terrains, water, result.Notes, result.Wrote);
 
 				/* The ground past the scene's edge, out to the horizon: client-only, built from the
 				 * same request so it meets the terrain at the edge. Before the sea, because a scene
@@ -772,7 +786,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// </param>
 		internal static bool PaintBiomes(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan, Terrain[,] terrains,
 			string terrainFolder, SceneGenerationResult result, out Func<float, float, float, float, Color> groundColour,
-			out BackdropLayerWeigher backdropWeights, LocalArtScope scope = null, Func<float, float, float> ground = null, SceneWater water = null)
+			out BackdropLayerWeigher backdropWeights, LocalArtScope scope = null, Func<float, float, float> ground = null, SceneWater water = null,
+			PointOfInterestStage poi = null)
 		{
 			if (water != null && !water.Any)
 			{
@@ -798,6 +813,14 @@ namespace FishMMO.Shared.WorldDesign
 				return false;
 			}
 
+			/* The points of interest, planned on this ground before anything is painted or grown on it: their pads are
+			 * flattened (and a shaper's holes cut) now, so the splat paints the ground they leave, and everything placed
+			 * below keeps out of their footprints. A repaint's stage carries the stored plan and plans nothing. */
+			poi?.PlanSites(scene, plan, terrains, field, water, result.Notes);
+			Func<float, float, bool> keptOut = poi?.Excludes;
+			// Details keep off the sites and a road's width only: a trail's own grass is thinned by the shaders.
+			Func<float, float, bool> detailKeptOut = poi?.DetailExcludes;
+
 			scope ??= LocalArtScope.For(scene, tiles);
 			if (scope.AllowsLocal)
 			{
@@ -806,7 +829,18 @@ namespace FishMMO.Shared.WorldDesign
 
 			BiomeTerrainLayers.ClearCache();
 			SceneTerrainPalette palette = SceneTerrainPalette.Build(field, scope.PaletteResolver(BiomeTerrainLayers.Resolve), BiomeTerrainLayers.Placeholder,
-				water != null ? RiverSediment() : null);
+				water != null ? RiverSediment() : null, poi != null && poi.HasPaths ? PathSurfaces() : null);
+			if (poi != null)
+			{
+				// The arrays' slices the path overlay samples its earth, road and cobbles from, and each ground layer's own biome's.
+				float[] coverage = field.Coverage();
+				poi.PathLayers = palette.PathLayers(coverage);
+				poi.SetPathLayerMaps(palette.PathLayerMap(SceneTerrainPalette.SlotPathEarth, coverage), palette.PathLayerMap(SceneTerrainPalette.SlotPathGravel, coverage));
+				if (poi.HasPaths && poi.PathLayers.x < 0f)
+				{
+					result.Notes.Add("Paths: no path ground is in the palette (the generated Path grounds are missing: Biome Tools → Art → Generate missing biome art, then repaint), so the ways are carved and thin the grass but are not drawn on the terrain.");
+				}
+			}
 			if (palette.Layers.Count == 0)
 			{
 				result.Notes.Add("None of this scene's biomes has any terrain art; it is painted with the plain height bands.");
@@ -838,10 +872,14 @@ namespace FishMMO.Shared.WorldDesign
 			/* Details and trees, from the alphamaps just written: every rule is gated on its own
 			 * layer's weight there and on its biome's reach, so what grows is exactly what the
 			 * ground says grows. Baked into the terrain data like the heights — committed, editable
-			 * by hand, and the trees' colliders are the server's as well as the client's. */
+			 * by hand, and the trees' colliders are the server's as well as the client's. The scene's
+			 * placement climate, the field the biomes were chosen from, gates the rules that carry a
+			 * climate band (a wide biome's warm and cold sets: palms on a tropical beach only, larch
+			 * on a cold slope only); without it every band passes. */
+			ScenePlacementClimate placementClimate = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
 			TerrainScatterReport scatter = TerrainScatter.Scatter(tiles, palette, field, options.Seed,
 				new TerrainScatterOptions { NormalizedHeight = options.NormalizedHeight, Prefabs = scope.ScatterPrefabs, HasLiquidWater = options.HasLiquidWater,
-					InlandWaterSurface = inland });
+					InlandWaterSurface = inland, Excluded = keptOut, DetailExcluded = detailKeptOut }, placementClimate);
 			result.Notes.AddRange(scatter.InvalidPrefabs);
 			result.Notes.AddRange(scatter.BudgetCaps);
 			result.Notes.AddRange(scatter.Warnings);
@@ -904,6 +942,12 @@ namespace FishMMO.Shared.WorldDesign
 					return false;
 				};
 			}
+			if (keptOut != null)
+			{
+				// Nor in a point of interest's footprint.
+				Func<float, float, bool> wet = cliffOptions.Excluded;
+				cliffOptions.Excluded = wet != null ? (x, z) => keptOut(x, z) || wet(x, z) : keptOut;
+			}
 			CliffPlacerReport cliffs = CliffPlacer.Place(scene, tiles, palette, field, options.Seed, options.NormalizedHeight, cliffOptions);
 			result.Notes.AddRange(cliffs.Notes);
 
@@ -915,10 +959,16 @@ namespace FishMMO.Shared.WorldDesign
 				Func<float, float, float, string> rockAt = BiomeRockTypes(field, cliffOptions.RockTypeAt);
 				List<RiverBoulder> boulders = RiverBoulders.Plan(water, (east, north) => GroundAltitude(terrains, plan, east, north),
 					rockAt, options.Seed);
+				List<FallLedge> ledges = FallLedges.Plan(water, (east, north) => GroundAltitude(terrains, plan, east, north), rockAt, options.Seed);
+				if (keptOut != null)
+				{
+					// None under a bridge or in a riverside site's footprint.
+					boulders.RemoveAll(b => keptOut(b.Position.x, b.Position.z));
+					ledges.RemoveAll(l => keptOut(l.Position.x, l.Position.z));
+				}
 				RiverBoulders.Place(scene, water, boulders, result.Notes);
 				// The falls' ledges, lip boulders and overhangs (FallLedges): after the boulders, whose Place clears the water's list.
-				FallLedges.Place(scene, water, FallLedges.Plan(water, (east, north) => GroundAltitude(terrains, plan, east, north),
-					rockAt, options.Seed), result.Notes);
+				FallLedges.Place(scene, water, ledges, result.Notes);
 			}
 			else
 			{
@@ -990,7 +1040,7 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
-		private static Func<float, float, float, string> GeologyRockTypes(SceneGenerationRequest request, SolarSystemProfile system)
+		internal static Func<float, float, float, string> GeologyRockTypes(SceneGenerationRequest request, SolarSystemProfile system)
 		{
 			PlanetGeology geology = PlanetGeology.For(request, system);
 			AtlasFootprint footprint = request.Footprint;
@@ -1028,6 +1078,83 @@ namespace FishMMO.Shared.WorldDesign
 				sediment.Add((SceneTerrainPalette.SlotGravel, gravel));
 			}
 			return sediment;
+		}
+
+		/// <summary>
+		/// The grounds a biome's ways are surfaced with: its Small Path layer (footpaths, trails, cart tracks), its Road layer
+		/// and the cobbles every biome shares. A slot the biome leaves empty takes the generated path ground for the ground it
+		/// is painted with (<see cref="SurfaceCatalogue.PathGroundFor"/>, <see cref="SurfaceCatalogue.RoadGroundFor"/>):
+		/// loam through grass, a littered track through forest, packed sand through desert, trampled snow over ice.
+		/// </summary>
+		internal static Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> PathSurfaces()
+		{
+			var generated = new Dictionary<string, TerrainTextureLayer>();
+			TerrainTextureLayer Generated(string ground)
+			{
+				if (!generated.TryGetValue(ground, out TerrainTextureLayer layer))
+				{
+					var terrainLayer = AssetDatabase.LoadAssetAtPath<TerrainLayer>(ProceduralArtCatalogue.GroundLayerPath(ground));
+					layer = terrainLayer != null && terrainLayer.diffuseTexture != null
+						? new TerrainTextureLayer
+						{
+							terrainLayer = terrainLayer,
+							albedoTexture = terrainLayer.diffuseTexture,
+							normalTexture = terrainLayer.normalMapTexture,
+							maskTexture = terrainLayer.maskMapTexture,
+							tileSize = terrainLayer.tileSize,
+						}
+						: null;
+					generated[ground] = layer;
+				}
+				return layer;
+			}
+			// The ground family a biome is painted with: its main layer's, else its first detail's.
+			string GroundOf(BiomeTemplate biome)
+			{
+				string Name(TerrainTextureLayer layer)
+				{
+					string name = layer?.terrainLayer != null ? layer.terrainLayer.name : null;
+					return name != null && name.StartsWith("Ground_", StringComparison.Ordinal) ? name.Substring(7) : null;
+				}
+				string ground = Name(biome.MainTextureLayer);
+				if (ground == null && biome.DetailTextureLayers != null)
+				{
+					foreach (TerrainTextureLayer detail in biome.DetailTextureLayers)
+					{
+						ground = Name(detail);
+						if (ground != null)
+						{
+							break;
+						}
+					}
+				}
+				return ground ?? Ground.Grass;
+			}
+			TerrainTextureLayer stone = Generated(Ground.Flagstone);
+			return biome =>
+			{
+				var surfaces = new List<(string, TerrainTextureLayer)>();
+				string ground = GroundOf(biome);
+				TerrainTextureLayer earth = biome.SmallPathTextureLayer != null && biome.SmallPathTextureLayer.HasAlbedo
+					? biome.SmallPathTextureLayer
+					: Generated(SurfaceCatalogue.PathGroundFor(ground)) ?? Generated(Ground.Soil);
+				TerrainTextureLayer road = biome.RoadTextureLayer != null && biome.RoadTextureLayer.HasAlbedo
+					? biome.RoadTextureLayer
+					: Generated(SurfaceCatalogue.RoadGroundFor(ground)) ?? Generated(Ground.Gravel);
+				if (earth != null)
+				{
+					surfaces.Add((SceneTerrainPalette.SlotPathEarth, earth));
+				}
+				if (road != null)
+				{
+					surfaces.Add((SceneTerrainPalette.SlotPathGravel, road));
+				}
+				if (stone != null)
+				{
+					surfaces.Add((SceneTerrainPalette.SlotPathStone, stone));
+				}
+				return surfaces;
+			};
 		}
 
 		/// <summary>
@@ -1528,6 +1655,7 @@ namespace FishMMO.Shared.WorldDesign
 				FineDetail = fineDetail,
 				Erosion = erosion,
 				ErosionStrength = entry.ErosionStrength,
+				PointsOfInterest = entry.PointsOfInterest,
 				ReplaceExisting = true,
 			});
 		}

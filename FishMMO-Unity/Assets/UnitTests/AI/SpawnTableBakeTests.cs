@@ -222,6 +222,7 @@ namespace FishMMO.UnitTests.AI
 			 * has only those stands in the scene and never spawns — which is how the Dungeon's
 			 * spawners and the tutorial banker shipped until 2026-09-16. */
 			List<string> empty = new List<string>();
+			List<string> pending = new List<string>();
 			int scanned = 0;
 
 			foreach (string path in SpawnTableBaker.FindWorldScenePaths())
@@ -234,6 +235,13 @@ namespace FishMMO.UnitTests.AI
 						scanned++;
 						List<string> problems = new List<string>();
 						SpawnTableBaker.Validate(scene, spawner, problems);
+						/* A generated spawner left empty on purpose (a world boss lair's boss, Jim 2026-10-10) says so with
+						 * PendingSpawnerContent: a designer's to-do, listed, not a silent defect. */
+						if (problems.Count > 0 && spawner.TryGetComponent(out PendingSpawnerContent marked))
+						{
+							pending.Add($"{path}: {spawner.name}: {marked.Reason}");
+							continue;
+						}
 						empty.AddRange(problems);
 					}
 				}
@@ -243,6 +251,10 @@ namespace FishMMO.UnitTests.AI
 				}
 			}
 
+			if (pending.Count > 0)
+			{
+				Debug.Log($"{pending.Count} generated spawner(s) await a designer:\n{string.Join("\n", pending)}");
+			}
 			Assert.Greater(scanned, 0, "no spawners found in the world scenes; the scan is broken");
 			Assert.IsEmpty(empty, string.Join("\n", empty));
 		}

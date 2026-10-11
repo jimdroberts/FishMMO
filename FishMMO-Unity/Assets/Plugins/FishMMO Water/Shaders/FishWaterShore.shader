@@ -323,7 +323,7 @@ Shader "FishMMO/Water/Shore"
                 color = color * clouds.a + clouds.rgb;
                 sheen *= clouds.a;
                 half fogKeep;
-                color = FishWaterAirFog(color, positionWS, input.screenUV, fogKeep);
+                color = FishWaterAirFogOver(color, positionWS, input.screenUV, fogKeep);
                 sheen *= fogKeep;
 
                 return half4(color * alpha + sheen, alpha);

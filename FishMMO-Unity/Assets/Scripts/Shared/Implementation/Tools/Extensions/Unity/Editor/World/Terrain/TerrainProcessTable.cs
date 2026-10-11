@@ -131,7 +131,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Mountains.
 			("Alpine Meadow", "Mountain"), ("Mountain Slope", "Mountain"), ("Rocky Terrain", "Mountain"), ("Alpine", "Mountain"),
 			("Scree", "Mountain"), ("Crater", "Mountain"),
-			("Permanent Ice", "Periglacial"), ("Glacier", "Periglacial"),
+			("Permanent Ice", "Periglacial"), ("Glacier", "Periglacial"), ("Ice Sheet", "Periglacial"),
 
 			// Volcanic ground, on any world.
 			("Volcanic", "Volcanic"), ("Geyser Basin", "Volcanic"), ("Sulphur Flats", "Volcanic"), ("Molten Surface", "Volcanic"),

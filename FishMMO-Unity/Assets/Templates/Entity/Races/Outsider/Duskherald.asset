@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Duskherald
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Outsider
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Twilight messengers between the choir and the pit — hushed, balanced names'
+  Description: "Twilight messengers between the choir and the pit \u2014 hushed,
+    balanced names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Outsider
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +83,8 @@ MonoBehaviour:
       - oth
       - el
       - ion
-      Description: 'Twilight messengers between the choir and the pit — hushed, balanced names'
+      Description: "Twilight messengers between the choir and the pit \u2014 hushed,
+        balanced names"
       Tags:
       - Dusk-names
       - Threshold-marks
@@ -162,6 +164,8 @@ MonoBehaviour:
       - pit
       - silence
     AllowGenericOccupations: 0
+    Plural: Duskheralds
+    Adjective: Duskherald
   BiomeAffinities:
   - BiomeID: 18062707
     Weight: 2
@@ -173,3 +177,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1474826537
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

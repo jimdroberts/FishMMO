@@ -42,6 +42,9 @@ namespace FishMMO.Shared.Biomes
 		[Range(-1f, 1f)] public float MaxTemperature = 1f;
 		[Range(-1f, 1f)] public float MinHumidity = -1f;
 		[Range(-1f, 1f)] public float MaxHumidity = 1f;
+		[Tooltip("The warmest season this biome stands, on the temperature scale (0 freezing, 0.30 is 10 °C). Köppen's lines: anything with trees needs a summer of 10 °C or more, tundra and bog anything above freezing, an ice sheet a summer that never thaws. Read only where the body's seasons are known (a placed scene); -1 to 1 asks nothing.")]
+		[Range(-1f, 1f)] public float MinWarmestSeason = -1f;
+		[Range(-1f, 1f)] public float MaxWarmestSeason = 1f;
 		[Tooltip("Relative chance among biomes whose envelopes fit. 0 = never chosen by climate; placed by hand only.")]
 		[Min(0f)] public float SelectionWeight = 1f;
 
@@ -180,6 +183,36 @@ namespace FishMMO.Shared.Biomes
 		{
 			return temperature >= MinTemperature && temperature <= MaxTemperature
 				&& humidity >= MinHumidity && humidity <= MaxHumidity;
+		}
+
+		/// <summary>
+		/// The envelope with the summer test: <see cref="ContainsClimate(float, float)"/> and, when the
+		/// sample's seasons are known, a warmest season inside <see cref="MinWarmestSeason"/>…<see cref="MaxWarmestSeason"/>.
+		/// </summary>
+		public bool ContainsClimate(in ClimateSample sample)
+		{
+			return ContainsClimate(sample.Temperature, sample.Humidity) && WarmestSeasonDistance(sample) <= 0f;
+		}
+
+		/// <summary>How far the sample's warmest season lies outside this biome's range, 0 inside or when the seasons are unknown.</summary>
+		public float WarmestSeasonDistance(in ClimateSample sample)
+		{
+			if (!sample.SeasonKnown)
+			{
+				return 0f;
+			}
+			float w = sample.WarmestSeason;
+			return w < MinWarmestSeason ? MinWarmestSeason - w : w > MaxWarmestSeason ? w - MaxWarmestSeason : 0f;
+		}
+
+		/// <summary>
+		/// <see cref="ClimateDistance(float, float)"/> with the summer's distance in it too, in the same units.
+		/// </summary>
+		public float ClimateDistance(in ClimateSample sample)
+		{
+			float d = ClimateDistance(sample.Temperature, sample.Humidity);
+			float w = WarmestSeasonDistance(sample);
+			return Mathf.Sqrt(d * d + w * w);
 		}
 
 		/// <summary>

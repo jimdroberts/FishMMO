@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Halfling
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Warm and round — comfortable, pastoral, hearth-fire words'
+  Description: "Warm and round \u2014 comfortable, pastoral, hearth-fire words"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -81,7 +81,7 @@ MonoBehaviour:
       - an
       - er
       - in
-      - 'on'
+      - on
       - el
       SyllMin: 2
       SyllMax: 3
@@ -95,7 +95,7 @@ MonoBehaviour:
       - mund
       - worth
       - dale
-      Description: 'Warm and round — comfortable, pastoral, hearth-fire words'
+      Description: "Warm and round \u2014 comfortable, pastoral, hearth-fire words"
       Tags:
       - Shire-names
       - Hearth-bonds
@@ -156,7 +156,7 @@ MonoBehaviour:
         - ford
         - lake
         - bank
-        Description: 'River Halfling — boatfolk, trade-wise, current-blessed'
+        Description: "River Halfling \u2014 boatfolk, trade-wise, current-blessed"
         Tags:
         - Boat-names
         - Trade-bonds
@@ -203,7 +203,7 @@ MonoBehaviour:
         - an
         - er
         - in
-        - 'on'
+        - on
         - el
         SyllMin: 2
         SyllMax: 3
@@ -217,7 +217,7 @@ MonoBehaviour:
         - mund
         - worth
         - ham
-        Description: 'Shire Halfling — English countryside, green hills, pipe-smoke'
+        Description: "Shire Halfling \u2014 English countryside, green hills, pipe-smoke"
         Tags:
         - Village-names
         - Hearth-bonds
@@ -324,6 +324,9 @@ MonoBehaviour:
       - dust
       - ruin
       - scar
+    AllowGenericOccupations: 1
+    Plural: Halflings
+    Adjective: Halfling
   BiomeAffinities:
   - BiomeID: -2037808285
     Weight: 3
@@ -333,3 +336,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -1486751517
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

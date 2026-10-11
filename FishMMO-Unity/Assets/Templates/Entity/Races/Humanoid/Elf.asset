@@ -362,6 +362,8 @@ MonoBehaviour:
       - weep
       - fade
     AllowGenericOccupations: 1
+    Plural: Elves
+    Adjective: Elven
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -373,3 +375,5 @@ MonoBehaviour:
     Weight: 0.5
   - BiomeID: -540190004
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

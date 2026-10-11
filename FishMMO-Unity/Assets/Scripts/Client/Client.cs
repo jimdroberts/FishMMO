@@ -270,6 +270,7 @@ namespace FishMMO.Client
 			UIManager.SetClient(this);
 			ClientNamingSystem.Initialize(this);
 			ClientInteractableStateSystem.Initialize(this);
+			ClientPortalStateSystem.Initialize(this);
 
 			KinematicCharacterSystem.EnsureCreation();
 			KinematicCharacterSystem.Settings.AutoSimulation = false;
@@ -470,6 +471,7 @@ namespace FishMMO.Client
 				NetworkManager.SceneManager.OnLoadEnd -= OnSceneLoadEnd;
 				NetworkManager.SceneManager.OnUnloadEnd -= OnSceneUnloadEnd;
 			}
+			ClientPortalStateSystem.Destroy();
 			ClientInteractableStateSystem.Destroy();
 			ClientNamingSystem.Destroy();
 			UIManager.SetClient(null);

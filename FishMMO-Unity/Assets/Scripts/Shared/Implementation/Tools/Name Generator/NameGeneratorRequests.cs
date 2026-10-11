@@ -78,6 +78,8 @@ namespace FishMMO.Shared.NameGeneration
 	public sealed class POIRequest : BiomeGenerationRequest
 	{
 		public POIType POIType { get; set; } = POIType.Any;
+		/// <summary>The race's naming key when the place belongs to one ("Cave of Orcs"); empty names from the biome alone.</summary>
+		public string Race { get; set; }
 	}
 
 	/// <summary>Request for legendary item name generation.</summary>

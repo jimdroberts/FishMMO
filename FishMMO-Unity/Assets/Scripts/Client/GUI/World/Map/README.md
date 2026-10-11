@@ -145,6 +145,38 @@ the hint says so. The map still opens anywhere for looking. The policy reaches t
 baked `WorldSceneDetails.Waypoints` positions on the refresh tick, so walking up to a waypoint with
 the map open enables the button. It is a hint only — the server refuses with `NotNearWaypoint`.
 
+## Points of interest
+
+Generated points of interest (one `ScenePointOfInterest` per site, written by the scene generator) and
+hand-placed `MapPointOfInterest` landmarks are harvested by the world scene details cache rebuild into
+`WorldSceneDetails.PointsOfInterest` — not only into the map definition, which exists only while a map
+is baked. `MapContent.AppendPointsOfInterest(results, details, definition, fog, forWorldMap, labelTier)`
+reads the details first and the definition's list for back-compat, drawing a landmark that is in both
+(same name, same place to the metre) once.
+
+- **Discovery.** Every generated point requires discovery (Jim, 2026-10-10): it appears once the fog has
+  explored its chunk, never before.
+- **Tiers.** A kind's detail tier is 0 to 3 (`PointOfInterestKinds`). It is gated twice: against
+  `Cartography.VisibleContentTier` (0 to `Cartography.MaximumDetailTier`, 4; with no provider every tier
+  shows), which decides whether the point is known at all; and on the world map by zoom, through
+  `MapContent.LabelTierForZoom`, which decides only whether it is *named* — tiers 0 and 1 at any zoom,
+  tier 2 from half the scene, tier 3 from a quarter. The icon is always drawn.
+- **Styles.** One `MapMarkerType` per kind, same name as the `POIType`. `UIMapPOI.uss` is generated from
+  the kinds table and styles every kind by its `PointOfInterestGroup`: one shape and one
+  `--map-poi-<group>` token (FishMMO-Theme.uss) per group. Both map UXMLs load it after
+  `UIMapShared.uss`. Regenerate it when a kind is added; `PointOfInterestMapTests` fails until you do.
+- **Filters.** The legend lists one PLACES row per group (`MapFilters.PlaceCategories`, appended to
+  `MapFilterCategory` after Notes), two to a row with the group's colour swatch. Landmark and
+  DungeonEntrance keep the Landmarks row.
+
+## North offset
+
+`WorldMapDefinition.NorthOffsetDegrees` turns the bake camera, so the baked image's up is not world +Z.
+The world map samples the image through the same frame (`UITKMapView.MapTextureNorthDegrees`,
+`WorldToTextureUV`), so terrain and markers agree. The view itself stays north-up: panning, clamping
+and the cursor readout all assume an axis-aligned view, so turning the whole map by the offset is a
+separate change that has not been made.
+
 ## The anti-radar story, briefly
 
 The observer system decides which entities exist on a client at all; nothing without a GameObject

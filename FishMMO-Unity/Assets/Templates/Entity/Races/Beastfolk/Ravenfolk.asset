@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Ravenfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Flightless crow-people who speak only in borrowed voices and sounds they have heard.
+  Description: Flightless crow-people who speak only in borrowed voices and sounds
+    they have heard.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -80,14 +81,14 @@ MonoBehaviour:
       - kk
       - ka
       - to
-      Description: Mimicry-only — mimetic caws and borrowed phrases
+      Description: "Mimicry-only \u2014 mimetic caws and borrowed phrases"
       Tags:
       - Mimic-names
       - Flightless-marks
       WeightedCodas: []
     Cultures: []
     Places:
-    - 'the Thieves'' Eaves'
+    - the Thieves' Eaves
     - Caw-roost
     - Mimicry Alley
     - the Stolen Quarter
@@ -103,9 +104,9 @@ MonoBehaviour:
       - the Flightless
       - the Echo
       Rank:
-      - 'Guildmaster of the Thieves'' Eaves'
+      - Guildmaster of the Thieves' Eaves
       Legend:
-      - 'Who Spoke in the Dying King''s Voice to His Heir'
+      - Who Spoke in the Dying King's Voice to His Heir
       Occupational: []
     CitySuffixes:
       Capital: []
@@ -114,6 +115,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Ravenfolk
+    Adjective: Ravenfolk
   BiomeAffinities:
   - BiomeID: 144196518
     Weight: 2
@@ -125,3 +129,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 187749268
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Poltergeist
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Furniture-hurling house spirits — rattling, banging names'
+  Description: "Furniture-hurling house spirits \u2014 rattling, banging names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ock
       - orr
       - ang
-      Description: 'Furniture-hurling house spirits — rattling, banging names'
+      Description: "Furniture-hurling house spirits \u2014 rattling, banging names"
       Tags:
       - Rattle-names
       - House-marks
@@ -123,7 +123,7 @@ MonoBehaviour:
       - Warden of the Loud Cellar
       - Elder of Bangfield House
       Legend:
-      - 'Who Threw the Bishop''s Chair Through the Window'
+      - Who Threw the Bishop's Chair Through the Window
       - Who Knocked the Alphabet Every Night for a Year
       - Who Broke Every Plate in the House Twice
       - Who Slammed the Door on the Exorcist
@@ -161,6 +161,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Poltergeists
+    Adjective: Poltergeist
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 3
@@ -170,3 +172,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: 621224406
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

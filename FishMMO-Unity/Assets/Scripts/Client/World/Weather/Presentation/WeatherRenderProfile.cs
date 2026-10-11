@@ -170,7 +170,21 @@ namespace FishMMO.Client
 		[Range(1, 12)] public int LightSteps = 6;
 		[Tooltip("How far the clouds are drawn, in metres. They dissolve over the last quarter of it, and the haze is full by four fifths of it, so the sky ends in the colour of the horizon and not on an edge.")]
 		[Min(1000f)] public float MaxDistance = 44000f;
-		[Tooltip("Steps a ray may take past the camera's far plane, each as long as it must be to reach the end of the ray (0: no limit). The march costs as long as its longest rays, and in a storm those are the low ones that cross a hundred kilometres of deck toward the horizon; past the far plane a cloud is a few pixels of haze, and this keeps the horizon clouded without paying for it.")]
+		[Tooltip("How far a cloud ray is marched in full, in metres; past it the far tail's few steps reach the end of the ray, and the far band's last slice ends here. It was the camera's far plane, which the scene backdrop raises to 20 km to draw the horizon ring: now the clouds keep their own distance whatever the camera's. Measured in Flo Monolith (2026-10-09, 1440p): 13 km against 20 km saves about 1 ms in a fair sky, and the horizon's thinnest cloud between 13 and 20 km thins a little, with a few sparkles on far edges (Jim chose 13 km for the frames). Never nearer than 1 km past the far band's second slice.")]
+		[Min(1000f)] public float FullMarchMetres = 13000f;
+		[Tooltip("Draw the clouds past the far band's start from an imposter: a panorama round the camera, marched a band of rows a frame with the same march and light as the clouds near by, and read by direction every frame — so turning the camera costs nothing and only the near band is marched live. Off: the far band marches its slices on the screen as before.")]
+		public bool FarImposter = true;
+		[Tooltip("The imposter panorama's size, texels a side (octahedral, the whole sphere: the sky is its inner half). 1024 is about the angular detail the far band had at 1440p.")]
+		[Range(128, 4096)] public int FarImposterSize = 1024;
+		[Tooltip("Frames to refresh the whole imposter once. More is cheaper; the far clouds then follow the weather that much later (at the game's pace a cloud past 5 km moves a pixel or two in that time).")]
+		[Range(4, 512)] public int FarImposterRefreshFrames = 48;
+		[Tooltip("How much of each refresh replaces what a texel held (1: all of it). Lower averages more refreshes' ray phases — smoother far cloud — and follows changes more slowly.")]
+		[Range(0.05f, 1f)] public float FarImposterKeep = 0.4f;
+		[Tooltip("Where the imposter takes over, in metres (0: where the far band begins). Further out, the far band marches the clouds between its start and here on the screen, at full detail, and the imposter — softer, at about 8 screen pixels a texel at 1440p — only has the clouds that are small and hazy anyway.")]
+		[Min(0f)] public float FarImposterStartMetres = 0f;
+		[Tooltip("How often each texel of the near clouds is marched: 1 every frame, 4 one texel in each two-by-two block a frame, the other three carried on from last frame's march (fetched from where their cloud stood then, by its distance, with the wind's drift undone). About three quarters of the near march saved; a texel's view of the cloud is up to three frames old, which shows as smear on near clouds while the camera moves fast or the weather is run quickly.")]
+		[Range(1, 4)] public int NearMarchEvery = 1;
+		[Tooltip("Steps a ray may take past Full March Metres, each as long as it must be to reach the end of the ray (0: no limit). The march costs as long as its longest rays, and in a storm those are the low ones that cross a hundred kilometres of deck toward the horizon; past the far plane a cloud is a few pixels of haze, and this keeps the horizon clouded without paying for it.")]
 		[Range(0, 64)] public int FarTailSteps = 24;
 		[Tooltip("Where the far band begins, in metres from the camera (0: one band). Cloud past it is marched a quarter of the screen a frame and carried on between from the frame before: two thirds of a fair sky's cost was past ten kilometres, where a cloud barely moves on the screen. The far clouds are a little softer for it (Jim, 2026-10-07).")]
 		[Min(0f)] public float FarBandMetres = 5000f;
@@ -309,6 +323,10 @@ namespace FishMMO.Client
 		public bool RayJitter = true;
 		[Tooltip("Multiplies the march's step (the near step, 18–90 m, and every step grown from it: through a band's empty air, up to six times, and deep inside cloud). The limits on how far a step may climb through a thin layer and how much light it may take out of a dense cloud still apply. Under 1 is finer and slower. Grain or banding that shrinks with it is undersampling along the ray.")]
 		[Range(0.25f, 4f)] public float StepScale = 1f;
+		[Tooltip("Step Scale for cloud near the camera, eased back to Step Scale beyond Near Step Distance (0: the same as Step Scale everywhere). Near cloud is where the march's grain is big enough to see; refining the whole sky cost about 1.3 ms at 1440p for nothing visible far off. Under a raining storm, 0.35 near against 0.5 took the base's grain from 1.3 % to 0.8 % of its brightness at the World Sim bed's 180x clock (2026-10-09).")]
+		[Range(0f, 4f)] public float NearStepScale = 0f;
+		[Tooltip("How far along the ray (m) the cloud is walked at Near Step Scale; it eases to Step Scale over as far again.")]
+		[Range(500f, 20000f)] public float NearStepDistance = 4000f;
 		[Tooltip("Let the step grow with distance (0.6 % of the distance, 0.4 % far off). Off keeps the near step all the way (slow; the budget of steps is raised to match). The prime suspect for a change of look in a sphere round the camera: if the sphere goes, it was the step.")]
 		public bool DistanceStepGrowth = true;
 		[Tooltip("The most optical depth one step may take inside cloud (0.35: about 30 % of the light left). Higher is cheaper and grainier — one sample decides more of the pixel, so the ray's jitter swings it further; lower is smoother and costs more only where the cloud is dense.")]
@@ -393,6 +411,14 @@ namespace FishMMO.Client
 		/// it grows, z the eddies' and the edge's footprint along the ray, in steps (0: none, the old way), w the test cap on
 		/// how far a ray marches (m; 0 none).
 		/// </summary>
+		/// <summary>
+		/// The near-field step (<c>_FishCloudNearStep</c>): x Near Step Scale over Step Scale (1: no change), y the distance
+		/// it holds to (m), z how far it then eases back over (m).
+		/// </summary>
+		public Vector4 NearStepVector => new Vector4(
+			NearStepScale > 0f ? Mathf.Clamp(NearStepScale, 0.25f, 4f) / Mathf.Clamp(StepScale, 0.25f, 4f) : 1f,
+			Mathf.Max(0f, NearStepDistance), Mathf.Max(1f, NearStepDistance), 0f);
+
 		public Vector4 StepVector => new Vector4(Mathf.Clamp(MaxStepOpticalDepth, 0.05f, 2f), Mathf.Clamp(MaxInCloudGrowth, 1f, 4f), Mathf.Clamp(DetailStepFootprint, 0f, 2f), Mathf.Max(0f, MaxMarchDistance));
 
 		/// <summary>
@@ -536,10 +562,34 @@ namespace FishMMO.Client
 		public ComputeShader DetailScatterCompute;
 		public DetailScatterSettings DetailScatter = new DetailScatterSettings();
 
+		[Header("Deep snow and trails")]
+		[Tooltip("How deep snow can lie past the white blanket the cover stands for, metres. It builds once the ground is white and melts when the blanket does (WeatherCover.AdvanceDeepSnow); only the quality tier that lifts the ground under snow (TerrainSnowDisplacement) shows it as height.")]
+		[Range(0f, 3f)] public float DeepSnowMetres = 1f;
+		[Tooltip("World hours of the heaviest snowfall to build deep snow from nothing to its deepest.")]
+		[Min(0.1f)] public float DeepSnowHours = 4f;
+		[Tooltip("Footprints and trodden grass round the camera (GroundTrailMap): every character in view leaves stride prints in snow, ash, sand and wet ground, and grass lies down where a body pushes through it and rises again.")]
+		public bool GroundTrails = true;
+		[Tooltip("FishMMO/Ground Trail: stamps and fades the trail map. Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader GroundTrailShader;
+
 		[Header("Sea life")]
 		[Tooltip("FishMMO/Sea Life: the background fish, rays, turtles, whales, jellies and crabs (SeaLifeSystem). Referenced here so a client build includes it.")]
 		public Shader SeaLifeShader;
 		public SeaLifeSettings SeaLife = new SeaLifeSettings();
+
+		[Header("Ambient life")]
+		[Tooltip("FishMMO/Ambient Life: the land's birds, bats and small animals (AmbientLifeSystem). Referenced here so a client build includes it; empty, the editor loads it by path.")]
+		public Shader AmbientLifeShader;
+		public AmbientLifeSettings AmbientLife = new AmbientLifeSettings();
+
+		[Header("Air motes")]
+		[Tooltip("FishMMO/Weather/Air Motes: dust in the light, pollen and seed fluff, diamond dust, fireflies and marsh lights round the camera (AirMotesField). Referenced here so a client build includes it; empty, it is found by name, which only works where something else ships it (the editor).")]
+		public Shader AirMotesShader;
+
+		[Header("Falling leaves")]
+		[Tooltip("FishMMO/Weather/Falling Leaves: leaves coming down under and downwind of the trees near the camera, mostly in autumn (FallingLeavesPresenter). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader FallingLeavesShader;
+		public FallingLeavesSettings FallingLeaves = new FallingLeavesSettings();
 
 		/// <summary>
 		/// The loaded profile, if any. In the editor, a world scene played straight from its own file never runs the

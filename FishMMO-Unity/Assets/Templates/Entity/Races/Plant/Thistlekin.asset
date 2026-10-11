@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Thistlekin
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Plant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Prickly small folk of the waste ground — spiky, buzzing names'
+  Description: "Prickly small folk of the waste ground \u2014 spiky, buzzing names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Plant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - ick
       - ock
       - er
-      Description: 'Prickly small folk of the waste ground — spiky, buzzing names'
+      Description: "Prickly small folk of the waste ground \u2014 spiky, buzzing
+        names"
       Tags:
       - Prickle-names
       - Waste-marks
@@ -124,10 +125,10 @@ MonoBehaviour:
       - Master of Pricklecourt
       Legend:
       - Who Grew on the Battlefield and Was the Only Thing That Did
-      - 'Who Stuck to the King''s Cloak and Rode to the Capital'
+      - Who Stuck to the King's Cloak and Rode to the Capital
       - Who Fed the Goldfinches Through the Famine
       - Who Seeded the Whole Verge in a Single Gust
-      - 'Who Pricked the Invader''s Bare Feet at the Ford'
+      - Who Pricked the Invader's Bare Feet at the Ford
       Occupational:
       - Seed-scatterer
       - Verge-keeper
@@ -162,6 +163,8 @@ MonoBehaviour:
       - blight
       - ash
     AllowGenericOccupations: 0
+    Plural: Thistlekin
+    Adjective: Thistlekin
   BiomeAffinities:
   - BiomeID: 1156965030
     Weight: 3
@@ -171,3 +174,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -540190004
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

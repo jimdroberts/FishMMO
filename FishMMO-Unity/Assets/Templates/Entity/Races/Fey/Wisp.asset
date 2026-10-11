@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Wisp
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Fey
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A drifting mote of pale fire that lures travellers into bogs and off cliffs, then vanishes. Some are lost souls; some only pretend to be.'
+  Description: A drifting mote of pale fire that lures travellers into bogs and off
+    cliffs, then vanishes. Some are lost souls; some only pretend to be.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Fey
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - oth
       - ar
-      Description: 'Faint, flickering — names that trail off'
+      Description: "Faint, flickering \u2014 names that trail off"
       Tags:
       - Spirit
       - Monster
@@ -100,7 +101,7 @@ MonoBehaviour:
     - Gallows Hill
     - the Drowned Bell
     - the Old Ford
-    - 'Widow''s Lantern'
+    - Widow's Lantern
     Titles:
       Honorific:
       - Pale One
@@ -152,6 +153,8 @@ MonoBehaviour:
       - grave
       - ruin
     AllowGenericOccupations: 0
+    Plural: Wisps
+    Adjective: Wisp
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -161,3 +164,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 247344987
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

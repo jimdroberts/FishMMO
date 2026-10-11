@@ -366,7 +366,7 @@ namespace FishMMO.Client
 		{
 			ClientMapSystem.Filter.Collect(markerBuffer, Character, false, ClientMapSystem.Fog);
 			MapContent.AppendNotes(markerBuffer, ClientMapSystem.Notes, false);
-			MapContent.AppendPointsOfInterest(markerBuffer, ClientMapSystem.Definition, ClientMapSystem.Fog, false);
+			MapContent.AppendPointsOfInterest(markerBuffer, ClientMapSystem.SceneDetails, ClientMapSystem.Definition, ClientMapSystem.Fog, false);
 			IWaypointController waypointController = null;
 			Character?.TryGet(out waypointController);
 			MapContent.AppendWaypoints(markerBuffer, ClientMapSystem.SceneDetails, ClientMapSystem.SceneName, waypointController, false);

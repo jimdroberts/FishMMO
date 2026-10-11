@@ -248,6 +248,11 @@ namespace FishMMO.Shared
 						sceneDetails.Waypoints.Add(obj.WaypointIndex, obj.ToDetails());
 					}
 
+					// Harvest points of interest into the details, whether or not a map is baked; see
+					// WorldSceneDetails.PointsOfInterest.
+					sceneDetails.PointsOfInterest = HarvestPointsOfInterest(currentScene);
+					Log.Debug("WorldSceneDetailsCacheReader", $"Found {sceneDetails.PointsOfInterest.Count} point(s) of interest in [{currentScene.name}]");
+
 					// Search for interactable teleporters and validate against TeleporterCache.
 					Teleporter[] interactableTeleporters = GameObject.FindObjectsByType<Teleporter>();
 					foreach (Teleporter obj in interactableTeleporters)
@@ -314,6 +319,66 @@ namespace FishMMO.Shared
 			Log.Debug("WorldSceneDetailsCacheReader", "Rebuild Complete");
 #endif
 			return true;
+		}
+
+		/// <summary>
+		/// Every point of interest in one scene, as the map draws it: each active generated
+		/// <see cref="ScenePointOfInterest"/> and each active hand-placed <see cref="MapPointOfInterest"/>.
+		/// </summary>
+		/// <param name="scene">The scene to read. Only its own objects are read, never another loaded scene's.</param>
+		/// <returns>The details, sorted by type, name and position; never null.</returns>
+		/// <remarks>
+		/// Read from the scene's roots rather than with <c>FindObjectsByType</c>, which spans every loaded
+		/// scene: the rebuild opens scenes additively, and a POI must never be harvested into a neighbour.
+		/// Sorted because component order in a scene is not stable across saves, and the cache is a
+		/// committed asset whose churn should mean something changed.
+		/// </remarks>
+		public static List<MapPointOfInterestDetails> HarvestPointsOfInterest(Scene scene)
+		{
+			var result = new List<MapPointOfInterestDetails>();
+			if (!scene.IsValid() || !scene.isLoaded)
+			{
+				return result;
+			}
+
+			var generated = new List<ScenePointOfInterest>();
+			var authored = new List<MapPointOfInterest>();
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				/* GetComponentsInChildren(false) leaves out inactive children but NOT an inactive root's own components, so a
+				 * switched-off point standing at the scene root was harvested onto the map (PointOfInterestMapTests). */
+				if (!root.activeSelf)
+				{
+					continue;
+				}
+				generated.Clear();
+				authored.Clear();
+				root.GetComponentsInChildren(false, generated);
+				root.GetComponentsInChildren(false, authored);
+				foreach (ScenePointOfInterest point in generated)
+				{
+					result.Add(point.ToDetails());
+				}
+				foreach (MapPointOfInterest landmark in authored)
+				{
+					result.Add(landmark.ToDetails());
+				}
+			}
+
+			result.Sort(ComparePointsOfInterest);
+			return result;
+		}
+
+		private static int ComparePointsOfInterest(MapPointOfInterestDetails a, MapPointOfInterestDetails b)
+		{
+			int order = a.Type.CompareTo(b.Type);
+			if (order != 0) return order;
+			order = string.CompareOrdinal(a.Name, b.Name);
+			if (order != 0) return order;
+			order = a.Position.x.CompareTo(b.Position.x);
+			if (order != 0) return order;
+			order = a.Position.z.CompareTo(b.Position.z);
+			return order != 0 ? order : a.Position.y.CompareTo(b.Position.y);
 		}
 
 #if UNITY_EDITOR

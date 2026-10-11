@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bog Giant
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Giant
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Mire giants half-sunk in the fen — bubbling names
+  Description: "Mire giants half-sunk in the fen \u2014 bubbling names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Giant
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ug
       - orm
       - ull
-      Description: Mire giants half-sunk in the fen — bubbling names
+      Description: "Mire giants half-sunk in the fen \u2014 bubbling names"
       Tags:
       - Mire-names
       - Bubble-marks
@@ -163,6 +163,8 @@ MonoBehaviour:
       - tumble
       - scar
     AllowGenericOccupations: 1
+    Plural: Bog Giants
+    Adjective: Bog Giant
   BiomeAffinities:
   - BiomeID: 719042512
     Weight: 3
@@ -172,3 +174,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 888339253
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

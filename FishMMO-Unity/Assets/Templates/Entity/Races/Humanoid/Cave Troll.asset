@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Cave Troll
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Deep-rock trolls — grinding names, stone-slow'
+  Description: "Deep-rock trolls \u2014 grinding names, stone-slow"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ug
       - ok
       - orn
-      Description: 'Deep-rock trolls — grinding names, stone-slow'
+      Description: "Deep-rock trolls \u2014 grinding names, stone-slow"
       Tags:
       - Stone-names
       - Grind-marks
@@ -168,6 +168,8 @@ MonoBehaviour:
       - hollow
       - scar
     AllowGenericOccupations: 0
+    Plural: Cave Trolls
+    Adjective: Cave Troll
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -177,3 +179,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 155940630
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

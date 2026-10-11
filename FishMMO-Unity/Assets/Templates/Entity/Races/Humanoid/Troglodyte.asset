@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Troglodyte
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Humanoid
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Reptile-cave stench-speech — stinking and short
+  Description: "Reptile-cave stench-speech \u2014 stinking and short"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Humanoid
   Naming:
     Phonology:
       Onsets:
@@ -92,7 +92,7 @@ MonoBehaviour:
       - ar
       - arn
       - uth
-      Description: Reptile-cave stench-speech — stinking and short
+      Description: "Reptile-cave stench-speech \u2014 stinking and short"
       Tags:
       - Stench-marks
       - Cave-bonds
@@ -125,6 +125,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Troglodytes
+    Adjective: Troglodyte
   BiomeAffinities:
   - BiomeID: 596668801
     Weight: 3
@@ -132,3 +135,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 155940630
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

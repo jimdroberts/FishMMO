@@ -495,6 +495,10 @@ namespace FishMMO.UnitTests
 			}
 			foreach (RockType t in RockTypes.All)
 			{
+				if (t.FormationsOnly)
+				{
+					continue;
+				}
 				Assert.That(CliffRocks.PiecesOf(t.Name).Any(), Is.True, t.Name);
 				Assert.That(CliffRocks.MaterialName(t.Name), Is.Not.Null.And.Not.Empty, t.Name);
 			}
@@ -503,6 +507,25 @@ namespace FishMMO.UnitTests
 			Assert.That(CliffRocks.StructureOf("Slate"), Is.EqualTo(CliffStructure.Foliated));
 			Assert.That(CliffRocks.StructureOf("Basalt"), Is.EqualTo(CliffStructure.Columnar));
 			Assert.That(CliffRocks.StructureOf(CliffRocks.Ice), Is.EqualTo(CliffStructure.Ice));
+		}
+
+		[Test]
+		public void FormationOnlyRocks_AreNeverCliffRocks()
+		{
+			// A salt flat's polygons, a geyser's sinter or a termite mound are scattered formations, not cliffs: none is a
+			// cliff type, none is taken from a ground family of the same name, and the crust's sixteen all still are.
+			var types = new HashSet<string>(CliffRocks.Types());
+			foreach (RockType t in RockTypes.All)
+			{
+				Assert.That(CliffRocks.IsCliffRock(t.Name), Is.EqualTo(!t.FormationsOnly), t.Name);
+				Assert.That(types.Contains(t.Name), Is.EqualTo(!t.FormationsOnly), t.Name);
+			}
+			Assert.That(RockTypes.Crust.Length, Is.EqualTo(16));
+			Assert.That(RockTypes.Crust.All(t => !t.FormationsOnly), Is.True);
+			Assert.That(RockTypes.FormationRocks.All(t => t.FormationsOnly), Is.True);
+			Assert.That(CliffRocks.RockTypeFor(Ground.Sulphur, null), Is.Null, "a sulphur family's cliff stays terrain, not a sulphur cliff");
+			Assert.That(CliffRocks.RockTypeFor(Ground.Sinter, null), Is.Null);
+			Assert.That(CliffRocks.IsCliffRock(CliffRocks.Ice), Is.False, "ice cliffs are the Ice pseudo-type, not a rock type");
 		}
 
 		[Test]

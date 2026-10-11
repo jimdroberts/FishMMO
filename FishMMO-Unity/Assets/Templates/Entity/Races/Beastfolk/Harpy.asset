@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Harpy
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Shrill and musical — song-calls that carry for leagues
+  Description: "Shrill and musical \u2014 song-calls that carry for leagues"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -79,10 +79,10 @@ MonoBehaviour:
       - lene
       MasculineSuffixes:
       - os
-      - 'on'
+      - on
       - us
       - io
-      Description: Shrill and musical — song-calls that carry for leagues
+      Description: "Shrill and musical \u2014 song-calls that carry for leagues"
       Tags:
       - Wind-names
       - Flock-bonds
@@ -122,6 +122,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Harpies
+    Adjective: Harpy
   BiomeAffinities:
   - BiomeID: 646460858
     Weight: 3
@@ -131,3 +134,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: 1496239796
     Weight: 0.5
+  DamageImmunities: []
+  BreathesWater: 0

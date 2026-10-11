@@ -437,7 +437,7 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.IsTrue(layer.Contains("float3 sun = _FishFogLightColor.rgb * sunShare * risen"), "FishFogLight lights beam and diffuse by the light through the cloud over the point");
 			LogAssert.IsTrue(layer.Contains("* _FishFogLightColor.w;"), "and FishFogSunShare turns the average back into the surfaces' light");
 			string march = SourceScanPins.ReadCode("Assets/Prefabs/Client/Weather/Shaders/FishCloudVolume.hlsl");
-			LogAssert.IsTrue(march.Contains("FishFogLight(altitudeHere, direction, fogColumn, _FishFogLayer.x, 1.0, FishFogSunShare(position))"), "the march lights each fog sample by the cloud over it");
+			LogAssert.IsTrue(march.Contains("FishFogLight(altitudeHere, direction, fogColumn, _FishFogLayer.x, FishTerrainSunlit(position), FishFogSunShare(position))"), "the march lights each fog sample by the cloud over it (and the terrain shading it)");
 			string height = SourceScanPins.ReadCode("Assets/Prefabs/Client/Weather/Shaders/FishHeightFog.shader");
 			LogAssert.IsTrue(height.Contains("FishFogSunShare(litAt)"), "and so does the analytic fallback");
 			string view = SourceScanPins.ReadCode("Assets/Scripts/Client/World/Weather/Presentation/FogLayerView.cs");

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Chimera
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: Fractured speech — three tongues in one throat
+  Description: "Fractured speech \u2014 three tongues in one throat"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -68,7 +68,7 @@ MonoBehaviour:
       Middles:
       - me
       - ry
-      - 'no'
+      - no
       - si
       SyllMin: 3
       SyllMax: 4
@@ -78,10 +78,10 @@ MonoBehaviour:
       - ithea
       MasculineSuffixes:
       - os
-      - 'on'
+      - on
       - us
       - ax
-      Description: Fractured speech — three tongues in one throat
+      Description: "Fractured speech \u2014 three tongues in one throat"
       Tags:
       - Fused-names
       - Curse-marks
@@ -116,6 +116,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Chimeras
+    Adjective: Chimera
   BiomeAffinities:
   - BiomeID: 599899035
     Weight: 2
@@ -123,3 +126,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: 681889367
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

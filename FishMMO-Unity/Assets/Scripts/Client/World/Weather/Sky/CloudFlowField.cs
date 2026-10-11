@@ -114,6 +114,9 @@ namespace FishMMO.Client
 		private bool shadeReady;
 		private float shadeBase;
 		private float shadeStarted = float.NegativeInfinity;
+
+		/// <summary>Lets the far shade be solved again at once if the light has turned: the clock was set to another moment.</summary>
+		public void ShadeSoon() => shadeStarted = float.NegativeInfinity;
 		private ushort[] shadeHalves;
 		/// <summary>The least time between two of the far shade's solves, s, however fast the light is moving.</summary>
 		private const float ShadeInterval = 3f;

@@ -122,7 +122,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			WorldAtlasScene neighbour = Placed("Neighbour", 10.0, 20.0, surface);
 			List<WorldAtlasScene> hits = SceneGeneration.Collisions(
-				Request("New", 10.0, 20.0, surface), new[] { neighbour }, body.SkyRadiusKm);
+				Request("New", 10.0, 20.0, surface), new[] { neighbour }, body.SkyRadiusKm, BodyOf);
 
 			Assert.That(hits, Has.Count.EqualTo(1), "a rectangle on the same spot collides");
 			Assert.That(hits[0], Is.SameAs(neighbour));
@@ -133,7 +133,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			WorldAtlasScene neighbour = Placed("Neighbour", 10.0, 20.0, surface);
 			Assert.That(SceneGeneration.Collisions(
-				Request("New", -40.0, -120.0, surface), new[] { neighbour }, body.SkyRadiusKm),
+				Request("New", -40.0, -120.0, surface), new[] { neighbour }, body.SkyRadiusKm, BodyOf),
 				Is.Empty);
 		}
 
@@ -145,7 +145,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			 * anywhere its entrance is. */
 			WorldAtlasScene forest = Placed("Forest", 10.0, 20.0, surface);
 			Assert.That(SceneGeneration.Collisions(
-				Request("Cave", 10.0, 20.0, underworld), new[] { forest }, body.SkyRadiusKm),
+				Request("Cave", 10.0, 20.0, underworld), new[] { forest }, body.SkyRadiusKm, BodyOf),
 				Is.Empty);
 		}
 
@@ -156,9 +156,25 @@ namespace FishMMO.UnitTests.WorldDesign
 			WorldAtlasScene waiting = Placed("Waiting", 10.0, 20.0, surface);
 			waiting.Placed = false;
 			Assert.That(SceneGeneration.Collisions(
-				Request("New", 10.0, 20.0, surface), new[] { waiting }, body.SkyRadiusKm),
+				Request("New", 10.0, 20.0, surface), new[] { waiting }, body.SkyRadiusKm, BodyOf),
 				Is.Empty);
 		}
+
+		[Test]
+		public void TheSameSpotOnAnotherBodyIsNotACollision()
+		{
+			/* Bodies without layers of their own share the atlas's default ones, so the same
+			 * surface layer sits on every planet. A layer match alone made a cut on one world
+			 * refuse itself over scenes on all the others. */
+			WorldBody moon = Make<WorldBody>("Test Moon");
+			WorldAtlasScene elsewhere = Placed("Elsewhere", 10.0, 20.0, surface);
+			elsewhere.Body = moon;
+			Assert.That(SceneGeneration.Collisions(
+				Request("New", 10.0, 20.0, surface), new[] { elsewhere }, body.SkyRadiusKm, BodyOf),
+				Is.Empty);
+		}
+
+		private static WorldBody BodyOf(WorldAtlasScene entry) => entry.Body;
 
 		// ── Tiles ─────────────────────────────────────────────────────
 

@@ -89,6 +89,9 @@ namespace FishMMO.Shared.Weather
 		[Tooltip("Thrown up by vents: when a biome emits it, it rises in a plume over the vent and falls out of that plume, downwind (VolcanicPlume), rather than out of the air everywhere over the biome. On for volcanic ash and cryovolcanic tephra; off for what wind lifts off the ground or a haze that settles everywhere — sulphur dust off a sulphur flat, tholin. Sulphur flats are deposits, not vents: marking their dust vented put eruption columns over every one.")]
 		public bool Vented;
 
+		[Tooltip("A vapour: water steam off hot ground. White and buoyant, it is seen only where it mixes into colder air and has evaporated again once diluted into drier air (SteamPhysics), so it never falls out of the sky and never lies on the ground. A biome that emits a vapour is set with fumaroles, hot springs and geysers (GeothermalVents), drawn by the client; its emission is not weather: it adds nothing to what falls and raises no eruption.")]
+		public bool Vapour;
+
 		[Header("Sound")]
 		[Tooltip("Audio cue name for this substance falling. Empty uses the kind's own cue.")]
 		public string AudioCue;

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Lich
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Archaic, vaulted speech — phylactery-bound dread'
+  Description: "Archaic, vaulted speech \u2014 phylactery-bound dread"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - xyr
       - reth
       - nak
-      Description: 'Archaic, vaulted speech — phylactery-bound dread'
+      Description: "Archaic, vaulted speech \u2014 phylactery-bound dread"
       Tags:
       - Phylactery-bonds
       - Eternal-marks
@@ -118,6 +118,9 @@ MonoBehaviour:
       Port: []
       Sacred: []
       Ruin: []
+    AllowGenericOccupations: 1
+    Plural: Liches
+    Adjective: Lich
   BiomeAffinities:
   - BiomeID: -1693619367
     Weight: 1
@@ -129,3 +132,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -567058185
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

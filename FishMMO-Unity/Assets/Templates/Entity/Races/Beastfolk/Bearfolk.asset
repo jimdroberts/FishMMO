@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Bearfolk
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beastfolk
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Broad, slow-spoken bear people — deep names with rounded ends'
+  Description: "Broad, slow-spoken bear people \u2014 deep names with rounded ends"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beastfolk
   Naming:
     Phonology:
       Onsets:
@@ -71,7 +71,7 @@ MonoBehaviour:
       - ro
       - um
       - ar
-      - 'on'
+      - on
       SyllMin: 2
       SyllMax: 3
       FeminineSuffixes:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - un
       - ak
       - orr
-      Description: 'Broad, slow-spoken bear people — deep names with rounded ends'
+      Description: "Broad, slow-spoken bear people \u2014 deep names with rounded
+        ends"
       Tags:
       - Honey-names
       - Den-marks
@@ -163,6 +164,8 @@ MonoBehaviour:
       - scatter
       - hollow
     AllowGenericOccupations: 1
+    Plural: Bearfolk
+    Adjective: Bearfolk
   BiomeAffinities:
   - BiomeID: -1123947451
     Weight: 3
@@ -172,3 +175,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -138594552
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

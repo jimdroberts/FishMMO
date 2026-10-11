@@ -174,8 +174,9 @@ void SplatmapFinalColor(inout half4 color, half fogCoord)
     #endif
 }
 
-/// Deep snow lifts the ground it lies on — the same lift FishWeatherTerrain applies, so the two terrain
-/// shaders agree about where the snow's surface is.
+/// Snow lifts the ground it lies on — its blanket, the deep snow past it, less where it is trodden
+/// (FishSnowLiftMetres) — the same lift FishWeatherTerrain applies, so the two terrain shaders agree about
+/// where the snow's surface is.
 void FishSnowLift(inout float4 positionOS, float3 normalOS)
 {
     // FishMMO edit: off unless the quality tier asks for it (_FishSnowDepth is 0 below High), and only
@@ -184,7 +185,7 @@ void FishSnowLift(inout float4 positionOS, float3 normalOS)
     {
         float3 snowWorld = TransformObjectToWorld(positionOS.xyz);
         float3 snowNormal = TransformObjectToWorldNormal(normalOS);
-        float lift = FishCoverAt(snowWorld).x * _FishSnowDepth * FishCoverFacing(snowNormal, snowWorld, 0.5);
+        float lift = FishSnowLiftMetres(snowWorld, snowNormal, _FishSnowDepth);
         positionOS.xyz += TransformWorldToObjectDir(float3(0, 1, 0)) * lift;
     }
 }
@@ -278,6 +279,7 @@ void SplatmapFragment(
     {
         half3 weathered = inputData.normalWS;
         FishWeatherSurface(inputData.positionWS, albedo, weathered, smoothness, metallic, occlusion);
+        FishTrailSurface(inputData.positionWS, inputData.viewDirectionWS, albedo, weathered, smoothness);
         inputData.normalWS = normalize(lerp(inputData.normalWS, weathered, _FishWeatherAmount));
     }
 

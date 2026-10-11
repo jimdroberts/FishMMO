@@ -38,8 +38,20 @@ namespace FishMMO.Shared.NameGeneration
 		public List<StringMapping> BiomeMeaningCodas = new();
 
 		[Header("Points of interest")]
-		[Tooltip("POI type (lowercase POIType name) → type-specific suffixes, e.g. 'shrine' → Shrine, Altar, Fane.")]
+		[Tooltip("POI type (lowercase POIType name) → the words that say what it is, e.g. 'shrine' → Shrine, Altar, Fane. Fills {Type}; a kind with no row uses the built-in words.")]
 		public List<StringListMapping> POITypeSuffixes = new();
+		[Tooltip("How place names are composed, per kind. Empty falls back to the built-in set.")]
+		public List<PlaceNameTemplate> PlaceNameTemplates = new();
+		[Tooltip("POI type (lowercase POIType name) → endings fused onto a root by {Root}{Suffix}, e.g. 'lake' → mere, tarn. A kind with no row uses the biome's codas.")]
+		public List<StringListMapping> PlaceFusedSuffixes = new();
+		[Tooltip("Adjectives any place may take; the only ones planet-wide water names use. Empty uses the built-in list.")]
+		public string[] PlaceAdjectives;
+		[Tooltip("Nouns for 'of the {Adjective} {Noun}' and inn or ship names. Empty uses the built-in list.")]
+		public string[] PlaceNouns;
+		[Tooltip("How often a request for any kind draws each kind; a kind with no row draws at the built-in weight.")]
+		public List<POIKindWeight> POIKindWeights = new();
+		[Tooltip("The sound of rivers, lakes and falls, which cross biomes and so cannot use any one biome's phonology. Unusable (no onsets or codas) falls back to the built-in water phonology.")]
+		public SerializableBiomePhonology WaterPhonology = new();
 
 		[Header("Titles — compositions")]
 		[Tooltip("How titles are assembled, by category and register. Empty falls back to the built-in set.")]

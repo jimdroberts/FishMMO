@@ -87,6 +87,13 @@ MonoBehaviour:
   Clouds:
     LightSteps: 6
     MaxDistance: 44000
+    FullMarchMetres: 13000
+    FarImposter: 1
+    FarImposterSize: 1024
+    FarImposterRefreshFrames: 48
+    FarImposterKeep: 0.4
+    FarImposterStartMetres: 0
+    NearMarchEvery: 1
     FarTailSteps: 24
     FarBandMetres: 5000
     TemporalBlend: 0.9
@@ -101,6 +108,8 @@ MonoBehaviour:
       MaxMarchDistance: 0
       RayJitter: 1
       StepScale: 0.5
+      NearStepScale: 0.35
+      NearStepDistance: 4000
       DistanceStepGrowth: 1
       MaxStepOpticalDepth: 1
       MaxInCloudGrowth: 2
@@ -220,8 +229,8 @@ MonoBehaviour:
   RockCreviceWidth: 0.35
   RockCreviceShadow: 0.45
   RockCreviceSoil: 0.85
-  RockFieldCompute: {fileID: 0}
-  RockSdfShader: {fileID: 0}
+  RockFieldCompute: {fileID: 7200000, guid: 1446210affab588c8b35acf5931095de, type: 3}
+  RockSdfShader: {fileID: 4800000, guid: fb04a5ed9cb4deb3f9a85b639f510c31, type: 3}
   GrassBladesCompute: {fileID: 7200000, guid: 8bd7189a93a941d9b60c4f759d719be6, type: 3}
   GrassBladesShader: {fileID: 4800000, guid: 713c81c490c74311b936e0315f3029c4, type: 3}
   Grass:
@@ -244,6 +253,11 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 0
       Wade: 0
+      HeadShare: 1
+      HeadPalette: []
+      BladeRoot: {r: 0, g: 0, b: 0, a: 0}
+      BladeTip: {r: 0, g: 0, b: 0, a: 0}
+      Tall: 0
     - Prefix: Detail_GrassLush
       Density: 1
       Stiffness: 0.9
@@ -257,6 +271,11 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 0
       Wade: 0
+      HeadShare: 1
+      HeadPalette: []
+      BladeRoot: {r: 0, g: 0, b: 0, a: 0}
+      BladeTip: {r: 0, g: 0, b: 0, a: 0}
+      Tall: 0
     - Prefix: Detail_GrassDry
       Density: 0.8
       Stiffness: 1.3
@@ -270,6 +289,11 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 0
       Wade: 0
+      HeadShare: 1
+      HeadPalette: []
+      BladeRoot: {r: 0, g: 0, b: 0, a: 0}
+      BladeTip: {r: 0, g: 0, b: 0, a: 0}
+      Tall: 0
     - Prefix: Detail_GrassTall
       Density: 0.75
       Stiffness: 0.7
@@ -283,6 +307,11 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 0
       Wade: 0
+      HeadShare: 1
+      HeadPalette: []
+      BladeRoot: {r: 0, g: 0, b: 0, a: 0}
+      BladeTip: {r: 0, g: 0, b: 0, a: 0}
+      Tall: 0
     - Prefix: Detail_GrassTuft
       Density: 0.85
       Stiffness: 1.6
@@ -296,6 +325,11 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 0
       Wade: 0
+      HeadShare: 1
+      HeadPalette: []
+      BladeRoot: {r: 0, g: 0, b: 0, a: 0}
+      BladeTip: {r: 0, g: 0, b: 0, a: 0}
+      Tall: 0
     - Prefix: Detail_Reeds
       Density: 1
       Stiffness: 2.6
@@ -309,6 +343,11 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 1
       Wade: 0
+      HeadShare: 1
+      HeadPalette: []
+      BladeRoot: {r: 0, g: 0, b: 0, a: 0}
+      BladeTip: {r: 0, g: 0, b: 0, a: 0}
+      Tall: 0
     - Prefix: Detail_Flowers
       Density: 1
       Stiffness: 1.3
@@ -322,6 +361,11 @@ MonoBehaviour:
       HeadColour: {r: 0.36, g: 0.25, b: 0.14, a: 1}
       BluntTip: 0
       Wade: 0
+      HeadShare: 1
+      HeadPalette: []
+      BladeRoot: {r: 0, g: 0, b: 0, a: 0}
+      BladeTip: {r: 0, g: 0, b: 0, a: 0}
+      Tall: 0
     Rings:
     - {x: 7.5, y: 800}
     - {x: 50, y: 120}
@@ -337,7 +381,7 @@ MonoBehaviour:
     MaxBladePixels: 2.5
     Lod0Distance: 6
     Lod1Distance: 25
-    ShadowDistance: 10
+    ShadowDistance: 0
     BladeCap: 5000000
     DistanceFadeBand: 0.12
     BladeWidth: 0.012
@@ -382,7 +426,7 @@ MonoBehaviour:
     - Detail_Pebbles
     - Detail_Rocks
     - Detail_Shells
-    - Detail_DebrisForest
+    - Detail_Debris
     ThinStartMetres: 60
     ThinKeepAtDistance: 0.25
     EdgeFadeBand: 0.1
@@ -392,6 +436,10 @@ MonoBehaviour:
     BushLodMetresPerMetre: {x: 12, y: 40}
     BushLodFadeBand: 0.15
     MaxInstancesPerSlot: 2000000
+  DeepSnowMetres: 1
+  DeepSnowHours: 4
+  GroundTrails: 1
+  GroundTrailShader: {fileID: 4800000, guid: 74296a7aa0af6b6b0bbde80035c5b4e7, type: 3}
   SeaLifeShader: {fileID: 4800000, guid: fed391ef859a41a0b7e7b819fe159a24, type: 3}
   SeaLife:
     Enabled: 1
@@ -645,3 +693,40 @@ MonoBehaviour:
       Smoothness: 0.4
       CastShadows: 1
     Version: 2
+  AmbientLifeShader: {fileID: 4800000, guid: 6943ce254cd5feb65911006becc4dd49, type: 3}
+  AmbientLife:
+    Enabled: 1
+    MaxVisible: 400
+    CellMetres: 64
+    Flush: 1
+    FlockDistance: 260
+    SoloBirdDistance: 140
+    RaptorDistance: 450
+    BatDistance: 70
+    CritterDistance: 60
+    FadeBand: 0.2
+    ShadowDistance: 30
+    FlockDensity: 1
+    SoloBirdDensity: 1
+    RaptorDensity: 1
+    BatDensity: 1
+    CritterDensity: 1
+    SizeScale: 1.4
+    DebugHighlight: 0
+    DebugScale: 4
+  AirMotesShader: {fileID: 4800000, guid: 21d1d818c31df151a8d79b5707f6de1e, type: 3}
+  FallingLeavesShader: {fileID: 4800000, guid: b95ed509b5cff62c4a8a1e51c4c9c9c1, type: 3}
+  FallingLeaves:
+    Enabled: 1
+    ParticlesPerformant: 0
+    ParticlesBalanced: 3000
+    ParticlesHigh: 6000
+    BoxSize: 36
+    BoxHeight: 30
+    LeafSize: {x: 0.04, y: 0.09}
+    LeafAlbedo: {r: 0.12, g: 0.2, b: 0.04, a: 1}
+    DryAlbedo: {r: 0.14, g: 0.085, b: 0.04, a: 1}
+    BrownShare: 0.3
+    LieSeconds: 2.5
+    CanopyTexelMetres: 4
+    Alpha: 1

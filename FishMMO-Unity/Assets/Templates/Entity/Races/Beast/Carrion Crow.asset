@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Carrion Crow
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Beast
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Great crows that follow armies — cawing, harsh names'
+  Description: "Great crows that follow armies \u2014 cawing, harsh names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Beast
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,7 @@ MonoBehaviour:
       - ak
       - orr
       - ock
-      Description: 'Great crows that follow armies — cawing, harsh names'
+      Description: "Great crows that follow armies \u2014 cawing, harsh names"
       Tags:
       - Caw-names
       - Battle-marks
@@ -122,7 +122,7 @@ MonoBehaviour:
       - Follower of the Siege Lines
       Legend:
       - Who Followed the Army from the Muster to the Grave
-      - 'Who Picked the Crown from the Dead King''s Head'
+      - Who Picked the Crown from the Dead King's Head
       - Who Roosted on the Gallows Through the Plague Year
       - Who Cawed the Ambush Warning and Was Ignored
       - Who Ate Better Than the Generals
@@ -156,6 +156,8 @@ MonoBehaviour:
       - carrion
       - waste
     AllowGenericOccupations: 0
+    Plural: Carrion Crows
+    Adjective: Carrion Crow
   BiomeAffinities:
   - BiomeID: 525873855
     Weight: 3
@@ -165,3 +167,5 @@ MonoBehaviour:
     Weight: 1.5
   - BiomeID: -857237992
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

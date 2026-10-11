@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Mimic
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Aberration
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,8 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'A shapeshifting predator that spends years as a chest, a door or a bed, waiting for a hand to close on it.'
+  Description: A shapeshifting predator that spends years as a chest, a door or a
+    bed, waiting for a hand to close on it.
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +35,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Aberration
   Naming:
     Phonology:
       Onsets:
@@ -89,7 +90,7 @@ MonoBehaviour:
       MasculineSuffixes:
       - ug
       - or
-      Description: 'Two-voiced — a borrowed word, then teeth'
+      Description: "Two-voiced \u2014 a borrowed word, then teeth"
       Tags:
       - Slime
       - Monster
@@ -151,6 +152,8 @@ MonoBehaviour:
       - sludge
       - ooze
     AllowGenericOccupations: 0
+    Plural: Mimics
+    Adjective: Mimic
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 1
@@ -162,3 +165,5 @@ MonoBehaviour:
     Weight: 1
   - BiomeID: -567058185
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

@@ -10,7 +10,7 @@ namespace FishMMO.Client
 	/// prototype list when a terrain is next taken).
 	/// </summary>
 	[Serializable]
-	public class DetailScatterSettings
+	public class DetailScatterSettings : ISerializationCallbackReceiver
 	{
 		/// <summary>
 		/// Every shrub prefab's name starts with this (the art generator's ProceduralArtCatalogue.BushPrefix: the two must
@@ -26,8 +26,18 @@ namespace FishMMO.Client
 		[Tooltip("Off: every mesh detail stays on the instanced chunk renderer (built on the CPU, culled on the GPU). The dashboard's A/B button overrides it per play session.")]
 		public bool Enabled = true;
 
-		[Tooltip("Mesh detail prototype prefab names starting with any of these are scattered on the GPU (and skipped by the chunk renderer). Ground cover first: pebbles, small rocks, shells, forest litter. Anything colliderless works, sparse or dense: each 2 m block keeps its exact expected count, so a single plant stays where its block is. Prototypes the blade grass draws are never taken here.")]
-		public string[] PrototypePrefixes = { "Detail_Pebbles", "Detail_Rocks", "Detail_Shells", "Detail_DebrisForest" };
+		[Tooltip("Mesh detail prototype prefab names starting with any of these are scattered on the GPU (and skipped by the chunk renderer). Ground cover first: pebbles, small rocks, shells, litter (every Detail_Debris*: forest, needle, palm, wrack, branch, bamboo). Anything colliderless works, sparse or dense: each 2 m block keeps its exact expected count, so a single plant stays where its block is. Prototypes the blade grass draws are never taken here.")]
+		public string[] PrototypePrefixes = { "Detail_Pebbles", "Detail_Rocks", "Detail_Shells", LitterPrefix };
+
+		/// <summary>
+		/// Every ground-litter detail (the art generator's <c>Detail_Debris*</c>: DebrisForest, and since the vegetation
+		/// expansion DebrisNeedle, DebrisPalm, DebrisWrack, DebrisBranch, DebrisBamboo). All colliderless cards and twigs,
+		/// scattered on the GPU like the forest litter always was. No other prefab starts with it.
+		/// </summary>
+		public const string LitterPrefix = "Detail_Debris";
+
+		/// <summary>The prefix that named the only litter there was before 2026-10-10; a profile saved with it reads <see cref="LitterPrefix"/>.</summary>
+		public const string LegacyLitterPrefix = "Detail_DebrisForest";
 
 		[Header("Distance")]
 		[Tooltip("Instances are drawn whole to this distance (m); beyond it a share of them, picked by a hash of their position (the same ones every frame), falls to Thin Keep At Distance at the draw distance.")]
@@ -71,6 +81,29 @@ namespace FishMMO.Client
 			}
 			return false;
 		}
+
+		/// <summary>
+		/// A profile saved before the litter family grew lists <see cref="LegacyLitterPrefix"/>; it is read as
+		/// <see cref="LitterPrefix"/>, so the new litter is scattered without editing the asset on disk (which the open
+		/// editor would overwrite with its loaded copy), and the profile saves the new prefix the next time it is saved.
+		/// Detail_DebrisForest matches either, so it is scattered exactly as before.
+		/// </summary>
+		public void OnAfterDeserialize()
+		{
+			if (PrototypePrefixes == null)
+			{
+				return;
+			}
+			for (int i = 0; i < PrototypePrefixes.Length; i++)
+			{
+				if (string.Equals(PrototypePrefixes[i], LegacyLitterPrefix, StringComparison.Ordinal))
+				{
+					PrototypePrefixes[i] = LitterPrefix;
+				}
+			}
+		}
+
+		public void OnBeforeSerialize() { }
 
 		/// <summary>True when a prototype of this name is a bush (<see cref="BushPrefix"/>).</summary>
 		public static bool IsBush(string name) => !string.IsNullOrEmpty(name) && name.StartsWith(BushPrefix, StringComparison.Ordinal);

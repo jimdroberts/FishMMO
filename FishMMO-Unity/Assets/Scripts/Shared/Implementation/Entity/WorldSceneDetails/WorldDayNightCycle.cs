@@ -167,6 +167,7 @@ namespace FishMMO.Shared
 
 		private NetworkManager networkManager;
 		private TimeManager timeManager;
+		private uint seenJumps;
 		private bool sceneLoadTriggersPending = true;
 		private float serverTimer;
 		private readonly CelestialEventTracker tracker = new CelestialEventTracker();
@@ -314,7 +315,11 @@ namespace FishMMO.Shared
 			if (!server)
 			{
 				Evaluate();
-				UpdateDayNightState(DaylightNow);
+				// A set of the clock lands the day or the night at once, as it lands the sky: no fade across it.
+				uint jumps = FishMMO.Shared.Celestial.WorldClock.Shared.Jumps;
+				bool jumped = jumps != seenJumps;
+				seenJumps = jumps;
+				UpdateDayNightState(DaylightNow, jumped);
 				ApplyRotations();
 				UpdateDayNightFading();
 			}

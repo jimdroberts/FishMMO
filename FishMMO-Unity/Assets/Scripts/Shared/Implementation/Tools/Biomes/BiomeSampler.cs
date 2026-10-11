@@ -50,6 +50,17 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Reads the biome at a world position under the given scene settings (null = no map, default climate).</summary>
 		public static BiomeReading Read(Vector3 worldPosition, WorldSceneSettings settings)
 		{
+			return settings != null
+				? Read(worldPosition, settings, settings.RuntimeTemperatureOffset, settings.RuntimeHumidityOffset)
+				: Read(worldPosition, settings, 0f, 0f);
+		}
+
+		/// <summary>
+		/// The same, with the scene's runtime climate offsets given: those of the moment being read
+		/// (<see cref="FishMMO.Shared.Weather.SceneClimate.OffsetsAt"/>), not whatever the settings were last told.
+		/// </summary>
+		public static BiomeReading Read(Vector3 worldPosition, WorldSceneSettings settings, float runtimeTemperature, float runtimeHumidity)
+		{
 			var reading = new BiomeReading();
 
 			SceneBiomeMap map = settings != null ? settings.BiomeMap : null;
@@ -81,7 +92,7 @@ namespace FishMMO.Shared.Biomes
 			 * tier by, so a biome chosen here falls in the same tier as the painted one. */
 			if (settings != null)
 			{
-				reading.Climate = settings.SampleClimateAt(ground, reading.Height, out float resolverHeight);
+				reading.Climate = settings.SampleClimateAt(ground, reading.Height, out float resolverHeight, runtimeTemperature, runtimeHumidity);
 				reading.Height = resolverHeight;
 			}
 			else
@@ -99,9 +110,21 @@ namespace FishMMO.Shared.Biomes
 				/* Filtered by the world this scene is on before the climate is scored. A painted
 				 * biome map is left alone — if a designer has put a jungle on an airless moon they
 				 * meant it, and second-guessing a hand-painted map would be worse than the mistake. */
-				reading.Biome = settings != null
-					? BiomeResolver.Select(reading.Height, reading.Climate, settings.WorldConditions)
-					: BiomeResolver.Select(reading.Height, reading.Climate);
+				/* A scene cut from the globe chooses exactly as its generator painted — the field's own
+				 * choice from the honest climate at the ground — so ground off the map neither changes
+				 * biome with the weather nor disagrees with the painted ground at an ecotone. The shifted
+				 * reading still picks the climate variant below. */
+				ScenePlacementClimate placement = settings != null ? settings.PlacementClimate : null;
+				if (placement != null && placement.Generated)
+				{
+					reading.Biome = placement.SelectBiomeAt(ground);
+				}
+				else
+				{
+					reading.Biome = settings != null
+						? BiomeResolver.Select(reading.Height, reading.Climate, settings.WorldConditions)
+						: BiomeResolver.Select(reading.Height, reading.Climate);
+				}
 			}
 			if (reading.Biome != null)
 			{

@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: Headless Rider
   m_EditorClassIdentifier: 
   Playable: 0
-  Category: Undead
   Prefab: {fileID: 0}
   PlaceholderModel:
     m_AssetGUID: 
@@ -22,7 +21,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   GenderedModels: []
-  Description: 'Riders who carry their heads or none — galloping, hollow names'
+  Description: "Riders who carry their heads or none \u2014 galloping, hollow names"
   DefaultProportions:
     Height: 1
     ArmLength: 1
@@ -35,6 +34,7 @@ MonoBehaviour:
   StartingAbilities: []
   StartingInventoryItems: []
   StartingEquipment: []
+  Category: Undead
   Naming:
     Phonology:
       Onsets:
@@ -82,7 +82,8 @@ MonoBehaviour:
       - oth
       - orr
       - ull
-      Description: 'Riders who carry their heads or none — galloping, hollow names'
+      Description: "Riders who carry their heads or none \u2014 galloping, hollow
+        names"
       Tags:
       - Gallop-names
       - Road-marks
@@ -94,7 +95,7 @@ MonoBehaviour:
     - the Dropped Head
     - the Coach Gate
     - Gallowsford
-    - 'the Black Mare''s Stable'
+    - the Black Mare's Stable
     - the Last Mile
     Titles:
       Honorific:
@@ -120,7 +121,7 @@ MonoBehaviour:
       - Rider of the Night Road
       - Crosser of Hoofbeat Bridge
       - Keeper of the Coach Gate
-      - 'Lord of the Black Mare''s Stable'
+      - Lord of the Black Mare's Stable
       - Warden of the Last Mile
       Legend:
       - Who Rode the Coach Off the Bridge
@@ -161,6 +162,8 @@ MonoBehaviour:
       - ash
       - waste
     AllowGenericOccupations: 0
+    Plural: Headless Riders
+    Adjective: Headless Rider
   BiomeAffinities:
   - BiomeID: -857237992
     Weight: 2
@@ -170,3 +173,5 @@ MonoBehaviour:
     Weight: 2
   - BiomeID: -2037808285
     Weight: 1
+  DamageImmunities: []
+  BreathesWater: 0

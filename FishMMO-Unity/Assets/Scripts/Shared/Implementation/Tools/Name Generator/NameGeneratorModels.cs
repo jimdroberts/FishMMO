@@ -133,10 +133,41 @@ namespace FishMMO.Shared.NameGeneration
 	}
 
 	/// <summary>POI category types for generation.</summary>
+	/// <remarks>
+	/// Also the KIND of a generated point of interest (<see cref="FishMMO.Shared.PointOfInterestKinds"/>), one map marker
+	/// type each. Append only: the ordinal is stored in scene namer settings and POI assets, so inserting renumbers them.
+	/// The first eleven predate the generator; the rest were appended with it (2026-10-10).
+	/// </remarks>
 	public enum POIType
 	{
 		Any, Landmark, Camp, Shrine, Tower, Bridge,
-		Clearing, Spring, Cave, Monument, Wreck
+		Clearing, Spring, Cave, Monument, Wreck,
+		// Water
+		Waterfall, Rapids, River, Lake, HotSpring, RiverMouth, Delta,
+		// Landforms
+		Peak, Pass, Gorge, Mesa, Butte, Valley, Island, Bay, Headland, NaturalArch, Sinkhole, Crater, DuneSea, SaltFlat, Glacier,
+		// Volcanic
+		Volcano, LavaLake, FumaroleField, ObsidianField,
+		// Swamp and wetland
+		SunkenTemple, DrownedVillage, WitchHut, StiltVillage, BogShrine, MangroveMaze, WispHollow,
+		// Terrain-shaped
+		Grotto, SeaCave, IceCave, LavaTube, Overhang,
+		// Wild sites
+		BanditCamp, HuntingLodge, LumberCamp, FishingCamp, MonsterDen, Nest,
+		// Sacred and arcane
+		RitualSite, StoneCircle, Temple, Monastery, FeyRing, LeyNexus, FallenStar, CorruptedGrove, Portal,
+		// The dead
+		Graveyard, Barrow, Crypt, Battlefield, Ossuary,
+		// Ruins and monuments
+		Ruins, RuinedTower, Statue, Obelisk, AncientRoad, AbandonedFarm, Hermitage, Oasis,
+		// Settlements and strongholds
+		Village, Town, City, Capital, Port, Keep, Castle, Fortress, TradingPost, Waystation, Mine, Quarry, Lighthouse,
+		// Coast and sea
+		SmugglersCove, PirateCove, CoralReef, SunkenShip, SunkenRuins, SunkenCity,
+		// Encounters and resources
+		DungeonEntrance, BossLair, OreVein, CrystalFormation, AncientTree, HerbGrove,
+		// Alien worlds
+		IceGeyserField, Cryovolcano, MethaneLake, ImpactBasin, TidalRift,
 	}
 
 	/// <summary>Phonology + vocabulary for a biome.</summary>
@@ -152,6 +183,12 @@ namespace FishMMO.Shared.NameGeneration
 		public string[] DungeonPrefixes { get; set; }
 		public string[] POISuffixes { get; set; }
 		public string[] Adjectives { get; set; }
+		/// <summary>
+		/// This biome's own words for point-of-interest kinds (lowercase <see cref="POIType"/> name →
+		/// words): a desert's spring is an Oasis, a swamp's shrine a Bog-altar. Preferred over the
+		/// grammar's global type words; a kind with no entry uses those.
+		/// </summary>
+		public IReadOnlyDictionary<string, string[]> POITypeWords { get; set; } = new Dictionary<string, string[]>();
 		public string Description { get; set; }
 	}
 

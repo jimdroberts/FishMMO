@@ -46,7 +46,8 @@ namespace FishMMO.Client
 			}
 		}
 
-		public void Update(in WeatherFrame frame, float shelter, WeatherAudioProfile profile, float deltaTime)
+		/// <param name="snap">The weather snapped to another moment (<see cref="WeatherClient.Snaps"/>): every loop goes straight to its level.</param>
+		public void Update(in WeatherFrame frame, float shelter, WeatherAudioProfile profile, float deltaTime, bool snap = false)
 		{
 			if (profile != boundProfile)
 			{
@@ -56,7 +57,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			float step = deltaTime / Mathf.Max(0.05f, profile.FadeSeconds);
+			float step = snap ? float.MaxValue : deltaTime / Mathf.Max(0.05f, profile.FadeSeconds);
 			foreach (KeyValuePair<WeatherAudioCue, (ChannelAudioSource channel, AudioSource source)> pair in loops)
 			{
 				WeatherAudioEntry entry = profile.Find(pair.Key);

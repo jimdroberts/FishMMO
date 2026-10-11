@@ -1,0 +1,110 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: Ruins - Temple
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 69
+  Weight: 0.5
+  DefaultBiomeWeight: 1
+  BiomeWeights:
+  - Biome: Desert
+    Weight: 1.5
+  - Biome: High Desert
+    Weight: 1.5
+  - Biome: Badlands
+    Weight: 1.5
+  - Biome: Salt Flat
+    Weight: 1.5
+  - Biome: Oasis
+    Weight: 1.5
+  - Biome: Scrubland
+    Weight: 1.5
+  - Biome: Arid
+    Weight: 1.5
+  - Biome: Dust Sea
+    Weight: 1.5
+  - Biome: Wasteland
+    Weight: 1.5
+  - Biome: Barren
+    Weight: 1.5
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 1
+  Large: 1
+  PadFlatness: 0.5
+  Style: stone
+  Layout: 1
+  Pieces:
+  - Tag: column
+    MinCount: 6
+    MaxCount: 10
+    MinDecay: 0.3
+    MaxDecay: 0.9
+    MinScale: 1
+    MaxScale: 1
+    Role: 2
+    Style: 
+  - Tag: altar
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0.2
+    MaxDecay: 0.5
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: 
+  - Tag: rubble
+    MinCount: 2
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: =RuinedStatue
+    MinCount: 0
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506032503357873
+  - rid: 4061506032503357874
+  - rid: 4061506032503357875
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506032503357873
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506032503357874
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506032503357875
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
