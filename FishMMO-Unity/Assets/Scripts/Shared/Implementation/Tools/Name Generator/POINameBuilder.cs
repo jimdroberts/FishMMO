@@ -25,6 +25,8 @@ namespace FishMMO.Shared.NameGeneration
 		public Func<string> Dungeon;
 		/// <summary>The phonology {Founder} names are drawn from; null when there is none.</summary>
 		public RacePhonology FounderPhonology;
+		/// <summary>The only words {Type} may be, when what stands there is known (<see cref="POIRequest.TypeWords"/>); null for any.</summary>
+		public string[] TypeWords;
 	}
 
 	/// <summary>
@@ -402,6 +404,11 @@ namespace FishMMO.Shared.NameGeneration
 		private static string TypeWord(BuildState state)
 		{
 			PlaceContext ctx = state.Ctx;
+			if (ctx.TypeWords != null && ctx.TypeWords.Length > 0)
+			{
+				// What is built there is known: only its own words (a timber bridge is no viaduct).
+				return GeneratorUtility.Pick(ctx.TypeWords, ctx.Rng);
+			}
 			string key = PlaceNameDefaults.KeyOf(ctx.Kind);
 			string[] global = GlobalTypeWords(ctx.Kind);
 			if (!state.BiomeFree && ctx.Biome.POITypeWords != null
@@ -511,6 +518,19 @@ namespace FishMMO.Shared.NameGeneration
 		}
 
 		// ── Roots ──────────────────────────────────────────────────────
+
+		/// <summary>
+		/// A place-name root from a biome's phonology, capitalised and smoothed as a {Root} slot is: what a region is named
+		/// from (GeneratedSceneNames). Empty when the phonology has no onsets.
+		/// </summary>
+		public static string PlaceRoot(BiomePhonology phonology, DeterministicRNG rng)
+		{
+			if (phonology?.Onsets == null || phonology.Onsets.Length == 0 || rng == null)
+			{
+				return string.Empty;
+			}
+			return GeneratorUtility.Capitalize(GeneratorUtility.Smooth(BuildBiomeRoot(phonology, rng).ToLowerInvariant()));
+		}
 
 		/// <summary>One or two syllables of the biome's phonology, as the old landmark names were built.</summary>
 		private static string BuildBiomeRoot(BiomePhonology ph, DeterministicRNG rng)

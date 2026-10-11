@@ -15,6 +15,8 @@
 // ── FishMMO edit: the terrain's own lighting, for the ground a rock's base and crevices render (FishGroundContactLit.hlsl). ──
 #include "FishGroundLighting.hlsl"
 #include "FishGroundContactLit.hlsl"
+// ── FishMMO edit: what years do to a building (the structure kit's materials, _FishStructure). ──
+#include "FishStructureWeathering.hlsl"
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 
 #if defined(LOD_FADE_CROSSFADE)
@@ -307,6 +309,22 @@ void LitPassFragment(
     FishRockCrevice(inputData.positionWS, input.fishRockOrigin, (half3)input.normalWS, fishSoil, fishShade);
     surfaceData.albedo *= fishShade;
     surfaceData.occlusion *= fishShade;
+    bool fishStructure = _FishStructure > 0.5h;
+    if (fishStructure)
+    {
+        /* A wall is not a rock: the terrain unfolded half a metre up it read as grass climbing the wall. Only its very
+         * foot takes the ground (the plinth set into the earth); above, the weathering's damp and splash. */
+        half fishFoot = 1.0h - (half)smoothstep(0.0, 0.18, input.fishContact);
+        fishGroundWeight = min(fishGroundWeight, fishFoot * 0.9h);
+        fishSoil = 0.0h;
+        FishStructureWeather(inputData.positionWS, (half3)input.normalWS, input.fishContact, input.fishRockOrigin,
+            surfaceData.albedo, surfaceData.smoothness, surfaceData.occlusion);
+        if (_FishStructure > 1.5h)
+        {
+            // A pane: lit at night.
+            surfaceData.emission += FishStructureGlow(inputData.positionWS, input.fishRockOrigin);
+        }
+    }
     if (fishSoil > fishGroundWeight)
     {
         if (!fishHasGround)
@@ -332,7 +350,8 @@ void LitPassFragment(
 #if defined(FISH_INDIRECT_INSTANCED)
     // ── FishMMO edit: distant terrain rocks settle into the landscape (FishGroundColour.hlsl). Only the
     // GPU-instanced twin (terrain rocks, boulders, formations, cliff rocks): buildings and props drawn with
-    // this shader keep their own colour at any distance. ──
+    // this shader keep their own colour at any distance (the structure kit's are drawn by this twin too: flagged). ──
+    if (!fishStructure)
     {
         float distanceFar, distanceFlatten;
         float3 distanceTarget;

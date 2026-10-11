@@ -225,6 +225,39 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>True where the tiles have a hole at (east, north).</summary>
+		/// <summary>
+		/// <see cref="HoleQuery(Terrain[,], TerrainTilePlan)"/> widened by <paramref name="margin"/> metres: a canyon wall stands
+		/// in its hole but its bed juts past it, so a site or a way kept only off the hole could still be under the wall.
+		/// </summary>
+		public static Func<float, float, bool> HoleQuery(Terrain[,] terrains, TerrainTilePlan plan, float margin)
+		{
+			Func<float, float, bool> hole = HoleQuery(terrains, plan);
+			if (hole == null || margin <= 0f)
+			{
+				return hole;
+			}
+			return (east, north) =>
+			{
+				if (hole(east, north))
+				{
+					return true;
+				}
+				for (int ring = 1; ring <= 2; ring++)
+				{
+					float r = margin * ring / 2f;
+					for (int k = 0; k < 8; k++)
+					{
+						float a = k * (Mathf.PI / 4f);
+						if (hole(east + r * Mathf.Cos(a), north + r * Mathf.Sin(a)))
+						{
+							return true;
+						}
+					}
+				}
+				return false;
+			};
+		}
+
 		public static Func<float, float, bool> HoleQuery(Terrain[,] terrains, TerrainTilePlan plan)
 		{
 			int countX = plan.CountX, countZ = plan.CountZ;

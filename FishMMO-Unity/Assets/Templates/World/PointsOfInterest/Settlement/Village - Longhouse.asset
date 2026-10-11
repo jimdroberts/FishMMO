@@ -22,8 +22,6 @@ MonoBehaviour:
     Weight: 2.5
   - Biome: Snow
     Weight: 2.5
-  - Biome: Periglacial
-    Weight: 2.5
   - Biome: Glacier
     Weight: 2.5
   - Biome: Ice Sheet
@@ -40,8 +38,6 @@ MonoBehaviour:
     Weight: 0.4
   - Biome: Jungle
     Weight: 0.4
-  - Biome: Rainforest
-    Weight: 0.4
   - Biome: Bamboo Forest
     Weight: 0.4
   - Biome: Forest Ruins
@@ -49,8 +45,6 @@ MonoBehaviour:
   - Biome: Jungle Ruins
     Weight: 0.4
   - Biome: Jungle Temple
-    Weight: 0.4
-  - Biome: Temperate
     Weight: 0.4
   RaceCategories:
   - Humanoid
@@ -111,17 +105,17 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357454
-  - rid: 4061506032503357455
-  - rid: 4061506032503357456
-  - rid: 4061506032503357457
-  - rid: 4061506032503357458
-  - rid: 4061506032503357459
-  - rid: 4061506032503357460
+  - rid: 4061506061917749698
+  - rid: 4061506061917749699
+  - rid: 4061506061917749700
+  - rid: 4061506061917749701
+  - rid: 4061506061917749702
+  - rid: 4061506061917749703
+  - rid: 4061506061917749704
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357454
+    - rid: 4061506061917749698
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -132,26 +126,26 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings:
-        - {x: -3, y: 2, z: 3.8836575}
-        - {x: 3, y: 1.5, z: 3.8836575}
-    - rid: 4061506032503357455
+        - {x: -3, y: 2, z: 3.8168495}
+        - {x: 3, y: 1.5, z: 3.8168495}
+    - rid: 4061506061917749699
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357456
+    - rid: 4061506061917749700
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503357457
+    - rid: 4061506061917749701
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: -3, y: 3.8836575}
-    - rid: 4061506032503357458
+        Offset: {x: -3, y: 3.8168495}
+    - rid: 4061506061917749702
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: 3, y: 3.8836575}
-    - rid: 4061506032503357459
+        Offset: {x: 3, y: 3.8168495}
+    - rid: 4061506061917749703
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -159,7 +153,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506032503357460
+    - rid: 4061506061917749704
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 4

@@ -1054,6 +1054,95 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>What stands at a scene position.</summary>
 		public WaterKind KindAt(float east, float north) => Grid != null ? Grid.KindAt(east, north) : WaterKind.None;
 
+		/// <summary>How far past a river's banks <see cref="RiverSurfaceNear"/> still answers, metres.</summary>
+		public const float RiverSurfaceReachMetres = 3f;
+
+		private const float RiverIndexCell = 32f;
+		private Dictionary<long, List<(int river, int point)>> riverIndex;
+		private readonly object riverIndexLock = new object();
+
+		/// <summary>
+		/// A perennial river's surface where its centre line comes nearest to a scene position, if that is within its
+		/// banks and <see cref="RiverSurfaceReachMetres"/>; negative infinity otherwise. Smooth along the river, unlike
+		/// <see cref="SurfaceAt"/>, which takes the highest of the grid's samples about a point: down a falling river that
+		/// steps at every sample, and the bed paint up the banks came out as a row of teeth (Jim, 2026-10-11). Safe from
+		/// the scatter's worker threads.
+		/// </summary>
+		public float RiverSurfaceNear(float east, float north)
+		{
+			Dictionary<long, List<(int river, int point)>> index = RiverIndex();
+			long key = ((long)Mathf.FloorToInt(east / RiverIndexCell) << 32) ^ (uint)Mathf.FloorToInt(north / RiverIndexCell);
+			if (!index.TryGetValue(key, out List<(int river, int point)> near))
+			{
+				return float.NegativeInfinity;
+			}
+			float nearest = float.PositiveInfinity, level = float.NegativeInfinity;
+			foreach ((int r, int i) in near)
+			{
+				RiverPath river = Rivers[r];
+				float ax = river.X[i], az = river.Z[i], bx = river.X[i + 1], bz = river.Z[i + 1];
+				float abx = bx - ax, abz = bz - az;
+				float length2 = abx * abx + abz * abz;
+				float t = length2 > 1e-8f ? Mathf.Clamp01(((east - ax) * abx + (north - az) * abz) / length2) : 0f;
+				float dx = ax + abx * t - east, dz = az + abz * t - north;
+				float distance = Mathf.Sqrt(dx * dx + dz * dz);
+				float half = 0.5f * Mathf.Lerp(river.Width[i], river.Width[i + 1], t);
+				if (distance <= half + RiverSurfaceReachMetres && distance < nearest)
+				{
+					nearest = distance;
+					level = Mathf.Lerp(river.Surface[i], river.Surface[i + 1], t);
+				}
+			}
+			return level;
+		}
+
+		/// <summary>Every perennial river segment filed in 32 m cells within its banks and the reach; built once, under a lock.</summary>
+		private Dictionary<long, List<(int river, int point)>> RiverIndex()
+		{
+			lock (riverIndexLock)
+			{
+				if (riverIndex != null)
+				{
+					return riverIndex;
+				}
+				var index = new Dictionary<long, List<(int, int)>>();
+				for (int r = 0; r < Rivers.Count; r++)
+				{
+					RiverPath river = Rivers[r];
+					if (river == null || !river.Perennial || river.Count < 2 || river.Surface == null || river.Width == null)
+					{
+						continue;
+					}
+					for (int i = 0; i + 1 < river.Count; i++)
+					{
+						float margin = 0.5f * Mathf.Max(river.Width[i], river.Width[i + 1]) + RiverSurfaceReachMetres;
+						int x0 = Mathf.FloorToInt((Mathf.Min(river.X[i], river.X[i + 1]) - margin) / RiverIndexCell);
+						int x1 = Mathf.FloorToInt((Mathf.Max(river.X[i], river.X[i + 1]) + margin) / RiverIndexCell);
+						int z0 = Mathf.FloorToInt((Mathf.Min(river.Z[i], river.Z[i + 1]) - margin) / RiverIndexCell);
+						int z1 = Mathf.FloorToInt((Mathf.Max(river.Z[i], river.Z[i + 1]) + margin) / RiverIndexCell);
+						for (int z = z0; z <= z1; z++)
+						{
+							for (int x = x0; x <= x1; x++)
+							{
+								long key = ((long)x << 32) ^ (uint)z;
+								if (!index.TryGetValue(key, out List<(int, int)> list))
+								{
+									list = new List<(int, int)>();
+									index[key] = list;
+								}
+								list.Add((r, i));
+							}
+						}
+					}
+				}
+				riverIndex = index;
+				return index;
+			}
+		}
+
+		/// <summary>A lake's level over a scene position or the grid samples about it; negative infinity where none.</summary>
+		public float LakeSurfaceNear(float east, float north) => Grid != null ? Grid.LakeSurfaceNear(east, north) : float.NegativeInfinity;
+
 		/// <summary>
 		/// How much of a scene position is a river's bar, 0 … 1 over a round kernel about it, and how
 		/// sandy (1) or gravelly (0) the bar there is: what the sediment paint reads.

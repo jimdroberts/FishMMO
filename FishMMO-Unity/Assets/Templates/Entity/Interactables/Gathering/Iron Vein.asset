@@ -18,7 +18,8 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: Rust-red iron ore, found wherever the rock is hard.
+  Description: "Rust-red iron ore, found wherever the rock is hard \u2014 and as
+    black sand on the beach."
   Drops:
   - Item: {fileID: 11400000, guid: ee9626c65710a06ddbf39a0c10ceab74, type: 2}
     MinAmount: 1

@@ -126,6 +126,11 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed class StructureDraft
 	{
 		public readonly List<StructureSolid> Solids = new List<StructureSolid>();
+		/// <summary>Where the piece gives off smoke, fire or light, in its own frame (<see cref="StructurePieces.EmittersOf"/>).</summary>
+		public readonly List<(Vector3 at, SceneEmitterKind kind)> Emitters = new List<(Vector3, SceneEmitterKind)>();
+
+		/// <summary>Marks where the piece gives off smoke, fire or light.</summary>
+		public void Emit(Vector3 at, SceneEmitterKind kind) => Emitters.Add((at, kind));
 		public readonly StructurePiece Piece;
 		public readonly int Variant;
 		public readonly int Lod;
@@ -229,6 +234,7 @@ namespace FishMMO.Shared.WorldDesign
 			"fire", "storage", "banner", "bedding", "palisade", "gate", "standing-stone", "altar", "shrine", "statue",
 			"column", "grave", "crypt", "bones", "fence", "house", "tower", "keep", "stilt", "well", "lighthouse",
 			"market", "dock", "bridge", "rubble", "monument", "military", "water", "underwater",
+			"church", "temple", "tavern", "smithy", "stable", "notice", "farm", "clutter", "town", "light",
 		};
 
 		private static List<StructurePiece> all;
@@ -245,6 +251,8 @@ namespace FishMMO.Shared.WorldDesign
 					AddSacred(list);
 					AddDead(list);
 					AddBuildings(list);
+					AddTown(list);
+					AddClutter(list);
 					AddRuins(list);
 					all = list;
 				}
@@ -286,6 +294,56 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		// ── Building ──────────────────────────────────────────────────
+
+		private static readonly Dictionary<(string, int), IReadOnlyList<(Vector3 at, SceneEmitterKind kind)>> emitters =
+			new Dictionary<(string, int), IReadOnlyList<(Vector3, SceneEmitterKind)>>();
+
+		/// <summary>
+		/// Where a variant gives off smoke, fire or light (a chimney's top, a fire's bed, a forge, a lantern's pane), in its
+		/// own frame: what the cut writes into the scene so the client draws the smoke and lights the lamps. Built once.
+		/// </summary>
+		public static IReadOnlyList<(Vector3 at, SceneEmitterKind kind)> EmittersOf(StructurePiece piece, int variant)
+		{
+			if (piece == null || variant < 0 || variant >= piece.Variants)
+			{
+				return Array.Empty<(Vector3, SceneEmitterKind)>();
+			}
+			lock (emitters)
+			{
+				if (!emitters.TryGetValue((piece.Id, variant), out IReadOnlyList<(Vector3, SceneEmitterKind)> list))
+				{
+					var draft = new StructureDraft(piece, variant, 0, DefaultSeed);
+					piece.Builder(draft);
+					list = draft.Emitters.ToArray();
+					emitters[(piece.Id, variant)] = list;
+				}
+				return list;
+			}
+		}
+
+		/// <summary>The piece and variant a generated prefab's name names ("Structure_Tavern_1_Mossy"), or false.</summary>
+		public static bool TryParsePrefab(string prefabName, out StructurePiece piece, out int variant)
+		{
+			piece = null;
+			variant = 0;
+			if (string.IsNullOrEmpty(prefabName) || !prefabName.StartsWith(Prefix, StringComparison.Ordinal))
+			{
+				return false;
+			}
+			string rest = prefabName.Substring(Prefix.Length);
+			// The id may itself hold underscores in future; the variant is the first all-digit part after it.
+			string[] parts = rest.Split('_');
+			for (int i = 1; i < parts.Length; i++)
+			{
+				if (int.TryParse(parts[i], out int v))
+				{
+					piece = Find(string.Join("_", parts, 0, i));
+					variant = v;
+					return piece != null && v >= 0 && v < piece.Variants;
+				}
+			}
+			return false;
+		}
 
 		/// <summary>A level of a variant as solids.</summary>
 		public static List<StructureSolid> BuildSolids(StructurePiece piece, int variant, int lod, int seed)

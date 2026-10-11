@@ -71,6 +71,9 @@ namespace FishMMO.TestHarness.World
 		private Slider deepSnowSlider;
 
 		private readonly List<Button> bodyButtons = new List<Button>();
+		/// <summary>The scenes cut on the body last clicked, to travel to (WorldSimController.Travel).</summary>
+		private VisualElement sceneRow;
+		private WorldBody listedBody;
 		private readonly List<Button> tierButtons = new List<Button>();
 		private readonly List<(Button button, SkyProfile profile)> skyButtons = new List<(Button, SkyProfile)>();
 		/// <summary>Snow, wet, ash and sand, in that order.</summary>
@@ -511,17 +514,36 @@ namespace FishMMO.TestHarness.World
 
 		private void BuildSkyTab(VisualElement page)
 		{
-			page.Add(Heading("Where", "The body you stand on and where on it. Latitude sets the sun's path and the wind belt; longitude sets the local hour."));
+			page.Add(Heading("Where", Controller.InCutScene
+				? "The body you stand on and where on it. This is a cut scene, so its ground is its body's: another body takes you to a scene cut on it (pick one below); a body with no cut scene yet is greyed out."
+				: "The body you stand on and where on it. Latitude sets the sun's path and the wind belt; longitude sets the local hour. A body's cut scenes, listed below, take you onto its real ground."));
 			var bodies = Row();
 			foreach (WorldBody body in Controller.Bodies)
 			{
 				WorldBody captured = body;
 				Button button = SmallButton(body.ResolvedName, () =>
 				{
-					Controller.Body = captured;
+					if (!Controller.InCutScene)
+					{
+						// The neutral bed stands on any body.
+						Controller.Body = captured;
+					}
+					listedBody = captured;
 					RefreshBodyButtons();
+					RefreshSceneRow();
 					RefreshFacts();
 				});
+				int cut = WorldSimController.ScenesOn(body).Count;
+				if (Controller.InCutScene && cut == 0)
+				{
+					// Nowhere to stand on it: no scene is cut there yet (Jim, 2026-10-11).
+					button.SetEnabled(false);
+					button.tooltip = $"No scene is cut on {body.ResolvedName} yet. Cut one from the World Atlas to stand there.";
+				}
+				else
+				{
+					button.tooltip = cut == 0 ? $"{body.ResolvedName}: no cut scene yet; the bed stands on it here." : $"{body.ResolvedName}: {cut} cut scene(s).";
+				}
 				bodyButtons.Add(button);
 				bodies.Add(button);
 			}
@@ -530,6 +552,10 @@ namespace FishMMO.TestHarness.World
 				bodies.Add(Small("No solar system is loaded. Create the example system on the Solar System page."));
 			}
 			page.Add(bodies);
+			sceneRow = Row();
+			page.Add(sceneRow);
+			listedBody = Controller.Body;
+			RefreshSceneRow();
 			bodyFacts = Well(string.Empty);
 			page.Add(bodyFacts);
 
@@ -993,11 +1019,42 @@ namespace FishMMO.TestHarness.World
 			}
 		}
 
+		/// <summary>The scenes cut on the listed body: each travels there; the one stood in is marked and does nothing.</summary>
+		private void RefreshSceneRow()
+		{
+			if (sceneRow == null)
+			{
+				return;
+			}
+			sceneRow.Clear();
+			IReadOnlyList<WorldSimController.CutScene> scenes = WorldSimController.ScenesOn(listedBody);
+			if (listedBody == null || scenes.Count == 0)
+			{
+				if (listedBody != null && !Controller.InCutScene)
+				{
+					sceneRow.Add(Small($"No scene is cut on {listedBody.ResolvedName} yet: the bed stands on it over its own test ground."));
+				}
+				return;
+			}
+			sceneRow.Add(Small($"Scenes on {listedBody.ResolvedName}:"));
+			string here = Controller.gameObject.scene.name;
+			foreach (WorldSimController.CutScene scene in scenes)
+			{
+				WorldSimController.CutScene captured = scene;
+				Button button = SmallButton(scene.Name, () => Controller.Travel(captured));
+				bool current = scene.Name == here;
+				button.EnableInClassList(ActiveClass, current);
+				button.SetEnabled(!current);
+				button.tooltip = current ? "You are here." : $"Travel to {scene.Name}, at this same moment.";
+				sceneRow.Add(button);
+			}
+		}
+
 		private void RefreshBodyButtons()
 		{
 			for (int i = 0; i < bodyButtons.Count && i < Controller.Bodies.Count; i++)
 			{
-				bodyButtons[i].EnableInClassList(ActiveClass, Controller.Bodies[i] == Controller.Body);
+				bodyButtons[i].EnableInClassList(ActiveClass, Controller.Bodies[i] == Controller.Body || Controller.Bodies[i] == listedBody);
 			}
 		}
 

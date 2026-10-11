@@ -174,6 +174,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float[] PathEarthMap = Array.Empty<float>();
 		public float[] PathRoadMap = Array.Empty<float>();
+		/// <summary>Where the sites' pieces give off smoke, fire and light (chimneys, fires, forges, lanterns), as laid.</summary>
+		public List<SceneEmitter> Emitters = new List<SceneEmitter>();
 
 		/// <summary>The record with this id, or null.</summary>
 		public PointOfInterestRecord Find(int id)

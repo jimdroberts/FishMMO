@@ -155,6 +155,9 @@ Shader "FishMMO/Weather/Volcanic Plume"
                     centre = vent + float3(axis.x + offset.x, s * _PlumeLean.z + 0.3 * _PlumeRise.y * r.z, axis.y + offset.y);
                     size = 1.6 * width + 0.6;
                     alpha = smoothstep(0.0, 0.06, s) * (1.0 - smoothstep(0.35, 1.0, s)) * paced * _PlumeLean.w;
+                    // FishMMO edit: a fire's smoke glows from below near its bed (HearthSmoke: _PlumeColor.a > 0); steam
+                    // passes 0 and is unchanged.
+                    glow = pow(saturate(1.0 - s * 5.0), 2.0) * paced;
                 }
                 else if (population == 5)
                 {

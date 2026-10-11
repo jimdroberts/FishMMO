@@ -5,6 +5,9 @@
 #include "FishWeather.hlsl"
 
 float4 _FishSkyZenith;      // rgb
+// x 1 while the sky reflection probe captures the sky (SkySystem.OnBeginCamera), y the sky's light through the cloud
+// (SkySystem.CloudSkyThrough, as the ambient takes it). What the ground reflects is the sky the ground sees.
+float4 _FishSkyCapture;
 float4 _FishSkyHorizon;     // rgb
 float4 _FishSkyGround;      // rgb
 float4 _FishSkyFogColor;    // rgb, a = how much the horizon melts into fog

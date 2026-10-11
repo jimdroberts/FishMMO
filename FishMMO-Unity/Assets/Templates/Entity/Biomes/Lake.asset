@@ -181,7 +181,7 @@ MonoBehaviour:
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
-  TerrainProcess: {fileID: 0}
+  TerrainProcess: {fileID: 11400000, guid: cc5ba8f95b95c207884b8784d8ef3c7d, type: 2}
   mainTextureLayer:
     terrainLayer: {fileID: 8574412962073106934, guid: 41f6eb1d8712e8d73accf8b30ec56aca,
       type: 2}
@@ -836,6 +836,122 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
+    - stableGuid: e466bfc166334aad99851eecaf3367c5
+      enableSpawning: 1
+      ruleName: Detail_Pebbles_Grey
+      prefabs:
+      - {fileID: 9091986924529341410, guid: e7e5ae42e23e436a881abe7e07dc62a0, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 5
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.45, y: 1.75}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 41598
+      clusterMetres: 2
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 76166ad33c53459a
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 60186a23cc784ca9abcf319702d93093
+      enableSpawning: 1
+      ruleName: Detail_Rocks_Grey
+      prefabs:
+      - {fileID: 6429919493837588000, guid: 5ab08d91d26e259328288439498bdbd2, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1.2
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.45, y: 1.75}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 47495
+      clusterMetres: 3
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 18c6c04dd240fddd
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
   roadTextureLayer:
     terrainLayer: {fileID: 0}
     albedoTexture: {fileID: 0}

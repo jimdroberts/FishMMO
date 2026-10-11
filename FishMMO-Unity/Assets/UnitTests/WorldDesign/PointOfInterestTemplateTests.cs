@@ -540,17 +540,21 @@ namespace FishMMO.UnitTests.WorldDesign
 			PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Linear, 10f, (PointOfInterestSlotRole.Span, SpanSize, 4f, 1));
 			request.SpanHalf = 13f;
 			List<PointOfInterestLayoutPiece> spans = PointOfInterestLayouts.Place(request, new DeterministicRNG(1));
-			Assert.That(spans.Count, Is.EqualTo(7), "26 m of crossing in 4 m spans");
+			// 26 m in modules of 4: six, each fitted to 4.33 m, so the deck ends exactly at the crossing's ends (2026-10-11:
+			// whole modules overshot by most of one, over the path).
+			Assert.That(spans.Count, Is.EqualTo(Mathf.RoundToInt(26f / 4f)));
+			float module = 26f / spans.Count;
 			spans.Sort((p, q) => p.Offset.y.CompareTo(q.Offset.y));
-			Assert.That(spans[0].Offset.y - 2f, Is.LessThanOrEqualTo(-13f));
-			Assert.That(spans[spans.Count - 1].Offset.y + 2f, Is.GreaterThanOrEqualTo(13f));
+			Assert.That(spans[0].Offset.y - module * 0.5f, Is.EqualTo(-13f).Within(1e-3f));
+			Assert.That(spans[spans.Count - 1].Offset.y + module * 0.5f, Is.EqualTo(13f).Within(1e-3f));
 			for (int i = 0; i < spans.Count; i++)
 			{
 				Assert.That(spans[i].Offset.x, Is.EqualTo(0f), "on the heading, across the river");
 				Assert.That(spans[i].Yaw, Is.EqualTo(0f), "a span runs along its z, as the heading does");
+				Assert.That(spans[i].Footprint.y, Is.EqualTo(module).Within(1e-4f), "fitted to its share");
 				if (i > 0)
 				{
-					Assert.That(spans[i].Offset.y - spans[i - 1].Offset.y, Is.EqualTo(4f).Within(1e-4f), "end to end");
+					Assert.That(spans[i].Offset.y - spans[i - 1].Offset.y, Is.EqualTo(module).Within(1e-4f), "end to end");
 				}
 			}
 		}

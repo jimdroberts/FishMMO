@@ -280,6 +280,7 @@ namespace FishMMO.Client
 				{
 					ReleaseAll();
 				}
+				GrassSwardMap.Clear();
 				return;
 			}
 			if (renderer == null && !rendererTried)
@@ -379,6 +380,12 @@ namespace FishMMO.Client
 			}
 			ResolveArrays();
 			renderer.Publish(settings, types, grassDistance);
+			// The ground under the blades takes their roots' shade (it glowed between them, lit as open ground).
+			Camera eye = Camera.main;
+			if (eye != null)
+			{
+				GrassSwardMap.Update(settings, grassDistance, grassTerrains, eye.transform.position);
+			}
 			TerrainInstancingProbe.SyncMs += TerrainInstancingProbe.Now - start;
 		}
 
@@ -526,6 +533,7 @@ namespace FishMMO.Client
 			}
 			taken.Clear();
 			grassTerrains.Clear();
+			GrassSwardMap.Clear();
 			none.Clear();
 			types.Clear();
 			typesByPrefab.Clear();

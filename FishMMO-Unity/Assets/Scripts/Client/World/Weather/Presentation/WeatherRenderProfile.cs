@@ -586,6 +586,10 @@ namespace FishMMO.Client
 		[Tooltip("FishMMO/Weather/Air Motes: dust in the light, pollen and seed fluff, diamond dust, fireflies and marsh lights round the camera (AirMotesField). Referenced here so a client build includes it; empty, it is found by name, which only works where something else ships it (the editor).")]
 		public Shader AirMotesShader;
 
+		[Header("Site embers")]
+		[Tooltip("FishMMO/World/Site Embers: sparks off the campfires, cooking fires and forges near the camera (SiteEmbers). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader SiteEmbersShader;
+
 		[Header("Falling leaves")]
 		[Tooltip("FishMMO/Weather/Falling Leaves: leaves coming down under and downwind of the trees near the camera, mostly in autumn (FallingLeavesPresenter). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader FallingLeavesShader;

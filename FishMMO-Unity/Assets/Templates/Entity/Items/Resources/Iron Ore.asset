@@ -32,4 +32,5 @@ MonoBehaviour:
   Attributes: []
   Family: Ore
   Tier: 1
-  Description: Rust-red iron ore, found wherever the rock is hard.
+  Description: "Rust-red iron ore, found wherever the rock is hard \u2014 and as
+    black sand on the beach."

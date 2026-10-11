@@ -292,7 +292,7 @@ namespace FishMMO.Client
 					continue;
 				}
 				bool seaNear = kind.NeedsSea && (seaHere && wet || Near(world, home, kind.Behaviour == AmbientBehaviour.Scurry ? 20f : 160f, true));
-				bool freshNear = kind.NeedsFreshWater && (kind.Behaviour == AmbientBehaviour.Paddle || Near(world, home, 10f, false));
+				bool freshNear = kind.NeedsFreshWater && (kind.Behaviour == AmbientBehaviour.Paddle || (wet && !seaHere) || Near(world, home, 10f, false));
 				bool treesNear = perches != null && perches.Count > 0;
 				world.Habitat(new Vector3(home.x, ground, home.z), out AmbientHabitat habitat, out float temperature);
 				float weight = AmbientGating.HabitatWeight(kind, habitat, temperature, seaNear, freshNear, treesNear);
@@ -377,6 +377,9 @@ namespace FishMMO.Client
 				case AmbientBehaviour.Hawk:
 					Bats(group, kind, ref frame, into);
 					break;
+				case AmbientBehaviour.Transit:
+					Transit(group, kind, ref frame, into);
+					break;
 				default:
 					for (int m = 0; m < group.Count; m++)
 					{
@@ -451,6 +454,10 @@ namespace FishMMO.Client
 				case AmbientShape.Raptor: period = 30f; duty = 0.1f; break;
 				case AmbientShape.Vulture: period = 45f; duty = 0.05f; break;
 				case AmbientShape.Bat: period = 1.3f; duty = 0.85f; break;
+				case AmbientShape.Owl: period = 3f; duty = 0.55f; break;      // a few deep soft beats, a glide
+				case AmbientShape.Goose: period = 2f; duty = 1f; break;       // steady rowing the whole way
+				case AmbientShape.Butterfly: period = 1.1f; duty = 0.65f; break; // a fit of beats, a glide on open wings
+				case AmbientShape.Dragonfly: period = 2.5f; duty = 1f; break;
 				default: period = 2f; duty = 0.9f; break;
 			}
 		}
@@ -763,7 +770,8 @@ namespace FishMMO.Client
 			/* A bird up in a crown 10–30 m over the path is not seen, and one in the grass barely: the open ground and the
 			 * flights between are where the eye finds them (Jim, 2026-10-10: "still rarely seeing birds"), so most episodes
 			 * are on the ground and they are short, so a bird is often on the wing. */
-			float treeShare = kind.Shape == AmbientShape.Crow ? 0.3f : 0.35f;
+			// An owl hunts from a perch and drops onto the grass now and then; it does not forage about on foot.
+			float treeShare = kind.Shape == AmbientShape.Owl ? 0.75f : kind.Shape == AmbientShape.Crow ? 0.3f : 0.35f;
 			if (perches != null && perches.Count > 0 && (shelter > 0.5f || Unit(eh) < treeShare))
 			{
 				int first = (int)(Unit(Mix(eh ^ 0x1u)) * perches.Count) % perches.Count;
@@ -846,7 +854,7 @@ namespace FishMMO.Client
 			double length = g.Episode * Mathf.Lerp(0.8f, 1.2f, Unit(Mix(own ^ 0x30u)));
 			long episode = EpisodeAt(t, length, Unit(Mix(own ^ 0x31u)), out double start);
 			float tau = (float)(t - start), len = (float)length;
-			float shelter = AmbientGating.Shelter(f.Conditions);
+			float shelter = AmbientGating.Shelter(kind, f.Conditions);
 			float size = g.Length * Mathf.Lerp(0.88f, 1.12f, Unit(Mix(own ^ 0x32u)));
 			if (!BirdSpot(g, kind, own, episode, ref f, shelter, out Vector3 spot, out bool tree))
 			{
@@ -1082,6 +1090,84 @@ namespace FishMMO.Client
 			}
 		}
 
+		// ── Birds passing over ────────────────────────────────────────
+
+		/// <summary>
+		/// A group passing over. In a share of its episodes (<see cref="AmbientCreatureKind.PassShare"/>) it crosses the sky
+		/// over its home in a straight line on a heading of that episode's own, from one edge of its circle to the other and
+		/// offset to one side by up to half its radius; the crossing comes somewhere in the episode, and the rest of it the
+		/// sky is empty of them. A V keeps its shape, each bird a little out of step with the one ahead; anything else
+		/// straggles along the line.
+		/// </summary>
+		private static void Transit(in AmbientGroup g, AmbientCreatureKind kind, ref Frame f, List<AmbientInstance> into)
+		{
+			double t = f.Seconds;
+			long episode = EpisodeAt(t, g.Episode, Unit(Mix(g.Seed ^ 0x60u)), out double start);
+			uint eh = EpisodeSeed(g.Seed, episode);
+			if (Unit(eh) >= kind.PassShare)
+			{
+				return;
+			}
+			float r = Mathf.Max(20f, g.Radius);
+			float speed = Mathf.Max(1f, kind.Speed) * Mathf.Lerp(0.9f, 1.1f, Unit(Mix(eh ^ 0x1u)));
+			// A chord of its circle, so the whole crossing stays within the group's reach.
+			float offset = (Unit(Mix(eh ^ 0x4u)) * 2f - 1f) * r * 0.5f;
+			float half = Mathf.Sqrt(r * r - offset * offset);
+			float crossing = 2f * half / speed;
+			float slack = Mathf.Max(0f, (float)g.Episode - crossing);
+			float tau = (float)(t - start) - slack * Unit(Mix(eh ^ 0x2u));
+			if (tau < 0f || tau > crossing)
+			{
+				return;
+			}
+			float heading = Unit(Mix(eh ^ 0x3u)) * Mathf.PI * 2f;
+			var dir = new Vector3(Mathf.Cos(heading), 0f, Mathf.Sin(heading));
+			var side = new Vector3(dir.z, 0f, -dir.x);
+			// A slow weave about the line: nothing flies a ruled straight.
+			float weave = r * 0.03f * Mathf.Sin(Angle(t, 0.05 + 0.04 * Unit(Mix(eh ^ 0x5u)), Unit(Mix(eh ^ 0x6u)) * 6.28f));
+			Vector3 lead = g.Home + side * (offset + weave) + dir * (tau * speed - half);
+			// Its height over home, and never under most of it over the ground beneath (a skein clears a ridge).
+			float altitude = g.Altitude * Mathf.Lerp(0.85f, 1.15f, Unit(Mix(eh ^ 0x7u)));
+			float floor = Surface(f.World, lead.x, lead.z, out float under, out _) ? under : g.Home.y;
+			lead.y = Mathf.Max(g.Home.y + altitude, floor + altitude * 0.6f);
+			float u = tau / crossing;
+			float visible = f.Visible * Mathf.SmoothStep(0f, 1f, Mathf.Min(u, 1f - u) / 0.08f);
+			Quaternion flying = Flight(dir * speed, 0f);
+
+			Rhythm(kind.Shape, out float period, out float duty);
+			// Which arm of a V is the long one this time.
+			float longArm = Unit(Mix(eh ^ 0x8u)) < 0.5f ? -1f : 1f;
+			int left = 0, right = 0;
+			for (int m = 0; m < g.Count; m++)
+			{
+				uint own = MemberSeed(g.Seed, m);
+				float size = g.Length * Mathf.Lerp(0.9f, 1.1f, Unit(Mix(own ^ 0x61u)));
+				Vector3 at;
+				if (kind.Vee)
+				{
+					// The leader at the point, the rest down two arms about 35° off the line (one arm often the longer),
+					// each riding the upwash of the bird ahead and bobbing a little out of step with it.
+					float arm = m == 0 ? 0f : Unit(Mix(own ^ 0x62u)) < 0.6f ? longArm : -longArm;
+					int rank = m == 0 ? 0 : arm < 0f ? ++left : ++right;
+					float spacing = kind.Spread * Mathf.Lerp(0.9f, 1.15f, Unit(Mix(own ^ 0x63u)));
+					at = lead - dir * (rank * spacing * 0.82f) + side * (arm * rank * spacing * 0.58f)
+						+ Vector3.up * (0.3f * Mathf.Sin(Angle(t, 0.45, Unit(own) * 6.28f)) - rank * 0.12f)
+						+ dir * (0.35f * Mathf.Sin(Angle(t, 0.3, Unit(Mix(own ^ 0x64u)) * 6.28f)));
+				}
+				else
+				{
+					// A straggle: strung out behind the first, a little to either side and up and down.
+					Vector3 d = Disk(Mix(own ^ 0x65u), kind.Spread);
+					float trail = m * kind.Spread * (0.6f + 0.8f * Unit(Mix(own ^ 0x66u)));
+					at = lead - dir * trail + side * d.x
+						+ Vector3.up * (d.z * 0.5f + 0.25f * kind.Spread * Mathf.Sin(Angle(t, 0.35 + 0.3 * Unit(Mix(own ^ 0x67u)), Unit(own) * 6.28f)));
+				}
+				float flap = FlapStrength(t, period * Mathf.Lerp(0.85f, 1.15f, Unit(Mix(own ^ 0x68u))), duty, Unit(Mix(own ^ 0x69u)));
+				float phase = SeaLifePlacement.Cycle(t, 1.0 / Math.Max(0.1, kind.StrokeHz * Mathf.Lerp(0.92f, 1.08f, Unit(Mix(own ^ 0x6Au)))), Unit(Mix(own ^ 0x6Bu)));
+				Emit(into, kind, own, at, flying, size, new Vector4(phase, flap, 0f, 0f), visible);
+			}
+		}
+
 		// ── Bats ──────────────────────────────────────────────────────
 
 		private static void Bats(in AmbientGroup g, AmbientCreatureKind kind, ref Frame f, List<AmbientInstance> into)
@@ -1091,10 +1177,11 @@ namespace FishMMO.Client
 			for (int m = 0; m < g.Count; m++)
 			{
 				uint own = MemberSeed(g.Seed, m);
-				// Half the colony works the tree line (round a crown), the rest the open air over home (and its water).
+				// Half a bat colony works the tree line (round a crown), the rest the open air over home (and its water).
+				// Insects keep to their own patch of air near the ground.
 				Vector3 beat = g.Home + Disk(Mix(own ^ 0x70u), kind.Spread);
 				float band = Mathf.Lerp(kind.Altitude.x, kind.Altitude.y, Unit(Mix(own ^ 0x71u)));
-				if (f.Perches != null && f.Perches.Count > 0 && Unit(Mix(own ^ 0x72u)) < 0.5f)
+				if (kind.Shape == AmbientShape.Bat && f.Perches != null && f.Perches.Count > 0 && Unit(Mix(own ^ 0x72u)) < 0.5f)
 				{
 					Vector4 p = f.Perches[(int)(Unit(Mix(own ^ 0x73u)) * f.Perches.Count) % f.Perches.Count];
 					float dx = p.x - g.Home.x, dz = p.z - g.Home.z;
@@ -1107,12 +1194,14 @@ namespace FishMMO.Client
 				float r = g.Radius * Mathf.Lerp(0.6f, 1f, Unit(Mix(own ^ 0x74u)));
 				double w = kind.Speed / (r * 0.9);
 				float p1 = Unit(Mix(own ^ 0x75u)) * 6.28f, p2 = Unit(Mix(own ^ 0x76u)) * 6.28f, p3 = Unit(Mix(own ^ 0x77u)) * 6.28f;
+				// Up and down by a share of its band: a bat's metres, a butterfly's hand-spans.
+				float bob = Mathf.Min(1f, kind.Altitude.y / 6f);
 				Vector3 Position(double at)
 				{
 					// Three incommensurate turns make a path that never quite repeats; the fastest is the jinking after insects.
 					float x = r * (0.6f * Mathf.Sin(Angle(at, w, p1)) + 0.25f * Mathf.Sin(Angle(at, w * 2.7, p2)) + 0.12f * Mathf.Sin(Angle(at, w * 6.1, p3)));
 					float z = r * (0.6f * Mathf.Cos(Angle(at, w * 0.93, p2)) + 0.25f * Mathf.Cos(Angle(at, w * 2.3, p3)) + 0.12f * Mathf.Cos(Angle(at, w * 5.3, p1)));
-					float y = band + 1.2f * Mathf.Sin(Angle(at, w * 1.3, p3)) + 0.5f * Mathf.Sin(Angle(at, w * 4.7, p1));
+					float y = band + bob * (1.2f * Mathf.Sin(Angle(at, w * 1.3, p3)) + 0.5f * Mathf.Sin(Angle(at, w * 4.7, p1)));
 					return new Vector3(beat.x + x, y, beat.z + z);
 				}
 				Vector3 now = Position(t);
@@ -1122,7 +1211,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				float lift = surface + 1.2f;
+				float lift = surface + Mathf.Min(1.2f, kind.Altitude.x);
 				now.y += surface;
 				soon.y += surface;
 				after.y += surface;

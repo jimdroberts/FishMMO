@@ -227,6 +227,7 @@ namespace FishMMO.Shared.WorldDesign
 				float chimneyTop = top + rise + 0.9f;
 				d.Add(StructureShapes.ChamferBox(new Vector3(cx, (floor + chimneyTop) * 0.5f, cz), new Vector3(0.7f, chimneyTop - floor, 0.7f), d.Bevel(0.03f),
 					StructureMaterial.Fieldstone, key + 15));
+				d.Emit(new Vector3(cx, chimneyTop + 0.05f, cz), SceneEmitterKind.Smoke);
 			}
 		}
 
@@ -234,7 +235,8 @@ namespace FishMMO.Shared.WorldDesign
 		internal static void Window(StructureDraft d, Vector3 at, Vector3 outward, int key)
 		{
 			Quaternion turn = Quaternion.FromToRotation(Vector3.back, outward);
-			d.Add(StructureShapes.Block(at + outward * 0.02f, new Vector3(0.6f, 0.75f, 0.06f), turn, StructureMaterial.Iron, key, StructureRole.Detail));
+			// The pane: glass, lit from inside at night.
+			d.Add(StructureShapes.Block(at + outward * 0.02f, new Vector3(0.6f, 0.75f, 0.06f), turn, StructureMaterial.Glass, key, StructureRole.Detail));
 			d.Add(StructureShapes.Block(at + outward * 0.06f + Vector3.down * 0.42f, new Vector3(0.8f, 0.08f, 0.14f), turn, StructureMaterial.Timber, key + 1, StructureRole.Detail));
 			d.Add(StructureShapes.Block(at + outward * 0.05f + Vector3.up * 0.42f, new Vector3(0.8f, 0.1f, 0.1f), turn, StructureMaterial.Timber, key + 2, StructureRole.Detail));
 			if (d.Fine)

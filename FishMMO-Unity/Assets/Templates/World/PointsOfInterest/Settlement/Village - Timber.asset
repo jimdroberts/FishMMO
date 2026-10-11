@@ -28,16 +28,10 @@ MonoBehaviour:
     Weight: 0.1
   - Biome: Scrubland
     Weight: 0.1
-  - Biome: Arid
-    Weight: 0.1
   - Biome: Dust Sea
     Weight: 0.1
   - Biome: Wasteland
     Weight: 0.1
-  - Biome: Barren
-    Weight: 0.1
-  - Biome: Mountain
-    Weight: 0.5
   - Biome: Mountain Slope
     Weight: 0.5
   - Biome: Alpine
@@ -60,8 +54,6 @@ MonoBehaviour:
     Weight: 0.5
   - Biome: Snow
     Weight: 0.5
-  - Biome: Periglacial
-    Weight: 0.5
   - Biome: Glacier
     Weight: 0.5
   - Biome: Ice Sheet
@@ -77,8 +69,6 @@ MonoBehaviour:
   - Biome: Peat Bog
     Weight: 0.4
   - Biome: Wetlands
-    Weight: 0.4
-  - Biome: Wetland
     Weight: 0.4
   - Biome: Swamp Ruins
     Weight: 0.4
@@ -122,6 +112,42 @@ MonoBehaviour:
     MaxScale: 1
     Role: 6
     Style: 
+  - Tag: church
+    MinCount: 0
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: stone
+  - Tag: tavern
+    MinCount: 0
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: timber
+  - Tag: smithy
+    MinCount: 0
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 6
+    Style: timber
+  - Tag: notice
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 1
+    Style: timber
   - Tag: storage
     MinCount: 4
     MaxCount: 10
@@ -141,17 +167,17 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357440
-  - rid: 4061506032503357441
-  - rid: 4061506032503357442
-  - rid: 4061506032503357443
-  - rid: 4061506032503357444
-  - rid: 4061506032503357445
-  - rid: 4061506032503357446
+  - rid: 4061506061917749924
+  - rid: 4061506061917749925
+  - rid: 4061506061917749926
+  - rid: 4061506061917749927
+  - rid: 4061506061917749928
+  - rid: 4061506061917749929
+  - rid: 4061506061917749930
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357440
+    - rid: 4061506061917749924
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -164,24 +190,24 @@ MonoBehaviour:
         Clearings:
         - {x: -3, y: 2, z: 4.1499996}
         - {x: 3, y: 1.5, z: 4.1499996}
-    - rid: 4061506032503357441
+    - rid: 4061506061917749925
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357442
+    - rid: 4061506061917749926
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503357443
+    - rid: 4061506061917749927
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 4.1499996}
-    - rid: 4061506032503357444
+    - rid: 4061506061917749928
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: 3, y: 4.1499996}
-    - rid: 4061506032503357445
+    - rid: 4061506061917749929
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1
@@ -189,7 +215,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506032503357446
+    - rid: 4061506061917749930
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 4

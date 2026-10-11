@@ -24,8 +24,6 @@ MonoBehaviour:
     Weight: 1.5
   - Biome: Jungle
     Weight: 1.5
-  - Biome: Rainforest
-    Weight: 1.5
   - Biome: Bamboo Forest
     Weight: 1.5
   - Biome: Forest Ruins
@@ -33,8 +31,6 @@ MonoBehaviour:
   - Biome: Jungle Ruins
     Weight: 1.5
   - Biome: Jungle Temple
-    Weight: 1.5
-  - Biome: Temperate
     Weight: 1.5
   RaceCategories: []
   Races: []
@@ -82,15 +78,15 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357646
-  - rid: 4061506032503357647
-  - rid: 4061506032503357648
-  - rid: 4061506032503357649
-  - rid: 4061506032503357650
+  - rid: 4061506061917749561
+  - rid: 4061506061917749562
+  - rid: 4061506061917749563
+  - rid: 4061506061917749564
+  - rid: 4061506061917749565
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357646
+    - rid: 4061506061917749561
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -101,16 +97,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506032503357647
+    - rid: 4061506061917749562
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357648
+    - rid: 4061506061917749563
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503357649
+    - rid: 4061506061917749564
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -118,7 +114,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506032503357650
+    - rid: 4061506061917749565
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6

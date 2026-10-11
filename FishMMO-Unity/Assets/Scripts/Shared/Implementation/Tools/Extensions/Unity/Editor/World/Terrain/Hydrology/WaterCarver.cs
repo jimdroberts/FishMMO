@@ -104,6 +104,26 @@ namespace FishMMO.Shared.WorldDesign
 			return best;
 		}
 
+		/// <summary>The highest LAKE surface among the four samples around a position (a lake is flat); negative infinity where none is a lake.</summary>
+		public float LakeSurfaceNear(float east, float north)
+		{
+			float gx = (east - OriginX) / Spacing, gz = (north - OriginZ) / Spacing;
+			int x0 = (int)Math.Floor(gx), z0 = (int)Math.Floor(gz);
+			float best = float.NegativeInfinity;
+			for (int dz = 0; dz <= 1; dz++)
+			{
+				for (int dx = 0; dx <= 1; dx++)
+				{
+					int x = x0 + dx, z = z0 + dz;
+					if (x >= 0 && z >= 0 && x < Width && z < Depth && Kind[z * Width + x] == WaterKind.Lake)
+					{
+						best = Math.Max(best, Level[z * Width + x]);
+					}
+				}
+			}
+			return best;
+		}
+
 		/// <summary>The kind of water at the nearest sample.</summary>
 		public WaterKind KindAt(float east, float north)
 		{

@@ -16,8 +16,6 @@ MonoBehaviour:
   Weight: 1
   DefaultBiomeWeight: 0.3
   BiomeWeights:
-  - Biome: Mountain
-    Weight: 2
   - Biome: Mountain Slope
     Weight: 2
   - Biome: Alpine
@@ -39,8 +37,6 @@ MonoBehaviour:
   - Biome: Taiga
     Weight: 1.5
   - Biome: Snow
-    Weight: 1.5
-  - Biome: Periglacial
     Weight: 1.5
   - Biome: Glacier
     Weight: 1.5
@@ -136,16 +132,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357604
-  - rid: 4061506032503357605
-  - rid: 4061506032503357606
-  - rid: 4061506032503357607
-  - rid: 4061506032503357608
-  - rid: 4061506032503357609
+  - rid: 4061506061917749304
+  - rid: 4061506061917749305
+  - rid: 4061506061917749306
+  - rid: 4061506061917749307
+  - rid: 4061506061917749308
+  - rid: 4061506061917749309
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357604
+    - rid: 4061506061917749304
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -157,20 +153,20 @@ MonoBehaviour:
         KeepOutOfWater: 1
         Clearings:
         - {x: -3, y: 2, z: 9.696667}
-    - rid: 4061506032503357605
+    - rid: 4061506061917749305
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357606
+    - rid: 4061506061917749306
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503357607
+    - rid: 4061506061917749307
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 9.696667}
-    - rid: 4061506032503357608
+    - rid: 4061506061917749308
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -178,7 +174,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506032503357609
+    - rid: 4061506061917749309
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

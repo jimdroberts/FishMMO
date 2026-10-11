@@ -209,7 +209,8 @@ namespace FishMMO.Client
 			Vector3 viewer = camera.transform.position;
 			var viewer2 = new Vector2(viewer.x, viewer.z);
 			FindSites(viewer2);
-			if (found.Count == 0)
+			FindHearths(viewer);
+			if (found.Count == 0 && hearths.Count == 0)
 			{
 				return;
 			}
@@ -245,6 +246,81 @@ namespace FishMMO.Client
 					break;
 				}
 				DrawSite(found[i], AirAt(found[i], planet), gravity, camera, material, profile);
+				drawn++;
+			}
+			DrawHearths(planet, camera, material, profile);
+		}
+
+		// ── Hearth smoke (2026-10-11) ────────────────────────────────
+
+		/// <summary>The most chimneys and fires smoking at once, the nearest.</summary>
+		public const int MaxHearths = 32;
+		/// <summary>Hearths further than this are not drawn, m: a wisp of chimney smoke is lost past it.</summary>
+		public const float HearthReach = 450f;
+		private readonly List<SceneEmitter> hearths = new List<SceneEmitter>();
+		private Vector3 hearthsAt = new Vector3(float.MaxValue, 0f, 0f);
+		private int hearthsVersion = -1;
+		private static readonly int NightLightsId = Shader.PropertyToID("_FishNightLights");
+		private static readonly Color ChimneySmoke = new Color(0.62f, 0.6f, 0.58f, 0f);
+		private static readonly Color FireSmoke = new Color(0.5f, 0.48f, 0.46f, 0f);
+
+		/// <summary>The chimneys and fires round the camera (SceneSiteEmitters), again when it has moved far or the scenes changed.</summary>
+		private void FindHearths(Vector3 viewer)
+		{
+			if (SceneSiteEmitters.Version == hearthsVersion && (viewer - hearthsAt).sqrMagnitude < Refind * Refind)
+			{
+				return;
+			}
+			hearthsVersion = SceneSiteEmitters.Version;
+			hearthsAt = viewer;
+			SceneSiteEmitters.Near(viewer, HearthReach + Refind, k => k == SceneEmitterKind.Smoke || k == SceneEmitterKind.Fire, MaxHearths * 2, hearths);
+		}
+
+		/// <summary>
+		/// Hearth smoke: a thin grey ribbon off a chimney, leaning with the wind (most chimneys, not all; more in the cold and
+		/// at mealtimes and evening), and a campfire's smoke with its glow underneath. Drawn as the steam is, but smoke does not
+		/// evaporate in dry air: its length is its own, a dozen metres or so before it thins to nothing.
+		/// </summary>
+		private void DrawHearths(in PlanetAir planet, Camera camera, Material material, WeatherRenderProfile profile)
+		{
+			if (hearths.Count == 0)
+			{
+				return;
+			}
+			Vector3 eye = camera.transform.position;
+			float night = Shader.GetGlobalFloat(NightLightsId);
+			// Mealtimes: the morning and evening fires, from the local day's own clock.
+			float hour = (float)(context.LocalTime01 % 1.0) * 24f;
+			float meal = Mathf.Max(Mathf.Exp(-Mathf.Pow((hour - 7.5f) / 1.5f, 2f)), Mathf.Exp(-Mathf.Pow((hour - 18.5f) / 2f, 2f)));
+			int drawn = 0;
+			foreach (SceneEmitter e in hearths)
+			{
+				if (drawn >= MaxHearths || (e.Position - eye).sqrMagnitude > HearthReach * HearthReach)
+				{
+					break;
+				}
+				var site = new GeothermalSite { Position = new Vector2(e.Position.x, e.Position.z), Seed = e.Seed };
+				Air air = AirAt(new Found { Site = site, Ground = e.Position.y }, planet);
+				float cold = Mathf.InverseLerp(14f, -4f, air.AirC);
+				bool fire = e.Kind == SceneEmitterKind.Fire;
+				float strength;
+				if (fire)
+				{
+					strength = 0.55f;
+				}
+				else
+				{
+					// Which chimneys are lit today: about two in three, more when it is cold.
+					float lit = (e.Seed & 0xFFFF) / 65535f;
+					if (lit > 0.55f + 0.35f * cold)
+					{
+						continue;
+					}
+					strength = 0.25f + 0.25f * cold + 0.2f * Mathf.Max(meal, night);
+				}
+				float length = (fire ? 9f : 12f) * (1f + 0.6f * cold);
+				DrawSteam(site, e.Position, length, fire ? 0.35f : 0.22f, 0.13f, fire ? 1.4f : 1.1f, air.Wind, strength, 0, fire ? FireSmoke : ChimneySmoke,
+					camera, material, profile, true, 0f, fire ? 1.4f : 0f);
 				drawn++;
 			}
 		}
@@ -383,7 +459,7 @@ namespace FishMMO.Client
 		/// carried by the wind, so it leans by their ratio.
 		/// </summary>
 		private void DrawSteam(in GeothermalSite site, Vector3 vent, float length, float radius, float spread, float rise, Vector2 wind, float strength, int layer,
-			Color colour, Camera camera, Material material, WeatherRenderProfile profile, bool holdPace, float fixedPeriod = 0f)
+			Color colour, Camera camera, Material material, WeatherRenderProfile profile, bool holdPace, float fixedPeriod = 0f, float glow = 0f)
 		{
 			if (length < 0.5f || strength <= 0.001f)
 			{
@@ -404,7 +480,7 @@ namespace FishMMO.Client
 			var bounds = new Bounds((min + max) * 0.5f, max - min);
 			Draw(material, profile, camera, bounds, vent, SteamPopulation, share, 0.35f,
 				new Vector4(length, radius, spread, period), new Vector4(sideways.x, sideways.y, up, Mathf.Clamp01(strength)), Vector4.zero, Vector4.zero,
-				new Color(colour.r, colour.g, colour.b, 0f), periods);
+				new Color(colour.r, colour.g, colour.b, glow), periods);
 		}
 
 		/// <summary>The periods a site's two layers hold for one of its plumes this frame (see <see cref="VolcanicPlumePresenter.PaceWindowSeconds"/>).</summary>

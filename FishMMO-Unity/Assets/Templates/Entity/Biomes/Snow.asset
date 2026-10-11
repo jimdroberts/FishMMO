@@ -258,8 +258,9 @@ MonoBehaviour:
   EmissionRate: 0
   TerrainProcess: {fileID: 11400000, guid: 3f2dfed1eabacae5ab0cae1a92dc0117, type: 2}
   mainTextureLayer:
-    terrainLayer: {fileID: 0}
-    albedoTexture: {fileID: 2800000, guid: 880ecc3bf473abd4da332ec06e2b5ff2, type: 3}
+    terrainLayer: {fileID: 8574412962073106934, guid: afdee67e2d4c80cf77b9981f0b67f9ae,
+      type: 2}
+    albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
     metallic: 0

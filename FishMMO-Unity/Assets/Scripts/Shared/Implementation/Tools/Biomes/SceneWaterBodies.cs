@@ -171,8 +171,9 @@ namespace FishMMO.Shared.Biomes
 		public const float MaxReachMetres = 2f;
 
 		/// <summary>
-		/// The highest water surface over a scene position or within <paramref name="reach"/> metres of it (at most
-		/// <see cref="MaxReachMetres"/>): a river's past its banks by that much, a lake's where its mask covers the
+		/// The water surface over a scene position or within <paramref name="reach"/> metres of it (at most
+		/// <see cref="MaxReachMetres"/>): the nearest river's (where its centre line comes nearest) past its banks by that
+		/// much, or a lake's, whichever stands higher; a lake's where its mask covers the
 		/// point or a point that far off. For maps sampled on a grid coarser than a creek: a 2 m heightmap can have no
 		/// sample inside a 1.5 m channel, and the water still has to reach the samples either side of it.
 		/// </summary>
@@ -198,29 +199,35 @@ namespace FishMMO.Shared.Biomes
 			{
 				return any;
 			}
+			/* The river's surface where its centre line comes nearest, not the highest of every segment in reach: down a
+			 * falling river the segment upstream reaches a little past its end and stands higher, so the highest stepped
+			 * at every segment, and the grass's waterline and the banks' bed paint came out as a row of teeth pointing
+			 * downstream (Jim, 2026-10-11). The nearest varies smoothly along the river. */
+			float nearest = float.PositiveInfinity, river = float.NegativeInfinity;
 			foreach (Segment segment in near)
 			{
 				if (segment.Jet)
 				{
 					continue;
 				}
-				SceneHydrology.River river = Hydrology.Rivers[segment.River];
-				if (!river.Perennial)
+				SceneHydrology.River path = Hydrology.Rivers[segment.River];
+				if (!path.Perennial)
 				{
 					continue;
 				}
-				Vector3 a = river.Points[segment.Point], b = river.Points[segment.Point + 1];
+				Vector3 a = path.Points[segment.Point], b = path.Points[segment.Point + 1];
 				float t = Project(a, b, x, z, out float distance);
-				float half = 0.5f * Mathf.Lerp(Width(river, segment.Point), Width(river, segment.Point + 1), t);
-				if (distance <= half + reach)
+				float half = 0.5f * Mathf.Lerp(Width(path, segment.Point), Width(path, segment.Point + 1), t);
+				if (distance <= half + reach && distance < nearest)
 				{
-					float here = Mathf.Lerp(a.y, b.y, t);
-					if (here > level)
-					{
-						level = here;
-						any = true;
-					}
+					nearest = distance;
+					river = Mathf.Lerp(a.y, b.y, t);
 				}
+			}
+			if (river > level)
+			{
+				level = river;
+				any = true;
 			}
 			return any;
 		}

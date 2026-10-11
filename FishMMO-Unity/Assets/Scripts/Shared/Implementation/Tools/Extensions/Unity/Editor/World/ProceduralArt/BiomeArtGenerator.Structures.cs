@@ -115,6 +115,8 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						RockLit(mat, albedo, normal, mask, scale);
 						mat.SetColor("_BaseColor", tint);
+						// Weathered as a building, not set into the ground as a rock (FishStructureWeathering.hlsl); a pane lit at night.
+						mat.SetFloat("_FishStructure", material == StructureMaterial.Glass ? 2f : 1f);
 					});
 				}
 			}

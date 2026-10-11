@@ -26,7 +26,9 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// <para>
 	/// <b>Fills, never overwrites.</b> A texture slot is filled only when it is empty — no
-	/// terrain layer, and no albedo or only a placeholder swatch (see <see cref="IsPlaceholderTexture"/>).
+	/// terrain layer, and no albedo or only a placeholder swatch (see <see cref="IsPlaceholderTexture"/>) —
+	/// or still holds one of the first biomes' colour-only photos (<see cref="IsLegacyPhoto"/>), whose reference
+	/// is then dropped.
 	/// Filling sets the slot's <see cref="TerrainTextureLayer.terrainLayer"/>, which takes precedence
 	/// over the loose texture fields, so even a swatch that was in the slot stays where it was: the
 	/// tool adds, it does not erase. The bands (noise, slope, height, cliff angles) are written
@@ -36,11 +38,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Rule lists.</b> Spec rules are added to a layer whose rule list holds no live rule. A rule
 	/// is dead when none of its prefabs exists (a missing reference, or none at all) or every one
-	/// that does is a placeholder cube (<see cref="IsPlaceholderPrefab"/>). Dead rules are never
-	/// deleted: they are switched off (<see cref="PrefabSpawnRule.enableSpawning"/> = false) and
-	/// their name marked, so the data stays for whoever authored it and a scatter does not plant
-	/// cubes or nothing. A rule someone switched off themselves, with real prefabs, is authored —
-	/// its list is left alone.
+	/// that does is a placeholder cube (<see cref="IsPlaceholderPrefab"/>). Dead rules are removed,
+	/// as are rules the spec has moved out of a slot (when nobody tuned them) and the rules an earlier
+	/// version switched off and kept (<see cref="DisabledMark"/>): kept, they were only dead weight in
+	/// every template (2026-10-11). A rule someone switched off themselves, with real prefabs, is
+	/// authored — its list is left alone.
 	/// </para>
 	/// <para>
 	/// <b>Spec rules stay the spec's until somebody tunes them.</b> Every rule the tool writes
@@ -84,8 +86,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class BiomeArtAuthoring
 	{
-		/// <summary>The prefix marking a rule this tool switched off.</summary>
+		/// <summary>The prefix an earlier version of this tool gave a rule it switched off; such rules are now removed.</summary>
 		public const string DisabledMark = "[disabled by Biome Art: ";
+
+		/// <summary>Where the first biomes' colour-only photo textures live (<see cref="IsLegacyPhoto"/>).</summary>
+		public const string LegacyPhotoFolder = "Assets/Prefabs/Shared/Biomes/Textures/";
 
 		// BiomeTexture_<Name>_<RRGGBB>: the flat swatches every biome was first given as a colour key.
 		private static readonly Regex PlaceholderSwatch = new Regex(@"^BiomeTexture_.+_[0-9A-Fa-f]{6}$", RegexOptions.CultureInvariant);
@@ -102,6 +107,23 @@ namespace FishMMO.Shared.WorldDesign
 			return layer != null && layer.terrainLayer == null && (layer.albedoTexture == null || IsPlaceholderTexture(layer.albedoTexture));
 		}
 
+		/// <summary>
+		/// True for a slot still drawing one of the first biomes' photo textures: a loose albedo from
+		/// <see cref="LegacyPhotoFolder"/> with no normal and no mask (Grass, Woodland, Forest, Glacier, Snow, Ocean). Not
+		/// art somebody chose for a biome so much as the stand-in it was born with, a step below the generated ground in
+		/// every way (no relief of its own, no mask, 1024 px), so the authoring pass replaces it as it does a swatch.
+		/// </summary>
+		public static bool IsLegacyPhoto(TerrainTextureLayer layer)
+		{
+			if (layer == null || layer.terrainLayer != null || layer.albedoTexture == null || layer.normalTexture != null || layer.maskTexture != null
+				|| IsPlaceholderTexture(layer.albedoTexture))
+			{
+				return false;
+			}
+			string path = AssetDatabase.GetAssetPath(layer.albedoTexture);
+			return !string.IsNullOrEmpty(path) && path.StartsWith(LegacyPhotoFolder, StringComparison.Ordinal);
+		}
+
 		/// <summary>True for an asset under the generated folders: build output, never authored.</summary>
 		public static bool IsGenerated(Object asset)
 		{
@@ -109,9 +131,9 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// True when the authoring pass may put <paramref name="layer"/> in the slot: it is empty, or it
-		/// holds a different GENERATED layer (procedural art the spec has since changed), never art
-		/// somebody assigned.
+		/// True when the authoring pass may put <paramref name="layer"/> in the slot: it is empty, it holds
+		/// one of the first biomes' photos (<see cref="IsLegacyPhoto"/>), or it holds a different GENERATED layer
+		/// (procedural art the spec has since changed); never art somebody assigned.
 		/// </summary>
 		public static bool IsFillable(TerrainTextureLayer slot, TerrainLayer layer, Func<Object, bool> isGenerated)
 		{
@@ -119,7 +141,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
-			if (IsEmptySlot(slot))
+			if (IsEmptySlot(slot) || IsLegacyPhoto(slot))
 			{
 				return true;
 			}
@@ -235,6 +257,7 @@ namespace FishMMO.Shared.WorldDesign
 			public int RulesUpdated;
 			/// <summary>Spec-named rules the spec would change but somebody tuned, so they were kept.</summary>
 			public int RulesKept;
+			/// <summary>Dead rules, rules the spec retired from a slot, and rules an earlier run had switched off: removed.</summary>
 			public int RulesDisabled;
 			public int BiomesChanged;
 			public readonly List<string> Missing = new List<string>();
@@ -243,7 +266,7 @@ namespace FishMMO.Shared.WorldDesign
 			public override string ToString()
 			{
 				var sb = new StringBuilder();
-				sb.AppendLine($"Biome art authoring: {BiomesChanged} biomes changed, {LocalReferencesMoved} LOCAL references moved to sidecars, {SlotsFilled} slots filled, {RulesAdded} rules added, updated {RulesUpdated} rules, {RulesKept} hand-tuned rules kept, {RulesDisabled} dead rules switched off.");
+				sb.AppendLine($"Biome art authoring: {BiomesChanged} biomes changed, {LocalReferencesMoved} LOCAL references moved to sidecars, {SlotsFilled} slots filled, {RulesAdded} rules added, updated {RulesUpdated} rules, {RulesKept} hand-tuned rules kept, {RulesDisabled} dead or retired rules removed.");
 				foreach (string m in NoSpec) sb.AppendLine("no spec entry: " + m);
 				foreach (string m in Missing) sb.AppendLine("missing art: " + m);
 				foreach (string l in Lines) sb.AppendLine(l);
@@ -261,7 +284,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Author biome art", Section = "Authoring", Order = 1,
-			Tooltip = "Generates any missing procedural art, then fills empty texture slots and empty rule lists on every biome from the spec table, and brings spec rules nobody has tuned up to date. Never overwrites authored or hand-tuned values; dead placeholder rules are switched off, not deleted.",
+			Tooltip = "Generates any missing procedural art, then fills empty texture slots and empty rule lists on every biome from the spec table, and brings spec rules nobody has tuned up to date. Never overwrites authored or hand-tuned values; replaces the first biomes' colour-only photos; removes dead and retired rules.",
 			Confirm = "Assign procedural art to every biome's empty slots and empty rule lists, and update untouched spec rules? Authored and hand-tuned values are not touched. Undoable per biome.")]
 		public static void ApplyFromDashboard()
 		{
@@ -472,7 +495,11 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			// Dead rules first, so the lists they sit in count as empty below.
+			// Rules an earlier run switched off, and dead rules, are removed first, so the lists they sit in count as empty below.
+			foreach (string key in BiomeLocalArt.SlotsOf(biome))
+			{
+				RemoveSwitchedOff(who, key, BiomeLocalArt.CommittedLayer(biome, key), report, apply);
+			}
 			DisableDeadRules(who, "main", biome.MainTextureLayer, report, apply);
 			if (biome.DetailTextureLayers != null)
 			{
@@ -564,7 +591,7 @@ namespace FishMMO.Shared.WorldDesign
 				AddRules(who, "lakebed", biome.LakebedTextureLayer, entry.Bed, source, report, apply);
 			}
 
-			// Rules the spec has moved or dropped: switched off where the tool wrote them and nobody has tuned them since.
+			// Rules the spec has moved or dropped: removed where the tool wrote them and nobody has tuned them since.
 			foreach ((string slotName, string rule) in entry.Retired)
 			{
 				Retire(who, slotName, SlotNamed(biome, slotName), rule, report, apply);
@@ -600,12 +627,19 @@ namespace FishMMO.Shared.WorldDesign
 				report.Missing.Add($"{who} {slotName}: Ground_{family}");
 				return false;
 			}
-			string replacing = slot.terrainLayer != null ? $" (replacing the generated '{slot.terrainLayer.name}': the spec changed)" : string.Empty;
+			bool photo = IsLegacyPhoto(slot);
+			string replacing = slot.terrainLayer != null ? $" (replacing the generated '{slot.terrainLayer.name}': the spec changed)"
+				: photo ? $" (replacing the colour-only photo '{slot.albedoTexture.name}')" : string.Empty;
 			report.SlotsFilled++;
-			report.Lines.Add($"{who} {slotName}: {(apply ? "filled with" : "would fill with")} Ground_{family}{replacing}{(slot.albedoTexture != null && slot.terrainLayer == null ? $" (placeholder '{slot.albedoTexture.name}' left in place, now unused)" : string.Empty)}");
+			report.Lines.Add($"{who} {slotName}: {(apply ? "filled with" : "would fill with")} Ground_{family}{replacing}{(!photo && slot.albedoTexture != null && slot.terrainLayer == null ? $" (placeholder '{slot.albedoTexture.name}' left in place, now unused)" : string.Empty)}");
 			if (!apply)
 			{
 				return true;
+			}
+			if (photo)
+			{
+				// The layer draws instead of the loose textures; the photo is dropped so nothing reads it again.
+				slot.albedoTexture = null;
 			}
 			slot.terrainLayer = layer;
 			if (bands != null)
@@ -638,19 +672,44 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				PrefabSpawnRule rule = slot.prefabSpawnRules[r];
 				string reason = DeadReason(rule);
-				if (reason == null || rule == null || !rule.enableSpawning)
+				if (reason == null)
 				{
 					continue;
 				}
 				report.RulesDisabled++;
-				report.Lines.Add($"{who} {slotName} rule {r} '{rule.ruleName}': {reason} — {(apply ? "switched off" : "would be switched off")} (kept, not deleted)");
+				report.Lines.Add($"{who} {slotName} rule {r} '{rule?.ruleName}': {reason} — {(apply ? "removed" : "would be removed")}");
 				if (apply)
 				{
-					rule.enableSpawning = false;
-					if (rule.ruleName == null || !rule.ruleName.StartsWith(DisabledMark, System.StringComparison.Ordinal))
-					{
-						rule.ruleName = $"{DisabledMark}{reason}] {rule.ruleName}";
-					}
+					slot.prefabSpawnRules.RemoveAt(r);
+					r--;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Removes the rules an earlier version of this tool switched off and kept (<see cref="DisabledMark"/>): retired
+		/// kelp and seagrass, rules the spec moved to another slot, rules whose prefabs were gone. Kept, they were dead
+		/// weight in every template and in every look at one.
+		/// </summary>
+		private static void RemoveSwitchedOff(string who, string slotName, TerrainTextureLayer slot, Report report, bool apply)
+		{
+			if (slot?.prefabSpawnRules == null)
+			{
+				return;
+			}
+			for (int r = 0; r < slot.prefabSpawnRules.Count; r++)
+			{
+				PrefabSpawnRule rule = slot.prefabSpawnRules[r];
+				if (rule == null || rule.enableSpawning || rule.ruleName == null || !rule.ruleName.StartsWith(DisabledMark, StringComparison.Ordinal))
+				{
+					continue;
+				}
+				report.RulesDisabled++;
+				report.Lines.Add($"{who} {slotName}: rule '{rule.ruleName}' was switched off by an earlier run — {(apply ? "removed" : "would be removed")}");
+				if (apply)
+				{
+					slot.prefabSpawnRules.RemoveAt(r);
+					r--;
 				}
 			}
 		}
@@ -688,11 +747,10 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			report.RulesDisabled++;
-			report.Lines.Add($"{who} {slotName}: rule '{name}' moved out of this slot by the spec — {(apply ? "switched off" : "would be switched off")} (kept, not deleted)");
+			report.Lines.Add($"{who} {slotName}: rule '{name}' moved out of this slot by the spec — {(apply ? "removed" : "would be removed")}");
 			if (apply)
 			{
-				rule.enableSpawning = false;
-				rule.ruleName = $"{DisabledMark}moved by the spec] {rule.ruleName}";
+				slot.prefabSpawnRules.Remove(rule);
 			}
 		}
 
@@ -720,7 +778,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			// Dead rules count as nothing here — they were (or would be) switched off above — and nor do
+			// Dead rules count as nothing here — they were (or would be) removed above — and nor do
 			// the spec's own (all-generated, or fingerprinted and untouched) rules: not somebody's work.
 			if (!HasNoAuthoredRule(slot.prefabSpawnRules, IsGenerated))
 			{

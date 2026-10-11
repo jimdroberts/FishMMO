@@ -438,7 +438,8 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
     albedo /= total; normal /= total; smoothness /= total; occlusion /= total;
 
     // A cart track's ruts: two lanes a gauge apart, darker, packed glossy, shadowed in their bottoms.
-    float rut = track * (1.0 - smoothstep(0.1, 0.23, abs(fromCentre - 0.72)));
+    // Fainter where the track is less used, so they melt away with it where it peters out (ScenePathField.EndFade).
+    float rut = track * (1.0 - smoothstep(0.1, 0.23, abs(fromCentre - 0.72))) * saturate(wear * 1.6);
     albedo *= (half)(1.0 - 0.22 * rut);
     smoothness = lerp(smoothness, max(smoothness, 0.35h), (half)rut);
     occlusion *= (half)(1.0 - 0.25 * rut);

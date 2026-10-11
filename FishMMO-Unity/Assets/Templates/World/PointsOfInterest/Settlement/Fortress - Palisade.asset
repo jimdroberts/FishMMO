@@ -24,8 +24,6 @@ MonoBehaviour:
     Weight: 1.5
   - Biome: Jungle
     Weight: 1.5
-  - Biome: Rainforest
-    Weight: 1.5
   - Biome: Bamboo Forest
     Weight: 1.5
   - Biome: Forest Ruins
@@ -33,8 +31,6 @@ MonoBehaviour:
   - Biome: Jungle Ruins
     Weight: 1.5
   - Biome: Jungle Temple
-    Weight: 1.5
-  - Biome: Temperate
     Weight: 1.5
   - Biome: Steppe
     Weight: 1.5
@@ -127,16 +123,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357616
-  - rid: 4061506032503357617
-  - rid: 4061506032503357618
-  - rid: 4061506032503357619
-  - rid: 4061506032503357620
-  - rid: 4061506032503357621
+  - rid: 4061506061917749941
+  - rid: 4061506061917749942
+  - rid: 4061506061917749943
+  - rid: 4061506061917749944
+  - rid: 4061506061917749945
+  - rid: 4061506061917749946
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357616
+    - rid: 4061506061917749941
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -147,21 +143,21 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings:
-        - {x: -3, y: 2, z: 3.8836575}
-    - rid: 4061506032503357617
+        - {x: -3, y: 2, z: 3.8168495}
+    - rid: 4061506061917749942
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357618
+    - rid: 4061506061917749943
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503357619
+    - rid: 4061506061917749944
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: -3, y: 3.8836575}
-    - rid: 4061506032503357620
+        Offset: {x: -3, y: 3.8168495}
+    - rid: 4061506061917749945
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -169,7 +165,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506032503357621
+    - rid: 4061506061917749946
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

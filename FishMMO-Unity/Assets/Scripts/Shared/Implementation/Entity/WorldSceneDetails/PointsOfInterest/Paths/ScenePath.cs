@@ -21,6 +21,11 @@ namespace FishMMO.Shared
 		Street,
 		/// <summary>An ancient road: old paving under centuries of growth.</summary>
 		AncientRoad,
+		/// <summary>
+		/// Ground a site's buildings wear (never routed): bare under and round a building, a trodden apron round a well or a
+		/// fire, a worn way out of a door. What keeps grass out of houses and makes a village look lived in.
+		/// </summary>
+		Yard,
 	}
 
 	/// <summary>What a stretch of path is surfaced with. The shader reads it as a code (<see cref="ScenePathStyle.SurfaceCode"/>).</summary>
@@ -196,6 +201,8 @@ namespace FishMMO.Shared
 					return new ScenePathStyle(kind, 2.5f, ScenePathSurface.Stone, 1f, 1f, 1f, 0.5f, 0f, 0f, 0f, 1f, 0f, true);
 				case ScenePathClass.AncientRoad:
 					return new ScenePathStyle(kind, 2f, ScenePathSurface.Stone, 0.25f, 0.15f, 0.12f, 2f, 0f, 0.6f, 12f, 0.6f, 0.4f, false);
+				case ScenePathClass.Yard:
+					return new ScenePathStyle(kind, 1f, ScenePathSurface.Earth, 0.85f, 0.85f, 1f, 0.5f, 0f, 0f, 0f, 0.5f, 0f, false);
 				default:
 					return For(ScenePathClass.Trail);
 			}

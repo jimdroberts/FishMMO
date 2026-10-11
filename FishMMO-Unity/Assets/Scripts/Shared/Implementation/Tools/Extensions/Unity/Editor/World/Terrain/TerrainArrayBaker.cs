@@ -95,7 +95,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static class TerrainArrayBaker
 	{
 		/// <summary>Raised whenever the bake's output format changes, so every machine rebakes.</summary>
-		public const int BakeVersion = 1;
+		public const int BakeVersion = 2;
 
 		/// <summary>The largest slice. 32 slices of 1024 are a 16384 x 2048 image; 2048 would need 16384 x 8192 and half a gigabyte to write.</summary>
 		public const int MaximumSliceSize = 1024;
@@ -142,9 +142,19 @@ namespace FishMMO.Shared.WorldDesign
 				ResolvedTerrainArrayLayer resolved = TerrainArrayResolver.Resolve(i, layers[i], lookup, plan.Conflicts);
 				plan.Layers.Add(resolved);
 				bool hasAlpha = AlbedoHasAlpha(resolved.Albedo);
-				plan.Params.Add(TerrainArrayLayerParams.From(resolved.ParamsLayer, resolved.Mask != null, hasAlpha));
-				plan.AnyNormal |= resolved.Normal != null;
-				plan.AnyMask |= resolved.Mask != null;
+				// A layer with an albedo and no normal or mask gets them worked out from the albedo
+				// (TerrainSurfaceDerivation), so no ground with art draws flat.
+				bool derivesMask = resolved.Mask == null && resolved.Albedo != null;
+				TerrainArrayLayerParams parameters = TerrainArrayLayerParams.From(resolved.ParamsLayer, resolved.Mask != null || derivesMask, hasAlpha);
+				if (derivesMask)
+				{
+					// The derived mask is written in the final units, so it is read as it is.
+					parameters.MaskRemapMin = Vector4.zero;
+					parameters.MaskRemapMax = Vector4.one;
+				}
+				plan.Params.Add(parameters);
+				plan.AnyNormal |= resolved.Normal != null || resolved.Albedo != null;
+				plan.AnyMask |= resolved.Mask != null || resolved.Albedo != null;
 				largest = Mathf.Max(largest, Largest(resolved.Albedo), Largest(resolved.Normal), Largest(resolved.Mask));
 				if (resolved.Albedo == null)
 				{
@@ -253,7 +263,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static string HashOf(TerrainArrayPlan plan)
 		{
 			var text = new StringBuilder(1024);
-			text.Append("v").Append(BakeVersion)
+			text.Append("v").Append(BakeVersion).Append("d").Append(TerrainSurfaceDerivation.Version)
 				.Append("|cs").Append((int)PlayerSettings.colorSpace)
 				.Append("|s").Append(plan.SliceSize)
 				.Append("|n").Append(plan.AnyNormal ? 1 : 0)
@@ -397,18 +407,30 @@ namespace FishMMO.Shared.WorldDesign
 			Layout(count, size, out int columns, out int rows);
 
 			var keep = new HashSet<string>(StringComparer.Ordinal);
-			string albedoPath = WriteFlipbook(plan, TerrainArrayKind.Albedo, folder, columns, rows, report);
+			var derived = new Dictionary<int, TerrainSurfaceDerivation.Result>();
+			string albedoPath = WriteFlipbook(plan, TerrainArrayKind.Albedo, folder, columns, rows, report, derived);
 			keep.Add(albedoPath);
 			string normalPath = null, maskPath = null;
 			if (plan.AnyNormal)
 			{
-				normalPath = WriteFlipbook(plan, TerrainArrayKind.Normal, folder, columns, rows, report);
+				normalPath = WriteFlipbook(plan, TerrainArrayKind.Normal, folder, columns, rows, report, derived);
 				keep.Add(normalPath);
 			}
 			if (plan.AnyMask)
 			{
-				maskPath = WriteFlipbook(plan, TerrainArrayKind.Mask, folder, columns, rows, report);
+				maskPath = WriteFlipbook(plan, TerrainArrayKind.Mask, folder, columns, rows, report, derived);
 				keep.Add(maskPath);
+			}
+			if (derived.Count > 0)
+			{
+				var names = new List<string>();
+				foreach (KeyValuePair<int, TerrainSurfaceDerivation.Result> pair in derived)
+				{
+					ResolvedTerrainArrayLayer layer = plan.Layers[pair.Key];
+					string name = layer.Committed != null ? layer.Committed.name : $"layer {pair.Key}";
+					names.Add($"{name} ({TerrainSurfaceDerivation.MeanTiltDegrees(pair.Value.Normal):0}°)");
+				}
+				Debug.Log($"[Terrain arrays] '{plan.SceneName}': relief worked out from the albedo for {string.Join(", ", names)}.");
 			}
 
 			string setPath = TerrainArraySet.BakedAssetPath(plan.SceneName);
@@ -469,13 +491,16 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				EditorUtility.SetDirty(set);
 			}
+			// The ground's material gets the defaults that go with what the arrays now hold (height blending), once.
+			TerrainArraySetup.ApplyLaterDefaults(AssetDatabase.LoadAssetAtPath<Material>(TerrainArraySetup.MaterialPath));
 			AssetDatabase.SaveAssets();
 			report.Written.Add(setPath);
 			report.Baked = set.Albedo != null;
 		}
 
 		/// <summary>Renders every slice of one array and writes the flipbook image. Returns its path.</summary>
-		private static string WriteFlipbook(TerrainArrayPlan plan, TerrainArrayKind kind, string folder, int columns, int rows, TerrainArrayBakeReport report)
+		private static string WriteFlipbook(TerrainArrayPlan plan, TerrainArrayKind kind, string folder, int columns, int rows, TerrainArrayBakeReport report,
+			Dictionary<int, TerrainSurfaceDerivation.Result> derived)
 		{
 			int size = plan.SliceSize;
 			int width = columns * size, height = rows * size;
@@ -491,11 +516,31 @@ namespace FishMMO.Shared.WorldDesign
 				EditorUtility.DisplayProgressBar("Terrain arrays", $"'{plan.SceneName}': {kind} {i + 1}/{plan.Layers.Count}", (i + (int)kind * plan.Layers.Count) / (3f * plan.Layers.Count));
 				ResolvedTerrainArrayLayer layer = plan.Layers[i];
 				Texture2D source = kind == TerrainArrayKind.Albedo ? layer.Albedo : kind == TerrainArrayKind.Normal ? layer.Normal : layer.Mask;
-				if (source == null)
+				Color32[] slice;
+				if (source != null)
+				{
+					slice = TerrainArraySliceReader.Read(source, size, kind, report.Problems);
+				}
+				else if (kind != TerrainArrayKind.Albedo && layer.Albedo != null)
+				{
+					// No art of this kind: worked out from the albedo, once for both the normal and the mask.
+					if (!derived.TryGetValue(i, out TerrainSurfaceDerivation.Result result))
+					{
+						Color32[] albedo = TerrainArraySliceReader.Read(layer.Albedo, size, TerrainArrayKind.Albedo, report.Problems);
+						if (albedo == null)
+						{
+							continue;
+						}
+						TerrainArrayLayerParams parameters = plan.Params[i];
+						result = TerrainSurfaceDerivation.Derive(albedo, size, parameters.Metallic, parameters.Smoothness, parameters.AlbedoHasAlpha);
+						derived[i] = result;
+					}
+					slice = kind == TerrainArrayKind.Normal ? result.Normal : result.Mask;
+				}
+				else
 				{
 					continue;
 				}
-				Color32[] slice = TerrainArraySliceReader.Read(source, size, kind, report.Problems);
 				if (slice == null)
 				{
 					continue;

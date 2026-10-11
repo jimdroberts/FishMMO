@@ -87,11 +87,14 @@ Shader "FishMMO/Sky"
                 float eclipse = _FishSkyEclipse.x;
                 float airless = _FishSkyEclipse.z;
 
-                // Overcast greys the sky.
+                // Overcast greys the sky. Seen, the clouds are marched over it and finish the job; captured for the
+                // ground's reflections there are no clouds, so the grey goes all the way.
+                bool capture = _FishSkyCapture.x > 0.5;
                 float overcast = saturate(_FishWeatherCloud.x * _FishWeatherCloud.y);
                 float3 grey = dot(horizon, float3(0.3, 0.5, 0.2)) * float3(0.85, 0.88, 0.92);
-                zenith = lerp(zenith, grey * 0.9, overcast * 0.7);
-                horizon = lerp(horizon, grey, overcast * 0.7);
+                float greying = capture ? 1.0 : 0.7;
+                zenith = lerp(zenith, grey * 0.9, overcast * greying);
+                horizon = lerp(horizon, grey, overcast * greying);
 
                 // Atmosphere.
                 float h = saturate(up);
@@ -293,11 +296,23 @@ Shader "FishMMO/Sky"
                 color = lerp(color, max(color, ownRingLight), ownRing);
 
                 // The sun's disc is a great deal further off than the ring, and goes behind it.
-                color += sunsLight * (1.0 - ownRing);
+                /* Captured for the reflection probe, the sky is what the ground reflects (2026-10-11: "glow" on the
+                 * terrain, building up in Play). The sun's disc stays out: its highlight is the sun light's own, and
+                 * the disc in the probe, smeared over the rough mips the ground reads, lit every field a second time,
+                 * toward the sun, through every gap in the grass. And it takes the cloud as the ambient does: the
+                 * probe has no clouds, so under an overcast the ground reflected a bright clear sky it was not lit by. */
+                if (!capture)
+                {
+                    color += sunsLight * (1.0 - ownRing);
+                }
 
                 // Melt into the fog at the horizon, so terrain and sky meet without a seam.
                 float fogBand = saturate(1.0 - up * 7.0) * _FishSkyFogColor.a;
                 color = lerp(color, _FishSkyFogColor.rgb, fogBand);
+                if (capture)
+                {
+                    color *= _FishSkyCapture.y;
+                }
 
                 return half4(color * _FishSkyParams.w, 1.0);
             }

@@ -120,6 +120,15 @@ namespace FishMMO.Shared.WorldDesign
 			if (networkObject == null)
 			{
 				networkObject = gameObject.AddComponent<NetworkObject>();
+				// State forwarding is for platforms only; a site's spawners, doors and waypoints feed observers by
+				// broadcast (InterestManagementWiringTests). NetworkObject defaults it on.
+				var serialized = new SerializedObject(networkObject);
+				SerializedProperty forwarding = serialized.FindProperty("_enableStateForwarding");
+				if (forwarding != null && forwarding.boolValue)
+				{
+					forwarding.boolValue = false;
+					serialized.ApplyModifiedPropertiesWithoutUndo();
+				}
 			}
 			return networkObject;
 		}

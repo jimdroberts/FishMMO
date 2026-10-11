@@ -466,7 +466,10 @@ void SplatmapFragment(
     InitializeInputData(IN, normalTS, inputData);
     SetupTerrainDebugTextureData(inputData, IN.uvMainAndLM.xy);
 
-    // ── FishMMO edit 1 of 3: the weather on this ground. ──
+    // ── FishMMO edit 1 of 3: the weather on this ground (and the grass on it). ──
+    half sward = FishSwardShade(inputData.positionWS);
+    albedo *= sward;
+    smoothness *= sward;
     if (_FishWeatherAmount > 0.0)
     {
         half3 weathered = inputData.normalWS;

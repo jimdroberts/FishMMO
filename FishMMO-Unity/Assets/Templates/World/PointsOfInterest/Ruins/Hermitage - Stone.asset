@@ -16,8 +16,6 @@ MonoBehaviour:
   Weight: 1
   DefaultBiomeWeight: 0.4
   BiomeWeights:
-  - Biome: Mountain
-    Weight: 2
   - Biome: Mountain Slope
     Weight: 2
   - Biome: Alpine
@@ -46,13 +44,9 @@ MonoBehaviour:
     Weight: 2
   - Biome: Scrubland
     Weight: 2
-  - Biome: Arid
-    Weight: 2
   - Biome: Dust Sea
     Weight: 2
   - Biome: Wasteland
-    Weight: 2
-  - Biome: Barren
     Weight: 2
   RaceCategories: []
   Races: []
@@ -91,13 +85,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357909
-  - rid: 4061506032503357910
-  - rid: 4061506032503357911
+  - rid: 4061506061917749583
+  - rid: 4061506061917749584
+  - rid: 4061506061917749585
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357909
+    - rid: 4061506061917749583
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -108,12 +102,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506032503357910
+    - rid: 4061506061917749584
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357911
+    - rid: 4061506061917749585
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

@@ -227,6 +227,11 @@ namespace FishMMO.Client
 		/// weighted by its density. What hides an animal on the ground; null until built (<see cref="CoverAt"/> reads 0).
 		/// </summary>
 		public float[] Cover;
+		/// <summary>
+		/// Per density texel (as <see cref="Occupied"/>), how much of the ground is under blades, 0..1: the blade types'
+		/// densities added up. What shades the ground under the sward (<see cref="GrassSwardMap"/>); null until built.
+		/// </summary>
+		public byte[] Sward;
 		public int HeightResolution;
 		public float MaxGrassHeight;
 		public bool HeightChecked;
@@ -642,6 +647,17 @@ namespace FishMMO.Client
 						}
 					}
 					gt.Cover = cover;
+					var sward = new byte[dres * dres];
+					for (int i = 0; i < sward.Length; i++)
+					{
+						float sum = 0f;
+						for (int c = 0; c < count; c++)
+						{
+							sum += density[c][i];
+						}
+						sward[i] = (byte)Mathf.RoundToInt(Mathf.Clamp01(sum) * 255f);
+					}
+					gt.Sward = sward;
 					gt.BeginHeightGrid();
 					return;
 				}
@@ -899,6 +915,24 @@ namespace FishMMO.Client
 			return lo <= hi ? new Vector2(lo, hi) : new Vector2(Origin.y, Origin.y + Size.y);
 		}
 
+		/// <summary>How much of the ground at a world point on this terrain is under blades, 0..1 (0 off it, or before it is built).</summary>
+		public float SwardAt(float x, float z)
+		{
+			byte[] sward = Sward;
+			int res = DensityResolution;
+			if (sward == null || res <= 0 || Size.x <= 0f || Size.z <= 0f)
+			{
+				return 0f;
+			}
+			float u = (x - Origin.x) / Size.x, v = (z - Origin.z) / Size.z;
+			if (u < 0f || u > 1f || v < 0f || v > 1f)
+			{
+				return 0f;
+			}
+			int ix = Mathf.Clamp((int)(u * res), 0, res - 1), iz = Mathf.Clamp((int)(v * res), 0, res - 1);
+			return sward[iz * res + ix] / 255f;
+		}
+
 		/// <summary>The grass standing at a world point on this terrain, metres (0 off it, or before the map is built).</summary>
 		public float CoverAt(float x, float z)
 		{
@@ -932,6 +966,7 @@ namespace FishMMO.Client
 			Density = null;
 			Occupied = null;
 			Cover = null;
+			Sward = null;
 			if (heightTexture != null)
 			{
 				UnityEngine.Object.Destroy(heightTexture);

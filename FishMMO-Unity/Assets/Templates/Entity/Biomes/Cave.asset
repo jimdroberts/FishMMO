@@ -224,7 +224,7 @@ MonoBehaviour:
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
-  TerrainProcess: {fileID: 0}
+  TerrainProcess: {fileID: 11400000, guid: 0f472e1f6013a495f9a563ea05bff142, type: 2}
   mainTextureLayer:
     terrainLayer: {fileID: 8574412962073106934, guid: b460e0b7c7d15dda82b56be3ce4cb55f,
       type: 2}
@@ -423,68 +423,6 @@ MonoBehaviour:
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
       specFingerprint: 29fa01a455a3f9fc
-      detailNoiseSpread: 0.4
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
-    - stableGuid: a172eaa7ad4349e7b2077aa7d3c0990c
-      enableSpawning: 0
-      ruleName: '[disabled by Biome Art: moved by the spec] Formations: Limestone
-        pinnacles'
-      prefabs:
-      - {fileID: 8274548307635613768, guid: f7e6c2c54ccd4d803d28c1a0ffc9a639, type: 3}
-      - {fileID: 8578079170974968235, guid: 349664a4754107069f5c5fc72c71e8fe, type: 3}
-      - {fileID: 7503033762574344351, guid: 5083f57163d8b26f08e6fe595c15972a, type: 3}
-      - {fileID: 7374477958975361001, guid: 6a7b0ab822c981c91d8d91c69a0409f4, type: 3}
-      spawnChannel: 1
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 0.03
-      maxPerChunk: 2000
-      minSpacing: 6
-      minTextureWeight: 0.5
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 25
-      slopeFalloff: 5
-      useNonUniformScaling: 0
-      uniformScaleRange: {x: 0.8, y: 1.25}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.85, y: 1.25}
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 51708
-      clusterMetres: 14
-      clusterSize: 5
-      clusterSpacing: 4
-      clusterBackground: 0.3
-      clusterScaleBias: 0.5
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0, y: 0.05}
-      sinkSlopeFactor: 0.6
-      depthRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      specFingerprint: a1294df0813c2f4f
       detailNoiseSpread: 0.4
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}

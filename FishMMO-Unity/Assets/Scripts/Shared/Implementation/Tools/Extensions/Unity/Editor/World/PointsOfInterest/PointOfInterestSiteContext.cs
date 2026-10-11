@@ -82,7 +82,25 @@ namespace FishMMO.Shared.WorldDesign
 		public GameObject ResolvePiece(string tag, int seed) => PointOfInterestPieces.Resolve(tag, Style, seed);
 
 		/// <summary>Adds an instanced prop to the scene's POI prop set.</summary>
-		public void AddProp(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale) => Sink?.Add(prefab, position, rotation, scale);
+		public void AddProp(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale)
+		{
+			Sink?.Add(prefab, position, rotation, scale);
+			// What the piece gives off (a chimney's smoke, a fire, a forge, a lantern), where it now stands.
+			if (Points != null && prefab != null && StructurePieces.TryParsePrefab(prefab.name, out StructurePiece piece, out int variant))
+			{
+				foreach ((Vector3 at, SceneEmitterKind kind) in StructurePieces.EmittersOf(piece, variant))
+				{
+					Vector3 world = position + rotation * Vector3.Scale(at, scale);
+					Points.Emitters ??= new System.Collections.Generic.List<SceneEmitter>();
+					Points.Emitters.Add(new SceneEmitter
+					{
+						Position = world,
+						Kind = kind,
+						Seed = PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0, Mathf.RoundToInt(world.x * 10f), Mathf.RoundToInt(world.z * 10f), (int)kind),
+					});
+				}
+			}
+		}
 
 		/// <summary>The world position of an offset in the site's own frame (x right, z ahead along its heading), on the ground.</summary>
 		public Vector3 OnGround(Vector2 local)

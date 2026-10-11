@@ -318,7 +318,7 @@ MonoBehaviour:
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
-  TerrainProcess: {fileID: 0}
+  TerrainProcess: {fileID: 11400000, guid: cc5ba8f95b95c207884b8784d8ef3c7d, type: 2}
   mainTextureLayer:
     terrainLayer: {fileID: 8574412962073106934, guid: 8d929eacc4270f23ac8575fa44d73214,
       type: 2}
@@ -344,64 +344,6 @@ MonoBehaviour:
       max: 90
     slopeFalloff: 5
     prefabSpawnRules:
-    - stableGuid: e7e9f77669f942d8bcef468b2c87e43d
-      enableSpawning: 0
-      ruleName: '[disabled by Biome Art: moved by the spec] Trees: Oak'
-      prefabs:
-      - {fileID: 6230501179755798689, guid: 4ccf17bb127a8e1cfc899527e99cf2ee, type: 3}
-      spawnChannel: 1
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 0.665
-      maxPerChunk: 20000
-      minSpacing: 10.1
-      minTextureWeight: 0.5
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 30
-      slopeFalloff: 5
-      useNonUniformScaling: 1
-      uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.2}
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 54946
-      clusterMetres: 0
-      clusterSize: 0
-      clusterSpacing: 4
-      clusterBackground: 0.2
-      clusterScaleBias: 0.5
-      forestMetres: 520
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.00744186
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.05, y: 0.15}
-      sinkSlopeFactor: 0.3
-      depthRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      specFingerprint: fabcdeefeed09306
-      detailNoiseSpread: 0.4
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
     - stableGuid: 24c5a47234394c669629c594d5f6fed8
       enableSpawning: 1
       ruleName: Fern

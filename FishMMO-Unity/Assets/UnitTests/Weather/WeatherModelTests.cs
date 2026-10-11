@@ -193,6 +193,33 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
+		public void RetypingCarriesWhatTheFallDoesToTheGround()
+		{
+			// Rain derived first and then found to be snow: the ground whitens and does not soak (it did both).
+			WeatherFrame cold = Frame((WeatherChannel.Precipitation, 0.8f), (WeatherChannel.RainWeight, 1f));
+			cold.DeriveSurfaceRates();
+			cold.RetypeForTemperature(-0.5f);
+			cold.DeriveSurfaceRates();
+			Assert.That(cold[WeatherChannel.WetnessTarget], Is.EqualTo(0f).Within(Tolerance), "snow re-typed from rain still soaked the ground");
+			Assert.That(cold[WeatherChannel.SnowCoverRate], Is.EqualTo(0.8f).Within(Tolerance));
+
+			// And the other way: snow found to be rain wets it and lays no snow.
+			WeatherFrame warm = Frame((WeatherChannel.Precipitation, 0.6f), (WeatherChannel.SnowWeight, 1f));
+			warm.DeriveSurfaceRates();
+			warm.RetypeForTemperature(0.5f);
+			warm.DeriveSurfaceRates();
+			Assert.That(warm[WeatherChannel.SnowCoverRate], Is.EqualTo(0f).Within(Tolerance), "rain re-typed from snow still whitened the ground");
+			Assert.That(warm[WeatherChannel.WetnessTarget], Is.EqualTo(0.6f).Within(Tolerance));
+
+			// A scaling the air made (a thin atmosphere's 0.3) survives the re-typing.
+			WeatherFrame thin = Frame((WeatherChannel.Precipitation, 1f), (WeatherChannel.RainWeight, 1f));
+			thin.DeriveSurfaceRates();
+			thin[WeatherChannel.WetnessTarget] *= 0.3f;
+			thin.RetypeForTemperature(-0.05f);
+			Assert.That(thin[WeatherChannel.WetnessTarget], Is.EqualTo(0.15f).Within(Tolerance));
+		}
+
+		[Test]
 		public void RetypingLeavesHailAshAndSandAlone()
 		{
 			WeatherFrame frame = Frame((WeatherChannel.HailWeight, 0.4f), (WeatherChannel.AshWeight, 0.3f), (WeatherChannel.SandWeight, 0.3f));

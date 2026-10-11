@@ -24,8 +24,6 @@ MonoBehaviour:
     Weight: 1.5
   - Biome: Jungle
     Weight: 1.5
-  - Biome: Rainforest
-    Weight: 1.5
   - Biome: Bamboo Forest
     Weight: 1.5
   - Biome: Forest Ruins
@@ -33,8 +31,6 @@ MonoBehaviour:
   - Biome: Jungle Ruins
     Weight: 1.5
   - Biome: Jungle Temple
-    Weight: 1.5
-  - Biome: Temperate
     Weight: 1.5
   RaceCategories: []
   Races: []
@@ -82,14 +78,14 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357642
-  - rid: 4061506032503357643
-  - rid: 4061506032503357644
-  - rid: 4061506032503357645
+  - rid: 4061506061917749837
+  - rid: 4061506061917749838
+  - rid: 4061506061917749839
+  - rid: 4061506061917749840
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357642
+    - rid: 4061506061917749837
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -100,16 +96,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506032503357643
+    - rid: 4061506061917749838
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357644
+    - rid: 4061506061917749839
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503357645
+    - rid: 4061506061917749840
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5

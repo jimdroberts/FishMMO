@@ -743,11 +743,26 @@ namespace FishMMO.Shared.WorldDesign
 				while (i < n)
 				{
 					Vector3 p = path.Points[i];
-					int cell = router.IndexAt(p.x, p.z);
-					if (router.Bridge[cell] != 0)
+					int bridge = router.Bridge[router.IndexAt(p.x, p.z)];
+					if (bridge != 0)
 					{
-						path.Flags[i] |= (byte)ScenePathPointFlags.Bridge;
-						i++;
+						// Over a bridge already standing (or asked for by an earlier way): onto its deck along its axis.
+						int start = i;
+						while (i < n && router.Bridge[router.IndexAt(path.Points[i].x, path.Points[i].z)] == bridge)
+						{
+							i++;
+						}
+						if (BridgeAxis(bridge, out Vector3 centre, out float yaw, out float planned))
+						{
+							Straighten(path, start, i - 1, centre, yaw, planned > 0f ? planned : RunHalf(path, start, i - 1, centre, yaw));
+						}
+						else
+						{
+							for (int k = start; k < i; k++)
+							{
+								path.Flags[k] |= (byte)ScenePathPointFlags.Bridge;
+							}
+						}
 						continue;
 					}
 					if (input.WaterAt == null || input.WaterAt(p.x, p.z) != PathCellWater.River)
@@ -756,17 +771,17 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					// A run of river: wade it or bridge it, on its deepest point.
-					int start = i;
+					int first = i;
 					float deepest = 0f;
 					while (i < n && input.WaterAt(path.Points[i].x, path.Points[i].z) == PathCellWater.River)
 					{
 						deepest = Mathf.Max(deepest, input.WaterDepth != null ? input.WaterDepth(path.Points[i].x, path.Points[i].z) : 0f);
 						i++;
 					}
-					int end = i - 1;
+					int last = i - 1;
 					if (deepest <= style.FordDepth)
 					{
-						for (int k = Mathf.Max(0, start - 2); k <= Mathf.Min(n - 1, end + 2); k++)
+						for (int k = Mathf.Max(0, first - 2); k <= Mathf.Min(n - 1, last + 2); k++)
 						{
 							path.Flags[k] |= (byte)ScenePathPointFlags.Ford;
 							if (path.Surface[k] != (byte)ScenePathSurface.Stone)
@@ -777,23 +792,118 @@ namespace FishMMO.Shared.WorldDesign
 						plan.Fords++;
 						continue;
 					}
-					int a = Mathf.Max(0, start - 1), b = Mathf.Min(n - 1, end + 1);
-					for (int k = a; k <= b; k++)
-					{
-						path.Flags[k] |= (byte)ScenePathPointFlags.Bridge;
-					}
+					int a = Mathf.Max(0, first - 1), b = Mathf.Min(n - 1, last + 1);
 					Vector3 pa = path.Points[a], pb = path.Points[b];
-					Vector3 centre = (pa + pb) * 0.5f;
+					Vector3 middle = (pa + pb) * 0.5f;
 					var site = new PathBridgeSite
 					{
 						PathId = path.Id,
-						Centre = new Vector3(centre.x, Mathf.Max(pa.y, pb.y), centre.z),
+						Centre = new Vector3(middle.x, Mathf.Max(pa.y, pb.y), middle.z),
 						Yaw = PointOfInterestPlanner.YawOf(pb.x - pa.x, pb.z - pa.z),
 						Span = new Vector2(pb.x - pa.x, pb.z - pa.z).magnitude,
 					};
 					plan.Bridges.Add(site);
 					// Every way after this one may use it.
-					router.MarkBridge(nextBridgeId--, site.Centre, site.Yaw, site.Span * 0.5f + 2f);
+					int id = nextBridgeId--;
+					router.MarkBridge(id, site.Centre, site.Yaw, site.Span * 0.5f + 2f);
+					// The deck reaches a little past the water (PropsFeature.MeasureCrossing): the way runs straight onto it.
+					Straighten(path, a, b, site.Centre, site.Yaw, site.Span * 0.5f + BridgeAbutmentMetres);
+					// Past the points just laid on its deck: they are this crossing, not another bridge to straighten onto.
+					while (i < n && router.Bridge[router.IndexAt(path.Points[i].x, path.Points[i].z)] == id)
+					{
+						i++;
+					}
+				}
+			}
+
+			/// <summary>How far past the water's edge a bridge's deck is reckoned to reach, metres.</summary>
+			private const float BridgeAbutmentMetres = 2.5f;
+			/// <summary>Straight ground the way keeps beyond a deck's end before it bends away, metres.</summary>
+			private const float BridgeApproachMetres = 5f;
+			/// <summary>Over which, past the straight, the way eases back into its own line, metres.</summary>
+			private const float BridgeEaseMetres = 12f;
+
+			/// <summary>
+			/// A bridge's centre and heading: a standing record's, or one an earlier way asked for (negative ids), whose
+			/// planned deck half length comes too (0 for a record, whose deck the way's own run measures).
+			/// </summary>
+			private bool BridgeAxis(int id, out Vector3 centre, out float yaw, out float half)
+			{
+				centre = default;
+				yaw = 0f;
+				half = 0f;
+				if (id < 0)
+				{
+					int index = -id - 1;
+					if (index < plan.Bridges.Count)
+					{
+						centre = plan.Bridges[index].Centre;
+						yaw = plan.Bridges[index].Yaw;
+						half = plan.Bridges[index].Span * 0.5f + BridgeAbutmentMetres;
+						return true;
+					}
+					return false;
+				}
+				foreach (PointOfInterestRecord record in input.Records)
+				{
+					if (record != null && record.Id == id)
+					{
+						centre = record.Position;
+						yaw = record.Yaw;
+						return true;
+					}
+				}
+				return false;
+			}
+
+			/// <summary>How far along a bridge's axis a run of the way's points reaches, metres: the deck's half length it used.</summary>
+			private static float RunHalf(ScenePath path, int first, int last, Vector3 centre, float yaw)
+			{
+				float r = yaw * Mathf.Deg2Rad;
+				var axis = new Vector2(Mathf.Sin(r), Mathf.Cos(r));
+				float half = 0f;
+				for (int k = first; k <= last; k++)
+				{
+					half = Mathf.Max(half, Mathf.Abs(Vector2.Dot(new Vector2(path.Points[k].x - centre.x, path.Points[k].z - centre.z), axis)));
+				}
+				return half;
+			}
+
+			/// <summary>
+			/// Lays the way straight along a bridge's axis over its deck and a few metres either side, easing back into its own
+			/// line beyond: a way that bends onto a bridge meets it at an angle, and the deck's railings stand across it (Jim,
+			/// 2026-10-11). Flags the points on the deck as bridged and no others near it.
+			/// </summary>
+			private void Straighten(ScenePath path, int first, int last, Vector3 centre, float yaw, float half)
+			{
+				float r = yaw * Mathf.Deg2Rad;
+				var axis = new Vector2(Mathf.Sin(r), Mathf.Cos(r));
+				var across = new Vector2(-axis.y, axis.x);
+				float straight = half + BridgeApproachMetres, ease = straight + BridgeEaseMetres;
+				int window = Mathf.CeilToInt(ease / PointSpacing) + 2;
+				for (int k = Mathf.Max(0, first - window); k <= Mathf.Min(path.Count - 1, last + window); k++)
+				{
+					if ((path.FlagsAt(k) & ScenePathPointFlags.InSite) != 0)
+					{
+						continue;
+					}
+					var offset = new Vector2(path.Points[k].x - centre.x, path.Points[k].z - centre.z);
+					float along = Vector2.Dot(offset, axis), side = Vector2.Dot(offset, across);
+					if (Mathf.Abs(along) > ease || Mathf.Abs(side) > ease)
+					{
+						continue;
+					}
+					float keep = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(straight, ease, Mathf.Abs(along)));
+					Vector2 placed = new Vector2(centre.x, centre.z) + axis * along + across * (side * keep);
+					path.Points[k] = new Vector3(placed.x, input.Ground(placed.x, placed.y), placed.y);
+					if (Mathf.Abs(along) <= half)
+					{
+						path.Flags[k] |= (byte)ScenePathPointFlags.Bridge;
+					}
+					else
+					{
+						path.Flags[k] &= unchecked((byte)~ScenePathPointFlags.Bridge);
+					}
 				}
 			}
 

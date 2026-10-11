@@ -14,6 +14,8 @@ namespace FishMMO.Shared.WorldDesign
 		Herb = 2,
 		Fungus = 3,
 		Wood = 4,
+		/// <summary>What grows or lies on the sea floor (and a lake's): gathered round sunken sites.</summary>
+		Marine = 5,
 	}
 
 	/// <summary>
@@ -85,10 +87,11 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static readonly string[] Volcanic = { "Volcanic", "Lava Tube", "Volcanic Cave", "Molten Surface", "Geyser Basin", "Sulphur Flats", "Volcanic Temple", "Crater" };
 		private static readonly string[] Caves = { "Cave", "Ice Cave", "Swamp Cave", "Volcanic Cave", "Lava Tube", "Karst" };
-		private static readonly string[] Alien = { "Impact Basin", "Radiation Plain", "Regolith Plain", "Tholin Plain", "Nitrogen Ice Field", "Methane Lake", "Cryovolcanic Plain", "Ice Geyser Field", "Tidal Fracture", "Dust Sea", "Runaway Greenhouse Plain", "Sulphuric Cloud Deck", "Rille" };
-		private static readonly string[] Temperate = { "Grassland", "Plains", "Farmland", "Woodland", "Forest", "Valley", "Hills", "Steppe", "Alpine Meadow", "Forest Ruins" };
-		private static readonly string[] Cold = { "Alpine", "Alpine Meadow", "Tundra", "Taiga", "Snow", "Glacier", "Mountain Slope", "Permanent Ice" };
-		private static readonly string[] Dry = { "Desert", "High Desert", "Savanna", "Scrubland", "Oasis", "Badlands", "Steppe", "Salt Flat" };
+		private static readonly string[] Alien = { "Impact Basin", "Radiation Plain", "Regolith Plain", "Tholin Plain", "Nitrogen Ice Field", "Methane Lake", "Cryovolcanic Plain", "Ice Geyser Field", "Tidal Fracture", "Dust Sea", "Runaway Greenhouse Plain", "Sulphuric Cloud Deck", "Rille", "Subsurface Ocean Vent" };
+		// The strongholds and palaces stand in temperate country; their gardens and moats grow its herbs.
+		private static readonly string[] Temperate = { "Grassland", "Plains", "Farmland", "Woodland", "Forest", "Valley", "Hills", "Steppe", "Alpine Meadow", "Forest Ruins", "Castle", "Fortress", "Marble Palace" };
+		private static readonly string[] Cold = { "Alpine", "Alpine Meadow", "Tundra", "Taiga", "Snow", "Glacier", "Mountain Slope", "Permanent Ice", "Ice Sheet", "Ice Shelf", "Ice Palace", "Ice Ruin" };
+		private static readonly string[] Dry = { "Desert", "High Desert", "Savanna", "Scrubland", "Oasis", "Badlands", "Steppe", "Salt Flat", "Wasteland" };
 		private static readonly string[] Wet = { "Swamp", "Wetlands", "Peat Bog", "Mangrove", "Estuary", "Swamp Ruins", "Swamp Temple" };
 		private static readonly string[] Tropical = { "Jungle", "Jungle Ruins", "Jungle Temple", "Bamboo Forest", "Mangrove" };
 
@@ -97,23 +100,25 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Ore ──────────────────────────────────────────────────
 			new GatheringResource { Node = "Copper Lode", Item = "Copper Ore", Family = GatheringFamily.Ore, Tier = 1, Visual = "Boulder_Sandstone_Round",
 				Tint = new Color(0.86f, 0.52f, 0.32f), Size = 1.6f, MaxUses = 4, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 3,
-				Biomes = new[] { "Hills", "Badlands", "Desert", "High Desert", "Scrubland", "Rocky Terrain", "Valley", "Plains", "Steppe" },
+				Biomes = new[] { "Hills", "Badlands", "Desert", "High Desert", "Scrubland", "Rocky Terrain", "Valley", "Plains", "Steppe", "Wasteland" },
 				Description = "Green-stained copper ore from soft sedimentary rock." },
 			new GatheringResource { Node = "Iron Vein", Item = "Iron Ore", Family = GatheringFamily.Ore, Tier = 1, Visual = "Boulder_Basalt_Round",
 				Tint = new Color(0.62f, 0.34f, 0.26f), Size = 1.7f, MaxUses = 4, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 3,
-				Biomes = new[] { "Hills", "Mountain Slope", "Rocky Terrain", "Volcanic", "Scree", "Badlands", "Tundra", "Taiga", "Forest", "Valley", "Rocky Coast" },
-				Description = "Rust-red iron ore, found wherever the rock is hard." },
+				Biomes = new[] { "Hills", "Mountain Slope", "Rocky Terrain", "Volcanic", "Scree", "Badlands", "Tundra", "Taiga", "Forest", "Valley", "Rocky Coast",
+					"Beach", "Wasteland", "Castle", "Fortress" },
+				Description = "Rust-red iron ore, found wherever the rock is hard — and as black sand on the beach." },
 			new GatheringResource { Node = "Silver Vein", Item = "Silver Ore", Family = GatheringFamily.Ore, Tier = 2, Visual = "Formation_Granite_Corestone_0",
 				Tint = new Color(0.82f, 0.87f, 0.94f), Size = 1.8f, MaxUses = 3, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
-				Biomes = new[] { "Alpine", "Mountain Slope", "Hills", "Karst", "Tundra", "Scree", "Glacier" },
+				Biomes = new[] { "Alpine", "Mountain Slope", "Hills", "Karst", "Tundra", "Scree", "Glacier", "Ice Sheet", "Ice Palace", "Ice Ruin" },
 				Description = "Bright silver ore from the granite of the high country." },
 			new GatheringResource { Node = "Gold Vein", Item = "Gold Ore", Family = GatheringFamily.Ore, Tier = 3, Visual = "Formation_Quartzite_Block_0",
 				Tint = new Color(1.0f, 0.82f, 0.34f), Size = 1.7f, MaxUses = 3, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 2,
-				Biomes = new[] { "Desert", "High Desert", "Badlands", "River", "Valley", "Mountain Slope", "Savanna" },
+				Biomes = new[] { "Desert", "High Desert", "Badlands", "River", "Valley", "Mountain Slope", "Savanna", "Marble Palace" },
 				Description = "Gold in white quartz, where old rivers and dry ranges cut deep." },
 			new GatheringResource { Node = "Starsilver Vein", Item = "Starsilver Ore", Family = GatheringFamily.Ore, Tier = 4, Visual = "Formation_Gneiss_Boulder_0",
 				Tint = new Color(0.58f, 0.86f, 1.0f), Size = 1.9f, MaxUses = 2, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
-				Biomes = new[] { "Alpine", "Mountain Slope", "Glacier", "Impact Basin", "Crater" },
+				// Fallen stars lie where nothing buries them: the ice sheets keep every meteorite that lands on them.
+				Biomes = new[] { "Alpine", "Mountain Slope", "Glacier", "Impact Basin", "Crater", "Ice Sheet", "Ice Shelf" },
 				Description = "A pale, impossibly light ore. Rare beyond telling." },
 
 			// ── Crystal ──────────────────────────────────────────────
@@ -122,7 +127,8 @@ namespace FishMMO.Shared.WorldDesign
 				Biomes = Volcanic, Description = "Volcanic glass that never quite cools." },
 			new GatheringResource { Node = "Lumen Quartz Cluster", Item = "Lumen Quartz", Family = GatheringFamily.Crystal, Tier = 2, Visual = "Formation_Gypsum_Crystal_0",
 				Tint = new Color(0.86f, 0.82f, 1.0f), Size = 1.4f, MaxUses = 3, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
-				Biomes = Caves, Description = "Cave quartz that holds a faint light." },
+				Biomes = new[] { "Cave", "Ice Cave", "Swamp Cave", "Volcanic Cave", "Lava Tube", "Karst", "Ice Palace", "Ice Ruin" },
+				Description = "Cave quartz that holds a faint light." },
 			new GatheringResource { Node = "Voidstone Cluster", Item = "Voidstone", Family = GatheringFamily.Crystal, Tier = 3, Visual = "Formation_WaterIce_Crystal_0",
 				Tint = new Color(0.62f, 0.32f, 1.0f), Size = 1.5f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = Alien, Description = "A crystal from no world anyone knows." },
@@ -143,6 +149,10 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Bloodroot Patch", Item = "Bloodroot", Family = GatheringFamily.Herb, Tier = 2, Visual = "Detail_FlowersWarm",
 				Tint = new Color(1.0f, 0.55f, 0.55f), Size = 0.8f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 2,
 				Biomes = Tropical, Description = "A red root from the deep jungle." },
+			new GatheringResource { Node = "Samphire Patch", Item = "Samphire", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_ShrubSamphire",
+				Tint = new Color(0.72f, 0.9f, 0.6f), Size = 0.8f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
+				Biomes = new[] { "Beach", "Estuary", "Salt Flat", "Rocky Coast", "Mangrove" },
+				Description = "Salty sea-asparagus from the tideline." },
 
 			// ── Fungus ───────────────────────────────────────────────
 			new GatheringResource { Node = "Glowcap Cluster", Item = "Glowcap", Family = GatheringFamily.Fungus, Tier = 2, Visual = "Detail_MushroomCave",
@@ -169,6 +179,34 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.86f, 0.95f, 1.0f), Size = 0.0f, Footprint = 0.15f, MaxUses = 5, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Taiga", "Tundra", "Alpine", "Snow", "Mountain Slope" },
 				Description = "Pale, resinous wood from the oldest pines." },
+
+			// ── Marine ───────────────────────────────────────────────
+			// Gathered round the sunken sites (FamiliesFor): the sea floor and a lake's bed had no nodes at all (audit 2026-10-11).
+			new GatheringResource { Node = "Pearl Oyster Bed", Item = "Pearl", Family = GatheringFamily.Marine, Tier = 2, Visual = "Detail_MusselBedOyster",
+				Tint = new Color(0.92f, 0.9f, 0.86f), Size = 1.2f, MaxUses = 3, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 1,
+				// Freshwater pearl mussels in the lakes and the clean rivers.
+				Biomes = new[] { "Coastal Water", "Coral Reef", "Ocean", "Lake", "River" },
+				Description = "An oyster bed; one shell in a hundred holds a pearl worth the dive." },
+			new GatheringResource { Node = "Kelp Holdfast", Item = "Kelp Frond", Family = GatheringFamily.Marine, Tier = 1, Visual = "Detail_Kelp",
+				Tint = new Color(0.78f, 0.86f, 0.55f), Size = 1.8f, MaxUses = 4, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
+				Biomes = new[] { "Coastal Water", "Ocean", "Seamount", "Underwater Canyon" },
+				Description = "Tough fronds from a kelp forest's floor." },
+			new GatheringResource { Node = "Living Coral", Item = "Coral Fragment", Family = GatheringFamily.Marine, Tier = 2, Visual = "Detail_BrainCoral",
+				Tint = new Color(1.0f, 0.72f, 0.66f), Size = 1.2f, MaxUses = 3, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 2,
+				Biomes = new[] { "Coral Reef", "Coastal Water" },
+				Description = "A branch of reef coral, still bright." },
+			new GatheringResource { Node = "Manganese Nodules", Item = "Manganese Nodule", Family = GatheringFamily.Marine, Tier = 3, Visual = "Boulder_Nodule_Round",
+				Tint = new Color(0.55f, 0.5f, 0.46f), Size = 1.4f, MaxUses = 3, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 2,
+				Biomes = new[] { "Abyssal Plain", "Deep Ocean", "Abyss" },
+				Description = "Metal-rich lumps grown a millimetre a million years on the abyssal floor." },
+			new GatheringResource { Node = "Glass Sponge", Item = "Glass Spicule", Family = GatheringFamily.Marine, Tier = 3, Visual = "Detail_GlassSponge",
+				Tint = new Color(0.86f, 0.94f, 1.0f), Size = 1.3f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 2,
+				Biomes = new[] { "Abyss", "Deep Ocean", "Seamount", "Underwater Canyon" },
+				Description = "Silica lace from a sponge older than the kingdoms above it." },
+			new GatheringResource { Node = "Vent Clam Bed", Item = "Vent Pearl", Family = GatheringFamily.Marine, Tier = 4, Visual = "Detail_MusselBedVentClam",
+				Tint = new Color(1.0f, 0.86f, 0.7f), Size = 1.2f, MaxUses = 2, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
+				Biomes = new[] { "Subsurface Ocean Vent", "Abyss" },
+				Description = "A pearl grown in the heat of a black smoker." },
 		};
 
 		/// <summary>Every resource, in authoring order.</summary>
@@ -212,6 +250,11 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.Cave:
 				case POIType.Grotto:
 					return new[] { GatheringFamily.Ore, GatheringFamily.Crystal, GatheringFamily.Fungus };
+				// What grows on a wreck and round a drowned wall: the sea floor's own harvest.
+				case POIType.SunkenShip:
+				case POIType.SunkenRuins:
+				case POIType.SunkenCity:
+					return new[] { GatheringFamily.Marine };
 				default:
 					return Array.Empty<GatheringFamily>();
 			}

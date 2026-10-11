@@ -31,6 +31,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// face with no block joints, where ashlar's courses would read as a statue built of bricks.
 		/// </summary>
 		Monolith,
+		/// <summary>
+		/// A window's pane or a lantern's: dark by day, lit warm from dusk (FishStructureWeathering.hlsl, a material marked
+		/// _FishStructure = 2), in most windows of a house and not others.
+		/// </summary>
+		Glass,
 	}
 
 	/// <summary>What a part does in its structure, which decides how a ruin treats it.</summary>

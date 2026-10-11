@@ -101,6 +101,7 @@ Material:
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
+    - _FishStructure: 0
     - _FishVisible: 1
     - _FishWeatherAmount: 1
     - _GlossMapScale: 0

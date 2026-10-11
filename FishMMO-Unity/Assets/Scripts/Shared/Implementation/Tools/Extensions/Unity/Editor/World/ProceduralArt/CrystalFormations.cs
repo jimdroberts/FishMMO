@@ -475,11 +475,19 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					lathe.AddRing(crest - lip * 1.6f, 1f, 0f);
 				}
-				lathe.AddRing(crest - lip * 0.5f, 0.995f, 0f);
-				lathe.AddRing(crest, 0.975f, 0f);
 				if (level > 1)
 				{
-					lathe.AddRing(crest - lip * 0.45f, 0.94f, 0f, 0.5f);
+					lathe.AddRing(crest - lip * 0.5f, 0.995f, 0f);
+				}
+				// The lip's top is a narrow rounded band, two rings, at every level: a knife-edge crest shares one ring
+				// between the outer wall and the steep inner lip, its smoothed normal leans into the pool, and the outer
+				// wall's top triangles end up all but edge-on to their own normals (flipped outright at the coarser LODs).
+				// Below the finest level the band's outer ring stands in for the wall's top bevel, so the count is unchanged.
+				lathe.AddRing(crest, 0.98f, 0f);
+				lathe.AddRing(crest, 0.955f, 0f, 0.8f);
+				if (level > 1)
+				{
+					lathe.AddRing(crest - lip * 0.45f, 0.93f, 0f, 0.5f);
 				}
 				lathe.AddRing(crest - lip, 0.91f, 0f, 0.3f);
 				float wallLump = lump * 0.015f * length;

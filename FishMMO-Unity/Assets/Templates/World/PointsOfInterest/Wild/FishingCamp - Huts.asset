@@ -22,8 +22,6 @@ MonoBehaviour:
     Weight: 1.5
   - Biome: Snow
     Weight: 1.5
-  - Biome: Periglacial
-    Weight: 1.5
   - Biome: Glacier
     Weight: 1.5
   - Biome: Ice Sheet
@@ -78,13 +76,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357709
-  - rid: 4061506032503357710
-  - rid: 4061506032503357711
+  - rid: 4061506061917749619
+  - rid: 4061506061917749620
+  - rid: 4061506061917749621
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357709
+    - rid: 4061506061917749619
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -95,12 +93,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506032503357710
+    - rid: 4061506061917749620
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357711
+    - rid: 4061506061917749621
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

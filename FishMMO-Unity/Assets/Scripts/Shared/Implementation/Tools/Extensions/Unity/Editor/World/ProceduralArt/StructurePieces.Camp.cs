@@ -191,6 +191,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(0.58f, -0.06f), new Vector2(0.58f, 0.02f), new Vector2(0.3f, 0.05f), new Vector2(0f, 0.05f) },
 				d.Seg(12, 6), StructureMaterial.Ash, 1, true));
+			d.Emit(new Vector3(0f, 0.15f, 0f), SceneEmitterKind.Fire);
 			int logs = d.Mid ? 4 : 3;
 			for (int i = 0; i < logs; i++)
 			{

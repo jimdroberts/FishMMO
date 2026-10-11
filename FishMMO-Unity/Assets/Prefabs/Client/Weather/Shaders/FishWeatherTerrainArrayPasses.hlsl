@@ -274,6 +274,12 @@ void SplatmapFragment(
     InputData inputData;
     InitializeInputData(IN, ground.normalTS, inputData);
 
+    // FishMMO edit: the grass standing on this ground shades it as it shades its own roots (GrassSwardMap). Before the
+    // weather, so snow lying over the grass is not darkened by it.
+    half sward = FishSwardShade(inputData.positionWS);
+    albedo *= sward;
+    smoothness *= sward;
+
     // FishMMO edit: the weather on this ground.
     if (_FishWeatherAmount > 0.0)
     {

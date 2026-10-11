@@ -24,6 +24,7 @@ namespace FishMMO.Client
 		public const string AmbientLifeShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishAmbientLife.shader";
 		public const string AirMotesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishAirMotes.shader";
 		public const string FallingLeavesShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishFallingLeaves.shader";
+		public const string SiteEmbersShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishSiteEmbers.shader";
 		public const string IndirectShaderVariantsPath = "Assets/Prefabs/Shared/Biomes/Generated/Variants/FishIndirectVariants.shadervariants";
 		public const string AudioPath = Folder + "/Weather Audio Profile.asset";
 		public const string ShaderName = "FishMMO/Weather/Precipitation";
@@ -187,6 +188,8 @@ namespace FishMMO.Client
 			if (profile.AirMotesShader == null) profile.AirMotesShader = AssetDatabase.LoadAssetAtPath<Shader>(AirMotesShaderPath);
 			// The leaves coming down from the trees: same rule.
 			if (profile.FallingLeavesShader == null) profile.FallingLeavesShader = AssetDatabase.LoadAssetAtPath<Shader>(FallingLeavesShaderPath);
+			// The sparks off the sites' fires and forges: same rule.
+			if (profile.SiteEmbersShader == null) profile.SiteEmbersShader = AssetDatabase.LoadAssetAtPath<Shader>(SiteEmbersShaderPath);
 			// Generated with the biome art (gitignored, path-derived GUID), so it may not exist yet; assigned once it does.
 			if (profile.IndirectShaderVariants == null) profile.IndirectShaderVariants = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(IndirectShaderVariantsPath);
 			EditorUtility.SetDirty(profile);

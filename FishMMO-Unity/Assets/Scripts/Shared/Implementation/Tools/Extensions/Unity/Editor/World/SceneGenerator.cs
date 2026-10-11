@@ -1293,12 +1293,21 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			return (x, z) =>
 			{
-				float surface = water.SurfaceAt(x, z);
+				/* A lake's level, or the river's where its centre line comes nearest: smooth down a falling river. The grid's
+				 * highest-of-four-samples stepped at every sample there, and the bed paint and the plants' waterline up the
+				 * banks came out as teeth (Jim, 2026-10-11). The grid still answers what neither does. */
+				float surface = Mathf.Max(water.LakeSurfaceNear(x, z), water.RiverSurfaceNear(x, z));
+				WaterKind kind = water.KindAt(x, z);
+				if (float.IsNegativeInfinity(surface) && (kind == WaterKind.River || kind == WaterKind.Lake))
+				{
+					// Only under water itself: the grid's fringe a sample past the banks is where it stepped.
+					surface = water.SurfaceAt(x, z);
+				}
 				if (!float.IsNegativeInfinity(surface))
 				{
 					return surface;
 				}
-				switch (water.KindAt(x, z))
+				switch (kind)
 				{
 					case WaterKind.DryWash:
 						return float.PositiveInfinity;

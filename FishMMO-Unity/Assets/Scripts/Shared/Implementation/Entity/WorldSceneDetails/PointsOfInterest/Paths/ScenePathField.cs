@@ -120,25 +120,75 @@ namespace FishMMO.Shared
 			var pages = new Dictionary<int, Page>();
 			foreach (ScenePath path in list)
 			{
+				EndFade(path, out float[] half, out float[] wear);
 				for (int i = 1; i < path.Count; i++)
 				{
 					if ((path.FlagsAt(i - 1) & ScenePathPointFlags.Bridge) != 0 && (path.FlagsAt(i) & ScenePathPointFlags.Bridge) != 0)
 					{
 						continue;
 					}
-					field.Segment(pages, path, i - 1, i);
+					field.Segment(pages, path, i - 1, i, half, wear);
 				}
 			}
 			field.Pack(pages);
 			return field;
 		}
 
+		/// <summary>How far a dead end peters out, metres: a few widths, within bounds.</summary>
+		public static float EndFadeMetres(ScenePath path) => path.Class == ScenePathClass.Yard ? 2.5f : Mathf.Clamp(4f * path.MaxHalfWidth + 3f, 4f, 12f);
+
+		/// <summary>
+		/// The half widths and wears a path is drawn with: its own, narrowed to nothing and worn away over the last few metres
+		/// of each end that stops in a site, so a way peters out into the ground instead of ending in a full-width round
+		/// cap (Jim, 2026-10-11). An end that joins another way (FromId −1) and a settlement's streets are drawn as they
+		/// are: a junction must meet, and a street runs to its walls.
+		/// </summary>
+		public static void EndFade(ScenePath path, out float[] half, out float[] wear)
+		{
+			int n = path.Count;
+			half = new float[n];
+			wear = new float[n];
+			for (int i = 0; i < n; i++)
+			{
+				half[i] = path.HalfWidth[i];
+				wear[i] = path.Wear != null && path.Wear.Length > i ? path.Wear[i] : 1f;
+			}
+			if (path.Class == ScenePathClass.Street || n < 2)
+			{
+				return;
+			}
+			if (path.Class == ScenePathClass.Yard && path.FromId < 0 && path.ToId < 0)
+			{
+				// A building's own ground: no end to fade.
+				return;
+			}
+			bool fadeStart = path.FromId >= 0, fadeEnd = path.ToId >= 0;
+			if (!fadeStart && !fadeEnd)
+			{
+				return;
+			}
+			float reach = EndFadeMetres(path);
+			var along = new float[n];
+			for (int i = 1; i < n; i++)
+			{
+				along[i] = along[i - 1] + Vector2.Distance(new Vector2(path.Points[i - 1].x, path.Points[i - 1].z), new Vector2(path.Points[i].x, path.Points[i].z));
+			}
+			float total = along[n - 1];
+			for (int i = 0; i < n; i++)
+			{
+				float fromEnd = Mathf.Min(fadeStart ? along[i] : float.PositiveInfinity, fadeEnd ? total - along[i] : float.PositiveInfinity);
+				float fade = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(fromEnd / reach));
+				half[i] *= Mathf.Lerp(0.06f, 1f, fade);
+				wear[i] *= Mathf.Lerp(0.1f, 1f, fade);
+			}
+		}
+
 		/// <summary>Writes one segment's distance into every texel within its reach, keeping the nearest edge.</summary>
-		private void Segment(Dictionary<int, Page> pages, ScenePath path, int ia, int ib)
+		private void Segment(Dictionary<int, Page> pages, ScenePath path, int ia, int ib, float[] halves, float[] wears)
 		{
 			Vector2 a = new Vector2(path.Points[ia].x, path.Points[ia].z), b = new Vector2(path.Points[ib].x, path.Points[ib].z);
-			float ha = path.HalfWidth[ia], hb = path.HalfWidth[ib];
-			float wa = path.Wear != null && path.Wear.Length > ia ? path.Wear[ia] : 1f, wb = path.Wear != null && path.Wear.Length > ib ? path.Wear[ib] : 1f;
+			float ha = halves[ia], hb = halves[ib];
+			float wa = wears[ia], wb = wears[ib];
 			float sa = path.Surface != null && path.Surface.Length > ia ? ScenePathStyle.SurfaceCode((ScenePathSurface)path.Surface[ia]) : 0f;
 			float sb = path.Surface != null && path.Surface.Length > ib ? ScenePathStyle.SurfaceCode((ScenePathSurface)path.Surface[ib]) : 0f;
 			float reach = Mathf.Max(ha, hb) + OutsideMetres;

@@ -80,7 +80,7 @@ namespace FishMMO.Shared.WorldDesign
 				used.Add(chosen);
 				record.Name = chosen;
 			}
-			QualifyRiverFeatures(records);
+			QualifyRiverFeatures(records, namer, used);
 			if (describe != null)
 			{
 				foreach (PointOfInterestRecord record in records)
@@ -96,8 +96,6 @@ namespace FishMMO.Shared.WorldDesign
 			null,
 			new[] { "Upper", "Lower" },
 			new[] { "Upper", "Middle", "Lower" },
-			new[] { "Upper", "High", "Low", "Lower" },
-			new[] { "Upper", "High", "Middle", "Low", "Lower" },
 		};
 
 		private static readonly string[] Ordinals =
@@ -107,11 +105,14 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Tells apart the falls (and rapids, mouths) one river has in the scene. They share the river's planet-wide name, so a
-		/// river stepping down a valley had seven "Dunwy Falls" (Flo Monolith probe, 2026-10-10). Highest first, they become
-		/// Upper / Middle / Lower Dunwy Falls, or First… Twelfth past five; the root stays the river's, so it still reads the
-		/// same in every scene. Rivers themselves are left alone: two runs of one river ARE the same river.
+		/// river stepping down a valley had seven "Dunwy Falls" (Flo Monolith probe, 2026-10-10). Two or three become Upper /
+		/// (Middle /) Lower Dunwy Falls, highest first. Past three, a river's falls are each named for themselves, as real
+		/// ones are (Vernal, Nevada, Bridalveil on one river): the highest and the lowest keep the river's name as Upper and
+		/// Lower, and the ones between take their own (2026-10-11: "First … Ninth Dunwy Falls" read as a list, not places).
+		/// With no namer (tests, templates not loaded) the ones between are numbered. Rivers themselves are left alone: two
+		/// runs of one river ARE the same river.
 		/// </summary>
-		public static void QualifyRiverFeatures(IList<PointOfInterestRecord> records)
+		public static void QualifyRiverFeatures(IList<PointOfInterestRecord> records, PointOfInterestNamer namer = null, HashSet<string> used = null)
 		{
 			var groups = new Dictionary<(POIType, int, string), List<PointOfInterestRecord>>();
 			foreach (PointOfInterestRecord record in records)
@@ -138,32 +139,189 @@ namespace FishMMO.Shared.WorldDesign
 					int c = b.Position.y.CompareTo(a.Position.y);
 					return c != 0 ? c : a.Id.CompareTo(b.Id);
 				});
-				string[] words = group.Count < RiverQualifiers.Length ? RiverQualifiers[group.Count] : null;
-				for (int i = 0; i < group.Count; i++)
+				string root = group[0].Name;
+				if (group.Count < RiverQualifiers.Length)
 				{
-					string qualifier = words != null ? words[i] : i < Ordinals.Length ? Ordinals[i] : (i + 1).ToString();
-					group[i].Name = Qualify(group[i].Name, qualifier);
+					string[] words = RiverQualifiers[group.Count];
+					for (int i = 0; i < group.Count; i++)
+					{
+						group[i].Name = Qualify(root, words[i]);
+					}
+					continue;
+				}
+				group[0].Name = Qualify(root, "Upper");
+				group[group.Count - 1].Name = Qualify(root, "Lower");
+				for (int i = 1; i < group.Count - 1; i++)
+				{
+					string own = OwnName(group[i], namer, used);
+					group[i].Name = own ?? Qualify(root, i < Ordinals.Length ? Ordinals[i] : (i + 1).ToString());
 				}
 			}
 		}
+
+		/// <summary>A river feature's own name, apart from its river's: drawn as any place is, unique in the scene; null when none comes.</summary>
+		private static string OwnName(PointOfInterestRecord record, PointOfInterestNamer namer, HashSet<string> used)
+		{
+			if (namer == null)
+			{
+				return null;
+			}
+			int river = record.PlanetRiver;
+			// Named as a place of its own, from the scene and its id, not from the planet river.
+			record.PlanetRiver = -1;
+			try
+			{
+				for (int attempt = 0; attempt < MaxAttempts; attempt++)
+				{
+					string name = namer(record, attempt)?.Trim();
+					if (string.IsNullOrEmpty(name))
+					{
+						return null;
+					}
+					if (used == null || used.Add(name))
+					{
+						return name;
+					}
+				}
+				return null;
+			}
+			finally
+			{
+				record.PlanetRiver = river;
+			}
+		}
+
+		/// <summary>
+		/// The words a site may be called by, from what its template builds: a timber bridge is a bridge or a span, never a
+		/// viaduct, a causeway or a ford; a plain shrine is no chapel; a timber tower no spire (2026-10-11: names did not
+		/// match what stood there). Null where the template leaves the kind's own words fitting, or the site has none.
+		/// </summary>
+		public static string[] TypeWordsFor(PointOfInterestRecord record)
+		{
+			if (record == null || string.IsNullOrEmpty(record.Template))
+			{
+				return null;
+			}
+			// "Bridge - Timber", "Camp - Yurts (Medium-Large)": the style is between the dash and any size.
+			string style = record.Template;
+			int dash = style.IndexOf(" - ", StringComparison.Ordinal);
+			style = dash >= 0 ? style.Substring(dash + 3) : style;
+			int paren = style.IndexOf(" (", StringComparison.Ordinal);
+			style = (paren >= 0 ? style.Substring(0, paren) : style).Trim();
+			return TemplateWords.TryGetValue((record.Kind, style), out string[] words) ? words : null;
+		}
+
+		private static readonly Dictionary<(POIType, string), string[]> TemplateWords = new Dictionary<(POIType, string), string[]>
+		{
+			[(POIType.Bridge, "Timber")] = new[] { "Bridge", "Footbridge", "Span", "Crossing", "Plank Bridge" },
+			[(POIType.Shrine, "Shrine")] = new[] { "Shrine", "Wayshrine", "Altar" },
+			[(POIType.Shrine, "Statue")] = new[] { "Shrine", "Effigy", "Idol" },
+			[(POIType.Tower, "Timber")] = new[] { "Watchtower", "Tower", "Lookout", "Watch" },
+			[(POIType.Tower, "Stone")] = new[] { "Tower", "Watchtower", "Turret", "Lookout", "Beacon" },
+			[(POIType.Monument, "Obelisk")] = new[] { "Obelisk", "Needle", "Pillar", "Monument" },
+			[(POIType.Monument, "Statue")] = new[] { "Statue", "Monument", "Effigy", "Memorial" },
+			[(POIType.Statue, "Standing")] = new[] { "Statue", "Effigy", "Figure" },
+			[(POIType.Statue, "Broken")] = new[] { "Broken Statue", "Fallen Effigy", "Toppled Statue" },
+			[(POIType.Camp, "Lean-tos")] = new[] { "Camp", "Shelter", "Bivouac" },
+			[(POIType.Camp, "Hide Tents")] = new[] { "Camp", "Encampment", "Tents" },
+			[(POIType.Camp, "Yurts")] = new[] { "Camp", "Encampment", "Yurts" },
+			[(POIType.Camp, "Crude")] = new[] { "Camp", "Shelter", "Fire-ring" },
+			[(POIType.BanditCamp, "Open")] = new[] { "Camp", "Hideout", "Den" },
+			[(POIType.BanditCamp, "Palisade")] = new[] { "Stockade", "Hideout", "Holdfast" },
+			[(POIType.Graveyard, "Railed")] = new[] { "Graveyard", "Cemetery", "Burying Ground" },
+			[(POIType.Graveyard, "Earthen")] = new[] { "Boneyard", "Gravefield", "Barrow-field" },
+			[(POIType.Temple, "Colonnade")] = new[] { "Temple", "Fane", "Sanctuary" },
+			[(POIType.Temple, "Court")] = new[] { "Temple", "Sanctuary", "House" },
+			[(POIType.Monastery, "Cloister")] = new[] { "Monastery", "Abbey", "Priory", "Cloister" },
+			[(POIType.Monastery, "Timber")] = new[] { "Priory", "Friary", "Retreat" },
+			[(POIType.Ruins, "Stone")] = new[] { "Ruins", "Remains", "Foundations" },
+			[(POIType.Ruins, "Burned")] = new[] { "Ruins", "Ashes", "Burnt Walls" },
+			[(POIType.Ruins, "Temple")] = new[] { "Ruined Temple", "Fallen Fane", "Broken Sanctum" },
+			[(POIType.RuinedTower, "Tower")] = new[] { "Ruined Tower", "Broken Tower", "Shell" },
+			[(POIType.RuinedTower, "Keep")] = new[] { "Ruined Keep", "Broken Keep", "Old Keep" },
+			[(POIType.Hermitage, "Cottage")] = new[] { "Hermitage", "Cell", "Cottage" },
+			[(POIType.Hermitage, "Stone")] = new[] { "Hermitage", "Cell", "Anchorhold" },
+			[(POIType.HuntingLodge, "Lodge")] = new[] { "Hunting Lodge", "Lodge", "Hunt Hall" },
+			[(POIType.HuntingLodge, "Hide Lodge")] = new[] { "Hunters' Camp", "Hide Lodge", "Hunting Blind" },
+			[(POIType.Waystation, "Inn")] = new[] { "Inn", "Waystation", "Rest" },
+			[(POIType.Waystation, "Stone Inn")] = new[] { "Inn", "Waystation", "Hostel" },
+			[(POIType.Crypt, "Tomb")] = new[] { "Crypt", "Tomb", "Sepulchre", "Mausoleum" },
+			[(POIType.Ossuary, "Tomb")] = new[] { "Ossuary", "Charnel House", "Bone Hall" },
+			[(POIType.Mine, "Adit")] = new[] { "Mine", "Diggings", "Adit", "Delving" },
+			[(POIType.Quarry, "Cut Stone")] = new[] { "Quarry", "Stone-pit", "Delf" },
+			[(POIType.Portal, "Arch")] = new[] { "Portal", "Gate", "Arch", "Waygate" },
+			[(POIType.DungeonEntrance, "Door")] = new[] { "Door", "Gate", "Stair", "Doors", "Entrance" },
+			[(POIType.Lighthouse, "Stone")] = new[] { "Lighthouse", "Light", "Beacon" },
+			[(POIType.FishingCamp, "Shore")] = new[] { "Fishing Camp", "Landing", "Net-huts" },
+			[(POIType.FishingCamp, "Huts")] = new[] { "Fishing Camp", "Net-huts", "Smokehouse" },
+			[(POIType.LumberCamp, "Timber")] = new[] { "Lumber Camp", "Logging Camp", "Woodyard", "Sawpit" },
+			[(POIType.TradingPost, "Market")] = new[] { "Trading Post", "Market", "Post" },
+			[(POIType.TradingPost, "Caravanserai")] = new[] { "Caravanserai", "Trading Post", "Khan" },
+			[(POIType.StoneCircle, "Trilithons")] = new[] { "Henge", "Stone Circle", "Trilithons" },
+			[(POIType.StoneCircle, "Menhirs")] = new[] { "Standing Stones", "Stone Circle", "Stones", "Ring" },
+			[(POIType.RitualSite, "Stones")] = new[] { "Ritual Site", "Altar", "Offering Stone", "Rite-ground" },
+			[(POIType.RitualSite, "Bonefire")] = new[] { "Ritual Site", "Bonefire", "Blood Ring" },
+			[(POIType.WitchHut, "Stilt Hut")] = new[] { "Hut", "Stilt Hut", "Hovel" },
+			[(POIType.WitchHut, "Cottage")] = new[] { "Cottage", "Hut", "Croft" },
+			[(POIType.AbandonedFarm, "Farmstead")] = new[] { "Farm", "Farmstead", "Steading", "Grange" },
+			[(POIType.AbandonedFarm, "Burned")] = new[] { "Burned Farm", "Burnt Steading", "Ashen Farm" },
+			[(POIType.MonsterDen, "Bones")] = new[] { "Den", "Lair", "Bone-pile" },
+			[(POIType.MonsterDen, "Lair")] = new[] { "Den", "Lair", "Lurk" },
+			[(POIType.Nest, "Bones")] = new[] { "Nest", "Brood", "Roost" },
+			[(POIType.Oasis, "Camp")] = new[] { "Oasis", "Wells", "Watering" },
+		};
 
 		/// <summary>"Dunwy Falls" → "Upper Dunwy Falls"; "The Hidden Race" → "The Upper Hidden Race".</summary>
 		public static string Qualify(string name, string qualifier)
 			=> name.StartsWith("The ", StringComparison.Ordinal) ? $"The {qualifier} {name.Substring(4)}" : $"{qualifier} {name}";
 
-		/// <summary>"A cave in the Pine Forest." from the kind's display name and the biome's.</summary>
+		/// <summary>Kinds whose display name is a plural that takes no article ("Ruins in the Forest").</summary>
+		private static readonly HashSet<POIType> PluralKinds = new HashSet<POIType>
+		{
+			POIType.Ruins, POIType.Rapids, POIType.FumaroleField, POIType.MangroveMaze,
+		};
+
+		/// <summary>
+		/// One line about a site: what it is, whose, and where. "An elven village in the Forest."; "A cave of the dryads in
+		/// the Forest."; "Ruins in the Tundra."; "A lake." — not "A lake in the Lake", "A rapids" or "A river Mouth".
+		/// </summary>
 		public static string Describe(PointOfInterestRecord record, string biomeDisplayName)
 		{
-			string kind = PointOfInterestKinds.Info(record.Kind).DisplayName;
-			string lower = kind.Length > 0 ? char.ToLowerInvariant(kind[0]) + kind.Substring(1) : kind;
-			string article = lower.Length > 0 && "aeiou".IndexOf(lower[0]) >= 0 ? "An" : "A";
-			if (string.IsNullOrWhiteSpace(biomeDisplayName))
+			PointOfInterestKindInfo info = PointOfInterestKinds.Info(record.Kind);
+			string kind = info.DisplayName.ToLowerInvariant();
+			string race = record.Race ?? string.Empty;
+			bool settled = info.Has(PointOfInterestTraits.Settlement) || record.Kind == POIType.Camp;
+			string adjective = race.Length > 0 && settled ? RaceNaming.AdjectiveOf(race) : null;
+			string plural = race.Length > 0 && !settled ? RaceNaming.PluralOf(race) : null;
+
+			string phrase = !string.IsNullOrEmpty(adjective) ? $"{adjective.ToLowerInvariant()} {kind}" : kind;
+			if (!PluralKinds.Contains(record.Kind))
 			{
-				return $"{article} {lower}.";
+				phrase = $"{(("aeiou".IndexOf(phrase[0]) >= 0) ? "an" : "a")} {phrase}";
 			}
-			string where = PointOfInterestKinds.Info(record.Kind).Has(PointOfInterestTraits.Underwater) ? "beneath the" : "in the";
-			return $"{article} {lower} {where} {biomeDisplayName}.";
+			if (!string.IsNullOrEmpty(plural))
+			{
+				phrase += $" of the {plural.ToLowerInvariant()}";
+			}
+			phrase = char.ToUpperInvariant(phrase[0]) + phrase.Substring(1);
+
+			// Where: not when the biome is the thing itself or the water it lies in ("A lake in the Lake").
+			bool redundant = string.IsNullOrWhiteSpace(biomeDisplayName)
+				|| biomeDisplayName.IndexOf(info.DisplayName, StringComparison.OrdinalIgnoreCase) >= 0
+				|| info.DisplayName.IndexOf(biomeDisplayName, StringComparison.OrdinalIgnoreCase) >= 0
+				|| info.Group == PointOfInterestGroup.Water && IsWaterBiome(biomeDisplayName);
+			if (redundant)
+			{
+				return phrase + ".";
+			}
+			string where = info.Has(PointOfInterestTraits.Underwater) ? "beneath the" : "in the";
+			return $"{phrase} {where} {biomeDisplayName}.";
 		}
+
+		private static bool IsWaterBiome(string biome)
+			=> biome.IndexOf("Water", StringComparison.OrdinalIgnoreCase) >= 0 || biome.IndexOf("Lake", StringComparison.OrdinalIgnoreCase) >= 0
+				|| biome.IndexOf("Ocean", StringComparison.OrdinalIgnoreCase) >= 0 || biome.IndexOf("River", StringComparison.OrdinalIgnoreCase) >= 0
+				|| biome.IndexOf("Sea", StringComparison.OrdinalIgnoreCase) >= 0;
 
 		/// <summary>The seed a record's name is drawn from, kept on it.</summary>
 		public static int NameSeed(int sceneSeed, PointOfInterestRecord record)
@@ -205,6 +363,8 @@ namespace FishMMO.Shared.WorldDesign
 					RegionSeed = river ? bodySeed : sceneName,
 					ObjectSeed = river ? record.PlanetRiver.ToString() : record.Id.ToString(),
 					Index = index > 0 ? index : (int?)null,
+					// Called by what is built there, when its template says.
+					TypeWords = TypeWordsFor(record),
 				};
 				return new NameGenerator(record.NameSeed).Generate(request)?.Name;
 			};

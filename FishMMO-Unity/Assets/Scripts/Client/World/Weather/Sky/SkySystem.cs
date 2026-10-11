@@ -47,6 +47,7 @@ namespace FishMMO.Client
 		private static readonly int EclipseId = Shader.PropertyToID("_FishSkyEclipse");
 		private static readonly int EclipseBodyId = Shader.PropertyToID("_FishSkyEclipseBody");
 		private static readonly int SunDirId = Shader.PropertyToID("_FishSunDir");
+		private static readonly int NightLightsId = Shader.PropertyToID("_FishNightLights");
 		private static readonly int SunColorId = Shader.PropertyToID("_FishSunColor");
 		private static readonly int SunCountId = Shader.PropertyToID("_FishSunCount");
 		private static readonly int StarMatrixId = Shader.PropertyToID("_FishStarMatrix");
@@ -110,6 +111,9 @@ namespace FishMMO.Client
 		private static readonly int CloudScreenId = Shader.PropertyToID("_FishCloudScreen");
 		private static readonly int CloudLightId = Shader.PropertyToID("_FishCloudLight");
 		private static readonly int AmbientSkyId = Shader.PropertyToID("_FishAmbientSky");
+		private static readonly int SkyCaptureId = Shader.PropertyToID("_FishSkyCapture");
+		/// <summary>The sky's light through the cloud the ambient took last (<see cref="ApplyAmbient"/>), for the reflection capture.</summary>
+		private float ambientThrough = 1f;
 		private static readonly int AmbientEquatorId = Shader.PropertyToID("_FishAmbientEquator");
 		private static readonly int AmbientGroundId = Shader.PropertyToID("_FishAmbientGround");
 		private static readonly int CloudTypeParamsId = Shader.PropertyToID("_FishCloudTypeParams");
@@ -1076,6 +1080,8 @@ namespace FishMMO.Client
 			Shader.SetGlobalVectorArray(SunDirId, sunDirections);
 			Shader.SetGlobalVectorArray(SunColorId, sunColors);
 			Shader.SetGlobalFloat(SunCountId, count);
+			// Lamps and lit windows (FishStructureWeathering.hlsl): lit from dusk, as the main sun goes down, out by sunrise.
+			Shader.SetGlobalFloat(NightLightsId, 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-0.04f, 0.12f, sunDirections[0].y)));
 
 			Shader.SetGlobalVector(CloudLitId, sample.CloudLit);
 			Shader.SetGlobalVector(CloudShadowId, sample.CloudShadow);
@@ -2229,6 +2235,7 @@ namespace FishMMO.Client
 			// (1 − 0.3·overcast), which left the ground under a bright overcast base seven times too
 			// dark for the sky over it. The sun's share of what comes through is in the sun's light.
 			float dim = CloudSkyThrough * (1f - eclipse * 0.8f);
+			ambientThrough = dim;
 			Color flashColor = new Color(0.3f, 0.32f, 0.38f) * flash;
 			Color skyColor = sample.AmbientSky * dim + flashColor;
 			Color equator = sample.AmbientEquator * dim + flashColor * 0.6f;
@@ -2302,6 +2309,11 @@ namespace FishMMO.Client
 
 		private void OnBeginCamera(ScriptableRenderContext context, Camera camera)
 		{
+			/* The sky reflection probe (UpdateReflection) captures the sky the ground sees, not the one the eye does: no
+			 * sun disc (the sun light gives its own highlight) and the cloud's dimming, as the ambient has it (FishSky.shader).
+			 * Set for every camera, so it is off again for the next. */
+			bool capture = camera != null && camera.cameraType == CameraType.Reflection;
+			Shader.SetGlobalVector(SkyCaptureId, new Vector4(capture ? 1f : 0f, ambientThrough, 0f, 0f));
 			// Every camera starts with no cloud buffer of its own: the feature raises the flag once it has published
 			// one FOR THIS CAMERA. Cleared once a frame only, a second camera (the Scene view, a probe) inherited the
 			// first's — its height and froxel fog stood down for a fog its own march never drew, and its water laid

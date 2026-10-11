@@ -153,7 +153,7 @@ namespace FishMMO.UnitTests.Weather
 			foreach (AmbientCreatureKind kind in Kinds)
 			{
 				float sea = AmbientGating.HabitatWeight(kind, AmbientHabitat.Sea, C(15f), true, false, false);
-				Assert.That(sea > 0f, Is.EqualTo(kind.Name == "Gulls"), $"{kind.Name} over open sea");
+				Assert.That(sea > 0f, Is.EqualTo(kind.Shape == AmbientShape.Gull), $"{kind.Name} over open sea");
 			}
 		}
 
@@ -508,6 +508,82 @@ namespace FishMMO.UnitTests.Weather
 				}
 			}
 			Assert.That(seated, Is.GreaterThan(50), "birds spend most of their time sitting");
+		}
+
+		[Test]
+		public void Owls_HuntAtNightAndRoostByDay()
+		{
+			AmbientCreatureKind owl = Kind("Owl");
+			AmbientConditions night = At(0.0, false, 12f), noon = At(0.5, true, 18f);
+			Assert.That(AmbientGating.Activity(owl, night), Is.GreaterThan(0.8f), "out at night");
+			Assert.That(AmbientGating.Activity(owl, noon), Is.LessThan(0.2f), "few about at noon");
+			Assert.That(AmbientGating.Shelter(owl, night), Is.LessThan(0.5f), "hunting, not roosting, in the dark");
+			Assert.That(AmbientGating.Shelter(owl, noon), Is.EqualTo(1f), "roosting by day");
+			Assert.That(AmbientGating.Shelter(Kind("Songbird"), night), Is.EqualTo(1f), "the day birds roost at night");
+		}
+
+		[Test]
+		public void Transit_CrossesHighInAStraightLineAndKeepsItsV()
+		{
+			var world = new FakeWorld();
+			AmbientCreatureKind geese = Kind("Geese skein");
+			int index = System.Array.IndexOf(Kinds, geese);
+			var group = new AmbientGroup { Kind = index, Seed = 4242u, Home = new Vector3(60f, 0f, 40f), Radius = 320f, Altitude = 120f, Episode = 150.0, Count = 11, Length = 0.85f };
+			world.TryGround(60f, 40f, out group.Home.y);
+			var a = new List<AmbientInstance>();
+			var b = new List<AmbientInstance>();
+			var none = new AmbientThreats();
+			int passing = 0, empty = 0;
+			Vector3 lastLead = default;
+			bool haveLast = false;
+			for (double t = 10000.0; t < 13000.0; t += 2.5)
+			{
+				a.Clear();
+				b.Clear();
+				AmbientLifeMotion.Frame fa = FrameAt(t, world, new AmbientMemberState[11], none);
+				AmbientLifeMotion.Frame fb = FrameAt(t, world, new AmbientMemberState[11], none);
+				AmbientLifeMotion.Evaluate(group, geese, ref fa, a);
+				AmbientLifeMotion.Evaluate(group, geese, ref fb, b);
+				Assert.That(b.Count, Is.EqualTo(a.Count));
+				if (a.Count == 0)
+				{
+					empty++;
+					haveLast = false;
+					continue;
+				}
+				passing++;
+				Assert.That(a.Count, Is.EqualTo(11), "the whole skein passes together");
+				Vector3 lead = a[0].Matrix.GetColumn(3);
+				Vector3 forward = a[0].Matrix.rotation * Vector3.forward;
+				for (int i = 0; i < a.Count; i++)
+				{
+					Assert.That(b[i].Matrix, Is.EqualTo(a[i].Matrix), "two players, one skein");
+					Vector3 at = a[i].Matrix.GetColumn(3);
+					world.TryGround(at.x, at.z, out float y);
+					Assert.That(at.y - y, Is.GreaterThan(60f), "high over the ground");
+					float flat = new Vector2(at.x - group.Home.x, at.z - group.Home.z).magnitude;
+					Assert.That(flat, Is.LessThan(group.Radius * 1.05f + geese.Spread * group.Count), "within its reach");
+					if (i > 0)
+					{
+						Assert.That(Vector3.Dot(at - lead, forward), Is.LessThan(0f), "the leader at the point of the V");
+					}
+				}
+				if (haveLast)
+				{
+					// A straight crossing: the leader moves along its own heading.
+					Vector3 moved = lead - lastLead;
+					moved.y = 0f;
+					if (moved.magnitude > 1f)
+					{
+						Vector3 flatForward = new Vector3(forward.x, 0f, forward.z).normalized;
+						Assert.That(Vector3.Dot(moved.normalized, flatForward), Is.GreaterThan(0.98f), "flying where it faces");
+					}
+				}
+				lastLead = lead;
+				haveLast = true;
+			}
+			Assert.That(passing, Is.GreaterThan(0), "it passes over now and then");
+			Assert.That(empty, Is.GreaterThan(passing), "and the sky is mostly empty of it");
 		}
 
 		// ── Meshes ────────────────────────────────────────────────────

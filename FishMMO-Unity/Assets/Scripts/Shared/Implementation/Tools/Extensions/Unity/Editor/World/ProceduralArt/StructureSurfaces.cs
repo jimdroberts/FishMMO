@@ -30,8 +30,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class StructureSurfaces
 	{
-		/// <summary>Every surface's texture size.</summary>
-		public const int Size = 512;
+		/// <summary>
+		/// Every surface's texture size. 1024 (2026-10-11, was 512): a 2 m plank tile at 512 was 4 mm a texel, soft at the
+		/// distance a player stands from a house wall.
+		/// </summary>
+		public const int Size = 1024;
 
 		/// <summary>Every surface, in a fixed order.</summary>
 		public static readonly string[] Names = { "Timber", "Plaster", "Thatch", "Ashlar", "Fieldstone", "Cloth", "Iron", "Earth", "Monolith" };
@@ -51,6 +54,7 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Dyed: return "Cloth";
 				case StructureMaterial.Iron: return "Iron";
 				case StructureMaterial.Bone: return "Plaster";
+				case StructureMaterial.Glass: return "Iron";
 				default: return "Earth"; // Earth, Ash
 			}
 		}
@@ -64,6 +68,8 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Dyed: return new Color(0.62f, 0.14f, 0.11f);
 				case StructureMaterial.Bone: return new Color(0.96f, 0.91f, 0.78f);
 				case StructureMaterial.Ash: return new Color(0.3f, 0.29f, 0.28f);
+				// Old glass and horn panes: dark by day with a little amber in them.
+				case StructureMaterial.Glass: return new Color(0.42f, 0.37f, 0.3f);
 				default: return Color.white;
 			}
 		}

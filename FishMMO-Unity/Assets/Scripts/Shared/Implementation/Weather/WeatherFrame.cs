@@ -117,8 +117,20 @@ namespace FishMMO.Shared.Weather
 				return;
 			}
 			float frozen = Mathf.InverseLerp(0.05f, -0.15f, temperature);
+			float hail = this[WeatherChannel.HailWeight] * 0.5f;
+			float wettingBefore = rain + hail;
 			this[WeatherChannel.RainWeight] = water * (1f - frozen);
 			this[WeatherChannel.SnowWeight] = water * frozen;
+			/* What the fall does to the ground follows it (2026-10-11): the wetness and snow rates were derived from
+			 * the types before this, and DeriveSurfaceRates keeps the higher of old and new, so snow re-typed from rain
+			 * still soaked the ground as rain and rain re-typed from snow still whitened it. Scaled by how much the
+			 * share changed, so a scaling the air already made (a thin atmosphere's) is kept. */
+			float p = this[WeatherChannel.Precipitation];
+			float wettingAfter = this[WeatherChannel.RainWeight] + hail;
+			float wet = this[WeatherChannel.WetnessTarget];
+			this[WeatherChannel.WetnessTarget] = wettingBefore > 1e-5f ? wet * (wettingAfter / wettingBefore) : Mathf.Max(wet, p * wettingAfter);
+			float snowCover = this[WeatherChannel.SnowCoverRate];
+			this[WeatherChannel.SnowCoverRate] = snow > 1e-5f ? snowCover * (this[WeatherChannel.SnowWeight] / snow) : Mathf.Max(snowCover, p * this[WeatherChannel.SnowWeight]);
 		}
 
 		/// <summary>Zeroes the precipitation kinds in a mask and renormalises what remains.</summary>

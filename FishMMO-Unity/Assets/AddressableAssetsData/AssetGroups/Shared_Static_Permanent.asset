@@ -1797,6 +1797,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 23bcabd76a567dba3aa5a85c71b58690
+    m_Address: Vent Clam Bed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 23fab518843ac25c03488d568bf860ab
     m_Address: Pet Melee Attack State
     m_ReadOnly: 0
@@ -2513,6 +2519,18 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3523ef71e94fa0e6ad37749b8d233fab
     m_Address: Tree_Baobab_Billboard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3550f7b19c7273f8a99d994b091d7cb7
+    m_Address: Pearl Oyster Bed Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 355611bb162cf993c97c304d03ca3309
+    m_Address: Vent Clam Bed Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4311,6 +4329,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5bf7c727ffeb8cdb78b535f0bc977420
+    m_Address: Manganese Nodules Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5bf888764c6450a7d209fbeb8792859a
     m_Address: Tree_WeepingWillow_LOD1
     m_ReadOnly: 0
@@ -4517,6 +4541,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 602d4757f2fe4f20be6261bc73694d0a
     m_Address: Abyss
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6031520b87604f64f8bd6ee6dd948c58
+    m_Address: Glass Sponge Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5361,6 +5391,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 785a8896039da5acc98b8a483ef56f81
+    m_Address: Glass Sponge
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 785ce1db41ef302fd8b7346e1d2213c7
     m_Address: Detail_GrassSedge
     m_ReadOnly: 0
@@ -5441,6 +5477,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7a9b618ab081359ee98257f925cfba96
     m_Address: Ground_Sulphur
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7aa0ca70e1f867b189dd2f171dfd2afc
+    m_Address: Living Coral Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5752,6 +5794,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 81dd6c8841df66e44ad306e2ef34aaee
     m_Address: Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8244be5f8b878b241b27e35c6216397b
+    m_Address: Manganese Nodule
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6326,6 +6374,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8e0447a9fec50712593ed92c16dc76a7
+    m_Address: Samphire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8e056ce9269267864b1456d2eb01f7c4
     m_Address: Deadwood_RootPlate
     m_ReadOnly: 0
@@ -6416,6 +6470,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fd308380e90ccaaf8e0a7077cc04968
+    m_Address: Coral Fragment
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fd5b495939c44a69de52c13977761bd
     m_Address: Ooze
     m_ReadOnly: 0
@@ -6430,6 +6490,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 8fea2bfc9cc7e67021f4258b5a5feaf9
     m_Address: Brute Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90028aba8dff9a119931ae5d612ffe50
+    m_Address: Glass Spicule
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6808,6 +6874,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 97e24a72ceaa368445865b1e867ecb12
     m_Address: Detail_FlowersWoodland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 98048065f78a222b89c7e8ad1f401db4
+    m_Address: Samphire Patch Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7377,6 +7449,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a2806216699de66eba55c9eed61ba9cb
     m_Address: Formation_Termitaria_Cathedral_2_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a2aa0bf3901de4a03b162000d440b9bf
+    m_Address: Kelp Holdfast
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7999,6 +8077,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b0b1af143a1e61007bc915616f7ff90e
+    m_Address: Living Coral
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b0d79037128688f8e21ef1fd961e8cb0
     m_Address: Formation_Halite_Terrace_1_LOD0
     m_ReadOnly: 0
@@ -8250,6 +8334,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b5d1999b2da4c510e947908356cf90ed
+    m_Address: Manganese Nodules
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b646a6d9bc4f07d428f12e255af67366
     m_Address: Basic ReturnHome State
     m_ReadOnly: 0
@@ -8288,6 +8378,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b75e7df86163a7c2ae574ad5bc7b211f
     m_Address: Detail_Bush_Gorse_LOD1
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b760bdac17164511a85f895809a58561
+    m_Address: Kelp Frond
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8384,6 +8480,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b930ff8a9c81416f4c72b8aaefa67c3a
     m_Address: Formation_Basalt_Block_2_LOD2
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b96376f1c89554cb8953c0522413601d
+    m_Address: Pearl
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10068,6 +10170,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e299743d980495435b9faa1c4ca0a303
+    m_Address: Vent Pearl
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e2f4c9fa92644ac898eea4770fda7c9e
     m_Address: Deep Gnome
     m_ReadOnly: 0
@@ -10434,6 +10542,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eb20f4f1db6c794f6a92218d2a3d817c
+    m_Address: Pearl Oyster Bed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eb7a456cf8764852991df6a62e8817ac
     m_Address: Waypoints Discovered
     m_ReadOnly: 0
@@ -10580,6 +10694,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ee9626c65710a06ddbf39a0c10ceab74
     m_Address: Iron Ore
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ef46892dbab0cc6caac60b0903fc9a63
+    m_Address: Kelp Holdfast Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11281,6 +11401,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: ffdfee25096d5c769f84d5a4f6e91773
     m_Address: Balanced Personality
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fff2c37020fa2f76a8c5ca7475f34d3b
+    m_Address: Samphire Patch
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

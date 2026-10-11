@@ -199,16 +199,22 @@ namespace FishMMO.Shared.WorldDesign
 		public const string RuinedKeep = "=RuinedKeep";
 		public const string RuinedStatue = "=RuinedStatue";
 		public const string Portal = "portal";
+		public const string Church = "church";
+		public const string Temple = "temple";
+		public const string Tavern = "tavern";
+		public const string Smithy = "smithy";
+		public const string Stable = "stable";
+		public const string Notice = "notice";
 
 		// ── Styles ───────────────────────────────────────────────────
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
 
-		// ── Biomes (asset names in Assets/Templates/Entity/Biomes) ───
-		public static readonly string[] Swamp = { "Swamp", "Mangrove", "Peat Bog", "Wetlands", "Wetland", "Swamp Ruins", "Swamp Temple", "Swamp Cave" };
-		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland", "Arid", "Dust Sea", "Wasteland", "Barren" };
-		public static readonly string[] Highland = { "Mountain", "Mountain Slope", "Alpine", "Hills", "Rocky Terrain", "Scree", "Karst", "Rocky Coast", "Alpine Meadow" };
-		public static readonly string[] Cold = { "Tundra", "Taiga", "Snow", "Periglacial", "Glacier", "Ice Sheet", "Ice Shelf", "Permanent Ice" };
-		public static readonly string[] Woods = { "Forest", "Woodland", "Taiga", "Jungle", "Rainforest", "Bamboo Forest", "Forest Ruins", "Jungle Ruins", "Jungle Temple", "Temperate" };
+		// ── Biomes (asset names in Assets/Templates/Entity/Biomes, exactly: a name no biome has matches nothing) ───
+		public static readonly string[] Swamp = { "Swamp", "Mangrove", "Peat Bog", "Wetlands", "Swamp Ruins", "Swamp Temple", "Swamp Cave" };
+		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland", "Dust Sea", "Wasteland" };
+		public static readonly string[] Highland = { "Mountain Slope", "Alpine", "Hills", "Rocky Terrain", "Scree", "Karst", "Rocky Coast", "Alpine Meadow" };
+		public static readonly string[] Cold = { "Tundra", "Taiga", "Snow", "Glacier", "Ice Sheet", "Ice Shelf", "Permanent Ice" };
+		public static readonly string[] Woods = { "Forest", "Woodland", "Taiga", "Jungle", "Bamboo Forest", "Forest Ruins", "Jungle Ruins", "Jungle Temple" };
 		public static readonly string[] Steppe = { "Steppe", "Savanna", "Tundra" };
 		public static readonly string[] Volcanic = { "Volcanic", "Volcanic Cave", "Volcanic Temple", "Geyser Basin", "Sulphur Flats", "Molten Surface" };
 
@@ -263,10 +269,12 @@ namespace FishMMO.Shared.WorldDesign
 			// Villages: a street of houses round a well; longhouses in the cold, yurts on the steppe.
 			T(a, POIType.Village, "Timber", Streets, Timber)
 				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 8, 18, Street)
+				.S(Church, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
 				.S(Storage, 4, 10, Scatter).S(Banner, 0, 2, Scatter)
 				.In(0.1f, Arid).In(0.5f, Highland).In(0.5f, Cold).In(0.4f, Swamp);
 			T(a, POIType.Village, "Stone", Streets, Stone)
 				.S(Well, 1, 1, Centre).S(Stall, 0, 3, Centre).S(House, 8, 16, Street)
+				.S(Church, 0, 1, Street, style: Stone).S(Tavern, 0, 1, Street, style: Timber).S(Smithy, 0, 1, Street, style: Timber).S(Notice, 1, 1, Centre, style: Timber)
 				.S(Storage, 4, 10, Scatter).S(Banner, 0, 2, Scatter)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland).Races(Civil);
 			T(a, POIType.Village, "Longhouse", Streets, Timber)
@@ -280,15 +288,21 @@ namespace FishMMO.Shared.WorldDesign
 			// Towns: two or more streets, a market square.
 			T(a, POIType.Town, "Timber", Streets, Timber)
 				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 20, 40, Street)
+				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
+				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
 				.S(Storage, 8, 16, Scatter).S(Watchtower, 0, 2, Scatter).S(Banner, 2, 4, Scatter)
 				.In(0.1f, Arid).In(0.5f, Highland).In(0.5f, Cold);
 			T(a, POIType.Town, "Stone", Streets, Stone)
 				.S(Well, 1, 2, Centre).S(Stall, 3, 8, Centre).S(House, 20, 36, Street)
+				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
+				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
 				.S(Storage, 8, 16, Scatter).S(Banner, 2, 4, Scatter)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland).Races(Civil);
 			T(a, POIType.Town, "Palisaded", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 2, 2, Gates).S(Watchtower, 2, 4, Towers)
 				.S(Well, 1, 1, Centre).S(Stall, 2, 6, Centre).S(House, 18, 34, Street).S(Storage, 6, 12, Scatter).S(Banner, 2, 4, Scatter)
+				.S(Church, 1, 1, Street, style: Stone).S(Temple, 0, 1, Street, style: Stone).S(Tavern, 1, 2, Street, style: Timber).S(Smithy, 1, 2, Street, style: Timber)
+				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 1, 2, Centre, style: Timber)
 				.Elsewhere(0.6f).In(1.2f, Woods).In(0.2f, Arid).Races(Civil);
 
 			// Cities: walled in stone, gatehouses on the main streets, a keep in the middle.
@@ -296,12 +310,16 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Wall, 1, 1, Perimeter).S(Gate, 2, 4, Gates).S(WallTower, 6, 12, Towers)
 				.S(Keep, 1, 1, Centre).S(Well, 2, 3, Centre).S(Stall, 6, 12, Centre)
 				.S(House, 25, 45, Street).S(House, 25, 45, Street, style: Timber)
+				.S(Church, 1, 2, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 4, Street, style: Timber).S(Smithy, 2, 3, Street, style: Timber)
+				.S(Stable, 1, 3, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
 				.S(Storage, 10, 20, Scatter).S(Banner, 4, 8, Scatter)
 				.Elsewhere(1f).In(1.5f, Arid).In(1.5f, Highland);
 			T(a, POIType.City, "Timber", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 2, 4, Gates).S(Watchtower, 6, 10, Towers)
 				.S(Keep, 1, 1, Centre, style: Stone).S(Well, 2, 3, Centre).S(Stall, 6, 12, Centre)
 				.S(House, 50, 90, Street).S(Storage, 10, 20, Scatter).S(Banner, 4, 8, Scatter)
+				.S(Church, 1, 2, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 4, Street, style: Timber).S(Smithy, 2, 3, Street, style: Timber)
+				.S(Stable, 1, 3, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
 			// The capital: larger than a city (the planner's footprint), more of everything, the keep at its heart (Jim's default).
@@ -309,12 +327,16 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Wall, 1, 1, Perimeter).S(Gate, 4, 4, Gates).S(WallTower, 12, 20, Towers)
 				.S(Keep, 1, 1, Centre).S(Statue, 2, 4, Centre).S(Obelisk, 1, 1, Centre).S(Well, 3, 5, Centre).S(Stall, 12, 20, Centre)
 				.S(House, 50, 80, Street).S(House, 40, 70, Street, style: Timber)
+				.S(Church, 2, 3, Street, style: Stone).S(Temple, 1, 2, Street, style: Stone).S(Tavern, 3, 6, Street, style: Timber).S(Smithy, 3, 4, Street, style: Timber)
+				.S(Stable, 2, 4, Scatter, style: Timber).S(Notice, 3, 5, Centre, style: Timber)
 				.S(Storage, 20, 30, Scatter).S(Banner, 8, 12, Scatter)
 				.Sized(false, false, true).In(1.5f, Arid).In(1.5f, Highland);
 			T(a, POIType.Capital, "Timber", Walled, Timber)
 				.S(Wall, 1, 1, Perimeter, style: Stone).S(Gate, 4, 4, Gates, style: Stone).S(WallTower, 12, 20, Towers, style: Stone)
 				.S(Keep, 1, 1, Centre, style: Stone).S(Statue, 2, 4, Centre).S(Well, 3, 5, Centre).S(Stall, 12, 20, Centre)
 				.S(House, 80, 140, Street).S(Storage, 20, 30, Scatter).S(Banner, 8, 12, Scatter)
+				.S(Church, 2, 3, Street, style: Stone).S(Temple, 1, 2, Street, style: Stone).S(Tavern, 3, 6, Street, style: Timber).S(Smithy, 3, 4, Street, style: Timber)
+				.S(Stable, 2, 4, Scatter, style: Timber).S(Notice, 3, 5, Centre, style: Timber)
 				.Sized(false, false, true).Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
 			// Ports: a waterfront street, piers out from the shore ahead (the planner turns a port to the sea).

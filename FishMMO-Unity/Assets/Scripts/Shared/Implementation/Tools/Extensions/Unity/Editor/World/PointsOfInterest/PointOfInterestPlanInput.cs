@@ -288,6 +288,8 @@ namespace FishMMO.Shared.WorldDesign
 			asset.PathLayers = PathLayers;
 			asset.PathEarthMap = PathEarthMap;
 			asset.PathRoadMap = PathRoadMap;
+			// Laid afresh by every place (PropsFeature): what the pieces give off.
+			asset.Emitters = new List<SceneEmitter>();
 		}
 	}
 }

@@ -992,7 +992,9 @@ namespace FishMMO.Shared.WorldDesign
 					// on the floor, holothurians and xenophyophores on the sediment.
 					.Under(Sea("Sponge", 0.15f, 0f, 0f, 128, 60f), Sea("Anemone", 0.15f, 0f, 0f, 128, 60f),
 						Sea("BacterialMat", 0.3f, 0f, 0f, 160, 15f), Sea("TubeWorms", 0.3f, 0f, 0f, 160, 20f), Sea("SeaCucumber", 0.2f, 0f, 0f, 128),
-						Sea("Xenophyophore", 0.2f, 0f, 0f, 128), Sea("Crinoid", 0.3f, 0f, 0f, 128, 90f)),
+						Sea("Xenophyophore", 0.2f, 0f, 0f, 128), Sea("Crinoid", 0.3f, 0f, 0f, 128, 90f),
+						// Basalt talus at the foot of the trench walls, manganese nodules on the sediment.
+						SeaStones(SmallRocks("Basalt"), 0.8f, 0f, 0f), SeaStones(Pebbles("Nodule"), 1f, 0f, 0f)),
 				E("Deep Ocean", L(Ground.Silt), Ds(D(Ground.Mud, 128f)), C(Ground.Basalt), Ground.Silt, Ground.Silt)
 					// The continental slope: Lophelia cold-water coral thickets on the rock, sea pens in the mud, crinoids and
 					// glass sponges, brittle-star beds and the odd nodule.
@@ -1005,21 +1007,27 @@ namespace FishMMO.Shared.WorldDesign
 					.Under(Band(Sea("Kelp", 3f, 4f, 30f, 160), -1f, 0.6f), Sea("Seaweed", 2f, 1.5f, 20f, 160), Sea("Sponge", 1f, 6f, 0f, 128), Sea("SeaFan", 0.5f, 8f, 120f, 128),
 						Sea("Urchin", 1f, 2f, 40f, 128), Sea("Starfish", 0.5f, 1f, 0f, 96), Sea("Shells", 1f, 1f, 30f, 96),
 						Sea("SandDollar", 2f, 2f, 20f, 160, 10f), Sea("SeaPen", 1f, 20f, 0f, 160, 15f), Sea("MusselBed", 1.5f, 1f, 15f, 180),
-						Sea("SeaCucumber", 0.3f, 5f, 0f, 128), Sea("BrittleStar", 0.5f, 10f, 0f, 128))
+						Sea("SeaCucumber", 0.3f, 5f, 0f, 128), Sea("BrittleStar", 0.5f, 10f, 0f, 128),
+						// Shell gravel and the odd glacial or reef stone lying on the shelf.
+						SeaStones(Pebbles("Grey"), 1.5f, 2f, 0f), SeaStones(SmallRocks("Grey"), 0.5f, 4f, 0f))
 					.Moved("main", "Kelp"),
 				E("Seamount", L(Ground.Basalt), Ds(D(Ground.Silt, 48f, 2f, 0f, 20f)), C(Ground.Basalt), Ground.Silt, Ground.Silt)
 					// A seamount's flanks: kelp only on a shallow summit in cold water, soft corals there in warm water,
 					// cold-water and black coral gardens, crinoids and glass sponges down the current-swept basalt.
 					.Under(Band(Sea("Kelp", 4f, 4f, 30f, 160), -1f, 0.6f), Sea("SeaFan", 3f, 4f, 0f, 160, 60f), Sea("Sponge", 2f, 4f, 0f, 160, 60f), Sea("Anemone", 1f, 2f, 0f, 128, 60f),
 						Sea("ColdCoral", 1.5f, 150f, 1000f, 180, 70f), Sea("Crinoid", 1f, 40f, 0f, 160, 70f), Sea("GlassSponge", 1f, 100f, 0f, 160, 70f),
-						Band(Sea("SoftCoral", 2f, 5f, 40f, 180, 60f), 0.55f, 1f), Sea("BrittleStar", 0.5f, 20f, 0f, 128))
+						Band(Sea("SoftCoral", 2f, 5f, 40f, 180, 60f), 0.55f, 1f), Sea("BrittleStar", 0.5f, 20f, 0f, 128),
+						// Pillow-lava rubble and pebbles shed down the basalt flanks.
+						SeaStones(SmallRocks("Basalt"), 1.5f, 4f, 0f), SeaStones(Pebbles("Basalt"), 2f, 4f, 0f))
 					.Moved("detail/0", "Kelp"),
 				E("Underwater Canyon", L(Ground.Silt), Ds(D(Ground.Rock, 48f, 3f, 25f, 90f), D(Ground.Gravel, 64f)), C(Ground.CliffRock, 38f), Ground.Silt, Ground.Silt)
 					// Monterey Canyon: cold-water coral and crinoids on the sheer walls, sea pens in the soft floor, dense
 					// brittle-star beds, a rare seep mat.
 					.Under(Sea("SeaFan", 1.5f, 4f, 0f, 160, 70f), Sea("Sponge", 1.5f, 4f, 0f, 160, 70f), Sea("Anemone", 0.5f, 2f, 0f, 128, 70f),
 						Sea("ColdCoral", 1f, 50f, 0f, 160, 90f), Sea("Crinoid", 0.5f, 30f, 0f, 160, 90f), Sea("SeaPen", 1f, 20f, 0f, 160, 15f),
-						Sea("BrittleStar", 2f, 20f, 0f, 160, 20f), Sea("BacterialMat", 0.05f, 200f, 0f, 160, 15f)),
+						Sea("BrittleStar", 2f, 20f, 0f, 160, 20f), Sea("BacterialMat", 0.05f, 200f, 0f, 160, 15f),
+						// Rock fallen from the walls, and gravel the turbidity currents drop on the floor.
+						SeaStones(SmallRocks("Grey"), 2f, 4f, 0f), SeaStones(Pebbles("Grey"), 3f, 4f, 0f)),
 				E("Coastal Water", L(Ground.Sand), Ds(D(Ground.Pebbles, 32f, 3f, -1f, -1f, Stones(SmallRocks("Grey"), 3f)), D(Ground.Silt, 64f)),
 					C(Ground.Rock), Ground.Sand, Ground.Pebbles)
 					.Under(Sea("Seaweed", 6f, 1f, 20f, 200), Sea("Kelp", 6f, 5f, 30f, 200),
@@ -1248,13 +1256,17 @@ namespace FishMMO.Shared.WorldDesign
 				E("Lake", L(Ground.Grass, Grass("GrassLush", 30f), Bush("Willow", 0.3f),
 						Stand(Was(0.1f, 10f), 15f, W(0.15f, 0.5f, open: 0.05f), "Alder"), Band(Trees(0.02f, 12f, 15f, "WeepingWillow"), 0.3f, 1f)),
 					Ds(D(Ground.Mud, 32f, 2f, 0f, 10f, Plants("Reeds", 15f), Plants("ReedsPlume", 10f, 200), Grass("GrassSedge", 15f), Grass("GrassRush", 10f), Plants("FlowersWet", 2f, 180)),
-						D(Ground.Pebbles, 48f, 2f, -1f, -1f, Logs("Driftwood", 0.01f, 12f, Wood("Driftwood"), 15f))),
+						D(Ground.Pebbles, 48f, 2f, -1f, -1f, Logs("Driftwood", 0.01f, 12f, Wood("Driftwood"), 15f),
+							// The beach itself: rounded pebbles and the stones the waves have not moved.
+							Stones(Pebbles("Grey"), 5f), Stones(SmallRocks("Grey"), 1.2f))),
 					C(Ground.Rock), Ground.Mud, Ground.Pebbles),
 				// Riparian corridor: alder, white willow and black poplar along the banks, sedges, rushes and wet flowers on the
 				// mud, driftwood log jams on the gravel bars.
 				E("River", L(Ground.Grass, Grass("GrassLush", 25f), Bush("Willow", 0.4f),
 						Stand(Was(0.15f, 10f), 15f, W(0.2f, 0.6f, open: 0.05f), "Alder"), Trees(0.02f, 12f, 15f, "WeepingWillow"), Trees(0.02f, 14f, 15f, "Poplar")),
-					Ds(D(Ground.Pebbles, 32f, 2f, -1f, -1f, Logs("Log jams", 0.02f, 8f, Wood("Driftwood", "FallenLog_Birch"), 15f)),
+					Ds(D(Ground.Pebbles, 32f, 2f, -1f, -1f, Logs("Log jams", 0.02f, 8f, Wood("Driftwood", "FallenLog_Birch"), 15f),
+							// The gravel bars: rounded cobbles and pebbles the floods sorted.
+							Stones(Pebbles("Grey"), 6f), Stones(SmallRocks("Grey"), 1.5f)),
 						D(Ground.Mud, 48f, 2f, 0f, 10f, Plants("Reeds", 10f), Grass("GrassSedge", 15f), Grass("GrassRush", 10f), Plants("FlowersWet", 2f, 180))),
 					C(Ground.Rock), Ground.Pebbles, Ground.Gravel),
 				// Forested wetland (−3…20 °C): a bald-cypress swamp with its knees and palmetto where it is warm, an alder carr

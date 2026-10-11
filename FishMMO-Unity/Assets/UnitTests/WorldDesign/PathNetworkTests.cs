@@ -87,6 +87,25 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void AWayPetersOutWhereItEndsInASiteButMeetsTheWayItJoins()
+		{
+			// A cart track joining a road at its start (FromId -1), ending in a village (ToId 7).
+			ScenePath track = Line(new Vector3(0f, 0f, 0f), new Vector3(0f, 0f, 80f), 1.5f, ScenePathClass.CartTrack, 41);
+			track.FromId = -1;
+			track.ToId = 7;
+			ScenePathField field = ScenePathField.Build(new[] { track });
+			Assert.That(field.Sample(0f, 40f, out _, out float middle, out _, out _), Is.True);
+			Assert.That(middle, Is.EqualTo(1.5f).Within(0.05f), "full width along the way");
+			Assert.That(field.Sample(0f, 1f, out _, out float joined, out _, out _), Is.True);
+			Assert.That(joined, Is.EqualTo(1.5f).Within(0.05f), "full width where it meets the road");
+			bool found = field.Sample(0f, 79.5f, out float edge, out float end, out float wear, out _);
+			Assert.That(!found || end < 0.3f, Is.True, $"narrowed to almost nothing at its end in the village (half {end:0.00})");
+			Assert.That(!found || edge > -0.3f, Is.True, "no full-width cap at the end");
+			field.Sample(0f, 40f, out _, out _, out float middleWear, out _);
+			Assert.That(!found || wear < middleWear * 0.5f, Is.True, "worn away into the ground at its end");
+		}
+
+		[Test]
 		public void ABridgesSpanIsNotDrawnOnTheBedUnderIt()
 		{
 			ScenePath path = Line(new Vector3(0f, 0f, -60f), new Vector3(0f, 0f, 60f), 1.5f, ScenePathClass.Road, 61);
@@ -286,6 +305,36 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void AWayRunsStraightOntoItsBridge()
+		{
+			List<PointOfInterestRecord> records = ThreeTowns();
+			// A river slanting across the way between the middle and east towns, so the route meets it at an angle.
+			Func<float, float, PathCellWater> river = (x, z) => Mathf.Abs((x - 500f) * 0.8f - z * 0.6f) < 7f ? PathCellWater.River : PathCellWater.Dry;
+			PathPlan plan = PathNetworkPlanner.Plan(Input(records, river, 1.5f));
+			Assert.That(plan.Bridges.Count, Is.EqualTo(1), string.Join("\n", plan.Notes));
+			PathBridgeSite bridge = plan.Bridges[0];
+			ScenePath road = plan.Paths.Find(p => p.Id == bridge.PathId);
+			float r = bridge.Yaw * Mathf.Deg2Rad;
+			var axis = new Vector2(Mathf.Sin(r), Mathf.Cos(r));
+			var across = new Vector2(-axis.y, axis.x);
+			float deck = bridge.Span * 0.5f + 2.5f;
+			int onAxis = 0;
+			for (int i = 0; i < road.Count; i++)
+			{
+				var offset = new Vector2(road.Points[i].x - bridge.Centre.x, road.Points[i].z - bridge.Centre.z);
+				float along = Vector2.Dot(offset, axis), side = Vector2.Dot(offset, across);
+				if (Mathf.Abs(along) <= deck + 4f && Mathf.Abs(side) < 20f)
+				{
+					Assert.That(Mathf.Abs(side), Is.LessThan(0.05f), $"point {i}, {along:0.0} m along the bridge, is off its axis");
+					bool bridged = (road.FlagsAt(i) & ScenePathPointFlags.Bridge) != 0;
+					Assert.That(bridged, Is.EqualTo(Mathf.Abs(along) <= deck), $"point {i}: on the deck exactly where it is over it (along {along:0.00}, deck {deck:0.00}, side {side:0.000}, of {road.Count}, flags {road.FlagsAt(i)})");
+					onAxis++;
+				}
+			}
+			Assert.That(onAxis, Is.GreaterThan(5));
+		}
+
+		[Test]
 		public void PlanningIsDeterministic()
 		{
 			List<PointOfInterestRecord> records = ThreeTowns();
@@ -299,6 +348,48 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(b.Paths[p].Points, Is.EqualTo(a.Paths[p].Points));
 				Assert.That(b.Paths[p].Wear, Is.EqualTo(a.Paths[p].Wear));
 			}
+		}
+	}
+
+	/// <summary>
+	/// The river's level up its banks is smooth down a falling river: the bed paint and the plants' waterline used the
+	/// highest of the grid's samples about a point, which stepped at every sample and cut the banks into teeth (2026-10-11).
+	/// </summary>
+	[TestFixture]
+	public class RiverBankLevelTests
+	{
+		[Test]
+		public void TheLevelBesideAFallingRiverHasNoSteps()
+		{
+			// A river 8 m wide running diagonally across the grid, falling a metre every 25 m.
+			const int n = 41;
+			var river = new RiverPath { Id = 0, Perennial = true, X = new float[n], Z = new float[n], Width = new float[n], Surface = new float[n] };
+			for (int i = 0; i < n; i++)
+			{
+				river.X[i] = i * 10f * 0.8f;
+				river.Z[i] = i * 10f * 0.6f;
+				river.Width[i] = 8f;
+				river.Surface[i] = 20f - i * 10f / 25f;
+			}
+			var water = new SceneWater();
+			water.Rivers.Add(river);
+			// Along the bank, 1.5 m outside it, in half-metre steps.
+			var normal = new Vector2(-0.6f, 0.8f);
+			float previous = float.NaN;
+			for (float s = 20f; s < 380f; s += 0.5f)
+			{
+				float x = 0.8f * s + normal.x * 5.5f, z = 0.6f * s + normal.y * 5.5f;
+				float level = water.RiverSurfaceNear(x, z);
+				Assert.That(float.IsNegativeInfinity(level), Is.False, $"answered {s} m along");
+				if (!float.IsNaN(previous))
+				{
+					// A 1-in-25 river falls 2 cm a half metre; a step would be a whole segment's fall (40 cm).
+					Assert.That(previous - level, Is.InRange(-1e-3f, 0.03f), $"{s} m along");
+				}
+				previous = level;
+			}
+			Assert.That(float.IsNegativeInfinity(water.RiverSurfaceNear(0.8f * 100f + normal.x * 9f, 0.6f * 100f + normal.y * 9f)), Is.True,
+				"past the banks and the reach, nothing");
 		}
 	}
 

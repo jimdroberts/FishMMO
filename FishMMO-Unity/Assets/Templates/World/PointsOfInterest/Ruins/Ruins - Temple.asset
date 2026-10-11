@@ -28,13 +28,9 @@ MonoBehaviour:
     Weight: 1.5
   - Biome: Scrubland
     Weight: 1.5
-  - Biome: Arid
-    Weight: 1.5
   - Biome: Dust Sea
     Weight: 1.5
   - Biome: Wasteland
-    Weight: 1.5
-  - Biome: Barren
     Weight: 1.5
   RaceCategories: []
   Races: []
@@ -82,13 +78,13 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503357873
-  - rid: 4061506032503357874
-  - rid: 4061506032503357875
+  - rid: 4061506061917749851
+  - rid: 4061506061917749852
+  - rid: 4061506061917749853
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503357873
+    - rid: 4061506061917749851
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -99,12 +95,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506032503357874
+    - rid: 4061506061917749852
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503357875
+    - rid: 4061506061917749853
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

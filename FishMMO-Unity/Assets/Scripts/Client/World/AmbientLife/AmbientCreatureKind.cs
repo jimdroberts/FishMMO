@@ -34,6 +34,14 @@ namespace FishMMO.Client
 		Crab,
 		/// <summary>A frog or toad: squat and wide, folded hind legs.</summary>
 		Frog,
+		/// <summary>An owl: a big round head on a short body, broad rounded wings, a short tail.</summary>
+		Owl,
+		/// <summary>A goose, swan or crane in flight: a long neck stretched ahead, long steady-beating wings.</summary>
+		Goose,
+		/// <summary>A butterfly: a slip of a body under two broad rounded wings, flapping and gliding in fits.</summary>
+		Butterfly,
+		/// <summary>A dragonfly or damselfly: a long thin body, narrow glassy wings held out flat, a blur when it beats.</summary>
+		Dragonfly,
 	}
 
 	/// <summary>How a kind lives and moves (AmbientLifeMotion).</summary>
@@ -51,6 +59,11 @@ namespace FishMMO.Client
 		Scurry,
 		/// <summary>A waterfowl paddling about on still water.</summary>
 		Paddle,
+		/// <summary>
+		/// Birds passing over on their way somewhere else: a straight crossing from one side of the sky to the other, now
+		/// and then — a skein of geese high in its V, a pair of pigeons, a few small birds bounding over the treetops.
+		/// </summary>
+		Transit,
 	}
 
 	/// <summary>Which of the settings' families a kind belongs to: each has its own draw distance and density.</summary>
@@ -106,6 +119,11 @@ namespace FishMMO.Client
 		Volcanic = 1 << 16,
 		/// <summary>No life at all: wasteland, alien ground, airless rock.</summary>
 		Barren = 1 << 17,
+		/// <summary>
+		/// Ruins, graveyards and abandoned farms (the scene's points of interest, not its biome): broken walls full of
+		/// holes and ledges, where owls, bats, crows, rats and lizards live.
+		/// </summary>
+		Ruins = 1 << 18,
 	}
 
 	/// <summary>One kind of ambient creature: what it looks like, where and when it lives, and how it moves.</summary>
@@ -139,6 +157,10 @@ namespace FishMMO.Client
 		public Vector2 Altitude = new Vector2(10f, 35f);
 		/// <summary>Seconds one episode of its routine lasts (a perch, a foraging bout, a flight loop), min..max.</summary>
 		public Vector2 Episode = new Vector2(20f, 45f);
+		/// <summary>Transit: the share of its episodes in which a group crosses (the sky is not always full).</summary>
+		public float PassShare = 0.5f;
+		/// <summary>Transit: flies in a V (geese, cranes, swans); otherwise a loose straggle.</summary>
+		public bool Vee;
 
 		// ── Where ──
 		/// <summary>The country it lives in.</summary>
@@ -205,7 +227,7 @@ namespace FishMMO.Client
 		public static float Celsius(float degrees) => degrees / 33.1f;
 
 		/// <summary>
-		/// Sixteen kinds. Numbers are grounded in the animals': flight initiation distances from field studies
+		/// Twenty-four kinds. Numbers are grounded in the animals': flight initiation distances from field studies
 		/// (small passerines 4-8 m, corvids 15-25 m, gulls 10-20 m, ducks 10-20 m, rabbits ~10 m), wing beats from
 		/// high-speed footage (finches 15-20 Hz, crows 3-4 Hz, gulls 3 Hz, bats 8-12 Hz), and densities thinned to
 		/// what a player notices rather than what a census would count.
@@ -243,7 +265,7 @@ namespace FishMMO.Client
 					Name = "Rooks", Shape = AmbientShape.Crow, Behaviour = AmbientBehaviour.Flock, Family = AmbientFamily.Flocks,
 					Length = new Vector2(0.42f, 0.5f), GroupSize = new Vector2Int(4, 14), GroupsPerKm2 = 8f, Spread = 8f, Roam = new Vector2(60f, 120f),
 					Speed = 9f, StrokeHz = 3.6f, Altitude = new Vector2(10f, 35f), Episode = new Vector2(70f, 130f),
-					Habitats = OpenCountry | AmbientHabitat.Woodland | AmbientHabitat.Tundra | AmbientHabitat.Settlement | AmbientHabitat.Mountain,
+					Habitats = OpenCountry | AmbientHabitat.Woodland | AmbientHabitat.Tundra | AmbientHabitat.Settlement | AmbientHabitat.Mountain | AmbientHabitat.Ruins,
 					Prefers = AmbientHabitat.Farmland, PreferWeight = 3f, Climate = new Vector2(-0.6f, 0.9f),
 					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(-25f), RainLimit = 0.5f,
 					FlushMetres = 22f, FleeSpeed = 9f,
@@ -269,8 +291,9 @@ namespace FishMMO.Client
 					Name = "Crow", Shape = AmbientShape.Crow, Behaviour = AmbientBehaviour.Perch, Family = AmbientFamily.SoloBirds,
 					Length = new Vector2(0.44f, 0.52f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 45f, Spread = 6f, Roam = new Vector2(20f, 45f),
 					Speed = 9f, StrokeHz = 3.8f, Episode = new Vector2(10f, 28f),
-					Habitats = Wooded | OpenCountry | AmbientHabitat.Settlement | AmbientHabitat.Coast | AmbientHabitat.Tundra | AmbientHabitat.Mountain | AmbientHabitat.Wetland,
-					Prefers = AmbientHabitat.Farmland | AmbientHabitat.Settlement, Climate = new Vector2(-0.7f, 1f),
+					Habitats = Wooded | OpenCountry | AmbientHabitat.Settlement | AmbientHabitat.Coast | AmbientHabitat.Tundra | AmbientHabitat.Mountain | AmbientHabitat.Wetland
+						| AmbientHabitat.Ruins,
+					Prefers = AmbientHabitat.Farmland | AmbientHabitat.Settlement | AmbientHabitat.Ruins, Climate = new Vector2(-0.7f, 1f),
 					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(-30f), RainLimit = 0.55f,
 					FlushMetres = 15f, FleeSpeed = 9f,
 					Back = Hex(0x141418), Belly = Hex(0x1c1c22), Accent = Hex(0x0c0c0e), Smoothness = 0.55f,
@@ -311,6 +334,91 @@ namespace FishMMO.Client
 					Back = Hex(0x3a3028), Belly = Hex(0x4a3e34), Accent = Hex(0x1a1612), Smoothness = 0.2f,
 				},
 
+				// ── Birds of the night and the high air ──
+				new AmbientCreatureKind
+				{
+					// Tawny, barn and long-eared owls: out of the roost at dusk, hunting from a perch at the wood's edge and
+					// dropping onto the grass; the rest of the day asleep in a crown.
+					Name = "Owl", Shape = AmbientShape.Owl, Behaviour = AmbientBehaviour.Perch, Family = AmbientFamily.SoloBirds,
+					Length = new Vector2(0.34f, 0.42f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 22f, Spread = 8f, Roam = new Vector2(25f, 60f),
+					Speed = 7f, StrokeHz = 3.2f, Episode = new Vector2(18f, 45f),
+					Habitats = Wooded | AmbientHabitat.Farmland | AmbientHabitat.Grassland | AmbientHabitat.Settlement | AmbientHabitat.Wetland | AmbientHabitat.Tundra
+						| AmbientHabitat.Ruins,
+					Prefers = AmbientHabitat.Woodland | AmbientHabitat.Farmland | AmbientHabitat.Ruins, PreferWeight = 2.5f, Climate = new Vector2(-0.8f, 1f),
+					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(-35f), RainLimit = 0.3f,
+					FlushMetres = 10f, FleeSpeed = 7f,
+					Back = Hex(0x7a6448), Belly = Hex(0xd8c8a8), Accent = Hex(0x3a3024), Smoothness = 0.12f,
+					// Tawny brown, a barn owl's gold and white, a grey phase.
+					Palette = new[] { Hex(0xffffff), Hex(0xfff0d0), Hex(0xc8c4c0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Golden and white-tailed eagles: the largest thing in the sky, circling far above the ridges and the coast.
+					Name = "Eagle", Shape = AmbientShape.Raptor, Behaviour = AmbientBehaviour.Soar, Family = AmbientFamily.Raptors,
+					Length = new Vector2(0.8f, 0.95f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 1.2f, Spread = 40f, Roam = new Vector2(250f, 420f),
+					Speed = 13f, StrokeHz = 2.2f, Altitude = new Vector2(110f, 320f), Episode = new Vector2(120f, 220f),
+					Habitats = AmbientHabitat.Mountain | AmbientHabitat.Coast | AmbientHabitat.Tundra | AmbientHabitat.Grassland | AmbientHabitat.Scrub
+						| AmbientHabitat.Forest | AmbientHabitat.Wetland | AmbientHabitat.Desert,
+					Prefers = AmbientHabitat.Mountain | AmbientHabitat.Coast, PreferWeight = 4f, Climate = new Vector2(-0.8f, 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(-30f), RainLimit = 0.15f, NeedsThermals = true,
+					FlushMetres = 0f,
+					Back = Hex(0x3e2c1c), Belly = Hex(0x4e3824), Accent = Hex(0x1c140e), Smoothness = 0.2f,
+					Palette = new[] { Hex(0xffffff), Hex(0xe8d8b8) },
+				},
+				new AmbientCreatureKind
+				{
+					// Gulls riding the updraft off the shore and the warm air over a harbour town: high, wings still, wheeling.
+					Name = "Gulls aloft", Shape = AmbientShape.Gull, Behaviour = AmbientBehaviour.Soar, Family = AmbientFamily.Raptors,
+					Length = new Vector2(0.45f, 0.62f), GroupSize = new Vector2Int(2, 7), GroupsPerKm2 = 6f, Spread = 25f, Roam = new Vector2(80f, 200f),
+					Speed = 9f, StrokeHz = 2.8f, Altitude = new Vector2(25f, 90f), Episode = new Vector2(70f, 140f),
+					Habitats = AmbientHabitat.Coast | AmbientHabitat.Sea | AmbientHabitat.Settlement | AmbientHabitat.Farmland | AmbientHabitat.FreshWater | AmbientHabitat.Wetland,
+					Prefers = AmbientHabitat.Coast | AmbientHabitat.Settlement, PreferWeight = 3f, NeedsSea = true, Climate = new Vector2(-0.6f, 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(-15f), RainLimit = 0.5f,
+					FlushMetres = 0f,
+					Back = Hex(0xa8b0b8), Belly = Hex(0xf2f2ee), Accent = Hex(0x1e1e22), Smoothness = 0.3f,
+				},
+				new AmbientCreatureKind
+				{
+					// Geese, swans and cranes on passage: a skein high over the land, calling, straight on to wherever it goes.
+					Name = "Geese skein", Shape = AmbientShape.Goose, Behaviour = AmbientBehaviour.Transit, Family = AmbientFamily.Raptors,
+					Length = new Vector2(0.75f, 0.95f), GroupSize = new Vector2Int(7, 23), GroupsPerKm2 = 1.6f, Spread = 3.2f, Roam = new Vector2(280f, 400f),
+					Speed = 17f, StrokeHz = 3.2f, Altitude = new Vector2(70f, 240f), Episode = new Vector2(90f, 200f), PassShare = 0.45f, Vee = true,
+					Habitats = OpenCountry | AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Coast | AmbientHabitat.Tundra
+						| AmbientHabitat.Woodland | AmbientHabitat.Forest | AmbientHabitat.Settlement | AmbientHabitat.Mountain,
+					Prefers = AmbientHabitat.Wetland | AmbientHabitat.Farmland | AmbientHabitat.Coast, PreferWeight = 2f, Climate = new Vector2(-0.6f, 0.85f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(-20f), RainLimit = 0.4f, Migrates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x6a645a), Belly = Hex(0xb0a898), Accent = Hex(0x1e1c1a), Smoothness = 0.25f,
+					// Greylags, a white swan now and then, a crane's grey.
+					Palette = new[] { Hex(0xffffff), Hex(0xe8e4dc), Hex(0xb8bcc4) },
+				},
+				new AmbientCreatureKind
+				{
+					// Pigeons and doves crossing between fields and roofs: fast and direct, in ones and twos and small parties.
+					Name = "Pigeons", Shape = AmbientShape.Crow, Behaviour = AmbientBehaviour.Transit, Family = AmbientFamily.Flocks,
+					Length = new Vector2(0.3f, 0.4f), GroupSize = new Vector2Int(1, 6), GroupsPerKm2 = 14f, Spread = 4f, Roam = new Vector2(160f, 240f),
+					Speed = 15f, StrokeHz = 6f, Altitude = new Vector2(15f, 55f), Episode = new Vector2(40f, 90f), PassShare = 0.55f,
+					Habitats = OpenCountry | AmbientHabitat.Woodland | AmbientHabitat.Forest | AmbientHabitat.Settlement | AmbientHabitat.Coast | AmbientHabitat.Mountain,
+					Prefers = AmbientHabitat.Settlement | AmbientHabitat.Farmland, PreferWeight = 2.5f, Climate = new Vector2(Celsius(-12f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(-15f), RainLimit = 0.4f,
+					FlushMetres = 0f,
+					Back = Hex(0x7a7e88), Belly = Hex(0x9a9ca4), Accent = Hex(0x3a3c44), Smoothness = 0.35f,
+					Palette = new[] { Hex(0xffffff), Hex(0xd8d0c8), Hex(0xb8b0a8) },
+				},
+				new AmbientCreatureKind
+				{
+					// Small birds going over: a handful bounding across the sky above the treetops.
+					Name = "Passing songbirds", Shape = AmbientShape.Songbird, Behaviour = AmbientBehaviour.Transit, Family = AmbientFamily.Flocks,
+					Length = new Vector2(0.12f, 0.18f), GroupSize = new Vector2Int(1, 8), GroupsPerKm2 = 30f, Spread = 3f, Roam = new Vector2(120f, 180f),
+					Speed = 12f, StrokeHz = 16f, Altitude = new Vector2(6f, 30f), Episode = new Vector2(30f, 70f), PassShare = 0.6f,
+					Habitats = Wooded | OpenCountry | AmbientHabitat.Wetland | AmbientHabitat.Settlement | AmbientHabitat.Tundra | AmbientHabitat.Mountain | AmbientHabitat.Coast,
+					Prefers = AmbientHabitat.Woodland | AmbientHabitat.Farmland | AmbientHabitat.Settlement, PreferWeight = 2f, Climate = new Vector2(Celsius(-12f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(-15f), RainLimit = 0.3f, Migrates = true,
+					FlushMetres = 0f,
+					Back = Hex(0x5a4a3a), Belly = Hex(0xb8a488), Accent = Hex(0x2a2420), Smoothness = 0.2f,
+					Palette = new[] { Hex(0xffffff), Hex(0xe8d8c0), Hex(0x8a7a6a), Hex(0x3a3a40), Hex(0xf0e070) },
+				},
+
 				// ── Bats ──
 				new AmbientCreatureKind
 				{
@@ -318,13 +426,46 @@ namespace FishMMO.Client
 					Length = new Vector2(0.08f, 0.11f), GroupSize = new Vector2Int(3, 9), GroupsPerKm2 = 100f, Spread = 10f, Roam = new Vector2(8f, 16f),
 					Speed = 6f, StrokeHz = 10f, Altitude = new Vector2(2f, 9f),
 					Habitats = Wooded | AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Farmland | AmbientHabitat.Settlement
-						| AmbientHabitat.Cave | AmbientHabitat.Mountain | AmbientHabitat.Grassland | AmbientHabitat.Scrub | AmbientHabitat.Desert,
-					Prefers = AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Cave | AmbientHabitat.Woodland, PreferWeight = 2.5f,
+						| AmbientHabitat.Cave | AmbientHabitat.Mountain | AmbientHabitat.Grassland | AmbientHabitat.Scrub | AmbientHabitat.Desert | AmbientHabitat.Ruins,
+					Prefers = AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Cave | AmbientHabitat.Woodland | AmbientHabitat.Ruins, PreferWeight = 2.5f,
 					Climate = new Vector2(Celsius(0f), 1f),
 					// Insect bats stay in the roost below about 5 °C (no insects fly) and in rain (it clogs their sonar and soaks them).
 					Activity = AmbientActivity.Dusk, ColdLimit = Celsius(5f), RainLimit = 0.15f, Hibernates = true,
 					FlushMetres = 0f,
 					Back = Hex(0x2a221e), Belly = Hex(0x3a302a), Accent = Hex(0x1a1614), Smoothness = 0.2f, CastShadows = false,
+				},
+
+				// ── Insects ──
+				new AmbientCreatureKind
+				{
+					// Whites, brimstones, fritillaries, blues: over flowery grass, field edges and gardens on warm sunny days,
+					// flitting in fits a metre or so up.
+					Name = "Butterflies", Shape = AmbientShape.Butterfly, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.03f, 0.045f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 450f, Spread = 6f, Roam = new Vector2(4f, 10f),
+					Speed = 1.6f, StrokeHz = 9f, Altitude = new Vector2(0.4f, 2.2f),
+					Habitats = OpenCountry | AmbientHabitat.Woodland | AmbientHabitat.Settlement | AmbientHabitat.Wetland | AmbientHabitat.Jungle
+						| AmbientHabitat.Mountain | AmbientHabitat.Ruins,
+					Prefers = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Scrub, PreferWeight = 2.5f, Climate = new Vector2(Celsius(8f), 1f),
+					// Ectotherms that need the sun on their wings: under about 13 °C or an overcast sky they sit it out.
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(13f), HeatLover = true, RainLimit = 0.08f, Hibernates = true, NeedsThermals = true,
+					FlushMetres = 0f,
+					Back = Hex(0xf0ead8), Belly = Hex(0xe0d8c0), Accent = Hex(0x2a2420), Smoothness = 0.1f, CastShadows = false,
+					// Cabbage white, brimstone, small tortoiseshell's orange, a blue, a peacock's red.
+					Palette = new[] { Hex(0xffffff), Hex(0xf8f0a0), Hex(0xf0a050), Hex(0x90b0f0), Hex(0xc05040) },
+				},
+				new AmbientCreatureKind
+				{
+					// Hawkers and darters patrolling a pond or a slow river's margin, hanging and darting low over the water.
+					Name = "Dragonflies", Shape = AmbientShape.Dragonfly, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Length = new Vector2(0.05f, 0.08f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 600f, Spread = 4f, Roam = new Vector2(4f, 9f),
+					Speed = 3.5f, StrokeHz = 30f, Altitude = new Vector2(0.3f, 1.6f),
+					Habitats = AmbientHabitat.Wetland | AmbientHabitat.FreshWater | AmbientHabitat.Grassland | AmbientHabitat.Farmland | Wooded,
+					Prefers = AmbientHabitat.Wetland | AmbientHabitat.FreshWater, PreferWeight = 3f, NeedsFreshWater = true, Climate = new Vector2(Celsius(8f), 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(14f), HeatLover = true, RainLimit = 0.12f, Hibernates = true, NeedsThermals = true,
+					FlushMetres = 0f,
+					Back = Hex(0x2a6a8a), Belly = Hex(0x3a7a6a), Accent = Hex(0x141414), Smoothness = 0.6f, CastShadows = false,
+					// An emperor's blue, a green hawker, a darter's red.
+					Palette = new[] { Hex(0xffffff), Hex(0x90e0a0), Hex(0xf07050) },
 				},
 
 				// ── Ground critters ──
@@ -334,8 +475,8 @@ namespace FishMMO.Client
 					Length = new Vector2(0.2f, 0.26f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 600f, Spread = 3f, Roam = new Vector2(2f, 5f),
 					Speed = 1.6f, StrokeHz = 6f, Episode = new Vector2(5f, 14f),
 					Habitats = AmbientHabitat.Farmland | AmbientHabitat.Settlement | AmbientHabitat.Wetland | AmbientHabitat.Coast | AmbientHabitat.Grassland
-						| AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Cave,
-					Prefers = AmbientHabitat.Settlement | AmbientHabitat.Farmland | AmbientHabitat.Wetland, PreferWeight = 3f, Climate = new Vector2(Celsius(-8f), 1f),
+						| AmbientHabitat.Woodland | AmbientHabitat.Scrub | AmbientHabitat.Cave | AmbientHabitat.Ruins,
+					Prefers = AmbientHabitat.Settlement | AmbientHabitat.Farmland | AmbientHabitat.Wetland | AmbientHabitat.Ruins, PreferWeight = 3f, Climate = new Vector2(Celsius(-8f), 1f),
 					Activity = AmbientActivity.Nocturnal, ColdLimit = Celsius(-10f), RainLimit = 0.6f,
 					FlushMetres = 4f, FleeSpeed = 3f,
 					Back = Hex(0x4a4038), Belly = Hex(0x7a7064), Accent = Hex(0xb08a80), Smoothness = 0.25f,
@@ -380,8 +521,8 @@ namespace FishMMO.Client
 					Length = new Vector2(0.18f, 0.3f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 600f, Spread = 4f, Roam = new Vector2(2f, 5f),
 					Speed = 0.8f, StrokeHz = 7f, Episode = new Vector2(5f, 15f),
 					Habitats = AmbientHabitat.Desert | AmbientHabitat.Scrub | AmbientHabitat.Mountain | AmbientHabitat.Volcanic | AmbientHabitat.Coast
-						| AmbientHabitat.Grassland | AmbientHabitat.Jungle,
-					Prefers = AmbientHabitat.Desert | AmbientHabitat.Scrub, PreferWeight = 3f, Climate = new Vector2(Celsius(14f), 1f),
+						| AmbientHabitat.Grassland | AmbientHabitat.Jungle | AmbientHabitat.Ruins,
+					Prefers = AmbientHabitat.Desert | AmbientHabitat.Scrub | AmbientHabitat.Ruins, PreferWeight = 3f, Climate = new Vector2(Celsius(14f), 1f),
 					// Ectotherms: below about 15 °C they cannot run, so they stay hidden; the hot noon that drives everything
 					// else into the shade is when they bask.
 					Activity = AmbientActivity.Diurnal, ColdLimit = Celsius(15f), HeatLover = true, RainLimit = 0.2f, Hibernates = true,

@@ -101,6 +101,8 @@ namespace FishMMO.Client
 			/// <summary>Wing tips (outer third) in the accent colour: a gull's black tips, a raptor's dark primaries.</summary>
 			public bool DarkTips;
 			public bool Bat;
+			/// <summary>A neck between the body and the head (geese, swans, cranes), when its radii are non-zero.</summary>
+			public Vector3 NeckCentre, NeckRadii;
 		}
 
 		private static BirdPlan Plan(AmbientShape shape)
@@ -147,6 +149,49 @@ namespace FishMMO.Client
 						Columns = new[] { 0f, 0.4f, 0.75f, 1f }, Lead = new[] { 0.09f, 0.08f, 0.03f, -0.08f }, Trail = new[] { -0.08f, -0.1f, -0.08f, -0.09f },
 						LegLength = 0f,
 					};
+				case AmbientShape.Owl:
+					return new BirdPlan
+					{
+						// The head is the owl: nearly as wide as the body, the bill a hook barely out of the face.
+						BodyCentre = new Vector3(0f, 0.2f, -0.03f), BodyRadii = new Vector3(0.15f, 0.15f, 0.2f),
+						HeadCentre = new Vector3(0f, 0.31f, 0.15f), HeadRadii = new Vector3(0.12f, 0.115f, 0.1f), BeakLength = 0.04f, BeakRadius = 0.022f,
+						TailLength = 0.13f, TailRoot = 0.07f, TailTip = 0.1f, Shoulder = new Vector3(0.1f, 0.26f, 0.06f), Span = 1f,
+						// Broad, rounded, the fingers short: silent flight.
+						Columns = new[] { 0f, 0.4f, 0.75f, 0.92f, 1f }, Lead = new[] { 0.14f, 0.15f, 0.13f, 0.09f, 0.02f }, Trail = new[] { -0.17f, -0.2f, -0.18f, -0.12f, -0.04f },
+						LegLength = 0.1f,
+					};
+				case AmbientShape.Goose:
+					return new BirdPlan
+					{
+						// Stretched out in flight: the neck as long as the body, the legs tucked away.
+						BodyCentre = new Vector3(0f, 0.12f, -0.08f), BodyRadii = new Vector3(0.12f, 0.11f, 0.23f),
+						NeckCentre = new Vector3(0f, 0.14f, 0.2f), NeckRadii = new Vector3(0.035f, 0.035f, 0.15f),
+						HeadCentre = new Vector3(0f, 0.155f, 0.38f), HeadRadii = new Vector3(0.045f, 0.045f, 0.065f), BeakLength = 0.08f, BeakRadius = 0.02f,
+						TailLength = 0.1f, TailRoot = 0.06f, TailTip = 0.08f, Shoulder = new Vector3(0.08f, 0.15f, 0.02f), Span = 1.2f,
+						Columns = new[] { 0f, 0.4f, 0.75f, 1f }, Lead = new[] { 0.09f, 0.09f, 0.05f, -0.08f }, Trail = new[] { -0.1f, -0.12f, -0.09f, -0.1f },
+						LegLength = 0f, DarkTips = true,
+					};
+				case AmbientShape.Butterfly:
+					return new BirdPlan
+					{
+						// The wings are the butterfly: broad and rounded, the hind wing's lobe trailing; the body a slip under them.
+						BodyCentre = new Vector3(0f, 0.05f, 0f), BodyRadii = new Vector3(0.05f, 0.05f, 0.3f),
+						HeadCentre = new Vector3(0f, 0.06f, 0.33f), HeadRadii = new Vector3(0.06f, 0.06f, 0.06f), BeakLength = 0f, BeakRadius = 0f,
+						TailLength = 0f, Shoulder = new Vector3(0.04f, 0.07f, 0.1f), Span = 1.05f,
+						Columns = new[] { 0f, 0.35f, 0.7f, 0.9f, 1f }, Lead = new[] { 0.32f, 0.5f, 0.55f, 0.42f, 0.2f }, Trail = new[] { -0.42f, -0.55f, -0.35f, -0.1f, 0.05f },
+						LegLength = 0f, DarkTips = true,
+					};
+				case AmbientShape.Dragonfly:
+					return new BirdPlan
+					{
+						// A thorax with the wings on it and a long abdomen trailing behind.
+						BodyCentre = new Vector3(0f, 0.05f, 0.2f), BodyRadii = new Vector3(0.06f, 0.06f, 0.13f),
+						NeckCentre = new Vector3(0f, 0.05f, -0.2f), NeckRadii = new Vector3(0.028f, 0.028f, 0.32f),
+						HeadCentre = new Vector3(0f, 0.06f, 0.36f), HeadRadii = new Vector3(0.07f, 0.06f, 0.05f), BeakLength = 0f, BeakRadius = 0f,
+						TailLength = 0f, Shoulder = new Vector3(0.04f, 0.08f, 0.25f), Span = 0.75f,
+						Columns = new[] { 0f, 0.5f, 0.9f, 1f }, Lead = new[] { 0.1f, 0.11f, 0.09f, 0.05f }, Trail = new[] { -0.02f, -0.04f, -0.04f, -0.01f },
+						LegLength = 0f,
+					};
 				case AmbientShape.Bat:
 					return new BirdPlan
 					{
@@ -173,6 +218,10 @@ namespace FishMMO.Client
 		{
 			// The body and the head: countershaded ellipsoids, the head turning (part 4) on its own.
 			Ellipsoid(b, plan.BodyCentre, plan.BodyRadii, 6, 8, back, belly, 0f, 0f);
+			if (plan.NeckRadii.sqrMagnitude > 0f)
+			{
+				Ellipsoid(b, plan.NeckCentre, plan.NeckRadii, 4, 6, back, Color.Lerp(belly, back, 0.5f), 0f, 0f);
+			}
 			Ellipsoid(b, plan.HeadCentre, plan.HeadRadii, 5, 7, back, Color.Lerp(belly, back, 0.4f), 4f, 0f);
 			// Eyes: a dark spot each side of the head.
 			for (int side = -1; side <= 1; side += 2)

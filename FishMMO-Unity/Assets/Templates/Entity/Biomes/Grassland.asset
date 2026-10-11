@@ -281,8 +281,9 @@ MonoBehaviour:
   EmissionRate: 0
   TerrainProcess: {fileID: 11400000, guid: a1f47f4144d2db786a921228ae8a2297, type: 2}
   mainTextureLayer:
-    terrainLayer: {fileID: 0}
-    albedoTexture: {fileID: 2800000, guid: b57d7a0ebf324414fb3f358921cc80fc, type: 3}
+    terrainLayer: {fileID: 8574412962073106934, guid: 41f6eb1d8712e8d73accf8b30ec56aca,
+      type: 2}
+    albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
     metallic: 0
@@ -304,122 +305,6 @@ MonoBehaviour:
       max: 90
     slopeFalloff: 5
     prefabSpawnRules:
-    - stableGuid: f4d3fd6ef31b47a7a109092cbaf02f07
-      enableSpawning: 0
-      ruleName: '[disabled by Biome Art: placeholder prefab only] '
-      prefabs:
-      - {fileID: 4732638208583590639, guid: 87bd0c23528df05478c9d9c23b961a97, type: 3}
-      spawnChannel: 0
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 50
-      maxPerChunk: 20000
-      minSpacing: 0
-      minTextureWeight: 0.35
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 0
-      heightFalloff: 0
-      useSlopeConstraint: 0
-      slopeRange:
-        min: 0
-        max: 0
-      slopeFalloff: 0
-      useNonUniformScaling: 0
-      uniformScaleRange: {x: 1, y: 1}
-      widthScaleRange: {x: 0.8, y: 1.2}
-      heightScaleRange: {x: 0.8, y: 1.2}
-      yRotationRange: {x: 0, y: 0}
-      alignToTerrainNormal: 0
-      seedOffset: 0
-      clusterMetres: 0
-      clusterSize: 0
-      clusterSpacing: 4
-      clusterBackground: 0.2
-      clusterScaleBias: 0.5
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0, y: 0}
-      sinkSlopeFactor: 0
-      depthRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      specFingerprint: 
-      detailNoiseSpread: 0.5
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 64
-    - stableGuid: 16b080bc250c42f183134296c88ef485
-      enableSpawning: 0
-      ruleName: '[disabled by Biome Art: every prefab is missing] '
-      prefabs:
-      - {fileID: 8730988760233312242, guid: ab474dcb80a6b304981d8d8456ec4f14, type: 3}
-      spawnChannel: 1
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 1.5
-      maxPerChunk: 35
-      minSpacing: 0
-      minTextureWeight: 0.35
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 0
-      heightFalloff: 0
-      useSlopeConstraint: 0
-      slopeRange:
-        min: 0
-        max: 0
-      slopeFalloff: 0
-      useNonUniformScaling: 1
-      uniformScaleRange: {x: 1, y: 1}
-      widthScaleRange: {x: 0.6, y: 1}
-      heightScaleRange: {x: 1, y: 1.6}
-      yRotationRange: {x: 0, y: 0}
-      alignToTerrainNormal: 0
-      seedOffset: 0
-      clusterMetres: 0
-      clusterSize: 0
-      clusterSpacing: 4
-      clusterBackground: 0.2
-      clusterScaleBias: 0.5
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0, y: 0}
-      sinkSlopeFactor: 0
-      depthRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      specFingerprint: 
-      detailNoiseSpread: 0.5
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 64
     - stableGuid: 20a0cca1f29746e0aac82e4acaec82e2
       enableSpawning: 1
       ruleName: GrassLush

@@ -674,12 +674,16 @@ namespace FishMMO.Shared.WorldDesign
 					from = -half;
 					to = half;
 				}
-				int n = Math.Max(1, Mathf.CeilToInt((to - from) / module - 1e-3f));
+				/* Exactly from one end to the other: as many modules as come nearest the length, each stretched or shrunk a
+				 * little to fit (its footprint's depth says by how much, PropsFeature.Build). Whole modules centred on the
+				 * crossing ran up to most of a module past each end, over the path that comes to it (Jim, 2026-10-11). */
+				int n = Math.Max(1, Mathf.RoundToInt((to - from) / module));
+				float length = (to - from) / n;
 				float middle = 0.5f * (from + to);
 				for (int i = 0; i < n; i++)
 				{
-					var at = new Vector2(0f, middle + (i - (n - 1) * 0.5f) * module);
-					TryLay(s, -1, at, 0f, new Vector2(slot.Footprint.x, module), 0f, SpanGroup);
+					var at = new Vector2(0f, middle + (i - (n - 1) * 0.5f) * length);
+					TryLay(s, -1, at, 0f, new Vector2(slot.Footprint.x, length), 0f, SpanGroup);
 				}
 			}
 
@@ -1143,6 +1147,269 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// The ground a site's pieces wear, written to the scene's ways as yards (<see cref="ScenePathClass.Yard"/>): bare
+		/// earth under and just round each building (no grass blade comes up through a floor), a trodden apron round a
+		/// well, a fire or a stall, and a worn way out of each front door. The grass between them grows; the path field
+		/// thins it where feet go (FishGroundPaths.hlsl).
+		/// </summary>
+		private static void AddYards(PointOfInterestSiteContext context,
+			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
+		{
+			if (context.Points == null || grounds.Count == 0)
+			{
+				return;
+			}
+			int id = 0;
+			foreach (ScenePath existing in context.Points.Paths)
+			{
+				id = Math.Max(id, existing != null ? existing.Id : 0);
+			}
+			// How lived in the site is: a ruin's ground has grown back over, a camp's is fresh, a town's beaten bare.
+			PointOfInterestGroup group = PointOfInterestKinds.Info(context.Record.Kind).Group;
+			float kept = group == PointOfInterestGroup.Ruins || group == PointOfInterestGroup.Dead ? 0.3f
+				: PointOfInterestKinds.Info(context.Record.Kind).Has(PointOfInterestTraits.Settlement) ? 1f : 0.8f;
+			void Add(Vector3 a, Vector3 b, float half, float wear, int toId)
+			{
+				wear *= kept;
+				var path = new ScenePath
+				{
+					Id = ++id,
+					Class = ScenePathClass.Yard,
+					FromId = -1,
+					ToId = toId,
+					Points = new[] { a, b },
+					HalfWidth = new[] { half, half },
+					Wear = new[] { wear, wear },
+					Surface = new[] { (byte)ScenePathSurface.Earth, (byte)ScenePathSurface.Earth },
+					Flags = new[] { (byte)ScenePathPointFlags.InSite, (byte)ScenePathPointFlags.InSite },
+				};
+				context.Points.Paths.Add(path);
+			}
+			foreach ((Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag) in grounds)
+			{
+				// Walls, gates, spans and piers: the ground beside them is not worn by them.
+				if (role == PointOfInterestSlotRole.Perimeter || role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower
+					|| role == PointOfInterestSlotRole.Span || role == PointOfInterestSlotRole.Pier)
+				{
+					continue;
+				}
+				float width = Mathf.Max(0.1f, size.x), depth = Mathf.Max(0.1f, size.y);
+				float longest = Mathf.Max(width, depth), shortest = Mathf.Min(width, depth);
+				if (longest < 1.2f)
+				{
+					continue;
+				}
+				string t = tag ?? string.Empty;
+				bool gathering = t.IndexOf("well", StringComparison.OrdinalIgnoreCase) >= 0 || t.IndexOf("fire", StringComparison.OrdinalIgnoreCase) >= 0
+					|| t.IndexOf("stall", StringComparison.OrdinalIgnoreCase) >= 0 || t.IndexOf("market", StringComparison.OrdinalIgnoreCase) >= 0
+					|| role == PointOfInterestSlotRole.Centre;
+				if (gathering)
+				{
+					// Where people stand about: a trodden ring a pace and a half round it.
+					Add(at, at, longest * 0.5f + 1.6f, 0.8f, -1);
+					continue;
+				}
+				bool building = longest >= 3f;
+				// Under and round it: a rectangle as a capsule along its long side.
+				Vector3 axis = turn * (width >= depth ? Vector3.right : Vector3.forward);
+				float reach = Mathf.Max(0f, longest - shortest) * 0.5f;
+				Add(at - axis * reach, at + axis * reach, shortest * 0.5f + (building ? 0.6f : 0.3f), building ? 1f : 0.75f, -1);
+				if (building)
+				{
+					// Out of its front door (a piece's front looks down its −z) a few paces toward the street.
+					Vector3 front = turn * Vector3.back;
+					Vector3 door = at + front * (depth * 0.5f);
+					Add(door, door + front * 3.5f, 0.55f, 0.9f, context.Record.Id);
+				}
+			}
+		}
+
+		/// <summary>
+		/// What gathers round lived-in buildings (Jim, 2026-10-11: sites looked dated): by each front door a water butt, a
+		/// bench or a low lantern; a woodpile against a side wall; a cart, hay or a washing line in the back yard; lantern
+		/// posts along a town's streets. Round a camp's tents, drying and weapon racks, water and a log heap. Each is kept
+		/// clear of the buildings, the streets and one another; a ruin gets none.
+		/// </summary>
+		private static void AddClutter(PointOfInterestSiteContext context,
+			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds,
+			PointOfInterestLayoutRequest request, DeterministicRNG random)
+		{
+			PointOfInterestRecord record = context.Record;
+			PointOfInterestKindInfo info = PointOfInterestKinds.Info(record.Kind);
+			if (info.Group == PointOfInterestGroup.Ruins || info.Group == PointOfInterestGroup.Dead || info.Has(PointOfInterestTraits.Underwater))
+			{
+				return;
+			}
+			bool town = info.Has(PointOfInterestTraits.Settlement) || info.Group == PointOfInterestGroup.Settlement;
+			bool camp = !town && (info.Group == PointOfInterestGroup.Wild || record.Kind == POIType.BossLair || record.Kind == POIType.PirateCove
+				|| record.Kind == POIType.SmugglersCove || record.Kind == POIType.Oasis);
+			if (!town && !camp)
+			{
+				return;
+			}
+			// What may not be stood on: every laid piece's footprint, and what has been placed since.
+			var taken = new List<(Vector2 centre, float yaw, Vector2 size)>();
+			foreach ((Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole _, string _) in grounds)
+			{
+				taken.Add((new Vector2(at.x, at.z), turn.eulerAngles.y, size + Vector2.one * 0.6f));
+			}
+			var streets = new List<(Vector2 a, Vector2 b, float half)>();
+			Quaternion siteTurn = Quaternion.Euler(0f, record.Yaw, 0f);
+			var origin = new Vector2(record.Position.x, record.Position.z);
+			foreach ((Vector2 centre, Vector2 axis, float width, float half) in request.Streets)
+			{
+				Vector3 a = siteTurn * new Vector3(centre.x - axis.x * half, 0f, centre.y - axis.y * half);
+				Vector3 b = siteTurn * new Vector3(centre.x + axis.x * half, 0f, centre.y + axis.y * half);
+				streets.Add((origin + new Vector2(a.x, a.z), origin + new Vector2(b.x, b.z), width * 0.5f));
+			}
+			bool OnStreet(Vector2 p, float pad)
+			{
+				foreach ((Vector2 a, Vector2 b, float half) in streets)
+				{
+					Vector2 ab = b - a;
+					float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Mathf.Max(1e-4f, ab.sqrMagnitude));
+					if (Vector2.Distance(a + ab * t, p) < half + pad)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+			int placed = 0;
+			bool Put(string query, Vector3 at, float yaw)
+			{
+				var pieceRequest = new PointOfInterestPieceRequest(query, "timber", (int)(random.NextDouble() * 1000000));
+				GameObject prefab = PointOfInterestPieceResolver.Resolve(pieceRequest);
+				if (prefab == null)
+				{
+					return false;
+				}
+				Vector2 size = PointOfInterestPieceResolver.Measure(pieceRequest).Footprint;
+				var c = new Vector2(at.x, at.z);
+				if (OnStreet(c, Mathf.Max(size.x, size.y) * 0.5f))
+				{
+					return false;
+				}
+				foreach ((Vector2 centre, float takenYaw, Vector2 takenSize) in taken)
+				{
+					if (PointOfInterestLayouts.Overlaps(c, yaw, size, centre, takenYaw, takenSize))
+					{
+						return false;
+					}
+				}
+				if (context.Water != null && context.Water.KindAt(at.x, at.z) != WaterKind.None)
+				{
+					return false;
+				}
+				taken.Add((c, yaw, size + Vector2.one * 0.3f));
+				context.AddProp(prefab, new Vector3(at.x, context.GroundAt(at.x, at.z), at.z), Quaternion.Euler(0f, yaw, 0f), Vector3.one);
+				placed++;
+				return true;
+			}
+			string Pick(params string[] choices) => choices[(int)(random.NextDouble() * choices.Length) % choices.Length];
+
+			foreach ((Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag) in grounds)
+			{
+				if (role == PointOfInterestSlotRole.Perimeter || role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower
+					|| role == PointOfInterestSlotRole.Span || role == PointOfInterestSlotRole.Pier)
+				{
+					continue;
+				}
+				float width = size.x, depth = size.y;
+				float yaw = turn.eulerAngles.y;
+				Vector3 front = turn * Vector3.back, right = turn * Vector3.right;
+				if (town && tag == PointOfInterestTemplateSpecs.Church)
+				{
+					// The churchyard: headstones in rows behind and beside the church, the odd plain mound among them, all
+					// facing the same way as the church; rows break where the ground is taken or a street runs.
+					int rows = 2 + (int)(random.NextDouble() * 2.0);
+					int across = 3 + (int)(random.NextDouble() * 3.0);
+					for (int r = 0; r < rows; r++)
+					{
+						for (int c = 0; c < across; c++)
+						{
+							if (random.NextDouble() < 0.15)
+							{
+								continue; // a gap: an old grave gone, or room not yet used
+							}
+							float x = (c - (across - 1) * 0.5f) * 1.7f + (float)(random.NextDouble() - 0.5) * 0.3f;
+							float z = depth * 0.5f + 2.2f + r * 2.3f;
+							float lean = (float)(random.NextDouble() - 0.5) * 8f;
+							Put(random.NextDouble() < 0.15 ? "=GraveMound" : "=Gravestone", at - front * z + right * x, yaw + lean);
+						}
+					}
+					// And a few along the church's sunny side.
+					float sideways = random.NextDouble() < 0.5 ? -1f : 1f;
+					for (int g = 0; g < 3; g++)
+					{
+						Put("=Gravestone", at + right * sideways * (width * 0.5f + 2f) + front * ((g - 1) * 2.4f), yaw + (float)(random.NextDouble() - 0.5) * 8f);
+					}
+					continue;
+				}
+				if (town && tag == PointOfInterestTemplateSpecs.Temple)
+				{
+					// A temple's court is kept clear: no woodpiles or washing against its columns.
+					continue;
+				}
+				if (town && Mathf.Max(width, depth) >= 3f)
+				{
+					// By the door.
+					if (random.NextDouble() < 0.7)
+					{
+						float along = (random.NextDouble() < 0.5 ? -1f : 1f) * Mathf.Max(0.6f, width * 0.5f - 0.7f);
+						Put(Pick("=WaterButt", "=Bench", "=LanternPost"), at + front * (depth * 0.5f + 0.55f) + right * along, yaw);
+					}
+					// Against a side wall.
+					if (random.NextDouble() < 0.6)
+					{
+						float side = random.NextDouble() < 0.5 ? -1f : 1f;
+						Put(Pick("=Woodpile", "=WaterButt", "=HayBales"), at + right * side * (width * 0.5f + 0.5f) - front * (float)(random.NextDouble() - 0.5) * depth * 0.6f, yaw + 90f);
+					}
+					// The back yard.
+					if (random.NextDouble() < 0.45)
+					{
+						Put(Pick("=Cart", "=HayBales", "=WashingLine", "=Woodpile"), at - front * (depth * 0.5f + 2.5f) + right * (float)(random.NextDouble() - 0.5) * width, yaw + (float)(random.NextDouble() - 0.5) * 30f);
+					}
+				}
+				else if (camp && Mathf.Max(width, depth) >= 1.8f && random.NextDouble() < 0.6)
+				{
+					bool hostile = info.Has(PointOfInterestTraits.Hostile);
+					float a = (float)(random.NextDouble() * Math.PI * 2.0);
+					var offset = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * (Mathf.Max(width, depth) * 0.5f + 1.4f);
+					Put(hostile ? Pick("=WeaponRack", "=DryingRack", "=WaterButt", "=Woodpile") : Pick("=DryingRack", "=WaterButt", "=Woodpile"), at + offset, a * Mathf.Rad2Deg + 90f);
+				}
+			}
+			// Lanterns along a town's streets, either side in turn, every dozen paces or so.
+			if (town && (record.Kind == POIType.Town || record.Kind == POIType.City || record.Kind == POIType.Capital || record.Kind == POIType.Port))
+			{
+				foreach ((Vector2 a, Vector2 b, float half) in streets)
+				{
+					Vector2 ab = b - a;
+					float length = ab.magnitude;
+					if (length < 10f)
+					{
+						continue;
+					}
+					Vector2 along = ab / length, across = new Vector2(-along.y, along.x);
+					int side = 1;
+					for (float t = 6f; t < length - 6f; t += 13f, side = -side)
+					{
+						Vector2 p = a + along * t + across * side * (half + 0.7f);
+						float yaw = Mathf.Atan2(-across.x * side, -across.y * side) * Mathf.Rad2Deg;
+						var pieceRequest = new PointOfInterestPieceRequest("=LanternPost", "timber", 0);
+						GameObject prefab = PointOfInterestPieceResolver.Resolve(pieceRequest);
+						if (prefab != null && !taken.Exists(x => Vector2.Distance(x.centre, p) < Mathf.Max(x.size.x, x.size.y) * 0.5f + 0.5f))
+						{
+							context.AddProp(prefab, new Vector3(p.x, context.GroundAt(p.x, p.y), p.y), Quaternion.Euler(0f, yaw, 0f), Vector3.one);
+							taken.Add((p, yaw, new Vector2(0.4f, 0.8f)));
+							placed++;
+						}
+					}
+				}
+			}
+		}
+
 		public override void Build(PointOfInterestSiteContext context)
 		{
 			PointOfInterestTemplate template = context.Template;
@@ -1229,6 +1496,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, random);
 			AddStreets(context, request);
+			var grounds = new List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)>();
 			int laid = 0, missing = 0, ruined = 0, wet = 0;
 			bool dryOnly = KeepOutOfWater && !PointOfInterestKinds.Info(record.Kind).Has(PointOfInterestTraits.Underwater);
 			float sea = dryOnly ? SeaLevelOf(context) : float.NegativeInfinity;
@@ -1260,9 +1528,12 @@ namespace FishMMO.Shared.WorldDesign
 				Quaternion pitch = Quaternion.identity;
 				if (piece.Role == PointOfInterestSlotRole.Span)
 				{
-					// On the line from one bank top to the other, sloped with it: each end meets its own bank.
-					at.y = crossing.DeckAt(piece.Offset.y);
-					pitch = Quaternion.Euler(-crossing.SlopeDegrees, 0f, 0f);
+					// On the deck's profile, pitched to its own stretch of it: its two ends on the profile, so the modules
+					// meet end to end, level over the water and ramping down to each bank.
+					float half = piece.Footprint.y * 0.5f;
+					float near = crossing.DeckAt(piece.Offset.y - half), far = crossing.DeckAt(piece.Offset.y + half);
+					at.y = 0.5f * (near + far);
+					pitch = Quaternion.Euler(-Mathf.Atan2(far - near, 2f * half) * Mathf.Rad2Deg, 0f, 0f);
 				}
 				else if (piece.Role == PointOfInterestSlotRole.Pier)
 				{
@@ -1274,9 +1545,19 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				float tilt = deck ? 0f : d.Decay * MaxTiltDegrees;
 				Quaternion rotation = Quaternion.Euler(d.TiltX * tilt, record.Yaw + piece.Yaw, d.TiltZ * tilt) * pitch;
-				context.AddProp(prefab, at, rotation, Vector3.one * d.Scale);
+				Vector3 scale = Vector3.one * d.Scale;
+				if (piece.Role == PointOfInterestSlotRole.Span)
+				{
+					// A span is fitted end to end: its own size, stretched along the deck to the module the layout gave it.
+					float module = metrics.Module > 0f ? metrics.Module : Mathf.Max(0.01f, metrics.Footprint.y);
+					scale = new Vector3(1f, 1f, piece.Footprint.y / module);
+				}
+				context.AddProp(prefab, at, rotation, scale);
+				grounds.Add((at, Quaternion.Euler(0f, record.Yaw + piece.Yaw, 0f), metrics.Footprint * d.Scale, piece.Role, slot.Tag));
 				laid++;
 			}
+			AddYards(context, grounds);
+			AddClutter(context, grounds, request, random);
 			int dropped = request.Items.Count;
 			foreach (PointOfInterestLayoutPiece piece in pieces)
 			{
@@ -1365,6 +1646,12 @@ namespace FishMMO.Shared.WorldDesign
 				return StructureFinish.None;
 			}
 			float moss = decay * (Mentions(biome, Damp) ? 1f : 0.5f);
+			PointOfInterestGroup group = PointOfInterestKinds.Info(kind).Group;
+			if (group == PointOfInterestGroup.Ruins || group == PointOfInterestGroup.Dead)
+			{
+				// Long abandoned: the moss has had the stones for years (2026-10-11: ruins looked freshly built).
+				moss = Mathf.Max(moss, 0.55f + 0.4f * decay);
+			}
 			return roll < moss ? StructureFinish.Mossy : StructureFinish.None;
 		}
 
@@ -1397,158 +1684,173 @@ namespace FishMMO.Shared.WorldDesign
 			return Mathf.Min(centre, lowest + Mathf.Max(0f, depth) * 0.9f);
 		}
 
-		/// <summary>A bridge's line across its water: where it starts and ends along the heading and its deck at each end.</summary>
+		/// <summary>
+		/// A bridge's deck along its heading: where it starts and ends, and its height everywhere between. Level at the
+		/// water's clearance over the water, ramping down each side onto that bank's ground at the end, never under the
+		/// straight line from end to end. Each span module is pitched to its own stretch of it (rotation, not steps: Jim,
+		/// 2026-10-11), so both ends sit on their banks whatever their heights and the middle clears the water.
+		/// </summary>
 		public struct Crossing
 		{
 			/// <summary>Metres along the heading (signed) of the start and the end.</summary>
 			public float From, To;
-			/// <summary>World height of the deck at the start and at the end.</summary>
+			/// <summary>World height of the deck at the start and at the end: the ground there.</summary>
 			public float DeckFrom, DeckTo;
+			/// <summary>Metres along the heading where the water (or a dry channel's bed) begins and ends.</summary>
+			public float WaterFrom, WaterTo;
+			/// <summary>The deck's height over the water: its surface and the clearance. NaN for none (a plain straight deck).</summary>
+			public float Level;
+			/// <summary>How steeply each ramp comes down from <see cref="Level"/> to its end (rise per metre).</summary>
+			public float RampFrom, RampTo;
 
-			/// <summary>The deck's height at a distance along the heading, on the straight line between the ends.</summary>
-			public float DeckAt(float along) => To > From ? Mathf.Lerp(DeckFrom, DeckTo, Mathf.Clamp01((along - From) / (To - From))) : DeckFrom;
+			/// <summary>The deck's height at a distance along the heading.</summary>
+			public float DeckAt(float along)
+			{
+				float line = To > From ? Mathf.Lerp(DeckFrom, DeckTo, Mathf.Clamp01((along - From) / (To - From))) : DeckFrom;
+				if (float.IsNaN(Level))
+				{
+					return line;
+				}
+				float raised = along < WaterFrom ? Level - (WaterFrom - along) * RampFrom
+					: along > WaterTo ? Level - (along - WaterTo) * RampTo
+					: Level;
+				return Mathf.Max(line, raised);
+			}
 
-			/// <summary>The deck's slope, degrees, rising toward <see cref="To"/>.</summary>
+			/// <summary>The deck's pitch between two distances along it, degrees, rising toward <see cref="To"/>.</summary>
+			public float SlopeDegreesBetween(float a, float b) => b > a ? Mathf.Atan2(DeckAt(b) - DeckAt(a), b - a) * Mathf.Rad2Deg : 0f;
+
+			/// <summary>The straight line's slope end to end, degrees.</summary>
 			public float SlopeDegrees => To > From ? Mathf.Atan2(DeckTo - DeckFrom, To - From) * Mathf.Rad2Deg : 0f;
 		}
 
-		/// <summary>The steepest slope a bridge's deck takes between banks of different heights, degrees.</summary>
-		public const float MaxDeckSlopeDegrees = 12f;
+		/// <summary>The steepest the deck's line runs from one end to the other between banks of different heights, degrees.</summary>
+		public const float MaxDeckSlopeDegrees = 20f;
 
-		/// <summary>Clearance the deck keeps over the water at the crossing's lowest point, metres.</summary>
+		/// <summary>The gentlest a ramp comes down from the deck over the water to a low bank (rise per metre): about 14°.</summary>
+		public const float MinRampGrade = 0.25f;
+
+		/// <summary>Clearance the deck keeps over the water, metres.</summary>
 		public const float DeckClearance = 0.6f;
 
 		/// <summary>
-		/// The bridge's line across the water at this site (Jim, 2026-10-10: bridges did not meet the terrain). Out from the
-		/// centre along the heading each way it finds the bank's top (past the water, up the carved channel side while the
-		/// ground still climbs). The deck is level at the LOWER top, so a hillside beyond one bank is not climbed, and each
-		/// end is where that side's ground first reaches the deck, plus a metre's bearing: both ends meet the ground. A bank
-		/// too low to reach the water's <see cref="DeckClearance"/> brings its end down to it, sloped to at most
-		/// <see cref="MaxDeckSlopeDegrees"/>.
+		/// The bridge's line across the water at this site: from where each bank first stands clear of the water by
+		/// <see cref="DeckClearance"/>, carried on up a steep channel wall to its lip (never along a gently rising bank), to
+		/// the same on the other side; a bank too low ever to clear the water ends a few metres past its edge. Both ends
+		/// sit on their ground; the deck over the water stands at the clearance and ramps down to each end
+		/// (<see cref="Crossing"/>).
 		/// </summary>
 		/// <remarks>
-		/// It used to stop at the first dry ground past the water's edge, part way up the channel side, and lay one flat deck
-		/// at the site's own ground: the high bank swallowed one end and the other hung in the air.
+		/// <para>
+		/// History. It first stopped at the first dry ground and laid one flat deck at the site's own height: one end buried,
+		/// one in the air. Then it ran each end out to the bank's top (2026-10-10), which on a lowland river's long, gentle
+		/// banks ran the deck far over the grass (2026-10-11). Then one straight deck from end to end, which over a low bank
+		/// had to stand that end up in the air to clear the water ("aligns on one side and stands on the other", Jim,
+		/// 2026-10-11): the deck is a profile now, and each module takes its own pitch.
+		/// </para>
+		/// <para>A dry channel (no water at the site) is measured from its bed.</para>
 		/// </remarks>
 		public static Crossing MeasureCrossing(PointOfInterestSiteContext context)
 		{
 			PointOfInterestRecord record = context.Record;
 			SceneWater water = context.Water;
-			float centreLevel = water != null ? water.SurfaceAt(record.Position.x, record.Position.z) : float.NegativeInfinity;
-			float reach = Mathf.Max(6f, record.Radius * 2f);
-			const float Step = 0.5f;
-			int samples = Mathf.Max(1, Mathf.FloorToInt(reach / Step));
-			var ground = new float[2, samples];
-			var wet = new bool[2, samples];
-			var top = new float[2];
-			var topT = new float[2];
-			for (int i = 0; i < 2; i++)
+			float level = water != null ? water.SurfaceAt(record.Position.x, record.Position.z) : float.NegativeInfinity;
+			if (float.IsNegativeInfinity(level))
 			{
-				float side = i == 0 ? -1f : 1f;
-				bool dryYet = false, climbing = true;
-				float firstDry = float.NegativeInfinity;
-				topT[i] = Mathf.Min(reach, Mathf.Max(2f, record.Radius));
-				top[i] = float.NegativeInfinity;
-				for (int k = 0; k < samples; k++)
-				{
-					float t = (k + 1) * Step;
-					Vector3 at = context.OnGround(new Vector2(0f, side * t));
-					float level = water != null ? water.SurfaceAt(at.x, at.z) : float.NegativeInfinity;
-					ground[i, k] = at.y;
-					wet[i, k] = !float.IsNegativeInfinity(level) && at.y <= level + 0.3f;
-					if (wet[i, k] || !climbing)
-					{
-						continue;
-					}
-					/* The bank's top: past the water, up the carved channel side while it still climbs (over 0.15 m a step).
-					 * Flat ground before the climb starts (a dry channel's floor, a strip of shore) does not end the search. */
-					if (!dryYet)
-					{
-						dryYet = true;
-						firstDry = at.y;
-						top[i] = at.y;
-						topT[i] = t;
-					}
-					else if (at.y - top[i] > 0.15f || top[i] - firstDry < 0.3f && at.y >= top[i] - 0.05f)
-					{
-						if (at.y > top[i])
-						{
-							top[i] = at.y;
-							topT[i] = t;
-						}
-					}
-					else
-					{
-						climbing = false;
-					}
-				}
-				if (float.IsNegativeInfinity(top[i]))
-				{
-					top[i] = context.OnGround(new Vector2(0f, side * topT[i])).y;
-				}
+				level = context.OnGround(Vector2.zero).y;
 			}
+			return MeasureCrossing(t => context.OnGround(new Vector2(0f, t)).y, level, Mathf.Max(8f, record.Radius * 2f));
+		}
 
-			// One level for the deck: the lower bank's top (a hillside beyond the other bank is not followed up), never under
-			// the water's clearance. Each end is where its own ground first reaches that level, plus a metre's bearing.
-			float level0 = Mathf.Min(top[0], top[1]);
-			if (!float.IsNegativeInfinity(centreLevel))
-			{
-				level0 = Mathf.Max(level0, centreLevel + DeckClearance);
-			}
+		/// <summary>The steepest a bank may climb (rise per metre) and still be the channel's wall the deck reaches over.</summary>
+		public const float ChannelWallGrade = 0.6f;
+
+		/// <summary>
+		/// <see cref="MeasureCrossing(PointOfInterestSiteContext)"/> on a profile: the ground's height at a signed distance
+		/// along the heading, and the water's surface (or a dry bed's height).
+		/// </summary>
+		public static Crossing MeasureCrossing(Func<float, float> groundAlong, float waterLevel, float reach)
+		{
+			const float Step = 0.5f, MaxWallRun = 6f, Bearing = 0.5f, LowBankRun = 3f;
+			float need = waterLevel + DeckClearance;
 			var ends = new float[2];
 			var decks = new float[2];
+			var lips = new float[2];
+			var edges = new float[2];
 			for (int i = 0; i < 2; i++)
 			{
 				float side = i == 0 ? -1f : 1f;
-				float t = topT[i];
-				float deck = top[i];
-				bool past = false;
-				for (int k = 0; k < samples; k++)
+				// The water's edge: the first ground above it.
+				float edge = Step;
+				while (edge < reach && groundAlong(side * edge) <= waterLevel + 0.05f)
 				{
-					if (wet[i, k])
+					edge += Step;
+				}
+				edges[i] = edge;
+				float t = edge;
+				bool clear = false;
+				for (; t <= reach; t += Step)
+				{
+					if (groundAlong(side * t) >= need)
 					{
-						past = true;
-						continue;
-					}
-					if ((past || k > 0) && ground[i, k] >= level0 - 0.05f)
-					{
-						t = (k + 1) * Step;
-						deck = level0;
-						// Up to a metre's bearing onto the bank, but only while it stays near the deck: never dug into a steep bank.
-						for (int j = k + 1; j < samples && j <= k + 2 && ground[i, j] <= level0 + 0.3f; j++)
-						{
-							t = (j + 1) * Step;
-						}
+						clear = true;
 						break;
 					}
 				}
-				ends[i] = side * t;
-				// Where the ground never reaches the level (a low bank), the end comes down onto it.
-				decks[i] = Mathf.Min(deck, level0);
-			}
-			var crossing = new Crossing { From = ends[0], To = ends[1], DeckFrom = decks[0], DeckTo = decks[1] };
-
-			// Never steeper than a footbridge: past it the lower end comes up (it then stands on its trestle or a short gap).
-			float length = Mathf.Max(1f, crossing.To - crossing.From);
-			float rise = Mathf.Tan(MaxDeckSlopeDegrees * Mathf.Deg2Rad) * length;
-			if (crossing.DeckTo - crossing.DeckFrom > rise)
-			{
-				crossing.DeckFrom = crossing.DeckTo - rise;
-			}
-			else if (crossing.DeckFrom - crossing.DeckTo > rise)
-			{
-				crossing.DeckTo = crossing.DeckFrom - rise;
-			}
-			// Clear of the water at the middle, where the river runs (the site's centre is on it).
-			if (!float.IsNegativeInfinity(centreLevel))
-			{
-				float lack = centreLevel + DeckClearance - crossing.DeckAt(0f);
-				if (lack > 0f)
+				if (!clear)
 				{
-					crossing.DeckFrom += lack;
-					crossing.DeckTo += lack;
+					// A bank too low ever to clear the water: the deck comes down onto it a few metres past the edge.
+					t = Mathf.Min(reach, edge + LowBankRun);
 				}
+				else
+				{
+					// Up a steep wall to its lip, not along a gentle rise.
+					for (float run = 0f; t + Step <= reach && run < MaxWallRun && groundAlong(side * (t + Step)) - groundAlong(side * t) > ChannelWallGrade * Step; run += Step)
+					{
+						t += Step;
+					}
+				}
+				lips[i] = t;
+				ends[i] = t + Bearing;
+				decks[i] = groundAlong(side * t);
 			}
+
+			// Not too steep end to end: the higher end comes back down its wall (still clear of the water) until it is not.
+			float tan = Mathf.Tan(MaxDeckSlopeDegrees * Mathf.Deg2Rad);
+			for (int guard = 0; guard < 64; guard++)
+			{
+				float length = ends[0] + ends[1];
+				float rise = decks[1] - decks[0];
+				if (Mathf.Abs(rise) <= tan * length)
+				{
+					break;
+				}
+				int high = rise > 0f ? 1 : 0;
+				float side = high == 0 ? -1f : 1f;
+				float t = lips[high] - Step;
+				if (t < edges[high] || groundAlong(side * t) < need)
+				{
+					// No lower footing that clears the water: the deck rotates to meet both ends as they are.
+					break;
+				}
+				lips[high] = t;
+				ends[high] = t + Bearing;
+				decks[high] = groundAlong(side * t);
+			}
+
+			var crossing = new Crossing
+			{
+				From = -ends[0],
+				To = ends[1],
+				DeckFrom = decks[0],
+				DeckTo = decks[1],
+				WaterFrom = -edges[0],
+				WaterTo = edges[1],
+				Level = need,
+			};
+			// Each ramp exactly long enough to bring the deck down from over the water onto its end.
+			crossing.RampFrom = Mathf.Max(MinRampGrade, (need - decks[0]) / Mathf.Max(0.5f, ends[0] - edges[0]));
+			crossing.RampTo = Mathf.Max(MinRampGrade, (need - decks[1]) / Mathf.Max(0.5f, ends[1] - edges[1]));
 			return crossing;
 		}
 

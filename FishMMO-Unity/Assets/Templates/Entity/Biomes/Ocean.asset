@@ -272,8 +272,9 @@ MonoBehaviour:
   EmissionRate: 0
   TerrainProcess: {fileID: 11400000, guid: 4621ef5e37fbafb5c8a551a4af9364bb, type: 2}
   mainTextureLayer:
-    terrainLayer: {fileID: 0}
-    albedoTexture: {fileID: 2800000, guid: 2aaac07da5221414f8c52c54730d6aea, type: 3}
+    terrainLayer: {fileID: 8574412962073106934, guid: 1d10f337581c5f444da1242bbcbcae76,
+      type: 2}
+    albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
     metallic: 0
@@ -294,65 +295,7 @@ MonoBehaviour:
       min: 0
       max: 90
     slopeFalloff: 5
-    prefabSpawnRules:
-    - stableGuid: f976a4e937714e1f8cf30d8805833f48
-      enableSpawning: 0
-      ruleName: '[disabled by Biome Art: moved by the spec] Kelp'
-      prefabs:
-      - {fileID: 6116002195385175035, guid: 80df7855cb7a41368435f295dcc7434d, type: 3}
-      spawnChannel: 0
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 2
-      maxPerChunk: 0
-      minSpacing: 0
-      minTextureWeight: 0.45
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 40
-      slopeFalloff: 5
-      useNonUniformScaling: 0
-      uniformScaleRange: {x: 0.8, y: 1.25}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.85, y: 1.25}
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 22706
-      clusterMetres: 6
-      clusterSize: 12
-      clusterSpacing: 4
-      clusterBackground: 0.25
-      clusterScaleBias: 0.5
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.02, y: 0.05}
-      sinkSlopeFactor: 0
-      depthRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      specFingerprint: 9615f680ccf7e187
-      detailNoiseSpread: 1.2
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 128
+    prefabSpawnRules: []
   detailTextureLayers:
   - terrainLayer: {fileID: 8574412962073106934, guid: ebd101f82d3a597c1f2af54475da8abe,
       type: 2}
@@ -1228,3 +1171,119 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailInstancesPerSpawn: 128
+    - stableGuid: f60642a5c73d4f8185e97b7b8c6c9594
+      enableSpawning: 1
+      ruleName: Detail_Pebbles_Grey
+      prefabs:
+      - {fileID: 9091986924529341410, guid: e7e5ae42e23e436a881abe7e07dc62a0, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 1.5
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.45, y: 1.75}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 59583
+      clusterMetres: 2
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 2, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: fdd8b03b41ab4f00
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96
+    - stableGuid: 9f01fb7d43d8438d94aefcd364c25d22
+      enableSpawning: 1
+      ruleName: Detail_Rocks_Grey
+      prefabs:
+      - {fileID: 6429919493837588000, guid: 5ab08d91d26e259328288439498bdbd2, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.5
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.4
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 0
+      slopeRange:
+        min: 0
+        max: 90
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.45, y: 1.75}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 1
+      seedOffset: 20599
+      clusterMetres: 3
+      clusterSize: 6
+      clusterSpacing: 4
+      clusterBackground: 0.2
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0, y: 0}
+      sinkSlopeFactor: 0
+      depthRange: {x: 4, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 75f7dbba17e57f69
+      detailNoiseSpread: 2.5
+      detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
+      detailDryColor: {r: 1, g: 1, b: 1, a: 1}
+      detailInstancesPerSpawn: 96

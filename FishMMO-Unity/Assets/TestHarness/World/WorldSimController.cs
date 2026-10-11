@@ -106,6 +106,124 @@ namespace FishMMO.TestHarness.World
 			}
 		}
 
+		// ── Travel between scenes ─────────────────────────────────────
+
+		/// <summary>
+		/// True when the bed stands in a cut scene (one placed on the atlas): there the ground is that body's, so another
+		/// body is reached by travelling to a scene cut on it, not by changing the sky over this ground. False in the bed's
+		/// own neutral scene, which stands on whatever body is chosen.
+		/// </summary>
+		public bool InCutScene => Settings != null && Settings.AtlasEntry != null && Settings.AtlasEntry.Placed;
+
+		/// <summary>A scene cut on a body: its name and project path.</summary>
+		public readonly struct CutScene
+		{
+			public readonly string Name;
+			public readonly string Path;
+
+			public CutScene(string name, string path)
+			{
+				Name = name;
+				Path = path;
+			}
+		}
+
+		private static Dictionary<WorldBody, List<CutScene>> cutScenes;
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void ResetTravel()
+		{
+			cutScenes = null;
+			handoff = null;
+		}
+
+		/// <summary>
+		/// The scenes cut on a body, by name: every placed atlas entry on it whose scene exists in the project. Found once a
+		/// play session (editor only; a player has none). Empty for a body nothing has been cut on.
+		/// </summary>
+		public static IReadOnlyList<CutScene> ScenesOn(WorldBody target)
+		{
+			if (target == null)
+			{
+				return Array.Empty<CutScene>();
+			}
+#if UNITY_EDITOR
+			if (cutScenes == null)
+			{
+				cutScenes = new Dictionary<WorldBody, List<CutScene>>();
+				foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:" + nameof(WorldAtlasScene)))
+				{
+					var entry = UnityEditor.AssetDatabase.LoadAssetAtPath<WorldAtlasScene>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
+					if (entry == null || entry.Body == null || !entry.Placed || string.IsNullOrEmpty(entry.SceneName))
+					{
+						continue;
+					}
+					string path = null;
+					foreach (string sceneGuid in UnityEditor.AssetDatabase.FindAssets($"t:Scene {entry.SceneName}"))
+					{
+						string candidate = UnityEditor.AssetDatabase.GUIDToAssetPath(sceneGuid);
+						// The scene of that very name (not a LOCAL copy or one whose name merely contains it).
+						if (System.IO.Path.GetFileNameWithoutExtension(candidate) == entry.SceneName && !candidate.StartsWith("Assets/LOCAL", StringComparison.Ordinal))
+						{
+							path = candidate;
+							break;
+						}
+					}
+					if (path == null)
+					{
+						continue;
+					}
+					if (!cutScenes.TryGetValue(entry.Body, out List<CutScene> list))
+					{
+						list = new List<CutScene>();
+						cutScenes[entry.Body] = list;
+					}
+					list.Add(new CutScene(entry.SceneName, path));
+				}
+				foreach (List<CutScene> list in cutScenes.Values)
+				{
+					list.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+				}
+			}
+			return cutScenes.TryGetValue(target, out List<CutScene> found) ? found : (IReadOnlyList<CutScene>)Array.Empty<CutScene>();
+#else
+			return Array.Empty<CutScene>();
+#endif
+		}
+
+		/// <summary>What the bed carries into the scene it travels to: the moment, and whether and how fast it runs.</summary>
+		private sealed class Handoff
+		{
+			public double WorldSeconds;
+			public bool Paused;
+			public float TimeScale;
+		}
+
+		private static Handoff handoff;
+
+		/// <summary>
+		/// Travels to a scene cut on another body (or another scene on this one): loads it in place of this one, and the
+		/// bed there picks up at this same moment of the world clock, running or held as it is here. Play mode only.
+		/// </summary>
+		public void Travel(CutScene scene)
+		{
+			if (!Application.isPlaying || string.IsNullOrEmpty(scene.Path))
+			{
+				return;
+			}
+			handoff = new Handoff
+			{
+				WorldSeconds = clock != null ? clock.WorldSeconds : 0.0,
+				Paused = Paused,
+				TimeScale = timeScale,
+			};
+#if UNITY_EDITOR
+			UnityEditor.SceneManagement.EditorSceneManager.LoadSceneInPlayMode(scene.Path, new LoadSceneParameters(LoadSceneMode.Single));
+#else
+			SceneManager.LoadScene(scene.Name, LoadSceneMode.Single);
+#endif
+		}
+
 		/// <summary>
 		/// Local time of day where the bed stands, 0.5 noon. Setting it moves the world clock to the
 		/// nearest moment that has it (<see cref="JumpTo"/>): the sun, the weather and everything else
@@ -839,7 +957,10 @@ namespace FishMMO.TestHarness.World
 			/* The bed's own tick, standing in for FishNet's: it drives the shared world clock, so the sky,
 			 * the weather, the sea and the storms all read the time down the game's own path. Held at
 			 * the start, as the bed always was. */
-			clock = new LocalWorldClock(TickRate, ((double)year * DaysPerYear + dayOfYear) * DayHours * 3600.0);
+			// Arrived from another scene (Travel): at the moment it left, not at this scene's own start.
+			Handoff arrived = handoff;
+			handoff = null;
+			clock = new LocalWorldClock(TickRate, arrived != null ? arrived.WorldSeconds : ((double)year * DaysPerYear + dayOfYear) * DayHours * 3600.0);
 			LocalWorldClock.Activate(clock);
 			clock.Hold();
 			// No preview pins: the cycle reads the local clock (WorldTime), as it reads the server's in game.
@@ -863,8 +984,20 @@ namespace FishMMO.TestHarness.World
 			Heading = heading;
 			// The bed starts life-size, whatever the profiles say, so what you see is what ships.
 			SkyProfile.LargerThanLifeOverride = false;
-			// At its starting hour of the day, where the bed stands.
-			JumpTo(StartTimeOfDay);
+			if (arrived != null)
+			{
+				timeScale = arrived.TimeScale;
+				resumeAfterArrival = !arrived.Paused;
+				// The date the panel shows, from the moment carried over.
+				double days = arrived.WorldSeconds / 3600.0 / DayHours;
+				year = Math.Max(0, (int)Math.Floor(days / DaysPerYear));
+				dayOfYear = Mathf.Clamp((float)(days - (double)year * DaysPerYear), 0f, DaysPerYear - 0.0001f);
+			}
+			else
+			{
+				// At its starting hour of the day, where the bed stands.
+				JumpTo(StartTimeOfDay);
+			}
 
 			Scene scene = gameObject.scene;
 			timeline.SceneName = scene.name;
@@ -882,11 +1015,19 @@ namespace FishMMO.TestHarness.World
 			SkySystem.EnablePostProcessing(Camera);
 		}
 
+		/// <summary>True when the scene travelled from was running: this one runs on from the first frame.</summary>
+		private bool resumeAfterArrival;
+
 		private void Start()
 		{
 			if (!StartAir.IsZero)
 			{
 				SetAir(StartAir, 0f);
+			}
+			if (resumeAfterArrival)
+			{
+				resumeAfterArrival = false;
+				Paused = false;
 			}
 		}
 

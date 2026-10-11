@@ -39,6 +39,8 @@ half _Surface;
 // working with the SRP batcher; the fade writes _FishVisible per renderer during a fade only.
 half _FishWeatherAmount;
 half _FishVisible;
+// FishMMO edit: 1 on the structure kit's materials: weathered (FishStructureWeathering.hlsl), no ground unfold up the walls.
+half _FishStructure;
 UNITY_TEXTURE_STREAMING_DEBUG_VARS;
 CBUFFER_END
 

@@ -142,6 +142,19 @@ namespace FishMMO.Shared.WorldDesign
 			("Regolith Plain", "Barren"), ("Impact Basin", "Barren"), ("Rille", "Barren"), ("Dust Sea", "Barren"),
 			("Radiation Plain", "Barren"), ("Nitrogen Ice Field", "Barren"), ("Cryovolcanic Plain", "Barren"),
 			("Ice Geyser Field", "Barren"), ("Ice Shelf", "Barren"), ("Tidal Fracture", "Barren"),
+
+			// Fresh water: the shores and banks wear as the country round them does.
+			("Lake", "Temperate"), ("River", "Temperate"),
+
+			// Caves, ruins, temples and strongholds take the ground they stand in: a cave is cut in soluble rock, an ice
+			// palace in frozen ground, a jungle temple under the rainforest's rain (2026-10-11: they wore as temperate
+			// country, so an ice cave's floor drained and an obsidian temple grew soil).
+			("Cave", "Karst"), ("Ice Cave", "Periglacial"), ("Volcanic Cave", "Volcanic"), ("Swamp Cave", "Wetland"),
+			("Ice Palace", "Periglacial"), ("Ice Ruin", "Periglacial"),
+			("Jungle Ruins", "Rainforest"), ("Jungle Temple", "Rainforest"),
+			("Swamp Ruins", "Wetland"), ("Swamp Temple", "Wetland"),
+			("Volcanic Temple", "Volcanic"),
+			("Forest Ruins", "Temperate"), ("Castle", "Temperate"), ("Fortress", "Mountain"), ("Marble Palace", "Open"),
 		};
 
 		/// <summary>The profile named <paramref name="name"/>; false when the table has none.</summary>

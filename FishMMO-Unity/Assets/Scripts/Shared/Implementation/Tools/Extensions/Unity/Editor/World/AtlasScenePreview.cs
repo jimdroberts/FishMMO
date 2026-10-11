@@ -107,7 +107,7 @@ namespace FishMMO.Shared.WorldDesign
 			order.Sort((a, b) => a.Class.CompareTo(b.Class));
 			foreach (ScenePath path in order)
 			{
-				if (path == null || path.Count < 2)
+				if (path == null || path.Count < 2 || path.Class == ScenePathClass.Yard)
 				{
 					continue;
 				}

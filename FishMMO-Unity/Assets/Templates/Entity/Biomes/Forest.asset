@@ -331,124 +331,6 @@ MonoBehaviour:
       max: 90
     slopeFalloff: 5
     prefabSpawnRules:
-    - stableGuid: 6e05d5407fd34849a21482300a7b36d8
-      enableSpawning: 0
-      ruleName: '[disabled by Biome Art: every prefab is missing] '
-      prefabs:
-      - {fileID: 8730988760233312242, guid: ab474dcb80a6b304981d8d8456ec4f14, type: 3}
-      - {fileID: 4244583878775227621, guid: 87ba66e77b1b4954b8176243a1ba6d01, type: 3}
-      spawnChannel: 1
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 7.5
-      maxPerChunk: 1500
-      minSpacing: 0
-      minTextureWeight: 0
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 0
-      heightFalloff: 0
-      useSlopeConstraint: 0
-      slopeRange:
-        min: 0
-        max: 0
-      slopeFalloff: 0
-      useNonUniformScaling: 1
-      uniformScaleRange: {x: 1, y: 1}
-      widthScaleRange: {x: 3, y: 5}
-      heightScaleRange: {x: 3, y: 8}
-      yRotationRange: {x: 0, y: 0}
-      alignToTerrainNormal: 0
-      seedOffset: 0
-      clusterMetres: 0
-      clusterSize: 0
-      clusterSpacing: 4
-      clusterBackground: 0.2
-      clusterScaleBias: 0.5
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0, y: 0}
-      sinkSlopeFactor: 0
-      depthRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      specFingerprint: 
-      detailNoiseSpread: 0
-      detailHealthyColor: {r: 0, g: 0, b: 0, a: 0}
-      detailDryColor: {r: 0, g: 0, b: 0, a: 0}
-      detailInstancesPerSpawn: 64
-    - stableGuid: 08c939b985fb4498a5e01ff80608598c
-      enableSpawning: 0
-      ruleName: '[disabled by Biome Art: moved by the spec] Trees: Oak, Birch'
-      prefabs:
-      - {fileID: 6230501179755798689, guid: 4ccf17bb127a8e1cfc899527e99cf2ee, type: 3}
-      - {fileID: 8646138383080746032, guid: d06cacd197c0a1bb375a3cc8dbed91d8, type: 3}
-      spawnChannel: 1
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 1.88
-      maxPerChunk: 20000
-      minSpacing: 7.3
-      minTextureWeight: 0.5
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 30
-      slopeFalloff: 5
-      useNonUniformScaling: 1
-      uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.85, y: 1.15}
-      heightScaleRange: {x: 0.8, y: 1.2}
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 31675
-      clusterMetres: 0
-      clusterSize: 0
-      clusterSpacing: 4
-      clusterBackground: 0.2
-      clusterScaleBias: 0.5
-      forestMetres: 520
-      forestCover: 0.8
-      forestEdge: 0.3
-      forestOpen: 0.0069565214
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.05, y: 0.15}
-      sinkSlopeFactor: 0.3
-      depthRange: {x: 0, y: 0}
-      useClimateBand: 0
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 1}
-      humidityFalloff: 0.1
-      specFingerprint: 2a53c2cb93f9b1c4
-      detailNoiseSpread: 0.4
-      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
-      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
-      detailInstancesPerSpawn: 255
     - stableGuid: cd49e8223bd14f39a9a5df93a4a1f0af
       enableSpawning: 1
       ruleName: Fern
@@ -1210,15 +1092,16 @@ MonoBehaviour:
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
   detailTextureLayers:
-  - terrainLayer: {fileID: 0}
-    albedoTexture: {fileID: 2800000, guid: a1c155353d68bbb468bcd000d3568816, type: 3}
+  - terrainLayer: {fileID: 8574412962073106934, guid: b7c6da84cc4c4005a287abfab095836d,
+      type: 2}
+    albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
     metallic: 0
     smoothness: 0
     tileSize: {x: 8, y: 8}
     blendMode: 0
-    blendNoiseScale: 32
+    blendNoiseScale: 48
     blendNoiseOffsetX: 125
     blendNoiseOffsetY: 325
     blendSharpness: 2
@@ -1232,7 +1115,123 @@ MonoBehaviour:
       min: 0
       max: 0
     slopeFalloff: 0
-    prefabSpawnRules: []
+    prefabSpawnRules:
+    - stableGuid: adbfae49e8584db6a482366aa2849465
+      enableSpawning: 1
+      ruleName: Fern
+      prefabs:
+      - {fileID: 7040531935600446957, guid: 49db2bc4e07ba3e829ff499ebf213bfe, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 8
+      maxPerChunk: 0
+      minSpacing: 0
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 40
+      slopeFalloff: 5
+      useNonUniformScaling: 0
+      uniformScaleRange: {x: 0.8, y: 1.25}
+      widthScaleRange: {x: 0.85, y: 1.15}
+      heightScaleRange: {x: 0.85, y: 1.25}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 39016
+      clusterMetres: 4
+      clusterSize: 8
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.5
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.08}
+      sinkSlopeFactor: 0
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: b39e178b8b1d41a5
+      detailNoiseSpread: 1.2
+      detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
+      detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
+      detailInstancesPerSpawn: 160
+    - stableGuid: 225a64a57b0d4680b1907fb5ca552c5a
+      enableSpawning: 1
+      ruleName: 'Bush: Rhododendron'
+      prefabs:
+      - {fileID: 6659896605054011343, guid: 083a34c5456afee45568193d85fbd24b, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
+      densityPer100m2: 0.3
+      maxPerChunk: 0
+      minSpacing: 2.1
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 46895
+      clusterMetres: 7.6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      useClimateBand: 0
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: -1, y: 1}
+      humidityFalloff: 0.1
+      specFingerprint: 46609042bcffc2bb
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
   - terrainLayer: {fileID: 8574412962073106934, guid: 2aea7c71ade3f48312c2982f762b82f5,
       type: 2}
     albedoTexture: {fileID: 0}

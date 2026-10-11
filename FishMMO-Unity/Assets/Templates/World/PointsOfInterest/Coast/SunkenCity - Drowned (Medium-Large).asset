@@ -89,15 +89,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506032503358000
-  - rid: 4061506032503358001
-  - rid: 4061506032503358002
-  - rid: 4061506032503358003
-  - rid: 4061506032503358004
+  - rid: 4061506061917749705
+  - rid: 4061506061917749706
+  - rid: 4061506061917749707
+  - rid: 4061506061917749708
+  - rid: 4061506061917749709
+  - rid: 4061506061917749710
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503358000
+    - rid: 4061506061917749705
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -108,16 +109,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506032503358001
+    - rid: 4061506061917749706
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503358002
+    - rid: 4061506061917749707
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503358003
+    - rid: 4061506061917749708
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5
@@ -125,7 +126,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506032503358004
+    - rid: 4061506061917749709
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 6
@@ -133,3 +134,10 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
+    - rid: 4061506061917749710
+      type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Families: 
+        Count: 0
+        RespawnSeconds: {x: 300, y: 600}
+        AreaShare: 0.7

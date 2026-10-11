@@ -326,6 +326,8 @@ namespace FishMMO.Client
 		[Range(0f, 70f)] public float NormalRounding = 38f;
 		[Tooltip("The light kept at the root (dense grass shades its own base): 1 none, 0.3 strong.")]
 		[Range(0f, 1f)] public float RootOcclusion = 0.35f;
+		[Tooltip("How much of the roots' shade the ground under the grass takes (GrassSwardMap): 0 none, the ground lit as open ground and glowing between the blades; 1 the roots' own.")]
+		[Range(0f, 1f)] public float GroundShade = 0.8f;
 		[Tooltip("Light through a blade when the sun is behind it.")]
 		[Range(0f, 2f)] public float Translucency = 0.6f;
 		[Range(0f, 0.8f)] public float Smoothness = 0.3f;

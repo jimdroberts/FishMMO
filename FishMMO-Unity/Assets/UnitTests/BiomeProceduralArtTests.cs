@@ -481,7 +481,7 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void Authoring_SwitchesOffDeadRules_KeepsThem_AndAddsTheSpecRules()
+		public void Authoring_RemovesDeadRules_AndAddsTheSpecRules()
 		{
 			BiomeTemplate biome = MakeBiome("Woodland");
 			var source = new FakeSource(created);
@@ -495,17 +495,32 @@ namespace FishMMO.UnitTests
 			BiomeArtAuthoring.Author(biome, entry, source, report, true);
 			List<PrefabSpawnRule> rules = biome.MainTextureLayer.prefabSpawnRules;
 			Assert.That(report.RulesDisabled, Is.EqualTo(3));
-			for (int i = 0; i < 3; i++)
-			{
-				Assert.IsFalse(rules[i].enableSpawning, $"dead rule {i} still spawns");
-				Assert.That(rules[i].ruleName, Does.StartWith(BiomeArtAuthoring.DisabledMark));
-			}
-			Assert.AreSame(cube, rules[0].prefabs[0], "a dead rule's data was changed");
-			Assert.That(rules.Count, Is.EqualTo(3 + entry.Main.Scatter.Count));
+			Assert.IsFalse(rules.Exists(r => r.ruleName == "cubes" || r.ruleName == "missing" || r.ruleName == "empty"), "a dead rule was kept");
+			Assert.That(rules.Count, Is.EqualTo(entry.Main.Scatter.Count));
 
 			var again = new BiomeArtAuthoring.Report();
 			BiomeArtAuthoring.Author(biome, entry, source, again, true);
 			Assert.That(again.RulesDisabled + again.RulesAdded, Is.EqualTo(0));
+		}
+
+		[Test]
+		public void Authoring_RemovesRulesAnEarlierRunSwitchedOff()
+		{
+			BiomeTemplate biome = MakeBiome("Woodland");
+			var source = new FakeSource(created);
+			GameObject tree = source.Prefab("SomeoneElsesTree");
+			biome.MainTextureLayer.prefabSpawnRules.Add(new PrefabSpawnRule
+			{
+				ruleName = BiomeArtAuthoring.DisabledMark + "moved by the spec] Kelp", enableSpawning = false, prefabs = new[] { tree },
+			});
+			// Switched off by hand, unmarked: somebody's, and left alone.
+			biome.MainTextureLayer.prefabSpawnRules.Add(new PrefabSpawnRule { ruleName = "mine, resting", enableSpawning = false, prefabs = new[] { tree } });
+
+			var report = new BiomeArtAuthoring.Report();
+			BiomeArtAuthoring.Author(biome, BiomeArtSpec.For("Woodland"), source, report, true);
+			List<PrefabSpawnRule> rules = biome.MainTextureLayer.prefabSpawnRules;
+			Assert.IsFalse(rules.Exists(r => r.ruleName.StartsWith(BiomeArtAuthoring.DisabledMark)), "the switched-off rule was kept:\n" + report);
+			Assert.IsTrue(rules.Exists(r => r.ruleName == "mine, resting"), "a rule switched off by hand was removed");
 		}
 
 		[Test]

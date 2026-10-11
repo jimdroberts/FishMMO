@@ -54,16 +54,24 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public const float BasemapDistance = 20000f;
 
+		/// <summary>
+		/// The defaults added since the material was first made, each given to an existing material once: 1, height
+		/// blending (2026-10-11), now that every layer with art has a height in its mask (TerrainSurfaceDerivation).
+		/// </summary>
+		public const int SurfaceDefaults = 1;
+
 		/// <summary>The array material, created on first use. Null (with an error) if the shader is missing.</summary>
 		/// <remarks>
 		/// Created once and then left alone: a material somebody has tuned (snow depth, height blend)
-		/// is theirs, and a generator re-applying defaults over it would undo that on every run.
+		/// is theirs, and a generator re-applying defaults over it would undo that on every run. A default
+		/// added later is given to it once (<see cref="SurfaceDefaults"/>), and never again after that.
 		/// </remarks>
 		public static Material EnsureMaterial()
 		{
 			Material material = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
 			if (material != null)
 			{
+				ApplyLaterDefaults(material);
 				return material;
 			}
 			Shader shader = Shader.Find(TerrainArrayBinder.ShaderName);
@@ -77,13 +85,41 @@ namespace FishMMO.Shared.WorldDesign
 			material.SetFloat("_FishWeatherAmount", 1f);
 			// The depth the hand-made scenes' terrain material uses.
 			material.SetFloat("_FishSnowDepth", 0.12f);
-			material.SetFloat("_EnableHeightBlend", 0f);
 			material.SetFloat("_HeightTransition", 0.2f);
 			// Per-pixel normals when instanced: the tangent frame from the heightmap, not the patch's coarse vertices.
 			material.SetFloat("_EnableInstancedPerPixelNormal", 1f);
 			material.EnableKeyword("_TERRAIN_INSTANCED_PERPIXEL_NORMAL");
+			ApplyLaterDefaults(material);
 			AssetDatabase.CreateAsset(material, MaterialPath);
 			return material;
+		}
+
+		/// <summary>Gives a material the defaults added after it was made, each once (<see cref="SurfaceDefaults"/>).</summary>
+		public static bool ApplyLaterDefaults(Material material)
+		{
+			if (material == null || !material.HasProperty("_FishSurfaceDefaults"))
+			{
+				return false;
+			}
+			int applied = Mathf.RoundToInt(material.GetFloat("_FishSurfaceDefaults"));
+			if (applied >= SurfaceDefaults)
+			{
+				return false;
+			}
+			if (applied < 1)
+			{
+				// Height blending: the stones of one ground stand up through the sand of the next, rather than
+				// the two fading through each other. The heights are in every layer's mask now.
+				material.SetFloat("_EnableHeightBlend", 1f);
+				material.EnableKeyword("_TERRAIN_BLEND_HEIGHT");
+				if (material.GetFloat("_HeightTransition") <= 0f)
+				{
+					material.SetFloat("_HeightTransition", 0.2f);
+				}
+			}
+			material.SetFloat("_FishSurfaceDefaults", SurfaceDefaults);
+			EditorUtility.SetDirty(material);
+			return true;
 		}
 
 		/// <summary>The coordinator's entry point; see the overload for <paramref name="biomeCoverage"/>.</summary>

@@ -173,20 +173,21 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// <see cref="Excludes"/> for the details (grass, flowers): the sites' footprints and a road's trodden width only; a
-		/// trail keeps its grass for the shaders to thin. Null when it keeps nothing out.
+		/// <see cref="Excludes"/> for the details (grass, flowers): a road's trodden width only. A site's grounds keep their
+		/// grass between the buildings (2026-10-11: a village stood on a bare disc of terrain); the grass and details are
+		/// thinned per blade on its streets, yards and paths, and kept out of its buildings, by the path field
+		/// (FishGroundPaths.hlsl, the yards PropsFeature writes). Null when it keeps nothing out.
 		/// </summary>
 		public Func<float, float, bool> DetailExcludes
 		{
 			get
 			{
-				Func<float, float, bool> sites = Plan != null && Plan.KeepOuts.Count > 0 ? KeepOutQuery(Plan.KeepOuts) : null;
 				if (!HasPaths)
 				{
-					return sites;
+					return null;
 				}
 				var ways = new PathExclusion(Plan.Paths);
-				return sites != null ? (x, z) => sites(x, z) || ways.Details(x, z) : (Func<float, float, bool>)ways.Details;
+				return ways.Details;
 			}
 		}
 
@@ -233,6 +234,9 @@ namespace FishMMO.Shared.WorldDesign
 				return false;
 			};
 		}
+
+		/// <summary>How far sites and ways keep from a holed patch of ground (a canyon wall's), metres.</summary>
+		public const float CanyonWallClearMetres = 4f;
 
 		/// <summary>The scene's POI seed: the scene's own seed and a "POI" salt.</summary>
 		public static int SeedFor(SceneGenerationRequest request)
@@ -586,7 +590,8 @@ namespace FishMMO.Shared.WorldDesign
 				BiomeAt = biomeAt,
 				HardnessAt = hardness,
 				PlateauAt = plateau,
-				Blocked = PointOfInterestTerrain.HoleQuery(terrains, tiles),
+				// Clear of the canyon walls' beds as well as their holes.
+				Blocked = PointOfInterestTerrain.HoleQuery(terrains, tiles, CanyonWallClearMetres),
 				Settings = PointOfInterestPlanSettings.From(Settings),
 				Rules = rules,
 				Seed = SeedFor(Request),
@@ -794,6 +799,15 @@ namespace FishMMO.Shared.WorldDesign
 
 			// The ways (with the streets the layouts just laid) baked for the client's path surface.
 			ScenePathBake.Write(scene, root.transform, TerrainFolder, Request.SceneName, asset, wrote, notes);
+			// And what the laid pieces give off (chimney smoke, fires, forges, lanterns), offered to the client.
+			if (asset.Emitters != null && asset.Emitters.Count > 0)
+			{
+				var emitters = new GameObject(SceneSiteEmitters.ObjectName);
+				emitters.transform.SetParent(root.transform, false);
+				emitters.AddComponent<ClientOnlyObject>();
+				emitters.AddComponent<SceneSiteEmitters>().Points = asset;
+				notes?.Add($"Points of interest: {asset.Emitters.Count:N0} chimney(s), fire(s) and lamp(s) for smoke and light.");
+			}
 			EditorUtility.SetDirty(asset);
 
 			if (sink.Props.Count > 0)

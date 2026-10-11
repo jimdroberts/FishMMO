@@ -1,4 +1,5 @@
 using System;
+using FishMMO.Shared;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -92,6 +93,8 @@ namespace FishMMO.Client
 			("salt flat", AmbientHabitat.Desert), ("badlands", AmbientHabitat.Desert | AmbientHabitat.Mountain), ("desert", AmbientHabitat.Desert),
 			("dune", AmbientHabitat.Desert), ("geyser", AmbientHabitat.Volcanic | AmbientHabitat.Grassland), ("volcan", AmbientHabitat.Volcanic | AmbientHabitat.Mountain),
 			("crater", AmbientHabitat.Mountain | AmbientHabitat.Volcanic), ("castle", AmbientHabitat.Settlement | AmbientHabitat.Grassland),
+			// A palace's gardens and courts (an ice palace is ice first, above).
+			("palace", AmbientHabitat.Settlement | AmbientHabitat.Grassland),
 			("fortress", AmbientHabitat.Settlement | AmbientHabitat.Mountain), ("town", AmbientHabitat.Settlement | AmbientHabitat.Farmland),
 			("village", AmbientHabitat.Settlement | AmbientHabitat.Farmland), ("city", AmbientHabitat.Settlement), ("cave", AmbientHabitat.Cave),
 			("alpine", AmbientHabitat.Mountain), ("mountain", AmbientHabitat.Mountain), ("scree", AmbientHabitat.Mountain), ("rock", AmbientHabitat.Mountain),
@@ -103,6 +106,29 @@ namespace FishMMO.Client
 		/// ("Birch Woodland", "Salt Marsh") is understood. None for a name no keyword matches (the caller falls back
 		/// on the climate, <see cref="HabitatOfClimate"/>); Barren for lifeless ground.
 		/// </summary>
+		/// <summary>
+		/// What a point of interest adds to the country it stands in: a village, town or camp people live in brings the
+		/// birds and rats that live off people (and the fields round it); a temple or shrine the pigeons and sparrows of its
+		/// courts; a ruin, a graveyard or an abandoned farm the owls, bats, crows and lizards of broken walls.
+		/// </summary>
+		public static AmbientHabitat HabitatOfSite(PointOfInterestGroup group, PointOfInterestTraits traits)
+		{
+			if ((traits & PointOfInterestTraits.Settlement) != 0)
+			{
+				return AmbientHabitat.Settlement | AmbientHabitat.Farmland;
+			}
+			switch (group)
+			{
+				case PointOfInterestGroup.Ruins:
+				case PointOfInterestGroup.Dead:
+					return AmbientHabitat.Ruins;
+				case PointOfInterestGroup.Sacred:
+					return AmbientHabitat.Settlement;
+				default:
+					return AmbientHabitat.None;
+			}
+		}
+
 		public static AmbientHabitat HabitatOf(string biomeName)
 		{
 			if (string.IsNullOrEmpty(biomeName))
@@ -291,6 +317,19 @@ namespace FishMMO.Client
 		public static float Shelter(in AmbientConditions c)
 		{
 			return Mathf.Clamp01(Mathf.Max(Mathf.InverseLerp(0.1f, 0.35f, c.Rain + c.Snow), Mathf.InverseLerp(0.4f, 0.15f, c.Light)));
+		}
+
+		/// <summary>
+		/// <see cref="Shelter(in AmbientConditions)"/> for one kind: a night bird (an owl) roosts by day instead, and is
+		/// out hunting in the dark.
+		/// </summary>
+		public static float Shelter(AmbientCreatureKind kind, in AmbientConditions c)
+		{
+			if (kind == null || kind.Activity != AmbientActivity.Nocturnal)
+			{
+				return Shelter(c);
+			}
+			return Mathf.Clamp01(Mathf.Max(Mathf.InverseLerp(0.1f, 0.35f, c.Rain + c.Snow), Mathf.InverseLerp(0.5f, 0.8f, c.Light)));
 		}
 
 		// ── Fear ──────────────────────────────────────────────────────

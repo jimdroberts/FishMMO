@@ -44,29 +44,29 @@ MonoBehaviour:
     Role: 8
     Style: stone
   Features:
-  - rid: 4061506032503358143
-  - rid: 4061506032503358144
-  - rid: 4061506032503358145
+  - rid: 4061506061917749330
+  - rid: 4061506061917749331
+  - rid: 4061506061917749332
   references:
     version: 2
     RefIds:
-    - rid: 4061506032503358143
+    - rid: 4061506061917749330
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506032503358144
+    - rid: 4061506061917749331
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506032503358145
+    - rid: 4061506061917749332
       type: {class: PointOfInterestChamberFeature, ns: FishMMO.Shared.WorldDesign,
         asm: FishMMO.Shared.Tools.Editor}
       data:
         MinRadius: 3
         Features:
-        - rid: 4061506032503358146
-    - rid: 4061506032503358146
+        - rid: 4061506061917749333
+    - rid: 4061506061917749333
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4

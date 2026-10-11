@@ -19,6 +19,8 @@ Shader "FishMMO/Weather Terrain Array"
     {
         [Toggle(_TERRAIN_BLEND_HEIGHT)] _EnableHeightBlend("Height-based blend (mask blue)", Float) = 0.0
         _HeightTransition("Height Transition", Range(0, 1.0)) = 0.0
+        // Which of the array setup's later defaults this material has been given (TerrainArraySetup.SurfaceDefaults).
+        [HideInInspector] _FishSurfaceDefaults("Surface defaults applied", Float) = 0.0
 
         _FishWeatherAmount("Weather on this ground", Range(0.0, 1.0)) = 1.0
         _FishSnowDepth("Snow lifts the ground by (m, High only)", Range(0.0, 1.0)) = 0.0

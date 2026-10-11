@@ -87,6 +87,31 @@ float4 FishCoverAt(float3 worldPos)
     return SAMPLE_TEXTURE2D_LOD(_FishCoverTex, sampler_FishCoverTex, uv, 0);
 }
 
+// The blade grass standing on the ground round the camera (GrassSwardMap): how closed the sward is, 0..1, read with
+// the cover's sampler (the ground's passes are near the limit of samplers).
+TEXTURE2D(_FishSwardTex);
+float4 _FishSwardRect;      // xy the map's world x/z corner, zw one over its size in metres
+float4 _FishSwardParams;    // x light the ground keeps under a closed sward, y/z the blades' far blend (metres), w 1 when on
+
+// How much of the light the ground keeps under the grass standing on it, 1 where none stands. A blade is shaded toward
+// its root, and the ground it grows in had nothing of the kind: lit as open ground, it shone between the blades. Taken
+// as the roots take it, and let go through the blades' own far blend, where they are lit flat as the ground they cover.
+half FishSwardShade(float3 worldPos)
+{
+    if (_FishSwardParams.w < 0.5)
+    {
+        return 1.0h;
+    }
+    float2 uv = (worldPos.xz - _FishSwardRect.xy) * _FishSwardRect.zw;
+    if (any(uv < 0.0) || any(uv > 1.0))
+    {
+        return 1.0h;
+    }
+    float sward = SAMPLE_TEXTURE2D_LOD(_FishSwardTex, sampler_FishCoverTex, uv, 0).r;
+    float far = smoothstep(_FishSwardParams.y, _FishSwardParams.z, distance(worldPos, _WorldSpaceCameraPos));
+    return (half)lerp(1.0, _FishSwardParams.x, sward * (1.0 - far));
+}
+
 // Deep snow (WeatherCoverMap): how deep the snow lies past the blanket the cover's x stands for, on the same map,
 // one byte of the deepest it can lie. Only the tier that lifts the ground under snow shows it (FishSnowLiftMetres).
 float4 _FishSnowDepthParams;    // x metres the map's 1 stands for (the deepest snow lies), 0 with no map

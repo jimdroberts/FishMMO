@@ -155,6 +155,16 @@ namespace FishMMO.Shared.NameGeneration
 
 		public POINameEntry Generate(POIRequest req) => Generate(req, 0);
 
+		/// <summary>
+		/// A bare place-name root in a biome's phonology ("Arad", "Dunwy"), seeded: what a region's name is built on
+		/// ("Aradune Weald"). Empty when the biome carries no usable naming.
+		/// </summary>
+		public static string PlaceRoot(BiomeTemplate biome, int seed)
+		{
+			BiomePhonology phonology = biome != null && biome.Naming != null && biome.Naming.IsUsable ? biome.Naming.RuntimePhonology : null;
+			return phonology != null ? POINameBuilder.PlaceRoot(phonology, new DeterministicRNG(seed)) : string.Empty;
+		}
+
 		/// <remarks>
 		/// <para>
 		/// Every generated point of interest is named here (Jim, 2026-10-10). The name is composed from the
@@ -192,6 +202,7 @@ namespace FishMMO.Shared.NameGeneration
 				// the falls named with its seeds share it.
 				RootRng = biomeFree ? DeriveRng(req, batchOffset, "hydronym") : draw,
 				FounderPhonology = FounderPhonology(race, draw),
+				TypeWords = req.TypeWords,
 			};
 			if (!biomeFree)
 			{

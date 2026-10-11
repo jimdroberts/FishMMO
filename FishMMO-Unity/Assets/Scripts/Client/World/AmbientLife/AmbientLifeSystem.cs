@@ -517,6 +517,10 @@ namespace FishMMO.Client
 				case AmbientShape.Rabbit: return 0.25f;
 				case AmbientShape.Frog: return 0.3f;
 				case AmbientShape.Lizard: return 0.14f;
+				case AmbientShape.Owl: return 0.7f;
+				case AmbientShape.Goose: return 0.65f;
+				case AmbientShape.Butterfly: return 1.2f;
+				case AmbientShape.Dragonfly: return 0.3f;
 				default: return 0.12f;
 			}
 		}
@@ -546,6 +550,7 @@ namespace FishMMO.Client
 				case AmbientBehaviour.Hawk: return g.Radius + kind.Spread + 60f; // half of a colony may work a tree line out to 60 m
 				case AmbientBehaviour.Perch: return g.Radius * 1.6f + 45f; // and the refuge it may fly to
 				case AmbientBehaviour.Paddle: return g.Radius + 60f;
+				case AmbientBehaviour.Transit: return g.Radius * 1.05f + kind.Spread * g.Count; // its crossing (a chord of its circle, weaving) and a V's arms
 				default: return g.Radius + kind.Spread + 8f;
 			}
 		}
@@ -692,7 +697,7 @@ namespace FishMMO.Client
 						continue;
 					}
 					float reach = Reach(kind, g);
-					float lift = kind.Behaviour == AmbientBehaviour.Flock || kind.Behaviour == AmbientBehaviour.Soar ? g.Altitude : 0f;
+					float lift = kind.Behaviour == AmbientBehaviour.Flock || kind.Behaviour == AmbientBehaviour.Soar || kind.Behaviour == AmbientBehaviour.Transit ? g.Altitude : 0f;
 					Vector3 middle = g.Home + Vector3.up * lift;
 					float distance = Vector3.Distance(eye, middle) - reach;
 					if (distance > settings.DistanceOf(kind.Family))
@@ -983,7 +988,20 @@ namespace FishMMO.Client
 			/// <summary>The blade grass standing there (GrassBladeSystem's cover map), for open-ground foraging.</summary>
 			public float CoverAt(float x, float z) => GrassBladeSystem.CoverAt(x, z);
 
+			/// <summary>Metres past a point of interest's radius its people's (or its ruins') animals still count as at home.</summary>
+			private const float SiteMargin = 30f;
+
+			/// <summary>The country from the biome (<see cref="GroundHabitat"/>), with what a point of interest standing there adds.</summary>
 			public void Habitat(Vector3 position, out AmbientHabitat habitat, out float temperature)
+			{
+				GroundHabitat(position, out habitat, out temperature);
+				if ((habitat & (AmbientHabitat.Barren | AmbientHabitat.Ice)) == 0 && SceneSiteEmitters.SiteAt(position, SiteMargin, out PointOfInterestKindInfo site))
+				{
+					habitat |= AmbientGating.HabitatOfSite(site.Group, site.Traits);
+				}
+			}
+
+			private void GroundHabitat(Vector3 position, out AmbientHabitat habitat, out float temperature)
 			{
 				temperature = AmbientLifeCatalogue.Celsius(15f);
 				float humidity = 0f;
