@@ -64,6 +64,8 @@ namespace FishMMO.Water
 		private static readonly int FallPathTexId = Shader.PropertyToID("_FallPathTex");
 		private static readonly int FallPathId = Shader.PropertyToID("_FallPath");
 		private static readonly int FallOriginId = Shader.PropertyToID("_FallOrigin");
+		private static readonly int FallMistNoiseId = Shader.PropertyToID("_FallMistNoise");
+		private static readonly int FallMistNoiseCellsId = Shader.PropertyToID("_FallMistNoiseCells");
 		private readonly Vector4[] shaderFalls = new Vector4[MaxShaderFalls];
 		private readonly Vector4[] shaderFallsB = new Vector4[MaxShaderFalls];
 
@@ -376,6 +378,9 @@ namespace FishMMO.Water
 					if (spray != null)
 					{
 						var block = new MaterialPropertyBlock();
+						// The mist's noise lattice: without it the shader works the noise out in full, at several times the cost.
+						block.SetTexture(FallMistNoiseId, FallTextures.MistNoise);
+						block.SetFloat(FallMistNoiseCellsId, FallTextures.MistNoiseCells);
 						if (build != null && build.Paths != null)
 						{
 							block.SetTexture(FallPathTexId, build.Paths);
@@ -503,7 +508,7 @@ namespace FishMMO.Water
 		/// <summary>
 		/// Sorting orders above every water surface (InlandWaterRenderer.Add numbers lakes and rivers 0, 1, 2…): Unity sorts
 		/// transparent renderers by sorting order before their render queue, so at order 0 the falls and their spray were
-		/// drawn first and every river surface, the plunge pool among them, painted over the splash (Jim, 2026-10-07).
+		/// drawn first and every river surface, the plunge pool among them, painted over the splash (2026-10-07).
 		/// </summary>
 		private const int CurtainSortingOrder = 30000, SpraySortingOrder = 30001;
 

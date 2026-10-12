@@ -117,7 +117,7 @@ namespace FishMMO.Shared.WorldDesign
 		public float Multiplier = 1f;
 		public List<PointOfInterestKindOverride> Overrides = new List<PointOfInterestKindOverride>();
 
-		/// <summary>A scene's settings; null is Normal density with no capital (Jim, 2026-10-10).</summary>
+		/// <summary>A scene's settings; null is Normal density with no capital (2026-10-10).</summary>
 		public static PointOfInterestPlanSettings From(PointOfInterestSettings settings)
 		{
 			if (settings == null)
@@ -290,6 +290,7 @@ namespace FishMMO.Shared.WorldDesign
 			asset.PathRoadMap = PathRoadMap;
 			// Laid afresh by every place (PropsFeature): what the pieces give off.
 			asset.Emitters = new List<SceneEmitter>();
+			asset.Rooms = new List<SceneRoom>();
 		}
 	}
 }

@@ -204,6 +204,83 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(route.Joined, Is.True);
 			Assert.That(Length(router, route), Is.LessThan(360f), "it meets the road nearby rather than walking to the far town");
 		}
+
+		/// <summary>
+		/// An escarpment: low ground south of z = 0, 60 m higher north of z = 6 (a wall of ten metres a metre), and east of
+		/// x = 340 a gentle ramp up it. Flo Monolith's falls are such a wall, and ways came down it (2026-10-12).
+		/// </summary>
+		public static float Escarpment(float x, float z)
+		{
+			float wall = 10f + 60f * Mathf.Clamp01(z / 6f);
+			float ramp = 10f + 60f * Mathf.Clamp01((z + 150f) / 300f);
+			return x < 300f ? wall : x > 340f ? ramp : Mathf.Lerp(wall, ramp, (x - 300f) / 40f);
+		}
+
+		[Test]
+		public void AWayNeverStepsDownACliffOntoABridge()
+		{
+			PathRouter router = Router(Escarpment);
+			// A bridge at the cliff's foot whose marked strip runs on up the wall (a deck aimed up a fall): its cells were
+			// climbed for free, and a relaxed search stepped straight down the cliff onto it.
+			router.MarkBridge(9, new Vector3(0f, 10f, -4f), 0f, 14f);
+			PathRouter.Route route = router.Find(new PathRouter.Request { Class = ScenePathClass.Footpath, From = new Vector2(0f, -100f), To = new Vector2(0f, 100f), Relaxed = true });
+			Assert.That(route, Is.Not.Null, "it goes round by the ramp");
+			for (int i = 1; i < route.Cells.Count; i++)
+			{
+				int a = route.Cells[i - 1], b = route.Cells[i];
+				if (router.IsDeck(a) && router.IsDeck(b) && router.Bridge[a] == router.Bridge[b])
+				{
+					continue;
+				}
+				float run = new Vector2(router.XOf(a % router.Width) - router.XOf(b % router.Width), router.ZOf(a / router.Width) - router.ZOf(b / router.Width)).magnitude;
+				Assert.That(Mathf.Abs(router.Height[b] - router.Height[a]), Is.LessThanOrEqualTo(PathRouter.WalkableGrade * run + 1e-3f), $"step {i} climbs a cliff");
+				Assert.That(router.IsSteep(b) && i < route.Cells.Count - 1, Is.False, $"step {i} enters a cell with a cliff in it");
+			}
+		}
+
+		[Test]
+		public void AWayIsNetworkOnlyAtItsOwnHeight()
+		{
+			PathRouter router = Router(Escarpment);
+			// A way along the cliff's foot: the cells on the top beside it are not on it.
+			var foot = new List<Vector3>();
+			for (float x = -200f; x <= 200f; x += 2f)
+			{
+				foot.Add(new Vector3(x, 10f, -2f));
+			}
+			router.MarkWay(foot, ScenePathClass.Footpath, 4f);
+			Assert.That(router.Network[router.IndexAt(0f, -2f)], Is.Not.EqualTo((byte)255));
+			// The next cell north is centred 4 m up the wall, 20 m above the way.
+			Assert.That(router.Network[router.IndexAt(0f, 3f)], Is.EqualTo((byte)255), "the wall above is not on the way at its foot");
+		}
+
+		/// <summary>A gorge along z: plateaus at 50 m, a floor at 20 m between walls (two metres of wall each side) with <paramref name="halfFloor"/> metres either side of x = 0.</summary>
+		public static float Gorge(float x, float z, float halfFloor) =>
+			Mathf.Abs(x) < halfFloor ? 20f : Mathf.Abs(x) < halfFloor + 2f ? Mathf.Lerp(20f, 50f, (Mathf.Abs(x) - halfFloor) / 2f) : 50f;
+
+		[Test]
+		public void AGorgeIsBridgedRimToRim()
+		{
+			PathRouter router = Router((x, z) => Gorge(x, z, 8f));
+			PathRouter.Route route = router.Find(new PathRouter.Request { Class = ScenePathClass.Footpath, From = new Vector2(-200f, 0f), To = new Vector2(200f, 0f) });
+			Assert.That(route, Is.Not.Null, "the gorge runs the map's length: only a bridge crosses it");
+			float longest = 0f;
+			for (int i = 1; i < route.Cells.Count; i++)
+			{
+				int a = route.Cells[i - 1], b = route.Cells[i];
+				longest = Mathf.Max(longest, new Vector2(router.XOf(a % router.Width) - router.XOf(b % router.Width), router.ZOf(a / router.Width) - router.ZOf(b / router.Width)).magnitude);
+				Assert.That(router.Height[b], Is.GreaterThan(45f), $"step {i} goes down into the gorge");
+			}
+			Assert.That(longest, Is.InRange(20f, PathRouter.MaxGorgeSpan + router.Cell), "one span rim to rim");
+		}
+
+		[Test]
+		public void AGorgeWiderThanABridgeSpansIsNotCrossed()
+		{
+			PathRouter router = Router((x, z) => Gorge(x, z, 30f));
+			PathRouter.Route route = router.Find(new PathRouter.Request { Class = ScenePathClass.Footpath, From = new Vector2(-200f, 0f), To = new Vector2(200f, 0f), Relaxed = true });
+			Assert.That(route, Is.Null);
+		}
 	}
 
 	/// <summary>The network: neighbour links between settlements, fading spurs, fords and bridges, and the same plan every time.</summary>
@@ -332,6 +409,90 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			Assert.That(onAxis, Is.GreaterThan(5));
+		}
+
+		/// <summary>
+		/// A river slanting 60° across the way: the bridge used to take the way's heading through the water, so its deck ran
+		/// aslant down the river and one end stood out over the falling bank (Flo Monolith, 2026-10-12). It turns to cross
+		/// square (as far as <c>BridgeTurnDegrees</c> allows), and the way eases onto it and off again without a jump.
+		/// </summary>
+		[Test]
+		public void ABridgeCrossesItsRiverSquare()
+		{
+			List<PointOfInterestRecord> records = ThreeTowns();
+			// Its banks run at 60° to east-west; square across it is a heading of 150° (or 330°).
+			Func<float, float, PathCellWater> river = (x, z) => Mathf.Abs((x - 500f) * 0.5f - z * 0.866f) < 5f ? PathCellWater.River : PathCellWater.Dry;
+			PathPlan plan = PathNetworkPlanner.Plan(Input(records, river, 1.5f));
+			Assert.That(plan.Bridges.Count, Is.EqualTo(1), string.Join("\n", plan.Notes));
+			PathBridgeSite bridge = plan.Bridges[0];
+			float off = Mathf.Min(Mathf.Abs(Mathf.DeltaAngle(bridge.Yaw, 150f)), Mathf.Abs(Mathf.DeltaAngle(bridge.Yaw, 330f)));
+			Assert.That(off, Is.LessThan(10f), $"square across the river (yaw {bridge.Yaw:0.0})");
+			Assert.That(bridge.Span, Is.InRange(9f, 14f), "the water's width across it, not the way's slant through it");
+			ScenePath road = plan.Paths.Find(p => p.Id == bridge.PathId);
+			for (int i = 1; i < road.Count; i++)
+			{
+				Assert.That(Vector3.Distance(road.Points[i], road.Points[i - 1]), Is.LessThan(6f), $"no jump in the way at point {i}");
+			}
+		}
+
+		/// <summary>
+		/// A town below an escarpment and one above it beyond a river along its top, and a waterfall's site at the cliff's
+		/// foot: every way goes round by the ramp, crosses on a bridge between banks at one height, and enters the fall's
+		/// site from ground a walker can stand on. In Flo Monolith a spur joined a way 60 m below across the cliff's edge,
+		/// a bridge was aimed up the fall, and its approach was straightened up the wall (2026-10-12).
+		/// </summary>
+		[Test]
+		public void AWayNeverClimbsACliffToReachItsBridge()
+		{
+			var records = new List<PointOfInterestRecord>
+			{
+				Site(1, POIType.Town, 0f, -400f, 40f),
+				Site(2, POIType.Town, 0f, 400f, 40f),
+				Site(3, POIType.Waterfall, 0f, -10f, 6f),
+			};
+			Func<float, float, PathCellWater> river = (x, z) => z > 20f && z < 28f && x < 600f ? PathCellWater.River : PathCellWater.Dry;
+			PathPlanInput input = Input(records, river, 1.5f);
+			input.Ground = PathRouterTests.Escarpment;
+			PathPlan plan = PathNetworkPlanner.Plan(input);
+			Assert.That(plan.Paths.Exists(p => p.FromId == 1 && p.ToId == 2 || p.FromId == 2 && p.ToId == 1), Is.True, string.Join("\n", plan.Notes));
+			var notes = new List<string>();
+			foreach (ScenePath path in plan.Paths)
+			{
+				PathNetworkPlanner.CountUnwalkable(path, notes);
+			}
+			Assert.That(notes, Is.Empty, string.Join("\n", notes));
+		}
+
+		/// <summary>Two towns either side of a gorge 20 m wide that runs the map's length: one bridge, rim to rim, at the rims' height.</summary>
+		[Test]
+		public void TownsAcrossAGorgeAreJoinedByOneBridgeOverIt()
+		{
+			var records = new List<PointOfInterestRecord>
+			{
+				Site(1, POIType.Town, -300f, 0f, 40f),
+				Site(2, POIType.Town, 300f, 0f, 40f),
+			};
+			PathPlanInput input = Input(records);
+			input.Ground = (x, z) => PathRouterTests.Gorge(x, z, 8f);
+			PathPlan plan = PathNetworkPlanner.Plan(input);
+			Assert.That(plan.Gorges, Is.EqualTo(1), string.Join("\n", plan.Notes));
+			PathBridgeSite bridge = plan.Bridges.Find(b => b.Gorge);
+			Assert.That(bridge.Span, Is.InRange(20f, PathRouter.MaxGorgeSpan + input.CellMetres));
+			Assert.That(bridge.Centre.y, Is.EqualTo(50f).Within(0.5f), "at the rims' height");
+			Assert.That(Mathf.Abs(bridge.Centre.x), Is.LessThan(3f), "over the gorge");
+			var notes = new List<string>();
+			foreach (ScenePath path in plan.Paths)
+			{
+				PathNetworkPlanner.CountUnwalkable(path, notes);
+				for (int i = 0; i < path.Count; i++)
+				{
+					if ((path.FlagsAt(i) & ScenePathPointFlags.Bridge) == 0)
+					{
+						Assert.That(path.Points[i].y, Is.GreaterThan(45f), $"way {path.Id} point {i} is down in the gorge off the deck");
+					}
+				}
+			}
+			Assert.That(notes, Is.Empty, string.Join("\n", notes));
 		}
 
 		[Test]

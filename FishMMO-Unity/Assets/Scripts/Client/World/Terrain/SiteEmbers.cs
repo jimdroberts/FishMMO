@@ -8,9 +8,10 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Sparks off the sites' campfires, cooking fires and forges (SceneSiteEmitters, baked by the cut): the nearest
-	/// <see cref="MaxSources"/> within <see cref="Reach"/> of the camera each throw up a stream of embers that rise, drift
-	/// downwind, cool and go out (FishSiteEmbers.shader). One draw of one pre-built field of quads for all of them.
+	/// The sites' fires near the camera (SceneSiteEmitters, baked by the cut): campfires, hearths, forges and torches. The
+	/// nearest <see cref="MaxSources"/> within <see cref="Reach"/> each burn with tongues of flame (FishSiteFlames.shader)
+	/// and throw up a stream of embers that rise, drift downwind, cool and go out (FishSiteEmbers.shader). Two draws of two
+	/// pre-built fields of quads for all of them.
 	/// </summary>
 	/// <remarks>
 	/// Play mode, client only, self-starting like the site lights. The shader comes from the weather render profile
@@ -25,6 +26,9 @@ namespace FishMMO.Client
 		/// <summary>Embers in the field, shared among the sources.</summary>
 		public const int Particles = MaxSources * 48;
 		public const string ShaderName = "FishMMO/World/Site Embers";
+		public const string FlamesShaderName = "FishMMO/World/Site Flames";
+		/// <summary>Tongues of flame in the field, shared among the sources.</summary>
+		public const int Flames = MaxSources * 9;
 		private const float Refind = 8f;
 
 		private static readonly int SourcesId = Shader.PropertyToID("_EmberSources");
@@ -32,6 +36,13 @@ namespace FishMMO.Client
 		private static readonly int WindId = Shader.PropertyToID("_EmberWind");
 		private static readonly int NightLightsId = Shader.PropertyToID("_FishNightLights");
 		private static readonly int WeatherWindId = Shader.PropertyToID("_FishWeatherWind");
+		private static readonly int FlameSourcesId = Shader.PropertyToID("_FlameSources");
+		private static readonly int FlameStrengthId = Shader.PropertyToID("_FlameStrength");
+		private static readonly int FlameWindId = Shader.PropertyToID("_FlameWind");
+		private static readonly Vector4[] flameSources = new Vector4[MaxSources];
+		private static MaterialPropertyBlock flameBlock;
+		private static Material flameMaterial;
+		private static Mesh flameMesh;
 
 		private static readonly List<SceneEmitter> near = new List<SceneEmitter>();
 		private static readonly Vector4[] sources = new Vector4[MaxSources];
@@ -86,6 +97,16 @@ namespace FishMMO.Client
 				Object.Destroy(mesh);
 				mesh = null;
 			}
+			if (flameMaterial != null)
+			{
+				Object.Destroy(flameMaterial);
+				flameMaterial = null;
+			}
+			if (flameMesh != null)
+			{
+				Object.Destroy(flameMesh);
+				flameMesh = null;
+			}
 			near.Clear();
 		}
 
@@ -120,7 +141,8 @@ namespace FishMMO.Client
 			{
 				foundVersion = SceneSiteEmitters.Version;
 				foundAt = eye;
-				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind == SceneEmitterKind.Fire || kind == SceneEmitterKind.Forge, MaxSources, near);
+				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind == SceneEmitterKind.Fire || kind == SceneEmitterKind.Forge || kind == SceneEmitterKind.Hearth
+					|| kind == SceneEmitterKind.Torch, MaxSources, near);
 			}
 			if (near.Count == 0)
 			{
@@ -146,12 +168,15 @@ namespace FishMMO.Client
 				{
 					sources[i] = Vector4.zero;
 					strengths[i] = Vector4.zero;
+					flameSources[i] = Vector4.zero;
+					flameStrengths[i] = Vector4.zero;
 					continue;
 				}
 				SceneEmitter e = near[i];
 				float distance = Vector3.Distance(eye, e.Position);
 				float fade = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(Reach * 0.7f, Reach, distance));
 				bool forge = e.Kind == SceneEmitterKind.Forge;
+				bool hearth = e.Kind == SceneEmitterKind.Hearth, torch = e.Kind == SceneEmitterKind.Torch;
 				// A fire burns up and dies down over minutes, each on its own beat; a forge sparks in bursts as it is worked.
 				float phase = (e.Seed & 0xFFFF) * 0.0137f;
 				double t = WorldMotion.Seconds;
@@ -159,7 +184,13 @@ namespace FishMMO.Client
 					? Mathf.Clamp01(0.35f + 0.65f * Mathf.Sin((float)(t * 0.9 % 6283.0) + phase))
 					: 0.65f + 0.35f * Mathf.Sin((float)(t * 0.05 % 6283.0) + phase);
 				sources[i] = new Vector4(e.Position.x, e.Position.y, e.Position.z, forge ? 2f : 1f);
-				strengths[i] = new Vector4(fade, forge ? 0.25f + 0.6f * burn : 0.35f + 0.4f * burn, 0f, 0f);
+				// A hearth under its hood and a torch spit only a few sparks (a stream of them rose into the ceiling as a cloud
+				// of orange dots); a campfire and a forge their full share.
+				float sparks = forge ? 0.25f + 0.6f * burn : 0.35f + 0.4f * burn;
+				strengths[i] = new Vector4(fade, hearth || torch ? sparks * 0.18f : sparks, 0f, 0f);
+				flameSources[i] = new Vector4(e.Position.x, e.Position.y, e.Position.z, forge ? 2f : hearth ? 3f : torch ? 4f : 1f);
+				// The flames: the same fade, and the fire's own burn as their height (a forge's bursts too).
+				flameStrengths[i] = new Vector4(fade, forge ? burn : Mathf.InverseLerp(0.3f, 1f, burn), 0f, 0f);
 				bounds.Encapsulate(new Bounds(e.Position + Vector3.up * 3f, new Vector3(10f, 8f, 10f)));
 			}
 			// The wind near the ground: the weather's direction and speed (0..1 of 30 m/s), the plume's share of it.
@@ -179,6 +210,51 @@ namespace FishMMO.Client
 				worldBounds = bounds,
 			};
 			Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);
+			DrawFlames(camera, bounds, night, wind.x * speed, wind.y * speed);
 		}
+
+		/// <summary>
+		/// The flames: one draw of a field of quads the shader hands out among the same sources as the embers (in
+		/// <see cref="flameSources"/>, kinds 1 fire, 2 forge, 3 hearth, 4 torch; <see cref="flameStrengths"/> their fade and burn).
+		/// </summary>
+		private static void DrawFlames(Camera camera, Bounds bounds, float night, float windX, float windZ)
+		{
+			WeatherRenderProfile profile = WeatherRenderProfile.Active;
+			Shader shader = profile != null && profile.SiteFlamesShader != null ? profile.SiteFlamesShader : Shader.Find(FlamesShaderName);
+			if (shader == null)
+			{
+				return;
+			}
+			if (flameMaterial == null || flameMaterial.shader != shader)
+			{
+				if (flameMaterial != null)
+				{
+					Object.Destroy(flameMaterial);
+				}
+				flameMaterial = new Material(shader) { name = "Site Flames", hideFlags = HideFlags.HideAndDontSave };
+			}
+			if (flameMesh == null)
+			{
+				flameMesh = PrecipitationField.BuildMesh(Flames, 61211);
+				flameMesh.name = "Site Flames";
+			}
+			flameBlock ??= new MaterialPropertyBlock();
+			flameBlock.Clear();
+			flameBlock.SetVectorArray(FlameSourcesId, flameSources);
+			flameBlock.SetVectorArray(FlameStrengthId, flameStrengths);
+			flameBlock.SetVector(FlameWindId, new Vector4(windX, night, windZ, 0f));
+			var rp = new RenderParams(flameMaterial)
+			{
+				camera = camera,
+				matProps = flameBlock,
+				shadowCastingMode = ShadowCastingMode.Off,
+				receiveShadows = false,
+				layer = camera.gameObject.layer,
+				worldBounds = bounds,
+			};
+			Graphics.RenderMesh(rp, flameMesh, 0, Matrix4x4.identity);
+		}
+
+		private static readonly Vector4[] flameStrengths = new Vector4[MaxSources];
 	}
 }

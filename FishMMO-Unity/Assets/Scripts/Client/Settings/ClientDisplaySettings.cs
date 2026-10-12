@@ -310,7 +310,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Applies the stored multisampling choice to the active pipeline asset; with none, leaves the quality level's own
-		/// (Jim, 2026-10-09: 4× on High Fidelity, off on Balanced and Performant). The leaves' and the grass's soft edges are
+		/// (2026-10-09: 4× on High Fidelity, off on Balanced and Performant). The leaves' and the grass's soft edges are
 		/// alpha-to-coverage, which only MSAA can draw; 4× cost about 0.3 ms at 2560×1440 in Flo Monolith (`msaa1`).
 		/// </summary>
 		public static void ApplySavedMsaa()
@@ -318,10 +318,72 @@ namespace FishMMO.Client
 			int stored = ClientSettings.GetInt(ClientSettings.MsaaKey, MsaaUnchosen);
 			if (stored == MsaaUnchosen)
 			{
+				if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset authored)
+				{
+					MatchOcclusionToMsaa(authored);
+				}
 				return;
 			}
 			ApplyMsaa((MsaaOption)Mathf.Clamp(stored, (int)MsaaOption.Off, (int)MsaaOption.Four));
 		}
+
+		/// <summary>
+		/// The GPU Resident Drawer's occlusion culling on exactly when multisampling is off. Under MSAA on Vulkan URP resolves
+		/// the depth attachment in hardware and allocates it without multisampled binding (bindTextureMS false), but the
+		/// drawer's depth pyramid (core InstanceOcclusionCuller) picks its Texture2DMS variant from isMSAAEnabled alone: Unity
+		/// refuses the bind every frame ("A non-multisampled texture being bound to a multisampled sampler… enable the bindMS
+		/// flag") and the pyramid reads no depth, so nothing was occluded under MSAA anyway. A Unity bug in a package we do not
+		/// embed; switching it off where it cannot work loses nothing and stops the error.
+		/// </summary>
+		public static void MatchOcclusionToMsaa(UniversalRenderPipelineAsset pipeline)
+		{
+			if (pipeline == null)
+			{
+				return;
+			}
+			bool on = pipeline.msaaSampleCount <= 1;
+			if (pipeline.gpuResidentDrawerEnableOcclusionCullingInCameras == on)
+			{
+				return;
+			}
+#if UNITY_EDITOR
+			if (Application.isPlaying && !authoredOcclusion.ContainsKey(pipeline))
+			{
+				authoredOcclusion.Add(pipeline, pipeline.gpuResidentDrawerEnableOcclusionCullingInCameras);
+				UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+				UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+			}
+#endif
+			pipeline.gpuResidentDrawerEnableOcclusionCullingInCameras = on;
+		}
+
+#if UNITY_EDITOR
+		/// <summary>Each pipeline asset's occlusion setting before play mode matched it to MSAA (put back on exit).</summary>
+		private static readonly Dictionary<UniversalRenderPipelineAsset, bool> authoredOcclusion = new Dictionary<UniversalRenderPipelineAsset, bool>();
+
+		/// <summary>
+		/// In the editor, every quality level's pipeline asset authored with MSAA has its occlusion culling turned off, saved
+		/// with the asset (High Fidelity: MSAA 4), so the Game and Scene views stop logging the bindMS error too.
+		/// </summary>
+		[UnityEditor.InitializeOnLoadMethod]
+		private static void MatchAuthoredOcclusionToMsaa()
+		{
+			UnityEditor.EditorApplication.delayCall += () =>
+			{
+				for (int level = 0; level < QualitySettings.count; level++)
+				{
+					if (QualitySettings.GetRenderPipelineAssetAt(level) is UniversalRenderPipelineAsset pipeline
+						&& pipeline.msaaSampleCount > 1 && pipeline.gpuResidentDrawerEnableOcclusionCullingInCameras)
+					{
+						pipeline.gpuResidentDrawerEnableOcclusionCullingInCameras = false;
+						UnityEditor.EditorUtility.SetDirty(pipeline);
+						UnityEditor.AssetDatabase.SaveAssetIfDirty(pipeline);
+						Debug.Log($"[Display] '{pipeline.name}' renders with MSAA {pipeline.msaaSampleCount}x: GPU occlusion culling switched off (it cannot read MSAA depth; see ClientDisplaySettings.MatchOcclusionToMsaa).");
+					}
+				}
+			};
+		}
+#endif
 
 		/// <summary>What the options show: the player's choice, or with none the active quality level's own MSAA.</summary>
 		public static MsaaOption CurrentMsaa()
@@ -362,6 +424,7 @@ namespace FishMMO.Client
 			// vegetation have no motion vectors, so their wind motion pixelated under it).
 			bool stp = pipeline.upscalingFilter == UpscalingFilterSelection.STP && pipeline.renderScale < 1f;
 			pipeline.msaaSampleCount = stp || option == MsaaOption.Off ? 1 : option == MsaaOption.Two ? 2 : 4;
+			MatchOcclusionToMsaa(pipeline);
 		}
 
 #if UNITY_EDITOR
@@ -460,6 +523,14 @@ namespace FishMMO.Client
 				}
 			}
 			authoredMsaa.Clear();
+			foreach (KeyValuePair<UniversalRenderPipelineAsset, bool> pair in authoredOcclusion)
+			{
+				if (pair.Key != null)
+				{
+					pair.Key.gpuResidentDrawerEnableOcclusionCullingInCameras = pair.Value;
+				}
+			}
+			authoredOcclusion.Clear();
 
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 

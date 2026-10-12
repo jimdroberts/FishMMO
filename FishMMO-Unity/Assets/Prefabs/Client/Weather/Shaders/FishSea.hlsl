@@ -39,7 +39,7 @@ float FishSeaCeiling()
 /// in the shallows and dying with depth (a wave's orbit shrinks as exp(-k·depth)), never quite still.
 /// About 0.6 at full surge in the shallows; zero with no sea.
 /// <para>
-/// Slow and short on purpose (Jim, 2026-10-06: "animated too fast"). How fast a frond seems to move is its stroke
+/// Slow and short on purpose (2026-10-06: "animated too fast"). How fast a frond seems to move is its stroke
 /// times its rate: at an 8 s swell, a 5 s chop and a unit stroke a tall kelp's tip swept metres every few seconds.
 /// Real kelp in a surge leans a metre or two over ten seconds and more.
 /// </para>

@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using FishMMO.Water;
+using FishMMO.Shared;
 
 namespace FishMMO.RenderScratch
 {
@@ -21,7 +22,7 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class WaterShoreProbe
 	{
-		private const string OutputDirectory = "/home/jim/Dev/FishMMO-Dev/WaterRenders/shore";
+		private static readonly string OutputDirectory = ProbeOutput.Path("WaterRenders", "shore");
 		private const int Width = 1280;
 		private const int Height = 720;
 		private const float Period = 9f;
@@ -287,8 +288,8 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		private const string BreakerDirectoryGentle = "/home/jim/Dev/FishMMO-Dev/WaterRenders/breakers";
-		private const string BreakerDirectorySteep = "/home/jim/Dev/FishMMO-Dev/WaterRenders/breakers-steep";
+		private static readonly string BreakerDirectoryGentle = ProbeOutput.Path("WaterRenders", "breakers");
+		private static readonly string BreakerDirectorySteep = ProbeOutput.Path("WaterRenders", "breakers-steep");
 
 		private static void Build(out Camera camera, out WaterSurface water, out WaterShore shore, out Light sun)
 		{
@@ -343,8 +344,10 @@ namespace FishMMO.RenderScratch
 			camera.allowHDR = true;
 		}
 
-		private static void Capture(Camera camera, string name, string note, string directory = OutputDirectory)
+		private static void Capture(Camera camera, string name, string note, string directory = null)
 		{
+			directory ??= OutputDirectory;
+
 			var texture = new RenderTexture(Width, Height, 24, RenderTextureFormat.DefaultHDR) { antiAliasing = 1 };
 			camera.targetTexture = texture;
 			camera.Render();
@@ -384,8 +387,9 @@ namespace FishMMO.RenderScratch
 			UnityEngine.Object.DestroyImmediate(texture);
 		}
 
-		private static void Finish(int code, string directory = OutputDirectory)
+		private static void Finish(int code, string directory = null)
 		{
+			directory ??= OutputDirectory;
 			Debug.Log("[WaterShoreProbe]\n" + Report);
 			File.WriteAllText(Path.Combine(directory, "report.txt"), Report.ToString());
 			EditorApplication.Exit(code);

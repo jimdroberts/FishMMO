@@ -7,7 +7,7 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Water
 {
 	/// <summary>
-	/// Wakes on the rivers (Jim: rivers only): every character and drifting body in a river near the camera, its place,
+	/// Wakes on the rivers (rivers only): every character and drifting body in a river near the camera, its place,
 	/// size and velocity handed to the inland water's shader, which draws its Kelvin wake, the rings round it and the white
 	/// at its bow from the water moving past it (the current less its own velocity). Analytic, not simulated: nothing to
 	/// step, nothing to store, and the same at any frame rate.

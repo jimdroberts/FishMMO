@@ -26,7 +26,7 @@ Shader "FishMMO/Water/Underwater"
 
         /* Two passes, one pixel's MSAA samples split between them by the depth buffer itself. The depth TEXTURE has one
          * depth a pixel, and at a frond's edge a pixel is part frond, part open water: shaded once by the frond's depth,
-         * the water behind it took almost no fog and the bright horizon past it rimmed every edge (Jim, 2026-10-10).
+         * the water behind it took almost no fog and the bright horizon past it rimmed every edge (2026-10-10).
          * Both passes draw at the far plane: ZTest LEqual passes only the samples nothing was drawn on (fogged the
          * whole way), ZTest Greater only the samples something was (fogged to its depth). */
         HLSLINCLUDE
@@ -378,7 +378,7 @@ Shader "FishMMO/Water/Underwater"
 
                 /* What is behind was lit by light that came DOWN through the water to it, and the fog above only
                  * counts the water between it and the eye. Without this a rock twenty metres down, near the camera,
-                 * was as sunlit as one on the beach (Jim, 2026-10-06: "the sky light glow is visible on objects under
+                 * was as sunlit as one on the beach (2026-10-06: "the sky light glow is visible on objects under
                  * water"). Its light, the sky's and the sun's, dimmed by the depth it stands at, as the water's own
                  * inscatter is; one number, since the blend carries one (the water's colour is in the inscatter).
                  * Nothing past the surface: the ray left the water before it reached that. */

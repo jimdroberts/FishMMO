@@ -68,7 +68,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The generated resources (Jim, 2026-10-10: generate GatheringNodeTemplates and node prefabs, none existed; placeholder
+	/// The generated resources (2026-10-10: generate GatheringNodeTemplates and node prefabs, none existed; placeholder
 	/// items). <see cref="GatheringContentGenerator"/> turns each row into assets; <see cref="GatheringFeature"/> picks one per
 	/// site with <see cref="Pick"/>.
 	/// </summary>
@@ -226,7 +226,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The families a point-of-interest kind gathers. Empty for a kind that has no nodes of its own.
+		/// The families a point-of-interest kind gathers, its own first (a herb grove's herbs before its fungi): most of a
+		/// site's nodes are of the first (<see cref="GatheringFeature"/>). Empty for a kind that has no nodes of its own.
 		/// </summary>
 		public static GatheringFamily[] FamiliesFor(POIType kind)
 		{
@@ -261,22 +262,27 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Draws one resource of a family for a site, weighted towards those that suit its biome.
+		/// Draws one resource of a family for a site, from those that grow in its biome.
 		/// </summary>
 		/// <remarks>
-		/// A resource that names the biome weighs 1; one that does not weighs 0.05, so a site still gets its family's node
-		/// in a biome no row names (an alien world's mine). Rarer tiers weigh less: tier 4 a quarter, tier 3 a half.
-		/// Deterministic in <paramref name="random"/>; rows are walked in authoring order.
+		/// <para>Only the family's resources that grow in the biome (<see cref="GrowsIn"/>) are drawn when any does; every one
+		/// of the family when none does, so a site still gets its family's node in a biome no row names (an alien world's
+		/// mine). Rarer tiers weigh less: tier 4 a quarter, tier 3 a half. Deterministic in <paramref name="random"/>; rows
+		/// are walked in authoring order.</para>
+		/// <para>Off-biome rows used to stay in the draw at a twentieth of the weight. With five other herbs beside the one a
+		/// forest grows, that drew a stranger at one site in five: Flo Monolith's forest herb grove Bri Wortgarth grew bog
+		/// Mirewort (2026-10-12).</para>
 		/// </remarks>
 		/// <returns>The resource, or null when the family has none.</returns>
 		public static GatheringResource Pick(GatheringFamily family, string biomeName, DeterministicRNG random)
 		{
+			bool grown = AnyGrowsIn(family, biomeName);
 			float total = 0.0f;
 			foreach (GatheringResource resource in all)
 			{
 				if (resource.Family == family)
 				{
-					total += Weight(resource, biomeName);
+					total += Weight(resource, biomeName, grown);
 				}
 			}
 			if (total <= 0.0f)
@@ -291,8 +297,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
+				float weight = Weight(resource, biomeName, grown);
+				if (weight <= 0.0f)
+				{
+					continue;
+				}
 				last = resource;
-				roll -= Weight(resource, biomeName);
+				roll -= weight;
 				if (roll < 0.0f)
 				{
 					return resource;
@@ -301,16 +312,38 @@ namespace FishMMO.Shared.WorldDesign
 			return last;
 		}
 
-		/// <summary>A resource's draw weight in a biome (see <see cref="Pick"/>).</summary>
+		/// <summary>Whether a resource grows in a biome: one of its <see cref="GatheringResource.Biomes"/>, or anywhere when it names none.</summary>
+		public static bool GrowsIn(GatheringResource resource, string biomeName)
+		{
+			return resource != null && (resource.Biomes.Length == 0 || resource.Suits(biomeName));
+		}
+
+		/// <summary>Whether any resource of a family grows in a biome.</summary>
+		public static bool AnyGrowsIn(GatheringFamily family, string biomeName)
+		{
+			foreach (GatheringResource resource in all)
+			{
+				if (resource.Family == family && GrowsIn(resource, biomeName))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>A resource's draw weight in a biome (see <see cref="Pick"/>): 0 when it does not grow there but another of its family does.</summary>
 		public static float Weight(GatheringResource resource, string biomeName)
 		{
-			if (resource == null)
+			return resource == null ? 0.0f : Weight(resource, biomeName, AnyGrowsIn(resource.Family, biomeName));
+		}
+
+		private static float Weight(GatheringResource resource, string biomeName, bool familyGrows)
+		{
+			if (resource == null || familyGrows && !GrowsIn(resource, biomeName))
 			{
 				return 0.0f;
 			}
-			float fit = resource.Biomes.Length == 0 || resource.Suits(biomeName) ? 1.0f : 0.05f;
-			float rarity = resource.Tier >= 4 ? 0.25f : resource.Tier == 3 ? 0.5f : 1.0f;
-			return fit * rarity;
+			return resource.Tier >= 4 ? 0.25f : resource.Tier == 3 ? 0.5f : 1.0f;
 		}
 	}
 }

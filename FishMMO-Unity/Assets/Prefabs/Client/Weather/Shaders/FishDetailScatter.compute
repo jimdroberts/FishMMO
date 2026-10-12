@@ -354,7 +354,7 @@ void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThread
             {
                 continue;
             }
-            // Nothing stands on a worn path (FishGroundPaths.hlsl): bare ways clear, a lost trail only thinned.
+            // Nothing stands where a path or a yard wears the ground bare (FishGroundPaths.hlsl), as the terrain draws it.
             float trodden = FishPathTrodden(worldXZ);
             if (trodden > 0.0 && ScatterUnit(h, 6u) < trodden)
             {

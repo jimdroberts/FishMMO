@@ -21,7 +21,7 @@ namespace FishMMO.RenderScratch
 	{
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string ROOT = "Assets/Scripts/Client/GUI/World/";
-		private const string OUT_DIR = "/home/jim/Dev/FishMMO-Dev/PanelRenders/interface-scaling";
+		private static readonly string OUT_DIR = ProbeOutput.Path("PanelRenders", "interface-scaling");
 		private const int SETTLE_FRAMES = 20;
 		private const float BAND_BOTTOM = 106f;
 		private const float ICON = 16f;

@@ -413,7 +413,11 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 0.25f, 0.2f), new Vector3(5f, 0.3f, 6.4f), d.Bevel(0.03f), stone, 2));
 			if (d.Variant == 0)
 			{
-				d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2f, 0.9f), new Vector3(4.2f, 3.2f, 4.4f), d.Bevel(0.04f), stone, 3));
+				// The tomb chamber: walls with an iron door under the porch.
+				WallsWithDoor(d, new Vector3(0f, 0f, 0.9f), 4.2f, 4.4f, 0.45f, 0.4f, 3.6f, 0f, 1.2f, 0.39f, 2.7f, stone, 30);
+				HangDoor(d, new Vector3(0f, 0.4f, 0.9f - 2.2f + 0.45f - 0.05f), Vector3.right, Vector3.forward, 1.2f, 2.3f, StructureDoorKind.Iron);
+				d.Room(new Vector3(0f, 0.4f, 0.9f), new Vector2(4.2f - 0.9f, 4.4f - 0.9f), 3.2f, StructureRoomKind.Tomb);
+				Steps(d, new Vector3(0f, 0f, -3f), Vector3.back, 1.6f, 0.4f, stone, 40, 0.1f);
 				// The porch: two columns and the pediment over them.
 				for (int s = -1; s <= 1; s += 2)
 				{
@@ -423,15 +427,17 @@ namespace FishMMO.Shared.WorldDesign
 				GableRoof(d, 4.5f, 5.8f, 4f, 1.1f, 0.12f, 0.22f, stone, 21, Matrix4x4.identity);
 				Gable(d, 4.4f, 4f, 1.08f, -2.75f, 0.3f, stone, 23, Matrix4x4.identity);
 				Gable(d, 4.4f, 4f, 1.08f, 3.15f, 0.3f, stone, 24, Matrix4x4.identity);
-				d.Add(StructureShapes.Box(new Vector3(0f, 1.5f, -1.35f), new Vector3(1.2f, 2.1f, 0.1f), StructureMaterial.Iron, 25, StructureRole.Detail));
 				if (d.Mid)
 				{
-					d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2.65f, -1.38f), new Vector3(1.6f, 0.25f, 0.2f), d.Bevel(0.02f), stone, 26, StructureRole.Detail));
+					d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2.85f, -1.38f), new Vector3(1.6f, 0.25f, 0.2f), d.Bevel(0.02f), stone, 26, StructureRole.Detail));
 				}
 				return;
 			}
 			// Domed: a cube, a drum, a dome, a finial.
-			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 1.95f, 0.2f), new Vector3(4.4f, 3.1f, 4.4f), d.Bevel(0.04f), stone, 3));
+			WallsWithDoor(d, new Vector3(0f, 0f, 0.2f), 4.4f, 4.4f, 0.45f, 0.4f, 3.5f, 0f, 1.2f, 0.39f, 2.7f, stone, 30);
+			HangDoor(d, new Vector3(0f, 0.4f, 0.2f - 2.2f + 0.45f - 0.05f), Vector3.right, Vector3.forward, 1.2f, 2.3f, StructureDoorKind.Iron);
+			d.Room(new Vector3(0f, 0.4f, 0.2f), new Vector2(4.4f - 0.9f, 4.4f - 0.9f), 3.1f, StructureRoomKind.Tomb);
+			Steps(d, new Vector3(0f, 0f, -3f), Vector3.back, 1.6f, 0.4f, stone, 40, 0.1f);
 			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 3.6f, 0.2f), new Vector3(4.7f, 0.3f, 4.7f), d.Bevel(0.03f), stone, 4));
 			int seg = d.Seg(20, 8);
 			var drum = new List<Vector2> { new Vector2(1.8f, 3.7f), new Vector2(1.8f, 4.4f), new Vector2(1.9f, 4.45f) };
@@ -444,8 +450,7 @@ namespace FishMMO.Shared.WorldDesign
 			drum.Add(new Vector2(0f, 6.15f));
 			d.Add(StructureShapes.Lathe(drum, seg, stone, 5).Transform(Matrix4x4.Translate(new Vector3(0f, 0f, 0.2f))));
 			d.Add(StructureShapes.Rod(new Vector3(0f, 6f, 0.2f), new Vector3(0f, 6.9f, 0.2f), 0.06f, d.Seg(6, 4), StructureMaterial.Iron, 6, StructureRole.Detail, 0.2f));
-			d.Add(StructureShapes.Box(new Vector3(0f, 1.45f, -2.04f), new Vector3(1.2f, 2f, 0.1f), StructureMaterial.Iron, 7, StructureRole.Detail));
-			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2.6f, -2.1f), new Vector3(1.7f, 0.3f, 0.25f), d.Bevel(0.02f), stone, 8, StructureRole.Detail));
+			d.Add(StructureShapes.ChamferBox(new Vector3(0f, 2.85f, -2.1f), new Vector3(1.7f, 0.3f, 0.25f), d.Bevel(0.02f), stone, 8, StructureRole.Detail));
 		}
 
 		private static void CryptEntrance(StructureDraft d)

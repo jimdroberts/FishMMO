@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Baked, not built.</b> The cut routes, carves and rasterises the paths (Jim, 2026-10-10: "paths should be baked into
+	/// <b>Baked, not built.</b> The cut routes, carves and rasterises the paths (2026-10-10: "paths should be baked into
 	/// the cut"); this only binds the two textures it wrote and the numbers that address them.
 	/// </para>
 	/// <para>

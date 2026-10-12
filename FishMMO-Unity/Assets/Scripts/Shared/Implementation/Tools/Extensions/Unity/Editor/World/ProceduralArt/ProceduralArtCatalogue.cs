@@ -740,6 +740,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path; // The structure kit (ProceduralArtCatalogue.Structures.cs).
 			}
+			foreach (string path in VinePayloadPaths())
+			{
+				yield return path; // Vines and ivy (ProceduralArtCatalogue.Vines.cs).
+			}
 		}
 
 		/// <summary>Every wrapper the generator writes, by project path: terrain layers, materials and prefabs.</summary>
@@ -785,6 +789,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path;
 			}
+			foreach (string path in VineWrapperPaths())
+			{
+				yield return path;
+			}
 			foreach (string prefab in AllPrefabNames())
 			{
 				yield return PrefabPath(prefab);
@@ -824,6 +832,10 @@ namespace FishMMO.Shared.WorldDesign
 				yield return prefab;
 			}
 			foreach (string prefab in StructurePrefabNames())
+			{
+				yield return prefab;
+			}
+			foreach (string prefab in VinePrefabNames())
 			{
 				yield return prefab;
 			}

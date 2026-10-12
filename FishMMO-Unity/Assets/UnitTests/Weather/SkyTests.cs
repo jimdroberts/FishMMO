@@ -984,7 +984,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void DiscsAreDrawnLifeSizeUnlessAProfileAsksOtherwise()
 		{
-			// Jim's decision, 2026-09-17: life-size by default — a moon is as big as its radius and
+			// Decided 2026-09-17: life-size by default — a moon is as big as its radius and
 			// distance make it — with a toggle for a flattered sky.
 			SkyProfile profile = Make<SkyProfile>("Sky");
 			LogAssert.IsFalse(profile.LargerThanLife, "life-size is the default");

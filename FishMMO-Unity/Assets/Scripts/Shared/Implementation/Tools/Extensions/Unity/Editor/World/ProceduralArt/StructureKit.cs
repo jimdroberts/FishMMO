@@ -9,7 +9,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// The structure kit as the POI templates see it: pieces by tag and style, a seeded pick, and the generated prefab for a
-	/// piece, variant and finish (Jim, 2026-10-10: generated points of interest are built from a procedural kit, any piece
+	/// piece, variant and finish (2026-10-10: generated points of interest are built from a procedural kit, any piece
 	/// replaceable by a LOCAL or hand-made prefab).
 	/// </summary>
 	/// <remarks>

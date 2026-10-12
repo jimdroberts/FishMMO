@@ -43,12 +43,13 @@ namespace FishMMO.Shared
 		/// </summary>
 		public ISwitchTarget SwitchTarget { get; private set; }
 
-		private string title = "Switch";
+		[Tooltip("What the switch is called above it (\"Door\" for a door, \"Lever\" for a lever).")]
+		[SerializeField] private string title = "Switch";
 
 		/// <summary>
 		/// Display title shown above the switch.
 		/// </summary>
-		public override string Title { get { return title; } }
+		public override string Title { get { return string.IsNullOrWhiteSpace(title) ? "Switch" : title; } }
 
 		/// <summary>
 		/// Title color for the switch UI label.

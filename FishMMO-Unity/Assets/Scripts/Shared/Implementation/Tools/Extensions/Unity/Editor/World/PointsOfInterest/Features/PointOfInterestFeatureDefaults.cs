@@ -15,14 +15,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// that ride it find it, spawners before the boss so the boss can wait on them.</para>
 	/// <list type="bullet">
 	/// <item><description>Every site: a name-toast <see cref="RegionFeature"/> and an <see cref="ExplorationFeature"/>
-	/// (EVERY POI requires discovery, Jim 2026-10-10).</description></item>
+	/// (EVERY POI requires discovery, 2026-10-10).</description></item>
 	/// <item><description>Settlements: <see cref="WaypointFeature"/>, <see cref="RespawnFeature"/>, merchant; towns and up add
 	/// a banker, a crafter and guards; townsfolk scale with size; a capital gets a second merchant and more guards and
-	/// townsfolk than a city (Jim's default: capitals get a larger layout and more service NPCs).</description></item>
+	/// townsfolk than a city (by default: capitals get a larger layout and more service NPCs).</description></item>
 	/// <item><description>Strongholds and waystations: a waypoint (and a respawn at a waystation), guards or a merchant.</description></item>
 	/// <item><description>Hostile sites: a monster pack, an elite from medium size. A world boss lair: a pack and an empty
 	/// <see cref="BossSpawnerFeature"/>.</description></item>
-	/// <item><description>Portals: <see cref="PortalFeature"/>. Dungeon entrances, and large caves: <see cref="DungeonEntranceFeature"/>.</description></item>
+	/// <item><description>Portals: <see cref="PortalFeature"/>. Dungeon entrances, and the great cavern of a large cave: <see cref="DungeonEntranceFeature"/>.</description></item>
 	/// <item><description>Resource sites (ore veins, crystal formations, herb groves, ancient trees, mines, quarries, lumber
 	/// camps, obsidian fields, fallen stars, witches' huts): <see cref="GatheringFeature"/>.</description></item>
 	/// </list>
@@ -65,6 +65,10 @@ namespace FishMMO.Shared.WorldDesign
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Guard });
 					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Merchant });
 					break;
+				case POIType.Dockyard:
+					// The shipwright.
+					features.Add(new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Merchant });
+					break;
 				case POIType.Waystation:
 					features.Add(new WaypointFeature());
 					features.Add(new RespawnFeature());
@@ -85,7 +89,8 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.LavaTube:
 					if (size >= 2)
 					{
-						// Jim, 2026-10-10: a large cave ends in a dungeon entrance; a small one is a walk-in grotto.
+						// 2026-10-11: a dungeon instance's entrance can be inside a cave: a large cave's great cavern holds
+						// one (built there by the template's chamber feature). Dungeon entrances are also sites of their own.
 						features.Add(new DungeonEntranceFeature());
 					}
 					break;
@@ -100,7 +105,12 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			if (GatheringResourceCatalogue.FamiliesFor(kind).Length > 0 && kind != POIType.Cave && kind != POIType.Grotto)
+			if (kind == POIType.Mine)
+			{
+				// A mine's ore is where it was being dug: in its deepest stope.
+				features.Add(new PointOfInterestChamberFeature { Features = new List<PointOfInterestFeature> { new GatheringFeature() } });
+			}
+			else if (GatheringResourceCatalogue.FamiliesFor(kind).Length > 0 && kind != POIType.Cave && kind != POIType.Grotto)
 			{
 				features.Add(new GatheringFeature());
 			}

@@ -223,8 +223,9 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Carves every way into the tiles; returns the heightmap samples changed.</summary>
+		/// <param name="keep">Ground the carve leaves alone besides water and pads (a moat's ditch, crossed by its drawbridge).</param>
 		public static int Carve(Terrain[,] terrains, TerrainTilePlan tiles, IReadOnlyList<ScenePath> paths, Func<float, float, float> ground,
-			Func<float, float, bool> wet, IReadOnlyList<PointOfInterestPad> pads)
+			Func<float, float, bool> wet, IReadOnlyList<PointOfInterestPad> pads, Func<float, float, bool> keep = null)
 		{
 			if (paths == null || paths.Count == 0)
 			{
@@ -267,7 +268,7 @@ namespace FishMMO.Shared.WorldDesign
 			return PointOfInterestTerrain.EditHeights(terrains, tiles, Rect.MinMaxRect(minX, minZ, maxX, maxZ), (x, z, h) =>
 			{
 				float level = Blend(index, targets, x, z, out float weight);
-				if (float.IsNaN(level) || weight <= 0f || (wet != null && wet(x, z)) || InPad(x, z))
+				if (float.IsNaN(level) || weight <= 0f || (wet != null && wet(x, z)) || InPad(x, z) || (keep != null && keep(x, z)))
 				{
 					return h;
 				}

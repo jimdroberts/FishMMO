@@ -9,7 +9,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// <summary>
 	/// Which rock a biome's cliffs, river boulders and fall ledges are made of: the planet geology's where the biome
 	/// accepts it, else the biome's own. Geology alone walled Flo Monolith's bog and taiga in sandstone and
-	/// Baoakraal's karst and grassland in conglomerate (Jim, 2026-10-08).
+	/// Baoakraal's karst and grassland in conglomerate (2026-10-08).
 	/// </summary>
 	[TestFixture]
 	public class BiomeRockTests

@@ -7,7 +7,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// Builds its own features in a carved cave's chamber instead of at the site's anchor (the cave's mouth): a camp or a
-	/// den on the chamber floor, a large cave's dungeon entrance at its back (Jim, 2026-10-10: a large cave ends in a
+	/// den on the chamber floor, a large cave's dungeon entrance at its back (2026-10-10: a large cave ends in a
 	/// dungeon entrance; a small one is a walk-in grotto).
 	/// </summary>
 	/// <remarks>
@@ -16,7 +16,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <see cref="PointOfInterestSiteContext.OnGround"/>, so the inner features are handed a context whose record is a copy
 	/// of the site's moved to the chamber (<see cref="CaveShaper.TryChamber"/>): its floor as the anchor, its floor radius
 	/// as the footprint, its heading turned back toward the mouth (so "ahead" is the way a player comes in), and the
-	/// ground flat at the floor (the terrain above a chamber is the hillside). No feature needs to know it is in a cave.
+	/// ground the chamber floor's plane (the terrain above a chamber is the hillside). No feature needs to know it is in a cave.
 	/// </para>
 	/// <para>
 	/// The copy keeps the site's id, seed, race and name, so names, scene ids and the shape lookups (a dungeon entrance's
@@ -35,9 +35,9 @@ namespace FishMMO.Shared.WorldDesign
 		public override void Build(PointOfInterestSiteContext context)
 		{
 			PointOfInterestSiteContext inner = context;
-			if (CaveShaper.TryChamber(context.Points, context.Record.Id, out Vector3 floor, out float radius, out float yaw))
+			if (CaveShaper.TryChamber(context.Points, context.Record.Id, out Vector3 floor, out float radius, out float yaw, out float slope))
 			{
-				inner = InChamber(context, floor, Mathf.Max(MinRadius, radius), Mathf.Repeat(yaw + 180f, 360f));
+				inner = InChamber(context, floor, Mathf.Max(MinRadius, radius), Mathf.Repeat(yaw + 180f, 360f), slope, yaw);
 			}
 			else
 			{
@@ -65,8 +65,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>A context like the site's, anchored at a chamber floor (flat), its radius and heading.</summary>
-		public static PointOfInterestSiteContext InChamber(PointOfInterestSiteContext context, Vector3 floor, float radius, float yaw)
+		/// <summary>
+		/// A context like the site's, anchored at a chamber floor, its radius and heading; the ground is the floor's plane,
+		/// rising <paramref name="slope"/> a metre along <paramref name="slopeYaw"/> (flat by default).
+		/// </summary>
+		public static PointOfInterestSiteContext InChamber(PointOfInterestSiteContext context, Vector3 floor, float radius, float yaw, float slope = 0f, float slopeYaw = 0f)
 		{
 			PointOfInterestRecord site = context.Record;
 			var record = new PointOfInterestRecord
@@ -94,6 +97,8 @@ namespace FishMMO.Shared.WorldDesign
 				UnlockIndex = site.UnlockIndex,
 			};
 			float level = floor.y;
+			float sr = slopeYaw * Mathf.Deg2Rad, sx = Mathf.Sin(sr) * slope, sz = Mathf.Cos(sr) * slope;
+			float slopeDegrees = Mathf.Atan(Mathf.Abs(slope)) * Mathf.Rad2Deg;
 			return new PointOfInterestSiteContext
 			{
 				Scene = context.Scene,
@@ -106,11 +111,13 @@ namespace FishMMO.Shared.WorldDesign
 				TerrainFolder = context.TerrainFolder,
 				// A river on the hillside above a chamber is not water in it.
 				Water = null,
-				GroundAt = (east, north) => level,
-				SlopeAt = (east, north) => 0f,
+				GroundAt = (east, north) => level + (east - floor.x) * sx + (north - floor.z) * sz,
+				SlopeAt = (east, north) => slopeDegrees,
 				BiomeAt = context.BiomeAt,
 				Notes = context.Notes,
 				Sink = context.Sink,
+				Doors = context.Doors,
+				Rooms = context.Rooms,
 			};
 		}
 	}

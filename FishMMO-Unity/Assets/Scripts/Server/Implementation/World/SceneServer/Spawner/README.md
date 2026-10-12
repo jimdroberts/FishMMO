@@ -124,7 +124,7 @@ Scenes authored before the move carry networked spawners. `FishMMO Dashboard →
 
 `SpawnTableBakeTests.EveryShippedSpawner_SpawnsSomething` fails on any spawner whose entries are empty or name no prefab, which the runtime skips without a word. The Dungeon's three spawners and the tutorial banker shipped that way until 2026-09-16.
 
-**Placement.** With `RandomSpawnPosition` on, the object lands at the ground hit plus the spawnable's `YOffset` — a sphere's radius, but a box's or capsule's **full height**, which suits prefabs whose pivot is at their centre. A prefab whose pivot is at its base (the `Dungeon Chest`) turns random placement off and has its spawner stand on the floor. The ground probe starts at the top of the bounding box and reaches down its full height, so a spawner placed above the floor needs a box at least twice that tall; the Dungeon orc spawners stand 0.5 m up with a 1.5 m box.
+**Placement.** With `RandomSpawnPosition` on, the object lands at the ground hit plus the spawnable's `YOffset`: how far its pivot stands above its collider's lowest point (`SpawnableSettings.PivotAboveBottom`) — 0 for a base pivot (gathering nodes, trees, characters), half the height for a centred one — so the collider just rests on the ground. (It was the collider's full height until 2026-10-12, which floated every base-pivot prefab by its own height.) The ground probe starts at the top of the bounding box and reaches down its full height, so a spawner placed above the floor needs a box at least twice that tall; the Dungeon orc spawners stand 0.5 m up with a 1.5 m box.
 
 ## Configuration
 
@@ -162,7 +162,7 @@ Turn `PrewarmPool` off only for spawners whose prefabs are large and rarely used
 | `MinimumRespawnTime`| `float`          | 0       | Minimum respawn delay (seconds)                      |
 | `MaximumRespawnTime`| `float`          | 0       | Maximum respawn delay (seconds)                      |
 | `SpawnChance`       | `float [0–1]`    | 0.5     | Selection weight for weighted spawn mode             |
-| `YOffset`           | `float`          | auto    | Vertical offset from ground, calculated from collider at bake time |
+| `YOffset`           | `float`          | auto    | Pivot above the collider's lowest point, calculated from the collider at bake time |
 
 ### NPCSpawnableSettings
 

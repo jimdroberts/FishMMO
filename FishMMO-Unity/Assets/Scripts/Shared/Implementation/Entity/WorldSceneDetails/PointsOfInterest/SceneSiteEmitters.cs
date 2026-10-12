@@ -83,6 +83,58 @@ namespace FishMMO.Shared
 			return found;
 		}
 
+		/// <summary>Whether a point is inside any enabled scene's room (a building's inside: its walls and roof over it).</summary>
+		public static bool InRoom(Vector3 at)
+		{
+			foreach (SceneSiteEmitters set in active)
+			{
+				if (set == null || set.Points == null || set.Points.Rooms == null)
+				{
+					continue;
+				}
+				foreach (SceneRoom room in set.Points.Rooms)
+				{
+					Vector3 d = at - room.Centre;
+					if (Mathf.Abs(d.y) > room.HalfSize.y + 0.5f || d.x * d.x + d.z * d.z > room.HalfSize.sqrMagnitude + 1f)
+					{
+						continue;
+					}
+					Vector3 q = Quaternion.Inverse(Quaternion.Euler(0f, room.Yaw, 0f)) * d;
+					if (Mathf.Abs(q.x) <= room.HalfSize.x + 0.3f && Mathf.Abs(q.z) <= room.HalfSize.z + 0.3f)
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/// <summary>Every enabled scene's rooms whose middles are within a distance of a point, nearest first, at most <paramref name="max"/>.</summary>
+		public static void NearRooms(Vector3 at, float reach, int max, List<SceneRoom> into)
+		{
+			into.Clear();
+			float r2 = reach * reach;
+			foreach (SceneSiteEmitters set in active)
+			{
+				if (set == null || set.Points == null || set.Points.Rooms == null)
+				{
+					continue;
+				}
+				foreach (SceneRoom room in set.Points.Rooms)
+				{
+					if ((room.Centre - at).sqrMagnitude <= r2)
+					{
+						into.Add(room);
+					}
+				}
+			}
+			into.Sort((a, b) => (a.Centre - at).sqrMagnitude.CompareTo((b.Centre - at).sqrMagnitude));
+			if (into.Count > max)
+			{
+				into.RemoveRange(max, into.Count - max);
+			}
+		}
+
 		/// <summary>Every enabled scene's emitters of some kinds within a distance of a point, nearest first, at most <paramref name="max"/>.</summary>
 		public static void Near(Vector3 at, float reach, System.Func<SceneEmitterKind, bool> kinds, int max, List<SceneEmitter> into)
 		{

@@ -163,7 +163,7 @@ namespace FishMMO.Client
 		/// 0 to <see cref="Cartography.MaximumDetailTier"/>) decides whether the point is known at all; every
 		/// point-of-interest tier (0 to 3, <c>PointOfInterestKinds</c>) is inside that range, and with no
 		/// Cartography provider every tier is shown. The discovery rule hides a point until the fog has
-		/// revealed its chunk; every generated point requires discovery (Jim, 2026-10-10).
+		/// revealed its chunk; every generated point requires discovery (2026-10-10).
 		/// </para>
 		/// </remarks>
 		public static void AppendPointsOfInterest(List<MapMarkerSnapshot> results, WorldSceneDetails details,

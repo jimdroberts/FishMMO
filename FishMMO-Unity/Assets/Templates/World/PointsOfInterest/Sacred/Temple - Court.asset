@@ -70,14 +70,23 @@ MonoBehaviour:
     MaxScale: 1
     Role: 8
     Style: 
+  - Tag: =Brazier
+    MinCount: 2
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
   Features:
-  - rid: 4061506061917749640
-  - rid: 4061506061917749641
-  - rid: 4061506061917749642
+  - rid: 4061506076050456996
+  - rid: 4061506076050456997
+  - rid: 4061506076050456998
   references:
     version: 2
     RefIds:
-    - rid: 4061506061917749640
+    - rid: 4061506076050456996
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -88,12 +97,12 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506061917749641
+    - rid: 4061506076050456997
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506061917749642
+    - rid: 4061506076050456998
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 

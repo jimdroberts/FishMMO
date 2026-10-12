@@ -23,6 +23,8 @@ Shader "Hidden/FishMMO/Weather/VolumetricFogApply"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
+            // The fine ground map: no weather fog in a cave (FishOpenAir).
+            #include "FishGroundMap.hlsl"
 
             TEXTURE3D(_FishVolFogVolume);
             SAMPLER(sampler_FishVolFogVolume);
@@ -56,7 +58,8 @@ Shader "Hidden/FishMMO/Weather/VolumetricFogApply"
                 float slice = SliceOf(eye);
 
                 float4 fog = SAMPLE_TEXTURE3D_LOD(_FishVolFogVolume, sampler_FishVolFogVolume, float3(uv, slice), 0);
-                return float4(fog.rgb, saturate(fog.a));
+                float3 surface = ComputeWorldSpacePosition(uv, rawDepth, UNITY_MATRIX_I_VP);
+                return FishOpenAirFade(float4(fog.rgb, saturate(fog.a)), FishOpenAir(GetCameraPositionWS(), surface));
             }
             ENDHLSL
         }

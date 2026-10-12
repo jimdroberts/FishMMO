@@ -1,5 +1,9 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+#if UNITY_EDITOR
+using FishMMO.Shared;
+using FishMMO.Shared.Core;
+#endif
 
 namespace FishMMO.TestHarness.World
 {
@@ -7,7 +11,8 @@ namespace FishMMO.TestHarness.World
 	/// The world test bed's camera: right mouse to look, WASD/QE to move, Shift to hurry, scroll to
 	/// change the field of view (a narrow view is how you check a moon's real size), R to put it back.
 	/// V swaps to walking: a capsule put down where the camera is looking, WASD to walk it, Shift to
-	/// run, Space to jump, with the camera following behind and scroll setting how far.
+	/// run, Space to jump, with the camera following behind and scroll setting how far. In the editor, E while walking
+	/// opens or shuts the door ahead (the sites' server-run doors, simulated here: no server) and F lights a torch.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -205,12 +210,119 @@ namespace FishMMO.TestHarness.World
 				if (keyboard.dKey.isPressed) wish += Vector3.right;
 				run = keyboard.leftShiftKey.isPressed;
 				jump = keyboard.spaceKey.wasPressedThisFrame;
+#if UNITY_EDITOR
+				if (keyboard.eKey.wasPressedThisFrame)
+				{
+					UseDoor();
+				}
+				if (keyboard.fKey.wasPressedThisFrame)
+				{
+					ToggleTorch();
+				}
+#endif
 			}
 			// Relative to where the camera faces, flattened: looking down at your feet still walks forward.
 			wish = Quaternion.Euler(0f, yaw, 0f) * wish;
 			walker.Move(wish, run, jump, Time.deltaTime);
 			Follow(Time.deltaTime);
+#if UNITY_EDITOR
+			FlickerTorch();
+#endif
 		}
+
+#if UNITY_EDITOR
+		/// <summary>The torch the walker carries (F): a warm point light held up beside its head, flickering.</summary>
+		private Light torch;
+
+		/// <summary>Lights or puts out the walker's torch, to see by in a cave, a mine or the night. Editor only.</summary>
+		private void ToggleTorch()
+		{
+			if (torch == null)
+			{
+				var held = new GameObject("World Sim Torch") { hideFlags = HideFlags.DontSave };
+				held.transform.SetParent(walker.transform, false);
+				// Held up and a little forward of the right shoulder, so it lights the way and the walls beside it.
+				held.transform.localPosition = new Vector3(0.35f, 0.45f, 0.3f);
+				torch = held.AddComponent<Light>();
+				torch.type = LightType.Point;
+				torch.color = new Color(1f, 0.64f, 0.34f);
+				torch.range = 11f;
+				torch.shadows = LightShadows.Soft;
+				torch.enabled = false;
+			}
+			torch.enabled = !torch.enabled;
+		}
+
+		/// <summary>A torch's flicker: three unrelated beats, as the site fires flicker (SiteLightPool).</summary>
+		private void FlickerTorch()
+		{
+			if (torch == null || !torch.enabled)
+			{
+				return;
+			}
+			float t = Time.time;
+			torch.intensity = 2.2f * (0.84f + 0.09f * Mathf.Sin(t * 11.3f) + 0.05f * Mathf.Sin(t * 17.9f + 1.3f) + 0.03f * Mathf.Sin(t * 5.1f + 2.9f));
+		}
+
+		/// <summary>How far round the walker a door is looked for, metres (a drawbridge's switch reaches 8).</summary>
+		private const float DoorSearch = 9f;
+		private readonly Collider[] doorHits = new Collider[64];
+
+		/// <summary>
+		/// Opens or shuts the door ahead of the walker, as a player's "Door Interact" would on the server: the nearest
+		/// door, portcullis or drawbridge (an <see cref="ISwitch"/> whose target is the leaf's SwitchTargetMover) within
+		/// its own interaction range (the server's rule, <see cref="IInteractable.InRange"/>) and in front rather than behind. Offline there is no tick to time it by, so
+		/// the mover swings on frame time and goes solid or not as it would on the server (SwitchTargetMover's offline
+		/// path). Editor only: the bed is not a way into the game's doors.
+		/// </summary>
+		private void UseDoor()
+		{
+			Vector3 eye = walker.Feet + Vector3.up * 1.6f;
+			Vector3 facing = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+			int count = gameObject.scene.GetPhysicsScene().OverlapSphere(eye, DoorSearch, doorHits, ~0, QueryTriggerInteraction.Collide);
+			ISwitchTarget best = null;
+			float bestScore = float.MaxValue;
+			for (int i = 0; i < count; i++)
+			{
+				Collider hit = doorHits[i];
+				// Through the interfaces, not the Switch component itself (a FishNet NetworkBehaviour this bed does not reference).
+				ISwitch use = hit != null ? hit.GetComponentInParent<ISwitch>() : null;
+				ISwitchTarget target = use?.SwitchTarget;
+				if (target == null || !use.InRange(walker.transform))
+				{
+					continue;
+				}
+				Vector3 at = hit.ClosestPoint(eye);
+				float distance = Vector3.Distance(eye, at);
+				Vector3 toward = at - eye;
+				toward.y = 0f;
+				float ahead = toward.sqrMagnitude < 1e-4f ? 1f : Vector3.Dot(toward.normalized, facing);
+				if (ahead < 0.2f)
+				{
+					continue;
+				}
+				// Nearer and more squarely ahead wins.
+				float score = distance * (2f - ahead);
+				if (score < bestScore)
+				{
+					bestScore = score;
+					best = target;
+				}
+			}
+			if (best == null)
+			{
+				return;
+			}
+			if (best.IsActivated)
+			{
+				best.Deactivate(null);
+			}
+			else
+			{
+				best.Activate(null);
+			}
+		}
+#endif
 
 		/// <summary>
 		/// Puts the camera behind the walker. Anything solid between them pulls it in at once; it

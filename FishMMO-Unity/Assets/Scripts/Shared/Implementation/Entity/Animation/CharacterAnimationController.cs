@@ -40,7 +40,7 @@ namespace FishMMO.Shared
 		private Animator animator;
 
 #if !UNITY_SERVER
-		// Whether the animator has the swimming parameters at all (no clips exist yet: Jim, code first, clips later), so
+		// Whether the animator has the swimming parameters at all (no clips exist yet: code first, clips later), so
 		// setting them never logs a missing parameter.
 		private bool animatorHasSwimming;
 		private bool swimming;

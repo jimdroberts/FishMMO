@@ -73,15 +73,24 @@ MonoBehaviour:
     MaxScale: 1
     Role: 8
     Style: timber
+  - Tag: =TorchPost
+    MinCount: 0
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
   Features:
-  - rid: 4061506061917749773
-  - rid: 4061506061917749774
-  - rid: 4061506061917749775
-  - rid: 4061506061917749776
+  - rid: 4061506076050457124
+  - rid: 4061506076050457125
+  - rid: 4061506076050457126
+  - rid: 4061506076050457127
   references:
     version: 2
     RefIds:
-    - rid: 4061506061917749773
+    - rid: 4061506076050457124
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -92,16 +101,16 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings: []
-    - rid: 4061506061917749774
+    - rid: 4061506076050457125
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506061917749775
+    - rid: 4061506076050457126
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506061917749776
+    - rid: 4061506076050457127
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 5

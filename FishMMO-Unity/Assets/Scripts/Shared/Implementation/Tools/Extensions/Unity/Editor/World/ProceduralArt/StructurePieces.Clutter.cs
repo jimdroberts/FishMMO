@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What gathers round lived-in buildings and camps (Jim, 2026-10-11: points of interest looked dated): woodpiles, carts,
+	/// What gathers round lived-in buildings and camps (2026-10-11: points of interest looked dated): woodpiles, carts,
 	/// hay, a washing line, lanterns, signposts, benches, water butts; and at a camp, a cooking tripod, a drying rack and a
 	/// weapon rack. Tagged "clutter" with where it belongs ("town", "camp"); PropsFeature leans it against the buildings.
 	/// </summary>
@@ -116,7 +116,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			for (int s = -1; s <= 1; s += 2)
 			{
-				d.Add(StructureShapes.Beam(new Vector3(s * 2f, -0.3f, 0f), new Vector3(s * 2f, 1.9f, 0f), 0.08f, 0.08f, StructureMaterial.Timber, 1 + (s > 0 ? 1 : 0)));
+				d.Add(StructureShapes.Beam(new Vector3(s * 2f, -0.3f, 0f), new Vector3(s * 2f, 1.9f, 0f), 0.12f, 0.12f, StructureMaterial.Timber, 1 + (s > 0 ? 1 : 0)));
 			}
 			d.Add(StructureShapes.Beam(new Vector3(-2f, 1.8f, 0f), new Vector3(2f, 1.72f, 0f), 0.015f, 0.015f, StructureMaterial.Canvas, 3, StructureRole.Detail));
 			if (!d.Mid)
@@ -231,7 +231,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			for (int s = -1; s <= 1; s += 2)
 			{
-				Log(d, new Vector3(s * 1.1f, -0.3f, 0f), new Vector3(s * 1.1f, 2f, 0f), 0.05f, 1 + (s > 0 ? 1 : 0), 0f, StructureMaterial.Timber, 5);
+				Log(d, new Vector3(s * 1.1f, -0.3f, 0f), new Vector3(s * 1.1f, 2f, 0f), 0.065f, 1 + (s > 0 ? 1 : 0), 0f, StructureMaterial.Timber, 5);
 			}
 			Log(d, new Vector3(-1.2f, 1.85f, 0f), new Vector3(1.2f, 1.85f, 0f), 0.04f, 3, 0f, StructureMaterial.Timber, 5);
 			Log(d, new Vector3(-1.2f, 0.45f, 0f), new Vector3(1.2f, 0.45f, 0f), 0.04f, 4, 0f, StructureMaterial.Timber, 5);

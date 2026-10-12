@@ -132,14 +132,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			Collider collider = NetworkObject.GetComponent<Collider>();
 			if (collider != null)
 			{
-				collider.TryGetDimensions(out float height, out float radius);
-				YOffset = height;
-				// If the collider is a sphere, use its radius for YOffset.
-				if (collider is SphereCollider)
-				{
-					YOffset = radius;
-				}
+				YOffset = PivotAboveBottom(collider);
 			}
+		}
+
+		/// <summary>
+		/// How far the prefab's pivot stands above its collider's lowest point, metres: what lifts it so its collider just
+		/// rests on the ground the spawner found. 0 for a prefab whose pivot is at its base (a gathering node, a tree, a
+		/// character on its feet), half its height for one pivoted at its middle.
+		/// </summary>
+		/// <remarks>
+		/// It was the collider's full height (a sphere's radius), right only for a pivot that far below the collider: every
+		/// base-pivot prefab on a random-position spawner hovered its own height over the ground — a herb 0.8 m up, an ore
+		/// vein 1.2 m, an ancient oak 27 m (2026-10-12: "Herb Grove has no herbs?").
+		/// </remarks>
+		public static float PivotAboveBottom(Collider collider)
+		{
+			float scale = Mathf.Abs(collider.transform.lossyScale.y);
+			float bottom;
+			switch (collider)
+			{
+				case BoxCollider box:
+					bottom = box.center.y - box.size.y * 0.5f;
+					break;
+				case CapsuleCollider capsule:
+					bottom = capsule.center.y - (capsule.direction == 1 ? capsule.height * 0.5f : capsule.radius);
+					break;
+				case SphereCollider sphere:
+					bottom = sphere.center.y - sphere.radius;
+					break;
+				case MeshCollider mesh when mesh.sharedMesh != null:
+					bottom = mesh.sharedMesh.bounds.min.y;
+					break;
+				case CharacterController controller:
+					bottom = controller.center.y - controller.height * 0.5f;
+					break;
+				default:
+					collider.TryGetDimensions(out float height, out _);
+					bottom = -0.5f * height;
+					break;
+			}
+			return Mathf.Max(0f, -bottom * scale);
 		}
 
 		/// <summary>

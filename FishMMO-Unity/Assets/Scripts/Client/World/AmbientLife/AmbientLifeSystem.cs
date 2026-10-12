@@ -90,6 +90,8 @@ namespace FishMMO.Client
 			public readonly List<AmbientGroup> Groups = new List<AmbientGroup>();
 			public AmbientMemberState[] States = Array.Empty<AmbientMemberState>();
 			public List<Vector4> Perches;
+			/// <summary>The same trees' trunks, index for index with <see cref="Perches"/>.</summary>
+			public List<AmbientTrunk> Trunks;
 			public bool Near, Far;
 		}
 		private static readonly Dictionary<long, Cell> cells = new Dictionary<long, Cell>();
@@ -585,7 +587,7 @@ namespace FishMMO.Client
 				}
 				if (cell == null)
 				{
-					cell = new Cell { Perches = perches.In(x, z) };
+					cell = new Cell { Perches = perches.In(x, z), Trunks = perches.TrunksIn(x, z) };
 				}
 				bool placed = true;
 				if (!cell.Far)
@@ -637,7 +639,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				if (!AmbientLifeMotion.TryPlace(kind, k, settings.DensityOf(kind.Family), world.SceneSeed, x, z, cellMetres, world, cell.Perches, scratchGroups))
+				if (!AmbientLifeMotion.TryPlace(kind, k, settings.DensityOf(kind.Family), world.SceneSeed, x, z, cellMetres, world, cell.Perches, scratchGroups, cell.Trunks))
 				{
 					return false;
 				}
@@ -735,6 +737,7 @@ namespace FishMMO.Client
 				AmbientGroup g = c.Cell.Groups[c.Group];
 				AmbientCreatureKind kind = Kinds[g.Kind];
 				frame.Perches = c.Cell.Perches;
+				frame.Trunks = c.Cell.Trunks;
 				frame.States = c.Cell.States;
 				// A group comes out (and goes back) by dissolving as the moment's share crosses its rank.
 				frame.Visible = Mathf.Clamp01((activity[g.Kind] - g.Rank) / 0.06f);

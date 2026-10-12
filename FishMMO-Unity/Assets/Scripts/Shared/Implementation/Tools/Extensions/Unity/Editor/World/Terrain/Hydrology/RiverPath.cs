@@ -38,6 +38,15 @@ namespace FishMMO.Shared.WorldDesign
 		public float EdgeHoldMetres = 200f;
 
 		/// <summary>
+		/// The tightest bend a river's centre line may take, as a radius in its widths, and at least
+		/// <see cref="MinBendRadiusMetres"/>: real channels seldom bend tighter than about twice their width (Leopold &amp;
+		/// Wolman's r/w of 2–3), and none turns back on itself. Tighter than half its width the channel's inside bank
+		/// folds over itself, and its water's ribbon with it (<see cref="RiverShaping.EaseBends"/>).
+		/// </summary>
+		public float MinBendRadiusWidths = 1.5f;
+		public float MinBendRadiusMetres = 4f;
+
+		/// <summary>
 		/// How far the surface may stand above the lower of its banks, metres, held there by a levee,
 		/// where the sill below stands higher than the banks. 0: a river cuts through what it cannot
 		/// fill below its banks — a rise downstream of it is the same to the water as a dam, and
@@ -316,7 +325,21 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="ground">The ground, scene metres, at (east, north): smoothed, so a pebble's dip does not pull the river.</param>
 		/// <param name="hold">Per point, 0 … 1: how freely it may move (0 at a scene's edge).</param>
 		/// <param name="smoothMetres">Half-width of the smoothing of the moves along the line.</param>
-		public static void SnapToFloor(List<float> x, List<float> z, Func<float, float, float> ground, float[] hold, float reach, float penalty, float smoothMetres)
+		/// <param name="minBendRadius">
+		/// The tightest bend the moved line may be left with, metres; 0 for no limit. Each point moves along its own normal,
+		/// so one moved toward the inside of a bend by as much as the bend's radius meets the points beside it there.
+		/// </param>
+		/// <remarks>
+		/// Each move is held to the room on its side of the line (<see cref="RoomBeside"/>) less <paramref name="minBendRadius"/>.
+		/// Moved further, the line on the inside of a bend folds over itself: where the lowest ground lies the
+		/// same way for a long stretch (a slope, not a valley floor), the points all go most of the reach that way, a rounded
+		/// corner of the planet's line is offset past its own centre into a loop, and Untangle cuts the loop out at its
+		/// crossing and leaves a hairpin. Flo Monolith's river 0 turned back on itself by 146° at its junction with river 1,
+		/// and by 139° near the coast between straight legs 40 m long: the shape of a line offset past its corners
+		/// (2026-10-12: "Fix the river issues"). <see cref="EaseBends"/> takes out whatever tight bend is left.
+		/// </remarks>
+		public static void SnapToFloor(List<float> x, List<float> z, Func<float, float, float> ground, float[] hold, float reach, float penalty, float smoothMetres,
+			float minBendRadius = 0f)
 		{
 			int count = x.Count;
 			if (count < 3 || reach <= 0f)
@@ -342,6 +365,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			float spacing = Distance(x[0], z[0], x[1], z[1]);
 			move = SmoothAlong(move, Math.Max(1, (int)Math.Round(smoothMetres / Math.Max(0.1f, spacing))));
+			if (minBendRadius > 0f)
+			{
+				for (int i = 0; i < count; i++)
+				{
+					move[i] = Math.Sign(move[i]) * Math.Min(Math.Abs(move[i]), RoomBeside(x, z, nx, nz, i, move[i], minBendRadius));
+				}
+			}
 			for (int i = 0; i < count; i++)
 			{
 				float m = move[i] * (hold != null ? hold[i] : 1f);
@@ -398,6 +428,307 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return removed;
+		}
+
+		/// <summary>
+		/// How far point <paramref name="i"/> of a line may move along its normal toward <paramref name="move"/>'s side and stay
+		/// the nearest point of the line to where it lands, less <paramref name="margin"/>, metres (0 for none): the radius
+		/// of the largest circle touching the line at the point from that side with no other point of the line inside it.
+		/// </summary>
+		/// <remarks>
+		/// Moved no further, no point passes another: the moved line keeps its order and cannot fold, and where the room is
+		/// a bend's own radius it is left a bend at least <paramref name="margin"/> round. A bend's radius alone is not
+		/// enough: beside a sharp corner the straight stretches have no curvature, yet moved toward the corner's inside by
+		/// more than its radius they run past its centre and cross one another there.
+		/// </remarks>
+		public static float RoomBeside(IList<float> x, IList<float> z, float[] nx, float[] nz, int i, float move, float margin)
+		{
+			float magnitude = Math.Abs(move);
+			if (magnitude < 1e-4f)
+			{
+				return 0f;
+			}
+			float sx = nx[i] * Math.Sign(move), sz = nz[i] * Math.Sign(move);
+			// A point further than twice the reach asked for cannot make the circle smaller than the reach: d² / 2(d·n) ≥ |d| / 2.
+			float limit = 2f * (magnitude + margin);
+			float limitSq = limit * limit;
+			float room = float.MaxValue;
+			for (int j = 0; j < x.Count; j++)
+			{
+				float dx = x[j] - x[i], dz = z[j] - z[i];
+				float dSq = dx * dx + dz * dz;
+				float toward = dx * sx + dz * sz;
+				if (j == i || toward <= 1e-4f || dSq > limitSq)
+				{
+					continue;
+				}
+				// The circle touching the line at i on that side whose rim passes through j.
+				room = Math.Min(room, dSq / (2f * toward));
+			}
+			return room == float.MaxValue ? magnitude : Math.Max(0f, room - margin);
+		}
+
+		/// <summary>The most relaxation sweeps a stretch whose tight bend was cut off is given to round out.</summary>
+		private const int MaxEaseSweeps = 4000;
+
+		/// <summary>
+		/// Takes every bend tighter than its river may take out of a line, and returns the points removed: no point is left
+		/// bending tighter than its least radius (<see cref="RiverSettings.MinBendRadiusWidths"/> of its width, and at least
+		/// <see cref="RiverSettings.MinBendRadiusMetres"/>), so none turns back on itself. Run after <see cref="Untangle"/>,
+		/// on the coarse line, before it is resampled finer. <paramref name="along"/> (the planet line's parameter) is cut
+		/// and carried with the line; <paramref name="width"/> is per point of the line as given.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A tight bend is cut off as a river cuts through one: the point turning most for the chords either side of it is
+		/// removed, so the line runs on the chord between its neighbours, until each turn has room for its radius (a turn θ
+		/// over chords of mean length L needs L ≥ Rθ). That only ever shortens the line onto the inside of its bend, so it
+		/// cannot add a loop, and a hairpin's two strands go with its tip. Each stretch the cuts reached, and as far again
+		/// as the bend's diameter beyond, is then resampled at the line's own spacing and relaxed: a point bending tighter
+		/// than its radius moves halfway toward the middle of its neighbours, sweep after sweep, until none does. The
+		/// stretch's two end points never move, so it meets the line beyond as the line always did, and a line with no tight
+		/// bend is returned exactly as it was.
+		/// </para>
+		/// <para>
+		/// Hairpins came out of the snaps, the meanders and Untangle's cuts (a loop cut at its neck joins two strands running
+		/// opposite ways): Flo Monolith's river 0 turned back on itself by 146°, 139° and 86° (2026-10-12). A line that
+		/// doubles back has a channel whose inside bank lies across its own water, and a ribbon whose quads twist over.
+		/// </para>
+		/// </remarks>
+		public static int EaseBends(List<float> x, List<float> z, List<float> along, IList<float> width, RiverSettings settings)
+		{
+			int count = x.Count;
+			if (count < 3)
+			{
+				return 0;
+			}
+			float length = 0f;
+			for (int i = 1; i < count; i++)
+			{
+				length += Distance(x[i - 1], z[i - 1], x[i], z[i]);
+			}
+			float step = Math.Max(0.5f, length / (count - 1));
+			var widths = new List<float>(count);
+			for (int i = 0; i < count; i++)
+			{
+				widths.Add(width != null && i < width.Count ? width[i] : settings.MinWidth);
+			}
+			float RadiusOf(float w) => Math.Max(settings.MinBendRadiusMetres, settings.MinBendRadiusWidths * w);
+			var touched = new List<bool>(new bool[count]);
+			var excess = new List<float>(new float[count]);
+			float Excess(int i)
+			{
+				if (i <= 0 || i >= x.Count - 1)
+				{
+					return 0f;
+				}
+				float ax = x[i] - x[i - 1], az = z[i] - z[i - 1], bx = x[i + 1] - x[i], bz = z[i + 1] - z[i];
+				float la = (float)Math.Sqrt(ax * ax + az * az), lb = (float)Math.Sqrt(bx * bx + bz * bz);
+				if (la < 1e-4f || lb < 1e-4f)
+				{
+					// A point on top of its neighbour turns any way at all: always taken out.
+					return float.PositiveInfinity;
+				}
+				float turn = Math.Abs((float)Math.Atan2(ax * bz - az * bx, ax * bx + az * bz));
+				return turn * RadiusOf(widths[i]) / (0.5f * (la + lb));
+			}
+			for (int i = 1; i < count - 1; i++)
+			{
+				excess[i] = Excess(i);
+			}
+			int removed = 0;
+			while (x.Count > 2)
+			{
+				int worst = -1;
+				float most = 1f;
+				for (int i = 1; i < x.Count - 1; i++)
+				{
+					if (excess[i] > most)
+					{
+						most = excess[i];
+						worst = i;
+					}
+				}
+				if (worst < 0)
+				{
+					break;
+				}
+				x.RemoveAt(worst);
+				z.RemoveAt(worst);
+				along.RemoveAt(worst);
+				widths.RemoveAt(worst);
+				excess.RemoveAt(worst);
+				touched.RemoveAt(worst);
+				removed++;
+				// The two points either side now meet on the chord: only their turns changed.
+				touched[worst - 1] = true;
+				touched[worst] = true;
+				excess[worst - 1] = Excess(worst - 1);
+				excess[worst] = Excess(worst);
+			}
+			if (removed == 0)
+			{
+				return 0;
+			}
+			/* Each stretch the cuts reached, and the bend's diameter beyond it (two points at least), to be rounded; stretches
+			 * that meet are one, or the point where they met is held by both and keeps whatever turn they leave it. */
+			var spans = new List<(int from, int to, float radius)>();
+			for (int a = 0; a < x.Count; a++)
+			{
+				if (!touched[a])
+				{
+					continue;
+				}
+				int b = a;
+				float widest = widths[a];
+				while (b + 1 < x.Count && touched[b + 1])
+				{
+					b++;
+					widest = Math.Max(widest, widths[b]);
+				}
+				float radius = RadiusOf(widest);
+				int beyond = Math.Max(2, (int)Math.Ceiling(2f * radius / step));
+				int from = Math.Max(0, a - beyond), to = Math.Min(x.Count - 1, b + beyond);
+				if (spans.Count > 0 && from <= spans[spans.Count - 1].to)
+				{
+					(int f, int t, float r) = spans[spans.Count - 1];
+					spans[spans.Count - 1] = (f, Math.Max(t, to), Math.Max(r, radius));
+				}
+				else
+				{
+					spans.Add((from, to, radius));
+				}
+				a = b;
+			}
+			// From the end, so the indices of those before hold.
+			for (int k = spans.Count - 1; k >= 0; k--)
+			{
+				(int from, int to, float radius) = spans[k];
+				if (to - from < 2)
+				{
+					continue;
+				}
+				var sx = x.GetRange(from, to - from + 1);
+				var sz = z.GetRange(from, to - from + 1);
+				var sv = along.GetRange(from, to - from + 1);
+				Resample(sx, sz, sv, step);
+				Relax(sx, sz, radius);
+				x.RemoveRange(from, to - from + 1);
+				z.RemoveRange(from, to - from + 1);
+				along.RemoveRange(from, to - from + 1);
+				x.InsertRange(from, sx);
+				z.InsertRange(from, sz);
+				along.InsertRange(from, sv);
+			}
+			return removed;
+		}
+
+		/// <summary>
+		/// Relaxes a stretch of line until no point bends tighter than <paramref name="radius"/> (it turns no more than its
+		/// chords' mean length over the radius): such a point moves halfway toward the middle of its neighbours, sweep after
+		/// sweep, at most <see cref="MaxEaseSweeps"/> times. The two end points never move.
+		/// </summary>
+		private static void Relax(List<float> x, List<float> z, float radius)
+		{
+			int m = x.Count;
+			for (int sweep = 0; sweep < MaxEaseSweeps; sweep++)
+			{
+				bool settled = true;
+				for (int i = 1; i < m - 1; i++)
+				{
+					float ax = x[i] - x[i - 1], az = z[i] - z[i - 1], bx = x[i + 1] - x[i], bz = z[i + 1] - z[i];
+					float la = (float)Math.Sqrt(ax * ax + az * az), lb = (float)Math.Sqrt(bx * bx + bz * bz);
+					float turn = Math.Abs((float)Math.Atan2(ax * bz - az * bx, ax * bx + az * bz));
+					if (turn * radius <= 0.5f * (la + lb) * 1.0001f)
+					{
+						continue;
+					}
+					x[i] += 0.5f * (0.5f * (x[i - 1] + x[i + 1]) - x[i]);
+					z[i] += 0.5f * (0.5f * (z[i - 1] + z[i + 1]) - z[i]);
+					settled = false;
+				}
+				if (settled)
+				{
+					return;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Brings a tributary's last point onto the river it joins, at (<paramref name="toX"/>, <paramref name="toZ"/>), and
+		/// returns the line's new point count. The move is eased in over its last stretch (at least 150 m and three times the
+		/// move), and that stretch is resampled at <paramref name="spacing"/>, its discharge and drainage area carried along.
+		/// </summary>
+		/// <remarks>
+		/// The ease is measured along the line as it lay before the move. It was measured as the points were moved, from each
+		/// point to its already moved neighbour, so the first step counted the whole move as distance along: the ease fell
+		/// away within a few points, the last ones were pulled apart, and Flo Monolith's river 1 ended in segments of 7, 11,
+		/// 21 and 40 m where its others are 2 m (2026-10-12). Eased over three times the move, no point is carried past
+		/// its neighbour, so the line cannot fold; resampled, its last rows stand at the river's own spacing.
+		/// </remarks>
+		public static int EndOnto(List<float> x, List<float> z, ref float[] discharge, ref float[] area, float toX, float toZ, float spacing)
+		{
+			int n = x.Count;
+			if (n < 2)
+			{
+				return n;
+			}
+			float shiftX = toX - x[n - 1], shiftZ = toZ - z[n - 1];
+			float shift = (float)Math.Sqrt(shiftX * shiftX + shiftZ * shiftZ);
+			if (shift < 1e-4f)
+			{
+				return n;
+			}
+			float taper = Math.Max(150f, 3f * shift);
+			var fromEnd = new float[n];
+			for (int i = n - 2; i >= 0; i--)
+			{
+				fromEnd[i] = fromEnd[i + 1] + Distance(x[i], z[i], x[i + 1], z[i + 1]);
+			}
+			int first = n - 1;
+			for (int i = n - 1; i >= 0 && fromEnd[i] < taper; i--)
+			{
+				float w = 1f - SmoothStep(fromEnd[i] / taper);
+				x[i] += shiftX * w;
+				z[i] += shiftZ * w;
+				first = i;
+			}
+			// Resampled from the last point left where it was, so the stretch meets the rest of the line on it.
+			int from = Math.Max(0, first - 1);
+			var sx = x.GetRange(from, n - from);
+			var sz = z.GetRange(from, n - from);
+			var index = new List<float>(n - from);
+			for (int i = from; i < n; i++)
+			{
+				index.Add(i);
+			}
+			Resample(sx, sz, index, Math.Max(0.5f, spacing));
+			x.RemoveRange(from, n - from);
+			z.RemoveRange(from, n - from);
+			x.AddRange(sx);
+			z.AddRange(sz);
+			discharge = CarryOnto(discharge, from, index);
+			area = CarryOnto(area, from, index);
+			return x.Count;
+		}
+
+		/// <summary>Values per point with those from <paramref name="from"/> on replaced by their values at the fractional points <paramref name="index"/>.</summary>
+		private static float[] CarryOnto(float[] values, int from, List<float> index)
+		{
+			if (values == null)
+			{
+				return null;
+			}
+			var result = new float[from + index.Count];
+			Array.Copy(values, result, Math.Min(from, values.Length));
+			for (int k = 0; k < index.Count; k++)
+			{
+				int i0 = Math.Max(0, Math.Min(values.Length - 1, (int)Math.Floor(index[k])));
+				int i1 = Math.Min(values.Length - 1, i0 + 1);
+				float t = index[k] - (float)Math.Floor(index[k]);
+				result[from + k] = values[i0] + (values[i1] - values[i0]) * t;
+			}
+			return result;
 		}
 
 		/// <summary>The distance from (px, pz) to the segment (ax, az)-(bx, bz).</summary>

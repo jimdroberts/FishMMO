@@ -93,7 +93,7 @@ namespace FishMMO.ControlPanel.Services
 		/// <param name="Username">The identifier the client proves: SRP needs the exact spelling the verifier was derived from.</param>
 		/// <param name="AccountName">
 		/// The account row's own name, which a successful sign-in is issued as. The row stores its
-		/// name lowercase and web_sessions references it, so a session issued for the typed "Jim"
+		/// name lowercase and web_sessions references it, so a session issued for the name as typed
 		/// failed its foreign key and an account registered with a capital letter could never sign
 		/// in. The typed name for a fake exchange, which can never prove.
 		/// </param>

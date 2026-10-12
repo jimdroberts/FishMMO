@@ -92,14 +92,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Faces are sections</b> (Jim, 2026-10-08: they replace the formation-shaped cliff rocks). A role
+	/// <b>Faces are sections</b> (2026-10-08: they replace the formation-shaped cliff rocks). A role
 	/// picks the style of its size: titans the massif, the footing the bluff, the middle face walls and
 	/// pillars, fill the small block, the crest ledges. A section's mesh is the same for every type: the
 	/// rock it is made of is its material (<see cref="MaterialName"/>, from the biome's cliff), so a
 	/// sandstone canyon and a granite one share geometry and differ in stone.
 	/// </para>
 	/// <para>
-	/// <b>Talus is the wall fallen</b> (Jim, 2026-10-08: the formation debris — round bedded "cake" slabs
+	/// <b>Talus is the wall fallen</b> (2026-10-08: the formation debris — round bedded "cake" slabs
 	/// for sandstone — still read as the old cliffs): 3 m rubble and 7 m rockfall blocks cut by the same
 	/// joints, beds and bevels as the face, at a lighter triangle budget
 	/// (<see cref="CliffSections.DebrisLodTriangles"/>). LOD2 is the collider. Ice keeps its seracs and
@@ -532,7 +532,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// Geology alone (2026-10-05 … 10-08) walled a scene in its province's rock whatever grew there — sandstone under
-		/// a bog — and the biome alone would make every scene of a biome one rock. Jim chose the two together (2026-10-08).
+		/// a bog — and the biome alone would make every scene of a biome one rock. The two are taken together (2026-10-08).
 		/// </remarks>
 		public static string RockFor(BiomeArtSpec.Entry entry, string geology)
 		{

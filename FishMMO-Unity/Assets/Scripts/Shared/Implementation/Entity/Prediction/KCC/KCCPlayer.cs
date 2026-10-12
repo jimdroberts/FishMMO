@@ -436,6 +436,17 @@ namespace FishMMO.Shared
 					platformVelocity = currentPlatform.LastCompletedTickVelocity;
 				}
 			}
+			else
+			{
+				/* A ship under way (2026-10-12: "Solid sailing ships needs to be done."). Its hull is a pure function
+				 * of the synced tick and is already standing where this tick puts it (FloatingBoats poses every ship before
+				 * any replicate of the tick, live and in each replayed tick), so the carry is worked out from the same tick
+				 * this input reads the water at: the deck point under the rider's feet, moved rigidly from the last tick's
+				 * pose to this one's. No ring and no registry lookup, because there is nothing to look up: the same tick
+				 * gives the same answer on the server, on the owner and in every replay of it. Zero aboard nothing. */
+				FloatingBoats.TryGetCarry(gameObject.scene, CharacterController.WaterTick, base.TimeManager.TickDelta,
+					transform.position, deltaTime, out platformVelocity);
+			}
 			/* The motor conveys this velocity only when the platform is moving UP into the
 			 * character (dot > 0.5) or the character is stably grounded on it -- a platform
 			 * travelling horizontally has a dot near zero, so a rider who is not stably grounded is

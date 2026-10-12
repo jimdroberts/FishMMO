@@ -138,6 +138,7 @@ namespace FishMMO.Client
 			waterfalls?.Dispose();
 			FogComposer.SetWeather(0f, Color.gray, 0f, 1000f);
 			WeatherShaderGlobals.Clear();
+			MossShaderGlobals.Clear();
 			instance = null;
 		}
 
@@ -207,6 +208,8 @@ namespace FishMMO.Client
 			FogComposer.SetWeather(0f, Color.gray, 0f, 1000f);
 			FogComposer.Reset();
 			WeatherShaderGlobals.Clear();
+			// A new scene's biome lands at once rather than easing over from the last one's.
+			mossDampness = float.NaN;
 		}
 
 		private void OnAudioCue(WeatherAudioCue cue, float volume)
@@ -304,6 +307,11 @@ namespace FishMMO.Client
 			WeatherShaderGlobals.Apply(shown, hasContext ? context.Cover : default, hasContext ? context.Temperature : 0f, shelter, time, LightningFlash,
 				hasContext ? context.Substance : null, target[WeatherChannel.WindSpeed]);
 			WeatherShaderGlobals.ApplyTier(tier.TerrainSnowDisplacement);
+			// The moss layer (FishMoss.hlsl): how damp the biome under the camera keeps its rock and timber, eased so an
+			// ecotone fades it rather than switching it, and which way is poleward (the shaded side of a wall).
+			float mossTarget = hasContext ? MossClimate.Dampness(context.Sample.Biome) : MossClimate.Neutral;
+			mossDampness = MossClimate.Ease(mossDampness, mossTarget, dt);
+			MossShaderGlobals.Apply(profile, mossDampness, hasContext && context.Settings != null ? context.Settings.Latitude : 0f);
 			WeatherFogPresenter.Apply(shown, profile);
 			ApplyWind(shown);
 			GlobalsMarker.End();
@@ -315,6 +323,8 @@ namespace FishMMO.Client
 		}
 
 		private WeatherTierSettings currentTier;
+		// The scene's dampness for the moss as shown (MossClimate.Ease); NaN until the first frame, which lands at once.
+		private float mossDampness = float.NaN;
 
 		/// <summary>
 		/// Precipitation is submitted as each camera starts rendering, so any render of the target

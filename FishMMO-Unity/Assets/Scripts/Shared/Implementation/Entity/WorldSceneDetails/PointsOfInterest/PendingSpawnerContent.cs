@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Marks a generated spawner the generator left empty ON PURPOSE, for a designer to fill: a world boss lair's boss
-	/// (Jim, 2026-10-10: the designer assigns the boss), or a role no NPC exists for yet.
+	/// (2026-10-10: the designer assigns the boss), or a role no NPC exists for yet.
 	/// </summary>
 	/// <remarks>
 	/// An empty spawner is otherwise a defect the spawn-table checks fail on, because it stands in the scene and never

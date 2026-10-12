@@ -137,11 +137,11 @@ namespace FishMMO.Shared.Weather
 		/// How far the mist a fall raises spreads from where it lands, metres. As the cube root of its power, the size
 		/// of the turbulent cloud a steady source of energy keeps stirred: about 17 m for a 1.3 MW mountain fall
 		/// (4 m wide, 50 m high), about 200 m for Niagara's couple of gigawatts. Never less than half its width. (0.1 P^⅓
-		/// drew a cloud too small to hide a landing in, Jim 2026-10-08.)
+		/// drew a cloud too small to hide a landing in, 2026-10-08.)
 		/// </summary>
 		public static float PlumeRadius(in Fall fall)
 		{
-			// And a fifth of its height besides: a taller fall throws its spray further and its cloud stands higher (Jim, 2026-10-08).
+			// And a fifth of its height besides: a taller fall throws its spray further and its cloud stands higher (2026-10-08).
 			return Mathf.Clamp(0.16f * Mathf.Pow(Mathf.Max(1f, fall.Power), 1f / 3f), 3f, 200f) + 0.5f * fall.Width + 0.2f * Mathf.Max(0f, fall.Drop);
 		}
 

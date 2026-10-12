@@ -407,7 +407,11 @@ namespace FishMMO.TestHarness.World
 			header.Add(actions);
 			panel.Add(header);
 
-			var help = new Label("Right-drag to look · scroll to zoom · WASD/QE to fly · Shift to hurry · V to walk (Space jumps, scroll sets the distance, Ctrl+scroll zooms). The real sky and the real weather model; nothing reaches a server.");
+			var help = new Label("Right-drag to look · scroll to zoom · WASD/QE to fly · Shift to hurry · V to walk (Space jumps, scroll sets the distance, Ctrl+scroll zooms"
+#if UNITY_EDITOR
+				+ ", E opens or shuts the door ahead, F lights a torch"
+#endif
+				+ "). The real sky and the real weather model; nothing reaches a server.");
 			help.AddToClassList("ws-help");
 			panel.Add(help);
 
@@ -536,7 +540,7 @@ namespace FishMMO.TestHarness.World
 				int cut = WorldSimController.ScenesOn(body).Count;
 				if (Controller.InCutScene && cut == 0)
 				{
-					// Nowhere to stand on it: no scene is cut there yet (Jim, 2026-10-11).
+					// Nowhere to stand on it: no scene is cut there yet (2026-10-11).
 					button.SetEnabled(false);
 					button.tooltip = $"No scene is cut on {body.ResolvedName} yet. Cut one from the World Atlas to stand there.";
 				}

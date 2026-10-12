@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The scene's "Points of Interest" root in the inspector: its settings editable in place (Jim, 2026-10-10: density
+	/// The scene's "Points of Interest" root in the inspector: its settings editable in place (2026-10-10: density
 	/// is "editable afterwards on a settings component in the scene"), what the last plan made, and Regenerate POIs.
 	/// </summary>
 	[CustomEditor(typeof(ScenePointOfInterestSettings))]

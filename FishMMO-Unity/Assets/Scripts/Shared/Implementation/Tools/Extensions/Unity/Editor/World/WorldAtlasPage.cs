@@ -539,7 +539,7 @@ namespace FishMMO.Shared.WorldDesign
 			request.SceneName = sceneName;
 			request.FineDetail = fineDetail;
 
-			/* The pre-cut prompt (Jim, 2026-10-10): capital and density, asked before anything is
+			/* The pre-cut prompt (2026-10-10): capital and density, asked before anything is
 			 * written. The settings asset is saved before the cut because the generator links the
 			 * scene to it; one this cut created is removed again if the cut is refused. */
 			string settingsPath = AtlasPointsOfInterest.SettingsPathFor(sceneName);
@@ -616,7 +616,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Cuts a generated scene's terrain from the globe again, after asking.</summary>
 		private void RecutScene(WorldAtlasScene entry)
 		{
-			/* One modal: the re-cut warning and the pre-cut questions together (Jim, 2026-10-10). It
+			/* One modal: the re-cut warning and the pre-cut questions together (2026-10-10). It
 			 * opens on the scene's current settings; a re-cut regenerates every point of interest. */
 			if (!PointOfInterestPrompt.Ask(
 				$"Generate \"{entry.SceneName}\" again from the globe, where its rectangle is now?\n\n" +

@@ -115,7 +115,7 @@ namespace FishMMO.Shared.WorldDesign
 				try
 				{
 					/* A scene is a region kilometres across, not one landmark: it was named as a point of interest ("Flo
-					 * Monolith", "Volax Obelisk" for a valley of forest and rivers, Jim 2026-10-11). Now a root in the
+					 * Monolith", "Volax Obelisk" for a valley of forest and rivers, 2026-10-11). Now a root in the
 					 * biome's own sounds and a word for the country it is: a weald, downs, fens, fells, a vale, an isle. */
 					candidate = underground
 						? generator.Generate(new DungeonRequest { Biome = biome.Key, Variant = variant }).Name

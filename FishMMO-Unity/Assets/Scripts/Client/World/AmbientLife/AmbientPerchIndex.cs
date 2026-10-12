@@ -29,9 +29,13 @@ namespace FishMMO.Client
 		private static readonly string[] NotTrees = { "Formation", "Boulder", "Iceberg", "IceBoulder", "Serac", "SeaIce", "Rocks", "Cliff", "Rock" };
 
 		private readonly Dictionary<long, List<Vector4>> cells = new Dictionary<long, List<Vector4>>();
+		private readonly Dictionary<long, List<AmbientTrunk>> trunkCells = new Dictionary<long, List<AmbientTrunk>>();
+		private readonly Dictionary<long, List<(Vector4 Perch, AmbientTrunk Trunk)>> gathering = new Dictionary<long, List<(Vector4, AmbientTrunk)>>();
+		private readonly Dictionary<GameObject, AmbientTrunk.Profile> trunkShapes = new Dictionary<GameObject, AmbientTrunk.Profile>();
 		private readonly Dictionary<GameObject, Vector4> prototypes = new Dictionary<GameObject, Vector4>();
 		private readonly List<Terrain> terrains = new List<Terrain>();
 		private static readonly List<Vector4> none = new List<Vector4>();
+		private static readonly List<AmbientTrunk> noTrunks = new List<AmbientTrunk>();
 		private float cellMetres;
 
 		/// <summary>Trees indexed.</summary>
@@ -40,6 +44,9 @@ namespace FishMMO.Client
 		/// <summary>The perches in a cell (x, crown top y, z, tree height): an empty list where there are none. Not to be changed.</summary>
 		public List<Vector4> In(int cellX, int cellZ) => cells.TryGetValue(Key(cellX, cellZ), out List<Vector4> list) ? list : none;
 
+		/// <summary>The trunks of the same trees, in the same order as <see cref="In"/>: perch i is the crown of trunk i. Not to be changed.</summary>
+		public List<AmbientTrunk> TrunksIn(int cellX, int cellZ) => trunkCells.TryGetValue(Key(cellX, cellZ), out List<AmbientTrunk> list) ? list : noTrunks;
+
 		public static long Key(int x, int z) => ((long)x << 32) | (uint)z;
 
 		/// <summary>Reads every loaded tree into the index, cells of <paramref name="metres"/>.</summary>
@@ -47,6 +54,8 @@ namespace FishMMO.Client
 		{
 			cellMetres = metres;
 			cells.Clear();
+			trunkCells.Clear();
+			gathering.Clear();
 			Count = 0;
 			foreach (SceneProps props in Object.FindObjectsByType<SceneProps>())
 			{
@@ -73,7 +82,8 @@ namespace FishMMO.Client
 						}
 						Vector4 c = crowns[prop.Prototype];
 						Vector3 top = prop.Position + prop.Rotation * Vector3.Scale(prop.Scale, new Vector3(c.x, c.y, c.z));
-						Add(top, c.w * prop.Scale.y);
+						var trunk = new AmbientTrunk { Base = prop.Position, Rotation = prop.Rotation, Scale = prop.Scale, Shape = TrunkOf(set.Prototypes[prop.Prototype].Prefab, c.w) };
+						Add(top, c.w * prop.Scale.y, trunk);
 					}
 				}
 			}
@@ -102,43 +112,69 @@ namespace FishMMO.Client
 					Vector4 c = crowns[tree.prototypeIndex];
 					Vector3 at = origin + Vector3.Scale(tree.position, size);
 					var scale = new Vector3(tree.widthScale, tree.heightScale, tree.widthScale);
-					Vector3 top = at + Quaternion.Euler(0f, tree.rotation * Mathf.Rad2Deg, 0f) * Vector3.Scale(scale, new Vector3(c.x, c.y, c.z));
-					Add(top, c.w * tree.heightScale);
+					Quaternion turn = Quaternion.Euler(0f, tree.rotation * Mathf.Rad2Deg, 0f);
+					Vector3 top = at + turn * Vector3.Scale(scale, new Vector3(c.x, c.y, c.z));
+					var trunk = new AmbientTrunk { Base = at, Rotation = turn, Scale = scale, Shape = TrunkOf(protos[tree.prototypeIndex].prefab, c.w) };
+					Add(top, c.w * tree.heightScale, trunk);
 				}
 			}
-			foreach (List<Vector4> list in cells.Values)
+			foreach (KeyValuePair<long, List<(Vector4 Perch, AmbientTrunk Trunk)>> cell in gathering)
 			{
-				list.Sort(ByHash);
-				if (list.Count > PerCell)
+				List<(Vector4 Perch, AmbientTrunk Trunk)> list = cell.Value;
+				list.Sort((a, b) => Hash(a.Perch).CompareTo(Hash(b.Perch)));
+				int n = Mathf.Min(PerCell, list.Count);
+				var perches = new List<Vector4>(n);
+				var trunks = new List<AmbientTrunk>(n);
+				for (int i = 0; i < n; i++)
 				{
-					list.RemoveRange(PerCell, list.Count - PerCell);
+					perches.Add(list[i].Perch);
+					trunks.Add(list[i].Trunk);
 				}
+				cells[cell.Key] = perches;
+				trunkCells[cell.Key] = trunks;
 			}
+			gathering.Clear();
 		}
 
 		public void Clear()
 		{
 			cells.Clear();
+			trunkCells.Clear();
+			gathering.Clear();
 			prototypes.Clear();
+			trunkShapes.Clear();
+			AmbientTrunk.ClearCache();
 			Count = 0;
 		}
 
-		private void Add(Vector3 top, float height)
+		private void Add(Vector3 top, float height, AmbientTrunk trunk)
 		{
 			if (height < 2f)
 			{
 				return;
 			}
 			long key = Key(Mathf.FloorToInt(top.x / cellMetres), Mathf.FloorToInt(top.z / cellMetres));
-			if (!cells.TryGetValue(key, out List<Vector4> list))
+			if (!gathering.TryGetValue(key, out List<(Vector4 Perch, AmbientTrunk Trunk)> list))
 			{
-				cells[key] = list = new List<Vector4>();
+				gathering[key] = list = new List<(Vector4, AmbientTrunk)>();
 			}
-			list.Add(new Vector4(top.x, top.y, top.z, height));
+			list.Add((new Vector4(top.x, top.y, top.z, height), trunk));
 			Count++;
 		}
 
-		private static readonly System.Comparison<Vector4> ByHash = (a, b) => Hash(a).CompareTo(Hash(b));
+		/// <summary>A prototype's trunk, measured once from its collision mesh (<see cref="AmbientTrunk.Measure(GameObject, float)"/>).</summary>
+		private AmbientTrunk.Profile TrunkOf(GameObject prefab, float height)
+		{
+			if (prefab == null)
+			{
+				return AmbientTrunk.Profile.Plain(height, Mathf.Clamp(height * 0.025f, 0.12f, 0.5f));
+			}
+			if (!trunkShapes.TryGetValue(prefab, out AmbientTrunk.Profile shape))
+			{
+				trunkShapes[prefab] = shape = AmbientTrunk.Measure(prefab, height);
+			}
+			return shape;
+		}
 
 		/// <summary>A stable hash of a perch's position to the centimetre.</summary>
 		private static uint Hash(Vector4 p)

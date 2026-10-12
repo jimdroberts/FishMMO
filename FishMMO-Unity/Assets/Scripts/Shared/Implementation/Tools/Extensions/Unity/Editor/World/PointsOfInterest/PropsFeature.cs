@@ -90,6 +90,12 @@ namespace FishMMO.Shared.WorldDesign
 		public float SpanFrom = float.NaN, SpanTo = float.NaN;
 		/// <summary>Metres ahead of the centre where the water begins, for piers; NaN where there is none.</summary>
 		public float ShoreAhead = float.NaN;
+		/// <summary>
+		/// Where a pier runs, metres ahead of the centre: from where the bank stands at its deck's height out to where its
+		/// piles would no longer reach the bed (<see cref="MeasureShore(PointOfInterestSiteContext, out float, out float, out float)"/>);
+		/// NaN lays it from <see cref="ShoreAhead"/> for its footprint's share of the site.
+		/// </summary>
+		public float PierFrom = float.NaN, PierTo = float.NaN;
 		/// <summary>Spots kept clear for the site's gameplay (a waypoint, a respawn point): x, z in the site's frame and y the radius.</summary>
 		public readonly List<Vector3> Clearings = new List<Vector3>();
 		/// <summary>
@@ -676,7 +682,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				/* Exactly from one end to the other: as many modules as come nearest the length, each stretched or shrunk a
 				 * little to fit (its footprint's depth says by how much, PropsFeature.Build). Whole modules centred on the
-				 * crossing ran up to most of a module past each end, over the path that comes to it (Jim, 2026-10-11). */
+				 * crossing ran up to most of a module past each end, over the path that comes to it (2026-10-11). */
 				int n = Math.Max(1, Mathf.RoundToInt((to - from) / module));
 				float length = (to - from) / n;
 				float middle = 0.5f * (from + to);
@@ -697,15 +703,19 @@ namespace FishMMO.Shared.WorldDesign
 				PointOfInterestLayoutSlot slot = request.Slots[s];
 				float module = slot.Module > 0f ? slot.Module : Mathf.Max(1f, slot.Footprint.y);
 				int piers = Mathf.Clamp(slot.Count, 1, 4);
-				int modules = Math.Max(2, Mathf.RoundToInt(request.Radius * 0.6f / module));
+				bool measured = !float.IsNaN(request.PierFrom) && !float.IsNaN(request.PierTo);
+				int modules = measured
+					? Math.Max(2, Mathf.RoundToInt((request.PierTo - request.PierFrom) / module))
+					: Math.Max(2, Mathf.RoundToInt(request.Radius * 0.6f / module));
 				float spacing = Mathf.Max(slot.Footprint.x * 3f, 8f);
 				for (int p = 0; p < piers; p++)
 				{
 					float x = (p - (piers - 1) * 0.5f) * spacing;
 					for (int i = 0; i < modules; i++)
 					{
-						// The first module stands half on the shore.
-						var at = new Vector2(x, request.ShoreAhead + i * module);
+						// From the bank at the deck's height, module by module out over the water; unmeasured, the first
+						// module stands half on the shore.
+						var at = new Vector2(x, measured ? request.PierFrom + (i + 0.5f) * module : request.ShoreAhead + i * module);
 						TryLay(s, -1, at, 0f, new Vector2(slot.Footprint.x, module), 0f, PierGroup);
 					}
 				}
@@ -1226,14 +1236,127 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// What gathers round lived-in buildings (Jim, 2026-10-11: sites looked dated): by each front door a water butt, a
+		/// What gathers round lived-in buildings (2026-10-11: sites looked dated): by each front door a water butt, a
 		/// bench or a low lantern; a woodpile against a side wall; a cart, hay or a washing line in the back yard; lantern
 		/// posts along a town's streets. Round a camp's tents, drying and weapon racks, water and a log heap. Each is kept
 		/// clear of the buildings, the streets and one another; a ruin gets none.
 		/// </summary>
+		/// <summary>
+		/// Stairs up the inside of a stone curtain to its walk (2026-10-11: walkable castle walls): against the module two
+		/// along from each gate, and one across the bailey from the first, where nothing already stands.
+		/// </summary>
+		/// <summary>
+		/// A drawbridge over the site's moat (MoatShaper) before each gate: hinged on the ditch's inner lip on the line from
+		/// the site's middle through the gate, as wide as the gate's passage and long enough to rest on the far bank, lowered
+		/// to begin with. A real door (PointOfInterestDoors builds it, the server works it): raised, the ditch is a ditch.
+		/// </summary>
+		private static void AddDrawbridges(PointOfInterestSiteContext context, List<Vector3> gateways, float stature)
+		{
+			if (gateways.Count == 0 || context.Record == null
+				|| !MoatShaper.TryMoat(context.Points, context.Record.Id, out Vector3 centre, out float inner, out float width, out _))
+			{
+				return;
+			}
+			const float Passage = 3.5f;
+			foreach (Vector3 gate in gateways)
+			{
+				var outward = new Vector3(gate.x - centre.x, 0f, gate.z - centre.z);
+				if (outward.sqrMagnitude < 1e-4f)
+				{
+					continue;
+				}
+				outward.Normalize();
+				// The doors' convention: the hinge is the leaf's corner on one jamb, Across runs along it to the other.
+				var across = new Vector3(outward.z, 0f, -outward.x);
+				float leafWidth = Passage * stature + 0.3f;
+				var lip = new Vector3(centre.x + outward.x * inner, 0f, centre.z + outward.z * inner);
+				lip.y = context.GroundAt != null ? context.GroundAt(lip.x, lip.z) : gate.y;
+				context.Doors.Add(new PointOfInterestSiteContext.PlacedDoor
+				{
+					Hinge = lip - across * (0.5f * leafWidth),
+					Across = across,
+					Inward = -outward,
+					Width = leafWidth,
+					// Up, it is a door; down, it reaches over the ditch onto the far bank.
+					Height = width + 1.2f,
+					Kind = StructureDoorKind.Studded,
+					Building = "Drawbridge",
+					Scale = stature,
+					Motion = StructureDoorMotion.Drawbridge,
+					StartsOpen = true,
+				});
+			}
+		}
+
+		private static void AddWallStairs(PointOfInterestSiteContext context, List<(Vector3 at, Quaternion turn)> curtain, List<Vector3> gateways,
+			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
+		{
+			if (curtain.Count < 4)
+			{
+				return;
+			}
+			GameObject stair = StructureKit.Prefab("WallStair", 0);
+			if (stair == null)
+			{
+				return;
+			}
+			StructurePiece piece = StructurePieces.Find("WallStair");
+			Vector2 size = piece != null ? piece.Footprint : new Vector2(7.5f, 1.2f);
+			Vector3 centre = context.Record.Position;
+			float Bearing(Vector3 p) => Mathf.Atan2(p.x - centre.x, p.z - centre.z) * Mathf.Rad2Deg;
+			var wanted = new List<float>();
+			foreach (Vector3 g in gateways)
+			{
+				wanted.Add(Bearing(g) + 360f / curtain.Count * 2.2f);
+			}
+			wanted.Add((gateways.Count > 0 ? Bearing(gateways[0]) : context.Record.Yaw) + 180f);
+			var used = new HashSet<int>();
+			foreach (float bearing in wanted)
+			{
+				int best = -1;
+				float bestGap = float.MaxValue;
+				for (int i = 0; i < curtain.Count; i++)
+				{
+					float gap = Mathf.Abs(Mathf.DeltaAngle(Bearing(curtain[i].at), bearing));
+					if (!used.Contains(i) && gap < bestGap)
+					{
+						bestGap = gap;
+						best = i;
+					}
+				}
+				if (best < 0)
+				{
+					continue;
+				}
+				// Its back to the wall's inner face (the wall faces out along its −z).
+				(Vector3 at, Quaternion turn) wall = curtain[best];
+				Vector3 foot = wall.at + wall.turn * new Vector3(0f, 0f, 1.08f);
+				Vector3 middle = foot + wall.turn * new Vector3(0f, 0f, size.y * 0.5f);
+				bool clear = true;
+				foreach ((Vector3 at, Quaternion turn, Vector2 footprint, PointOfInterestSlotRole role, string _) in grounds)
+				{
+					if (role == PointOfInterestSlotRole.Perimeter || role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower)
+					{
+						continue;
+					}
+					if (PointOfInterestLayouts.Overlaps(new Vector2(middle.x, middle.z), wall.turn.eulerAngles.y, size, new Vector2(at.x, at.z), turn.eulerAngles.y, footprint))
+					{
+						clear = false;
+						break;
+					}
+				}
+				if (!clear)
+				{
+					continue;
+				}
+				used.Add(best);
+				context.AddProp(stair, new Vector3(foot.x, wall.at.y, foot.z), wall.turn, Vector3.one);
+			}
+		}
+
 		private static void AddClutter(PointOfInterestSiteContext context,
 			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds,
-			PointOfInterestLayoutRequest request, DeterministicRNG random)
+			PointOfInterestLayoutRequest request, DeterministicRNG random, float stature = 1f)
 		{
 			PointOfInterestRecord record = context.Record;
 			PointOfInterestKindInfo info = PointOfInterestKinds.Info(record.Kind);
@@ -1285,7 +1408,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return false;
 				}
-				Vector2 size = PointOfInterestPieceResolver.Measure(pieceRequest).Footprint;
+				Vector2 size = PointOfInterestPieceResolver.Measure(pieceRequest).Footprint * stature;
 				var c = new Vector2(at.x, at.z);
 				if (OnStreet(c, Mathf.Max(size.x, size.y) * 0.5f))
 				{
@@ -1303,7 +1426,7 @@ namespace FishMMO.Shared.WorldDesign
 					return false;
 				}
 				taken.Add((c, yaw, size + Vector2.one * 0.3f));
-				context.AddProp(prefab, new Vector3(at.x, context.GroundAt(at.x, at.z), at.z), Quaternion.Euler(0f, yaw, 0f), Vector3.one);
+				context.AddProp(prefab, new Vector3(at.x, context.GroundAt(at.x, at.z), at.z), Quaternion.Euler(0f, yaw, 0f), Vector3.one * stature);
 				placed++;
 				return true;
 			}
@@ -1380,8 +1503,11 @@ namespace FishMMO.Shared.WorldDesign
 					Put(hostile ? Pick("=WeaponRack", "=DryingRack", "=WaterButt", "=Woodpile") : Pick("=DryingRack", "=WaterButt", "=Woodpile"), at + offset, a * Mathf.Rad2Deg + 90f);
 				}
 			}
-			// Lanterns along a town's streets, either side in turn, every dozen paces or so.
-			if (town && (record.Kind == POIType.Town || record.Kind == POIType.City || record.Kind == POIType.Capital || record.Kind == POIType.Port))
+			// Lights along the streets, either side in turn: a town's iron lanterns every dozen paces or so, a village's torches
+			// on poles every twenty (2026-10-12: "We need torches, light posts, braziers").
+			bool lanterns = record.Kind == POIType.Town || record.Kind == POIType.City || record.Kind == POIType.Capital || record.Kind == POIType.Port;
+			bool torches = record.Kind == POIType.Village;
+			if (town && (lanterns || torches))
 			{
 				foreach ((Vector2 a, Vector2 b, float half) in streets)
 				{
@@ -1393,15 +1519,15 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					Vector2 along = ab / length, across = new Vector2(-along.y, along.x);
 					int side = 1;
-					for (float t = 6f; t < length - 6f; t += 13f, side = -side)
+					for (float t = 6f; t < length - 6f; t += lanterns ? 13f : 20f, side = -side)
 					{
 						Vector2 p = a + along * t + across * side * (half + 0.7f);
 						float yaw = Mathf.Atan2(-across.x * side, -across.y * side) * Mathf.Rad2Deg;
-						var pieceRequest = new PointOfInterestPieceRequest("=LanternPost", "timber", 0);
+						var pieceRequest = new PointOfInterestPieceRequest(lanterns ? "=LanternPost" : "=TorchPost", "timber", 0);
 						GameObject prefab = PointOfInterestPieceResolver.Resolve(pieceRequest);
 						if (prefab != null && !taken.Exists(x => Vector2.Distance(x.centre, p) < Mathf.Max(x.size.x, x.size.y) * 0.5f + 0.5f))
 						{
-							context.AddProp(prefab, new Vector3(p.x, context.GroundAt(p.x, p.y), p.y), Quaternion.Euler(0f, yaw, 0f), Vector3.one);
+							context.AddProp(prefab, new Vector3(p.x, context.GroundAt(p.x, p.y), p.y), Quaternion.Euler(0f, yaw, 0f), Vector3.one * stature);
 							taken.Add((p, yaw, new Vector2(0.4f, 0.8f)));
 							placed++;
 						}
@@ -1429,6 +1555,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			int slots = template.Pieces.Count;
 			var styles = new string[slots];
+			// The site's race's stature: its buildings (and what stands round them) are built to it, a giant's hall two and a
+			// half times a human's, a halfling's cottage three fifths (RaceStature). A big race's site keeps its ground, so it
+			// holds fewer, bigger buildings.
+			float stature = RaceStature.BuildingScale(record.Race);
 			for (int s = 0; s < slots; s++)
 			{
 				PointOfInterestPieceSlot slot = template.Pieces[s];
@@ -1440,6 +1570,10 @@ namespace FishMMO.Shared.WorldDesign
 				styles[s] = string.IsNullOrWhiteSpace(slot.Style) ? context.Style : slot.Style;
 				PointOfInterestSlotRole role = PointOfInterestLayouts.RoleFor(template.Layout, s, slot.Role);
 				int count = CountFor(slot, record.SizeClass, CountsFollowSize, random);
+				if (stature > 1.05f && count > 0)
+				{
+					count = Mathf.Max(1, Mathf.RoundToInt(count / (stature * stature)));
+				}
 				PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], 0));
 				request.Slots.Add(new PointOfInterestLayoutSlot { Role = role, Footprint = metrics.Footprint, Module = metrics.Module, Count = count });
 			}
@@ -1454,6 +1588,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int k = 0; k < request.Slots[s].Count; k++)
 				{
 					Draws d = Take(random, slot, false);
+					d.Scale *= stature;
 					PointOfInterestPieceMetrics metrics = PointOfInterestPieceResolver.Measure(new PointOfInterestPieceRequest(slot.Tag, styles[s], d.Seed, d.Decay));
 					request.Items.Add(new PointOfInterestLayoutItem { Slot = s, Footprint = metrics.Footprint * d.Scale });
 					draws.Add(d);
@@ -1464,13 +1599,17 @@ namespace FishMMO.Shared.WorldDesign
 			if (request.Slots.Exists(s => s.Role == PointOfInterestSlotRole.Span))
 			{
 				crossing = MeasureCrossing(context);
+				if (crossing.Unfooted)
+				{
+					context.Notes?.Add($"{record.Name}: the ground falls away from the water along the bridge's heading, so one end comes down on the highest ground beside the water rather than on a bank.");
+				}
 				request.SpanFrom = crossing.From;
 				request.SpanTo = crossing.To;
 				request.SpanHalf = Mathf.Max(-crossing.From, crossing.To);
 			}
 			if (request.Slots.Exists(s => s.Role == PointOfInterestSlotRole.Pier))
 			{
-				request.ShoreAhead = MeasureShore(context, out pierDeck);
+				request.ShoreAhead = MeasureShore(context, out pierDeck, out request.PierFrom, out request.PierTo);
 			}
 
 			// The ways that come in: a walled site opens its gates toward them.
@@ -1497,11 +1636,25 @@ namespace FishMMO.Shared.WorldDesign
 			List<PointOfInterestLayoutPiece> pieces = PointOfInterestLayouts.Place(request, random);
 			AddStreets(context, request);
 			var grounds = new List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)>();
+			// The stone curtain's modules (their walk is climbable) and the gates, for the wall stairs.
+			var curtain = new List<(Vector3 at, Quaternion turn)>();
+			var gateways = new List<Vector3>();
 			int laid = 0, missing = 0, ruined = 0, wet = 0;
 			bool dryOnly = KeepOutOfWater && !PointOfInterestKinds.Info(record.Kind).Has(PointOfInterestTraits.Underwater);
 			float sea = dryOnly ? SeaLevelOf(context) : float.NegativeInfinity;
+			// A gorge is crossed by one piece rim to rim (a stone arch, or ropes where it is wide or wild), not plank spans
+			// with nothing under them; the spans stand in only until that art is generated.
+			bool gorgeLaid = crossing.Gorge && LayGorgeBridge(context, crossing, allowLocal, grounds);
+			if (gorgeLaid)
+			{
+				laid++;
+			}
 			foreach (PointOfInterestLayoutPiece piece in pieces)
 			{
+				if (gorgeLaid && piece.Role == PointOfInterestSlotRole.Span)
+				{
+					continue;
+				}
 				PointOfInterestPieceSlot slot = template.Pieces[piece.Slot];
 				Draws d = piece.Item >= 0 ? draws[piece.Item] : Take(random, slot, true);
 				if (d.LeaveOut < d.Decay * 0.5f)
@@ -1534,6 +1687,9 @@ namespace FishMMO.Shared.WorldDesign
 					float near = crossing.DeckAt(piece.Offset.y - half), far = crossing.DeckAt(piece.Offset.y + half);
 					at.y = 0.5f * (near + far);
 					pitch = Quaternion.Euler(-Mathf.Atan2(far - near, 2f * half) * Mathf.Rad2Deg, 0f, 0f);
+					// Its trestle only where the legs reach the ground or the bed and have room to stand there.
+					float trestle = piece.Offset.y - half + TrestleInset;
+					prefab = SpanVariant(prefab, pieceRequest, crossing.DeckAt(trestle) - context.OnGround(new Vector2(piece.Offset.x, trestle)).y);
 				}
 				else if (piece.Role == PointOfInterestSlotRole.Pier)
 				{
@@ -1554,10 +1710,20 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				context.AddProp(prefab, at, rotation, scale);
 				grounds.Add((at, Quaternion.Euler(0f, record.Yaw + piece.Yaw, 0f), metrics.Footprint * d.Scale, piece.Role, slot.Tag));
+				if (piece.Role == PointOfInterestSlotRole.Perimeter && prefab.name.StartsWith("Structure_WallSegment_0", StringComparison.Ordinal))
+				{
+					curtain.Add((at, Quaternion.Euler(0f, record.Yaw + piece.Yaw, 0f)));
+				}
+				else if (piece.Role == PointOfInterestSlotRole.Gate)
+				{
+					gateways.Add(at);
+				}
 				laid++;
 			}
 			AddYards(context, grounds);
-			AddClutter(context, grounds, request, random);
+			AddClutter(context, grounds, request, random, stature);
+			AddWallStairs(context, curtain, gateways, grounds);
+			AddDrawbridges(context, gateways, stature);
 			int dropped = request.Items.Count;
 			foreach (PointOfInterestLayoutPiece piece in pieces)
 			{
@@ -1580,12 +1746,139 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>The longest gorge thrown over with a stone arch, lip to lip, metres: wider is crossed on ropes.</summary>
+		public const float MaxArchSpan = 32f;
+
+		/// <summary>
+		/// How far from any settlement a gorge is the wild's (crossed on ropes by whoever goes that way, not arched by a town
+		/// that keeps it), metres.
+		/// </summary>
+		public const float WildGorgeMetres = 600f;
+
+		/// <summary>
+		/// Lays a gorge's crossing as one piece from lip to lip (StructurePieces.Bridges): the stone arch nearest its length,
+		/// stretched to it, where a settlement is within <see cref="WildGorgeMetres"/> and the gorge no wider than
+		/// <see cref="MaxArchSpan"/>; the nearest rope bridge otherwise (<see cref="GorgeBridgeFor"/>). Its deck's ends are
+		/// the crossing's ends on the rims, its abutments or anchor posts run on into them, pitched along the line between.
+		/// False for a wild cleft too narrow for ropes, or when the art is not generated yet: the plank spans are laid instead.
+		/// </summary>
+		private static bool LayGorgeBridge(PointOfInterestSiteContext context, Crossing crossing, bool allowLocal,
+			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
+		{
+			PointOfInterestRecord record = context.Record;
+			float length = crossing.To - crossing.From;
+			if (length <= 0.5f)
+			{
+				return false;
+			}
+			string id = GorgeBridgeFor(length, NearSettlement(context, WildGorgeMetres), out float nominal);
+			StructurePiece piece = id != null ? StructurePieces.Find(id) : null;
+			if (piece == null)
+			{
+				return false;
+			}
+			int variant = StructureKit.PickVariant(piece, record.SiteSeed);
+			GameObject prefab = StructureKit.Prefab(id, variant, StructureFinish.None, allowLocal);
+			if (prefab == null)
+			{
+				return false;
+			}
+			float middle = 0.5f * (crossing.From + crossing.To);
+			Vector3 at = context.OnGround(new Vector2(0f, middle));
+			at.y = crossing.DeckAt(middle);
+			float pitch = Mathf.Atan2(crossing.DeckTo - crossing.DeckFrom, length) * Mathf.Rad2Deg;
+			Quaternion turn = Quaternion.Euler(0f, record.Yaw, 0f);
+			context.AddProp(prefab, at, turn * Quaternion.Euler(-pitch, 0f, 0f), new Vector3(1f, 1f, length / nominal));
+			grounds.Add((at, turn, new Vector2(piece.Footprint.x, length), PointOfInterestSlotRole.Span, "gorge"));
+			return true;
+		}
+
+		/// <summary>The narrowest gorge hung with a rope bridge, metres: a cleft narrower is crossed on planks laid rim to rim.</summary>
+		public const float MinRopeSpan = 10f;
+
+		/// <summary>
+		/// The kit's gorge crossing for a gorge <paramref name="length"/> metres lip to lip, and that piece's own length: the
+		/// stone arch whose length is nearest it (the least stretch) when the gorge is <paramref name="kept"/> by a settlement
+		/// near and no wider than <see cref="MaxArchSpan"/>; else the nearest rope bridge; null for a wild cleft under
+		/// <see cref="MinRopeSpan"/>, which is crossed on plank spans.
+		/// </summary>
+		public static string GorgeBridgeFor(float length, bool kept, out float nominal)
+		{
+			bool arch = kept && length <= MaxArchSpan;
+			if (!arch && length < MinRopeSpan)
+			{
+				nominal = 0f;
+				return null;
+			}
+			float[] lengths = arch ? StructurePieces.ArchBridgeLengths : StructurePieces.RopeBridgeLengths;
+			nominal = lengths[0];
+			foreach (float l in lengths)
+			{
+				if (Mathf.Abs(Mathf.Log(length / l)) < Mathf.Abs(Mathf.Log(length / nominal)))
+				{
+					nominal = l;
+				}
+			}
+			return arch ? StructurePieces.ArchBridgeId(nominal) : StructurePieces.RopeBridgeId(nominal);
+		}
+
+		/// <summary>True when a settlement (a town, a village, a city…) stands within <paramref name="metres"/> of the site.</summary>
+		private static bool NearSettlement(PointOfInterestSiteContext context, float metres)
+		{
+			if (context.Points == null || context.Points.Points == null)
+			{
+				return false;
+			}
+			Vector3 at = context.Record.Position;
+			foreach (PointOfInterestRecord other in context.Points.Points)
+			{
+				if (other != null && PathNetworkPlanner.RankOf(other.Kind) > 0
+					&& new Vector2(other.Position.x - at.x, other.Position.z - at.z).sqrMagnitude <= metres * metres)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The kit's bridge span whose first variant stands a trestle under its start; the second has none.</summary>
+		private const string TrestledSpan = "BridgeSpan";
+
+		/// <summary>How far below the deck the span's trestle reaches, and how far in from the module's start it stands, metres.</summary>
+		private const float TrestleDepth = 4f, TrestleInset = 0.3f;
+
+		/// <summary>
+		/// The span with its trestle where the legs reach the ground or the river bed under them (<paramref name="drop"/>, the
+		/// deck's height over it, between half a metre and the legs' length) and without one elsewhere. The variant was a
+		/// seeded pick, so half the modules hung four metres of legs in the air under a high deck, or stood them in a bank.
+		/// Any other piece, or art not generated yet, is returned as it is.
+		/// </summary>
+		private static GameObject SpanVariant(GameObject prefab, in PointOfInterestPieceRequest request, float drop)
+		{
+			if (prefab == null || !StructurePieces.TryParsePrefab(prefab.name, out StructurePiece kit, out int variant)
+				|| kit.Id != TrestledSpan || kit.Variants < 2)
+			{
+				return prefab;
+			}
+			int wanted = drop >= 0.5f && drop <= TrestleDepth - 0.1f ? 0 : 1;
+			if (wanted == variant)
+			{
+				return prefab;
+			}
+			GameObject other = StructureKit.Prefab(kit.Id, wanted, request.Finish, request.AllowLocal);
+			if (other == null && request.Finish != StructureFinish.None)
+			{
+				other = StructureKit.Prefab(kit.Id, wanted, StructureFinish.None, request.AllowLocal);
+			}
+			return other != null ? other : prefab;
+		}
+
 		/// <summary>Pieces built to stand in water: stilts, piers, bridges.</summary>
 		private static bool StandsInWater(string tag)
 			=> !string.IsNullOrEmpty(tag) && (tag.Contains("stilt") || tag.Contains("dock") || tag.Contains("bridge") || tag.Contains("Stilt") || tag.Contains("Pier") || tag.Contains("Bridge"));
 
 		/// <summary>The water's surface over a point (river, lake, or the sea where the ground is below it); negative infinity on dry land.</summary>
-		private static float WaterLevelAt(PointOfInterestSiteContext context, float x, float z, float sea)
+		internal static float WaterLevelAt(PointOfInterestSiteContext context, float x, float z, float sea)
 		{
 			float level = context.Water != null ? context.Water.SurfaceAt(x, z) : float.NegativeInfinity;
 			return Mathf.Max(level, sea);
@@ -1687,7 +1980,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A bridge's deck along its heading: where it starts and ends, and its height everywhere between. Level at the
 		/// water's clearance over the water, ramping down each side onto that bank's ground at the end, never under the
-		/// straight line from end to end. Each span module is pitched to its own stretch of it (rotation, not steps: Jim,
+		/// straight line from end to end. Each span module is pitched to its own stretch of it (rotation, not steps,
 		/// 2026-10-11), so both ends sit on their banks whatever their heights and the middle clears the water.
 		/// </summary>
 		public struct Crossing
@@ -1702,6 +1995,13 @@ namespace FishMMO.Shared.WorldDesign
 			public float Level;
 			/// <summary>How steeply each ramp comes down from <see cref="Level"/> to its end (rise per metre).</summary>
 			public float RampFrom, RampTo;
+			/// <summary>
+			/// True when an end found no ground the deck could come down onto past the water (it falls away along the
+			/// heading: a fall's lip, a river crossed aslant on a hillside), so it ends on the highest ground beside it.
+			/// </summary>
+			public bool Unfooted;
+			/// <summary>True for a gorge's crossing (<see cref="TryGorgeCrossing"/>): one straight deck lip to lip, high over the floor.</summary>
+			public bool Gorge;
 
 			/// <summary>The deck's height at a distance along the heading.</summary>
 			public float DeckAt(float along)
@@ -1730,23 +2030,44 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The gentlest a ramp comes down from the deck over the water to a low bank (rise per metre): about 14°.</summary>
 		public const float MinRampGrade = 0.25f;
 
+		/// <summary>
+		/// The steepest a ramp comes down to an end that found no bank (rise per metre): about <see cref="MaxDeckSlopeDegrees"/>.
+		/// It starts back over the water to stay this gentle.
+		/// </summary>
+		public const float MaxRampGrade = 0.36f;
+
 		/// <summary>Clearance the deck keeps over the water, metres.</summary>
 		public const float DeckClearance = 0.6f;
 
 		/// <summary>
+		/// How far the water's surface along the heading may differ from the site's and still be the water the bridge
+		/// crosses, metres: a river crossed aslant falls a little across the deck; the foot of a fall, or a lower reach seen
+		/// past a bank, is other water.
+		/// </summary>
+		public const float SameWaterMetres = 1.5f;
+
+		/// <summary>
 		/// The bridge's line across the water at this site: from where each bank first stands clear of the water by
 		/// <see cref="DeckClearance"/>, carried on up a steep channel wall to its lip (never along a gently rising bank), to
-		/// the same on the other side; a bank too low ever to clear the water ends a few metres past its edge. Both ends
-		/// sit on their ground; the deck over the water stands at the clearance and ramps down to each end
-		/// (<see cref="Crossing"/>).
+		/// the same on the other side; a bank too low ever to clear the water is met where the gentlest ramp down from the
+		/// deck reaches it. Both ends sit on their ground; the deck over the water stands at the clearance and ramps down to
+		/// each end (<see cref="Crossing"/>).
 		/// </summary>
 		/// <remarks>
 		/// <para>
 		/// History. It first stopped at the first dry ground and laid one flat deck at the site's own height: one end buried,
 		/// one in the air. Then it ran each end out to the bank's top (2026-10-10), which on a lowland river's long, gentle
 		/// banks ran the deck far over the grass (2026-10-11). Then one straight deck from end to end, which over a low bank
-		/// had to stand that end up in the air to clear the water ("aligns on one side and stands on the other", Jim,
+		/// had to stand that end up in the air to clear the water ("aligns on one side and stands on the other",
 		/// 2026-10-11): the deck is a profile now, and each module takes its own pitch.
+		/// </para>
+		/// <para>
+		/// Then "still floating on one end" (2026-10-12): the water was taken as any ground under the site's water
+		/// level, so where the ground fell away past a bank (a fall's lip, a river crossed aslant down a hillside, a gorge
+		/// beyond it) the "water" ran on to the edge of the reach, the deck held its level over all of it, and the layout,
+		/// which lays no further than the reach, cut it off with its ramp: Flo Monolith's bridges ended 3, 6, 18 and 64 m
+		/// over the ground. The water is now the scene's own, at this crossing's level, along the heading; no end lies past
+		/// the reach; and an end that finds no ground to come down onto takes the highest ground beside the water.
 		/// </para>
 		/// <para>A dry channel (no water at the site) is measured from its bed.</para>
 		/// </remarks>
@@ -1755,11 +2076,21 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestRecord record = context.Record;
 			SceneWater water = context.Water;
 			float level = water != null ? water.SurfaceAt(record.Position.x, record.Position.z) : float.NegativeInfinity;
+			Func<float, float> waterAlong = null;
 			if (float.IsNegativeInfinity(level))
 			{
 				level = context.OnGround(Vector2.zero).y;
 			}
-			return MeasureCrossing(t => context.OnGround(new Vector2(0f, t)).y, level, Mathf.Max(8f, record.Radius * 2f));
+			else
+			{
+				waterAlong = t =>
+				{
+					Vector3 at = context.OnGround(new Vector2(0f, t));
+					return water.SurfaceAt(at.x, at.z);
+				};
+			}
+			// The record stands at its banks' (or a gorge's rims') height: a gorge bridge is laid rim to rim at it.
+			return MeasureCrossing(t => context.OnGround(new Vector2(0f, t)).y, level, Mathf.Max(8f, record.Radius * 2f), waterAlong, record.Position.y);
 		}
 
 		/// <summary>The steepest a bank may climb (rise per metre) and still be the channel's wall the deck reaches over.</summary>
@@ -1767,52 +2098,131 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// <see cref="MeasureCrossing(PointOfInterestSiteContext)"/> on a profile: the ground's height at a signed distance
-		/// along the heading, and the water's surface (or a dry bed's height).
+		/// along the heading, the water's surface at the site (or a dry bed's height), and the scene's water surface along
+		/// the heading (negative infinity where there is none).
 		/// </summary>
-		public static Crossing MeasureCrossing(Func<float, float> groundAlong, float waterLevel, float reach)
+		/// <remarks>
+		/// Without <paramref name="waterAlong"/> (a dry channel) the water is wherever the ground lies under
+		/// <paramref name="waterLevel"/>; with it, only where that water's surface is within <see cref="SameWaterMetres"/> of
+		/// the site's, so a fall's foot or a lower reach past a bank is not reckoned the water crossed here.
+		/// <para>
+		/// With <paramref name="rim"/> (the site's height) at least <see cref="PathRouter.GorgeDepth"/> over the water (or a
+		/// dry floor), the crossing may be a gorge's (PathRouter's rim-to-rim steps): the deck runs straight from the lip of one
+		/// wall to the lip of the other, high over the floor, never down into it. Where either lip is not found up a wall
+		/// it is measured as any other crossing.
+		/// </para>
+		/// </remarks>
+		public static Crossing MeasureCrossing(Func<float, float> groundAlong, float waterLevel, float reach, Func<float, float> waterAlong = null,
+			float rim = float.NaN)
 		{
-			const float Step = 0.5f, MaxWallRun = 6f, Bearing = 0.5f, LowBankRun = 3f;
-			float need = waterLevel + DeckClearance;
-			var ends = new float[2];
-			var decks = new float[2];
-			var lips = new float[2];
+			const float Step = 0.5f, MaxWallRun = 6f, Bearing = 0.5f;
+			// Every end inside the reach: the layout lays no span past it, so a deck that ended beyond was cut short with
+			// its level and hung in the air.
+			float limit = Mathf.Max(Step, reach - Bearing);
+			if (!float.IsNaN(rim) && rim >= waterLevel + PathRouter.GorgeDepth
+				&& TryGorgeCrossing(groundAlong, rim, limit, out Crossing gorge))
+			{
+				return gorge;
+			}
+			float SurfaceAt(float t) => waterAlong != null ? waterAlong(t) : waterLevel;
+			bool Crossed(float surface) => !float.IsNegativeInfinity(surface) && Mathf.Abs(surface - waterLevel) <= SameWaterMetres;
+			// Under the water this bridge crosses; and under any water at all (no end stands in a lower reach).
+			bool Under(float t)
+			{
+				float surface = SurfaceAt(t);
+				return Crossed(surface) && groundAlong(t) <= surface + 0.05f;
+			}
+			bool Wet(float t)
+			{
+				float surface = SurfaceAt(t);
+				return !float.IsNegativeInfinity(surface) && groundAlong(t) <= surface + 0.05f;
+			}
+
 			var edges = new float[2];
 			for (int i = 0; i < 2; i++)
 			{
 				float side = i == 0 ? -1f : 1f;
-				// The water's edge: the first ground above it.
+				// The water's edge: the first ground not under it.
 				float edge = Step;
-				while (edge < reach && groundAlong(side * edge) <= waterLevel + 0.05f)
+				while (edge < limit && Under(side * edge))
 				{
 					edge += Step;
 				}
-				edges[i] = edge;
-				float t = edge;
-				bool clear = false;
-				for (; t <= reach; t += Step)
+				edges[i] = Mathf.Min(edge, limit);
+			}
+			// Clear of all of it: a river crossed aslant falls a little from one side of the deck to the other.
+			float level = waterLevel;
+			for (float t = -edges[0]; t <= edges[1]; t += Step)
+			{
+				float surface = SurfaceAt(t);
+				if (Crossed(surface))
 				{
-					if (groundAlong(side * t) >= need)
+					level = Mathf.Max(level, surface);
+				}
+			}
+			float need = level + DeckClearance;
+
+			var ends = new float[2];
+			var decks = new float[2];
+			var lips = new float[2];
+			bool unfooted = false;
+			for (int i = 0; i < 2; i++)
+			{
+				float side = i == 0 ? -1f : 1f;
+				float t = edges[i];
+				bool footed = false;
+				for (; t <= limit; t += Step)
+				{
+					if (Wet(side * t))
 					{
-						clear = true;
+						continue;
+					}
+					float ground = groundAlong(side * t);
+					if (ground >= need)
+					{
+						// Up a steep wall to its lip, not along a gentle rise.
+						for (float run = 0f; t + Step <= limit && run < MaxWallRun && groundAlong(side * (t + Step)) - groundAlong(side * t) > ChannelWallGrade * Step; run += Step)
+						{
+							t += Step;
+						}
+						footed = true;
+						break;
+					}
+					if (ground >= need - (t - edges[i]) * MinRampGrade)
+					{
+						// A bank too low ever to clear the water: where the gentlest ramp down from the deck meets it.
+						footed = true;
 						break;
 					}
 				}
-				if (!clear)
+				if (footed)
 				{
-					// A bank too low ever to clear the water: the deck comes down onto it a few metres past the edge.
-					t = Mathf.Min(reach, edge + LowBankRun);
+					lips[i] = t;
+					decks[i] = groundAlong(side * t);
+					// Resting a little onto its bank where the bank is level there: not out over a drop, nor into a rise.
+					ends[i] = t + (Mathf.Abs(groundAlong(side * (t + Bearing)) - decks[i]) <= 0.2f ? Bearing : 0f);
+					continue;
 				}
-				else
+				// No ground the deck can come down onto: the ground falls away from the water faster than any ramp. It ends
+				// on the highest ground on this side (the lip at the water's edge; ties go outward, across the water rather
+				// than short of it), and its ramp starts back over the water so it comes down no steeper than MaxRampGrade
+				// where there is room.
+				unfooted = true;
+				float best = Step;
+				float highest = groundAlong(side * Step);
+				for (float u = Step * 2f; u <= limit; u += Step)
 				{
-					// Up a steep wall to its lip, not along a gentle rise.
-					for (float run = 0f; t + Step <= reach && run < MaxWallRun && groundAlong(side * (t + Step)) - groundAlong(side * t) > ChannelWallGrade * Step; run += Step)
+					float ground = groundAlong(side * u);
+					if (ground >= highest - 0.05f)
 					{
-						t += Step;
+						best = u;
+						highest = Mathf.Max(highest, ground);
 					}
 				}
-				lips[i] = t;
-				ends[i] = t + Bearing;
-				decks[i] = groundAlong(side * t);
+				lips[i] = best;
+				ends[i] = best;
+				decks[i] = groundAlong(side * best);
+				edges[i] = Mathf.Max(0f, Mathf.Min(edges[i], best - (need - decks[i]) / MaxRampGrade));
 			}
 
 			// Not too steep end to end: the higher end comes back down its wall (still clear of the water) until it is not.
@@ -1847,6 +2257,7 @@ namespace FishMMO.Shared.WorldDesign
 				WaterFrom = -edges[0],
 				WaterTo = edges[1],
 				Level = need,
+				Unfooted = unfooted,
 			};
 			// Each ramp exactly long enough to bring the deck down from over the water onto its end.
 			crossing.RampFrom = Mathf.Max(MinRampGrade, (need - decks[0]) / Mathf.Max(0.5f, ends[0] - edges[0]));
@@ -1854,41 +2265,212 @@ namespace FishMMO.Shared.WorldDesign
 			return crossing;
 		}
 
+		/// <summary>How far under its rim a gorge's lip may stand and still be where the deck lands, metres.</summary>
+		private const float RimTolerance = 0.75f;
+
 		/// <summary>
-		/// How far ahead of the site's centre the water begins (river, lake or sea), metres, and the deck a pier there
-		/// stands at (a metre over the water); NaN when there is no water within two and a half radii ahead.
+		/// A gorge's deck: on each side the first ground within <see cref="RimTolerance"/> of the rim, carried on up the wall
+		/// to its lip; one straight deck between, no steeper than <see cref="MaxDeckSlopeDegrees"/>, over a floor at least
+		/// <see cref="PathRouter.GorgeDepth"/> under both lips. False when either side has no such lip or there is no such floor.
 		/// </summary>
-		public static float MeasureShore(PointOfInterestSiteContext context, out float deck)
+		private static bool TryGorgeCrossing(Func<float, float> groundAlong, float rim, float limit, out Crossing crossing)
+		{
+			const float Step = 0.5f, MaxWallRun = 6f, Bearing = 0.5f;
+			crossing = default;
+			var lips = new float[2];
+			var ends = new float[2];
+			var decks = new float[2];
+			for (int i = 0; i < 2; i++)
+			{
+				float side = i == 0 ? -1f : 1f;
+				float t = Step;
+				while (t <= limit && groundAlong(side * t) < rim - RimTolerance)
+				{
+					t += Step;
+				}
+				if (t > limit)
+				{
+					return false;
+				}
+				for (float run = 0f; t + Step <= limit && run < MaxWallRun && groundAlong(side * (t + Step)) - groundAlong(side * t) > ChannelWallGrade * Step; run += Step)
+				{
+					t += Step;
+				}
+				lips[i] = t;
+				decks[i] = groundAlong(side * t);
+				ends[i] = t + (Mathf.Abs(groundAlong(side * (t + Bearing)) - decks[i]) <= 0.2f ? Bearing : 0f);
+			}
+			if (Mathf.Abs(decks[1] - decks[0]) > Mathf.Tan(MaxDeckSlopeDegrees * Mathf.Deg2Rad) * (ends[0] + ends[1]))
+			{
+				return false;
+			}
+			float floor = float.PositiveInfinity;
+			for (float t = -lips[0]; t <= lips[1]; t += Step)
+			{
+				floor = Mathf.Min(floor, groundAlong(t));
+			}
+			if (floor > Mathf.Min(decks[0], decks[1]) - PathRouter.GorgeDepth)
+			{
+				return false;
+			}
+			crossing = new Crossing
+			{
+				From = -ends[0],
+				To = ends[1],
+				DeckFrom = decks[0],
+				DeckTo = decks[1],
+				WaterFrom = -lips[0],
+				WaterTo = lips[1],
+				Level = float.NaN,
+				Gorge = true,
+			};
+			return true;
+		}
+
+		/// <summary>How far a pier's deck stands over the highest water under it, metres.</summary>
+		public const float PierFreeboard = 0.8f;
+		/// <summary>How far under its deck a pier's piles reach (the Pier piece's), metres: no module is laid over deeper water.</summary>
+		public const float PierPileReach = 5.8f;
+		/// <summary>The most a pier's deck may stand over the bank where it starts, metres: a step up, not a climb.</summary>
+		private const float PierStep = 0.5f;
+		/// <summary>How far back of the high-water line a pier may start to meet a bank at its deck's height, metres.</summary>
+		private const float PierLandward = 8f;
+
+		/// <summary>Metres ahead of the centre where the water begins, and the pier's deck over it; NaN where there is no shore.</summary>
+		public static float MeasureShore(PointOfInterestSiteContext context, out float deck) => MeasureShore(context, out deck, out _, out _);
+
+		/// <summary>
+		/// Metres ahead of the centre where the water begins (NaN where there is no shore), the height of a pier's deck, and
+		/// the stretch a pier runs: from the bank at the deck's height out to where its piles stop reaching the bed.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Over high water.</b> On the sea the deck stands <see cref="PierFreeboard"/> over the highest the tide comes (the
+		/// scene's <c>WaterEnvironment.MaximumTideMetres</c>), not over mean sea level: a deck a metre over the mean was awash
+		/// for hours of every high tide (2026-10-12: "high tide should be the measurement"). A lake or river has no tide
+		/// and its deck stands a metre over its level.
+		/// </para>
+		/// <para>
+		/// <b>From the bank.</b> A deck that high over a beach would start a step taller than a man where the water does, so the
+		/// pier starts back up the shore where the ground reaches its deck (or, on a low beach, at the high-water line), and runs
+		/// out as far past the waterline as it would have; it stops short where the bed falls deeper than its piles reach.
+		/// </para>
+		/// </remarks>
+		public static float MeasureShore(PointOfInterestSiteContext context, out float deck, out float from, out float to)
 		{
 			PointOfInterestRecord record = context.Record;
-			deck = record.Position.y;
 			float sea = SeaLevelOf(context);
-			float reach = Mathf.Max(10f, record.Radius * 2.5f);
+			float tide = float.IsNegativeInfinity(sea) ? 0f : HighestTideOf(context);
+			float shore = MeasureShore(
+				t => context.OnGround(new Vector2(0f, t)).y,
+				t =>
+				{
+					Vector3 at = context.OnGround(new Vector2(0f, t));
+					return context.Water != null ? context.Water.SurfaceAt(at.x, at.z) : float.NegativeInfinity;
+				},
+				sea, tide, record.Radius, out deck, out from, out to);
+			if (float.IsNaN(shore))
+			{
+				deck = record.Position.y;
+			}
+			return shore;
+		}
+
+		/// <summary>
+		/// The pure measure over a profile ahead of the site (see the overload above): <paramref name="groundAlong"/> and
+		/// <paramref name="waterAlong"/> (the river or lake surface, negative infinity for none) at metres ahead,
+		/// <paramref name="sea"/> the mean sea level (negative infinity for none) and <paramref name="highestTide"/> how far
+		/// over it the tide comes.
+		/// </summary>
+		public static float MeasureShore(Func<float, float> groundAlong, Func<float, float> waterAlong, float sea, float highestTide, float radius,
+			out float deck, out float from, out float to)
+		{
+			deck = float.NaN;
+			from = to = float.NaN;
+			float reach = Mathf.Max(10f, radius * 2.5f);
 			for (float t = 0f; t <= reach; t += 1f)
 			{
-				Vector3 at = context.OnGround(new Vector2(0f, t));
-				float level = context.Water != null ? context.Water.SurfaceAt(at.x, at.z) : float.NegativeInfinity;
-				if (float.IsNegativeInfinity(level) && !float.IsNegativeInfinity(sea) && at.y < sea)
+				float ground = groundAlong(t);
+				float level = waterAlong != null ? waterAlong(t) : float.NegativeInfinity;
+				if (float.IsNegativeInfinity(level) && !float.IsNegativeInfinity(sea) && ground < sea)
 				{
 					level = sea;
 				}
-				if (!float.IsNegativeInfinity(level) && level > at.y + 0.3f)
+				if (float.IsNegativeInfinity(level) || level <= ground + 0.3f)
 				{
-					deck = level + 1f;
-					return t;
+					continue;
 				}
+				bool tidal = !float.IsNegativeInfinity(sea) && Mathf.Abs(level - sea) < 0.3f;
+				float high = tidal ? sea + Mathf.Max(0f, highestTide) : level;
+				deck = high + (tidal ? PierFreeboard : 1f);
+				// Back up the shore to where the bank stands at the deck (less a step); on a low beach, the high-water line.
+				for (float b = t; b >= 0f; b -= 0.5f)
+				{
+					float bank = groundAlong(b);
+					if (bank >= deck - PierStep)
+					{
+						from = b;
+						break;
+					}
+					if (float.IsNaN(from) && bank >= high)
+					{
+						// The high-water line: kept unless the bank a few metres further back reaches the deck.
+						from = b;
+					}
+					else if (!float.IsNaN(from) && b < from - PierLandward)
+					{
+						break;
+					}
+				}
+				if (float.IsNaN(from))
+				{
+					from = t;
+				}
+				// Out as far past the waterline as a pier reaches, short of where the piles stop meeting the bed or the ground
+				// comes up dry again.
+				float outward = t + Mathf.Max(6f, radius * 0.6f);
+				to = t;
+				for (float o = t; o <= outward; o += 0.5f)
+				{
+					float bed = groundAlong(o);
+					if (bed < deck - PierPileReach || (o > t + 3f && bed > level - 0.1f))
+					{
+						break;
+					}
+					to = o;
+				}
+				to = Mathf.Max(to, from + 6f);
+				return t;
 			}
 			return float.NaN;
 		}
 
-		/// <summary>The scene's sea level, scene metres; negative infinity for a scene with no sea.</summary>
-		private static float SeaLevelOf(PointOfInterestSiteContext context)
+		/// <summary>The most the scene's tide rises over mean sea level, metres: its water environment's limit, else the default.</summary>
+		internal static float HighestTideOf(PointOfInterestSiteContext context)
 		{
-			if (context.Water != null && !float.IsNegativeInfinity(context.Water.SeaLevel))
+			if (context.Scene.IsValid())
 			{
-				return context.Water.SeaLevel;
+				foreach (GameObject root in context.Scene.GetRootGameObjects())
+				{
+					if (root.TryGetComponent(out FishMMO.Water.WaterEnvironment environment))
+					{
+						return environment.DriveTide ? environment.MaximumTideMetres : 0f;
+					}
+				}
 			}
-			SceneGenerationRequest request = context.Request;
+			return FishMMO.Water.WaterEnvironment.DefaultMaximumTideMetres;
+		}
+
+		/// <summary>The scene's sea level, scene metres; negative infinity for a scene with no sea.</summary>
+		internal static float SeaLevelOf(PointOfInterestSiteContext context) => SeaLevelOf(context.Request, context.Water);
+
+		/// <summary>The scene's sea level, scene metres; negative infinity for a scene with no sea.</summary>
+		internal static float SeaLevelOf(SceneGenerationRequest request, SceneWater water)
+		{
+			if (water != null && !float.IsNegativeInfinity(water.SeaLevel))
+			{
+				return water.SeaLevel;
+			}
 			if (request == null || request.Body == null || (request.Layer != null && request.Layer.Underground))
 			{
 				return float.NegativeInfinity;

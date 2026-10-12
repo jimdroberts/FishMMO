@@ -260,6 +260,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			int before = x.Count;
 			int removed = RiverShaping.Untangle(x, z, along, width, 4f);
 			Assert.That(removed, Is.GreaterThan(20), "the loop is gone");
+			// (EaseBends then takes out the corner the cut leaves: ARiverLineNeverTurnsBackOnItself.)
 			Assert.That(x.Count, Is.EqualTo(before - removed));
 			Assert.That(along.Count, Is.EqualTo(x.Count), "its parameter is cut with it");
 			for (int i = 0; i < x.Count; i++)
@@ -275,6 +276,198 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// No river turns back on itself. Flo Monolith's river 0 turned 146° in one point where river 1 joins it, and 139°
+		/// and 86° near the coast between straight legs 40 m long (2026-10-12: "Fix the river issues"). Eased, every
+		/// bend has room for its radius, the line resampled finer turns nowhere near a right angle, and it keeps its ends.
+		/// </summary>
+		[Test]
+		public void ARiverLineNeverTurnsBackOnItself()
+		{
+			var settings = new RiverSettings();
+			// Flo's junction: north-west, then back east (146°); its coast: east, 45 m south, 41 m back north-east (143°), on south-east; an Ω's neck cut (two 90° turns).
+			var shapes = new (string name, Vector2[] corners, float width)[]
+			{
+				("hairpin", new[] { new Vector2(0f, 0f), new Vector2(-40f, 70f), new Vector2(60f, 21f) }, 8f),
+				("zigzag", new[] { new Vector2(-80f, 0f), new Vector2(0f, 0f), new Vector2(2f, -45f), new Vector2(25f, -11f), new Vector2(90f, -60f) }, 4f),
+				("neck", new[] { new Vector2(-60f, -60f), new Vector2(0f, 0f), new Vector2(0f, 60f), new Vector2(10f, 60f), new Vector2(10f, 0f), new Vector2(70f, -60f) }, 6f),
+			};
+			foreach ((string name, Vector2[] corners, float width) in shapes)
+			{
+				var x = new List<float>();
+				var z = new List<float>();
+				var along = new List<float>();
+				for (int c = 0; c + 1 < corners.Length; c++)
+				{
+					int steps = Mathf.Max(1, Mathf.RoundToInt(Vector2.Distance(corners[c], corners[c + 1]) / 4f));
+					for (int k = 0; k < steps; k++)
+					{
+						Vector2 p = Vector2.Lerp(corners[c], corners[c + 1], k / (float)steps);
+						x.Add(p.x);
+						z.Add(p.y);
+					}
+				}
+				x.Add(corners[corners.Length - 1].x);
+				z.Add(corners[corners.Length - 1].y);
+				for (int i = 0; i < x.Count; i++)
+				{
+					along.Add(i);
+				}
+				var widths = new float[x.Count];
+				for (int i = 0; i < widths.Length; i++)
+				{
+					widths[i] = width;
+				}
+				Assert.That(MostTurn(x, z), Is.GreaterThan(85f), $"{name}: the line given turns back on itself");
+				float firstX = x[0], firstZ = z[0], lastX = x[x.Count - 1], lastZ = z[z.Count - 1];
+				int removed = RiverShaping.EaseBends(x, z, along, widths, settings);
+				Assert.That(removed, Is.GreaterThan(0), $"{name}: the bend is cut off");
+				Assert.That(along.Count, Is.EqualTo(x.Count), $"{name}: its parameter is carried with it");
+				Assert.That(new Vector4(x[0], z[0], x[x.Count - 1], z[z.Count - 1]), Is.EqualTo(new Vector4(firstX, firstZ, lastX, lastZ)), $"{name}: its ends are kept");
+				float radius = Mathf.Max(settings.MinBendRadiusMetres, settings.MinBendRadiusWidths * width);
+				for (int i = 1; i + 1 < x.Count; i++)
+				{
+					float turn = Turn(x, z, i) * Mathf.Deg2Rad;
+					float chords = 0.5f * (Vector2.Distance(new Vector2(x[i - 1], z[i - 1]), new Vector2(x[i], z[i])) + Vector2.Distance(new Vector2(x[i], z[i]), new Vector2(x[i + 1], z[i + 1])));
+					Assert.That(turn * radius, Is.LessThanOrEqualTo(1.2f * chords), $"{name}: point {i} bends tighter than a {radius} m radius");
+				}
+				RiverShaping.Resample(x, z, along, 2f);
+				Assert.That(MostTurn(x, z), Is.LessThan(45f), $"{name}: resampled finer, it still turns nowhere sharply");
+			}
+
+			// A line with no tight bend is left exactly as it was.
+			var gx = new List<float>();
+			var gz = new List<float>();
+			var ga = new List<float>();
+			for (int i = 0; i <= 60; i++)
+			{
+				float a = i * 0.04f;
+				gx.Add(60f * Mathf.Cos(a));
+				gz.Add(60f * Mathf.Sin(a));
+				ga.Add(i);
+			}
+			var copy = new List<float>(gx);
+			Assert.That(RiverShaping.EaseBends(gx, gz, ga, null, settings), Is.EqualTo(0));
+			Assert.That(gx, Is.EqualTo(copy));
+		}
+
+		/// <summary>
+		/// The snap to the valley floor never folds the line over a bend. On ground that falls away the same way the whole
+		/// search long, every point went most of its reach that way, and a bend's straight stretches moved past its centre and
+		/// crossed: the loop Untangle cut, leaving the hairpin. Held to the room on each side, no point passes another.
+		/// </summary>
+		[Test]
+		public void SnappingToTheFloorNeverFoldsTheLineOverABend()
+		{
+			for (int held = 0; held < 2; held++)
+			{
+				var x = new List<float>();
+				var z = new List<float>();
+				var t = new List<float>();
+				// East along z = 0, a quarter turn of 50 m radius to the north, then north.
+				for (float e = -150f; e < 0f; e += 4f) { x.Add(e); z.Add(0f); }
+				for (int k = 0; k <= 20; k++)
+				{
+					float a = -Mathf.PI / 2f + k * (Mathf.PI / 2f) / 20f;
+					x.Add(50f * Mathf.Cos(a)); z.Add(50f + 50f * Mathf.Sin(a));
+				}
+				for (float n = 54f; n < 200f; n += 4f) { x.Add(50f); z.Add(n); }
+				for (int i = 0; i < x.Count; i++) { t.Add(i); }
+				RiverShaping.Resample(x, z, t, 4f);
+				// Falling toward the north-west everywhere: the lowest ground is always the far edge of the search, inside the bend.
+				RiverShaping.SnapToFloor(x, z, (e, n) => 0.2f * (e - n), null, 80f, 0.03f, 60f, held == 1 ? 6f : 0f);
+				int crossings = Crossings(x, z);
+				if (held == 0)
+				{
+					Assert.That(crossings, Is.GreaterThan(0), "unheld, the bend's two straights cross: the loop Untangle cuts into a hairpin");
+					continue;
+				}
+				Assert.That(crossings, Is.EqualTo(0), "held, the line never crosses itself");
+				Assert.That(MostTurn(x, z), Is.LessThan(90f), "nor turns back on itself");
+			}
+		}
+
+		/// <summary>
+		/// A tributary brought onto the river it joins keeps its spacing and never folds. The ease was measured from each point
+		/// to its already moved neighbour, so it fell away within a few points and pulled the last ones apart: Flo Monolith's
+		/// river 1 ended in segments of 7, 11, 21 and 40 m where the rest are 2 m (2026-10-12).
+		/// </summary>
+		[Test]
+		public void ATributaryBroughtOntoItsRiverKeepsItsSpacing()
+		{
+			foreach (Vector2 to in new[] { new Vector2(340f, 10f), new Vector2(270f, -25f), new Vector2(300f, 60f) })
+			{
+				var x = new List<float>();
+				var z = new List<float>();
+				for (int i = 0; i <= 150; i++)
+				{
+					x.Add(2f * i);
+					z.Add(0f);
+				}
+				var q = new float[x.Count];
+				var area = new float[x.Count];
+				for (int i = 0; i < q.Length; i++)
+				{
+					q[i] = 1f + 0.01f * i;
+					area[i] = 100f + i;
+				}
+				int n = RiverShaping.EndOnto(x, z, ref q, ref area, to.x, to.y, 2f);
+				Assert.That(n, Is.EqualTo(x.Count));
+				Assert.That(q.Length, Is.EqualTo(n), $"{to}: its discharge is carried along");
+				Assert.That(area.Length, Is.EqualTo(n));
+				Assert.That(new Vector2(x[n - 1], z[n - 1]), Is.EqualTo(to), $"{to}: it ends on the river it joins");
+				Assert.That(new Vector2(x[0], z[0]), Is.EqualTo(Vector2.zero), $"{to}: its far end is where it was");
+				for (int i = 1; i < n; i++)
+				{
+					float dx = x[i] - x[i - 1], dz = z[i] - z[i - 1];
+					float segment = Mathf.Sqrt(dx * dx + dz * dz);
+					Assert.That(segment, Is.InRange(1.4f, 2.6f), $"{to}: segment {i} is {segment:0.00} m");
+					Assert.That(dx, Is.GreaterThan(0f), $"{to}: segment {i} runs back");
+					Assert.That(q[i], Is.GreaterThanOrEqualTo(q[i - 1] - 1e-5f), $"{to}: its discharge grows downstream as it did");
+				}
+				Assert.That(MostTurn(x, z), Is.LessThan(15f), $"{to}: eased in, not bent");
+			}
+		}
+
+		/// <summary>The sharpest turn anywhere along a line, degrees.</summary>
+		private static float MostTurn(List<float> x, List<float> z)
+		{
+			float most = 0f;
+			for (int i = 1; i + 1 < x.Count; i++)
+			{
+				most = Mathf.Max(most, Turn(x, z, i));
+			}
+			return most;
+		}
+
+		/// <summary>How far a line turns at point <paramref name="i"/>, degrees.</summary>
+		private static float Turn(List<float> x, List<float> z, int i)
+		{
+			float ax = x[i] - x[i - 1], az = z[i] - z[i - 1], bx = x[i + 1] - x[i], bz = z[i + 1] - z[i];
+			return Mathf.Abs(Mathf.Atan2(ax * bz - az * bx, ax * bx + az * bz)) * Mathf.Rad2Deg;
+		}
+
+		/// <summary>How many pairs of a line's segments (not neighbours) cross.</summary>
+		private static int Crossings(List<float> x, List<float> z)
+		{
+			int crossings = 0;
+			for (int i = 0; i + 1 < x.Count; i++)
+			{
+				for (int j = i + 2; j + 1 < x.Count; j++)
+				{
+					float d1 = (x[j] - x[i]) * (z[i + 1] - z[i]) - (z[j] - z[i]) * (x[i + 1] - x[i]);
+					float d2 = (x[j + 1] - x[i]) * (z[i + 1] - z[i]) - (z[j + 1] - z[i]) * (x[i + 1] - x[i]);
+					float d3 = (x[i] - x[j]) * (z[j + 1] - z[j]) - (z[i] - z[j]) * (x[j + 1] - x[j]);
+					float d4 = (x[i + 1] - x[j]) * (z[j + 1] - z[j]) - (z[i + 1] - z[j]) * (x[j + 1] - x[j]);
+					if (d1 * d2 < 0f && d3 * d4 < 0f)
+					{
+						crossings++;
+					}
+				}
+			}
+			return crossings;
 		}
 
 		[Test]
@@ -353,11 +546,20 @@ namespace FishMMO.UnitTests.WorldDesign
 				"the river above the ramp is left as it was");
 		}
 
+		/// <summary>What Flo Monolith's river 0 carries where it meets the sea, m³/s: about 5 m wide.</summary>
+		/// <remarks>
+		/// It was 6 m³/s, a river 8 m wide, and the bluff unmet was then no fall: Knickpoints names a point a fall only where
+		/// the surface falls 0.3 per metre over a width either side of it, and the bluff's 3.9 m over the 17 m an 8 m river
+		/// measures it across is 0.23. A ledge into the sea still, but named a rapid, so the check that the fixture reproduces
+		/// Flo's fall failed before the meet level was ever tried (2026-10-12).
+		/// </remarks>
+		private const float SeaRiverDischarge = 1.3f;
+
 		/// <summary>A straight river along those surfaces, its reaches named (knickpoints and pools included).</summary>
 		private static RiverPath SeaRiver(float[] surface, float spacing, RiverSettings settings)
 		{
 			int n = surface.Length;
-			RiverShaping.Size(6f, settings, out float width, out float depth);
+			RiverShaping.Size(SeaRiverDischarge, settings, out float width, out float depth);
 			var path = new RiverPath
 			{
 				X = new float[n], Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
@@ -369,7 +571,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				path.S[i] = i * spacing;
 				path.Width[i] = width;
 				path.Depth[i] = depth;
-				path.Discharge[i] = 6f;
+				path.Discharge[i] = SeaRiverDischarge;
 				path.Bed[i] = surface[i] - depth;
 			}
 			RiverShaping.Reaches(path, settings, 7u);

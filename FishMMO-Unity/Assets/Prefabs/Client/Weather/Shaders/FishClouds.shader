@@ -320,6 +320,8 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+            // The fine ground map: the clouds, the mist and the god rays stay out of a cave (FishOpenAir).
+            #include "FishGroundMap.hlsl"
 
             TEXTURE2D(_FishCloudBuffer);
             SAMPLER(sampler_FishCloudBuffer);
@@ -336,7 +338,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 return output;
             }
 
-            float4 Frag(Varyings input) : SV_Target
+            float4 Composite(Varyings input)
             {
                 // Pass 1 already rebuilt the clouds pixel for pixel, each from the samples that looked
                 // at what that pixel looks at, so at the screen's own size there is nothing left to
@@ -436,6 +438,14 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     return best;
                 }
                 return here < nearest ? float4(0.0, 0.0, 0.0, 1.0) : farValue;
+            }
+
+            float4 Frag(Varyings input) : SV_Target
+            {
+                float4 clouds = Composite(input);
+                float rawDepth = SampleSceneDepth(input.uv);
+                float3 surface = ComputeWorldSpacePosition(input.uv, rawDepth, UNITY_MATRIX_I_VP);
+                return FishOpenAirFade(clouds, FishOpenAir(GetCameraPositionWS(), surface));
             }
             ENDHLSL
         }
@@ -985,7 +995,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         // (at infinity: a camera moving at 50 m/s shifts a cloud five kilometres off by under a pixel in three frames);
         // where it cannot be — off that view's screen, its ray now ending elsewhere — it is marched at once. A slice
         // behind a near band and nearer slices that already let nothing through is not marched at all. Writes near and
-        // far together, which the steadying reads in place of pass 0's march. Jim, 2026-10-07: distant clouds may be
+        // far together, which the steadying reads in place of pass 0's march. 2026-10-07: distant clouds may be
         // softer for this.
         Pass
         {

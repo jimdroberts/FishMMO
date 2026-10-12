@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 			};
 
 #if UNITY_EDITOR
-		/// <summary>How high the marker line rises above the site, metres, with the label at its top (Jim, 2026-10-10).</summary>
+		/// <summary>How high the marker line rises above the site, metres, with the label at its top (2026-10-10).</summary>
 		private const float MarkerHeight = 20f;
 
 		private static GUIStyle labelStyle;

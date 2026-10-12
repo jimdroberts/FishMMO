@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Breath and drowning as Jim set them (2026-10-05): a meter that drains under water and fills in about three
+	/// Breath and drowning as specified (2026-10-05): a meter that drains under water and fills in about three
 	/// seconds out of it; a flat tenth of maximum health a second once it is gone; lava's 50 fire a second; fire races
 	/// immune to fire, aquatic races breathing water.
 	/// </summary>
@@ -86,7 +86,7 @@ namespace FishMMO.UnitTests
 			var fire = AssetDatabase.LoadAssetAtPath<DamageAttributeTemplate>("Assets/Templates/Entity/CharacterAttributes/Damage/Fire Damage.asset");
 			Assert.That(race, Is.Not.Null, name);
 			Assert.That(fire, Is.Not.Null);
-			Assert.That(race.IsImmuneTo(fire), Is.True, $"{name} swims in lava (Jim: an under-lava city)");
+			Assert.That(race.IsImmuneTo(fire), Is.True, $"{name} swims in lava (an under-lava city)");
 		}
 
 		[Test]

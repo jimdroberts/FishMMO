@@ -25,7 +25,7 @@ namespace FishMMO.Client.Editor
 	/// <code>
 	/// xvfb-run -a -s "-screen 0 1600x1000x24" &lt;Unity&gt; -batchmode -projectPath &lt;FishMMO-Unity&gt; \
 	///   -executeMethod FishMMO.Client.Editor.NetworkStatsRender.Render \
-	///   -netstatsOut /home/jim/Dev/FishMMO-Dev/PanelRenders/NetworkStats -logFile /tmp/netstats-render.log
+	///   -netstatsOut &lt;checkout&gt;/PanelRenders/NetworkStats -logFile /tmp/netstats-render.log
 	/// </code>
 	/// <para><b>Output.</b> The directory comes from <c>-netstatsOut &lt;dir&gt;</c>, else the
 	/// <c>FISHMMO_NETSTATS_RENDER_DIR</c> environment variable, else

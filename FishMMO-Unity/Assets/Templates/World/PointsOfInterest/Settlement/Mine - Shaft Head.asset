@@ -1,0 +1,123 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d5ab720ab15d69083f3901ff8f111f, type: 3}
+  m_Name: Mine - Shaft Head
+  m_EditorClassIdentifier: FishMMO.Shared.Tools.Editor::FishMMO.Shared.WorldDesign.PointOfInterestTemplate
+  Kind: 87
+  Weight: 1
+  DefaultBiomeWeight: 1
+  BiomeWeights: []
+  RaceCategories: []
+  Races: []
+  Small: 1
+  Medium: 1
+  Large: 1
+  PadFlatness: 0.7
+  Style: timber
+  Layout: 4
+  Pieces:
+  - Tag: =Headframe
+    MinCount: 1
+    MaxCount: 1
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: =OreBin
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: =LeanTo
+    MinCount: 1
+    MaxCount: 2
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: storage
+    MinCount: 2
+    MaxCount: 5
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  - Tag: rubble
+    MinCount: 2
+    MaxCount: 5
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: stone
+  - Tag: =TorchPost
+    MinCount: 1
+    MaxCount: 3
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
+  Features:
+  - rid: 4061506076050456751
+  - rid: 4061506076050456752
+  - rid: 4061506076050456753
+  - rid: 4061506076050456754
+  references:
+    version: 2
+    RefIds:
+    - rid: 4061506076050456751
+      type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MaxSinkMetres: 0.4
+        MaxTiltDegrees: 8
+        Gap: 1
+        CountsFollowSize: 1
+        Finish: 0
+        FinishChance: 1
+        KeepOutOfWater: 1
+        Clearings: []
+    - rid: 4061506076050456752
+      type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        RadiusShare: 1.25
+        Height: 60
+        ShowName: 1
+    - rid: 4061506076050456753
+      type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data: 
+    - rid: 4061506076050456754
+      type: {class: PointOfInterestChamberFeature, ns: FishMMO.Shared.WorldDesign,
+        asm: FishMMO.Shared.Tools.Editor}
+      data:
+        MinRadius: 3
+        Features:
+        - rid: 4061506076050456755
+    - rid: 4061506076050456755
+      type: {class: GatheringFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
+      data:
+        Families: 
+        Count: 0
+        RespawnSeconds: {x: 300, y: 600}
+        AreaShare: 0.7

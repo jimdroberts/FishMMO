@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// A <see cref="Waypoint"/> at the site, indexed by the site's unlock index so a re-cut keeps every character's
-	/// discovery of it (Jim, 2026-10-10: settlements get a waypoint).
+	/// discovery of it (2026-10-10: settlements get a waypoint).
 	/// </summary>
 	/// <remarks>
 	/// An instance of the shipped <c>Waypoint.prefab</c>, named after the site, given a deterministic SceneId

@@ -1499,13 +1499,11 @@ namespace FishMMO.Client
 			// Steam off water warmer than the air is the march's too: its own source, drawn whatever the mist is doing.
 			bool steaming = steamFog.Publish(presentation, column, wind, clear, sunAltitude, viewerAt, DrawFog);
 			bool on = DrawFog && (MistBestPotential > 0.001f || steaming);
-			// Kept for the fog too: the fine ground round the camera carries the near terrain shadow every fog
-			// is shaded by (FishTerrainSunlit), mist or none.
-			if (on || fogDrawn)
-			{
-				mistGround ??= new MistGroundMap();
-				mistGround.Update(viewerAt, cloudSunDirection, cloudFlow);
-			}
+			// Kept always: the fine ground round the camera carries the near terrain shadow every fog is shaded by
+			// (FishTerrainSunlit), and how far underground every lit surface is (a cave's walls take no sky:
+			// FishGroundMap.hlsl FishUnderground), mist or fog or neither.
+			mistGround ??= new MistGroundMap();
+			mistGround.Update(viewerAt, cloudSunDirection, cloudFlow);
 			Shader.SetGlobalVector(MistId, on ? new Vector4(deficit, stirred, night, MistRange) : Vector4.zero);
 			return on;
 		}
@@ -2236,6 +2234,12 @@ namespace FishMMO.Client
 			// dark for the sky over it. The sun's share of what comes through is in the sun's light.
 			float dim = CloudSkyThrough * (1f - eclipse * 0.8f);
 			ambientThrough = dim;
+			// Underground (in a cave or a mine) the sky does not reach: the ambient and the sky's reflection fade as the
+			// camera goes in, eased like eyes adjusting, so a character there is not lit by a sky it cannot see. The
+			// cave's own surfaces take theirs per pixel (FishUnderground); this is everything drawn with stock shaders.
+			float under = Underground();
+			dim *= 1f - UndergroundAmbientCut * under;
+			RenderSettings.reflectionIntensity = 1f - UndergroundAmbientCut * under;
 			Color flashColor = new Color(0.3f, 0.32f, 0.38f) * flash;
 			Color skyColor = sample.AmbientSky * dim + flashColor;
 			Color equator = sample.AmbientEquator * dim + flashColor * 0.6f;
@@ -2255,6 +2259,36 @@ namespace FishMMO.Client
 				lastAmbientEquator = equator;
 				lastAmbientGround = ground;
 			}
+		}
+
+		/// <summary>How much of the sky's ambient and reflection is taken away deep underground.</summary>
+		public const float UndergroundAmbientCut = 0.92f;
+		/// <summary>How much of the underground dimming a room's inside gets: 0.6 × 0.92, about the lit pass's own (FISH_INDOOR_DIM).</summary>
+		private const float IndoorAmbientShare = 0.6f;
+		/// <summary>Seconds the ambient takes to follow the camera in or out of a cave (about two thirds of the way).</summary>
+		private const float UndergroundEaseSeconds = 1.5f;
+		private float underground;
+
+		/// <summary>
+		/// How far underground the camera is, 0..1, eased: 0 within six metres under the ground over it, 1 from twenty
+		/// (FishGroundMap.hlsl's FishUnderground, the same bounds); indoors, part of the way (IndoorRooms).
+		/// </summary>
+		private float Underground()
+		{
+			float target = 0f;
+			if (TargetCamera != null)
+			{
+				Vector3 eye = TargetCamera.transform.position;
+				if (TerrainSet.Current.TryHeight(eye.x, eye.z, out float ground))
+				{
+					float t = Mathf.Clamp01((ground - eye.y - 6f) / 14f);
+					target = t * t * (3f - 2f * t);
+				}
+				// Indoors (a room of a site's building), the sky comes in at the windows and the door: part of the way.
+				target = Mathf.Max(target, IndoorAmbientShare * IndoorRooms.IndoorAt(eye));
+			}
+			underground = Mathf.Lerp(underground, target, 1f - Mathf.Exp(-Time.unscaledDeltaTime / UndergroundEaseSeconds));
+			return underground;
 		}
 
 		private static bool Changed(Color a, Color b) => Mathf.Abs(a.r - b.r) + Mathf.Abs(a.g - b.g) + Mathf.Abs(a.b - b.b) > 0.003f;

@@ -25,8 +25,10 @@ float4 _FishDistanceBlend;       // x start (m), y end (m), z normal flatten, w 
 TEXTURE2D(_FishGroundNormal);    // the terrain's surface normal over the same rect: linear, rgb = n·0.5 + 0.5, a coverage
 float4 _FishContactLarge;        // trees' and terrain rocks' bases: x band height (m), y how much terrain the band shows above its foot, w 1 when on
 // Per draw, not global: 1 on TerrainGpuRenderer's tree and rock draws (TerrainTreeInstancing, CliffRockInstancing), set
-// on their own material clones and per-draw blocks. Nothing else sets it, so it reads 0 and every ordinary material
-// drawn with these shaders (buildings, props, the scattered pebbles and litter, the shared assets) is untouched.
+// on their own material clones and per-draw blocks; 2 on a carved cave's rock (CaveVisibility's property block: the
+// ground only where the rock comes up through the hillside — its collar and lip — never on the walls under it). Nothing
+// else sets it, so it reads 0 and every ordinary material drawn with these shaders (buildings, props, the scattered
+// pebbles and litter, the shared assets) is untouched.
 float _FishContactOn;
 
 // The ground's colour under a world position (rgb) and the map's coverage there (a; 0 outside it or where no
@@ -423,7 +425,7 @@ struct FishGroundSite
 // The band reads as a skirt of ground drawn up over the object's foot: solid terrain over its lower third, fading
 // into the object above (the profile's strength scales the fade, never the solid foot). Every orientation takes it —
 // walls, trunks and the rounded underside of a rock's bevel just above the ground, which faces DOWN and was skipped as
-// an "overhang": that bare, self-shadowed lip was the hard dark line under every rock (Jim, 2026-10-08).
+// an "overhang": that bare, self-shadowed lip was the hard dark line under every rock (2026-10-08).
 //
 // A wall cannot read the terrain's texture where the terrain reads it, straight down: every texel of the ground line
 // would streak up the wall. The band instead UNFOLDS the ground up the wall: a pixel h metres up reads the ground h
@@ -450,7 +452,15 @@ bool FishGroundContact(float3 positionWS, float vertexHeight, half3 surfaceNorma
     }
     float3 groundNormal = FishGroundHeightNormal(tile, t);
     // Across the slope, not straight down: on a cliff face a vertical metre is a few centimetres from the surface.
-    float height = max(0.0, (positionWS.y - FishGroundSurfaceY(tile, t, positionWS, groundNormal)) * groundNormal.y);
+    float raw = (positionWS.y - FishGroundSurfaceY(tile, t, positionWS, groundNormal)) * groundNormal.y;
+    // A carved cave's rock (mode 2, CaveVisibility) takes the ground only where it comes up through the hillside: below
+    // the surface it is the cave's own wall and roof, which must not draw as the turf over them. A scattered rock's buried
+    // part is never seen, so mode 1 keeps the band's full depth.
+    if (_FishContactOn > 1.5 && raw < -0.3)
+    {
+        return false;
+    }
+    float height = max(0.0, raw);
     half u = (half)saturate(1.0 - height / band);
     half contact = u * u * (3.0h - 2.0h * u);
     if (contact <= 0.0h)

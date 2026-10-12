@@ -138,17 +138,26 @@ MonoBehaviour:
     MaxScale: 1
     Role: 8
     Style: 
+  - Tag: =TorchPost
+    MinCount: 2
+    MaxCount: 4
+    MinDecay: 0
+    MaxDecay: 0
+    MinScale: 1
+    MaxScale: 1
+    Role: 8
+    Style: 
   Features:
-  - rid: 4061506061917749284
-  - rid: 4061506061917749285
-  - rid: 4061506061917749286
-  - rid: 4061506061917749287
-  - rid: 4061506061917749288
-  - rid: 4061506061917749289
+  - rid: 4061506076050456631
+  - rid: 4061506076050456632
+  - rid: 4061506076050456633
+  - rid: 4061506076050456634
+  - rid: 4061506076050456635
+  - rid: 4061506076050456636
   references:
     version: 2
     RefIds:
-    - rid: 4061506061917749284
+    - rid: 4061506076050456631
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -160,20 +169,20 @@ MonoBehaviour:
         KeepOutOfWater: 1
         Clearings:
         - {x: -3, y: 2, z: 5.499623}
-    - rid: 4061506061917749285
+    - rid: 4061506076050456632
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506061917749286
+    - rid: 4061506076050456633
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506061917749287
+    - rid: 4061506076050456634
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Offset: {x: -3, y: 5.499623}
-    - rid: 4061506061917749288
+    - rid: 4061506076050456635
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 3
@@ -181,7 +190,7 @@ MonoBehaviour:
         Offset: {x: 0, y: 0}
         AreaShare: 0.5
         ApplySiteRace: 1
-    - rid: 4061506061917749289
+    - rid: 4061506076050456636
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

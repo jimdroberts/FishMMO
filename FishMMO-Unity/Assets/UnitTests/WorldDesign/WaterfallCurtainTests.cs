@@ -30,16 +30,25 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(FallHydraulics.BrinkSpeed(q), Is.EqualTo(2.525f).Within(0.02f));
 		}
 
+		/// <summary>
+		/// Castillo's break-up length against Horeni's fit, within a factor of two from a trickle to a mountain river. Not
+		/// past that: at a critical brink the jet's Froude number is the same at every discharge, so Castillo's length grows
+		/// as the jet's thickness, q^⅔, and Horeni's fit as q^0.32. The two cannot agree within two over the hundredfold
+		/// range 0.05–5 m²/s this asked for at any one turbulence (at 0.013 the ratio runs 0.54 … 2.65), and never did; q 5 is
+		/// held to Castillo's own scaling instead (2026-10-12).
+		/// </summary>
 		[Test]
 		public void BreakUpLengthAgreesWithHoreniAcrossTrickleToRiver()
 		{
 			Assert.That(FallHydraulics.BreakupLength(0.6f, 0.013f), Is.EqualTo(6.47f).Within(0.05f));
 			Assert.That(FallHydraulics.BreakupLengthHoreni(0.6f), Is.EqualTo(5.10f).Within(0.02f));
-			foreach (float q in new[] { 0.05f, 0.2f, 0.6f, 1.33f, 5f })
+			foreach (float q in new[] { 0.05f, 0.2f, 0.6f, 1.33f, 2f })
 			{
 				float castillo = FallHydraulics.BreakupLength(q), horeni = FallHydraulics.BreakupLengthHoreni(q);
 				Assert.That(castillo / horeni, Is.InRange(0.5f, 2f), $"q {q}: Castillo {castillo:0.00} m against Horeni {horeni:0.00} m");
 			}
+			float big = FallHydraulics.BreakupLength(5f) / FallHydraulics.BreakupLength(0.6f);
+			Assert.That(big, Is.EqualTo(Mathf.Pow(5f / 0.6f, 2f / 3f)).Within(0.01f), "a big river's sheet holds as much longer as its jet is thicker");
 		}
 
 		[Test]
@@ -99,17 +108,20 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void ALedgeInTheCollisionSetOnlyIsStruckByTheCurtain()
 		{
 			BuildCliff();
-			// A ledge 4 m below the lip, out 4.5 m from the face, under the left half of the fall: baked collision only.
+			/* A shelf 4 m below the lip running 9.5 m out from the face, under one half of the fall: baked collision only. It
+			 * was 4.5 m deep, and the water that landed on it spilled off its front at a walking pace from 4 m lower and 4 m
+			 * further out, and came down 9.33 m out, where the free half lands (9.35 m): one landing, the assertion failed with
+			 * the ledge doing all it should. Off a shelf out past the free half's landing, the struck half lands beyond it. */
 			var owner = new GameObject(ScenePropColliders.ObjectName).AddComponent<ScenePropColliders>();
 			var set = ScriptableObject.CreateInstance<ScenePropCollisionSet>();
 			set.Source = "Test";
 			set.Prototypes = new[] { new ScenePropCollisionSet.Prototype { Mesh = BoxMesh(), Layer = 0 } };
 			set.Instances = new[]
 			{
-				new ScenePropCollisionSet.Instance { Prototype = 0, Position = new Vector3(1.6f, Plateau - 5f, 1.75f), Rotation = Quaternion.identity, Scale = new Vector3(3.2f, 1.2f, 4.5f) },
+				new ScenePropCollisionSet.Instance { Prototype = 0, Position = new Vector3(1.6f, Plateau - 5f, 4.5f), Rotation = Quaternion.identity, Scale = new Vector3(3.2f, 1.2f, 10f) },
 			};
 			owner.Sets.Add(set);
-			Assert.That(Physics.OverlapSphere(new Vector3(1.6f, Plateau - 5f, 1.75f), 2f), Is.Empty, "the ledge must not be in physics: the falls are built before any prop chunk is streamed in");
+			Assert.That(Physics.OverlapSphere(new Vector3(1.6f, Plateau - 5f, 4.5f), 2f), Is.Empty, "the ledge must not be in physics: the falls are built before any prop chunk is streamed in");
 
 			InlandWaterRenderer renderer = BuildWater(out _);
 			InlandWaterRenderer.Fall fall = renderer.Falls[0];
@@ -118,8 +130,15 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(strike.Point.x, Is.GreaterThan(-0.5f), $"a strike at {strike.Point} is not under the ledge");
 			}
-			// The water that struck the ledge is thrown off its front, so the left half lands further out, or apart.
-			Assert.That(fall.Parts.Count > 1 || Mathf.Abs(fall.Landing.x) > 0.2f, $"the ledge changed nothing where the water lands ({fall.Parts.Count} part(s), landing {fall.Landing})");
+			// The water that struck the shelf spills off its front, out past where the free half lands: two landings, apart along the throw.
+			Assert.That(fall.Parts.Count, Is.GreaterThan(1), $"the ledge changed nothing where the water lands ({fall.Parts.Count} part(s), landing {fall.Landing})");
+			float nearest = float.MaxValue, farthest = float.MinValue;
+			foreach (InlandWaterRenderer.Part part in fall.Parts)
+			{
+				nearest = Mathf.Min(nearest, part.Landing.z);
+				farthest = Mathf.Max(farthest, part.Landing.z);
+			}
+			Assert.That(farthest - nearest, Is.GreaterThan(2f), $"the shelf's water lands out past the free water (landings {nearest:0.00} … {farthest:0.00} m out)");
 		}
 
 		[Test]

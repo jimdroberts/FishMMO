@@ -66,7 +66,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheMovedMenuItems_AreGone()
 		{
-			/* Every item Jim approved moving, by menu path. The remaining FishMMO/ items (QuickStart,
+			/* Every item approved for moving, by menu path. The remaining FishMMO/ items (QuickStart,
 			 * Script Compilation, Restore Missing Generated Files, the dashboards) stay by decision. */
 			string[] moved =
 			{

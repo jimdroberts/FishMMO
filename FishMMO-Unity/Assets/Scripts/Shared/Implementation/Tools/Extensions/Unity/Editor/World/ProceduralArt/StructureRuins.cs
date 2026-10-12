@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Turns an intact piece into a ruin of it (Jim, 2026-10-10: ruins are made FROM the intact pieces by cut planes, tilt
+	/// Turns an intact piece into a ruin of it (2026-10-10: ruins are made FROM the intact pieces by cut planes, tilt
 	/// and missing chunks, by a decay parameter): roofs fall in, walls break along a ragged line, slices lean, tops lie
 	/// where they fell, and rubble gathers round the foot.
 	/// </summary>

@@ -13,7 +13,7 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why details popped "in square chunks" (Jim, 2026-10-02).</b> Unity draws terrain details by
+	/// <b>Why details popped "in square chunks" (2026-10-02).</b> Unity draws terrain details by
 	/// patch — <c>detailResolutionPerPatch</c> cells a side, 32 m at the generator's old 32 × 1 m — and
 	/// culls a whole patch at <c>detailObjectDistance</c>. Each patch therefore appears and vanishes at
 	/// once, a square of grass at a time. Trees are dropped one by one at <c>treeDistance</c>, whatever

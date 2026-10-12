@@ -170,7 +170,7 @@ namespace FishMMO.Client
 		[Range(1, 12)] public int LightSteps = 6;
 		[Tooltip("How far the clouds are drawn, in metres. They dissolve over the last quarter of it, and the haze is full by four fifths of it, so the sky ends in the colour of the horizon and not on an edge.")]
 		[Min(1000f)] public float MaxDistance = 44000f;
-		[Tooltip("How far a cloud ray is marched in full, in metres; past it the far tail's few steps reach the end of the ray, and the far band's last slice ends here. It was the camera's far plane, which the scene backdrop raises to 20 km to draw the horizon ring: now the clouds keep their own distance whatever the camera's. Measured in Flo Monolith (2026-10-09, 1440p): 13 km against 20 km saves about 1 ms in a fair sky, and the horizon's thinnest cloud between 13 and 20 km thins a little, with a few sparkles on far edges (Jim chose 13 km for the frames). Never nearer than 1 km past the far band's second slice.")]
+		[Tooltip("How far a cloud ray is marched in full, in metres; past it the far tail's few steps reach the end of the ray, and the far band's last slice ends here. It was the camera's far plane, which the scene backdrop raises to 20 km to draw the horizon ring: now the clouds keep their own distance whatever the camera's. Measured in Flo Monolith (2026-10-09, 1440p): 13 km against 20 km saves about 1 ms in a fair sky, and the horizon's thinnest cloud between 13 and 20 km thins a little, with a few sparkles on far edges (13 km was chosen for the frames). Never nearer than 1 km past the far band's second slice.")]
 		[Min(1000f)] public float FullMarchMetres = 13000f;
 		[Tooltip("Draw the clouds past the far band's start from an imposter: a panorama round the camera, marched a band of rows a frame with the same march and light as the clouds near by, and read by direction every frame — so turning the camera costs nothing and only the near band is marched live. Off: the far band marches its slices on the screen as before.")]
 		public bool FarImposter = true;
@@ -186,7 +186,7 @@ namespace FishMMO.Client
 		[Range(1, 4)] public int NearMarchEvery = 1;
 		[Tooltip("Steps a ray may take past Full March Metres, each as long as it must be to reach the end of the ray (0: no limit). The march costs as long as its longest rays, and in a storm those are the low ones that cross a hundred kilometres of deck toward the horizon; past the far plane a cloud is a few pixels of haze, and this keeps the horizon clouded without paying for it.")]
 		[Range(0, 64)] public int FarTailSteps = 24;
-		[Tooltip("Where the far band begins, in metres from the camera (0: one band). Cloud past it is marched a quarter of the screen a frame and carried on between from the frame before: two thirds of a fair sky's cost was past ten kilometres, where a cloud barely moves on the screen. The far clouds are a little softer for it (Jim, 2026-10-07).")]
+		[Tooltip("Where the far band begins, in metres from the camera (0: one band). Cloud past it is marched a quarter of the screen a frame and carried on between from the frame before: two thirds of a fair sky's cost was past ten kilometres, where a cloud barely moves on the screen. The far clouds are a little softer for it (2026-10-07).")]
 		[Min(0f)] public float FarBandMetres = 5000f;
 		[Tooltip("How much the last frame is kept when the clouds are steadied.")]
 		[Range(0f, 0.98f)] public float TemporalBlend = 0.9f;
@@ -550,6 +550,18 @@ namespace FishMMO.Client
 		[Tooltip("Hidden/FishMMO/RockSdf: draws each rock shape's distance field. Referenced here so it ships to clients only.")]
 		public Shader RockSdfShader;
 
+		[Header("Moss (rock, cliffs, caves, stone and timber)")]
+		[Tooltip("How much moss the world grows, times each scene's dampness (MossClimate: the biome under the camera — swamp and forest a lot, desert, volcanic and ice next to none) and each material's own Moss amount (_FishMoss, set by the art generator). 0 turns it off everywhere. Live (2026-10-12).")]
+		[Range(0f, 2f)] public float MossStrength = 1f;
+		[Tooltip("Metres one tile of the moss texture covers (projected in world space, so the same on every rock and wall).")]
+		[Range(0.25f, 8f)] public float MossTileMetres = 2f;
+		[Tooltip("The dampness the editor previews with out of play mode, where no biome is being sampled (0..1).")]
+		[Range(0f, 1f)] public float MossEditorDampness = 0.6f;
+		[Tooltip("The generated moss surface (Generate biome art writes Ground_Moss_Albedo; alpha holds its smoothness). Assigned by Create weather render profile; empty, the editor loads it by path and a build draws a plain green instead.")]
+		public Texture2D MossAlbedo;
+		[Tooltip("The generated moss surface's normal map (Ground_Moss_Normal).")]
+		public Texture2D MossNormal;
+
 		[Header("Procedural grass")]
 		[Tooltip("FishGrassBlades.compute: generates the visible blades around each camera every frame. Referenced here, not from Resources, so it ships to clients only.")]
 		public ComputeShader GrassBladesCompute;
@@ -589,6 +601,8 @@ namespace FishMMO.Client
 		[Header("Site embers")]
 		[Tooltip("FishMMO/World/Site Embers: sparks off the campfires, cooking fires and forges near the camera (SiteEmbers). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader SiteEmbersShader;
+		[Tooltip("FishMMO/World/Site Flames: the flames on the campfires, hearths, forges and torches near the camera (SiteEmbers). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		public Shader SiteFlamesShader;
 
 		[Header("Falling leaves")]
 		[Tooltip("FishMMO/Weather/Falling Leaves: leaves coming down under and downwind of the trees near the camera, mostly in autumn (FallingLeavesPresenter). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]

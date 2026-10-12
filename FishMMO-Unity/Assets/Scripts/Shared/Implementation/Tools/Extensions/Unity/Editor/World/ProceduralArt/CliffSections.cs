@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// A rock shelter for a point of interest (Jim, 2026-10-10: "a placeable lean/arch cliff section"): an unbroken wall
+		/// A rock shelter for a point of interest (2026-10-10: "a placeable lean/arch cliff section"): an unbroken wall
 		/// whose upper half leans 4.5 m out over its front, so the ground under its brow is roofed. No bays (a gap in the
 		/// front row would open the shelter's roof) and an even skyline.
 		/// </summary>

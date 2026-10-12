@@ -142,8 +142,8 @@ export function generateSalt() {
  *
  * Not the account name. The name used to be the identity, and nothing agreed on its spelling:
  * sign-in hashed what was typed, reset and password change hashed the stored lowercase name, so
- * a player who registered "Jim" had to type "Jim", could not change their password here, and
- * after a reset could only sign in as "jim" (issue #267). Every account has its own random salt,
+ * a player who registered with capital letters had to type them exactly, could not change their password here,
+ * and after a reset could only sign in in lowercase (issue #267). Every account has its own random salt,
  * which is what the identity would otherwise protect, so a constant costs nothing.
  */
 export const SRP_IDENTITY = 'fishmmo';

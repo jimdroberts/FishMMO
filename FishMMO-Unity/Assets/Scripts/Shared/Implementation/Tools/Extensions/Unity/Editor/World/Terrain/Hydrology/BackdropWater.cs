@@ -348,6 +348,13 @@ namespace FishMMO.Shared.WorldDesign
 				RiverShaping.Size(qs[i], 0.5f, settings, out widths[i], out _);
 			}
 			RiverShaping.Untangle(xs, zs, qs, widths, 4f);
+			// Nor a hairpin (RiverShaping.EaseBends), with the widths of what Untangle left of the line.
+			var kept = new float[xs.Count];
+			for (int i = 0; i < kept.Length; i++)
+			{
+				RiverShaping.Size(qs[i], 0.5f, settings, out kept[i], out _);
+			}
+			RiverShaping.EaseBends(xs, zs, qs, kept, settings);
 			int n = xs.Count;
 			if (n < 2)
 			{
@@ -387,24 +394,30 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>Moves a line's first or last point (<paramref name="atEnd"/>) onto <paramref name="to"/>, the rows within <see cref="HoldMetres"/> of it following less the farther they are.</summary>
+		/// <summary>
+		/// Moves a line's first or last point (<paramref name="atEnd"/>) onto <paramref name="to"/>, the rows within
+		/// <see cref="HoldMetres"/> of it (or three times the move, if more) following less the farther they are.
+		/// </summary>
+		/// <remarks>
+		/// The distance is measured along the line as it lay before the move, as RiverShaping.EndOnto does for a scene's
+		/// tributary: measured as the rows moved, from each to its already moved neighbour, the first step counted the move
+		/// itself as distance along, the ease fell away within a few rows and the end rows were pulled apart (Flo Monolith's
+		/// river 1 ended in a 40 m segment; 2026-10-12). Eased over three times the move, no row passes its neighbour.
+		/// </remarks>
 		private static void ShiftEnd(List<float> x, List<float> z, bool atEnd, Vector2 to)
 		{
 			int n = x.Count;
 			int from = atEnd ? n - 1 : 0, step = atEnd ? -1 : 1;
 			float sx = to.x - x[from], sz = to.y - z[from];
-			float along = 0f;
-			for (int i = from; i >= 0 && i < n; i += step)
+			float taper = Mathf.Max(HoldMetres, 3f * Mathf.Sqrt(sx * sx + sz * sz));
+			var along = new float[n];
+			for (int i = from + step; i >= 0 && i < n; i += step)
 			{
-				if (i != from)
-				{
-					along += RiverShaping.Distance(x[i - step], z[i - step], x[i], z[i]);
-				}
-				float w = Mathf.Clamp01(1f - along / HoldMetres);
-				if (w <= 0f)
-				{
-					break;
-				}
+				along[i] = along[i - step] + RiverShaping.Distance(x[i - step], z[i - step], x[i], z[i]);
+			}
+			for (int i = from; i >= 0 && i < n && along[i] < taper; i += step)
+			{
+				float w = 1f - Mathf.SmoothStep(0f, 1f, along[i] / taper);
 				x[i] += sx * w;
 				z[i] += sz * w;
 			}

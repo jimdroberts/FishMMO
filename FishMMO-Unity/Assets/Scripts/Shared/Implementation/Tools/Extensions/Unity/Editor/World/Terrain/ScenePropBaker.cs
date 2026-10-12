@@ -446,6 +446,8 @@ namespace FishMMO.Shared.WorldDesign
 					EditorUtility.SetDirty(terrain);
 				}
 			}
+			// Ivy, creeper and lianas up some of the trees, each as a prop with its tree's own transform (VinePlacement).
+			VinePlacement.ClimbTrees(scene, prototypes, props, notes);
 			int collidable = Write(scene, ScatterSource, prototypes, props, collisionLayer);
 			notes?.Add($"Props: {props.Count:N0} trees and large props baked as instanced data in {prototypes.Count} prototype(s), {collidable:N0} of them collidable (streamed near characters){(skipped > 0 ? $"; {skipped:N0} skipped (no prefab)" : string.Empty)}{(kept > 0 ? $"; {kept:N0} left on the terrain (a Tree Creator, SpeedTree, billboard or skinned prefab the instanced path cannot draw)" : string.Empty)}.");
 			return props.Count;

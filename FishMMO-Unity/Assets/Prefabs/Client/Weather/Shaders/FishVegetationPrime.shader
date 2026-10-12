@@ -34,6 +34,7 @@ Shader "FishMMO/Vegetation Prime"
         _WindFlutter("Flutter (m)", Range(0.0, 0.2)) = 0.03
         _WindFrequency("Frequency", Range(0.1, 4.0)) = 1.2
         [Toggle] _Aquatic("Under the sea (sways with the surge instead of the wind, kept under the surface)", Float) = 0.0
+        [Toggle] _Clinging("Clings or hangs, not rooted where it stands (vines): no ground colour, no contact band", Float) = 0.0
 
         [Header(Season)]
         _HealthyColor("Healthy tint", Color) = (0.9, 0.95, 0.9, 1)

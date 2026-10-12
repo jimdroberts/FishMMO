@@ -9,7 +9,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Real light from the sites' lamps, fires and forges (SceneSiteEmitters, baked by the cut): a small pool of point
 	/// lights given to the nearest of them round the camera, so a lantern lights the street under it at night and a
-	/// campfire flickers on the tents round it (Jim, 2026-10-11).
+	/// campfire flickers on the tents round it (2026-10-11).
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -102,10 +102,12 @@ namespace FishMMO.Client
 			{
 				foundVersion = SceneSiteEmitters.Version;
 				foundAt = eye;
-				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind != SceneEmitterKind.Smoke, MaxLights, near);
+				// Not a chimney's smoke, and not an indoor hearth's bed: a room's light is its Indoor emitter, at its middle.
+				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind != SceneEmitterKind.Smoke && kind != SceneEmitterKind.Hearth, MaxLights, near);
 			}
 			float night = Mathf.Clamp01(Shader.GetGlobalFloat(NightLightsId));
 			float time = Time.time;
+			int shadowed = 0;
 			for (int i = 0; i < MaxLights; i++)
 			{
 				bool wanted = i < near.Count;
@@ -123,8 +125,41 @@ namespace FishMMO.Client
 				float fade = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(Reach * 0.75f, Reach, distance));
 				float phase = (e.Seed & 0xFFFF) * 0.0137f;
 				float intensity;
+				light.shadows = LightShadows.None;
 				switch (e.Kind)
 				{
+					case SceneEmitterKind.Indoor:
+					{
+						// A room's hearth and candles, filling the room and no further. Most homes are lived in tonight, not all.
+						bool home = (e.Seed & 0xFF) < 205;
+						float flick = 0.9f + 0.06f * Mathf.Sin(time * 7.3f + phase) + 0.04f * Mathf.Sin(time * 12.1f + phase * 1.7f);
+						light.color = new Color(1f, 0.62f, 0.32f);
+						light.range = e.Reach > 0f ? e.Reach : 5f;
+						intensity = home ? 1.8f * Mathf.Lerp(0.25f, 1f, night) * flick : 0f;
+						// The nearest few cast shadows where the quality tier has them (none leak through windows and walls then).
+						light.shadows = shadowed++ < MaxShadowedIndoor ? LightShadows.Soft : LightShadows.None;
+						break;
+					}
+					case SceneEmitterKind.Crystal:
+					{
+						// Cave crystals: violet, blue or green by the seed, breathing slowly, the same by day as by night.
+						uint hue = (e.Seed >> 8) & 3u;
+						light.color = hue == 0 ? new Color(0.62f, 0.4f, 1f) : hue == 2 ? new Color(0.4f, 1f, 0.7f) : new Color(0.35f, 0.62f, 1f);
+						light.range = e.Reach > 0f ? e.Reach : 6f;
+						intensity = 1.4f * (0.85f + 0.15f * Mathf.Sin(time * 0.7f + phase));
+						break;
+					}
+					case SceneEmitterKind.Torch:
+					{
+						// A torch: underground (a mine's, a cave camp's) there is no sky to outshine it, so it burns as bright at noon
+						// as at midnight; in the open it is a small light by day (a gatehouse's, a village street's).
+						float flick = 0.88f + 0.08f * Mathf.Sin(time * 9.7f + phase) + 0.04f * Mathf.Sin(time * 15.3f + phase * 1.9f);
+						bool buried = TerrainSet.Current.TryHeight(e.Position.x, e.Position.z, out float ground) && e.Position.y < ground - 3f;
+						light.color = new Color(1f, 0.66f, 0.36f);
+						light.range = e.Reach > 0f ? e.Reach : 8f;
+						intensity = 1.6f * flick * (buried ? 1f : Mathf.Lerp(0.3f, 1f, night));
+						break;
+					}
 					case SceneEmitterKind.Fire:
 						// A fire's flicker: three unrelated beats, never in step with the next fire.
 						float flicker = 0.8f + 0.1f * Mathf.Sin(time * 11.3f + phase) + 0.06f * Mathf.Sin(time * 17.9f + phase * 2.1f) + 0.04f * Mathf.Sin(time * 5.1f + phase * 3.7f);
@@ -149,6 +184,9 @@ namespace FishMMO.Client
 				light.enabled = intensity > 0.01f;
 			}
 		}
+
+		/// <summary>Indoor lights that cast shadows at once (where the URP tier supports additional-light shadows).</summary>
+		public const int MaxShadowedIndoor = 4;
 
 		private static Light LightAt(int index)
 		{

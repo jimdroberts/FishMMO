@@ -4,7 +4,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.AI
 {
 	/// <summary>
-	/// The chase-across-water decision (Jim, 2026-10-05: not all NPCs swim; those that do may drown, so they choose
+	/// The chase-across-water decision (2026-10-05: not all NPCs swim; those that do may drown, so they choose
 	/// between chasing in and staying on land): scored from the water, the breath, the courage and the target.
 	/// </summary>
 	[TestFixture]

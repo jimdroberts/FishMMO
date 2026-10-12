@@ -43,7 +43,7 @@ namespace FishMMO.Shared
 
 		/// <summary>The world map zoom tier; 0 = always, higher = only zoomed in.</summary>
 		public int DetailTier;
-		/// <summary>Hidden until the fog of war reveals it. Every generated POI starts true (Jim, 2026-10-10).</summary>
+		/// <summary>Hidden until the fog of war reveals it. Every generated POI starts true (2026-10-10).</summary>
 		public bool RequiresDiscovery = true;
 
 		/// <summary>The POI this one belongs to (a graveyard's town, a cave's dungeon), or -1.</summary>
@@ -176,6 +176,8 @@ namespace FishMMO.Shared
 		public float[] PathRoadMap = Array.Empty<float>();
 		/// <summary>Where the sites' pieces give off smoke, fire and light (chimneys, fires, forges, lanterns), as laid.</summary>
 		public List<SceneEmitter> Emitters = new List<SceneEmitter>();
+		/// <summary>The sites' rooms, as laid: where the sky's light reaches only through windows and doors.</summary>
+		public List<SceneRoom> Rooms = new List<SceneRoom>();
 
 		/// <summary>The record with this id, or null.</summary>
 		public PointOfInterestRecord Find(int id)

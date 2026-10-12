@@ -37,7 +37,7 @@ namespace FishMMO.RenderScratch
 		private const string ROOT = "Assets/Scripts/Client/GUI/World/";
 		private const int WIDTH = 1200;
 		private const int SETTLE_FRAMES = 40;
-		private const string OUT_DIR = "/home/jim/Dev/FishMMO-Dev/HudProbe";
+		private static readonly string OUT_DIR = ProbeOutput.Path("HudProbe");
 
 		/// <summary>One panel to mount, and the element inside it that actually draws.</summary>
 		private sealed class Mount

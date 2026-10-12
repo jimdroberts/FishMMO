@@ -7,7 +7,8 @@
 //   * grime rising from the ground and fading by head height;
 //   * rain streaks down the walls;
 //   * moss on what faces the sky (roofs, sills, wall tops) and on north faces, in patches.
-// Pure functions of position and normal: no textures, no per-material inputs but the flag.
+// Pure functions of position and normal: no textures, no per-material inputs but the flag (and _FishMoss, which hands
+// the moss to the textured layer, FishMoss.hlsl).
 
 #ifndef FISHMMO_STRUCTURE_WEATHERING_INCLUDED
 #define FISHMMO_STRUCTURE_WEATHERING_INCLUDED
@@ -74,6 +75,9 @@ void FishStructureWeather(float3 positionWS, half3 normalWS, float heightAboveGr
     half patches = (half)smoothstep(0.42, 0.8, FishWearNoise(positionWS.xz * 0.55 + positionWS.y * 0.3) * 0.6
                                               + FishWearNoise(positionWS.xz * 2.9 + 11.0) * 0.4);
     half moss = saturate(skyward * 0.85h + north * 0.35h) * patches;
+    // A material with the textured moss layer (_FishMoss, FishMoss.hlsl, the art generator's) grows its moss there, from
+    // the scene's dampness; this flat colour stays only on structure materials without it, which it always drew on.
+    moss *= 1.0h - saturate((half)_FishMoss * 4.0h);
     half3 mossColour = half3(0.2h, 0.27h, 0.1h) * (0.8h + 0.4h * fine);
     albedo = lerp(albedo, mossColour, moss * 0.7h);
     smoothness = lerp(smoothness, 0.08h, moss * 0.6h);

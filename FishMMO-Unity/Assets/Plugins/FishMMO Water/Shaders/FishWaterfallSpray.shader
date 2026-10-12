@@ -6,6 +6,10 @@ Shader "FishMMO/Water/Waterfall Spray"
     // Strands and shed drops: water falling with the curtain on its traced paths (_FallPathTex). Mist: billows rising
     // from the landing and a veil over the fall, drifting downwind, lit bright when the sun is behind them, a rainbow in
     // the spray when it is behind the eye.
+    // Cheap from inside the cloud: what is in the eye's face is thinned or not drawn at all (NearFade), a quad nothing of
+    // which can show is collapsed before it rasterizes, the light is worked out once a particle, and the mist's noise is
+    // read from a lattice texture (Noise3). Standing in the spray, every puff and drop within a few metres covered the
+    // whole screen at the full per-pixel cost, and the frame rate collapsed (2026-10-12).
     Properties
     {
         _SprayColor("Spray colour", Color) = (0.95, 0.97, 1.0, 1)
@@ -73,8 +77,22 @@ Shader "FishMMO/Water/Waterfall Spray"
             SAMPLER(sampler_FallPathTex);
             float4 _FallPath;               // x strips, y seconds from the lip to the last landing, z the pool's level, w break-up length (m)
             float4 _FallOrigin;             // xyz the lip, w the speed the water lands at (m/s)
+            // The mist's noise lattice (FallTextures.MistNoise) and its cells along each side; 0 when none is bound, and
+            // the noise is worked out in full instead.
+            TEXTURE3D(_FallMistNoise);
+            SAMPLER(sampler_FallMistNoise);
+            float _FallMistNoiseCells;
 
             #define FISH_INLAND_CLOCK_WRAP 10000.0
+            // The least alpha drawn: below it a pixel clips, and a particle whose opacity is below it is never rasterized.
+            #define SPRAY_CLIP 0.004
+            // Near the eye (NearFade). Shares are a particle's radius over half the screen's height.
+            #define MIST_SHARE_FULL 0.4     // puffs bigger on screen than this are thinned
+            #define MIST_THIN_BOOST 3.0     // the most a kept puff is thickened for the ones thinned away
+            #define DROP_NEAR_FROM 0.4      // m: a drop whose nearest end is closer than this is not drawn
+            #define DROP_NEAR_TO 1.2        // m: and from here on it is drawn in full
+            #define DROP_SHARE_FULL 0.15    // a drop wider on screen than this fades
+            #define DROP_SHARE_GONE 0.3     // and is gone at this
 
             struct Attributes
             {
@@ -91,11 +109,13 @@ Shader "FishMMO/Water/Waterfall Spray"
             {
                 float4 positionCS : SV_POSITION;
                 float2 corner : TEXCOORD0;
-                float4 look : TEXCOORD1;        // xyz the particle's world position, w its opacity
+                float4 look : TEXCOORD1;        // rgb the sun's light on it with its rainbow (before the shadow), w its opacity
                 float3 kind : TEXCOORD2;        // x kind, y eye depth, z a seed for its shape
                 float4 screenPos : TEXCOORD3;
                 float fogFactor : TEXCOORD4;
                 float3 pixelWS : TEXCOORD5;     // where on its quad this pixel is, in the world: the mist's shared noise is read there
+                float3 sky : TEXCOORD6;         // the light on it from all round
+                float4 shadowCoord : TEXCOORD7; // where its centre falls in the sun's shadow
             };
 
             float Hash(float x) { return frac(sin(x * 78.233) * 43758.5453); }
@@ -132,6 +152,90 @@ Shader "FishMMO/Water/Waterfall Spray"
                 float3 drift = gravity / k;
                 velocity = drift + (v0 - drift) * e;
                 return x0 + drift * t + (v0 - drift) * (1.0 - e) / k;
+            }
+
+            /// <summary>
+            /// How much of a particle near the eye is drawn: 0…1, and more than 1 for a puff kept in place of others thinned
+            /// away. From further off it is 1 and nothing changes.
+            /// </summary>
+            /// <remarks>
+            /// Standing in the spray, every puff within a few metres covered the whole screen and the cloud stacked a hundred
+            /// deep, each layer at the full per-pixel cost, and puffs and drops at or behind the eye were still rasterized
+            /// to be clipped pixel by pixel (2026-10-12). Mist: gone within a metre and faded in by four, as the
+            /// fragment did (a puff the camera is in drew a flat grey sheet over the view); and once a puff's radius passes
+            /// MIST_SHARE_FULL of half the screen's height, only a seeded (MIST_SHARE_FULL / share)² of them is kept, each
+            /// thickened by as much (up to MIST_THIN_BOOST) so the cloud's cover holds: the near puffs fill a fixed amount
+            /// of the screen however close they come rather than a screen each. Drops: gone when their nearest end is within
+            /// DROP_NEAR_FROM of the eye, and fading once wider on screen than DROP_SHARE_FULL; a drop that big is an
+            /// out-of-focus blur a hand's width from the lens, not spray.
+            /// </remarks>
+            float NearFade(float3 position, float3 axis, float size, float stretch, bool mist, float pick)
+            {
+                float depth = -TransformWorldToView(position).z;
+                // P[1][1] is the cotangent of half the field of view, so this is the share of half the screen's height a metre spans there.
+                float perMetre = abs(UNITY_MATRIX_P[1][1]) / (unity_OrthoParams.w > 0.5 ? 1.0 : max(1e-3, depth));
+                float share = size * perMetre;
+                if (mist)
+                {
+                    float ratio = MIST_SHARE_FULL / max(1e-4, share);
+                    float keep = saturate(ratio * ratio);
+                    return smoothstep(1.0, 4.0, depth) * saturate((1.1 * keep - pick) * 10.0) * min(MIST_THIN_BOOST, 1.0 / max(1e-3, keep));
+                }
+                // A drop is drawn out along its flight: its nearest end, not its middle, is what comes into the eye.
+                float3 forward = -UNITY_MATRIX_V[2].xyz;
+                float nearest = depth - size * stretch * abs(dot(axis, forward));
+                return smoothstep(DROP_NEAR_FROM, DROP_NEAR_TO, nearest) * (1.0 - smoothstep(DROP_SHARE_FULL, DROP_SHARE_GONE, share));
+            }
+
+            /// Henyey-Greenstein, scaled to 1 for light scattered evenly.
+            half ForwardScatter(half cosine, half g)
+            {
+                half g2 = g * g;
+                return (1.0 - g2) / pow(max(1e-3, 1.0 + g2 - 2.0 * g * cosine), 1.5);
+            }
+
+            /// <summary>
+            /// A rainbow's colour at <paramref name="angle"/> degrees from the point opposite the sun: the primary bow 40.6–42.3°,
+            /// violet inside and red outside, and the fainter secondary 50–53° with its colours the other way round.
+            /// </summary>
+            half3 Rainbow(half angle)
+            {
+                half t1 = (angle - 40.6) / 1.7;
+                half t2 = 1.0 - (angle - 50.0) / 3.0;
+                half3 bow = half3(0.0, 0.0, 0.0);
+                half in1 = smoothstep(-0.15, 0.05, t1) * (1.0 - smoothstep(0.95, 1.15, t1));
+                half in2 = smoothstep(-0.15, 0.05, t2) * (1.0 - smoothstep(0.95, 1.15, t2));
+                half3 c1 = half3(smoothstep(0.45, 0.95, t1), saturate(1.0 - abs(t1 - 0.5) * 2.2), 1.0 - smoothstep(0.05, 0.55, t1));
+                half3 c2 = half3(smoothstep(0.45, 0.95, t2), saturate(1.0 - abs(t2 - 0.5) * 2.2), 1.0 - smoothstep(0.05, 0.55, t2));
+                return c1 * in1 + c2 * in2 * 0.43;
+            }
+
+            /// <summary>
+            /// The light on a particle at <paramref name="position"/>, its centre: <paramref name="sun"/> what the sun gives it,
+            /// its rainbow with it, for the fragment to scale by the sun's shadow there; <paramref name="sky"/> what reaches it
+            /// from all round. Once a particle, in the vertex: it was read at the centre anyway, so every pixel of a quad
+            /// worked out the same two spherical-harmonic reads, scatter and bow, and a quad in the eye's face did it for
+            /// the whole screen.
+            /// </summary>
+            void SprayLight(float3 position, bool mist, out half3 sun, out half3 sky)
+            {
+                /* The sun where it reaches (spray in a shaded gorge was lit as if in full sun: the fragment applies the
+                 * shadow), the sky and the ground round it, and much brighter looking toward the sun through it (droplets
+                 * scatter forward). */
+                Light mainLight = GetMainLight();
+                float3 toEye = normalize(_WorldSpaceCameraPos - position);
+                half forward = ForwardScatter(dot(-toEye, mainLight.direction), mist ? 0.55 : 0.7);
+                half3 ambient = 0.5 * (SampleSH(float3(0.0, 1.0, 0.0)) + SampleSH(toEye));
+                /* Spray mist is dense and white: most of the light in it has been turned more than once, so it is nearly as
+                 * bright as what lights it from every side, the sky's light most of all, and glows looking toward the sun.
+                 * Lit like a sparse drop (the beam and a little sky) it was a dull grey-brown in a shaded gorge. */
+                half3 tint = mist ? _MistColor.rgb : _SprayColor.rgb;
+                sun = tint * mainLight.color * (mist ? 0.55 + 0.3 * forward : 0.45 + 0.12 * forward);
+                sky = tint * ambient * (mist ? 1.6 : 0.9);
+
+                // A rainbow in the sunlit spray, round the point opposite the sun; mist's fine drops give only a faint one.
+                half bowAngle = degrees(acos(clamp(dot(-toEye, -mainLight.direction), -1.0, 1.0)));
+                sun += Rainbow(bowAngle) * mainLight.color * _Rainbow * (mist ? 0.25 : 1.0) * saturate(mainLight.direction.y * 4.0 + 0.2);
             }
 
             Varyings SprayVertex(Attributes input)
@@ -225,7 +329,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                     float3 tangentA = normalize(cross(normal, float3(0.0, 1.0, 0.0)) + float3(1e-4, 0.0, 0.0));
                     float3 tangentB = cross(normal, tangentA);
                     /* Most of a strike's water runs on down the rock; what splashes off leaves slowly, close to the face
-                     * and downward. Thrown out at up to 8 m/s for over a second it sprayed the terrain (Jim, 2026-10-08). */
+                     * and downward. Thrown out at up to 8 m/s for over a second it sprayed the terrain (2026-10-08). */
                     float speed = min(4.5, max(1.0, input.kind.y) * lerp(0.06, 0.18, r1));
                     float3 way = normalize(normal * 0.45 + float3(0.0, -0.45, 0.0) + (tangentA * (r2 - 0.5) + tangentB * (r3 - 0.5)) * 0.7);
                     float strikeLife = SnapLife(lerp(0.45, 0.9, s2));
@@ -253,7 +357,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                 {
                     /* Thrown up and out where the curtain lands: a crown of drops, hardest at the impact and softer toward
                      * the zone's edge, outward with a scatter, falling back under gravity and drag. Low and out, not up: at
-                     * up to 16 m/s the spray read as water shooting back up the fall (Jim, 2026-10-07). */
+                     * up to 16 m/s the spray read as water shooting back up the fall (2026-10-07). */
                     float out_ = saturate(length(input.impact));
                     float2 away2 = dot(input.impact, input.impact) > 1e-6 ? normalize(input.impact) : float2(downstream.x, downstream.z);
                     float3 away = float3(away2.x, 0.0, away2.y);
@@ -274,7 +378,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                     float out_ = saturate(length(input.impact));
                     float2 away2 = dot(input.impact, input.impact) > 1e-6 ? normalize(input.impact) : float2(downstream.x, downstream.z);
                     float3 away = float3(away2.x, 0.0, away2.y);
-                    /* A cloud that hugs the landing and climbs up the curtain, higher for a taller fall (Jim, 2026-10-08):
+                    /* A cloud that hugs the landing and climbs up the curtain, higher for a taller fall (2026-10-08):
                      * it rises to about four tenths of the drop and spreads only a little past the impact. Spread by the
                      * drop as well, a 40 m fall's cloud fanned out across the whole cliff as scattered puffs. */
                     float rise = lerp(0.3, 1.0, r1) * (0.4 + 0.05 * drop) * lerp(1.1, 0.7, out_);
@@ -304,11 +408,25 @@ Shader "FishMMO/Water/Waterfall Spray"
                     right = normalize(cross(upAxis, toEye) + float3(1e-5, 0.0, 0.0));
                     stretch = 1.0 + speed * (kindId == 2 ? 0.6 : 0.3);
                 }
+
+                opacity *= NearFade(position, upAxis, size, stretch, mist, Hash(s1 * 13.7 + s2 * 71.3));
+                if (_FishInlandCameraInSea > 0.5 || opacity < SPRAY_CLIP)
+                {
+                    /* Nothing of it can show (under the sea no fall is seen; a particle at the eye, thinned away, landed or
+                     * between lives): every corner on one point outside the clip volume, so the quad rasterizes nothing
+                     * rather than running the fragment over its whole area only to clip every pixel. */
+                    output.positionCS = float4(2.0, 2.0, 2.0, 1.0);
+                    return output;
+                }
                 float3 world = position + (right * input.corner.x + upAxis * (input.corner.y * stretch)) * size;
                 output.positionCS = TransformWorldToHClip(world);
                 output.screenPos = ComputeScreenPos(output.positionCS);
                 output.corner = input.corner;
-                output.look = float4(position, opacity);
+                half3 sun, sky;
+                SprayLight(position, mist, sun, sky);
+                output.look = float4(sun, opacity);
+                output.sky = sky;
+                output.shadowCoord = TransformWorldToShadowCoord(position);
                 output.pixelWS = world;
                 output.kind = float3(input.kind.x, -TransformWorldToView(world).z, s1 * 37.0 + s2 * 11.0);
                 output.fogFactor = ComputeFogFactor(output.positionCS.z);
@@ -326,12 +444,24 @@ Shader "FishMMO/Water/Waterfall Spray"
 
             float Hash3(float3 p) { return frac(sin(dot(p, float3(127.1, 311.7, 74.7))) * 43758.5453); }
 
-            /// Value noise in three dimensions.
+            /// <summary>
+            /// Value noise in three dimensions. From the lattice texture when one is bound: one filtered read with its place
+            /// in the cell moved along the same easing curve, so the hardware's blend of the cell's eight corners is value
+            /// noise's own. Worked out, it was eight sin hashes a read and four reads a pixel: most of what a pixel of mist
+            /// cost, paid a hundred times over in every pixel standing inside the cloud.
+            /// </summary>
             half Noise3(float3 p)
             {
                 float3 i = floor(p), f = frac(p);
                 f = f * f * (3.0 - 2.0 * f);
-                half a = lerp(lerp(Hash3(i), Hash3(i + float3(1, 0, 0)), f.x), lerp(Hash3(i + float3(0, 1, 0)), Hash3(i + float3(1, 1, 0)), f.x), f.y);
+                UNITY_BRANCH
+                if (_FallMistNoiseCells > 0.5)
+                {
+                    // The cell wrapped into the lattice exactly (its side is a power of two), so it keeps its precision far from the origin.
+                    float3 cell = i - _FallMistNoiseCells * floor(i / _FallMistNoiseCells);
+                    return SAMPLE_TEXTURE3D_LOD(_FallMistNoise, sampler_FallMistNoise, (cell + 0.5 + f) / _FallMistNoiseCells, 0).r;
+                }
+                half a =lerp(lerp(Hash3(i), Hash3(i + float3(1, 0, 0)), f.x), lerp(Hash3(i + float3(0, 1, 0)), Hash3(i + float3(1, 1, 0)), f.x), f.y);
                 half b = lerp(lerp(Hash3(i + float3(0, 0, 1)), Hash3(i + float3(1, 0, 1)), f.x), lerp(Hash3(i + float3(0, 1, 1)), Hash3(i + float3(1, 1, 1)), f.x), f.y);
                 return lerp(a, b, f.z);
             }
@@ -359,44 +489,14 @@ Shader "FishMMO/Water/Waterfall Spray"
                 return lerp(a, b, blend);
             }
 
-            /// Henyey-Greenstein, scaled to 1 for light scattered evenly.
-            half ForwardScatter(half cosine, half g)
-            {
-                half g2 = g * g;
-                return (1.0 - g2) / pow(max(1e-3, 1.0 + g2 - 2.0 * g * cosine), 1.5);
-            }
-
-            /// <summary>
-            /// A rainbow's colour at <paramref name="angle"/> degrees from the point opposite the sun: the primary bow 40.6–42.3°,
-            /// violet inside and red outside, and the fainter secondary 50–53° with its colours the other way round.
-            /// </summary>
-            half3 Rainbow(half angle)
-            {
-                half t1 = (angle - 40.6) / 1.7;
-                half t2 = 1.0 - (angle - 50.0) / 3.0;
-                half3 bow = half3(0.0, 0.0, 0.0);
-                half in1 = smoothstep(-0.15, 0.05, t1) * (1.0 - smoothstep(0.95, 1.15, t1));
-                half in2 = smoothstep(-0.15, 0.05, t2) * (1.0 - smoothstep(0.95, 1.15, t2));
-                half3 c1 = half3(smoothstep(0.45, 0.95, t1), saturate(1.0 - abs(t1 - 0.5) * 2.2), 1.0 - smoothstep(0.05, 0.55, t1));
-                half3 c2 = half3(smoothstep(0.45, 0.95, t2), saturate(1.0 - abs(t2 - 0.5) * 2.2), 1.0 - smoothstep(0.05, 0.55, t2));
-                return c1 * in1 + c2 * in2 * 0.43;
-            }
-
             half4 SprayFragment(Varyings input) : SV_Target
             {
-                if (_FishInlandCameraInSea > 0.5)
-                {
-                    discard;
-                }
                 int kindId = (int)round(input.kind.x);
                 bool mist = kindId == 1 || kindId == 3;
                 float d2 = dot(input.corner, input.corner);
-                // Mist in wisps, not balls: the soft disc broken by noise that turns with the particle's own seed.
                 // Soft all the way to its edge: a billow, never a lens with a rim.
-                half shape = mist ? exp(-d2 * 2.2) * smoothstep(1.0, 0.45, d2) * MistField(input.pixelWS) : smoothstep(1.0, 0.15, sqrt(d2));
+                half shape = mist ? exp(-d2 * 2.2) * smoothstep(1.0, 0.45, d2) : smoothstep(1.0, 0.15, sqrt(d2));
                 half alpha = shape * input.look.w;
-                // Not in the eye's face: a puff the camera is in drew a flat grey sheet over the view.
-                alpha *= mist ? smoothstep(1.0, 4.0, input.kind.y) : 1.0;
 
                 // Soft where it meets the pool and the rock, so no quad edge cuts the water.
                 #if defined(_WATER_DEPTH)
@@ -404,27 +504,19 @@ Shader "FishMMO/Water/Waterfall Spray"
                     float sceneEye = LinearEyeDepth(SampleSceneDepth(screenUV), _ZBufferParams);
                     alpha *= saturate((sceneEye - input.kind.y) / max(0.05, _SoftDistance));
                 #endif
-                clip(alpha - 0.004);
+                // What cannot show goes before the mist's noise is read (it is at most 1): the quad's corners, the faint rim.
+                clip(alpha - SPRAY_CLIP);
+                UNITY_BRANCH
+                if (mist)
+                {
+                    // Mist in wisps, not balls: the soft disc broken by the shared field (MistField).
+                    alpha *= MistField(input.pixelWS);
+                    clip(alpha - SPRAY_CLIP);
+                }
 
-                /* Light: the sun where it reaches (spray in a shaded gorge was lit as if in full sun), the sky and the ground
-                 * round it, and much brighter looking toward the sun through it (droplets scatter forward). */
-                Light mainLight = GetMainLight(TransformWorldToShadowCoord(input.look.xyz));
-                half sunlit = mainLight.shadowAttenuation;
-                float3 toEye = normalize(_WorldSpaceCameraPos - input.look.xyz);
-                half forward = ForwardScatter(dot(-toEye, mainLight.direction), mist ? 0.55 : 0.7);
-                half3 ambient = 0.5 * (SampleSH(float3(0.0, 1.0, 0.0)) + SampleSH(toEye));
-                /* Spray mist is dense and white: most of the light in it has been turned more than once, so it is nearly as
-                 * bright as what lights it from every side, the sky's light most of all, and glows looking toward the sun.
-                 * Lit like a sparse drop (the beam and a little sky) it was a dull grey-brown in a shaded gorge. */
-                half3 light = mist
-                    ? mainLight.color * sunlit * (0.55 + 0.3 * forward) + ambient * 1.6
-                    : mainLight.color * sunlit * (0.45 + 0.12 * forward) + ambient * 0.9;
-                half3 color = (mist ? _MistColor.rgb : _SprayColor.rgb) * light;
-
-                // A rainbow in the sunlit spray, round the point opposite the sun; mist's fine drops give only a faint one.
-                half bowAngle = degrees(acos(clamp(dot(-toEye, -mainLight.direction), -1.0, 1.0)));
-                color += Rainbow(bowAngle) * mainLight.color * sunlit * _Rainbow * (mist ? 0.25 : 1.0) * saturate(mainLight.direction.y * 4.0 + 0.2);
-
+                // The light was worked out for the particle in the vertex (SprayLight); only the shadow is read here.
+                half sunlit = MainLightRealtimeShadow(input.shadowCoord);
+                half3 color = input.look.rgb * sunlit + input.sky;
                 color = MixFog(color, input.fogFactor);
                 return half4(color, saturate(alpha));
             }

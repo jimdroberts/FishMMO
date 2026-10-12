@@ -198,11 +198,6 @@ namespace FishMMO.Shared.WorldDesign
 					site.Add(feature);
 					continue;
 				}
-				if (spec.InChamber && feature is DungeonEntranceFeature door)
-				{
-					// The chamber is where it goes; the tunnel's far end is the chamber's back wall.
-					door.AtTunnelEnd = false;
-				}
 				built.Add(feature);
 			}
 			ReserveGameplaySpots(spec, built);

@@ -44,7 +44,7 @@ namespace FishMMO.Client
 		[Min(0f)] public float CritterDensity = 1f;
 
 		[Header("Size")]
-		[Tooltip("Every animal drawn this many times its real size, so small birds and critters read at play distances (Jim, 2026-10-10: 30-50% bigger). 1 is life size.")]
+		[Tooltip("Every animal drawn this many times its real size, so small birds and critters read at play distances (2026-10-10: 30-50% bigger). 1 is life size.")]
 		[Range(1f, 3f)] public float SizeScale = 1.4f;
 
 		[Header("Debug")]

@@ -49,14 +49,8 @@ Shader "FishMMO/Weather/Air Motes"
             #include "FishAmbient.hlsl"
             #include "FishFogLayer.hlsl"
 
-            // The fine ground round the camera (MistGroundMap; FishMist.hlsl reads the same): r the ground
-            // above _FishMistGroundBase (m; over open water, the water's surface), g the hollow (m), b how
-            // near open water is (0..1), a the tree canopy (0..1). Declared here rather than by including
-            // FishMist.hlsl, which brings the whole mist march with it.
-            TEXTURE2D(_FishMistGround);
-            SAMPLER(sampler_FishMistGround);
-            float4 _FishMistGroundRect;
-            float _FishMistGroundBase;
+            // The fine ground round the camera (MistGroundMap), shared with the mist and the lit surfaces.
+            #include "FishGroundMap.hlsl"
 
             // Per draw, from a MaterialPropertyBlock (AirMotesField.Render).
             float4 _MoteOrigin;  // xyz camera position, w the ground under the camera (m): a ground band's last resort

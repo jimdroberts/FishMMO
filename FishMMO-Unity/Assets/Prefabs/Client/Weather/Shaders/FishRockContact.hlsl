@@ -2,7 +2,7 @@
 #define FISHMMO_ROCK_CONTACT_INCLUDED
 
 // Rock crevices: where one rock meets another, the seam darkens toward its bottom and fills with the surrounding
-// ground's own material — what real rock piles do, soil and grit settling between the stones (Jim, 2026-10-08).
+// ground's own material — what real rock piles do, soil and grit settling between the stones (2026-10-08).
 // Rocks only: FishMMO/Weather Lit Indirect's forward pass, on the draws that take the contact blend.
 //
 // RockContactField (FishMMO.Client/World/Terrain) keeps, for the camera:

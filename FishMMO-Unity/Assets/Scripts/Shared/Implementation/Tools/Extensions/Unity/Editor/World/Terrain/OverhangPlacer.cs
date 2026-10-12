@@ -46,7 +46,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>
 	/// An overhang as a stretched slab of the rock's own boulder art: projecting from a face, sunk into it behind, laid as a
 	/// prop with collision. The hard cap over a plunge fall (<see cref="FallLedges"/>) and a point of interest's rock
-	/// shelter on any steep face (<see cref="PlanAt"/>) are the same slab (Jim, 2026-10-10: "FallLedges' stretched slab
+	/// shelter on any steep face (<see cref="PlanAt"/>) are the same slab (2026-10-10: "FallLedges' stretched slab
 	/// generalised").
 	/// </summary>
 	public static class OverhangPlacer

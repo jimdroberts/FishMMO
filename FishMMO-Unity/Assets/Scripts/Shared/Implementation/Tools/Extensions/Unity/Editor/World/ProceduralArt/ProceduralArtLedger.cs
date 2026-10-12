@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// <para>
 	/// <b>Everything generated is the generator's.</b> This class used to keep a committed JSON ledger
-	/// of the wrappers' hashes, so that a wrapper Jim had replaced by hand under a generated name was
+	/// of the wrappers' hashes, so that a wrapper replaced by hand under a generated name was
 	/// kept rather than overwritten. Since 2026-10-02 nothing generated is committed: wrappers are build
 	/// output, regenerated on every machine with path-derived GUIDs, so a hand edit to one would live
 	/// on one machine only and vanish at the next regeneration anyway. The rule is now simply that

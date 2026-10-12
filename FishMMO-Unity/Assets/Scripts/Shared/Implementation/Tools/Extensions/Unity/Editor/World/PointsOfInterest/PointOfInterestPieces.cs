@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// kit, or a project's hand-made pieces.
 	/// </summary>
 	/// <remarks>
-	/// Hand-made and LOCAL prefabs may replace any kit piece (Jim, 2026-10-10): register them as a source with a higher
+	/// Hand-made and LOCAL prefabs may replace any kit piece (2026-10-10): register them as a source with a higher
 	/// <see cref="Priority"/> than the kit's, and the kit is only asked for what they do not have.
 	/// </remarks>
 	public interface IStructurePieceSource

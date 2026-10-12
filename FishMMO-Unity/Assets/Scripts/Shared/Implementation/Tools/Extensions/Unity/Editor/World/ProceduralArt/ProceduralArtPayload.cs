@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Nothing generated is committed (Jim, 2026-10-02).</b> Thirty-odd 1024² ground families in
+	/// <b>Nothing generated is committed (2026-10-02).</b> Thirty-odd 1024² ground families in
 	/// three maps, bark, the foliage atlas and a billboard per tree come to a few hundred megabytes of
 	/// PNG, every byte of which a deterministic function reproduces from the seed, and the wrappers are
 	/// as reproducible as the payload. So all of it lives under <see cref="ProceduralArtCatalogue.Root"/>
@@ -153,6 +153,13 @@ namespace FishMMO.Shared.WorldDesign
 			"StructureRuins.cs",
 			"StructureSolids.cs",
 			"StructureSurfaces.cs",
+			// The moss each material may grow (2026-10-12).
+			"MossAmounts.cs",
+			// Vines and ivy (2026-10-12).
+			"VineAtlas.cs",
+			"VineMeshes.cs",
+			"ProceduralArtCatalogue.Vines.cs",
+			"BiomeArtGenerator.Vines.cs",
 		};
 
 		private static readonly Regex MetaGuid = new Regex(@"^guid:\s*([0-9a-fA-F]{32})\s*$", RegexOptions.Multiline | RegexOptions.CultureInvariant);

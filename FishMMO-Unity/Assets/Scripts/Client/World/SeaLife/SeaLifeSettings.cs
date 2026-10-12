@@ -137,7 +137,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Version 2: as many fish as a diver sees (Jim, 2026-10-06: "fish are way too rare still").</b> The densities
+		/// <b>Version 2: as many fish as a diver sees (2026-10-06: "fish are way too rare still").</b> The densities
 		/// were per square kilometre of sea, and the sea is seen through some 22 m of water: about 0.002 km² at a time,
 		/// so 150 schools to the km² put a fifth of one in view. They are now four to twelve times that. They were
 		/// drawn and placed out to 140 m, which nobody under water can see; drawn to 70 m, the denser sea costs about

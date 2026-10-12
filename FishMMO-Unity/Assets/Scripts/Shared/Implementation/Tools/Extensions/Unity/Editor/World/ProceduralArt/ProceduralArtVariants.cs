@@ -483,6 +483,35 @@ namespace FishMMO.Shared.WorldDesign
 		/// compiling), the collection cannot be judged: <see cref="IsStale"/> says no and <see cref="Ensure(List{string})"/>
 		/// leaves the file alone, rather than rewriting it from shaders that could not be read.
 		/// </summary>
+		/// <summary>Which twin is not readable and why, for the problem line: its compiler's first errors, or that it has none yet.</summary>
+		public static string TwinsProblem()
+		{
+			var parts = new List<string>();
+			foreach (KeyValuePair<string, string> pair in IndirectTwins)
+			{
+				Shader shader = Shader.Find(pair.Value);
+				if (Readable(shader, out _))
+				{
+					continue;
+				}
+				if (shader == null)
+				{
+					parts.Add($"'{pair.Value}' not found");
+					continue;
+				}
+				var errors = new List<string>();
+				foreach (ShaderMessage message in ShaderUtil.GetShaderMessages(shader))
+				{
+					if (message.severity == UnityEditor.Rendering.ShaderCompilerMessageSeverity.Error && errors.Count < 3)
+					{
+						errors.Add($"{message.message} at {message.file}:{message.line}");
+					}
+				}
+				parts.Add($"'{pair.Value}': " + (errors.Count > 0 ? string.Join(" | ", errors) : ShaderUtil.ShaderHasError(shader) ? "errors, none listed" : "no readable parsed form"));
+			}
+			return parts.Count > 0 ? string.Join("; ", parts) : "all readable now";
+		}
+
 		public static bool TwinsReady()
 		{
 			foreach (KeyValuePair<string, string> pair in IndirectTwins)
@@ -628,7 +657,7 @@ namespace FishMMO.Shared.WorldDesign
 			var own = new List<string>();
 			if (!TwinsReady())
 			{
-				own.Add($"{AssetPath}: an indirect shader is still importing or does not compile; the collection is left as it is until it does.");
+				own.Add($"{AssetPath}: an indirect shader is still importing or does not compile ({TwinsProblem()}); the collection is left as it is until it does.");
 				if (problems != null)
 				{
 					problems.AddRange(own);

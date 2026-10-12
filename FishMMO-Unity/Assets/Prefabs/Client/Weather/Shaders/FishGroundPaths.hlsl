@@ -120,11 +120,36 @@ float FishPathMedian(FishPathSample p)
 }
 
 /// <summary>
-/// What the path does to what grows at a point. trodden: how bare it wears the ground, 0 untouched .. 1 bare: what the
-/// grass and the details are thinned by. A kept road is bare across its width; a trail barely walked keeps most of its
-/// grass; a cart track keeps the grass between its ruts. flattened: how much shorter what still grows there stands
-/// (trampled), 0 .. 1 — a lost trail reads by its low grass. One field sample serves both.
+/// How much of the ground at a point the path wears bare, 0 .. 1: the share the terrain draws with the path's own ground
+/// (FishApplyPaths), and so what the grass and the details are cleared by (FishPathWearAt). One function for both, so
+/// nothing grows where the ground is drawn bare: the grass used to thin by its own curve of the wear, which left a
+/// quarter of the blades standing on a camp's yard (wear 0.64) that the terrain drew as plain earth.
 /// </summary>
+/// <param name="soft">Half the width over which the frayed edge fades, metres.</param>
+float FishPathBare(FishPathSample p, float2 xz, float soft)
+{
+    float wear = saturate(p.wear);
+    float cover = 1.0 - smoothstep(-soft, soft, FishPathFrayedEdge(p, xz));
+    cover *= 1.0 - FishPathOvergrown(p, xz) * 0.92;
+    cover *= 1.0 - FishPathMedian(p) * 0.85;
+    // Barely walked: the earth shows through in a broken scatter rather than a band.
+    cover *= lerp(0.55 + 0.45 * FishPathNoise(xz * 3.1 + 9.0), 1.0, wear);
+    return cover;
+}
+
+/// <summary>
+/// What the path does to what grows at a point. trodden: the chance a blade or a detail is not there, 0 .. 1, from the
+/// bare share the terrain draws (FishPathBare). A kept road or a building's yard is bare across its width; a lost trail
+/// is broken by the patches it has grown over, and grass stands in them; a cart track keeps the grass between its ruts.
+/// flattened: how much shorter what still grows there stands (trampled), 0 .. 1 — a lost trail reads by its low grass.
+/// One field sample serves both.
+/// </summary>
+/// <remarks>
+/// The bare share is not taken as the chance itself: earth drawn at 85 % over the ground reads as earth, but 15 % of a
+/// thick sward left standing on it reads as grass. So ground drawn mostly bare grows nothing, and the grass comes back
+/// only as the drawing fades — over a soft edge wider than the paint's, so the sward thins in instead of stopping at a
+/// cut line.
+/// </remarks>
 void FishPathWearAt(float2 xz, out float trodden, out float flattened)
 {
     trodden = 0.0;
@@ -134,10 +159,10 @@ void FishPathWearAt(float2 xz, out float trodden, out float flattened)
     {
         return;
     }
+    float bare = FishPathBare(p, xz, 0.4);
+    trodden = smoothstep(0.15, 0.8, bare);
     float edge = FishPathFrayedEdge(p, xz);
     float median = FishPathMedian(p);
-    float inside = 1.0 - smoothstep(-0.12, 0.12, edge);
-    trodden = inside * saturate(p.wear * 1.15) * (1.0 - FishPathOvergrown(p, xz)) * (1.0 - median);
     float within = 1.0 - smoothstep(-0.25, 0.35, edge);
     flattened = within * lerp(0.45, 0.8, saturate(p.wear)) * (1.0 - 0.6 * median);
 }

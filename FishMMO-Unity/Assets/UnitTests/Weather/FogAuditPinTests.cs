@@ -110,7 +110,7 @@ namespace FishMMO.UnitTests.Weather
 					: "the clouds' full march follows the camera's far plane",
 				SourceScanPins.Replace("float farPlane = FullMarchFor(sky, band);", "float farPlane = Mathf.Max(band * FarSplitB + 1000f, cameraData.camera.farClipPlane);"),
 				"the band's last slice at the camera's far plane");
-			// 13 km, Jim's choice for the frames; the far tail's steps grow from the ordinary step there (geometric).
+			// 13 km, the distance chosen for the frames; the far tail's steps grow from the ordinary step there (geometric).
 			LogAssert.IsTrue(SourceScanPins.ReadSource("Assets/Prefabs/Client/Weather/Weather Render Profile.asset").Contains("FullMarchMetres: 13000"),
 				"the shipped profile marches the clouds in full to 13 km");
 			string volume = SourceScanPins.ReadCode(Shaders + "FishCloudVolume.hlsl");

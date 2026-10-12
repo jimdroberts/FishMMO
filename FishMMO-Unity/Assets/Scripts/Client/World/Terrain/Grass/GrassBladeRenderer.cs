@@ -78,7 +78,7 @@ namespace FishMMO.Client
 		/// The GPU-driven gather: every tile with grass baked once into a table (<see cref="EnsureTiles"/>), and each frame
 		/// a compute pass culls it (reach, view, the shadows' sweep), picks each tile's level and writes the work list the
 		/// generation reads, dispatched indirectly from the counts it wrote. Nothing is gathered or uploaded on the CPU per
-		/// frame. Off: the CPU gather (the work list kept across frames, RegatherMetres). Jim, 2026-10-07: "the real fix".
+		/// frame. Off: the CPU gather (the work list kept across frames, RegatherMetres). 2026-10-07: "the real fix".
 		/// </summary>
 		public static bool GpuGather = true;
 

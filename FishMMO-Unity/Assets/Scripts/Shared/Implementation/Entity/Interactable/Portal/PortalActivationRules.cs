@@ -3,7 +3,7 @@ using System;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Who a portal opens for once it is activated (Jim, 2026-10-10: chosen per portal; generated
+	/// Who a portal opens for once it is activated (2026-10-10: chosen per portal; generated
 	/// portals get a seeded mix).
 	/// </summary>
 	public enum PortalActivationScope : byte

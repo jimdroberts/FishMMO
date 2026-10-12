@@ -12,8 +12,8 @@ namespace FishMMO.UnitTests
 	/// <remarks>
 	/// A breaker throws its water square to the break line. Where the line bends toward the shore those
 	/// throws converge, and over a shoal the breakers from every side meet in the middle: thrown past
-	/// either, the sheets went through each other and the barrels seemed to form outward (Jim,
-	/// 2026-09-26). The space is what stops that — and on an ordinary beach it must be the plain room.
+	/// either, the sheets went through each other and the barrels seemed to form outward
+	/// (2026-09-26). The space is what stops that — and on an ordinary beach it must be the plain room.
 	/// </remarks>
 	[TestFixture]
 	public class WaterBreakerSpaceTests

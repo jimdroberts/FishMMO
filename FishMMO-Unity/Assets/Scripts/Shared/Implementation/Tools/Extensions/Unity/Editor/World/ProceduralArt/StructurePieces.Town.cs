@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The buildings a settlement is more than houses for (Jim, 2026-10-11): church, temple, tavern, smithy, stables, notice board.
+	/// The buildings a settlement is more than houses for (2026-10-11): church, temple, tavern, smithy, stables, notice board.
 	/// Each is built from the house kit and the same parts as the rest, so it wears the same surfaces and weathers alike.
 	/// </summary>
 	public static partial class StructurePieces
@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 				"A columned stone temple on a stepped podium, 10×14 m: a cella under a pedimented roof, braziers burning at the steps; v0 a portico of four columns, v1 two columns between the side walls.",
 				TownTemple, "building", "temple", "sacred");
 			Piece(list, "Tavern", StructureStyle.Timber, StructureSize.Building,
-				"A two-storey jettied tavern, 8×10 m, two chimneys, a hanging sign, barrels and a bench by the door; v1 thatched.",
+				"A two-storey jettied tavern, 8×10 m, a gable chimney over its taproom hearth, a hanging sign, barrels and a bench by the door; v1 thatched.",
 				Tavern, "building", "tavern");
 			Piece(list, "Smithy", StructureStyle.Timber, StructureSize.Building,
 				"An open-fronted smithy, 6×5 m: a stone forge under a hood and chimney, anvil on its stump, quench trough and bellows; v1 a stone back wall.",
@@ -30,9 +30,79 @@ namespace FishMMO.Shared.WorldDesign
 			Piece(list, "NoticeBoard", StructureStyle.Timber, StructureSize.Small,
 				"A notice board under a little roof with notices pinned to it; v1 a single post with a board.",
 				NoticeBoard, "notice");
+			// A door's leaf, a metre wide and two high (the door scales it to its doorway), hinge side at x = -0.5, the
+			// outside face toward -z. Not baked into a building: each door is a server-run scene object (PointOfInterestDoors).
+			StructurePiece leaf = Piece(list, "DoorLeaf", StructureStyle.Timber, StructureSize.Small,
+				"A door's leaf, 1×2 m: v0 planks on ledges and a brace with strap hinges and a ring; v1 boarded oak studded with iron; v2 iron-plated, riveted.",
+				DoorLeaf, "door");
+			leaf.Variants = 3;
+			leaf.Collides = false;
 			Piece(list, "FieldFence", StructureStyle.Timber, StructureSize.Small,
 				"Three metres of field fence along x: v0 post and two rails, v1 post and three rails, weathered and a little uneven.",
 				FieldFence, "farm").ModuleLength = 3f;
+		}
+
+		// ── Door leaf ─────────────────────────────────────────────────
+
+		private static void DoorLeaf(StructureDraft d)
+		{
+			// 10 cm: a ledged plank door's boards and the iron plate's frame (a thinner leaf read as a sheet of card).
+			const float width = 1f, height = 2f, thick = 0.1f;
+			var kind = (StructureDoorKind)d.Variant;
+			if (kind == StructureDoorKind.Iron)
+			{
+				d.Add(StructureShapes.Box(new Vector3(0f, height * 0.5f, 0f), new Vector3(width, height, thick), StructureMaterial.Iron, 1));
+				if (d.Mid)
+				{
+					// A raised frame round the plate and a cross rail, riveted.
+					d.Add(StructureShapes.Box(new Vector3(0f, height * 0.5f, -thick * 0.5f - 0.01f), new Vector3(width - 0.12f, 0.08f, 0.02f), StructureMaterial.Iron, 2, StructureRole.Detail));
+					for (int s = -1; s <= 1; s += 2)
+					{
+						d.Add(StructureShapes.Box(new Vector3(s * (width * 0.5f - 0.06f), height * 0.5f, -thick * 0.5f - 0.01f), new Vector3(0.08f, height - 0.1f, 0.02f), StructureMaterial.Iron, 3 + (s > 0 ? 1 : 0), StructureRole.Detail));
+						d.Add(StructureShapes.Box(new Vector3(0f, s > 0 ? height - 0.06f : 0.06f, -thick * 0.5f - 0.01f), new Vector3(width - 0.1f, 0.08f, 0.02f), StructureMaterial.Iron, 5 + (s > 0 ? 1 : 0), StructureRole.Detail));
+					}
+				}
+			}
+			else
+			{
+				// Vertical boards, edge to edge.
+				int boards = kind == StructureDoorKind.Studded ? 6 : 5;
+				float board = width / boards;
+				for (int i = 0; i < boards; i++)
+				{
+					float x = -width * 0.5f + board * (i + 0.5f);
+					d.Add(StructureShapes.Box(new Vector3(x, height * 0.5f, d.Range(10 + i, 1, -0.006f, 0.006f)), new Vector3(board - 0.004f, height, thick), StructureMaterial.Timber, 10 + i)).Grain = Vector3.up;
+				}
+				if (d.Mid)
+				{
+					// Ledges and a brace on the inside face (+z).
+					foreach (float y in new[] { 0.35f, height - 0.35f })
+					{
+						d.Add(StructureShapes.Box(new Vector3(0f, y, thick * 0.5f + 0.02f), new Vector3(width - 0.08f, 0.14f, 0.04f), StructureMaterial.Timber, 30 + (y > 1f ? 1 : 0), StructureRole.Detail));
+					}
+					d.Add(StructureShapes.Beam(new Vector3(-width * 0.5f + 0.1f, 0.42f, thick * 0.5f + 0.02f), new Vector3(width * 0.5f - 0.1f, height - 0.42f, thick * 0.5f + 0.02f),
+						0.12f, 0.04f, StructureMaterial.Timber, 32, StructureRole.Detail));
+					// Strap hinges from the hinge side across the outside face (−z), and the ring by the latch.
+					foreach (float y in new[] { 0.4f, height - 0.4f })
+					{
+						d.Add(StructureShapes.Box(new Vector3(-width * 0.5f + (kind == StructureDoorKind.Studded ? 0.45f : 0.3f), y, -thick * 0.5f - 0.008f),
+							new Vector3(kind == StructureDoorKind.Studded ? 0.9f : 0.6f, 0.05f, 0.016f), StructureMaterial.Iron, 40 + (y > 1f ? 1 : 0), StructureRole.Detail));
+					}
+					d.Add(StructureShapes.Box(new Vector3(width * 0.5f - 0.16f, 1.0f, -thick * 0.5f - 0.03f), new Vector3(0.09f, 0.09f, 0.03f), StructureMaterial.Iron, 42, StructureRole.Detail));
+				}
+				if (kind == StructureDoorKind.Studded && d.Fine)
+				{
+					// Rows of iron studs.
+					for (int row = 0; row < 5; row++)
+					{
+						for (int col = 0; col < 4; col++)
+						{
+							float x = -width * 0.5f + 0.17f + col * ((width - 0.34f) / 3f), y = 0.25f + row * ((height - 0.5f) / 4f);
+							d.Add(StructureShapes.Box(new Vector3(x, y, -thick * 0.5f - 0.008f), new Vector3(0.035f, 0.035f, 0.016f), StructureMaterial.Iron, 50 + row * 4 + col, StructureRole.Detail));
+						}
+					}
+				}
+			}
 		}
 
 		// ── Field fence ───────────────────────────────────────────────
@@ -62,7 +132,7 @@ namespace FishMMO.Shared.WorldDesign
 				Width = 7f, Depth = 14f, WallHeight = 5.5f, Rise = 4.2f, Overhang = 0.4f, Wall = 0.5f, Plinth = 0.5f,
 				WallMaterial = StructureMaterial.Stone, RoofMaterial = StructureMaterial.Timber, PlinthMaterial = StructureMaterial.Fieldstone,
 				Frame = false, RidgeAlongX = false, Chimney = false, Windows = 0,
-				DoorWidth = 1.6f, DoorHeight = 3f, DoorX = 0f, Key = 1,
+				DoorWidth = 1.6f, DoorHeight = 3f, DoorX = 0f, DoorKind = StructureDoorKind.Studded, RoomKind = StructureRoomKind.Church, Key = 1,
 			};
 			BuildHouse(d, h);
 			float floor = h.Plinth;
@@ -92,11 +162,20 @@ namespace FishMMO.Shared.WorldDesign
 			if (tower)
 			{
 				// A square west tower over the door, a belfry under a spire, a cross on top.
-				const float side = 3.6f, top = 13f;
+				const float side = 3.6f, top = 13f, tw = 0.6f;
 				float tz = front - side * 0.5f + 0.3f;
-				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (top - FoundationDepth) * 0.5f, tz), new Vector3(side, top + FoundationDepth, side), d.Bevel(0.04f),
+				// The tower's foot is a porch: an open arch in front, the church's door behind, solid from the arch's head up.
+				float half = side * 0.5f, porchTop = floor + 3.6f;
+				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (floor - FoundationDepth) * 0.5f, tz), new Vector3(side, floor + FoundationDepth, side), d.Bevel(0.04f),
 					StructureMaterial.Stone, 150));
-				d.Add(StructureShapes.Box(new Vector3(0f, floor + 1.5f, tz - side * 0.5f - 0.05f), new Vector3(1.5f, 3f, 0.1f), StructureMaterial.Timber, 151, StructureRole.Detail)).Grain = Vector3.up;
+				WallRun(d, new Vector3(-half, 0f, tz - half + tw * 0.5f), new Vector3(half, 0f, tz - half + tw * 0.5f), tw, floor, porchTop,
+					new List<WallOpening> { new WallOpening { Along = half, Width = 1.5f, Bottom = floor - 0.01f, Top = floor + 3f } }, StructureMaterial.Stone, 151);
+				WallRun(d, new Vector3(-half, 0f, tz + half - tw * 0.5f), new Vector3(half, 0f, tz + half - tw * 0.5f), tw, floor, porchTop,
+					new List<WallOpening> { new WallOpening { Along = half, Width = h.DoorWidth, Bottom = floor - 0.01f, Top = floor + h.DoorHeight } }, StructureMaterial.Stone, 152);
+				WallRun(d, new Vector3(-half + tw * 0.5f, 0f, tz - half + tw), new Vector3(-half + tw * 0.5f, 0f, tz + half - tw), tw, floor, porchTop, null, StructureMaterial.Stone, 153);
+				WallRun(d, new Vector3(half - tw * 0.5f, 0f, tz - half + tw), new Vector3(half - tw * 0.5f, 0f, tz + half - tw), tw, floor, porchTop, null, StructureMaterial.Stone, 154);
+				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (porchTop + top) * 0.5f, tz), new Vector3(side, top - porchTop, side), d.Bevel(0.04f), StructureMaterial.Stone, 155));
+				Steps(d, new Vector3(0f, 0f, tz - half), Vector3.back, 1.9f, floor, StructureMaterial.Stone, 156);
 				if (d.Mid)
 				{
 					// A string course under the belfry, and the belfry's openings on every face.
@@ -136,22 +215,24 @@ namespace FishMMO.Shared.WorldDesign
 		private static void TownTemple(StructureDraft d)
 		{
 			const float cellaWidth = 7f, cellaDepth = 9f, wall = 0.6f, columnHeight = 5.5f, radius = 0.38f;
-			const float podiumWidth = 10.4f, podiumDepth = 13.6f, step = 0.35f;
+			// Four steps of 0.24 m: a character's controller climbs a quarter metre at most.
+			const float podiumWidth = 10.4f, podiumDepth = 13.6f, step = 0.24f;
+			const int stepCount = 4;
 			bool portico = d.Variant == 0;
 			// Three steps up, the first reaching down into the ground.
-			for (int i = 0; i < 3; i++)
+			for (int i = 0; i < stepCount; i++)
 			{
 				float top = (i + 1) * step, bottom = i == 0 ? -FoundationDepth : i * step;
-				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (top + bottom) * 0.5f, 0f), new Vector3(podiumWidth - i * 0.8f, top - bottom, podiumDepth - i * 0.8f), d.Bevel(0.03f),
+				d.Add(StructureShapes.ChamferBox(new Vector3(0f, (top + bottom) * 0.5f, 0f), new Vector3(podiumWidth - i * 0.6f, top - bottom, podiumDepth - i * 0.6f), d.Bevel(0.03f),
 					StructureMaterial.Stone, 10 + i));
 			}
-			float floor = 3f * step;
+			float floor = stepCount * step;
 			float front = -podiumDepth * 0.5f + 1.2f;
 			// The cella: the god's room at the back, its door to the portico.
 			const float cellaZ = 1.5f;
-			Walls(d, new Vector3(0f, 0f, cellaZ), cellaWidth, cellaDepth, wall, floor, floor + columnHeight, StructureMaterial.Stone, 20);
-			float door = cellaZ - cellaDepth * 0.5f - 0.05f;
-			d.Add(StructureShapes.Box(new Vector3(0f, floor + 1.8f, door), new Vector3(1.8f, 3.6f, 0.12f), StructureMaterial.Timber, 25, StructureRole.Detail)).Grain = Vector3.up;
+			WallsWithDoor(d, new Vector3(0f, 0f, cellaZ), cellaWidth, cellaDepth, wall, floor, floor + columnHeight, 0f, 1.8f, floor - 0.01f, floor + 3.6f, StructureMaterial.Stone, 20);
+			HangDoor(d, new Vector3(0f, floor, cellaZ - cellaDepth * 0.5f + wall - 0.05f), Vector3.right, Vector3.forward, 1.8f, 3.6f, StructureDoorKind.Studded);
+			d.Room(new Vector3(0f, floor, cellaZ), new Vector2(cellaWidth - 2f * wall, cellaDepth - 2f * wall), columnHeight, StructureRoomKind.Temple);
 			float columnZ = front + 0.6f;
 			if (portico)
 			{
@@ -211,18 +292,15 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var h = new House
 			{
-				Width = 8f, Depth = 10f, WallHeight = 2.8f, Upper = 2.6f, Rise = 3f, Overhang = 0.6f, Wall = 0.25f, Plinth = 0.45f,
+				Width = 8f, Depth = 10f, WallHeight = 2.8f, Upper = 2.7f, Rise = 3f, Overhang = 0.6f, Wall = 0.25f, Plinth = 0.45f,
 				WallMaterial = StructureMaterial.Plaster, RoofMaterial = d.Variant == 1 ? StructureMaterial.Thatch : StructureMaterial.Timber,
-				PlinthMaterial = StructureMaterial.Fieldstone, Frame = true, RidgeAlongX = true, Chimney = true, Windows = 4,
-				DoorWidth = 1.4f, DoorHeight = 2.2f, DoorX = -1.6f, Key = 1,
+				PlinthMaterial = StructureMaterial.Fieldstone, Frame = true, RidgeAlongX = true, Chimney = true, Windows = 3,
+				DoorWidth = 1.4f, DoorHeight = 2.4f, DoorX = -1.6f, DoorKind = StructureDoorKind.Studded, RoomKind = StructureRoomKind.Tavern,
+				UpperRoomKind = StructureRoomKind.Lodging, Key = 1,
 			};
 			BuildHouse(d, h);
 			float floor = h.Plinth, front = -h.Depth * 0.5f;
 			float ridgeTop = floor + h.WallHeight + 0.24f + h.Upper + h.Rise;
-			// A second chimney at the other gable.
-			d.Add(StructureShapes.ChamferBox(new Vector3(-h.Width * 0.5f + 0.9f, (floor + ridgeTop + 0.9f) * 0.5f, 0.35f), new Vector3(0.7f, ridgeTop + 0.9f - floor, 0.7f), d.Bevel(0.03f),
-				StructureMaterial.Fieldstone, 400));
-			d.Emit(new Vector3(-h.Width * 0.5f + 0.9f, ridgeTop + 0.95f, 0.35f), SceneEmitterKind.Smoke);
 			if (!d.Mid)
 			{
 				return;
@@ -310,7 +388,7 @@ namespace FishMMO.Shared.WorldDesign
 				Width = 12f, Depth = 6.5f, WallHeight = 3f, Rise = 2.6f, Overhang = 0.6f, Wall = 0.2f, Plinth = 0.3f,
 				WallMaterial = StructureMaterial.Timber, RoofMaterial = d.Variant == 1 ? StructureMaterial.Thatch : StructureMaterial.Timber,
 				PlinthMaterial = StructureMaterial.Fieldstone, Frame = false, RidgeAlongX = true, Chimney = false, Windows = 0,
-				DoorWidth = 2.6f, DoorHeight = 2.6f, DoorX = 0f, Key = 1,
+				DoorWidth = 2.6f, DoorHeight = 2.6f, DoorX = 0f, RoomKind = StructureRoomKind.Stable, Key = 1,
 			};
 			BuildHouse(d, h);
 			float floor = h.Plinth, front = -h.Depth * 0.5f;

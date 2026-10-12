@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Client;
+using FishMMO.Shared;
 
 namespace FishMMO.RenderScratch
 {
@@ -19,7 +20,7 @@ namespace FishMMO.RenderScratch
 	{
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string ROOT = "Assets/Scripts/Client/GUI/World/";
-		private const string OUT = "/home/jim/Dev/FishMMO-Dev/PanelRenders/interface-scaling/gridfit.txt";
+		private static readonly string OUT = ProbeOutput.Path("PanelRenders", "interface-scaling", "gridfit.txt");
 		private const int SETTLE_FRAMES = 30;
 
 		private static readonly (int w, int h)[] sizes =

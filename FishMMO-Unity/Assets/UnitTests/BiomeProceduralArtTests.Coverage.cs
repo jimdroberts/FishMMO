@@ -6,7 +6,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Every biome is dressed (2026-10-10, Jim: "do not skip any of them — generate properly for each biome"):
+	/// Every biome is dressed (2026-10-10: "do not skip any of them — generate properly for each biome"):
 	/// each spec entry carries at least three things of its own, the lifeless and alien ones included, and the five
 	/// biomes that once had nothing at all now have their ground.
 	/// </summary>

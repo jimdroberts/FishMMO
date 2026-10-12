@@ -104,7 +104,7 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// The procedural structure kit (<see cref="StructureKit"/>) as a piece source for the POI templates: the lowest
-	/// priority, so a LOCAL or hand-made source registered above it wins for whatever it has (Jim, 2026-10-10).
+	/// priority, so a LOCAL or hand-made source registered above it wins for whatever it has (2026-10-10).
 	/// </summary>
 	/// <remarks>
 	/// <para>

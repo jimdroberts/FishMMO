@@ -46,7 +46,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The share of the autumn peak a broadleaf wood drops through the rest of the year. Above the few percent a real wood
-		/// sheds: leaves on the air are what make a wood feel alive, and at 6% one went by unseen (Jim, 2026-10-10).
+		/// sheds: leaves on the air are what make a wood feel alive, and at 6% one went by unseen (2026-10-10).
 		/// </summary>
 		public const float AllYearDeciduous = 0.2f;
 		/// <summary>The same for evergreens, whose old leaves and needles come down a few at a time year round.</summary>

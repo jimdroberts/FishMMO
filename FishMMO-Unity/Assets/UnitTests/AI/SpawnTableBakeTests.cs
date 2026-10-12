@@ -235,7 +235,7 @@ namespace FishMMO.UnitTests.AI
 						scanned++;
 						List<string> problems = new List<string>();
 						SpawnTableBaker.Validate(scene, spawner, problems);
-						/* A generated spawner left empty on purpose (a world boss lair's boss, Jim 2026-10-10) says so with
+						/* A generated spawner left empty on purpose (a world boss lair's boss, 2026-10-10) says so with
 						 * PendingSpawnerContent: a designer's to-do, listed, not a silent defect. */
 						if (problems.Count > 0 && spawner.TryGetComponent(out PendingSpawnerContent marked))
 						{

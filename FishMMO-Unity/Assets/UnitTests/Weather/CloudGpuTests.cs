@@ -16,7 +16,7 @@ namespace FishMMO.UnitTests.Weather
 	/// The kernels themselves cannot run here. What can be held is everything either side of them: the
 	/// packed storms carry everything the reference raster reads (<see cref="WeatherMap.RasterPacked"/>,
 	/// the kernel's twin, agrees with <see cref="WeatherMap.SampleTexel"/> over each storm), a storm is
-	/// never dropped that could have drawn anything, and the tiers' numbers keep what Jim judged.
+	/// never dropped that could have drawn anything, and the tiers' numbers keep what was judged in the editor.
 	/// </remarks>
 	[TestFixture]
 	public class CloudGpuTests
@@ -81,7 +81,7 @@ namespace FishMMO.UnitTests.Weather
 		{
 			// Each tier rebuilds at four times its march, capped at the screen, every pixel re-marched once in sixteen
 			// frames. 2026-10-07: High had come down to a march of 0.07, rebuilt at 0.28 of the screen and stretched 3.5x
-			// by the composite: "very blurry" (Jim). At 0.25 it is rebuilt at the screen's size, and a still frame matched
+			// by the composite: "very blurry". At 0.25 it is rebuilt at the screen's size, and a still frame matched
 			// a march of 0.48 at 3.7 ms of march against 8.6 (overcast, 2560x1440).
 			foreach (WeatherTierSettings tier in new[] { WeatherTierSettings.Performant(), WeatherTierSettings.Balanced(), WeatherTierSettings.High() })
 			{

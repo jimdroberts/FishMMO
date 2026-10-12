@@ -28,7 +28,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	}
 
 	/// <summary>
-	/// Whether, and how, an archetype's NPCs swim (Jim, 2026-10-05: not all NPCs can swim; swimming NPCs will probably
+	/// Whether, and how, an archetype's NPCs swim (2026-10-05: not all NPCs can swim; swimming NPCs will probably
 	/// drown, and an AI decides whether to chase into the water or stay on land).
 	/// </summary>
 	/// <remarks>

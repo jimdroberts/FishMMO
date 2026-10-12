@@ -91,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The pre-cut prompt (Jim, 2026-10-10): before every cut and re-cut on the World Atlas page, asks
+	/// The pre-cut prompt (2026-10-10): before every cut and re-cut on the World Atlas page, asks
 	/// whether the scene holds the capital and how dense its points of interest are.
 	/// </summary>
 	/// <remarks>

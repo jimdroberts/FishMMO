@@ -38,7 +38,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>From the planet's line to the scene's river.</b> Each planet river crossing the scene is
 	/// carried into scene metres, its 200 m grid steps rounded off (<see cref="RiverShaping.Chaikin"/>),
 	/// moved onto the scene's own valley floor, which its finer ground puts tens of metres from the
-	/// planet's (<see cref="RiverShaping.SnapToFloor"/>), and swung into meanders where its bed is gentle.
+	/// planet's (<see cref="RiverShaping.SnapToFloor"/>), and swung into meanders where its bed is gentle; never left
+	/// bending tighter than a river of its width can, nor turning back on itself (<see cref="RiverShaping.EaseBends"/>).
 	/// Within <see cref="RiverSettings.EdgeHoldMetres"/> of the scene's edge it is held to the planet's
 	/// line, so the neighbour scene cut across the same river meets it where it crosses.
 	/// </para>
@@ -342,11 +343,17 @@ namespace FishMMO.Shared.WorldDesign
 			float[] gradient = Gradient(x, z, filled);
 			float[] hold = Hold(x, z, halfW, halfD, s.EdgeHoldMetres);
 
-			RiverShaping.SnapToFloor(x, z, blurred.At, hold, s.SnapMetres, s.SnapPenalty, Mathf.Max(60f, 8f * Median(width)));
-			RiverShaping.SnapToFloor(x, z, blurred.At, hold, s.SnapMetres * 0.4f, s.SnapPenalty, Mathf.Max(40f, 5f * Median(width)));
+			// Never folded over the inside of a bend: a snap may not take a bend tighter than the river can (RiverShaping.SnapToFloor).
+			float bendRadius = Mathf.Max(s.MinBendRadiusMetres, s.MinBendRadiusWidths * Median(width));
+			RiverShaping.SnapToFloor(x, z, blurred.At, hold, s.SnapMetres, s.SnapPenalty, Mathf.Max(60f, 8f * Median(width)), bendRadius);
+			RiverShaping.SnapToFloor(x, z, blurred.At, hold, s.SnapMetres * 0.4f, s.SnapPenalty, Mathf.Max(40f, 5f * Median(width)), bendRadius);
 			RiverShaping.Meander(x, z, width, gradient, hold, s, unchecked((uint)(river.Id * 0x9E3779B1u) ^ (uint)(a * 0x85EBCA6Bu)));
 			// No loops: the snaps and the meanders can pull the line across itself (see RiverShaping.Untangle).
 			RiverShaping.Untangle(x, z, t, width, 4f);
+			/* Nor any hairpin: a loop cut at its neck joins two strands running opposite ways, and the snaps and meanders
+			 * together can still bend it tighter than a river turns (RiverShaping.EaseBends). Widths for what is left of the
+			 * line, as Untangle cut its points but not the widths worked out before it. */
+			RiverShaping.EaseBends(x, z, t, WidthsAlong(river, t, s), s);
 
 			// The finer spacing the channel is described at, its values carried along.
 			float spacing = Mathf.Clamp(0.5f * Median(width), 2f, 6f);
@@ -391,26 +398,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			n = x.Count;
 
-			// A tributary ends on the river it joins, wherever that river was moved to.
+			// A tributary ends on the river it joins, wherever that river was moved to, at its own spacing (RiverShaping.EndOnto).
 			if (joined != null)
 			{
 				Nearest(joined, x[n - 1], z[n - 1], out float jx, out float jz, out _);
-				float shiftX = jx - x[n - 1], shiftZ = jz - z[n - 1];
-				float along = 0f;
-				for (int i = n - 1; i >= 0; i--)
-				{
-					if (i < n - 1)
-					{
-						along += RiverShaping.Distance(x[i], z[i], x[i + 1], z[i + 1]);
-					}
-					float w = Mathf.Clamp01(1f - along / 150f);
-					if (w <= 0f)
-					{
-						break;
-					}
-					x[i] += shiftX * w;
-					z[i] += shiftZ * w;
-				}
+				n = RiverShaping.EndOnto(x, z, ref q, ref area, jx, jz, spacing);
 			}
 
 			// Each point's floor: the lowest ground across where its channel will be.
@@ -454,7 +446,7 @@ namespace FishMMO.Shared.WorldDesign
 				/* The lower of its two banks, where the water meets them: at the channel's edge, and a little way out,
 				 * whichever is lower. Read only a way out (as it was, 3 m and more past the edge), a river in a V or a
 				 * gorge took its banks from up the valley's sides or its walls and stood its surface there, over the
-				 * ground at its own edge: water hanging in the air, metres above its banks (Jim, 2026-10-06: "the
+				 * ground at its own edge: water hanging in the air, metres above its banks (2026-10-06: "the
 				 * pools are floating"; Flo Monolith had a quarter of a river's length over air, up to 13.6 m). */
 				float reach = half + Mathf.Max(3f, half);
 				float edge = half + 0.25f;
@@ -1065,7 +1057,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A perennial river's surface where its centre line comes nearest to a scene position, if that is within its
 		/// banks and <see cref="RiverSurfaceReachMetres"/>; negative infinity otherwise. Smooth along the river, unlike
 		/// <see cref="SurfaceAt"/>, which takes the highest of the grid's samples about a point: down a falling river that
-		/// steps at every sample, and the bed paint up the banks came out as a row of teeth (Jim, 2026-10-11). Safe from
+		/// steps at every sample, and the bed paint up the banks came out as a row of teeth (2026-10-11). Safe from
 		/// the scatter's worker threads.
 		/// </summary>
 		public float RiverSurfaceNear(float east, float north)
@@ -1528,6 +1520,27 @@ namespace FishMMO.Shared.WorldDesign
 				Array.Copy(values, result, Math.Min(n, values.Length));
 			}
 			return result;
+		}
+
+		/// <summary>A planet river's channel width at fractional cell positions along it: by its discharge, or a dry wash's by its drainage area.</summary>
+		private static float[] WidthsAlong(DrainageRiver river, List<float> t, RiverSettings settings)
+		{
+			float[] q = Along(t, river.Discharge);
+			float[] area = Along(t, river.Area);
+			float threshold = new DrainageSettings().MinRiverDischarge;
+			var width = new float[t.Count];
+			for (int i = 0; i < t.Count; i++)
+			{
+				if (q[i] >= threshold)
+				{
+					RiverShaping.Size(q[i], settings, out width[i], out _);
+				}
+				else
+				{
+					width[i] = RiverShaping.DryWidth(area[i], settings);
+				}
+			}
+			return width;
 		}
 
 		/// <summary>A planet river's per-cell values at fractional cell positions along it.</summary>

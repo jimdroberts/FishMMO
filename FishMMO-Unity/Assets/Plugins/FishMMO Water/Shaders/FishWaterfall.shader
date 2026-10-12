@@ -151,7 +151,7 @@ Shader "FishMMO/Water/Waterfall"
 
                 /* White water is still water: its white covers only part of what is behind it (most in a dense jet), the
                  * refracted rock and glassy body show through the rest, and it is wet, so the sky and the sun shine in it.
-                 * Painted over the water as one opaque white it read as a texture, not water (Jim, 2026-10-08). */
+                 * Painted over the water as one opaque white it read as a texture, not water (2026-10-08). */
                 half cover = s.white * (rope ? 0.85 : lerp(0.5, 0.88, s.strand));
                 half3 color = lerp(glassy, foamLit, cover);
                 half sheen = pow(saturate(dot(bumped, halfVector)), 48.0) * 0.35;

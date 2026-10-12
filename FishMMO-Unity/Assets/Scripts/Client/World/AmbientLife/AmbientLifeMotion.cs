@@ -246,7 +246,7 @@ namespace FishMMO.Client
 		/// <param name="density">The family's density multiplier (settings).</param>
 		/// <param name="perches">The tree perches in the cell (x, crown top y, z, tree height).</param>
 		public static bool TryPlace(AmbientCreatureKind kind, int kindIndex, float density, uint sceneSeed, int cellX, int cellZ, float cellMetres,
-			IAmbientWorld world, List<Vector4> perches, List<AmbientGroup> groups)
+			IAmbientWorld world, List<Vector4> perches, List<AmbientGroup> groups, List<AmbientTrunk> trunks = null)
 		{
 			if (kind == null || !kind.Enabled || kind.GroupsPerKm2 <= 0f || density <= 0f)
 			{
@@ -260,11 +260,13 @@ namespace FishMMO.Client
 			{
 				uint seed = SeaLifePlacement.Hash(sceneSeed ^ 0xA1B1E000u, cellX * 4099 + kindIndex, cellZ, i);
 				var home = new Vector3((cellX + Unit(Mix(seed ^ 0x1u))) * cellMetres, 0f, (cellZ + Unit(Mix(seed ^ 0x2u))) * cellMetres);
-				// A squirrel lives at the foot of a tree.
+				// A squirrel lives at the foot of a tree: its trunk, where the index knows it, else under its crown.
 				if (kind.NeedsTrees && perches != null && perches.Count > 0)
 				{
-					Vector4 tree = perches[(int)(Unit(Mix(seed ^ 0x3u)) * perches.Count) % perches.Count];
-					home = new Vector3(tree.x, 0f, tree.z) + Disk(Mix(seed ^ 0x4u), 3f);
+					int pick = (int)(Unit(Mix(seed ^ 0x3u)) * perches.Count) % perches.Count;
+					Vector4 tree = perches[pick];
+					Vector3 foot = trunks != null && pick < trunks.Count && trunks[pick] != null ? trunks[pick].Base : new Vector3(tree.x, 0f, tree.z);
+					home = new Vector3(foot.x, 0f, foot.z) + Disk(Mix(seed ^ 0x4u), 3f);
 				}
 				if (!world.TryGround(home.x, home.z, out float ground))
 				{
@@ -348,6 +350,8 @@ namespace FishMMO.Client
 			public IAmbientWorld World;
 			/// <summary>Tree perches in the group's cell (x, crown top, z, height).</summary>
 			public List<Vector4> Perches;
+			/// <summary>The same trees' trunks, index for index with <see cref="Perches"/>; null where only the crowns are known.</summary>
+			public List<AmbientTrunk> Trunks;
 			/// <summary>The cell's fright states, indexed from the group's <see cref="AmbientGroup.StateFirst"/>.</summary>
 			public AmbientMemberState[] States;
 			/// <summary>Who frightens them this frame (none: nothing takes fright, as for a scene-view draw).</summary>
@@ -768,7 +772,7 @@ namespace FishMMO.Client
 			}
 			List<Vector4> perches = f.Perches;
 			/* A bird up in a crown 10–30 m over the path is not seen, and one in the grass barely: the open ground and the
-			 * flights between are where the eye finds them (Jim, 2026-10-10: "still rarely seeing birds"), so most episodes
+			 * flights between are where the eye finds them (2026-10-10: "still rarely seeing birds"), so most episodes
 			 * are on the ground and they are short, so a bird is often on the wing. */
 			// An owl hunts from a perch and drops onto the grass now and then; it does not forage about on foot.
 			float treeShare = kind.Shape == AmbientShape.Owl ? 0.75f : kind.Shape == AmbientShape.Crow ? 0.3f : 0.35f;
@@ -1242,7 +1246,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// A ground animal's spot in an episode: somewhere dry within its run of its own home spot (a crab's may be wet sand),
 		/// the most open of a few: in 0.5 m grass a mouse or a rat is not seen at all, so they forage on paths, sand, rock
-		/// and short turf where there is any (Jim, 2026-10-10). With no grass anywhere this is the first dry place, as before.
+		/// and short turf where there is any (2026-10-10). With no grass anywhere this is the first dry place, as before.
 		/// </summary>
 		private static Vector3 CritterSpot(in AmbientGroup g, AmbientCreatureKind kind, uint own, long episode, Vector3 home, IAmbientWorld world)
 		{
@@ -1286,8 +1290,14 @@ namespace FishMMO.Client
 			double length = g.Episode * Mathf.Lerp(0.75f, 1.25f, Unit(Mix(own ^ 0x82u)));
 			long episode = EpisodeAt(t, length, Unit(Mix(own ^ 0x83u)), out double start);
 			float tau = (float)(t - start), len = (float)length;
-			Vector3 spot = CritterSpot(g, kind, own, episode, home, world);
-			Vector3 next = CritterSpot(g, kind, own, episode + 1, home, world);
+			// A squirrel's rest may be up a trunk: then its spot is the trunk's foot, which it runs to like any other spot.
+			bool squirrel = kind.Shape == AmbientShape.Squirrel;
+			Climb climb = default;
+			bool onTrunk = squirrel && TrunkRest(own, episode, home, world, ref f, out climb);
+			Vector3 spot = onTrunk ? Foot(in climb, world) : CritterSpot(g, kind, own, episode, home, world);
+			Climb nextClimb = default;
+			Vector3 next = squirrel && TrunkRest(own, episode + 1, home, world, ref f, out nextClimb)
+				? Foot(in nextClimb, world) : CritterSpot(g, kind, own, episode + 1, home, world);
 			float dash = kind.Shape == AmbientShape.Lizard ? 3f : 1f;
 			float move = Mathf.Clamp(Vector3.Distance(spot, next) / (kind.Speed * dash), 0.3f, len * 0.6f);
 			float gaitHz = kind.StrokeHz * (kind.Shape == AmbientShape.Lizard ? 1.6f : 1f);
@@ -1328,11 +1338,12 @@ namespace FishMMO.Client
 				state.Height = 0f;
 				if (state.Refuge == AmbientMemberState.ToTrunk)
 				{
-					if (NearestTree(f.Perches, at, 15f, out Vector4 tree))
+					if (NearestTrunk(ref f, world, at, 15f, out AmbientTrunk tree))
 					{
-						// Round to the far side of the trunk from the threat, as squirrels do, clear of the bark.
-						state.To = new Vector3(tree.x, 0f, tree.z) + state.Flee * Mathf.Clamp(tree.w * 0.025f, 0.2f, 0.5f);
-						state.Height = tree.w;
+						// Round to the far side of the trunk from the threat, as squirrels do, and well up it.
+						var up = new Climb { Trunk = tree, Outward = state.Flee, Height = FleeHeight(tree) };
+						state.To = Foot(in up, world);
+						state.Height = up.Height;
 					}
 					else
 					{
@@ -1368,25 +1379,21 @@ namespace FishMMO.Client
 					Quaternion? climbing = null;
 					if (state.Refuge == AmbientMemberState.ToTrunk)
 					{
-						// Across to the trunk, then straight up it to where the branches start.
+						// Across to the trunk's foot on its far side, then up the bark (the trunk's own surface) at a run.
 						Vector3 foot = state.To;
-						if (away < run)
+						if (away < run || !NearestTrunk(ref f, world, foot, 2.5f, out AmbientTrunk tree))
 						{
-							pos = Vector3.Lerp(state.From, foot, away / run);
+							pos = Vector3.Lerp(state.From, foot, Mathf.Min(1f, away / run));
 							dir = foot - state.From;
 						}
 						else
 						{
-							float climb = Mathf.Min(1f, (away - run) / 1.6f) * Mathf.Max(1.5f, state.Height * 0.45f);
-							pos = foot;
-							if (world.TryGround(foot.x, foot.z, out float fy) && !float.IsInfinity(fy))
-							{
-								pos.y = fy;
-							}
-							pos.y += climb;
-							runStride = away - run < 1.6f ? 1f : 0f;
-							// Head up the trunk, back to the world, belly to the bark.
-							climbing = Quaternion.LookRotation(Vector3.up, new Vector3(state.Flee.x, 0f, state.Flee.z));
+							var up = new Climb { Trunk = tree, Outward = state.Flee, Height = state.Height };
+							float climbTime = Mathf.Max(0.5f, state.Height / (ClimbSpeed * 1.6f));
+							float rise = Mathf.Min(1f, (away - run) / climbTime);
+							OnTrunk(in up, foot, world, size, rise * state.Height, false, out pos, out Quaternion cling);
+							runStride = rise < 1f ? 1f : 0f;
+							climbing = cling;
 						}
 					}
 					else
@@ -1422,25 +1429,37 @@ namespace FishMMO.Client
 					}
 					float fleePhase = SeaLifePlacement.Cycle(t, 1.0 / Math.Max(0.1, gaitHz * 1.8f), Unit(own));
 					Quaternion r = climbing ?? Ground(world, pos, crab ? new Vector3(dir.z, 0f, -dir.x) : dir, size);
-					Emit(into, kind, own, pos, r, size, new Vector4(fleePhase, runStride, bounds ? 1f : 0f, 0f), visible);
+					// Up a trunk it scampers rather than bounds: a bound lifts the body off what it stands on, here the bark.
+					Emit(into, kind, own, pos, r, size, new Vector4(fleePhase, runStride, bounds && !climbing.HasValue ? 1f : 0f, 0f), visible);
 					return;
 				}
 			}
 
-			// A squirrel spends some of its rests on a trunk a couple of metres up, where it is seen (Jim, 2026-10-10).
-			if (kind.Shape == AmbientShape.Squirrel && stride <= 0f && Unit(EpisodeSeed(own ^ 0x88u, episode)) < TrunkRestShare
-				&& NearestTree(f.Perches, home, 12f, out Vector4 trunk))
+			// A squirrel spends some of its rests on a trunk a couple of metres up, where it is seen (2026-10-10): it
+			// ran to the trunk's foot, climbs, clings, and comes down head first before it runs on (no jumps up or down).
+			if (onTrunk && stride <= 0f)
 			{
-				Vector3 round = Disk(Mix(EpisodeSeed(own ^ 0x89u, episode)), 1f);
-				Vector3 outward = new Vector3(round.x, 0f, round.z).sqrMagnitude > 1e-6f ? new Vector3(round.x, 0f, round.z).normalized : Vector3.forward;
-				Vector3 bark = new Vector3(trunk.x, 0f, trunk.z) + outward * Mathf.Clamp(trunk.w * 0.025f, 0.2f, 0.5f);
-				if (world.TryGround(bark.x, bark.z, out float by) && !float.IsInfinity(by))
+				float rest = len - move;
+				float climbTime = Mathf.Clamp(climb.Height / ClimbSpeed, 0.6f, 3f);
+				if (rest >= 2f * climbTime + 1f)
 				{
-					bark.y = by + Mathf.Lerp(1.2f, Mathf.Clamp(trunk.w * 0.3f, 1.5f, 4f), Unit(Mix(own ^ 0x8Au)));
-					// Head up the trunk, belly to the bark, as when it flees up one.
-					Quaternion cling = Quaternion.LookRotation(Vector3.up, outward);
-					float sway = SeaLifePlacement.Cycle(t, 1.0 / Math.Max(0.1, gaitHz * 0.35f), Unit(Mix(own ^ 0x87u)));
-					Emit(into, kind, own, bark, cling, size, new Vector4(sway, 0f, 1f, 0f), visible);
+					float up = climb.Height;
+					bool descending = false;
+					float gait = 0f;
+					if (tau < climbTime)
+					{
+						up = climb.Height * Mathf.SmoothStep(0f, 1f, tau / climbTime);
+						gait = 1f;
+					}
+					else if (tau > rest - climbTime)
+					{
+						up = climb.Height * Mathf.SmoothStep(0f, 1f, (rest - tau) / climbTime);
+						gait = 1f;
+						descending = true;
+					}
+					OnTrunk(in climb, spot, world, size, up, descending, out Vector3 bark, out Quaternion cling);
+					float scamper = SeaLifePlacement.Cycle(t, 1.0 / Math.Max(0.1, gaitHz * (gait > 0f ? 1.3f : 0.35f)), Unit(Mix(own ^ 0x87u)));
+					Emit(into, kind, own, bark, cling, size, new Vector4(scamper, gait, 0f, 0f), visible);
 					return;
 				}
 			}
@@ -1492,6 +1511,111 @@ namespace FishMMO.Client
 			}
 			Vector3 forward = Vector3.ProjectOnPlane(heading, up);
 			return Facing(forward, up);
+		}
+
+		// ── Trunks ────────────────────────────────────────────────────
+
+		/// <summary>Metres a second a squirrel climbs at its ease (it runs up half as fast again when frightened).</summary>
+		public const float ClimbSpeed = 1.6f;
+
+		/// <summary>One climb: which trunk, the side of it and how high.</summary>
+		private struct Climb
+		{
+			public AmbientTrunk Trunk;
+			public Vector3 Outward;
+			public float Height;
+		}
+
+		/// <summary>
+		/// Whether a squirrel spends an episode's rest up a trunk, and which: the nearest to its home, a side of it and a
+		/// height of its own, all from the episode, so its run in knows where it is going.
+		/// </summary>
+		private static bool TrunkRest(uint own, long episode, Vector3 home, IAmbientWorld world, ref Frame f, out Climb climb)
+		{
+			climb = default;
+			if (Unit(EpisodeSeed(own ^ 0x88u, episode)) >= TrunkRestShare || !NearestTrunk(ref f, world, home, 12f, out AmbientTrunk trunk))
+			{
+				return false;
+			}
+			Vector3 round = Disk(Mix(EpisodeSeed(own ^ 0x89u, episode)), 1f);
+			var flat = new Vector3(round.x, 0f, round.z);
+			climb.Trunk = trunk;
+			climb.Outward = flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector3.forward;
+			climb.Height = Mathf.Min(Mathf.Lerp(1.2f, 4f, Unit(Mix(own ^ 0x8Au))), Mathf.Max(0.8f, trunk.Top - 0.3f));
+			return true;
+		}
+
+		/// <summary>How high a frightened squirrel goes: well up, short of where the measured trunk ends.</summary>
+		private static float FleeHeight(AmbientTrunk trunk) => Mathf.Max(0.8f, Mathf.Min(Mathf.Max(2.5f, trunk.Top * 0.8f), trunk.Top - 0.2f));
+
+		/// <summary>The foot of a climb: the ground just out from the bark on its side.</summary>
+		private static Vector3 Foot(in Climb climb, IAmbientWorld world)
+		{
+			Vector3 p = climb.Trunk.Surface(0.2f, climb.Outward, out _, out Vector3 normal) + normal * 0.06f;
+			if (world.TryGround(p.x, p.z, out float y) && !float.IsInfinity(y))
+			{
+				p.y = y;
+			}
+			return p;
+		}
+
+		/// <summary>
+		/// A squirrel <paramref name="up"/> metres up a trunk: on the bark, head up (head down coming down), belly to the
+		/// bark, back to the world; the first half metre a turn from standing at the foot, facing the trunk, to clinging.
+		/// </summary>
+		private static void OnTrunk(in Climb climb, Vector3 foot, IAmbientWorld world, float size, float up, bool descending, out Vector3 position, out Quaternion rotation)
+		{
+			Vector3 bark = climb.Trunk.Surface(Mathf.Max(0.15f, up), climb.Outward, out Vector3 along, out Vector3 normal);
+			Quaternion cling = Quaternion.LookRotation(descending ? -along : along, normal);
+			float onto = Mathf.Clamp01(up / 0.5f);
+			if (onto >= 1f)
+			{
+				position = bark;
+				rotation = cling;
+				return;
+			}
+			Quaternion standing = Ground(world, foot, descending ? normal : -normal, size);
+			position = Vector3.Lerp(foot, bark, onto);
+			rotation = Quaternion.Slerp(standing, cling, onto);
+		}
+
+		/// <summary>
+		/// The trunk nearest a place within reach: the frame's measured trunks where there are any, else one stood under the
+		/// nearest crown (a scene the index has not measured, and the tests).
+		/// </summary>
+		private static bool NearestTrunk(ref Frame f, IAmbientWorld world, Vector3 at, float reach, out AmbientTrunk trunk)
+		{
+			trunk = null;
+			if (f.Trunks != null && f.Trunks.Count > 0)
+			{
+				float best = reach * reach;
+				foreach (AmbientTrunk t in f.Trunks)
+				{
+					if (t == null)
+					{
+						continue;
+					}
+					float dx = t.Base.x - at.x, dz = t.Base.z - at.z;
+					float d = dx * dx + dz * dz;
+					if (d < best)
+					{
+						best = d;
+						trunk = t;
+					}
+				}
+				return trunk != null;
+			}
+			if (!NearestTree(f.Perches, at, reach, out Vector4 tree))
+			{
+				return false;
+			}
+			float ground = world.TryGround(tree.x, tree.z, out float gy) && !float.IsInfinity(gy) ? gy : tree.y - tree.w;
+			trunk = new AmbientTrunk
+			{
+				Base = new Vector3(tree.x, ground, tree.z),
+				Shape = AmbientTrunk.Profile.Plain(tree.w, Mathf.Clamp(tree.w * 0.025f, 0.2f, 0.5f)),
+			};
+			return true;
 		}
 
 		/// <summary>The tree nearest a place within reach.</summary>

@@ -5,7 +5,7 @@
     Unity UIToolkit  (Unity 6.x LTS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    GENERATED from PointOfInterestKinds.cs and MapMarkerType.cs (Jim, 2026-10-10: one
+    GENERATED from PointOfInterestKinds.cs and MapMarkerType.cs (2026-10-10: one
     marker type per point-of-interest kind). Regenerate rather than hand-edit when a kind
     is added: every kind's type is listed in its GROUP's rule, so the shape and the colour
     belong to the group (one --map-poi-group token each, in FishMMO-Theme.uss) and the

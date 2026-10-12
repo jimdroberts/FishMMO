@@ -26,7 +26,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>A repaint does not plan.</b> It reads the plan back from the scene's asset (<see cref="ForRepaint"/>) and
 	/// places it again: the ground already carries the pads, and planning again on flattened ground would move them.
-	/// A re-cut regenerates everything (Jim, 2026-10-10).
+	/// A re-cut regenerates everything (2026-10-10).
 	/// </para>
 	/// </remarks>
 	public sealed class PointOfInterestStage
@@ -346,6 +346,8 @@ namespace FishMMO.Shared.WorldDesign
 					HardnessAt = hardness,
 					Notes = notes,
 				};
+				// Water read back from a scene's hydrology carries the last plan's moats: they are dug again below.
+				MoatShaper.ClearWater(water);
 				foreach (PointOfInterestRecord record in plan.Records.ToArray())
 				{
 					IPointOfInterestShaper shaper = PointOfInterestShapers.For(record.Kind);
@@ -497,7 +499,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			Plan.Paths.AddRange(paths.Paths);
-			int carved = PathCarver.Carve(terrains, tiles, Plan.Paths, ground, (x, z) => WaterAt(x, z) != PathCellWater.Dry, Plan.Pads);
+			// A way across a moat keeps the banks' level (it crosses on the drawbridge) and leaves the ditch undug.
+			List<PointOfInterestShape> shapes = Plan.Shapes;
+			Func<float, float, float> deck = (x, z) => MoatShaper.BankLevel(shapes, x, z, ground, out float bank) ? bank : ground(x, z);
+			int carved = PathCarver.Carve(terrains, tiles, Plan.Paths, deck, (x, z) => WaterAt(x, z) != PathCellWater.Dry, Plan.Pads,
+				(x, z) => MoatShaper.Contains(shapes, x, z));
 			// The ways' heights on the ground as carved.
 			foreach (ScenePath path in Plan.Paths)
 			{
@@ -741,8 +747,18 @@ namespace FishMMO.Shared.WorldDesign
 				Templates.TryGetValue(record.Id, out PointOfInterestTemplate template);
 				// The site's own biome: a site is small beside the biome field's blend, and a repaint has no field to ask.
 				BiomeRegistry.TryGetByID(record.BiomeID, out BiomeTemplate siteBiome);
+				// One list of the site's doors and one of its rooms, shared by every context made for it: the props feature
+				// records them as it lays the buildings, the doors and interiors builders read them after. (A fresh pair per
+				// context left the builders empty-handed: no door or room was ever built in a cut.)
+				var siteDoors = new List<PointOfInterestSiteContext.PlacedDoor>();
+				var siteRooms = new List<PointOfInterestSiteContext.PlacedRoom>();
+				// And of every prop laid at it, for the builders that dress what the features laid (ivy on its walls).
+				var siteLaid = new List<PointOfInterestSiteContext.PlacedProp>();
 				PointOfInterestSiteContext Context(int salt) => new PointOfInterestSiteContext
 				{
+					Doors = siteDoors,
+					Rooms = siteRooms,
+					Laid = siteLaid,
 					Scene = scene,
 					Root = site.transform,
 					Record = record,
@@ -795,6 +811,17 @@ namespace FishMMO.Shared.WorldDesign
 						notes?.Add($"{site.name}: site builder {builder.GetType().Name} threw: {ex.Message}");
 					}
 				}
+			}
+
+			// Ships under way between the harbours and out to sea, solid on every peer (PointOfInterestSeaTraffic, FloatingBoats).
+			try
+			{
+				PointOfInterestSeaTraffic.Build(root.transform, asset, Request, tiles.WidthMetres, tiles.DepthMetres, ground, water, notes);
+			}
+			catch (Exception ex)
+			{
+				Debug.LogException(ex);
+				notes?.Add($"Sea traffic threw: {ex.Message}");
 			}
 
 			// The ways (with the streets the layouts just laid) baked for the client's path surface.

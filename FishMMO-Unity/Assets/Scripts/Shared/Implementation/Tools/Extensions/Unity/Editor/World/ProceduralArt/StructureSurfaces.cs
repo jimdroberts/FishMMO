@@ -23,7 +23,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// and a plank is the same width on a crate as on a house.
 	/// </para>
 	/// <para>
-	/// <b>Finishes change only the albedo</b> (Jim, 2026-10-10: tint variants via material, not new meshes): moss settles in
+	/// <b>Finishes change only the albedo</b> (2026-10-10: tint variants via material, not new meshes): moss settles in
 	/// the hollows and patches, char blackens all but a little ember brown in the cracks, algae lays a dark streaked film.
 	/// The normal and mask maps are shared, so a finish costs one texture per surface.
 	/// </para>

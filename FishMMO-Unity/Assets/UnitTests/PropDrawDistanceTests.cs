@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Baked props are drawn as far as their size earns (Jim, 2026-10-06: culled by draw distance, larger objects
+	/// Baked props are drawn as far as their size earns (2026-10-06: culled by draw distance, larger objects
 	/// further, for realism), never to the camera's 20 km far plane.
 	/// </summary>
 	[TestFixture]

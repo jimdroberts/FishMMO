@@ -140,7 +140,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The half widths and wears a path is drawn with: its own, narrowed to nothing and worn away over the last few metres
 		/// of each end that stops in a site, so a way peters out into the ground instead of ending in a full-width round
-		/// cap (Jim, 2026-10-11). An end that joins another way (FromId −1) and a settlement's streets are drawn as they
+		/// cap (2026-10-11). An end that joins another way (FromId −1) and a settlement's streets are drawn as they
 		/// are: a junction must meet, and a street runs to its walls.
 		/// </summary>
 		public static void EndFade(ScenePath path, out float[] half, out float[] wear)

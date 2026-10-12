@@ -251,7 +251,7 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, out half whi
 /// Read <see cref="FISH_RIVER_LACE_MIP"/> mips down: a river's white water is clumps of froth with holes, never the
 /// lace's web of bubble walls. Those walls are a texel or three wide, and every cut under about a third covers little
 /// else, so a river's thin foam drew as hairlines, stretched along the current into rows of parallel dotted streaks
-/// (the cut keeps only the top of a texel-wide ridge, and that wanders as the wall crosses texel centres; Jim's
+/// (the cut keeps only the top of a texel-wide ridge, and that wanders as the wall crosses texel centres; seen in a
 /// close-up, 2026-10-09). Averaged over 4×4 texels a wall falls below any cut, while the patches and their holes stay,
 /// and the cut still covers what it is asked (a fifth covers 19 %).
 /// </remarks>
@@ -278,7 +278,7 @@ half FlowLace(float2 xz, float2 flow, float scale, float cycle, float2 shift)
 /// <remarks>
 /// Not world space turned to the flow's direction: river water lies hundreds of metres from the origin, and there the
 /// slightest turn of the flow slid the turned coordinate by metres from one pixel to the next. The texture was squeezed
-/// and aliased into rows of white ticks bending in arcs, and tore along triangle edges (Jim's screenshots, 2026-10-07).
+/// and aliased into rows of white ticks bending in arcs, and tore along triangle edges (screenshots, 2026-10-07).
 /// The river's frame bends with the river and turns nowhere.
 /// </remarks>
 half StreakFoam(float2 frame, float speed, float scale, float cycle)
@@ -683,7 +683,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		+ 3.0 * sin(6.2831853 * input.riverUV.y / (1.3 * wavelength) + wander * 6.2831853)
 		+ 4.0 * (cluster - 0.5);
 	/* Short-crested: each crest a hump a wavelength or two across, not a ridge running on across the channel. Long, even
-	 * crests caught a low sun as rows of parallel white lines on the river (Jim, 2026-10-07, at dusk); real standing waves
+	 * crests caught a low sun as rows of parallel white lines on the river (2026-10-07, at dusk); real standing waves
 	 * are separate haystacks that rise and fall. The humps drift slowly so they come and go. */
 	float2 humpUV = float2(input.riverUV.x / (1.6 * wavelength), input.riverUV.y / (1.1 * wavelength + 0.4)) * 0.23
 		+ float2(_FishInlandTime * 0.004, 0.0);
@@ -797,7 +797,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		half3 plumeTint = exp(-plumeDepth * (1.0 + 1.0 / max(0.25, mainLight.direction.y)) * _WaterDensity.rgb);
 		/* Lit only by what reaches it: the sun's light down through the water and the sky's. The water's own light
 		 * carries a floor (+0.12) that keeps a dark river from going black; on bubbles that scatter it all back up it
-		 * made every plunge pool glow turquoise at night (Jim's screenshot, 2026-10-08). */
+		 * made every plunge pool glow turquoise at night (screenshot, 2026-10-08). */
 		half3 plumeSource = lightColor * saturate(mainLight.direction.y) * 0.9 + _GlossyEnvironmentColor.rgb * 0.8;
 		half3 plumeLight = half3(0.80, 0.95, 0.93) * plumeTint * plumeSource;
 		behind = lerp(behind, plumeLight, plumeCover * 0.85);
@@ -834,7 +834,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	 *    fall's boil and the trail it sends downstream, and wakes ───────────────────────────────────────────────
 	 * Not on water for being fast, shallow or rippled: a river running smooth, however fast, is clear, and a riffle is a
 	 * broken surface, not a white one. Speed alone (from 1.2 m/s) and shallow moving water at the banks used to give
-	 * every quick reach a thin even foam, which the lace drew as streaks of white hairlines (Jim, 2026-10-09: "rivers
+	 * every quick reach a thin even foam, which the lace drew as streaks of white hairlines (2026-10-09: "rivers
 	 * don't typically have foam"). */
 	half foam = 0.0;
 	if (!below)
@@ -854,7 +854,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 			trail = FallTrail(input.riverUV, input.bank.x);
 			half rafts = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), foamFrame, float2(0.0, foamSpeed), max(0.3, _FoamScale) * 3.0, _FlowCycle * 3.0, float2(0.29, 0.61)).g;
 			/* Gathered into rafts by a smooth modulation of how much foam there is, not a cut: cut, the broad noise drew
-			 * every raft as a puffy cloud lying on the water (Jim's screenshot, 2026-10-08). The lace makes the holes. */
+			 * every raft as a puffy cloud lying on the water (screenshot, 2026-10-08). The lace makes the holes. */
 			trail *= 0.35 + 0.65 * smoothstep(0.2, 0.75, rafts);
 		}
 		// Round a fall's foot the pool boils rather than streaks.

@@ -29,7 +29,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// old prefab object ID paired with it — in the project is replaced with the new one.
 	/// </para>
 	/// <para>
-	/// <b>What is rewritten.</b> Every file under <c>Assets</c> except <c>Assets/LOCAL</c> (Jim's licensed
+	/// <b>What is rewritten.</b> Every file under <c>Assets</c> except <c>Assets/LOCAL</c> (licensed
 	/// art is never touched; a LOCAL file naming an old GUID is listed instead) and the payload (which
 	/// only ever references other payload, already deterministic). Text-serialized assets and .meta
 	/// files by text: any 32-digit GUID token, and <c>fileID: N, guid: G</c> pairs for the prefab IDs.

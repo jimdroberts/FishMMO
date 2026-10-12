@@ -202,7 +202,7 @@ namespace FishMMO.Shared.Biomes
 			/* The river's surface where its centre line comes nearest, not the highest of every segment in reach: down a
 			 * falling river the segment upstream reaches a little past its end and stands higher, so the highest stepped
 			 * at every segment, and the grass's waterline and the banks' bed paint came out as a row of teeth pointing
-			 * downstream (Jim, 2026-10-11). The nearest varies smoothly along the river. */
+			 * downstream (2026-10-11). The nearest varies smoothly along the river. */
 			float nearest = float.PositiveInfinity, river = float.NegativeInfinity;
 			foreach (Segment segment in near)
 			{

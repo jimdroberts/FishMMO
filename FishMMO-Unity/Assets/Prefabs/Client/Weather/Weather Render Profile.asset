@@ -231,6 +231,11 @@ MonoBehaviour:
   RockCreviceSoil: 0.85
   RockFieldCompute: {fileID: 7200000, guid: 1446210affab588c8b35acf5931095de, type: 3}
   RockSdfShader: {fileID: 4800000, guid: fb04a5ed9cb4deb3f9a85b639f510c31, type: 3}
+  MossStrength: 1
+  MossTileMetres: 2
+  MossEditorDampness: 0.6
+  MossAlbedo: {fileID: 2800000, guid: 2564cd0e5ed546d14f53d093bb7d60fa, type: 3}
+  MossNormal: {fileID: 2800000, guid: 570dfab7c67765760564febcee446ae1, type: 3}
   GrassBladesCompute: {fileID: 7200000, guid: 8bd7189a93a941d9b60c4f759d719be6, type: 3}
   GrassBladesShader: {fileID: 4800000, guid: 713c81c490c74311b936e0315f3029c4, type: 3}
   Grass:
@@ -393,6 +398,7 @@ MonoBehaviour:
     EdgeOnThicken: 0.6
     NormalRounding: 38
     RootOcclusion: 0.35
+    GroundShade: 0.8
     Translucency: 0.6
     Smoothness: 0.15
     Specular: 0.6
@@ -716,6 +722,7 @@ MonoBehaviour:
     DebugScale: 4
   AirMotesShader: {fileID: 4800000, guid: 21d1d818c31df151a8d79b5707f6de1e, type: 3}
   SiteEmbersShader: {fileID: 4800000, guid: 353ad06289eaf158ea064422b704fb85, type: 3}
+  SiteFlamesShader: {fileID: 4800000, guid: 095de51400dc4bcd8f8e45707b97bd50, type: 3}
   FallingLeavesShader: {fileID: 4800000, guid: b95ed509b5cff62c4a8a1e51c4c9c9c1, type: 3}
   FallingLeaves:
     Enabled: 1

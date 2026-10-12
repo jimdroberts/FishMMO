@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 namespace FishMMO.Water
 {
@@ -16,6 +17,28 @@ namespace FishMMO.Water
 	{
 		private const int Size = 256;
 		private static Texture2D streaks, ripples;
+		private static Texture3D mistNoise;
+
+		/// <summary>The cells along each side of <see cref="MistNoise"/>: a power of two, so the shader wraps a cell into it exactly.</summary>
+		public const int MistNoiseCells = 32;
+
+		/// <summary>
+		/// The spray's mist noise lattice: one random value per cell of a <see cref="MistNoiseCells"/>³ lattice that wraps,
+		/// read filtered and unmipped by FishWaterfallSpray.shader (Noise3) with its place in the cell eased, so one read is
+		/// value noise. Worked out in the shader it was eight sin hashes a read and four reads a pixel, which standing
+		/// inside the spray's cloud was paid a hundred times over in every pixel of the screen.
+		/// </summary>
+		public static Texture3D MistNoise
+		{
+			get
+			{
+				if (mistNoise == null)
+				{
+					BuildMistNoise();
+				}
+				return mistNoise;
+			}
+		}
 
 		/// <summary>R streaks (long down the water, fine across it), G lace (the open net between jets), B packets (rounded masses).</summary>
 		public static Texture2D Streaks
@@ -139,6 +162,35 @@ namespace FishMMO.Water
 			};
 			ripples.SetPixels32(normals);
 			ripples.Apply(true, true);
+		}
+
+		private static void BuildMistNoise()
+		{
+			const int n = MistNoiseCells;
+			var values = new byte[n * n * n];
+			for (int z = 0; z < n; z++)
+			{
+				for (int y = 0; y < n; y++)
+				{
+					for (int x = 0; x < n; x++)
+					{
+						// The lattice's own value, not a smoothed field: the filtered read does the blending between cells.
+						values[(z * n + y) * n + x] = (byte)Mathf.RoundToInt(255f * Hash(x + z * 1031, y, 59));
+					}
+				}
+			}
+			/* Linear R8 (the values are noise, not colour) and filtered with no mips: a mip would average the lattice away
+			 * and break the eased read, which needs the one level's eight corners. */
+			mistNoise = new Texture3D(n, n, n, GraphicsFormat.R8_UNorm, TextureCreationFlags.None)
+			{
+				name = "Fall mist lattice",
+				hideFlags = HideFlags.HideAndDontSave,
+				wrapMode = TextureWrapMode.Repeat,
+				filterMode = FilterMode.Bilinear,
+				anisoLevel = 0,
+			};
+			mistNoise.SetPixelData(values, 0);
+			mistNoise.Apply(false, true);
 		}
 	}
 }

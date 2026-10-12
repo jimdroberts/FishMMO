@@ -167,7 +167,7 @@ namespace FishMMO.Shared.NameGeneration
 
 		/// <remarks>
 		/// <para>
-		/// Every generated point of interest is named here (Jim, 2026-10-10). The name is composed from the
+		/// Every generated point of interest is named here (2026-10-10). The name is composed from the
 		/// grammar's place-name compositions (<see cref="POINameBuilder"/>); settlements are named by the
 		/// city builder in the request's race, or a race at home in the biome, and dressed by the
 		/// composition ("Ashgard Keep"); dungeon-like kinds may take a dungeon name.

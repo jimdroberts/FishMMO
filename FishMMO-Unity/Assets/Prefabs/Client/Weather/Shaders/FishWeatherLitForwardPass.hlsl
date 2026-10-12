@@ -17,6 +17,18 @@
 #include "FishGroundContactLit.hlsl"
 // ── FishMMO edit: what years do to a building (the structure kit's materials, _FishStructure). ──
 #include "FishStructureWeathering.hlsl"
+// ── FishMMO edit: the fine ground map, for how far underground a surface is (a carved cave's walls). Read with the
+// core's inline bilinear clamp sampler (GlobalSamplers.hlsl, through FishGroundColour.hlsl): this pass is near D3D11's
+// sixteen, and a texture's own sampler (sampler_FishGroundColour) is refused in a program that does not read that texture. ──
+#define FISH_GROUND_MAP_SAMPLER sampler_LinearClamp
+#include "FishGroundMap.hlsl"
+// ── FishMMO edit: moss on the surfaces whose material asks for it (_FishMoss; FishMoss.hlsl). Read with the base map's
+// own sampler, bound in every program of this pass: no sampler state of its own. ──
+#include "FishMoss.hlsl"
+// ── FishMMO edit: the rooms round the camera, darker than the day outside them (FishIndoor). ──
+#include "FishIndoor.hlsl"
+// How much of the sky's ambient a room's inside loses (SkySystem dims the camera's own ambient by a share of it).
+#define FISH_INDOOR_DIM 0.65h
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 
 #if defined(LOD_FADE_CROSSFADE)
@@ -295,6 +307,8 @@ void LitPassFragment(
     // ── FishMMO edit: the weather on this surface, and the day/night dissolve. Here, because this
     // is the first point where the world position and the shaded normal are both known. ──
     FishDitherClip(input.positionCS.xy, _FishVisible);
+    // ── FishMMO edit: how deep underground this surface is (a cave's walls, its formations): the sky reaches none of it. ──
+    half fishUnderground = FishUnderground(inputData.positionWS);
 #if defined(FISH_INDIRECT_INSTANCED)
     // ── FishMMO edit: a terrain rock sits IN the ground. Over a band at its base, and in the crevices where it meets
     // another rock, it renders the TERRAIN — the terrain's own surface there (FishGroundColour.hlsl FishGroundContact)
@@ -334,6 +348,9 @@ void LitPassFragment(
         }
         fishGroundWeight = fishSoil;
     }
+    // Underground there is no terrain surface at a rock's foot to blend in (a cave's stalagmite stands on the cave's floor,
+    // and the terrain's own sky-lit colour there read as daylight at every formation's base).
+    fishGroundWeight *= 1.0h - fishUnderground;
     // One sample of the terrain's surface for both.
     FishGroundPixel fishGround = (FishGroundPixel)0;
     if (fishHasGround && fishGroundWeight > 0.0h)
@@ -341,6 +358,16 @@ void LitPassFragment(
         fishGround = FishGroundSurfaceAtSite(fishSite, inputData.positionWS, fishWorldDx, fishWorldDy);
     }
 #endif
+    // ── FishMMO edit: moss (FishMoss.hlsl), ahead of the weather so rain darkens it and snow covers it like the rest.
+    // After the crevices and the structure's weathering, whose shade it reads as where damp collects. A GPU-drawn rock
+    // knows its height over the terrain exactly; anything else reads the fine ground map's. ──
+#if defined(FISH_INDIRECT_INSTANCED)
+    float fishMossAbove = input.fishContact;
+#else
+    float fishMossAbove = 1e4;
+#endif
+    FishMossSurface(inputData.positionWS, (half3)input.normalWS, fishMossAbove, fishUnderground,
+        surfaceData.albedo, inputData.normalWS, surfaceData.smoothness, surfaceData.metallic, surfaceData.occlusion);
     if (_FishWeatherAmount > 0.0)
     {
         half3 weathered = inputData.normalWS;
@@ -357,6 +384,9 @@ void LitPassFragment(
         float3 distanceTarget;
         half4 distancePull;
         FishDistanceBlend(inputData.positionWS, distanceFar, distanceFlatten, distanceTarget, distancePull);
+        // Not underground: the far pull is toward the landscape's colour, which a cave has none of.
+        distanceFlatten *= 1.0h - fishUnderground;
+        distancePull.a *= 1.0h - fishUnderground;
         inputData.normalWS = normalize(lerp(inputData.normalWS, distanceTarget, distanceFlatten));
         surfaceData.albedo = lerp(surfaceData.albedo, distancePull.rgb, distancePull.a);
         surfaceData.smoothness *= (half)(1.0 - distanceFar);
@@ -369,7 +399,24 @@ void LitPassFragment(
 
     InitializeBakedGIData(input, inputData);
 
+    // ── FishMMO edit: deep underground (a cave's walls) the sky does not reach: no ambient, no reflections, no sun (taken
+    // off below), and the distance fog's sky colour not laid over them either. ──
+    surfaceData.occlusion *= 1.0h - 0.96h * fishUnderground;
+    // Indoors the sky comes in only at the windows and the door: most of its ambient and reflection gone.
+    surfaceData.occlusion *= 1.0h - FISH_INDOOR_DIM * FishIndoor(inputData.positionWS);
+
     half4 color = UniversalFragmentPBR(inputData, surfaceData);
+    // ── FishMMO edit: and the sun's own light taken back off underground. A cave's deep rock casts no shadow (it is drawn
+    // without, for cost) and the terrain's shadow reaches only as far as the shadow distance, so the sun lit stalagmites
+    // and walls tens of metres under a hill. Its term evaluated again and subtracted, only where there is any to take. ──
+    if (fishUnderground > 0.001h)
+    {
+        SurfaceData fishSunSurface = surfaceData;
+        BRDFData fishSunBrdf;
+        InitializeBRDFData(fishSunSurface, fishSunBrdf);
+        Light fishSun = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
+        color.rgb = max(0.0h, color.rgb - fishUnderground * LightingPhysicallyBased(fishSunBrdf, fishSun, inputData.normalWS, inputData.viewDirectionWS));
+    }
 #if defined(FISH_INDIRECT_INSTANCED)
     // ── FishMMO edit: the ground's lit colour over the band and in the crevices (above). ──
     if (fishHasGround && fishGroundWeight > 0.0h)
@@ -377,7 +424,7 @@ void LitPassFragment(
         color.rgb = lerp(color.rgb, FishGroundLit(inputData, fishGround, fishShade), fishGroundWeight);
     }
 #endif
-    color.rgb = MixFog(color.rgb, inputData.fogCoord);
+    color.rgb = lerp(MixFog(color.rgb, inputData.fogCoord), color.rgb, fishUnderground);
     color.a = OutputAlpha(color.a, IsSurfaceTypeTransparent(_Surface));
 
     outColor = color;

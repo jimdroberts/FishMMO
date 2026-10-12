@@ -718,8 +718,8 @@ namespace FishMMO.Shared.WorldDesign
 			ScenePropBaker.BakeTerrainTrees(scene, tiles, notes);
 
 			/* The sea's level from its surface, which stands at it (read from the scene so a repaint finds it too), at HIGH
-			 * water: deep water is judged at the top of the tide, so a rising tide never strands an NPC that cannot swim
-			 * (Jim). A lava sea is its own area at any depth. */
+			 * water: deep water is judged at the top of the tide, so a rising tide never strands an NPC that cannot swim.
+			 * A lava sea is its own area at any depth. */
 			float sea = float.NegativeInfinity, lava = float.NegativeInfinity;
 			foreach (GameObject root in scene.GetRootGameObjects())
 			{
@@ -914,7 +914,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				/* No cliff rock stands in a channel or a lake, nor within RockClearMetres of one. Tested at the site alone,
 				 * a rock sized to a cliff and sited on a river's carved bank (cut to 38°, so painted cliff) stood out over
-				 * the water, and a gorge filled with faceted prisms (Jim, 2026-10-06: "poor carving"). The walls further
+				 * the water, and a gorge filled with faceted prisms (2026-10-06: "poor carving"). The walls further
 				 * back keep their rock. */
 				bool Wet(float x, float z)
 				{
@@ -1295,7 +1295,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				/* A lake's level, or the river's where its centre line comes nearest: smooth down a falling river. The grid's
 				 * highest-of-four-samples stepped at every sample there, and the bed paint and the plants' waterline up the
-				 * banks came out as teeth (Jim, 2026-10-11). The grid still answers what neither does. */
+				 * banks came out as teeth (2026-10-11). The grid still answers what neither does. */
 				float surface = Mathf.Max(water.LakeSurfaceNear(x, z), water.RiverSurfaceNear(x, z));
 				WaterKind kind = water.KindAt(x, z);
 				if (float.IsNegativeInfinity(surface) && (kind == WaterKind.River || kind == WaterKind.Lake))

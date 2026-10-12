@@ -160,13 +160,13 @@ namespace FishMMO.Client
 	/// <summary>
 	/// The blade types added by the vegetation expansion (2026-10-10, design §2c/§2d), as tunings the code supplies when the
 	/// profile has none of its own: <see cref="GrassBladeSettings.TuningFor"/> takes an entry here only where its prefix
-	/// matches a prototype more closely than any of the profile's (so an entry Jim adds to the profile always wins, and a
+	/// matches a prototype more closely than any of the profile's (so an entry added to the profile always wins, and a
 	/// prototype the profile already matches as closely is untouched). Each is derived from the nearest of the profile's
 	/// seven (GrassTuft, GrassTall, GrassDry, Reeds, Detail_Flowers) so the new ones read as the same family.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why in code.</b> The tunings live in the Weather Render Profile asset, which Jim's editor holds loaded: an edit on
+	/// <b>Why in code.</b> The tunings live in the Weather Render Profile asset, which the open editor holds loaded: an edit on
 	/// disk is overwritten by the stale in-memory copy on the next save. Without these a new <c>Detail_GrassSedge</c> took
 	/// the bare <c>Detail_Grass</c> tuning (an even lawn), a <c>Detail_ReedsPlume</c> the cattail's brown spindle, and every
 	/// new flower set the meadow flowers' size. <see cref="GrassBladeSettings.AddMissingDefaultTypes"/> writes them into a

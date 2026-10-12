@@ -30,7 +30,7 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class AbilityPanelsRender
 	{
-		private const string OUTPUT_DIR = "/home/jim/Dev/FishMMO-Dev/PanelRenders";
+		private static readonly string OUTPUT_DIR = ProbeOutput.Path("PanelRenders");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string ABILITIES_UXML = "Assets/Scripts/Client/GUI/World/Ability/UIAbilities.uxml";
 		private const string CRAFT_UXML = "Assets/Scripts/Client/GUI/World/Ability/Crafting/UIAbilityCraft.uxml";

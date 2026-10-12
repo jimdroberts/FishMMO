@@ -11,7 +11,7 @@ namespace FishMMO.UnitTests.Weather
 	/// thinnest cloud that can be at its height.
 	/// </summary>
 	/// <remarks>
-	/// Issue #238, 2026-09-29: in Jim's editor the Ray Jitter diagnostic proved the grain was the rays'
+	/// Issue #238, 2026-09-29: in the editor the Ray Jitter diagnostic proved the grain was the rays'
 	/// phase, and turning it off left rings across a thin layer and terraces inside cumulus. The march
 	/// strode through a band's empty air at up to 0.15 of the band's depth in height per stride and walked
 	/// back on the stride's grid when it landed in cloud: a sheet thinner than a stride was all or nothing

@@ -17,7 +17,7 @@ namespace FishMMO.UnitTests
 	{
 		private const int Seed = ProceduralArtCatalogue.DefaultSeed;
 
-		/// <summary>The tags the POI plan names (Jim's list): each must find at least one piece.</summary>
+		/// <summary>The tags the POI plan names (the requested list): each must find at least one piece.</summary>
 		private static readonly string[] PlanTags = { "tent", "camp", "sacred", "dead", "building", "wall", "ruin", "portal", "swamp" };
 
 		/// <summary>The pieces the plan lists, by id: none may go missing from the table.</summary>

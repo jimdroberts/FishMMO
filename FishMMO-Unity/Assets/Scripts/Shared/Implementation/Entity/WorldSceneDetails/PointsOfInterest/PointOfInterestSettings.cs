@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// One scene's point-of-interest choices: asked before every cut (Jim, 2026-10-10) and editable afterwards.
+	/// One scene's point-of-interest choices: asked before every cut (2026-10-10) and editable afterwards.
 	/// </summary>
 	/// <remarks>
 	/// Saved beside the scene's atlas entry, not in its terrain folder, so it exists before the first cut and a

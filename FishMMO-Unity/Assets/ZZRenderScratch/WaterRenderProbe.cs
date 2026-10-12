@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using FishMMO.Water;
+using FishMMO.Shared;
 
 namespace FishMMO.RenderScratch
 {
@@ -21,7 +22,7 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class WaterRenderProbe
 	{
-		private const string OutputDirectory = "/home/jim/Dev/FishMMO-Dev/WaterRenders";
+		private static readonly string OutputDirectory = ProbeOutput.Path("WaterRenders");
 		private const int Width = 1280;
 		private const int Height = 720;
 

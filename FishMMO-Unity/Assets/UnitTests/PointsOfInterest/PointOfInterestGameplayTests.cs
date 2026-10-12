@@ -15,7 +15,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.PointsOfInterest
 {
 	/// <summary>
-	/// Pins the gameplay half of generated points of interest (Jim, 2026-10-10): the gathering catalogue, the NPC role
+	/// Pins the gameplay half of generated points of interest (2026-10-10): the gathering catalogue, the NPC role
 	/// table, the recommended features per kind, and each feature built on a scene fixture — a waypoint with a SceneId and
 	/// the site's unlock index, spawners tagged EditorOnly, a region named after the site, a dormant portal.
 	/// </summary>
@@ -191,9 +191,21 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			Assert.IsInstanceOf<BossSpawnerFeature>(lair.Last(), "the boss comes after the packs it waits on");
 
 			Assert.IsTrue(PointOfInterestFeatureDefaults.For(POIType.Portal, 1).Any(f => f is PortalFeature));
-			Assert.IsTrue(PointOfInterestFeatureDefaults.For(POIType.Cave, 2).Any(f => f is DungeonEntranceFeature), "a large cave ends in a dungeon");
-			Assert.IsFalse(PointOfInterestFeatureDefaults.For(POIType.Cave, 0).Any(f => f is DungeonEntranceFeature), "a small cave is a walk-in grotto");
+			// 2026-10-11: a dungeon's entrance can be inside a cave: a large cave's great cavern holds one; a small cave, a
+			// grotto or a mine none.
+			foreach (POIType cave in new[] { POIType.Cave, POIType.IceCave, POIType.LavaTube })
+			{
+				Assert.IsTrue(PointOfInterestFeatureDefaults.For(cave, 2).Any(f => f is DungeonEntranceFeature), $"a large {cave} holds a dungeon entrance");
+				Assert.IsFalse(PointOfInterestFeatureDefaults.For(cave, 0).Any(f => f is DungeonEntranceFeature), $"a small {cave} is walked in and out of");
+			}
+			foreach (POIType kind in new[] { POIType.Grotto, POIType.Mine })
+			{
+				Assert.IsFalse(PointOfInterestFeatureDefaults.For(kind, 2).Any(f => f is DungeonEntranceFeature), $"a {kind} holds no dungeon entrance");
+			}
+			Assert.IsTrue(PointOfInterestFeatureDefaults.For(POIType.DungeonEntrance, 1).Any(f => f is DungeonEntranceFeature), "a dungeon entrance site does");
 			Assert.IsTrue(PointOfInterestFeatureDefaults.For(POIType.OreVein, 0).Any(f => f is GatheringFeature));
+			Assert.IsTrue(PointOfInterestFeatureDefaults.For(POIType.Mine, 1).OfType<PointOfInterestChamberFeature>().Any(c => c.Features.Any(f => f is GatheringFeature)),
+				"a mine's ore is gathered in its stope");
 			Assert.IsTrue(PointOfInterestFeatureDefaults.NeedsUnlockIndex(PointOfInterestFeatureDefaults.For(POIType.Portal, 0)));
 		}
 

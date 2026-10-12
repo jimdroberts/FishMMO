@@ -109,7 +109,7 @@ namespace FishMMO.Shared.WorldDesign
 			var sources = new List<NavMeshBuildSource>(collected.Count);
 			foreach (NavMeshBuildSource source in collected)
 			{
-				if (source.component != null && source.component.gameObject.scene == scene)
+				if (source.component != null && source.component.gameObject.scene == scene && !UnderWay(source.component.transform))
 				{
 					sources.Add(source);
 				}
@@ -217,6 +217,18 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			notes?.Add($"NavMesh: baked from {fromScene:N0} scene source(s) and {props:N0} prop(s), water deeper than {WadeMetres:0.#} m marked {DeepWaterArea} in {waterBoxes:N0} box(es), height mesh {(settings.buildHeightMesh ? "on" : "off")}, {settings.voxelSize:0.###} m voxels, in {clock.Elapsed.TotalSeconds:0.0} s.");
 			return true;
+		}
+
+		/// <summary>
+		/// True for a collider on a ship under way (<see cref="FloatingBoats.IsUnderWay"/>): it sails on, so baking its hull
+		/// where the cut left it would leave a ship-shaped island of NavMesh (and a hole in the sea's) at the lane's start for
+		/// ever (2026-10-12: "Solid sailing ships needs to be done."). Swimming NPCs steer round the real hull by its
+		/// NavMesh obstacle instead.
+		/// </summary>
+		private static bool UnderWay(Transform t)
+		{
+			FloatingBoats boats = t != null ? t.GetComponentInParent<FloatingBoats>(true) : null;
+			return boats != null && boats.IsUnderWay(t);
 		}
 
 		/// <summary>

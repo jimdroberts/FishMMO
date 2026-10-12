@@ -22,7 +22,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// written, 1 otherwise.
 	/// </para>
 	/// <para>
-	/// Environment: <c>FISHMMO_CAVE_RENDER_OUT</c> (default /tmp/claude-1000/cave-render);
+	/// Environment: <c>FISHMMO_CAVE_RENDER_OUT</c> (default <c>WorldRenders/caves</c> under <see cref="ProbeOutput.Root"/>);
 	/// <c>FISHMMO_CAVE_RENDER_CAVES</c> the caves as <c>Form:size</c> pairs (default <c>Cave:2,Cave:0,LavaTube:1,Grotto:1</c>);
 	/// <c>FISHMMO_CAVE_RENDER_ROCK</c> the rock type (default Limestone). The overhang section and arch need the cliff
 	/// section art generated (Generate Biome Art); without it they are left out and said so in <c>index.txt</c>.
@@ -33,6 +33,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const int Width = 1280, Height = 800;
 		private const float TileMetres = 800f;
 		private const int Resolution = 513;
+		private const float HeightRange = 200f;
 
 		public static void Run()
 		{
@@ -60,18 +61,21 @@ namespace FishMMO.Shared.WorldDesign
 			return string.IsNullOrEmpty(v) ? fallback : v;
 		}
 
-		/// <summary>The escarpment: a foot at 10 m (z under 0), a face rising 60 m over 30 m, a rolling plateau behind it.</summary>
+		/// <summary>
+		/// The escarpment: a foot at 45 m (z under 0; well over the sea at 0, so a cave has room to descend), a face rising
+		/// 60 m over 30 m, a rolling plateau behind it.
+		/// </summary>
 		private static float Escarpment(float x, float z)
 		{
 			float t = Mathf.Clamp01(z / 30f);
-			float face = 10f + 60f * (t * t * (3f - 2f * t));
+			float face = 45f + 60f * (t * t * (3f - 2f * t));
 			float roll = 3f * Mathf.Sin(x * 0.05f) + 2f * Mathf.Sin(z * 0.031f) * Mathf.Clamp01(z / 40f);
 			return face + roll * Mathf.Clamp01((z + 10f) / 30f) - 0.04f * Mathf.Max(0f, -z);
 		}
 
 		private static bool Render()
 		{
-			string output = Env("FISHMMO_CAVE_RENDER_OUT", "/tmp/claude-1000/cave-render");
+			string output = ProbeOutput.FromEnvironment("FISHMMO_CAVE_RENDER_OUT", "WorldRenders", "caves");
 			string rock = Env("FISHMMO_CAVE_RENDER_ROCK", "Limestone");
 			Directory.CreateDirectory(output);
 			var log = new List<string>();
@@ -80,14 +84,14 @@ namespace FishMMO.Shared.WorldDesign
 
 			// The terrain, one tile in memory, its corner at the scene's south-west like a generated scene's.
 			var data = new TerrainData { heightmapResolution = Resolution };
-			data.size = new Vector3(TileMetres, 120f, TileMetres);
+			data.size = new Vector3(TileMetres, HeightRange, TileMetres);
 			var heights = new float[Resolution, Resolution];
 			float step = TileMetres / (Resolution - 1);
 			for (int k = 0; k < Resolution; k++)
 			{
 				for (int i = 0; i < Resolution; i++)
 				{
-					heights[k, i] = Mathf.Clamp01(Escarpment(-0.5f * TileMetres + i * step, -0.5f * TileMetres + k * step) / 120f);
+					heights[k, i] = Mathf.Clamp01(Escarpment(-0.5f * TileMetres + i * step, -0.5f * TileMetres + k * step) / HeightRange);
 				}
 			}
 			data.SetHeights(0, 0, heights);
@@ -116,8 +120,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// ── The caves, side by side along the face ──
-			var caves = new List<(string Name, CaveSolid Solid)>();
-			string[] wanted = Env("FISHMMO_CAVE_RENDER_CAVES", "Cave:2,Cave:0,LavaTube:1,Grotto:1").Split(',');
+			var caves = new List<(string Name, CaveSystem System)>();
+			string[] wanted = Env("FISHMMO_CAVE_RENDER_CAVES", "Cave:2,Cave:1,Cave:0,LavaTube:1").Split(',');
 			for (int c = 0; c < wanted.Length; c++)
 			{
 				string[] parts = wanted[c].Split(':');
@@ -127,26 +131,35 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				int size = parts.Length > 1 && int.TryParse(parts[1], out int s) ? s : 1;
 				float x = -300f + 70f + c * 85f;
-				CaveGround ground = CaveShaper.SampleGround(groundAt, tiles, x, -1f, 150f);
-				CaveSolid solid = CaveSolid.Plan(form, size, new Vector3(x, 0f, -1f), 180f, 1000 + c, ground, 0f, out string problem);
+				CaveGround ground = CaveShaper.SampleGround(groundAt, tiles, x, -1f, 380f);
+				CaveSystem system = CaveSystem.Plan(form, size, new Vector3(x, 0f, -1f), 180f, 1000 + c, c, ground, 0f, out string problem);
 				string name = $"{form}_{size}";
-				if (solid == null)
+				if (system == null)
 				{
 					log.Add($"{name}: refused, {problem}");
 					continue;
 				}
-				List<Vector2Int> cells = solid.HoleCells(groundAt, holeStep, gridX, gridZ);
+				List<Vector2Int> cells = system.HoleCells(0, groundAt, holeStep, gridX, gridZ);
 				CaveShaper.CutHoles(terrains, tiles, cells, holeStep, gridX, gridZ);
-				Bounds e = solid.Extent;
-				CaveGround meshGround = CaveShaper.SampleGround(groundAt, tiles, solid.Origin.x + e.min.x - 4f, solid.Origin.z + e.min.z - 4f, solid.Origin.x + e.max.x + 4f, solid.Origin.z + e.max.z + 4f);
+				Bounds e = system.Extent;
+				CaveGround meshGround = CaveShaper.SampleGround(groundAt, tiles, system.Origin.x + e.min.x - 4f, system.Origin.z + e.min.z - 4f, system.Origin.x + e.max.x + 4f, system.Origin.z + e.max.z + 4f);
 				var clock = System.Diagnostics.Stopwatch.StartNew();
-				MeshBuilder[] levels = solid.BuildMeshes(meshGround, out string report);
-				Mesh[] meshes = CaveShaper.WriteMeshes(null, c, levels, null);
+				List<CaveMesher.Piece> pieces = CaveMesher.Build(system, meshGround, out string report);
+				Mesh[] meshes = CaveShaper.WriteMeshes(null, c, pieces, null);
 				var root = new GameObject(name).transform;
-				CaveShaper.Build(root, solid, meshes, material);
-				caves.Add((name, solid));
-				log.Add($"{name}: radius {solid.Radius:0.0} m, {solid.Length:0} m long, chamber {solid.ChamberRadii.x:0.0} x {solid.ChamberRadii.y:0.0} m, {cells.Count} holes, " +
-					$"{levels[0].TriangleCount}/{levels[1].TriangleCount}/{levels[2].TriangleCount} triangles, {report}, {clock.ElapsedMilliseconds} ms");
+				CaveShaper.Build(root, system, pieces, meshes, material);
+				// In the game the rock takes the ground where it comes up through the hillside (CaveVisibility's cave mode of
+				// the shader's ground contact); this render has no ground map, so it shows the same by colour.
+				if (Env("FISHMMO_CAVE_RENDER_CONTACT", "1") == "1")
+				{
+					ShowContact(root, system.Origin, groundAt);
+				}
+				caves.Add((name, system));
+				Physics.SyncTransforms();
+				int gaps = Gaps(system, meshGround, cells, groundAt, holeStep, gridX, gridZ, out string worst);
+				log.Add($"{name}: gap probe over {cells.Count} cut cells: {gaps} gap point(s){worst}");
+				log.Add($"{name}: radius {system.Radius:0.0} m, {system.PassageLength:0} m of passages, {system.Depth:0} m deep, {system.Chambers.Count} chambers, {cells.Count} holes, " +
+					$"{report}, {clock.ElapsedMilliseconds} ms");
 			}
 
 			// ── A slab shelter, the leaning section, an arch ──
@@ -241,14 +254,18 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			Shot("overview", new Vector3(-20f, 70f, -170f), new Vector3(-20f, 25f, 10f), false);
-			foreach ((string name, CaveSolid solid) in caves)
+			foreach ((string name, CaveSystem system) in caves)
 			{
-				Vector3 o = solid.Origin;
-				float r = solid.Radius;
+				Vector3 o = system.Origin;
+				float r = system.Radius;
+				List<CaveNode> trunk = system.Passages[0].Nodes;
 				Shot(name + "_outside", o + new Vector3(0.6f * r + 3f, 1.4f * r + 3f, -(4f * r + 12f)), o + new Vector3(0f, 0.8f * r, 4f), false);
-				Shot(name + "_mouth", o + new Vector3(0f, 1.7f, -0.5f * r), o + solid.Nodes[Mathf.Min(4, solid.Nodes.Count - 1)].Centre, true);
-				Vector3 room = solid.ChamberFloorWorld + Vector3.up * 1.7f;
-				Shot(name + "_chamber", room, o + solid.Nodes[Mathf.Max(0, solid.Nodes.Count - 5)].Centre, true);
+				Shot(name + "_mouth", o + new Vector3(0f, 1.7f, -0.5f * r), o + trunk[Mathf.Min(4, trunk.Count - 1)].Centre, true);
+				if (system.TryChamberOf(system.Mouths[0].SiteId, out CaveChamber chamber))
+				{
+					Vector3 room = o + new Vector3(chamber.Centre.x, chamber.Floor + 1.7f, chamber.Centre.z);
+					Shot(name + "_chamber", room, o + trunk[Mathf.Max(0, trunk.Count - 5)].Centre, true);
+				}
 			}
 			foreach ((string name, Vector3 foot) in builds)
 			{
@@ -262,6 +279,176 @@ namespace FishMMO.Shared.WorldDesign
 			return written == shots && caves.Count > 0;
 		}
 
+		/// <summary>
+		/// Checks the edge of the terrain cut for a cave's mouth: every 0.25 m along each side of a cut cell that borders an
+		/// uncut one, the drawn rock must stand at the ground there (or above it), or the terrain's cut edge shows with nothing
+		/// under it — a gap. Inside the cut the rock may fall away into the opening; at its edge it may not.
+		/// </summary>
+		private static int Gaps(CaveSystem system, CaveGround ground, List<Vector2Int> cells, Func<float, float, float> groundAt, float step, float gridX, float gridZ, out string worst)
+		{
+			var holed = new HashSet<long>();
+			foreach (Vector2Int c in cells)
+			{
+				holed.Add(((long)c.x << 32) ^ (uint)c.y);
+			}
+			int samples = 0, gaps = 0;
+			float deepest = 0f;
+			Vector3 at = Vector3.zero;
+			foreach (Vector2Int c in cells)
+			{
+				for (int side = 0; side < 4; side++)
+				{
+					int nx = c.x + (side == 0 ? 1 : side == 1 ? -1 : 0), nz = c.y + (side == 2 ? 1 : side == 3 ? -1 : 0);
+					if (holed.Contains(((long)nx << 32) ^ (uint)nz))
+					{
+						continue;
+					}
+					for (float f = 0.125f; f < 1f; f += 0.25f)
+					{
+						// On the shared edge, a hair inside the cut cell.
+						float ex = side == 0 ? c.x + 0.98f : side == 1 ? c.x + 0.02f : c.x + f;
+						float ez = side == 2 ? c.y + 0.98f : side == 3 ? c.y + 0.02f : c.y + f;
+						float x = gridX + ex * step, z = gridZ + ez * step, g = groundAt(x, z);
+						samples++;
+						// Just over where the ground was: inside the rock (an outcrop over it), it is covered; in the open, a ray
+						// down must meet rock at the ground.
+						if (system.Field(new Vector3(x, g + 0.4f, z) - system.Origin, ground) < 0f)
+						{
+							continue;
+						}
+						bool hit = Physics.Raycast(new Vector3(x, g + 0.4f, z), Vector3.down, out RaycastHit h, 40f);
+						float drop = hit ? g - h.point.y : 40f;
+						if (drop > 0.15f && InsideDrawnRock(new Vector3(x, g + 0.4f, z)))
+						{
+							// The drawn surface stands a little off the field's (the mesher's cell): the start was inside rock.
+							continue;
+						}
+						if (drop > 0.15f)
+						{
+							gaps++;
+							if (drop > deepest)
+							{
+								deepest = drop;
+								at = new Vector3(x, g, z);
+							}
+						}
+					}
+				}
+			}
+			// The control: the same rays down the cut cells' middles must fall through somewhere (the opening), or the probe
+			// cannot see a gap at all.
+			int through = 0;
+			foreach (Vector2Int c in cells)
+			{
+				float x = gridX + (c.x + 0.5f) * step, z = gridZ + (c.y + 0.5f) * step, g = groundAt(x, z);
+				if (system.Field(new Vector3(x, g + 0.4f, z) - system.Origin, ground) >= 0f
+					&& (!Physics.Raycast(new Vector3(x, g + 0.4f, z), Vector3.down, out RaycastHit h, 40f) || g - h.point.y > 0.8f))
+				{
+					through++;
+				}
+			}
+			worst = $" over {samples} edge samples (control: {through} of {cells.Count} cut middles fall through to the opening){(gaps > 0 ? $"; deepest {deepest:0.00} m under the ground at ({at.x:0.0}, {at.y:0.0}, {at.z:0.0})" : string.Empty)}";
+			return gaps;
+		}
+
+		/// <summary>
+		/// Colours a cave's drawn rock as the game's cave-mode ground contact shows it: the ground's green where the rock is
+		/// within the contact band of the hillside's surface (solid under 0.175 m, fading out by 0.5 m), its rock grey where it
+		/// stands proud of it or lies more than 0.3 m under it (its walls and roof).
+		/// </summary>
+		private static void ShowContact(Transform root, Vector3 origin, Func<float, float, float> groundAt)
+		{
+			Shader shader = Shader.Find("Universal Render Pipeline/Particles/Lit");
+			if (shader == null)
+			{
+				return;
+			}
+			var preview = new Material(shader);
+			preview.SetColor("_BaseColor", Color.white);
+			var rock = new Color(0.55f, 0.53f, 0.5f);
+			var turf = new Color(0.36f, 0.43f, 0.24f);
+			foreach (MeshFilter filter in root.GetComponentsInChildren<MeshFilter>())
+			{
+				var renderer = filter.GetComponent<MeshRenderer>();
+				if (filter.sharedMesh == null || renderer == null)
+				{
+					continue;
+				}
+				Mesh mesh = UnityEngine.Object.Instantiate(filter.sharedMesh);
+				Vector3[] vertices = mesh.vertices;
+				var colours = new Color[vertices.Length];
+				Matrix4x4 toWorld = filter.transform.localToWorldMatrix;
+				for (int i = 0; i < vertices.Length; i++)
+				{
+					Vector3 v = toWorld.MultiplyPoint3x4(vertices[i]);
+					float raw = v.y - groundAt(v.x, v.z);
+					float weight = 0f;
+					if (raw >= -0.3f)
+					{
+						float height = Mathf.Max(0f, raw);
+						float c = Mathf.Clamp01(1f - height / 0.5f);
+						c = c * c * (3f - 2f * c);
+						float f = Mathf.Clamp01(1f - height / 0.175f);
+						f = f * f * (3f - 2f * f);
+						weight = Mathf.Lerp(c * 0.75f, 1f, f);
+					}
+					colours[i] = Color.Lerp(rock, turf, weight);
+				}
+				mesh.colors = colours;
+				filter.sharedMesh = mesh;
+				renderer.sharedMaterial = preview;
+			}
+		}
+
+		/// <summary>Whether a point is inside the drawn rock: a ray up from it meets the underside of a surface.</summary>
+		private static bool InsideDrawnRock(Vector3 at)
+		{
+			bool backfaces = Physics.queriesHitBackfaces;
+			Physics.queriesHitBackfaces = true;
+			try
+			{
+				return Physics.Raycast(at, Vector3.up, out RaycastHit h, 60f) && Vector3.Dot(h.normal, Vector3.up) > 0.05f;
+			}
+			finally
+			{
+				Physics.queriesHitBackfaces = backfaces;
+			}
+		}
+
+		private static readonly System.Collections.Generic.Dictionary<StructureMaterial, Material> kitMaterials = new System.Collections.Generic.Dictionary<StructureMaterial, Material>();
+
+		/// <summary>A structure kit piece built in memory (level 0) with flat stand-in colours per material, for a render.</summary>
+		private static void AddKitPiece(string id, int variant, Vector3 position, Quaternion rotation, Vector3 scale, Transform parent)
+		{
+			StructurePiece piece = StructureKit.Get(id);
+			if (piece == null)
+			{
+				return;
+			}
+			StructureMesh built = StructurePieces.Build(piece, variant, 0, ProceduralArtCatalogue.DefaultSeed);
+			var go = new GameObject(id);
+			go.transform.SetParent(parent, true);
+			go.transform.SetPositionAndRotation(position, rotation);
+			go.transform.localScale = scale;
+			go.AddComponent<MeshFilter>().sharedMesh = built.Mesh.ToMesh(id);
+			var materials = new Material[built.Materials.Length];
+			for (int i = 0; i < materials.Length; i++)
+			{
+				StructureMaterial kind = built.Materials[i];
+				if (!kitMaterials.TryGetValue(kind, out Material m) || m == null)
+				{
+					m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+					Color colour = kind == StructureMaterial.Earth ? new Color(0.24f, 0.2f, 0.12f)
+						: kind == StructureMaterial.Timber ? new Color(0.33f, 0.24f, 0.15f)
+						: new Color(0.45f, 0.45f, 0.42f);
+					m.SetColor("_BaseColor", colour);
+					kitMaterials[kind] = m;
+				}
+				materials[i] = m;
+			}
+			go.AddComponent<MeshRenderer>().sharedMaterials = materials;
+		}
+
 		private static void Lighting()
 		{
 			var sun = new GameObject("Sun").AddComponent<Light>();
@@ -269,7 +456,8 @@ namespace FishMMO.Shared.WorldDesign
 			sun.intensity = 1.6f;
 			sun.color = new Color(1f, 0.95f, 0.88f);
 			sun.shadows = LightShadows.Soft;
-			sun.transform.rotation = Quaternion.Euler(40f, 150f, 0f);
+			// Over the shoulder of the shots, onto the escarpment's face (it faces −z).
+			sun.transform.rotation = Quaternion.Euler(38f, 25f, 0f);
 			RenderSettings.ambientMode = AmbientMode.Trilight;
 			RenderSettings.ambientSkyColor = new Color(0.5f, 0.56f, 0.66f);
 			RenderSettings.ambientEquatorColor = new Color(0.38f, 0.38f, 0.37f);

@@ -169,7 +169,7 @@ namespace FishMMO.Shared
 
 		[Header("Swimming")]
 		/// <summary>
-		/// Whether this character swims at all. Every player does (Jim, 2026-10-05: swimming becomes a profession later,
+		/// Whether this character swims at all. Every player does (2026-10-05: swimming becomes a profession later,
 		/// a skill on top of it, never a gate in front of it).
 		/// </summary>
 		public bool CanSwim = true;

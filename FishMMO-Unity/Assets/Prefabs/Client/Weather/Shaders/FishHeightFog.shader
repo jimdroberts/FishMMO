@@ -44,6 +44,8 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
             #include "FishFogLayer.hlsl"
+            // The fine ground map: no weather fog in a cave (FishOpenAir).
+            #include "FishGroundMap.hlsl"
 
             float4x4 _FishFogInverseVP;
             // x the eye depth this pass starts at (m): the froxel volume's far edge where it runs, 0
@@ -143,7 +145,7 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
                 float3 light = FishFogLight(lit, ray, column, extinction, FishTerrainSunlit(float3(litAt.x, lit, litAt.z)), FishFogSunShare(litAt));
 
                 // rgb adds the fog's light, alpha keeps what it lets through.
-                return float4(light * (1.0 - transmittance), transmittance);
+                return FishOpenAirFade(float4(light * (1.0 - transmittance), transmittance), FishOpenAir(camera, camera + toPixel));
             }
             ENDHLSL
         }

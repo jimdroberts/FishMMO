@@ -151,7 +151,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A dry channel 6 m wide and 2 m deep, its walls carved up to ground at 0 m; past the near bank flat ground, past
 		/// the far bank a hillside climbing on. The deck spans the channel's walls and sits on the ground at both ends; the
-		/// hillside is not climbed (Jim, 2026-10-10: one end buried, the other in the air).
+		/// hillside is not climbed (2026-10-10: one end buried, the other in the air).
 		/// </summary>
 		private static float Channel(float z)
 		{
@@ -182,7 +182,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A lowland river: 6 m of water a metre deep, its banks rising gently (a fifth of a metre a metre) from just above
 		/// the water. The deck reaches only as far as the banks take to clear the water, not out across the floodplain
-		/// (Jim, 2026-10-11: bridges far past the river line, over the path).
+		/// (2026-10-11: bridges far past the river line, over the path).
 		/// </summary>
 		private static float Lowland(float z)
 		{
@@ -227,6 +227,96 @@ namespace FishMMO.UnitTests.WorldDesign
 			PropsFeature.Crossing crossing = PropsFeature.MeasureCrossing(Ground, 0f, 20f);
 			Assert.That(Mathf.Abs(crossing.SlopeDegrees), Is.LessThanOrEqualTo(PropsFeature.MaxDeckSlopeDegrees + 0.5f));
 			Assert.That(crossing.DeckAt(0f), Is.GreaterThanOrEqualTo(PropsFeature.DeckClearance - 1e-3f));
+		}
+
+		/// <summary>
+		/// A river 6 m wide crossed on a hillside: the near bank rises, the far one falls away downhill from the water's edge
+		/// at half a metre a metre, under the water's level all the way. That ground was taken as more water, the deck held
+		/// its level over it to the reach, and the layout cut it off there 6 m over the slope (Flo Monolith,
+		/// 2026-10-12: "still floating in mid air on one end").
+		/// </summary>
+		private static float Hillside(float z) => z < -3f ? 0.5f * (-z - 3f) : z < 3f ? -1f : -0.5f * (z - 3f);
+
+		[Test]
+		public void AnEndWhereTheGroundFallsAwayLandsAtTheWater()
+		{
+			const float Reach = 16f;
+			// The scene's water: the river only; the hillside beyond is dry ground.
+			PropsFeature.Crossing crossing = PropsFeature.MeasureCrossing(Hillside, 0f, Reach, z => Mathf.Abs(z) < 3f ? 0f : float.NegativeInfinity);
+			Assert.That(crossing.To, Is.LessThanOrEqualTo(Reach), "no end past the reach the layout lays to");
+			Assert.That(crossing.To, Is.InRange(3f, 4f), "the far end at the water's edge, not out over the slope");
+			Assert.That(crossing.DeckAt(crossing.To) - Hillside(crossing.To), Is.InRange(-0.3f, 0.1f), "the far end on its ground");
+			Assert.That(crossing.DeckAt(crossing.From) - Hillside(crossing.From), Is.InRange(-0.3f, 0.1f), "the near end on its ground");
+			Assert.That(crossing.Unfooted, Is.True);
+
+			// Without the scene's water (a dry channel's reckoning) the fall is under the level all the way: still no end in the air.
+			PropsFeature.Crossing dry = PropsFeature.MeasureCrossing(Hillside, 0f, Reach);
+			Assert.That(dry.To, Is.LessThanOrEqualTo(Reach));
+			Assert.That(dry.DeckAt(dry.To) - Hillside(dry.To), Is.InRange(-0.3f, 0.1f), "the far end on its ground");
+		}
+
+		/// <summary>
+		/// A crossing at a fall's head: the river at 0 m over a bed a metre down, the far bank's lip at the water, and past it
+		/// the fall's face and the lower reach 6 m down. The lower reach is other water, not more of this crossing.
+		/// </summary>
+		[Test]
+		public void TheWaterBelowAFallIsNotTheWaterCrossed()
+		{
+			float Ground(float z) => z < -3f ? 1f : z < 3f ? -1f : z < 4f ? 0.2f : -6.5f;
+			float Water(float z) => Mathf.Abs(z) < 3f ? 0f : z >= 4f ? -6f : float.NegativeInfinity;
+			PropsFeature.Crossing crossing = PropsFeature.MeasureCrossing(Ground, 0f, 16f, Water);
+			Assert.That(crossing.To, Is.InRange(3f, 4.5f), "ends on the lip above the fall");
+			Assert.That(crossing.DeckAt(crossing.To) - Ground(crossing.To), Is.InRange(-0.3f, 0.1f), "on its ground");
+			Assert.That(crossing.Level, Is.EqualTo(PropsFeature.DeckClearance).Within(1e-3f), "clear of this water, not raised for the other");
+		}
+
+		/// <summary>
+		/// A gorge 20 m across between walls 30 m high, a river on its floor: laid rim to rim at the rims' height (the record
+		/// stands there), not down onto the floor beside the water.
+		/// </summary>
+		[Test]
+		public void AGorgeBridgeRunsLipToLipHighOverTheFloor()
+		{
+			float Ground(float z) => Mathf.Abs(z) < 8f ? 20f : Mathf.Abs(z) < 10f ? Mathf.Lerp(20f, 50f, (Mathf.Abs(z) - 8f) / 2f) : 50f;
+			PropsFeature.Crossing crossing = PropsFeature.MeasureCrossing(Ground, 20.5f, 32f, z => Mathf.Abs(z) < 3f ? 20.5f : float.NegativeInfinity, 50f);
+			Assert.That(crossing.From, Is.InRange(-11f, -9.5f));
+			Assert.That(crossing.To, Is.InRange(9.5f, 11f));
+			Assert.That(crossing.DeckAt(0f), Is.EqualTo(50f).Within(0.5f), "high over the floor");
+			Assert.That(crossing.Gorge, Is.True, "built as a gorge's crossing (StructurePieces.Bridges), not plank spans");
+			Assert.That(crossing.DeckAt(crossing.From) - Ground(crossing.From), Is.InRange(-0.3f, 0.1f), "on the near rim");
+			Assert.That(crossing.DeckAt(crossing.To) - Ground(crossing.To), Is.InRange(-0.3f, 0.1f), "on the far rim");
+		}
+
+		/// <summary>
+		/// Which gorge crossing a gorge gets: a stone arch where a settlement keeps it and it is no wider than an arch is
+		/// thrown, the nearest in length (the least stretch); ropes for a wide or a wild one; planks for a wild cleft too
+		/// narrow for ropes.
+		/// </summary>
+		[Test]
+		public void AGorgeGetsTheCrossingThatFitsIt()
+		{
+			Assert.That(PropsFeature.GorgeBridgeFor(20.6f, true, out float arch), Is.EqualTo("ArchBridge20"));
+			Assert.That(arch, Is.EqualTo(20f));
+			Assert.That(PropsFeature.GorgeBridgeFor(9f, true, out _), Is.EqualTo("ArchBridge8"));
+			Assert.That(PropsFeature.GorgeBridgeFor(38f, true, out float wide), Is.EqualTo("RopeBridge36"), "wider than an arch is thrown");
+			Assert.That(wide, Is.EqualTo(36f));
+			Assert.That(PropsFeature.GorgeBridgeFor(18f, false, out _), Is.EqualTo("RopeBridge16"), "a wild gorge is crossed on ropes");
+			Assert.That(PropsFeature.GorgeBridgeFor(7f, false, out _), Is.Null, "a wild cleft is crossed on planks");
+			foreach (float length in new[] { 6f, 12f, 17f, 24f, 31f, 40f })
+			{
+				foreach (bool kept in new[] { true, false })
+				{
+					string id = PropsFeature.GorgeBridgeFor(length, kept, out float nominal);
+					if (id == null)
+					{
+						continue;
+					}
+					StructurePiece piece = StructurePieces.Find(id);
+					Assert.That(piece, Is.Not.Null, id);
+					Assert.That(piece.ModuleLength, Is.EqualTo(nominal), id);
+					Assert.That(Mathf.Max(length / nominal, nominal / length), Is.LessThanOrEqualTo(1.4f), $"{id} stretched to {length} m");
+				}
+			}
 		}
 
 		[Test]

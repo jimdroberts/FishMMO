@@ -30,7 +30,7 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class ChatRenderProbe
 	{
-		private const string OUTPUT_DIR = "/home/jim/Dev/FishMMO-Dev/PanelRenders";
+		private static readonly string OUTPUT_DIR = ProbeOutput.Path("PanelRenders");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string UXML_PATH = "Assets/Scripts/Client/GUI/World/Chat/UIChat.uxml";
 		private const string OUTPUT_NAME = "UIChat-messages.png";

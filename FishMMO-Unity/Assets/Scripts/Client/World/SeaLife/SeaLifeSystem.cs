@@ -100,7 +100,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The clock the sea's motion runs on: the world's shared motion clock (<see cref="WorldMotion.Seconds"/>),
 		/// so every player's plants rock and fish swim in step, and never faster than real time however fast a
-		/// preview runs the sky (Jim, 2026-10-06: "animated too fast").
+		/// preview runs the sky (2026-10-06: "animated too fast").
 		/// </summary>
 		/// <remarks>
 		/// It had its own copy of that rule: the sky's clock, stepped at most a real frame at a time and drawn

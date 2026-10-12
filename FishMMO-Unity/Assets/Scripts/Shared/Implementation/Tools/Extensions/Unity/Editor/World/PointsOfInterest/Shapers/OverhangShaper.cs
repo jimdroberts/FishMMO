@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// The overhang and natural-arch kinds: a rock shelter or an arch at a steep face, laid as props in the scene's "POI"
-	/// set (Jim, 2026-10-10: both FallLedges' stretched slab and a placeable lean/arch cliff section).
+	/// set (2026-10-10: both FallLedges' stretched slab and a placeable lean/arch cliff section).
 	/// </summary>
 	/// <remarks>
 	/// <para>

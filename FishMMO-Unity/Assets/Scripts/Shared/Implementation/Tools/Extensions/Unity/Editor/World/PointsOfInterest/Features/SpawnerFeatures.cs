@@ -11,7 +11,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// A spawner for one NPC role at the site — service NPCs, guards, townsfolk, a hostile pack or its elite — filled
-	/// from <see cref="PointOfInterestNpcTable"/> by the site's race (Jim, 2026-10-10: auto spawners).
+	/// from <see cref="PointOfInterestNpcTable"/> by the site's race (2026-10-10: auto spawners).
 	/// </summary>
 	/// <remarks>
 	/// <para><b>Authoring only.</b> The spawner is an <see cref="ObjectSpawner"/> on an <c>EditorOnly</c> object: the spawn
@@ -86,7 +86,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The world boss's spawner, EMPTY (Jim, 2026-10-10: a designer assigns the boss), standing at the centre of an arena:
+	/// The world boss's spawner, EMPTY (2026-10-10: a designer assigns the boss), standing at the centre of an arena:
 	/// a region over the lair's floor named "&lt;site&gt; Arena".
 	/// </summary>
 	/// <remarks>
@@ -114,7 +114,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (spawner.TryGetComponent(out PendingSpawnerContent pending))
 			{
-				pending.Reason = $"The world boss of {PointOfInterestFeatureKit.SiteName(context)}, empty by design (Jim, 2026-10-10): assign the boss NPC, then remove this.";
+				pending.Reason = $"The world boss of {PointOfInterestFeatureKit.SiteName(context)}, empty by design (2026-10-10): assign the boss NPC, then remove this.";
 			}
 			EditorUtility.SetDirty(spawner);
 			PointOfInterestFeatureKit.Note(context, "its boss spawner is empty by design: assign the boss.");
@@ -147,18 +147,32 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Gathering nodes at the site: one generated resource of the site's family (<see cref="GatheringResourceCatalogue"/>),
-	/// drawn by its biome, kept alive by a spawner so a depleted node comes back.
+	/// Gathering nodes at the site: generated resources of the site's families (<see cref="GatheringResourceCatalogue"/>),
+	/// drawn by its biome, each kept alive on its own spot by a spawner so a depleted node comes back where it stood.
 	/// </summary>
 	/// <remarks>
-	/// Needs <see cref="GatheringContentGenerator.Generate"/> to have run; a resource whose node prefab does not exist yet is
-	/// noted and skipped. A node is a NetworkObject spawned by its spawner rather than placed in the scene, because a placed
-	/// node that depletes despawns for good (<see cref="Interactable.Despawn"/> only respawns through a spawner).
+	/// <para>Needs <see cref="GatheringContentGenerator.Generate"/> to have run; a resource whose node prefab does not exist
+	/// yet is noted and skipped. A node is a NetworkObject spawned by its spawner rather than placed in the scene, because a
+	/// placed node that depletes despawns for good (<see cref="Interactable.Despawn"/> only respawns through a spawner).</para>
+	/// <para><b>The site's own family.</b> Most nodes are of the kind's first family (a herb grove's herbs); from three nodes
+	/// on, the last is of one of its others (a mushroom cluster among the herbs). The family used to be one coin toss for the
+	/// whole site, so half of all herb groves grew nothing but mushrooms.</para>
+	/// <para><b>One spawner per node, on the ground.</b> A spawner that scatters (<c>RandomSpawnPosition</c>) raises what it
+	/// spawns by its collider's whole height (SpawnableSettings.YOffset, sized for things that fall to the ground); a node's
+	/// pivot is its base and it never falls, so every node hovered its own height in the air (Flo Monolith's spawn table,
+	/// 2026-10-12: Mirewort 0.8 m, Iron Vein 1.2 m, the Ancient Oak 27 m). Each node therefore has a spawner of its own
+	/// standing on its spot (spawned there exactly, no offset), drawn from the site's seed apart from the others, off the
+	/// props the site laid, out of the water (sea-floor nodes aside) and off steep ground.</para>
 	/// </remarks>
 	[Serializable]
 	public class GatheringFeature : PointOfInterestFeature
 	{
-		[Tooltip("The resource families to draw from; empty takes the kind's own (GatheringResourceCatalogue.FamiliesFor).")]
+		/// <summary>The steepest ground a node is put on while a gentler spot can be found, degrees.</summary>
+		private const float MaxSlopeDegrees = 40.0f;
+		/// <summary>Draws per node before the best of them is taken.</summary>
+		private const int Attempts = 16;
+
+		[Tooltip("The resource families to draw from, the main one first; empty takes the kind's own (GatheringResourceCatalogue.FamiliesFor).")]
 		public List<GatheringFamily> Families = new List<GatheringFamily>();
 
 		[Tooltip("Nodes kept alive; 0 picks by the site's size class (2 / 3 / 5).")]
@@ -168,7 +182,7 @@ namespace FishMMO.Shared.WorldDesign
 		[Tooltip("Respawn delay range for a depleted node, seconds.")]
 		public Vector2 RespawnSeconds = new Vector2(300.0f, 600.0f);
 
-		[Tooltip("The area nodes scatter in, as a share of the site's radius.")]
+		[Tooltip("The area nodes stand in, as a share of the site's radius.")]
 		[Range(0.1f, 1.0f)]
 		public float AreaShare = 0.7f;
 
@@ -183,36 +197,187 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			GatheringFamily family = families[context.Random.Next(families.Count)];
 			string biome = null;
 			if (context.BiomeAt != null)
 			{
 				Biomes.BiomeTemplate template = context.BiomeAt(context.Record.Position.x, context.Record.Position.z);
 				biome = template != null ? template.name : null;
 			}
-			GatheringResource resource = GatheringResourceCatalogue.Pick(family, biome, context.Random);
+
+			int size = Mathf.Clamp(context.Record.SizeClass, 0, 2);
+			int count = Count > 0 ? Count : size == 0 ? 2 : size == 1 ? 3 : 5;
+			GatheringResource main = GatheringResourceCatalogue.Pick(families[0], biome, context.Random);
+			GatheringResource other = families.Count > 1 && count >= 3
+				? GatheringResourceCatalogue.Pick(families[1 + context.Random.Next(families.Count - 1)], biome, context.Random)
+				: null;
+			NetworkObject mainNode = NodeObject(context, main, families[0]);
+			NetworkObject otherNode = other != null ? NodeObject(context, other, other.Family) : null;
+			if (mainNode == null && otherNode == null)
+			{
+				return;
+			}
+
+			bool underwater = families[0] == GatheringFamily.Marine;
+			List<Vector2> spots = Spots(context, count, underwater);
+			for (int i = 0; i < spots.Count; ++i)
+			{
+				bool isOther = otherNode != null && (i == spots.Count - 1 || mainNode == null);
+				GatheringResource resource = isOther ? other : main;
+				NetworkObject networkObject = isOther ? otherNode : mainNode;
+				var spawnables = new List<SpawnableSettings>
+				{
+					new SpawnableSettings
+					{
+						NetworkObject = networkObject,
+						SpawnChance = 1.0f,
+						MinimumRespawnTime = Mathf.Max(0.0f, RespawnSeconds.x),
+						MaximumRespawnTime = Mathf.Max(RespawnSeconds.x, RespawnSeconds.y),
+					},
+				};
+				// Area 0: the node appears on the spawner's own spot (the ground there), never raised by its height.
+				ObjectSpawner spawner = PointOfInterestFeatureKit.AddSpawner(context, PointOfInterestFeatureKit.UniqueName(context, $"{resource.Node} Spawner {i + 1}"),
+					spots[i], spawnables, 1, 0.0f);
+				// Turned its own way, so a bed of one plant does not stand in step.
+				spawner.transform.rotation = Quaternion.Euler(0.0f, context.Random.NextFloat() * 360.0f, 0.0f);
+				EditorUtility.SetDirty(spawner);
+			}
+		}
+
+		/// <summary>A resource's node prefab's NetworkObject, or null with a note when Generate Gathering Content has not made it.</summary>
+		private static NetworkObject NodeObject(PointOfInterestSiteContext context, GatheringResource resource, GatheringFamily family)
+		{
 			GameObject prefab = GatheringContentGenerator.LoadPrefab(resource);
 			NetworkObject networkObject = prefab != null ? prefab.GetComponent<NetworkObject>() : null;
 			if (networkObject == null)
 			{
 				PointOfInterestFeatureKit.Note(context, $"no node prefab for '{resource?.Node ?? family.ToString()}': run Generate Gathering Content.");
-				return;
 			}
+			return networkObject;
+		}
 
-			int size = Mathf.Clamp(context.Record.SizeClass, 0, 2);
-			int count = Count > 0 ? Count : size == 0 ? 2 : size == 1 ? 3 : 5;
-			var spawnables = new List<SpawnableSettings>
+		/// <summary>
+		/// Where the nodes stand, in the site's frame: seeded spots within <see cref="AreaShare"/> of its radius. Each is the
+		/// first of a few draws that is clear of the spots before it and of the site's props, on dry (unless
+		/// <paramref name="underwater"/>) and not too steep ground; the clearest draw when none is.
+		/// </summary>
+		private List<Vector2> Spots(PointOfInterestSiteContext context, int count, bool underwater)
+		{
+			PointOfInterestRecord record = context.Record;
+			float reach = Mathf.Max(3.0f, record.Radius * AreaShare);
+			float gap = Mathf.Clamp(reach * 0.35f, 1.5f, 4.0f);
+			List<Vector3> props = PropsNear(context, reach + 25.0f);
+			Quaternion turn = Quaternion.Euler(0.0f, record.Yaw, 0.0f);
+			var spots = new List<Vector2>(count);
+			var placed = new List<Vector2>(count);
+			for (int n = 0; n < count; ++n)
 			{
-				new SpawnableSettings
+				Vector2 best = Vector2.zero;
+				Vector2 bestWorld = new Vector2(record.Position.x, record.Position.z);
+				float bestScore = float.NegativeInfinity;
+				for (int attempt = 0; attempt < Attempts; ++attempt)
 				{
-					NetworkObject = networkObject,
-					SpawnChance = 1.0f,
-					MinimumRespawnTime = Mathf.Max(0.0f, RespawnSeconds.x),
-					MaximumRespawnTime = Mathf.Max(RespawnSeconds.x, RespawnSeconds.y),
-				},
-			};
-			PointOfInterestFeatureKit.AddSpawner(context, PointOfInterestFeatureKit.UniqueName(context, $"{resource.Node} Spawner"),
-				PointOfInterestFeatureKit.RandomLocal(context, 0.2f), spawnables, count, Mathf.Max(3.0f, context.Record.Radius * AreaShare));
+					float r = reach * Mathf.Sqrt(context.Random.NextFloat());
+					float a = context.Random.NextFloat() * Mathf.PI * 2.0f;
+					var local = new Vector2(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
+					Vector3 offset = turn * new Vector3(local.x, 0.0f, local.y);
+					var world = new Vector2(record.Position.x + offset.x, record.Position.z + offset.z);
+
+					// How far clear of everything it must keep away from (negative: inside it), less what the ground costs.
+					float score = gap * 4.0f;
+					foreach (Vector2 other in placed)
+					{
+						score = Mathf.Min(score, Vector2.Distance(world, other) - gap);
+					}
+					foreach (Vector3 prop in props)
+					{
+						score = Mathf.Min(score, Vector2.Distance(world, new Vector2(prop.x, prop.y)) - prop.z);
+					}
+					if (!underwater && context.Water != null && context.Water.KindAt(world.x, world.y) != WaterKind.None)
+					{
+						score -= 100.0f;
+					}
+					float slope = context.SlopeAt != null ? context.SlopeAt(world.x, world.y) : 0.0f;
+					if (slope > MaxSlopeDegrees)
+					{
+						score -= slope - MaxSlopeDegrees;
+					}
+					if (score > bestScore)
+					{
+						bestScore = score;
+						best = local;
+						bestWorld = world;
+					}
+					if (score >= 0.0f)
+					{
+						break;
+					}
+				}
+				spots.Add(best);
+				placed.Add(bestWorld);
+			}
+			return spots;
+		}
+
+		/// <summary>
+		/// The props laid so far within <paramref name="reach"/> of the site, as (east, north, keep-clear radius): the
+		/// footprint of each prefab's meshes at the prop's scale and half a metre more, so a node never grows out of a stone.
+		/// </summary>
+		private static List<Vector3> PropsNear(PointOfInterestSiteContext context, float reach)
+		{
+			var near = new List<Vector3>();
+			PointOfInterestPropSink sink = context.Sink;
+			if (sink == null)
+			{
+				return near;
+			}
+			var centre = new Vector2(context.Record.Position.x, context.Record.Position.z);
+			var radii = new Dictionary<int, float>();
+			foreach (ScenePropSet.Prop prop in sink.Props)
+			{
+				var at = new Vector2(prop.Position.x, prop.Position.z);
+				if ((at - centre).sqrMagnitude > reach * reach || prop.Prototype < 0 || prop.Prototype >= sink.Prototypes.Count)
+				{
+					continue;
+				}
+				if (!radii.TryGetValue(prop.Prototype, out float radius))
+				{
+					radius = FootprintRadius(sink.Prototypes[prop.Prototype].Prefab);
+					radii[prop.Prototype] = radius;
+				}
+				float scale = Mathf.Max(Mathf.Abs(prop.Scale.x), Mathf.Abs(prop.Scale.z));
+				near.Add(new Vector3(at.x, at.y, radius * scale + 0.5f));
+			}
+			return near;
+		}
+
+		/// <summary>
+		/// The radius round a prefab's origin that holds its meshes' footprint, metres. From the meshes' own bounds placed
+		/// under the root (a prefab asset's renderers report no bounds outside a scene).
+		/// </summary>
+		private static float FootprintRadius(GameObject prefab)
+		{
+			if (prefab == null)
+			{
+				return 0.5f;
+			}
+			float radius = 0.0f;
+			Matrix4x4 toRoot = prefab.transform.worldToLocalMatrix;
+			foreach (MeshFilter filter in prefab.GetComponentsInChildren<MeshFilter>(true))
+			{
+				Mesh mesh = filter.sharedMesh;
+				if (mesh == null)
+				{
+					continue;
+				}
+				Matrix4x4 matrix = toRoot * filter.transform.localToWorldMatrix;
+				Vector3 min = mesh.bounds.min, max = mesh.bounds.max;
+				for (int corner = 0; corner < 8; ++corner)
+				{
+					Vector3 p = matrix.MultiplyPoint3x4(new Vector3((corner & 1) != 0 ? max.x : min.x, (corner & 2) != 0 ? max.y : min.y, (corner & 4) != 0 ? max.z : min.z));
+					radius = Mathf.Max(radius, new Vector2(p.x, p.z).magnitude);
+				}
+			}
+			return radius > 0.0f ? radius : 0.5f;
 		}
 	}
 }

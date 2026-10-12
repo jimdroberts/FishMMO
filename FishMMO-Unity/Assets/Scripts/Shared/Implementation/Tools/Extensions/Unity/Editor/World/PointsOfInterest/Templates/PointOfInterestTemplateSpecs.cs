@@ -205,6 +205,11 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Smithy = "smithy";
 		public const string Stable = "stable";
 		public const string Notice = "notice";
+		/// <summary>Light sources (2026-10-12: torches, braziers): a torch on a pole, and a fire bowl.</summary>
+		public const string TorchPost = "=TorchPost";
+		public const string Brazier = "=Brazier";
+		public const string Slipway = "=Slipway";
+		public const string Shipwreck = "=Shipwreck";
 
 		// ── Styles ───────────────────────────────────────────────────
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
@@ -322,7 +327,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Stable, 1, 3, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
-			// The capital: larger than a city (the planner's footprint), more of everything, the keep at its heart (Jim's default).
+			// The capital: larger than a city (the planner's footprint), more of everything, the keep at its heart.
 			T(a, POIType.Capital, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 4, 4, Gates).S(WallTower, 12, 20, Towers)
 				.S(Keep, 1, 1, Centre).S(Statue, 2, 4, Centre).S(Obelisk, 1, 1, Centre).S(Well, 3, 5, Centre).S(Stall, 12, 20, Centre)
@@ -340,13 +345,18 @@ namespace FishMMO.Shared.WorldDesign
 				.Sized(false, false, true).Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
 			// Ports: a waterfront street, piers out from the shore ahead (the planner turns a port to the sea).
+			// A port is a harbour town (2026-10-12: "Harbours should probably have towns to go with them"): its
+			// waterfront has the taverns, chapel, smithy and warehouses a town's has, and the ships at its piers and in its
+			// roads are PointOfInterestHarbour's.
 			T(a, POIType.Port, "Timber", Streets, Timber)
-				.S(Pier, 1, 3, Piers).S(Well, 1, 1, Centre).S(Stall, 2, 5, Centre).S(House, 10, 24, Street)
-				.S(Storage, 10, 20, Scatter).S(Lighthouse, 0, 1, Scatter).S(Banner, 1, 3, Scatter)
+				.S(Pier, 2, 4, Piers).S(Well, 1, 1, Centre).S(Stall, 3, 6, Centre).S(Notice, 1, 1, Centre).S(House, 16, 30, Street)
+				.S(Tavern, 1, 2, Street).S(Church, 0, 1, Street, style: Stone).S(Smithy, 1, 1, Street).S(Stable, 0, 1, Scatter)
+				.S(Storage, 12, 22, Scatter).S("=Woodpile", 1, 3, Scatter).S(Lighthouse, 0, 1, Scatter).S(Banner, 1, 3, Scatter)
 				.In(0.2f, Arid).In(0.6f, Highland);
 			T(a, POIType.Port, "Stone", Streets, Stone)
-				.S(Pier, 1, 3, Piers, style: Timber).S(Well, 1, 1, Centre).S(Stall, 2, 5, Centre).S(House, 10, 22, Street)
-				.S(Storage, 10, 20, Scatter).S(Lighthouse, 0, 1, Scatter).S(Banner, 1, 3, Scatter)
+				.S(Pier, 2, 4, Piers, style: Timber).S(Well, 1, 1, Centre).S(Stall, 3, 6, Centre).S(Notice, 1, 1, Centre, style: Timber).S(House, 16, 28, Street)
+				.S(Tavern, 1, 2, Street, style: Timber).S(Church, 1, 1, Street).S(Smithy, 1, 1, Street, style: Timber).S(Stable, 0, 1, Scatter, style: Timber)
+				.S(Storage, 12, 22, Scatter).S(Lighthouse, 0, 1, Scatter).S(Banner, 1, 3, Scatter)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland).Races(Civil);
 
 			T(a, POIType.TradingPost, "Market", Single, Timber)
@@ -357,7 +367,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Elsewhere(0.2f).In(2f, Arid).In(1.5f, Steppe);
 
 			T(a, POIType.Waystation, "Inn", Single, Timber)
-				.S(House, 1, 1, Centre).S(LeanTo, 1, 2, Scatter).S(Well, 0, 1, Scatter).S(Storage, 2, 5, Scatter).S(Fire, 0, 1, Scatter);
+				.S(House, 1, 1, Centre).S(LeanTo, 1, 2, Scatter).S(Well, 0, 1, Scatter).S(Storage, 2, 5, Scatter).S(Fire, 0, 1, Scatter).S(TorchPost, 1, 2, Scatter);
 			T(a, POIType.Waystation, "Stone Inn", Single, Stone)
 				.S(StoneHouse, 1, 1, Centre).S(LeanTo, 1, 2, Scatter).S(Well, 1, 1, Scatter).S(Storage, 2, 5, Scatter)
 				.Elsewhere(0.3f).In(2f, Arid).In(2f, Highland);
@@ -369,30 +379,30 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			T(a, POIType.Keep, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(WallTower, 0, 4, Towers)
-				.S(Keep, 1, 1, Centre).S(Well, 0, 1, Centre).S(Storage, 3, 6, Scatter).S(Banner, 2, 4, Scatter);
+				.S(Keep, 1, 1, Centre).S(Well, 0, 1, Centre).S(Storage, 3, 6, Scatter).S(Banner, 2, 4, Scatter).S(Brazier, 1, 3, Scatter);
 			T(a, POIType.Keep, "Palisade", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Watchtower, 1, 1, Centre).S(Longhouse, 1, 2, Rows)
-				.S(Storage, 3, 6, Scatter).S(Banner, 2, 4, Scatter).S(Fire, 0, 1, Scatter)
+				.S(Storage, 3, 6, Scatter).S(Banner, 2, 4, Scatter).S(Fire, 0, 1, Scatter).S(TorchPost, 2, 4, Scatter)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1.5f, Cold).In(0.1f, Arid).Races(Civil);
 
 			T(a, POIType.Castle, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 2, Gates).S(WallTower, 4, 8, Towers)
 				.S(Keep, 1, 1, Centre).S(Well, 1, 1, Centre).S(House, 4, 10, Street)
-				.S(Storage, 4, 8, Scatter).S(Banner, 3, 6, Scatter);
+				.S(Storage, 4, 8, Scatter).S(Banner, 3, 6, Scatter).S(Brazier, 2, 4, Scatter);
 			T(a, POIType.Castle, "Highland", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(WallTower, 6, 10, Towers)
 				.S(Keep, 1, 1, Centre).S(Well, 1, 1, Centre).S(Longhouse, 2, 4, Street, style: Timber)
-				.S(Storage, 4, 8, Scatter).S(Banner, 3, 6, Scatter)
+				.S(Storage, 4, 8, Scatter).S(Banner, 3, 6, Scatter).S(Brazier, 2, 4, Scatter)
 				.Elsewhere(0.3f).In(2f, Highland).In(1.5f, Cold).Races(Civil);
 
 			T(a, POIType.Fortress, "Stone", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 2, 2, Gates).S(WallTower, 6, 10, Towers)
 				.S(Keep, 1, 1, Centre).S(Watchtower, 2, 4, Scatter, style: Timber).S(Longhouse, 3, 6, Street, style: Timber)
-				.S(Tent, 4, 10, Rows, style: Hide).S(Storage, 6, 12, Scatter).S(Banner, 6, 10, Scatter);
+				.S(Tent, 4, 10, Rows, style: Hide).S(Storage, 6, 12, Scatter).S(Banner, 6, 10, Scatter).S(Brazier, 2, 5, Scatter).S(TorchPost, 2, 4, Scatter);
 			T(a, POIType.Fortress, "Palisade", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 2, 2, Gates).S(Watchtower, 4, 8, Towers)
 				.S(Longhouse, 2, 4, Street).S(Tent, 6, 14, Rows, style: Hide).S(Fire, 1, 2, Centre)
-				.S(Storage, 6, 12, Scatter).S(Banner, 6, 10, Scatter)
+				.S(Storage, 6, 12, Scatter).S(Banner, 6, 10, Scatter).S(TorchPost, 3, 6, Scatter)
 				.Elsewhere(0.5f).In(1.5f, Woods).In(1.5f, Steppe).Races(Outlaw);
 
 			T(a, POIType.Tower, "Timber", Single, Timber)
@@ -409,10 +419,24 @@ namespace FishMMO.Shared.WorldDesign
 			// Spans laid across the river the planner sited it on, as long as the water is wide (PropsFeature.MeasureCrossing).
 			T(a, POIType.Bridge, "Timber", Linear, Timber).S(Bridge, 1, 1, Span).Pad(0f);
 
-			// The adit faces out of the rock face the planner found (its heading).
+			// The adit itself is dug by the cave shaper into the rock face the planner found (CaveForm.Mine: its portal, sets,
+			// track and stopes are the cave dressing's); the template is the yard before it.
 			T(a, POIType.Mine, "Adit", Single, Timber)
-				.S(CryptDoor, 1, 1, Centre, style: Stone).S(LeanTo, 1, 2, Scatter).S(Storage, 3, 6, Scatter)
-				.S(Rubble, 2, 4, Scatter, style: Stone).S(Fire, 0, 1, Scatter).Pad(0.7f);
+				.S(LeanTo, 1, 2, Scatter).S(Storage, 3, 6, Scatter).S("=OreBin", 0, 1, Scatter)
+				.S(Rubble, 2, 4, Scatter, style: Stone).S(Fire, 0, 1, Scatter).S(TorchPost, 1, 2, Scatter).Pad(0.7f);
+			// Mines that do not all look alike (2026-10-12): a shaft head with its headframe and ore bins; a worked-out
+			// one left to the weather; and a delving, cut by a hold's masons. The portal the cave dressing puts at the mouth
+			// follows the template's name (PointOfInterestCaveDressing.PortalVariant).
+			T(a, POIType.Mine, "Shaft Head", Scattered, Timber)
+				.S("=Headframe", 1, 1, Scatter).S("=OreBin", 1, 2, Scatter).S(LeanTo, 1, 2, Scatter).S(Storage, 2, 5, Scatter)
+				.S(Rubble, 2, 5, Scatter, style: Stone).S(TorchPost, 1, 3, Scatter).Pad(0.7f);
+			T(a, POIType.Mine, "Abandoned", Scattered, Timber)
+				.S(LeanTo, 0, 1, Scatter, 0.4f, 0.8f).S(Storage, 1, 3, Scatter, 0.3f, 0.7f).S("=OreBin", 0, 1, Scatter, 0.3f, 0.7f)
+				.S(Rubble, 3, 6, Scatter, style: Stone).S(Bones, 0, 2, Scatter)
+				.Weathered(PointOfInterestFinish.Mossy, 0.8f).Pad(0.6f).Weighs(0.6f);
+			T(a, POIType.Mine, "Delving", Single, Stone)
+				.S(StoneHouse, 0, 1, Scatter).S(Storage, 2, 5, Scatter, style: Timber).S("=OreBin", 1, 1, Scatter, style: Timber)
+				.S(Statue, 0, 1, Scatter).S(Rubble, 1, 3, Scatter).Pad(0.7f).Weighs(0.6f);
 
 			T(a, POIType.Quarry, "Cut Stone", Scattered, Stone)
 				.S(Rubble, 4, 8, Scatter).S(Plinth, 2, 4, Scatter).S("=FallenColumn", 1, 3, Scatter)
@@ -420,6 +444,14 @@ namespace FishMMO.Shared.WorldDesign
 
 			T(a, POIType.Lighthouse, "Stone", Single, Stone)
 				.S(Lighthouse, 1, 1, Centre).S(Storage, 1, 3, Scatter, style: Timber).S(Cottage, 0, 1, Scatter, style: Timber);
+
+			// A shipwright's yard (2026-10-12: "We need docks (dockyards should be Points of interest)"): a ship on the
+			// stocks in the middle of the yard, the planner having turned it to the sea; a pier out over the water, the
+			// shipwright's house, sheds and a forge for the ironwork, timber stacked to season. Boats lie at the pier
+			// (PointOfInterestHarbour).
+			T(a, POIType.Dockyard, "Slipway", Single, Timber)
+				.S(Slipway, 1, 1, Centre).S(Pier, 1, 2, Piers).S(House, 1, 1, Scatter).S(LeanTo, 1, 2, Scatter).S(Smithy, 0, 1, Scatter)
+				.S("=Woodpile", 2, 4, Scatter).S(Storage, 3, 6, Scatter).S("=Cart", 0, 1, Scatter).S(TorchPost, 1, 3, Scatter).Pad(0.6f);
 		}
 
 		// ── Wild camps and lairs ────────────────────────────────────
@@ -431,7 +463,7 @@ namespace FishMMO.Shared.WorldDesign
 				.In(1.5f, Woods).Pad(0.8f);
 			T(a, POIType.Camp, "Hide Tents", Round, Hide)
 				.S(Tent, 4, 8, Ring).S(Fire, 1, 1, Centre).S(Bedding, 2, 5, Scatter).S(Storage, 2, 5, Scatter, style: Timber)
-				.S(Banner, 0, 1, Scatter, style: Timber).Races(Outlaw).Pad(0.8f);
+				.S(Banner, 0, 1, Scatter, style: Timber).S(TorchPost, 0, 2, Scatter).Races(Outlaw).Pad(0.8f);
 			T(a, POIType.Camp, "Yurts", Round, Hide)
 				.S(Yurt, 3, 6, Ring).S(Fire, 1, 2, Centre).S(Bedding, 2, 5, Scatter).S(Storage, 2, 5, Scatter, style: Timber)
 				.Elsewhere(0.05f).In(2f, Cold).In(1.5f, Steppe).Pad(0.8f);
@@ -441,10 +473,10 @@ namespace FishMMO.Shared.WorldDesign
 
 			T(a, POIType.BanditCamp, "Open", Round, Hide)
 				.S(Tent, 3, 6, Ring).S(Fire, 1, 1, Centre).S(Storage, 4, 8, Scatter, style: Timber).S(Banner, 1, 2, Scatter, style: Timber)
-				.S(Bedding, 2, 5, Scatter).Pad(0.8f);
+				.S(Bedding, 2, 5, Scatter).S(TorchPost, 1, 3, Scatter).Pad(0.8f);
 			T(a, POIType.BanditCamp, "Palisade", Walled, Timber)
 				.S(Palisade, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Fire, 1, 1, Centre).S(Tent, 3, 6, Ring, style: Hide)
-				.S(Storage, 4, 8, Scatter).S(Banner, 1, 3, Scatter).S(Watchtower, 0, 1, Scatter)
+				.S(Storage, 4, 8, Scatter).S(Banner, 1, 3, Scatter).S(Watchtower, 0, 1, Scatter).S(TorchPost, 2, 4, Scatter)
 				.Races(Outlaw).In(1.5f, Woods).Pad(0.8f);
 
 			T(a, POIType.HuntingLodge, "Lodge", Single, Timber)
@@ -492,14 +524,14 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Menhir, 7, 13, Ring, 0f, 0.3f).S(Menhir, 0, 1, Centre).Pad(0.7f);
 
 			T(a, POIType.Shrine, "Shrine", Single, Stone)
-				.S(Shrine, 1, 1, Centre).S(Menhir, 0, 2, Scatter, scaleMin: 0.6f, scaleMax: 0.9f).Pad(0.8f);
+				.S(Shrine, 1, 1, Centre).S(Menhir, 0, 2, Scatter, scaleMin: 0.6f, scaleMax: 0.9f).S(Brazier, 0, 2, Scatter).Pad(0.8f);
 			T(a, POIType.Shrine, "Statue", Single, Stone)
 				.S(Statue, 1, 1, Centre).S(Altar, 0, 1, Scatter).Pad(0.8f).Weighs(0.5f);
 
 			T(a, POIType.Temple, "Colonnade", Round, Stone)
-				.S(Column, 8, 14, Ring).S(Altar, 1, 1, Centre).S(Statue, 2, 4, Centre).S(Shrine, 0, 1, Scatter);
+				.S(Column, 8, 14, Ring).S(Altar, 1, 1, Centre).S(Statue, 2, 4, Centre).S(Shrine, 0, 1, Scatter).S(Brazier, 2, 4, Scatter);
 			T(a, POIType.Temple, "Court", Walled, Stone)
-				.S(Wall, 1, 1, Perimeter).S(Shrine, 1, 1, Centre).S(Statue, 2, 4, Centre).S(Column, 4, 8, Scatter).S(Well, 0, 1, Scatter);
+				.S(Wall, 1, 1, Perimeter).S(Shrine, 1, 1, Centre).S(Statue, 2, 4, Centre).S(Column, 4, 8, Scatter).S(Well, 0, 1, Scatter).S(Brazier, 2, 4, Scatter);
 
 			T(a, POIType.Monastery, "Cloister", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Shrine, 1, 1, Centre).S(Statue, 1, 2, Centre).S(Well, 1, 1, Centre)
@@ -642,9 +674,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Coast(List<PointOfInterestTemplateSpec> a)
 		{
-			// No hull in the kit yet: a wreck is its cargo and its mast.
+			// A wreck is its hull on the beach (a cog's stern half, or a longship's bones) and its cargo strewn about it
+			// (2026-10-12: "Shipwrecks don't have a wrecked ship mesh?").
 			T(a, POIType.Wreck, "Debris", Scattered, Timber)
-				.S(Storage, 3, 8, Scatter, 0.3f, 0.8f).S(Banner, 1, 2, Scatter, 0.6f, 0.9f).S(Rubble, 0, 2, Scatter, style: Stone);
+				.S(Shipwreck, 1, 1, Centre).S(Storage, 3, 8, Scatter, 0.3f, 0.8f).S(Rubble, 0, 2, Scatter, style: Stone);
 
 			T(a, POIType.SmugglersCove, "Camp", Single, Timber)
 				.S(Fire, 1, 1, Centre).S(Tent, 2, 4, Ring, style: Hide).S(Pier, 0, 1, Piers).S(Storage, 8, 14, Scatter).S(LeanTo, 1, 2, Scatter);
@@ -654,7 +687,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Banner, 2, 4, Scatter).S(Fire, 1, 1, Scatter);
 
 			T(a, POIType.SunkenShip, "Debris", Scattered, Timber)
-				.S(Storage, 3, 8, Scatter, 0.4f, 0.9f).S(Banner, 1, 2, Scatter, 0.6f, 0.9f).S(Bones, 0, 3, Scatter)
+				.S(Shipwreck, 1, 1, Centre).S(Storage, 3, 8, Scatter, 0.4f, 0.9f).S(Banner, 1, 2, Scatter, 0.6f, 0.9f).S(Bones, 0, 3, Scatter)
 				.Weathered(PointOfInterestFinish.Algae).Pad(0f);
 
 			T(a, POIType.SunkenRuins, "Stone", Scattered, Stone)
@@ -674,16 +707,16 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Caves: built in the carved chamber ─────────────────────
 
 		/// <summary>
-		/// The carved cave kinds (their shaper digs the tunnel and chamber; Overhang and NaturalArch need no template):
-		/// small and medium caves hold a camp or a den in the chamber, a large cave's chamber its dungeon entrance
-		/// (PointOfInterestFeatureDefaults) among the bones of whatever guards it.
+		/// The carved cave kinds (their shaper digs the system; Overhang and NaturalArch need no template): small and medium
+		/// caves hold a camp or a den in their great cavern, a large cave's its dungeon entrance (PointOfInterestFeatureDefaults)
+		/// among the bones and banners of whatever guards it.
 		/// </summary>
 		private static void Caves(List<PointOfInterestTemplateSpec> a)
 		{
 			foreach (POIType kind in new[] { POIType.Cave, POIType.IceCave, POIType.LavaTube })
 			{
 				T(a, kind, "Camp", Single, Timber)
-					.S(Fire, 1, 1, Centre, style: Stone).S(Bedding, 1, 3, Scatter, style: Hide).S(Storage, 1, 3, Scatter).S(Bones, 0, 2, Scatter)
+					.S(Fire, 1, 1, Centre, style: Stone).S(Bedding, 1, 3, Scatter, style: Hide).S(Storage, 1, 3, Scatter).S(Bones, 0, 2, Scatter).S(TorchPost, 1, 2, Scatter)
 					.Sized(true, true, false).Chamber().Pad(0f);
 				T(a, kind, "Den", Scattered, Earth)
 					.S(Bones, 3, 6, Scatter).S(Rubble, 0, 2, Scatter, style: Stone).S(Mound, 0, 1, Scatter)
@@ -706,7 +739,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Encounters(List<PointOfInterestTemplateSpec> a)
 		{
-			// The door faces out of the rock face the planner found; the dungeon behind it is hand-made (Jim, 2026-10-10).
+			// The door faces out of the rock face the planner found; the dungeon behind it is hand-made (2026-10-10).
 			T(a, POIType.DungeonEntrance, "Door", Single, Stone)
 				.S(CryptDoor, 1, 1, Centre).S(Statue, 0, 2, Scatter, 0.3f, 0.7f).S(Rubble, 1, 3, Scatter).S(Bones, 0, 3, Scatter).Pad(0.5f);
 

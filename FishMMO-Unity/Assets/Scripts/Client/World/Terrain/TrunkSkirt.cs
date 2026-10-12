@@ -12,7 +12,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// A generated trunk is a tube that ends, open, at the tree's pivot. The scatter sinks the tree a little, more on a
 	/// slope, but the ground under one trunk is no plane: its downhill side, a dip, a heightmap texel's fold fall away
-	/// below the ring and leave a gap under the bark (Jim, 2026-10-08).
+	/// below the ring and leave a gap under the bark (2026-10-08).
 	/// </para>
 	/// <para>
 	/// The skirt is a second ring under every open bark edge near the bottom of the mesh: each of its vertices a copy of

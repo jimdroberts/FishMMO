@@ -26,7 +26,7 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class InventoryCapacityProbe
 	{
-		private const string OUTPUT_DIR = "/home/jim/Dev/FishMMO-Dev/PanelRenders";
+		private static readonly string OUTPUT_DIR = ProbeOutput.Path("PanelRenders");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string CURRENCY_ASSET = "Assets/Templates/Entity/CharacterAttributes/Misc/Currency.asset";
 		private const int WIDTH = 1200;

@@ -9,8 +9,8 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The large-rock cliffs (<see cref="CliffRocks"/>, <see cref="CliffRockPlacement"/>): the rules Jim
-	/// chose them by, checked on a synthetic cliff band — size graded by height, the base rule, burial
+	/// The large-rock cliffs (<see cref="CliffRocks"/>, <see cref="CliffRockPlacement"/>): the rules they
+	/// are chosen by, checked on a synthetic cliff band — size graded by height, the base rule, burial
 	/// graded by size, stable resting debris, orientation by structure — and the meshes themselves.
 	/// </summary>
 	[TestFixture]
@@ -138,7 +138,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// Slid out of a convex brow, a face or fill section hung its flat floor over the falling ground and looked poised
-		/// in the air (Jim, 2026-10-08). Every section, not only the footing, is lowered until no underside shows.
+		/// in the air (2026-10-08). Every section, not only the footing, is lowered until no underside shows.
 		/// </summary>
 		[Test]
 		public void NoSectionShowsItsUnderside([Values("Granite", "Sandstone", "Basalt")] string type)
@@ -154,7 +154,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// Debris is cliff sections now, blocks with broad flat faces, and the best of 24 random orientations stood them
-		/// on an edge or a corner (Jim, 2026-10-08: "randomly rotating … levitating"). A block rests flat on a face: its
+		/// on an edge or a corner (2026-10-08: "randomly rotating … levitating"). A block rests flat on a face: its
 		/// lowest points are a face's worth of vertices, not one corner, and no orientation sits its centre lower.
 		/// </summary>
 		[Test]
@@ -208,7 +208,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// The slope normal leans down the hill. It was built leaning up it (a mirror of the slope, 2θ off), so every
-		/// talus rock was rested on a slope that was not there and stood on end on its cone (Jim, 2026-10-08).
+		/// talus rock was rested on a slope that was not there and stood on end on its cone (2026-10-08).
 		/// </summary>
 		[Test]
 		public void SlopeNormal_LeansDownTheHill()
@@ -343,7 +343,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The sheer backdrop (Jim, 2026-10-08: "larger variants as background ... the height scale based on the
+		/// The sheer backdrop (2026-10-08: "larger variants as background ... the height scale based on the
 		/// height of the cliff itself"): scarps stand along the foot of the 48 m band, sized to it — the test band
 		/// takes one tier to near the crest, or a lower wall and a second on it — and stand upright, their back in
 		/// the hill and their face out of it.
@@ -412,7 +412,7 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── Variety and budget (Jim 2026-10-04: "sparse, and all identical") ──
+		// ── Variety and budget (2026-10-04: "sparse, and all identical") ──
 
 		[Test]
 		public void FaceRoles_HaveSeveralVariants([Values("Granite", "Sandstone", "Basalt", "Slate", "Ice")] string type)

@@ -3,6 +3,7 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Water;
+using FishMMO.Shared;
 
 namespace FishMMO.RenderScratch
 {
@@ -137,7 +138,9 @@ namespace FishMMO.RenderScratch
 		private static void Finish(StringBuilder log, int code)
 		{
 			Debug.Log("[WaterFFTProbe]\n" + log);
-			System.IO.File.WriteAllText("/tmp/claude-1000/fftprobe.txt", log.ToString());
+			string path = ProbeOutput.Path("WaterRenders", "fftprobe.txt");
+			System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+			System.IO.File.WriteAllText(path, log.ToString());
 			EditorApplication.Exit(code);
 		}
 	}

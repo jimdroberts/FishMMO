@@ -75,7 +75,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// A kind IS a <see cref="POIType"/>, so the name generator, the generated scene data and the map all speak of
-	/// the same thing. Each kind has its own <see cref="MapMarkerType"/> of the same name (Jim, 2026-10-10), found
+	/// the same thing. Each kind has its own <see cref="MapMarkerType"/> of the same name (2026-10-10), found
 	/// by name so the two enums can never drift apart silently: a kind with no marker type answers
 	/// <see cref="MapMarkerType.Landmark"/>, and a unit test pins that none does.
 	/// </remarks>
@@ -301,6 +301,7 @@ namespace FishMMO.Shared
 			Add(POIType.Mine, Se, K | P, 2);
 			Add(POIType.Quarry, Se, K | P, 2);
 			Add(POIType.Lighthouse, Se, K | P, 2);
+			Add(POIType.Dockyard, Se, K | P, 2);
 
 			Add(POIType.Wreck, Co, K, 2, "Shipwreck");
 			Add(POIType.SmugglersCove, Co, K | H, 2, "Smugglers' Cove");

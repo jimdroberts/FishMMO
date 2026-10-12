@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Biomes;
 using FishMMO.Shared.Celestial;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -114,11 +115,26 @@ namespace FishMMO.Shared.WorldDesign
 			ScenePropBaker.BakeFolder = terrainFolder;
 			try
 			{
+				// The old plan's cave mouths closed first: the new plan opens its own (and a moved or dropped cave leaves none).
+				int refilled = CaveShaper.RefillMouths(terrains, plan, PointOfInterestProbe.Asset(scene));
+				if (refilled > 0)
+				{
+					notes.Add($"Closed {refilled} terrain hole texel(s) round the old plan's cave mouths before planning again.");
+				}
 				SceneWater water = SceneGenerator.LoadWater(request, plan, terrains, notes);
 				SolarSystemProfile system = SolarSystemProfile.Resolve(request.Body);
 				SceneBiomeField field = SceneBiomeField.Build(request, plan, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north), system, water: water);
 				PointOfInterestStage stage = PointOfInterestStage.ForCut(request, terrainFolder);
 				stage.PlanSites(scene, plan, terrains, field.Biomes.Count > 0 ? field : null, water, notes);
+				// The water again: the plan's moats are lakes of the scene's (MoatShaper), drawn and swum from its hydrology.
+				if (water != null && !scope.AllowsLocal)
+				{
+					string hydrologyPath = SceneGenerator.SaveWater(request, terrainFolder, water);
+					if (hydrologyPath != null)
+					{
+						SceneGenerator.EnsureInlandWater(scene, AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath));
+					}
+				}
 				stage.Place(scene, plan, terrains, water, notes, null);
 			}
 			finally

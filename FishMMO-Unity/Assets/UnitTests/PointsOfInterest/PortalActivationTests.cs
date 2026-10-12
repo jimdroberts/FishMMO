@@ -11,7 +11,7 @@ using FishMMO.UnitTests.Harness;
 namespace FishMMO.UnitTests.PointsOfInterest
 {
 	/// <summary>
-	/// Pins portal activation (Jim, 2026-10-10): the decision as a truth table over scope ×
+	/// Pins portal activation (2026-10-10): the decision as a truth table over scope ×
 	/// conditions × stored state, the store's loaded/dirty bookkeeping, and a use through
 	/// <see cref="PortalGate.Use"/> on a real component.
 	/// </summary>

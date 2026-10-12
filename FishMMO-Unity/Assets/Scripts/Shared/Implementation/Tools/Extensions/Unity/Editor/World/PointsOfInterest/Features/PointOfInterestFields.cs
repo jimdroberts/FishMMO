@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The farmland round a settlement (Jim, 2026-10-11): fields of wheat, ploughed plots and fenced pasture on the gentle,
+	/// The farmland round a settlement (2026-10-11): fields of wheat, ploughed plots and fenced pasture on the gentle,
 	/// dry ground outside it, clear of its ways, the water and every other site.
 	/// </summary>
 	/// <remarks>

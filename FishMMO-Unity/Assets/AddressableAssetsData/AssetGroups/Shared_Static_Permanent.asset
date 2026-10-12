@@ -5235,6 +5235,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 74903023514d88c60a33523d955595d1
+    m_Address: Door Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 749455d1a9f49917abf3d6d818f3f393
     m_Address: Point of Interest NPC Table
     m_ReadOnly: 0

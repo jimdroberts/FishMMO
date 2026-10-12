@@ -14,7 +14,7 @@ namespace FishMMO.Shared.NameGeneration
 	/// names work before the content tool has written anything, and a kind appended to
 	/// <see cref="POIType"/> without content still names as itself rather than failing. The same tables
 	/// are what <c>PlaceNamingContentTool.WriteGrammarDefaults</c> copies into the asset, where designers
-	/// then own them (Jim, 2026-10-10: patterns live in the grammar asset, modelled on title templates).
+	/// then own them (2026-10-10: patterns live in the grammar asset, modelled on title templates).
 	/// </para>
 	/// <para>
 	/// Type words for kinds whose name already carries a qualifier ("Sunken Temple", "Hunting Lodge")
@@ -36,7 +36,7 @@ namespace FishMMO.Shared.NameGeneration
 		/// </summary>
 		/// <remarks>
 		/// A planet river runs through many scenes and biomes, and every scene must call it the same thing
-		/// (Jim, 2026-10-10: rivers named planet-wide from the body seed and the PlanetRiver). Its falls,
+		/// (2026-10-10: rivers named planet-wide from the body seed and the PlanetRiver). Its falls,
 		/// rapids and mouth take the same treatment so that, given the river's seeds, they share its root:
 		/// "River Tamar", "Tamar Falls", "Mouth of the Tamar". Lakes follow so a lake reads like the water
 		/// that feeds it. The root comes from the shared water phonology and adjectives from the generic
@@ -161,6 +161,7 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.Mine] = new[] { "Mine", "Pit", "Delving", "Shaft", "Diggings", "Workings", "Adit" },
 			[POIType.Quarry] = new[] { "Quarry", "Stonepit", "Cut", "Delf", "Stoneworks", "Diggings" },
 			[POIType.Lighthouse] = new[] { "Lighthouse", "Light", "Beacon", "Pharos", "Lamp", "Watchlight" },
+			[POIType.Dockyard] = new[] { "Dockyard", "Shipyard", "Slipway", "Yard", "Shipwrights' Yard", "Hithe" },
 
 			[POIType.SmugglersCove] = new[] { "Smugglers' Cove", "Hidden Cove", "Cove", "Smugglers' Hole", "Free-traders' Landing", "Run" },
 			[POIType.PirateCove] = new[] { "Pirate Cove", "Corsair Cove", "Reavers' Bay", "Raiders' Cove", "Hideaway", "Anchorage" },
@@ -241,7 +242,7 @@ namespace FishMMO.Shared.NameGeneration
 
 		/// <summary>
 		/// The sound of rivers, lakes and falls. Planet-wide rivers cross biomes, so their names cannot come
-		/// from any one biome's phonology (Jim, 2026-10-10: rivers named planet-wide from the body seed and
+		/// from any one biome's phonology (2026-10-10: rivers named planet-wide from the body seed and
 		/// planet river); one shared, old-sounding phonology gives every world's water a family resemblance.
 		/// Onsets end in a consonant and codas start with a vowel so roots fuse without smoothing.
 		/// </summary>
@@ -331,7 +332,7 @@ namespace FishMMO.Shared.NameGeneration
 		private static readonly POIType[] Likenesses = { POIType.Monument, POIType.Statue, POIType.Obelisk };
 		private static readonly POIType[] Homes = { POIType.AbandonedFarm, POIType.Hermitage };
 		private static readonly POIType[] Towns = { POIType.Village, POIType.Town, POIType.City, POIType.Capital, POIType.Port, POIType.StiltVillage };
-		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation };
+		private static readonly POIType[] Works = { POIType.Tower, POIType.Bridge, POIType.Mine, POIType.Quarry, POIType.Lighthouse, POIType.Waystation, POIType.Dockyard };
 		private static readonly POIType[] RaceWorks = { POIType.Tower, POIType.Mine, POIType.Quarry };
 		private static readonly POIType[] Coves = { POIType.SmugglersCove, POIType.PirateCove };
 		private static readonly POIType[] Wrecks = { POIType.Wreck, POIType.SunkenShip };

@@ -29,7 +29,7 @@ namespace FishMMO.RenderScratch
 	{
 		/* Outside Assets/ deliberately: Unity never imports these, there is no .meta churn, and
 		 * nothing has to be cleaned up afterwards — which is how earlier sets got thrown away. */
-		private const string OUTPUT_DIR = "/home/jim/Dev/FishMMO-Dev/PanelRenders";
+		private static readonly string OUTPUT_DIR = ProbeOutput.Path("PanelRenders");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string GUI_ROOT = "Assets/Scripts/Client/GUI";
 		private const int WIDTH = 1200;

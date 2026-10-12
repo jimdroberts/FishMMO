@@ -226,7 +226,7 @@ namespace FishMMO.Water
 							 * along it, less the harder it struck; only where that leaves it next to nothing does it slide off
 							 * downhill, or spill off a flat ledge the fall's way, at a walking pace. Kept at most of its speed
 							 * and pushed outward by a share of it, a strip that met a bank's wall was flung sideways off the
-							 * fall in a wide arc and on across the ground (Jim, 2026-10-08). */
+							 * fall in a wide arc and on across the ground (2026-10-08). */
 							Vector3 along = (v + normal * into) * Mathf.Lerp(0.8f, 0.45f, steep);
 							if (along.sqrMagnitude < 1f)
 							{

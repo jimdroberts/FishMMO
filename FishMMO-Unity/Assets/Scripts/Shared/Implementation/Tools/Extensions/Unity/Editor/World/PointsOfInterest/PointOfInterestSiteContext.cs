@@ -75,6 +75,56 @@ namespace FishMMO.Shared.WorldDesign
 		public List<string> Notes;
 		internal PointOfInterestPropSink Sink;
 
+		/// <summary>One door of a building laid at the site, in the world: what PointOfInterestDoors makes a door of.</summary>
+		public struct PlacedDoor
+		{
+			public Vector3 Hinge;
+			public Vector3 Across;
+			public Vector3 Inward;
+			public float Width, Height;
+			public StructureDoorKind Kind;
+			/// <summary>The building's piece, for the door's name.</summary>
+			public string Building;
+			/// <summary>The building's scale (its race's stature): the leaf's thickness, and whether a person needs steps of their own up to it.</summary>
+			public float Scale;
+			public StructureDoorMotion Motion;
+			public bool StartsOpen;
+		}
+
+		/// <summary>One room of a building laid at the site: the room in the building's frame, where the building stands, and its doors.</summary>
+		public struct PlacedRoom
+		{
+			public StructureRoom Room;
+			public Vector3 Position;
+			public Quaternion Rotation;
+			public float Scale;
+			/// <summary>The building's doors, in its own frame (the room keeps their swing and the way in clear).</summary>
+			public IReadOnlyList<StructureDoor> Doors;
+			public string Building;
+		}
+
+		/// <summary>The rooms of the buildings laid so far (<see cref="AddProp"/>), for PointOfInterestInteriors.</summary>
+		public List<PlacedRoom> Rooms = new List<PlacedRoom>();
+
+		/// <summary>The doors of the buildings laid so far (<see cref="AddProp"/>), for the site builders after the template's features.</summary>
+		public List<PlacedDoor> Doors = new List<PlacedDoor>();
+
+		/// <summary>One prop laid at the site (<see cref="AddProp"/>), as laid.</summary>
+		public struct PlacedProp
+		{
+			public GameObject Prefab;
+			public Vector3 Position;
+			public Quaternion Rotation;
+			public Vector3 Scale;
+		}
+
+		/// <summary>
+		/// Every prop laid at the site so far (<see cref="AddProp"/>), shared by every feature and builder of the site like
+		/// <see cref="Doors"/>: what the site builders after the template's features dress (PointOfInterestVines grows ivy on
+		/// the walls laid here).
+		/// </summary>
+		public List<PlacedProp> Laid = new List<PlacedProp>();
+
 		/// <summary>The style pieces are resolved in: the template's, else the site's race, else empty.</summary>
 		public string Style => Template != null && !string.IsNullOrWhiteSpace(Template.Style) ? Template.Style : Record?.Race ?? string.Empty;
 
@@ -85,6 +135,43 @@ namespace FishMMO.Shared.WorldDesign
 		public void AddProp(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale)
 		{
 			Sink?.Add(prefab, position, rotation, scale);
+			if (prefab != null)
+			{
+				Laid?.Add(new PlacedProp { Prefab = prefab, Position = position, Rotation = rotation, Scale = scale });
+			}
+			// Its doors, where they now stand: each becomes a server-run door (PointOfInterestDoors).
+			if (prefab != null && StructurePieces.TryParsePrefab(prefab.name, out StructurePiece doorPiece, out int doorVariant))
+			{
+				foreach (StructureDoor door in StructurePieces.DoorsOf(doorPiece, doorVariant))
+				{
+					Doors.Add(new PlacedDoor
+					{
+						Hinge = position + rotation * Vector3.Scale(door.Hinge, scale),
+						Across = (rotation * door.Across).normalized,
+						Inward = (rotation * door.Inward).normalized,
+						Width = door.Width * Mathf.Abs(scale.x),
+						Height = door.Height * Mathf.Abs(scale.y),
+						Kind = door.Kind,
+						Building = doorPiece.Id,
+						Scale = Mathf.Abs(scale.y),
+						Motion = door.Motion,
+						StartsOpen = door.StartsOpen,
+					});
+				}
+				IReadOnlyList<StructureDoor> pieceDoors = StructurePieces.DoorsOf(doorPiece, doorVariant);
+				foreach (StructureRoom room in StructurePieces.RoomsOf(doorPiece, doorVariant))
+				{
+					Rooms.Add(new PlacedRoom
+					{
+						Room = room,
+						Position = position,
+						Rotation = rotation,
+						Scale = Mathf.Abs(scale.y),
+						Doors = pieceDoors,
+						Building = doorPiece.Id,
+					});
+				}
+			}
 			// What the piece gives off (a chimney's smoke, a fire, a forge, a lantern), where it now stands.
 			if (Points != null && prefab != null && StructurePieces.TryParsePrefab(prefab.name, out StructurePiece piece, out int variant))
 			{

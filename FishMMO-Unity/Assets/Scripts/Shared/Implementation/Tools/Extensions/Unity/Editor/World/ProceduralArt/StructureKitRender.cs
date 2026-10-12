@@ -20,7 +20,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// and exits through <see cref="EditorApplication.Exit"/>: 0 when every piece rendered, 1 otherwise.
 	/// </para>
 	/// <para>
-	/// Environment: <c>FISHMMO_STRUCTURE_RENDER_OUT</c> (default /tmp/claude-1000/structure-render);
+	/// Environment: <c>FISHMMO_STRUCTURE_RENDER_OUT</c> (default <c>WorldRenders/structures</c> under <see cref="ProbeOutput.Root"/>);
 	/// <c>FISHMMO_STRUCTURE_RENDER_ONLY</c> comma-separated piece ids; <c>FISHMMO_STRUCTURE_RENDER_FINISH</c> None, Mossy,
 	/// Charred or Algae; <c>FISHMMO_STRUCTURE_RENDER_LIVE</c>=1 builds every piece live (no generated art needed: the
 	/// materials then are flat colours unless the generated ones exist). Writes <c>{piece}_{v}.png</c>,
@@ -76,7 +76,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var j = new Job
 			{
-				Output = Env("FISHMMO_STRUCTURE_RENDER_OUT", "/tmp/claude-1000/structure-render"),
+				Output = ProbeOutput.FromEnvironment("FISHMMO_STRUCTURE_RENDER_OUT", "WorldRenders", "structures"),
 				Live = Env("FISHMMO_STRUCTURE_RENDER_LIVE", "0") == "1",
 			};
 			Enum.TryParse(Env("FISHMMO_STRUCTURE_RENDER_FINISH", "None"), true, out j.Finish);

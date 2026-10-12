@@ -85,6 +85,7 @@ CBUFFER_START(UnityPerMaterial)
     half4 _VaryFullness;
     half4 _VaryColour;
     half _Aquatic;
+    half _Clinging;
 CBUFFER_END
 
 // Not per material: one value for every plant, from the terrains' draw distances.
@@ -123,7 +124,9 @@ half4 VegGroundColour(float3 originWS, float heightAboveRoot, out half coverage)
 {
     coverage = 0.0;
     half amount = (half)_FishGroundColourParams.z;
-    if ((half)_FishGroundColourParams.x <= 0.0 || _FishVegPlantConst > 0.5)
+    // A vine (_Clinging) is not rooted where its origin is: a curtain hangs from a lintel, a mat stands on a wall, so the
+    // ground under its origin is not the soil it grows from, and every vertex below the origin would read as its root.
+    if ((half)_FishGroundColourParams.x <= 0.0 || _FishVegPlantConst > 0.5 || _Clinging > 0.5)
     {
         return half4(0.0, 0.0, 0.0, 0.0);
     }
@@ -637,7 +640,7 @@ VegVaryings VegVertex(VegAttributes input)
     // A branch, not ?: — HLSL's ?: evaluates both sides, and the trace is the whole of what is being skipped.
     output.contact = aboveRoot;
     UNITY_BRANCH
-    if (aboveRoot <= FishContactParams().x + FISH_VEG_CONTACT_EXACT_BELOW || _FishVegContactAlways > 0.5)
+    if ((aboveRoot <= FishContactParams().x + FISH_VEG_CONTACT_EXACT_BELOW || _FishVegContactAlways > 0.5) && _Clinging < 0.5)
     {
         output.contact = FishContactHeight(positionWS, rootWS);
     }
@@ -781,8 +784,8 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
         /* The ramp is at most a quarter of the alpha range wide. Far off, a needle card is a pixel or two and
          * neighbouring pixels read unrelated alphas: fwidth(a) ran toward 1, every leaf pixel came out near half
          * coverage, and half coverage is the same two samples of four on every layer, so a crown of many layers
-         * never added up past half. Distant pines turned to see-through haze round an opaque trunk (Jim,
-         * 2026-10-07). Capped, a far pixel is cut by its own alpha again (the mips keep the needles' coverage:
+         * never added up past half. Distant pines turned to see-through haze round an opaque trunk
+         * (2026-10-07). Capped, a far pixel is cut by its own alpha again (the mips keep the needles' coverage:
          * the importer's Preserve Coverage at the same cutoff), and near edges keep their soft ramp. */
         coverage = saturate((a - cutoff) / clamp(fwidth(a), 1e-4, 0.25) + 0.5);
         clip(coverage - 0.01);
@@ -824,7 +827,16 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     float3 groundDy = ddy(input.positionWS);
     half groundWeight;
     FishGroundSite groundSite;
-    bool hasGround = FishGroundContact(input.positionWS, input.contact, input.normalWS, groundWeight, groundSite);
+    // The contact band is a trunk's foot in the ground; a vine's leaves lying on the ground (a spill) or hanging to it are
+    // leaves, never the terrain (_Clinging: no band at all).
+    groundWeight = 0.0h;
+    groundSite = (FishGroundSite)0;
+    bool hasGround = false;
+    UNITY_BRANCH
+    if (_Clinging < 0.5)
+    {
+        hasGround = FishGroundContact(input.positionWS, input.contact, input.normalWS, groundWeight, groundSite);
+    }
     FishGroundPixel groundPixel = (FishGroundPixel)0;
     if (hasGround)
     {

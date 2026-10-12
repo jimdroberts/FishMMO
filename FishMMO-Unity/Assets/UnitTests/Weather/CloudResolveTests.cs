@@ -13,7 +13,7 @@ namespace FishMMO.UnitTests.Weather
 	/// the moving average, and the reprojection of a cloud carried by its own band's drift.
 	/// </summary>
 	/// <remarks>
-	/// Issue #238, 2026-09-28: in Jim's editor, on a real GPU with the camera moving, the steadying that
+	/// Issue #238, 2026-09-28: in the editor, on a real GPU with the camera moving, the steadying that
 	/// handed each sample only to the pixel it fell in showed a crosshatch and dark blocky specks under an
 	/// overcast (single rays, history dropped), and long smears along the wind at night (the middle and
 	/// high bands' history reprojected with the low band's drift). These hold the replacement to the

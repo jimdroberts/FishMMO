@@ -94,16 +94,16 @@ MonoBehaviour:
     Role: 8
     Style: 
   Features:
-  - rid: 4061506061917749685
-  - rid: 4061506061917749686
-  - rid: 4061506061917749687
-  - rid: 4061506061917749688
-  - rid: 4061506061917749689
-  - rid: 4061506061917749690
+  - rid: 4061506076050457043
+  - rid: 4061506076050457044
+  - rid: 4061506076050457045
+  - rid: 4061506076050457046
+  - rid: 4061506076050457047
+  - rid: 4061506076050457048
   references:
     version: 2
     RefIds:
-    - rid: 4061506061917749685
+    - rid: 4061506076050457043
       type: {class: PropsFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         MaxSinkMetres: 0.4
@@ -114,26 +114,26 @@ MonoBehaviour:
         FinishChance: 1
         KeepOutOfWater: 1
         Clearings:
-        - {x: -2.8628535, y: 2, z: 6.5845633}
-        - {x: 3, y: 1.5, z: 6.9}
-    - rid: 4061506061917749686
+        - {x: -2.8215287, y: 2, z: 6.602377}
+        - {x: 3, y: 1.5, z: 7.02}
+    - rid: 4061506076050457044
       type: {class: RegionFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         RadiusShare: 1.25
         Height: 60
         ShowName: 1
-    - rid: 4061506061917749687
+    - rid: 4061506076050457045
       type: {class: ExplorationFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data: 
-    - rid: 4061506061917749688
+    - rid: 4061506076050457046
       type: {class: WaypointFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: -2.8628535, y: 6.5845633}
-    - rid: 4061506061917749689
+        Offset: {x: -2.8215287, y: 6.602377}
+    - rid: 4061506076050457047
       type: {class: RespawnFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
-        Offset: {x: 3, y: 6.9}
-    - rid: 4061506061917749690
+        Offset: {x: 3, y: 7.02}
+    - rid: 4061506076050457048
       type: {class: NpcSpawnerFeature, ns: FishMMO.Shared.WorldDesign, asm: FishMMO.Shared.Tools.Editor}
       data:
         Role: 1

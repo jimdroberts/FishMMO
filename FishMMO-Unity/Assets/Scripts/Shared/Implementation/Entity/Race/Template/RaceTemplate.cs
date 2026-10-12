@@ -163,7 +163,7 @@ namespace FishMMO.Shared
 		public List<BiomeAffinity> BiomeAffinities = new List<BiomeAffinity>();
 
 		/// <summary>
-		/// Damage this race takes none of, whatever its resistances: a fire race's fire, lava included (Jim, 2026-10-05:
+		/// Damage this race takes none of, whatever its resistances: a fire race's fire, lava included (2026-10-05:
 		/// fire races are fire immune, and a city under the lava should be possible).
 		/// </summary>
 		[Header("Environment")]

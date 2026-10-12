@@ -168,6 +168,8 @@ namespace FishMMO.Shared.NameGeneration
 		DungeonEntrance, BossLair, OreVein, CrystalFormation, AncientTree, HerbGrove,
 		// Alien worlds
 		IceGeyserField, Cryovolcano, MethaneLake, ImpactBasin, TidalRift,
+		// Appended (the values are serialized): a shipwright's yard on the coast.
+		Dockyard,
 	}
 
 	/// <summary>Phonology + vocabulary for a biome.</summary>

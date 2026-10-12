@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// <para>The project had no concrete item type for a thing that is only carried: every
 	/// <see cref="BaseItemTemplate"/> subclass was equipment or a consumable. Gathering nodes need
-	/// something to drop, so the generated nodes (Jim, 2026-10-10: generate placeholder resource
+	/// something to drop, so the generated nodes (2026-10-10: generate placeholder resource
 	/// items) drop these. No crafting system reads them yet; <see cref="Family"/> and
 	/// <see cref="Tier"/> are the handles one will key on.</para>
 	/// </remarks>

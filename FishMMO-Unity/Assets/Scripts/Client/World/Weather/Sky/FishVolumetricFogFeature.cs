@@ -313,7 +313,7 @@ namespace FishMMO.Client
 			/// metre for every tenfold above a kilowatt, from nothing for a trickle to a fifth for a
 			/// megawatt mountain fall and 0.35, the most, for a Niagara — the thick white of spray a few
 			/// metres of which hides the rock behind it, in the boil, and thinning from there. Half that
-			/// left a fall's landing in plain view (Jim, 2026-10-08).
+			/// left a fall's landing in plain view (2026-10-08).
 			/// </summary>
 			public static float PeakExtinction(float power)
 			{

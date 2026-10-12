@@ -896,8 +896,9 @@ void FishGrassGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID
     float ownHeight = 0.72 + 0.38 * GrassUnit(GrassMix(own ^ 0x68E31DA4u));
     float lean = saturate(_GrassShapeParams.x * (0.25 + 0.75 * min(1.0, r * 1.2)) * (0.5 + 0.5 * GrassUnit(GrassMix(own ^ 0xB5297A4Du))));
     float height = typeShape.x * max(0.1, clumpHeight * middle * ownHeight);
-    /* The scene's paths (FishGroundPaths.hlsl): a blade on a worn way is not there, or lies trampled short; a lost trail
-     * keeps most of its grass, lower, which is how it still reads; a cart track keeps the strip between its ruts. */
+    /* The scene's paths and yards (FishGroundPaths.hlsl): no blade where the terrain draws the ground bare, thinning in
+     * over its edge; what stands on a way lies trampled short, which is how a lost trail's overgrown stretches still
+     * read; a cart track keeps the strip between its ruts. */
     float trodden, flattened;
     FishPathWearAt(rootXZ, trodden, flattened);
     if (trodden > 0.0 && GrassUnit(GrassMix(own ^ 0x2F6B1C3Du)) < trodden)

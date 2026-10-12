@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests
 	/// <para>
 	/// SRP used to hash the typed name into the password verifier and into every proof, so a proof
 	/// verified only if the name was typed exactly as it had been when the password was set. An
-	/// account registered as "Jim" could not sign in as "jim"; and an email sign-in hashed the email,
+	/// account registered with a capital letter could not sign in in lowercase; and an email sign-in hashed the email,
 	/// which never matched a verifier made from the username, so it could not succeed at all — the
 	/// game client also refused to send an email before that. SRP now hashes one fixed identity
 	/// (<c>SrpIdentity.Value</c>), the client and server both lowercase the identifier, and the name

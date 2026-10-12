@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -174,6 +175,55 @@ namespace FishMMO.Shared.WorldDesign
 		/// mouth). Returns the hole texels cut.
 		/// </summary>
 		public static int CutHoles(Terrain[,] terrains, TerrainTilePlan plan, Rect area, Func<float, float, bool> hole)
+			=> SetHoles(terrains, plan, area, hole, false);
+
+		/// <summary>
+		/// Fills the holes where <paramref name="fill"/>(east, north) is true within <paramref name="area"/> (a cave's mouth a
+		/// new plan no longer opens). Returns the hole texels filled.
+		/// </summary>
+		public static int FillHoles(Terrain[,] terrains, TerrainTilePlan plan, Rect area, Func<float, float, bool> fill)
+			=> SetHoles(terrains, plan, area, fill, true);
+
+		/// <summary>The centres (east, north) of the terrain's hole texels within <paramref name="area"/>: what was actually cut.</summary>
+		public static List<Vector2> HolesIn(Terrain[,] terrains, TerrainTilePlan plan, Rect area)
+		{
+			var holes = new List<Vector2>();
+			for (int tz = 0; tz < plan.CountZ; tz++)
+			{
+				for (int tx = 0; tx < plan.CountX; tx++)
+				{
+					Terrain terrain = terrains[tx, tz];
+					if (terrain == null || terrain.terrainData == null)
+					{
+						continue;
+					}
+					TerrainData data = terrain.terrainData;
+					Vector3 origin = terrain.transform.position;
+					if (!new Rect(origin.x, origin.z, data.size.x, data.size.z).Overlaps(area))
+					{
+						continue;
+					}
+					int res = data.holesResolution;
+					float step = data.size.x / res;
+					int x0 = Mathf.Clamp(Mathf.FloorToInt((area.xMin - origin.x) / step), 0, res - 1), x1 = Mathf.Clamp(Mathf.CeilToInt((area.xMax - origin.x) / step), 0, res - 1);
+					int z0 = Mathf.Clamp(Mathf.FloorToInt((area.yMin - origin.z) / step), 0, res - 1), z1 = Mathf.Clamp(Mathf.CeilToInt((area.yMax - origin.z) / step), 0, res - 1);
+					bool[,] solid = data.GetHoles(x0, z0, x1 - x0 + 1, z1 - z0 + 1);
+					for (int z = 0; z <= z1 - z0; z++)
+					{
+						for (int x = 0; x <= x1 - x0; x++)
+						{
+							if (!solid[z, x])
+							{
+								holes.Add(new Vector2(origin.x + (x0 + x + 0.5f) * step, origin.z + (z0 + z + 0.5f) * step));
+							}
+						}
+					}
+				}
+			}
+			return holes;
+		}
+
+		private static int SetHoles(Terrain[,] terrains, TerrainTilePlan plan, Rect area, Func<float, float, bool> where, bool solidity)
 		{
 			int cut = 0;
 			for (int tz = 0; tz < plan.CountZ; tz++)
@@ -206,11 +256,11 @@ namespace FishMMO.Shared.WorldDesign
 						for (int x = 0; x < res; x++)
 						{
 							float east = origin.x + (x + 0.5f) * step;
-							if (east < area.xMin || east > area.xMax || !solid[z, x] || !hole(east, north))
+							if (east < area.xMin || east > area.xMax || solid[z, x] == solidity || !where(east, north))
 							{
 								continue;
 							}
-							solid[z, x] = false;
+							solid[z, x] = solidity;
 							any = true;
 							cut++;
 						}

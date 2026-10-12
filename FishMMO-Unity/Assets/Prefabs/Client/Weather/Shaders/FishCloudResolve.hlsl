@@ -36,7 +36,7 @@
 //      sixteen places and the rays' phases (golden-ratio from cycle to cycle, FishClouds.shader pass 0)
 //      average out. A history the clip had to pull far is trusted less, the further the less.
 //
-// What it replaced (issue #238, 2026-09-28, Jim's editor on a real GPU, camera moving): each sample was
+// What it replaced (issue #238, 2026-09-28, in the editor on a real GPU, camera moving): each sample was
 // handed only to the pixel it fell in, histories dropped wherever an own sample disagreed with them —
 // sharp on a still, but every pixel showed one ray a visit and every reset exposed that ray alone: the
 // crosshatch and the dark blocky specks under an overcast, and the woven rings of frozen ray-phase noise.

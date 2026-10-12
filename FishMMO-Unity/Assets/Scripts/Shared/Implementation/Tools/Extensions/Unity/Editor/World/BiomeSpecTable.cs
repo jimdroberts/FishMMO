@@ -229,7 +229,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float TenDegrees = 10f / 33.1f;
 
 		/// <summary>
-		/// The warmest-season ranges (2026-10-10, Jim): what grows is decided by the summer, not the
+		/// The warmest-season ranges (2026-10-10): what grows is decided by the summer, not the
 		/// year — Köppen's ice cap (no month above 0 °C), tundra (0–10 °C) and forest (10 °C and up),
 		/// the same lines that put the treeline at the 10 °C summer isotherm on every continent. A
 		/// tabled biome not listed here keeps −1…1 (asks nothing): rock, water, deserts and the aliens.

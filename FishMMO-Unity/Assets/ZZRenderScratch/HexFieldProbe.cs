@@ -22,7 +22,7 @@ namespace FishMMO.RenderScratch
 	{
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string UXML_PATH = "Assets/Scripts/Client/GUI/Shared/ColorPicker/UIColorPicker.uxml";
-		private const string REPORT_PATH = "/home/jim/Dev/FishMMO-Dev/PanelRenders/hex-field-probe.txt";
+		private static readonly string REPORT_PATH = ProbeOutput.Path("PanelRenders", "hex-field-probe.txt");
 		private const int WIDTH = 1200;
 		private const int HEIGHT = 900;
 		private const int SETTLE_FRAMES = 40;

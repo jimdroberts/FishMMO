@@ -93,7 +93,7 @@ namespace FishMMO.Water
 			{
 				totalDischarge += part.Discharge;
 			}
-			/* Dense, not big: many small drops and puffs (Jim, 2026-10-08), twice the drops there were and as many puffs as
+			/* Dense, not big: many small drops and puffs (2026-10-08), twice the drops there were and as many puffs as
 			 * drops, each puff a third the size it was, so the cloud is thick and its grain fine. */
 			int spray = Mathf.Clamp(Mathf.RoundToInt(6f * SprayDensity * fall.Width * Mathf.Sqrt(fall.Drop)), 128, 8000);
 			// Puffs for the cloud, more for a taller fall (it fills more air). Soft and overlapping (the shader's shared mist

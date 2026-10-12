@@ -34,12 +34,8 @@
 // Lit as the fog is (FishFogLight), under whatever fog lies over it — and out of the light wherever the
 // terrain shades it (FishTerrainSunlit, FishFogLayer.hlsl: a mountain's evening shadow kilometres long).
 
-TEXTURE2D(_FishMistGround);
-SAMPLER(sampler_FishMistGround);
-// xy the fine ground map's corner, z its size (m), w 1 once it is read (MistGroundMap). r the ground above
-// _FishMistGroundBase (m), g the hollow (m, + in a dip), b how near open water is (0..1), a the canopy (0..1).
-float4 _FishMistGroundRect;
-float _FishMistGroundBase;
+// The fine ground map and FishMistGroundAt: FishGroundMap.hlsl.
+#include "FishGroundMap.hlsl"
 // x how far short of saturation the air over open ground stays (K, GroundMist.Deficit), y how much of the
 // mist the wind leaves (0..1), z how much the night chills the ground (0..1, GroundMist.NightCalm), w how
 // far the mist is drawn (m).
@@ -136,24 +132,6 @@ float FishMistSteamDensity(float3 at, float above, float footprint)
     return thick * covered * profile;
 }
 
-/// The ground under a point: x its height (m), y its hollow (m), z how near open water (0..1), w the canopy
-/// over it (0..1). `covered` is false outside the map.
-float4 FishMistGroundAt(float2 xz, out bool covered)
-{
-    covered = false;
-    if (_FishMistGroundRect.w < 0.5)
-    {
-        return float4(0.0, 0.0, 0.0, 0.0);
-    }
-    float2 uv = (xz - _FishMistGroundRect.xy) / max(1.0, _FishMistGroundRect.z);
-    if (any(uv <= 0.0) || any(uv >= 1.0))
-    {
-        return float4(0.0, 0.0, 0.0, 0.0);
-    }
-    covered = true;
-    float4 g = SAMPLE_TEXTURE2D_LOD(_FishMistGround, sampler_FishMistGround, uv, 0);
-    return float4(g.x + _FishMistGroundBase, g.yzw);
-}
 
 /// How ready the air at a spot is, 0..1: the open ground's deficit, closed further by the spot's hollow,
 /// water and canopy (GroundMist.LocalClosing), then the onset curve and the wind (GroundMist.Local).

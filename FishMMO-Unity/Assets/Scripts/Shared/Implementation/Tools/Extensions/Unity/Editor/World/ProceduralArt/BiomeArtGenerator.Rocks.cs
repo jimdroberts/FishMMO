@@ -112,7 +112,9 @@ namespace FishMMO.Shared.WorldDesign
 					WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => IceLit(m, ice, albedo, normal, mask));
 					continue;
 				}
-				WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => RockLit(m, albedo, normal, mask, 1f));
+				// Moss as the stone allows (MossAmounts); the scene's dampness decides how much of it grows.
+				float moss = MossAmounts.ForRockType(type.Name);
+				WriteMaterial(c, ProceduralArtCatalogue.RockMaterial(type.Name), rock, m => RockLit(m, albedo, normal, mask, 1f, moss));
 			}
 			foreach (IceMaterialProposal p in IceSurfaces.Materials)
 			{
@@ -125,8 +127,9 @@ namespace FishMMO.Shared.WorldDesign
 			// Cliff rocks wear their rock type's formation material (or glacier ice): nothing of their own.
 		}
 
-		/// <summary>The legacy rock material's setup, with a texture scale (cliffs draw rock at the terrain's size).</summary>
-		private static void RockLit(Material m, Texture2D albedo, Texture2D normal, Texture2D mask, float scale)
+		/// <summary>The legacy rock material's setup, with a texture scale (cliffs draw rock at the terrain's size) and the
+		/// moss it may grow (FishMoss.hlsl's _FishMoss, MossAmounts; 0 none).</summary>
+		private static void RockLit(Material m, Texture2D albedo, Texture2D normal, Texture2D mask, float scale, float moss = 0f)
 		{
 			m.SetTexture("_BaseMap", albedo);
 			m.SetTextureScale("_BaseMap", new Vector2(scale, scale));
@@ -143,6 +146,7 @@ namespace FishMMO.Shared.WorldDesign
 			m.SetFloat("_Smoothness", 1f);
 			m.SetFloat("_Metallic", 0f);
 			m.SetFloat("_FishWeatherAmount", 1f);
+			m.SetFloat("_FishMoss", moss);
 		}
 
 		/// <summary>
@@ -175,6 +179,8 @@ namespace FishMMO.Shared.WorldDesign
 				m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
 			}
 			m.SetFloat("_FishWeatherAmount", 1f);
+			// Ice holds no moss.
+			m.SetFloat("_FishMoss", 0f);
 		}
 
 		// ── Props: formations, ice boulders, seracs ───────────────────

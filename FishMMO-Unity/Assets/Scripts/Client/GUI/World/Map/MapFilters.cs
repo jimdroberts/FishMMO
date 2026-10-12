@@ -31,7 +31,7 @@ namespace FishMMO.Client
 
 		/*
 		 * Generated points of interest: one category per PointOfInterestGroup, in the group enum's order
-		 * (Jim, 2026-10-10: one marker type per kind, a hundred of them, so the legend lists the thirteen
+		 * (2026-10-10: one marker type per kind, a hundred of them, so the legend lists the thirteen
 		 * groups rather than the kinds). Appended: the ordinal is the bit in the saved filter mask, and the
 		 * mask defaults to every bit set, so these arrive switched on for a player who saved a mask before.
 		 */

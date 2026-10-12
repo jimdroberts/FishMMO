@@ -242,7 +242,7 @@ namespace FishMMO.Shared.WorldDesign
 				Wild(Placed(POIType.DungeonEntrance, 0.06f, 0, 2, 1200f).Footprint(12f, 18f, 30f)).Hard(0.4f, true),
 				Wild(Placed(POIType.BossLair, 0.02f, 0, 1, 3000f).Footprint(35f, 50f, 18f)).AwayFromSettlements(900f).Races(Monster),
 				Wild(Placed(POIType.Cave, 0.15f, 0, 4, 500f).Footprint(8f, 14f, 30f)).Hard(0.4f, true).Races(Monster),
-				Placed(POIType.Grotto, 0.06f, 0, 2, 600f).Footprint(6f, 10f, 30f).Hard(0.3f, true).NearWater(120f).Weigh(0f, Alien),
+				Placed(POIType.Grotto, 0.06f, 0, 2, 600f).Footprint(6f, 10f, 30f).Hard(0.3f, true).NearWater(20f).Weigh(0f, Alien),
 				Placed(POIType.SeaCave, 0.06f, 0, 2, 600f).Footprint(6f, 10f, 30f).Hard(0.3f, true).Coast(40f).Altitude(0.5f, 12f),
 				Placed(POIType.IceCave, 0.1f, 0, 2, 600f).Footprint(8f, 14f, 30f).Hard(0f, true).Only(Ice).Races(Monster),
 				Placed(POIType.LavaTube, 0.1f, 0, 2, 600f).Footprint(8f, 14f, 30f).Hard(0.3f, true).Only(Volcanic).Races("Elemental", "Draconic", "Beast"),
@@ -301,12 +301,15 @@ namespace FishMMO.Shared.WorldDesign
 				Wild(Placed(POIType.Mine, 0.08f, 0, 2, 900f).Footprint(12f, 18f, 30f)).Hard(0.55f, true),
 				Wild(Placed(POIType.Quarry, 0.06f, 0, 1, 1200f).Footprint(20f, 30f, 28f)).Hard(0.55f),
 				Wild(Placed(POIType.Lighthouse, 0.05f, 0, 1, 2000f).Footprint(6f, 9f, 25f)).Coast(60f).Altitude(3f, PointOfInterestKindRule.Unbounded),
-				Wild(Placed(POIType.Wreck, 0.06f, 0, 2, 800f).Footprint(8f, 14f, 12f)).Coast(25f).Altitude(0.5f, 4f),
+				// A shipwright's yard is where ships are wanted: on a low shore near a town (2026-10-12: "Harbours should
+				// probably have towns to go with them").
+				Settled(Placed(POIType.Dockyard, 0.05f, 0, 1, 1500f).Footprint(26f, 34f, 12f)).Coast(50f).NearSettlement(700f).Altitude(0.5f, 8f),
+				Wild(Placed(POIType.Wreck, 0.06f, 0, 2, 800f).Footprint(14f, 20f, 12f)).Coast(25f).Altitude(0.5f, 4f),
 				Wild(Placed(POIType.SmugglersCove, 0.05f, 0, 1, 1500f).Footprint(12f, 18f, 20f)).Coast(50f).AwayFromSettlements(700f).Races(Outlaw),
 				Wild(Placed(POIType.PirateCove, 0.04f, 0, 1, 2000f).Footprint(20f, 30f, 18f)).Coast(60f).AwayFromSettlements(900f).Races(Outlaw),
 
 				// ── Placed: under the sea ──
-				Placed(POIType.SunkenShip, 0.08f, 0, 2, 800f).Footprint(8f, 14f, 30f).Sea(5f, 40f),
+				Placed(POIType.SunkenShip, 0.08f, 0, 2, 800f).Footprint(14f, 20f, 30f).Sea(5f, 40f),
 				Placed(POIType.SunkenRuins, 0.05f, 0, 1, 1200f).Footprint(20f, 35f, 25f).Sea(4f, 30f).Races("Aquatic"),
 				Placed(POIType.SunkenCity, 0.02f, 0, 1, 3000f).Footprint(60f, 90f, 20f).Sea(8f, 60f).Races("Aquatic"),
 

@@ -69,7 +69,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// How far a prop of <paramref name="size"/> metres is drawn: in proportion to its size, so a boulder goes at a few
-		/// hundred metres and a crag stays on the skyline for kilometres (Jim, 2026-10-06: larger objects keep larger
+		/// hundred metres and a crag stays on the skyline for kilometres (2026-10-06: larger objects keep larger
 		/// distances, for realism). Scaled by the quality level's LOD bias (its square root: 0.6 Performant, 1 Balanced,
 		/// 1.4 High Fidelity).
 		/// </summary>

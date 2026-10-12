@@ -73,7 +73,8 @@ namespace FishMMO.Shared.WorldDesign
 				importer.alphaSource = TextureImporterAlphaSource.FromInput;
 				importer.wrapMode = TextureWrapMode.Repeat;
 			}
-			else if (file.StartsWith("Billboard_", System.StringComparison.Ordinal) || file == ProceduralArtCatalogue.AtlasName)
+			// The vine atlas is a leaf atlas like the foliage one: cut out at the same cutoff, its coverage kept down the mips.
+			else if (file.StartsWith("Billboard_", System.StringComparison.Ordinal) || file == ProceduralArtCatalogue.AtlasName || file == ProceduralArtCatalogue.VineAtlasName)
 			{
 				importer.textureType = TextureImporterType.Default;
 				importer.sRGBTexture = true;

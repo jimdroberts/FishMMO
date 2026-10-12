@@ -9,7 +9,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// A dormant portal at the site: a same-scene <see cref="Teleporter"/> or a cross-scene <see cref="SceneTeleporter"/>,
-	/// with a <see cref="PortalActivation"/> whose scope is a seeded draw (Jim, 2026-10-10: both kinds; destinations empty
+	/// with a <see cref="PortalActivation"/> whose scope is a seeded draw (2026-10-10: both kinds; destinations empty
 	/// and set by hand; inactive until activated; any-of conditions; the key designer-assigned and left empty; scope per
 	/// portal, a seeded mix when generated).
 	/// </summary>
@@ -112,30 +112,19 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A <see cref="DungeonEntrance"/> with an EMPTY dungeon name (Jim, 2026-10-10: dungeon interiors are hand-made scenes
-	/// on other atlas layers, linked by hand). At the far end of the site's carved tunnel when its shaper left one, else at
-	/// the site.
+	/// A <see cref="DungeonEntrance"/> with an EMPTY dungeon name (2026-10-10: dungeon interiors are hand-made scenes
+	/// on other atlas layers, linked by hand). At its own site, or in a large cave's great cavern (PointOfInterestChamberFeature anchors it there).
 	/// </summary>
 	[Serializable]
 	public class DungeonEntranceFeature : PointOfInterestFeature
 	{
-		[Tooltip("Stand at the end of the site's carved tunnel (its shape), not at the site's anchor.")]
-		public bool AtTunnelEnd = true;
-
-		[Tooltip("Where the entrance stands in the site's frame when there is no tunnel, metres.")]
+		[Tooltip("Where the entrance stands in the site's frame, metres.")]
 		public Vector2 Offset = new Vector2(0.0f, 6.0f);
 
 		public override void Build(PointOfInterestSiteContext context)
 		{
 			Vector3 position = context.OnGround(Offset);
 			float yaw = context.Record.Yaw;
-			PointOfInterestShape shape = AtTunnelEnd ? FindShape(context) : null;
-			if (shape != null && shape.Size.z > 0.0f)
-			{
-				Vector3 along = Quaternion.Euler(0.0f, shape.Yaw, 0.0f) * Vector3.forward;
-				position = shape.Position + along * Mathf.Max(0.0f, shape.Size.z - 2.0f);
-				yaw = shape.Yaw;
-			}
 
 			GameObject entrance = context.AddChild(PointOfInterestFeatureKit.UniqueName(context, "Dungeon Entrance"));
 			entrance.transform.SetPositionAndRotation(position + Vector3.up * 2.0f, Quaternion.Euler(0.0f, yaw, 0.0f));
@@ -159,22 +148,6 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestFeatureKit.AssignSceneId(networkObject, context, 0xD06E);
 			EditorUtility.SetDirty(dungeon);
 			PointOfInterestFeatureKit.Note(context, "dungeon entrance placed with an empty DungeonName: link it to its interior by hand.");
-		}
-
-		private static PointOfInterestShape FindShape(PointOfInterestSiteContext context)
-		{
-			if (context.Points?.Shapes == null)
-			{
-				return null;
-			}
-			foreach (PointOfInterestShape shape in context.Points.Shapes)
-			{
-				if (shape != null && shape.SiteId == context.Record.Id)
-				{
-					return shape;
-				}
-			}
-			return null;
 		}
 	}
 }

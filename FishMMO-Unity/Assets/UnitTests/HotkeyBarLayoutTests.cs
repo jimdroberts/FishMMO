@@ -22,7 +22,7 @@ namespace FishMMO.UnitTests
 	/// single-bar game.
 	/// </para>
 	/// <para>
-	/// The modifier scheme is Jim's rule from the issue: modifier combinations are the default for
+	/// The modifier scheme is the issue's rule: modifier combinations are the default for
 	/// the extra bars only where they overlap nothing already bound. Shift is Sprint, so it is not
 	/// one of them; <see cref="TheDefaultModifiers_OverlapNoAuthoredBinding"/> is the pin.
 	/// </para>

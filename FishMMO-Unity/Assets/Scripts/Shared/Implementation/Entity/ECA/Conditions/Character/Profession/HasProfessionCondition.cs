@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// ECA condition placeholder: the character practises a profession. ALWAYS FALSE today.
 	/// </summary>
 	/// <remarks>
-	/// <para>FishMMO has no profession system yet (Jim, 2026-10-10: portals take a profession
+	/// <para>FishMMO has no profession system yet (2026-10-10: portals take a profession
 	/// condition as a placeholder; there is no Archaeology or any other profession). The condition
 	/// exists so portals and other content can be authored against a profession key now and start
 	/// working the day professions land, without re-authoring.</para>

@@ -42,6 +42,8 @@ Shader "FishMMO/Weather Lit"
         [HideInInspector] _FishVisible("Visible (day/night dissolve)", Range(0.0, 1.0)) = 1.0
         // FishMMO edit: 1 on the structure kit's materials (weathered walls, FishStructureWeathering.hlsl); 0 rocks and props.
         [Toggle] _FishStructure("Structure (weathered, no ground unfold)", Float) = 0.0
+        // FishMMO edit: moss on this surface (FishMoss.hlsl), times the scene's dampness; 0 none. Set by the art generator.
+        _FishMoss("Moss on this surface", Range(0.0, 1.0)) = 0.0
 
         _BumpScale("Scale", Float) = 1.0
         _BumpMap("Normal Map", 2D) = "bump" {}

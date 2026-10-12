@@ -275,7 +275,7 @@ FallSurface EvaluateFall(Varyings input, float3 view, float3 normalWS, float dis
     aeration = 1.0 - (1.0 - aeration) * (1.0 - aeration);
     /* White by degrees, with the streaks in it: aerated water is a mass of bubbles in water, densest in the jets and
      * thinner between them, never one flat sheet of white. The narrower ramp it had went white wherever the water had
-     * taken in air at all, and read as painted (Jim, 2026-10-08). */
+     * taken in air at all, and read as painted (2026-10-08). */
     half white = smoothstep(0.45 - 0.4 * aeration, 1.05 - 0.25 * aeration, strand + 0.2 * aeration);
     white = max(white, churned * smoothstep(0.1, 0.75, strand + 0.25 * churned));
     white *= lerp(0.6, 0.95, strand);
@@ -304,7 +304,7 @@ FallSurface EvaluateFall(Varyings input, float3 view, float3 normalWS, float dis
      * face (a horsetail), white and whole. */
     /* Below its break-up length the ropes carry the detail, but the water is still a mass falling there: the sheet stays as
      * its body, thinner and aerated, under the ropes. Faded out entirely it left the fall's lower part as a few edge-on
-     * bands with nothing between them (Jim, 2026-10-08). Water riding rock stays whole down the face (a horsetail). */
+     * bands with nothing between them (2026-10-08). Water riding rock stays whole down the face (a horsetail). */
     half keep = max(max(lerp(1.0, 0.6, smoothstep(0.85, 1.6, breakup)), saturate(churned * 1.2) * (1.0 - airborne * 0.3)), far * 0.85);
     alpha *= keep;
 

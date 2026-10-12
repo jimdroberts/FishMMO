@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests
 	/// <summary>
 	/// Point-of-interest naming against the project's real naming assets: every kind names in every
 	/// sampled biome, names replay exactly, race slots resolve for every race, and planet-wide water
-	/// names depend on nothing but their seeds (Jim, 2026-10-10).
+	/// names depend on nothing but their seeds (2026-10-10).
 	/// </summary>
 	[TestFixture]
 	public class PointOfInterestNamingTests

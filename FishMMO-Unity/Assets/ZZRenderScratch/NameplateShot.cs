@@ -22,7 +22,7 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class NameplateShot
 	{
-		private const string OUTPUT = "/home/jim/Dev/FishMMO-Dev/PanelRenders/Nameplates.png";
+		private static readonly string OUTPUT = ProbeOutput.Path("PanelRenders", "Nameplates.png");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string UXML_PATH = "Assets/Scripts/Client/GUI/WorldLabels/UIWorldLabels.uxml";
 		private const int WIDTH = 1200;
@@ -102,7 +102,7 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		private const string OPTIONS_OUTPUT = "/home/jim/Dev/FishMMO-Dev/PanelRenders/NameplateOptions.png";
+		private static readonly string OPTIONS_OUTPUT = ProbeOutput.Path("PanelRenders", "NameplateOptions.png");
 		private const string OPTIONS_UXML_PATH = "Assets/Scripts/Client/GUI/World/Options/UIOptions.uxml";
 		private const int OPTIONS_WIDTH = 1000;
 		private const int OPTIONS_HEIGHT = 900;

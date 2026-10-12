@@ -380,16 +380,10 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
     float wear = saturate(p.wear);
     float fromCentre = max(0.0, p.edge + p.halfWidth);
 
-    float edge = FishPathFrayedEdge(p, xz);
-    float soft = max(pixel * 1.5, lerp(0.3, 0.06, wear));
-    float cover = 1.0 - smoothstep(-soft, soft, edge);
-    cover *= 1.0 - FishPathOvergrown(p, xz) * 0.92;
-    float median = FishPathMedian(p);
-    cover *= 1.0 - median * 0.85;
+    // The bare share, as the grass and the details are cleared by (FishPathBare), so neither grows on what is drawn here.
+    float cover = FishPathBare(p, xz, max(pixel * 1.5, lerp(0.3, 0.06, wear)));
     // A way under a pixel wide covers that share of it.
     cover *= saturate(2.0 * max(p.halfWidth, 0.25) / pixel);
-    // Barely walked: the earth shows through in a broken scatter rather than a band.
-    cover *= lerp(0.55 + 0.45 * FishPathNoise(xz * 3.1 + 9.0), 1.0, wear);
     if (cover <= 0.004)
     {
         return;

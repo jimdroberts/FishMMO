@@ -274,6 +274,12 @@ namespace FishMMO.Client
 			hearthsVersion = SceneSiteEmitters.Version;
 			hearthsAt = viewer;
 			SceneSiteEmitters.Near(viewer, HearthReach + Refind, k => k == SceneEmitterKind.Smoke || k == SceneEmitterKind.Fire, MaxHearths * 2, hearths);
+			// No smoke column off a fire underground (a camp in a cave's cavern): it would rise out through the hill. Nor off a
+			// fire indoors (a hall's fire pit, a temple's braziers): it rose through the roof; a building's smoke leaves by
+			// its chimney, whose top is a Smoke emitter of its own (2026-10-12).
+			TerrainSet terrains = TerrainSet.Current;
+			hearths.RemoveAll(e => (terrains.TryHeight(e.Position.x, e.Position.z, out float ground) && e.Position.y < ground - 3f)
+				|| (e.Kind == SceneEmitterKind.Fire && SceneSiteEmitters.InRoom(e.Position)));
 		}
 
 		/// <summary>

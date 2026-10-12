@@ -9,9 +9,10 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Carved caves (<see cref="CaveSolid"/>, <see cref="CaveShaper"/>) on a synthetic escarpment: the tunnel stays under
-	/// three metres of rock past its mouth, its shell is a closed valid mesh within budget, the terrain is holed only at the
-	/// mouth, the floor can be walked to the chamber, and the same seed gives the same mesh. Then the overhang slab
+	/// Carved cave systems (<see cref="CaveSystem"/>, <see cref="CaveMesher"/>, <see cref="CaveShaper"/>) on a synthetic
+	/// escarpment: every passage stays under three metres of rock past its mouth, a cave goes deep and opens into chambers,
+	/// two caves near each other join deep down, a mine runs straight and level, the rock's pieces meet seamlessly, the
+	/// terrain is holed only at the mouth, every passage can be walked, and the same seed gives the same rock. Then the overhang slab
 	/// (<see cref="OverhangPlacer"/>), the shelter and arch plans (<see cref="OverhangShaper"/>), and FallLedges' output
 	/// pinned against its own code from before the slab was moved out of it.
 	/// </summary>
@@ -46,32 +47,41 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>The face of <see cref="Escarpment"/> turned by <paramref name="tilt"/> faces this way (out of the slope).</summary>
 		private static float YawOut(float tilt) => Mathf.Repeat(180f - tilt, 360f);
 
-		private static CaveGround Patch(Func<float, float, float> g, float reach = 170f) => CaveGround.Sample(g, -reach, -reach, reach, reach, 1f);
+		/// <summary>The ground round the origin, 2 m samples: wide enough for the longest trunk.</summary>
+		private static CaveGround Patch(Func<float, float, float> g, float reach = 560f) => CaveGround.Sample(g, -reach, -reach, reach, reach, 2f);
 
-		private static CaveSolid PlanCave(CaveForm form, int size, int seed, out Func<float, float, float> g)
+		private static CaveSystem PlanCave(CaveForm form, int size, int seed, out Func<float, float, float> g, float x = 0f)
 		{
 			float tilt = seed * 13f % 40f - 20f;
-			g = form == CaveForm.SeaCave ? SeaCliff() : Escarpment(tilt, seed);
-			var mouth = new Vector3(0f, 0f, form == CaveForm.SeaCave ? -4f : -1f);
-			float yaw = form == CaveForm.SeaCave ? 180f : YawOut(tilt);
-			CaveSolid solid = CaveSolid.Plan(form, size, mouth, yaw, seed * 7919, Patch(g), 0f, out string problem);
-			Assert.That(solid, Is.Not.Null, $"{form} size {size} seed {seed} was refused: {problem}");
-			return solid;
+			bool sea = form == CaveForm.SeaCave || form == CaveForm.Grotto;
+			// A dry cave's escarpment lifted 60 m, so its foot (and every floor of the cave) stands well over the sea.
+			Func<float, float, float> face = Escarpment(tilt, seed);
+			g = sea ? SeaCliff() : (px, pz) => face(px, pz) + CaveLift;
+			var mouth = new Vector3(x, 0f, sea ? -4f : -1f);
+			float yaw = sea ? 180f : YawOut(tilt);
+			CaveSystem system = CaveSystem.Plan(form, size, mouth, yaw, seed * 7919, seed, Patch(g), 0f, out string problem, form == CaveForm.Grotto ? 0f : float.NaN);
+			Assert.That(system, Is.Not.Null, $"{form} size {size} seed {seed} was refused: {problem}");
+			return system;
 		}
 
-		private static MeshBuilder[] Mesh(CaveSolid solid, Func<float, float, float> g)
+		/// <summary>How far the dry caves' escarpment is lifted over the sea, metres.</summary>
+		private const float CaveLift = 60f;
+
+		private static CaveGround MeshGround(CaveSystem system, Func<float, float, float> g)
 		{
-			Bounds e = solid.Extent;
-			CaveGround ground = CaveGround.Sample(g, solid.Origin.x + e.min.x - 4f, solid.Origin.z + e.min.z - 4f,
-				solid.Origin.x + e.max.x + 4f, solid.Origin.z + e.max.z + 4f, HoleStep, GridX, GridZ);
-			return solid.BuildMeshes(ground, out _);
+			Bounds e = system.Extent;
+			return CaveGround.Sample(g, system.Origin.x + e.min.x - 4f, system.Origin.z + e.min.z - 4f,
+				system.Origin.x + e.max.x + 4f, system.Origin.z + e.max.z + 4f, HoleStep, GridX, GridZ);
 		}
+
+		private static List<CaveMesher.Piece> Mesh(CaveSystem system, Func<float, float, float> g, bool keepHidden = false)
+			=> CaveMesher.Build(system, MeshGround(system, g), out _, keepHidden);
 
 		/// <summary>The roof's height over a point: marched up through the noisy void to the rock.</summary>
-		private static float RoofOver(CaveSolid solid, Vector3 p)
+		private static float RoofOver(CaveSystem system, Vector3 p)
 		{
 			float y = p.y;
-			while (solid.Void(new Vector3(p.x, y, p.z)) < 0f && y < p.y + 60f)
+			while (system.Void(new Vector3(p.x, y, p.z)) < 0f && y < p.y + 80f)
 			{
 				y += 0.05f;
 			}
@@ -79,10 +89,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>The floor under a point: marched down through the void to the rock.</summary>
-		private static float FloorUnder(CaveSolid solid, Vector3 p)
+		private static float FloorUnder(CaveSystem system, Vector3 p)
 		{
 			float y = p.y;
-			while (solid.Void(new Vector3(p.x, y, p.z)) < 0f && y > p.y - 60f)
+			while (system.Void(new Vector3(p.x, y, p.z)) < 0f && y > p.y - 60f)
 			{
 				y -= 0.02f;
 			}
@@ -91,13 +101,13 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		private static readonly (CaveForm Form, int Size)[] Shapes =
 		{
-			(CaveForm.Cave, 0), (CaveForm.Cave, 2), (CaveForm.Grotto, 1), (CaveForm.IceCave, 1), (CaveForm.LavaTube, 1), (CaveForm.SeaCave, 0),
+			(CaveForm.Cave, 0), (CaveForm.Cave, 2), (CaveForm.Grotto, 1), (CaveForm.IceCave, 1), (CaveForm.LavaTube, 1), (CaveForm.SeaCave, 0), (CaveForm.Mine, 1),
 		};
 
-		// ── The tunnel ────────────────────────────────────────────
+		// ── The system ────────────────────────────────────────────
 
 		[Test]
-		public void TheTunnelStaysUnderThreeMetresOfRockPastItsMouth()
+		public void EveryPassageStaysUnderThreeMetresOfRockPastItsMouth()
 		{
 			foreach ((CaveForm form, int size) in Shapes)
 			{
@@ -107,28 +117,34 @@ namespace FishMMO.UnitTests.WorldDesign
 					{
 						continue;
 					}
-					CaveSolid solid = PlanCave(form, size, seed, out Func<float, float, float> g);
+					CaveSystem system = PlanCave(form, size, seed, out Func<float, float, float> g);
 					var probes = new List<Vector3>();
-					foreach (CaveNode node in solid.Nodes)
+					foreach (CavePassage passage in system.Passages)
 					{
-						if (node.Along < solid.MouthZone)
+						foreach (CaveNode node in passage.Nodes)
 						{
-							continue;
-						}
-						for (int k = -2; k <= 2; k++)
-						{
-							probes.Add(node.Centre + new Vector3(k * 0.35f * node.Radius, 0f, 0f));
+							if (passage.Kind == CavePassageKind.Trunk && node.Along < system.Mouths[0].Zone)
+							{
+								continue;
+							}
+							for (int k = -2; k <= 2; k++)
+							{
+								probes.Add(node.Centre + new Vector3(k * 0.35f * node.Radius, 0f, 0f));
+							}
 						}
 					}
-					probes.Add(solid.ChamberCentre);
+					foreach (CaveChamber chamber in system.Chambers)
+					{
+						probes.Add(chamber.Centre);
+					}
 					foreach (Vector3 p in probes)
 					{
-						if (solid.Void(p) >= 0f)
+						if (system.Void(p) >= 0f)
 						{
 							continue;
 						}
-						float ground = g(p.x + solid.Origin.x, p.z + solid.Origin.z) - solid.Origin.y;
-						Assert.That(ground - RoofOver(solid, p), Is.GreaterThanOrEqualTo(CaveSolid.MinCover - 0.05f),
+						float ground = g(p.x + system.Origin.x, p.z + system.Origin.z) - system.Origin.y;
+						Assert.That(ground - RoofOver(system, p), Is.GreaterThanOrEqualTo(CaveSystem.MinCover - 0.05f),
 							$"{form} {size} seed {seed}: thin roof at {p}");
 					}
 				}
@@ -136,27 +152,169 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
-		public void TheShellIsAClosedValidMeshWithinItsBudget()
+		public void ACaveGoesDeepAndOpensIntoChambers()
 		{
-			foreach ((CaveForm form, int size) in Shapes)
+			for (int seed = 1; seed <= 3; seed++)
 			{
-				CaveSolid solid = PlanCave(form, size, 1, out Func<float, float, float> g);
-				solid.HoleCells(g, HoleStep, GridX, GridZ);
-				MeshBuilder[] levels = Mesh(solid, g);
-				int[] budget = CaveSolid.LodTriangles(form, size);
-				for (int l = 0; l < levels.Length; l++)
-				{
-					List<string> problems = levels[l].Validate(true);
-					Assert.That(problems, Is.Empty, $"{form} {size} LOD{l}: {string.Join("; ", problems)}");
-					Assert.That(OpenEdges(levels[l]), Is.Zero, $"{form} {size} LOD{l} has edges not on exactly two faces");
-					Assert.That(levels[l].TriangleCount, Is.LessThanOrEqualTo(budget[l]), $"{form} {size} LOD{l}");
-				}
-				Assert.That(budget[0], Is.LessThanOrEqualTo(size >= 2 && form != CaveForm.Grotto ? 6000 : size == 0 || form == CaveForm.Grotto ? 2500 : 4000));
+				CaveSystem medium = PlanCave(CaveForm.Cave, 1, seed, out _);
+				Assert.That(medium.Depth, Is.GreaterThanOrEqualTo(20f), $"seed {seed}: a medium cave falls well under its mouth");
+				Assert.That(medium.PassageLength, Is.GreaterThanOrEqualTo(80f), $"seed {seed}: and runs a long way");
+				Assert.That(medium.Chambers.Count, Is.GreaterThanOrEqualTo(2), $"seed {seed}: rooms along it");
+				Assert.That(medium.Chambers.Exists(c => c.Kind == CaveChamberKind.Cavern), Is.True, $"seed {seed}: a cavern at its end");
+
+				CaveSystem large = PlanCave(CaveForm.Cave, 2, seed, out _);
+				Assert.That(large.Depth, Is.GreaterThan(medium.Depth * 0.8f), $"seed {seed}: a large cave deeper still");
+				Assert.That(large.Passages.Count, Is.GreaterThanOrEqualTo(2), $"seed {seed}: side passages off it");
+				Assert.That(large.TryChamberOf(seed, out CaveChamber own), Is.True);
+				Assert.That(own.Kind, Is.EqualTo(CaveChamberKind.Cavern), "a site's own chamber is its great cavern");
+				Assert.That(own.Radii.y, Is.GreaterThanOrEqualTo(6f), "a cavern is tall");
 			}
 		}
 
-		/// <summary>Edges not on exactly two faces, vertices welded by position (crease copies share one exactly).</summary>
-		private static int OpenEdges(MeshBuilder m)
+		[Test]
+		public void TwoCavesNearEachOtherJoinDeepDown()
+		{
+			CaveSystem a = PlanCave(CaveForm.Cave, 1, 1, out Func<float, float, float> g, 0f);
+			CaveSystem b = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(140f, 0f, -1f), YawOut(1f * 13f % 40f - 20f), 4242, 2, Patch(g), 0f, out string problem);
+			Assert.That(b, Is.Not.Null, problem);
+			int passages = a.Passages.Count + b.Passages.Count, chambers = a.Chambers.Count + b.Chambers.Count;
+			Assert.That(a.TryJoin(b, Patch(g, 700f), CaveShaper.LinkLength, 99), Is.True, "a link fits between them");
+			Assert.That(a.Mouths.Count, Is.EqualTo(2), "one system, two mouths");
+			Assert.That(a.Mouths[1].SiteId, Is.EqualTo(2));
+			Assert.That(a.Passages.Count, Is.EqualTo(passages + 1));
+			Assert.That(a.Chambers.Count, Is.EqualTo(chambers));
+			Assert.That(a.TryChamberOf(2, out _), Is.True, "the joined site keeps its own chamber");
+			CavePassage link = a.Passages.Find(p => p.Kind == CavePassageKind.Link);
+			Assert.That(link, Is.Not.Null);
+			AssertWalkable(a, link.Nodes, "link");
+			foreach (CaveNode node in link.Nodes)
+			{
+				float ground = g(node.Centre.x + a.Origin.x, node.Centre.z + a.Origin.z) - a.Origin.y;
+				Assert.That(ground - RoofOver(a, node.Centre), Is.GreaterThanOrEqualTo(CaveSystem.MinCover - 0.05f), $"the link's roof at {node.Centre}");
+			}
+			CaveSystem back = CaveSystem.FromValues(a.ToValues(), a.Origin, a.Seed);
+			Assert.That(back.Mouths.Count, Is.EqualTo(2), "the joined system is stored whole");
+			Assert.That(back.Passages.Count, Is.EqualTo(a.Passages.Count));
+		}
+
+		[Test]
+		public void NoDryCaveRunsUnderTheSea()
+		{
+			// The escarpment's foot only 12 m over the sea: every floor of a cave cut into it stays 2 m over it.
+			Func<float, float, float> low = (x, z) => Escarpment(0f, 1)(x, z) + 2f;
+			foreach ((CaveForm form, int size) in new[] { (CaveForm.Cave, 2), (CaveForm.Cave, 1), (CaveForm.Mine, 1), (CaveForm.LavaTube, 1) })
+			{
+				CaveSystem system = CaveSystem.Plan(form, size, new Vector3(0f, 0f, -1f), YawOut(0f), 77, 1, Patch(low), 0f, out string problem);
+				if (system == null)
+				{
+					continue;
+				}
+				Assert.That(system.LowestFloor, Is.EqualTo(CaveSystem.AboveSea).Within(1e-4f));
+				foreach (CavePassage passage in system.Passages)
+				{
+					foreach (CaveNode node in passage.Nodes)
+					{
+						Assert.That(system.Origin.y + node.Floor, Is.GreaterThanOrEqualTo(CaveSystem.AboveSea - 0.01f), $"{form} {size}: a floor under the sea's reach");
+					}
+				}
+				foreach (CaveChamber chamber in system.Chambers)
+				{
+					float r = Mathf.Max(chamber.Radii.x, chamber.Radii.z);
+					Assert.That(system.Origin.y + chamber.Floor - Mathf.Abs(chamber.Slope) * r, Is.GreaterThanOrEqualTo(CaveSystem.AboveSea - 0.01f), $"{form} {size}: a chamber under it");
+				}
+			}
+			Assert.That(CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(0f, 0f, -4f), 180f, 11, 1, Patch(SeaCliff()), 0f, out string why), Is.Null, "a cave at the waterline is the sea's");
+			Assert.That(why, Is.Not.Empty);
+		}
+
+		[Test]
+		public void AGrottoOpensAtTheWaterAndIsHalfFlooded()
+		{
+			Assert.That(CaveSystem.Plan(CaveForm.Grotto, 1, new Vector3(0f, 0f, -1f), YawOut(0f), 5, 1, Patch((x, z) => Escarpment(0f, 1)(x, z) + CaveLift), 0f, out string dry), Is.Null,
+				"no water before the face, no grotto");
+			for (int seed = 1; seed <= 3; seed++)
+			{
+				CaveSystem grotto = PlanCave(CaveForm.Grotto, 1, seed, out _);
+				Assert.That(grotto.WaterLevel, Is.EqualTo(0f));
+				Assert.That(grotto.Origin.y, Is.LessThan(0f), "awash at the mouth");
+				Assert.That(grotto.TryChamberOf(seed, out CaveChamber pool), Is.True);
+				float front = grotto.Origin.y + pool.Floor - pool.Slope * 0.8f * pool.Radii.x;
+				float back = grotto.Origin.y + pool.Floor + pool.Slope * 0.8f * pool.Radii.x;
+				Assert.That(front, Is.LessThan(0f), $"seed {seed}: its front is under the water");
+				Assert.That(back, Is.GreaterThan(0.2f), $"seed {seed}: its back is a dry ledge");
+			}
+		}
+
+		[Test]
+		public void AMineRunsStraightAndNearlyLevel()
+		{
+			for (int seed = 1; seed <= 3; seed++)
+			{
+				CaveSystem mine = PlanCave(CaveForm.Mine, 1, seed, out _);
+				Assert.That(mine.Radius, Is.InRange(1.9f, 2.3f));
+				List<CaveNode> adit = mine.Passages[0].Nodes;
+				for (int i = 2; i < adit.Count; i++)
+				{
+					Vector3 step = adit[i].Centre - adit[i - 1].Centre;
+					float run = new Vector2(step.x, step.z).magnitude;
+					float rise = adit[i].Floor - adit[i - 1].Floor;
+					Assert.That(Mathf.Atan2(Mathf.Abs(rise), run) * Mathf.Rad2Deg, Is.LessThanOrEqualTo(8.5f), $"seed {seed}: the adit's floor at {i}");
+				}
+				Assert.That(mine.Chambers.Exists(c => c.Kind == CaveChamberKind.Stope), Is.True, $"seed {seed}: stopes where the ore was");
+				Assert.That(mine.Passages.Exists(p => p.Kind == CavePassageKind.Branch), Is.True, $"seed {seed}: drifts off the adit");
+			}
+		}
+
+		[Test]
+		public void AMineWithoutAFaceIsSunkAsADecline()
+		{
+			Func<float, float, float> flat = (x, z) => 20f + 0.6f * Mathf.Sin(x * 0.03f) + 0.4f * Mathf.Sin(z * 0.05f);
+			for (int seed = 1; seed <= 3; seed++)
+			{
+				CaveSystem mine = CaveSystem.Plan(CaveForm.Mine, 1, new Vector3(0f, 0f, 0f), 90f, seed * 31, seed, Patch(flat), 0f, out string problem);
+				Assert.That(mine, Is.Not.Null, $"seed {seed}: {problem}");
+				Assert.That(mine.Depth, Is.GreaterThanOrEqualTo(10f), $"seed {seed}: it goes down");
+				Assert.That(mine.Origin.y, Is.EqualTo(flat(mine.Origin.x, mine.Origin.z)).Within(0.01f), "its mouth is on the ground");
+				AssertWalkable(mine, mine.Passages[0].Nodes, $"decline {seed}");
+				foreach (CaveNode node in mine.Passages[0].Nodes)
+				{
+					if (node.Along < mine.Mouths[0].Zone)
+					{
+						continue;
+					}
+					float ground = flat(node.Centre.x + mine.Origin.x, node.Centre.z + mine.Origin.z) - mine.Origin.y;
+					Assert.That(ground - RoofOver(mine, node.Centre), Is.GreaterThanOrEqualTo(CaveSystem.MinCover - 0.05f), $"seed {seed}: roof past the cut");
+				}
+			}
+		}
+
+		// ── The rock ──────────────────────────────────────────────
+
+		[Test]
+		public void ThePiecesMeetWithoutSeams()
+		{
+			foreach ((CaveForm form, int size) in new[] { (CaveForm.Cave, 0), (CaveForm.Grotto, 1), (CaveForm.Mine, 0) })
+			{
+				CaveSystem system = PlanCave(form, size, 1, out Func<float, float, float> g);
+				system.HoleCells(0, g, HoleStep, GridX, GridZ);
+				List<CaveMesher.Piece> pieces = Mesh(system, g, keepHidden: true);
+				Assert.That(pieces.Count, Is.GreaterThan(1), $"{form} {size}: more than one piece");
+				// Welded by position across every piece, the whole shell is closed: each edge on exactly two faces.
+				var all = new MeshBuilder(1);
+				foreach (CaveMesher.Piece piece in pieces)
+				{
+					all.Append(piece.Mesh);
+				}
+				// A seam between pieces (or a hole) leaves edges on an odd number of faces. Surface nets can pinch where two
+				// sheets of rock cross at a shallow angle in one cell (an outcrop's block over the hillside's rock): four faces on
+				// an edge, still closed — allowed, but only a handful in a whole cave.
+				Assert.That(OpenEdges(all, odd: true), Is.Zero, $"{form} {size}: edges on an odd number of faces (a seam between pieces, or a hole)");
+				Assert.That(OpenEdges(all, odd: false), Is.LessThanOrEqualTo(8), $"{form} {size}: pinched edges (on four or more faces)");
+			}
+		}
+
+		/// <summary>Edges not on exactly two faces, vertices welded by position (the pieces' copies share one exactly).</summary>
+		private static int OpenEdges(MeshBuilder m, bool odd = true)
 		{
 			var weld = new Dictionary<Vector3, int>();
 			var use = new Dictionary<(int, int), int>();
@@ -181,7 +339,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			int open = 0;
 			foreach (int n in use.Values)
 			{
-				if (n != 2)
+				if (odd ? n % 2 == 1 : n > 2 && n % 2 == 0)
 				{
 					open++;
 				}
@@ -190,28 +348,41 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
-		public void TheInnerWallFacesIntoTheVoid()
+		public void TheBuriedFacesAreDroppedAndTheWallFacesIntoTheVoid()
 		{
-			CaveSolid solid = PlanCave(CaveForm.Cave, 1, 2, out Func<float, float, float> g);
-			solid.HoleCells(g, HoleStep, GridX, GridZ);
-			MeshBuilder lod0 = Mesh(solid, g)[0];
-			int inner = 0, facing = 0;
-			for (int i = 0; i < lod0.VertexCount; i++)
+			CaveSystem system = PlanCave(CaveForm.Cave, 1, 2, out Func<float, float, float> g);
+			system.HoleCells(0, g, HoleStep, GridX, GridZ);
+			List<CaveMesher.Piece> seen = Mesh(system, g);
+			List<CaveMesher.Piece> whole = Mesh(system, g, keepHidden: true);
+			int Count(List<CaveMesher.Piece> pieces)
 			{
-				Vector3 p = lod0.Positions[i];
-				// A vertex on the tunnel's own wall (not the buried outer face or the lip): its normal points into the void.
-				if (Mathf.Abs(solid.Void(p)) > 0.05f || p.y > g(p.x + solid.Origin.x, p.z + solid.Origin.z) - solid.Origin.y - 1f)
+				int n = 0;
+				pieces.ForEach(p => n += p.Mesh.TriangleCount);
+				return n;
+			}
+			Assert.That(Count(seen), Is.LessThan(0.75f * Count(whole)), "the shell's buried face is not kept");
+			int inner = 0, facing = 0;
+			foreach (CaveMesher.Piece piece in seen)
+			{
+				MeshBuilder m = piece.Mesh;
+				for (int i = 0; i < m.VertexCount; i++)
 				{
-					continue;
-				}
-				inner++;
-				if (solid.Void(p + lod0.Normals[i] * 0.3f) < solid.Void(p))
-				{
-					facing++;
+					Vector3 p = m.Positions[i];
+					if (Mathf.Abs(system.Void(p)) > 0.05f || p.y > g(p.x + system.Origin.x, p.z + system.Origin.z) - system.Origin.y - 1f)
+					{
+						continue;
+					}
+					inner++;
+					if (system.Void(p + m.Normals[i] * 0.3f) < system.Void(p))
+					{
+						facing++;
+					}
 				}
 			}
 			Assert.That(inner, Is.GreaterThan(100));
 			Assert.That(facing, Is.GreaterThanOrEqualTo((int)(0.97f * inner)), $"{facing} of {inner} wall normals point into the cave");
+			Assert.That(seen.Exists(p => p.Mouth), Is.True, "the pieces at the mouth are marked to be drawn from outside");
+			Assert.That(seen.Exists(p => !p.Mouth), Is.True, "and the deep ones are not");
 		}
 
 		[Test]
@@ -219,123 +390,152 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			foreach ((CaveForm form, int size) in Shapes)
 			{
-				CaveSolid solid = PlanCave(form, size, 2, out Func<float, float, float> g);
-				List<Vector2Int> cells = solid.HoleCells(g, HoleStep, GridX, GridZ);
+				CaveSystem system = PlanCave(form, size, 2, out Func<float, float, float> g);
+				List<Vector2Int> cells = system.HoleCells(0, g, HoleStep, GridX, GridZ);
 				Assert.That(cells.Count, Is.GreaterThan(0), $"{form} {size}: the mouth opens no hole");
-				float reach = solid.MouthZone + solid.Radius + 2f * HoleStep;
+				CaveMouth mouth = system.Mouths[0];
+				float reach = mouth.Zone + mouth.Radius + 2f * HoleStep;
 				foreach (Vector2Int c in cells)
 				{
-					float x = GridX + (c.x + 0.5f) * HoleStep - solid.Origin.x, z = GridZ + (c.y + 0.5f) * HoleStep - solid.Origin.z;
+					float x = GridX + (c.x + 0.5f) * HoleStep - system.Origin.x, z = GridZ + (c.y + 0.5f) * HoleStep - system.Origin.z;
 					Assert.That(Mathf.Sqrt(x * x + z * z), Is.LessThanOrEqualTo(reach), $"{form} {size}: a hole at ({x:0}, {z:0}) from the mouth");
 				}
 				// The shell reaches every holed quad's far corner, so no hole's edge looks into nothing.
-				Assert.That(solid.Collar, Is.GreaterThan(0f));
-				Assert.That(solid.ShellMouth, Is.GreaterThan(solid.Collar));
+				Assert.That(mouth.Collar, Is.GreaterThan(0f));
+				Assert.That(mouth.Shell, Is.GreaterThan(mouth.Collar));
 			}
 		}
 
 		[Test]
-		public void TheFloorCanBeWalkedToTheChamber()
+		public void EveryPassageCanBeWalked()
 		{
 			foreach ((CaveForm form, int size) in Shapes)
 			{
-				CaveSolid solid = PlanCave(form, size, form == CaveForm.SeaCave ? 1 : 3 - size % 2, out _);
-				var path = new List<Vector3>();
-				for (int i = 1; i < solid.Nodes.Count; i++)
+				CaveSystem system = PlanCave(form, size, form == CaveForm.SeaCave ? 1 : 3 - size % 2, out _);
+				foreach (CavePassage passage in system.Passages)
 				{
-					Vector3 a = solid.Nodes[i - 1].Centre, b = solid.Nodes[i].Centre;
-					int steps = Mathf.CeilToInt(Vector3.Distance(a, b) / 0.5f);
-					for (int s = 0; s < steps; s++)
+					AssertWalkable(system, passage.Nodes, $"{form} {size} {passage.Kind}");
+				}
+				foreach (CaveChamber chamber in system.Chambers)
+				{
+					Vector3 floor = new Vector3(chamber.Centre.x, chamber.Floor + 1.5f, chamber.Centre.z);
+					Assert.That(RoofOver(system, floor) - FloorUnder(system, floor), Is.GreaterThanOrEqualTo(2.6f), $"{form} {size}: headroom in the {chamber.Kind}");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Along a chain of nodes, every half metre: 2.2 m of headroom over the floor and no step steeper than 42° — under the
+		/// NavMesh agent's 45° (the character controller stands on 60°). The passages run at 22° at most; the rest is where a
+		/// passage's floor meets a chamber's in the smooth union.
+		/// </summary>
+		private static void AssertWalkable(CaveSystem system, List<CaveNode> nodes, string what)
+		{
+			var path = new List<Vector3>();
+			for (int i = 1; i < nodes.Count; i++)
+			{
+				Vector3 a = nodes[i - 1].Centre, b = nodes[i].Centre;
+				int steps = Mathf.CeilToInt(Vector3.Distance(a, b) / 0.5f);
+				for (int s = 0; s < steps; s++)
+				{
+					path.Add(Vector3.Lerp(a, b, s / (float)steps));
+				}
+			}
+			float previousFloor = float.NaN;
+			Vector3 previous = default;
+			foreach (Vector3 p in path)
+			{
+				float floor = FloorUnder(system, p);
+				float roof = RoofOver(system, new Vector3(p.x, floor + 0.1f, p.z));
+				Assert.That(roof - floor, Is.GreaterThanOrEqualTo(2.2f), $"{what}: headroom at {p}");
+				if (!float.IsNaN(previousFloor))
+				{
+					float run = new Vector2(p.x - previous.x, p.z - previous.z).magnitude;
+					if (run > 0.2f)
 					{
-						path.Add(Vector3.Lerp(a, b, s / (float)steps));
+						float slope = Mathf.Atan2(Mathf.Abs(floor - previousFloor), run) * Mathf.Rad2Deg;
+						Assert.That(slope, Is.LessThanOrEqualTo(42f), $"{what}: the floor at {p} is too steep to walk");
 					}
 				}
-				Vector3 room = new Vector3(solid.ChamberCentre.x, solid.ChamberFloor + 1.5f, solid.ChamberCentre.z);
-				Vector3 last = solid.Nodes[solid.Nodes.Count - 1].Centre;
-				for (int s = 0; s <= 8; s++)
-				{
-					path.Add(Vector3.Lerp(last, room, s / 8f));
-				}
-				float previousFloor = float.NaN;
-				Vector3 previous = default;
-				foreach (Vector3 p in path)
-				{
-					float floor = FloorUnder(solid, p);
-					float roof = RoofOver(solid, new Vector3(p.x, floor + 0.1f, p.z));
-					Assert.That(roof - floor, Is.GreaterThanOrEqualTo(2.2f), $"{form} {size}: headroom at {p}");
-					if (!float.IsNaN(previousFloor))
-					{
-						float run = new Vector2(p.x - previous.x, p.z - previous.z).magnitude;
-						if (run > 0.2f)
-						{
-							float slope = Mathf.Atan2(Mathf.Abs(floor - previousFloor), run) * Mathf.Rad2Deg;
-							Assert.That(slope, Is.LessThanOrEqualTo(35f), $"{form} {size}: the floor at {p} is too steep to walk");
-						}
-					}
-					previousFloor = floor;
-					previous = p;
-				}
-				Assert.That(solid.ChamberRadii.x / solid.Nodes[solid.Nodes.Count - 1].Radius, Is.InRange(1.4f, 2.6f), $"{form} {size}: chamber size");
+				previousFloor = floor;
+				previous = p;
 			}
 		}
 
 		// ── Determinism and storage ───────────────────────────────
 
 		[Test]
-		public void TheSameSeedGivesTheSameMesh()
+		public void TheSameSeedGivesTheSameRock()
 		{
-			CaveSolid a = PlanCave(CaveForm.Cave, 0, 4, out Func<float, float, float> g);
-			CaveSolid b = PlanCave(CaveForm.Cave, 0, 4, out _);
-			a.HoleCells(g, HoleStep, GridX, GridZ);
-			b.HoleCells(g, HoleStep, GridX, GridZ);
-			Assert.That(CaveSolid.Hash(Mesh(a, g)[0]), Is.EqualTo(CaveSolid.Hash(Mesh(b, g)[0])));
-			CaveSolid c = PlanCave(CaveForm.Cave, 0, 5, out Func<float, float, float> g5);
-			c.HoleCells(g5, HoleStep, GridX, GridZ);
-			Assert.That(CaveSolid.Hash(Mesh(c, g5)[0]), Is.Not.EqualTo(CaveSolid.Hash(Mesh(a, g)[0])), "another seed, another cave");
+			CaveSystem a = PlanCave(CaveForm.Cave, 0, 4, out Func<float, float, float> g);
+			CaveSystem b = PlanCave(CaveForm.Cave, 0, 4, out _);
+			a.HoleCells(0, g, HoleStep, GridX, GridZ);
+			b.HoleCells(0, g, HoleStep, GridX, GridZ);
+			Assert.That(CaveMesher.Hash(Mesh(a, g)), Is.EqualTo(CaveMesher.Hash(Mesh(b, g))));
+			CaveSystem c = PlanCave(CaveForm.Cave, 0, 5, out Func<float, float, float> g5);
+			c.HoleCells(0, g5, HoleStep, GridX, GridZ);
+			Assert.That(CaveMesher.Hash(Mesh(c, g5)), Is.Not.EqualTo(CaveMesher.Hash(Mesh(a, g))), "another seed, another cave");
 		}
 
 		[Test]
-		public void AStoredCaveBuildsTheSameMeshAgain()
+		public void AStoredCaveBuildsTheSameRockAgain()
 		{
-			CaveSolid solid = PlanCave(CaveForm.LavaTube, 0, 2, out Func<float, float, float> g);
-			solid.HoleCells(g, HoleStep, GridX, GridZ);
-			CaveSolid back = CaveSolid.FromValues(solid.ToValues(), solid.Origin, solid.Seed);
+			CaveSystem system = PlanCave(CaveForm.LavaTube, 0, 2, out Func<float, float, float> g);
+			List<Vector2Int> cells = system.HoleCells(0, g, HoleStep, GridX, GridZ);
+			CaveSystem back = CaveSystem.FromValues(system.ToValues(), system.Origin, system.Seed);
 			Assert.That(back, Is.Not.Null);
-			Assert.That(back.Nodes.Count, Is.EqualTo(solid.Nodes.Count));
-			Assert.That(back.ChamberFloorWorld, Is.EqualTo(solid.ChamberFloorWorld));
-			Assert.That(CaveSolid.Hash(Mesh(back, g)[0]), Is.EqualTo(CaveSolid.Hash(Mesh(solid, g)[0])), "a repaint rebuilds the cave it planned");
+			// As CaveShaper.Place does: the stored system reads back the cut its plan made (the terrain's holes).
+			var cut = new List<Vector2>();
+			foreach (Vector2Int c in cells)
+			{
+				cut.Add(new Vector2(GridX + (c.x + 0.5f) * HoleStep, GridZ + (c.y + 0.5f) * HoleStep));
+			}
+			back.UseCutHoles(0, cut, g, HoleStep, GridX, GridZ);
+			Assert.That(back.Passages.Count, Is.EqualTo(system.Passages.Count));
+			Assert.That(back.Chambers.Count, Is.EqualTo(system.Chambers.Count));
+			Assert.That(CaveMesher.Hash(Mesh(back, g)), Is.EqualTo(CaveMesher.Hash(Mesh(system, g))), "a repaint rebuilds the cave it planned");
+			Assert.That(CaveSystem.FromValues(new float[] { 1f, 0f, 0f }, Vector3.zero, 1), Is.Null, "an older format is not misread");
+		}
+
+		[Test]
+		public void AJoinedSiteStoresALinkToItsHost()
+		{
+			Assert.That(CaveShaper.IsLink(CaveShaper.LinkValues(17), out int host), Is.True);
+			Assert.That(host, Is.EqualTo(17));
+			CaveSystem system = PlanCave(CaveForm.Cave, 0, 1, out _);
+			Assert.That(CaveShaper.IsLink(system.ToValues(), out _), Is.False, "a system is not a link");
 		}
 
 		[Test]
 		public void FlatGroundAndAHighSeaFootAreRefused()
 		{
 			Func<float, float, float> flat = (x, z) => 5f;
-			Assert.That(CaveSolid.Plan(CaveForm.Cave, 1, Vector3.zero, 180f, 11, Patch(flat), 0f, out string problem), Is.Null);
+			Assert.That(CaveSystem.Plan(CaveForm.Cave, 1, Vector3.zero, 180f, 11, 1, Patch(flat), 0f, out string problem), Is.Null);
 			Assert.That(problem, Is.Not.Empty);
 			// A sea cave whose face's foot stands 10 m over the sea.
 			Func<float, float, float> high = (x, z) => 10f + 40f * Mathf.Clamp01(z / 25f);
-			Assert.That(CaveSolid.Plan(CaveForm.SeaCave, 0, new Vector3(0f, 0f, -2f), 180f, 11, Patch(high), 0f, out problem), Is.Null);
+			Assert.That(CaveSystem.Plan(CaveForm.SeaCave, 0, new Vector3(0f, 0f, -2f), 180f, 11, 1, Patch(high), 0f, out problem), Is.Null);
 		}
 
 		[Test]
 		public void ASeaCaveFloorLiesJustUnderTheSea()
 		{
-			CaveSolid solid = PlanCave(CaveForm.SeaCave, 0, 1, out _);
-			Assert.That(solid.Origin.y, Is.InRange(-0.6f, 0f));
-			foreach (CaveNode node in solid.Nodes)
+			CaveSystem system = PlanCave(CaveForm.SeaCave, 0, 1, out _);
+			Assert.That(system.Origin.y, Is.InRange(-0.6f, 0f));
+			foreach (CaveNode node in system.Passages[0].Nodes)
 			{
-				if (node.Along <= solid.MouthZone)
+				if (node.Along <= system.Mouths[0].Zone)
 				{
-					Assert.That(solid.Origin.y + node.Floor, Is.InRange(-1.2f, 0.3f), "awash through its mouth");
+					Assert.That(system.Origin.y + node.Floor, Is.InRange(-1.2f, 0.3f), "awash through its mouth");
 				}
 			}
 		}
 
 		[Test]
-		public void EveryCaveKindHasAShaperAndArchesAndOverhangsTheirs()
+		public void EveryCaveKindAndMinesHaveAShaperAndArchesAndOverhangsTheirs()
 		{
 			PointOfInterestTerrainShapers.Register();
-			foreach (POIType kind in new[] { POIType.Cave, POIType.Grotto, POIType.SeaCave, POIType.IceCave, POIType.LavaTube })
+			foreach (POIType kind in new[] { POIType.Cave, POIType.Grotto, POIType.SeaCave, POIType.IceCave, POIType.LavaTube, POIType.Mine })
 			{
 				Assert.That(CaveShaper.Instance.Handles(kind), Is.True, kind.ToString());
 				Assert.That(PointOfInterestShapers.For(kind), Is.SameAs(CaveShaper.Instance), $"{kind} is registered");

@@ -16,9 +16,11 @@ namespace FishMMO.Water
 	/// </para>
 	/// <para>
 	/// <b>Break-up.</b> A falling nappe stays one sheet only for its break-up length L_b, which grows with its
-	/// discharge, not its height (Castillo &amp; Carrillo 2016, eq. 1b; Horeni's L_b ≈ 6 q^0.32 agrees within a
-	/// factor of two). A mountain stream's is a few metres: a 50 m fall is a sheet over its brink and ropes of white
-	/// water for nine tenths of its height.
+	/// discharge, not its height (Castillo &amp; Carrillo 2016, eq. 1b). Horeni's L_b ≈ 6 q^0.32 agrees within a factor
+	/// of two from a trickle to a mountain river (q 0.05–2 m²/s) and not beyond: the brink's Froude number is the same at
+	/// every discharge, so Castillo's length grows as the jet's thickness, q^⅔, and twice as fast as Horeni's fit. A
+	/// mountain stream's is a few metres: a 50 m fall is a sheet over its brink and ropes of white water for nine tenths of
+	/// its height.
 	/// </para>
 	/// <para>
 	/// <b>Spread and impact.</b> Turbulence spreads each edge by ξ = 2φ√h(√(2H) − 2√h), φ = K_φ·T_u, and the jet
@@ -32,8 +34,9 @@ namespace FishMMO.Water
 
 		/// <summary>
 		/// The jet's turbulence intensity leaving the lip: the measured flat crest's 0.013. At that value Castillo's
-		/// break-up length agrees with Horeni's across a trickle to a river (q 0.05–5 m²/s); at 0.03 a small stream broke
-		/// up within 0.6 m of its lip, a third of Horeni's figure. <see cref="InlandWaterRenderer.LipTurbulence"/> tunes it.
+		/// break-up length agrees with Horeni's within a factor of two from a trickle to a mountain river (q 0.05–2 m²/s;
+		/// past that it grows as q^⅔ and Horeni's as q^0.32, so no one value matches both across a big river too); at 0.03
+		/// a small stream broke up within 0.6 m of its lip, a third of Horeni's figure. <see cref="InlandWaterRenderer.LipTurbulence"/> tunes it.
 		/// </summary>
 		public const float DefaultTurbulence = 0.013f;
 

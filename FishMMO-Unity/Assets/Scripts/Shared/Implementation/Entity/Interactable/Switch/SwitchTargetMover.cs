@@ -55,6 +55,14 @@ namespace FishMMO.Shared
 		[SerializeField]
 		private bool startActivated;
 
+		[Tooltip("Colliders that block only while the target is fully closed and still (a door's leaf). While it moves, and while it stands open, they are triggers: the character controller ignores them, so a swinging door never shoves a player or fights their prediction, and the switch's raycast still finds them.")]
+		[SerializeField]
+		private Collider[] solidWhenClosed;
+
+		[Tooltip("Also solid when fully open and still: a drawbridge, which is the way across when it is down.")]
+		[SerializeField]
+		private bool solidWhenOpenToo;
+
 		/// <inheritdoc />
 		public bool IsActivated { get; private set; }
 
@@ -108,6 +116,7 @@ namespace FishMMO.Shared
 			changeTick = 0u;
 			changeTravel = travel;
 			ApplyPose();
+			ApplySolid(!startActivated || solidWhenOpenToo);
 		}
 
 		/// <inheritdoc />
@@ -133,6 +142,7 @@ namespace FishMMO.Shared
 			changeTick = 0u;
 			changeTravel = travel;
 			ApplyPose();
+			ApplySolid(!activated || solidWhenOpenToo);
 		}
 
 		/// <inheritdoc />
@@ -165,6 +175,8 @@ namespace FishMMO.Shared
 			changeTravel = TravelAt(now, timeManager.TickDelta);
 			changeTick = now;
 			IsActivated = activated;
+			// Not solid from the tick it starts to move: the server's controller sees it at once.
+			ApplySolid(false);
 		}
 
 		/// <summary>
@@ -198,6 +210,10 @@ namespace FishMMO.Shared
 			if (timeManager != null)
 			{
 				next = TravelAt(timeManager.Tick + timeManager.GetTickPercentAsDouble(), timeManager.TickDelta);
+				// Solid again only from the whole tick it is shut, so the server and every client turn it solid on
+				// the same tick (the motion is timed by the shared tick; the frame's fraction is presentation).
+				float settled = TravelAt(timeManager.Tick, timeManager.TickDelta);
+				ApplySolid((!IsActivated && settled <= 0.0f) || (solidWhenOpenToo && IsActivated && settled >= 1.0f));
 			}
 			else if (travelSeconds <= 0.0f)
 			{
@@ -208,6 +224,10 @@ namespace FishMMO.Shared
 				// Offline (an editor preview): no tick to share, so its own frame time.
 				next = Mathf.MoveTowards(travel, target, Time.deltaTime / travelSeconds);
 			}
+			if (timeManager == null)
+			{
+				ApplySolid((!IsActivated && next <= 0.0f) || (solidWhenOpenToo && IsActivated && next >= 1.0f));
+			}
 
 			if (Mathf.Approximately(next, travel))
 			{
@@ -215,6 +235,27 @@ namespace FishMMO.Shared
 			}
 			travel = next;
 			ApplyPose();
+		}
+
+		private bool solid = true;
+		private bool solidApplied;
+
+		/// <summary>Makes the <see cref="solidWhenClosed"/> colliders block, or turns them into triggers; only when it changes.</summary>
+		private void ApplySolid(bool blocks)
+		{
+			if (solidWhenClosed == null || solidWhenClosed.Length == 0 || (solidApplied && blocks == solid))
+			{
+				return;
+			}
+			solid = blocks;
+			solidApplied = true;
+			foreach (Collider c in solidWhenClosed)
+			{
+				if (c != null)
+				{
+					c.isTrigger = !blocks;
+				}
+			}
 		}
 
 		/// <summary>

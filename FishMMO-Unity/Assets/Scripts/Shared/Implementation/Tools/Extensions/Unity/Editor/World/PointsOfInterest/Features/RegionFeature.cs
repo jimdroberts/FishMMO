@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A <see cref="Region"/> over the site that shows its name when a player walks in (Jim, 2026-10-10: settlements
+	/// A <see cref="Region"/> over the site that shows its name when a player walks in (2026-10-10: settlements
 	/// get a name-toast region).
 	/// </summary>
 	/// <remarks>

@@ -113,13 +113,55 @@ namespace FishMMO.Shared.WorldDesign
 					Texture2D albedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo", finish));
 					WriteMaterial(c, StructurePieces.MaterialName(material, finish), shader, mat =>
 					{
-						RockLit(mat, albedo, normal, mask, scale);
+						// Moss as the material and its finish allow (MossAmounts): stone, timber and thatch green over in a
+						// damp scene; the Mossy finish keeps its baked moss and takes the most of the layer on top.
+						RockLit(mat, albedo, normal, mask, scale, MossAmounts.ForStructure(material, finish));
 						mat.SetColor("_BaseColor", tint);
 						// Weathered as a building, not set into the ground as a rock (FishStructureWeathering.hlsl); a pane lit at night.
 						mat.SetFloat("_FishStructure", material == StructureMaterial.Glass ? 2f : 1f);
+						if (material == StructureMaterial.Glass)
+						{
+							Glass(mat, tint);
+						}
 					});
 				}
 			}
+		}
+
+		/// <summary>
+		/// A window pane you can see through (2026-10-11): alpha-blended, no depth written and no shadow cast, so a lit
+		/// room shows through it and the GPU occlusion (built from the opaque depth) still sees the room behind it — what is
+		/// inside draws when a window or a door shows it and is culled when the walls hide it. Its night glow is unchanged.
+		/// </summary>
+		private static ShadowCastingMode[] NoShadows(int count)
+		{
+			var none = new ShadowCastingMode[count];
+			for (int i = 0; i < count; i++)
+			{
+				none[i] = ShadowCastingMode.Off;
+			}
+			return none;
+		}
+
+		private static void Glass(Material mat, Color tint)
+		{
+			mat.SetFloat("_Surface", 1f);
+			mat.SetFloat("_Blend", 0f);
+			mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+			mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+			mat.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
+			mat.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+			mat.SetFloat("_ZWrite", 0f);
+			mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+			mat.DisableKeyword("_ALPHATEST_ON");
+			mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+			mat.SetOverrideTag("RenderType", "Transparent");
+			mat.SetShaderPassEnabled("ShadowCaster", false);
+			mat.SetShaderPassEnabled("DepthOnly", false);
+			mat.SetShaderPassEnabled("DepthNormals", false);
+			// Old crown glass: greenish, a little cloudy, more than half see-through.
+			mat.SetColor("_BaseColor", new Color(tint.r * 0.9f, tint.g, tint.b * 0.95f, 0.32f));
+			mat.SetFloat("_Smoothness", 0.85f);
 		}
 
 		/// <summary>A piece's meshes (every variant, every level) and its prefabs (every variant in every finish).</summary>
@@ -148,7 +190,8 @@ namespace FishMMO.Shared.WorldDesign
 					bool collides = piece.Collides;
 					WritePrefab(c, StructurePieces.PrefabName(piece.Id, v, finish), root =>
 					{
-						Lods(root, meshes, mats, StructureLodHeights, shadows);
+						// Furniture stands under a roof that already shades it: it casts no sun shadow (nor costs the shadow map one).
+						Lods(root, meshes, mats, StructureLodHeights, piece.HasTag("furniture") ? NoShadows(meshes.Length) : shadows);
 						if (collides)
 						{
 							AddBoulderCollider(root, meshes);

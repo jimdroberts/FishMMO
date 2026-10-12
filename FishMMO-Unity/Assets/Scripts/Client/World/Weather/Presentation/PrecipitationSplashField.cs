@@ -26,7 +26,7 @@ namespace FishMMO.Client
 	/// needs water deep enough to carry a wave — so rings go only where the ground's own shader draws
 	/// a puddle, and on calm open water. Everywhere else a drop leaves a soft spurt gone in a tenth
 	/// of a second. Every bolder version — rings everywhere, then crisp crowns of droplets — read as
-	/// something laid on the ground rather than as rain hitting it (Jim, 2026-09-25).
+	/// something laid on the ground rather than as rain hitting it (2026-09-25).
 	/// </para>
 	/// <para>
 	/// <b>Additive to <see cref="PrecipitationField"/>, not a replacement.</b> The falling particles

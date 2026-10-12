@@ -15,6 +15,20 @@ namespace FishMMO.Shared
 		Forge,
 		/// <summary>A lantern's pane: a steady warm light at night.</summary>
 		Lamp,
+		/// <summary>A fire indoors (a hearth in a room): flicker and sparks, and no smoke — its smoke goes up the chimney. Its light is the room's (<see cref="Indoor"/>).</summary>
+		Hearth,
+		/// <summary>
+		/// A lived-in room's light (its hearth and candles), at the room's middle and reaching only its walls
+		/// (<see cref="SceneEmitter.Reach"/>): the outside of the walls faces away from it, so a house is not lit through them.
+		/// </summary>
+		Indoor,
+		/// <summary>
+		/// A cluster of glowing crystals deep in a cave: a cold, steady light, day and night alike (no sky reaches it), its
+		/// hue from bits 8–9 of the seed (violet, blue, green, blue), reaching <see cref="SceneEmitter.Reach"/>.
+		/// </summary>
+		Crystal,
+		/// <summary>A lantern or torch underground (a mine's lamps, a cave camp's): a warm flicker, lit day and night, reaching <see cref="SceneEmitter.Reach"/>.</summary>
+		Torch,
 	}
 
 	/// <summary>
@@ -28,5 +42,22 @@ namespace FishMMO.Shared
 		public SceneEmitterKind Kind;
 		/// <summary>A stable number for its own look (which chimneys smoke, how a fire flickers).</summary>
 		public uint Seed;
+		/// <summary>How far its light reaches, metres; 0 for its kind's own.</summary>
+		public float Reach;
+	}
+
+	/// <summary>
+	/// One room of a site's buildings as a box, baked by the cut (PointOfInterestInteriors): inside it the sky's light only
+	/// comes through the windows and doors, so the client darkens what is drawn in it (IndoorRooms, FishIndoor.hlsl).
+	/// </summary>
+	[Serializable]
+	public struct SceneRoom
+	{
+		/// <summary>The box's middle, scene metres.</summary>
+		public Vector3 Centre;
+		/// <summary>Its heading, degrees about +y.</summary>
+		public float Yaw;
+		/// <summary>Half its width, height and depth, metres (inside the walls, under the ceiling).</summary>
+		public Vector3 HalfSize;
 	}
 }

@@ -45,7 +45,7 @@ namespace FishMMO.RenderScratch
 	{
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string GUI = "Assets/Scripts/Client/GUI/";
-		private const string OUT_DIR = "/home/jim/Dev/FishMMO-Dev/EquipProbe";
+		private static readonly string OUT_DIR = ProbeOutput.Path("EquipProbe");
 		private const string ITEM_TEMPLATE_DIR = "Assets/Templates/Entity/Items";
 
 		/* Panel space. PanelSettings is ScaleWithScreenSize against 1200x800 with match = WIDTH, so

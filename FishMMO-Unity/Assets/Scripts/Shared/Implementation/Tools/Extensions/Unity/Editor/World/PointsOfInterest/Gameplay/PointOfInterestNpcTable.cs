@@ -74,7 +74,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// <para><b>Resolution.</b> The most specific row wins — the race's own row, else its category's, else the wildcard;
 	/// among equally specific rows the first. A role nothing answers resolves to nothing: the feature still places its
-	/// spawner, empty, and logs it, so a designer can fill it (Jim, 2026-10-10: unknown → null).</para>
+	/// spawner, empty, and logs it, so a designer can fill it (2026-10-10: unknown → null).</para>
 	/// <para><b>Defaults.</b> Written in code (<see cref="FillDefaults"/>) so the generator works before anyone authors the
 	/// asset: the shipped human banker, merchant and ability crafter serve every race; orcs fill an orc site's pack
 	/// (weighted 0.5 / 0.3 / 0.2, the dungeon's mix) and its elite. Guards and townsfolk have no prefabs yet.

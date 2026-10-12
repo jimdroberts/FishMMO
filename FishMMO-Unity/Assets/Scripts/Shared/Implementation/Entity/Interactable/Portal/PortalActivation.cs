@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	/// <see cref="SceneTeleporter"/> — dormant until something activates it.
 	/// </summary>
 	/// <remarks>
-	/// <para><b>Jim's rules (2026-10-10).</b> A portal is inactive until activated. A player
+	/// <para><b>The rules (2026-10-10).</b> A portal is inactive until activated. A player
 	/// activates it by using it while meeting ANY of its <see cref="Conditions"/> (an ability known,
 	/// an item held, the placeholder <see cref="HasProfessionCondition"/>) or holding its
 	/// <see cref="Key"/>; the key is designer-assigned and generated portals leave it empty. Who it

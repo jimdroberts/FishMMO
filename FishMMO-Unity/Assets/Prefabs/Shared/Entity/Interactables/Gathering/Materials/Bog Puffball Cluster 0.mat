@@ -38,6 +38,7 @@ Material:
     - _Aquatic: 0
     - _BackfaceFlip: 0
     - _BumpScale: 1
+    - _Clinging: 0
     - _Cull: 0
     - _Cutoff: 0.45
     - _Deciduous: 0

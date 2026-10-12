@@ -97,7 +97,7 @@ namespace FishMMO.Client
 			colors.Clear();
 			indices.Clear();
 			ActiveBolts = 0;
-			/* Under water the sky is not seen (Jim, 2026-10-06: strikes were visible from under the sea): no bolts, and
+			/* Under water the sky is not seen (2026-10-06: strikes were visible from under the sea): no bolts, and
 			 * of the flash only a dim, diffuse brightening comes down through the surface, less the deeper the eye. */
 			float underwater = 1f;
 			bool submerged = false;

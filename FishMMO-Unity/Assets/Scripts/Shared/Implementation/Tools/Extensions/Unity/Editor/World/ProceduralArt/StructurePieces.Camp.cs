@@ -368,31 +368,10 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			d.Add(StructureShapes.Beam(new Vector3(-1.95f, 3.45f, -0.05f), new Vector3(1.95f, 3.45f, -0.05f), 0.24f, 0.3f, StructureMaterial.Timber, 9));
-			// The two leaves, hinged at the posts: each 1.36 wide, five planks and two battens.
-			for (int s = -1; s <= 1; s += 2)
-			{
-				int first = d.Solids.Count;
-				const float leaf = 1.36f;
-				int planks = d.Fine ? 5 : d.Mid ? 3 : 1;
-				float w = leaf / planks;
-				for (int p = 0; p < planks; p++)
-				{
-					float x = -s * (w * (p + 0.5f));
-					float top = 2.9f + (d.Fine ? d.Range(20 + p, 1, -0.06f, 0.06f) : 0f);
-					d.Add(StructureShapes.Box(new Vector3(x, 0.05f + top * 0.5f, 0f), new Vector3(w - (d.Fine ? 0.01f : 0f), top, 0.08f), StructureMaterial.Timber, 20 + s * 10 + p)).Grain = Vector3.up;
-				}
-				if (d.Mid)
-				{
-					foreach (float y in new[] { 0.6f, 2.3f })
-					{
-						d.Add(StructureShapes.Box(new Vector3(-s * leaf * 0.5f, y, -0.07f), new Vector3(leaf - 0.1f, 0.18f, 0.06f), StructureMaterial.Timber, 60 + s * 3 + (y < 1f ? 0 : 1)));
-					}
-				}
-				// Swing about the hinge at the post's inner face, outward (toward −z) when open.
-				var hinge = new Vector3(s * 1.36f, 0f, 0f);
-				float angle = open ? s * -75f : 0f;
-				TransformSince(d, first, Matrix4x4.Translate(hinge) * Matrix4x4.Rotate(Quaternion.Euler(0f, angle, 0f)));
-			}
+			// The two leaves, hinged at the posts and swinging outward: server-run doors (PointOfInterestDoors); open by day (v0)
+			// or shut (v1).
+			d.Door(new Vector3(-1.36f, 0f, -0.06f), Vector3.right, Vector3.back, 1.36f, 2.95f, StructureDoorKind.Planks, StructureDoorMotion.Swing, open);
+			d.Door(new Vector3(1.36f, 0f, -0.06f), Vector3.left, Vector3.back, 1.36f, 2.95f, StructureDoorKind.Planks, StructureDoorMotion.Swing, open);
 		}
 	}
 }

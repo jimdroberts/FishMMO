@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// The arithmetic of breath and drowning, apart from any character, so it can be tested on its own.
 	/// </summary>
 	/// <remarks>
-	/// Jim's rules (2026-10-05): a meter drains while the head is under water and refills in about three seconds at the
+	/// The rules (2026-10-05): a meter drains while the head is under water and refills in about three seconds at the
 	/// surface; at zero, a FLAT tenth of maximum health a second. Lava burns 50 fire a second, which fire resistance takes
 	/// off one for one and from which fire races are immune.
 	/// </remarks>

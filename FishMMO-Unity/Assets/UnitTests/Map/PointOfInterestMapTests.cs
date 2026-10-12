@@ -16,7 +16,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Generated points of interest on the maps (Jim, 2026-10-10): harvested into the scene details whether
+	/// Generated points of interest on the maps (2026-10-10): harvested into the scene details whether
 	/// or not a map is baked, hidden until discovered, one marker type per kind styled and filtered by group.
 	/// </summary>
 	[TestFixture]

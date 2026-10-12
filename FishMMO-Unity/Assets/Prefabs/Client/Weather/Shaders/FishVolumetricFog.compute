@@ -290,7 +290,7 @@ float3 FallMistLight(float y, float3 ray, FishFogColumn c, float extinction, flo
     float3 sun = _FishFogLightColor.rgb * risen * (beam * FishFogPhase(dot(ray, toLight), g) * shadow + turnedAbove + turnedHere * shadow);
     /* The sky's light is dimmed by the fog above, not by the mist's own depth: a dense white cloud lit from every side
      * by the sky stays about as bright as the sky inside (its light turned many times, hardly absorbed). Dimmed by its
-     * own depth, the thickest mist at a fall's foot was the darkest, grey in a shaded gorge (Jim, 2026-10-08). */
+     * own depth, the thickest mist at a fall's foot was the darkest, grey in a shaded gorge (2026-10-08). */
     float3 sky = _FishFogAmbient.rgb / (1.0 + carry * above);
     return sun + sky;
 }

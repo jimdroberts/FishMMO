@@ -29,7 +29,7 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class TooltipGalleryRender
 	{
-		private const string OUTPUT_DIR = "/home/jim/Dev/FishMMO-Dev/PanelRenders";
+		private static readonly string OUTPUT_DIR = ProbeOutput.Path("PanelRenders");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string THEME_USS = "Assets/Scripts/Client/GUI/FishMMO-Theme.uss";
 		private const string VIEW_USS = "Assets/Scripts/Client/GUI/Shared/Tooltip/UITooltipView.uss";

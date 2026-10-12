@@ -32,7 +32,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Nothing generated is committed (Jim, 2026-10-02).</b> Textures and meshes (the payload) and
+	/// <b>Nothing generated is committed (2026-10-02).</b> Textures and meshes (the payload) and
 	/// the terrain layers, materials and prefabs built on them (the wrappers) are all build output:
 	/// gitignored, regenerated on every machine — on editor load and first in every build — and
 	/// each with a GUID that is a function of its path (<see cref="ProceduralArtPayload"/>) and object
@@ -478,8 +478,9 @@ namespace FishMMO.Shared.WorldDesign
 			// Migration, ground, bark, atlas, import, verify, layers, materials, rocks, details, bushes, trees, deadwood,
 			// built layers; the rock-formation, ice and cliff-piece steps (BiomeArtGenerator.Rocks.cs); the structure kit's
 			// (BiomeArtGenerator.Structures.cs).
+			// The vines: a step a species, and one for the climbers (BiomeArtGenerator.Vines.cs).
 			return SurfaceCatalogue.GroundRecipes.Length + SurfaceCatalogue.BarkRecipes.Length + 10 + ProceduralArtCatalogue.Bushes.Length + ProceduralArtCatalogue.Trees.Length + RockStepCount()
-				+ StructureStepCount();
+				+ StructureStepCount() + ProceduralArtCatalogue.Vines.Length + 1;
 		}
 
 		/// <summary>
@@ -516,6 +517,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			yield return "Foliage atlas";
 			WriteAtlas(c);
+			// The vines' own leaf atlas (BiomeArtGenerator.Vines.cs), imported with the rest in the next step.
+			WriteVineAtlas(c);
 			yield return "Importing textures";
 			ImportPendingTextures(c);
 			// Before any wrapper: every texture a wrapper will name must load as a 2D texture now.
@@ -545,6 +548,15 @@ namespace FishMMO.Shared.WorldDesign
 				yield return "Tree: " + species.Name;
 				WriteTree(c, species);
 			}
+			// Vines and ivy (BiomeArtGenerator.Vines.cs): each species' curtains, mats and spill, then the climbers built on the
+			// trees' trunks.
+			foreach (VineSpecies species in ProceduralArtCatalogue.Vines)
+			{
+				yield return "Vine: " + species.Name;
+				WriteVines(c, species);
+			}
+			yield return "Vine climbers";
+			WriteVineClimbers(c);
 			// Fallen logs, stumps, driftwood and petrified logs (BiomeArtGenerator.Deadwood.cs): after the barks, the
 			// rock surfaces and the materials, which they wear.
 			yield return "Deadwood";
@@ -1021,6 +1033,8 @@ namespace FishMMO.Shared.WorldDesign
 					m.SetFloat("_Smoothness", 1f);
 					m.SetFloat("_Metallic", 0f);
 					m.SetFloat("_FishWeatherAmount", 1f);
+					// The moss its stone allows (MossAmounts): boulders and rocks green over with their outcrops.
+					m.SetFloat("_FishMoss", MossAmounts.ForLegacyRock(spec.Name));
 				});
 			}
 

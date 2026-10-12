@@ -193,7 +193,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void NightCritters_AreAboutByDayTooButFewer()
 		{
-			// Jim, 2026-10-10: a third of the night's rats and mice are out by day, so a noon walk is not empty of them.
+			// 2026-10-10: a third of the night's rats and mice are out by day, so a noon walk is not empty of them.
 			AmbientConditions mildNoon = At(0.5, true, 18f);
 			AmbientConditions night = At(0.0, false, 15f);
 			float day = AmbientGating.Activity(Kind("Rat"), mildNoon);

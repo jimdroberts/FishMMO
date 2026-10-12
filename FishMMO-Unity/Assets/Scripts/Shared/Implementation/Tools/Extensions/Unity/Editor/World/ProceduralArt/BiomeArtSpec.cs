@@ -222,7 +222,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			/// <remarks>
 			/// Geology alone walled whole scenes in one province's rock whatever grew on them: Flo Monolith's bog and taiga
-			/// stood in sandstone cliffs and boulders, Baoakraal's karst and grassland in conglomerate (Jim, 2026-10-08, who
+			/// stood in sandstone cliffs and boulders, Baoakraal's karst and grassland in conglomerate (2026-10-08, who
 			/// chose this list over either alone). So sandstone and conglomerate are accepted only by the dry biomes.
 			/// </remarks>
 			public string[] Rocks = Array.Empty<string>();

@@ -316,7 +316,7 @@ namespace FishMMO.Shared.WorldDesign
 			if (options.Excluded != null && plan.Rocks.Count > 0)
 			{
 				/* A rock is sited by its centre, but a cliff section is tens of metres across: one centred just outside a
-				 * cave's keep-out or a way's clearance stood over the mouth or across the path (Jim, 2026-10-11). Each
+				 * cave's keep-out or a way's clearance stood over the mouth or across the path (2026-10-11). Each
 				 * rock's footprint as placed (its collision mesh's bounds, turned and scaled) is tested on a 5 × 5 grid,
 				 * and one that covers excluded ground anywhere goes. */
 				int before = plan.Rocks.Count;
@@ -422,6 +422,10 @@ namespace FishMMO.Shared.WorldDesign
 				report.Pieces++;
 				report.PiecesByType[piece.Type] = (report.PiecesByType.TryGetValue(piece.Type, out int n) ? n : 0) + 1;
 			}
+			// Vines hung off the crags' edges in the biomes that grow them (VinePlacement): with the rocks' own props, so a re-placing
+			// clears them together; no collider, so no collision.
+			VinePlacement.HangFromCrags(plan.Rocks, r => seating.TryGetValue(CliffRocks.MeshName(in r.Piece, CliffRocks.CollisionLod), out MeshBuilder m) ? m : null,
+				field, ground, seed, prototypes, props, report.Notes);
 			report.Collidable = ScenePropBaker.Write(scene, PropSource, prototypes, props, layer);
 			if (report.MissingAssets > 0)
 			{

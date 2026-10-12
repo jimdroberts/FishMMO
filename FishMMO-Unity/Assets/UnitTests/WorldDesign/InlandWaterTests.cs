@@ -230,7 +230,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A lake is drawn first and keeps the pixels it claims, and its surface is its mask grown by a 4 m cell. Beside a
 		/// river it neither drains into nor from (a pond along a ponded stretch), those cells laid square patches of lake
-		/// water over the channel (Jim, 2026-10-08). It gives the channel up, along the bank's own line; at a mouth it
+		/// water over the channel (2026-10-08). It gives the channel up, along the bank's own line; at a mouth it
 		/// keeps it, as before.
 		/// </summary>
 		[Test]
@@ -297,6 +297,58 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
+		/// <summary>
+		/// A tributary ends on the centre line of the river it joins, and the carver cuts its channel with a round end of
+		/// its mouth's half width past that point. Its ribbon stopped square at the point, so where its mouth was wider than
+		/// the river it joins (mouths flare to 2.2 widths) the end's lobes past that river's banks were bed under no water:
+		/// a dry patch at the T (2026-10-12). It runs on over the round end, whole and at its mouth's level.
+		/// </summary>
+		[Test]
+		public void ATributarysWaterCoversTheRoundEndOfItsChannel()
+		{
+			Shader shader = Shader.Find("FishMMO/Water/Inland Water");
+			var material = new Material(shader);
+			var renderer = host.AddComponent<InlandWaterRenderer>();
+			renderer.Material = material;
+			try
+			{
+				renderer.Rebuild();
+				GameObject tributary = null;
+				foreach (GameObject surface in renderer.Built)
+				{
+					if (surface.name == "River 1")
+					{
+						tributary = surface;
+					}
+				}
+				Assert.That(tributary, Is.Not.Null);
+				Mesh mesh = tributary.GetComponent<MeshFilter>().sharedMesh;
+				Vector3[] vertices = mesh.vertices;
+				var colours = new List<Color32>();
+				mesh.GetColors(colours);
+				// River 1 runs south to (0, 9.5, 0), 6 m wide: its channel's round end reaches 3 m past, to z −3.
+				float farthest = float.PositiveInfinity;
+				for (int i = 0; i < vertices.Length; i++)
+				{
+					if (colours[i].g != 255 || colours[i].a != 255)
+					{
+						continue;
+					}
+					farthest = Mathf.Min(farthest, vertices[i].z);
+					if (vertices[i].z < 0f)
+					{
+						Assert.That(vertices[i].y, Is.EqualTo(9.5f).Within(1e-3f), $"past its end the water stays at its mouth's level at {vertices[i]}");
+					}
+				}
+				Assert.That(farthest, Is.LessThanOrEqualTo(-3f), "the water claims the whole round end past the joined river's centre line");
+			}
+			finally
+			{
+				Object.DestroyImmediate(renderer);
+				Object.DestroyImmediate(material);
+			}
+		}
+
 		[Test]
 		public void ARiverDrainingToTheSeaIsMarkedToMeetItAtAnyTide()
 		{
@@ -323,6 +375,238 @@ namespace FishMMO.UnitTests.WorldDesign
 						}
 					}
 				}
+			}
+			finally
+			{
+				Object.DestroyImmediate(renderer);
+				Object.DestroyImmediate(material);
+			}
+		}
+
+		/// <summary>
+		/// A river is drawn before every river joining it, however the planet ranks them: a tributary's rows run on past its
+		/// mouth across the river it joins at full strength, and drawn first they would take that river's pixels (the
+		/// draw-once stencil) as a flat patch of the tributary's water. Larger rivers still come first otherwise.
+		/// </summary>
+		[Test]
+		public void AJoinedRiverIsDrawnBeforeItsTributariesHoweverTheyRank()
+		{
+			var rivers = new List<SceneHydrology.River>
+			{
+				new SceneHydrology.River { Id = 0, PlanetRiver = 5, JoinsRiver = 1, Finish = SceneHydrology.End.Confluence },
+				new SceneHydrology.River { Id = 1, PlanetRiver = 9, JoinsRiver = 2, Finish = SceneHydrology.End.Confluence },
+				new SceneHydrology.River { Id = 2, PlanetRiver = 7 },
+				new SceneHydrology.River { Id = 3, PlanetRiver = 1 },
+				// A loop of joins (no network should have one) is drawn, not followed for ever.
+				new SceneHydrology.River { Id = 4, PlanetRiver = 20, JoinsRiver = 5, Finish = SceneHydrology.End.Confluence },
+				new SceneHydrology.River { Id = 5, PlanetRiver = 21, JoinsRiver = 4, Finish = SceneHydrology.End.Confluence },
+			};
+			List<SceneHydrology.River> order = InlandWaterRenderer.DrawOrder(rivers);
+			Assert.That(order.Count, Is.EqualTo(rivers.Count), "every river is drawn once");
+			int At(int id) => order.FindIndex(r => r.Id == id);
+			Assert.That(At(2), Is.LessThan(At(1)), "river 1 joins river 2");
+			Assert.That(At(1), Is.LessThan(At(0)), "river 0 joins river 1, though the planet ranks it first");
+			Assert.That(At(3), Is.EqualTo(0), "otherwise the planet's ranking stands");
+		}
+
+		/// <summary>
+		/// A ribbon's quads never twist, however its line bends. Flo Monolith's river 0 turned 146° in one point where river 1
+		/// joins it (its points 446–455 here, as cut), and a bend tighter than the ribbon's half width closed its inside rows
+		/// past each other: both drew quads back to front.
+		/// </summary>
+		[Test]
+		public void ARibbonNeverFoldsOverATightBendOrAHairpin()
+		{
+			var hairpin = new List<Vector3>
+			{
+				new Vector3(-857.49f, 0f, -1470.72f), new Vector3(-858.50f, 0f, -1468.73f), new Vector3(-859.33f, 0f, -1466.66f),
+				new Vector3(-860.15f, 0f, -1464.58f), new Vector3(-860.97f, 0f, -1462.50f), new Vector3(-861.51f, 0f, -1460.48f),
+				new Vector3(-860.05f, 0f, -1458.78f), new Vector3(-858.70f, 0f, -1457.07f), new Vector3(-859.51f, 0f, -1454.98f),
+				new Vector3(-860.31f, 0f, -1454.18f), new Vector3(-858.12f, 0f, -1454.61f), new Vector3(-855.92f, 0f, -1454.99f),
+				new Vector3(-853.69f, 0f, -1455.13f), new Vector3(-851.46f, 0f, -1455.27f), new Vector3(-849.23f, 0f, -1455.32f),
+			};
+			var tight = new List<Vector3>();
+			for (int k = 0; k <= 24; k++)
+			{
+				// A half turn of 3 m radius, rows a metre apart, for a ribbon reaching 6 m each side.
+				float a = k / 24f * Mathf.PI;
+				tight.Add(new Vector3(3f * Mathf.Cos(a), 0f, 3f * Mathf.Sin(a)));
+			}
+			foreach ((string name, List<Vector3> line, float half) in new[] { ("hairpin", hairpin, 5.5f), ("tight", tight, 6f) })
+			{
+				List<int> kept = InlandWaterRenderer.RowsThatAdvance(line);
+				Assert.That(kept[0], Is.EqualTo(0), $"{name}: its first row is kept");
+				Assert.That(kept[kept.Count - 1], Is.EqualTo(line.Count - 1), $"{name}: its last row is kept");
+				var centres = new List<Vector3>();
+				var halves = new List<float>();
+				foreach (int r in kept)
+				{
+					centres.Add(line[r]);
+					halves.Add(half);
+				}
+				InlandWaterRenderer.RibbonFrames(centres, halves, out Vector3[] forwards, out float[] leftReach, out float[] rightReach);
+				// Laid out as RiverMesh lays them: the columns across each row, each side drawn in by its own share.
+				const int across = 8;
+				var rows = new Vector3[centres.Count, across + 1];
+				for (int r = 0; r < centres.Count; r++)
+				{
+					var left = new Vector3(-forwards[r].z, 0f, forwards[r].x);
+					for (int k = 0; k <= across; k++)
+					{
+						float offset = Mathf.Lerp(-half, half, k / (float)across);
+						float scale = offset > 0f ? Mathf.Clamp01(leftReach[r] / half) : Mathf.Clamp01(rightReach[r] / half);
+						rows[r, k] = centres[r] + left * (offset * scale);
+					}
+				}
+				for (int r = 0; r + 1 < centres.Count; r++)
+				{
+					for (int k = 0; k < across; k++)
+					{
+						// Wound as RiverMesh winds them: (row, next, next + 1) and (row, next + 1, row + 1), facing up.
+						Assert.That(Facing(rows[r, k], rows[r + 1, k], rows[r + 1, k + 1]), Is.GreaterThanOrEqualTo(-1e-4f), $"{name}: quad {r}.{k} is drawn back to front");
+						Assert.That(Facing(rows[r, k], rows[r + 1, k + 1], rows[r, k + 1]), Is.GreaterThanOrEqualTo(-1e-4f), $"{name}: quad {r}.{k} is drawn back to front");
+					}
+				}
+			}
+			// A gentle bend keeps every row and its whole width.
+			var gentle = new List<Vector3>();
+			var gentleHalves = new List<float>();
+			for (int k = 0; k <= 20; k++)
+			{
+				float a = k * 0.05f;
+				gentle.Add(new Vector3(40f * Mathf.Cos(a), 0f, 40f * Mathf.Sin(a)));
+				gentleHalves.Add(5f);
+			}
+			Assert.That(InlandWaterRenderer.RowsThatAdvance(gentle).Count, Is.EqualTo(gentle.Count));
+			InlandWaterRenderer.RibbonFrames(gentle, gentleHalves, out _, out float[] gentleLeft, out float[] gentleRight);
+			for (int k = 0; k < gentle.Count; k++)
+			{
+				Assert.That(Mathf.Min(gentleLeft[k], gentleRight[k]), Is.EqualTo(5f), $"row {k} reaches its whole half width");
+			}
+		}
+
+		/// <summary>
+		/// Twice a triangle's area seen from above, positive where it is wound clockwise seen from above (the face Unity
+		/// draws toward the viewer, as every quad of a straight ribbon is), negative where it is drawn back to front.
+		/// </summary>
+		private static float Facing(Vector3 a, Vector3 b, Vector3 c) => Vector3.Cross(c - a, b - a).y;
+
+		/// <summary>
+		/// A tributary's rows run on past its mouth flat at the mouth's level; they stop short of a fall on the river it joins
+		/// (whose own ribbon gives the fall's pixels to the curtain, so nothing would hide them), and of that river where it
+		/// stands well below the mouth.
+		/// </summary>
+		[Test]
+		public void ATributarysRunOnStopsShortOfAFallOnTheRiverItJoins()
+		{
+			// The joined river runs east at 10 m, over a lip at x 6 (point 28) down to 2 m at x 8 (point 29) and on.
+			var joined = new SceneHydrology.River { Id = 7, Points = new Vector3[51] };
+			for (int i = 0; i < joined.Points.Length; i++)
+			{
+				float x = -50f + 2f * i;
+				joined.Points[i] = new Vector3(x, x <= 6f ? 10f : 2f, 0f);
+			}
+			var falls = new List<InlandWaterRenderer.Fall> { new InlandWaterRenderer.Fall { River = 7, Lip = 28, Foot = 30 } };
+			var runOn = new List<Vector3> { new Vector3(3f, 10f, 2f), new Vector3(6.5f, 10f, 0.5f), new Vector3(9f, 10f, -1f) };
+			Assert.That(InlandWaterRenderer.ConfluenceRunOnRows(joined, falls, runOn, 10f), Is.EqualTo(1), "they stop where they would lie over the fall");
+			var below = new List<Vector3> { new Vector3(-2f, 10f, 2f), new Vector3(12f, 10f, 0f), new Vector3(14f, 10f, -2f) };
+			Assert.That(InlandWaterRenderer.ConfluenceRunOnRows(joined, null, below, 10f), Is.EqualTo(1), "and, with no fall named, where the river stands below the mouth");
+			var clear = new List<Vector3> { new Vector3(-20f, 10f, 2f), new Vector3(-20f, 10f, 0f), new Vector3(-20f, 10f, -2f) };
+			Assert.That(InlandWaterRenderer.ConfluenceRunOnRows(joined, falls, clear, 10f), Is.EqualTo(3), "away from the fall they all stand");
+		}
+
+		/// <summary>
+		/// A ribbon built over a line that doubles back has no quad facing down: the rows where it turns back are left out
+		/// and the inside of the bend is drawn in (InlandWaterRenderer.RowsThatAdvance, RibbonFrames).
+		/// </summary>
+		[Test]
+		public void ARiversSurfaceHasNoTwistedQuadsWhereItsLineDoublesBack()
+		{
+			Shader shader = Shader.Find("FishMMO/Water/Inland Water");
+			var material = new Material(shader);
+			var renderer = host.AddComponent<InlandWaterRenderer>();
+			renderer.Material = material;
+			SceneHydrology.River hairpin = River(5, 5, new Vector3(-600f, 20f, 300f), new Vector3(-560f, 20f, 300f), 8f, 1f, SceneHydrology.End.Edge);
+			// East 40 m, then back west-south-west: a 146° turn in one point, as Flo Monolith's river 0 took.
+			for (int i = 21; i < hairpin.Points.Length; i++)
+			{
+				hairpin.Points[i] = hairpin.Points[20] + new Vector3(-2f * Mathf.Cos(34f * Mathf.Deg2Rad), 0f, -2f * Mathf.Sin(34f * Mathf.Deg2Rad)) * (i - 20);
+			}
+			hydrology.Rivers.Add(hairpin);
+			try
+			{
+				renderer.Rebuild();
+				GameObject surface = null;
+				foreach (GameObject built in renderer.Built)
+				{
+					if (built.name == "River 5")
+					{
+						surface = built;
+					}
+				}
+				Assert.That(surface, Is.Not.Null);
+				Mesh mesh = surface.GetComponent<MeshFilter>().sharedMesh;
+				Vector3[] vertices = mesh.vertices;
+				int[] triangles = mesh.triangles;
+				for (int t = 0; t < triangles.Length; t += 3)
+				{
+					Assert.That(Facing(vertices[triangles[t]], vertices[triangles[t + 1]], vertices[triangles[t + 2]]), Is.GreaterThanOrEqualTo(-1e-4f), $"triangle {t / 3} faces down");
+				}
+			}
+			finally
+			{
+				Object.DestroyImmediate(renderer);
+				Object.DestroyImmediate(material);
+			}
+		}
+
+		/// <summary>
+		/// A lake's outlet runs a few rows on into the lake before the river's first point, and every one of them carries the
+		/// river's speed at that first point. Only the first did; the rest took the speed at the river's mouth.
+		/// </summary>
+		[Test]
+		public void ALakesOutletRowsCarryTheRiversStartSpeed()
+		{
+			Shader shader = Shader.Find("FishMMO/Water/Inland Water");
+			var material = new Material(shader);
+			var renderer = host.AddComponent<InlandWaterRenderer>();
+			renderer.Material = material;
+			// Out of the lake (level 8, east of everything) westward, slow at its outlet and fast at its far end.
+			SceneHydrology.River outlet = River(6, 6, new Vector3(420f, 8f, 0f), new Vector3(300f, 7f, 100f), 6f, 1f, SceneHydrology.End.Edge);
+			outlet.Start = SceneHydrology.End.Lake;
+			outlet.StartLake = 0;
+			for (int i = 0; i < outlet.Speed.Length; i++)
+			{
+				outlet.Speed[i] = Mathf.Lerp(0.4f, 2f, i / (float)(outlet.Speed.Length - 1));
+			}
+			hydrology.Rivers.Add(outlet);
+			try
+			{
+				renderer.Rebuild();
+				GameObject surface = null;
+				foreach (GameObject built in renderer.Built)
+				{
+					if (built.name == "River 6")
+					{
+						surface = built;
+					}
+				}
+				Assert.That(surface, Is.Not.Null);
+				Mesh mesh = surface.GetComponent<MeshFilter>().sharedMesh;
+				var uvs = new List<Vector2>();
+				var banks = new List<Vector4>();
+				mesh.GetUVs(0, uvs);
+				mesh.GetUVs(4, banks);
+				int lakeRows = 0;
+				for (int v = 0; v < uvs.Count; v++)
+				{
+					if (uvs[v].x < 0f)
+					{
+						lakeRows++;
+						Assert.That(banks[v].y, Is.EqualTo(0.4f).Within(1e-4f), $"vertex {v}, {-uvs[v].x:0.0} m into the lake, runs at the outlet's speed");
+					}
+				}
+				Assert.That(lakeRows, Is.GreaterThan(2 * (renderer.Across + 1)), "it runs several rows on into the lake");
 			}
 			finally
 			{

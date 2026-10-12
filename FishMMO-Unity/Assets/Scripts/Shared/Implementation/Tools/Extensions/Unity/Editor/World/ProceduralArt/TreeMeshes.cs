@@ -179,7 +179,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// area is <see cref="LodFoliageShare"/> of <paramref name="full"/>'s (at most <see cref="MaxLodLeafScale"/>).
 		/// The level used to keep a tenth of a conifer's needle area at the same card size (pine 146 leaf triangles
 		/// against 1 396) and about a seventh of a broadleaf's: from fifty metres on a pine stood as a bare trunk with a
-		/// few tufts (Jim, 2026-10-07). Area is linear in the width scale, so one correction lands it.
+		/// few tufts (2026-10-07). Area is linear in the width scale, so one correction lands it.
 		/// </summary>
 		public static MeshBuilder BuildReduced(in TreeSpecies species, int lod, int seed, MeshBuilder full)
 		{

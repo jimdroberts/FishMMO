@@ -41,6 +41,9 @@ half _FishWeatherAmount;
 half _FishVisible;
 // FishMMO edit: 1 on the structure kit's materials: weathered (FishStructureWeathering.hlsl), no ground unfold up the walls.
 half _FishStructure;
+// FishMMO edit: how much moss this surface grows, 0..1 (FishMoss.hlsl; 0, the default, is none and costs one branch).
+// Times the scene's dampness, a global. Set by the art generator on rock, cliff, cave rock and the structure kit.
+half _FishMoss;
 UNITY_TEXTURE_STREAMING_DEBUG_VARS;
 CBUFFER_END
 

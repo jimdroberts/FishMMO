@@ -252,6 +252,7 @@ namespace FishMMO.Shared.WorldDesign
 			[(POIType.Portal, "Arch")] = new[] { "Portal", "Gate", "Arch", "Waygate" },
 			[(POIType.DungeonEntrance, "Door")] = new[] { "Door", "Gate", "Stair", "Doors", "Entrance" },
 			[(POIType.Lighthouse, "Stone")] = new[] { "Lighthouse", "Light", "Beacon" },
+			[(POIType.Dockyard, "Slipway")] = new[] { "Dockyard", "Shipyard", "Slipway", "Yard" },
 			[(POIType.FishingCamp, "Shore")] = new[] { "Fishing Camp", "Landing", "Net-huts" },
 			[(POIType.FishingCamp, "Huts")] = new[] { "Fishing Camp", "Net-huts", "Smokehouse" },
 			[(POIType.LumberCamp, "Timber")] = new[] { "Lumber Camp", "Logging Camp", "Woodyard", "Sawpit" },
@@ -398,7 +399,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 	}
 
-	/// <summary>Who a site belongs to: a seeded pick among the races at home in its biome (Jim, 2026-10-10).</summary>
+	/// <summary>Who a site belongs to: a seeded pick among the races at home in its biome (2026-10-10).</summary>
 	public static class PointOfInterestRaces
 	{
 		/// <summary>One race the planner may pick: its naming key, its category, its affinity for the site's biome.</summary>
@@ -468,7 +469,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	public static class PointOfInterestUnlocks
 	{
-		/// <summary>Jim's default for matching a site to the one it replaces: same kind, within 200 m.</summary>
+		/// <summary>The default for matching a site to the one it replaces: same kind, within 200 m.</summary>
 		public const float MatchMetres = 200f;
 
 		/// <summary>

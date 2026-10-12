@@ -154,7 +154,7 @@ is baked. `MapContent.AppendPointsOfInterest(results, details, definition, fog, 
 reads the details first and the definition's list for back-compat, drawing a landmark that is in both
 (same name, same place to the metre) once.
 
-- **Discovery.** Every generated point requires discovery (Jim, 2026-10-10): it appears once the fog has
+- **Discovery.** Every generated point requires discovery (2026-10-10): it appears once the fog has
   explored its chunk, never before.
 - **Tiers.** A kind's detail tier is 0 to 3 (`PointOfInterestKinds`). It is gated twice: against
   `Cartography.VisibleContentTier` (0 to `Cartography.MaximumDetailTier`, 4; with no provider every tier

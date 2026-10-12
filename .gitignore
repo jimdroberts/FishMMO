@@ -57,9 +57,14 @@ Configuration.cfg
 # the repository root, so saving one from the settings screen lands here.
 UIProfiles/
 
-# Rendered UI panel previews. Generated build output, kept out of the repo but
+# Rendered UI panel previews and other render/probe harness output (see
+# ProbeOutput.cs). Generated build output, kept out of the repo but
 # deliberately durable — /tmp does not survive a reboot.
 PanelRenders/
+WaterRenders/
+WorldRenders/
+HudProbe/
+EquipProbe/
 
 # --- .NET / NuGet ---
 project.lock.json

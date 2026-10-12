@@ -248,7 +248,7 @@ namespace FishMMO.Client
 					break;
 				case AmbientActivity.Nocturnal:
 					// A third of the ground's night creatures (rats, mice, frogs) are about by day too, so a noon walk is not
-					// empty of them (Jim, 2026-10-10); what flies keeps to the dark.
+					// empty of them (2026-10-10); what flies keeps to the dark.
 					hour = Mathf.Lerp(1f, kind.Flies ? 0.12f : DaytimeNocturnalShare, c.Light);
 					break;
 				case AmbientActivity.Crepuscular:

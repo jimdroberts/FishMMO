@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 		DungeonEntrance,
 
 		/*
-		 * Generated points of interest, one type per kind (Jim, 2026-10-10), each named after its
+		 * Generated points of interest, one type per kind (2026-10-10), each named after its
 		 * NameGeneration.POIType value so PointOfInterestKinds.MarkerFor maps them by name. Landmark and
 		 * DungeonEntrance above serve the kinds of the same name. Appended in POIType's order; the ordinal is
 		 * draw order, so new kinds go on the end here too.

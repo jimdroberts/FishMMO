@@ -793,7 +793,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Backdrops ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// The sheer walls behind the clutter (Jim, 2026-10-08: "larger variants as background ... the height
+		/// The sheer walls behind the clutter (2026-10-08: "larger variants as background ... the height
 		/// scale based on the height of the cliff itself ... sheer realistic cliff faces"). Walked along every foot
 		/// line before the footing: at each step the scarp nearest the band's height there
 		/// (<see cref="CliffRocks.FaceShapes"/>), scaled to 85–100 % of it (0.75–1.3 in height, so its beds stay
@@ -1188,7 +1188,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// It was written up·cos θ − down·sin θ, leaning uphill: a mirror of the real slope, 2θ off it, so every talus rock
-		/// was rested on a slope that was not there and stood on end on the cone it lay on (Jim, 2026-10-08; measured on
+		/// was rested on a slope that was not there and stood on end on the cone it lay on (2026-10-08; measured on
 		/// Flo Monolith's re-cut: centre of mass 2.5× the lowest it can rest, 41° between the two normals on the planner's
 		/// own test cliff). Its tests built the slope normal the same wrong way, so they agreed with it.
 		/// </remarks>
@@ -1206,8 +1206,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// It used to keep the best of 24 random orientations. For the round boulders that came first that was close
 		/// enough; for cliff sections, which are blocks with broad flat faces, the best of 24 was almost never face
-		/// down, so 8–12 m blocks stood on an edge or a corner over the talus, looking poised in the air (Jim,
-		/// 2026-10-08). Now the lowest rest is searched for and snapped flat onto its hull face (<see cref="RestingFace"/>);
+		/// down, so 8–12 m blocks stood on an edge or a corner over the talus, looking poised in the air
+		/// (2026-10-08). Now the lowest rest is searched for and snapped flat onto its hull face (<see cref="RestingFace"/>);
 		/// random orientations remain only for an empty mesh.
 		/// </remarks>
 		public static Matrix4x4 StablePose(MeshBuilder mesh, Vector3 com, Vector3 s, Vector3 down, float slopeDegrees, DeterministicRNG rng)
@@ -1323,8 +1323,7 @@ namespace FishMMO.Shared.WorldDesign
 				faces.Add((u, H(u), ContactArea(p, u, size)));
 			}
 			/* Of the faces it can settle on, the broadest that is nearly as steady as the steadiest: on a block the
-			 * steadiest face IS its broadest, but a notched rubble block can sit a shade lower on a narrow face (Jim:
-			 * "shouldn't the largest face lay flat against the terrain?"). */
+			 * steadiest face IS its broadest, but a notched rubble block can sit a shade lower on a narrow face (* "shouldn't the largest face lay flat against the terrain?"). */
 			float lowest = float.MaxValue;
 			foreach ((Vector3 _, float h, float _) in faces)
 			{
@@ -1609,7 +1608,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Seats a section by how much of it shows. A section is a wall standing out of the hill, its back and foot in
 		/// the ground: buried along the slope normal as a boulder is (a third to a half of its thickness, more for the
 		/// footing's base rule), an upright section on a steep face went in until its front was flush with the
-		/// ground — three quarters of it underground, the face a flat cut patch (Jim, Flo Monolith, 2026-10-08).
+		/// ground — three quarters of it underground, the face a flat cut patch (Flo Monolith, 2026-10-08).
 		/// Instead it slides out of the hill along the fall line, re-dropped at every step, until 30–45 % of its
 		/// surface is underground; then every section is lowered (never pushed into the face) while its flat
 		/// underside shows over falling ground.
@@ -1634,7 +1633,7 @@ namespace FishMMO.Shared.WorldDesign
 			rock.Position = new Vector3(start.x, 0f, start.z) + outward * hi;
 			Sink(run, m, c, w, ref rock);
 			/* Every section, not only the footing: slid out of a convex brow, a face or fill block's flat floor hung
-			 * over the falling ground and the block looked poised in the air (Jim, 2026-10-08). Lowered (never pushed
+			 * over the falling ground and the block looked poised in the air (2026-10-08). Lowered (never pushed
 			 * into the face) until no underside shows; one that has to go past SectionMostHidden is refused by Fit. */
 			{
 				float under = Underside(run, m, in rock, height);

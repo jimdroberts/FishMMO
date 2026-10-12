@@ -81,7 +81,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why solids, not a mesh.</b> A ruin is made FROM the intact piece (Jim, 2026-10-10: cut planes, tilt and missing
+	/// <b>Why solids, not a mesh.</b> A ruin is made FROM the intact piece (2026-10-10: cut planes, tilt and missing
 	/// chunks by a decay parameter), and a solid can be cut by a plane and stay closed: <see cref="Clip"/> keeps one side
 	/// and caps the opening, so a broken wall shows a broken top, not a hole into nothing. Clipping a box by its twelve
 	/// edge planes is also how the bevels are made (<see cref="StructureShapes.ChamferBox"/>).
@@ -524,6 +524,117 @@ namespace FishMMO.Shared.WorldDesign
 		private static StructureSolid New(StructureMaterial material, StructureRole role, int key)
 		{
 			return new StructureSolid { Material = material, Role = role, Key = key };
+		}
+
+		/// <summary>
+		/// A solid lofted through closed rings of equal point counts (a hull's stations: each a section's loop): consecutive
+		/// rings joined by planar triangles, the first and last rings capped. The rings run along the loft in order; each
+		/// ring's points must wind the same way, counter-clockwise looking back along the loft (from the last ring toward the
+		/// first), so its faces turn outward. Shaded smooth along and round the loft.
+		/// </summary>
+		public static StructureSolid Loft(IList<Vector3[]> rings, StructureMaterial material, int key, StructureRole role = StructureRole.Structure)
+		{
+			StructureSolid s = New(material, role, key);
+			int count = rings.Count, m = rings[0].Length;
+			// Smooth normals at every grid point: across the ring by its neighbours, along the loft by the next rings.
+			var normals = new Vector3[count, m];
+			for (int i = 0; i < count; i++)
+			{
+				Vector3 along = rings[Mathf.Min(count - 1, i + 1)][0] - rings[Mathf.Max(0, i - 1)][0];
+				for (int j = 0; j < m; j++)
+				{
+					Vector3 alongJ = rings[Mathf.Min(count - 1, i + 1)][j] - rings[Mathf.Max(0, i - 1)][j];
+					if (alongJ.sqrMagnitude < 1e-10f)
+					{
+						alongJ = along;
+					}
+					Vector3 round = rings[i][(j + 1) % m] - rings[i][(j + m - 1) % m];
+					normals[i, j] = Vector3.Cross(round, alongJ).normalized;
+				}
+			}
+			for (int i = 0; i + 1 < count; i++)
+			{
+				for (int j = 0; j < m; j++)
+				{
+					int k = (j + 1) % m;
+					Vector3 a = rings[i][j], b = rings[i][k], c = rings[i + 1][k], d = rings[i + 1][j];
+					AddLoftTriangle(s, a, b, c, normals[i, j], normals[i, k], normals[i + 1, k]);
+					AddLoftTriangle(s, a, c, d, normals[i, j], normals[i + 1, k], normals[i + 1, j]);
+				}
+			}
+			// The end caps: flat, facing back along the loft at the first ring and on along it at the last.
+			Vector3 backward = (Centre(rings[0]) - Centre(rings[1])).normalized;
+			Vector3 forward = (Centre(rings[count - 1]) - Centre(rings[count - 2])).normalized;
+			StructureFace first = Face(backward, rings[0]);
+			StructureFace last = Face(forward, rings[count - 1]);
+			first.Concave = last.Concave = true;
+			// Whichever way the rings wound, the side faces turn outward: the solid's signed volume (each face fanned from its
+			// first corner) says whether they are inside out, and if so every side face is turned (the caps already face out).
+			double volume = 0.0;
+			foreach (StructureFace f in s.Faces)
+			{
+				for (int t = 1; t + 1 < f.Points.Count; t++)
+				{
+					volume += Vector3.Dot(f.Points[0], Vector3.Cross(f.Points[t], f.Points[t + 1]));
+				}
+			}
+			foreach (StructureFace f in new[] { first, last })
+			{
+				for (int t = 1; t + 1 < f.Points.Count; t++)
+				{
+					volume += Vector3.Dot(f.Points[0], Vector3.Cross(f.Points[t], f.Points[t + 1]));
+				}
+			}
+			if (volume < 0.0)
+			{
+				foreach (StructureFace f in s.Faces)
+				{
+					f.Points.Reverse();
+					f.Normal = -f.Normal;
+					if (f.Normals != null)
+					{
+						f.Normals.Reverse();
+						for (int t = 0; t < f.Normals.Count; t++)
+						{
+							f.Normals[t] = -f.Normals[t];
+						}
+					}
+				}
+			}
+			s.Faces.Add(first);
+			s.Faces.Add(last);
+			return s;
+		}
+
+		private static Vector3 Centre(Vector3[] ring)
+		{
+			Vector3 sum = Vector3.zero;
+			foreach (Vector3 p in ring)
+			{
+				sum += p;
+			}
+			return sum / Mathf.Max(1, ring.Length);
+		}
+
+		private static void AddLoftTriangle(StructureSolid s, Vector3 a, Vector3 b, Vector3 c, Vector3 na, Vector3 nb, Vector3 nc)
+		{
+			Vector3 n = Vector3.Cross(b - a, c - a);
+			if (n.sqrMagnitude < 1e-14f)
+			{
+				return;
+			}
+			StructureFace f = Face(n.normalized, a, b, c);
+			if (f.Points.Count == 3)
+			{
+				// Smooth only where the smooth normals agree with the face: at a sharp edge (a hull's gunwale, where the outside
+				// skin turns into the inside) the face shades flat.
+				Vector3 fn = n.normalized;
+				if (Vector3.Dot(na, fn) > 0.5f && Vector3.Dot(nb, fn) > 0.5f && Vector3.Dot(nc, fn) > 0.5f)
+				{
+					f.Normals = new List<Vector3> { na, nb, nc };
+				}
+				s.Faces.Add(f);
+			}
 		}
 
 		/// <summary>An axis-aligned box from its centre and size.</summary>
