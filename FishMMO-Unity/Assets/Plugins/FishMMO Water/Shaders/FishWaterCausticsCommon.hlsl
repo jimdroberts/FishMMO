@@ -142,10 +142,13 @@ half FishWaterCausticLight(float3 positionWS)
 	float depth = _FishWaterLevel - positionWS.y;
 	Light sun = GetMainLight();
 	float3 toSun = sun.direction;
-	if (_FishWaterCaustics.x > 0.0 && depth > 0.02 && toSun.y > 0.02)
+	half fadeDistance = max(1.0, _FishWaterCaustics.z);
+	float seen = distance(_WorldSpaceCameraPos, positionWS);
+	/* Past the fade distance the strength below is exactly nothing (the smoothstep is 1 from its far edge on), and
+	 * a strength of nothing leaves the light at exactly 1: so those pixels skip the sun's shadow and the eight taps
+	 * of the slope maps, and come out the same. */
+	if (_FishWaterCaustics.x > 0.0 && depth > 0.02 && toSun.y > 0.02 && seen < fadeDistance)
 	{
-		float focus = FishWaterCausticFocus(positionWS, depth, toSun);
-
 		/* How much of that reaches here to be seen. The light scatters and is absorbed on its way
 		 * down, so the contrast dies with depth; the pattern is finer than a pixel a little way off,
 		 * where it would only shimmer, so it fades with distance; it starts from nothing at the
@@ -153,12 +156,16 @@ half FishWaterCausticLight(float3 positionWS)
 		 * and out from under the clouds. */
 		half shadow = MainLightRealtimeShadow(TransformWorldToShadowCoord(positionWS));
 		half open = saturate(toSun.y * 3.0) * shadow * saturate(_FishWaterCloudShadow);
-		half fadeDistance = max(1.0, _FishWaterCaustics.z);
-		half far = 1.0 - smoothstep(fadeDistance * 0.5, fadeDistance, distance(_WorldSpaceCameraPos, positionWS));
+		half far = 1.0 - smoothstep(fadeDistance * 0.5, fadeDistance, seen);
 		half strength = _FishWaterCaustics.x * exp(-depth / max(0.5, _FishWaterCaustics.y))
 			* smoothstep(0.02, 0.3, depth) * open * far;
 
-		light = max(0.0, 1.0 + (focus - 1.0) * strength);
+		// The focus only where something of it shows: in full shadow or under full cloud the light is 1 whatever it is.
+		if (strength > 0.0)
+		{
+			float focus = FishWaterCausticFocus(positionWS, depth, toSun);
+			light = max(0.0, 1.0 + (focus - 1.0) * strength);
+		}
 	}
 	return light;
 }

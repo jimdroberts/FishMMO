@@ -15,8 +15,8 @@ NavMeshProjectSettings:
     cost: 4
   - name: Lava
     cost: 8
-  - name: 
-    cost: 1
+  - name: Climb
+    cost: 3
   - name: 
     cost: 1
   - name: 

@@ -53,9 +53,9 @@ namespace FishMMO.Client
 				long triangles = (long)args[c].instanceCount * (args[c].indexCountPerInstance / 3);
 				instancesBy[view, level] += args[c].instanceCount;
 				trianglesBy[view, level] += triangles;
-				if (view == 0 && command.Mesh != null)
+				if (view == 0 && command.SourceMesh != null)
 				{
-					string key = $"{command.Mesh.name} L{level}";
+					string key = $"{command.SourceMesh.name} L{level}";
 					byMesh[key] = (byMesh.TryGetValue(key, out long t) ? t : 0) + triangles;
 				}
 			}

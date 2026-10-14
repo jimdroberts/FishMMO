@@ -150,6 +150,50 @@ namespace FishMMO.Client
 		public static bool LastResolvedByCompute => lastPass != null && lastPass.LastByCompute;
 
 		/// <summary>
+		/// How far the light shafts reach across the frame, in screen heights (the gather's <c>_FishGodRayParams.z</c>). An
+		/// eclipse's rays belong around the body, not across the whole sky, so they reach a shorter way — what they rake
+		/// around is the silhouette itself.
+		/// </summary>
+		public static float GodRayReach(SkySystem sky) => sky.GodRayEclipse > 0.02f ? 0.35f : 0.9f;
+
+		/// <summary>
+		/// Whether the light shafts' gather (FishClouds pass 4, CloudGodRays) can find anything at any pixel of the frame.
+		/// It returns nothing where the light stands behind the camera (clip w ≤ 0), where the light stands so far outside
+		/// the frame that its fade (<c>framed</c>, gone at 0.6 of a screen height) is spent, and where a pixel is farther
+		/// from the light than the reach (<c>spread</c> ≥ 1) — and no pixel is nearer the light than the frame's nearest
+		/// edge. With nothing gathered the composite (pass 5) writes (0, 0, 0, 1) through Blend One SrcAlpha, Zero One:
+		/// the frame unchanged. So when this is false neither pass is drawn, and the frame is the same.
+		/// </summary>
+		/// <remarks>
+		/// Worked out as the shader works it, with room to spare: the GPU's floats need not land where these do at the
+		/// edge, so the light must be clearly behind (w under −1000 of the 10⁶ m point the shader projects) or clearly
+		/// outside the fade or the reach (by 2 % and a hundredth of a screen) before the passes are left out.
+		/// <paramref name="aspect"/> is the narrowest the shader may take the frame to be: a narrower one brings the
+		/// light nearer, so it only ever draws more.
+		/// </remarks>
+		public static bool GodRaysReachFrame(Matrix4x4 viewProjection, Vector3 camera, Vector3 toLight, float reach, float aspect)
+		{
+			var far = new Vector4(camera.x + toLight.x * 1e6f, camera.y + toLight.y * 1e6f, camera.z + toLight.z * 1e6f, 1f);
+			Vector4 clip = viewProjection * far;
+			if (clip.w < -1000f)
+			{
+				return false;
+			}
+			if (clip.w <= 1000f)
+			{
+				// Near the edge of behind: whatever the GPU's sign, the light is a thousand screens out, but leave it be.
+				return true;
+			}
+			float lx = clip.x / clip.w * 0.5f + 0.5f;
+			float ly = clip.y / clip.w * 0.5f + 0.5f;
+			float outX = Mathf.Max(0f, Mathf.Max(-lx, lx - 1f)) * Mathf.Max(0f, aspect);
+			float outY = Mathf.Max(0f, Mathf.Max(-ly, ly - 1f));
+			float outside = Mathf.Sqrt(outX * outX + outY * outY);
+			float gone = Mathf.Min(0.6f, reach) * 1.02f + 0.01f;
+			return outside < gone;
+		}
+
+		/// <summary>
 		/// The reconstruction options under trial (issue #238: "the towers look very spotty"), all off
 		/// by default, and off is the rendering exactly as it was. Set by the probes from
 		/// <c>FISHMMO_CLOUD_OPTIONS</c> so each can be rendered alone and together; nothing in the game
@@ -425,6 +469,8 @@ namespace FishMMO.Client
 			private static readonly int MarchParamsId = Shader.PropertyToID("_FishCloudMarchParams");
 			private static readonly int FarTailId = Shader.PropertyToID("_FishCloudFarTail");
 			private static readonly int LodParamsId = Shader.PropertyToID("_FishCloudLodParams");
+			/// <summary>The imposter panorama's texel as an angle: √(4π) / size radians (an octahedral sphere's mean texel), its march's pixel cone.</summary>
+			private static readonly int ImposterConeId = Shader.PropertyToID("_FishCloudImposterCone");
 			private static readonly int TemporalId = Shader.PropertyToID("_FishCloudTemporal");
 			private static readonly int JitterId = Shader.PropertyToID("_FishCloudJitter");
 			private static readonly int UpsampleId = Shader.PropertyToID("_FishCloudUpsample");
@@ -513,6 +559,8 @@ namespace FishMMO.Client
 			/// settles on either.
 			/// </summary>
 			private readonly Dictionary<Camera, CloudHistory> histories = new Dictionary<Camera, CloudHistory>();
+			/// <summary>Cameras whose clouds were not drawn on a frame because the view was sealed (UndergroundView).</summary>
+			private readonly HashSet<Camera> gapped = new HashSet<Camera>();
 			private readonly List<Camera> forgotten = new List<Camera>();
 			private CloudHistory lastDrawn;
 			private CloudHistory lastGameDrawn;
@@ -691,6 +739,28 @@ namespace FishMMO.Client
 			}
 			#endif
 
+			// The far passes' indices, looked up by name once for a material and its shader (FindPass compares strings).
+			private Material passesOf;
+			private Shader passesShader;
+			private int passesCount = -1;
+			private int farBandPass = -1, imposterUpdatePass = -1, imposterDrawPass = -1;
+
+			private void FindPasses()
+			{
+				Shader shader = material.shader;
+				int count = material.passCount;
+				if (passesOf == material && passesShader == shader && passesCount == count)
+				{
+					return;
+				}
+				passesOf = material;
+				passesShader = shader;
+				passesCount = count;
+				farBandPass = material.FindPass("CloudFarBand");
+				imposterUpdatePass = material.FindPass("CloudFarImposterUpdate");
+				imposterDrawPass = material.FindPass("CloudFarImposter");
+			}
+
 			public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
 			{
 				if (material == null || !SkySystem.CloudsReady)
@@ -750,11 +820,33 @@ namespace FishMMO.Client
 				bool byCompute = randomWrite && resourceData.cameraDepthTexture.IsValid()
 					&& width <= outputWidth && height <= outputHeight;
 
+				/* Sealed in a cave (UndergroundView): the march, the steadying and the composite would be faded to nothing at
+				 * every pixel, so none is drawn and nothing of the camera's history is touched — it is started afresh when the
+				 * view opens. The light shafts take no such fade and are drawn as ever, the clouds' buffer stood in for: the
+				 * gather reads it only at the sky, and a sealed view has none. */
+				if (cameraData.cameraType == CameraType.Game && UndergroundView.Sealed(cameraData.camera))
+				{
+					gapped.Add(cameraData.camera);
+					Matrix4x4 sealedViewProjection = GL.GetGPUProjectionMatrix(cameraData.camera.projectionMatrix, true) * cameraData.GetViewMatrix();
+					if (GodRaysDrawn(sky, cameraData, sealedViewProjection, screenWidth, screenHeight, width, height))
+					{
+						DrawGodRays(renderGraph, resourceData, sky, renderGraph.defaultResources.whiteTexture, sealedViewProjection, width / 2, height / 2);
+					}
+					return;
+				}
+
 				float now = Time.realtimeSinceStartup;
 				Forget(now);
 				CloudHistory state = HistoryFor(cameraData.camera, outputWidth, outputHeight, randomWrite);
 				state.LastDrawn = now;
 				byCompute &= state.RandomWrite;
+				if (gapped.Remove(cameraData.camera))
+				{
+					// Not drawn while the view was sealed: what the history holds is of then, and is not carried on.
+					state.Valid = false;
+					state.NearValid = false;
+					state.FarValid = Vector4.zero;
+				}
 
 				Matrix4x4 view = cameraData.GetViewMatrix();
 				// The camera's own projection, never URP's jittered one (GetProjectionMatrix carries the
@@ -907,12 +999,13 @@ namespace FishMMO.Client
 				TextureHandle weightWrite = renderGraph.ImportTexture(state.Weight[1 - state.Index]);
 
 				// The far band (CloudFarBand) begins here, metres; 0: one band.
-				int farPass = material.FindPass("CloudFarBand");
+				FindPasses();
+				int farPass = farBandPass;
 				float band = FarBandEnabled && farPass >= 0 ? Mathf.Max(0f, sky.CloudFarBandMetres) : 0f;
 				int marching = FarSliceOverride >= 0 ? FarSliceOverride % FarSlices : state.Frame % FarSlices;
 				// The far imposter: refreshed a band of rows a frame, and drawn in place of the far band once it has been filled.
-				int imposterRefreshPass = material.FindPass("CloudFarImposterUpdate");
-				int imposterPass = material.FindPass("CloudFarImposter");
+				int imposterRefreshPass = imposterUpdatePass;
+				int imposterPass = imposterDrawPass;
 				bool imposterOn = band > 0f && FarImposterEnabled && sky.CloudFarImposter && imposterRefreshPass >= 0 && imposterPass >= 0;
 				bool imposterShown = false;
 				int imposterRowStart = 0, imposterRows = 0, imposterSize = 0;
@@ -922,6 +1015,7 @@ namespace FishMMO.Client
 				if (imposterOn)
 				{
 					imposterSize = sky.CloudFarImposterSize;
+					Shader.SetGlobalFloat(ImposterConeId, 3.5449077f / Mathf.Max(1, imposterSize));
 					if (state.ImposterSize != imposterSize || state.Imposter[0][0] == null)
 					{
 						state.AllocateImposter(imposterSize);
@@ -933,7 +1027,18 @@ namespace FishMMO.Client
 						state.ResetImposter();
 					}
 					imposterShown = state.ImposterFilled;
-					int perFrame = Mathf.CeilToInt(imposterSize / (float)Mathf.Max(1, sky.CloudFarImposterRefreshFrames));
+					int perFrame;
+					if (sky.CloudFarImposterRefreshSeconds > 0f)
+					{
+						// By time: the rows this frame's share of the refresh period comes to, the fraction carried on.
+						state.ImposterRowCarry += imposterSize * Mathf.Min(Time.unscaledDeltaTime, 0.25f) / sky.CloudFarImposterRefreshSeconds;
+						perFrame = Mathf.Max(1, (int)state.ImposterRowCarry);
+						state.ImposterRowCarry = Mathf.Max(0f, state.ImposterRowCarry - perFrame);
+					}
+					else
+					{
+						perFrame = Mathf.CeilToInt(imposterSize / (float)Mathf.Max(1, sky.CloudFarImposterRefreshFrames));
+					}
 					if (!state.ImposterFilled)
 					{
 						perFrame *= 2;
@@ -1073,7 +1178,9 @@ namespace FishMMO.Client
 					TextureHandle[] imposterNewer = null, imposterOlder = null;
 					if (imposterOn)
 					{
-						var building = new TextureHandle[4];
+						// Each panorama's handles in an array of its own kept with the camera's history (one per panorama, so the
+						// newer and the older are never one array unless they are one panorama), filled afresh every frame.
+						TextureHandle[] building = state.ImposterHandles[state.ImposterBuild];
 						TextureHandle[] source = null;
 						for (int i = 0; i < building.Length; i++)
 						{
@@ -1081,7 +1188,7 @@ namespace FishMMO.Client
 						}
 						if (state.ImposterNewest >= 0)
 						{
-							imposterNewer = new TextureHandle[4];
+							imposterNewer = state.ImposterHandles[state.ImposterNewest];
 							for (int i = 0; i < imposterNewer.Length; i++)
 							{
 								imposterNewer[i] = renderGraph.ImportTexture(state.Imposter[state.ImposterNewest][i]);
@@ -1090,7 +1197,7 @@ namespace FishMMO.Client
 							imposterOlder = imposterNewer;
 							if (state.ImposterOlder >= 0)
 							{
-								imposterOlder = new TextureHandle[4];
+								imposterOlder = state.ImposterHandles[state.ImposterOlder];
 								for (int i = 0; i < imposterOlder.Length; i++)
 								{
 									imposterOlder[i] = renderGraph.ImportTexture(state.Imposter[state.ImposterOlder][i]);
@@ -1141,8 +1248,8 @@ namespace FishMMO.Client
 						farOut = renderGraph.CreateTexture(marchDesc);
 						farOutMotion = renderGraph.CreateTexture(motionDesc);
 					}
-					var slices = new TextureHandle[FarSlices];
-					var sliceInfos = new TextureHandle[FarSlices];
+					TextureHandle[] slices = state.FarHandles;
+					TextureHandle[] sliceInfos = state.FarInfoHandles;
 					for (int i = 0; i < FarSlices && runFarBand; i++)
 					{
 						slices[i] = renderGraph.ImportTexture(state.Far[i]);
@@ -1379,7 +1486,9 @@ namespace FishMMO.Client
 				/* Not from under the water (2026-10-06: the sky's glow showed on things under the sea): the shafts rake
 				 * out from the sun across the frame, and under the surface the water's own pass (FishMMO/Water/Underwater)
 				 * draws the sun's shafts as the water bends and scatters them. */
-				if (sky.GodRayIntensity > 0.001f && SkySystem.DrawGodRays && !SurfaceWater.IsUnder(cameraData.camera.transform.position))
+				/* Nor when the gather would find nothing anywhere in the frame (GodRaysReachFrame): the light behind the camera, or
+				 * so far outside the frame that its fade or its reach ends before the frame's nearest edge. */
+				if (GodRaysDrawn(sky, cameraData, viewProjection, screenWidth, screenHeight, width, height))
 				{
 					DrawGodRays(renderGraph, resourceData, sky, steadied, viewProjection, width / 2, height / 2);
 				}
@@ -1548,6 +1657,7 @@ namespace FishMMO.Client
 					CloudHistory state = histories[camera];
 					state.Release();
 					histories.Remove(camera);
+					gapped.Remove(camera);
 					if (lastDrawn == state)
 					{
 						lastDrawn = null;
@@ -1572,14 +1682,28 @@ namespace FishMMO.Client
 			/// medium: haze, mist and rain, with a small floor. During an eclipse the light comes from
 			/// the ring around the body covering the sun, which is where the rays should rake out from.
 			/// </remarks>
+			/// <summary>
+			/// Whether the light shafts are drawn for this camera: asked for, not from under the water, and with anything for the
+			/// gather to find in the frame (<see cref="GodRaysReachFrame"/>, at the narrowest the frame may be taken to be).
+			/// </summary>
+			private static bool GodRaysDrawn(SkySystem sky, UniversalCameraData cameraData, Matrix4x4 viewProjection, int screenWidth, int screenHeight,
+				int width, int height)
+			{
+				if (!(sky.GodRayIntensity > 0.001f) || !SkySystem.DrawGodRays || SurfaceWater.IsUnder(cameraData.camera.transform.position))
+				{
+					return false;
+				}
+				float aspect = Mathf.Min(cameraData.camera.aspect, (float)screenWidth / Mathf.Max(1, screenHeight),
+					Mathf.Max(8, width / 2) / (float)Mathf.Max(8, height / 2));
+				return GodRaysReachFrame(viewProjection, cameraData.worldSpaceCameraPos, sky.GodRayDirection, GodRayReach(sky), aspect);
+			}
+
 			private void DrawGodRays(RenderGraph renderGraph, UniversalResourceData resourceData, SkySystem sky, TextureHandle clouds, Matrix4x4 viewProjection, int width, int height)
 			{
 				material.SetMatrix(RayVPId, viewProjection);
 				Vector3 direction = sky.GodRayDirection;
 				material.SetVector(RayDirId, new Vector4(direction.x, direction.y, direction.z, 0f));
-				// An eclipse's rays belong around the body, not across the whole sky, so they reach a
-				// shorter way — what they rake around is the silhouette itself.
-				float reach = sky.GodRayEclipse > 0.02f ? 0.35f : 0.9f;
+				float reach = GodRayReach(sky);
 				float medium = sky.GodRayMedium;
 				// Falloff per screen height, how near the world has to be to be left out of it, reach, taps.
 				// Near things are left out on purpose: only cloud and distant terrain cast a shaft.
@@ -1684,12 +1808,17 @@ namespace FishMMO.Client
 				/// dozen sweeps to follow a change.
 				/// </summary>
 				public readonly RTHandle[][] Imposter = { new RTHandle[4], new RTHandle[4], new RTHandle[4] };
+				/// <summary>The graph's handles to each panorama's layers and to the far slices, this frame's: kept, not made each frame.</summary>
+				public readonly TextureHandle[][] ImposterHandles = { new TextureHandle[4], new TextureHandle[4], new TextureHandle[4] };
+				public readonly TextureHandle[] FarHandles = new TextureHandle[FarSlices];
+				public readonly TextureHandle[] FarInfoHandles = new TextureHandle[FarSlices];
 				/// <summary>Each panorama's moment: where the camera stood and how far the low clouds had drifted when it was begun.</summary>
 				public readonly Vector3[] ImposterCamera = new Vector3[3];
 				public readonly Vector2[] ImposterDrift = new Vector2[3];
 				public int ImposterSize;
-				/// <summary>The next row of the panorama being built.</summary>
+				/// <summary>The next row of the panorama being built, and the fraction of a row owed to it (a refresh by time).</summary>
 				public int ImposterRow;
+				public float ImposterRowCarry;
 				/// <summary>Which panorama is being built, which is the newest whole one, and which the one before it (−1: none yet).</summary>
 				public int ImposterBuild;
 				public int ImposterNewest = -1;
@@ -1703,6 +1832,7 @@ namespace FishMMO.Client
 					ImposterNewest = -1;
 					ImposterOlder = -1;
 					ImposterRow = 0;
+					ImposterRowCarry = 0f;
 				}
 
 				/// <summary>The panorama being built is whole: it is the newest, the newest before it the older, and the third is built next.</summary>

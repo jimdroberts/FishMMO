@@ -1,6 +1,8 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -251,6 +253,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			var scratch = new float[Math.Max(1, biomes)];
+			// The planner asks its sites from several threads: each keeps its own weights.
+			using var siteScratch = new ThreadLocal<float[]>(() => new float[Math.Max(1, biomes)]);
 			CliffRockSiteAt siteAt = (float x, float z, float y, out CliffRockSite site) =>
 			{
 				site = default;
@@ -258,7 +262,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return false;
 				}
-				int b = field.DominantIndexAt(x, z, scratch);
+				int b = field.DominantIndexAt(x, z, siteScratch.Value);
 				if (b < 0 || rock[b] == null)
 				{
 					return false;
@@ -313,6 +317,16 @@ namespace FishMMO.Shared.WorldDesign
 				return m;
 			}, options.Placement);
 			report.Stats = plan.Stats;
+			UnityEngine.Debug.Log($"[Cliffs] planned {plan.Rocks.Count:N0} rock(s) in {plan.Stats.Timing}.");
+			var phases = new List<string>();
+			double lapAt = 0.0;
+			void Lap(string phase)
+			{
+				double now = clock.Elapsed.TotalSeconds;
+				phases.Add($"{phase} {now - lapAt:0.0} s");
+				lapAt = now;
+			}
+			Lap("plan and seating");
 			if (options.Excluded != null && plan.Rocks.Count > 0)
 			{
 				/* A rock is sited by its centre, but a cliff section is tens of metres across: one centred just outside a
@@ -361,6 +375,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				CleanScatter(ground, plan, report);
 			}
+			Lap("keep-outs, talus cones and scatter cleared");
 
 			int layer = ColliderLayer;
 			var root = new GameObject(RootName) { layer = layer };
@@ -422,11 +437,15 @@ namespace FishMMO.Shared.WorldDesign
 				report.Pieces++;
 				report.PiecesByType[piece.Type] = (report.PiecesByType.TryGetValue(piece.Type, out int n) ? n : 0) + 1;
 			}
+			Lap("prefabs");
 			// Vines hung off the crags' edges in the biomes that grow them (VinePlacement): with the rocks' own props, so a re-placing
 			// clears them together; no collider, so no collision.
 			VinePlacement.HangFromCrags(plan.Rocks, r => seating.TryGetValue(CliffRocks.MeshName(in r.Piece, CliffRocks.CollisionLod), out MeshBuilder m) ? m : null,
 				field, ground, seed, prototypes, props, report.Notes);
+			Lap("crag vines");
 			report.Collidable = ScenePropBaker.Write(scene, PropSource, prototypes, props, layer);
+			Lap("props and collision baked");
+			UnityEngine.Debug.Log($"[Cliffs] {plan.Rocks.Count:N0} rock(s) in {clock.Elapsed.TotalSeconds:0.0} s: {string.Join("; ", phases)}.");
 			if (report.MissingAssets > 0)
 			{
 				report.Notes.Add($"Cliffs: {report.MissingAssets} rock(s) left out because their generated assets are missing (e.g. '{firstMissing}'); run Generate Biome Art, then repaint.");
@@ -795,33 +814,54 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					continue;
 				}
+				// The texels to clear, row by row in parallel (the plan only reads), and the window they fall in.
 				var clear = new bool[dres, dres];
-				bool any = false;
-				for (int j = 0; j < dres; j++)
+				var rowFirst = new int[dres];
+				var rowLast = new int[dres];
+				Vector3 origin = tile.Origin, size = tile.Size;
+				Parallel.For(0, dres, new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) }, j =>
 				{
+					int first = dres, last = -1;
 					for (int i = 0; i < dres; i++)
 					{
-						float x = tile.Origin.x + (i + 0.5f) / dres * tile.Size.x, z = tile.Origin.z + (j + 0.5f) / dres * tile.Size.z;
+						float x = origin.x + (i + 0.5f) / dres * size.x, z = origin.z + (j + 0.5f) / dres * size.z;
 						if (plan.UnderRock(x, z, 0.15f) || plan.Debris(x, z) > 0.5f)
 						{
 							clear[j, i] = true;
-							any = true;
+							first = Math.Min(first, i);
+							last = i;
 						}
 					}
+					rowFirst[j] = first;
+					rowLast[j] = last;
+				});
+				int i0 = dres, i1 = -1, j0 = dres, j1 = -1;
+				for (int j = 0; j < dres; j++)
+				{
+					if (rowLast[j] < 0)
+					{
+						continue;
+					}
+					i0 = Math.Min(i0, rowFirst[j]);
+					i1 = Math.Max(i1, rowLast[j]);
+					j0 = Math.Min(j0, j);
+					j1 = j;
 				}
-				if (!any)
+				if (i1 < 0)
 				{
 					continue;
 				}
+				// Only that window of each layer is read and written back: the rest of the layer is untouched either way.
+				int width = i1 - i0 + 1, height = j1 - j0 + 1;
 				foreach (int layer in layers)
 				{
-					int[,] map = data.GetDetailLayer(0, 0, dres, dres, layer);
+					int[,] map = data.GetDetailLayer(i0, j0, width, height, layer);
 					bool changed = false;
-					for (int j = 0; j < dres; j++)
+					for (int j = 0; j < height; j++)
 					{
-						for (int i = 0; i < dres; i++)
+						for (int i = 0; i < width; i++)
 						{
-							if (clear[j, i] && map[j, i] != 0)
+							if (clear[j0 + j, i0 + i] && map[j, i] != 0)
 							{
 								map[j, i] = 0;
 								report.DetailTexelsCleared++;
@@ -831,7 +871,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (changed)
 					{
-						data.SetDetailLayer(0, 0, layer, map);
+						data.SetDetailLayer(i0, j0, layer, map);
 					}
 				}
 				EditorUtility.SetDirty(data);

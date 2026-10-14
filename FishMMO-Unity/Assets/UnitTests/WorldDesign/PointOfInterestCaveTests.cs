@@ -462,6 +462,215 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
+		// ── Characters and their features (2026-10-13) ────────────
+
+		private static List<(CaveSystem System, Func<float, float, float> Ground)> variety;
+
+		/// <summary>Caves of every size over a dozen seeds each, planned once for the fixture: what the feature tests look through.</summary>
+		private static List<(CaveSystem System, Func<float, float, float> Ground)> Variety()
+		{
+			if (variety == null)
+			{
+				variety = new List<(CaveSystem, Func<float, float, float>)>();
+				for (int size = 0; size <= 2; size++)
+				{
+					for (int seed = 1; seed <= 12; seed++)
+					{
+						CaveSystem system = PlanCave(CaveForm.Cave, size, seed, out Func<float, float, float> g);
+						variety.Add((system, g));
+					}
+				}
+			}
+			return variety;
+		}
+
+		[Test]
+		public void EveryCharacterTurnsUpAndLaysItsFeatures()
+		{
+			var characters = new HashSet<CaveCharacter>();
+			bool rift = false, bridge = false, spiral = false, column = false, ramp = false, climb = false, loop = false, hall = false;
+			foreach ((CaveSystem system, _) in Variety())
+			{
+				characters.Add(system.Character);
+				rift |= system.Rifts.Count > 0;
+				climb |= system.Climbs.Count > 0;
+				loop |= system.Passages.Exists(p => p.Kind == CavePassageKind.Link);
+				foreach (CaveSolid solid in system.Solids)
+				{
+					bridge |= solid.Kind == CaveSolidKind.Bridge;
+					spiral |= solid.Kind == CaveSolidKind.Spiral;
+					column |= solid.Kind == CaveSolidKind.Column;
+					ramp |= solid.Kind == CaveSolidKind.Ramp;
+				}
+				hall |= system.Chambers.Exists(c => Mathf.Max(c.Radii.x, c.Radii.z) >= 28f);
+			}
+			Assert.That(characters.Count, Is.GreaterThanOrEqualTo(5), $"characters seen: {string.Join(", ", characters)}");
+			Assert.That(rift, Is.True, "a chasm somewhere");
+			Assert.That(bridge, Is.True, "a natural bridge over one");
+			Assert.That(spiral, Is.True, "a pit wound round by its ledge");
+			Assert.That(column, Is.True, "a giant column in a hall");
+			Assert.That(ramp, Is.True, "a ramp between a hall's terraces");
+			Assert.That(climb, Is.True, "a climb between floors");
+			Assert.That(loop, Is.True, "a way that joins two hubs again");
+			Assert.That(hall, Is.True, "an enormous hall (56 m across or more)");
+		}
+
+		[Test]
+		public void NothingCanBeFallenIntoWithoutAWayOut()
+		{
+			foreach ((CaveSystem system, _) in Variety())
+			{
+				string what = $"{system.Character} seed {system.Seed}";
+				foreach (CaveClimb c in system.Climbs)
+				{
+					Assert.That(system.ClimbFits(c), Is.True, $"{what}: the climb from {c.Bottom} to {c.Top} is clear and can be stepped off");
+				}
+				foreach (CaveRift rift in system.Rifts)
+				{
+					bool climbed = system.Climbs.Exists(c =>
+					{
+						var ab = new Vector2(rift.B.x - rift.A.x, rift.B.z - rift.A.z);
+						var ap = new Vector2(c.Bottom.x - rift.A.x, c.Bottom.z - rift.A.z);
+						float t = Mathf.Clamp01(Vector2.Dot(ap, ab) / ab.sqrMagnitude);
+						return (ap - ab * t).magnitude < rift.Width + 1f && Mathf.Abs(c.Bottom.y - rift.A.y) < 3f;
+					});
+					Assert.That(climbed, Is.True, $"{what}: a chasm with a climb out of it");
+				}
+				foreach (CaveShaft shaft in system.Shafts)
+				{
+					bool ledge = system.Solids.Exists(o => o.Kind == CaveSolidKind.Spiral && new Vector2(o.A.x - shaft.Bottom.x, o.A.z - shaft.Bottom.z).magnitude < 0.1f);
+					bool climbed = system.Climbs.Exists(c => new Vector2(c.Bottom.x - shaft.Bottom.x, c.Bottom.z - shaft.Bottom.z).magnitude < shaft.Radius + 0.5f);
+					Assert.That(ledge || climbed, Is.True, $"{what}: a shaft with a ledge or a climb out of it");
+				}
+			}
+		}
+
+		[Test]
+		public void ABridgeCarriesTheWayOverItsChasm()
+		{
+			int bridges = 0;
+			foreach ((CaveSystem system, _) in Variety())
+			{
+				foreach (CaveSolid bridge in system.Solids)
+				{
+					if (bridge.Kind != CaveSolidKind.Bridge)
+					{
+						continue;
+					}
+					bridges++;
+					for (float t = 0.1f; t <= 0.9f; t += 0.1f)
+					{
+						Vector3 deck = Vector3.Lerp(bridge.A, bridge.B, t);
+						Assert.That(system.Void(deck - Vector3.up * 0.25f), Is.GreaterThanOrEqualTo(0f), $"seed {system.Seed}: rock under the deck at {t:0.0}");
+						Assert.That(RoofOver(system, deck + Vector3.up * 0.1f) - deck.y, Is.GreaterThanOrEqualTo(2.2f), $"seed {system.Seed}: headroom over the deck at {t:0.0}");
+					}
+					Vector3 middle = Vector3.Lerp(bridge.A, bridge.B, 0.5f);
+					Vector3 beside = middle + Vector3.Cross(Vector3.up, (bridge.B - bridge.A).normalized) * (bridge.Width + 1.2f);
+					Assert.That(FloorUnder(system, beside + Vector3.up * 0.5f), Is.LessThan(middle.y - 4f), $"seed {system.Seed}: the chasm falls away beside it");
+				}
+			}
+			Assert.That(bridges, Is.GreaterThan(0));
+		}
+
+		[Test]
+		public void APitsLedgeCanBeWalkedToItsFloor()
+		{
+			int pits = 0;
+			foreach ((CaveSystem system, _) in Variety())
+			{
+				foreach (CaveSolid pit in system.Solids)
+				{
+					if (pit.Kind != CaveSolidKind.Spiral)
+					{
+						continue;
+					}
+					pits++;
+					float pitch = Mathf.Abs(pit.Arch), hand = Mathf.Sign(pit.Arch);
+					float last = (pit.B.y - pit.A.y) / pitch;
+					float radius = pit.Depth - 0.5f * pit.Width;
+					float previous = float.NaN;
+					for (float phi = 0.05f; phi < last - 0.05f; phi += 0.5f / radius)
+					{
+						float yaw = pit.Angle * Mathf.Deg2Rad + hand * phi;
+						float ledge = pit.B.y - phi * pitch;
+						var p = new Vector3(pit.A.x + Mathf.Sin(yaw) * radius, ledge + 1f, pit.A.z + Mathf.Cos(yaw) * radius);
+						float floor = FloorUnder(system, p);
+						Assert.That(floor, Is.EqualTo(ledge).Within(0.35f), $"seed {system.Seed}: the ledge is under foot {phi:0.00} rad down");
+						Assert.That(RoofOver(system, new Vector3(p.x, floor + 0.1f, p.z)) - floor, Is.GreaterThanOrEqualTo(2.2f), $"seed {system.Seed}: headroom on the ledge");
+						if (!float.IsNaN(previous))
+						{
+							Assert.That(Mathf.Atan2(Mathf.Abs(floor - previous), 0.5f) * Mathf.Rad2Deg, Is.LessThanOrEqualTo(42f), $"seed {system.Seed}: the ledge is walkable");
+						}
+						previous = floor;
+					}
+				}
+			}
+			Assert.That(pits, Is.GreaterThan(0));
+		}
+
+		[Test]
+		public void AFeaturedCaveStoresAndRebuildsExactly()
+		{
+			foreach ((CaveSystem system, _) in Variety())
+			{
+				float[] values = system.ToValues();
+				CaveSystem back = CaveSystem.FromValues(values, system.Origin, system.Seed);
+				Assert.That(back, Is.Not.Null, $"seed {system.Seed}");
+				Assert.That(back.ToValues(), Is.EqualTo(values), $"seed {system.Seed}: round trip");
+				foreach (CaveChamber c in system.Chambers)
+				{
+					Vector3 p = new Vector3(c.Centre.x, c.Floor + 1f, c.Centre.z);
+					Assert.That(back.Void(p), Is.EqualTo(system.Void(p)), "the same field");
+				}
+			}
+		}
+
+		[Test]
+		public void AMineGoesDownByShaftsAndInclines()
+		{
+			bool shaft = false, deeper = false, broke = false;
+			for (int seed = 1; seed <= 10; seed++)
+			{
+				CaveSystem mine = PlanCave(CaveForm.Mine, 2, seed, out _);
+				Assert.That(mine.Character, Is.EqualTo(CaveCharacter.Workings));
+				shaft |= mine.Shafts.Exists(s => s.Square) && mine.Climbs.Exists(c => c.Kind == CaveClimbKind.Ladder);
+				float adit = mine.Passages[0].Nodes[mine.Passages[0].Nodes.Count - 1].Floor;
+				deeper |= mine.Depth > -adit + 10f;
+				broke |= mine.Chambers.Exists(c => c.Kind == CaveChamberKind.Hall && c.Rough > 1.5f);
+				foreach (CaveClimb c in mine.Climbs)
+				{
+					Assert.That(mine.ClimbFits(c), Is.True, $"seed {seed}: its ladder is clear");
+				}
+			}
+			Assert.That(shaft, Is.True, "a ladder shaft down to a lower level");
+			Assert.That(deeper, Is.True, "levels under the adit");
+			Assert.That(broke, Is.True, "a mine that broke into a natural cavern");
+		}
+
+		[Test]
+		public void TheRockStaysWithinItsBudget()
+		{
+			// Measured 2026-10-13: 30k–170k triangles a system, ~2–7 MB of render mesh and as much collider, ≤ 21k a piece.
+			foreach ((CaveForm form, int size, int seed) in new[] { (CaveForm.Cave, 2, 3), (CaveForm.Cave, 2, 4), (CaveForm.LavaTube, 2, 4), (CaveForm.Mine, 1, 4) })
+			{
+				CaveSystem system = PlanCave(form, size, seed, out Func<float, float, float> g);
+				List<CaveMesher.Piece> pieces = Mesh(system, g);
+				long triangles = 0, vertices = 0;
+				int biggest = 0;
+				foreach (CaveMesher.Piece piece in pieces)
+				{
+					triangles += piece.Mesh.TriangleCount;
+					vertices += piece.Mesh.VertexCount;
+					biggest = Mathf.Max(biggest, piece.Mesh.TriangleCount);
+				}
+				double megabytes = (vertices * 52.0 + triangles * 12.0 + triangles * 40.0) / 1048576.0;
+				string what = $"{form} {size} seed {seed} ({system.Character})";
+				Assert.That(triangles, Is.LessThanOrEqualTo(250000), $"{what}: {triangles:N0} triangles");
+				Assert.That(biggest, Is.LessThanOrEqualTo(40000), $"{what}: a piece of {biggest:N0} triangles");
+				Assert.That(megabytes, Is.LessThanOrEqualTo(16.0), $"{what}: ~{megabytes:0.0} MB of render mesh and collider");
+			}
+		}
+
 		// ── Determinism and storage ───────────────────────────────
 
 		[Test]

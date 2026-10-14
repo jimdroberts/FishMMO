@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Unity.Collections;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
@@ -78,6 +79,7 @@ namespace FishMMO.Client
 		private static readonly int VisibleOutId = Shader.PropertyToID("_ScatterVisibleOut");
 		private static readonly int HeightsId = Shader.PropertyToID("_ScatterHeights");
 		private static readonly int DensityId = Shader.PropertyToID("_ScatterDensity");
+		private static readonly int HolesId = Shader.PropertyToID("_ScatterHoles");
 		private static readonly int CameraId = Shader.PropertyToID("_ScatterCamera");
 		private static readonly int PlanesId = Shader.PropertyToID("_ScatterPlanes");
 		private static readonly int LightId = Shader.PropertyToID("_ScatterLight");
@@ -103,7 +105,8 @@ namespace FishMMO.Client
 		private readonly int clearKernel, generateKernel, finalizeKernel, argsFenceKernel;
 		private readonly DetailScatterAtlas atlas = new DetailScatterAtlas();
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO detail scatter" };
-		private const string GpuSample = "FishMMO detail scatter (compute)";
+		/// <summary>The scatter's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
+		private static readonly CustomSampler GpuSample = CustomSampler.Create("FishMMO detail scatter (compute)", true);
 		private readonly Vector4[] planeVectors = new Vector4[6];
 		private readonly List<GroupRange> ranges = new List<GroupRange>();
 		private readonly List<Command> commands = new List<Command>();
@@ -349,6 +352,7 @@ namespace FishMMO.Client
 			{
 				cmd.SetComputeTextureParam(compute, generateKernel, HeightsId, range.Group.Heights);
 				cmd.SetComputeTextureParam(compute, generateKernel, DensityId, range.Group.Density);
+				cmd.SetComputeTextureParam(compute, generateKernel, HolesId, range.Group.Holes);
 				cmd.SetComputeIntParam(compute, ItemOffsetId, range.Offset);
 				cmd.SetComputeIntParam(compute, ItemCountId, range.Count);
 				cmd.DispatchCompute(compute, generateKernel, Mathf.Min(range.Count, 65535), (range.Count + 65534) / 65535, 1);
@@ -382,11 +386,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Issues the indirect draws of every slot this camera's generation filled. Returns the draws.</summary>
+		/// <summary>Of the last camera's draws, those of shadow casters (each drawn into every cascade).</summary>
+		public int LastShadowDraws { get; private set; }
+
 		private int Draw(Camera camera, Vector3 eye, float reach)
 		{
 			double drawStart = TerrainInstancingProbe.Now;
 			var worldBounds = new Bounds(eye, Vector3.one * (2f * reach + 20f));
-			int draws = 0;
+			int draws = 0, shadowDraws = 0;
 			for (int c = 0; c < commands.Count; c++)
 			{
 				Command command = commands[c];
@@ -400,7 +407,9 @@ namespace FishMMO.Client
 				rp.matProps = blocks[c];
 				Graphics.RenderMeshIndirect(rp, command.Mesh, argsBuffer, 1, c);
 				draws++;
+				shadowDraws += rp.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly ? 1 : 0;
 			}
+			LastShadowDraws = shadowDraws;
 			TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
 			return draws;
 		}
@@ -477,30 +486,71 @@ namespace FishMMO.Client
 			return d.magnitude;
 		}
 
+		/// <summary>One channel of the terrain being listed, looked up once per terrain rather than once per item.</summary>
+		private struct ListedChannel
+		{
+			public int Type;
+			public bool Usable, Bush, Casts;
+			public int Levels;
+			/// <summary>A bush's tallest and shortest instance (its mesh's top at the channel's height range), and its reach.</summary>
+			public float Tallest, Shortest, Reach;
+		}
+
+		private readonly ListedChannel[] listed = new ListedChannel[DetailScatterMath.MaxChannels];
+		private static readonly Unity.Profiling.ProfilerMarker ListMarker = new Unity.Profiling.ProfilerMarker("DetailScatterRenderer.ListItems");
+
 		/// <summary>
 		/// Lists one terrain's work items within <paramref name="distance"/> (the detail distance; a bush's own reach for
 		/// its channels) that the view (or the sun's shadow of it) can see, adding their bounds to the slots' needs: to
 		/// level 0 for most types, to every level a bush's instances there can draw (<see cref="DetailScatterMath.LevelsReached"/>).
+		/// Every test is the one it always was, on the same values; what does not change from item to item (each channel's
+		/// type and a bush's heights and reach, the light's direction) is worked out once per terrain.
 		/// </summary>
 		private void ListItems(DetailScatterTerrain st, uint terrainIndex, float distance, in TerrainTreeField.View view, IReadOnlyList<DetailScatterType> types, DetailScatterSettings s)
 		{
+			using var listScope = ListMarker.Auto();
 			Vector3 eye = view.Position;
 			bool bushes = HasBush(st, types);
-			float listed = bushes ? Mathf.Max(distance, Mathf.Max(s.BushDrawMin, s.BushDrawMax)) : distance;
+			float listedReach = bushes ? Mathf.Max(distance, Mathf.Max(s.BushDrawMin, s.BushDrawMax)) : distance;
 			float itemX = DetailScatterMath.ItemSide * st.BlockX, itemZ = DetailScatterMath.ItemSide * st.BlockZ;
 			int side = st.ItemsSide;
-			int ix0 = Mathf.Max(0, Mathf.FloorToInt((eye.x - listed - st.Origin.x) / itemX)), ix1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.x + listed - st.Origin.x) / itemX));
-			int iz0 = Mathf.Max(0, Mathf.FloorToInt((eye.z - listed - st.Origin.z) / itemZ)), iz1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.z + listed - st.Origin.z) / itemZ));
+			int ix0 = Mathf.Max(0, Mathf.FloorToInt((eye.x - listedReach - st.Origin.x) / itemX)), ix1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.x + listedReach - st.Origin.x) / itemX));
+			int iz0 = Mathf.Max(0, Mathf.FloorToInt((eye.z - listedReach - st.Origin.z) / itemZ)), iz1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.z + listedReach - st.Origin.z) / itemZ));
 			float pad = st.MaxInstanceReach + 0.5f;
+			int channels = st.Channels;
+			for (int c = 0; c < channels; c++)
+			{
+				ref ListedChannel lc = ref listed[c];
+				int type = st.ChannelSettings[c].Type;
+				lc.Type = type;
+				lc.Usable = type >= 0 && type < types.Count;
+				if (!lc.Usable)
+				{
+					continue;
+				}
+				DetailScatterType t = types[type];
+				lc.Bush = t.Bush;
+				lc.Casts = t.CastsShadows;
+				lc.Levels = t.Levels.Length;
+				if (t.Bush)
+				{
+					ref DetailScatterTerrain.Channel ch = ref st.ChannelSettings[c];
+					lc.Tallest = t.MeshTop * Mathf.Max(ch.MinHeight, ch.MaxHeight);
+					lc.Shortest = t.MeshTop * Mathf.Min(ch.MinHeight, ch.MaxHeight);
+					lc.Reach = s.BushDrawDistance(lc.Tallest);
+				}
+			}
+			// The shadows' sweep (TerrainTreeMath.ShadowSweep), its direction worked out once.
+			bool shadows = view.Shadows && st.CastsShadows;
+			Vector3 sweepDirection = view.LightDirection.sqrMagnitude > 1e-8f ? view.LightDirection.normalized : Vector3.down;
+			float sweepDown = Mathf.Max(-sweepDirection.y, 0.1f);
 			for (int iz = iz0; iz <= iz1; iz++)
 			{
 				for (int ix = ix0; ix <= ix1; ix++)
 				{
-					float x0 = st.Origin.x + ix * itemX, x1 = Mathf.Min(x0 + itemX, st.Origin.x + st.Size.x);
-					float z0 = st.Origin.z + iz * itemZ, z1 = Mathf.Min(z0 + itemZ, st.Origin.z + st.Size.z);
 					int boundsAt = (iz * side + ix) * DetailScatterMath.MaxChannels;
 					bool anything = false;
-					for (int c = 0; c < st.Channels && !anything; c++)
+					for (int c = 0; c < channels && !anything; c++)
 					{
 						anything = st.ItemBounds[boundsAt + c] > 0;
 					}
@@ -508,42 +558,46 @@ namespace FishMMO.Client
 					{
 						continue;
 					}
+					float x0 = st.Origin.x + ix * itemX, x1 = Mathf.Min(x0 + itemX, st.Origin.x + st.Size.x);
+					float z0 = st.Origin.z + iz * itemZ, z1 = Mathf.Min(z0 + itemZ, st.Origin.z + st.Size.z);
 					Vector2 heights = st.ItemHeightRange(ix, iz);
 					var bounds = new Bounds();
 					bounds.SetMinMax(new Vector3(x0 - pad, heights.x - 0.5f, z0 - pad), new Vector3(x1 + pad, heights.y + st.MaxInstanceHeight + 0.5f, z1 + pad));
 					float near = TerrainTreeMath.MinDistance(bounds, eye);
-					if (near > listed)
+					if (near > listedReach)
 					{
 						continue;
 					}
-					float far = MaxDistance(bounds, eye);
 					bool main = TerrainTreeMath.IntersectsFrustum(view.Planes, bounds);
-					bool shadow = view.Shadows && st.CastsShadows && near <= view.ShadowDistance
-						&& TerrainTreeMath.IntersectsFrustum(view.Planes, TerrainTreeMath.ShadowSweep(bounds, view.LightDirection, view.ShadowDistance));
+					bool shadow = shadows && near <= view.ShadowDistance
+						&& TerrainTreeMath.IntersectsFrustum(view.Planes, Sweep(bounds, sweepDirection, sweepDown, view.ShadowDistance));
 					if (!main && !shadow)
 					{
 						continue;
 					}
+					// The far side only for a bush's levels: worked out once an item has one.
+					float far = -1f;
 					bool any = false;
-					for (int c = 0; c < st.Channels; c++)
+					for (int c = 0; c < channels; c++)
 					{
 						int bound = st.ItemBounds[boundsAt + c];
-						int type = st.ChannelSettings[c].Type;
-						if (bound <= 0 || type < 0 || type >= types.Count)
+						ref ListedChannel lc = ref listed[c];
+						if (bound <= 0 || !lc.Usable)
 						{
 							continue;
 						}
-						DetailScatterType t = types[type];
 						int levels = 1;
-						if (t.Bush)
+						if (lc.Bush)
 						{
-							ref DetailScatterTerrain.Channel ch = ref st.ChannelSettings[c];
-							float tallest = t.MeshTop * Mathf.Max(ch.MinHeight, ch.MaxHeight);
-							if (near > s.BushDrawDistance(tallest))
+							if (near > lc.Reach)
 							{
 								continue;
 							}
-							levels = DetailScatterMath.LevelsReached(near, far, t.MeshTop * Mathf.Min(ch.MinHeight, ch.MaxHeight), tallest, t.Levels.Length, s.BushLodMetresPerMetre, s.BushLodFadeBand);
+							if (far < 0f)
+							{
+								far = MaxDistance(bounds, eye);
+							}
+							levels = DetailScatterMath.LevelsReached(near, far, lc.Shortest, lc.Tallest, lc.Levels, s.BushLodMetresPerMetre, s.BushLodFadeBand);
 						}
 						else if (near > distance)
 						{
@@ -558,11 +612,11 @@ namespace FishMMO.Client
 							}
 							if (main)
 							{
-								need[SlotOf(type, level, 0)] += bound;
+								need[SlotOf(lc.Type, level, 0)] += bound;
 							}
-							if (shadow && t.CastsShadows)
+							if (shadow && lc.Casts)
 							{
-								need[SlotOf(type, level, 1)] += bound;
+								need[SlotOf(lc.Type, level, 1)] += bound;
 							}
 						}
 					}
@@ -582,6 +636,19 @@ namespace FishMMO.Client
 					};
 				}
 			}
+		}
+
+		/// <summary>
+		/// TerrainTreeMath.ShadowSweep with its direction (<paramref name="d"/>, normalised) and its fall per metre
+		/// (<paramref name="down"/>) worked out by the caller: the same operations on the same values.
+		/// </summary>
+		private static Bounds Sweep(Bounds bounds, Vector3 d, float down, float maxLength)
+		{
+			float length = Mathf.Min(maxLength, bounds.size.y / down);
+			Bounds swept = bounds;
+			swept.Encapsulate(bounds.min + d * length);
+			swept.Encapsulate(bounds.max + d * length);
+			return swept;
 		}
 
 		// ── Layout ────────────────────────────────────────────────────
@@ -673,7 +740,8 @@ namespace FishMMO.Client
 							startIndex = mesh.GetIndexStart(0),
 							baseVertexIndex = (uint)mesh.GetBaseVertex(0),
 							instanceCount = 0,
-							startInstance = 0,
+							// The run's start where the instance index carries it (FishIndirectInstancing.hlsl's Vulkan branch).
+							startInstance = TerrainGpuRenderer.InstanceIdCarriesBase ? (uint)bases[slot] : 0u,
 						});
 						argSlots.Add((uint)slot);
 						commandBases.Add((uint)bases[slot]);
@@ -744,6 +812,9 @@ namespace FishMMO.Client
 				blocks[c].SetBuffer(InstancesId, instanceBuffer);
 				blocks[c].SetBuffer(VisibleId, visibleBuffer);
 				blocks[c].SetBuffer(CommandBasesId, commandBaseBuffer);
+				// The drawn level's caster sphere, as the trees' slots carry it: a bush's or a pebble's shadow caster then
+				// skips the cascades it cannot reach (FishCasterCulling.hlsl), by the same rule as the trees'.
+				blocks[c].SetVector(TerrainGpuRenderer.CasterSphereId, commands[c].Mesh != null ? TerrainGpuRenderer.CasterSphere(commands[c].Mesh.bounds) : Vector4.zero);
 			}
 		}
 

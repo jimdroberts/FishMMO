@@ -242,61 +242,47 @@ namespace FishMMO.Client
 			GroundMaterialMap.Release();
 		}
 
-		/// <summary>Builds the map from every active terrain and publishes it (or switches the blend off when there is none).</summary>
+		private static readonly ProfilerMarker BuildMarker = new ProfilerMarker("GroundColourMap.Build");
+		private static readonly ProfilerMarker MaterialMarker = new ProfilerMarker("GroundMaterialMap.Build");
+
+		/// <summary>
+		/// Builds the map from every active terrain and publishes it (or switches the blend off when there is none): from the
+		/// scene's bake (TerrainDetailBake.GroundColour) when it was made over these very terrains, else worked out here.
+		/// </summary>
 		public static void Build()
 		{
+			using var buildScope = BuildMarker.Auto();
 			Terrain[] terrains = Terrain.activeTerrains;
-			var bounds = new Rect();
-			bool any = false;
-			foreach (Terrain t in terrains)
-			{
-				if (t == null || t.terrainData == null)
-				{
-					continue;
-				}
-				Vector3 p = t.GetPosition();
-				Vector3 s = t.terrainData.size;
-				var r = new Rect(p.x, p.z, s.x, s.z);
-				bounds = any ? Rect.MinMaxRect(Mathf.Min(bounds.xMin, r.xMin), Mathf.Min(bounds.yMin, r.yMin), Mathf.Max(bounds.xMax, r.xMax), Mathf.Max(bounds.yMax, r.yMax)) : r;
-				any = true;
-			}
-			if (!any || bounds.width <= 0f || bounds.height <= 0f)
-			{
-				Release();
-				return;
-			}
-
-			float texel = Mathf.Max(TargetTexelMetres, Mathf.Max(bounds.width, bounds.height) / MaxTexels);
-			int w = Mathf.Clamp(Mathf.CeilToInt(bounds.width / texel), 1, MaxTexels);
-			int h = Mathf.Clamp(Mathf.CeilToInt(bounds.height / texel), 1, MaxTexels);
-			var pixels = new Color32[w * h];
-			// Alpha is coverage: 0 where no terrain was read, which the shader treats as "no blend".
-			var mid = new Color32(128, 128, 128, 0);
-			for (int i = 0; i < pixels.Length; i++)
-			{
-				pixels[i] = mid;
-			}
-
-			var normals = new Color32[w * h];
-			var flat = new Color32(128, 255, 128, 0);
-			for (int i = 0; i < normals.Length; i++)
-			{
-				normals[i] = flat;
-			}
-
 			Dictionary<Terrain, TerrainArraySet> sets = ArraySets(out bool missing);
 			waitingForArrays = missing;
 			waitedFrames = 0;
-			foreach (Terrain t in terrains)
+			Rect bounds;
+			float texel;
+			int w, h;
+			Color32[] pixels = null, normals = null;
+			TerrainDetailBake.GroundColour baked = SceneTerrainBake.GroundOf(terrains);
+			if (baked != null && !SameSets(baked, terrains, sets))
 			{
-				if (t != null && t.terrainData != null)
+				baked = null;
+			}
+			if (baked != null && baked.Width > 0 && baked.Height > 0 && baked.Colour.Length == baked.Width * baked.Height * 4 && baked.Normals.Length == baked.Colour.Length)
+			{
+				bounds = baked.Bounds;
+				texel = baked.Texel;
+				w = baked.Width;
+				h = baked.Height;
+				// A set still loading (by address, in a player) still brings a rebuild when it arrives: the ground material
+				// map below needs it, and this map is taken from the bake again then.
+			}
+			else
+			{
+				baked = null;
+				if (!Compute(terrains, sets, out bounds, out texel, out w, out h, out pixels, out normals))
 				{
-					sets.TryGetValue(t, out TerrainArraySet set);
-					Paint(t, set, bounds, w, h, pixels);
-					PaintNormals(t, bounds, w, h, normals);
+					Release();
+					return;
 				}
 			}
-
 			if (map == null || map.width != w || map.height != h)
 			{
 				if (map != null)
@@ -312,7 +298,14 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
-			map.SetPixels32(pixels);
+			if (baked != null)
+			{
+				map.SetPixelData(baked.Colour, 0);
+			}
+			else
+			{
+				map.SetPixels32(pixels);
+			}
 			map.Apply(false, false);
 			if (normalMap == null || normalMap.width != w || normalMap.height != h)
 			{
@@ -328,16 +321,136 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
-			normalMap.SetPixels32(normals);
+			if (baked != null)
+			{
+				normalMap.SetPixelData(baked.Normals, 0);
+			}
+			else
+			{
+				normalMap.SetPixels32(normals);
+			}
 			normalMap.Apply(false, false);
 			Shader.SetGlobalTexture(NormalTextureId, normalMap);
-			Report(terrains, sets, w, h, texel, pixels);
+			if (baked != null)
+			{
+				UnityEngine.Debug.Log($"[Ground colour] {w}×{h} map at {texel:0.#} m/texel over {terrains.Length} terrain(s), from the scene's bake.");
+			}
+			else
+			{
+				Report(terrains, sets, w, h, texel, pixels);
+			}
 			// The terrains' own heights and layers, for the contact blend at trunk, rock and detail bases (GPU only).
-			GroundMaterialMap.Build(terrains, sets);
+			using (MaterialMarker.Auto())
+			{
+				GroundMaterialMap.Build(terrains, sets);
+			}
 			Shader.SetGlobalTexture(TextureId, map);
 			Shader.SetGlobalVector(RectId, new Vector4(bounds.xMin, bounds.yMin, 1f / (w * texel), 1f / (h * texel)));
 			published = true;
 			Publish();
+		}
+
+		/// <summary>
+		/// The map over <paramref name="terrains"/>: its rect, texel size and size, and each texel's colour (the splat-weighted
+		/// mean of the layers as drawn with <paramref name="sets"/>) and surface normal. False when there is no terrain. The
+		/// play's build and the editor's bake (TerrainDetailBaker) are this one.
+		/// </summary>
+		public static bool Compute(IReadOnlyList<Terrain> terrains, Dictionary<Terrain, TerrainArraySet> sets, out Rect bounds, out float texel,
+			out int w, out int h, out Color32[] pixels, out Color32[] normals)
+		{
+			bounds = new Rect();
+			texel = TargetTexelMetres;
+			w = h = 0;
+			pixels = normals = null;
+			bool any = false;
+			foreach (Terrain t in terrains)
+			{
+				if (t == null || t.terrainData == null)
+				{
+					continue;
+				}
+				Vector3 p = t.GetPosition();
+				Vector3 s = t.terrainData.size;
+				var r = new Rect(p.x, p.z, s.x, s.z);
+				bounds = any ? Rect.MinMaxRect(Mathf.Min(bounds.xMin, r.xMin), Mathf.Min(bounds.yMin, r.yMin), Mathf.Max(bounds.xMax, r.xMax), Mathf.Max(bounds.yMax, r.yMax)) : r;
+				any = true;
+			}
+			if (!any || bounds.width <= 0f || bounds.height <= 0f)
+			{
+				return false;
+			}
+			texel = Mathf.Max(TargetTexelMetres, Mathf.Max(bounds.width, bounds.height) / MaxTexels);
+			w = Mathf.Clamp(Mathf.CeilToInt(bounds.width / texel), 1, MaxTexels);
+			h = Mathf.Clamp(Mathf.CeilToInt(bounds.height / texel), 1, MaxTexels);
+			pixels = new Color32[w * h];
+			// Alpha is coverage: 0 where no terrain was read, which the shader treats as "no blend".
+			var mid = new Color32(128, 128, 128, 0);
+			for (int i = 0; i < pixels.Length; i++)
+			{
+				pixels[i] = mid;
+			}
+			normals = new Color32[w * h];
+			var flat = new Color32(128, 255, 128, 0);
+			for (int i = 0; i < normals.Length; i++)
+			{
+				normals[i] = flat;
+			}
+			foreach (Terrain t in terrains)
+			{
+				if (t != null && t.terrainData != null)
+				{
+					sets.TryGetValue(t, out TerrainArraySet set);
+					Paint(t, set, bounds, w, h, pixels);
+					PaintNormals(t, bounds, w, h, normals);
+				}
+			}
+			return true;
+		}
+
+		/// <summary>A texture set's key for the bake: what of it the map's colours depend on besides its albedo (the layers and their tints).</summary>
+		public static int SetKey(TerrainArraySet set)
+		{
+			if (set == null)
+			{
+				return 0;
+			}
+			unchecked
+			{
+				int key = 17 * 31 + set.LayerCount;
+				if (set.LayerTint != null)
+				{
+					foreach (Vector4 tint in set.LayerTint)
+					{
+						key = key * 31 + tint.GetHashCode();
+					}
+				}
+				return key;
+			}
+		}
+
+		/// <summary>
+		/// Whether a bake was made with the texture sets bound now: each terrain's own (its albedo and tints), where it has one
+		/// (a set still loading, by address in a player, is taken to be the one baked).
+		/// </summary>
+		private static bool SameSets(TerrainDetailBake.GroundColour baked, Terrain[] terrains, Dictionary<Terrain, TerrainArraySet> sets)
+		{
+			if (baked.Albedos == null || baked.SetKeys == null || baked.Albedos.Length != baked.Terrains.Length || baked.SetKeys.Length != baked.Terrains.Length)
+			{
+				return false;
+			}
+			foreach (Terrain t in terrains)
+			{
+				if (t == null || t.terrainData == null || !sets.TryGetValue(t, out TerrainArraySet set))
+				{
+					continue;
+				}
+				int at = System.Array.IndexOf(baked.Terrains, t.terrainData);
+				if (at < 0 || baked.Albedos[at] != set.Albedo || baked.SetKeys[at] != SetKey(set))
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/// <summary>
@@ -651,7 +764,15 @@ namespace FishMMO.Client
 			{
 				RenderTexture.active = previous;
 				RenderTexture.ReleaseTemporary(rt);
-				Object.Destroy(read);
+				// In edit mode too: the editor's bake works the map out outside play.
+				if (Application.isPlaying)
+				{
+					Object.Destroy(read);
+				}
+				else
+				{
+					Object.DestroyImmediate(read);
+				}
 			}
 		}
 	}

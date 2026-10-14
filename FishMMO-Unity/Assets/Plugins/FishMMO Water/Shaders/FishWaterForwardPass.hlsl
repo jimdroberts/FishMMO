@@ -79,7 +79,10 @@ float WaterWhitewater(float2 xz, float depth, inout float3 normalWS)
 	normalWS = normalize(normalWS - float3(shoreward.x, 0.0, shoreward.y) * bore.z);
 	float2 uv = (xz - _FishWaterShoreRect.xy) / _FishWaterShoreRect.zw;
 	float kept = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamMemory, sampler_FishWaterFoamMemory, uv, 0).g;
-	return saturate(max(bore.x, kept * 0.85));
+	// Where the simulated foam runs, the bores' foam it carries shoreward stands in for the memory's, kept in place.
+	FishFoamFieldSample carried = FishFoamFieldAt(xz);
+	kept = lerp(kept * 0.85, FishFoamFieldCoverage(carried.amount), carried.known);
+	return saturate(max(bore.x, kept));
 }
 
 half4 WaterFragment(Varyings input) : SV_Target

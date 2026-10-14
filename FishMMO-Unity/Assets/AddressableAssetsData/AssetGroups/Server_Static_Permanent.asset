@@ -33,6 +33,13 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 38bcb38630edd8d5f84e23dba3385a40
+    m_Address: Assets/Scenes/WorldScene/Arthis/Isle of Aradune Terrain/Isle of Aradune
+      NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a68083bfef2f80fc8ca1af9c8369512
     m_Address: Assets/Prefabs/Server/SceneServer/CharacterSystem.asset
     m_ReadOnly: 0
@@ -118,6 +125,13 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a3730f3cbc747a039e70782308f6220
+    m_Address: Assets/Scenes/WorldScene/Rheis/Volax Obelisk Terrain/Volax Obelisk
+      NavMesh.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7c1ca08ef1e69c690af41b67d7b5167e
     m_Address: Assets/Prefabs/Server/LoginServer/LoginServerSystem.asset
     m_ReadOnly: 0
@@ -166,6 +180,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9bb793da43a030e459af61d22643af10
+    m_Address: Assets/Scenes/WorldScene/Tutorial Spawners/NavMesh-Floor.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9eff8c9262694279a2d40893e55c00ed
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/SpawnTableCatalogue.asset
     m_ReadOnly: 0
@@ -174,6 +194,13 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a07e5732885d4c9bbe3e39ffd87c2f25
     m_Address: Assets/Prefabs/Server/SceneServer/SceneNavMeshCatalogue.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: aa6142b61c7fc2b0cb7c0a5d865e93bc
+    m_Address: Assets/Scenes/WorldScene/Arthis/Treacherous Bri Lookout Terrain/Treacherous
+      Bri Lookout NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -190,6 +217,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
+    m_Address: Assets/Scenes/WorldScene/Test Dungeon/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c2da67465d50a8ed8b0a146bc785ce23
     m_Address: Assets/Prefabs/Server/SceneServer/InteractableSystem.asset
     m_ReadOnly: 0
@@ -198,6 +231,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c35c56275b1f41c4a54a550becfb9cfa
     m_Address: Assets/Prefabs/Server/SceneServer/NavMeshSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c43b6eb487815084ca437ada41086fa4
+    m_Address: Assets/Scenes/WorldScene/Dungeon/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -244,6 +283,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
+    m_Address: Assets/Scenes/WorldScene/StartScene A/NavMesh-Terrain.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f23e4e47e1bcac9b18d2d3bee4159f51
     m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/StartScene A.asset
     m_ReadOnly: 0
@@ -252,6 +297,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f854f419ab83b93908afd02eb77367aa
     m_Address: Assets/Prefabs/Server/SceneServer/GuildSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f8dd271abfab0f44287f337e86b02aa5
+    m_Address: Assets/Scenes/WorldScene/StartScene B/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

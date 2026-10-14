@@ -222,7 +222,7 @@ Shader "FishMMO/Weather Lit"
 
             // -------------------------------------
             // Shader Stages
-            #pragma vertex ShadowPassVertex
+            #pragma vertex FishShadowPassVertex
             #pragma fragment FishShadowPassFragment
 
             // -------------------------------------

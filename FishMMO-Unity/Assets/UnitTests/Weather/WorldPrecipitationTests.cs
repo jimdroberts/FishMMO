@@ -244,7 +244,9 @@ namespace FishMMO.UnitTests.Weather
 		public void TheBackground_IsTypedByItsOwnCondensate_BeforeTheGroundJoinsIt()
 		{
 			string physics = CodeOnly(Read("Scripts/Shared/Implementation/Weather/WeatherPhysics.cs"));
-			string frame = MethodBody(physics, "public static WeatherFrame Frame(");
+			// The full overload, which the plain one forwards to.
+			string frame = MethodBody(physics, "float temperatureScale, float emissionBoost, float fallout, WeatherSubstance falloutSubstance, out WeatherSubstance substance)");
+			LogAssert.IsTrue(physics.Contains("return Frame(air, column, planet, ground, temperatureScale, emissionBoost, 0f, null, out substance);"), "the plain overload is the full one with no fallout");
 			int typed = frame.IndexOf("TypeCondensate(ref weather, column.SurfaceKelvin < AirPhysics.FreezingKelvin(planet.Condensate))");
 			int added = frame.IndexOf("accumulator.Add(weather, 1f, PrecipitateOf(planet, column.SurfaceKelvin))");
 			LogAssert.IsTrue(typed >= 0 && added > typed,

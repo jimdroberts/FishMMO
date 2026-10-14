@@ -320,10 +320,13 @@ namespace FishMMO.Shared.WorldDesign
 			if (!Reused)
 			{
 				int flattened = 0;
+				// A pad's bank keeps off the water: a river's channel and its banks, a lake (PointOfInterestTerrain.BankReach).
+				Func<float, float, bool> padWet = water == null ? null : (Func<float, float, bool>)((x, z) =>
+					!float.IsNegativeInfinity(water.RiverSurfaceNear(x, z)) || !float.IsNegativeInfinity(water.LakeSurfaceNear(x, z)));
 				foreach (PointOfInterestPad pad in plan.Pads)
 				{
 					float flatness = Templates.TryGetValue(pad.Id, out PointOfInterestTemplate template) ? template.PadFlatness : 1f;
-					if (PointOfInterestTerrain.FlattenPad(terrains, tiles, pad, flatness) > 0)
+					if (PointOfInterestTerrain.FlattenPad(terrains, tiles, pad, flatness, padWet) > 0)
 					{
 						flattened++;
 					}
@@ -402,9 +405,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// Plans the scene's ways (<see cref="PathNetworkPlanner"/>), turns the bridges they need into Bridge sites, and
 		/// carves the ways into the ground (<see cref="PathCarver"/>).
 		/// </summary>
+		/// <summary>How far above the water beside it a way's carve leaves a bank, metres.</summary>
+		public const float PathBankFreeboardMetres = 0.15f;
+
+		/// <summary>How far past a river's banks a way's carve is held above its water, metres.</summary>
+		public const float PathBankReachMetres = 8f;
+
 		private void PlanPaths(TerrainTilePlan tiles, Terrain[,] terrains, SceneWater water, PointOfInterestPlanInput input,
 			Func<float, float, float> ground, PointOfInterestTemplateLibrary library, Dictionary<int, BiomeTemplate> biomes, List<string> notes)
 		{
+			// A waterfall's reach is crossed by no way and bridged by none: the way goes above the lip or below the pool.
+			FallReaches falls = FallReaches.Of(water != null ? water.Rivers : null, PointOfInterestPlanner.MinFallMetres);
 			PathCellWater WaterAt(float x, float z)
 			{
 				if (input.HasSea && ground(x, z) < input.SeaLevel + 0.3f)
@@ -413,7 +424,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				switch (water != null ? water.KindAt(x, z) : WaterKind.None)
 				{
-					case WaterKind.River: return PathCellWater.River;
+					case WaterKind.River: return falls.Contains(x, z) ? PathCellWater.Open : PathCellWater.River;
 					case WaterKind.Lake: return PathCellWater.Open;
 					case WaterKind.DryWash:
 					case WaterKind.Bar:
@@ -428,7 +439,18 @@ namespace FishMMO.Shared.WorldDesign
 				DepthMetres = tiles.DepthMetres,
 				Ground = ground,
 				WaterAt = WaterAt,
-				WaterDepth = (x, z) => water != null ? water.SurfaceAt(x, z) - ground(x, z) : 0f,
+				// A river's depth under its own level where its centre line passes (SceneWater.RiverSurfaceNear): the grid's
+				// surface is the highest of its samples about a point, which down a falling stream reads it deeper by the fall
+				// over a sample, so a ford or a bridge turned on where the way's points fell.
+				WaterDepth = (x, z) =>
+				{
+					if (water == null)
+					{
+						return 0f;
+					}
+					float level = water.RiverSurfaceNear(x, z);
+					return (float.IsNegativeInfinity(level) ? water.SurfaceAt(x, z) : level) - ground(x, z);
+				},
 				Blocked = input.Blocked,
 				Records = Plan.Records,
 				KeepOuts = Plan.KeepOuts,
@@ -439,6 +461,28 @@ namespace FishMMO.Shared.WorldDesign
 			};
 			var clock = System.Diagnostics.Stopwatch.StartNew();
 			PathPlan paths = PathNetworkPlanner.Plan(pathInput);
+
+			// A bridge the rule placed between two towns that no way was laid over stands on no path: it is dropped.
+			var unused = new HashSet<int>();
+			foreach (PointOfInterestRecord r in Plan.Records)
+			{
+				if (r.Kind == POIType.Bridge && !paths.UsedBridges.Contains(r.Id))
+				{
+					unused.Add(r.Id);
+				}
+			}
+			if (unused.Count > 0)
+			{
+				Plan.Records.RemoveAll(r => unused.Contains(r.Id));
+				Plan.Pads.RemoveAll(p => unused.Contains(p.Id));
+				Plan.KeepOuts.RemoveAll(k => unused.Contains(k.Id));
+				Plan.Shapes.RemoveAll(s => s == null || unused.Contains(s.SiteId));
+				foreach (int id in unused)
+				{
+					Templates.Remove(id);
+				}
+				notes?.Add($"Points of interest: {unused.Count} bridge(s) no way crosses dropped.");
+			}
 
 			// Each bridge a way needs and no standing bridge serves becomes a Bridge site: named, on the map, built from its template.
 			var ids = new HashSet<int>();
@@ -467,7 +511,7 @@ namespace FishMMO.Shared.WorldDesign
 					Kind = POIType.Bridge,
 					Position = new Vector3(Mathf.Round(c.x * 100f) / 100f, Mathf.Round(c.y * 100f) / 100f, Mathf.Round(c.z * 100f) / 100f),
 					Yaw = Mathf.Round(site.Yaw),
-					Radius = Mathf.Clamp(site.Span * 0.5f + 6f, 6f, 30f),
+					Radius = PathBridgeSite.RecordRadius(site.Span),
 					SizeClass = 1,
 					BiomeID = biomeId,
 					DetailTier = PointOfInterestKinds.Info(POIType.Bridge).DetailTier,
@@ -502,8 +546,31 @@ namespace FishMMO.Shared.WorldDesign
 			// A way across a moat keeps the banks' level (it crosses on the drawbridge) and leaves the ditch undug.
 			List<PointOfInterestShape> shapes = Plan.Shapes;
 			Func<float, float, float> deck = (x, z) => MoatShaper.BankLevel(shapes, x, z, ground, out float bank) ? bank : ground(x, z);
+			// Never cut under the water beside it: a way along a bank keeps the bank above the river's or lake's surface.
+			Func<float, float, float> aboveWater = water == null ? null : (Func<float, float, float>)((x, z) =>
+			{
+				/* Out to well past the river's own margin: a way cut under the water just past it left the water's edge standing
+				 * over the lower ground beside it (Flo Monolith, 2026-10-13, a metre and a half under 4 m past the bank). */
+				float near = Mathf.Max(water.RiverSurfaceNear(x, z, PathBankReachMetres), water.LakeSurfaceNear(x, z));
+				return float.IsNegativeInfinity(near) ? float.NegativeInfinity : near + PathBankFreeboardMetres;
+			});
 			int carved = PathCarver.Carve(terrains, tiles, Plan.Paths, deck, (x, z) => WaterAt(x, z) != PathCellWater.Dry, Plan.Pads,
-				(x, z) => MoatShaper.Contains(shapes, x, z));
+				(x, z) => MoatShaper.Contains(shapes, x, z), aboveWater);
+			// A gorge's stone arch is laid level between raked rims: its approaches are built up on the low rim and cut into
+			// the high one here, after the ways (which would even them back toward the ground beside), so the site finds rims
+			// that meet its deck.
+			int approaches = 0;
+			foreach (PointOfInterestRecord record in Plan.Records)
+			{
+				if (record.Kind == POIType.Bridge && PropsFeature.CarveArchApproaches(terrains, tiles, record, ground, water, Plan.Records) > 0)
+				{
+					approaches++;
+				}
+			}
+			if (approaches > 0)
+			{
+				notes?.Add($"Paths: {approaches} gorge arch(es) given approaches built up and cut to their level decks.");
+			}
 			// The ways' heights on the ground as carved.
 			foreach (ScenePath path in Plan.Paths)
 			{

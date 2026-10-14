@@ -29,7 +29,7 @@ namespace FishMMO.TestHarness.World.Editor
 	/// <remarks>
 	/// Launched by <c>memory/tools/perfrun.sh</c> as a GUI editor under xvfb (play mode needs presented frames).
 	/// Environment: FISHMMO_PERF_OUT (report folder), FISHMMO_SCENE (scene path; Flo Monolith), FISHMMO_PERF_VIEWS
-	/// (meadow,fall,overview), FISHMMO_PERF_VARIANTS ("all", "none" or a comma list), FISHMMO_PERF_RES (2560x1440),
+	/// (meadow,fall,overview; also edge, skyline, grass-*, and "at" with FISHMMO_PERF_AT="x,y,z,yaw"), FISHMMO_PERF_VARIANTS ("all", "none" or a comma list), FISHMMO_PERF_RES (2560x1440),
 	/// FISHMMO_PERF_SETTLE (seconds before the first measurement; 45). Writes ScenePerf-report.txt and a PNG per view.
 	/// </remarks>
 	public static class ScenePerfProbe
@@ -146,7 +146,22 @@ namespace FishMMO.TestHarness.World.Editor
 				string.Join(" ", new[] { "_FishFogLayer", "_FishFogShell", "_FishMist", "_FishCloudSub", "_FishFogLightColor", "_FishFogAmbient", "_FishSkyFogColor" }.Select(V));
 		}
 		private static Action revert;
-		private static bool renderDocDone;
+		// Which steps' variants have been captured (FISHMMO_PERF_RENDERDOC_STEPS, a semicolon list; default the first rebase).
+		private static readonly HashSet<string> renderDocTaken = new HashSet<string>();
+
+		/// <summary>
+		/// Whether a step of this variant should be captured: FISHMMO_PERF_RENDERDOC_STEPS names the variants (semicolon-separated,
+		/// "rebase" by default), each captured at its first step, so a variant and its base replay side by side at full clocks.
+		/// </summary>
+		private static bool RenderDocWanted(string variant)
+		{
+			if (renderDocTaken.Contains(variant))
+			{
+				return false;
+			}
+			string wanted = Environment.GetEnvironmentVariable("FISHMMO_PERF_RENDERDOC_STEPS") ?? "rebase";
+			return wanted.Split(';').Any(w => w.Trim() == variant);
+		}
 
 		private struct Step
 		{
@@ -166,6 +181,23 @@ namespace FishMMO.TestHarness.World.Editor
 			SessionState.SetString(StateKey, output);
 			string scene = Environment.GetEnvironmentVariable("FISHMMO_SCENE");
 			EditorSceneManager.OpenScene(string.IsNullOrEmpty(scene) ? DefaultScene : scene, OpenSceneMode.Single);
+			// FISHMMO_PERF_BAKE=1: the scene's grass and scatter maps baked first (TerrainDetailBaker, as a cut ends), so play
+			// takes its terrains from the bake. The scene is never saved: the bake's holder exists for this run only.
+			if (Environment.GetEnvironmentVariable("FISHMMO_PERF_BAKE") == "1")
+			{
+				UnityEngine.SceneManagement.Scene open = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+				var terrains = new List<Terrain>();
+				foreach (GameObject root in open.GetRootGameObjects())
+				{
+					terrains.AddRange(root.GetComponentsInChildren<Terrain>(true));
+				}
+				var notes = new List<string>();
+				TerrainDetailBaker.Bake(open, terrains, notes);
+				foreach (string note in notes)
+				{
+					Debug.Log($"[ScenePerfProbe] Bake: {note}");
+				}
+			}
 			EditorApplication.playModeStateChanged -= OnPlayMode;
 			EditorApplication.playModeStateChanged += OnPlayMode;
 			EditorApplication.EnterPlaymode();
@@ -197,6 +229,7 @@ namespace FishMMO.TestHarness.World.Editor
 
 		private static void Begin()
 		{
+			TerrainGpuRenderer.CountFamilies = true;
 			// Before anything is measured or its markers listed: the clouds and fog as shipped, whatever the editor's own switches say
 			// (FISHMMO_PERF_CLOUDS=0 holds the clouds off instead, to price everything else).
 			SkySystem.EditorCloudsOff = CloudsHeldOff;
@@ -204,6 +237,7 @@ namespace FishMMO.TestHarness.World.Editor
 			output = SessionState.GetString(StateKey, output);
 			report.Clear();
 			steps.Clear();
+			renderDocTaken.Clear();
 			weatherApplied = false;
 			weatherName = "scene";
 			stepIndex = -1;
@@ -273,7 +307,7 @@ namespace FishMMO.TestHarness.World.Editor
 				// GPU is in them, the work outside the camera's markers included. Replay timings run at full clocks; the live natural
 				// frames here do not (the GPU idles down to P3 under xvfb).
 				if (int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_RENDERDOC"), out int captures) && captures > 0
-					&& !renderDocDone && step.Variant == "rebase")
+					&& RenderDocWanted(step.Variant))
 				{
 					captures = Mathf.Min(captures, 16);
 					int first = WaitFrames - 2 - captures;
@@ -284,7 +318,7 @@ namespace FishMMO.TestHarness.World.Editor
 					}
 					if (frame == first)
 					{
-						report.Add($"renderdoc: loaded {UnityEditorInternal.RenderDoc.IsLoaded()}, capturing {captures} editor frames ({step.View})");
+						report.Add($"renderdoc: loaded {UnityEditorInternal.RenderDoc.IsLoaded()}, capturing {captures} editor frames ({step.View} {step.Variant})");
 					}
 					if (frame >= first && frame < first + captures)
 					{
@@ -292,8 +326,8 @@ namespace FishMMO.TestHarness.World.Editor
 					}
 					if (frame == first + captures)
 					{
-						renderDocDone = true;
-						report.Add("renderdoc: captures ended");
+						renderDocTaken.Add(step.Variant);
+						report.Add($"renderdoc: captures ended ({step.Variant})");
 					}
 				}
 				// FISHMMO_PERF_LIVE=1: two consecutive natural frames, as the game draws them (a frame at a time, the clock
@@ -507,6 +541,7 @@ namespace FishMMO.TestHarness.World.Editor
 			gpuSeries.Clear();
 			cpuSum.Clear();
 			sampled = 0;
+			drawCallsSum = batchesSum = setPassSum = shadowCastersSum = 0;
 		}
 
 		private static void Place(string view)
@@ -528,6 +563,16 @@ namespace FishMMO.TestHarness.World.Editor
 						break;
 					}
 					goto default;
+				case "at":
+				{
+					// FISHMMO_PERF_AT="x,y,z,yaw": a fixed eye (y absolute) looking level along the yaw, e.g. inside a cave chamber,
+					// where the ground under the camera is the cave's floor rather than the terrain.
+					string[] parts = (Environment.GetEnvironmentVariable("FISHMMO_PERF_AT") ?? "0,0,0,0").Split(',');
+					float F(int i) => parts.Length > i && float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v) ? v : 0f;
+					eye = new Vector3(F(0), F(1), F(2));
+					look = eye + Quaternion.Euler(0f, F(3), 0f) * Vector3.forward * 10f;
+					break;
+				}
 				case "overview":
 					eye = new Vector3(0f, GroundAt(0f, 0f) + 350f, -600f);
 					look = new Vector3(0f, GroundAt(0f, 0f), 0f);
@@ -1072,6 +1117,10 @@ namespace FishMMO.TestHarness.World.Editor
 				case "cpugather":
 					GrassBladeRenderer.GpuGather = false;
 					return () => GrassBladeRenderer.GpuGather = true;
+				case "nocavegate":
+					// The underground gate off: clouds and fog drawn in a sealed cave as before it (UndergroundView.Enabled).
+					UndergroundView.Enabled = false;
+					return () => UndergroundView.Enabled = true;
 				case "regather":
 					GrassBladeRenderer.AlwaysRegather = true;
 					return () => GrassBladeRenderer.AlwaysRegather = false;
@@ -1213,6 +1262,17 @@ namespace FishMMO.TestHarness.World.Editor
 					// The trees' alpha-tested lit pass drawn alone again, writing its own depth (TerrainGpuRenderer.PrimeAlphaTested).
 					TerrainGpuRenderer.PrimeAlphaTested = false;
 					return () => TerrainGpuRenderer.PrimeAlphaTested = true;
+				case "nobatch":
+					// One indirect call a command again, not one a material over a merged mesh (TerrainGpuRenderer.BatchDraws).
+					TerrainGpuRenderer.BatchDraws = false;
+					return () => TerrainGpuRenderer.BatchDraws = true;
+				case "batchgap2":
+				{
+					// Batched calls bridging up to two unwanted commands (TerrainGpuRenderer.BatchGap): fewer calls, more empty draws.
+					int was = TerrainGpuRenderer.BatchGap;
+					TerrainGpuRenderer.BatchGap = 2;
+					return () => TerrainGpuRenderer.BatchGap = was;
+				}
 				case "noocclusion":
 					FishDepthPyramid.Enabled = false;
 					return () => FishDepthPyramid.Enabled = true;
@@ -1450,6 +1510,8 @@ namespace FishMMO.TestHarness.World.Editor
 		/// saved): res=× (march resolution), steps=× (march steps), light=n (light-march steps), lightmarch=0,
 		/// maxdist=metres, stepscale=×, detail=0…1 (the tier's), growth=0 (no distance step growth), exit=0.001…0.5,
 		/// clip=γ (history clip), historyclip=0, blur=pixels, maxod=τ (max step optical depth), lightphase=0 stratified / 1 fixed.
+		/// legacy=1 (the march as before the 2026-10-13 cuts: pixel cone, probe field reuse, far-depth skip all off),
+		/// oldcadence=1 (imposter rows, light volume bands and cloud-shadow redraws per frame, as before).
 		/// </summary>
 		private static Action Cloud(string setting)
 		{
@@ -1492,6 +1554,15 @@ namespace FishMMO.TestHarness.World.Editor
 				case "stepscale": { float was = d.StepScale; d.StepScale = value; return () => d.StepScale = was; }
 				case "growth": { bool was = d.DistanceStepGrowth; d.DistanceStepGrowth = value > 0.5f; return () => d.DistanceStepGrowth = was; }
 				case "exit": { float was = d.EarlyExit; d.EarlyExit = value; return () => d.EarlyExit = was; }
+				case "legacy": { Shader.SetGlobalFloat("_FishCloudLegacy", value); return () => Shader.SetGlobalFloat("_FishCloudLegacy", 0f); }
+				case "oldcadence":
+				{
+					float imposter = clouds.FarImposterRefreshSeconds, build = CloudLightVolume.BuildSeconds, drift = CloudShadowPresenter.DriftRedrawSeconds;
+					clouds.FarImposterRefreshSeconds = 0f;
+					CloudLightVolume.BuildSeconds = 0f;
+					CloudShadowPresenter.DriftRedrawSeconds = 0f;
+					return () => { clouds.FarImposterRefreshSeconds = imposter; CloudLightVolume.BuildSeconds = build; CloudShadowPresenter.DriftRedrawSeconds = drift; };
+				}
 				case "fieldskip": { Shader.SetGlobalFloat("_FishCloudFieldSkip", value); return () => Shader.SetGlobalFloat("_FishCloudFieldSkip", 0f); }
 				case "fieldreuse": { Shader.SetGlobalFloat("_FishCloudFieldReuse", value); return () => Shader.SetGlobalFloat("_FishCloudFieldReuse", 0f); }
 				case "tail": { int was = clouds.FarTailSteps; clouds.FarTailSteps = (int)value; return () => clouds.FarTailSteps = was; }
@@ -1508,12 +1579,57 @@ namespace FishMMO.TestHarness.World.Editor
 			}
 		}
 
+		/// <summary>
+		/// Where the GPU-driven draws come from, as Unity counts them: each command is a draw in its pass, a shadow caster's in
+		/// every cascade. Props and terrain details by view (lit, depth prime, shadow) and the props by art family.
+		/// </summary>
+		private static string DrawSources()
+		{
+			int cascades = (GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset)?.shadowCascadeCount ?? 1;
+			var sb = new StringBuilder();
+			void Renderer(string name, TerrainGpuRenderer g)
+			{
+				if (g == null)
+				{
+					return;
+				}
+				int total = g.LastMainCommands + g.LastPrimeCommands + g.LastShadowCommands * cascades;
+				sb.Append($"{name} {total} (lit {g.LastMainCommands}, prime {g.LastPrimeCommands}, shadow {g.LastShadowCommands} × {cascades}); ");
+			}
+			Renderer("props", CliffRockInstancing.Gpu);
+			Renderer("details", TerrainDetailInstancing.Gpu);
+			DetailScatterRenderer scatter = DetailScatterSystem.Renderer;
+			if (scatter != null)
+			{
+				int lit = DetailScatterSystem.LastDrawCount - scatter.LastShadowDraws;
+				sb.Append($"scatter {lit + scatter.LastShadowDraws * cascades} (lit {lit}, shadow {scatter.LastShadowDraws} × {cascades}); ");
+			}
+			sb.Append($"grass {GrassBladeSystem.LastDrawCount}");
+			TerrainGpuRenderer props = CliffRockInstancing.Gpu;
+			if (props != null && props.LastFamilies.Count > 0)
+			{
+				sb.Append("; props by family (lit/prime/shadow):");
+				foreach (KeyValuePair<string, Vector3Int> f in props.LastFamilies.OrderByDescending(f => f.Value.x + f.Value.y + f.Value.z * cascades))
+				{
+					sb.Append($" {f.Key} {f.Value.x}/{f.Value.y}/{f.Value.z}");
+				}
+			}
+			return sb.ToString();
+		}
+
 		// ── Measuring ──────────────────────────────────────────────
 
 		/// <summary>One natural frame's time per marker (the recorders hold the frame before).</summary>
+		private static long drawCallsSum, batchesSum, setPassSum, shadowCastersSum;
+
 		private static void Sample()
 		{
 			sampled++;
+			// The editor's frame statistics, as the Game view's Stats panel shows them.
+			drawCallsSum += UnityStats.drawCalls;
+			batchesSum += UnityStats.instancedBatches;
+			setPassSum += UnityStats.setPassCalls;
+			shadowCastersSum += UnityStats.shadowCasters;
 			foreach (KeyValuePair<string, Recorder> pair in recorders)
 			{
 				Recorder r = pair.Value;
@@ -1651,6 +1767,9 @@ namespace FishMMO.TestHarness.World.Editor
 			report.Add(DescribeFog());
 			report.Add($"  props drawn: {CliffRockInstancing.DescribeDraws()}");
 			report.Add($"  shadow cascades: {ShadowCascadeCulling.LastReport}");
+			report.Add($"  frame stats (mean of {sampled} natural frames): draw calls {drawCallsSum / (double)Math.Max(1, sampled):0}, instanced batches {batchesSum / (double)Math.Max(1, sampled):0}, set-pass calls {setPassSum / (double)Math.Max(1, sampled):0}, shadow casters {shadowCastersSum / (double)Math.Max(1, sampled):0}");
+			report.Add($"  props commands drawn: {CliffRockInstancing.LastCommandCount}");
+			report.Add("  draw sources: " + DrawSources());
 			report.Add($"  indirect draws a camera: props {CliffRockInstancing.LastDrawCount}, trees {TerrainTreeInstancing.LastDrawCount}, details {TerrainDetailInstancing.LastDrawCount}, scatter {DetailScatterSystem.LastDrawCount}, grass {GrassBladeSystem.LastDrawCount}");
 			if (GrassBladeRenderer.TimedCalls > 0)
 			{

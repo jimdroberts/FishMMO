@@ -55,6 +55,8 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Iron: return "Iron";
 				case StructureMaterial.Bone: return "Plaster";
 				case StructureMaterial.Glass: return "Iron";
+				// Scraped horn and oiled parchment: smooth, a little clouded; its own albedo is also its glow (StructureLamplight).
+				case StructureMaterial.Lamplight: return "Plaster";
 				default: return "Earth"; // Earth, Ash
 			}
 		}
@@ -70,6 +72,8 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Ash: return new Color(0.3f, 0.29f, 0.28f);
 				// Old glass and horn panes: dark by day with a little amber in them.
 				case StructureMaterial.Glass: return new Color(0.42f, 0.37f, 0.3f);
+				// A lit horn pane: warm amber.
+				case StructureMaterial.Lamplight: return new Color(1f, 0.82f, 0.55f);
 				default: return Color.white;
 			}
 		}

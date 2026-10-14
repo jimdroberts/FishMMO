@@ -40,12 +40,16 @@
 //
 // ── What the renderer must do ────────────────────────────────────────────────────────────────
 //
-//   * startInstance = 0 in every indirect args entry, and one command per RenderMeshIndirect call
-//     (commandCount 1). SV_InstanceID does not mean the same thing on every API: on Vulkan and
-//     WebGPU it INCLUDES the args' startInstance, on D3D11/12 it does not (Unity's own
-//     UnityIndirect.cginc corrects for this per API). With startInstance 0 both agree, and the
-//     per-draw offset lives in _FishVisibleBase instead. unity_InstanceID is SV_InstanceID plus
-//     unity_BaseInstanceID, which Unity leaves 0 for indirect draws.
+//   * SV_InstanceID does not mean the same thing on every API: on Vulkan and WebGPU it INCLUDES the
+//     args' startInstance, on D3D11/12 and GL it does not (Unity's own UnityIndirect.cginc corrects
+//     for this per API). So, per API:
+//       Vulkan: startInstance = the command's run start in _FishVisibleInstances, and the instance
+//         index alone finds the entry; a call may then draw many commands (TerrainGpuRenderer's
+//         batched calls), since nothing needs to know which command it is.
+//       Everything else: startInstance = 0, one command per call (commandCount 1), and the run start
+//         comes from _FishCommandBases[GetCommandID(0)]. (WebGPU needs a feature for a non-zero
+//         startInstance in indirect draws, so it stays here.)
+//     unity_InstanceID is SV_InstanceID plus unity_BaseInstanceID, which Unity leaves 0 for indirect draws.
 //   * Transforms are T·R·S with a rotation and a positive per-axis scale, and NO SHEAR — which
 //     every terrain tree, detail, boulder and ice piece is (rotation about Y or ground-aligned,
 //     scale (w, h, w)). The 3×3's columns are then orthogonal, and the inverse below relies on it.
@@ -146,7 +150,14 @@ void FishIndirectSetup()
     // and with startInstance 0 in every args entry SV_InstanceID is the raw 0-based index on every
     // API (Vulkan and WebGPU add startInstance, D3D does not — zero makes them agree).
     uint local = (uint)(unity_InstanceID - unity_BaseInstanceID);
+#if defined(SHADER_API_VULKAN)
+    // Vulkan's instance index includes the args' startInstance, which the renderers set there to the command's run
+    // start (TerrainGpuRenderer.InstanceIdCarriesBase): the index alone finds the entry, whichever command of a
+    // many-command call this is.
+    FishVisible visible = _FishVisibleInstances[local];
+#else
     FishVisible visible = _FishVisibleInstances[_FishCommandBases[GetCommandID(0)] + local];
+#endif
     FishInstance instance = _FishInstances[visible.index];
 
     float4x4 objectToWorld = float4x4(instance.row0, instance.row1, instance.row2, float4(0.0, 0.0, 0.0, 1.0));

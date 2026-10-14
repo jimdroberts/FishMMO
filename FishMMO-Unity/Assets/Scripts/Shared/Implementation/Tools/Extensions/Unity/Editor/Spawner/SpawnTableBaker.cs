@@ -135,6 +135,38 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// <c>-executeMethod FishMMO.Shared.SpawnTableBaker.BakeFromCommandLine</c>: opens the world scene at
+		/// <c>FISHMMO_BAKE_SCENE</c> (a project path), bakes its table and saves the assets, without saving the scene.
+		/// Exits 0 on a clean bake in batch mode.
+		/// </summary>
+		public static void BakeFromCommandLine()
+		{
+			int code = 1;
+			try
+			{
+				string path = Environment.GetEnvironmentVariable("FISHMMO_BAKE_SCENE");
+				Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+				var problems = new List<string>();
+				SceneSpawnTable table = BakeScene(scene, problems);
+				AssetDatabase.SaveAssets();
+				foreach (string problem in problems)
+				{
+					Debug.LogWarning("[SpawnTableBaker] " + problem);
+				}
+				Debug.Log($"[SpawnTableBaker] '{path}': {(table != null ? table.Spawners.Count + " spawner(s)" : "no spawners")}, {problems.Count} problem(s).");
+				code = 0;
+			}
+			catch (Exception ex)
+			{
+				Debug.LogException(ex);
+			}
+			if (Application.isBatchMode)
+			{
+				EditorApplication.Exit(code);
+			}
+		}
+
+		/// <summary>
 		/// Bakes one open scene. A scene with no spawners loses its table.
 		/// </summary>
 		/// <param name="scene">An open world scene.</param>
@@ -180,25 +212,7 @@ namespace FishMMO.Shared
 				AssetDatabase.CreateAsset(table, tablePath);
 			}
 
-			/* Staged on a fresh instance so the reference ids can be chosen: the previous bake's
-			 * objects still hold ids in the table's own registry. CopySerialized then carries the
-			 * ids over, so rebaking an unchanged scene rewrites the table byte for byte — without
-			 * this every build left every table modified with nothing but new random rids. */
-			SceneSpawnTable staged = ScriptableObject.CreateInstance<SceneSpawnTable>();
-			try
-			{
-				staged.name = table.name;
-				staged.SceneName = scene.name;
-				staged.ScenePath = scene.path;
-				staged.Spawners = definitions;
-				AssignStableReferenceIds(staged);
-				EditorUtility.CopySerialized(staged, table);
-			}
-			finally
-			{
-				UnityEngine.Object.DestroyImmediate(staged);
-			}
-			EditorUtility.SetDirty(table);
+			Write(table, scene.name, scene.path, definitions);
 
 			// Every bake, not only on creation: a table that predates the rule is fixed by the next build.
 			ServerAddressables.Register(tablePath);
@@ -256,6 +270,32 @@ namespace FishMMO.Shared
 			definition.OrConditions = CloneConditions(spawner.OrConditions, resolveSpawnerIndex);
 			definition.TrueConditions = CloneConditions(spawner.TrueConditions, resolveSpawnerIndex);
 			return definition;
+		}
+
+		/// <summary>
+		/// Puts a bake's definitions into its table asset, in place and in two saves. The first, emptied, drops the
+		/// previous bake's objects and the ids they hold from the table's registry, so the new objects take ids 1, 2, 3…
+		/// and an unchanged scene rewrites the table byte for byte (without stable ids every build left every table
+		/// modified with nothing but new random rids).
+		/// </summary>
+		/// <remarks>
+		/// It used to be staged on a fresh instance and copied over with CopySerialized, whose read of managed references
+		/// into the table (ManagedReferencesTransferState.PerformFixups) crashed the editor natively at random, at the end
+		/// of scene cuts and on a lone bake alike. Here Unity only ever writes the table.
+		/// </remarks>
+		/// <param name="table">A table saved as an asset: the registry is only rebuilt when the asset is written.</param>
+		/// <returns>False if Unity refused an id; the table then falls back to random ids.</returns>
+		public static bool Write(SceneSpawnTable table, string sceneName, string scenePath, List<SpawnerDefinition> definitions)
+		{
+			table.SceneName = sceneName;
+			table.ScenePath = scenePath;
+			table.Spawners = new List<SpawnerDefinition>();
+			EditorUtility.SetDirty(table);
+			AssetDatabase.SaveAssetIfDirty(table);
+			table.Spawners = definitions;
+			bool stable = AssignStableReferenceIds(table);
+			EditorUtility.SetDirty(table);
+			return stable;
 		}
 
 		/// <summary>

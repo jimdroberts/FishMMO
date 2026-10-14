@@ -2,6 +2,7 @@
 using FishNet.Connection;
 using FishNet.Managing.Timing;
 using FishNet.Object;
+using Unity.Profiling;
 using UnityEngine;
 using FishMMO.Logging;
 using FishMMO.Shared.Core;
@@ -25,9 +26,11 @@ namespace FishMMO.Shared
 	/// <para>
 	/// Runs one pass every <see cref="ObserverStreamingPolicy.RescheduleIntervalTicks"/> ticks
 	/// off <see cref="TimeManager.OnPostTick"/>. A pass is O(entries) for density (uniform grid)
-	/// plus O(viewers × entries) for ranking, with entries grouped by Unity scene so characters
-	/// in different scenes never compare positions. At 200 players and 700 characters that is
-	/// ~140k score evaluations per half second, all field reads.
+	/// plus, for ranking, each viewer against the objects in the grid cells within reach of it
+	/// (the widest admitting range and the AI's declared proximity reach) and every wide-range
+	/// object, with entries grouped by Unity scene so characters in different scenes never compare
+	/// positions. Before the grid it was every viewer against every object: at 200 players and 700
+	/// characters, ~140k pair evaluations per half second.
 	/// </para>
 	/// </remarks>
 	public static class ObserverStreamingRegistry
@@ -39,6 +42,39 @@ namespace FishMMO.Shared
 		private static readonly Dictionary<int, List<ObserverStreamingEntry>> entriesByScene = new Dictionary<int, List<ObserverStreamingEntry>>();
 		private static readonly Dictionary<long, int> cellCounts = new Dictionary<long, int>();
 		private static readonly List<Candidate> candidates = new List<Candidate>();
+
+		/// <summary>Cached once: passing the method group to Sort allocated a delegate per viewer per pass.</summary>
+		private static readonly System.Comparison<Candidate> CandidateOrder = CompareCandidates;
+
+		/// <summary>Profiler markers, in a class of their own so the registry's statics stay free of native calls until a pass runs.</summary>
+		private static class Markers
+		{
+			public static readonly ProfilerMarker Pass = new ProfilerMarker("ObserverStreaming.RunPass");
+			public static readonly ProfilerMarker Density = new ProfilerMarker("ObserverStreaming.DensityRanges");
+			public static readonly ProfilerMarker Rank = new ProfilerMarker("ObserverStreaming.RankForViewers");
+			public static readonly ProfilerMarker Grid = new ProfilerMarker("ObserverStreaming.BuildGrid");
+			public static readonly ProfilerMarker Query = new ProfilerMarker("ObserverStreaming.QueryGrid");
+			public static readonly ProfilerMarker Sort = new ProfilerMarker("ObserverStreaming.SortCandidates");
+		}
+
+		/// <summary>Smallest grid cell, metres, so a scene of short-range objects is not cut into slivers.</summary>
+		private const float MinimumGridCell = 16f;
+
+		/// <summary>One scene's objects in grid order (by index into <see cref="gridPositions"/>), and the wide-range rest.</summary>
+		private static readonly ObserverProximityGrid grid = new ObserverProximityGrid();
+		private static readonly List<ObserverStreamingEntry> gridEntries = new List<ObserverStreamingEntry>();
+		private static readonly List<Vector3> gridPositions = new List<Vector3>();
+		private static readonly List<ObserverStreamingEntry> wideEntries = new List<ObserverStreamingEntry>();
+		private static readonly List<int> nearby = new List<int>();
+		private static float gridMaxAdmittingRange;
+		private static bool gridHasUnrangedObjects;
+		private static float proximityReach;
+
+		/// <summary>
+		/// The largest squared nearest-player distance any reader compares against, or negative before any reader has
+		/// said. Only ever grows, and is never reset, so no reader can be left with a shorter reach than it asked for.
+		/// </summary>
+		private static float requiredProximitySqr = -1f;
 
 		/// <summary>
 		/// Per-bucket rank counter reused across viewers. Keyed by
@@ -352,6 +388,42 @@ namespace FishMMO.Shared
 			return true;
 		}
 
+		/// <summary>
+		/// Declares the farthest nearest-player distance a reader of <see cref="TryGetNearestViewerDistance"/> compares
+		/// against (squared, as the AI's LOD bands are authored). Within the largest one declared, the measurement is
+		/// exactly the distance to the nearest player; beyond it, it is some distance beyond it (possibly
+		/// <see cref="ObserverStreamingEntry.NoViewerDistance"/>), which every such comparison reads the same way.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Each viewer only measures the objects within this reach (and its ranking ranges) instead of every object in
+		/// the scene. Until anything declares a reach the measurement is exact at every distance, as it always was.
+		/// </para>
+		/// <para>
+		/// The reach only grows: a reader must declare before the object it reads is first measured (an asset's load is
+		/// early enough), and nothing can take reach away from a reader that already declared.
+		/// </para>
+		/// </remarks>
+		/// <param name="sqrDistance">Squared distance, metres². Infinity or NaN keeps every distance exact.</param>
+		public static void RequireViewerProximity(float sqrDistance)
+		{
+			if (float.IsNaN(sqrDistance))
+			{
+				sqrDistance = float.PositiveInfinity;
+			}
+			if (sqrDistance > requiredProximitySqr)
+			{
+				requiredProximitySqr = sqrDistance;
+			}
+		}
+
+		/// <summary>
+		/// How far each viewer measures, metres: the declared reach with a margin (so a distance whose square rounds onto
+		/// a declared band edge is still measured), or infinity while nothing has declared one.
+		/// </summary>
+		internal static float ViewerProximityReach =>
+			requiredProximitySqr < 0f ? float.PositiveInfinity : Mathf.Sqrt(requiredProximitySqr) * 1.001f + 1f;
+
 		/// <summary>Reusable rank map for one viewer, cleared rather than reallocated.</summary>
 		private static Dictionary<int, int> RanksFor(int clientId)
 		{
@@ -415,6 +487,14 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static void RunPass()
 		{
+			using (Markers.Pass.Auto())
+			{
+				RunPassCore();
+			}
+		}
+
+		private static void RunPassCore()
+		{
 			LastPassViewers = 0;
 			LastPassLimitedPairs = 0;
 			LastPassRangeChanges = 0;
@@ -443,7 +523,8 @@ namespace FishMMO.Shared
 			}
 			for (int i = 0; i < entries.Count; ++i)
 			{
-				int sceneHandle = entries[i].NetworkObject.gameObject.scene.handle;
+				// The scene is read every pass, not cached: an object can be moved to another scene with no event to say so.
+				int sceneHandle = entries[i].GameObject.scene.handle;
 				if (!entriesByScene.TryGetValue(sceneHandle, out List<ObserverStreamingEntry> list))
 				{
 					list = new List<ObserverStreamingEntry>();
@@ -458,8 +539,14 @@ namespace FishMMO.Shared
 				{
 					continue;
 				}
-				ApplyDensityRanges(sceneEntries);
-				RankForViewers(sceneEntries);
+				using (Markers.Density.Auto())
+				{
+					ApplyDensityRanges(sceneEntries);
+				}
+				using (Markers.Rank.Auto())
+				{
+					RankForViewers(sceneEntries);
+				}
 			}
 		}
 
@@ -540,6 +627,40 @@ namespace FishMMO.Shared
 			int engagedBudget = ObserverStreamingPolicy.EngagedFullRateBudget;
 			byte engagedOverflow = ObserverStreamingPolicy.EngagedOverflowInterval;
 
+			/* Objects admitted from farther than WideRangeThreshold (Titans) are read by every viewer, as
+			 * before; everything else goes in a grid whose cell is the widest range among them, so a viewer's
+			 * query is a few cells. Ranges are fixed for the rest of the pass (ApplyDensityRanges ran first). */
+			gridEntries.Clear();
+			gridPositions.Clear();
+			wideEntries.Clear();
+			gridMaxAdmittingRange = 0f;
+			gridHasUnrangedObjects = false;
+			for (int i = 0; i < sceneEntries.Count; ++i)
+			{
+				ObserverStreamingEntry entry = sceneEntries[i];
+				bool ranged = entry.HasDistanceCondition && entry.AppliedRange > 0f;
+				if (ranged && entry.AppliedRange > ObserverStreamingPolicy.WideRangeThreshold)
+				{
+					wideEntries.Add(entry);
+					continue;
+				}
+				gridEntries.Add(entry);
+				gridPositions.Add(entry.Position);
+				if (ranged)
+				{
+					gridMaxAdmittingRange = Mathf.Max(gridMaxAdmittingRange, entry.AppliedRange);
+				}
+				else
+				{
+					gridHasUnrangedObjects = true;
+				}
+			}
+			proximityReach = ViewerProximityReach;
+			using (Markers.Grid.Auto())
+			{
+				grid.Build(gridPositions, Mathf.Max(MinimumGridCell, gridMaxAdmittingRange));
+			}
+
 			for (int v = 0; v < sceneEntries.Count; ++v)
 			{
 				ObserverStreamingEntry viewer = sceneEntries[v];
@@ -562,170 +683,203 @@ namespace FishMMO.Shared
 				Dictionary<int, int> ranks = RanksFor(viewerConnection.ClientId);
 				HashSet<int> pins = PinsFor(viewerConnection.ClientId);
 
-				for (int o = 0; o < sceneEntries.Count; ++o)
+				/* Only the objects that could pass a test below are read: the grid's query reaches the widest
+				 * range that admits a grid object and the proximity the AI asks about, and the wide-range objects
+				 * (Titans) are all read. Every object left out is beyond all of those, so it would have been
+				 * skipped by the range filter and its distance would not have changed a nearest-viewer answer
+				 * anyone reads (see RequireViewerProximity). */
+				using (Markers.Query.Auto())
 				{
-					ObserverStreamingEntry observed = sceneEntries[o];
-					if (ReferenceEquals(observed, viewer))
-					{
-						continue;
-					}
-
-					/* Candidacy by DISTANCE, not by current observer membership.
-					 *
-					 * Ranking only what the viewer already observes would deadlock the visibility
-					 * budget: a character that is not yet an observer would never be ranked, the
-					 * budget condition would never admit it, and it could never become an observer.
-					 *
-					 * Measured against the OBSERVED character's applied range, because that is the
-					 * range its DistanceCondition admits this viewer by — density scaling is
-					 * per-object, so the viewer's own range can be much smaller. Filtering by the
-					 * viewer's range left every (in observed's range, outside viewer's range) pair
-					 * unranked, and the budget condition admits ranked-viewer/unranked-object pairs
-					 * unconditionally on the premise that "unranked" means "out of range" — so those
-					 * characters bypassed both the visibility budget and the full-rate cap. */
-					float distance = Vector3.Distance(viewer.Position, observed.Position);
-
-					/* Recorded BEFORE the range filter, and so a true proximity measurement rather
-					 * than a restatement of who can see whom. AIController reads it to answer "is any
-					 * player near", a question it used to answer from NetworkObject.Observers — a
-					 * BANDWIDTH set, emptied by the visibility budget, which made a budget-evicted
-					 * monster full-heal, drop its threat table and reset its boss phases with players
-					 * standing next to it. */
-					observed.NoteViewerDistance(distance);
-
-					float admittingRange = observed.HasDistanceCondition && observed.AppliedRange > 0f
-						? observed.AppliedRange
-						: viewerRange;
-					if (distance > admittingRange)
-					{
-						continue;
-					}
-
-					bool sameParty = viewer.PartyID != 0 && viewer.PartyID == observed.PartyID;
-					bool sameGuild = viewer.GuildID != 0 && viewer.GuildID == observed.GuildID;
-
-					/* Pins: never evicted, whatever the crowd.
-					 *
-					 * Party members inside the ability ceiling, because a group that cannot see each
-					 * other cannot play together; the character the viewer currently targets,
-					 * because losing your target mid-fight is the worst possible moment for a
-					 * despawn; and anything the viewer is ACTUALLY FIGHTING, which is the case the
-					 * first two miss.
-					 *
-					 * That third one closes a real hole. An enemy that is neither targeted nor a
-					 * party member could be evicted by the budget mid-fight — and a despawned victim
-					 * takes its combat reports with it, because CharacterDamageController.
-					 * FlushCombatEvents broadcasts to the VICTIM's observers. The player then sees
-					 * no damage numbers at all, and their own predicted numbers grey out as
-					 * unconfirmed after a second, while every hit is landing. Nothing about that
-					 * reads as "the server stopped sending me this creature".
-					 *
-					 * Both directions, because either one means a fight: the viewer has damaged the
-					 * observed character, or the observed character has damaged the viewer. Bounded
-					 * by the ability ceiling like the party pin, so a fight that has genuinely moved
-					 * out of range stops holding a slot.
-					 *
-					 * Pins still occupy budget slots, so a player fighting several enemies simply
-					 * leaves fewer slots for strangers — which is the right trade. */
-					bool engagedWith = observed.InCombat &&
-						distance <= ObserverStreamingPolicy.EngagementRangeCeiling &&
-						viewer.Character != null &&
-						observed.Character != null &&
-						(observed.IsFoughtBy(viewer.Character.ID) ||
-						 viewer.IsFoughtBy(observed.Character.ID));
-
-					/* The target pin is bounded by the engagement ceiling like the other two.
-					 * Previously implicit (hover targeting reaches 50 m at most), it has to be
-					 * explicit now that the id can be client-reported: a forged or stale id naming
-					 * something across the map must not hold a budget slot. */
-					bool pinned = (sameParty && distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
-						(viewerTargetId != 0 &&
-						 observed.NetworkObject.ObjectId == viewerTargetId &&
-						 distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
-						engagedWith;
-					if (pinned)
-					{
-						pins.Add(observed.NetworkObject.ObjectId);
-						LastPassPinned++;
-					}
-
-					candidates.Add(new Candidate
-					{
-						Entry = observed,
-						Score = ObserverStreamingPolicy.Score(observed.InCombat, sameParty, sameGuild, distance, viewerRange),
-						Distance = distance,
-						Pinned = pinned,
-						Engaged = distance <= engagementRange,
-					});
+					float queryRange = Mathf.Max(gridMaxAdmittingRange, gridHasUnrangedObjects ? viewerRange : 0f);
+					grid.Query(viewer.Position, Mathf.Max(queryRange, proximityReach), nearby);
+				}
+				for (int n = 0; n < nearby.Count; ++n)
+				{
+					Consider(viewer, gridEntries[nearby[n]], viewerRange, engagementRange, viewerTargetId, pins);
+				}
+				for (int w = 0; w < wideEntries.Count; ++w)
+				{
+					Consider(viewer, wideEntries[w], viewerRange, engagementRange, viewerTargetId, pins);
 				}
 
-				candidates.Sort(CompareCandidates);
-
-				/* Rank within classification, so each kind is measured against its own budget.
-				 * classRanks is reset per viewer; the global index i still drives the FULL-RATE cap
-				 * below, because that one is about the total number of streams a client pays for
-				 * and does not care what kind they are. */
-				classRanks.Clear();
-				int engagedSoFar = 0;
-				for (int i = 0; i < candidates.Count; ++i)
-				{
-					Candidate candidate = candidates[i];
-					int objectId = candidate.Entry.NetworkObject.ObjectId;
-
-					int bucket = candidate.Entry.RankBucket;
-					classRanks.TryGetValue(bucket, out int classRank);
-					classRanks[bucket] = classRank + 1;
-
-					int budget = candidate.Entry.VisibilityBudget;
-					ranks[objectId] = classRank;
-					budgetsByObjectId[objectId] = budget;
-
-					if (budget > 0 && !candidate.Pinned && classRank >= budget)
-					{
-						LastPassBudgetExcluded++;
-					}
-
-					/* Rate limiting, in one place, most relevant first.
-					 *
-					 * An engaged character keeps every tick while the engaged budget lasts, then
-					 * falls to the overflow interval rather than to its distance band — it is still
-					 * close enough to be shot at, and one tick of compensation error is a different
-					 * thing from six. Everything else follows the relevance cap as before. */
-					if (candidate.Engaged)
-					{
-						if (engagedSoFar < engagedBudget)
-						{
-							engagedSoFar++;
-							continue;
-						}
-						if (engagedOverflow > 1)
-						{
-							/* Tagged as engaged overflow, not as a relevance cap. The two are
-							 * distinguished at the send: an engaged observer is exempt from the
-							 * relevance cap but NOT from this, because this interval is the bound on
-							 * that very exemption. While both were assigned as the same kind of
-							 * interval, GetEffectiveInterval discarded this one on the same
-							 * engagement test that had just been used to assign it — so
-							 * EngagedFullRateBudget and EngagedOverflowInterval had no runtime effect
-							 * whatsoever and the count below was of throttles that never happened. */
-							candidate.Entry.SetInterval(viewerConnection, engagedOverflow, ObserverStreamingEntry.IntervalOrigin.EngagedOverflow);
-							LastPassLimitedPairs++;
-						}
-						continue;
-					}
-
-					if (i >= rateCap)
-					{
-						byte interval = ObserverStreamingPolicy.LodInterval(candidate.Distance);
-						if (interval > 1)
-						{
-							candidate.Entry.SetInterval(viewerConnection, interval, ObserverStreamingEntry.IntervalOrigin.RelevanceCap);
-							LastPassLimitedPairs++;
-						}
-					}
-				}
-
+				RankCandidates(viewerConnection, ranks, rateCap, engagedBudget, engagedOverflow);
 				rankedClientIds.Add(viewerConnection.ClientId);
+			}
+		}
+
+		/// <summary>
+		/// One (viewer, object) pair: notes the viewer's distance on the object and, inside the range that admits it,
+		/// adds it as a ranking candidate (pinned where the viewer must never lose it).
+		/// </summary>
+		private static void Consider(ObserverStreamingEntry viewer, ObserverStreamingEntry observed, float viewerRange, float engagementRange, long viewerTargetId, HashSet<int> pins)
+		{
+			if (ReferenceEquals(observed, viewer))
+			{
+				return;
+			}
+
+			/* Candidacy by DISTANCE, not by current observer membership.
+			 *
+			 * Ranking only what the viewer already observes would deadlock the visibility
+			 * budget: a character that is not yet an observer would never be ranked, the
+			 * budget condition would never admit it, and it could never become an observer.
+			 *
+			 * Measured against the OBSERVED character's applied range, because that is the
+			 * range its DistanceCondition admits this viewer by — density scaling is
+			 * per-object, so the viewer's own range can be much smaller. Filtering by the
+			 * viewer's range left every (in observed's range, outside viewer's range) pair
+			 * unranked, and the budget condition admits ranked-viewer/unranked-object pairs
+			 * unconditionally on the premise that "unranked" means "out of range" — so those
+			 * characters bypassed both the visibility budget and the full-rate cap. */
+			float distance = Vector3.Distance(viewer.Position, observed.Position);
+
+			/* Recorded BEFORE the range filter, and so a true proximity measurement rather
+			 * than a restatement of who can see whom. AIController reads it to answer "is any
+			 * player near", a question it used to answer from NetworkObject.Observers — a
+			 * BANDWIDTH set, emptied by the visibility budget, which made a budget-evicted
+			 * monster full-heal, drop its threat table and reset its boss phases with players
+			 * standing next to it. */
+			observed.NoteViewerDistance(distance);
+
+			float admittingRange = observed.HasDistanceCondition && observed.AppliedRange > 0f
+				? observed.AppliedRange
+				: viewerRange;
+			if (distance > admittingRange)
+			{
+				return;
+			}
+
+			bool sameParty = viewer.PartyID != 0 && viewer.PartyID == observed.PartyID;
+			bool sameGuild = viewer.GuildID != 0 && viewer.GuildID == observed.GuildID;
+
+			/* Pins: never evicted, whatever the crowd.
+			 *
+			 * Party members inside the ability ceiling, because a group that cannot see each
+			 * other cannot play together; the character the viewer currently targets,
+			 * because losing your target mid-fight is the worst possible moment for a
+			 * despawn; and anything the viewer is ACTUALLY FIGHTING, which is the case the
+			 * first two miss.
+			 *
+			 * That third one closes a real hole. An enemy that is neither targeted nor a
+			 * party member could be evicted by the budget mid-fight — and a despawned victim
+			 * takes its combat reports with it, because CharacterDamageController.
+			 * FlushCombatEvents broadcasts to the VICTIM's observers. The player then sees
+			 * no damage numbers at all, and their own predicted numbers grey out as
+			 * unconfirmed after a second, while every hit is landing. Nothing about that
+			 * reads as "the server stopped sending me this creature".
+			 *
+			 * Both directions, because either one means a fight: the viewer has damaged the
+			 * observed character, or the observed character has damaged the viewer. Bounded
+			 * by the ability ceiling like the party pin, so a fight that has genuinely moved
+			 * out of range stops holding a slot.
+			 *
+			 * Pins still occupy budget slots, so a player fighting several enemies simply
+			 * leaves fewer slots for strangers — which is the right trade. */
+			bool engagedWith = observed.InCombat &&
+				distance <= ObserverStreamingPolicy.EngagementRangeCeiling &&
+				viewer.Character != null &&
+				observed.Character != null &&
+				(observed.IsFoughtBy(viewer.Character.ID) ||
+				 viewer.IsFoughtBy(observed.Character.ID));
+
+			/* The target pin is bounded by the engagement ceiling like the other two.
+			 * Previously implicit (hover targeting reaches 50 m at most), it has to be
+			 * explicit now that the id can be client-reported: a forged or stale id naming
+			 * something across the map must not hold a budget slot. */
+			bool pinned = (sameParty && distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
+				(viewerTargetId != 0 &&
+				 observed.NetworkObject.ObjectId == viewerTargetId &&
+				 distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
+				engagedWith;
+			if (pinned)
+			{
+				pins.Add(observed.NetworkObject.ObjectId);
+				LastPassPinned++;
+			}
+
+			candidates.Add(new Candidate
+			{
+				Entry = observed,
+				Score = ObserverStreamingPolicy.Score(observed.InCombat, sameParty, sameGuild, distance, viewerRange),
+				Distance = distance,
+				Pinned = pinned,
+				Engaged = distance <= engagementRange,
+			});
+		}
+
+		/// <summary>
+		/// Sorts one viewer's candidates (a total order, so the result does not depend on the order they were found in),
+		/// ranks each within its classification and rate limits all but the most relevant.
+		/// </summary>
+		private static void RankCandidates(NetworkConnection viewerConnection, Dictionary<int, int> ranks, int rateCap, int engagedBudget, byte engagedOverflow)
+		{
+			using (Markers.Sort.Auto())
+			{
+				candidates.Sort(CandidateOrder);
+			}
+
+			/* Rank within classification, so each kind is measured against its own budget.
+			 * classRanks is reset per viewer; the global index i still drives the FULL-RATE cap
+			 * below, because that one is about the total number of streams a client pays for
+			 * and does not care what kind they are. */
+			classRanks.Clear();
+			int engagedSoFar = 0;
+			for (int i = 0; i < candidates.Count; ++i)
+			{
+				Candidate candidate = candidates[i];
+				int objectId = candidate.Entry.NetworkObject.ObjectId;
+
+				int bucket = candidate.Entry.RankBucket;
+				classRanks.TryGetValue(bucket, out int classRank);
+				classRanks[bucket] = classRank + 1;
+
+				int budget = candidate.Entry.VisibilityBudget;
+				ranks[objectId] = classRank;
+				budgetsByObjectId[objectId] = budget;
+
+				if (budget > 0 && !candidate.Pinned && classRank >= budget)
+				{
+					LastPassBudgetExcluded++;
+				}
+
+				/* Rate limiting, in one place, most relevant first.
+				 *
+				 * An engaged character keeps every tick while the engaged budget lasts, then
+				 * falls to the overflow interval rather than to its distance band — it is still
+				 * close enough to be shot at, and one tick of compensation error is a different
+				 * thing from six. Everything else follows the relevance cap as before. */
+				if (candidate.Engaged)
+				{
+					if (engagedSoFar < engagedBudget)
+					{
+						engagedSoFar++;
+						continue;
+					}
+					if (engagedOverflow > 1)
+					{
+						/* Tagged as engaged overflow, not as a relevance cap. The two are
+						 * distinguished at the send: an engaged observer is exempt from the
+						 * relevance cap but NOT from this, because this interval is the bound on
+						 * that very exemption. While both were assigned as the same kind of
+						 * interval, GetEffectiveInterval discarded this one on the same
+						 * engagement test that had just been used to assign it — so
+						 * EngagedFullRateBudget and EngagedOverflowInterval had no runtime effect
+						 * whatsoever and the count below was of throttles that never happened. */
+						candidate.Entry.SetInterval(viewerConnection, engagedOverflow, ObserverStreamingEntry.IntervalOrigin.EngagedOverflow);
+						LastPassLimitedPairs++;
+					}
+					continue;
+				}
+
+				if (i >= rateCap)
+				{
+					byte interval = ObserverStreamingPolicy.LodInterval(candidate.Distance);
+					if (interval > 1)
+					{
+						candidate.Entry.SetInterval(viewerConnection, interval, ObserverStreamingEntry.IntervalOrigin.RelevanceCap);
+						LastPassLimitedPairs++;
+					}
+				}
 			}
 		}
 

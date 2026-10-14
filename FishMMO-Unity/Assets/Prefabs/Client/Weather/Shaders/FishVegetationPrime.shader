@@ -46,6 +46,8 @@ Shader "FishMMO/Vegetation Prime"
         [Header(Weather)]
         _SnowBury("Sinks into deep snow", Range(0.0, 1.0)) = 0.0
         _FishWeatherAmount("Weather on this surface", Range(0.0, 1.0)) = 1.0
+        // Moss grown on this surface (FishMoss.hlsl, scaled by the scene's dampness): the deadwood's bark and wood; 0 on every living plant.
+        _FishMoss("Moss on this surface", Range(0.0, 1.0)) = 0.0
 
         [Header(Distance and ground)]
         [Enum(None, 0, Detail, 1, Tree, 2)] _DistanceFade("Distance fade (detail: before its patch is culled; tree: before the tree distance)", Float) = 0.0

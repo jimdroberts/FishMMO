@@ -11,8 +11,9 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>
 	/// Lays vines (2026-10-12: "vines and ivy in the world … Cave mouths, Ruins and old walls, Cliffs and outcrops,
 	/// Trees") as baked props: over cave mouths (<see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, string, DeterministicRNG, Func{Vector3, bool})"/>,
-	/// called by the cave's own mouth builder), off crags (<see cref="HangFromCrags"/>, from CliffPlacer), up trees
-	/// (<see cref="ClimbTrees"/>, from the tree bake) and over the walls of ruins (PointOfInterestVines). What goes where is
+	/// called by the cave's own mouth builder), off crags (<see cref="HangFromCrags"/>, from CliffPlacer), on the walls beside
+	/// waterfalls (<see cref="DrapeFalls"/>, from FallLedges), up trees (<see cref="ClimbTrees"/>, from the tree bake) and over
+	/// the walls of ruins (PointOfInterestVines). What goes where is
 	/// <see cref="VineRules"/>; which biome grows what, <see cref="VineBiomes"/>.
 	/// </summary>
 	/// <remarks>
@@ -322,6 +323,162 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			notes?.Add($"Cliffs: {placed:N0} vine curtain(s) hung off {crags:N0} crag(s){(missing > 0 ? $"; {missing:N0} left out (no vine art: Generate Biome Art)" : string.Empty)}.");
 			return placed;
+		}
+
+		// ── Waterfalls ──────────────────────────────────────────
+
+		/// <summary>
+		/// Vines on the wet walls beside and round each waterfall (FallLedges.Place, before its props are written): mats on the
+		/// faces flanking the curtain and round the plunge pool and curtains hung from the walls' rims, in the biomes that grow
+		/// vines, as thickly as <see cref="VineRules.FallShare"/> says (<see cref="VineRules.FallWalls"/>). Seeded by the river
+		/// and the fall's lip, so a re-cut grows the same. The walls are the finished ground and the fall's own ledges and
+		/// overhang (<paramref name="rocks"/>), so no vine is laid through one. Added to the falls' own props, so a re-placing
+		/// clears them with the rock; no collider, so no collision.
+		/// </summary>
+		/// <param name="groundAt">The finished ground at (east, north), scene metres.</param>
+		/// <param name="keptOut">Ground no vine is laid on (under a bridge, in a riverside site's footprint); null for none.</param>
+		public static int DrapeFalls(SceneWater water, List<FallLedge> rocks, Func<float, float, float> groundAt, SceneBiomeField field, uint seed,
+			Func<float, float, bool> keptOut, List<ScenePropSet.Prototype> prototypes, List<ScenePropSet.Prop> props, List<string> notes)
+		{
+			if (water == null || groundAt == null || field == null || prototypes == null || props == null)
+			{
+				return 0;
+			}
+			var settings = new FallLedgeSettings();
+			var scratch = new float[Mathf.Max(1, field.Biomes.Count)];
+			var prototypeOf = new Dictionary<GameObject, int>();
+			for (int p = 0; p < prototypes.Count; p++)
+			{
+				if (prototypes[p].Prefab != null)
+				{
+					prototypeOf[prototypes[p].Prefab] = p;
+				}
+			}
+			int placed = 0, falls = 0, missing = 0;
+			var boxes = new List<(Vector3 centre, Quaternion inverse, Vector3 half)>();
+			foreach (RiverPath river in water.Rivers)
+			{
+				foreach (FallLedges.FallSpan span in FallLedges.FindFalls(river, settings.MinDropMetres, settings.PoolLevelMetres))
+				{
+					if (!FallFrameOf(river, span, out VineRules.FallFrame frame))
+					{
+						continue;
+					}
+					int b = field.DominantIndexAt(frame.Lip.x, frame.Lip.z, scratch);
+					BiomeTemplate biome = b >= 0 && b < field.Biomes.Count ? field.Biomes[b] : null;
+					VineBiomes.Habitat habitat = biome != null ? VineBiomes.For(biome.name) : null;
+					if (VineRules.FallShare(habitat) <= 0f)
+					{
+						continue;
+					}
+					// The fall's own ledges and overhang stand out of its face: rock as much as the ground is.
+					boxes.Clear();
+					if (rocks != null)
+					{
+						foreach (FallLedge rock in rocks)
+						{
+							if (rock.Kind != FallRockKind.LipBoulder && rock.River == river.Id && rock.Lip == span.Lip)
+							{
+								boxes.Add((rock.Position, Quaternion.Inverse(rock.Rotation), rock.Size * 0.5f));
+							}
+						}
+					}
+					bool SolidAt(Vector3 p)
+					{
+						if (p.y < groundAt(p.x, p.z))
+						{
+							return true;
+						}
+						foreach ((Vector3 centre, Quaternion inverse, Vector3 half) in boxes)
+						{
+							Vector3 local = inverse * (p - centre);
+							if (Mathf.Abs(local.x) <= half.x && Mathf.Abs(local.y) <= half.y && Mathf.Abs(local.z) <= half.z)
+							{
+								return true;
+							}
+						}
+						return false;
+					}
+					var rng = new DeterministicRNG(ProceduralNoise.SeedFor($"fallvine/{river.Id}/{span.Lip}", (int)seed));
+					List<VineSpot> spots = VineRules.FallWalls(in frame, habitat, rng, SolidAt, water.SurfaceAt, out _);
+					int before = placed;
+					foreach (VineSpot spot in spots)
+					{
+						if (keptOut != null && keptOut(spot.Position.x, spot.Position.z))
+						{
+							continue;
+						}
+						GameObject prefab = PrefabFor(in spot);
+						if (prefab == null)
+						{
+							missing++;
+							continue;
+						}
+						if (!prototypeOf.TryGetValue(prefab, out int prototype))
+						{
+							prototype = prototypes.Count;
+							prototypes.Add(new ScenePropSet.Prototype { Prefab = prefab, Layer = -1 });
+							prototypeOf[prefab] = prototype;
+						}
+						props.Add(new ScenePropSet.Prop { Prototype = prototype, Position = spot.Position, Rotation = RotationOf(in spot), Scale = spot.Scale });
+						placed++;
+					}
+					if (placed > before)
+					{
+						falls++;
+					}
+				}
+			}
+			notes?.Add($"Waterfalls: {placed:N0} vine(s) on the walls of {falls:N0} fall(s){(missing > 0 ? $"; {missing:N0} left out (no vine art: Generate Biome Art)" : string.Empty)}.");
+			return placed;
+		}
+
+		/// <summary>
+		/// A fall as <see cref="VineRules.FallWalls"/> takes it: the lip's middle on the water and the way the water leaves it
+		/// (the lip to the point after, as FallLedges reads it), the lip's width, the pool's level, how far out the water may
+		/// land (the plunge point, or its throw if that is further), and the pool's middle and radius as the runtime sizes the
+		/// pool (InlandWaterRenderer.FindFalls). False when the lip has no direction.
+		/// </summary>
+		public static bool FallFrameOf(RiverPath river, FallLedges.FallSpan span, out VineRules.FallFrame frame)
+		{
+			frame = default;
+			int lip = span.Lip, foot = span.Foot;
+			int next = Math.Min(foot, lip + 1);
+			float tx = river.X[next] - river.X[lip], tz = river.Z[next] - river.Z[lip];
+			float tl = Mathf.Sqrt(tx * tx + tz * tz);
+			if (tl < 1e-4f)
+			{
+				return false;
+			}
+			tx /= tl;
+			tz /= tl;
+			float width = Mathf.Max(1f, river.Width[lip]);
+			float poolWidth = width;
+			for (int k = lip; k <= foot; k++)
+			{
+				poolWidth = Mathf.Max(poolWidth, river.Width[k]);
+			}
+			float drop = span.Drop;
+			float radius = Mathf.Max(3f, 0.9f * poolWidth + 0.35f * drop);
+			int plunge = Mathf.Clamp(span.Plunge, lip, foot);
+			float plungeAlong = (river.X[plunge] - river.X[lip]) * tx + (river.Z[plunge] - river.Z[lip]) * tz;
+			float q = river.Discharge != null && lip < river.Discharge.Length ? river.Discharge[lip] / width : 1f;
+			float thrown = VineRules.FallThrow(q, drop);
+			// The basin's middle: the plunge point, or out under the falling water where it is thrown well clear of the face.
+			float basin = Mathf.Clamp(Mathf.Max(plungeAlong, 0.6f * thrown), 1.5f, 0.8f * radius + 1f);
+			var lipPoint = new Vector3(river.X[lip], river.Surface[lip], river.Z[lip]);
+			var downstream = new Vector3(tx, 0f, tz);
+			frame = new VineRules.FallFrame
+			{
+				Lip = lipPoint,
+				Downstream = downstream,
+				Width = width,
+				Pool = river.Surface[foot],
+				Landing = Mathf.Max(plungeAlong, thrown),
+				Basin = lipPoint + downstream * basin,
+				PoolRadius = radius,
+			};
+			return true;
 		}
 
 		// ── Trees ───────────────────────────────────────────────

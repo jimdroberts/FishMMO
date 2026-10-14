@@ -882,7 +882,9 @@ namespace FishMMO.Shared.WorldDesign
 					if (lathe.WallOffset != null && ring.Wall != 0f)
 					{
 						Vector3 at = lathe.Centre + new Vector3(c * radius, ring.Y, s * radius);
-						radius += ring.Wall * lathe.WallOffset(at, phi);
+						// Nor does a carving offset: a lean or flute deeper than a spire's narrow tip pulls one side through
+						// the axis, and the cap folds over it.
+						radius = Mathf.Max(radius * 0.3f, radius + ring.Wall * lathe.WallOffset(at, phi));
 					}
 					radius = Mathf.Max(0.01f, radius);
 					grid[r, i] = lathe.Centre + new Vector3(c * radius, ring.Y, s * radius);

@@ -98,18 +98,151 @@ namespace FishMMO.Shared.WorldDesign
 		/// Flattens a pad: the ground inside its radius eased to its height by <paramref name="flatness"/>, easing back to
 		/// the ground over its blend. Holes are kept. Returns the samples changed.
 		/// </summary>
-		public static int FlattenPad(Terrain[,] terrains, TerrainTilePlan plan, PointOfInterestPad pad, float flatness = 1f)
+		/// <param name="wet">Whether a scene position is water or its bank (east, north); a bank never runs into it. Null for none.</param>
+		public static int FlattenPad(Terrain[,] terrains, TerrainTilePlan plan, PointOfInterestPad pad, float flatness = 1f,
+			Func<float, float, bool> wet = null)
 		{
 			float reach = pad.Radius + Mathf.Max(Mathf.Max(0.01f, pad.Blend), MaxEmbankmentMetres);
 			var area = new Rect(pad.Centre.x - reach, pad.Centre.z - reach, reach * 2f, reach * 2f);
 			float height = pad.Height;
 			flatness = Mathf.Clamp01(flatness);
+			// How far the bank runs each way before it meets the ground, traced over the ground as it stands now.
+			float[] bank = BankReach((east, north) => GroundAt(terrains, east, north), pad.Centre, pad.Radius, pad.Blend, height, wet);
 			return EditHeights(terrains, plan, area, (east, north, metres) =>
 			{
 				float dx = east - pad.Centre.x, dz = north - pad.Centre.z;
-				float target = PadHeight(Mathf.Sqrt(dx * dx + dz * dz), metres, pad.Radius, pad.Blend, height);
+				float target = PadHeight(Mathf.Sqrt(dx * dx + dz * dz), metres, pad.Radius, pad.Blend, height, ReachToward(bank, dx, dz));
 				return Mathf.Lerp(metres, target, flatness);
 			});
+		}
+
+		/// <summary>How many directions round a pad its bank is traced along (<see cref="BankReach"/>).</summary>
+		public const int BankRays = 96;
+
+		/// <summary>Metres past where it meets the ground over which a bank's edit hands back to the natural ground.</summary>
+		public const float BankHandoverMetres = 4f;
+
+		/// <summary>How far short of water a pad's bank has handed back to the natural ground, metres.</summary>
+		public const float WaterSetbackMetres = 2f;
+
+		/// <summary>
+		/// How far out from a pad's centre its bank runs in each of <see cref="BankRays"/> directions (the first along +x,
+		/// turning toward +z): from the rim out to where the bank first meets the natural ground, at most the full reach.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>A bank stops where it meets the ground.</b> The cut-and-fill cone held every sample within its reach (160 m)
+		/// to within the bank's slope of the pad, wherever it lay. A bank is earth piled against the pad's edge (or dug
+		/// back from it) until it meets the hillside; past that the ground is the ground. Held to the cone everywhere, a
+		/// pad at a clifftop filled whatever lay below the cliff within the reach to a 31° slope: the shrine above Flo
+		/// Monolith's 70 m fall, 96 m from its gorge, filled the gorge, its plunge pool and a hundred metres of the river
+		/// below it 36 m deep, and the fall landed on a grassy hillside with no pool and no river out of it (2026-10-13;
+		/// found by the cut's river-burial check, which named the paint stage the pads are laid in).
+		/// </para>
+		/// <para>
+		/// So the bank is traced out along each direction over the ground as it stands, and ends at the first point where
+		/// the ground lies within the bank's reach of the pad's height. A pad on a hillside banks out as far as it needs
+		/// (the ground stays below the fill, or above the cut, all the way); a pad at a clifftop meets the ground at its rim
+		/// and leaves the cliff, and the valley past it, alone.
+		/// </para>
+		/// </remarks>
+		/// <param name="groundAt">The natural ground (east, north), metres; NaN off the terrain, where the bank ends.</param>
+		/// <param name="wet">
+		/// Whether a scene position is water or its bank. A bank ends before it: handed back to the natural ground over
+		/// <see cref="BankHandoverMetres"/> and <see cref="WaterSetbackMetres"/> more, short of the water. A town's pad 66 m
+		/// from Flo Monolith's river, above it on ground falling gentler than the bank's slope, banked on down the hillside
+		/// and over the river, filling its channel above its water (2026-10-13). Null for none.
+		/// </param>
+		public static float[] BankReach(Func<float, float, float> groundAt, Vector3 centre, float radius, float blend, float height,
+			Func<float, float, bool> wet = null)
+		{
+			var reach = new float[BankRays];
+			float most = radius + MaxEmbankmentMetres;
+			const float Step = 1f;
+			for (int r = 0; r < BankRays; r++)
+			{
+				float angle = r * (2f * Mathf.PI / BankRays);
+				float cos = Mathf.Cos(angle), sin = Mathf.Sin(angle);
+				float found = most;
+				for (float d = radius; d <= most; d += Step)
+				{
+					float east = centre.x + cos * d, north = centre.z + sin * d;
+					if (wet != null && wet(east, north))
+					{
+						// The edit is the natural ground again before the water's bank begins.
+						found = Mathf.Max(radius, d - BankHandoverMetres - WaterSetbackMetres);
+						break;
+					}
+					float ground = groundAt(east, north);
+					if (float.IsNaN(ground) || Mathf.Abs(ground - height) <= BankSlack(d - radius, blend) + 1e-3f)
+					{
+						found = d;
+						break;
+					}
+				}
+				reach[r] = found;
+			}
+			return reach;
+		}
+
+		/// <summary>How far the bank runs toward an offset (dx, dz) from the pad's centre: <see cref="BankReach"/> between its two nearest rays.</summary>
+		public static float ReachToward(float[] reach, float dx, float dz)
+		{
+			if (reach == null || reach.Length == 0)
+			{
+				return float.PositiveInfinity;
+			}
+			float angle = Mathf.Atan2(dz, dx);
+			if (angle < 0f)
+			{
+				angle += 2f * Mathf.PI;
+			}
+			float at = angle / (2f * Mathf.PI) * reach.Length;
+			int a = Mathf.FloorToInt(at) % reach.Length, b = (a + 1) % reach.Length;
+			return Mathf.Lerp(reach[a], reach[b], at - Mathf.Floor(at));
+		}
+
+		/// <summary>
+		/// The ground at a distance from a pad's centre, as <see cref="PadHeight(float, float, float, float, float)"/>, but only
+		/// as far as its bank runs that way (<paramref name="reach"/>, from <see cref="BankReach"/>): past it the natural
+		/// ground, handed back over <see cref="BankHandoverMetres"/> (where the bank meets the ground it already is the ground).
+		/// </summary>
+		public static float PadHeight(float distance, float ground, float radius, float blend, float height, float reach)
+		{
+			float banked = PadHeight(distance, ground, radius, blend, height);
+			if (distance <= reach || distance <= radius)
+			{
+				return banked;
+			}
+			float t = Mathf.Clamp01((distance - reach) / BankHandoverMetres);
+			return Mathf.Lerp(banked, ground, t * t * (3f - 2f * t));
+		}
+
+		/// <summary>How far a bank may stand from the pad's height a run past its rim: the slope, after the rim's rounded fillet.</summary>
+		private static float BankSlack(float run, float blend)
+		{
+			float b = Mathf.Max(0.01f, blend);
+			run = Mathf.Max(0f, run);
+			return (run < b ? run * run / (2f * b) : run - b * 0.5f) * EmbankmentSlope;
+		}
+
+		/// <summary>The terrain's height at a scene position (the tile under it); NaN off every tile.</summary>
+		private static float GroundAt(Terrain[,] terrains, float east, float north)
+		{
+			foreach (Terrain terrain in terrains)
+			{
+				if (terrain == null || terrain.terrainData == null)
+				{
+					continue;
+				}
+				Vector3 origin = terrain.transform.position;
+				Vector3 size = terrain.terrainData.size;
+				if (east >= origin.x && east <= origin.x + size.x && north >= origin.z && north <= origin.z + size.z)
+				{
+					return terrain.SampleHeight(new Vector3(east, 0f, north)) + origin.y;
+				}
+			}
+			return float.NaN;
 		}
 
 		/// <summary>The steepest cut or fill slope a pad leaves at its edge (tan 31°): steep enough to stay close, shallow enough to read as ground.</summary>
@@ -268,10 +401,79 @@ namespace FishMMO.Shared.WorldDesign
 					if (any)
 					{
 						data.SetHoles(0, 0, solid);
+						if (!solidity)
+						{
+							ClearDetailsInHoles(data, solid, new Rect(area.xMin - origin.x, area.yMin - origin.z, area.width, area.height));
+						}
 					}
 				}
 			}
 			return cut;
+		}
+
+		/// <summary>
+		/// Empties every detail layer over the hole cells of <paramref name="solid"/> (true solid, <see cref="TerrainData.GetHoles"/>)
+		/// within <paramref name="local"/> (metres from the tile's corner): a hole cut after the biome scatter left its
+		/// grass and flowers standing in the cave mouth. Returns the detail cells emptied.
+		/// </summary>
+		public static int ClearDetailsInHoles(TerrainData data, bool[,] solid, Rect local)
+		{
+			int layers = data.detailPrototypes.Length, res = data.detailResolution, holes = solid.GetLength(0);
+			if (layers == 0 || res <= 0 || holes <= 0)
+			{
+				return 0;
+			}
+			float texelX = data.size.x / res, texelZ = data.size.z / res;
+			int x0 = Mathf.Clamp(Mathf.FloorToInt(local.xMin / texelX), 0, res - 1), x1 = Mathf.Clamp(Mathf.CeilToInt(local.xMax / texelX), 0, res - 1);
+			int z0 = Mathf.Clamp(Mathf.FloorToInt(local.yMin / texelZ), 0, res - 1), z1 = Mathf.Clamp(Mathf.CeilToInt(local.yMax / texelZ), 0, res - 1);
+			if (x1 < x0 || z1 < z0)
+			{
+				return 0;
+			}
+			int w = x1 - x0 + 1, h = z1 - z0 + 1;
+			// The detail cells whose centre lies over a hole cell (the cell a plant's root reads, as the terrain clips it).
+			var under = new bool[h, w];
+			bool anyUnder = false;
+			for (int j = 0; j < h; j++)
+			{
+				int hz = Mathf.Clamp(Mathf.FloorToInt((z0 + j + 0.5f) / res * holes), 0, holes - 1);
+				for (int i = 0; i < w; i++)
+				{
+					int hx = Mathf.Clamp(Mathf.FloorToInt((x0 + i + 0.5f) / res * holes), 0, holes - 1);
+					if (!solid[hz, hx])
+					{
+						under[j, i] = true;
+						anyUnder = true;
+					}
+				}
+			}
+			if (!anyUnder)
+			{
+				return 0;
+			}
+			int cleared = 0;
+			for (int layer = 0; layer < layers; layer++)
+			{
+				int[,] map = data.GetDetailLayer(x0, z0, w, h, layer);
+				bool changed = false;
+				for (int j = 0; j < h; j++)
+				{
+					for (int i = 0; i < w; i++)
+					{
+						if (under[j, i] && map[j, i] != 0)
+						{
+							map[j, i] = 0;
+							changed = true;
+							cleared++;
+						}
+					}
+				}
+				if (changed)
+				{
+					data.SetDetailLayer(x0, z0, layer, map);
+				}
+			}
+			return cleared;
 		}
 
 		/// <summary>True where the tiles have a hole at (east, north).</summary>

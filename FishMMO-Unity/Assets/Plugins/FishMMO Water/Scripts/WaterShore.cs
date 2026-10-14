@@ -66,6 +66,13 @@ namespace FishMMO.Water
 		/// <summary>The foam memory's shader, for finding it when the reference was never set.</summary>
 		public const string FoamMemoryShaderName = "Hidden/FishMMO/Water/ShoreFoamMemory";
 
+		[Tooltip("The mark a floating hull lays over its own pixels so this pass leaves them alone (FishHullShoreMark.shader). " +
+			"FloatingBoats finds it by name; referenced here so a build includes it.")]
+		public Shader HullMarkShader;
+
+		/// <summary>The hull mark's shader: what FloatingBoats looks up (its ShoreMarkShaderName, pinned equal by a test).</summary>
+		public const string HullMarkShaderName = "FishMMO/Water/Hull Shore Mark";
+
 		private static readonly int MemoryId = Shader.PropertyToID("_FishWaterFoamMemory");
 		private static readonly int PreviousId = Shader.PropertyToID("_FoamMemoryPrevious");
 		private static readonly int MemorySizeId = Shader.PropertyToID("_FoamMemorySize");
@@ -271,6 +278,12 @@ namespace FishMMO.Water
 			if (Material != null)
 			{
 				meshRenderer.sharedMaterial = Material;
+			}
+			/* Filled in the editor, so a scene saved with a shore carries the reference and a build includes the shader;
+			 * nothing here draws with it (the boats do). */
+			if (HullMarkShader == null)
+			{
+				HullMarkShader = Shader.Find(HullMarkShaderName);
 			}
 			meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
 			meshRenderer.receiveShadows = false;

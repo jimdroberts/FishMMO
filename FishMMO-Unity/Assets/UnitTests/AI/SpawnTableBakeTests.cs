@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 using FishMMO.Shared;
@@ -615,33 +616,29 @@ namespace FishMMO.UnitTests.AI
 		public void ABakedTable_KeepsItsReferenceIdsAcrossRebakes()
 		{
 			/* Random [SerializeReference] ids made every build rewrite every table with nothing
-			 * else changed. The bake numbers them in table order and copies them onto the asset. */
-			SceneSpawnTable Stage()
+			 * else changed. The bake numbers them in table order, writing the table asset in place. */
+			List<SpawnerDefinition> Definitions() => new List<SpawnerDefinition>
 			{
-				SceneSpawnTable staged = ScriptableObject.CreateInstance<SceneSpawnTable>();
-				staged.Spawners = new List<SpawnerDefinition>
+				new SpawnerDefinition { Spawnables = new List<SpawnableSettings> { new NPCSpawnableSettings(), null, new ItemSpawnableSettings() } },
+				null,
+				new SpawnerDefinition
 				{
-					new SpawnerDefinition { Spawnables = new List<SpawnableSettings> { new NPCSpawnableSettings(), null, new ItemSpawnableSettings() } },
-					null,
-					new SpawnerDefinition
-					{
-						Spawnables = new List<SpawnableSettings> { new SpawnableSettings() },
-						OrConditions = new List<RespawnCondition> { new SpawnersClearedCondition() },
-					},
-				};
-				Assert.IsTrue(SpawnTableBaker.AssignStableReferenceIds(staged));
-				return staged;
-			}
+					Spawnables = new List<SpawnableSettings> { new SpawnableSettings() },
+					OrConditions = new List<RespawnCondition> { new SpawnersClearedCondition() },
+				},
+			};
 
+			const string path = "Assets/__SpawnTableBakeTests_Table.asset";
 			SceneSpawnTable asset = ScriptableObject.CreateInstance<SceneSpawnTable>();
-			SceneSpawnTable first = Stage();
-			SceneSpawnTable second = Stage();
+			AssetDatabase.CreateAsset(asset, path);
 			try
 			{
-				EditorUtility.CopySerialized(first, asset);
-				string once = EditorJsonUtility.ToJson(asset);
-				EditorUtility.CopySerialized(second, asset);
-				Assert.AreEqual(once, EditorJsonUtility.ToJson(asset), "an unchanged rebake must serialize identically");
+				Assert.IsTrue(SpawnTableBaker.Write(asset, "Test", "Assets/Test.unity", Definitions()), "the first bake takes ids 1, 2, 3…");
+				AssetDatabase.SaveAssetIfDirty(asset);
+				string once = File.ReadAllText(path);
+				Assert.IsTrue(SpawnTableBaker.Write(asset, "Test", "Assets/Test.unity", Definitions()), "a rebake frees the last bake's ids and takes them again");
+				AssetDatabase.SaveAssetIfDirty(asset);
+				Assert.AreEqual(once, File.ReadAllText(path), "an unchanged rebake must write the same bytes");
 
 				long Id(object managed) => UnityEngine.Serialization.ManagedReferenceUtility.GetManagedReferenceIdForObject(asset, managed);
 				Assert.AreEqual(1, Id(asset.Spawners[0].Spawnables[0]));
@@ -651,9 +648,7 @@ namespace FishMMO.UnitTests.AI
 			}
 			finally
 			{
-				Object.DestroyImmediate(first);
-				Object.DestroyImmediate(second);
-				Object.DestroyImmediate(asset);
+				AssetDatabase.DeleteAsset(path);
 			}
 		}
 

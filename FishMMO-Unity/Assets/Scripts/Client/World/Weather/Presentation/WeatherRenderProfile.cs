@@ -178,6 +178,8 @@ namespace FishMMO.Client
 		[Range(128, 4096)] public int FarImposterSize = 1024;
 		[Tooltip("Frames to refresh the whole imposter once. More is cheaper; the far clouds then follow the weather that much later (at the game's pace a cloud past 5 km moves a pixel or two in that time).")]
 		[Range(4, 512)] public int FarImposterRefreshFrames = 48;
+		[Tooltip("Seconds to refresh the whole imposter once, whatever the frame rate (0: by frames, FarImposterRefreshFrames). By frames, a fast frame rate refreshed it far more often than the far clouds change: 48 frames is a whole panorama every 0.16 s at 300 fps, each texel three marches, for clouds past 5 km that move a pixel or two in a second.")]
+		[Range(0f, 10f)] public float FarImposterRefreshSeconds = 1.5f;
 		[Tooltip("How much of each refresh replaces what a texel held (1: all of it). Lower averages more refreshes' ray phases — smoother far cloud — and follows changes more slowly.")]
 		[Range(0.05f, 1f)] public float FarImposterKeep = 0.4f;
 		[Tooltip("Where the imposter takes over, in metres (0: where the far band begins). Further out, the far band marches the clouds between its start and here on the screen, at full detail, and the imposter — softer, at about 8 screen pixels a texel at 1440p — only has the clouds that are small and hazy anyway.")]
@@ -550,8 +552,8 @@ namespace FishMMO.Client
 		[Tooltip("Hidden/FishMMO/RockSdf: draws each rock shape's distance field. Referenced here so it ships to clients only.")]
 		public Shader RockSdfShader;
 
-		[Header("Moss (rock, cliffs, caves, stone and timber)")]
-		[Tooltip("How much moss the world grows, times each scene's dampness (MossClimate: the biome under the camera — swamp and forest a lot, desert, volcanic and ice next to none) and each material's own Moss amount (_FishMoss, set by the art generator). 0 turns it off everywhere. Live (2026-10-12).")]
+		[Header("Moss (rock, cliffs, caves, stone, timber and deadwood)")]
+		[Tooltip("How much moss the world grows, times each scene's dampness (MossClimate: the biome under the camera — swamp and forest a lot, desert, volcanic and ice next to none) and each material's own Moss amount (_FishMoss, set by the art generator). A waterfall's spray grows it at this strength whatever the climate, on that rock and on the ground round the fall. 0 turns it off everywhere. Live (2026-10-12).")]
 		[Range(0f, 2f)] public float MossStrength = 1f;
 		[Tooltip("Metres one tile of the moss texture covers (projected in world space, so the same on every rock and wall).")]
 		[Range(0.25f, 8f)] public float MossTileMetres = 2f;

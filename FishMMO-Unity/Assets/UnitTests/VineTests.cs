@@ -344,6 +344,162 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		// ── Waterfalls ───────────────────────────────────────
+
+		/// <summary>
+		/// A 20 m fall into a round pool cut in a plateau: the lip's middle at the origin on the water, downstream +z, a 6 m
+		/// curtain; the headwall is the plateau's sheer edge at z = 0, the pool a 10 m circle about (0, 4) with its way out
+		/// down +z. With <paramref name="banks"/>, no wall at all: the ground slopes at 30 degrees from the pool up to the
+		/// plateau all round, a carved bank's, not a cliff's.
+		/// </summary>
+		private static VineRules.FallFrame FallBed(bool banks, out Func<Vector3, bool> solid, out Func<float, float, float> water)
+		{
+			const float plateau = 20f, bed = -2f, radius = 10f;
+			var basin = new Vector3(0f, 0f, 4f);
+			bool Channel(float x, float z) => z < 0f && Mathf.Abs(x) < 3f;
+			bool Pool(float x, float z) => z >= 0f && ((x - basin.x) * (x - basin.x) + (z - basin.z) * (z - basin.z) < radius * radius || Mathf.Abs(x) < 4f && z > basin.z);
+			float Ground(float x, float z)
+			{
+				if (banks)
+				{
+					float r = new Vector2(x - basin.x, z - basin.z).magnitude;
+					return Mathf.Clamp((r - radius) * Mathf.Tan(30f * Mathf.Deg2Rad), bed, plateau);
+				}
+				if (Channel(x, z))
+				{
+					return plateau - 1f;
+				}
+				return Pool(x, z) ? bed : plateau;
+			}
+			solid = p => p.y < Ground(p.x, p.z);
+			water = (x, z) => Channel(x, z) ? plateau + 0.3f : Pool(x, z) ? 0f : float.NegativeInfinity;
+			return new VineRules.FallFrame
+			{
+				Lip = new Vector3(0f, plateau + 0.3f, 0f), Downstream = Vector3.forward, Width = 6f, Pool = 0f,
+				Landing = 4f, Basin = basin, PoolRadius = radius,
+			};
+		}
+
+		private static float PieceWidth(in VineSpot spot)
+		{
+			ProceduralArtCatalogue.TryVinePiece(spot.Form, spot.Size, out VinePiece piece);
+			return piece.Width;
+		}
+
+		/// <summary>Out of the piece's face, from its heading.</summary>
+		private static Vector3 Facing(in VineSpot spot) => new Vector3(Mathf.Sin(spot.Yaw * Mathf.Deg2Rad), 0f, Mathf.Cos(spot.Yaw * Mathf.Deg2Rad));
+
+		[Test]
+		public void FallWalls_NeverGrowInsideTheFallingWater()
+		{
+			VineRules.FallFrame fall = FallBed(false, out Func<Vector3, bool> solid, out Func<float, float, float> water);
+			int grown = 0, flanking = 0;
+			for (int s = 0; s < 40; s++)
+			{
+				foreach (VineSpot spot in VineRules.FallWalls(in fall, VineBiomes.For("Forest"), new DeterministicRNG(500 + s), solid, water, out _))
+				{
+					grown++;
+					float half = 0.5f * PieceWidth(spot) * spot.Scale.x;
+					float bottom = spot.Form == VineForm.Curtain ? spot.Position.y - PieceLength(spot) * spot.Scale.y : spot.Position.y;
+					// The curtain falls from the brink run above the lip to its landing: no piece reaches across into its span there.
+					if (spot.Position.z > -VineRules.BrinkRunMetres - half && spot.Position.z < fall.Landing + half)
+					{
+						Assert.That(Mathf.Abs(spot.Position.x) - half, Is.GreaterThanOrEqualTo(0.5f * fall.Width), $"seed {s}: a {spot.Size} {spot.Form} in the curtain at {spot.Position}");
+						flanking++;
+					}
+					// Nor down into the pool.
+					Assert.That(bottom, Is.GreaterThan(fall.Pool), $"seed {s}: a {spot.Size} {spot.Form} hangs into the pool");
+				}
+			}
+			Assert.That(grown, Is.GreaterThan(80), "a forest fall's walls are overgrown");
+			Assert.That(flanking, Is.GreaterThan(5), "the headwall either side of the curtain is grown on");
+		}
+
+		[Test]
+		public void FallWalls_GrowOnlyWhereAWallStands()
+		{
+			VineRules.FallFrame fall = FallBed(false, out Func<Vector3, bool> solid, out Func<float, float, float> water);
+			int mats = 0, curtains = 0;
+			for (int s = 0; s < 40; s++)
+			{
+				foreach (VineSpot spot in VineRules.FallWalls(in fall, VineBiomes.For("Jungle"), new DeterministicRNG(900 + s), solid, water, out _))
+				{
+					Vector3 n = Facing(spot);
+					// Half a metre down a curtain from its edge, half a metre up a mat from its foot: rock just behind, air in front.
+					Vector3 on = spot.Position + (spot.Form == VineForm.Curtain ? Vector3.down : Vector3.up) * 0.5f;
+					Assert.That(solid(on - n * 0.3f), $"seed {s}: a {spot.Size} {spot.Form} with no rock behind it at {spot.Position}");
+					Assert.That(solid(on + n * 0.5f), Is.False, $"seed {s}: a {spot.Size} {spot.Form} inside the rock at {spot.Position}");
+					Assert.That(spot.Tilt, Is.LessThan(10f), $"seed {s}: a sheer wall read as leaning");
+					if (spot.Form == VineForm.Curtain)
+					{
+						curtains++;
+						Assert.That(spot.Position.y, Is.EqualTo(20f).Within(0.7f), $"seed {s}: a curtain not hung from the wall's rim");
+					}
+					else
+					{
+						mats++;
+						Assert.That(spot.Form, Is.EqualTo(VineForm.Mat));
+					}
+				}
+			}
+			Assert.That(mats, Is.GreaterThan(20), "mats on the faces");
+			Assert.That(curtains, Is.GreaterThan(5), "curtains off the rim");
+
+			// Banks, not walls: nothing to grow on.
+			fall = FallBed(true, out solid, out water);
+			for (int s = 0; s < 20; s++)
+			{
+				Assert.That(VineRules.FallWalls(in fall, VineBiomes.For("Jungle"), new DeterministicRNG(900 + s), solid, water, out _), Is.Empty, $"seed {s}: vines on a bank");
+			}
+		}
+
+		[Test]
+		public void FallWalls_NoneWhereTheBiomeGrowsNoVine_AndFewerWhereItIsScarce()
+		{
+			VineRules.FallFrame fall = FallBed(false, out Func<Vector3, bool> solid, out Func<float, float, float> water);
+			foreach (string dry in new[] { "Desert", "Glacier", "Tundra", "Volcanic", "Snow" })
+			{
+				Assert.That(VineRules.FallShare(VineBiomes.For(dry)), Is.EqualTo(0f), dry);
+				for (int s = 0; s < 10; s++)
+				{
+					Assert.That(VineRules.FallWalls(in fall, VineBiomes.For(dry), new DeterministicRNG(s), solid, water, out _), Is.Empty, dry);
+				}
+			}
+			int Count(string biome)
+			{
+				int n = 0;
+				for (int s = 0; s < 40; s++)
+				{
+					n += VineRules.FallWalls(in fall, VineBiomes.For(biome), new DeterministicRNG(70 + s), solid, water, out _).Count;
+				}
+				return n;
+			}
+			// Lush in the wet and warm, sparse in cold dry country.
+			Assert.That(Count("Jungle"), Is.GreaterThan(Count("Forest")));
+			Assert.That(Count("Forest"), Is.GreaterThan(3 * Count("Steppe")));
+		}
+
+		[Test]
+		public void FallWalls_AreDeterministic()
+		{
+			VineRules.FallFrame fall = FallBed(false, out Func<Vector3, bool> solid, out Func<float, float, float> water);
+			for (int s = 0; s < 10; s++)
+			{
+				List<VineSpot> a = VineRules.FallWalls(in fall, VineBiomes.For("River"), new DeterministicRNG(s), solid, water, out VineRules.FallGrowth ga);
+				List<VineSpot> b = VineRules.FallWalls(in fall, VineBiomes.For("River"), new DeterministicRNG(s), solid, water, out VineRules.FallGrowth gb);
+				Assert.That(b.Count, Is.EqualTo(a.Count));
+				Assert.That(gb.Species, Is.EqualTo(ga.Species));
+				for (int i = 0; i < a.Count; i++)
+				{
+					Assert.That(b[i].Prefab, Is.EqualTo(a[i].Prefab));
+					Assert.That(b[i].Position, Is.EqualTo(a[i].Position));
+					Assert.That(b[i].Scale, Is.EqualTo(a[i].Scale));
+					Assert.That(b[i].Yaw, Is.EqualTo(a[i].Yaw));
+					Assert.That(b[i].Tilt, Is.EqualTo(a[i].Tilt));
+				}
+			}
+		}
+
 		[Test]
 		public void Climbs_IsDeterministic_AndFollowsTheHabitatsShare()
 		{

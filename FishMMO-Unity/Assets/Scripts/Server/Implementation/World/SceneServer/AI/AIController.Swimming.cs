@@ -101,6 +101,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				mask |= 1 << DeepWaterArea;
 				Agent.SetAreaCost(DeepWaterArea, swim.DeepWaterCost);
 			}
+			// And the climbables' links, for an archetype that climbs (AIController.Climbing).
+			mask = WithClimbArea(mask);
 			if (Agent.areaMask != mask)
 			{
 				Agent.areaMask = mask;
@@ -233,8 +235,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (deepWaterProbeTimer <= 0f)
 			{
 				deepWaterProbeTimer = DeepWaterProbeInterval;
-				inDeepWater = NavMesh.SamplePosition(Agent.nextPosition, out NavMeshHit hit, 0.5f, NavMesh.AllAreas) &&
-					(hit.mask & (1 << DeepWaterArea)) != 0;
+				/* Deep water is baked only where the scene's water stands (the sea's, its lakes' and rivers'), so a scene with
+				 * none registered has no deep area to find: the NavMesh query is skipped there, for every NPC every probe. */
+				inDeepWater = WaterQuery.HasWater(Character.GameObject.scene)
+					&& NavMesh.SamplePosition(Agent.nextPosition, out NavMeshHit hit, 0.5f, NavMesh.AllAreas)
+					&& (hit.mask & (1 << DeepWaterArea)) != 0;
 				// Out of the water and not chasing back into it: land only again, so it goes round lakes when it wanders.
 				if (!inDeepWater && agentSwimming && WaterVerdict != WaterVerdict.Swim)
 				{

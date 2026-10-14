@@ -177,12 +177,15 @@ namespace FishMMO.Water
 				Vector3 next = p + v * dt;
 
 				// Still in its channel (on the river, or just over the brink): its banks are the river's, not rock in the way.
+				/* Past the lip's LINE by less than a metre and a half, wherever across it the strip is: measured from the lip's
+				 * middle, every strip more than 1.5 m out from it met the shallow bed and the banks at the brink at once and was
+				 * thrown out sideways, flat white wings standing out from the top of every wide fall (2026-10-13). */
 				var fromLip = new Vector2(next.x - lip.x, next.z - lip.z);
-				bool inChannel = fallen < BrinkClearMetres && fromLip.magnitude < 1.5f;
+				bool inChannel = fallen < BrinkClearMetres && Vector2.Dot(fromLip, new Vector2(ahead.x, ahead.z)) < 1.5f;
 				if (!inChannel)
 				{
 					float radius = Mathf.Clamp(0.5f * FallHydraulics.CoreThickness(strip.Q, Mathf.Max(0f, fallen)) + SheetClearance, 0.1f, 1f);
-					bool touching = false, onLevelGround = false;
+					bool touching = false, onLevelGround = false, touchingGround = false;
 					Vector3 normal = Vector3.zero, contact = next;
 					float ground = rock.Ground(next.x, next.z);
 					if (next.y - radius < ground)
@@ -197,6 +200,7 @@ namespace FishMMO.Water
 						normal += n;
 						contact = next - n * radius;
 						touching = true;
+						touchingGround = true;
 						onLevelGround = n.y > 0.6f;
 					}
 					if (rock.PropContact(next, radius, out Vector3 closest, out Vector3 propNormal))
@@ -255,9 +259,27 @@ namespace FishMMO.Water
 						}
 						touchedSinceRow = true;
 					}
-					/* Water that comes down on level ground out of the pool spreads and soaks away where it lands; it does
-					 * not skate on across the bank. A ledge's top (a prop) it runs over and spills off. */
-					groundRun = onLevelGround && next.y > poolLevel + 0.5f ? groundRun + (next - p).magnitude : 0f;
+					/* Water that comes down on the ground out of the pool spreads and soaks away where it lands; it does not
+					 * skate on across the bank. Counted on any ground the strip runs along without falling (less than
+					 * one metre down in two), not only level ground: on the talus at a cliff's foot (normals under 0.6 up) a
+					 * strip ran on as a white rope crawling along the ground for metres (2026-10-13). A steep face it
+					 * slides down it keeps, and a ledge's top (a prop) it runs over and spills off. */
+					/* Along the ground, not touching it this very step: a strip sliding down a slope is pushed clear and falls
+					 * back every other step, and counting only the steps it touched reset the run each time it was clear, so
+					 * the rope crawled on for ten metres and more (2026-10-13, the 70 m fall's foot). The run ends only when
+					 * the strip leaves the ground or drops more steeply than it runs (down a face). */
+					Vector3 stepped = next - p;
+					float steppedRun = stepped.magnitude;
+					bool alongGround = touchingGround || next.y - radius < rock.Ground(next.x, next.z) + 0.3f;
+					bool skating = alongGround && -stepped.y < 0.5f * steppedRun && next.y > poolLevel - 0.3f;
+					if (skating || onLevelGround && next.y > poolLevel + 0.5f)
+					{
+						groundRun += steppedRun;
+					}
+					else if (!alongGround || -stepped.y >= steppedRun)
+					{
+						groundRun = 0f;
+					}
 					if (groundRun > 2f)
 					{
 						strip.Points.Add(next);

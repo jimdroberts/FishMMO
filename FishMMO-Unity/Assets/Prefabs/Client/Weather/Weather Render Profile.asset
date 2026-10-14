@@ -91,6 +91,7 @@ MonoBehaviour:
     FarImposter: 1
     FarImposterSize: 1024
     FarImposterRefreshFrames: 48
+    FarImposterRefreshSeconds: 1.5
     FarImposterKeep: 0.4
     FarImposterStartMetres: 0
     NearMarchEvery: 1

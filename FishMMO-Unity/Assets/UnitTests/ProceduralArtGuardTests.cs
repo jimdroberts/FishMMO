@@ -153,7 +153,7 @@ namespace FishMMO.UnitTests
 				{
 					int fragments = Regex.Matches(c, @"LODFadeCrossFade\(input\.positionCS\);").Count;
 					int fades = Regex.Matches(c, @"VegFadeClip\(input\.positionCS, input\.fade\);").Count;
-					return fragments == 3 && fades == 3 ? null : $"{fragments} LOD cross-fade clips and {fades} distance-fade clips; the three fragment functions need both";
+					return fragments == 4 && fades == 4 ? null : $"{fragments} LOD cross-fade clips and {fades} distance-fade clips; the four fragment functions (forward, depth-normals, shadow/depth, prime) need both";
 				},
 				SourceScanPins.RegexReplaceFirst(@"VegFadeClip\(input\.positionCS, input\.fade\);", string.Empty),
 				"a pass that does not dissolve: its shadow or depth would outlive the plant");

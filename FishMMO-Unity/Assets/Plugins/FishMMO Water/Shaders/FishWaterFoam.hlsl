@@ -47,29 +47,72 @@ half FishFoamBlend(half a, half b, half w)
 }
 
 /// <summary>
+/// How much the lace's spread has shrunk at a mip, as the factor that restores it: mip 0's standard deviation over
+/// mip <paramref name="lod"/>'s (WaterFoam.png alpha, box-filtered mips as the importer makes them; fractional mips
+/// between their neighbours, as trilinear filtering reads them).
+/// </summary>
+/// <remarks>
+/// The equalisation (a cut at 1 − c covers c) holds at mip 0 only. Each mip averages the lace toward its mean, so a cut
+/// through a coarse mip covers far less than it is asked at a low coverage and far more at a high one: at mip 5 a
+/// tenth asked covered half a percent, the tops of the blurred patches alone (salt-and-pepper specks streaked along a
+/// river), and 0.85 asked covered 96 % (flat blobs with hard edges). Scaling the deviation from the mean back up by
+/// this factor keeps the cut within about two points of what it is asked through mip 6. Measured from the texture by
+/// FoamLaceTests, which also holds these figures to it.
+/// </remarks>
+static const float FishFoamLaceContrastByMip[9] = { 1.000, 1.008, 1.027, 1.067, 1.159, 1.401, 1.956, 2.853, 3.951 };
+
+half FishFoamLaceContrast(float lod)
+{
+	float l = clamp(lod, 0.0, 8.0);
+	int low = min((int)floor(l), 7);
+	return (half)lerp(FishFoamLaceContrastByMip[low], FishFoamLaceContrastByMip[low + 1], l - (float)low);
+}
+
+/// <summary>
+/// The lace read at mip <paramref name="lod"/>, its contrast restored to mip 0's (<see cref="FishFoamLaceContrast"/>):
+/// a cut through it then covers what it is asked, as through the full-size lace.
+/// </summary>
+half FishFoamLaceRestore(half lace, float lod)
+{
+	return saturate(0.5h + (lace - 0.5h) * FishFoamLaceContrast(lod));
+}
+
+/// <summary>
+/// Cuts the lace for a coverage, <paramref name="resolved"/> saying how far a pixel can show the lace there
+/// (1 crisp, 0 the coverage evenly; <see cref="FishFoamCut"/> works it out from the ground a pixel covers).
+/// </summary>
+FishFoam FishFoamCutResolved(half lace, half coverage, half resolved)
+{
+	FishFoam f;
+	coverage = saturate(coverage);
+	half over = lace - (1.0h - coverage);
+	/* Antialiased by the lace's own change across the pixel, never sharper than a soft wet edge; and the thinner the foam
+	 * the softer its edge. Thin foam is a web of bubbles thinning to nothing at its fringe, not a cut-out: cut at the
+	 * same hard edge as dense froth, the thin foam a river or the sea carries drew as flat flakes of paper scattered on
+	 * the water (2026-10-13). */
+	half edge = max(lerp(0.09h, 0.012h, saturate(coverage * 2.5h)), (half)fwidth(lace));
+	half crisp = saturate(over / edge + 0.5h);
+	// The body: how far inside its cut the lace is. Thin foam is near the cut, the middle of a dense patch far above it.
+	half body = saturate(over / max(0.05h, 0.6h * coverage));
+	f.cover = lerp(coverage, crisp, resolved);
+	f.body = lerp(coverage, body, resolved);
+	f.share = coverage;
+	return f;
+}
+
+/// <summary>
 /// Cuts the lace for a coverage. <paramref name="lace"/> is the map's alpha (or a blend of copies of it);
 /// <paramref name="metresPerPixel"/> the ground one pixel covers and <paramref name="tileMetres"/> one tile of
 /// the map, which say whether the lace can be seen there at all.
 /// </summary>
 FishFoam FishFoamCut(half lace, half coverage, float metresPerPixel, float tileMetres)
 {
-	FishFoam f;
-	coverage = saturate(coverage);
-	half over = lace - (1.0h - coverage);
-	// Antialiased by the lace's own change across the pixel, never sharper than a soft wet edge.
-	half edge = max(0.012h, (half)fwidth(lace));
-	half crisp = saturate(over / edge + 0.5h);
-	// The body: how far inside its cut the lace is. Thin foam is near the cut, the middle of a dense patch far above it.
-	half body = saturate(over / max(0.05h, 0.6h * coverage));
 	/* Whether a pixel can show the lace. Past about a texel a pixel the mips have averaged the lace toward its mean,
 	 * and a cut through that is all or nothing — whole seas going white at a coverage of a half. There the foam is
 	 * its coverage, evenly. */
 	float texelsPerPixel = metresPerPixel * FISH_FOAM_LACE_TEXELS / max(0.01, tileMetres);
 	half resolved = saturate(1.5h - 0.5h * (half)log2(max(1.0, texelsPerPixel)));
-	f.cover = lerp(coverage, crisp, resolved);
-	f.body = lerp(coverage, body, resolved);
-	f.share = coverage;
-	return f;
+	return FishFoamCutResolved(lace, coverage, resolved);
 }
 
 /// <summary>
@@ -104,8 +147,11 @@ half3 FishFoamAerate(half3 water, half share, half3 foamLit)
 /// </summary>
 half3 FishFoamOver(half3 water, FishFoam f, half3 foamLit, out half opacity)
 {
-	opacity = f.cover * lerp(0.55h, 0.97h, f.body);
-	half3 foam = lerp(lerp(water, foamLit, 0.75h), foamLit, f.body);
+	/* Foam is bubbles in water, never a coat of paint on it: thin lace mostly lets the water through (bubble walls with the
+	 * water behind them), and even thick froth lets some of the water's colour show, tinted by it. Laid near opaque, pure
+	 * white at its thickest, every patch read as solid white pasted on the water (2026-10-13). */
+	opacity = f.cover * lerp(0.25h, 0.8h, f.body);
+	half3 foam = lerp(lerp(water, foamLit, 0.6h), lerp(water, foamLit, 0.9h), f.body);
 	return lerp(FishFoamAerate(water, f.share, foamLit), foam, opacity);
 }
 

@@ -1395,6 +1395,8 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     + cycle * float2(0.6180340, 0.7548777));
                 float bounds[4] = { _FishCloudImposterBounds.x, _FishCloudImposterBounds.y, _FishCloudImposterBounds.z, skyEnd };
                 float4 layer[3];
+                // Its own texel's cone, not the screen pixel's: no eddy or edge finer than the panorama can show.
+                FishCloudPixelCone = max(_FishCloudLodParams.x, _FishCloudImposterCone);
                 // A loop, not unrolled: three whole marches unrolled is more than the compiler will take.
                 UNITY_LOOP
                 for (int j = 0; j < 3; j++)
@@ -1411,6 +1413,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 }
                 FishCloudMarchFrom = 0.0;
                 FishCloudMarchWhole = -1.0;
+                FishCloudPixelCone = 0.0;
                 float keep = carry ? _FishCloudImposter.z : 1.0;
                 output.near = float4(lerp(oldLight[0], layer[0].rgb, keep), 1.0);
                 output.mid = float4(lerp(oldLight[1], layer[1].rgb, keep), 1.0);

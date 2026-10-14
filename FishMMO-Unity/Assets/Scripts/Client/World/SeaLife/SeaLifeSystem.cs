@@ -335,12 +335,33 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			Status = reason;
-			if (reason != loggedReason)
+			if (reason == Status)
 			{
-				loggedReason = reason;
+				return;
+			}
+			Status = reason;
+			// Logged when the state changes, not its figures: "idle: the camera is 127 m above the sea" re-logged at every
+			// metre the camera rose or fell (746 lines, each with its stack trace, in 6 minutes of play).
+			string kind = WithoutFigures(reason);
+			if (kind != loggedReason)
+			{
+				loggedReason = kind;
 				Debug.Log(reason == "drawing" ? "[Sea life] drawing: placing the sea round the camera (a count follows once it is placed)." : $"[Sea life] {reason}.");
 			}
+		}
+
+		/// <summary>A state's text with its figures taken out (what tells one state from another).</summary>
+		private static string WithoutFigures(string reason)
+		{
+			var sb = new System.Text.StringBuilder(reason.Length);
+			foreach (char c in reason)
+			{
+				if (!char.IsDigit(c) && c != '.' && c != '-')
+				{
+					sb.Append(c);
+				}
+			}
+			return sb.ToString();
 		}
 
 		/// <summary>How many groups of each kind the placed cells hold.</summary>

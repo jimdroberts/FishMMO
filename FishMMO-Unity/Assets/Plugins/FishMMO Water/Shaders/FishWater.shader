@@ -87,6 +87,15 @@ Shader "FishMMO/Water/Ocean"
         ZWrite Off
         Cull Off
 
+        // Not inside a floating hull (FishHullLid.shader sets bit 128 across its open top): the water plane lies over
+        // the hull's floor there, and the boats took on the sea.
+        Stencil
+        {
+            Ref 128
+            ReadMask 128
+            Comp NotEqual
+        }
+
         Pass
         {
             Name "ForwardLit"

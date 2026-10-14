@@ -17,6 +17,9 @@ namespace FishMMO.Water.Editor
 	/// so a build normally costs a file read per scene.
 	/// </para>
 	/// <para>
+	/// Not for a dedicated server, which draws no shore and so builds no field at all.
+	/// </para>
+	/// <para>
 	/// Only in a build: <c>report</c> is null when entering play mode, where the editor's cache serves.
 	/// Ordered after <c>ClientOnlySceneStripper</c> (0), so a field it removes is not built first.
 	/// </para>
@@ -27,7 +30,8 @@ namespace FishMMO.Water.Editor
 
 		public void OnProcessScene(Scene scene, BuildReport report)
 		{
-			if (report == null)
+			// A dedicated server builds no field (WaterShoreField.Request): tens of megabytes it would only carry.
+			if (report == null || IsServerBuild())
 			{
 				return;
 			}
@@ -41,6 +45,16 @@ namespace FishMMO.Water.Editor
 					}
 				}
 			}
+		}
+
+		/// <summary>True while a dedicated server is being built (the same test as ClientOnlySceneStripper's).</summary>
+		private static bool IsServerBuild()
+		{
+#if UNITY_SERVER
+			return true;
+#else
+			return UnityEditor.EditorUserBuildSettings.standaloneBuildSubtarget == UnityEditor.StandaloneBuildSubtarget.Server;
+#endif
 		}
 	}
 }

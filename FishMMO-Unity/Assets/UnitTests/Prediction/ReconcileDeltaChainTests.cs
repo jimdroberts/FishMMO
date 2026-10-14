@@ -307,6 +307,34 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// A climb (the climbable's index, the phase and the step's ticks: the motor state's extension behind bit 4) reaches
+		/// the owner on both the full reconcile and the deltas, and the fields after it stay aligned.
+		/// </summary>
+		[Test]
+		public void AClimb_RidesTheChain()
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+			CharacterReconcileData authoritative = MakeReconcileData();
+
+			for (uint tick = 1; tick <= 70; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				bool climbing = tick >= 5 && tick < 50;
+				authoritative.MotorState.Climbable = climbing ? (ushort)312 : (ushort)0;
+				authoritative.MotorState.ClimbPhase = !climbing ? (byte)0 : tick < 40 ? (byte)1 : (byte)2;
+				authoritative.MotorState.ClimbTicks = tick >= 40 && tick < 50 ? (byte)(75 - (tick - 40)) : tick >= 50 && tick < 62 ? (byte)(62 - tick) : (byte)0;
+				authoritative.MotorState.IsCrouching = tick % 7 == 0;
+				LogAssert.IsTrue(client.Receive(server.Send(authoritative, tick), tick, out CharacterReconcileData received),
+					$"tick {tick}: nothing was lost");
+				LogAssert.AreEqual(authoritative.MotorState.Climbable, received.MotorState.Climbable, $"tick {tick}: climbable");
+				LogAssert.AreEqual(authoritative.MotorState.ClimbPhase, received.MotorState.ClimbPhase, $"tick {tick}: phase");
+				LogAssert.AreEqual(authoritative.MotorState.ClimbTicks, received.MotorState.ClimbTicks, $"tick {tick}: ticks");
+				LogAssert.IsTrue(ReconcileEquals(authoritative, received), $"tick {tick}: the rest of the reconcile");
+			}
+		}
+
+		/// <summary>
 		/// The deltas really are relative to the full reconcile: decoded against the wrong one they
 		/// come out wrong. Without this, every positive test here could be passing on payloads that
 		/// happen to be absolute.
@@ -766,6 +794,9 @@ namespace FishMMO.UnitTests
 				a.MotorState.JumpRequested != b.MotorState.JumpRequested ||
 				a.MotorState.IsSwimming != b.MotorState.IsSwimming ||
 				a.MotorState.ClimbOutTicks != b.MotorState.ClimbOutTicks ||
+				a.MotorState.Climbable != b.MotorState.Climbable ||
+				a.MotorState.ClimbPhase != b.MotorState.ClimbPhase ||
+				a.MotorState.ClimbTicks != b.MotorState.ClimbTicks ||
 				a.MotorState.GroundingStatus.IsStableOnGround != b.MotorState.GroundingStatus.IsStableOnGround)
 			{
 				return false;

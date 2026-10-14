@@ -188,18 +188,20 @@ namespace FishMMO.Client
 			WarmList list = WarmList.Read();
 			int play = list.Plays + 1;
 			int added = 0;
+			ShaderVariantCollection collection = null;
+			SerializedObject serialized = null;
 			try
 			{
 				Directory.CreateDirectory(Path.GetDirectoryName(CapturePath));
 				save.Invoke(null, new object[] { CapturePath });
 				AssetDatabase.ImportAsset(CapturePath, ImportAssetOptions.ForceSynchronousImport);
-				var collection = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(CapturePath);
+				collection = AssetDatabase.LoadAssetAtPath<ShaderVariantCollection>(CapturePath);
 				if (collection == null)
 				{
 					Debug.LogWarning($"[Shader prewarm] The editor's variant record did not save to {CapturePath}: nothing learned from Play.");
 					return;
 				}
-				var serialized = new SerializedObject(collection);
+				serialized = new SerializedObject(collection);
 				SerializedProperty shaders = serialized.FindProperty("m_Shaders");
 				for (int i = 0; shaders != null && i < shaders.arraySize; i++)
 				{
@@ -232,6 +234,14 @@ namespace FishMMO.Client
 			}
 			finally
 			{
+				// Unloaded before the file goes: deleting the asset left the collection loaded, still holding the managed
+				// wrapper made here, and the next Play's domain reload stranded that wrapper. The next save unloaded the
+				// object and resolved the dead handle: a native crash as Play ended (2026-10-13, Editor-prev.log).
+				serialized?.Dispose();
+				if (collection != null)
+				{
+					Resources.UnloadAsset(collection);
+				}
 				if (File.Exists(CapturePath))
 				{
 					AssetDatabase.DeleteAsset(CapturePath);

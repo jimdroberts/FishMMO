@@ -51,7 +51,24 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The most boulders lodged on one lip.</summary>
 		public int MaxLipBoulders = 2;
 		/// <summary>The most rocks one scene takes.</summary>
-		public int MaxRocks = 3000;
+		public int MaxRocks = 8000;
+
+		/// <summary>
+		/// Ground of a fall's basin at least this steep, degrees, is dressed in rock (<see cref="FallRockKind.Wall"/>): the
+		/// headwall and the gorge's walls the carve stands up (WaterCarver's FallBasin), which a heightfield can only draw as
+		/// terrain texture stretched down a near-upright face.
+		/// </summary>
+		public float WallDressDegrees = 48f;
+		/// <summary>One wall rock is tried per cell of this size over the basin, metres.</summary>
+		public float WallCellMetres = 2.5f;
+		/// <summary>A wall rock's face, the least and the most across and up the wall, metres; scaled down on a low wall.</summary>
+		public float MinWallRock = 2.2f;
+		public float MaxWallRock = 5f;
+		/// <summary>The share of a wall rock's thickness standing out of the face, the least and the most; the rest is in the rock.</summary>
+		public float MinWallOutShare = 0.25f;
+		public float MaxWallOutShare = 0.45f;
+		/// <summary>The most wall rocks one fall takes.</summary>
+		public int MaxWallRocksPerFall = 400;
 	}
 
 	/// <summary>What one rock of a fall is.</summary>
@@ -63,6 +80,8 @@ namespace FishMMO.Shared.WorldDesign
 		LipBoulder = 1,
 		/// <summary>The hard cap of a plunge fall, projecting over the face worn back beneath it.</summary>
 		Overhang = 2,
+		/// <summary>A slab of the wall's own rock, sunk in the steep ground of the fall's headwall and gorge: what the face is made of.</summary>
+		Wall = 3,
 	}
 
 	/// <summary>One rock of a fall: where, how big each way, which way it lies, its art, and the fall it belongs to.</summary>
@@ -75,8 +94,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public Vector3 Position;
 		/// <summary>
-		/// The planned box in the rock's own frame: x across the river, y up, z downstream (out of the face). A lip
-		/// boulder is scaled evenly from x, its height its art's own.
+		/// The planned box in the rock's own frame: x across the river, y up, z downstream (out of the face); for a wall rock,
+		/// x along the wall, y out of it and z up it, as its slab would lie on the ground. A lip boulder is scaled evenly from
+		/// x, its height its art's own.
 		/// </summary>
 		public Vector3 Size;
 		public Quaternion Rotation;
@@ -85,15 +105,22 @@ namespace FishMMO.Shared.WorldDesign
 		public int River;
 		public int Lip;
 		public int Foot;
-		/// <summary>The middle's offset across the river from the line through the lip, metres, positive to the left looking downstream.</summary>
+		/// <summary>
+		/// The middle's offset across the river from the line through the lip, metres, positive to the left looking downstream;
+		/// for a wall rock, the offset of the spot on the ground it was sunk at.
+		/// </summary>
 		public float Across;
-		/// <summary>How far downstream of the lip the rock's front edge stands, metres (negative: upstream of it).</summary>
+		/// <summary>
+		/// How far downstream of the lip the rock's front edge stands, metres (negative: upstream of it); for a wall rock, how
+		/// far downstream the spot on the ground it was sunk at.
+		/// </summary>
 		public float FrontAlong;
 	}
 
 	/// <summary>
 	/// The rock a waterfall falls over: ledges standing out of its face, boulders lodged on its lip, and the overhang of
-	/// a hard cap, so the water parts and breaks on its way down instead of sliding down a smooth wall.
+	/// a hard cap, so the water parts and breaks on its way down instead of sliding down a smooth wall; and the rock of its
+	/// basin's walls, so the headwall and gorge the carve stands up are rock rather than stretched terrain.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -120,6 +147,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Mostly inside the rock.</b> A ledge is a slab sunk into the face with only a share of it
 	/// (<see cref="FallLedgeSettings.MaxOutShare"/> at most) standing out, so what shows is a step of the face, not a
 	/// block stuck to it.
+	/// </para>
+	/// <para>
+	/// <b>The basin's walls.</b> The carve stands a fall's headwall and its gorge's walls at 50–75°, up to upright beside the
+	/// curtain (WaterCarver's FallBasin): steeper than a heightfield can texture without stretching. Every steep, dry spot of
+	/// the basin outside the curtain's band is dressed with a slab of the wall's own rock sunk in it, face out, the size of
+	/// the wall about it (<see cref="FallRockKind.Wall"/>).
 	/// </para>
 	/// <para>
 	/// The lip boulders are recorded in the scene's water like river boulders (<see cref="SceneWater.Boulders"/>), so the
@@ -260,6 +293,17 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			settings ??= new FallLedgeSettings();
 			var result = new List<FallLedge>();
+			// Each river's basins as the carve cut them, for the walls' rock.
+			float spacing = water.Grid != null ? water.Grid.Spacing : 2f;
+			var basinsOf = new Dictionary<RiverPath, FallBasin[]>();
+			foreach (RiverPath river in water.Rivers)
+			{
+				FallBasin[] basins = FallBasin.Along(river, water.Settings, spacing);
+				if (basins != null)
+				{
+					basinsOf[river] = basins;
+				}
+			}
 			foreach (RiverPath river in water.Rivers)
 			{
 				foreach (FallSpan fall in FindFalls(river, settings.MinDropMetres, settings.PoolLevelMetres))
@@ -270,6 +314,13 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					var random = new System.Random(unchecked((int)(seed ^ (uint)(river.Id * 0x9E3779B1u) ^ (uint)(fall.Lip * 0x85EBCA6Bu) ^ 0xFA11ED6Eu)));
 					PlanFall(river, fall, ground, rockTypeAt, random, settings, result);
+					// The walls on a stream of their own, so dressing them leaves the ledges and boulders where they were.
+					FallBasin basin = basinsOf.TryGetValue(river, out FallBasin[] basins) && fall.Lip < basins.Length ? basins[fall.Lip] : null;
+					if (basin != null)
+					{
+						var walls = new System.Random(unchecked((int)(seed ^ (uint)(river.Id * 0x9E3779B1u) ^ (uint)(fall.Lip * 0x85EBCA6Bu) ^ 0x3A11D0C5u)));
+						PlanWalls(water, river, fall, basin, ground, rockTypeAt, walls, settings, result);
+					}
 				}
 			}
 			if (result.Count > settings.MaxRocks)
@@ -501,18 +552,171 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
+		/// Dresses the steep ground of a fall's basin in rock: slabs of the wall's own rock sunk in the headwall and the gorge's
+		/// walls, faces out, wherever the finished ground stands steeper than <see cref="FallLedgeSettings.WallDressDegrees"/>,
+		/// so a near-upright face is rock and not terrain texture stretched down it.
+		/// </summary>
+		/// <remarks>
+		/// One rock is tried in each <see cref="FallLedgeSettings.WallCellMetres"/> cell of the basin (its headwall's circle and
+		/// the gorge to where the carve's basin has faded), at a jittered place in it, and kept where the ground is steep,
+		/// dry and not the curtain's: the band the water falls down is the ledges' and the overhang's, and the pool's floor is
+		/// the pool's. Each is a slab the size of the wall about it, its face turned out along the ground's normal and rolled a
+		/// little, with only a share of its thickness standing out, so the wall reads as jointed rock in blocks; none overlaps
+		/// another by more than a third. Deterministic in <paramref name="random"/>.
+		/// </remarks>
+		private static void PlanWalls(SceneWater water, RiverPath river, FallSpan fall, FallBasin basin, Func<float, float, float> ground,
+			Func<float, float, float, string> rockTypeAt, System.Random random, FallLedgeSettings settings, List<FallLedge> result)
+		{
+			int lip = fall.Lip, foot = fall.Foot;
+			int next = Math.Min(foot, lip + 1);
+			float tx = river.X[next] - river.X[lip], tz = river.Z[next] - river.Z[lip];
+			float tl = Mathf.Sqrt(tx * tx + tz * tz);
+			if (tl < 1e-4f)
+			{
+				return;
+			}
+			tx /= tl;
+			tz /= tl;
+			float nx = -tz, nz = tx;
+			float pool = river.Surface[foot];
+			float drop = basin.LipLevel - pool;
+			if (drop < 1f)
+			{
+				return;
+			}
+			float plungeAlong = river.S[Mathf.Clamp(fall.Plunge, lip, foot)] - river.S[lip];
+			// The basin's reach: its headwall's circle, on down the gorge until the carve's basin has faded back to banks, and as
+			// far out as walls of the gentlest steepness the carve stands rise from the widest water to the lip's height.
+			float alongTo = basin.FadeEnd;
+			float widest = basin.HalfLip;
+			for (int k = lip; k < river.Count && river.S[k] - river.S[lip] <= alongTo; k++)
+			{
+				widest = Mathf.Max(widest, 0.5f * river.Width[k]);
+			}
+			float acrossTo = Mathf.Min(80f, widest + basin.Radius + drop / Mathf.Tan(Mathf.Max(30f, water.Settings.FallWallDegrees - water.Settings.FallWallJitterDegrees) * Mathf.Deg2Rad) + 2f);
+			float curtain = basin.HalfLip + settings.SideSlackMetres;
+			float cell = Mathf.Max(1f, settings.WallCellMetres);
+			float steep = Mathf.Tan(settings.WallDressDegrees * Mathf.Deg2Rad);
+			const float probe = 0.75f;
+			int placed = 0;
+			int first = result.Count;
+			for (float along = -cell; along <= alongTo && placed < settings.MaxWallRocksPerFall; along += cell)
+			{
+				for (float across = -acrossTo; across <= acrossTo && placed < settings.MaxWallRocksPerFall; across += cell)
+				{
+					// A jittered place in the cell, drawn whether or not it is kept, so each cell's draw is its own.
+					float ja = along + (float)random.NextDouble() * cell, jc = across + (float)random.NextDouble() * cell;
+					double sizeRoll = random.NextDouble(), shapeRoll = random.NextDouble(), outRoll = random.NextDouble(), spinRoll = random.NextDouble();
+					// The curtain's band, from the lip down to where it lands, is the ledges' and the overhang's.
+					if (Mathf.Abs(jc) < curtain && ja < plungeAlong + 1f)
+					{
+						continue;
+					}
+					float x = river.X[lip] + tx * ja + nx * jc, z = river.Z[lip] + tz * ja + nz * jc;
+					float y = ground(x, z);
+					if (float.IsNaN(y) || y < pool + 0.3f)
+					{
+						continue;   // under the pool, or at its edge
+					}
+					WaterKind kind = water.KindAt(x, z);
+					if (kind == WaterKind.River || kind == WaterKind.Lake)
+					{
+						continue;
+					}
+					float gx = (ground(x + probe, z) - ground(x - probe, z)) / (2f * probe);
+					float gz = (ground(x, z + probe) - ground(x, z - probe)) / (2f * probe);
+					float grade = Mathf.Sqrt(gx * gx + gz * gz);
+					if (float.IsNaN(grade) || grade < steep)
+					{
+						continue;
+					}
+					// Out of the face, and up it.
+					var normal = new Vector3(-gx, 1f, -gz).normalized;
+					// As big as the wall about it: never much more than the drop.
+					float most = Mathf.Min(settings.MaxWallRock, 0.35f * drop + 1f);
+					float face = Mathf.Lerp(Mathf.Min(settings.MinWallRock, most), most, (float)sizeRoll);
+					float wide = face * Mathf.Lerp(0.85f, 1.35f, (float)shapeRoll);
+					float high = face * Mathf.Lerp(0.7f, 1.05f, (float)(1.0 - shapeRoll));
+					float thick = Mathf.Max(0.8f, 0.4f * face);
+					float outShare = Mathf.Lerp(settings.MinWallOutShare, settings.MaxWallOutShare, (float)outRoll);
+					/* Lying in the face as the slab art lies on the ground: its thin axis (y) out along the normal, its length (z) up
+					 * the face; rolled a little about the normal so the joints are not ruled lines. */
+					Vector3 upFace = (Vector3.up - normal * normal.y).normalized;
+					Quaternion turn = Quaternion.AngleAxis(((float)spinRoll - 0.5f) * 50f, normal) * Quaternion.LookRotation(upFace, normal);
+					Vector3 middle = new Vector3(x, y, z) + normal * (thick * (outShare - 0.5f));
+					// Its foot clear of the pool's water: made smaller to fit, or left out where only a pebble would.
+					float reach = 0.5f * (wide * Mathf.Abs((turn * Vector3.right).y) + thick * Mathf.Abs((turn * Vector3.up).y) + high * Mathf.Abs((turn * Vector3.forward).y));
+					float clear = middle.y - pool - PoolClearOf(settings);
+					if (reach > clear)
+					{
+						float fit = clear / Mathf.Max(1e-3f, reach);
+						if (fit < 0.5f)
+						{
+							continue;   // too near the pool for a block of the wall
+						}
+						wide *= fit;
+						high *= fit;
+						thick *= fit;
+						middle = new Vector3(x, y, z) + normal * (thick * (outShare - 0.5f));
+					}
+					// Overlapping the rocks already on this wall by a third at most.
+					bool crowded = false;
+					for (int r = first; r < result.Count; r++)
+					{
+						FallLedge other = result[r];
+						float apart = 0.5f * (Mathf.Max(other.Size.x, other.Size.z) + Mathf.Max(wide, high));
+						if ((other.Position - middle).sqrMagnitude < apart * apart * 0.45f)
+						{
+							crowded = true;
+							break;
+						}
+					}
+					if (crowded)
+					{
+						continue;
+					}
+					string rock = rockTypeAt?.Invoke(x, y, z);
+					result.Add(new FallLedge
+					{
+						Kind = FallRockKind.Wall,
+						Position = middle,
+						Size = new Vector3(wide, thick, high),
+						Rotation = turn,
+						Prefab = $"Boulder_{RiverBoulders.Material(rock)}_{(shapeRoll < 0.8 ? "Slab" : "Round")}",
+						River = river.Id,
+						Lip = lip,
+						Foot = foot,
+						Across = jc,
+						FrontAlong = ja,
+					});
+					placed++;
+				}
+			}
+		}
+
+		/// <summary>How far over the pool's water a wall rock's foot stands, metres.</summary>
+		private static float PoolClearOf(FallLedgeSettings settings) => Mathf.Max(0.2f, settings.PoolClearMetres);
+
+		/// <summary>
 		/// Bakes the falls' rock into a scene as props with collision under <see cref="PropSource"/>, replacing what that
 		/// source baked before, and records each lip boulder in the water (position and radius) for the flow to run
-		/// round. Run after <see cref="RiverBoulders.Place"/>, which clears the water's boulders. Returns how many were placed.
+		/// round. Run after <see cref="RiverBoulders.Place"/>, which clears the water's boulders. With the ground and the biome
+		/// field, the vines on each fall's walls (<see cref="VinePlacement.DrapeFalls"/>) are baked with the rock. Returns how
+		/// many rocks were placed.
 		/// </summary>
-		public static int Place(Scene scene, SceneWater water, List<FallLedge> rocks, List<string> notes)
+		/// <param name="ground">The finished ground at (east, north), scene metres; null for no vines.</param>
+		/// <param name="field">The scene's biomes, for which vines grow and how thickly; null for no vines.</param>
+		/// <param name="seed">The scene's seed, as <see cref="Plan"/> took it.</param>
+		/// <param name="keptOut">Ground no vine is laid on (under a bridge, in a riverside site's footprint); null for none.</param>
+		public static int Place(Scene scene, SceneWater water, List<FallLedge> rocks, List<string> notes,
+			Func<float, float, float> ground = null, SceneBiomeField field = null, uint seed = 0u, Func<float, float, bool> keptOut = null)
 		{
 			var prototypes = new List<ScenePropSet.Prototype>();
 			var prototypeOf = new Dictionary<GameObject, int>();
 			var props = new List<ScenePropSet.Prop>(rocks.Count);
 			var art = new Dictionary<string, (GameObject prefab, Bounds bounds)>();
 			var recorded = new List<Vector4>();
-			int placed = 0, missing = 0, ledges = 0, overhangs = 0, boulders = 0;
+			int placed = 0, missing = 0, ledges = 0, overhangs = 0, boulders = 0, walls = 0;
 			foreach (FallLedge rock in rocks)
 			{
 				if (!art.TryGetValue(rock.Prefab, out var found))
@@ -565,7 +769,7 @@ namespace FishMMO.Shared.WorldDesign
 					/* Stretched to the planned box each way: a slab of the rock's own art made a ledge's width, thickness and
 					 * depth. Scale is applied before the turn (T·R·S), so the box stays a box, no shear. Its middle where planned. */
 					OverhangPlacer.Stretch(found.bounds, rock.Position, rock.Rotation, rock.Size, out at, out scale);
-					if (rock.Kind == FallRockKind.Overhang) { overhangs++; } else { ledges++; }
+					if (rock.Kind == FallRockKind.Overhang) { overhangs++; } else if (rock.Kind == FallRockKind.Wall) { walls++; } else { ledges++; }
 				}
 				props.Add(new ScenePropSet.Prop { Prototype = prototype, Position = at, Rotation = rock.Rotation, Scale = scale });
 				placed++;
@@ -575,8 +779,14 @@ namespace FishMMO.Shared.WorldDesign
 			var mine = new HashSet<Vector4>(recorded);
 			water.Boulders.RemoveAll(mine.Contains);
 			water.Boulders.AddRange(recorded);
+			/* Vines on the wet walls beside and round each fall, in the biomes that grow them: with the falls' own props, so a
+			 * re-placing clears them with the rock; no collider, so no collision. */
+			if (ground != null && field != null)
+			{
+				VinePlacement.DrapeFalls(water, rocks, ground, field, seed, keptOut, prototypes, props, notes);
+			}
 			int collidable = ScenePropBaker.Write(scene, PropSource, prototypes, props);
-			notes?.Add($"Fall ledges: {ledges:N0} ledges, {overhangs:N0} overhangs and {boulders:N0} lip boulders placed on waterfalls as baked props, {collidable:N0} collidable"
+			notes?.Add($"Fall ledges: {ledges:N0} ledges, {overhangs:N0} overhangs, {boulders:N0} lip boulders and {walls:N0} wall rocks placed on waterfalls as baked props, {collidable:N0} collidable"
 				+ $"{(missing > 0 ? $"; {missing:N0} skipped, their boulder art is missing (run Generate biome art)" : string.Empty)}.");
 			return placed;
 		}

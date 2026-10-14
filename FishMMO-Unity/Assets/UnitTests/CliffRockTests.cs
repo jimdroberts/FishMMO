@@ -566,5 +566,113 @@ namespace FishMMO.UnitTests
 				}
 			}
 		}
+
+		// ── Equivalence of the fast paths ─────────────────────────────
+
+		/// <summary>Two mesas and a long scarp, 420 × 380 m: enough rocks, backdrops and cones to fill several index cells.</summary>
+		private sealed class Mesas : ICliffRockGround
+		{
+			private static float Step(float d, float r, float w) { float t = Mathf.Clamp01((r - d) / w); return t * t * (3f - 2f * t); }
+
+			public bool TryHeight(float x, float z, out float h)
+			{
+				h = 3f * Mathf.Sin(x * 0.013f) * Mathf.Cos(z * 0.017f) + 0.02f * x;
+				h += 40f * Step(Mathf.Sqrt((x - 130f) * (x - 130f) + (z - 140f) * (z - 140f)), 75f, 20f);
+				h += 26f * Step(Mathf.Sqrt((x - 320f) * (x - 320f) + 0.6f * (z - 120f) * (z - 120f)), 55f, 12f);
+				h += 48f * Mathf.Clamp01((z - 290f) / 26f);
+				return x >= 0f && z >= 0f && x <= 420f && z <= 380f;
+			}
+		}
+
+		private static CliffRockPlan PlanMesas(bool cones)
+		{
+			CliffRockSiteAt site = (float x, float z, float y, out CliffRockSite s) =>
+			{
+				s = new CliffRockSite { Type = z > 270f ? "Basalt" : x < 230f ? "Granite" : "Sandstone", MinAngle = 40f };
+				return true;
+			};
+			var options = new CliffRockPlacementOptions
+			{
+				Cones = cones,
+				Excluded = (x, z) => (x - 250f) * (x - 250f) + (z - 230f) * (z - 230f) < 20f * 20f,
+			};
+			return CliffRockPlacement.Plan(new Mesas(), new Rect(0f, 0f, 420f, 380f), site, 4242u, Seating, options);
+		}
+
+		/// <summary>Every rock, cone and count of a plan, bit for bit, as text: two plans that differ anywhere differ here.</summary>
+		private static List<string> Bits(CliffRockPlan plan)
+		{
+			string F(float f) => BitConverter.SingleToInt32Bits(f).ToString("X8");
+			string V(Vector3 v) => F(v.x) + F(v.y) + F(v.z);
+			var lines = new List<string>();
+			foreach (PlacedCliffRock r in plan.Rocks)
+			{
+				var m = new System.Text.StringBuilder();
+				for (int i = 0; i < 16; i++) m.Append(F(r.Rotation[i]));
+				lines.Add($"{r.Piece} {V(r.Position)} {m} {V(r.Scale)} {r.Talus}{r.Backdrop}{r.Base} {F(r.BandT)}{F(r.Hidden)}{F(r.Underside)}{F(r.Length)}{F(r.Embed)}{F(r.EmbedAchieved)}");
+			}
+			foreach (CliffCone c in plan.Cones)
+			{
+				lines.Add($"cone {V(c.Apex)} {F(c.Radius)} {F(c.ApexHeight)} {V(c.Down)} {c.Type}");
+			}
+			CliffRockStats s = plan.Stats;
+			lines.Add($"stats {s.Attempts} {s.Rejected} {s.Dropped} {s.Face} {s.Talus} {s.Cones} {s.Footing} {s.Backdrops} {s.Budget} {F(s.CliffLength)} {F(s.Covered)} {F(s.UndersideSum)} {s.HiddenSum:R}");
+			for (float z = 1f; z < 380f; z += 3.7f)
+			{
+				for (float x = 1f; x < 420f; x += 3.7f)
+				{
+					lines.Add($"{F(plan.HeightDelta(x, z))}{F(plan.Debris(x, z))}{plan.UnderRock(x, z, 0.15f)}");
+				}
+			}
+			return lines;
+		}
+
+		private static void AssertSame(List<string> expected, List<string> actual, string what)
+		{
+			Assert.That(actual.Count, Is.EqualTo(expected.Count), $"{what}: a different number of rocks, cones or samples");
+			for (int i = 0; i < expected.Count; i++)
+			{
+				Assert.That(actual[i], Is.EqualTo(expected[i]), $"{what}: line {i} differs");
+			}
+		}
+
+		/// <summary>
+		/// The face roles' scan and the overlap test read only the rocks filed near a candidate; reading every rock
+		/// placed, in order, as they did before the filing, must plan the same cliff to the bit. Pure (no talus, whose
+		/// resting pose needs the engine's quaternions).
+		/// </summary>
+		[Test]
+		public void Plan_FiledScanMatchesReadingEveryRock()
+		{
+			var flag = typeof(CliffRockPlacement).GetField("ScanEveryRock", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+			Assert.That(flag, Is.Not.Null, "the planner's every-rock switch");
+			List<string> filed = Bits(PlanMesas(false));
+			try
+			{
+				flag.SetValue(null, true);
+				List<string> every = Bits(PlanMesas(false));
+				AssertSame(every, filed, "filed scan against every rock");
+			}
+			finally
+			{
+				flag.SetValue(null, false);
+			}
+			Assert.That(filed.Count, Is.GreaterThan(100));
+		}
+
+		/// <summary>
+		/// The planner's parallel passes (bands, sites, gate noise, grid derivation, cone stamping, talus poses) must give
+		/// the same plan every time, to the bit: a race would show as two plans that differ.
+		/// </summary>
+		[Test]
+		public void Plan_IsTheSameToTheBit_RunAfterRun()
+		{
+			List<string> first = Bits(PlanMesas(true));
+			for (int run = 0; run < 2; run++)
+			{
+				AssertSame(first, Bits(PlanMesas(true)), $"run {run + 2}");
+			}
+			Assert.That(first.Any(l => l.StartsWith("cone", StringComparison.Ordinal)), Is.True, "the mesas raise talus cones");
+		}
 	}
 }

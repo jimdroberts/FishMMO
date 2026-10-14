@@ -32,11 +32,17 @@ namespace FishMMO.Client
 		/// <summary>SessionState key (editor): true draws every mesh detail through the chunk renderer instead (A/B).</summary>
 		public const string ChunkDetailsKey = "FishMMO.DetailScatter.UseChunks";
 
-		/// <summary>Milliseconds a frame the terrain being taken may spend summing its layers and reading its heights.</summary>
-		public const double BuildBudgetMilliseconds = 2.0;
+		/// <summary>
+		/// Milliseconds a frame of the main thread the terrain being taken may spend reading its layers and heights (the sums
+		/// and the packing run on a worker: DetailScatterTerrain.Builder). Was 2 with them on the main thread.
+		/// </summary>
+		public const double BuildBudgetMilliseconds = 1.0;
 
-		/// <summary>The budget while the terrain being built is within its draw distance of the camera: its details are on screen.</summary>
-		public const double VisibleBuildBudgetMilliseconds = 6.0;
+		/// <summary>
+		/// The budget while the terrain being built is within its draw distance of the camera: its details are on screen. Was 6
+		/// with the sums on the main thread; the reads alone fit in 1.
+		/// </summary>
+		public const double VisibleBuildBudgetMilliseconds = 1.0;
 
 		/// <summary>The most types the scatter keeps (one per prefab); a prefab past it stays on the chunk renderer.</summary>
 		public const int MaxTypes = 64;
@@ -60,17 +66,24 @@ namespace FishMMO.Client
 		private static readonly List<int> prototypeScratch = new List<int>();
 		private static readonly List<DetailScatterType> typeScratch = new List<DetailScatterType>();
 		private static readonly List<Taken> releasing = new List<Taken>();
+		/// <summary>Terrains whose build failed on a worker once (taken again once, then left to the chunk renderer).</summary>
+		private static readonly HashSet<Terrain> failedOnce = new HashSet<Terrain>();
 		private static readonly DetailScatterSettings defaults = new DetailScatterSettings();
 		private static readonly GrassBladeSettings grassDefaults = new GrassBladeSettings();
 		private static readonly HashSet<string> warned = new HashSet<string>();
 		private static readonly System.Func<DetailScatterTerrain, float> distanceOf = st => TerrainDetailInstancing.DetailDistanceOf(st.Terrain);
 		private static DetailScatterTerrain.Builder building;
 		private static DetailScatterRenderer renderer;
+		/// <summary>The renderer, for diagnostics.</summary>
+		public static DetailScatterRenderer Renderer => renderer;
 		private static bool rendererTried;
 		private static bool hooked;
 		private static bool enabled = true;
 		private static int syncedFrame = -1;
-		private static int summaryTerrains, summaryFrames, summaryLayers;
+		private static int summaryTerrains, summaryFrames, summaryLayers, summaryBaked;
+
+		/// <summary>Milliseconds a frame of the main thread spent taking terrains from the scene's bake (as the blade grass's).</summary>
+		public const double BakedBudgetMilliseconds = 4.0;
 		private static double summaryMilliseconds;
 
 		/// <summary>The session's switch (A/B); off gives every scattered prototype back to the chunk renderer.</summary>
@@ -94,6 +107,8 @@ namespace FishMMO.Client
 
 		public static bool Running => renderer != null && taken.Count > 0;
 		public static int TerrainCount => taken.Count;
+		/// <summary>Whether a terrain is being taken on now (its build in progress).</summary>
+		public static bool Building => building != null;
 		public static int TypeCount => types.Count;
 		public static int LastDrawCount { get; private set; }
 
@@ -271,8 +286,9 @@ namespace FishMMO.Client
 			if (building == null)
 			{
 				// Nearest the camera first: the ground underfoot must not wait behind every other terrain.
-				bool started = false;
-				while (!started)
+				bool started = false, spent = false;
+				var bakedWatch = System.Diagnostics.Stopwatch.StartNew();
+				while (!started && !spent)
 				{
 					Terrain next = null;
 					float best = float.MaxValue;
@@ -298,11 +314,22 @@ namespace FishMMO.Client
 						break;
 					}
 					started = TryTake(next, settings);
+					// Taken from the scene's bake, it is done at once: handed over now, and the next looked for while the
+					// frame's budget for it lasts.
+					if (started && building != null && building.Done)
+					{
+						// Counted with the terrains it adds to (one baked as having nothing is not one of them).
+						summaryBaked += building.Result != null ? 1 : 0;
+						Finish(building);
+						building = null;
+						started = false;
+						spent = bakedWatch.Elapsed.TotalMilliseconds >= BakedBudgetMilliseconds;
+					}
 				}
-				if (!started && summaryTerrains > 0)
+				if (!started && !spent && summaryTerrains > 0)
 				{
-					Debug.Log($"[Detail scatter] Scattering {summaryLayers} prototype layer(s) of {types.Count} type(s) on the GPU on {summaryTerrains} terrain(s); built in {summaryMilliseconds:F0} ms over {summaryFrames} frames. The chunk renderer skips those prototypes there.");
-					summaryTerrains = summaryFrames = summaryLayers = 0;
+					Debug.Log($"[Detail scatter] Scattering {summaryLayers} prototype layer(s) of {types.Count} type(s) on the GPU on {summaryTerrains} terrain(s); {summaryBaked} taken from the scene's bake, the rest built in {summaryMilliseconds:F0} ms of the main thread over {summaryFrames} frames (the sums on workers). The chunk renderer skips those prototypes there.");
+					summaryTerrains = summaryFrames = summaryLayers = summaryBaked = 0;
 					summaryMilliseconds = 0;
 				}
 			}
@@ -329,9 +356,31 @@ namespace FishMMO.Client
 		private static bool TryTake(Terrain terrain, DetailScatterSettings settings)
 		{
 			TerrainData data = terrain.terrainData;
+			SelectScattered(data, terrain.gameObject.layer, settings, GrassSettings, types, typesByPrefab, warned, prototypeScratch, typeScratch);
+			building = prototypeScratch.Count > 0 ? DetailScatterTerrain.Begin(terrain, prototypeScratch, typeScratch, TerrainDetailInstancing.DensityScaleOf(terrain)) : null;
+			if (building == null)
+			{
+				none[terrain] = data;
+				return false;
+			}
+			// The scene's bake, when it was made from just this (and at this density scale): taken from it at once, not read.
+			FishMMO.Shared.TerrainDetailBake.Tile tile = FishMMO.Shared.SceneTerrainBake.TileOf(data, out _);
+			if (tile != null)
+			{
+				building.TakeBaked(tile);
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// A terrain's scattered prototypes and each one's type, new types made and added to <paramref name="types"/> (up to
+		/// <see cref="MaxTypes"/>): bushes first, never what the blade grass claims. The play's choice and the editor's bake
+		/// (TerrainDetailBaker) are this one.
+		/// </summary>
+		public static void SelectScattered(TerrainData data, int layer, DetailScatterSettings settings, GrassBladeSettings grass, List<DetailScatterType> types,
+			Dictionary<GameObject, DetailScatterType> typesByPrefab, HashSet<string> warned, List<int> prototypeScratch, List<DetailScatterType> typeScratch)
+		{
 			DetailPrototype[] prototypes = data.detailPrototypes;
-			GrassBladeSettings grass = GrassSettings;
-			int layer = terrain.gameObject.layer;
 			prototypeScratch.Clear();
 			typeScratch.Clear();
 			// Bushes first: a terrain has DetailScatterMath.MaxChannels channels, and a type past them stays on the CPU chunk
@@ -373,13 +422,6 @@ namespace FishMMO.Client
 				prototypeScratch.Add(p);
 				typeScratch.Add(type);
 			}
-			building = prototypeScratch.Count > 0 ? DetailScatterTerrain.Begin(terrain, prototypeScratch, typeScratch, TerrainDetailInstancing.DensityScaleOf(terrain)) : null;
-			if (building == null)
-			{
-				none[terrain] = data;
-				return false;
-			}
-			return true;
 		}
 
 		/// <summary>Hands a finished terrain from the chunk renderer to the scatter.</summary>
@@ -391,7 +433,11 @@ namespace FishMMO.Client
 			summaryMilliseconds += done.Milliseconds;
 			if (scatter == null)
 			{
-				none[terrain] = terrain.terrainData;
+				// A build that failed on a worker is taken again from the start, once; one with nothing to scatter is remembered.
+				if (!done.Failed || !failedOnce.Add(terrain))
+				{
+					none[terrain] = terrain.terrainData;
+				}
 				return;
 			}
 			if (scatter.ClampedBlocks > 0 && scatter.ClampedChannel >= 0 && warned.Add("clamp " + terrain.name))
@@ -422,7 +468,7 @@ namespace FishMMO.Client
 		{
 			building?.Abandon();
 			building = null;
-			summaryTerrains = summaryFrames = summaryLayers = 0;
+			summaryTerrains = summaryFrames = summaryLayers = summaryBaked = 0;
 			summaryMilliseconds = 0;
 			foreach (Taken t in new List<Taken>(taken.Values))
 			{
@@ -431,6 +477,7 @@ namespace FishMMO.Client
 			taken.Clear();
 			scatterTerrains.Clear();
 			none.Clear();
+			failedOnce.Clear();
 			types.Clear();
 			typesByPrefab.Clear();
 			renderer?.Dispose();

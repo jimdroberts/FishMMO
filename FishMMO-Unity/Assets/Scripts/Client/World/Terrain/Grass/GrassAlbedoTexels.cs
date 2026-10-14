@@ -72,14 +72,7 @@ namespace FishMMO.Client
 			int width = Mathf.ClosestPowerOfTwo(Mathf.Clamp(Math.Min(albedo.width, albedo.height), 1, MaxWidth));
 			int layerTexels = PyramidTexels(width, out int mips);
 			var data = new uint[HeaderUints + layers * layerTexels];
-			for (int l = 0; l < FishMMO.Shared.TerrainArrayLayerParams.MaximumLayers; l++)
-			{
-				Vector4 st = layerST != null && l < layerST.Length ? layerST[l] : Vector4.zero;
-				Vector4 tint = layerTint != null && l < layerTint.Length ? layerTint[l] : Vector4.zero;
-				int h = l * 8;
-				data[h] = Bits(st.x); data[h + 1] = Bits(st.y); data[h + 2] = Bits(st.z); data[h + 3] = Bits(st.w);
-				data[h + 4] = Bits(tint.x); data[h + 5] = Bits(tint.y); data[h + 6] = Bits(tint.z); data[h + 7] = Bits(tint.w);
-			}
+			WriteHeader(data, layerST, layerTint);
 			var linear = new Vector3[width * width];
 
 			// The blit samples the array's own mips (sRGB decoded), the sRGB target re-encodes: bytes as the array holds them.
@@ -127,9 +120,60 @@ namespace FishMMO.Client
 			{
 				RenderTexture.active = previous;
 				RenderTexture.ReleaseTemporary(rt);
-				Object.Destroy(read);
+				if (Application.isPlaying)
+				{
+					Object.Destroy(read);
+				}
+				else
+				{
+					Object.DestroyImmediate(read);
+				}
 			}
 
+			return new GrassAlbedoTexels(albedo, data, width, mips, layerTexels, layers);
+		}
+
+		/// <summary>The per-layer tiling and tint header (<see cref="HeaderUints"/>) at the front of <paramref name="data"/>.</summary>
+		private static void WriteHeader(uint[] data, Vector4[] layerST, Vector4[] layerTint)
+		{
+			for (int l = 0; l < FishMMO.Shared.TerrainArrayLayerParams.MaximumLayers; l++)
+			{
+				Vector4 st = layerST != null && l < layerST.Length ? layerST[l] : Vector4.zero;
+				Vector4 tint = layerTint != null && l < layerTint.Length ? layerTint[l] : Vector4.zero;
+				int h = l * 8;
+				data[h] = Bits(st.x); data[h + 1] = Bits(st.y); data[h + 2] = Bits(st.z); data[h + 3] = Bits(st.w);
+				data[h + 4] = Bits(tint.x); data[h + 5] = Bits(tint.y); data[h + 6] = Bits(tint.z); data[h + 7] = Bits(tint.w);
+			}
+		}
+
+		/// <summary>The layers' pyramids of a copy (everything after the header), for the scene's bake.</summary>
+		public uint[] Pyramids()
+		{
+			var pyramids = new uint[Data.Length - HeaderUints];
+			Array.Copy(Data, HeaderUints, pyramids, 0, pyramids.Length);
+			return pyramids;
+		}
+
+		/// <summary>
+		/// A copy from the scene's bake (<see cref="FishMMO.Shared.TerrainDetailBake.Albedo"/>): its pyramids as read back when it
+		/// was baked, under the set's own header now; null when it is not one of what <see cref="Build"/> would make of the set.
+		/// </summary>
+		public static GrassAlbedoTexels FromBaked(FishMMO.Shared.TerrainDetailBake.Albedo baked, Texture2DArray albedo, int layers, Vector4[] layerST, Vector4[] layerTint)
+		{
+			layers = Math.Min(layers, albedo != null ? albedo.depth : 0);
+			if (baked == null || albedo == null || layers <= 0 || baked.Source != albedo || baked.Layers != layers)
+			{
+				return null;
+			}
+			int width = Mathf.ClosestPowerOfTwo(Mathf.Clamp(Math.Min(albedo.width, albedo.height), 1, MaxWidth));
+			int layerTexels = PyramidTexels(width, out int mips);
+			if (baked.Width != width || baked.Mips != mips || baked.LayerTexels != layerTexels || baked.Pyramids == null || baked.Pyramids.Length != layers * layerTexels)
+			{
+				return null;
+			}
+			var data = new uint[HeaderUints + layers * layerTexels];
+			WriteHeader(data, layerST, layerTint);
+			Array.Copy(baked.Pyramids, 0, data, HeaderUints, baked.Pyramids.Length);
 			return new GrassAlbedoTexels(albedo, data, width, mips, layerTexels, layers);
 		}
 

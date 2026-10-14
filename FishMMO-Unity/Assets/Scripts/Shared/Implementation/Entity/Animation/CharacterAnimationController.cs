@@ -29,6 +29,8 @@ namespace FishMMO.Shared
 		private static readonly int ParamDeath = Animator.StringToHash("Death");
 		private static readonly int ParamIsSwimming = Animator.StringToHash("IsSwimming");
 		private static readonly int ParamSwimPitch = Animator.StringToHash("SwimPitch");
+		private static readonly int ParamIsClimbing = Animator.StringToHash("IsClimbing");
+		private static readonly int ParamClimbSpeed = Animator.StringToHash("ClimbSpeed");
 
 		/// <summary>How quickly the body turns to lie along a swimmer's stroke, and back upright out of the water.</summary>
 		private const float SwimPoseSharpness = 6f;
@@ -43,6 +45,11 @@ namespace FishMMO.Shared
 		// Whether the animator has the swimming parameters at all (no clips exist yet: code first, clips later), so
 		// setting them never logs a missing parameter.
 		private bool animatorHasSwimming;
+		// Likewise climbing: no climb clips exist yet, so these are set only on a controller that has them.
+		private bool animatorHasClimbing;
+		private bool animatorHasClimbSpeed;
+		private bool climbing;
+		private float climbRate;
 		private bool swimming;
 		private float swimPitch;
 		private float posedPitch;
@@ -114,6 +121,8 @@ namespace FishMMO.Shared
 			}
 
 			animatorHasSwimming = false;
+			animatorHasClimbing = false;
+			animatorHasClimbSpeed = false;
 			posedPitch = 0f;
 			if (animator != null)
 			{
@@ -123,8 +132,24 @@ namespace FishMMO.Shared
 					if (parameter.nameHash == ParamIsSwimming)
 					{
 						animatorHasSwimming = true;
-						break;
 					}
+					else if (parameter.nameHash == ParamIsClimbing)
+					{
+						animatorHasClimbing = true;
+					}
+					else if (parameter.nameHash == ParamClimbSpeed && parameter.type == AnimatorControllerParameterType.Float)
+					{
+						animatorHasClimbSpeed = true;
+					}
+				}
+				if (animatorHasClimbing)
+				{
+					// The climb's state as this animator last had it, so a model swapped mid-climb shows it at once.
+					animator.SetBool(ParamIsClimbing, climbing);
+				}
+				if (animatorHasClimbSpeed)
+				{
+					animator.SetFloat(ParamClimbSpeed, climbRate);
 				}
 			}
 
@@ -222,6 +247,33 @@ namespace FishMMO.Shared
 			{
 				animator.SetBool(ParamIsSwimming, swimming);
 				animator.SetFloat(ParamSwimPitch, pitch);
+			}
+#endif
+		}
+
+		/// <inheritdoc />
+		/// <remarks>
+		/// With no climb clips the animator is told nothing (the controller lacks IsClimbing): the KCC already reports a
+		/// climber as grounded and still, so it stands upright facing the climbable while it rises, which reads as climbing
+		/// without limbs. Once clips exist, an IsClimbing bool and a ClimbSpeed float on the controller pick this up with no
+		/// code change, and the NetworkAnimator carries them to observers as it does the swim parameters.
+		/// </remarks>
+		public void SetClimbing(bool climbing, float rate)
+		{
+#if !UNITY_SERVER
+			if (this.climbing == climbing && Mathf.Approximately(climbRate, rate))
+			{
+				return;
+			}
+			this.climbing = climbing;
+			climbRate = rate;
+			if (animator != null && animatorHasClimbing)
+			{
+				animator.SetBool(ParamIsClimbing, climbing);
+			}
+			if (animator != null && animatorHasClimbSpeed)
+			{
+				animator.SetFloat(ParamClimbSpeed, rate);
 			}
 #endif
 		}

@@ -177,10 +177,10 @@ namespace FishMMO.Shared.WorldDesign
 					ship.Offset = period * ((k + random.NextFloat() * 0.5f) / count);
 					Vector3 start = lane.Points[0];
 					// The root with the hull's collision, the drawn ship under sail (client-only) under it.
-					ship.Root = PointOfInterestHarbour.Moor(sails, holder.transform, start, Quaternion.identity, out ship.Ship);
+					ship.Root = PointOfInterestHarbour.Moor(sails, piece, underSail, holder.transform, start, Quaternion.identity, out ship.Ship);
 					if (atAnchor != null && atAnchor != sails)
 					{
-						ship.Furled = PointOfInterestHarbour.Spawn(atAnchor, ship.Root, start, Quaternion.identity);
+						ship.Furled = PointOfInterestHarbour.Spawn(atAnchor, piece, furled, ship.Root, start, Quaternion.identity);
 						ship.Furled.gameObject.AddComponent<ClientOnlyObject>();
 						ship.Furled.gameObject.SetActive(false);
 					}

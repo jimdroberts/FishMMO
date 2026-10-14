@@ -201,7 +201,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int i = 0; i < stones; i++)
 			{
 				float a = i * Mathf.PI * 2f / stones;
-				RoughStone(d, new Vector3(Mathf.Cos(a) * 0.55f, 0.05f, Mathf.Sin(a) * 0.55f), new Vector3(0.22f, 0.16f, 0.2f), a * Mathf.Rad2Deg, 10 + i);
+				d.Add(RoughStone(d, new Vector3(Mathf.Cos(a) * 0.55f, 0.05f, Mathf.Sin(a) * 0.55f), new Vector3(0.22f, 0.16f, 0.2f), a * Mathf.Rad2Deg, 10 + i));
 			}
 			d.Add(StructureShapes.Cylinder(0.45f, -0.05f, 0.03f, d.Seg(10, 6), StructureMaterial.Ash, 30, false, StructureRole.Detail));
 			d.Emit(new Vector3(0f, 0.12f, 0f), SceneEmitterKind.Fire);

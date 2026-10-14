@@ -20,7 +20,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// FISHMMO_POI_OUT a top-down overview (overview.png), markers.json (every record and its pixel on the overview, for
 	/// labelling), one close-up per kind (site_*.png), the record table (records.tsv) and the cut's notes (report.txt).
 	/// The scene, its folders, settings and atlas entry are deleted afterwards unless FISHMMO_POI_KEEP=1, which leaves
-	/// them for the atlas and map renders; <see cref="Cleanup"/> deletes them later.
+	/// them for the atlas and map renders; <see cref="Cleanup"/> deletes them later. FISHMMO_POI_EXISTING=1 renders the
+	/// atlas entry's own scene as it was last cut instead: nothing is cut, saved or deleted.
 	/// </summary>
 	public static class PointOfInterestRenderProbe
 	{
@@ -33,7 +34,8 @@ namespace FishMMO.Shared.WorldDesign
 			string output = Environment.GetEnvironmentVariable("FISHMMO_POI_OUT") ?? Path.Combine(Path.GetTempPath(), "fishmmo-poi");
 			Directory.CreateDirectory(output);
 			string sceneName = Environment.GetEnvironmentVariable("FISHMMO_POI_SCENE") ?? "Flo Monolith";
-			bool keep = Environment.GetEnvironmentVariable("FISHMMO_POI_KEEP") == "1";
+			bool existingScene = Environment.GetEnvironmentVariable("FISHMMO_POI_EXISTING") == "1";
+			bool keep = existingScene || Environment.GetEnvironmentVariable("FISHMMO_POI_KEEP") == "1";
 			int maxShots = int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_POI_SHOTS"), out int shots) ? shots : 40;
 			var report = new List<string>();
 			WorldAtlasScene entry = WorldEditorAssets.FindAll<WorldAtlasScene>().FirstOrDefault(e => e != null && e.SceneName == sceneName);
@@ -47,8 +49,13 @@ namespace FishMMO.Shared.WorldDesign
 			try
 			{
 				Scene scene = EditorSceneManager.GetActiveScene();
-				string existing = $"{SceneGenerator.WorldFolder(entry.Body)}/{ProbeName}.unity";
-				if (Environment.GetEnvironmentVariable("FISHMMO_POI_REUSE") == "1" && File.Exists(existing))
+				string existing = $"{SceneGenerator.WorldFolder(entry.Body)}/{(existingScene ? sceneName : ProbeName)}.unity";
+				if (existingScene && !File.Exists(existing))
+				{
+					report.Add($"no scene at {existing}");
+					return;
+				}
+				if ((existingScene || Environment.GetEnvironmentVariable("FISHMMO_POI_REUSE") == "1") && File.Exists(existing))
 				{
 					scene = EditorSceneManager.OpenScene(existing, OpenSceneMode.Single);
 					report.Add($"reused {existing}");
@@ -145,7 +152,7 @@ namespace FishMMO.Shared.WorldDesign
 					EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 					Cleanup();
 				}
-				else
+				else if (!existingScene)
 				{
 					AssetDatabase.SaveAssets();
 				}

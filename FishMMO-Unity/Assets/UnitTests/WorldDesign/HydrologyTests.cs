@@ -866,9 +866,218 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			path.Reach[lip + 1] = RiverReach.Fall;
 			WaterCarver.CarveRivers(height, grid, new[] { path }, settings, true);
-			int atLip = grid.SampleAt(0f, 0f), beyond = grid.SampleAt(2f, 0f);
-			Assert.That(height[atLip], Is.GreaterThanOrEqualTo(path.Bed[lip] - 1e-3f), "the lip stands on its own bed: no hole under the water going over");
-			Assert.That(height[beyond], Is.LessThan(80f), "and the drop is still there a cell on");
+			int atLip = grid.SampleAt(0f, 0f), beyond = grid.SampleAt(2f, 0f), past = grid.SampleAt(4f, 0f);
+			Assert.That(height[atLip], Is.GreaterThanOrEqualTo(path.Bed[lip] - 0.05f), "the lip stands on its own bed: no hole under the water going over");
+			// A cell on, under the water's arc at the brink speed (FallHydraulics: critical flow over a free overfall).
+			float q = path.Discharge[lip] / path.Width[lip];
+			float brinkSpeed = (float)Math.Pow(9.81 * q, 1.0 / 3.0) / 0.715f;
+			float past2 = 2f - path.X[lip], fallen = 9.81f * past2 * past2 / (2f * brinkSpeed * brinkSpeed);
+			Assert.That(height[beyond], Is.LessThan(path.Bed[lip] - fallen), "the ground a cell past the lip lies under the water falling off it");
+			Assert.That(height[past], Is.LessThan(50f), "and the drop is still there two cells on");
+		}
+
+		[Test]
+		public void APoolsWaterReachesTheRimOfItsBowlOnTheSideItWasScouredWider()
+		{
+			// A straight river along x, 6 m wide, its water at 10 m. On its left (+z), beside its middle, the ground lies a metre
+			// under the water out to 9 m from the line, then rises to meet it 10 m out (7 m past the bank); elsewhere the banks hold.
+			int n = 20;
+			var path = new RiverPath
+			{
+				Perennial = true,
+				X = new float[n], Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
+				Surface = new float[n], Bed = new float[n], Curvature = new float[n], Reach = new RiverReach[n],
+			};
+			for (int i = 0; i < n; i++)
+			{
+				path.X[i] = i * 2f;
+				path.S[i] = i * 2f;
+				path.Width[i] = 6f;
+				path.Depth[i] = 1.5f;
+				path.Surface[i] = 10f;
+				path.Bed[i] = 8.5f;
+				path.Reach[i] = RiverReach.Pool;
+			}
+			// Bounded along the river too (x 6…32): a trench running on past both its ends would be open country.
+			Func<float, float, float> bowl = (x, z) => z > 0f
+				? (z < 3f ? 9f : x > 6f && x < 32f ? (z < 9f ? 9f : 9f + (z - 9f)) : 10.2f)
+				: (z > -3f ? 9f : 10.2f);
+			RiverShores.Measure(path, bowl, out float[] left, out float[] right);
+			Assert.That(left[10], Is.EqualTo(7f).Within(0.6f), "the left water reaches the bowl's rim, 7 m past the bank");
+			Assert.That(right[10], Is.EqualTo(0f), "the right bank holds it");
+
+			// Ground under the water on the left as far as can be seen: open country, not a bowl.
+			Func<float, float, float> open = (x, z) => z > 0f ? 9f : 10.2f;
+			RiverShores.Measure(path, open, out left, out _);
+			Assert.That(left[10], Is.EqualTo(0f), "no rim within reach spreads nothing");
+		}
+
+		[Test]
+		public void APoolsBowlLyingOffItsEndIsReachedToo()
+		{
+			// A 6 m river along x, its water at 10 m, held by banks either side; a bowl a metre under the water lies off to
+			// its left ahead of the point at x = 20, square beside no point, joined to the channel there.
+			int n = 20;
+			var path = new RiverPath
+			{
+				Perennial = true,
+				X = new float[n], Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
+				Surface = new float[n], Bed = new float[n], Curvature = new float[n], Reach = new RiverReach[n],
+			};
+			for (int i = 0; i < n; i++)
+			{
+				path.X[i] = i * 2f;
+				path.S[i] = i * 2f;
+				path.Width[i] = 6f;
+				path.Depth[i] = 1.5f;
+				path.Surface[i] = 10f;
+				path.Bed[i] = 8.5f;
+				path.Reach[i] = RiverReach.Pool;
+			}
+			Func<float, float, float> ground = (x, z) =>
+			{
+				if (Math.Abs(z) <= 3f)
+				{
+					return 8.5f;   // the channel
+				}
+				// The bowl: a disc 5 m across centred 6 m out to the left, a little downstream of x = 20, reaching the bank.
+				float bx = x - 22f, bz = z - 6f;
+				return bx * bx + bz * bz < 16f || (z > 0f && z < 4f && Math.Abs(x - 21f) < 2f) ? 9f : 10.5f;
+			};
+			RiverShores.Measure(path, ground, out float[] left, out float[] right);
+			float most = 0f;
+			for (int i = 8; i <= 13; i++)
+			{
+				most = Math.Max(most, left[i]);
+			}
+			Assert.That(most, Is.GreaterThan(5f), "the points beside the bowl are widened out to its far rim (about 7 m past the bank)");
+			Assert.That(right[10], Is.EqualTo(0f), "the right bank holds");
+			Assert.That(left[2], Is.EqualTo(0f), "and the left away from the bowl");
+		}
+
+		[Test]
+		public void ALeveeHoldsTheWaterOutPastItsDrawnMargin()
+		{
+			// A 3 m stream at 100 m running across the grid at 33°, the ground from half a metre past its left bank 1.5 m under its
+			// water, everywhere else well over it. The terrain between samples is their plane, so the ground is read there too.
+			var settings = new RiverSettings();
+			int w = 120, d = 120;
+			const float spacing = 2.1f;
+			var grid = new SceneWaterGrid(w, d, spacing, -126f, -126f);
+			float dx = MathF.Cos(33f * MathF.PI / 180f), dz = MathF.Sin(33f * MathF.PI / 180f);
+			var height = new float[w * d];
+			for (int z = 0; z < d; z++)
+			{
+				for (int x = 0; x < w; x++)
+				{
+					float left = grid.NorthOf(z) * dx - grid.EastOf(x) * dz;
+					height[z * w + x] = left > 2f ? 98.5f : 102f;
+				}
+			}
+			int n = 90;
+			var path = new RiverPath
+			{
+				X = new float[n], Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
+				Surface = new float[n], Bed = new float[n], Curvature = new float[n], Reach = new RiverReach[n],
+			};
+			for (int i = 0; i < n; i++)
+			{
+				float along = -99f + i * 2.2f;
+				path.X[i] = along * dx;
+				path.Z[i] = along * dz;
+				path.S[i] = i * 2.2f;
+				path.Discharge[i] = 1.5f;
+				path.Width[i] = 3f;
+				path.Depth[i] = 0.5f;
+				path.Surface[i] = 100f;
+				path.Bed[i] = 99.5f;
+				path.Reach[i] = RiverReach.Run;
+			}
+			WaterCarver.CarveRivers(height, grid, new[] { path }, settings, true);
+			float At(float east, float north)
+			{
+				float gx = (east + 126f) / spacing, gz = (north + 126f) / spacing;
+				int x0 = (int)MathF.Floor(gx), z0 = (int)MathF.Floor(gz);
+				float tx = gx - x0, tz = gz - z0;
+				float h00 = height[z0 * w + x0], h10 = height[z0 * w + x0 + 1], h01 = height[(z0 + 1) * w + x0], h11 = height[(z0 + 1) * w + x0 + 1];
+				// The terrain's own triangles: the cell split along its diagonal.
+				return tx + tz <= 1f ? h00 + (h10 - h00) * tx + (h01 - h00) * tz : h11 + (h01 - h11) * (1f - tx) + (h10 - h11) * (1f - tz);
+			}
+			/* Out past the bank as far as the water's surface is drawn (InlandWaterRenderer.MinBankMarginMetres, 2.6 m): nowhere
+			 * deeper under it than the shader draws as the shallow edge (a column under 0.525 m; the ground between the bed's last
+			 * sample and the bank's first is their plane, so it slopes down into the water there), and at or over it by the
+			 * margin's edge, so the water is closed in where its surface ends. */
+			int checkedPoints = 0;
+			for (float along = -70f; along <= 70f; along += 0.5f)
+			{
+				for (float o = 1.5f; o <= 1.5f + 2.6f; o += 0.25f)
+				{
+					float east = along * dx - o * dz, north = along * dz + o * dx;
+					checkedPoints++;
+					Assert.That(At(east, north), Is.GreaterThanOrEqualTo(100f - 0.5f), $"the ground at ({east:F1}, {north:F1}), {o - 1.5f:F2} m past the bank, lies deeper under the water than its shallow edge");
+				}
+				float edgeEast = along * dx - (1.5f + 2.6f) * dz, edgeNorth = along * dz + (1.5f + 2.6f) * dx;
+				Assert.That(At(edgeEast, edgeNorth), Is.GreaterThanOrEqualTo(100f - 1e-3f), $"the levee at ({edgeEast:F1}, {edgeNorth:F1}), where the water's surface ends, stands under it");
+			}
+			Assert.That(checkedPoints, Is.GreaterThan(500));
+		}
+
+		[Test]
+		public void ARapidsEdgeIsHeldToItsOwnWaterNotTheWaterUpstream()
+		{
+			// A 3 m stream down a 1-in-5 rapid, across the grid at 33°, cut into ground well above it.
+			var settings = new RiverSettings();
+			int w = 120, d = 120;
+			const float spacing = 2.1f;
+			var grid = new SceneWaterGrid(w, d, spacing, -126f, -126f);
+			var height = new float[w * d];
+			float dx = MathF.Cos(33f * MathF.PI / 180f), dz = MathF.Sin(33f * MathF.PI / 180f);
+			for (int z = 0; z < d; z++)
+			{
+				for (int x = 0; x < w; x++)
+				{
+					float along = grid.EastOf(x) * dx + grid.NorthOf(z) * dz;
+					height[z * w + x] = 103f - 0.2f * along;
+				}
+			}
+			int n = 90;
+			var path = new RiverPath
+			{
+				X = new float[n], Z = new float[n], S = new float[n], Discharge = new float[n], Width = new float[n], Depth = new float[n],
+				Surface = new float[n], Bed = new float[n], Curvature = new float[n], Reach = new RiverReach[n],
+			};
+			for (int i = 0; i < n; i++)
+			{
+				float along = -99f + i * 2.2f;
+				path.X[i] = along * dx;
+				path.Z[i] = along * dz;
+				path.S[i] = i * 2.2f;
+				path.Discharge[i] = 1.5f;
+				path.Width[i] = 3f;
+				path.Depth[i] = 0.5f;
+				path.Surface[i] = 100f - 0.2f * along;
+				path.Bed[i] = path.Surface[i] - 0.5f;
+				path.Reach[i] = RiverReach.Rapid;
+			}
+			WaterCarver.CarveRivers(height, grid, new[] { path }, settings, true);
+			int edges = 0;
+			for (int z = 0; z < d; z++)
+			{
+				for (int x = 0; x < w; x++)
+				{
+					float east = grid.EastOf(x), north = grid.NorthOf(z);
+					float along = east * dx + north * dz, out_ = Math.Abs(north * dx - east * dz);
+					if (along < -80f || along > 80f || out_ < 1.5f || out_ > 1.5f + spacing)
+					{
+						continue;
+					}
+					edges++;
+					float water = 100f - 0.2f * along;
+					Assert.That(height[z * w + x], Is.LessThanOrEqualTo(water + 0.05f),
+						$"the edge at ({east:F1}, {north:F1}) stands {height[z * w + x] - water:F2} m over the water beside it");
+				}
+			}
+			Assert.That(edges, Is.GreaterThan(50));
 		}
 
 		[Test]

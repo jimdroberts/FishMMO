@@ -234,5 +234,60 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(path.Bed[11], Is.EqualTo(surface[11] - 1f).Within(1e-4f), "back to the river's own bed past the pool");
 			Assert.That(path.Bed[2], Is.EqualTo(surface[2] - 1f).Within(1e-4f), "nothing scoured above the fall");
 		}
+
+		[Test]
+		public void APlungePoolEndsWhereTheRiverStopsMarkingItPool()
+		{
+			var hydrology = ScriptableObject.CreateInstance<SceneHydrology>();
+			try
+			{
+				// Lip at 3, foot at 7; the basin marked pool through point 9, the river running on from 10.
+				SceneHydrology.River river = River(new[] { 50f, 50f, 50f, 50f, 47f, 44f, 41f, 41f, 41f, 41f, 40.9f, 40.8f, 40.7f }, 4, 6);
+				river.Reach[7] = river.Reach[8] = river.Reach[9] = InlandWaterRenderer.PoolReach;
+				hydrology.Rivers.Add(river);
+				List<InlandWaterRenderer.Fall> falls = InlandWaterRenderer.FindFalls(hydrology, 1.5f);
+				Assert.That(falls.Count, Is.EqualTo(1));
+				Assert.That(InlandWaterRenderer.PoolTail(river, falls[0]), Is.EqualTo(10), "the first point past the pool");
+				river.Reach[8] = river.Reach[9] = 0;
+				Assert.That(InlandWaterRenderer.PoolTail(river, falls[0]), Is.EqualTo(8), "a pool of the foot alone ends after it");
+			}
+			finally
+			{
+				Object.DestroyImmediate(hydrology);
+			}
+		}
+
+		[Test]
+		public void APlungePoolsSurfaceRunsAtTheFallsCurrentNotTheBasinsMean()
+		{
+			/* Flo Monolith's 19.5 m fall (river 0, lip at point 1153): 1.32 m³/s over a 4.1 m lip into a basin 15.3 m wide and
+			 * 6.55 m deep, leaving it 4.5 m wide and 0.53 m deep. Over the basin's whole section the river moves at 1.3 cm/s,
+			 * and drawn at that the pool and its tail stood dead still. */
+			const float discharge = 1.32f, lip = 4.1f, outletDepth = 0.53f;
+			float mean = discharge / (15.3f * 6.55f);
+
+			float landing = InlandWaterRenderer.PoolCoreSpeed(discharge, lip, outletDepth, 0f, 15.3f, out float landingHalf);
+			Assert.That(landingHalf, Is.EqualTo(0.5f * lip).Within(1e-4f), "the core leaves the landing as wide as the curtain");
+			Assert.That(landing, Is.GreaterThan(0.5f), "the river's whole discharge in a current the outflow's depth: about 0.6 m/s");
+			Assert.That(landing, Is.GreaterThan(40f * mean));
+
+			float on = InlandWaterRenderer.PoolCoreSpeed(discharge, lip, outletDepth, 9f, 15.3f, out float onHalf);
+			Assert.That(onHalf, Is.EqualTo(0.5f * (lip + 9f * InlandWaterRenderer.PoolJetSpreadPerMetre)).Within(1e-4f), "it widens as a jet");
+			Assert.That(on, Is.LessThan(landing), "and slows as it widens");
+
+			// At the tail the core fills the channel, and runs at the river's own speed out of the pool.
+			float tail = InlandWaterRenderer.PoolCoreSpeed(discharge, lip, outletDepth, 30f, 4.5f, out float tailHalf);
+			Assert.That(tailHalf, Is.EqualTo(2.25f).Within(1e-4f), "never wider than the pool");
+			Assert.That(tail, Is.EqualTo(discharge / (4.5f * outletDepth)).Within(1e-4f));
+
+			// Across the basin: the core down the middle, slack water in the eddies by its sides, never below the mean.
+			Assert.That(InlandWaterRenderer.PoolCurrentAcross(0f, landingHalf, landing, mean), Is.EqualTo(landing).Within(1e-5f));
+			Assert.That(InlandWaterRenderer.PoolCurrentAcross(-landingHalf, landingHalf, landing, mean), Is.EqualTo(landing).Within(1e-5f), "the core's whole width");
+			float side = InlandWaterRenderer.PoolCurrentAcross(7.5f, landingHalf, landing, mean);
+			Assert.That(side, Is.LessThan(0.1f * landing), "slack by the basin's side");
+			Assert.That(side, Is.GreaterThanOrEqualTo(mean), "but never slower than the river's mean");
+			float edge = InlandWaterRenderer.PoolCurrentAcross(landingHalf + 0.5f * landingHalf, landingHalf, landing, mean);
+			Assert.That(edge, Is.InRange(mean, landing), "easing out past the core, not stepping");
+		}
 	}
 }

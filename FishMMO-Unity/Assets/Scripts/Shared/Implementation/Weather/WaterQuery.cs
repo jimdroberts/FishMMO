@@ -168,7 +168,11 @@ namespace FishMMO.Shared.Weather
 				}
 				if (inland.TryGetSurface(x, z, out float level) && level > sample.Surface)
 				{
-					Vector2 current = inland.CurrentAt(x, z);
+					/* The scene's lakes and rivers answer CurrentAt by asking TryGetSurface again first, which this has just
+					 * done: their flow straight away is the same answer without the second lookup. */
+					Vector2 current = inland is FishMMO.Shared.Biomes.SceneWaterBodies bodies
+						? bodies.FlowAt(x, z, out _, out _)
+						: inland.CurrentAt(x, z);
 					sample.Body = current.sqrMagnitude > 1e-8f ? WaterBody.River : WaterBody.Lake;
 					sample.Surface = level;
 					sample.Current = current;

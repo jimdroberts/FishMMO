@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using UnityEngine;
 using FishMMO.Shared.Biomes;
 
@@ -45,6 +46,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// gravel … 1 sand. Painted with the palette's sediment layers. Null for none.
 		/// </summary>
 		public Func<float, float, Vector2> BarAt;
+
+		/// <summary>
+		/// The least share of a biome's cliff rock at a world position (x, z) whose ground slopes s degrees, 0 … 1: bare rock
+		/// the slope rule alone leaves as ground (a waterfall's brink and face, <see cref="FallRockPaint"/>). Called from the
+		/// painter's worker threads. Null for none.
+		/// </summary>
+		public Func<float, float, float, float> RockAt;
 
 		/// <summary>Mixed into every layer's noise so two scenes with the same biomes do not share a pattern.</summary>
 		public uint Seed = 1u;
@@ -107,8 +115,9 @@ namespace FishMMO.Shared.WorldDesign
 
 			var report = new BiomeSplatReport();
 			var clock = Stopwatch.StartNew();
-			var weigher = new Weigher(palette, field, options);
 			TerrainLayer[] layers = ToArray(palette.Layers);
+			var workers = new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) };
+			object gate = new object();
 
 			foreach (Terrain terrain in tiles)
 			{
@@ -121,32 +130,55 @@ namespace FishMMO.Shared.WorldDesign
 				data.alphamapResolution = Mathf.Max(16, options.AlphamapResolution);
 				int resolution = data.alphamapResolution;
 				var splat = new float[resolution, resolution, layers.Length];
-				var texelWeights = new float[layers.Length];
 				Vector3 origin = terrain.transform.position;
 				Vector3 size = data.size;
 
+				// The terrain answers on the main thread only: every texel's ground height and steepness first.
+				var groundY = new float[resolution * resolution];
+				var steepness = new float[resolution * resolution];
 				for (int z = 0; z < resolution; z++)
 				{
+					float v = (z + 0.5f) / resolution;
+					for (int x = 0; x < resolution; x++)
+					{
+						float u = (x + 0.5f) / resolution;
+						// GetInterpolatedHeight and GetSteepness take (x, z) normalised; height in metres.
+						groundY[z * resolution + x] = origin.y + data.GetInterpolatedHeight(u, v);
+						steepness[z * resolution + x] = data.GetSteepness(u, v);
+					}
+				}
+
+				/* Then the weighing, rows in parallel: a texel's weights are its own, the field and the noises only read,
+				 * and each worker weighs with a weigher of its own (a weigher keeps scratch). */
+				int unreached = 0;
+				int count = layers.Length;
+				Parallel.For(0, resolution, workers, () => (new Weigher(palette, field, options), new float[count], 0), (z, _, local) =>
+				{
+					(Weigher weigher, float[] texelWeights, int missed) = local;
 					float v = (z + 0.5f) / resolution;
 					float worldZ = origin.z + v * size.z;
 					for (int x = 0; x < resolution; x++)
 					{
 						float u = (x + 0.5f) / resolution;
 						float worldX = origin.x + u * size.x;
-						// GetInterpolatedHeight and GetSteepness take (x, z) normalised; height in metres.
-						float worldY = origin.y + data.GetInterpolatedHeight(u, v);
-						float slope = data.GetSteepness(u, v);
-
-						if (!weigher.Weigh(worldX, worldY, worldZ, slope, texelWeights))
+						if (!weigher.Weigh(worldX, groundY[z * resolution + x], worldZ, steepness[z * resolution + x], texelWeights))
 						{
-							report.Unreached++;
+							missed++;
 						}
-						for (int layer = 0; layer < layers.Length; layer++)
+						for (int layer = 0; layer < count; layer++)
 						{
 							splat[z, x, layer] = texelWeights[layer];
 						}
 					}
-				}
+					return (weigher, texelWeights, missed);
+				}, local =>
+				{
+					lock (gate)
+					{
+						unreached += local.Item3;
+					}
+				});
+				report.Unreached += unreached;
 				data.SetAlphamaps(0, 0, splat);
 				report.Tiles++;
 				report.Texels += resolution * resolution;
@@ -225,6 +257,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 
 				Vector2 bar = options.BarAt != null ? options.BarAt(worldX, worldZ) : Vector2.zero;
+				float rock = options.RockAt != null ? Mathf.Clamp01(options.RockAt(worldX, worldZ, slopeDegrees)) : 0f;
 				float reached = 0f;
 				for (int b = 0; b < field.Biomes.Count; b++)
 				{
@@ -234,7 +267,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					reached += biomeWeight;
-					Share(b, biomeWeight, worldX, worldZ, height, slopeDegrees, submerged, bar, layerWeights);
+					Share(b, biomeWeight, worldX, worldZ, height, slopeDegrees, submerged, bar, rock, layerWeights);
 				}
 
 				float total = 0f;
@@ -259,7 +292,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>Shares one biome's reach at a point out among its layers. See the class remarks for the order.</summary>
-			private void Share(int biomeIndex, float biomeWeight, float worldX, float worldZ, float height, float slope, float submerged, Vector2 bar, float[] layerWeights)
+			private void Share(int biomeIndex, float biomeWeight, float worldX, float worldZ, float height, float slope, float submerged, Vector2 bar, float rock, float[] layerWeights)
 			{
 				IReadOnlyList<SceneTerrainPalette.Entry> entries = palette.EntriesFor(biomeIndex);
 				SceneTerrainPalette.Entry main = null;
@@ -268,6 +301,7 @@ namespace FishMMO.Shared.WorldDesign
 				SceneTerrainPalette.Entry gravel = null;
 				float cliffTotal = 0f;
 				float cliffMax = 0f;
+				int cliffs = 0;
 
 				// Cliffs: each by its own slope (and optional height) curve; together they take the
 				// largest of their weights, so two overlapping cliff layers do not double the rock.
@@ -287,17 +321,24 @@ namespace FishMMO.Shared.WorldDesign
 							detailStrength[entry.Index] = w;
 							cliffTotal += w;
 							cliffMax = Mathf.Max(cliffMax, w);
+							cliffs++;
 							break;
 					}
 				}
-				if (cliffTotal > 0f)
+				// At least the share the ground is known to be bare rock, split as the slope splits it, or evenly under every cliff's angle.
+				if (cliffs > 0 && rock > cliffMax)
+				{
+					cliffMax = rock;
+				}
+				if (cliffMax > 0f)
 				{
 					for (int i = 0; i < entries.Count; i++)
 					{
 						SceneTerrainPalette.Entry entry = entries[i];
 						if (entry.Role == PaletteRole.Cliff)
 						{
-							layerWeights[entry.LayerIndex] += biomeWeight * cliffMax * detailStrength[entry.Index] / cliffTotal;
+							float split = cliffTotal > 0f ? detailStrength[entry.Index] / cliffTotal : 1f / cliffs;
+							layerWeights[entry.LayerIndex] += biomeWeight * cliffMax * split;
 						}
 					}
 				}

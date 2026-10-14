@@ -60,6 +60,9 @@ namespace FishMMO.Shared.Biomes
 			public float[] Speed = Array.Empty<float>();
 			[Tooltip("What the water does at each point: 0 run, 1 riffle, 2 pool, 3 rapid, 4 fall.")]
 			public byte[] Reach = Array.Empty<byte>();
+			[Tooltip("How far past its half-width the water reaches on its left and right (looking downstream) at each point, metres, where the cut ground lies under it: a scoured pool wider than its channel. Empty for none.")]
+			public float[] ShoreLeft = Array.Empty<float>();
+			public float[] ShoreRight = Array.Empty<float>();
 		}
 
 		[Serializable]

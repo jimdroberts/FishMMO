@@ -70,6 +70,12 @@ namespace FishMMO.Shared.WorldDesign
 			var cv = new float[8];
 			var cp = new Vector3[8];
 			var parent = new int[12];
+			// A cell's vertices by edge root, in first-seen order (twelve edges, so twelve roots at most): fixed arrays,
+			// where two dictionaries per surface cell stalled every thread building alongside on the editor's collector.
+			var rootSum = new Vector3[12];
+			var rootCount = new int[12];
+			var rootVertex = new int[12];
+			var roots = new int[12];
 			int Find(int x) { while (parent[x] != x) x = parent[x] = parent[parent[x]]; return x; }
 			for (int k = 0; k < nz - 1; k++)
 				for (int j = 0; j < ny - 1; j++)
@@ -113,24 +119,26 @@ namespace FishMMO.Shared.WorldDesign
 								}
 							}
 						}
-						var sum = new Dictionary<int, (Vector3 p, int n)>();
+						int rootsSeen = 0;
+						for (int e = 0; e < 12; e++) rootCount[e] = 0;
 						for (int e = 0; e < 12; e++)
 						{
 							if (!Crossed(e)) continue;
 							float a = cv[CellEdges[e, 0]], b = cv[CellEdges[e, 1]];
 							Vector3 x = cp[CellEdges[e, 0]] + (cp[CellEdges[e, 1]] - cp[CellEdges[e, 0]]) * (a / (a - b));
 							int r = Find(e);
-							sum[r] = sum.TryGetValue(r, out var acc) ? (acc.p + x, acc.n + 1) : (x, 1);
+							if (rootCount[r] == 0) { roots[rootsSeen++] = r; rootSum[r] = x; rootCount[r] = 1; }
+							else { rootSum[r] = rootSum[r] + x; rootCount[r]++; }
 						}
-						var vertexOf = new Dictionary<int, int>();
-						foreach (var kv in sum)
+						for (int n = 0; n < rootsSeen; n++)
 						{
-							vertexOf[kv.Key] = positions.Count;
-							positions.Add(kv.Value.p / kv.Value.n);
+							int r = roots[n];
+							rootVertex[r] = positions.Count;
+							positions.Add(rootSum[r] / rootCount[r]);
 						}
 						for (int e = 0; e < 12; e++)
 						{
-							if (Crossed(e)) edgeVertex[Key(i, j, k, e)] = vertexOf[Find(e)];
+							if (Crossed(e)) edgeVertex[Key(i, j, k, e)] = rootVertex[Find(e)];
 						}
 					}
 			// Onto the surface: Newton steps along the gradient, kept within the cell's reach.

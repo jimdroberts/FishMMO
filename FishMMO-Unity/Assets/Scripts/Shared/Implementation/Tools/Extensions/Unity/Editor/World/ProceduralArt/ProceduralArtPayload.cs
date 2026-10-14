@@ -103,6 +103,8 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly string[] SourceFiles =
 		{
 			"BiomeArtGenerator.cs",
+			// The builds on all cores (2026-10-13): the trees' pure work lives there now.
+			"BiomeArtGenerator.Parallel.cs",
 			"BiomeArtSpec.cs",
 			"BillboardImpostor.cs",
 			"FoliageAtlas.cs",
@@ -150,6 +152,15 @@ namespace FishMMO.Shared.WorldDesign
 			"StructurePieces.Sacred.cs",
 			"StructurePieces.Buildings.cs",
 			"StructurePieces.Ruins.cs",
+			// Pieces added since, which were never hashed: an edit to them did not mark the art stale.
+			"StructurePieces.Bridges.cs",
+			"StructurePieces.Clutter.cs",
+			"StructurePieces.Interior.cs",
+			"StructurePieces.Lights.cs",
+			"StructurePieces.Mine.cs",
+			"StructurePieces.Ships.cs",
+			"StructurePieces.Town.cs",
+			"StructureKit.cs",
 			"StructureRuins.cs",
 			"StructureSolids.cs",
 			"StructureSurfaces.cs",
@@ -160,6 +171,11 @@ namespace FishMMO.Shared.WorldDesign
 			"VineMeshes.cs",
 			"ProceduralArtCatalogue.Vines.cs",
 			"BiomeArtGenerator.Vines.cs",
+			// The cave and mine kit (2026-10-13): its structure pieces, and the glow art built with the structures.
+			"StructurePieces.Cave.cs",
+			"CaveGlowMeshes.cs",
+			"ProceduralArtCatalogue.Cave.cs",
+			"BiomeArtGenerator.CaveGlow.cs",
 		};
 
 		private static readonly Regex MetaGuid = new Regex(@"^guid:\s*([0-9a-fA-F]{32})\s*$", RegexOptions.Multiline | RegexOptions.CultureInvariant);
@@ -557,12 +573,45 @@ namespace FishMMO.Shared.WorldDesign
 		[Serializable]
 		private sealed class LedgerDocument
 		{
-			public int version = 2;
+			public int version = 3;
 			public string fingerprint;
 			public int seed;
 			public List<string> files = new List<string>();
 			/// <summary>The layers <see cref="BiomeTerrainLayers"/> built from loose biome textures in that run.</summary>
 			public List<string> built = new List<string>();
+			/// <summary>Each family's fingerprint when it was last completely generated (<see cref="ProceduralArtFamilies"/>).</summary>
+			public List<FamilyRecord> families = new List<FamilyRecord>();
+		}
+
+		[Serializable]
+		private sealed class FamilyRecord
+		{
+			public string family;
+			public string fingerprint;
+		}
+
+		/// <summary>The family fingerprints the art on disk was last completely generated with (empty when none were recorded).</summary>
+		public static Dictionary<string, string> RecordedFamilies(out int seed)
+		{
+			seed = 0;
+			var map = new Dictionary<string, string>(StringComparer.Ordinal);
+			LedgerDocument doc = ReadLedger();
+			if (doc == null)
+			{
+				return map;
+			}
+			seed = doc.seed;
+			if (doc.families != null)
+			{
+				foreach (FamilyRecord r in doc.families)
+				{
+					if (r != null && !string.IsNullOrEmpty(r.family))
+					{
+						map[r.family] = r.fingerprint;
+					}
+				}
+			}
+			return map;
 		}
 
 		private static LedgerDocument ReadLedger()
@@ -606,8 +655,25 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>Records a COMPLETE generation, with the built terrain layers it ensured. Never called for a cancelled or failed one.</summary>
 		public static void RecordComplete(string fingerprint, int seed, IEnumerable<string> builtLayers)
+			=> RecordComplete(fingerprint, seed, builtLayers, FamilyFingerprints(seed));
+
+		/// <summary>
+		/// Records a COMPLETE generation: the whole art's fingerprint, the built layers, and every family's fingerprint as the
+		/// run saw it (the families a run did not rebuild were current, so their fingerprint is what is on disk too).
+		/// </summary>
+		public static void RecordComplete(string fingerprint, int seed, IEnumerable<string> builtLayers, Dictionary<ArtFamily, string> families)
 		{
 			var doc = new LedgerDocument { fingerprint = fingerprint, seed = seed };
+			if (families != null)
+			{
+				foreach (ArtFamily family in ProceduralArtFamilies.All)
+				{
+					if (families.TryGetValue(family, out string print))
+					{
+						doc.families.Add(new FamilyRecord { family = family.ToString(), fingerprint = print });
+					}
+				}
+			}
 			doc.files.AddRange(ProceduralArtCatalogue.PayloadPaths());
 			doc.files.AddRange(ProceduralArtCatalogue.WrapperPaths());
 			doc.files.Sort(StringComparer.Ordinal);
@@ -642,34 +708,26 @@ namespace FishMMO.Shared.WorldDesign
 		/// comment edit in those files also regenerates — which, the generator being deterministic,
 		/// rewrites nothing (bytes are compared before writing) and only spends the time.
 		/// </remarks>
-		public static string CurrentFingerprint(int seed)
+		public static string CurrentFingerprint(int seed) => ProceduralArtFamilies.Combined(FamilyFingerprints(seed));
+
+		/// <summary>
+		/// Each family's fingerprint now (<see cref="ProceduralArtFamilies.Fingerprints"/>): the format, seed and sizes, the
+		/// shared sources, the family's own and its inputs'.
+		/// </summary>
+		public static Dictionary<ArtFamily, string> FamilyFingerprints(int seed)
 		{
-			var sb = new StringBuilder();
-			sb.Append("format=").Append(FormatVersion).Append(";seed=").Append(seed)
+			var header = new StringBuilder();
+			header.Append("format=").Append(FormatVersion).Append(";seed=").Append(seed)
 				.Append(";ground=").Append(ProceduralArtCatalogue.GroundSize)
 				.Append(";bark=").Append(ProceduralArtCatalogue.BarkSize)
 				.Append(";atlas=").Append(ProceduralArtCatalogue.AtlasSize)
-				.Append(";billboard=").Append(ProceduralArtCatalogue.BillboardHeight).Append('\n');
+				.Append(";billboard=").Append(ProceduralArtCatalogue.BillboardHeight);
 			string folder = SourceFolder();
-			foreach (string file in SourceFiles)
+			return ProceduralArtFamilies.Fingerprints(header.ToString(), SourceFiles, file =>
 			{
 				string path = folder != null ? Path.Combine(folder, file) : null;
-				sb.Append(file).Append('\n');
-				if (path != null && File.Exists(path))
-				{
-					sb.Append(File.ReadAllText(path).Replace("\r\n", "\n"));
-				}
-				else
-				{
-					sb.Append("<missing>");
-				}
-				sb.Append('\n');
-			}
-			using (SHA1 sha = SHA1.Create())
-			{
-				byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
-				return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
-			}
+				return path != null && File.Exists(path) ? File.ReadAllText(path) : null;
+			});
 		}
 
 		/// <summary>The folder the generator's sources live in, found by its own script so a move does not break the hash.</summary>
@@ -704,6 +762,13 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>True when there was no generation record at all: a fresh clone, or a wiped Generated folder.</summary>
 			public bool NeverGenerated;
 			public string Fingerprint;
+			/// <summary>Each family's fingerprint now.</summary>
+			public Dictionary<ArtFamily, string> Families;
+			/// <summary>
+			/// The families whose code changed since they were last generated: what a run rebuilds. Every family when the
+			/// art was never generated, was generated with another seed or before families were recorded.
+			/// </summary>
+			public HashSet<ArtFamily> DirtyFamilies = new HashSet<ArtFamily>();
 			public readonly List<string> MissingPayload = new List<string>();
 			/// <summary>Generated files on disk whose .meta carries another GUID than their path's.</summary>
 			public readonly List<string> WrongGuid = new List<string>();
@@ -733,7 +798,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				var parts = new List<string>();
 				if (NeverGenerated) parts.Add("no procedural art has been generated on this machine");
-				else if (GeneratorChanged) parts.Add("the generator changed since the art was made");
+				else if (GeneratorChanged) parts.Add($"the generator changed since the art was made ({(DirtyFamilies.Count == ProceduralArtFamilies.All.Length ? "every family" : string.Join(", ", DirtyFamilies))})");
 				if (NeedsMigration) parts.Add("generated assets with random GUIDs from before deterministic IDs are on disk (they are migrated first)");
 				if (MissingPayload.Count > 0) parts.Add($"{MissingPayload.Count} payload file(s) missing (first: {MissingPayload[0]})");
 				if (WrongGuid.Count > 0) parts.Add($"{WrongGuid.Count} generated file(s) with the wrong GUID (first: {WrongGuid[0]})");
@@ -752,10 +817,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static State Check(int seed)
 		{
-			var state = new State { Fingerprint = CurrentFingerprint(seed) };
+			var state = new State { Families = FamilyFingerprints(seed) };
+			state.Fingerprint = ProceduralArtFamilies.Combined(state.Families);
 			string recorded = RecordedFingerprint(out int recordedSeed);
+			Dictionary<string, string> recordedFamilies = RecordedFamilies(out _);
 			state.NeverGenerated = recorded == null;
-			state.GeneratorChanged = recorded == null || recordedSeed != seed || !string.Equals(recorded, state.Fingerprint, StringComparison.Ordinal);
+			state.DirtyFamilies = recorded == null || recordedSeed != seed || recordedFamilies.Count == 0
+				? new HashSet<ArtFamily>(ProceduralArtFamilies.All)
+				: ProceduralArtFamilies.Dirty(state.Families, recordedFamilies);
+			state.GeneratorChanged = recorded == null || recordedSeed != seed || !string.Equals(recorded, state.Fingerprint, StringComparison.Ordinal) || state.DirtyFamilies.Count > 0;
 			foreach (string path in ProceduralArtCatalogue.PayloadPaths())
 			{
 				if (!File.Exists(path))

@@ -35,9 +35,6 @@ namespace FishMMO.Shared.WorldDesign
 		public Color BarkTint;
 		/// <summary>The exposed wood's two colours (sapwood and heartwood; soil and clay on a root plate).</summary>
 		public Color WoodA, WoodB;
-		/// <summary>How much of its upper surface is mossed over, 0..1.</summary>
-		public float Moss;
-		public Color MossColour;
 		/// <summary>A stump sawn flat (rings on its top) instead of snapped.</summary>
 		public bool Sawn;
 		/// <summary>Bracket fungi shelved on its side.</summary>
@@ -56,7 +53,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// <para>
 	/// <b>Two sub-meshes.</b> Sub-mesh <see cref="BarkSubmesh"/> is the bark, on its family's bark texture (UVs in bark
-	/// metres, the vertex colour a tint: moss on a log's top, bleach on driftwood, stone on a petrified log). Sub-mesh
+	/// metres, the vertex colour a tint: bleach on driftwood, stone on a petrified log; moss is the shader's, from the climate). Sub-mesh
 	/// <see cref="WoodSubmesh"/> is everything that is not bark — splintered and sawn ends, a petrified log's agate faces,
 	/// bracket fungi, a root plate's soil — in vertex colours on the atlas's solid cell, because a bark texture under a
 	/// cut face would show the bark's grain where the rings should be.
@@ -133,10 +130,6 @@ namespace FishMMO.Shared.WorldDesign
 			public int Submesh = BarkSubmesh;
 			public int Sides = 10;
 			public float UvMetres = 1f;
-			/// <summary>Moss on its upward faces: the share (0 none), its colour and its noise.</summary>
-			public float Moss;
-			public Color MossColour;
-			public int MossSalt;
 
 			public override void Emit(MeshBuilder mesh, int lod)
 			{
@@ -154,27 +147,8 @@ namespace FishMMO.Shared.WorldDesign
 					int last = Path.Count - 1;
 					path.Add(Path[last]); radii.Add(Radii[last]); colours.Add(PlantParts.C32(Colours[last], 0f)); wind.Add(Vector2.zero);
 				}
-				int first = mesh.VertexCount;
 				Func<float, float, Vector2> uv = Submesh == WoodSubmesh ? SolidUV : (Func<float, float, Vector2>)null;
 				PlantParts.Tube(mesh, Submesh, path, radii, SidesAt(Sides, lod), UvMetres, colours, wind, uvMap: uv);
-				if (Moss <= 0f)
-				{
-					return;
-				}
-				// Moss on the upper faces, in patches: the tube's normals are radial already.
-				for (int i = first; i < mesh.VertexCount; i++)
-				{
-					float up = mesh.Normals[i].y;
-					float patch = Noise(mesh.Positions[i] * 1.7f, MossSalt) * 0.65f + Noise(mesh.Positions[i] * 5.3f, MossSalt + 1) * 0.35f;
-					float weight = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.15f, 0.75f, up)) * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1f - Moss, 1.05f - Moss * 0.5f, patch));
-					if (weight <= 0f)
-					{
-						continue;
-					}
-					Color32 c = mesh.Colors[i];
-					Color moss = PlantParts.C32(MossColour, 0f);
-					mesh.Colors[i] = new Color32((byte)Mathf.Lerp(c.r, moss.r * 255f, weight), (byte)Mathf.Lerp(c.g, moss.g * 255f, weight), (byte)Mathf.Lerp(c.b, moss.b * 255f, weight), c.a);
-				}
 			}
 		}
 
@@ -351,14 +325,16 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// A fallen trunk: a gently wandering centre line along x, tapering from the butt to three quarters of it, its
-			/// girth swelling and pinching a little; lying with a quarter of its radius bedded; snapped at both ends; mossed
-			/// along its top; a few branch stubs standing out of its sides and top.
+			/// girth swelling and pinching a little; lying with a quarter of its radius bedded; snapped at both ends; a few
+			/// branch stubs standing out of its sides and top.
 			/// </summary>
 			private void Log()
 			{
 				float length = sp.Length, radius = sp.Radius;
 				int segments = Mathf.Clamp(Mathf.RoundToInt(length / 0.45f), 8, 28);
-				var trunk = new TubePiece { Sides = radius >= 0.3f ? 12 : 10, Moss = sp.Moss, MossColour = sp.MossColour, MossSalt = rng.Next(1 << 20) };
+				var trunk = new TubePiece { Sides = radius >= 0.3f ? 12 : 10 };
+				// Drawn still, though the baked moss it seeded is gone (moss follows the climate in the shader): every log keeps its shape.
+				rng.Next(1 << 20);
 				PlantParts.CrookedPath(new Vector3(-length * 0.5f, 0f, 0f), new Vector3(length * 0.5f, 0f, 0f), segments, 0.012f, 0f, rng, trunk.Path);
 				float phase = rng.NextFloat() * Mathf.PI * 2f;
 				for (int i = 0; i < trunk.Path.Count; i++)
@@ -391,7 +367,9 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>A snapped branch stub: a short tapering tube with a splintered end; gone at the last level.</summary>
 			private void Stub(Vector3 from, Vector3 dir, float radius, float length, Color colour)
 			{
-				var stub = new TubePiece { Sides = 6, MaxLod = 1, Moss = sp.Moss * 0.5f, MossColour = sp.MossColour, MossSalt = rng.Next(1 << 20) };
+				var stub = new TubePiece { Sides = 6, MaxLod = 1 };
+				// Drawn still, though the baked moss it seeded is gone (moss follows the climate in the shader): every log keeps its shape.
+				rng.Next(1 << 20);
 				stub.Path.Add(from - dir * (radius * 1.5f));
 				stub.Path.Add(from + dir * (length * 0.5f));
 				stub.Path.Add(from + dir * length);
@@ -404,7 +382,7 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Stumps ────────────────────────────────────────────────
 
 			/// <summary>
-			/// A stump: a lathed bole flaring into four to six root buttresses that run out under the ground, mossed low on
+			/// A stump: a lathed bole flaring into four to six root buttresses that run out under the ground, darker low on
 			/// its flare; snapped into splinters (or sawn flat and ringed); an old one shelved up one side with brackets.
 			/// </summary>
 			private void Stump()
@@ -413,15 +391,15 @@ namespace FishMMO.Shared.WorldDesign
 				int lobes = 4 + rng.Next(3);
 				float phase = rng.NextFloat() * Mathf.PI * 2f;
 				float flare = rng.Range(0.25f, 0.4f);
-				int mossSalt = rng.Next(1 << 20);
+				// Drawn still, though the baked moss it seeded is gone (moss follows the climate in the shader): every stump keeps its shape.
+				rng.Next(1 << 20);
 				Vector2[] profile =
 				{
 					new Vector2(radius * 1.9f, -0.12f), new Vector2(radius * 1.45f, 0.03f), new Vector2(radius * 1.15f, height * 0.22f),
 					new Vector2(radius * 1.03f, height * 0.55f), new Vector2(radius, height),
 				};
 				float round = Mathf.Max(1f, Mathf.Round(2f * Mathf.PI * radius * 1.3f));
-				Color bark = sp.BarkTint, moss = sp.MossColour;
-				float mossShare = sp.Moss;
+				Color bark = sp.BarkTint;
 				pieces.Add(new LathePiece
 				{
 					Profile = profile, Sides = 16, Submesh = BarkSubmesh,
@@ -430,12 +408,7 @@ namespace FishMMO.Shared.WorldDesign
 						float low = (1f - s) * (1f - s);
 						return 1f + flare * low * (Mathf.Pow(0.5f + 0.5f * Mathf.Cos(lobes * u * Mathf.PI * 2f + phase), 3f) - 0.3f);
 					},
-					Colour = (s, u) =>
-					{
-						float patch = Noise(new Vector3(u * 7f, s * 3f, 0.5f), mossSalt);
-						float weight = mossShare * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.4f, 0.8f, patch)) * (s < 0.35f ? 1f : 0.35f);
-						return PlantParts.C32(Color.Lerp(bark * Mathf.Lerp(0.82f, 1f, s), moss, weight), 0f);
-					},
+					Colour = (s, u) => PlantParts.C32(bark * Mathf.Lerp(0.82f, 1f, s), 0f),
 					Uv = (u, s) => new Vector2(u * round, s * (height + 0.12f) / 1f),
 				});
 				var top = new Vector3(0f, height, 0f);
@@ -671,7 +644,9 @@ namespace FishMMO.Shared.WorldDesign
 				});
 
 				// The trunk: from inside the plate, down to rest on the ground, snapped at its far end.
-				var trunk = new TubePiece { Sides = 12, Moss = sp.Moss, MossColour = sp.MossColour, MossSalt = rng.Next(1 << 20) };
+				var trunk = new TubePiece { Sides = 12 };
+				// Drawn still, though the baked moss it seeded is gone (moss follows the climate in the shader): every log keeps its shape.
+				rng.Next(1 << 20);
 				float trunkLength = plate * rng.Range(1.5f, 1.8f);
 				var from = new Vector3(0.1f, centre.y * 0.8f, 0f);
 				var to = new Vector3(trunkLength, radius * 0.75f, rng.Range(-0.2f, 0.2f));

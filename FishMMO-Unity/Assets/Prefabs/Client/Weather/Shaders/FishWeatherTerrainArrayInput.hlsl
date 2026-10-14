@@ -62,6 +62,9 @@ CBUFFER_START(_FishTerrainArray)
     // z: 1 when the normal array holds anything, w: 1 when the mask array does.
     float4 _FishArrayInfo;
     float4 _FishControl0_TexelSize;
+    // x: bit k set when control map k is zero over the whole tile (TerrainArrayBinder): it can neither add a layer nor
+    // move one, so it is not sampled. 0 (nothing pushed) reads every map.
+    float4 _FishControlEmpty;
     // xy: 1 / tile size in metres, zw: tile offset / tile size. Applied to WORLD x/z.
     float4 _FishLayerST[FISH_TERRAIN_ARRAY_MAX_LAYERS];
     // rgb: diffuse remap maximum (a tint, as URP's terrain uses it), a: normal scale.
@@ -224,8 +227,10 @@ void FishConsiderLayer(half weight, int index, inout half4 top, inout int4 ids, 
     #define FISH_SAMPLE_CONTROL(k) SAMPLE_TEXTURE2D(_FishControl##k, sampler_FishControl0, controlUV)
 #endif
 
+// A map that is zero everywhere on the tile is skipped, exactly: its four zeros add nothing to covered, and a weight of
+// zero never displaces one of the four (FishConsiderLayer's tests are strict) nor raises the fifth (which is never below 0).
 #define FISH_CONSIDER_CONTROL(k) \
-    if ((k) < controlCount) \
+    if ((k) < controlCount && ((emptyControls >> (k)) & 1u) == 0u) \
     { \
         half4 c = FISH_SAMPLE_CONTROL(k); \
         covered += dot(c, 1.0h); \
@@ -263,6 +268,7 @@ half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
     float2 controlUV = (uv * (_FishControl0_TexelSize.zw - 1.0f) + 0.5f) * _FishControl0_TexelSize.xy;
 #endif
     int controlCount = (int)_FishArrayInfo.y;
+    uint emptyControls = (uint)_FishControlEmpty.x;
 
     half4 top = 0;
     half fifth = 0;
@@ -352,8 +358,9 @@ void FishPathLayer(int id, float2 world, float2 worldDx, float2 worldDy, float b
 void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx, float2 worldDy, int groundId)
 {
     FishPathSample p = FishPathAt(positionWS.xz);
+    // Past the furthest the frayed, broken edge reaches (FishPathFrayedEdge, FishPathEdgeBand).
     UNITY_BRANCH
-    if (!p.found || p.edge > 1.2)
+    if (!p.found || p.edge > 2.0)
     {
         return;
     }
@@ -440,6 +447,12 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
     // A worn verge: the last of the path, darker where feet crowd the edge.
     float verge = smoothstep(-0.6, 0.0, p.edge) * (1.0 - smoothstep(0.0, 0.4, p.edge));
     albedo *= (half)(1.0 - 0.08 * verge * wear);
+    /* Toward its edge the way takes on the ground it crosses, in patches: dust and leaves blown over it, soil trodden up
+     * from the verge. Its own colour edge to edge read as a band laid on the ground at full strength (2026-10-13). */
+    float band = FishPathEdgeBand(p);
+    float nearEdge = smoothstep(-2.5 * band, 0.0, p.edge);
+    float blown = 0.35 + 0.65 * FishPathNoise(xz * 0.8 + 57.0);
+    albedo = lerp(albedo, s.albedo, (half)(0.35 * nearEdge * blown));
 
     half c = (half)saturate(cover);
     s.albedo = lerp(s.albedo, albedo, c);
@@ -451,10 +464,41 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
 #endif
 
 /// <summary>
+/// One layer slice sampled on one plane: its albedo, mask and tangent-space normal (decoded from plain RGB, as the
+/// baker writes it on every platform, rather than through UnpackNormalScale, whose layout follows the platform's
+/// normal-map encoding).
+/// </summary>
+void FishSampleLayerPlane(int id, float2 layerUV, float2 dx, float2 dy, bool hasMasks, bool hasNormals, half hasMask,
+    out half4 albedo, out half4 mask, out half3 normal)
+{
+    albedo = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishAlbedoArray, sampler_FishAlbedoArray, layerUV, id, dx, dy);
+    mask = 0.5h;
+    normal = half3(0.0h, 0.0h, 1.0h);
+    if (hasMasks)
+    {
+        mask = lerp(0.5h, SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishMaskArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy), hasMask);
+    }
+    if (hasNormals)
+    {
+        half4 packed = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishNormalArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy);
+        half3 n;
+        n.xy = (packed.rg * 2.0h - 1.0h) * (half)_FishLayerTint[id].a;
+        n.z = sqrt(max(1.0e-3h, 1.0h - saturate(dot(n.xy, n.xy))));
+        normal = n;
+    }
+}
+
+/// <summary>Ground steeper than this (the normal's height under it) starts to take its layers from the side; fully by the second.</summary>
+#define FISH_SIDE_FROM 0.766h
+#define FISH_SIDE_FULL 0.5h
+
+/// <summary>
 /// The ground at one pixel: its four strongest layers sampled from the arrays and blended.
 /// </summary>
 /// <param name="uv">The tile's 0..1 coordinate, for the control maps.</param>
 /// <param name="positionWS">World position, for the layers' tiling.</param>
+/// <param name="dPdx">The world position's screen derivatives, for the layers' gradients.</param>
+/// <param name="groundNormalWS">The ground's own normal (the terrain's, without the layers' detail): how steep it is, and which way it faces.</param>
 /// <remarks>
 /// <para>
 /// <b>World-space tiling.</b> Each layer tiles by world x/z rather than by the tile's own 0..1 coordinate,
@@ -468,9 +512,20 @@ void FishApplyPaths(inout FishArraySurface s, float3 positionWS, float2 worldDx,
 /// position once and scaled by each layer's own tiling. It also makes it legal to skip a layer whose weight
 /// is zero, which is most layers in most places.
 /// </para>
+/// <para>
+/// <b>Steep ground from the side.</b> Every layer is laid on the world's xz, so on a fall's wall or a gorge, 60–85°, one
+/// texel ran metres down the face: rock smeared into vertical streaks (2026-10-13: "the texturing of the waterfall walls,
+/// it's stretched"). From about 40° the layers are also laid on the planes facing across the slope (zy and xy), blended
+/// by the ground's normal, so a face reads at the texture's own scale. Their normal maps are turned into the terrain's own
+/// tangent frame (tangent = (0, 0, 1) × normal, the frame the passes build), so lighting on the face matches. Under 40°
+/// nothing changes: the one top-down sample, as before.
+/// </para>
 /// </remarks>
-FishArraySurface FishSampleArraySurfaceGrad(float2 uv, float3 positionWS, float2 worldDx, float2 worldDy)
+FishArraySurface FishSampleArraySurfaceSloped(float2 uv, float3 positionWS, float3 dPdx, float3 dPdy, half3 groundNormalWS)
 {
+    float2 worldDx = dPdx.xz;
+    float2 worldDy = dPdy.xz;
+
     FishArraySurface s;
     s.albedo = half3(0.5h, 0.5h, 0.5h);
     s.normalTS = half3(0.0h, 0.0h, 1.0h);
@@ -494,6 +549,33 @@ FishArraySurface FishSampleArraySurfaceGrad(float2 uv, float3 positionWS, float2
     bool hasNormals = _FishArrayInfo.z > 0.5;
     bool hasMasks = _FishArrayInfo.w > 0.5;
 
+    /* How much the ground is taken from the side, and from which: the planes facing x and z, by the share of each in the
+     * triangle's own facing. A cliff across the heightmap's grid is a staircase of triangles facing x and z by turns;
+     * chosen by the terrain's smoothed normal (their average), a plane ran edge-on across every other step, banded. The
+     * facet's normal from the position's derivatives is the triangle's, so each step takes the plane it faces. */
+    half3 n = normalize(groundNormalWS);
+    float3 facet = cross(dPdy, dPdx);
+    float facetLength = length(facet);
+    half3 facing = facetLength > 1e-8 ? (half3)(facet / facetLength) : n;
+    facing = dot(facing, n) < 0.0h ? -facing : facing;
+    half side = 1.0h - smoothstep(FISH_SIDE_FULL, FISH_SIDE_FROM, facing.y);
+    /* Sharp between the two: blended evenly, a face running diagonally took both planes, each stretched 1.4 times across
+     * it, and the two laid over each other read as banding. Now one plane holds a face until it turns past 45°, and the
+     * change comes over a few degrees either side. */
+    half2 across = abs(facing.xz) + 1e-4h;
+    across = saturate((across / (across.x + across.y) - 0.5h) * 6.0h + 0.5h);
+    half facingX = side * across.x, facingZ = side * across.y;
+    half top = 1.0h - facingX - facingZ;
+    // The terrain's tangent frame at this normal, as the passes build it: TS x along -tangent, y along the bitangent.
+    float3 tangentWS = normalize(cross(float3(0.0, 0.0, 1.0), (float3)n) + float3(1e-5, 0.0, 0.0));
+    float3 bitangentWS = cross((float3)n, tangentWS);
+    // Each side plane's texture axes in the world, laid so a face is never mirrored seen from outside it.
+    float signX = facing.x >= 0.0h ? 1.0 : -1.0;
+    float signZ = facing.z >= 0.0h ? 1.0 : -1.0;
+    float2 planeX = float2(-signX * positionWS.z, positionWS.y), planeXDx = float2(-signX * dPdx.z, dPdx.y), planeXDy = float2(-signX * dPdy.z, dPdy.y);
+    float2 planeZ = float2(signZ * positionWS.x, positionWS.y), planeZDx = float2(signZ * dPdx.x, dPdx.y), planeZDy = float2(signZ * dPdy.x, dPdy.y);
+    float3 axisXU = float3(0.0, 0.0, -signX), axisZU = float3(signZ, 0.0, 0.0), axisV = float3(0.0, 1.0, 0.0);
+
     half4 albedo[4];
     half4 masks[4];
     half3 normals[4];
@@ -516,21 +598,40 @@ FishArraySurface FishSampleArraySurfaceGrad(float2 uv, float3 positionWS, float2
         UNITY_BRANCH
         if (weights[k] > 0.0h)
         {
-            albedo[k] = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishAlbedoArray, sampler_FishAlbedoArray, layerUV, id, dx, dy);
-            if (hasMasks)
+            half4 a = 0, m = 0;
+            half3 detail = 0;
+            half4 planeAlbedo, planeMask;
+            half3 planeNormal;
+            UNITY_BRANCH
+            if (top > 0.0h)
             {
-                masks[k] = lerp(0.5h, SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishMaskArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy), hasMask[k]);
+                FishSampleLayerPlane(id, layerUV, dx, dy, hasMasks, hasNormals, hasMask[k], planeAlbedo, planeMask, planeNormal);
+                a += planeAlbedo * top;
+                m += planeMask * top;
+                detail += planeNormal * top;
             }
-            if (hasNormals)
+            // A side plane's normal: its detail along the plane's axes in the world, then into the terrain's frame.
+            UNITY_BRANCH
+            if (facingX > 0.0h)
             {
-                // Written as plain RGB by the baker on every platform, so decoded as RGB here rather than
-                // through UnpackNormalScale, whose layout follows the platform's normal-map encoding.
-                half4 packed = SAMPLE_TEXTURE2D_ARRAY_GRAD(_FishNormalArray, FISH_ARRAY_SURFACE_SAMPLER, layerUV, id, dx, dy);
-                half3 n;
-                n.xy = (packed.rg * 2.0h - 1.0h) * (half)_FishLayerTint[id].a;
-                n.z = sqrt(max(1.0e-3h, 1.0h - saturate(dot(n.xy, n.xy))));
-                normals[k] = n;
+                FishSampleLayerPlane(id, planeX * st.xy + st.zw, planeXDx * st.xy, planeXDy * st.xy, hasMasks, hasNormals, hasMask[k], planeAlbedo, planeMask, planeNormal);
+                float3 perturb = axisXU * planeNormal.x + axisV * planeNormal.y;
+                a += planeAlbedo * facingX;
+                m += planeMask * facingX;
+                detail += half3(dot(perturb, -tangentWS), dot(perturb, bitangentWS), planeNormal.z) * facingX;
             }
+            UNITY_BRANCH
+            if (facingZ > 0.0h)
+            {
+                FishSampleLayerPlane(id, planeZ * st.xy + st.zw, planeZDx * st.xy, planeZDy * st.xy, hasMasks, hasNormals, hasMask[k], planeAlbedo, planeMask, planeNormal);
+                float3 perturb = axisZU * planeNormal.x + axisV * planeNormal.y;
+                a += planeAlbedo * facingZ;
+                m += planeMask * facingZ;
+                detail += half3(dot(perturb, -tangentWS), dot(perturb, bitangentWS), planeNormal.z) * facingZ;
+            }
+            albedo[k] = a;
+            masks[k] = m;
+            normals[k] = normalize(detail + half3(0.0h, 0.0h, 1e-4h));
         }
         masks[k] = masks[k] * (half4)_FishLayerMaskScale[id] + (half4)_FishLayerMaskOffset[id];
     }
@@ -577,10 +678,16 @@ FishArraySurface FishSampleArraySurfaceGrad(float2 uv, float3 positionWS, float2
     return s;
 }
 
-/// <summary>The ground at one pixel, with the world gradients taken here (see FishSampleArraySurfaceGrad).</summary>
-FishArraySurface FishSampleArraySurface(float2 uv, float3 positionWS)
+/// <summary>The ground with gradients given, laid top-down only (the far backdrop: no faces it could show).</summary>
+FishArraySurface FishSampleArraySurfaceGrad(float2 uv, float3 positionWS, float2 worldDx, float2 worldDy)
 {
-    return FishSampleArraySurfaceGrad(uv, positionWS, ddx(positionWS.xz), ddy(positionWS.xz));
+    return FishSampleArraySurfaceSloped(uv, positionWS, float3(worldDx.x, 0.0, worldDx.y), float3(worldDy.x, 0.0, worldDy.y), half3(0.0h, 1.0h, 0.0h));
+}
+
+/// <summary>The ground at one pixel whose ground faces <paramref name="groundNormalWS"/>, with the world gradients taken here.</summary>
+FishArraySurface FishSampleArraySurface(float2 uv, float3 positionWS, half3 groundNormalWS)
+{
+    return FishSampleArraySurfaceSloped(uv, positionWS, ddx(positionWS), ddy(positionWS), groundNormalWS);
 }
 
 #ifdef FISH_TERRAIN_BACKDROP
@@ -638,9 +745,9 @@ FishArraySurface FishBackdropSurface(float2 uv, float3 positionWS)
     return s;
 }
 
-#define FISH_GROUND_SURFACE(uv, positionWS) FishBackdropSurface(uv, positionWS)
+#define FISH_GROUND_SURFACE(uv, positionWS, groundNormalWS) FishBackdropSurface(uv, positionWS)
 #else
-#define FISH_GROUND_SURFACE(uv, positionWS) FishSampleArraySurface(uv, positionWS)
+#define FISH_GROUND_SURFACE(uv, positionWS, groundNormalWS) FishSampleArraySurface(uv, positionWS, groundNormalWS)
 #endif
 
 #endif

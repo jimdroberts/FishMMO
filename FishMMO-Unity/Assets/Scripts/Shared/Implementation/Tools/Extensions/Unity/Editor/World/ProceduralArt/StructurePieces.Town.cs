@@ -188,7 +188,9 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				float r = side * 0.5f * 1.414f + 0.15f;
-				d.Add(StructureShapes.Lathe(new[] { new Vector2(r, top), new Vector2(0f, top + 6.5f) }, 4, StructureMaterial.Timber, 170, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof));
+				// A lathe turns about the origin: the spire is moved onto the tower, under the cross.
+				d.Add(StructureShapes.Lathe(new[] { new Vector2(r, top), new Vector2(0f, top + 6.5f) }, 4, StructureMaterial.Timber, 170, false, Mathf.PI * 0.25f, false, false, StructureRole.Roof)
+					.Transform(Matrix4x4.Translate(new Vector3(0f, 0f, tz))));
 				if (d.Mid)
 				{
 					Vector3 tip = new Vector3(0f, top + 6.5f, tz);
@@ -205,8 +207,9 @@ namespace FishMMO.Shared.WorldDesign
 					d.Add(StructureShapes.Box(new Vector3(s * 0.45f, y0 + 0.7f, front + 0.1f), new Vector3(0.25f, 1.4f, 0.4f), StructureMaterial.Stone, 180 + (s > 0 ? 1 : 0)));
 				}
 				d.Add(StructureShapes.Box(new Vector3(0f, y0 + 1.5f, front + 0.1f), new Vector3(1.2f, 0.25f, 0.45f), StructureMaterial.Stone, 182, StructureRole.Roof));
+				// The bell between the piers: a lathe turns about the origin, so it is moved onto the gable.
 				d.Add(StructureShapes.Lathe(new[] { new Vector2(0.22f, y0 + 0.75f), new Vector2(0.28f, y0 + 0.95f), new Vector2(0.12f, y0 + 1.3f), new Vector2(0f, y0 + 1.32f) },
-					d.Seg(10, 6), StructureMaterial.Iron, 183, true, 0f, false, false, StructureRole.Detail));
+					d.Seg(10, 6), StructureMaterial.Iron, 183, true, 0f, false, false, StructureRole.Detail).Transform(Matrix4x4.Translate(new Vector3(0f, 0f, front + 0.1f))));
 			}
 		}
 
@@ -292,10 +295,10 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var h = new House
 			{
-				Width = 8f, Depth = 10f, WallHeight = 2.8f, Upper = 2.7f, Rise = 3f, Overhang = 0.6f, Wall = 0.25f, Plinth = 0.45f,
+				Width = 11f, Depth = 14f, WallHeight = 2.8f, Upper = 2.7f, Rise = 3f, Overhang = 0.6f, Wall = 0.25f, Plinth = 0.45f,
 				WallMaterial = StructureMaterial.Plaster, RoofMaterial = d.Variant == 1 ? StructureMaterial.Thatch : StructureMaterial.Timber,
 				PlinthMaterial = StructureMaterial.Fieldstone, Frame = true, RidgeAlongX = true, Chimney = true, Windows = 3,
-				DoorWidth = 1.4f, DoorHeight = 2.4f, DoorX = -1.6f, DoorKind = StructureDoorKind.Studded, RoomKind = StructureRoomKind.Tavern,
+				DoorWidth = 1.4f, DoorHeight = 2.4f, DoorX = -2.2f, DoorKind = StructureDoorKind.Studded, RoomKind = StructureRoomKind.Tavern,
 				UpperRoomKind = StructureRoomKind.Lodging, Key = 1,
 			};
 			BuildHouse(d, h);
@@ -306,7 +309,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			// The sign: an iron-braced bracket from the wall beside the door, the board hanging on two rods.
-			var wall = new Vector3(0.6f, floor + 3.1f, front - 0.25f);
+			var wall = new Vector3(h.DoorX + h.DoorWidth * 0.5f + 1.5f, floor + 3.1f, front - 0.25f);
 			d.Add(StructureShapes.Beam(wall, wall + new Vector3(0f, 0f, -1.3f), 0.12f, 0.12f, StructureMaterial.Timber, 410, StructureRole.Detail));
 			d.Add(StructureShapes.Beam(wall + new Vector3(0f, -0.7f, 0f), wall + new Vector3(0f, -0.05f, -0.8f), 0.05f, 0.05f, StructureMaterial.Iron, 411, StructureRole.Detail));
 			Vector3 board = wall + new Vector3(0f, -0.65f, -0.85f);
@@ -317,7 +320,8 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Box(board, new Vector3(0.07f, 0.7f, 1f), StructureMaterial.Timber, 414, StructureRole.Detail));
 			d.Add(StructureShapes.Box(board, new Vector3(0.1f, 0.5f, 0.8f), StructureMaterial.Dyed, 415, StructureRole.Detail));
 			// Barrels and a bench by the door.
-			foreach ((float x, float z, int key) in new[] { (-3.3f, front - 0.55f, 420), (-2.75f, front - 0.6f, 424) })
+			float doorLeft = h.DoorX - h.DoorWidth * 0.5f;
+			foreach ((float x, float z, int key) in new[] { (doorLeft - 1f, front - 0.55f, 420), (doorLeft - 0.45f, front - 0.6f, 424) })
 			{
 				var profile = new List<Vector2> { new Vector2(0.27f, 0f), new Vector2(0.32f, 0.45f), new Vector2(0.27f, 0.9f) };
 				d.Add(StructureShapes.Lathe(profile, d.Seg(12, 6), StructureMaterial.Timber, key, true, 0f, false, true, StructureRole.Detail).Transform(Matrix4x4.Translate(new Vector3(x, 0f, z))));
@@ -385,17 +389,18 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var h = new House
 			{
-				Width = 12f, Depth = 6.5f, WallHeight = 3f, Rise = 2.6f, Overhang = 0.6f, Wall = 0.2f, Plinth = 0.3f,
+				Width = 16f, Depth = 9f, WallHeight = 3f, Rise = 2.6f, Overhang = 0.6f, Wall = 0.2f, Plinth = 0.3f,
 				WallMaterial = StructureMaterial.Timber, RoofMaterial = d.Variant == 1 ? StructureMaterial.Thatch : StructureMaterial.Timber,
 				PlinthMaterial = StructureMaterial.Fieldstone, Frame = false, RidgeAlongX = true, Chimney = false, Windows = 0,
 				DoorWidth = 2.6f, DoorHeight = 2.6f, DoorX = 0f, RoomKind = StructureRoomKind.Stable, Key = 1,
 			};
 			BuildHouse(d, h);
 			float floor = h.Plinth, front = -h.Depth * 0.5f;
-			// Stall half-doors either side of the big doors, each with the dark of the stall above it.
-			for (int i = 0; i < 4; i++)
+			// Stall half-doors either side of the big doors, each with the dark of the stall above it: as many as the front holds.
+			int perSide = Mathf.Max(1, Mathf.FloorToInt((h.Width * 0.5f - 1f - 2.4f) / 1.6f) + 1);
+			for (int i = 0; i < perSide * 2; i++)
 			{
-				float x = (i < 2 ? -1f : 1f) * (2.4f + (i % 2) * 1.6f);
+				float x = (i < perSide ? -1f : 1f) * (2.4f + (i % perSide) * 1.6f);
 				d.Add(StructureShapes.Box(new Vector3(x, floor + 0.7f, front - 0.05f), new Vector3(1.3f, 1.3f, 0.08f), StructureMaterial.Timber, 200 + i * 2, StructureRole.Detail)).Grain = Vector3.up;
 				d.Add(StructureShapes.Box(new Vector3(x, floor + 1.85f, front - 0.02f), new Vector3(1.2f, 0.95f, 0.04f), StructureMaterial.Ash, 201 + i * 2, StructureRole.Detail));
 			}

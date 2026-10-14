@@ -52,6 +52,17 @@ namespace FishMMO.Shared
 		Ford = 1 << 1,
 		/// <summary>Inside a site's footprint (a settlement's gate, a ruin's court): the pad already shaped the ground.</summary>
 		InSite = 1 << 2,
+		/// <summary>
+		/// A segment between two such points is drawn as a rectangle from point to point, its half width either side: a
+		/// building's plan or a ploughed plot, whose corners a round-ended strip left as grass. The points are the
+		/// rectangle's end midpoints, so never one point, which would give it no direction.
+		/// </summary>
+		Squared = 1 << 3,
+		/// <summary>
+		/// A segment between two such points is a building's floor: within it nothing drawn over it wears the ground less
+		/// (<see cref="ScenePathField"/>), so no grass or detail comes up indoors whatever path or apron crosses it.
+		/// </summary>
+		Floor = 1 << 4,
 	}
 
 	/// <summary>

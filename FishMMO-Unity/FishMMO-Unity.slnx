@@ -31,10 +31,10 @@
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="FishMMO.Shared.NameGenerator.Editor.csproj" />
   <Project Path="FishMMO.MockContent.Editor.csproj" />
+  <Project Path="FishMMO.TestHarness.World.Editor.csproj" />
   <Project Path="FishMMO.Shared.Biomes.Editor.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />
-  <Project Path="FishMMO.TestHarness.World.Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.Sky.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.Editor.csproj" />

@@ -97,13 +97,25 @@ float FishPathNoise(float2 p)
 /// How much a cart track (surface 1/3) the path is, 0 .. 1.
 float FishPathTrackness(float surface) { return saturate(1.0 - abs(surface * 3.0 - 1.0)); }
 
-/// The path's edge moved by its fraying: a kept way has a firm edge, a lost one wanders and breaks.
+/// <summary>
+/// The path's edge moved by its fraying: a lost way wanders and breaks; a kept one wanders less, but never runs ruler
+/// straight. Floored at wear 1 to about a third of a metre either way (and more on a wide street), where it had been
+/// a sixth: every town street was a band cut to its plan with a knife (2026-10-13: "they are 100% opacity").
+/// </summary>
 float FishPathFrayedEdge(FishPathSample p, float2 xz)
 {
-    float fray = (FishPathNoise(xz * 1.7) - 0.5) * lerp(0.55, 0.12, p.wear)
-               + (FishPathNoise(xz * 0.35 + 17.3) - 0.5) * lerp(0.8, 0.2, p.wear);
+    float wide = saturate(p.halfWidth / 4.0);
+    float fray = (FishPathNoise(xz * 1.7) - 0.5) * lerp(0.55, 0.3, p.wear)
+               + (FishPathNoise(xz * 0.35 + 17.3) - 0.5) * lerp(0.8, 0.45 + 0.35 * wide, p.wear)
+               + (FishPathNoise(xz * 0.11 + 3.7) - 0.5) * (0.4 + 0.6 * wide);
     return p.edge + fray;
 }
+
+/// <summary>
+/// The width over which a path's edge breaks up into the ground beside it, metres: the ground creeping in over its
+/// margin in patches, and its stone or grit scattering out into the verge. Wider on a wide street.
+/// </summary>
+float FishPathEdgeBand(FishPathSample p) { return 0.45 + 0.2 * clamp(p.halfWidth, 0.0, 4.5); }
 
 /// Where a path that is grown over has grass across it after all: patches, more of them the less it is walked.
 float FishPathOvergrown(FishPathSample p, float2 xz)
@@ -129,11 +141,21 @@ float FishPathMedian(FishPathSample p)
 float FishPathBare(FishPathSample p, float2 xz, float soft)
 {
     float wear = saturate(p.wear);
-    float cover = 1.0 - smoothstep(-soft, soft, FishPathFrayedEdge(p, xz));
+    float edge = FishPathFrayedEdge(p, xz);
+    /* Not a band of even fade but a broken one: across the edge band the path's surface holds where a noise field stands
+     * over how far in from the edge the point is, so the ground runs in over its margin in patches and bits of it lie
+     * out past its line, as gravel and stone thin into the grass at a real road's side. */
+    float band = FishPathEdgeBand(p);
+    float within = saturate((-edge + 0.35 * band) / band);
+    float breakup = FishPathNoise(xz * 2.3 + 11.0) * 0.6 + FishPathNoise(xz * 6.1 + 2.0) * 0.4;
+    float spread = 0.18 + soft / band;
+    float cover = smoothstep(breakup - spread, breakup + spread, within);
     cover *= 1.0 - FishPathOvergrown(p, xz) * 0.92;
     cover *= 1.0 - FishPathMedian(p) * 0.85;
     // Barely walked: the earth shows through in a broken scatter rather than a band.
     cover *= lerp(0.55 + 0.45 * FishPathNoise(xz * 3.1 + 9.0), 1.0, wear);
+    // And never a slab even where it is kept: the ground shows through its middle in broad, faint patches.
+    cover *= 1.0 - 0.22 * smoothstep(0.5, 0.85, FishPathNoise(xz * 0.45 + 23.0));
     return cover;
 }
 
@@ -155,7 +177,8 @@ void FishPathWearAt(float2 xz, out float trodden, out float flattened)
     trodden = 0.0;
     flattened = 0.0;
     FishPathSample p = FishPathAt(xz);
-    if (!p.found || p.edge > 1.0)
+    // Past the furthest the frayed, broken edge reaches (FishPathFrayedEdge, FishPathEdgeBand).
+    if (!p.found || p.edge > 2.0)
     {
         return;
     }

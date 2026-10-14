@@ -185,10 +185,17 @@ namespace FishMMO.Client
 				}
 				TerrainData data = t.terrainData;
 				// Unity's own drawing clamps at MaxDetailDistance; the instanced renderer draws to the player's
-				// grass distance, which may be further (TerrainDetailInstancing, ClientGrassSettings).
-				float detailDistance = detailOverride ? Mathf.Min(QualitySettings.terrainDetailDistance, MaxDetailDistance)
-					: TerrainDetailInstancing.IsDriving(t) ? TerrainDetailInstancing.DetailDistanceOf(t)
-					: Mathf.Min(t.detailObjectDistance, MaxDetailDistance);
+				// grass distance, which may be further (TerrainDetailInstancing, ClientGrassSettings). The distance is
+				// read through the renderer either way: it zeroes a driven terrain's own field and keeps the value.
+				float detailDistance = TerrainDetailInstancing.DetailDistanceOf(t);
+				if (detailOverride)
+				{
+					detailDistance = Mathf.Min(QualitySettings.terrainDetailDistance, MaxDetailDistance);
+				}
+				else if (!TerrainDetailInstancing.IsDriving(t))
+				{
+					detailDistance = Mathf.Min(detailDistance, MaxDetailDistance);
+				}
 				if (data.detailPrototypes.Length > 0 && detailDistance > 0f)
 				{
 					Vector2 band = DetailBand(detailDistance, PatchMetres(data.size.x, data.detailResolution, data.detailResolutionPerPatch));

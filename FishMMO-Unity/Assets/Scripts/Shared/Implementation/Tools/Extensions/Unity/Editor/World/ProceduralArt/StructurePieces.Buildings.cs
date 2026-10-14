@@ -57,10 +57,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static House Cottage(int variant) => new House
 		{
-			Width = 5f, Depth = 6f, WallHeight = 2.8f, Rise = 2.1f, Overhang = 0.5f, Wall = 0.25f, Plinth = 0.4f,
+			Width = 7f, Depth = 9f, WallHeight = 2.8f, Rise = 2.1f, Overhang = 0.5f, Wall = 0.25f, Plinth = 0.4f,
 			WallMaterial = StructureMaterial.Plaster, RoofMaterial = variant == 0 ? StructureMaterial.Thatch : StructureMaterial.Timber,
 			PlinthMaterial = StructureMaterial.Fieldstone, Frame = true, RidgeAlongX = variant == 0, Chimney = true, Windows = 2,
-			DoorWidth = 1f, DoorHeight = 2.25f, DoorX = variant == 0 ? -0.8f : 0f, Key = 1,
+			DoorWidth = 1f, DoorHeight = 2.25f, DoorX = variant == 0 ? -1.1f : 0f, Key = 1,
 		};
 
 		private static void TimberHouseSmall(StructureDraft d) => BuildHouse(d, Cottage(d.Variant));
@@ -70,9 +70,9 @@ namespace FishMMO.Shared.WorldDesign
 			bool stone = d.Variant == 1;
 			var house = new House
 			{
-				Width = 7f, Depth = 8.5f, WallHeight = 2.8f, Rise = 2.6f, Overhang = 0.5f, Wall = 0.3f, Plinth = 0.4f, Upper = 2.7f,
+				Width = 10f, Depth = 12f, WallHeight = 2.8f, Rise = 2.6f, Overhang = 0.5f, Wall = 0.3f, Plinth = 0.4f, Upper = 2.7f,
 				WallMaterial = stone ? StructureMaterial.Stone : StructureMaterial.Plaster, RoofMaterial = StructureMaterial.Timber,
-				PlinthMaterial = StructureMaterial.Fieldstone, Frame = !stone, RidgeAlongX = true, Chimney = true, Windows = 2,
+				PlinthMaterial = StructureMaterial.Fieldstone, Frame = !stone, RidgeAlongX = true, Chimney = true, Windows = 3,
 				DoorWidth = 1.2f, DoorHeight = 2.3f, DoorX = 0f, Key = 1,
 				// On a stone ground floor the upper storey is still timber-framed plaster.
 				UpperWallMaterial = stone ? StructureMaterial.Plaster : (StructureMaterial?)null, UpperFrame = true,
@@ -95,10 +95,10 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			BuildHouse(d, new House
 			{
-				Width = 6f, Depth = 7f, WallHeight = 3f, Rise = 2.4f, Overhang = 0.4f, Wall = 0.5f, Plinth = 0.3f,
+				Width = 8.5f, Depth = 10f, WallHeight = 3f, Rise = 2.4f, Overhang = 0.4f, Wall = 0.5f, Plinth = 0.3f,
 				WallMaterial = StructureMaterial.Stone, RoofMaterial = d.Variant == 0 ? StructureMaterial.Thatch : StructureMaterial.Timber,
 				PlinthMaterial = StructureMaterial.Fieldstone, Frame = false, RidgeAlongX = d.Variant == 0, Chimney = true, Windows = 2,
-				DoorWidth = 1.1f, DoorHeight = 2.3f, DoorX = d.Variant == 0 ? 0.9f : 0f, Key = 1,
+				DoorWidth = 1.1f, DoorHeight = 2.3f, DoorX = d.Variant == 0 ? 1.3f : 0f, Key = 1,
 			});
 		}
 
@@ -107,7 +107,7 @@ namespace FishMMO.Shared.WorldDesign
 			bool turf = d.Variant == 1;
 			var house = new House
 			{
-				Width = 6f, Depth = 16f, WallHeight = turf ? 1.6f : 1.9f, Rise = 3.6f, Overhang = 0.7f, Wall = turf ? 0.9f : 0.25f, Plinth = 0.25f,
+				Width = 8f, Depth = 22f, WallHeight = turf ? 1.6f : 1.9f, Rise = 3.6f, Overhang = 0.7f, Wall = turf ? 0.9f : 0.25f, Plinth = 0.25f,
 				WallMaterial = turf ? StructureMaterial.Earth : StructureMaterial.Timber, RoofMaterial = turf ? StructureMaterial.Earth : StructureMaterial.Thatch,
 				PlinthMaterial = StructureMaterial.Fieldstone, Frame = false, RidgeAlongX = false, Chimney = false, Windows = 0,
 				DoorWidth = 1.4f, DoorHeight = 2.3f, DoorX = 0f, RoomKind = StructureRoomKind.Hall, Key = 1,
@@ -144,10 +144,13 @@ namespace FishMMO.Shared.WorldDesign
 				// Posts along the long walls, carrying the eaves.
 				for (int s = -1; s <= 1; s += 2)
 				{
-					for (int i = 0; i < 6; i++)
+					// A post a bay, 2.6 m apart, the end ones a metre in from the gables.
+					int posts = Mathf.Max(2, Mathf.RoundToInt((house.Depth - 3f) / 2.6f) + 1);
+					float x = house.Width * 0.5f + 0.08f, span = house.Depth * 0.5f - 1.5f;
+					for (int i = 0; i < posts; i++)
 					{
-						float z = -6.5f + i * 2.6f;
-						d.Add(StructureShapes.Beam(new Vector3(s * 3.08f, 0f, z), new Vector3(s * 3.08f, top, z), 0.2f, 0.2f, StructureMaterial.Timber, 520 + i + (s > 0 ? 10 : 0), StructureRole.Detail));
+						float z = Mathf.Lerp(-span, span, i / (posts - 1f));
+						d.Add(StructureShapes.Beam(new Vector3(s * x, 0f, z), new Vector3(s * x, top, z), 0.2f, 0.2f, StructureMaterial.Timber, 520 + i + (s > 0 ? 10 : 0), StructureRole.Detail));
 					}
 				}
 			}
@@ -451,7 +454,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void WallStair(StructureDraft d)
 		{
-			// From the ground at x = -run/2 to the walk (WallWalkHeight) at x = +run/2, 1.2 m wide, its back against the wall at z = 0.
+			// From the ground at x = -run/2 to the walk (WallWalkHeight) at x = +run/2, 1.5 m wide (two abreast), its back against the wall at z = 0.
 			int risers = Mathf.CeilToInt(WallWalkHeight / StepRise);
 			float rise = WallWalkHeight / risers, run = (risers - 1) * StepTread;
 			bool timber = d.Variant == 1;
@@ -462,16 +465,16 @@ namespace FishMMO.Shared.WorldDesign
 				if (timber)
 				{
 					// A tread on a stone spine: the spine one solid ramp under them all.
-					d.Add(StructureShapes.Box(new Vector3(x0 + StepTread * 0.5f, top - 0.04f, 0.6f), new Vector3(StepTread + 0.04f, 0.08f, 1.2f), StructureMaterial.Timber, 10 + i)).Grain = Vector3.forward;
+					d.Add(StructureShapes.Box(new Vector3(x0 + StepTread * 0.5f, top - 0.04f, 0.75f), new Vector3(StepTread + 0.04f, 0.08f, 1.5f), StructureMaterial.Timber, 10 + i)).Grain = Vector3.forward;
 					continue;
 				}
-				d.Add(StructureShapes.Box(new Vector3(x0 + length * 0.5f, (top - FoundationDepth) * 0.5f, 0.6f), new Vector3(length, top + FoundationDepth, 1.2f), StructureMaterial.Stone, 10 + i));
+				d.Add(StructureShapes.Box(new Vector3(x0 + length * 0.5f, (top - FoundationDepth) * 0.5f, 0.75f), new Vector3(length, top + FoundationDepth, 1.5f), StructureMaterial.Stone, 10 + i));
 			}
 			if (timber)
 			{
 				// The spine under the treads and the landing at the top.
 				var spine = new[] { new Vector2(-run * 0.5f, -FoundationDepth), new Vector2(run * 0.5f, -FoundationDepth), new Vector2(run * 0.5f, WallWalkHeight - rise - 0.08f), new Vector2(-run * 0.5f + StepTread, rise - 0.08f) };
-				d.Add(StructureShapes.Prism(spine, 0.25f, 0.95f, StructureMaterial.Stone, 5).Transform(Matrix4x4.identity));
+				d.Add(StructureShapes.Prism(spine, 0.3f, 1.2f, StructureMaterial.Stone, 5).Transform(Matrix4x4.identity));
 			}
 		}
 
@@ -581,35 +584,36 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// A timber stair up to the deck (a ladder is a wall to a character's controller, which climbs 0.25 m at most).
 			float front = -size.y * 0.5f;
-			Steps(d, new Vector3(stairX, 0f, front), Vector3.back, 1f, deck, StructureMaterial.Timber, key + 60);
+			Steps(d, new Vector3(stairX, 0f, front), Vector3.back, StairWidth, deck, StructureMaterial.Timber, key + 60);
 		}
 
 		private static void StiltHut(StructureDraft d)
 		{
 			const float deck = 2f;
-			StiltPlatform(d, new Vector2(4.4f, 4.4f), deck, 200);
+			StiltPlatform(d, new Vector2(6.2f, 6.2f), deck, 200);
 			if (d.Variant == 0)
 			{
 				BuildHouse(d, new House
 				{
-					Width = 3.6f, Depth = 3.6f, WallHeight = 2.7f, Rise = 1.5f, Overhang = 0.45f, Wall = 0.12f, Floor = deck,
+					Width = 5f, Depth = 5f, WallHeight = 2.7f, Rise = 1.5f, Overhang = 0.45f, Wall = 0.12f, Floor = deck,
 					WallMaterial = StructureMaterial.Timber, RoofMaterial = StructureMaterial.Thatch, PlinthMaterial = StructureMaterial.Timber,
 					RidgeAlongX = true, Windows = 1, DoorWidth = 0.95f, DoorHeight = 2.25f, DoorX = 0f, Key = 1,
 				});
 				return;
 			}
 			int seg = d.Seg(12, 8);
-			RingWallWithDoor(d, Vector3.zero, 1.78f, 1.9f, deck, deck + 2.7f, seg, 1.5f * Mathf.PI, 0.95f, deck + 2.25f, StructureMaterial.Timber, 10);
-			HangDoor(d, new Vector3(0f, deck, -Mathf.Sqrt(1.78f * 1.78f - 0.226f) + 0.05f), Vector3.right, Vector3.forward, 0.95f, 2.25f, StructureDoorKind.Planks);
-			d.RoundRoom(new Vector3(0f, deck, 0f), 1.78f, 2.7f, StructureRoomKind.Dwelling);
-			d.Add(StructureShapes.Lathe(new[] { new Vector2(2.6f, deck + 2.35f), new Vector2(0f, deck + 4.8f) }, seg, StructureMaterial.Thatch, 2, true, 0f, false, true, StructureRole.Roof));
+			const float inner = 2.5f, door = 0.95f;
+			RingWallWithDoor(d, Vector3.zero, inner, inner + 0.12f, deck, deck + 2.7f, seg, 1.5f * Mathf.PI, door, deck + 2.25f, StructureMaterial.Timber, 10);
+			HangDoor(d, new Vector3(0f, deck, -Mathf.Sqrt(inner * inner - door * door * 0.25f) + 0.05f), Vector3.right, Vector3.forward, door, 2.25f, StructureDoorKind.Planks);
+			d.RoundRoom(new Vector3(0f, deck, 0f), inner, 2.7f, StructureRoomKind.Dwelling);
+			d.Add(StructureShapes.Lathe(new[] { new Vector2(inner + 0.82f, deck + 2.35f), new Vector2(0f, deck + 5.4f) }, seg, StructureMaterial.Thatch, 2, true, 0f, false, true, StructureRole.Roof));
 		}
 
 		private static void StiltHouse(StructureDraft d)
 		{
 			const float deck = 1.8f;
 			House h = Cottage(d.Variant);
-			StiltPlatform(d, new Vector2(6.4f, 8f), deck, 600, h.DoorX);
+			StiltPlatform(d, new Vector2(h.Width + 1.4f, h.Depth + 2f), deck, 600, h.DoorX);
 			h.Floor = deck;
 			h.Plinth = 0f;
 			h.Chimney = false;

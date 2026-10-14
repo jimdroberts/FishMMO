@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
@@ -21,6 +22,9 @@ namespace FishMMO.Client
 	/// </remarks>
 	public sealed class CloudLightVolume
 	{
+		/// <summary>The volume's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
+		private static readonly CustomSampler GpuSample = CustomSampler.Create("Cloud Light Volume", true);
+
 		/// <summary>Off: every light segment asks the field again (the probe's A/B).</summary>
 		public static bool Enabled = true;
 		/// <summary>Texels along a side of each slice.</summary>
@@ -35,6 +39,15 @@ namespace FishMMO.Client
 		/// 24 frames against texels of three hundred.
 		/// </summary>
 		public const int SlicesPerFrame = 2;
+
+		/// <summary>
+		/// Seconds a whole rebuild takes once the volume is up: slices are drawn as time owes them, not a band a frame,
+		/// which at 150–300 fps rebuilt it every 0.1–0.2 s against texels three hundred metres wide that a cloud takes
+		/// minutes to cross. The first build still draws <see cref="SlicesPerFrame"/> a frame, so it is up as soon as before.
+		/// 0: a band a frame always, as before (the probe's A/B).
+		/// </summary>
+		public static float BuildSeconds = 2f;
+		private float owed;
 		/// <summary>The grid reaches this far past the camera's far plane: the light march's own reach, and some.</summary>
 		public const float MarginMetres = 3500f;
 		/// <summary>And no farther than this, however far the camera sees.</summary>
@@ -48,7 +61,6 @@ namespace FishMMO.Client
 		private static readonly int BuildBId = Shader.PropertyToID("_FishCloudLightBuildB");
 
 		private static int Rows => (Slices + TilesAcross - 1) / TilesAcross;
-		private static int Frames => (Slices + SlicesPerFrame - 1) / SlicesPerFrame;
 
 		private RenderTexture front;
 		private RenderTexture back;
@@ -58,6 +70,30 @@ namespace FishMMO.Client
 		private Vector4 buildB;
 		private bool published;
 
+		// The pass's index, looked up by name once for a material and its shader (FindPass compares strings).
+		private Material passOf;
+		private Shader passShader;
+		private int passCount = -1;
+		private int passIndex = -1;
+
+		private int PassOf(Material cloudMaterial)
+		{
+			if (cloudMaterial == null)
+			{
+				return -1;
+			}
+			Shader shader = cloudMaterial.shader;
+			int count = cloudMaterial.passCount;
+			if (cloudMaterial != passOf || shader != passShader || count != passCount)
+			{
+				passOf = cloudMaterial;
+				passShader = shader;
+				passCount = count;
+				passIndex = cloudMaterial.FindPass("CloudLightVolume");
+			}
+			return passIndex;
+		}
+
 		/// <summary>
 		/// Draws the next band of slices round the viewer, and swaps the volume in when the last is drawn.
 		/// </summary>
@@ -66,7 +102,7 @@ namespace FishMMO.Client
 		/// <param name="top">Its top (m).</param>
 		public void Update(Material cloudMaterial, Vector3 viewer, float far, float bottom, float top, bool enabled)
 		{
-			int pass = cloudMaterial != null ? cloudMaterial.FindPass("CloudLightVolume") : -1;
+			int pass = PassOf(cloudMaterial);
 			if (!Enabled || !enabled || pass < 0 || !(top > bottom))
 			{
 				Clear();
@@ -96,16 +132,25 @@ namespace FishMMO.Client
 				buildA = new Vector4(x, z, texel, Texels);
 				buildB = new Vector4(bottom, (top - bottom) / Slices, Slices, TilesAcross);
 				part = 0;
+				owed = 0f;
 			}
+			// `part` is the next slice. Owed by time; the first build a band a frame, as it always was.
+			owed += BuildSeconds > 0f ? Slices * Mathf.Min(Time.unscaledDeltaTime, 0.25f) / BuildSeconds : 0f;
+			int count = Mathf.Min(Slices - part, BuildSeconds <= 0f ? SlicesPerFrame : published ? (int)owed : Mathf.Max(SlicesPerFrame, (int)owed));
+			if (count <= 0)
+			{
+				return;
+			}
+			owed = Mathf.Max(0f, owed - count);
 			commands.Clear();
-			commands.BeginSample("Cloud Light Volume");
+			commands.BeginSample(GpuSample);
 			commands.SetRenderTarget(back);
 			commands.SetGlobalVector(BuildAId, buildA);
 			commands.SetGlobalVector(BuildBId, buildB);
 			// This frame's slices, a tile each; the pass works out each pixel's slice from where it is.
-			for (int k = 0; k < SlicesPerFrame; k++)
+			for (int k = 0; k < count; k++)
 			{
-				int slice = part * SlicesPerFrame + k;
+				int slice = part + k;
 				if (slice >= Slices)
 				{
 					break;
@@ -113,10 +158,10 @@ namespace FishMMO.Client
 				commands.SetViewport(new Rect(slice % TilesAcross * Texels, slice / TilesAcross * Texels, Texels, Texels));
 				commands.DrawProcedural(Matrix4x4.identity, cloudMaterial, pass, MeshTopology.Triangles, 3);
 			}
-			commands.EndSample("Cloud Light Volume");
+			commands.EndSample(GpuSample);
 			Graphics.ExecuteCommandBuffer(commands);
-			part++;
-			if (part >= Frames)
+			part += count;
+			if (part >= Slices)
 			{
 				(front, back) = (back, front);
 				Shader.SetGlobalTexture(VolumeId, front);

@@ -9,7 +9,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// Dresses a carved cave system (2026-10-11: "much more realistic features"): dripstone on its floors and roofs
 	/// where water has stood and dripped — stalagmites, stalactites hung over them, columns where the two have met,
 	/// flowstone down the walls and gour pools on cavern floors — breakdown blocks fallen from the roof, glowing crystals
-	/// in some chambers, and in a mine its timbering, track, an ore tub and lamps.
+	/// in some chambers, and in a mine its timbering, track, an ore tub and lamps. Then (2026-10-13: "enormous caves with
+	/// lots of glowy rocks lining the walkable pathways") what the layout's features need and what lights the way: the
+	/// climbs' ladders and ropes and their scene climbables, the crossings' rope walks and trestles
+	/// (PointOfInterestCaveDressing.Ways.cs), glowing crystal, fungus and glow-worms lining the ways across halls, bridges,
+	/// ramps and ledges (.Glow.cs), explorers' camps and lanterns (.Camps.cs), and a mine's ore, lamps, signs and miners'
+	/// camp (.Workings.cs).
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -24,13 +29,19 @@ namespace FishMMO.Shared.WorldDesign
 	/// found by marching the system's field; nothing is placed where the field says rock.
 	/// </para>
 	/// <para>
+	/// <b>Some are overgrown</b> (<see cref="PointOfInterestCaveMouths.Overgrown"/>): the growth round the mouth (the
+	/// biome's ferns, bushes and creeper) carries in over the floor of each way in, thinning as the daylight fails, in
+	/// patches; bushes only near the mouth and off the lane, ferns and creeper down to a trodden line along the middle.
+	/// The terrain's own plants cannot follow: the cave's floor is its mesh, and the terrain is holed under it.
+	/// </para>
+	/// <para>
 	/// The system's host site dresses all of it (a joined site's chambers included); a joined site dresses nothing.
 	/// Props, so instanced, culled and collided with like the rest; formations from the biome art's formation prefabs, the
 	/// mine's from the structure kit. Seeded by the system, so a repaint dresses the same.
 	/// </para>
 	/// </remarks>
 	[InitializeOnLoad]
-	public sealed class PointOfInterestCaveDressing : IPointOfInterestSiteBuilder
+	public sealed partial class PointOfInterestCaveDressing : IPointOfInterestSiteBuilder
 	{
 		static PointOfInterestCaveDressing() => PointOfInterestSiteBuilders.Register(new PointOfInterestCaveDressing());
 
@@ -85,12 +96,19 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
+			var clock = System.Diagnostics.Stopwatch.StartNew();
+			int emitters = context.Points != null && context.Points.Emitters != null ? context.Points.Emitters.Count : 0;
 			var dresser = new Dresser(context, system, SetFor(system.Form), new DeterministicRNG(unchecked(system.Seed * 0x2F6B + 0xD1E5)));
 			dresser.Run();
-			PointOfInterestFeatureKit.Note(context, $"cave dressed: {dresser.Placed} props, {dresser.Lights} lights" + (dresser.Missing.Count > 0 ? $"; missing art: {string.Join(", ", dresser.Missing)} (Generate Biome Art, then repaint)" : string.Empty));
+			// Lights counts every emitter the dressing added: the glow's own and those its lamps, torches and fires give off.
+			int lights = (context.Points != null && context.Points.Emitters != null ? context.Points.Emitters.Count : 0) - emitters;
+			// With the time it took, so the dressing's marches can be measured in a cut's notes.
+			PointOfInterestFeatureKit.Note(context, $"cave dressed in {clock.Elapsed.TotalSeconds:0.00} s ({system.Character}): {dresser.Placed} props, {lights} lights"
+				+ $", glow: {dresser.Glowing} ({dresser.Lights} glow lights), lamps: {dresser.Lamps}, climbs: {dresser.Climbed}, crossings: {dresser.Crossed}, camps: {dresser.Camps}"
+				+ (dresser.Grown > 0 ? $", overgrown: {dresser.Grown} plants" : string.Empty) + (dresser.Missing.Count > 0 ? $"; missing art: {string.Join(", ", dresser.Missing)} (Generate Biome Art, then repaint)" : string.Empty));
 		}
 
-		private sealed class Dresser
+		private sealed partial class Dresser
 		{
 			private readonly PointOfInterestSiteContext context;
 			private readonly CaveSystem system;
@@ -99,7 +117,11 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly List<(Vector3 a, Vector3 b)> lanes = new List<(Vector3, Vector3)>();
 			private readonly List<(Vector3 centre, float radius)> keepClear = new List<(Vector3, float)>();
 			public readonly HashSet<string> Missing = new HashSet<string>();
-			public int Placed, Lights;
+			public int Placed, Lights, Grown;
+			/// <summary>Glow art laid, lanterns laid, climbs and crossings drawn, camps pitched.</summary>
+			public int Glowing, Lamps, Climbed, Crossed, Camps;
+			/// <summary>Where every crystal-kind light of this system stands (system frame): what keeps the glow's lights sparse.</summary>
+			private readonly List<Vector3> glowLights = new List<Vector3>();
 
 			public Dresser(PointOfInterestSiteContext context, CaveSystem system, Set set, DeterministicRNG rng)
 			{
@@ -145,6 +167,130 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Passage(passage);
 				}
+				if (PointOfInterestCaveMouths.Overgrown(system))
+				{
+					Overgrow();
+				}
+				// The layout's features and the glow last, each on its own random stream: what the passes above laid stands
+				// where it did before these were added.
+				Climbs();
+				Crossings();
+				if (system.Form == CaveForm.Mine)
+				{
+					Workings();
+				}
+				else
+				{
+					GlowAll();
+					Encampments();
+				}
+			}
+
+			// ── Overgrowth ────────────────────────────────────────
+
+			/// <summary>How far in the daylight lets plants grow, in bore radii at the mouth, within bounds (metres).</summary>
+			private const float LightRadii = 5f, LightMin = 8f, LightMax = 24f;
+			/// <summary>The trodden line down a way in that nothing grows on: half its width, metres.</summary>
+			private const float Trodden = 0.6f;
+
+			/// <summary>
+			/// Plants of the mouth's growth over the floor of each way in, as far as the light goes. Its own random stream,
+			/// so an overgrown cave's formations stand where they would in a bare one.
+			/// </summary>
+			private void Overgrow()
+			{
+				PointOfInterestCaveMouths.Growth growth = PointOfInterestCaveMouths.GrowthFor(PointOfInterestCaveMouths.BiomeOf(context, system));
+				if (growth.Species.Count == 0)
+				{
+					return;
+				}
+				var random = new DeterministicRNG(unchecked(system.Seed * 0x1F3D + 0x6A09));
+				var noise = new Vector2(random.NextFloat() * 1000f, random.NextFloat() * 1000f);
+				foreach (CavePassage passage in system.Passages)
+				{
+					if (passage.Kind != CavePassageKind.Trunk || passage.Nodes.Count < 2)
+					{
+						continue;
+					}
+					List<CaveNode> nodes = passage.Nodes;
+					float start = nodes[0].Along;
+					float light = Mathf.Clamp(LightRadii * nodes[0].Radius, LightMin, LightMax);
+					float end = Mathf.Min(start + light, nodes[nodes.Count - 1].Along);
+					for (float along = start + 0.4f; along < end; along += 0.6f)
+					{
+						CentreAt(nodes, along, out Vector3 centre, out float floor);
+						CentreAt(nodes, along + 0.5f, out Vector3 ahead, out _);
+						Vector3 dir = ahead - centre;
+						dir.y = 0f;
+						dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
+						var across = new Vector3(dir.z, 0f, -dir.x);
+						float radius = RadiusAt(nodes, along);
+						// The daylight falls off into the cave: thick at the mouth, the last few small and far between.
+						float lit = 1f - (along - start) / light;
+						lit *= lit;
+						for (int k = 0; k < 3; k++)
+						{
+							Vector3 p = centre + across * (random.Range(-0.95f, 0.95f) * radius) + dir * random.Range(-0.3f, 0.3f);
+							p.y = floor + 0.5f;
+							float patch = Mathf.Clamp01(Mathf.PerlinNoise(noise.x + p.x * 0.3f, noise.y + p.z * 0.3f) * 1.8f - 0.4f);
+							float roll = random.NextFloat(), pick = random.NextFloat(), size = random.NextFloat(), yaw = random.Range(0f, 360f);
+							if (roll >= lit * (0.3f + 0.7f * patch) || !FloorAndRoof(p, out float ground, out float roof))
+							{
+								continue;
+							}
+							var at = new Vector3(p.x, ground - 0.03f, p.z);
+							// Not under a grotto's pool or a sea cave's tide.
+							if (!float.IsNaN(system.WaterLevel) && system.Origin.y + ground < system.WaterLevel + 0.05f)
+							{
+								continue;
+							}
+							bool nearWall = Mathf.Abs(Vector3.Dot(p - centre, across)) > 0.6f * radius;
+							int species;
+							float scale;
+							if (growth.Bushes.Count > 0 && pick < 0.15f && lit > 0.35f && roof - ground > 2.4f && !InLane(at, 0f))
+							{
+								species = growth.Bushes[Mathf.FloorToInt(size * 997f) % growth.Bushes.Count];
+								scale = 0.55f + 0.45f * lit;
+							}
+							else if (growth.Creeper >= 0 && (nearWall ? pick < 0.5f : pick < 0.25f))
+							{
+								species = growth.Creeper;
+								scale = 0.8f + 0.5f * size;
+							}
+							else if (growth.Ferns.Count > 0)
+							{
+								int fern = Mathf.Abs(Mathf.FloorToInt(Mathf.PerlinNoise(noise.x + 3f + p.x * 0.08f, noise.y + p.z * 0.08f) * 997f)) % growth.Ferns.Count;
+								species = growth.Ferns[fern];
+								// Smaller the less light they have.
+								scale = (0.55f + 0.45f * Mathf.Sqrt(lit)) * (0.8f + 0.4f * size);
+							}
+							else
+							{
+								continue;
+							}
+							if (roof - ground < 1.2f || InLane(at, Trodden - Lane))
+							{
+								continue;
+							}
+							if (Place(growth.Species[species], at, Quaternion.Euler(0f, yaw, 0f), Vector3.one * scale))
+							{
+								Grown++;
+							}
+						}
+					}
+				}
+			}
+
+			/// <summary>The passage's bore radius at an arc length along it, between its nodes.</summary>
+			private static float RadiusAt(List<CaveNode> nodes, float along)
+			{
+				int i = 1;
+				while (i < nodes.Count - 1 && nodes[i].Along < along)
+				{
+					i++;
+				}
+				CaveNode a = nodes[i - 1], b = nodes[i];
+				return Mathf.Lerp(a.Radius, b.Radius, Mathf.Clamp01((along - a.Along) / Mathf.Max(1e-4f, b.Along - a.Along)));
 			}
 
 			// ── Chambers ──────────────────────────────────────────
@@ -362,7 +508,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				foreach (CavePassage passage in system.Passages)
 				{
-					float nextSet = 2f, nextLamp = 8f, nextTrack = 0f;
+					float nextSet = 2f, nextLamp = 8f;
 					bool trunk = passage.Kind == CavePassageKind.Trunk;
 					for (int i = 1; i < passage.Nodes.Count; i++)
 					{
@@ -374,16 +520,18 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						Vector3 dir = b.Centre - a.Centre;
 						float yaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
-						float pitch = -Mathf.Atan2(dir.y, new Vector2(dir.x, dir.z).magnitude) * Mathf.Rad2Deg;
 						for (float along = Mathf.Max(a.Along, nextSet); along < b.Along; along = nextSet)
 						{
 							float t = (along - a.Along) / length;
 							float floor = Mathf.Lerp(a.Floor, b.Floor, t);
 							Vector3 c = Vector3.Lerp(a.Centre, b.Centre, t);
 							float radius = Mathf.Lerp(a.Radius, b.Radius, t);
-							// Sized to the bore: its posts inside the floor's width, its cap under the roof.
+							// Sized to the bore: its posts inside the floor's width, its cap under the roof. On the floor as carved
+							// under the lower of its two feet (the field's floor is not the nodes' line), so neither post stands off it.
 							float s = radius / 2.1f;
-							Place(StructureKit.Prefab("MineSet", rng.NextFloat() < 0.5f ? 1 : 0), new Vector3(c.x, floor, c.z), Quaternion.Euler(0f, yaw, 0f), new Vector3(s, Mathf.Clamp(s, 0.95f, 1.1f), 1f));
+							Vector3 across = new Vector3(dir.z, 0f, -dir.x).normalized * (StructurePieces.MineSetHalfWidth * s);
+							float footA = FloorUnder(c + across, floor), footB = FloorUnder(c - across, floor);
+							Place(StructureKit.Prefab("MineSet", rng.NextFloat() < 0.5f ? 1 : 0), new Vector3(c.x, Mathf.Min(footA, footB), c.z), Quaternion.Euler(0f, yaw, 0f), new Vector3(s, Mathf.Clamp(s, 0.95f, 1.1f), 1f));
 							nextSet = along + rng.Range(2.6f, 3.2f);
 						}
 						for (float along = Mathf.Max(a.Along, nextLamp); along < b.Along; along = nextLamp)
@@ -400,26 +548,10 @@ namespace FishMMO.Shared.WorldDesign
 							}
 							nextLamp = along + rng.Range(14f, 20f);
 						}
-						if (trunk)
-						{
-							for (float along = Mathf.Max(a.Along, nextTrack); along + 1.5f < b.Along; along = nextTrack)
-							{
-								float t = (along + 1.5f - a.Along) / length;
-								Vector3 c = Vector3.Lerp(a.Centre, b.Centre, t);
-								float floor = Mathf.Lerp(a.Floor, b.Floor, t);
-								Place(StructureKit.Prefab("MineTrack", rng.NextFloat() < 0.15f ? 1 : 0), new Vector3(c.x, floor, c.z), Quaternion.Euler(pitch, yaw, 0f), Vector3.one);
-								nextTrack = along + 3f;
-							}
-						}
 					}
-					// A tub at the end of the track, by the last stope.
-					if (trunk && passage.Nodes.Count > 2)
+					if (trunk)
 					{
-						CaveNode end = passage.Nodes[passage.Nodes.Count - 2];
-						CaveNode last = passage.Nodes[passage.Nodes.Count - 1];
-						Vector3 dir = last.Centre - end.Centre;
-						Place(StructureKit.Prefab("MineCart", rng.NextFloat() < 0.3f ? 1 : 0), new Vector3(end.Centre.x, end.Floor, end.Centre.z),
-							Quaternion.Euler(0f, Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg, 0f), Vector3.one);
+						LayTrack(passage);
 					}
 				}
 				// Every stope lit, and its spoil and the ore's glint along its walls.
@@ -443,6 +575,168 @@ namespace FishMMO.Shared.WorldDesign
 						}
 					}
 				}
+			}
+
+			/// <summary>MineTrack's length (StructurePieces.Mine): its pivot is at its middle, on the sleepers' underside.</summary>
+			private const float TrackPieceMetres = 3f;
+
+			/// <summary>MineTrack's rail top over its pivot: where a tub's wheels stand.</summary>
+			private const float RailTopMetres = 0.14f;
+
+			/// <summary>How far a piece's sleepers may sit into a rise of the floor under it (their depth is 0.08 m).</summary>
+			private const float SleeperBedMetres = 0.05f;
+
+			/// <summary>Floor samples along each piece.</summary>
+			private const int TrackSamples = 7;
+
+			/// <summary>
+			/// The track along a trunk, a piece after another by arc length along its centre line (crossing its nodes, so no
+			/// segment shorter than a piece is skipped: a 1.5 m gap was left every 7.5 m on a mine's 2.5 m steps), laid on the
+			/// floor as carved, not on the nodes' line (the field's smooth union carves the floor up to ~0.45 m under it, and
+			/// unevenly). The rails run on unbroken: each joint takes one height, first the floor's under it, then raised
+			/// until no floor sample along either piece stands more than <see cref="SleeperBedMetres"/> over the line between
+			/// its joints; each piece is pitched joint to joint. A tub stands on the rails at the track's end.
+			/// </summary>
+			private void LayTrack(CavePassage passage)
+			{
+				List<CaveNode> nodes = passage.Nodes;
+				if (nodes.Count < 2)
+				{
+					return;
+				}
+				float start = nodes[0].Along;
+				int count = Mathf.FloorToInt((nodes[nodes.Count - 1].Along - start) / TrackPieceMetres);
+				if (count < 1)
+				{
+					return;
+				}
+				var joints = new Vector3[count + 1];
+				var floors = new float[count, TrackSamples];
+				var heights = new float[count + 1];
+				for (int j = 0; j <= count; j++)
+				{
+					CentreAt(nodes, start + j * TrackPieceMetres, out joints[j], out _);
+				}
+				// The floor under each piece, as the mesh is carved; a joint starts on the lower of its two pieces' floors there.
+				for (int j = 0; j < count; j++)
+				{
+					Vector3 a = joints[j], b = joints[j + 1];
+					for (int k = 0; k < TrackSamples; k++)
+					{
+						float f = k / (TrackSamples - 1f);
+						CentreAt(nodes, start + (j + f) * TrackPieceMetres, out _, out float nominal);
+						floors[j, k] = FloorUnder(new Vector3(Mathf.Lerp(a.x, b.x, f), 0f, Mathf.Lerp(a.z, b.z, f)), nominal);
+					}
+					heights[j] = j == 0 ? floors[0, 0] : Mathf.Min(heights[j], floors[j, 0]);
+					heights[j + 1] = floors[j, TrackSamples - 1];
+				}
+				// Raised where the floor rises between joints (over a hump, the sleepers bed into it a little), a few passes so
+				// a raise at one joint is seen by the piece beyond it.
+				for (int pass = 0; pass < 8; pass++)
+				{
+					bool raised = false;
+					for (int j = 0; j < count; j++)
+					{
+						float over = float.MinValue;
+						for (int k = 0; k < TrackSamples; k++)
+						{
+							over = Mathf.Max(over, floors[j, k] - Mathf.Lerp(heights[j], heights[j + 1], k / (TrackSamples - 1f)));
+						}
+						if (over > SleeperBedMetres + 1e-3f)
+						{
+							heights[j] += over - SleeperBedMetres;
+							heights[j + 1] += over - SleeperBedMetres;
+							raised = true;
+						}
+					}
+					if (!raised)
+					{
+						break;
+					}
+				}
+				Vector3 lastCentre = default;
+				Quaternion lastTurn = default;
+				bool laid = false;
+				for (int j = 0; j < count; j++)
+				{
+					var a = new Vector3(joints[j].x, heights[j], joints[j].z);
+					var b = new Vector3(joints[j + 1].x, heights[j + 1], joints[j + 1].z);
+					var flat = new Vector2(b.x - a.x, b.z - a.z);
+					if (flat.magnitude < 0.5f)
+					{
+						continue;
+					}
+					float yaw = Mathf.Atan2(flat.x, flat.y) * Mathf.Rad2Deg;
+					float pitch = -Mathf.Atan2(b.y - a.y, flat.magnitude) * Mathf.Rad2Deg;
+					Quaternion turn = Quaternion.Euler(pitch, yaw, 0f);
+					Vector3 centre = 0.5f * (a + b);
+					Place(StructureKit.Prefab("MineTrack", rng.NextFloat() < 0.15f ? 1 : 0), centre, turn, Vector3.one);
+					laid = true;
+					lastCentre = centre;
+					lastTurn = turn;
+				}
+				// A tub on the last piece's rails, or tipped off them beside it; by the last stope.
+				if (laid && nodes.Count > 2)
+				{
+					if (rng.NextFloat() < 0.3f)
+					{
+						Vector3 side = lastTurn * Vector3.right;
+						Vector3 at = lastCentre + new Vector3(side.x, 0f, side.z).normalized * 1.1f;
+						Place(StructureKit.Prefab("MineCart", 1), new Vector3(at.x, FloorUnder(at, lastCentre.y), at.z), Quaternion.Euler(0f, lastTurn.eulerAngles.y, 0f), Vector3.one);
+					}
+					else
+					{
+						Place(StructureKit.Prefab("MineCart", 0), lastCentre + lastTurn * new Vector3(0f, RailTopMetres, 0f), lastTurn, Vector3.one);
+					}
+				}
+			}
+
+			/// <summary>The passage's centre line and nominal floor at an arc length along it (system frame), between its nodes.</summary>
+			private static void CentreAt(List<CaveNode> nodes, float along, out Vector3 centre, out float floor)
+			{
+				int i = 1;
+				while (i < nodes.Count - 1 && nodes[i].Along < along)
+				{
+					i++;
+				}
+				CaveNode a = nodes[i - 1], b = nodes[i];
+				float t = Mathf.Clamp01((along - a.Along) / Mathf.Max(1e-4f, b.Along - a.Along));
+				centre = Vector3.Lerp(a.Centre, b.Centre, t);
+				floor = Mathf.Lerp(a.Floor, b.Floor, t);
+			}
+
+			/// <summary>
+			/// The floor as carved under (x, z) of <paramref name="p"/> (system frame), to a centimetre: marched down from a
+			/// little over <paramref name="nominal"/> (the nodes' floor, which the carved floor lies a little under where
+			/// segments and chambers meet) and bisected; <paramref name="nominal"/> where that point is rock.
+			/// </summary>
+			private float FloorUnder(Vector3 p, float nominal)
+			{
+				float top = nominal + 0.6f;
+				if (system.Void(new Vector3(p.x, top, p.z)) >= 0f)
+				{
+					return nominal;
+				}
+				float y = top, step = 0.1f;
+				while (system.Void(new Vector3(p.x, y - step, p.z)) < 0f && y > nominal - 3f)
+				{
+					y -= step;
+				}
+				// The surface lies between y - step (rock) and y (void).
+				float lo = y - step, hi = y;
+				for (int k = 0; k < 4; k++)
+				{
+					float mid = 0.5f * (lo + hi);
+					if (system.Void(new Vector3(p.x, mid, p.z)) < 0f)
+					{
+						hi = mid;
+					}
+					else
+					{
+						lo = mid;
+					}
+				}
+				return 0.5f * (lo + hi);
 			}
 
 			/// <summary>The mine's portal to its template: boarded up when abandoned, dressed stone for a delving, timber otherwise.</summary>
@@ -476,6 +770,10 @@ namespace FishMMO.Shared.WorldDesign
 				context.Points.Emitters ??= new List<SceneEmitter>();
 				context.Points.Emitters.Add(new SceneEmitter { Position = system.Origin + local, Kind = kind, Seed = seed, Reach = reach });
 				Lights++;
+				if (kind == SceneEmitterKind.Crystal)
+				{
+					glowLights.Add(local);
+				}
 			}
 
 			// ── Geometry ──────────────────────────────────────────
@@ -533,9 +831,17 @@ namespace FishMMO.Shared.WorldDesign
 				return false;
 			}
 
-			/// <summary>Within <paramref name="margin"/> + a lane of any passage's line on the floor, or in a site's camp ground.</summary>
-			private bool InLane(Vector3 p, float margin)
+			/// <summary>
+			/// Within <paramref name="margin"/> + a lane of any passage's line on the floor, or in a site's camp ground; or on a
+			/// way the layout built (a bridge's or ramp's deck, a crossing, a pit's ledge, the foot or the head of a climb).
+			/// </summary>
+			/// <remarks><paramref name="exceptSolid"/>: a solid's index whose own deck or ledge is not refused (what lines it).</remarks>
+			private bool InLane(Vector3 p, float margin, int exceptSolid = -1)
 			{
+				if (OnFeature(p, margin, exceptSolid))
+				{
+					return true;
+				}
 				foreach ((Vector3 centre, float radius) in keepClear)
 				{
 					if (Mathf.Abs(p.y - centre.y) < 3f && new Vector2(p.x - centre.x, p.z - centre.z).sqrMagnitude < (radius + margin) * (radius + margin))
@@ -555,6 +861,61 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				return false;
+			}
+
+			/// <summary>On, or within <paramref name="margin"/> of, a way the layout built: nothing is set down there.</summary>
+			private bool OnFeature(Vector3 p, float margin, int exceptSolid = -1)
+			{
+				for (int i = 0; i < system.Solids.Count; i++)
+				{
+					if (i == exceptSolid)
+					{
+						continue;
+					}
+					CaveSolid solid = system.Solids[i];
+					switch (solid.Kind)
+					{
+						case CaveSolidKind.Bridge:
+						case CaveSolidKind.Ramp:
+							if (NearLine(p, solid.A, solid.B, solid.Width + 0.6f + margin, 4f))
+							{
+								return true;
+							}
+							break;
+						case CaveSolidKind.Spiral:
+							// The whole pit: its ledge winds all round it, and its floor is where the ledge comes down.
+							if (new Vector2(p.x - solid.A.x, p.z - solid.A.z).magnitude < solid.Depth + 1f + margin && p.y > solid.A.y - 2f && p.y < solid.B.y + 4f)
+							{
+								return true;
+							}
+							break;
+					}
+				}
+				foreach (CaveCrossing crossing in system.Crossings)
+				{
+					if (NearLine(p, crossing.A, crossing.B, crossing.HalfWidth + 1f + margin, 4f))
+					{
+						return true;
+					}
+				}
+				foreach (CaveClimb climb in system.Climbs)
+				{
+					if (NearLine(p, climb.Bottom, climb.Bottom + climb.Out * 1.5f, 1.2f + margin, 3f)
+						|| NearLine(p, climb.Top, climb.Top + climb.TopExit * 2f, 1.2f + margin, 3f))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			/// <summary>Within <paramref name="reach"/> of a segment in plan, and within <paramref name="height"/> of it.</summary>
+			private static bool NearLine(Vector3 p, Vector3 a, Vector3 b, float reach, float height)
+			{
+				var ab = new Vector2(b.x - a.x, b.z - a.z);
+				var ap = new Vector2(p.x - a.x, p.z - a.z);
+				float t = Mathf.Clamp01(Vector2.Dot(ap, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+				return (ap - ab * t).sqrMagnitude < reach * reach && Mathf.Abs(p.y - Mathf.Lerp(a.y, b.y, t)) < height;
 			}
 
 			private bool NearMouth(Vector3 p)

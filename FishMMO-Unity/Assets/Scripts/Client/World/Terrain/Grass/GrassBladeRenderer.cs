@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Unity.Collections;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
@@ -100,6 +101,7 @@ namespace FishMMO.Client
 		private static readonly int DensityId = Shader.PropertyToID("_GrassDensity");
 		private static readonly int WaterId = Shader.PropertyToID("_GrassWater");
 		private static readonly int SeaId = Shader.PropertyToID("_GrassSea");
+
 		private static readonly int FishSeaId = Shader.PropertyToID("_FishSea");
 		private static readonly int CameraId = Shader.PropertyToID("_GrassCamera");
 		private static readonly int PlanesId = Shader.PropertyToID("_GrassPlanes");
@@ -213,7 +215,8 @@ namespace FishMMO.Client
 		/// <summary>All terrains' textures as array slices and their parameters in one table: one dispatch for all of them.</summary>
 		private readonly GrassTerrainAtlas atlas = new GrassTerrainAtlas();
 		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO procedural grass" };
-		private const string GpuSample = "FishMMO grass (compute)";
+		/// <summary>The generation's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
+		private static readonly CustomSampler GpuSample = CustomSampler.Create("FishMMO grass (compute)", true);
 		private readonly Vector4[] planeVectors = new Vector4[6];
 		private readonly Vector4[] ringDistance = new Vector4[MaxRings];
 		private readonly Vector4[] ringDensity = new Vector4[MaxRings];
@@ -324,8 +327,22 @@ namespace FishMMO.Client
 		}
 		public long LastCandidates { get; private set; }
 		public int LastTiles { get; private set; }
-		/// <summary>The last game camera's name, position, grass distance and lattice cell (Describe).</summary>
-		public string LastCamera { get; private set; } = "none yet";
+		/// <summary>
+		/// The last game camera's name, position, grass distance and lattice cell (Describe). Formatted only when asked: the
+		/// string (and the camera's name, which Unity allocates afresh) was built every frame for a line read on demand.
+		/// </summary>
+		public string LastCamera => lastCamera == null ? "none yet"
+			: $"'{(lastCamera.Camera != null ? lastCamera.Camera.name : "(destroyed)")}' at ({lastCamera.Eye.x:F0}, {lastCamera.Eye.y:F0}, {lastCamera.Eye.z:F0}), grass distance {lastCamera.Distance:F0} m, cell {lastCamera.Cell * 100f:F1} cm";
+
+		/// <summary>What <see cref="LastCamera"/> is formatted from.</summary>
+		private sealed class CameraNote
+		{
+			public Camera Camera;
+			public Vector3 Eye;
+			public float Distance, Cell;
+		}
+
+		private CameraNote lastCamera;
 
 		/// <summary>Debug: every blade drawn bright magenta, so procedural blades can be told from mesh grass at a glance.</summary>
 		public static bool Highlight;
@@ -507,6 +524,7 @@ namespace FishMMO.Client
 		/// <summary>Takes the profile's settings (every frame: live in the inspector) and the types into the material and the compute's arrays.</summary>
 		public void Publish(GrassBladeSettings s, IReadOnlyList<GrassType> types, float grassDistance)
 		{
+			using var publishScope = PublishMarker.Auto();
 			ringCount = 0;
 			if (s.Rings != null)
 			{
@@ -586,21 +604,19 @@ namespace FishMMO.Client
 				Array.Copy(typeTexels, uploadedTexels, typeTexels.Length);
 				typeTableUploaded = true;
 			}
-			material.SetTexture(TypeTableId, typeTable);
-			material.SetVectorArray(RingDistanceId, ringDistance);
-			material.SetVectorArray(RingDensityId, ringDensity);
-			material.SetFloat(RingCountId, ringCount);
-			material.SetVector(Params0Id, new Vector4(s.WidenExponent, Mathf.Max(1f, s.MaxWiden), grassDistance, s.DistanceFadeBand));
-			material.SetVector(Params1Id, new Vector4(s.NormalRounding * Mathf.Deg2Rad, s.RootOcclusion, s.Translucency, s.Smoothness));
-			material.SetVector(Params2Id, new Vector4(s.WindStrength, s.GustWaveMetres, s.Flutter, s.IdleBreeze));
-			material.SetVector(Params3Id, new Vector4(s.RootGroundBlend, s.RootGroundHeight, s.GroundHueTint, s.Specular));
-			material.SetVector(Params4Id, new Vector4(s.MaxWindBendDegrees * Mathf.Deg2Rad, s.GustSharpness, s.GustSpeed, s.GustSheen));
-			material.SetVector(Params5Id, new Vector4(s.FarBlendStart, s.FarBlendEnd, s.FarGroundPull, s.FarNormalFlatten));
-			material.SetVector(Params6Id, new Vector4(s.TerrainTextureTint, s.TerrainTextureBrightness, s.TerrainTextureRoot, Mathf.Clamp01(s.EdgeOnThicken)));
-			material.SetVector(Params7Id, new Vector4(s.WindCalmStart, Mathf.Max(s.WindCalmStart + 1f, s.WindCalmEnd), s.FarWind,
-				Mathf.Sin(Mathf.Clamp(s.TopDownLayDegrees, 0f, 80f) * Mathf.Deg2Rad)));
+			publishedParams[0] = new Vector4(s.WidenExponent, Mathf.Max(1f, s.MaxWiden), grassDistance, s.DistanceFadeBand);
+			publishedParams[1] = new Vector4(s.NormalRounding * Mathf.Deg2Rad, s.RootOcclusion, s.Translucency, s.Smoothness);
+			publishedParams[2] = new Vector4(s.WindStrength, s.GustWaveMetres, s.Flutter, s.IdleBreeze);
+			publishedParams[3] = new Vector4(s.RootGroundBlend, s.RootGroundHeight, s.GroundHueTint, s.Specular);
+			publishedParams[4] = new Vector4(s.MaxWindBendDegrees * Mathf.Deg2Rad, s.GustSharpness, s.GustSpeed, s.GustSheen);
+			publishedParams[5] = new Vector4(s.FarBlendStart, s.FarBlendEnd, s.FarGroundPull, s.FarNormalFlatten);
+			publishedParams[6] = new Vector4(s.TerrainTextureTint, s.TerrainTextureBrightness, s.TerrainTextureRoot, Mathf.Clamp01(s.EdgeOnThicken));
+			publishedParams[7] = new Vector4(s.WindCalmStart, Mathf.Max(s.WindCalmStart + 1f, s.WindCalmEnd), s.FarWind,
+				Mathf.Sin(Mathf.Clamp(s.TopDownLayDegrees, 0f, 80f) * Mathf.Deg2Rad));
 			colourFootprint = Mathf.Max(0.01f, s.TerrainTextureFootprint);
-			EnsureCapacity(s.BladeCap);
+			// The shadow slots at their share of the cap only while blade shadows are on: off (the default), the compute never
+			// appends to them and no draw reads them, and their two full-size buffers were ~12 MB held for nothing.
+			bool buffersChanged = EnsureCapacity(s.BladeCap, s.ShadowDistance > 0f);
 			// One set's albedo copy a frame (a blit and a readback per layer), outside any camera's rendering.
 			FishMMO.Shared.TerrainArraySet wanted = null;
 			foreach (FishMMO.Shared.TerrainArraySet set in albedoWanted)
@@ -616,6 +632,26 @@ namespace FishMMO.Client
 					albedoTexels[wanted] = GrassAlbedoTexels.Build(wanted.Albedo, wanted.LayerCount, wanted.LayerST, wanted.LayerTint);
 				}
 			}
+			// The materials only when something they hold changed: the settings are live in the inspector, so every value is
+			// worked out each frame, but the copies into the five slot materials were native work repeated for nothing.
+			if (materialsPublished && !changed && !buffersChanged && publishedRingCount == ringCount && SameValues(publishedParams, appliedParams)
+				&& SameValues(ringDistance, appliedRingDistance) && SameValues(ringDensity, appliedRingDensity))
+			{
+				return;
+			}
+			materialsPublished = true;
+			publishedRingCount = ringCount;
+			Array.Copy(publishedParams, appliedParams, publishedParams.Length);
+			Array.Copy(ringDistance, appliedRingDistance, ringDistance.Length);
+			Array.Copy(ringDensity, appliedRingDensity, ringDensity.Length);
+			material.SetTexture(TypeTableId, typeTable);
+			material.SetVectorArray(RingDistanceId, ringDistance);
+			material.SetVectorArray(RingDensityId, ringDensity);
+			material.SetFloat(RingCountId, ringCount);
+			for (int i = 0; i < ParamIds.Length; i++)
+			{
+				material.SetVector(ParamIds[i], publishedParams[i]);
+			}
 			for (int slot = 0; slot < Slots; slot++)
 			{
 				slotMaterials[slot].CopyPropertiesFromMaterial(material);
@@ -625,15 +661,39 @@ namespace FishMMO.Client
 			}
 		}
 
-		private void EnsureCapacity(int cap)
+		private static readonly Unity.Profiling.ProfilerMarker PublishMarker = new Unity.Profiling.ProfilerMarker("GrassBladeRenderer.Publish");
+		private static readonly int[] ParamIds = { Params0Id, Params1Id, Params2Id, Params3Id, Params4Id, Params5Id, Params6Id, Params7Id };
+		/// <summary>The material's parameter vectors as worked out this frame, and as last set on the materials.</summary>
+		private readonly Vector4[] publishedParams = new Vector4[8], appliedParams = new Vector4[8];
+		private readonly Vector4[] appliedRingDistance = new Vector4[MaxRings], appliedRingDensity = new Vector4[MaxRings];
+		private int publishedRingCount = -1;
+		private bool materialsPublished;
+
+		/// <summary>Exact equality, component by component (Vector4's == forgives differences under 1e-5).</summary>
+		private static bool SameValues(Vector4[] a, Vector4[] b)
 		{
+			for (int i = 0; i < a.Length; i++)
+			{
+				if (!a[i].Equals(b[i]))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>Sizes the slot buffers (the shadow slots at the floor while <paramref name="shadows"/> is off); true when any was replaced.</summary>
+		private bool EnsureCapacity(int cap, bool shadows)
+		{
+			bool replaced = false;
 			for (int s = 0; s < Slots; s++)
 			{
-				int capacity = Mathf.Max(1024, Mathf.CeilToInt(cap * SlotShare[s]));
+				int capacity = s >= 3 && !shadows ? 1024 : Mathf.Max(1024, Mathf.CeilToInt(cap * SlotShare[s]));
 				if (outBuffers[s] != null && capacities[s] == capacity)
 				{
 					continue;
 				}
+				replaced = true;
 				// The old buffer may still be read by a frame in flight: released a few frames later.
 				if (outBuffers[s] != null)
 				{
@@ -643,6 +703,7 @@ namespace FishMMO.Client
 				capacities[s] = capacity;
 				blocks[s].SetBuffer(BladesId, outBuffers[s]);
 			}
+			return replaced;
 		}
 
 		// ── Per camera ───────────────────────────────────────────────
@@ -825,7 +886,11 @@ namespace FishMMO.Client
 				LastItems = itemCount;
 				LastCandidates = candidates;
 				LastTiles = tiles;
-				LastCamera = $"'{camera.name}' at ({eye.x:F0}, {eye.y:F0}, {eye.z:F0}), grass distance {grassDistance:F0} m, cell {cell * 100f:F1} cm";
+				lastCamera ??= new CameraNote();
+				lastCamera.Camera = camera;
+				lastCamera.Eye = eye;
+				lastCamera.Distance = grassDistance;
+				lastCamera.Cell = cell;
 			}
 			TimeGather += TerrainInstancingProbe.Now - t1;
 			TimedItems = itemCount;
@@ -1255,6 +1320,13 @@ namespace FishMMO.Client
 			}
 			if (albedoTexels.TryGetValue(set, out GrassAlbedoTexels texels) && texels != null && texels.Source == set.Albedo)
 			{
+				return texels;
+			}
+			// The scene's bake holds the copy as it was read back when the scene was cut: no blit and readback for it.
+			texels = GrassAlbedoTexels.FromBaked(FishMMO.Shared.SceneTerrainBake.AlbedoOf(set.Albedo), set.Albedo, set.LayerCount, set.LayerST, set.LayerTint);
+			if (texels != null)
+			{
+				albedoTexels[set] = texels;
 				return texels;
 			}
 			albedoWanted.Add(set);

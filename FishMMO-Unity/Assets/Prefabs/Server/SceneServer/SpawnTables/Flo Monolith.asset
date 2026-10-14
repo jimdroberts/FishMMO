@@ -16,8 +16,8 @@ MonoBehaviour:
   ScenePath: Assets/Scenes/WorldScene/Arthis/Flo Monolith.unity
   Spawners:
   - Name: 'Verdant Caelshaft Merchant Spawner [66811e3f]'
-    Position: {x: -272.67725, y: 126.36902, z: -846.61444}
-    Rotation: {x: -0, y: 0.89879405, z: -0, w: 0.43837115}
+    Position: {x: -271.79578, y: 126.36987, z: -845.19666}
+    Rotation: {x: -0, y: 0.9170601, z: -0, w: 0.39874908}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -42,8 +42,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Verdant Caelshaft Townsfolk Spawner [66811e3f]'
-    Position: {x: -246.38208, y: 126.36902, z: -853.13446}
-    Rotation: {x: -0, y: 0.89879405, z: -0, w: 0.43837115}
+    Position: {x: -246.16893, y: 126.36987, z: -853.9836}
+    Rotation: {x: -0, y: 0.9170601, z: -0, w: 0.39874908}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -67,7 +67,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Aelaeirden Merchant Spawner [211d4441]'
-    Position: {x: -255.75787, y: 33.743652, z: 866.6886}
+    Position: {x: -255.75787, y: 33.787537, z: 866.6886}
     Rotation: {x: -0, y: 0.89879405, z: -0, w: 0.43837115}
     OrConditions: []
     TrueConditions: []
@@ -93,7 +93,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Aelaeirden Townsfolk Spawner [211d4441]'
-    Position: {x: -281.22696, y: 33.743652, z: 874.7863}
+    Position: {x: -281.22696, y: 33.787537, z: 874.7863}
     Rotation: {x: -0, y: 0.89879405, z: -0, w: 0.43837115}
     OrConditions: []
     TrueConditions: []
@@ -118,7 +118,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Branthicket Merchant Spawner [2c91c7c5]'
-    Position: {x: 1406.7577, y: 59.149963, z: -1319.2787}
+    Position: {x: 1406.7577, y: 59.107788, z: -1319.2787}
     Rotation: {x: -0, y: 0.3746066, z: -0, w: 0.92718387}
     OrConditions: []
     TrueConditions: []
@@ -144,7 +144,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Branthicket Townsfolk Spawner [2c91c7c5]'
-    Position: {x: 1430.8629, y: 59.149963, z: -1303.9365}
+    Position: {x: 1430.8629, y: 59.107788, z: -1303.9365}
     Rotation: {x: -0, y: 0.3746066, z: -0, w: 0.92718387}
     OrConditions: []
     TrueConditions: []
@@ -169,7 +169,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'New Sarooreach Merchant Spawner [403bb784]'
-    Position: {x: -441.72797, y: 125.12024, z: -869.0421}
+    Position: {x: -441.72797, y: 125.12109, z: -869.0421}
     Rotation: {x: -0, y: 0.98162717, z: -0, w: 0.19080906}
     OrConditions: []
     TrueConditions: []
@@ -195,7 +195,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'New Sarooreach Banker Spawner [403bb784]'
-    Position: {x: -405.7309, y: 125.12024, z: -886.33563}
+    Position: {x: -405.7309, y: 125.12109, z: -886.33563}
     Rotation: {x: -0, y: 0.98162717, z: -0, w: 0.19080906}
     OrConditions: []
     TrueConditions: []
@@ -221,7 +221,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'New Sarooreach Crafter Spawner [403bb784]'
-    Position: {x: -430.27808, y: 125.12024, z: -849.87036}
+    Position: {x: -430.27808, y: 125.12109, z: -849.87036}
     Rotation: {x: -0, y: 0.98162717, z: -0, w: 0.19080906}
     OrConditions: []
     TrueConditions: []
@@ -247,7 +247,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'New Sarooreach Guard Spawner [403bb784]'
-    Position: {x: -427.6761, y: 125.12024, z: -874.6292}
+    Position: {x: -427.6761, y: 125.12109, z: -874.6292}
     Rotation: {x: -0, y: 0.98162717, z: -0, w: 0.19080906}
     OrConditions: []
     TrueConditions: []
@@ -272,7 +272,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'New Sarooreach Townsfolk Spawner [403bb784]'
-    Position: {x: -434.28607, y: 125.12024, z: -901.4038}
+    Position: {x: -434.28607, y: 125.12109, z: -901.4038}
     Rotation: {x: -0, y: 0.98162717, z: -0, w: 0.19080906}
     OrConditions: []
     TrueConditions: []
@@ -296,14 +296,14 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Ashie Keep Guard Spawner [229cb5dc]'
-    Position: {x: -437.73886, y: 121.933716, z: -1049.5101}
-    Rotation: {x: -0, y: 0.7933533, z: -0, w: -0.6087614}
+  - Name: 'Elmie Donjon Guard Spawner [6f212960]'
+    Position: {x: -18.63514, y: 22.763794, z: 830.95636}
+    Rotation: {x: -0, y: 0.57357645, z: -0, w: 0.81915206}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 2
-    MaxSpawnCount: 2
+    InitialSpawnCount: 3
+    MaxSpawnCount: 3
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -313,7 +313,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 27.03, y: 8, z: 27.03}
+    BoundingBoxSize: {x: 30.68, y: 8, z: 30.68}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -321,9 +321,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Ashie Keep Merchant Spawner [229cb5dc]'
-    Position: {x: -425.18582, y: 121.933716, z: -1046.1648}
-    Rotation: {x: -0, y: 0.7933533, z: -0, w: -0.6087614}
+  - Name: 'Elmie Donjon Merchant Spawner [6f212960]'
+    Position: {x: -12.64073, y: 22.763794, z: 818.3689}
+    Rotation: {x: -0, y: 0.57357645, z: -0, w: 0.81915206}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -347,9 +347,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Ryuainoka''s Market Merchant Spawner [5fa2d236]'
-    Position: {x: -750.665, y: 159.00964, z: -1405.9082}
-    Rotation: {x: -0, y: 0.8949344, z: -0, w: 0.4461978}
+  - Name: 'Halaad''s Market Merchant Spawner [21ca4a91]'
+    Position: {x: -736.6177, y: 160.08716, z: -1470.6809}
+    Rotation: {x: -0, y: 0.3826835, z: -0, w: -0.9238795}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -373,9 +373,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Ryuainoka''s Market Townsfolk Spawner [5fa2d236]'
-    Position: {x: -750.8218, y: 159.00964, z: -1402.5074}
-    Rotation: {x: -0, y: 0.8949344, z: -0, w: 0.4461978}
+  - Name: 'Halaad''s Market Townsfolk Spawner [21ca4a91]'
+    Position: {x: -737.61365, y: 160.08716, z: -1459.1678}
+    Rotation: {x: -0, y: 0.3826835, z: -0, w: -0.9238795}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -390,7 +390,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 21.86, y: 8, z: 21.86}
+    BoundingBoxSize: {x: 23.1, y: 8, z: 23.1}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -399,8 +399,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'The Harsh Crevice MonsterPack Spawner [3db2f57e]'
-    Position: {x: -796.0273, y: 101.91481, z: 463.91873}
-    Rotation: {x: -0, y: 0.0580358, z: -0, w: -0.9983145}
+    Position: {x: -805.7505, y: 103.32447, z: 486.731}
+    Rotation: {x: -0, y: 0.04092588, z: -0, w: 0.9991622}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -415,7 +415,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 7.695578, y: 8, z: 7.695578}
+    BoundingBoxSize: {x: 6, y: 8, z: 6}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -424,8 +424,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'The Harsh Crevice Elite Spawner [3db2f57e]'
-    Position: {x: -796.6294, y: 102.08432, z: 466.44812}
-    Rotation: {x: -0, y: 0.0580358, z: -0, w: -0.9983145}
+    Position: {x: -804.9605, y: 103.26705, z: 487.9802}
+    Rotation: {x: -0, y: 0.04092588, z: -0, w: 0.9991622}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -440,7 +440,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 7.695578, y: 8, z: 7.695578}
+    BoundingBoxSize: {x: 6, y: 8, z: 6}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -448,9 +448,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Wood Golem Grotto MonsterPack Spawner [0f646f75]'
-    Position: {x: -1220.2731, y: 207.84564, z: -271.3386}
-    Rotation: {x: -0, y: 0.08783278, z: -0, w: 0.99613523}
+  - Name: 'Crevice of the Dryads MonsterPack Spawner [64d4444e]'
+    Position: {x: -289.44897, y: 2.6248322, z: -18.483017}
+    Rotation: {x: -0, y: 0.4383175, z: -0, w: 0.8988202}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -465,7 +465,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 11.786469, y: 8, z: 11.786469}
+    BoundingBoxSize: {x: 8.1658325, y: 8, z: 8.1658325}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -473,9 +473,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Wood Golem Grotto Elite Spawner [0f646f75]'
-    Position: {x: -1220.2272, y: 208.63849, z: -268.90656}
-    Rotation: {x: -0, y: 0.08783278, z: -0, w: 0.99613523}
+  - Name: 'Crevice of the Dryads Elite Spawner [64d4444e]'
+    Position: {x: -287.1914, y: 2.6520157, z: -20.348526}
+    Rotation: {x: -0, y: 0.4383175, z: -0, w: 0.8988202}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -490,7 +490,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 11.786469, y: 8, z: 11.786469}
+    BoundingBoxSize: {x: 8.1658325, y: 8, z: 8.1658325}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -499,7 +499,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Yurts of Wolffolk MonsterPack Spawner [1431563e]'
-    Position: {x: 754.37463, y: 160.3446, z: -1893.0397}
+    Position: {x: 754.37463, y: 160.33167, z: -1893.0397}
     Rotation: {x: -0, y: 0.2840153, z: -0, w: -0.95881975}
     OrConditions: []
     TrueConditions: []
@@ -524,7 +524,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Yurts of Wolffolk Elite Spawner [1431563e]'
-    Position: {x: 755.74426, y: 160.35986, z: -1896.5844}
+    Position: {x: 755.74426, y: 160.34546, z: -1896.5844}
     Rotation: {x: -0, y: 0.2840153, z: -0, w: -0.95881975}
     OrConditions: []
     TrueConditions: []
@@ -549,7 +549,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Wila Encampment MonsterPack Spawner [3df7f0d5]'
-    Position: {x: 32.42878, y: 156.07263, z: -1546.2793}
+    Position: {x: 32.42878, y: 156.16858, z: -1546.2793}
     Rotation: {x: -0, y: 0.6691306, z: -0, w: 0.7431448}
     OrConditions: []
     TrueConditions: []
@@ -574,7 +574,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Wila Encampment Elite Spawner [3df7f0d5]'
-    Position: {x: 31.072527, y: 156.03845, z: -1544.2837}
+    Position: {x: 31.072527, y: 156.16223, z: -1544.2837}
     Rotation: {x: -0, y: 0.6691306, z: -0, w: 0.7431448}
     OrConditions: []
     TrueConditions: []
@@ -599,7 +599,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'The Mysterious Camp MonsterPack Spawner [07416565]'
-    Position: {x: 31.51626, y: 220.20007, z: -2020.2705}
+    Position: {x: 31.51626, y: 220.20105, z: -2020.2705}
     Rotation: {x: -0, y: 0.551937, z: -0, w: 0.83388585}
     OrConditions: []
     TrueConditions: []
@@ -624,7 +624,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'The Mysterious Camp Elite Spawner [07416565]'
-    Position: {x: 32.655987, y: 220.20007, z: -2020.4149}
+    Position: {x: 32.655987, y: 220.20105, z: -2020.4149}
     Rotation: {x: -0, y: 0.551937, z: -0, w: 0.83388585}
     OrConditions: []
     TrueConditions: []
@@ -649,8 +649,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Flavaas''s Sawpit Ancient Oak Spawner 1 [2c5efa7d]'
-    Position: {x: 168.35005, y: 226.401, z: -1905.0236}
-    Rotation: {x: -0, y: 0.7661849, z: -0, w: -0.6426202}
+    Position: {x: 168.35005, y: 226.40198, z: -1905.0236}
+    Rotation: {x: -0, y: 0.5831353, z: -0, w: -0.812375}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -675,8 +675,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Flavaas''s Sawpit Ancient Oak Spawner 2 [2c5efa7d]'
-    Position: {x: 173.0945, y: 226.48706, z: -1895.2455}
-    Rotation: {x: -0, y: 0.50640124, z: -0, w: 0.8622981}
+    Position: {x: 173.0945, y: 226.47974, z: -1895.2455}
+    Rotation: {x: -0, y: 0.35344172, z: -0, w: -0.93545663}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -701,8 +701,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Flavaas''s Sawpit Ancient Oak Spawner 3 [2c5efa7d]'
-    Position: {x: 161.48067, y: 226.53015, z: -1897.4515}
-    Rotation: {x: -0, y: 0.74257475, z: -0, w: 0.66976327}
+    Position: {x: 161.48067, y: 226.51746, z: -1897.4515}
+    Rotation: {x: -0, y: 0.1468262, z: -0, w: 0.9891624}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -727,8 +727,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Flavaas''s Sawpit Ancient Oak Spawner 4 [2c5efa7d]'
-    Position: {x: 189.39189, y: 226.60486, z: -1894.2786}
-    Rotation: {x: -0, y: 0.32865793, z: -0, w: -0.9444491}
+    Position: {x: 177.28976, y: 226.41602, z: -1903.6051}
+    Rotation: {x: -0, y: 0.6913443, z: -0, w: 0.7225256}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -753,8 +753,8 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Flavaas''s Sawpit Ancient Oak Spawner 5 [2c5efa7d]'
-    Position: {x: 186.32556, y: 226.61621, z: -1890.7175}
-    Rotation: {x: -0, y: 0.9519076, z: -0, w: 0.30638564}
+    Position: {x: 173.49051, y: 226.50818, z: -1886.8763}
+    Rotation: {x: -0, y: 0.60566515, z: -0, w: 0.79571974}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -778,159 +778,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Lurk of Frost Giants MonsterPack Spawner [21f2530a]'
-    Position: {x: -1109.1658, y: 259.6272, z: 520.125}
-    Rotation: {x: -0, y: 0.1478094, z: -0, w: 0.9890159}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 23.73, y: 8, z: 23.73}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Lurk of Frost Giants Elite Spawner [21f2530a]'
-    Position: {x: -1103.7579, y: 259.33105, z: 518.2746}
-    Rotation: {x: -0, y: 0.1478094, z: -0, w: 0.9890159}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 23.73, y: 8, z: 23.73}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Great Elk Den MonsterPack Spawner [46664597]'
-    Position: {x: 673.16455, y: 158.21362, z: -1746.8696}
-    Rotation: {x: -0, y: 0.39073113, z: -0, w: 0.92050487}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 5
-    MaxSpawnCount: 5
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 21.38, y: 8, z: 21.38}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Great Elk Den Elite Spawner [46664597]'
-    Position: {x: 672.58636, y: 158.18689, z: -1753.7703}
-    Rotation: {x: -0, y: 0.39073113, z: -0, w: 0.92050487}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 21.38, y: 8, z: 21.38}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Giant Spider Brood MonsterPack Spawner [67a363b1]'
-    Position: {x: -1246.0713, y: 228.59546, z: -740.823}
-    Rotation: {x: -0, y: 0.99904823, z: -0, w: -0.043619424}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 15.43, y: 8, z: 15.43}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Giant Spider Brood Elite Spawner [67a363b1]'
-    Position: {x: -1251.5613, y: 228.50952, z: -743.82043}
-    Rotation: {x: -0, y: 0.99904823, z: -0, w: -0.043619424}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 1
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 15.43, y: 8, z: 15.43}
-    Spawnables: []
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Talonbear Ritual Site MonsterPack Spawner [3fa276df]'
-    Position: {x: -1340.4553, y: 174.33789, z: -1082.0304}
-    Rotation: {x: -0, y: 0.93358046, z: -0, w: -0.35836795}
+  - Name: 'The Storm-battered Lurk MonsterPack Spawner [11a570d2]'
+    Position: {x: 844.305, y: 153.03491, z: -1769.4293}
+    Rotation: {x: -0, y: 0.9986295, z: -0, w: 0.052335974}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -945,7 +795,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 16.58, y: 8, z: 16.58}
+    BoundingBoxSize: {x: 15.94, y: 8, z: 15.94}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -953,14 +803,14 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Cemetery of the Windswept Heron MonsterPack Spawner [4282625e]'
-    Position: {x: -914.9624, y: 181.2284, z: -1255.8885}
-    Rotation: {x: -0, y: 0.46174863, z: -0, w: 0.8870109}
+  - Name: 'Lindworm Lair MonsterPack Spawner [54c862a9]'
+    Position: {x: -1361.6188, y: 308.94934, z: 564.1325}
+    Rotation: {x: -0, y: 0.97437006, z: -0, w: 0.22495104}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 5
-    MaxSpawnCount: 5
+    InitialSpawnCount: 3
+    MaxSpawnCount: 3
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -970,7 +820,7 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 19.65, y: 8, z: 19.65}
+    BoundingBoxSize: {x: 18.22, y: 8, z: 18.22}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -978,9 +828,34 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Cemetery of the Windswept Heron Elite Spawner [4282625e]'
-    Position: {x: -912.6117, y: 181.16345, z: -1255.0448}
-    Rotation: {x: -0, y: 0.46174863, z: -0, w: 0.8870109}
+  - Name: 'Roost of Frost Wolves MonsterPack Spawner [3230f24f]'
+    Position: {x: -1087.4153, y: 257.885, z: 517.05896}
+    Rotation: {x: -0, y: 0.9862856, z: -0, w: -0.16504754}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 8
+    MaxSpawnCount: 8
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 1
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 14.65, y: 8, z: 14.65}
+    Spawnables: []
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Roost of Frost Wolves Elite Spawner [3230f24f]'
+    Position: {x: -1090.4044, y: 258.2943, z: 520.99097}
+    Rotation: {x: -0, y: 0.9862856, z: -0, w: -0.16504754}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -995,7 +870,82 @@ MonoBehaviour:
     RespawnCheckIntervalMaximum: 6
     RandomSpawnPosition: 1
     SphereRadius: 0.5
-    BoundingBoxSize: {x: 19.65, y: 8, z: 19.65}
+    BoundingBoxSize: {x: 14.65, y: 8, z: 14.65}
+    Spawnables: []
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Mandrake Rite-ground MonsterPack Spawner [52c3bad5]'
+    Position: {x: 690.6596, y: 157.13513, z: -1721.7343}
+    Rotation: {x: -0, y: 0.7826082, z: -0, w: -0.6225146}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 3
+    MaxSpawnCount: 3
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 1
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 16.67, y: 8, z: 16.67}
+    Spawnables: []
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Burying Ground of the Owl-haunted Rose MonsterPack Spawner [3bf1ef16]'
+    Position: {x: -751.083, y: 159.68652, z: -1384.4316}
+    Rotation: {x: -0, y: 0.8829476, z: -0, w: -0.4694716}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 8
+    MaxSpawnCount: 8
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 1
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 22.42, y: 8, z: 22.42}
+    Spawnables: []
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Burying Ground of the Owl-haunted Rose Elite Spawner [3bf1ef16]'
+    Position: {x: -752.8059, y: 159.6565, z: -1386.5814}
+    Rotation: {x: -0, y: 0.8829476, z: -0, w: -0.4694716}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 1
+    MaxSpawnCount: 1
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 1
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 22.42, y: 8, z: 22.42}
     Spawnables: []
     Pack:
       Enabled: 0
@@ -1004,7 +954,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Elmea Inn Merchant Spawner [06589bd6]'
-    Position: {x: 716.0195, y: 145.01465, z: -2059.3809}
+    Position: {x: 716.0195, y: 145.14478, z: -2059.3809}
     Rotation: {x: -0, y: 0.4305111, z: -0, w: 0.90258527}
     OrConditions: []
     TrueConditions: []
@@ -1030,7 +980,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Auraeelix''s Pit Iron Vein Spawner 1 [3e40567f]'
-    Position: {x: -902.82153, y: 148.8936, z: 393.14807}
+    Position: {x: -902.82153, y: 148.68669, z: 393.14807}
     Rotation: {x: -0, y: 0.5315416, z: -0, w: -0.8470323}
     OrConditions: []
     TrueConditions: []
@@ -1056,7 +1006,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Auraeelix''s Pit Iron Vein Spawner 2 [3e40567f]'
-    Position: {x: -900.0708, y: 148.79071, z: 394.15564}
+    Position: {x: -900.0708, y: 148.5838, z: 394.15564}
     Rotation: {x: -0, y: 0.3682508, z: -0, w: -0.92972654}
     OrConditions: []
     TrueConditions: []
@@ -1081,9 +1031,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Copaern Diggings Iron Vein Spawner 1 [00538092]'
-    Position: {x: -326.09116, y: 80.53034, z: -559.4542}
-    Rotation: {x: -0, y: 0.9010891, z: -0, w: -0.43363422}
+  - Name: 'Tho Delving Iron Vein Spawner 1 [076def0b]'
+    Position: {x: 807.58856, y: 66.61154, z: -1514.8684}
+    Rotation: {x: -0, y: 0.8678968, z: -0, w: 0.49674472}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1107,9 +1057,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Copaern Diggings Iron Vein Spawner 2 [00538092]'
-    Position: {x: -331.5613, y: 80.44577, z: -559.44354}
-    Rotation: {x: -0, y: 0.021881938, z: -0, w: 0.9997606}
+  - Name: 'Tho Delving Iron Vein Spawner 2 [076def0b]'
+    Position: {x: 807.6962, y: 66.60699, z: -1512.124}
+    Rotation: {x: -0, y: 0.99395597, z: -0, w: -0.10978013}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1133,9 +1083,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Copaern Diggings Iron Vein Spawner 3 [00538092]'
-    Position: {x: -328.5964, y: 80.50801, z: -559.85876}
-    Rotation: {x: -0, y: 0.7987989, z: -0, w: -0.6015982}
+  - Name: 'Yuueiri''s Quarry Iron Vein Spawner 1 [00307c69]'
+    Position: {x: -1217.0234, y: 184.21057, z: -1078.2067}
+    Rotation: {x: -0, y: 0.16162565, z: -0, w: 0.98685217}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1159,9 +1109,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Copaern Diggings Iron Vein Spawner 4 [00538092]'
-    Position: {x: -329.99097, y: 80.5244, z: -560.80383}
-    Rotation: {x: -0, y: 0.31775117, z: -0, w: -0.94817424}
+  - Name: 'Yuueiri''s Quarry Iron Vein Spawner 2 [00307c69]'
+    Position: {x: -1203.3839, y: 184.60046, z: -1086.1473}
+    Rotation: {x: -0, y: 0.33134782, z: -0, w: 0.9435087}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1185,9 +1135,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Copaern Diggings Iron Vein Spawner 5 [00538092]'
-    Position: {x: -329.62115, y: 80.40365, z: -557.64636}
-    Rotation: {x: -0, y: 0.9289628, z: -0, w: 0.37017325}
+  - Name: 'Wreck of the Green Star Kelp Holdfast Spawner 1 [1f406ce4]'
+    Position: {x: 73.1655, y: -10.864075, z: 1076.8284}
+    Rotation: {x: -0, y: 0.9945472, z: -0, w: 0.104287654}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1211,9 +1161,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Kel Quarry Iron Vein Spawner 1 [75f287ca]'
-    Position: {x: -481.94644, y: 136.7268, z: -1311.6792}
-    Rotation: {x: -0, y: 0.99838686, z: -0, w: -0.056777537}
+  - Name: 'Wreck of the Green Star Kelp Holdfast Spawner 2 [1f406ce4]'
+    Position: {x: 74.83141, y: -10.894592, z: 1081.3065}
+    Rotation: {x: -0, y: 0.5091969, z: -0, w: -0.86065006}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1237,86 +1187,8 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Kel Quarry Iron Vein Spawner 2 [75f287ca]'
-    Position: {x: -475.5222, y: 136.86572, z: -1310.454}
-    Rotation: {x: -0, y: 0.81978965, z: -0, w: 0.57266474}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 23
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Wreck of the Green Star Kelp Holdfast Spawner 1 [1f406ce4]'
-    Position: {x: 73.1655, y: -10.864868, z: 1076.8284}
-    Rotation: {x: -0, y: 0.9945472, z: -0, w: 0.104287654}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 24
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Wreck of the Green Star Kelp Holdfast Spawner 2 [1f406ce4]'
-    Position: {x: 74.83141, y: -10.895386, z: 1081.3065}
-    Rotation: {x: -0, y: 0.5091969, z: -0, w: -0.86065006}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 25
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
   - Name: 'Flo Sunken Halls MonsterPack Spawner [7d2e7a5a]'
-    Position: {x: 12.7094, y: -10.468811, z: 1227.7751}
+    Position: {x: 12.7094, y: -10.468018, z: 1227.7751}
     Rotation: {x: -0, y: 0.3420202, z: -0, w: -0.9396926}
     OrConditions: []
     TrueConditions: []
@@ -1341,8 +1213,86 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Flo Sunken Halls Living Coral Spawner 1 [7d2e7a5a]'
-    Position: {x: 5.88986, y: -10.48053, z: 1228.7578}
-    Rotation: {x: -0, y: 0.9863248, z: -0, w: -0.16481322}
+    Position: {x: 11.161119, y: -10.624268, z: 1220.113}
+    Rotation: {x: -0, y: 0.031570345, z: -0, w: -0.9995016}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 1
+    MaxSpawnCount: 1
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 0
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 1, y: 8, z: 1}
+    Spawnables:
+    - rid: 23
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Flo Sunken Halls Living Coral Spawner 2 [7d2e7a5a]'
+    Position: {x: 13.323417, y: -10.499268, z: 1225.6245}
+    Rotation: {x: -0, y: 0.77051073, z: -0, w: -0.63742715}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 1
+    MaxSpawnCount: 1
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 0
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 1, y: 8, z: 1}
+    Spawnables:
+    - rid: 24
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Oakea Lode Iron Vein Spawner 1 [44258c28]'
+    Position: {x: -732.5133, y: 162.15613, z: -1175.4823}
+    Rotation: {x: -0, y: 0.42732564, z: 0, w: 0.90409786}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 1
+    MaxSpawnCount: 1
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 0
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 1, y: 8, z: 1}
+    Spawnables:
+    - rid: 25
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Oakea Lode Iron Vein Spawner 2 [44258c28]'
+    Position: {x: -738.93036, y: 161.92456, z: -1179.4255}
+    Rotation: {x: -0, y: 0.01772302, z: -0, w: -0.99984294}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1366,9 +1316,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Flo Sunken Halls Living Coral Spawner 2 [7d2e7a5a]'
-    Position: {x: 25.576569, y: -10.409546, z: 1225.3052}
-    Rotation: {x: -0, y: 0.26613426, z: 0, w: 0.96393603}
+  - Name: 'Oakea Lode Iron Vein Spawner 3 [44258c28]'
+    Position: {x: -732.3083, y: 162.08752, z: -1178.2275}
+    Rotation: {x: -0, y: 0.9570189, z: -0, w: -0.2900258}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1392,9 +1342,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Oakea Lode Iron Vein Spawner 1 [44258c28]'
-    Position: {x: -732.5133, y: 162.18982, z: -1175.4823}
-    Rotation: {x: -0, y: 0.42732564, z: 0, w: 0.90409786}
+  - Name: 'Hriar Crystal Garden Emberglass Cluster Spawner 1 [142b2920]'
+    Position: {x: -1010.2044, y: 220.30725, z: -1044.1233}
+    Rotation: {x: -0, y: 0.9088887, z: -0, w: -0.41703877}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1418,9 +1368,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Oakea Lode Iron Vein Spawner 2 [44258c28]'
-    Position: {x: -738.93036, y: 161.90381, z: -1179.4255}
-    Rotation: {x: -0, y: 0.01772302, z: -0, w: -0.99984294}
+  - Name: 'Hriar Crystal Garden Emberglass Cluster Spawner 2 [142b2920]'
+    Position: {x: -1011.7205, y: 220.05994, z: -1050.2249}
+    Rotation: {x: -0, y: 0.5339584, z: -0, w: -0.84551084}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1444,9 +1394,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Oakea Lode Iron Vein Spawner 3 [44258c28]'
-    Position: {x: -732.3083, y: 162.12537, z: -1178.2275}
-    Rotation: {x: -0, y: 0.9570189, z: -0, w: -0.2900258}
+  - Name: 'Tho Leech-glade Silverleaf Patch Spawner 1 [7fc1b998]'
+    Position: {x: -930.1139, y: 180.20203, z: -1324.66}
+    Rotation: {x: -0, y: 0.68577784, z: -0, w: -0.727811}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1470,9 +1420,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Hriar Crystal Garden Emberglass Cluster Spawner 1 [142b2920]'
-    Position: {x: -1010.2044, y: 220.30627, z: -1044.1233}
-    Rotation: {x: -0, y: 0.9088887, z: -0, w: -0.41703877}
+  - Name: 'Tho Leech-glade Silverleaf Patch Spawner 2 [7fc1b998]'
+    Position: {x: -925.7439, y: 180.11072, z: -1324.5662}
+    Rotation: {x: -0, y: 0.61634946, z: -0, w: -0.78747284}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1496,9 +1446,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Hriar Crystal Garden Emberglass Cluster Spawner 2 [142b2920]'
-    Position: {x: -1011.7205, y: 219.99878, z: -1050.2249}
-    Rotation: {x: -0, y: 0.5339584, z: -0, w: -0.84551084}
+  - Name: 'Larow Herb Glade Silverleaf Patch Spawner 1 [0efc8bce]'
+    Position: {x: 622.7194, y: 34.70117, z: -1172.5133}
+    Rotation: {x: -0, y: 0.11316839, z: -0, w: -0.9935758}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1522,9 +1472,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'The Broken Herb Glade Silverleaf Patch Spawner 1 [3f139aec]'
-    Position: {x: -907.7803, y: 197.81287, z: -1770.0474}
-    Rotation: {x: -0, y: 0.8072383, z: -0, w: 0.5902257}
+  - Name: 'Larow Herb Glade Silverleaf Patch Spawner 2 [0efc8bce]'
+    Position: {x: 626.13025, y: 35.387207, z: -1181.0112}
+    Rotation: {x: -0, y: 0.9964684, z: -0, w: -0.08396891}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1548,9 +1498,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'The Broken Herb Glade Silverleaf Patch Spawner 2 [3f139aec]'
-    Position: {x: -910.7302, y: 197.34875, z: -1766.3329}
-    Rotation: {x: -0, y: 0.5621091, z: -0, w: -0.8270631}
+  - Name: 'Larow Herb Glade Silverleaf Patch Spawner 3 [0efc8bce]'
+    Position: {x: 627.16254, y: 34.208435, z: -1170.7393}
+    Rotation: {x: -0, y: 0.84149235, z: -0, w: 0.540269}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1574,9 +1524,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'The Broken Herb Glade Morel Cluster Spawner 3 [3f139aec]'
-    Position: {x: -915.9904, y: 196.95691, z: -1767.6946}
-    Rotation: {x: -0, y: 0.6804248, z: -0, w: -0.7328179}
+  - Name: 'Larow Herb Glade Silverleaf Patch Spawner 4 [0efc8bce]'
+    Position: {x: 623.1534, y: 34.811584, z: -1175.71}
+    Rotation: {x: -0, y: 0.598259, z: -0, w: 0.8013028}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1600,9 +1550,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Ragaarvald''s Simples Grove Silverleaf Patch Spawner 1 [0ce4be08]'
-    Position: {x: 684.7377, y: 47.992493, z: -1219.343}
-    Rotation: {x: -0, y: 0.7868844, z: -0, w: 0.6171004}
+  - Name: 'Larow Herb Glade Morel Cluster Spawner 5 [0efc8bce]'
+    Position: {x: 618.497, y: 35.045532, z: -1172.7902}
+    Rotation: {x: -0, y: 0.096747994, z: -0, w: 0.995309}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -1620,58 +1570,6 @@ MonoBehaviour:
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
     - rid: 36
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Ragaarvald''s Simples Grove Silverleaf Patch Spawner 2 [0ce4be08]'
-    Position: {x: 685.8597, y: 47.25952, z: -1229.4017}
-    Rotation: {x: -0, y: 0.5771028, z: -0, w: -0.8166716}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 37
-    Pack:
-      Enabled: 0
-      Tactic: 0
-      FocusTargeting: 1
-      TacticOrbitRadius: 5
-      KiteRotationSpeed: 30
-  - Name: 'Ragaarvald''s Simples Grove Morel Cluster Spawner 3 [0ce4be08]'
-    Position: {x: 684.06555, y: 47.530823, z: -1225.0591}
-    Rotation: {x: -0, y: 0.38508403, z: -0, w: 0.92288154}
-    OrConditions: []
-    TrueConditions: []
-    InitialRespawnTime: 0
-    InitialSpawnCount: 1
-    MaxSpawnCount: 1
-    UniqueSpawnables: 0
-    SpawnType: 0
-    PrewarmPool: 1
-    PrewarmHeadroom: 1
-    RandomRespawnTime: 1
-    RespawnCheckIntervalMinimum: 3
-    RespawnCheckIntervalMaximum: 6
-    RandomSpawnPosition: 0
-    SphereRadius: 0.5
-    BoundingBoxSize: {x: 1, y: 8, z: 1}
-    Spawnables:
-    - rid: 38
     Pack:
       Enabled: 0
       Tactic: 0
@@ -1830,7 +1728,7 @@ MonoBehaviour:
         ArchetypeOverride: {fileID: 0}
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 11400000, guid: f4e53c0f28f34decb8faa1b7b44d5356,
+        FactionOverride: {fileID: 11400000, guid: 10c3969643cf4153b3fa042fe9c9fd28,
           type: 2}
         PackRole: 3
         MinimumScale: 1
@@ -1867,7 +1765,7 @@ MonoBehaviour:
         SpawnChance: 1
         YOffset: -0
     - rid: 10
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
         NetworkObject: {fileID: 7260598054390996014, guid: e20156a5af67e8bf2a3bee9393c16e1e,
@@ -1876,17 +1774,6 @@ MonoBehaviour:
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
-        AttributeBonusOverride: {fileID: 0}
-        CorpseDecayDurationOverride: 0
-        EmptyCorpseDecayDurationOverride: 0
-        LootTableOverride: {fileID: 0}
-        ArchetypeOverride: {fileID: 0}
-        AdditionalAbilities: []
-        ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 0}
-        PackRole: 3
-        MinimumScale: 1
-        MaximumScale: 1
     - rid: 11
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
@@ -1918,7 +1805,7 @@ MonoBehaviour:
         SpawnChance: 1
         YOffset: -0
     - rid: 14
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
         NetworkObject: {fileID: 6349228138187238843, guid: 82e54404fe2ccc448bd81cbe31657e29,
@@ -1927,6 +1814,17 @@ MonoBehaviour:
         MaximumRespawnTime: 0
         SpawnChance: 1
         YOffset: -0
+        AttributeBonusOverride: {fileID: 0}
+        CorpseDecayDurationOverride: 0
+        EmptyCorpseDecayDurationOverride: 0
+        LootTableOverride: {fileID: 0}
+        ArchetypeOverride: {fileID: 0}
+        AdditionalAbilities: []
+        ReplacePrefabAbilities: 0
+        FactionOverride: {fileID: 0}
+        PackRole: 3
+        MinimumScale: 1
+        MaximumScale: 1
     - rid: 15
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
@@ -1991,7 +1889,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2001,7 +1899,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2011,7 +1909,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2021,7 +1919,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
+        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2031,7 +1929,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: ef46892dbab0cc6caac60b0903fc9a63,
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2041,7 +1939,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2051,7 +1949,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 7aa0ca70e1f867b189dd2f171dfd2afc,
+        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2061,7 +1959,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2071,7 +1969,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2081,7 +1979,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: f8df879c7ad8329b39693b0ded31617f,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2091,7 +1989,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2101,7 +1999,7 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 3fa78709d8f464211843a6f900c16887,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
@@ -2131,33 +2029,13 @@ MonoBehaviour:
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:
-        NetworkObject: {fileID: 7260598054390996014, guid: cc74cf39abc0f1dcfaf9be5c4a8995d5,
+        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600
         SpawnChance: 1
         YOffset: -0
     - rid: 36
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
-          type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
-        SpawnChance: 1
-        YOffset: -0
-    - rid: 37
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
-        asm: FishMMO.Server}
-      data:
-        NetworkObject: {fileID: 7260598054390996014, guid: 8d9b86f93a8be4dbaa7299135327f436,
-          type: 3}
-        MinimumRespawnTime: 300
-        MaximumRespawnTime: 600
-        SpawnChance: 1
-        YOffset: -0
-    - rid: 38
       type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
         asm: FishMMO.Server}
       data:

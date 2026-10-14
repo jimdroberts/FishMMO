@@ -9,7 +9,8 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// <summary>
 	/// The rock of a waterfall's face (<see cref="FallLedges"/>): ledges stand out of the face between the lip and the
 	/// pool, never in the pool and never past the water's sides, no one rock wide enough to dam the fall, more of them in
-	/// bedded rock than in massive, the same every time for a seed, and none at all on a drop too small to be a fall.
+	/// bedded rock than in massive, the same every time for a seed, and none at all on a drop too small to be a fall; the
+	/// basin's steep walls beside the curtain are dressed in their own rock.
 	/// </summary>
 	[TestFixture]
 	public class FallLedgeTests
@@ -99,6 +100,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					foreach (FallLedge rock in FallLedges.Plan(Water(drop), Ground(drop), Rock("Limestone"), seed))
 					{
+						if (rock.Kind == FallRockKind.Wall)
+						{
+							continue;   // the basin's walls, beside the fall (WallRockDressesOnlyTheBasinsSteepDryGroundBesideTheCurtain)
+						}
 						Assert.That(Mathf.Abs(rock.Across) + 0.5f * rock.Size.x, Is.LessThanOrEqualTo(0.5f * Width + 2f + 1e-3f),
 							$"{rock.Kind} beyond the water's sides and two metres");
 						Assert.That(rock.Position.z, Is.EqualTo(rock.Across).Within(1e-3f), "across is measured from the line through the lip");
@@ -173,6 +178,49 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			Assert.That(split, Is.GreaterThan(0), "a ledge wider than one rock may be is laid as several");
+		}
+
+		[Test]
+		public void WallRockDressesOnlyTheBasinsSteepDryGroundBesideTheCurtain()
+		{
+			var settings = new FallLedgeSettings();
+			float lipX = LipIndex * Spacing;
+			float steep = Mathf.Tan(settings.WallDressDegrees * Mathf.Deg2Rad);
+			foreach (float drop in new[] { 8f, 20f, 45f })
+			{
+				float pool = LipSurface - drop;
+				Func<float, float, float> ground = Ground(drop);
+				int walls = 0;
+				for (uint seed = 1; seed <= 10; seed++)
+				{
+					foreach (FallLedge rock in FallLedges.Plan(Water(drop), ground, Rock("Sandstone"), seed, settings))
+					{
+						if (rock.Kind != FallRockKind.Wall)
+						{
+							continue;
+						}
+						walls++;
+						// Where it was sunk: its spot on the ground, downstream and across from the lip.
+						float x = lipX + rock.FrontAlong, z = rock.Across;
+						Assert.That(Mathf.Abs(z) >= 0.5f * Width + settings.SideSlackMetres || rock.FrontAlong >= 2f * Spacing + 1f, Is.True,
+							$"a wall rock at ({rock.FrontAlong:F1}, {z:F1}) in the curtain's band: that is the ledges' and the overhang's");
+						float grade = Mathf.Abs(ground(x + 0.75f, z) - ground(x - 0.75f, z)) / 1.5f;
+						Assert.That(grade, Is.GreaterThanOrEqualTo(steep - 1e-3f), "only steep ground is dressed");
+						// Its lowest corner, whichever way it lies.
+						float lowest = float.MaxValue;
+						for (int corner = 0; corner < 8; corner++)
+						{
+							var local = new Vector3((corner & 1) != 0 ? 0.5f : -0.5f, (corner & 2) != 0 ? 0.5f : -0.5f, (corner & 4) != 0 ? 0.5f : -0.5f);
+							lowest = Mathf.Min(lowest, (rock.Position + rock.Rotation * Vector3.Scale(local, rock.Size)).y);
+						}
+						Assert.That(lowest, Is.GreaterThan(pool), "its foot clear of the pool's water");
+						Assert.That(Mathf.Max(rock.Size.x, rock.Size.z), Is.LessThanOrEqualTo(settings.MaxWallRock * 1.35f + 1e-3f));
+						Assert.That(rock.Size.y, Is.LessThan(Mathf.Min(rock.Size.x, rock.Size.z)), "a slab lying in the face: thin out of it");
+						Assert.That(rock.Prefab, Does.StartWith("Boulder_Sandstone_"), "the wall's own rock");
+					}
+				}
+				Assert.That(walls, Is.GreaterThan(0), $"the {drop} m face beside the curtain is dressed");
+			}
 		}
 
 		[Test]

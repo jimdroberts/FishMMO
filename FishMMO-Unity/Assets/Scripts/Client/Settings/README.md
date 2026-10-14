@@ -25,6 +25,7 @@ The settings screen itself is `UITKOptions` in
 | `ClientWorldLabelSettings` | World-label scale, distance, opacity, budget, occlusion, and the per-kind nameplate ranges. |
 | `ClientGrassSettings` | How far terrain grass and small details are drawn on the GPU-driven path. |
 | `ClientCloudSettings` | Whether the volumetric clouds (and their ground shadows and god rays) are drawn. |
+| `ClientCarriedLightSettings` | The torch or lantern the player's character carries, stepped by its key and restored on entering the world. |
 | `UIProfile` | Reads and writes a shareable UI layout/colour file, separate from `Configuration.cfg`. |
 
 ## Boot order

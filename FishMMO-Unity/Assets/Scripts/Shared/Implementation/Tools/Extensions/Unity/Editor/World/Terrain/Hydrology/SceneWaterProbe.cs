@@ -86,6 +86,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			RenderSettings.sun = sun;
 
+			// FISHMMO_SCENEWATER_FALL_DEBUG=1: the curtains drawn as their debug colours (alpha red, metres fallen green, brink blue).
+			Shader.SetGlobalFloat("_FishFallDebug", Environment.GetEnvironmentVariable("FISHMMO_SCENEWATER_FALL_DEBUG") == "1" ? 1f : 0f);
 			var camera = new GameObject("Probe Camera").AddComponent<Camera>();
 			camera.clearFlags = CameraClearFlags.Skybox;
 			camera.fieldOfView = 50f;
@@ -104,7 +106,14 @@ namespace FishMMO.Shared.WorldDesign
 
 			// The largest falls, and any fall with another close below it (a cascade) once.
 			var shots = renderer.Falls.OrderByDescending(f => f.Drop).Take(fallCount).ToList();
-			foreach (InlandWaterRenderer.Fall f in renderer.Falls)
+			// FISHMMO_SCENEWATER_LIPS="971,619": these falls (by their lip point) instead.
+			string lips = Environment.GetEnvironmentVariable("FISHMMO_SCENEWATER_LIPS");
+			if (!string.IsNullOrEmpty(lips))
+			{
+				var wanted = new HashSet<int>(lips.Split(',').Select(l => int.TryParse(l, out int lip) ? lip : -1));
+				shots = renderer.Falls.Where(f => wanted.Contains(f.Lip)).ToList();
+			}
+			foreach (InlandWaterRenderer.Fall f in string.IsNullOrEmpty(lips) ? renderer.Falls : new List<InlandWaterRenderer.Fall>())
 			{
 				bool cascade = renderer.Falls.Any(o => o.River == f.River && o.Lip > f.Foot && o.Lip - f.Foot <= 12);
 				if (cascade && !shots.Any(s => s.River == f.River && Mathf.Abs(s.Lip - f.Lip) <= 30))
@@ -135,6 +144,11 @@ namespace FishMMO.Shared.WorldDesign
 					("side", middle + side * back + Vector3.up * (f.Drop * 0.15f + 2f), middle),
 					("high", f.Landing + down * (back * 0.6f) - side * (back * 0.4f) + Vector3.up * (f.Drop + back * 0.7f), f.Landing),
 					("top", f.Landing + Vector3.up * (back * 1.4f + f.Drop) + down * 0.1f, f.Landing),
+					// The brink close: from a little downstream and to the side, over the drop, and from upstream along the river.
+					("lip", f.LipPoint + down * (f.Width + 6f) + side * (f.Width * 0.8f + 2f) + Vector3.up * 4f, f.LipPoint - Vector3.up * 1.5f),
+					("lipback", f.LipPoint - down * (f.Width + 7f) + Vector3.up * 3f, f.LipPoint + down * 2f - Vector3.up * 2f),
+					// Close in front of the brink, a little above it, looking back up at where the river goes over.
+					("lipclose", f.LipPoint + down * (0.6f * f.Width + 3f) + Vector3.up * 1.5f, f.LipPoint - Vector3.up * 0.8f),
 				};
 				foreach ((string name, Vector3 from, Vector3 at) in views)
 				{
@@ -147,10 +161,56 @@ namespace FishMMO.Shared.WorldDesign
 					camera.transform.position = eye;
 					camera.transform.LookAt(at);
 					string file = $"fall{index:00}_r{f.River}_l{f.Lip}_{name}.png";
+					// FISHMMO_SCENEWATER_FOAM=seconds: the simulated foam run that long round the camera first (WaterFoamField).
+					if (float.TryParse(Environment.GetEnvironmentVariable("FISHMMO_SCENEWATER_FOAM"), System.Globalization.NumberStyles.Float,
+						System.Globalization.CultureInfo.InvariantCulture, out float foamSeconds) && foamSeconds > 0f)
+					{
+						camera.Render();
+						WaterFoamField.Simulate(eye, foamSeconds);
+					}
 					Capture(camera, target, Path.Combine(outDir, file));
 					report.Add($"{file}: from {eye} to {at}");
 				}
 				index++;
+			}
+			/* FISHMMO_SCENEWATER_AT="x,z;x,z": the river at each of these points, from high to one side and from low across it,
+			 * looking at the water there (the reports of a bank not holding the water, at a scene position). */
+			string spots = Environment.GetEnvironmentVariable("FISHMMO_SCENEWATER_AT");
+			if (!string.IsNullOrEmpty(spots))
+			{
+				int spot = 0;
+				foreach (string pair in spots.Split(';'))
+				{
+					string[] xz = pair.Split(',');
+					if (xz.Length < 2 || !float.TryParse(xz[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sx)
+						|| !float.TryParse(xz[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sz))
+					{
+						continue;
+					}
+					float ground = GroundAt(sx, sz);
+					float water = bodies.TryGetSurface(sx, sz, out float surface) ? surface : ground;
+					var look = new Vector3(sx, Mathf.Max(ground, water), sz);
+					probe.transform.position = look + Vector3.up * 10f;
+					probe.RenderProbe();
+					// FISHMMO_SCENEWATER_AT_SCALE: the views that much further off (a town, not a bank).
+					float viewScale = float.TryParse(Environment.GetEnvironmentVariable("FISHMMO_SCENEWATER_AT_SCALE"), System.Globalization.NumberStyles.Float,
+						System.Globalization.CultureInfo.InvariantCulture, out float scaled) && scaled > 0f ? scaled : 1f;
+					foreach ((string name, Vector3 offset) in new[] { ("high", new Vector3(9f, 9f, -9f)), ("low", new Vector3(-7f, 2.2f, 5f)), ("top", new Vector3(0.5f, 16f, 0.5f)) })
+					{
+						Vector3 eye = look + (name == "low" ? new Vector3(offset.x * viewScale, offset.y, offset.z * viewScale) : offset * viewScale);
+						float under = GroundAt(eye.x, eye.z);
+						if (!float.IsNegativeInfinity(under) && eye.y < under + 1.5f)
+						{
+							eye.y = under + 1.5f;
+						}
+						camera.transform.position = eye;
+						camera.transform.LookAt(look);
+						string file = $"at{spot:00}_{name}.png";
+						Capture(camera, target, Path.Combine(outDir, file));
+						report.Add($"{file}: ({sx:0.0}, {sz:0.0}) ground {ground:0.00} water {water:0.00}, from {eye}");
+					}
+					spot++;
+				}
 			}
 			File.WriteAllLines(Path.Combine(outDir, "report.txt"), report);
 			Debug.Log($"[Scene water probe] {index} falls shot into '{outDir}'.\n" + string.Join("\n", report.Take(60)));
@@ -230,6 +290,21 @@ namespace FishMMO.Shared.WorldDesign
 			TerrainTilePlan plan = SceneGeneration.PlanTiles(request.SizeKm);
 			SceneHeightField field = SceneGround.Shape(request, plan, system, new List<string>(), out _, out SceneWater water);
 			report.Add($"shape: re-shaped {field.Width}x{field.Depth} at {field.Spacing} m; in-memory rivers {water?.Rivers?.Count ?? 0}");
+			// FISHMMO_SCENEWATER_DUMP: the whole shaped ground beside the CSV (little-endian float32, row by row north), with
+			// its grid in a text file, to diff against the saved tiles anywhere, not only at the banks.
+			if (Environment.GetEnvironmentVariable("FISHMMO_SCENEWATER_DUMP") == "1")
+			{
+				string folder = Path.GetDirectoryName(csvPath);
+				using (var stream = new BinaryWriter(File.Create(Path.Combine(folder, "shaped.f32"))))
+				{
+					foreach (float metres in field.Metres)
+					{
+						stream.Write(metres);
+					}
+				}
+				File.WriteAllText(Path.Combine(folder, "shaped.txt"), string.Format(System.Globalization.CultureInfo.InvariantCulture,
+					"{0} {1} {2} {3} {4}", field.Width, field.Depth, field.Spacing, field.EastOf(0), field.NorthOf(0)));
+			}
 			// The generator against itself: its own rivers over the very ground it carved them into, in this one run.
 			var self = new List<string> { "river,point,reach,surface,bed,width,left,right,centre,end,joins" };
 			foreach (RiverPath path in water?.Rivers ?? new List<RiverPath>())

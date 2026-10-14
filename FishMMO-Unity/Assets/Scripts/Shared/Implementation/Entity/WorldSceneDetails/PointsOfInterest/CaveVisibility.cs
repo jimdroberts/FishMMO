@@ -8,9 +8,28 @@ namespace FishMMO.Shared
 	/// of the camera (at a mouth looking in). Everything deeper is behind the hill.
 	/// </summary>
 	/// <remarks>
+	/// <para>
 	/// The pieces are the 32 m cubes the cut meshed the cave in (CaveMesher); their colliders are elsewhere, on the
 	/// server-kept cave root, and are never touched. On the cave's client-only visual, so a server never runs it. Checked a
 	/// few times a second, staggered between caves, and only the renderers whose state changes are written.
+	/// </para>
+	/// <para>
+	/// No property block on the pieces: one takes a renderer out of the SRP Batcher and the GPU Resident Drawer. The cave
+	/// mode of the rock shader's ground contact (<c>_FishContactOn</c> 2, FishGroundColour.hlsl) was set through one, but
+	/// the pieces wear FishMMO/Weather Lit, whose forward pass compiles the contact only for the GPU-driven rocks
+	/// (FISH_INDIRECT_INSTANCED): the value was read by nothing they draw. A cave contact for the pieces would be a
+	/// per-material value (a keyword, or a field of the material's constant buffer), never a block.
+	/// </para>
+	/// <para>
+	/// <b>In the cave</b> is in one of its voids' boxes (its passages', chambers', chasms' and shafts', set by the cut) or near
+	/// one of its pieces' boxes. The pieces' boxes alone were not enough once halls grew to 160 m (2026-10-13): a piece is a
+	/// 32 m cube of the surface, so the air in the middle of a hall, a few metres over its floor, was in none of them, and the
+	/// far walls were switched off by distance while the camera stood inside.
+	/// </para>
+	/// <para>
+	/// The caves alive and their pieces' boxes are open to the client (<see cref="Live"/>), so a full-screen effect can
+	/// ask whether the camera is sealed in one (UndergroundView).
+	/// </para>
 	/// </remarks>
 	[DisallowMultipleComponent]
 	public sealed class CaveVisibility : MonoBehaviour
@@ -19,6 +38,8 @@ namespace FishMMO.Shared
 		[SerializeField] private bool[] mouth = System.Array.Empty<bool>();
 		[Tooltip("How near a piece's box the camera must be for it to be drawn, metres.")]
 		[SerializeField] private float reach = 72f;
+		[Tooltip("The cave's voids, world boxes: inside any of them the camera is in the cave.")]
+		[SerializeField] private Bounds[] volumes = System.Array.Empty<Bounds>();
 
 		private const int Interval = 6;
 		/// <summary>How near a piece's box the camera counts as in the cave, metres (the boxes are the meshed 32 m cubes).</summary>
@@ -27,38 +48,72 @@ namespace FishMMO.Shared
 		private int phase;
 
 		/// <summary>Set by the cut: the pieces and which of them are at a mouth.</summary>
-		public void Configure(Renderer[] renderers, bool[] atMouth, float drawReach)
+		public void Configure(Renderer[] renderers, bool[] atMouth, float drawReach, Bounds[] voids = null)
 		{
 			pieces = renderers ?? System.Array.Empty<Renderer>();
 			mouth = atMouth ?? System.Array.Empty<bool>();
 			reach = drawReach;
+			volumes = voids ?? System.Array.Empty<Bounds>();
 		}
 
-		/// <summary>The rock shader's per-draw ground-contact switch (FishGroundColour.hlsl <c>_FishContactOn</c>).</summary>
-		private static readonly int ContactOnId = Shader.PropertyToID("_FishContactOn");
-		/// <summary>The cave mode: the ground drawn only where the rock comes up through the hillside.</summary>
-		private const float CaveContact = 2f;
-		private static MaterialPropertyBlock contactBlock;
+		private static readonly System.Collections.Generic.List<CaveVisibility> live = new System.Collections.Generic.List<CaveVisibility>();
+
+		/// <summary>The caves enabled now.</summary>
+		public static System.Collections.Generic.IReadOnlyList<CaveVisibility> Live => live;
+
+		/// <summary>How many pieces the cave is drawn in.</summary>
+		public int PieceCount => boxes != null ? boxes.Length : 0;
+
+		/// <summary>A piece's box in the world, as it was when the cave was enabled.</summary>
+		public Bounds BoxOf(int piece) => boxes[piece];
+
+		/// <summary>Whether a piece is at a mouth: the opening seen from outside, and the outside seen from in.</summary>
+		public bool AtMouth(int piece) => piece < mouth.Length && mouth[piece];
+
+		/// <summary>Whether a piece is drawn now (a missing renderer is drawn by nothing).</summary>
+		public bool Drawn(int piece) => pieces[piece] != null && pieces[piece].enabled;
+
+		/// <summary>Whether a point is inside one of the pieces' boxes or the voids' boxes: in the cave, or in the rock round it.</summary>
+		public bool Holds(Vector3 point)
+		{
+			for (int i = 0; i < boxes.Length; i++)
+			{
+				if (boxes[i].Contains(point))
+				{
+					return true;
+				}
+			}
+			return InVoid(point);
+		}
+
+		/// <summary>Whether a point is in one of the cave's voids' boxes.</summary>
+		private bool InVoid(Vector3 point)
+		{
+			for (int i = 0; i < volumes.Length; i++)
+			{
+				if (volumes[i].Contains(point))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
 
 		private void OnEnable()
 		{
 			boxes = new Bounds[pieces.Length];
-			// Where the cave's rock comes up through the hillside (the collar round its mouth, the lip over it) it is drawn as
-			// the ground there, as a scattered rock's foot is, so the mouth reads as earth and turf round an opening rather
-			// than a stone plate on the hill (2026-10-12). Its walls and roof under the hill keep their rock.
-			contactBlock ??= new MaterialPropertyBlock();
-			contactBlock.Clear();
-			contactBlock.SetFloat(ContactOnId, CaveContact);
 			for (int i = 0; i < pieces.Length; i++)
 			{
 				boxes[i] = pieces[i] != null ? pieces[i].bounds : default;
-				if (pieces[i] != null)
-				{
-					pieces[i].SetPropertyBlock(contactBlock);
-				}
 			}
 			phase = (GetInstanceID() & 0x7FFFFFFF) % Interval;
 			Apply(true);
+			live.Add(this);
+		}
+
+		private void OnDisable()
+		{
+			live.Remove(this);
 		}
 
 		private void LateUpdate()
@@ -80,7 +135,7 @@ namespace FishMMO.Shared
 			float reach2 = reach * reach;
 			// Inside the cave (in any of its pieces' boxes) every piece is drawn: a passage or a cavern is seen far along,
 			// and a piece switched off by distance left a hole onto the hillside's underside (2026-10-12).
-			bool inside = false;
+			bool inside = InVoid(eye);
 			for (int i = 0; i < boxes.Length && !inside; i++)
 			{
 				inside = boxes[i].SqrDistance(eye) <= InsideMargin * InsideMargin;

@@ -29,16 +29,16 @@ namespace FishMMO.Client
 		public sealed class Group
 		{
 			public int HeightResolution, DensityResolution, SurfaceResolution;
-			public Texture2DArray Heights, Surface;
+			public Texture Heights, Surface;
 			/// <summary>
 			/// Every density map of the group's terrains, a slice each: a terrain's maps are consecutive from its first
 			/// (table uint 33), as many as it has (uint 17). It was two arrays of a slice per terrain each, the second all
 			/// zeros for a terrain of four types or fewer; four such arrays for 16 channels would have doubled the memory
 			/// again for terrains that use one map. One array is also one binding, not four.
 			/// </summary>
-			public Texture2DArray Density;
-			/// <summary>The water-line maps (<see cref="GrassTerrain.Freeboard"/>) of the group's terrains that have one, a slice each; one unread 1×1 slice when none does.</summary>
-			public Texture2DArray Water;
+			public Texture Density;
+			/// <summary>The water-line maps (<see cref="GrassTerrain.Freeboard"/>: the water line and the painted holes) of the group's terrains that have one, a slice each; one unread 1×1 slice when none does.</summary>
+			public Texture Water;
 			public readonly List<GrassTerrain> Terrains = new List<GrassTerrain>();
 		}
 
@@ -189,7 +189,7 @@ namespace FishMMO.Client
 				}
 				// 16 slice, 17 density maps (1..4, raw), 18 surface resolution, 19 colour layers (0: none);
 				// 20 albedo width, 21 albedo mips, 22 texels per layer, 23 the copy's first uint (raw);
-				// 24 its water-line slice (raw; 0xFFFFFFFF none); 33 its first density slice (raw).
+				// 24 its water-line and holes slice (raw; 0xFFFFFFFF none); 33 its first density slice (raw).
 				data[at + 16] = (uint)slice;
 				data[at + 17] = (uint)gt.DensityMaps;
 				Put(data, at + 18, g.SurfaceResolution);
@@ -224,11 +224,7 @@ namespace FishMMO.Client
 						wet++;
 					}
 				}
-				g.Water = NewArray(wet > 0 ? g.HeightResolution : 1, Math.Max(1, wet), TextureFormat.R8, "water line");
-				if (wet == 0)
-				{
-					g.Water.Apply(false, false);
-				}
+				g.Water = NewArray(wet > 0 ? g.HeightResolution : 1, Math.Max(1, wet), TextureFormat.RG16, "water line and holes");
 				for (int s = 0; s < n; s++)
 				{
 					GrassTerrain gt = g.Terrains[s];
@@ -266,15 +262,10 @@ namespace FishMMO.Client
 
 		private static void Put(uint[] data, int at, float value) => data[at] = BitConverter.ToUInt32(BitConverter.GetBytes(value), 0);
 
-		private static Texture2DArray NewArray(int resolution, int slices, TextureFormat format, string what)
+		/// <summary>A GPU-only array (TerrainAtlasArrays: no system-memory copy, nothing uploaded), linear as the maps are.</summary>
+		private static Texture NewArray(int resolution, int slices, TextureFormat format, string what)
 		{
-			return new Texture2DArray(resolution, resolution, slices, format, false, true)
-			{
-				name = $"Grass {what} ({slices} terrain(s))",
-				filterMode = FilterMode.Point,
-				wrapMode = TextureWrapMode.Clamp,
-				hideFlags = HideFlags.DontSave,
-			};
+			return TerrainAtlasArrays.NewArray(resolution, slices, TerrainAtlasArrays.Linear(format), $"Grass {what} ({slices} terrain(s))");
 		}
 
 		/// <summary>An all-zero RGBA32 square: the slice of a terrain with no surface layers.</summary>
@@ -296,7 +287,7 @@ namespace FishMMO.Client
 			int frame = Time.frameCount;
 			foreach (Group g in Groups)
 			{
-				foreach (Texture2DArray a in new[] { g.Heights, g.Density, g.Surface, g.Water })
+				foreach (Texture a in new[] { g.Heights, g.Density, g.Surface, g.Water })
 				{
 					if (a != null)
 					{

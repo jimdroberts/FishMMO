@@ -21,7 +21,7 @@
 // fade band (where it is in two different levels).
 //
 // Portable to Vulkan, D3D11/12, Metal and WebGPU: no wave intrinsics; atomics only on a
-// RWByteAddressBuffer; no readbacks.
+// RWByteAddressBuffer and on groupshared counters (appends are counted per thread group); no readbacks.
 
 #pragma kernel FishClearCounts
 #pragma kernel FishCull
@@ -258,10 +258,17 @@ float FishThinFade(FishWork w, float3 position, float d)
     return fade;
 }
 
-void FishEmit(uint slot, uint index, float fade)
+/* Appends are counted per thread group: a work item is one model's run, so a group reaches at most that model's eight
+ * slots (four levels, two views). Each thread takes its entries' places from the group's own counters, then one thread
+ * per slot takes the group's whole run from the slot's counter with one atomic, where every entry took one before. The
+ * counts are the same, so the draws are; only the order of entries within a slot differs (nothing reads it). */
+#define FISH_GROUP_SLOTS 8
+groupshared uint gsFishCount[FISH_GROUP_SLOTS];
+groupshared uint gsFishBase[FISH_GROUP_SLOTS];
+
+// Writes a visible entry at its place in a slot (dropped past the slot's capacity).
+void FishStore(uint slot, uint at, uint index, float fade)
 {
-    uint at;
-    _FishCounts.InterlockedAdd(slot * 4, 1, at);
     uint2 s = _FishSlots[slot];
     if (at < s.y)
     {
@@ -281,9 +288,15 @@ void FishClearCounts(uint3 id : SV_DispatchThreadID)
     }
 }
 
-[numthreads(64, 1, 1)]
-void FishCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+/* One instance of a work item: which of its model's slots it enters (up to four entries: its level and its cross-fade
+ * partner, in the camera's view and the shadows'), as local slots (level * 2 + view) in `slots` with their fades, `valid`
+ * a bit per entry. Every output is set first, so each early return enters nothing. */
+void FishCullInstance(uint3 group, uint3 thread, out uint index, out uint4 slots, out float4 fades, out uint valid)
 {
+    index = 0;
+    slots = 0;
+    fades = 0.0;
+    valid = 0;
     uint item = group.x + group.y * 65535;
     if (item >= _FishWorkCount)
     {
@@ -294,7 +307,7 @@ void FishCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
     {
         return;
     }
-    uint index = work.start + thread.x;
+    index = work.start + thread.x;
     FishInstance inst = _FishInstances[index];
     FishModel m = _FishModels[work.model];
 
@@ -336,10 +349,14 @@ void FishCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
     float radius = m.sphereRadius * max(sx, max(sy, sz));
     if (FishSphereVisible(centre, radius) && !FishOccluded(centre, radius))
     {
-        FishEmit(m.slotBase + (uint)lod * 2, index, fade);
+        slots.x = (uint)lod * 2;
+        fades.x = fade;
+        valid |= 1u;
         if (partner >= 0)
         {
-            FishEmit(m.slotBase + (uint)partner * 2, index, partnerFade);
+            slots.y = (uint)partner * 2;
+            fades.y = partnerFade;
+            valid |= 2u;
         }
     }
 
@@ -354,11 +371,66 @@ void FishCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
         {
             if ((m.shadowMask & (1u << (uint)lod)) != 0)
             {
-                FishEmit(m.slotBase + (uint)lod * 2 + 1, index, fade);
+                slots.z = (uint)lod * 2 + 1;
+                fades.z = fade;
+                valid |= 4u;
             }
             if (partner >= 0 && (m.shadowMask & (1u << (uint)partner)) != 0)
             {
-                FishEmit(m.slotBase + (uint)partner * 2 + 1, index, partnerFade);
+                slots.w = (uint)partner * 2 + 1;
+                fades.w = partnerFade;
+                valid |= 8u;
+            }
+        }
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    if (thread.x < FISH_GROUP_SLOTS)
+    {
+        gsFishCount[thread.x] = 0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    uint index;
+    uint4 slots;
+    float4 fades;
+    uint valid;
+    FishCullInstance(group, thread, index, slots, fades, valid);
+    // This thread's places in the group's runs.
+    uint4 at = 0;
+    [unroll] for (int e = 0; e < 4; e++)
+    {
+        if ((valid & (1u << (uint)e)) != 0)
+        {
+            InterlockedAdd(gsFishCount[slots[e]], 1, at[e]);
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    // The group's runs in its model's slots: one atomic per slot it fills (the item is valid wherever a count is not 0).
+    if (thread.x < FISH_GROUP_SLOTS)
+    {
+        uint n = gsFishCount[thread.x];
+        uint first = 0;
+        if (n > 0)
+        {
+            uint item = group.x + group.y * 65535;
+            uint slotBase = _FishModels[_FishWork[item].model].slotBase;
+            _FishCounts.InterlockedAdd((slotBase + thread.x) * 4, n, first);
+        }
+        gsFishBase[thread.x] = first;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (valid != 0)
+    {
+        uint item = group.x + group.y * 65535;
+        uint slotBase = _FishModels[_FishWork[item].model].slotBase;
+        [unroll] for (int k = 0; k < 4; k++)
+        {
+            if ((valid & (1u << (uint)k)) != 0)
+            {
+                FishStore(slotBase + slots[k], gsFishBase[slots[k]] + at[k], index, fades[k]);
             }
         }
     }

@@ -46,12 +46,13 @@ namespace FishMMO.UnitTests.AI
 					// No NavMeshSurface in this scene.
 					continue;
 				}
+				// A generator-baked NavMesh is referenced by a hashed local file id, which is as often negative as not.
 				results.Add(new SurfaceScene
 				{
 					Path = path,
 					HasTerrain = Regex.IsMatch(text, @"^Terrain:\s*$", RegexOptions.Multiline),
 					BuildHeightMesh = heightMesh.Groups[1].Value == "1",
-					HasNavMeshData = Regex.IsMatch(text, @"^\s+m_NavMeshData:\s*\{fileID:\s*\d+,\s*guid:", RegexOptions.Multiline),
+					HasNavMeshData = Regex.IsMatch(text, @"^\s+m_NavMeshData:\s*\{fileID:\s*-?\d+,\s*guid:", RegexOptions.Multiline),
 				});
 			}
 			return results;

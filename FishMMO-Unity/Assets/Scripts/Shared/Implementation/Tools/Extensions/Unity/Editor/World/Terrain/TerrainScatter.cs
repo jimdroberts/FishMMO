@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Shared.Biomes;
@@ -1037,6 +1038,12 @@ namespace FishMMO.Shared.WorldDesign
 			public ScenePlacementClimate Placement;
 			/// <summary>The climate over the current tile, built the first time a banded rule asks.</summary>
 			public readonly ClimateGrid Climate = new ClimateGrid();
+			/// <summary>One chunk of a rule's visiting order, worked out before it is walked (<see cref="SampleRule"/>).</summary>
+			public readonly CellPick[] Picks = new CellPick[PickChunk];
+			/// <summary>The units a carpet wrote into each cell, for counting what it covered in row order.</summary>
+			public int[] CarpetUnits;
+			/// <summary>Each texel's biome weights for a band of alphamap rows (<see cref="ReadBiomes"/>).</summary>
+			public float[] BandWeights = Array.Empty<float>();
 
 			public Workspace(int biomes, int attributions)
 			{
@@ -1069,6 +1076,14 @@ namespace FishMMO.Shared.WorldDesign
 			Func<float, float, float, float> normalizedHeight, TerrainScatterOptions options, Workspace work, bool firstTile, TerrainScatterReport report)
 		{
 			TerrainData data = terrain.terrainData;
+			long phase = Stopwatch.GetTimestamp();
+			double Lap()
+			{
+				long now = Stopwatch.GetTimestamp();
+				double seconds = (now - phase) / (double)Stopwatch.Frequency;
+				phase = now;
+				return seconds;
+			}
 			var frame = new TileFrame
 			{
 				Origin = terrain.transform.position,
@@ -1122,11 +1137,13 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
+			report.SetupSeconds += Lap();
 			ReadGround(data, frame, work);
 			// Last tile's climate is not this one's; rebuilt only if a banded rule reaches this tile.
 			work.Climate.Ready = false;
 			ReadAlphamaps(data, frame, rules, palette.Layers.Count, work, terrain.name, report);
 			ReadBiomes(field, frame, layerBiomes, attributionEntries, work);
+			report.ReadSeconds += Lap();
 
 			Array.Clear(work.BiomeUsedDetail, 0, work.BiomeUsedDetail.Length);
 			Array.Clear(work.BiomeUsedTree, 0, work.BiomeUsedTree.Length);
@@ -1182,7 +1199,7 @@ namespace FishMMO.Shared.WorldDesign
 					placed = SampleRule(rule, frame, work, weights, work.Attribution[rule.Attribution], detailResolution, detailResolution, false,
 						normalizedHeight, ref budget, null, work.DetailBuffers, value, maxValue);
 					tileDetailUsed += placed;
-					WriteDetails(data, rule, work);
+					WriteDetails(data, rule, work, report);
 				}
 				biomeUsed[biome] += placed;
 				rule.Outcome.Placed += placed;
@@ -1194,11 +1211,14 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
+			report.RuleSeconds += Lap();
 			RunCarpets(data, rules, frame, work, detailResolution, maxValue, normalizedHeight, report);
+			report.CarpetSeconds += Lap();
 
 			report.DetailCellsCovered += tileDetailUsed;
 			report.TreesPlaced += tileTreesUsed;
 			Finish(terrain, data, work);
+			report.WriteSeconds += Lap();
 		}
 
 		private static void Finish(Terrain terrain, TerrainData data, Workspace work)
@@ -1414,48 +1434,95 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				entrySlot[e] = slot;
 			}
-			var sums = new float[sharers.Count];
-
-			float[] weights = work.BiomeWeights;
-			float step = 1f / (res - 1);
-			for (int y = 0; y < res; y++)
+			if (biomes == 0)
 			{
-				// Alphamap texels sit on the tile's corners (texel i at i / (res - 1)), as the terrain shader samples them.
-				float worldZ = frame.Origin.z + y * step * frame.Size.z;
-				for (int x = 0; x < res; x++)
+				// No weights to read: every share stays 0, as the texel-by-texel pass left it.
+				for (int e = 0; e < entries.Count; e++)
 				{
-					float worldX = frame.Origin.x + x * step * frame.Size.x;
-					if (biomes > 0)
+					Array.Clear(work.Attribution[e], 0, res * res);
+				}
+				return;
+			}
+
+			/* A band of rows at a time: each texel's weights and shares in parallel (the field only reads), then the
+			 * biomes' shares of the tile summed on one thread, texel by texel in row order, as they always were. */
+			const int BandRows = 32;
+			int stride = Math.Max(1, biomes);
+			if (work.BandWeights.Length < BandRows * res * stride)
+			{
+				work.BandWeights = new float[BandRows * res * stride];
+			}
+			float[] band = work.BandWeights;
+			float[][] attribution = work.Attribution;
+			int slots = sharers.Count;
+			var most = new float[entries.Count];
+			object gate = new object();
+			var entryBiome = new int[entries.Count];
+			for (int e = 0; e < entries.Count; e++)
+			{
+				entryBiome[e] = entries[e].BiomeIndex;
+			}
+			float step = 1f / (res - 1);
+			for (int y0 = 0; y0 < res; y0 += BandRows)
+			{
+				int rows = Math.Min(BandRows, res - y0);
+				Parallel.For(0, rows, Workers, () => (new float[stride], new float[slots], new float[entries.Count]), (r, _, local) =>
+				{
+					(float[] weights, float[] sums, float[] peak) = local;
+					int y = y0 + r;
+					// Alphamap texels sit on the tile's corners (texel i at i / (res - 1)), as the terrain shader samples them.
+					float worldZ = frame.Origin.z + y * step * frame.Size.z;
+					for (int x = 0; x < res; x++)
 					{
+						float worldX = frame.Origin.x + x * step * frame.Size.x;
 						field.WeightsAt(worldX, worldZ, weights);
+						Array.Copy(weights, 0, band, (r * res + x) * stride, biomes);
+						for (int l = 0; l < slots; l++)
+						{
+							int[] onLayer = sharers[l];
+							float sum = 0f;
+							for (int n = 0; n < onLayer.Length; n++)
+							{
+								sum += weights[onLayer[n]];
+							}
+							sums[l] = sum;
+						}
+						int texel = y * res + x;
+						for (int e = 0; e < entryBiome.Length; e++)
+						{
+							float own = weights[entryBiome[e]];
+							float sum = sums[entrySlot[e]];
+							float share = own > 0f && sum > 0f ? own / sum : 0f;
+							attribution[e][texel] = share;
+							if (share > peak[e])
+							{
+								peak[e] = share;
+							}
+						}
 					}
+					return local;
+				}, local =>
+				{
+					lock (gate)
+					{
+						for (int e = 0; e < most.Length; e++)
+						{
+							most[e] = Mathf.Max(most[e], local.Item3[e]);
+						}
+					}
+				});
+				for (int t = 0; t < rows * res; t++)
+				{
 					for (int b = 0; b < biomes; b++)
 					{
-						work.BiomeShare[b] += weights[b];
-					}
-					for (int l = 0; l < sums.Length; l++)
-					{
-						int[] onLayer = sharers[l];
-						float sum = 0f;
-						for (int n = 0; n < onLayer.Length; n++)
-						{
-							sum += weights[onLayer[n]];
-						}
-						sums[l] = sum;
-					}
-					int texel = y * res + x;
-					for (int e = 0; e < entries.Count; e++)
-					{
-						float own = weights[entries[e].BiomeIndex];
-						float sum = sums[entrySlot[e]];
-						float share = own > 0f && sum > 0f ? own / sum : 0f;
-						work.Attribution[e][texel] = share;
-						if (share > work.AttributionMax[e])
-						{
-							work.AttributionMax[e] = share;
-						}
+						work.BiomeShare[b] += band[t * stride + b];
 					}
 				}
+			}
+			for (int e = 0; e < entries.Count; e++)
+			{
+				// The largest share is the same whichever texel is met first.
+				work.AttributionMax[e] = Mathf.Max(work.AttributionMax[e], most[e]);
 			}
 			float texels = res * res;
 			for (int b = 0; b < biomes; b++)
@@ -1490,7 +1557,14 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Writes a detail rule's buffers into its prototypes' layers and clears them for the next rule.</summary>
-		private static void WriteDetails(TerrainData data, ScatterRule rule, Workspace work)
+		private static void WriteDetails(TerrainData data, ScatterRule rule, Workspace work, TerrainScatterReport report)
+		{
+			long began = Stopwatch.GetTimestamp();
+			WriteDetailLayers(data, rule, work);
+			report.DetailLayerSeconds += (Stopwatch.GetTimestamp() - began) / (double)Stopwatch.Frequency;
+		}
+
+		private static void WriteDetailLayers(TerrainData data, ScatterRule rule, Workspace work)
 		{
 			for (int v = 0; v < rule.Prototypes.Count; v++)
 			{
@@ -1517,16 +1591,63 @@ namespace FishMMO.Shared.WorldDesign
 			public string StoppedBy;
 		}
 
+		/// <summary>Why a visited cell placed nothing, or that it passed every test but the spacing.</summary>
+		private enum CellOutcome : byte
+		{
+			Passed,
+			NoWeight,
+			NoChance,
+			NoBiome,
+			NoHole,
+			NoHeight,
+			NoSlope,
+		}
+
+		/// <summary>
+		/// What one visited cell decided before the spacing and the budgets: everything that is the cell's alone (its
+		/// texture weight, roll, stands, groups, biome share, hole, water, keep-outs, banks, height, slope and climate
+		/// bands, its variant and its tree or detail value), so it can be worked out on any thread.
+		/// </summary>
+		private struct CellPick
+		{
+			public CellOutcome Outcome;
+			public int I, J, Variant, Value;
+			public float WorldX, WorldZ, PointSpacing, Sink;
+			public TreeInstance Tree;
+		}
+
+		/// <summary>Steps of the visiting order worked out together before they are walked: a budget that stops a rule wastes at most this many.</summary>
+		private const int PickChunk = 16384;
+
+		/// <summary>Steps one worker takes at a time inside a chunk: most cells are refused at their first test, which is too little work to hand out one by one.</summary>
+		private const int PickBlock = 512;
+
+		/// <summary>
+		/// For the equivalence tests only: <see cref="SampleRule"/> works out and walks one cell at a time, on the calling
+		/// thread, as it did before the chunks. A tile must come out the same either way.
+		/// </summary>
+		internal static bool VisitOneByOne;
+
+		private static ParallelOptions Workers => new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) };
+
 		/// <summary>
 		/// Visits every cell of one tile for one rule, in shuffled order, and places what passes.
 		/// Returns how many were placed.
 		/// </summary>
 		/// <remarks>
-		/// Allocation-free: everything it reads is flattened beforehand, and the only writes are into
-		/// pre-sized buffers, the tree list (pre-sized, amortised) and the rule's spacing hash
-		/// (amortised). The cheap refusals come first — texture weight, then the density draw, which
-		/// turns down most of what is left — so the biome share, the height delegate and the spacing
-		/// test only run for candidates that could still be placed.
+		/// <para>
+		/// The cheap refusals come first — texture weight, then the density draw, which turns down most of what is
+		/// left — so the biome share, the height delegate and the spacing test only run for candidates that could
+		/// still be placed.
+		/// </para>
+		/// <para>
+		/// <b>Two passes over each chunk of the visiting order.</b> What a cell decides on its own (<see cref="CellPick"/>)
+		/// is worked out for a chunk of steps in parallel ( <see cref="RuleCells.Evaluate"/>: pure reads of the tile and of
+		/// fields that are functions of position); then the chunk is walked in the visiting order, on one thread, for what
+		/// depends on the cells before it: the spacing, the budgets, the tree list's order and the detail writes. A cell's
+		/// numbers come from its own hash, so the walk places exactly what visiting the cells one by one did, and counts
+		/// the same refusals up to where a budget stopped it.
+		/// </para>
 		/// </remarks>
 		private static int SampleRule(ScatterRule scatterRule, TileFrame frame, Workspace work, float[] layerWeights, float[] attribution,
 			int cellsX, int cellsZ, bool tree, Func<float, float, float, float> normalizedHeight,
@@ -1538,72 +1659,203 @@ namespace FishMMO.Shared.WorldDesign
 				budget.StoppedBy = budget.RuleLeft <= 0 ? "rule's maxPerChunk" : budget.BiomeLeft <= 0 ? "biome's share of the tile budget" : "tile budget";
 				return 0;
 			}
+			if (scatterRule.Climate)
+			{
+				// Built here, once, so the workers only ever read it.
+				EnsureClimate(frame, work);
+			}
 
-			int total = cellsX * cellsZ;
-			float cellX = frame.Size.x / cellsX;
-			float cellZ = frame.Size.z / cellsZ;
-			// The chance before weight and shares: density per square metre times a cell's area.
-			float baseChance = rule.densityPer100m2 * 0.01f * cellX * cellZ * rule.spawnProbabilityMultiplier;
-			float minWeight = rule.minTextureWeight;
-			bool useHeight = rule.useHeightConstraint;
-			bool useSlope = rule.useSlopeConstraint;
-			MinMaxRange heightRange = rule.heightRange;
-			MinMaxRange slopeRange = rule.slopeRange;
-			float heightFalloff = rule.heightFalloff;
-			float slopeFalloff = rule.slopeFalloff;
+			var cells = new RuleCells(scatterRule, frame, work, layerWeights, attribution, cellsX, cellsZ, tree, normalizedHeight, detailValue, detailMax);
+			int total = cells.Total;
 			ScatterSpacing spacing = scatterRule.Spacing;
-			uint seed = scatterRule.Seed;
+			bool canopy = cells.Canopy;
 			List<int> prototypes = scatterRule.Prototypes;
-			int variants = prototypes.Count;
-			bool clustered = rule.IsClustered;
-			uint clusterSeed = scatterRule.ClusterSeed;
-			float clusterMetres = scatterRule.ClusterMetres;
-			float clusterPitch = scatterRule.ClusterPitch;
-			bool forest = scatterRule.Forest && tree;
-			StandField stands = scatterRule.Stands;
-			float forestMix = forest ? Mathf.Clamp01(rule.forestMix) : 0f;
-			float forestBias = forest ? Mathf.Clamp01(rule.forestScaleBias) : 0f;
-			bool canopy = scatterRule.Canopy && spacing != null;
-			/* The most a forest rule's chance can be multiplied by — its stands' heart at full cover, in
-			 * the thickest of its species patches — so a roll above it is refused before the field is
-			 * read. Most of a forest rule's cells go that way (a tree cell's chance is a few per cent), and
-			 * the field is the dearest thing in the loop. A clustered forest rule has no such bound. */
-			float forestCeiling = forest && !clustered ? stands.Ceiling * (1f + forestMix) : float.PositiveInfinity;
-
-			/* Cells in world integer coordinates, continuous from one tile into the next. From the
-			 * origin over the cell, not a tile index: three tiles centred on zero start at -1.5,
-			 * -0.5 and +0.5 tile widths, and rounding those to tile indices gives two of them one
-			 * index and one identical pattern. */
-			int gx0 = Mathf.RoundToInt(frame.Origin.x / cellX);
-			int gz0 = Mathf.RoundToInt(frame.Origin.z / cellZ);
-
-			int alphaRes = frame.AlphaResolution;
-			int heightRes = frame.HeightResolution;
-			int holesRes = frame.HolesResolution;
-			float[] heights = work.Heights;
-			float[] slopes = work.Slopes;
-			bool[] solid = work.Solid;
 
 			// The permutation: offset + k·stride (mod total), stride coprime with total.
-			uint order = Hash(seed ^ 0xA511E9B3u, gx0, gz0);
+			uint order = Hash(scatterRule.Seed ^ 0xA511E9B3u, cells.Gx0, cells.Gz0);
 			int stride = CoprimeStride(total, order);
 			int current = (int)(Mix(order + 1u) % (uint)total);
 
+			CellPick[] picks = work.Picks;
 			// Refusals counted in locals and added once: the outcome is a heap object.
 			long noWeight = 0, noChance = 0, noBiome = 0, noHole = 0, noHeight = 0, noSlope = 0, noSpacing = 0;
 			int placed = 0;
-			for (int k = 0; k < total; k++)
+			bool stopped = false;
+			int chunk = VisitOneByOne ? 1 : PickChunk;
+			for (int k0 = 0; k0 < total && !stopped; k0 += chunk)
 			{
-				int index = current;
-				current += stride;
-				if (current >= total)
+				int steps = Math.Min(chunk, total - k0);
+				int start = current;
+				if (VisitOneByOne)
 				{
-					current -= total;
+					cells.Evaluate(start, ref picks[0]);
 				}
+				else
+				{
+					int blocks = (steps + PickBlock - 1) / PickBlock;
+					Parallel.For(0, blocks, Workers, b =>
+					{
+						int from = b * PickBlock, to = Math.Min(steps, from + PickBlock);
+						for (int s = from; s < to; s++)
+						{
+							cells.Evaluate((int)((start + (long)s * stride) % total), ref picks[s]);
+						}
+					});
+				}
+				current = (int)((start + (long)steps * stride) % total);
+
+				for (int s = 0; s < steps; s++)
+				{
+					int k = k0 + s;
+					switch (picks[s].Outcome)
+					{
+						case CellOutcome.NoWeight: noWeight++; continue;
+						case CellOutcome.NoChance: noChance++; continue;
+						case CellOutcome.NoBiome: noBiome++; continue;
+						case CellOutcome.NoHole: noHole++; continue;
+						case CellOutcome.NoHeight: noHeight++; continue;
+						case CellOutcome.NoSlope: noSlope++; continue;
+					}
+					float worldX = picks[s].WorldX, worldZ = picks[s].WorldZ, pointSpacing = picks[s].PointSpacing;
+					if (spacing != null && !(canopy ? spacing.IsClear(worldX, worldZ, pointSpacing) : spacing.IsClear(worldX, worldZ)))
+					{
+						noSpacing++;
+						continue;
+					}
+
+					int variant = picks[s].Variant;
+					if (tree)
+					{
+						trees.Add(picks[s].Tree);
+						work.TreeSinks.Add(picks[s].Sink);
+					}
+					else
+					{
+						// Unity's detail maps are [y, x].
+						detailBuffers[variant][picks[s].J, picks[s].I] = picks[s].Value;
+						work.DetailPlaced[variant]++;
+					}
+					if (canopy)
+					{
+						spacing.Add(worldX, worldZ, pointSpacing);
+					}
+					else
+					{
+						spacing?.Add(worldX, worldZ);
+					}
+					placed++;
+
+					if (--budget.RuleLeft <= 0 || --budget.BiomeLeft <= 0 || --budget.TileLeft <= 0)
+					{
+						if (k + 1 < total)
+						{
+							budget.StoppedBy = budget.RuleLeft <= 0 ? "rule's maxPerChunk" : budget.BiomeLeft <= 0 ? "biome's share of the tile budget" : "tile budget";
+						}
+						stopped = true;
+						break;
+					}
+				}
+			}
+
+			TerrainScatterReport.RuleOutcome outcome = scatterRule.Outcome;
+			outcome.RejectedTextureWeight += noWeight;
+			outcome.RejectedChance += noChance;
+			outcome.RejectedBiome += noBiome;
+			outcome.RejectedHole += noHole;
+			outcome.RejectedHeight += noHeight;
+			outcome.RejectedSlope += noSlope;
+			outcome.RejectedSpacing += noSpacing;
+			return placed;
+		}
+
+		/// <summary>One rule's view of one tile for <see cref="SampleRule"/>: what every cell's own tests read, read-only.</summary>
+		private sealed class RuleCells
+		{
+			private readonly ScatterRule scatterRule;
+			private readonly PrefabSpawnRule rule;
+			private readonly TileFrame frame;
+			private readonly Workspace work;
+			private readonly float[] layerWeights, attribution, heights, slopes;
+			private readonly bool[] solid;
+			private readonly int cellsX, cellsZ, alphaRes, heightRes, holesRes, variants, detailValue, detailMax;
+			private readonly bool tree, useHeight, useSlope, clustered, forest;
+			private readonly Func<float, float, float, float> normalizedHeight;
+			private readonly float baseChance, minWeight, heightFalloff, slopeFalloff, clusterMetres, clusterPitch, forestMix, forestBias, forestCeiling;
+			private readonly MinMaxRange heightRange, slopeRange;
+			private readonly uint seed, clusterSeed;
+			private readonly StandField stands;
+			private readonly List<int> prototypes;
+			public readonly int Total, Gx0, Gz0;
+			public readonly bool Canopy;
+
+			public RuleCells(ScatterRule scatterRule, TileFrame frame, Workspace work, float[] layerWeights, float[] attribution,
+				int cellsX, int cellsZ, bool tree, Func<float, float, float, float> normalizedHeight, int detailValue, int detailMax)
+			{
+				this.scatterRule = scatterRule;
+				this.frame = frame;
+				this.work = work;
+				this.layerWeights = layerWeights;
+				this.attribution = attribution;
+				this.cellsX = cellsX;
+				this.cellsZ = cellsZ;
+				this.tree = tree;
+				this.normalizedHeight = normalizedHeight;
+				this.detailValue = detailValue;
+				this.detailMax = detailMax;
+				rule = scatterRule.Rule;
+
+				Total = cellsX * cellsZ;
+				float cellX = frame.Size.x / cellsX;
+				float cellZ = frame.Size.z / cellsZ;
+				// The chance before weight and shares: density per square metre times a cell's area.
+				baseChance = rule.densityPer100m2 * 0.01f * cellX * cellZ * rule.spawnProbabilityMultiplier;
+				minWeight = rule.minTextureWeight;
+				useHeight = rule.useHeightConstraint;
+				useSlope = rule.useSlopeConstraint;
+				heightRange = rule.heightRange;
+				slopeRange = rule.slopeRange;
+				heightFalloff = rule.heightFalloff;
+				slopeFalloff = rule.slopeFalloff;
+				seed = scatterRule.Seed;
+				prototypes = scatterRule.Prototypes;
+				variants = prototypes.Count;
+				clustered = rule.IsClustered;
+				clusterSeed = scatterRule.ClusterSeed;
+				clusterMetres = scatterRule.ClusterMetres;
+				clusterPitch = scatterRule.ClusterPitch;
+				forest = scatterRule.Forest && tree;
+				stands = scatterRule.Stands;
+				forestMix = forest ? Mathf.Clamp01(rule.forestMix) : 0f;
+				forestBias = forest ? Mathf.Clamp01(rule.forestScaleBias) : 0f;
+				Canopy = scatterRule.Canopy && scatterRule.Spacing != null;
+				/* The most a forest rule's chance can be multiplied by — its stands' heart at full cover, in
+				 * the thickest of its species patches — so a roll above it is refused before the field is
+				 * read. Most of a forest rule's cells go that way (a tree cell's chance is a few per cent), and
+				 * the field is the dearest thing in the loop. A clustered forest rule has no such bound. */
+				forestCeiling = forest && !clustered ? stands.Ceiling * (1f + forestMix) : float.PositiveInfinity;
+
+				/* Cells in world integer coordinates, continuous from one tile into the next. From the
+				 * origin over the cell, not a tile index: three tiles centred on zero start at -1.5,
+				 * -0.5 and +0.5 tile widths, and rounding those to tile indices gives two of them one
+				 * index and one identical pattern. */
+				Gx0 = Mathf.RoundToInt(frame.Origin.x / cellX);
+				Gz0 = Mathf.RoundToInt(frame.Origin.z / cellZ);
+
+				alphaRes = frame.AlphaResolution;
+				heightRes = frame.HeightResolution;
+				holesRes = frame.HolesResolution;
+				heights = work.Heights;
+				slopes = work.Slopes;
+				solid = work.Solid;
+			}
+
+			/// <summary>Everything cell <paramref name="index"/> decides on its own; safe from any thread.</summary>
+			public void Evaluate(int index, ref CellPick pick)
+			{
 				int i = index % cellsX;
 				int j = index / cellsX;
 
-				uint h = Hash(seed, gx0 + i, gz0 + j);
+				uint h = Hash(seed, Gx0 + i, Gz0 + j);
 				float u, v;
 				if (tree)
 				{
@@ -1620,8 +1872,8 @@ namespace FishMMO.Shared.WorldDesign
 				float weight = Bilinear(layerWeights, alphaRes, u, v);
 				if (weight < minWeight)
 				{
-					noWeight++;
-					continue;
+					pick.Outcome = CellOutcome.NoWeight;
+					return;
 				}
 				float worldX = frame.Origin.x + u * frame.Size.x;
 				float worldZ = frame.Origin.z + v * frame.Size.z;
@@ -1634,8 +1886,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					if (roll >= chance * forestCeiling)
 					{
-						noChance++;
-						continue;
+						pick.Outcome = CellOutcome.NoChance;
+						return;
 					}
 					/* A forest rule's biome share shrinks its stands instead of thinning them: across a seam the
 					 * woods recede to their hearts and break into copses, as a real forest edge does, rather
@@ -1644,8 +1896,8 @@ namespace FishMMO.Shared.WorldDesign
 					share = Bilinear(attribution, alphaRes, u, v);
 					if (share <= 0f)
 					{
-						noBiome++;
-						continue;
+						pick.Outcome = CellOutcome.NoBiome;
+						return;
 					}
 					float steep = Mathf.Clamp01(Bilinear(slopes, heightRes, u, v) / scatterRule.SlopeReference);
 					chance *= stands.Intensity(worldX, worldZ, share * (1f - StandSlopeThinning * steep * steep), share, out standMask);
@@ -1660,8 +1912,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (roll >= chance)
 				{
-					noChance++;
-					continue;
+					pick.Outcome = CellOutcome.NoChance;
+					return;
 				}
 
 				if (!forest)
@@ -1669,8 +1921,8 @@ namespace FishMMO.Shared.WorldDesign
 					share = Bilinear(attribution, alphaRes, u, v);
 					if (share <= 0f)
 					{
-						noBiome++;
-						continue;
+						pick.Outcome = CellOutcome.NoBiome;
+						return;
 					}
 					chance *= share;
 				}
@@ -1681,8 +1933,8 @@ namespace FishMMO.Shared.WorldDesign
 					int hz = Math.Min(holesRes - 1, (int)(v * holesRes));
 					if (!solid[hz * holesRes + hx])
 					{
-						noHole++;
-						continue;
+						pick.Outcome = CellOutcome.NoHole;
+						return;
 					}
 				}
 
@@ -1695,23 +1947,23 @@ namespace FishMMO.Shared.WorldDesign
 					float shore = WaterBand(scatterRule, worldY) * DepthBand(scatterRule, worldY);
 					if (shore <= 0f)
 					{
-						noHeight++;
-						continue;
+						pick.Outcome = CellOutcome.NoHeight;
+						return;
 					}
 					chance *= shore;
 				}
 				if (scatterRule.Excluded != null && scatterRule.Excluded(worldX, worldZ))
 				{
-					noHeight++;
-					continue;
+					pick.Outcome = CellOutcome.NoHeight;
+					return;
 				}
 				if (scatterRule.Inland != null)
 				{
 					float bank = InlandBand(scatterRule, worldX, worldY, worldZ);
 					if (bank <= 0f)
 					{
-						noHeight++;
-						continue;
+						pick.Outcome = CellOutcome.NoHeight;
+						return;
 					}
 					chance *= bank;
 				}
@@ -1720,8 +1972,8 @@ namespace FishMMO.Shared.WorldDesign
 					float band = Band(normalizedHeight(worldX, worldY, worldZ), heightRange, heightFalloff);
 					if (band <= 0f)
 					{
-						noHeight++;
-						continue;
+						pick.Outcome = CellOutcome.NoHeight;
+						return;
 					}
 					chance *= band;
 				}
@@ -1730,8 +1982,8 @@ namespace FishMMO.Shared.WorldDesign
 					float band = Band(Bilinear(slopes, heightRes, u, v), slopeRange, slopeFalloff);
 					if (band <= 0f)
 					{
-						noSlope++;
-						continue;
+						pick.Outcome = CellOutcome.NoSlope;
+						return;
 					}
 					chance *= band;
 				}
@@ -1741,15 +1993,15 @@ namespace FishMMO.Shared.WorldDesign
 					float band = ClimateAt(scatterRule, frame, work, u, v, worldY);
 					if (band <= 0f)
 					{
-						noHeight++;
-						continue;
+						pick.Outcome = CellOutcome.NoHeight;
+						return;
 					}
 					chance *= band;
 				}
 				if (roll >= chance)
 				{
-					noChance++;
-					continue;
+					pick.Outcome = CellOutcome.NoChance;
+					return;
 				}
 
 				int variant;
@@ -1757,80 +2009,44 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					/* A rule's species stand in patches of their own (a birch grove inside the oaks) with a
 					 * few strays across each patch's edge, rather than alternating tree by tree. */
-					float pick = SpeciesPatch(scatterRule.VariantSeed, worldX, worldZ, scatterRule.PatchMetres, 1f) * 0.5f;
-					pick = Mathf.Clamp01(pick + (Unit(Mix(h + 3u)) - 0.5f) * (1f - forestMix * 0.6f));
-					variant = Math.Min(variants - 1, (int)(pick * variants));
+					float pick01 = SpeciesPatch(scatterRule.VariantSeed, worldX, worldZ, scatterRule.PatchMetres, 1f) * 0.5f;
+					pick01 = Mathf.Clamp01(pick01 + (Unit(Mix(h + 3u)) - 0.5f) * (1f - forestMix * 0.6f));
+					variant = Math.Min(variants - 1, (int)(pick01 * variants));
 				}
 				else
 				{
 					variant = variants == 1 ? 0 : (int)(Mix(h + 3u) % (uint)variants);
 				}
 
-				TreeInstance instance = default;
-				float pointSpacing = 0f;
+				pick.Outcome = CellOutcome.Passed;
+				pick.I = i;
+				pick.J = j;
+				pick.Variant = variant;
+				pick.WorldX = worldX;
+				pick.WorldZ = worldZ;
+				pick.PointSpacing = 0f;
 				if (tree)
 				{
 					// Taller and narrower in a stand's heart (drawn up by its neighbours), shorter and broader in the open.
 					float groupShift = clustered ? rule.clusterScaleBias * (closeness - 0.5f) : 0f;
 					float standShift = forest ? forestBias * (standMask - 0.5f) : 0f;
-					instance = TreeInstanceAt(rule, prototypes[variant], u, height01, v, h, groupShift + standShift, groupShift - 0.5f * standShift);
-					if (canopy)
+					TreeInstance instance = TreeInstanceAt(rule, prototypes[variant], u, height01, v, h, groupShift + standShift, groupShift - 0.5f * standShift);
+					if (Canopy)
 					{
-						pointSpacing = rule.minSpacing * instance.widthScale * (scatterRule.CrownScale != null && variant < scatterRule.CrownScale.Length ? scatterRule.CrownScale[variant] : 1f);
+						pick.PointSpacing = rule.minSpacing * instance.widthScale * (scatterRule.CrownScale != null && variant < scatterRule.CrownScale.Length ? scatterRule.CrownScale[variant] : 1f);
 					}
-				}
-
-				if (spacing != null && !(canopy ? spacing.IsClear(worldX, worldZ, pointSpacing) : spacing.IsClear(worldX, worldZ)))
-				{
-					noSpacing++;
-					continue;
-				}
-
-				if (tree)
-				{
-					trees.Add(instance);
+					pick.Tree = instance;
 					float footprint = prototypes[variant] < work.TreeFootprints.Length ? work.TreeFootprints[prototypes[variant]] * instance.widthScale : 0f;
 					float sinkSlope = rule.sinkSlopeFactor > 0f ? Bilinear(slopes, heightRes, u, v) : 0f;
-					work.TreeSinks.Add(SinkMetres(rule, footprint, sinkSlope, h));
+					pick.Sink = SinkMetres(rule, footprint, sinkSlope, h);
 				}
 				else
 				{
 					/* A group's heart can ask for more than one in a cell; a draw cannot pass, so the rest
-					 * goes on as cover, which keeps a group's count what its field says. Unity's detail
-					 * maps are [y, x]. */
-					int value = chance > 1f ? Math.Min(detailMax, (int)(detailValue * chance + 0.5f)) : detailValue;
-					detailBuffers[variant][j, i] = value;
-					work.DetailPlaced[variant]++;
-				}
-				if (canopy)
-				{
-					spacing.Add(worldX, worldZ, pointSpacing);
-				}
-				else
-				{
-					spacing?.Add(worldX, worldZ);
-				}
-				placed++;
-
-				if (--budget.RuleLeft <= 0 || --budget.BiomeLeft <= 0 || --budget.TileLeft <= 0)
-				{
-					if (k + 1 < total)
-					{
-						budget.StoppedBy = budget.RuleLeft <= 0 ? "rule's maxPerChunk" : budget.BiomeLeft <= 0 ? "biome's share of the tile budget" : "tile budget";
-					}
-					break;
+					 * goes on as cover, which keeps a group's count what its field says. */
+					pick.Value = chance > 1f ? Math.Min(detailMax, (int)(detailValue * chance + 0.5f)) : detailValue;
 				}
 			}
-
-			TerrainScatterReport.RuleOutcome outcome = scatterRule.Outcome;
-			outcome.RejectedTextureWeight += noWeight;
-			outcome.RejectedChance += noChance;
-			outcome.RejectedBiome += noBiome;
-			outcome.RejectedHole += noHole;
-			outcome.RejectedHeight += noHeight;
-			outcome.RejectedSlope += noSlope;
-			outcome.RejectedSpacing += noSpacing;
-			return placed;
 		}
 
 		/// <summary>
@@ -1889,15 +2105,25 @@ namespace FishMMO.Shared.WorldDesign
 		/// writing each one's share of it.
 		/// </summary>
 		/// <remarks>
-		/// Both passes run <see cref="SampleCarpet"/>, the same arithmetic in the same order, so the
-		/// coverage a carpet adds to the sum is bit for bit the coverage it then divides by it. Storing
-		/// each carpet's coverage instead would cost a float per cell per carpet — 64 MB per carpet at
-		/// Unity's largest detail map — where recomputing costs one more pass of cheap arithmetic.
+		/// <para>
+		/// Both passes run <see cref="CarpetCells.Coverage"/>, the same arithmetic, so the coverage a carpet adds to the
+		/// sum is bit for bit the coverage it then divides by it. Storing each carpet's coverage instead would cost a
+		/// float per cell per carpet — 64 MB per carpet at Unity's largest detail map — where recomputing costs one more
+		/// pass of cheap arithmetic.
+		/// </para>
+		/// <para>
+		/// <b>In parallel, rows at a time.</b> Every cell's coverage is its own. The sum takes the rows in parallel with
+		/// the carpets inside each cell, in the carpets' order, so each cell's sum is added up in the same order as one
+		/// carpet after another did. The writes take one carpet at a time (they share the detail buffers), its rows in
+		/// parallel; what it covered is then counted on one thread in row order, so even the mean coverage it reports is
+		/// summed as it always was.
+		/// </para>
 		/// </remarks>
 		private static void RunCarpets(TerrainData data, List<ScatterRule> rules, TileFrame frame, Workspace work, int resolution, int maxValue,
 			Func<float, float, float, float> normalizedHeight, TerrainScatterReport report)
 		{
 			work.TileCarpets.Clear();
+			bool banded = false;
 			foreach (ScatterRule rule in rules)
 			{
 				if (!rule.Runnable || !rule.Carpet)
@@ -1912,25 +2138,33 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				work.TileCarpets.Add(rule);
+				banded |= rule.Climate;
 			}
 			if (work.TileCarpets.Count == 0)
 			{
 				return;
 			}
+			if (banded)
+			{
+				// Built here, once, so the workers only ever read it.
+				EnsureClimate(frame, work);
+			}
 
 			int cells = resolution * resolution;
 			work.CarpetSum = Workspace.Fit(work.CarpetSum, cells);
 			Array.Clear(work.CarpetSum, 0, cells);
-			foreach (ScatterRule rule in work.TileCarpets)
+			int carpets = work.TileCarpets.Count;
+			var views = new CarpetCells[carpets];
+			for (int c = 0; c < carpets; c++)
 			{
-				int layer = rule.Entry.LayerIndex;
-				SampleCarpet(rule, frame, work, work.Layers[layer], work.Attribution[rule.Attribution], resolution, normalizedHeight, false, maxValue);
+				ScatterRule rule = work.TileCarpets[c];
+				views[c] = new CarpetCells(rule, frame, work, work.Layers[rule.Entry.LayerIndex], work.Attribution[rule.Attribution], resolution, normalizedHeight);
 			}
-			foreach (ScatterRule rule in work.TileCarpets)
+			SumCarpets(views, work.CarpetSum, resolution);
+			foreach (CarpetCells view in views)
 			{
-				int layer = rule.Entry.LayerIndex;
-				SampleCarpet(rule, frame, work, work.Layers[layer], work.Attribution[rule.Attribution], resolution, normalizedHeight, true, maxValue);
-				WriteDetails(data, rule, work);
+				WriteCarpet(view, work, resolution, maxValue);
+				WriteDetails(data, view.Rule, work, report);
 			}
 
 			// What the tile's ground ended up carrying, every carpet together, quantised as the writes were.
@@ -1946,165 +2180,119 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
+		/// <summary>Why a carpet left a cell bare, or that it covered it.</summary>
+		private enum CarpetOutcome
+		{
+			Covered,
+			NoWeight,
+			NoBiome,
+			NoHole,
+			NoHeight,
+			NoSlope,
+		}
+
 		/// <summary>
-		/// One carpet over one tile, every cell in row order. With <paramref name="write"/> false it
-		/// adds each cell's coverage into <see cref="Workspace.CarpetSum"/> and counts refusals; with
-		/// it true it writes the cell's share — its coverage, scaled down where the carpets' sum passes
-		/// a full cell — into the rule's detail buffers.
+		/// Every carpet's coverage of every cell added into <paramref name="sum"/>, rows in parallel, the carpets in order
+		/// inside each cell; each carpet's refusals counted.
+		/// </summary>
+		private static void SumCarpets(CarpetCells[] views, float[] sum, int resolution)
+		{
+			int carpets = views.Length;
+			// Per carpet: weight, biome, hole, height and slope refusals.
+			var refused = new long[carpets * 5];
+			object gate = new object();
+			Parallel.For(0, resolution, Workers, () => new long[carpets * 5], (j, _, counts) =>
+			{
+				for (int i = 0; i < resolution; i++)
+				{
+					int cell = j * resolution + i;
+					for (int c = 0; c < carpets; c++)
+					{
+						float coverage = views[c].Coverage(i, j, out CarpetOutcome outcome);
+						if (outcome == CarpetOutcome.Covered)
+						{
+							sum[cell] += coverage;
+						}
+						else
+						{
+							counts[c * 5 + (int)outcome - 1]++;
+						}
+					}
+				}
+				return counts;
+			}, counts =>
+			{
+				lock (gate)
+				{
+					for (int n = 0; n < counts.Length; n++)
+					{
+						refused[n] += counts[n];
+					}
+				}
+			});
+			for (int c = 0; c < carpets; c++)
+			{
+				TerrainScatterReport.RuleOutcome outcome = views[c].Rule.Outcome;
+				outcome.RejectedTextureWeight += refused[c * 5];
+				outcome.RejectedBiome += refused[c * 5 + 1];
+				outcome.RejectedHole += refused[c * 5 + 2];
+				outcome.RejectedHeight += refused[c * 5 + 3];
+				outcome.RejectedSlope += refused[c * 5 + 4];
+			}
+		}
+
+		/// <summary>
+		/// One carpet's share of every cell — its coverage, scaled down where the carpets' sum passes a full cell —
+		/// written into its detail buffers, rows in parallel.
 		/// </summary>
 		/// <remarks>
-		/// Allocation-free, like <see cref="SampleRule"/>, with the cheap refusals first. Quantised
-		/// down (never rounded up) to the detail map's integer scale, and split between the rule's
+		/// Quantised down (never rounded up) to the detail map's integer scale, and split between the rule's
 		/// prototypes as whole units with the remainder dealt from a per-cell hash, so two carpets at a
 		/// half each, or one carpet's several variants, never sum past the full cell.
 		/// </remarks>
-		private static void SampleCarpet(ScatterRule scatterRule, TileFrame frame, Workspace work, float[] layerWeights, float[] attribution,
-			int resolution, Func<float, float, float, float> normalizedHeight, bool write, int maxValue)
+		private static void WriteCarpet(CarpetCells view, Workspace work, int resolution, int maxValue)
 		{
-			PrefabSpawnRule rule = scatterRule.Rule;
-			float peak = Mathf.Clamp01(rule.carpetCoverage * rule.spawnProbabilityMultiplier);
-			float minWeight = rule.minTextureWeight;
-			float ramp = rule.carpetWeightRamp;
-			float clumpMetres = rule.carpetClumpMetres;
-			float clumpFloor = rule.carpetClumpFloor;
-			uint clumpSeed = scatterRule.ClumpSeed;
-			bool useHeight = rule.useHeightConstraint;
-			bool useSlope = rule.useSlopeConstraint;
-			MinMaxRange heightRange = rule.heightRange;
-			MinMaxRange slopeRange = rule.slopeRange;
-			float heightFalloff = rule.heightFalloff;
-			float slopeFalloff = rule.slopeFalloff;
+			ScatterRule scatterRule = view.Rule;
 			List<int> prototypes = scatterRule.Prototypes;
 			int variants = prototypes.Count;
-
-			int alphaRes = frame.AlphaResolution;
-			int heightRes = frame.HeightResolution;
-			int holesRes = frame.HolesResolution;
-			float[] heights = work.Heights;
-			float[] slopes = work.Slopes;
-			bool[] solid = work.Solid;
+			uint clumpSeed = scatterRule.ClumpSeed;
 			float[] sum = work.CarpetSum;
 			List<int[,]> buffers = work.DetailBuffers;
-			int gx0 = Mathf.RoundToInt(frame.Origin.x / (frame.Size.x / resolution));
-			int gz0 = Mathf.RoundToInt(frame.Origin.z / (frame.Size.z / resolution));
+			int cells = resolution * resolution;
+			int[] unitsOf = work.CarpetUnits = work.CarpetUnits != null && work.CarpetUnits.Length == cells ? work.CarpetUnits : new int[cells];
+			int gx0 = Mathf.RoundToInt(view.Frame.Origin.x / (view.Frame.Size.x / resolution));
+			int gz0 = Mathf.RoundToInt(view.Frame.Origin.z / (view.Frame.Size.z / resolution));
 
-			long noWeight = 0, noBiome = 0, noHole = 0, noHeight = 0, noSlope = 0, covered = 0, shared = 0;
-			double coverageSum = 0d;
-			for (int j = 0; j < resolution; j++)
+			// Per variant: cells written; then the cells shared with other carpets.
+			var totals = new long[variants + 1];
+			object gate = new object();
+			Parallel.For(0, resolution, Workers, () => new long[variants + 1], (j, _, counts) =>
 			{
-				float v = (j + 0.5f) / resolution;
 				for (int i = 0; i < resolution; i++)
 				{
-					float u = (i + 0.5f) / resolution;
 					int cell = j * resolution + i;
-
-					float coverage = CarpetRamp(Bilinear(layerWeights, alphaRes, u, v), minWeight, ramp);
-					if (coverage <= 0f)
+					unitsOf[cell] = 0;
+					float coverage = view.Coverage(i, j, out CarpetOutcome outcome);
+					if (outcome != CarpetOutcome.Covered)
 					{
-						noWeight++;
 						continue;
 					}
-					float share = Bilinear(attribution, alphaRes, u, v);
-					if (share <= 0f)
-					{
-						noBiome++;
-						continue;
-					}
-					coverage *= share;
-
-					if (solid != null)
-					{
-						int hx = Math.Min(holesRes - 1, (int)(u * holesRes));
-						int hz = Math.Min(holesRes - 1, (int)(v * holesRes));
-						if (!solid[hz * holesRes + hx])
-						{
-							noHole++;
-							continue;
-						}
-					}
-					if (useSlope)
-					{
-						float band = Band(Bilinear(slopes, heightRes, u, v), slopeRange, slopeFalloff);
-						if (band <= 0f)
-						{
-							noSlope++;
-							continue;
-						}
-						coverage *= band;
-					}
-					float worldX = frame.Origin.x + u * frame.Size.x;
-					float worldZ = frame.Origin.z + v * frame.Size.z;
-					if (scatterRule.WaterGated)
-					{
-						float bedY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
-						float shore = WaterBand(scatterRule, bedY) * DepthBand(scatterRule, bedY);
-						if (shore <= 0f)
-						{
-							noHeight++;
-							continue;
-						}
-						coverage *= shore;
-					}
-					if (scatterRule.Excluded != null && scatterRule.Excluded(worldX, worldZ))
-					{
-						noHeight++;
-						continue;
-					}
-					if (scatterRule.Inland != null)
-					{
-						float bank = InlandBand(scatterRule, worldX, frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y, worldZ);
-						if (bank <= 0f)
-						{
-							noHeight++;
-							continue;
-						}
-						coverage *= bank;
-					}
-					if (useHeight)
-					{
-						float worldY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
-						float band = Band(normalizedHeight(worldX, worldY, worldZ), heightRange, heightFalloff);
-						if (band <= 0f)
-						{
-							noHeight++;
-							continue;
-						}
-						coverage *= band;
-					}
-					if (scatterRule.Climate)
-					{
-						float groundY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
-						float band = ClimateAt(scatterRule, frame, work, u, v, groundY);
-						if (band <= 0f)
-						{
-							noHeight++;
-							continue;
-						}
-						coverage *= band;
-					}
-					coverage *= peak * CarpetClump(clumpSeed, worldX, worldZ, clumpMetres, clumpFloor);
-
-					if (!write)
-					{
-						sum[cell] += coverage;
-						continue;
-					}
-
 					float total = sum[cell];
 					if (total > 1f)
 					{
 						coverage /= total;
-						shared++;
+						counts[variants]++;
 					}
 					int units = (int)(coverage * maxValue);
 					if (units <= 0)
 					{
 						continue;
 					}
+					unitsOf[cell] = units;
 					if (variants == 1)
 					{
 						buffers[0][j, i] = units;
-						work.DetailPlaced[0]++;
+						counts[0]++;
 					}
 					else
 					{
@@ -2119,28 +2307,190 @@ namespace FishMMO.Shared.WorldDesign
 							{
 								// Unity's detail maps are [y, x].
 								buffers[n][j, i] = value;
-								work.DetailPlaced[n]++;
+								counts[n]++;
 							}
 						}
 					}
+				}
+				return counts;
+			}, counts =>
+			{
+				lock (gate)
+				{
+					for (int n = 0; n < counts.Length; n++)
+					{
+						totals[n] += counts[n];
+					}
+				}
+			});
+			for (int n = 0; n < variants; n++)
+			{
+				work.DetailPlaced[n] += (int)totals[n];
+			}
+
+			// What it covered, in row order: the mean is a double summed cell by cell, so the order is kept.
+			long covered = 0;
+			double coverageSum = 0d;
+			for (int cell = 0; cell < cells; cell++)
+			{
+				int units = unitsOf[cell];
+				if (units > 0)
+				{
 					covered++;
 					coverageSum += units / (double)maxValue;
 				}
 			}
+			TerrainScatterReport.RuleOutcome ruleOutcome = scatterRule.Outcome;
+			ruleOutcome.Placed += covered;
+			ruleOutcome.CoverageSum += coverageSum;
+			ruleOutcome.SharedCells += totals[variants];
+		}
 
-			TerrainScatterReport.RuleOutcome outcome = scatterRule.Outcome;
-			if (!write)
+		/// <summary>One carpet's view of one tile: what a cell's coverage reads, read-only, so cells can be worked on any thread.</summary>
+		private sealed class CarpetCells
+		{
+			public readonly ScatterRule Rule;
+			public readonly TileFrame Frame;
+			private readonly Workspace work;
+			private readonly float[] layerWeights, attribution, heights, slopes;
+			private readonly bool[] solid;
+			private readonly int resolution, alphaRes, heightRes, holesRes;
+			private readonly float peak, minWeight, ramp, clumpMetres, clumpFloor, heightFalloff, slopeFalloff;
+			private readonly uint clumpSeed;
+			private readonly bool useHeight, useSlope;
+			private readonly MinMaxRange heightRange, slopeRange;
+			private readonly Func<float, float, float, float> normalizedHeight;
+
+			public CarpetCells(ScatterRule scatterRule, TileFrame frame, Workspace work, float[] layerWeights, float[] attribution,
+				int resolution, Func<float, float, float, float> normalizedHeight)
 			{
-				outcome.RejectedTextureWeight += noWeight;
-				outcome.RejectedBiome += noBiome;
-				outcome.RejectedHole += noHole;
-				outcome.RejectedHeight += noHeight;
-				outcome.RejectedSlope += noSlope;
-				return;
+				Rule = scatterRule;
+				Frame = frame;
+				this.work = work;
+				this.layerWeights = layerWeights;
+				this.attribution = attribution;
+				this.resolution = resolution;
+				this.normalizedHeight = normalizedHeight;
+				PrefabSpawnRule rule = scatterRule.Rule;
+				peak = Mathf.Clamp01(rule.carpetCoverage * rule.spawnProbabilityMultiplier);
+				minWeight = rule.minTextureWeight;
+				ramp = rule.carpetWeightRamp;
+				clumpMetres = rule.carpetClumpMetres;
+				clumpFloor = rule.carpetClumpFloor;
+				clumpSeed = scatterRule.ClumpSeed;
+				useHeight = rule.useHeightConstraint;
+				useSlope = rule.useSlopeConstraint;
+				heightRange = rule.heightRange;
+				slopeRange = rule.slopeRange;
+				heightFalloff = rule.heightFalloff;
+				slopeFalloff = rule.slopeFalloff;
+				alphaRes = frame.AlphaResolution;
+				heightRes = frame.HeightResolution;
+				holesRes = frame.HolesResolution;
+				heights = work.Heights;
+				slopes = work.Slopes;
+				solid = work.Solid;
 			}
-			outcome.Placed += covered;
-			outcome.CoverageSum += coverageSum;
-			outcome.SharedCells += shared;
+
+			/// <summary>
+			/// The carpet's coverage of cell (<paramref name="i"/>, <paramref name="j"/>): <c>carpetCoverage × ramp(texture
+			/// weight) × biome share × bands × clump</c>, with the cheap refusals first; 0 and the reason where it has none.
+			/// </summary>
+			public float Coverage(int i, int j, out CarpetOutcome outcome)
+			{
+				float v = (j + 0.5f) / resolution;
+				float u = (i + 0.5f) / resolution;
+				ScatterRule scatterRule = Rule;
+				TileFrame frame = Frame;
+
+				float coverage = CarpetRamp(Bilinear(layerWeights, alphaRes, u, v), minWeight, ramp);
+				if (coverage <= 0f)
+				{
+					outcome = CarpetOutcome.NoWeight;
+					return 0f;
+				}
+				float share = Bilinear(attribution, alphaRes, u, v);
+				if (share <= 0f)
+				{
+					outcome = CarpetOutcome.NoBiome;
+					return 0f;
+				}
+				coverage *= share;
+
+				if (solid != null)
+				{
+					int hx = Math.Min(holesRes - 1, (int)(u * holesRes));
+					int hz = Math.Min(holesRes - 1, (int)(v * holesRes));
+					if (!solid[hz * holesRes + hx])
+					{
+						outcome = CarpetOutcome.NoHole;
+						return 0f;
+					}
+				}
+				if (useSlope)
+				{
+					float band = Band(Bilinear(slopes, heightRes, u, v), slopeRange, slopeFalloff);
+					if (band <= 0f)
+					{
+						outcome = CarpetOutcome.NoSlope;
+						return 0f;
+					}
+					coverage *= band;
+				}
+				float worldX = frame.Origin.x + u * frame.Size.x;
+				float worldZ = frame.Origin.z + v * frame.Size.z;
+				if (scatterRule.WaterGated)
+				{
+					float bedY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
+					float shore = WaterBand(scatterRule, bedY) * DepthBand(scatterRule, bedY);
+					if (shore <= 0f)
+					{
+						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= shore;
+				}
+				if (scatterRule.Excluded != null && scatterRule.Excluded(worldX, worldZ))
+				{
+					outcome = CarpetOutcome.NoHeight;
+					return 0f;
+				}
+				if (scatterRule.Inland != null)
+				{
+					float bank = InlandBand(scatterRule, worldX, frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y, worldZ);
+					if (bank <= 0f)
+					{
+						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= bank;
+				}
+				if (useHeight)
+				{
+					float worldY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
+					float band = Band(normalizedHeight(worldX, worldY, worldZ), heightRange, heightFalloff);
+					if (band <= 0f)
+					{
+						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= band;
+				}
+				if (scatterRule.Climate)
+				{
+					float groundY = frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y;
+					float band = ClimateAt(scatterRule, frame, work, u, v, groundY);
+					if (band <= 0f)
+					{
+						outcome = CarpetOutcome.NoHeight;
+						return 0f;
+					}
+					coverage *= band;
+				}
+				coverage *= peak * CarpetClump(clumpSeed, worldX, worldZ, clumpMetres, clumpFloor);
+				outcome = CarpetOutcome.Covered;
+				return coverage;
+			}
 		}
 
 		/// <summary>
@@ -2665,15 +3015,28 @@ namespace FishMMO.Shared.WorldDesign
 		/// tile's <see cref="ClimateGrid"/>, which is built on the first call for the tile.
 		/// </summary>
 		/// <param name="worldY">The candidate's own world height: the band reads the temperature at it, not at a grid node's.</param>
+		/// <remarks>The grid is built by <see cref="EnsureClimate"/> before any worker reads it; here it is only read.</remarks>
 		private static float ClimateAt(ScatterRule rule, TileFrame frame, Workspace work, float u, float v, float worldY)
 		{
 			ClimateGrid grid = work.Climate;
 			if (!grid.Ready)
 			{
-				grid.Build(work.Placement, frame, work.Heights);
+				throw new InvalidOperationException("The tile's climate grid is read before it was built.");
 			}
 			grid.Read(u, v, worldY, out float temperature, out float humidity);
 			return ClimateBand(rule.Rule, temperature, humidity);
+		}
+
+		/// <summary>
+		/// Builds the current tile's climate grid if it is not built yet: on the calling thread, before the cells are
+		/// handed out. A function of the tile alone, so building it before the first banded cell asks changes nothing.
+		/// </summary>
+		private static void EnsureClimate(TileFrame frame, Workspace work)
+		{
+			if (!work.Climate.Ready)
+			{
+				work.Climate.Build(work.Placement, frame, work.Heights);
+			}
 		}
 
 		/// <summary>

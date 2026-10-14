@@ -436,7 +436,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (h.Floor <= 0f)
 				{
-					Steps(d, new Vector3(doorX, 0f, front - 0.12f), Vector3.back, h.DoorWidth + 0.4f, floor, h.PlinthMaterial, key + 22);
+					Steps(d, new Vector3(doorX, 0f, front - 0.12f), Vector3.back, Mathf.Max(h.DoorWidth + 0.4f, StairWidth), floor, h.PlinthMaterial, key + 22);
 				}
 			}
 			else
@@ -555,8 +555,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>A stair's width, metres.</summary>
-		internal const float StairWidth = 0.95f;
+		/// <summary>
+		/// A stair's width, metres: two people abreast, one going up while another comes down (the character capsule is
+		/// 0.6 m across; 0.95 m let only one at a time).
+		/// </summary>
+		internal const float StairWidth = 1.5f;
 		/// <summary>The clear height kept over every step of a stair, metres.</summary>
 		internal const float StairHeadroom = 2.05f;
 
@@ -870,7 +873,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Half-timbering on four walls: corner posts, sill and head plates, studs and braces at level 0.</summary>
 		internal static void Framing(StructureDraft d, float width, float depth, float y0, float y1, int key, List<WallOpening> frontHoles = null)
 		{
-			// Nothing crosses a hole in the front wall (a doorway, a window): studs and braces there are left out.
+			// Nothing crosses a hole in the front wall (a doorway, a window): studs and braces there are left out, plates and
+			// rails broken round it.
 			bool Clear(float x0, float x1)
 			{
 				if (frontHoles == null)
@@ -890,6 +894,37 @@ namespace FishMMO.Shared.WorldDesign
 			const float post = 0.2f, proud = 0.04f;
 			float hx = width * 0.5f + proud - post * 0.5f, hz = depth * 0.5f + proud - post * 0.5f;
 			int k = key;
+			// A plate or rail along the front wall, broken where a hole's height crosses it (a doorway's foot, a window): it
+			// butts into the hole's sides instead of running across it.
+			void FrontRail(float y, float thick, float tall, int railKey)
+			{
+				float from = -hx;
+				if (frontHoles != null)
+				{
+					var cuts = new List<Vector2>();
+					foreach (WallOpening o in frontHoles)
+					{
+						if (o.Top > y - tall * 0.5f && o.Bottom < y + tall * 0.5f)
+						{
+							float c = o.Along - width * 0.5f;
+							cuts.Add(new Vector2(c - o.Width * 0.5f, c + o.Width * 0.5f));
+						}
+					}
+					cuts.Sort((a, b) => a.x.CompareTo(b.x));
+					foreach (Vector2 cut in cuts)
+					{
+						if (cut.x - from > 0.05f)
+						{
+							d.Add(StructureShapes.Beam(new Vector3(from, y, -hz), new Vector3(cut.x, y, -hz), thick, tall, StructureMaterial.Timber, railKey, StructureRole.Detail));
+						}
+						from = Mathf.Max(from, cut.y);
+					}
+				}
+				if (hx - from > 0.05f)
+				{
+					d.Add(StructureShapes.Beam(new Vector3(from, y, -hz), new Vector3(hx, y, -hz), thick, tall, StructureMaterial.Timber, railKey, StructureRole.Detail));
+				}
+			}
 			for (int sx = -1; sx <= 1; sx += 2)
 			{
 				for (int sz = -1; sz <= 1; sz += 2)
@@ -899,7 +934,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (float y in new[] { y0 + 0.1f, y1 - 0.1f })
 			{
-				d.Add(StructureShapes.Beam(new Vector3(-hx, y, -hz), new Vector3(hx, y, -hz), 0.18f, post, StructureMaterial.Timber, k++, StructureRole.Detail));
+				FrontRail(y, 0.18f, post, k++);
 				d.Add(StructureShapes.Beam(new Vector3(-hx, y, hz), new Vector3(hx, y, hz), 0.18f, post, StructureMaterial.Timber, k++, StructureRole.Detail));
 				d.Add(StructureShapes.Beam(new Vector3(-hx, y, -hz), new Vector3(-hx, y, hz), 0.18f, post, StructureMaterial.Timber, k++, StructureRole.Detail));
 				d.Add(StructureShapes.Beam(new Vector3(hx, y, -hz), new Vector3(hx, y, hz), 0.18f, post, StructureMaterial.Timber, k++, StructureRole.Detail));
@@ -908,7 +943,7 @@ namespace FishMMO.Shared.WorldDesign
 			if (d.Mid)
 			{
 				float rail = (y0 + y1) * 0.5f;
-				d.Add(StructureShapes.Beam(new Vector3(-hx, rail, -hz), new Vector3(hx, rail, -hz), 0.13f, post * 0.9f, StructureMaterial.Timber, k++, StructureRole.Detail));
+				FrontRail(rail, 0.13f, post * 0.9f, k++);
 				d.Add(StructureShapes.Beam(new Vector3(-hx, rail, hz), new Vector3(hx, rail, hz), 0.13f, post * 0.9f, StructureMaterial.Timber, k++, StructureRole.Detail));
 			}
 			if (!d.Fine)

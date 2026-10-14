@@ -27,7 +27,8 @@ namespace FishMMO.Client
 		public sealed class Group
 		{
 			public int HeightResolution, Blocks;
-			public Texture2DArray Heights, Density;
+			/// <summary>Holes: a slice per terrain beside its height slice (same index), solid for a terrain with no hole.</summary>
+			public Texture Heights, Density, Holes;
 			public readonly List<DetailScatterTerrain> Terrains = new List<DetailScatterTerrain>();
 		}
 
@@ -42,6 +43,7 @@ namespace FishMMO.Client
 		private readonly List<(Object Texture, int Frame)> retiredTextures = new List<(Object, int)>();
 		private readonly List<(GraphicsBuffer Buffer, int Frame)> retiredBuffers = new List<(GraphicsBuffer, int)>();
 		private readonly Dictionary<int, Texture2D> blanks = new Dictionary<int, Texture2D>();
+		private readonly Dictionary<int, Texture2D> solids = new Dictionary<int, Texture2D>();
 
 		public int IndexOf(DetailScatterTerrain terrain) => index.TryGetValue(terrain, out int i) ? i : -1;
 
@@ -127,16 +129,18 @@ namespace FishMMO.Client
 			}
 			Table = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ordered.Count * TerrainUints, sizeof(uint)) { name = "Detail scatter terrain table" };
 
-			// The texture arrays, slice by slice on the GPU: one height slice and two density slices a terrain.
+			// The texture arrays, slice by slice on the GPU: one height slice, one holes slice and two density slices a terrain.
 			foreach (Group g in Groups)
 			{
 				int n = g.Terrains.Count;
 				g.Heights = NewArray(g.HeightResolution, n, ((Texture2D)g.Terrains[0].Heightmap).format, "heights");
 				g.Density = NewArray(g.Blocks, n * 2, TextureFormat.RGBAHalf, "density");
+				g.Holes = NewArray(g.HeightResolution, n, TextureFormat.R8, "holes");
 				for (int s = 0; s < n; s++)
 				{
 					DetailScatterTerrain st = g.Terrains[s];
 					Graphics.CopyTexture(st.Heightmap, 0, 0, g.Heights, s, 0);
+					Graphics.CopyTexture(st.Holes != null ? st.Holes : Solid(g.HeightResolution), 0, 0, g.Holes, s, 0);
 					Graphics.CopyTexture(st.Density0, 0, 0, g.Density, 2 * s, 0);
 					Graphics.CopyTexture(st.Density1 != null ? st.Density1 : Blank(g.Blocks), 0, 0, g.Density, 2 * s + 1, 0);
 				}
@@ -191,15 +195,10 @@ namespace FishMMO.Client
 
 		private static void Put(uint[] data, int at, float value) => data[at] = BitConverter.ToUInt32(BitConverter.GetBytes(value), 0);
 
-		private static Texture2DArray NewArray(int resolution, int slices, TextureFormat format, string what)
+		/// <summary>A GPU-only array (TerrainAtlasArrays: no system-memory copy, nothing uploaded), linear as the maps are.</summary>
+		private static Texture NewArray(int resolution, int slices, TextureFormat format, string what)
 		{
-			return new Texture2DArray(resolution, resolution, slices, format, false, true)
-			{
-				name = $"Detail scatter {what} ({slices} slice(s))",
-				filterMode = FilterMode.Point,
-				wrapMode = TextureWrapMode.Clamp,
-				hideFlags = HideFlags.DontSave,
-			};
+			return TerrainAtlasArrays.NewArray(resolution, slices, TerrainAtlasArrays.Linear(format), $"Detail scatter {what} ({slices} slice(s))");
 		}
 
 		/// <summary>An all-zero half-float square: the second density slice of a terrain with four channels or fewer.</summary>
@@ -215,6 +214,24 @@ namespace FishMMO.Client
 			return blank;
 		}
 
+		/// <summary>An all-solid R8 square: the holes slice of a terrain with no hole.</summary>
+		private Texture2D Solid(int resolution)
+		{
+			if (!solids.TryGetValue(resolution, out Texture2D solid) || solid == null)
+			{
+				var texels = new byte[resolution * resolution];
+				for (int i = 0; i < texels.Length; i++)
+				{
+					texels[i] = 255;
+				}
+				solid = new Texture2D(resolution, resolution, TextureFormat.R8, false, true) { name = "Detail scatter solid", hideFlags = HideFlags.DontSave };
+				solid.SetPixelData(texels, 0);
+				solid.Apply(false, true);
+				solids[resolution] = solid;
+			}
+			return solid;
+		}
+
 		/// <summary>The old arrays and table may still be read by a frame in flight: released a few frames later.</summary>
 		private void RetireAll()
 		{
@@ -228,6 +245,10 @@ namespace FishMMO.Client
 				if (g.Density != null)
 				{
 					retiredTextures.Add((g.Density, frame));
+				}
+				if (g.Holes != null)
+				{
+					retiredTextures.Add((g.Holes, frame));
 				}
 			}
 			Groups.Clear();
@@ -271,6 +292,14 @@ namespace FishMMO.Client
 				}
 			}
 			blanks.Clear();
+			foreach (Texture2D solid in solids.Values)
+			{
+				if (solid != null)
+				{
+					Object.Destroy(solid);
+				}
+			}
+			solids.Clear();
 			index.Clear();
 			ordered.Clear();
 			distances.Clear();

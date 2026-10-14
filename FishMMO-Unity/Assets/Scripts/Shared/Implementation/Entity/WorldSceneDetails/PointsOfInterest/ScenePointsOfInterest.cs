@@ -178,6 +178,12 @@ namespace FishMMO.Shared
 		public List<SceneEmitter> Emitters = new List<SceneEmitter>();
 		/// <summary>The sites' rooms, as laid: where the sky's light reaches only through windows and doors.</summary>
 		public List<SceneRoom> Rooms = new List<SceneRoom>();
+		/// <summary>
+		/// The ladders, rope ladders and ropes the sites' caves and mines were given, as laid (<see cref="SceneClimbable"/>).
+		/// Read on the server as well as the client: climbing is predicted movement the server is the authority for, and
+		/// the server's NavMesh links its NPCs climb come from these (<see cref="SceneClimbables"/>).
+		/// </summary>
+		public List<SceneClimbable> Climbables = new List<SceneClimbable>();
 
 		/// <summary>The record with this id, or null.</summary>
 		public PointOfInterestRecord Find(int id)

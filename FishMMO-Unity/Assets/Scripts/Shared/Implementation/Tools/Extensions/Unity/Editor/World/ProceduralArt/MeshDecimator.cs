@@ -101,6 +101,13 @@ namespace FishMMO.Shared.WorldDesign
 			for (int i = 0; i < nv; i++) faces[i] = new List<int>(6);
 			var q = new double[nv * 10];
 			var stamp = new int[nv];
+			// Made once and reused: a small allocation per candidate and per check, millions in a cliff, stalls every
+			// thread building alongside on the editor's stop-the-world collector.
+			var k = new double[10];
+			var sum = new double[10];
+			var nbU = new List<int>(16);
+			var nbV = new List<int>(16);
+			var around = new List<int>(16);
 			int aliveCount = 0;
 			for (int f = 0; f < nf; f++)
 			{
@@ -112,9 +119,11 @@ namespace FishMMO.Shared.WorldDesign
 				Normal(px, py, pz, a, b, c, out double nx, out double ny, out double nz, out double area);
 				if (area <= 0) continue;
 				double d = -(nx * px[a] + ny * py[a] + nz * pz[a]);
-				double[] k = { nx * nx, nx * ny, nx * nz, nx * d, ny * ny, ny * nz, ny * d, nz * nz, nz * d, d * d };
-				foreach (int v in new[] { a, b, c })
-					for (int j = 0; j < 10; j++) q[v * 10 + j] += k[j] * area;
+				k[0] = nx * nx; k[1] = nx * ny; k[2] = nx * nz; k[3] = nx * d; k[4] = ny * ny;
+				k[5] = ny * nz; k[6] = ny * d; k[7] = nz * nz; k[8] = nz * d; k[9] = d * d;
+				for (int j = 0; j < 10; j++) q[a * 10 + j] += k[j] * area;
+				for (int j = 0; j < 10; j++) q[b * 10 + j] += k[j] * area;
+				for (int j = 0; j < 10; j++) q[c * 10 + j] += k[j] * area;
 			}
 
 			double[] flipLimit = { 0.3, 0.15, 0.05 };
@@ -130,7 +139,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						int u = face[f * 3 + e], v = face[f * 3 + (e + 1) % 3];
 						long key = u < v ? ((long)u << 32) | (uint)v : ((long)v << 32) | (uint)u;
-						if (seen.Add(key)) heap.Push(Candidate(q, px, py, pz, stamp, u, v));
+						if (seen.Add(key)) heap.Push(Candidate(q, px, py, pz, stamp, u, v, sum));
 					}
 				}
 				while (aliveCount > targetTriangles && heap.Count > 0)
@@ -138,12 +147,13 @@ namespace FishMMO.Shared.WorldDesign
 					Entry e = heap.Pop();
 					if (stamp[e.U] != e.Su || stamp[e.V] != e.Sv) continue;
 					int u = e.U, v = e.V;
-					if (!LinkOk(face, faces, u, v)) continue;
+					if (!LinkOk(face, faces, u, v, nbU, nbV)) continue;
 					if (Flips(face, faces[u], u, v, e.At, px, py, pz, flipLimit[pass], sliverLimit[pass]) || Flips(face, faces[v], v, u, e.At, px, py, pz, flipLimit[pass], sliverLimit[pass])) continue;
 					Collapse(face, faces, alive, ref aliveCount, q, px, py, pz, stamp, u, v, e.At);
-					var around = new HashSet<int>();
-					foreach (int f in faces[u]) for (int j = 0; j < 3; j++) { int w = face[f * 3 + j]; if (w != u) around.Add(w); }
-					foreach (int w in around) heap.Push(Candidate(q, px, py, pz, stamp, u, w));
+					// In first-seen order, as the set this was gave them: the heap breaks ties by push order.
+					around.Clear();
+					foreach (int f in faces[u]) for (int j = 0; j < 3; j++) { int w = face[f * 3 + j]; if (w != u && !around.Contains(w)) around.Add(w); }
+					foreach (int w in around) heap.Push(Candidate(q, px, py, pz, stamp, u, w, sum));
 				}
 			}
 
@@ -159,7 +169,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (area > 1e-4 * longest && longest > 1e-6) continue;
 					int s0 = e0 <= e1 && e0 <= e2 ? 0 : e1 <= e2 ? 1 : 2;
 					int u = face[f * 3 + s0], v = face[f * 3 + (s0 + 1) % 3];
-					if (!LinkOk(face, faces, u, v))
+					if (!LinkOk(face, faces, u, v, nbU, nbV))
 					{
 						int sl = e0 >= e1 && e0 >= e2 ? 0 : e1 >= e2 ? 1 : 2;
 						if (TryFlip(face, faces, alive, f, sl)) changed = true;
@@ -224,16 +234,17 @@ namespace FishMMO.Shared.WorldDesign
 			return x * x + y * y + z * z;
 		}
 
-		private static bool LinkOk(int[] face, List<int>[] faces, int u, int v)
+		/// <summary><paramref name="nbU"/> and <paramref name="nbV"/> are the caller's scratch: each end's distinct corners.</summary>
+		private static bool LinkOk(int[] face, List<int>[] faces, int u, int v, List<int> nbU, List<int> nbV)
 		{
-			var nbU = new HashSet<int>();
-			var nbV = new HashSet<int>();
+			nbU.Clear();
+			nbV.Clear();
 			int shared = 0;
-			foreach (int f in faces[u]) for (int j = 0; j < 3; j++) nbU.Add(face[f * 3 + j]);
+			foreach (int f in faces[u]) for (int j = 0; j < 3; j++) AddOnce(nbU, face[f * 3 + j]);
 			foreach (int f in faces[v])
 			{
 				bool hasU = false;
-				for (int j = 0; j < 3; j++) { nbV.Add(face[f * 3 + j]); hasU |= face[f * 3 + j] == u; }
+				for (int j = 0; j < 3; j++) { AddOnce(nbV, face[f * 3 + j]); hasU |= face[f * 3 + j] == u; }
 				if (hasU) shared++;
 			}
 			if (shared != 2) return false;
@@ -247,6 +258,11 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (int g in faces[u]) if (SameTriple(face, g, a0, a1, a2)) return false;
 			}
 			return nbU.Count + nbV.Count - 6 >= 3;
+		}
+
+		private static void AddOnce(List<int> set, int x)
+		{
+			if (!set.Contains(x)) set.Add(x);
 		}
 
 		private static bool HasVertex(int[] face, int f, int a) => face[f * 3] == a || face[f * 3 + 1] == a || face[f * 3 + 2] == a;
@@ -317,9 +333,9 @@ namespace FishMMO.Shared.WorldDesign
 				+ q[o + 7] * z * z + 2 * q[o + 8] * z + q[o + 9];
 		}
 
-		private static Entry Candidate(double[] q, double[] px, double[] py, double[] pz, int[] stamp, int u, int v)
+		/// <summary><paramref name="s"/> is the caller's scratch for the summed quadric.</summary>
+		private static Entry Candidate(double[] q, double[] px, double[] py, double[] pz, int[] stamp, int u, int v, double[] s)
 		{
-			var s = new double[10];
 			for (int j = 0; j < 10; j++) s[j] = q[u * 10 + j] + q[v * 10 + j];
 			double a = s[0], b = s[1], c = s[2], d = s[4], e = s[5], f = s[7];
 			double det = a * (d * f - e * e) - b * (b * f - e * c) + c * (b * e - d * c);
@@ -343,11 +359,10 @@ namespace FishMMO.Shared.WorldDesign
 				ox = mx; oy = my; oz = mz;
 				best = Error(s, 0, mx, my, mz);
 			}
-			foreach (int w in new[] { u, v })
-			{
-				double err = Error(s, 0, px[w], py[w], pz[w]);
-				if (err < best) { best = err; ox = px[w]; oy = py[w]; oz = pz[w]; }
-			}
+			double errU = Error(s, 0, px[u], py[u], pz[u]);
+			if (errU < best) { best = errU; ox = px[u]; oy = py[u]; oz = pz[u]; }
+			double errV = Error(s, 0, px[v], py[v], pz[v]);
+			if (errV < best) { best = errV; ox = px[v]; oy = py[v]; oz = pz[v]; }
 			return new Entry { Cost = Math.Max(0, best), U = u, V = v, Su = stamp[u], Sv = stamp[v], At = new Vector3((float)ox, (float)oy, (float)oz) };
 		}
 

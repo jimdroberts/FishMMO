@@ -23,7 +23,10 @@ namespace FishMMO.Shared.WorldDesign
 		Small,
 		/// <summary>At most 1500: tents, palisades, shrines, statues.</summary>
 		Medium,
-		/// <summary>At most 3000: houses, towers, keeps.</summary>
+		/// <summary>
+		/// At most 3500: houses, towers, keeps (3000 until the houses were built 1.4× larger, 2026-10-13: a longer wall
+		/// carries more of the frame's close studding and more window openings).
+		/// </summary>
 		Building,
 	}
 
@@ -34,6 +37,11 @@ namespace FishMMO.Shared.WorldDesign
 		Ground,
 		/// <summary>At deck level: y = 0 is the walking surface (piers, bridge spans); piles and trestles reach down.</summary>
 		Deck,
+		/// <summary>
+		/// Hung from above (2026-10-13, the cave and mine kit): y = 0 is the fixing point on a roof, a beam or a shaft's lip,
+		/// and the piece hangs down −y from it (a climbing rope, a lantern on its chain).
+		/// </summary>
+		Roof,
 	}
 
 	/// <summary>A material treatment every piece is generated in: the same meshes, other textures (2026-10-10: tint variants via material, not new meshes).</summary>
@@ -83,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 		internal Action<StructureDraft> Builder;
 
 		/// <summary>The level-0 triangle budget of its <see cref="Size"/>.</summary>
-		public int TriangleBudget => Size == StructureSize.Small ? 600 : Size == StructureSize.Medium ? 1500 : 3000;
+		public int TriangleBudget => Size == StructureSize.Small ? 600 : Size == StructureSize.Medium ? 1500 : 3500;
 
 		public bool HasTag(string tag) => Array.IndexOf(Tags, tag) >= 0;
 
@@ -315,7 +323,7 @@ namespace FishMMO.Shared.WorldDesign
 			"fire", "storage", "banner", "bedding", "palisade", "gate", "standing-stone", "altar", "shrine", "statue",
 			"column", "grave", "crypt", "bones", "fence", "house", "tower", "keep", "stilt", "well", "lighthouse",
 			"market", "dock", "bridge", "rubble", "monument", "military", "water", "underwater",
-			"church", "temple", "tavern", "smithy", "stable", "notice", "farm", "clutter", "town", "light", "door", "furniture", "bed", "table", "chair", "chest", "shelf", "hearth", "bar", "pew", "lectern", "sarcophagus", "stall", "step", "portcullis", "wallstair", "mine", "torch", "boat", "ship", "wreck", "shipyard", "wild", "cave",
+			"church", "temple", "tavern", "smithy", "stable", "notice", "farm", "clutter", "town", "light", "door", "furniture", "bed", "table", "chair", "chest", "shelf", "hearth", "bar", "pew", "lectern", "sarcophagus", "stall", "step", "portcullis", "wallstair", "mine", "torch", "boat", "ship", "wreck", "shipyard", "gorge", "arch", "rope", "climb", "lantern", "cave",
 		};
 
 		private static List<StructurePiece> all;
@@ -336,6 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 					AddClutter(list);
 					AddInterior(list);
 					AddMine(list);
+					AddCave(list);
 					AddLights(list);
 					AddShips(list);
 					AddBridges(list);

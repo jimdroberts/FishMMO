@@ -101,6 +101,8 @@ namespace FishMMO.Client
 		private float cellX, cellZ;
 		private bool coverageMode;
 		private float[] coverage;
+		/// <summary>The terrain's painted holes (null: none): no plant is placed over one, whatever the layers hold there.</summary>
+		private TerrainHoleMask holes;
 		private Chunk[] chunks;
 		private int[] queuedFrame;
 		private readonly List<int> built = new List<int>();
@@ -121,6 +123,7 @@ namespace FishMMO.Client
 				size = data.size,
 				coverageMode = data.detailScatterMode == DetailScatterMode.CoverageMode,
 				coverage = new float[models.Length],
+				holes = TerrainHoleMask.Read(data),
 			};
 			field.cellX = field.size.x / resolution;
 			field.cellZ = field.size.z / resolution;
@@ -178,22 +181,50 @@ namespace FishMMO.Client
 		/// </summary>
 		public int Gather(in TerrainTreeField.View view, float distance, int frame, List<Missing> missing, bool useGpu = true, System.Text.StringBuilder trace = null)
 		{
+			return Gather(in view, distance, frame, missing, useGpu, trace, default, out _, out _);
+		}
+
+		/// <summary>
+		/// <see cref="Gather(in TerrainTreeField.View, float, int, List{Missing}, bool, System.Text.StringBuilder)"/>, for a
+		/// GPU work list that may be kept across frames.
+		/// </summary>
+		/// <param name="reuse">
+		/// For a GPU work list kept across frames (<see cref="TerrainGpuRenderer.WorkReuse"/>): chunks this much nearer count
+		/// as in reach, and the GPU runs are kept against these widened view and shadow planes, with their shadow candidacy
+		/// from the nearer distance. Null: the exact gather. The CPU path's buckets always take the exact tests.
+		/// </param>
+		/// <param name="cpuAppended">True when anything went into a CPU bucket (such a gather cannot be kept).</param>
+		/// <param name="anyMissing">True when a chunk in reach is not built yet (nor can it: the chunk is still to come).</param>
+		public int Gather(in TerrainTreeField.View view, float distance, int frame, List<Missing> missing, bool useGpu, System.Text.StringBuilder trace,
+			in TerrainGpuRenderer.ReuseBounds reuse, out bool cpuAppended, out bool anyMissing)
+		{
+			cpuAppended = false;
+			anyMissing = false;
 			TerrainGpuRenderer gpu = useGpu ? Gpu : null;
 			if (distance <= 0f)
 			{
 				return 0;
 			}
+			bool widened = reuse.ViewPlanes != null && gpu != null;
+			float slack = widened ? reuse.Slack : 0f;
+			Plane[] viewPlanes = widened ? reuse.ViewPlanes : view.Planes;
+			Plane[] shadowPlanes = widened ? reuse.ShadowPlanes : view.Planes;
+			if (gpu != null)
+			{
+				// The chunks this gather keeps wanted, so a list kept across frames keeps them wanted too (Rewant).
+				wanted.Clear();
+			}
 			float localX = view.Position.x - origin.x, localZ = view.Position.z - origin.z;
 			float sideX = ChunkMetresX, sideZ = ChunkMetresZ;
-			TerrainDetailMath.ChunkRange(localX, distance, sideX, ChunksX, out int minX, out int maxX);
-			TerrainDetailMath.ChunkRange(localZ, distance, sideZ, ChunksZ, out int minZ, out int maxZ);
+			TerrainDetailMath.ChunkRange(localX, distance + slack, sideX, ChunksX, out int minX, out int maxX);
+			TerrainDetailMath.ChunkRange(localZ, distance + slack, sideZ, ChunksZ, out int minZ, out int maxZ);
 			int gathered = 0;
 			for (int cz = minZ; cz <= maxZ; cz++)
 			{
 				for (int cx = minX; cx <= maxX; cx++)
 				{
 					float ground = TerrainDetailMath.DistanceToSquare(localX, localZ, cx * sideX, cz * sideZ, Mathf.Max(sideX, sideZ));
-					if (ground > distance)
+					if (ground - slack > distance)
 					{
 						continue;
 					}
@@ -201,6 +232,7 @@ namespace FishMMO.Client
 					Chunk chunk = chunks[index];
 					if (chunk == null)
 					{
+						anyMissing = true;
 						if (queuedFrame[index] != frame)
 						{
 							queuedFrame[index] = frame;
@@ -210,19 +242,23 @@ namespace FishMMO.Client
 						continue;
 					}
 					chunk.LastWanted = frame;
-					if (chunk.Count == 0 || TerrainTreeMath.MinDistance(chunk.Bounds, view.Position) > distance)
+					if (gpu != null)
+					{
+						wanted.Add(index);
+					}
+					float nearest = TerrainTreeMath.MinDistance(chunk.Bounds, view.Position);
+					if (chunk.Count == 0 || nearest - slack > distance)
 					{
 						trace?.Append($"\n    {Terrain.name} chunk {index} ({ground:F0} m): {(chunk.Count == 0 ? "empty" : "beyond the detail distance")}, {chunk.Count} instances, GPU offset {chunk.GpuOffset}");
 						continue;
 					}
-					if (!TerrainTreeMath.IntersectsFrustum(view.Planes, chunk.Bounds))
+					// Exact: what the CPU path's buckets take. Kept: what the GPU's work takes (the same when not widened).
+					bool exact = nearest <= distance && Sees(view.Planes, view.Planes, in view, chunk, nearest);
+					bool kept = widened ? Sees(viewPlanes, shadowPlanes, in view, chunk, nearest - slack) : exact;
+					if (!kept && !exact)
 					{
-						if (!chunk.CastsShadows || !view.Shadows || TerrainTreeMath.MinDistance(chunk.Bounds, view.Position) > view.ShadowDistance
-							|| !TerrainTreeMath.IntersectsFrustum(view.Planes, TerrainTreeMath.ShadowSweep(chunk.Bounds, view.LightDirection, view.ShadowDistance)))
-						{
-							trace?.Append($"\n    {Terrain.name} chunk {index} ({ground:F0} m): outside the frustum, {chunk.Count} instances");
-							continue;
-						}
+						trace?.Append($"\n    {Terrain.name} chunk {index} ({ground:F0} m): outside the frustum, {chunk.Count} instances");
+						continue;
 					}
 					if (trace != null)
 					{
@@ -240,19 +276,54 @@ namespace FishMMO.Client
 						TerrainDetailModel model = Models[p];
 						if (gpu != null && model.GpuId >= 0 && chunk.GpuOffset >= 0)
 						{
-							gpu.AddWork(chunk.GpuOffset + runs[p], count, model.GpuId, distance, 1f, 1,
-								model.CastsShadows && view.Shadows && TerrainTreeMath.MinDistance(chunk.Bounds, view.Position) <= view.ShadowDistance,
-								TerrainDetailMath.ThinStartMetres, TerrainDetailMath.ThinKeepAtDistance);
+							if (kept)
+							{
+								gpu.AddWork(chunk.GpuOffset + runs[p], count, model.GpuId, distance, 1f, 1,
+									model.CastsShadows && view.Shadows && nearest - slack <= view.ShadowDistance,
+									TerrainDetailMath.ThinStartMetres, TerrainDetailMath.ThinKeepAtDistance);
+								gathered += count;
+							}
 						}
-						else
+						else if (exact)
 						{
 							model.AppendRange(chunk.Instances, runs[p], count, chunk.Bounds);
+							cpuAppended = true;
+							gathered += count;
 						}
-						gathered += count;
 					}
 				}
 			}
 			return gathered;
+		}
+
+		/// <summary>Whether a chunk at <paramref name="near"/> metres is in view, or casts a shadow that can reach it.</summary>
+		private static bool Sees(Plane[] viewPlanes, Plane[] shadowPlanes, in TerrainTreeField.View view, Chunk chunk, float near)
+		{
+			if (TerrainTreeMath.IntersectsFrustum(viewPlanes, chunk.Bounds))
+			{
+				return true;
+			}
+			return chunk.CastsShadows && view.Shadows && near <= view.ShadowDistance
+				&& TerrainTreeMath.IntersectsFrustum(shadowPlanes, TerrainTreeMath.ShadowSweep(chunk.Bounds, view.LightDirection, view.ShadowDistance));
+		}
+
+		/// <summary>The built chunks the last GPU gather kept wanted.</summary>
+		private readonly List<int> wanted = new List<int>();
+
+		/// <summary>Counts every chunk built or released over every field: a GPU work list gathered before one is stale.</summary>
+		public static int ChunkVersion { get; private set; }
+
+		/// <summary>Keeps the chunks the last GPU gather wanted wanted this frame (its work list is kept instead of gathered again).</summary>
+		public void Rewant(int frame)
+		{
+			foreach (int index in wanted)
+			{
+				Chunk chunk = chunks[index];
+				if (chunk != null)
+				{
+					chunk.LastWanted = frame;
+				}
+			}
 		}
 
 		/// <summary>Builds one chunk now (from the pool where it can). Returns its instance count.</summary>
@@ -262,6 +333,7 @@ namespace FishMMO.Client
 			{
 				return chunks[index].Count;
 			}
+			using var buildScope = BuildMarker.Auto();
 			Chunk chunk = pool.Count > 0 ? pool.Pop() : new Chunk();
 			int prototypes = Models.Length;
 			if (chunk.RunStart.Length != prototypes + 1)
@@ -323,6 +395,7 @@ namespace FishMMO.Client
 			Upload(chunk, index);
 			chunks[index] = chunk;
 			built.Add(index);
+			ChunkVersion++;
 			layers.Clear();
 			return chunk.Count;
 		}
@@ -361,13 +434,36 @@ namespace FishMMO.Client
 			wz = TerrainDetailMath.WorldCell(origin.z + (gz + 0.5f) * cellZ, cellZ);
 		}
 
+		/// <summary>
+		/// Instances of a layer at least this many are placed across worker threads (<see cref="FillLayer"/>); fewer are not
+		/// worth the hand-off.
+		/// </summary>
+		public const int ParallelPlaceMinimum = 512;
+
+		/* A layer's instances while a chunk is built (the main thread's only: chunks are built there): where each stands
+		 * in its cell, the ground's height and normal there (TerrainData's, read here), then its matrix and bounds. */
+		private static int[] placeX = Array.Empty<int>(), placeZ = Array.Empty<int>();
+		private static uint[] placeHash = Array.Empty<uint>();
+		private static float[] placeHeight = Array.Empty<float>();
+		private static Vector3[] placeNormal = Array.Empty<Vector3>();
+		private static FishInstance[] placed = Array.Empty<FishInstance>();
+		private static Bounds[] placedBounds = Array.Empty<Bounds>();
+
+		private static readonly Unity.Profiling.ProfilerMarker BuildMarker = new Unity.Profiling.ProfilerMarker("TerrainDetailField.Build");
+
+		/// <summary>
+		/// A layer's instances into the chunk, in order. The ground under each is read from the TerrainData here (its reads
+		/// are the main thread's); the rest of each placement (its size, turn, lean and slope sink, its matrix and bounds) is
+		/// plain arithmetic of the instance's own, run on worker threads for a large layer, then the bounds are gathered in
+		/// order. The same operations on the same values, so every matrix is what it was.
+		/// </summary>
 		private void FillLayer(Chunk chunk, int[,] map, int p, int x0, int z0, int w, int h, ref Bounds bounds, ref bool any)
 		{
 			DetailPrototypeSettings s = settings[p];
 			Bounds mesh = Models[p].MeshBounds;
 			float area = cellX * cellZ;
 			float density = Density(p);
-			NativeArray<FishInstance> instances = chunk.Instances;
+			int n = 0;
 			for (int z = 0; z < h; z++)
 			{
 				for (int x = 0; x < w; x++)
@@ -379,39 +475,97 @@ namespace FishMMO.Client
 					}
 					int gx = x0 + x, gz = z0 + z;
 					WorldCell(gx, gz, out int wx, out int wz);
-					int n = TerrainDetailMath.CountInCell(TerrainDetailMath.ExpectedInCell(value, coverageMode, coverage[p], area, density),
+					int count = TerrainDetailMath.CountInCell(TerrainDetailMath.ExpectedInCell(value, coverageMode, coverage[p], area, density),
 						TerrainDetailMath.Hash(wx, wz, p, s.Seed, 0));
-					for (int k = 0; k < n; k++)
+					for (int k = 0; k < count; k++)
 					{
 						uint hash = TerrainDetailMath.Hash(wx, wz, p, s.Seed, k + 1);
-						Matrix4x4 m = Place(s, gx, gz, hash);
-						instances[chunk.Count++] = FishInstance.From(m);
-						Bounds b = TerrainTreeMath.TransformBounds(m, mesh);
-						if (any)
+						Vector2 inCell = TerrainDetailMath.InCell(hash, s.Jitter);
+						// Not over a hole (a cave mouth): the layers there keep what was painted before it was cut.
+						if (holes != null && holes.HoleAt((gx + inCell.x) / Resolution, (gz + inCell.y) / Resolution))
 						{
-							bounds.Encapsulate(b);
+							continue;
 						}
-						else
-						{
-							bounds = b;
-							any = true;
-						}
+						float nx = (gx + inCell.x) / Resolution, nz = (gz + inCell.y) / Resolution;
+						EnsurePlaceScratch(n + 1);
+						placeX[n] = gx;
+						placeZ[n] = gz;
+						placeHash[n] = hash;
+						placeHeight[n] = Data.GetInterpolatedHeight(nx, nz);
+						placeNormal[n] = Data.GetInterpolatedNormal(nx, nz);
+						n++;
 					}
+				}
+			}
+			if (n == 0)
+			{
+				return;
+			}
+			if (n >= ParallelPlaceMinimum && !TerrainBuildQueue.Inline)
+			{
+				System.Threading.Tasks.Parallel.For(0, n, i => PlaceInto(in s, in mesh, i));
+			}
+			else
+			{
+				for (int i = 0; i < n; i++)
+				{
+					PlaceInto(in s, in mesh, i);
+				}
+			}
+			NativeArray<FishInstance>.Copy(placed, 0, chunk.Instances, chunk.Count, n);
+			chunk.Count += n;
+			for (int i = 0; i < n; i++)
+			{
+				if (any)
+				{
+					bounds.Encapsulate(placedBounds[i]);
+				}
+				else
+				{
+					bounds = placedBounds[i];
+					any = true;
 				}
 			}
 		}
 
-		/// <summary>One instance's matrix: jittered in its cell, on the ground, turned, sized by the noise, leaning with the slope as the prototype asks.</summary>
-		private Matrix4x4 Place(in DetailPrototypeSettings s, int gx, int gz, uint hash)
+		/// <summary>Instance <paramref name="i"/> of the layer being placed: its matrix and bounds (worker-safe: its own slots only).</summary>
+		private void PlaceInto(in DetailPrototypeSettings s, in Bounds mesh, int i)
+		{
+			Matrix4x4 m = Place(s, placeX[i], placeZ[i], placeHash[i], placeHeight[i], placeNormal[i]);
+			placed[i] = FishInstance.From(m);
+			placedBounds[i] = TerrainTreeMath.TransformBounds(m, mesh);
+		}
+
+		private static void EnsurePlaceScratch(int needed)
+		{
+			if (placeX.Length >= needed)
+			{
+				return;
+			}
+			int size = Mathf.Max(needed, Mathf.Max(1024, placeX.Length * 2));
+			Array.Resize(ref placeX, size);
+			Array.Resize(ref placeZ, size);
+			Array.Resize(ref placeHash, size);
+			Array.Resize(ref placeHeight, size);
+			Array.Resize(ref placeNormal, size);
+			Array.Resize(ref placed, size);
+			Array.Resize(ref placedBounds, size);
+		}
+
+		/// <summary>
+		/// One instance's matrix: jittered in its cell, on the ground (<paramref name="ground"/>, TerrainData's interpolated
+		/// height there, and <paramref name="normal"/> its normal), turned, sized by the noise, leaning with the slope as the
+		/// prototype asks.
+		/// </summary>
+		private Matrix4x4 Place(in DetailPrototypeSettings s, int gx, int gz, uint hash, float ground, Vector3 normal)
 		{
 			Vector2 inCell = TerrainDetailMath.InCell(hash, s.Jitter);
 			float nx = (gx + inCell.x) / Resolution, nz = (gz + inCell.y) / Resolution;
 			float worldX = origin.x + nx * size.x, worldZ = origin.z + nz * size.z;
-			var position = new Vector3(worldX, origin.y + Data.GetInterpolatedHeight(nx, nz), worldZ);
+			var position = new Vector3(worldX, origin.y + ground, worldZ);
 			Vector2 scale = TerrainDetailMath.Size(TerrainDetailMath.Noise(worldX * s.NoiseSpread, worldZ * s.NoiseSpread, s.Seed),
 				s.MinWidth, s.MaxWidth, s.MinHeight, s.MaxHeight);
 			Quaternion rotation = Quaternion.AngleAxis(TerrainDetailMath.Yaw(hash), Vector3.up);
-			Vector3 normal = Data.GetInterpolatedNormal(nx, nz);
 			if (s.AlignToGround > 0f)
 			{
 				Vector3 up = Vector3.Slerp(Vector3.up, normal, s.AlignToGround);
@@ -459,6 +613,7 @@ namespace FishMMO.Client
 			int index = built[builtSlot];
 			Chunk chunk = chunks[index];
 			chunks[index] = null;
+			ChunkVersion++;
 			built[builtSlot] = built[built.Count - 1];
 			built.RemoveAt(built.Count - 1);
 			FreeGpu(chunk);

@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using FishMMO.Server.Core;
+using FishMMO.Shared;
 using FishNet.Managing.Scened;
 using UnityEngine;
 
@@ -68,7 +70,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 			}
 			for (int i = 0; i < args.LoadedScenes.Length; ++i)
 			{
-				NavMeshes.Add(args.LoadedScenes[i].name);
+				// The scene's climbables are registered by now (its objects enabled as it loaded): they become its NavMesh's links.
+				UnityEngine.SceneManagement.Scene scene = args.LoadedScenes[i];
+				SceneClimbables.TryGetAll(scene, out IReadOnlyList<SceneClimbable> climbables);
+				NavMeshes.Add(scene.name, climbables);
 			}
 		}
 

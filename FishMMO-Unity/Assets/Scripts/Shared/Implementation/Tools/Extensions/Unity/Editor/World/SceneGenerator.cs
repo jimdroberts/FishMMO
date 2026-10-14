@@ -286,6 +286,7 @@ namespace FishMMO.Shared.WorldDesign
 			};
 
 			TerrainTilePlan plan = result.Plan;
+			var clock = new StageClock("Cut");
 
 			/* Unity refuses to add a scene additively while an UNTITLED scene is open, which is
 			 * exactly what a freshly launched editor has — and what a batch editor always has. So
@@ -326,6 +327,7 @@ namespace FishMMO.Shared.WorldDesign
 				return SceneGenerationResult.Failed($"'{bodyPath}' could not be loaded again after opening the new scene; nothing was written." +
 					(result.BackupFolder != null ? $" The old scene is in '{result.BackupFolder}'." : string.Empty));
 			}
+			clock.Lap("Opening");
 			// Baked props and colliders go beside the terrain from the start: the scene has no path until it is saved.
 			ScenePropBaker.BakeFolder = terrainFolder;
 			try
@@ -337,6 +339,44 @@ namespace FishMMO.Shared.WorldDesign
 					out SceneWater water);
 				poi.Erosion = erosion;
 				poi.Field = ground;
+				/* No stretch of a river may lie under the ground it was laid in (RiverBurial). Where the shaped ground
+				 * buries one, the water is laid into it again (the carve only lowers, so a river already cut is left as
+				 * it is), and every later stage that writes the ground is checked the same way, so the cut names the
+				 * one that buries a river. */
+				int buried = 0, breached = -1;
+				void CheckRivers(string stage, Func<float, float, float> groundAt)
+				{
+					// And the banks: where the ground beside a river lies under its water within its drawn margin.
+					var worstBreaches = new List<string>();
+					int breaches = RiverBurial.Breaches(water?.Rivers, groundAt, worstBreaches);
+					if (breaches != breached)
+					{
+						string banks = $"River banks under their water after {stage}: {breaches} point(s){(worstBreaches.Count > 0 ? ": " + string.Join("; ", worstBreaches) : string.Empty)}.";
+						result.Notes.Add(banks);
+						Debug.Log($"[Scene generator] '{request.SceneName}' {banks}");
+						breached = breaches;
+					}
+					List<RiverBurial.Run> runs = RiverBurial.Find(water?.Rivers, groundAt);
+					int points = RiverBurial.Points(runs);
+					if (points != buried && points > 0)
+					{
+						string note = RiverBurial.Describe(stage, runs);
+						result.Notes.Add(note);
+						Debug.LogWarning($"[Scene generator] '{request.SceneName}' {note}");
+					}
+					else if (points == 0 && buried > 0)
+					{
+						result.Notes.Add($"Rivers buried: none after {stage}.");
+					}
+					buried = points;
+				}
+				CheckRivers("shaping the ground", ground.MetresAt);
+				if (buried > 0)
+				{
+					water.Finish(ground);
+					CheckRivers("laying the water again", ground.MetresAt);
+				}
+				clock.Lap("Ground, erosion and water");
 
 				/* Every tile shares one floor and one height range, measured from the ground itself:
 				 * tiles normalised against their own range are what makes a stitched landmass step
@@ -357,6 +397,9 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				Stitch(terrains, plan);
+				Func<float, float, float> tileGround = (east, north) => GroundAltitude(terrains, plan, east, north);
+				CheckRivers("cutting the tiles", tileGround);
+				clock.Lap("Terrain tiles");
 
 				/* Canyon walls where the plateaus' risers stand steep: meshes with their faces stood up
 				 * and their beds jutting, the terrain holed under them. Before the biomes are painted,
@@ -369,6 +412,7 @@ namespace FishMMO.Shared.WorldDesign
 						waterGrid != null && waterGrid.Kind.Length == ground.Metres.Length ? i => waterGrid.Kind[i] != WaterKind.None : null);
 					result.Notes.AddRange(walls.Notes);
 					result.Wrote.AddRange(walls.Wrote);
+					clock.Lap("Canyon walls");
 				}
 
 				/* The rivers and lakes laid into the ground, written beside it: what the paint, the scatter
@@ -387,8 +431,10 @@ namespace FishMMO.Shared.WorldDesign
 						}
 					}
 				}
+				CheckRivers("the paint, the cliffs and their talus", tileGround);
+				clock.Lap("Biomes: paint, scatter, cliffs and boulders");
 				// After the paint, so the boulders it placed are in it.
-				string hydrologyPath = SaveWater(request, terrainFolder, water);
+				string hydrologyPath = SaveWater(request, terrainFolder, water, tileGround);
 				if (hydrologyPath != null)
 				{
 					result.Wrote.Add(hydrologyPath);
@@ -398,8 +444,11 @@ namespace FishMMO.Shared.WorldDesign
 					// And the flow down every river, solved round its boulders, kept in the biome map for clients.
 					RiverFlowBake.Bake(hydrology, result.BiomeMap, result.Notes);
 				}
+				clock.Lap("Water assets and river flow");
 				// The sites, built on the finished ground: the POI asset, their objects and their props (in the NavMesh below).
 				poi.Place(scene, plan, terrains, water, result.Notes, result.Wrote);
+				CheckRivers("the sites and their paths", tileGround);
+				clock.Lap("Sites, paths and vines");
 
 				/* The ground past the scene's edge, out to the horizon: client-only, built from the
 				 * same request so it meets the terrain at the edge. Before the sea, because a scene
@@ -418,13 +467,17 @@ namespace FishMMO.Shared.WorldDesign
 				result.Wrote.AddRange(backdrop.Wrote);
 				result.BackdropReachMetres = backdrop.ReachMetres;
 				result.BackdropVertices = backdrop.Vertices;
+				clock.Lap("Backdrop");
 
 				// The sea first: the boundary has to reach its surface, which on a scene cut from
 				// the sea floor is far above the highest ground.
 				AddWater(scene, plan, request, lowest, backdrop, result);
 				AddBoundary(scene, plan, lowest, relief, result.HasWater || result.HasLava ? result.SeaLevelY : (float?)null);
+				clock.Lap("Sea and boundary");
 				// Once everything that stands is in place, and whether or not a biome painted the scene.
 				BakePropsAndNavMesh(scene, plan, terrains, water, result.Notes);
+				CheckRivers("the props and the NavMesh", tileGround);
+				clock.Lap("Props, collision and NavMesh");
 
 				// The same components the audit adds to a scene somebody forgot to finish.
 				bool wantsSky = request.Layer == null || !request.Layer.Underground;
@@ -446,11 +499,13 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 
+				clock.Lap("World systems and dressing");
 				if (!EditorSceneManager.SaveScene(scene, scenePath))
 				{
 					return SceneGenerationResult.Failed($"'{scenePath}' could not be saved.");
 				}
 				result.Wrote.Add(scenePath);
+				clock.Lap("Saving the scene");
 			}
 			finally
 			{
@@ -476,9 +531,47 @@ namespace FishMMO.Shared.WorldDesign
 			AssetDatabase.Refresh();
 			WorldAtlasScene.EditorLookup.Invalidate();
 
+			clock.Lap("Finishing: atlas entry, climate, asset refresh");
+			string timing = clock.ToString();
+			result.Notes.Add(timing);
+			Debug.Log($"[Scene generator] '{request.SceneName}' {timing}");
+
 			result.ScenePath = scenePath;
 			result.Success = true;
 			return result;
+		}
+
+		/// <summary>Wall time per stage of a cut, slowest first, so the cut says where its minutes went.</summary>
+		private sealed class StageClock
+		{
+			private readonly string what;
+			private readonly System.Diagnostics.Stopwatch total = System.Diagnostics.Stopwatch.StartNew();
+			private readonly List<(string stage, double seconds)> laps = new List<(string, double)>();
+			private double last;
+
+			public StageClock(string what)
+			{
+				this.what = what;
+			}
+
+			public void Lap(string stage)
+			{
+				double now = total.Elapsed.TotalSeconds;
+				laps.Add((stage, now - last));
+				last = now;
+			}
+
+			public override string ToString()
+			{
+				var sorted = new List<(string stage, double seconds)>(laps);
+				sorted.Sort((a, b) => b.seconds.CompareTo(a.seconds));
+				var parts = new List<string>(sorted.Count);
+				foreach ((string stage, double seconds) in sorted)
+				{
+					parts.Add($"{stage} {seconds:0.0}s");
+				}
+				return $"{what} in {total.Elapsed.TotalSeconds:0.0} s. Time by stage: {string.Join("; ", parts)}.";
+			}
 		}
 
 		/// <summary>Creates one terrain tile and its data asset, cut from the scene's ground.</summary>
@@ -541,6 +634,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The pass that keeps the foam the swash leaves on the sand.</summary>
 		public const string WaterFoamMemoryPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFoamMemory.shader";
+		/// <summary>The simulated foam's step (WaterFoamField), referenced by the sea and the inland water so a build includes it.</summary>
+		public const string WaterFoamFieldPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFoamField.shader";
 		/// <summary>The breakers' sheet, curling at the break line where the sea fades out.</summary>
 		public const string WaterBreakerPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterBreaker.shader";
 		/// <summary>The breakers' spray and mist.</summary>
@@ -610,6 +705,7 @@ namespace FishMMO.Shared.WorldDesign
 			surface.Spectrum = AssetDatabase.LoadAssetAtPath<ComputeShader>(WaterSpectrumPath);
 			// And its render-pass twin, for WebGL2 and GLES3: referenced so a build includes it.
 			surface.SpectrumPasses = AssetDatabase.LoadAssetAtPath<Shader>(WaterSpectrumPassesPath);
+			surface.FoamFieldShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterFoamFieldPath);
 			// The projected passes the surface finds by name in the editor, referenced for builds.
 			surface.UnderwaterShader = Shader.Find(WaterSurface.UnderwaterShaderName);
 			surface.CausticsShader = Shader.Find(WaterSurface.CausticsShaderName);
@@ -739,6 +835,8 @@ namespace FishMMO.Shared.WorldDesign
 				surfaceAt: (east, north) => Mathf.Max(sea, water != null ? water.SurfaceAt(east, north) : float.NegativeInfinity),
 				groundAt: (east, north) => GroundAltitude(terrains, plan, east, north),
 				lavaLevel: lava);
+			// The terrain is as it will ship: whatever is baked from it (the client's grass and detail scatter maps) is baked now.
+			SceneTerrainEvents.RaiseFinished(scene, tiles, notes);
 		}
 
 		/// <summary>
@@ -806,7 +904,9 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
+			var stages = new StageClock("Biomes");
 			SceneBiomeField field = SceneBiomeField.Build(request, plan, (east, north) => GroundAltitude(terrains, plan, east, north), system, water: water);
+			stages.Lap("biome field");
 			if (field.Biomes.Count == 0)
 			{
 				result.Notes.Add("No biome fits anywhere in this scene (none registered, or none this world allows); it is painted with the plain height bands.");
@@ -857,8 +957,10 @@ namespace FishMMO.Shared.WorldDesign
 				Seed = SceneSeed(request),
 				InlandWaterSurface = inland,
 				BarAt = water != null ? water.BarAt : (Func<float, float, Vector2>)null,
+				RockAt = FallRock(water),
 			};
 			BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);
+			stages.Lap("palette and splat");
 
 			/* The ground's renderer: the array terrain material on every tile and the binder that
 			 * feeds it the scene's arrays. Coverage decides which biome's LOCAL art wins a layer
@@ -868,6 +970,7 @@ namespace FishMMO.Shared.WorldDesign
 			result.Wrote.AddRange(arrays.Wrote);
 			result.Notes.AddRange(arrays.LocalConflicts);
 			result.Notes.AddRange(arrays.Notes);
+			stages.Lap("texture arrays");
 
 			/* Details and trees, from the alphamaps just written: every rule is gated on its own
 			 * layer's weight there and on its biome's reach, so what grows is exactly what the
@@ -883,6 +986,7 @@ namespace FishMMO.Shared.WorldDesign
 			result.Notes.AddRange(scatter.InvalidPrefabs);
 			result.Notes.AddRange(scatter.BudgetCaps);
 			result.Notes.AddRange(scatter.Warnings);
+			stages.Lap("trees and detail scatter");
 
 			/* The ground drawn close to its true shape, so what stands on it stays standing on it.
 			 * Trees, rocks and cliff pieces are placed at the exact surface height; the terrain's own
@@ -950,6 +1054,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			CliffPlacerReport cliffs = CliffPlacer.Place(scene, tiles, palette, field, options.Seed, options.NormalizedHeight, cliffOptions);
 			result.Notes.AddRange(cliffs.Notes);
+			stages.Lap("tile settings and cliffs");
 
 			/* Boulders in the rivers' fast water, on the finished ground, recorded in the water for the flow
 			 * to run round. Here, so a repaint places them again on sculpted ground (replacing its own root). */
@@ -968,7 +1073,8 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				RiverBoulders.Place(scene, water, boulders, result.Notes);
 				// The falls' ledges, lip boulders and overhangs (FallLedges): after the boulders, whose Place clears the water's list.
-				FallLedges.Place(scene, water, ledges, result.Notes);
+				// With them, the vines on the falls' walls in the biomes that grow them.
+				FallLedges.Place(scene, water, ledges, result.Notes, (east, north) => GroundAltitude(terrains, plan, east, north), field, options.Seed, keptOut);
 			}
 			else
 			{
@@ -976,6 +1082,7 @@ namespace FishMMO.Shared.WorldDesign
 				ScenePropBaker.Clear(scene, RiverBoulders.PropSource);
 				ScenePropBaker.Clear(scene, FallLedges.PropSource);
 			}
+			stages.Lap("river boulders, fall ledges and their vines");
 
 			result.BiomeSummary = Summarise(field);
 			foreach (SceneTerrainPalette.Entry entry in palette.Entries)
@@ -1014,7 +1121,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			groundColour = HorizonShading(request, plan, ground, palette.Layers, scope.PaletteResolver(BiomeTerrainLayers.Resolve), out backdropWeights);
 
-			Debug.Log($"[Scene generator] '{request.SceneName}' biomes: {result.BiomeSummary}; {palette.Layers.Count} terrain layer(s); splat {splat}.\n{scatter}");
+			stages.Lap("biome map and horizon shading");
+			Debug.Log($"[Scene generator] '{request.SceneName}' biomes: {result.BiomeSummary}; {palette.Layers.Count} terrain layer(s); splat {splat}.\n{scatter}\n{stages}");
 			return true;
 		}
 
@@ -1040,12 +1148,16 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
+		/// <remarks>
+		/// Safe from several threads at once (the cliff planner asks its sites in parallel): a cell's rock is a pure function
+		/// of the cell, so two threads that both miss it compute the same answer and either may keep it.
+		/// </remarks>
 		internal static Func<float, float, float, string> GeologyRockTypes(SceneGenerationRequest request, SolarSystemProfile system)
 		{
 			PlanetGeology geology = PlanetGeology.For(request, system);
 			AtlasFootprint footprint = request.Footprint;
 			double radiusKm = request.ResolvedRadiusKm;
-			var cache = new Dictionary<long, string>();
+			var cache = new System.Collections.Concurrent.ConcurrentDictionary<long, string>();
 			return (x, altitude, z) =>
 			{
 				int gx = Mathf.FloorToInt(x / 32f), gz = Mathf.FloorToInt(z / 32f);
@@ -1054,7 +1166,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Vector3 direction = AtlasGeometry.SceneToUnit(footprint, (gx + 0.5) * 0.032, (gz + 0.5) * 0.032, radiusKm).ToVector3();
 					type = geology.ColumnAt(direction).Lithology.RockTypeName;
-					cache[key] = type;
+					cache.TryAdd(key, type);
 				}
 				return type;
 			};
@@ -1161,7 +1273,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// Writes the scene's rivers, lakes and boulders to its hydrology asset beside its terrain, rewriting
 		/// it in place when it exists so its GUID survives. Returns its path; null when there is no water.
 		/// </summary>
-		internal static string SaveWater(SceneGenerationRequest request, string terrainFolder, SceneWater water)
+		/// <param name="ground">The finished ground at (east, north), scene metres: what the rivers' shores are measured on.</param>
+		internal static string SaveWater(SceneGenerationRequest request, string terrainFolder, SceneWater water, Func<float, float, float> ground)
 		{
 			if (water == null || !water.Any)
 			{
@@ -1171,13 +1284,13 @@ namespace FishMMO.Shared.WorldDesign
 			var asset = AssetDatabase.LoadAssetAtPath<SceneHydrology>(path);
 			if (asset != null)
 			{
-				water.WriteTo(asset);
+				water.WriteTo(asset, ground);
 				EditorUtility.SetDirty(asset);
 			}
 			else
 			{
 				asset = ScriptableObject.CreateInstance<SceneHydrology>();
-				water.WriteTo(asset);
+				water.WriteTo(asset, ground);
 				AssetDatabase.CreateAsset(asset, path);
 			}
 			return path;
@@ -1229,6 +1342,7 @@ namespace FishMMO.Shared.WorldDesign
 				renderer = host.AddComponent<FishMMO.Water.InlandWaterRenderer>();
 			}
 			renderer.Material = EnsureInlandWaterMaterial();
+			renderer.FoamFieldShader = AssetDatabase.LoadAssetAtPath<Shader>(WaterFoamFieldPath);
 			renderer.FallMaterial = EnsureWaterfallMaterial(WaterfallMaterialPath, WaterfallShaderName, "Waterfall");
 			renderer.SprayMaterial = EnsureWaterfallMaterial(WaterfallSprayMaterialPath, WaterfallSprayShaderName, "WaterfallSpray");
 			EditorUtility.SetDirty(host);
@@ -1289,6 +1403,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// The water's surface at (x, z) for the paint and the scatter: a river's or lake's, negative
 		/// infinity on dry ground, positive infinity in a dry wash's bed (bed paint, no plants, no water).
 		/// </summary>
+		/// <summary>The bare rock of the scene's falls for the splat painter (<see cref="FallRockPaint"/>); null with none.</summary>
+		private static Func<float, float, float, float> FallRock(SceneWater water)
+		{
+			if (water == null || water.Grid == null || water.Rivers.Count == 0)
+			{
+				return null;
+			}
+			var falls = new FallRockPaint(water.Rivers, water.Settings, water.Grid.Spacing);
+			return falls.Count > 0 ? falls.RockAt : (Func<float, float, float, float>)null;
+		}
+
 		private static Func<float, float, float> InlandSurface(SceneWater water)
 		{
 			return (x, z) =>

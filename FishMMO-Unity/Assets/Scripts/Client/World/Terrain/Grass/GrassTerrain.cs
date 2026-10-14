@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -246,13 +247,16 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Per heightmap sample (same grid as <see cref="Heightmap"/>), the ground's height over the river or lake water
-		/// standing at it: R8, 0..1 = −<see cref="FreeboardRangeMetres"/> … +<see cref="FreeboardRangeMetres"/>, 1 where there
-		/// is none. Null when no water reaches the terrain. Read bilinearly like the heights, its zero is the line where the
-		/// water meets the ground, and the compute grows no blade below it.
+		/// standing at it: RG8, R 0..1 = −<see cref="FreeboardRangeMetres"/> … +<see cref="FreeboardRangeMetres"/>, 1 where
+		/// there is none. Null when no water reaches the terrain and it has no hole. Read bilinearly like the heights, its zero
+		/// is the line where the water meets the ground, and the compute grows no blade below it. G is the terrain's painted
+		/// holes (<see cref="TerrainHoleMask"/>): texel (x, z) is heightmap cell (x, z), 0 a hole, 1 solid, point-read as the
+		/// terrain clips it, and no blade grows over a hole.
 		/// </summary>
 		/// <remarks>
 		/// The density maps cannot cut a creek: they are 2 m texels smoothed over 2 m (the scatter's points made into a
-		/// field), so a channel a few metres wide was filled from both banks and its water drawn under a lawn.
+		/// field), so a channel a few metres wide was filled from both banks and its water drawn under a lawn. Nor can they
+		/// leave a cave mouth bare: the detail layers under a hole keep what was painted before it was cut.
 		/// </remarks>
 		public Texture2D Freeboard;
 
@@ -267,8 +271,11 @@ namespace FishMMO.Client
 		public const float WaterReachMetres = FishMMO.Shared.Biomes.SceneWaterBodies.MaxReachMetres;
 
 		private float[] minHeights, maxHeights;
+		/// <summary>The cover grid being weighed on a worker for a terrain taken from its bake (<see cref="Cover"/> once it lands).</summary>
+		private Task<float[]> coverWork;
+		/// <summary>The water-line map's texels while building, two bytes each (<see cref="Freeboard"/>: R the line, G solid ground).</summary>
 		private byte[] freeboardTexels;
-		private bool anyWater;
+		private bool anyWater, anyHole;
 		private int gridX, gridZ;
 
 		/* The grass's own copy of the terrain's heights (TerrainData.GetHeights, normalised 0..1 of size.y), filled
@@ -299,9 +306,17 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// A terrain's grass under construction: <see cref="Step"/> reads <see cref="StripRows"/> rows of one grass
-		/// layer (or of the heightmap) at a time until the frame's budget is spent, then finishes with the textures.
-		/// The terrain's mesh grass keeps drawing until it is <see cref="Done"/>.
+		/// layer (or of the heightmap, the alphamaps, the holes) at a time until the frame's budget is spent, then finishes
+		/// with the textures. The terrain's mesh grass keeps drawing until it is <see cref="Done"/>.
 		/// </summary>
+		/// <remarks>
+		/// Only the TerrainData reads and the textures are the main thread's. Everything worked out from them (the layers
+		/// summed into blocks, the smoothing, the normalising and packing, the height grid, the water line, the holes, the
+		/// surface layers) runs on a worker (<see cref="TerrainBuildQueue"/>), as the same managed code in the same order,
+		/// so every map is bit for bit what it was; the smoothing and normalising run a channel per worker
+		/// (<see cref="BuildDensity"/>), each channel's own operations in their own order. The main thread's share fell
+		/// from 25–240 ms a terrain to its reads.
+		/// </remarks>
 		public sealed class Builder
 		{
 			public const int StripRows = 64;
@@ -323,12 +338,18 @@ namespace FishMMO.Client
 			/// <summary>The density maps' texel size, metres (the detail layer summed into blocks this size).</summary>
 			public const float DensityTexelMetres = 2f;
 
+			/// <summary>Strips read ahead of the worker at most: past it the main thread waits a frame (bounded memory).</summary>
+			public const int MaxPendingStrips = 8;
+
 			/// <summary>Progress, for the log: which stage and how far.</summary>
-			public string Progress => layer < layerPrototypes.Count ? $"reading layer {layer + 1}/{layerPrototypes.Count}" : smoothChannel < count ? $"smoothing channel {smoothChannel + 1}/{count}" : textures ? (heightRow < gt.HeightResolution ? "heights" : waters != null && waterRow < gt.HeightResolution ? "water line" : "surface layers") : "packing";
+			public string Progress => layer < layerPrototypes.Count ? $"reading layer {layer + 1}/{layerPrototypes.Count}" : densityWork == null ? "summing layers" : !textures ? "smoothing" : heightRow < gt.HeightResolution ? "heights" : !holesCut ? "holes" : surfaceRow < surfaceRows ? "surface layers" : "packing";
 
 			public readonly Terrain Terrain;
 			public GrassTerrain Result { get; private set; }
 			public bool Done { get; private set; }
+			/// <summary>True when the build gave up on a worker's exception (logged): the terrain is taken again from the start.</summary>
+			public bool Failed { get; private set; }
+			/// <summary>Main-thread milliseconds spent (the workers' time is not the frame's).</summary>
 			public double Milliseconds { get; private set; }
 			public int Frames { get; private set; }
 
@@ -347,15 +368,31 @@ namespace FishMMO.Client
 			private readonly float[][] density;
 			/// <summary>Each channel's blade type height, metres (for <see cref="GrassTerrain.Cover"/>).</summary>
 			private readonly float[] channelHeights;
-			private int layer, row, heightRow, waterRow, surfaceRow;
+			/// <summary>The worker's queue: the strips' arithmetic, in order.</summary>
+			private readonly TerrainBuildQueue queue = new TerrainBuildQueue();
+			private int layer, row, heightRow, surfaceRow, surfaceRows = int.MaxValue;
+			/// <summary>The terrain's painted holes, read a strip at a time after the heights; null until then.</summary>
+			private TerrainHoleMask holes;
+			private bool holesCut, waterQueued, heightsBegun;
 			/// <summary>The scene's lakes and rivers that reach this terrain; null for none.</summary>
 			private List<FishMMO.Shared.Biomes.SceneWaterBodies> waters;
 			private Color32[] surfacePixels;
-			private float[] surfaceWeights;
-			private bool any, textures;
-			/// <summary>Smoothing: per channel, passes 0..3 = (horizontal, vertical) × 2 iterations of a box (≈ a Gaussian); then normalising.</summary>
-			private int smoothChannel, smoothPass, smoothLine, normaliseChannel;
-			private float[] line;
+			/// <summary>Set by the worker when any layer has grass (read on the main thread once the queue is idle).</summary>
+			private bool any;
+			private bool textures;
+			/// <summary>The smoothing, normalising and packing of every channel (a worker's), started once the layers are summed.</summary>
+			private Task<DensityResult> densityWork;
+			/// <summary>Each channel's prefab (its type's): what a bake records, and what one must match to be taken.</summary>
+			private readonly GameObject[] channelPrefabs;
+
+			/// <summary>
+			/// Set before the first <see cref="Step"/> (the editor's bake, TerrainDetailBaker): the maps are kept as they are made,
+			/// in <see cref="Captured"/> and <see cref="CapturedHeights"/>, once <see cref="Done"/>.
+			/// </summary>
+			public bool Capture;
+			public FishMMO.Shared.TerrainDetailBake.Grass Captured { get; private set; }
+			/// <summary>The heights as the build stored them (16 bits, 0..1 of the terrain's height), for the bake.</summary>
+			public ushort[] CapturedHeights { get; private set; }
 
 			internal Builder(Terrain terrain, TerrainData data, List<int> prototypes, List<GrassType> types)
 			{
@@ -378,6 +415,11 @@ namespace FishMMO.Client
 					layerChannels.Add(c);
 				}
 				count = channelTypes.Count;
+				channelPrefabs = new GameObject[count];
+				for (int c = 0; c < count; c++)
+				{
+					channelPrefabs[c] = channelTypes[c] != null ? channelTypes[c].Prefab : null;
+				}
 				channelHeights = new float[count];
 				for (int c = 0; c < count; c++)
 				{
@@ -421,67 +463,81 @@ namespace FishMMO.Client
 				var area = new Rect(gt.Origin.x, gt.Origin.z, gt.Size.x, gt.Size.z);
 				foreach (FishMMO.Shared.Biomes.SceneWaterBodies bodies in UnityEngine.Object.FindObjectsByType<FishMMO.Shared.Biomes.SceneWaterBodies>())
 				{
-					if (bodies.isActiveAndEnabled && bodies.Reaches(area))
+					if (Live(bodies) && bodies.Reaches(area))
 					{
 						(waters ??= new List<FishMMO.Shared.Biomes.SceneWaterBodies>()).Add(bodies);
 					}
 				}
 			}
 
-			/// <summary>One strip of the current box-blur pass of the current channel (running sums, floats).</summary>
-			private void SmoothStrip()
+			/// <summary>
+			/// Adds one strip of a detail layer (rows <paramref name="rowBase"/>.. of <paramref name="res"/>) into a channel's
+			/// <paramref name="factor"/>² blocks, each cell's share of its layer's top value; true when any cell had grass.
+			/// Prototypes of one type add up; the channel is normalised afterwards and clamped to 1.
+			/// </summary>
+			public static bool AddStrip(int[,] cells, int rows, int rowBase, int res, int factor, int dres, float top, float[] target)
 			{
-				float[] target = density[smoothChannel];
-				int radius = Mathf.Max(1, Mathf.RoundToInt(SmoothMetres / Mathf.Max(0.05f, gt.Size.x / dres)));
-				bool horizontal = (smoothPass & 1) == 0;
-				if (line == null || line.Length < dres)
+				bool any = false;
+				float blockWeight = 1f / (factor * factor);
+				for (int z = 0; z < rows; z++)
 				{
-					line = new float[dres];
-				}
-				int lines = Mathf.Min(StripRows, dres - smoothLine);
-				for (int l = smoothLine; l < smoothLine + lines; l++)
-				{
-					for (int i = 0; i < dres; i++)
+					for (int x = 0; x < res; x++)
 					{
-						line[i] = target[horizontal ? l * dres + i : i * dres + l];
-					}
-					float sum = 0f;
-					int n = 0;
-					for (int i = 0; i < Mathf.Min(radius, dres); i++)
-					{
-						sum += line[i];
-						n++;
-					}
-					for (int i = 0; i < dres; i++)
-					{
-						int add = i + radius, drop = i - radius - 1;
-						if (add < dres)
+						int v = cells[z, x];
+						if (v > 0)
 						{
-							sum += line[add];
+							any = true;
+							target[((rowBase + z) / factor) * dres + x / factor] += Mathf.Min(1f, v / top) * blockWeight;
+						}
+					}
+				}
+				return any;
+			}
+
+			/// <summary>
+			/// One channel smoothed in place: (horizontal, vertical) × 2 iterations of a box of <paramref name="radius"/>
+			/// texels (≈ a Gaussian), running sums in floats, every line in order. <paramref name="line"/>: scratch, at least
+			/// <paramref name="dres"/> long.
+			/// </summary>
+			public static void Smooth(float[] target, int dres, int radius, float[] line)
+			{
+				for (int pass = 0; pass < 4; pass++)
+				{
+					bool horizontal = (pass & 1) == 0;
+					for (int l = 0; l < dres; l++)
+					{
+						for (int i = 0; i < dres; i++)
+						{
+							line[i] = target[horizontal ? l * dres + i : i * dres + l];
+						}
+						float sum = 0f;
+						int n = 0;
+						for (int i = 0; i < Mathf.Min(radius, dres); i++)
+						{
+							sum += line[i];
 							n++;
 						}
-						if (drop >= 0)
+						for (int i = 0; i < dres; i++)
 						{
-							sum -= line[drop];
-							n--;
+							int add = i + radius, drop = i - radius - 1;
+							if (add < dres)
+							{
+								sum += line[add];
+								n++;
+							}
+							if (drop >= 0)
+							{
+								sum -= line[drop];
+								n--;
+							}
+							target[horizontal ? l * dres + i : i * dres + l] = Mathf.Max(0f, sum / n);
 						}
-						target[horizontal ? l * dres + i : i * dres + l] = Mathf.Max(0f, sum / n);
-					}
-				}
-				smoothLine += lines;
-				if (smoothLine >= dres)
-				{
-					smoothLine = 0;
-					if (++smoothPass >= 4)
-					{
-						smoothPass = 0;
-						smoothChannel++;
 					}
 				}
 			}
 
 			/// <summary>Scales a channel so its <see cref="FullQuantile"/> of non-zero texels reads 1.</summary>
-			private static void Normalise(float[] values)
+			public static void Normalise(float[] values)
 			{
 				float max = 0f;
 				int nonZero = 0;
@@ -525,9 +581,9 @@ namespace FishMMO.Client
 			}
 
 			/// <summary>Four channels from <paramref name="first"/> packed into a texture's bytes.</summary>
-			private Color32[] Pack(int first)
+			public static Color32[] Pack(float[][] density, int count, int first, int texels)
 			{
-				var pixels = new Color32[dres * dres];
+				var pixels = new Color32[texels];
 				for (int i = 0; i < pixels.Length; i++)
 				{
 					byte B(int c) => first + c < count ? (byte)Mathf.Clamp(Mathf.RoundToInt(density[first + c][i] * 255f), 0, 255) : (byte)0;
@@ -536,9 +592,99 @@ namespace FishMMO.Client
 				return pixels;
 			}
 
-			/// <summary>Drops an unfinished build, freeing anything it created.</summary>
+			/// <summary>What <see cref="BuildDensity"/> gives the textures: the maps' bytes and the per-texel grids.</summary>
+			public sealed class DensityResult
+			{
+				public Color32[][] Maps;
+				public byte[] Occupied, Sward;
+				public float[] Cover;
+			}
+
+			/// <summary>
+			/// Every channel smoothed and normalised (a channel per worker where there are threads, each channel's own
+			/// operations in order, so the same floats either way), then the maps packed, and where grass grows, how tall it
+			/// stands and how much of the ground it covers, texel by texel with the channels in order.
+			/// </summary>
+			public static DensityResult BuildDensity(float[][] density, int count, int dres, int radius, float[] channelHeights, bool parallel)
+			{
+				if (parallel && count > 1)
+				{
+					Parallel.For(0, count, c =>
+					{
+						Smooth(density[c], dres, radius, new float[dres]);
+						Normalise(density[c]);
+					});
+				}
+				else
+				{
+					var line = new float[dres];
+					for (int c = 0; c < count; c++)
+					{
+						Smooth(density[c], dres, radius, line);
+						Normalise(density[c]);
+					}
+				}
+				int texels = dres * dres;
+				// As many maps as the channels need (at least one): map m holds channels 4m..4m+3.
+				int maps = Mathf.Clamp((count + 3) / 4, 1, MaxDensityMaps);
+				var result = new DensityResult { Maps = new Color32[maps][], Occupied = new byte[texels], Cover = new float[texels], Sward = new byte[texels] };
+				for (int m = 0; m < maps; m++)
+				{
+					Color32[] pixels = Pack(density, count, 4 * m, texels);
+					result.Maps[m] = pixels;
+					for (int i = 0; i < texels; i++)
+					{
+						Color32 a = pixels[i];
+						if (a.r > 1 || a.g > 1 || a.b > 1 || a.a > 1)
+						{
+							result.Occupied[i] = 1;
+						}
+					}
+				}
+				float[] cover = result.Cover;
+				for (int c = 0; c < count; c++)
+				{
+					float[] d = density[c];
+					float h = channelHeights[c];
+					for (int i = 0; i < texels; i++)
+					{
+						cover[i] = Mathf.Max(cover[i], d[i] * h);
+					}
+				}
+				byte[] sward = result.Sward;
+				for (int i = 0; i < texels; i++)
+				{
+					float sum = 0f;
+					for (int c = 0; c < count; c++)
+					{
+						sum += density[c][i];
+					}
+					sward[i] = (byte)Mathf.RoundToInt(Mathf.Clamp01(sum) * 255f);
+				}
+				return result;
+			}
+
+			/// <summary>Packs a strip of alphamaps (rows <paramref name="rowBase"/>.., <paramref name="ares"/> wide) into the surface-layer texels.</summary>
+			public static void PackSurfaceStrip(float[,,] maps, int rows, int rowBase, int ares, int alayers, Color32[] pixels, float[] weights)
+			{
+				for (int r = 0; r < rows; r++)
+				{
+					for (int x = 0; x < ares; x++)
+					{
+						for (int l = 0; l < alayers; l++)
+						{
+							weights[l] = maps[r, x, l];
+						}
+						uint packed = GrassMath.PackSurfaceLayers(weights, alayers);
+						pixels[(rowBase + r) * ares + x] = new Color32((byte)packed, (byte)(packed >> 8), (byte)(packed >> 16), (byte)(packed >> 24));
+					}
+				}
+			}
+
+			/// <summary>Drops an unfinished build, freeing anything it created; its queued work is skipped.</summary>
 			public void Abandon()
 			{
+				queue.Cancel();
 				if (!Done || Result == null)
 				{
 					gt.Dispose();
@@ -547,171 +693,426 @@ namespace FishMMO.Client
 				Result = null;
 			}
 
-			/// <summary>Works for at most <paramref name="budgetMs"/>; true once finished (<see cref="Result"/> null: no grass there).</summary>
+			/// <summary>A bake entry with this build's prototypes, channels and their prefabs; <paramref name="present"/> whether it has blades.</summary>
+			private FishMMO.Shared.TerrainDetailBake.Grass Layout(bool present)
+			{
+				return new FishMMO.Shared.TerrainDetailBake.Grass
+				{
+					Baked = true,
+					Present = present,
+					LayerPrototypes = layerPrototypes.ToArray(),
+					LayerChannels = layerChannels.ToArray(),
+					ChannelPrefabs = (GameObject[])channelPrefabs.Clone(),
+				};
+			}
+
+			/// <summary>Whether a bake was made from the same prototypes, read into the same channels, of the same prefabs.</summary>
+			private bool SameLayout(int[] prototypes, int[] channels, GameObject[] prefabs)
+			{
+				if (prototypes == null || channels == null || prefabs == null || prototypes.Length != layerPrototypes.Count
+					|| channels.Length != layerChannels.Count || prefabs.Length != channelPrefabs.Length)
+				{
+					return false;
+				}
+				for (int i = 0; i < prototypes.Length; i++)
+				{
+					if (prototypes[i] != layerPrototypes[i] || channels[i] != layerChannels[i])
+					{
+						return false;
+					}
+				}
+				for (int c = 0; c < prefabs.Length; c++)
+				{
+					if (prefabs[c] != channelPrefabs[c])
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+
+			/// <summary>The heights, the height grid and the water line as the build left them, into the bake (before the textures take them).</summary>
+			private void CaptureHeights()
+			{
+				int hres = gt.heightResolution;
+				if (gt.heightTexels16 != null)
+				{
+					CapturedHeights = (ushort[])gt.heightTexels16.Clone();
+				}
+				else if (gt.heightTexels32 != null)
+				{
+					CapturedHeights = new ushort[gt.heightTexels32.Length];
+					for (int i = 0; i < CapturedHeights.Length; i++)
+					{
+						CapturedHeights[i] = (ushort)Mathf.Clamp(Mathf.RoundToInt(gt.heightTexels32[i] * 65535f), 0, 65535);
+					}
+				}
+				Captured.GridX = gt.gridX;
+				Captured.GridZ = gt.gridZ;
+				Captured.MinHeights = (float[])gt.minHeights.Clone();
+				Captured.MaxHeights = (float[])gt.maxHeights.Clone();
+				Captured.Freeboard = gt.freeboardTexels != null && (gt.anyWater || gt.anyHole) && gt.freeboardTexels.Length == hres * hres * 2
+					? (byte[])gt.freeboardTexels.Clone() : new byte[0];
+			}
+
+			/// <summary>RGBA8 maps one after another, as bytes.</summary>
+			private static byte[] Flatten(Color32[][] maps, int texels)
+			{
+				var bytes = new byte[maps.Length * texels * 4];
+				int at = 0;
+				foreach (Color32[] map in maps)
+				{
+					for (int i = 0; i < texels; i++)
+					{
+						Color32 c = map[i];
+						bytes[at++] = c.r;
+						bytes[at++] = c.g;
+						bytes[at++] = c.b;
+						bytes[at++] = c.a;
+					}
+				}
+				return bytes;
+			}
+
+			/// <summary>
+			/// Takes the terrain from its baked maps instead of reading it (<see cref="FishMMO.Shared.TerrainDetailBake"/>): true,
+			/// and <see cref="Done"/>, when the bake was made from what this build would read (the same prototypes in the same
+			/// channels of the same prefabs, the same resolutions); false, and the builder untouched, when not.
+			/// </summary>
+			/// <remarks>
+			/// What the runtime decides is this builder's own: the channels' types and so their heights, from which the cover
+			/// is weighed here off the packed maps (a byte's worth off the floats the full build weighs it from).
+			/// </remarks>
+			public bool TakeBaked(FishMMO.Shared.TerrainDetailBake.Tile tile)
+			{
+				FishMMO.Shared.TerrainDetailBake.Grass g = tile?.Grass;
+				TerrainData data = gt.Data;
+				if (Done || g == null || !g.Baked || data == null || !SameLayout(g.LayerPrototypes, g.LayerChannels, g.ChannelPrefabs))
+				{
+					return false;
+				}
+				if (!g.Present)
+				{
+					gt.Dispose();
+					Done = true;
+					Result = null;
+					return true;
+				}
+				int hres = data.heightmapResolution, texels = dres * dres;
+				int gridX = Mathf.Max(1, Mathf.CeilToInt(gt.Size.x / BoundsCellMetres)), gridZ = Mathf.Max(1, Mathf.CeilToInt(gt.Size.z / BoundsCellMetres));
+				int maps = Mathf.Clamp((count + 3) / 4, 1, MaxDensityMaps);
+				if (g.DensityResolution != dres || g.DensityMaps != maps || g.Density == null || g.Density.Length != maps * texels * 4
+					|| g.Occupied == null || g.Occupied.Length != texels || g.Sward == null || g.Sward.Length != texels
+					|| tile.HeightResolution != hres || tile.Heights == null || tile.Heights.Length != hres * hres
+					|| g.GridX != gridX || g.GridZ != gridZ || g.MinHeights == null || g.MinHeights.Length != gridX * gridZ
+					|| g.MaxHeights == null || g.MaxHeights.Length != gridX * gridZ)
+				{
+					return false;
+				}
+				gt.Density = new Texture2D[maps];
+				for (int m = 0; m < maps; m++)
+				{
+					gt.Density[m] = MakeTexture(g.Density, m * texels * 4, dres, $"{Terrain.name} grass density {4 * m}-{4 * m + 3}");
+				}
+				gt.Occupied = g.Occupied;
+				gt.Sward = g.Sward;
+				// On a worker: ~290k texels × up to 16 channels a terrain was 35–60 ms of the frame each baked terrain was taken
+				// in (StartupTimeline, 2026-10-13). Nothing reads it before it lands but CoverAt, which reads 0 until then.
+				byte[] packed = g.Density;
+				int channels = count;
+				float[] heights = (float[])channelHeights.Clone();
+				if (TerrainBuildQueue.Inline)
+				{
+					gt.Cover = CoverOf(packed, maps, channels, texels, heights);
+				}
+				else
+				{
+					gt.coverWork = Task.Run(() => CoverOf(packed, maps, channels, texels, heights));
+				}
+				int ares = g.SurfaceResolution;
+				if (ares > 0 && g.Surface != null && g.Surface.Length == ares * ares * 4)
+				{
+					gt.SurfaceLayers = MakeTexture(g.Surface, 0, ares, $"{Terrain.name} grass surface layers");
+				}
+				gt.heightResolution = hres;
+				gt.gridX = gridX;
+				gt.gridZ = gridZ;
+				gt.minHeights = g.MinHeights;
+				gt.maxHeights = g.MaxHeights;
+				if (SystemInfo.SupportsTextureFormat(TextureFormat.R16))
+				{
+					gt.heightTexels16 = tile.Heights;
+				}
+				else
+				{
+					gt.heightTexels32 = new float[tile.Heights.Length];
+					for (int i = 0; i < tile.Heights.Length; i++)
+					{
+						gt.heightTexels32[i] = tile.Heights[i] / 65535f;
+					}
+				}
+				if (g.Freeboard != null && g.Freeboard.Length == hres * hres * 2)
+				{
+					gt.freeboardTexels = g.Freeboard;
+					gt.anyWater = true;
+				}
+				gt.FinishHeightTexture();
+				Result = gt;
+				Done = true;
+				return true;
+			}
+
+			/// <summary>
+			/// Per density texel, the grass standing there in metres off packed maps: each channel's density (a byte) times its
+			/// type's height, the tallest. <see cref="BuildDensity"/>'s rule, from the bytes.
+			/// </summary>
+			public static float[] CoverOf(byte[] density, int maps, int channels, int texels, float[] channelHeights)
+			{
+				var cover = new float[texels];
+				for (int c = 0; c < channels && c < 4 * maps; c++)
+				{
+					float h = channelHeights[c] / 255f;
+					int at = (c / 4) * texels * 4 + c % 4;
+					for (int i = 0; i < texels; i++)
+					{
+						cover[i] = Mathf.Max(cover[i], density[at + 4 * i] * h);
+					}
+				}
+				return cover;
+			}
+
+			/// <summary>A component in a scene as the build counts it: enabled in play, or (the editor's bake) enabled on an active object.</summary>
+			private static bool Live(Behaviour b) => b != null && (b.isActiveAndEnabled || (!Application.isPlaying && b.enabled && b.gameObject.activeInHierarchy));
+
+			/// <summary>Profiler marker of the main thread's share of a step (the reads, the textures).</summary>
+			private static readonly Unity.Profiling.ProfilerMarker StepMarker = new Unity.Profiling.ProfilerMarker("GrassTerrain.Builder.Step");
+
+			/// <summary>
+			/// Works for at most <paramref name="budgetMs"/> of the main thread's time, or until it waits on the worker; true
+			/// once finished (<see cref="Result"/> null: no grass there, or <see cref="Failed"/>).
+			/// </summary>
 			public bool Step(double budgetMs)
 			{
 				if (Done)
 				{
 					return true;
 				}
-				Frames++;
-				var watch = System.Diagnostics.Stopwatch.StartNew();
-				do
+				using (StepMarker.Auto())
 				{
-					Advance();
+					Frames++;
+					var watch = System.Diagnostics.Stopwatch.StartNew();
+					while (!Done && Advance() && watch.Elapsed.TotalMilliseconds < budgetMs)
+					{
+					}
+					Milliseconds += watch.Elapsed.TotalMilliseconds;
 				}
-				while (!Done && watch.Elapsed.TotalMilliseconds < budgetMs);
-				Milliseconds += watch.Elapsed.TotalMilliseconds;
 				return Done;
 			}
 
-			private void Advance()
+			/// <summary>One step of the main thread's share; false when it is waiting on the worker.</summary>
+			private bool Advance()
 			{
 				TerrainData data = gt.Data;
 				if (data == null)
 				{
 					Done = true;
-					return;
+					return true;
+				}
+				Exception fault = queue.Fault ?? densityWork?.Exception;
+				if (fault != null)
+				{
+					Debug.LogException(fault);
+					Debug.LogWarning($"[Grass] Building '{(Terrain != null ? Terrain.name : "terrain")}' failed on a worker; it is taken again.");
+					Abandon();
+					Failed = true;
+					return true;
 				}
 				if (layer < layerPrototypes.Count)
 				{
+					if (queue.Pending >= MaxPendingStrips)
+					{
+						return false;
+					}
 					int rows = Mathf.Min(StripRows, res - row);
 					int[,] cells = data.GetDetailLayer(0, row, res, rows, layerPrototypes[layer]);
-					// Prototypes of one type add up; the channel is normalised afterwards and clamped to 1.
 					float[] target = density[layerChannels[layer]];
-					float blockWeight = 1f / (factor * factor);
-					for (int z = 0; z < rows; z++)
+					int rowBase = row;
+					queue.Enqueue(() =>
 					{
-						for (int x = 0; x < res; x++)
+						if (AddStrip(cells, rows, rowBase, res, factor, dres, top, target))
 						{
-							int v = cells[z, x];
-							if (v > 0)
-							{
-								any = true;
-								target[((row + z) / factor) * dres + x / factor] += Mathf.Min(1f, v / top) * blockWeight;
-							}
+							any = true;
 						}
-					}
+					});
 					row += rows;
 					if (row >= res)
 					{
 						layer++;
 						row = 0;
 					}
-					return;
+					return true;
 				}
-				if (!any)
+				if (densityWork == null)
 				{
-					Done = true;
-					return;
+					if (!queue.Idle)
+					{
+						return false;
+					}
+					if (!any)
+					{
+						if (Capture)
+						{
+							Captured = Layout(false);
+						}
+						Done = true;
+						return true;
+					}
+					int radius = Mathf.Max(1, Mathf.RoundToInt(SmoothMetres / Mathf.Max(0.05f, gt.Size.x / dres)));
+					float[][] channels = density;
+					int n = count, side = dres;
+					float[] heights = channelHeights;
+					densityWork = TerrainBuildQueue.Inline
+						? Task.FromResult(BuildDensity(channels, n, side, radius, heights, false))
+						: Task.Run(() => BuildDensity(channels, n, side, radius, heights, true));
+					return true;
 				}
-				if (smoothChannel < count)
+				int hres = data.heightmapResolution;
+				if (!heightsBegun)
 				{
-					SmoothStrip();
-					return;
+					heightsBegun = true;
+					gt.BeginHeightGrid();
+					return true;
 				}
-				if (normaliseChannel < count)
+				if (heightRow < hres)
 				{
-					Normalise(density[normaliseChannel++]);
-					return;
+					if (queue.Pending >= MaxPendingStrips)
+					{
+						return false;
+					}
+					int rows = Mathf.Min(StripRows, hres - heightRow);
+					float[,] strip = data.GetHeights(0, heightRow, hres, rows);
+					int zBase = heightRow;
+					queue.Enqueue(() => gt.AccumulateHeights(strip, zBase));
+					heightRow += rows;
+					return true;
+				}
+				// The water line, against the heights (queued after them, so the worker has them all), a strip at a time.
+				if (waters != null && !waterQueued)
+				{
+					waterQueued = true;
+					var bodies = waters.ToArray();
+					// Each one's river index built now, on this thread: the worker only reads it (it is built lazily on first use).
+					foreach (FishMMO.Shared.Biomes.SceneWaterBodies b in bodies)
+					{
+						if (b != null)
+						{
+							b.TryGetSurface(gt.Origin.x, gt.Origin.z, out _);
+						}
+					}
+					for (int z = 0; z < hres; z += StripRows)
+					{
+						int zBase = z, rows = Mathf.Min(StripRows, hres - z);
+						queue.Enqueue(() => gt.AccumulateFreeboard(bodies, zBase, rows));
+					}
+					return true;
+				}
+				// The painted holes (a cave mouth, a canyon bed), against the same grid: read here, cut by the worker.
+				if (!holesCut)
+				{
+					holes ??= new TerrainHoleMask(data);
+					if (!holes.Complete)
+					{
+						holes.ReadStrip(data);
+						return true;
+					}
+					if (holes.Any)
+					{
+						TerrainHoleMask cut = holes;
+						queue.Enqueue(() => gt.CutHoles(cut));
+					}
+					holes = null;
+					holesCut = true;
+					return true;
+				}
+				int ares = data.alphamapResolution, alayers = data.alphamapLayers;
+				surfaceRows = alayers > 0 ? ares : 0;
+				if (alayers > 0 && surfaceRow < ares)
+				{
+					if (queue.Pending >= MaxPendingStrips)
+					{
+						return false;
+					}
+					surfacePixels ??= new Color32[ares * ares];
+					int rows = Mathf.Min(StripRows, ares - surfaceRow);
+					float[,,] maps = data.GetAlphamaps(0, surfaceRow, ares, rows);
+					int rowBase = surfaceRow;
+					Color32[] pixels = surfacePixels;
+					queue.Enqueue(() => PackSurfaceStrip(maps, rows, rowBase, ares, alayers, pixels, new float[alayers]));
+					surfaceRow += rows;
+					return true;
+				}
+				if (!queue.Idle || !densityWork.IsCompleted)
+				{
+					return false;
 				}
 				if (!textures)
 				{
 					textures = true;
-					// As many maps as the channels need (at least one): map m holds channels 4m..4m+3.
-					int maps = Mathf.Clamp((count + 3) / 4, 1, MaxDensityMaps);
-					gt.Density = new Texture2D[maps];
-					var occupied = new byte[dres * dres];
-					for (int m = 0; m < maps; m++)
+					DensityResult built = densityWork.Result;
+					gt.Density = new Texture2D[built.Maps.Length];
+					for (int m = 0; m < built.Maps.Length; m++)
 					{
-						Color32[] pixels = Pack(4 * m);
-						gt.Density[m] = MakeTexture(pixels, dres, $"{Terrain.name} grass density {4 * m}-{4 * m + 3}");
-						for (int i = 0; i < occupied.Length; i++)
-						{
-							Color32 a = pixels[i];
-							if (a.r > 1 || a.g > 1 || a.b > 1 || a.a > 1)
-							{
-								occupied[i] = 1;
-							}
-						}
+						gt.Density[m] = MakeTexture(built.Maps[m], dres, $"{Terrain.name} grass density {4 * m}-{4 * m + 3}");
 					}
-					gt.Occupied = occupied;
-					var cover = new float[dres * dres];
-					for (int c = 0; c < count; c++)
+					gt.Occupied = built.Occupied;
+					gt.Cover = built.Cover;
+					gt.Sward = built.Sward;
+					if (Capture)
 					{
-						float[] d = density[c];
-						float h = channelHeights[c];
-						for (int i = 0; i < cover.Length; i++)
-						{
-							cover[i] = Mathf.Max(cover[i], d[i] * h);
-						}
+						Captured = Layout(true);
+						Captured.DensityResolution = dres;
+						Captured.DensityMaps = built.Maps.Length;
+						Captured.Density = Flatten(built.Maps, dres * dres);
+						Captured.Occupied = built.Occupied;
+						Captured.Sward = built.Sward;
 					}
-					gt.Cover = cover;
-					var sward = new byte[dres * dres];
-					for (int i = 0; i < sward.Length; i++)
-					{
-						float sum = 0f;
-						for (int c = 0; c < count; c++)
-						{
-							sum += density[c][i];
-						}
-						sward[i] = (byte)Mathf.RoundToInt(Mathf.Clamp01(sum) * 255f);
-					}
-					gt.Sward = sward;
-					gt.BeginHeightGrid();
-					return;
-				}
-				int hres = data.heightmapResolution;
-				if (heightRow < hres)
-				{
-					int rows = Mathf.Min(StripRows, hres - heightRow);
-					gt.AccumulateHeights(data.GetHeights(0, heightRow, hres, rows), heightRow);
-					heightRow += rows;
-					return;
-				}
-				// The water line, against the heights just read (before they are uploaded and dropped).
-				if (waters != null && waterRow < hres)
-				{
-					int rows = Mathf.Min(StripRows, hres - waterRow);
-					gt.AccumulateFreeboard(waters, waterRow, rows);
-					waterRow += rows;
-					return;
-				}
-				int ares = data.alphamapResolution, alayers = data.alphamapLayers;
-				if (alayers > 0 && surfaceRow < ares)
-				{
-					if (surfacePixels == null)
-					{
-						surfacePixels = new Color32[ares * ares];
-						surfaceWeights = new float[alayers];
-					}
-					int rows = Mathf.Min(StripRows, ares - surfaceRow);
-					float[,,] maps = data.GetAlphamaps(0, surfaceRow, ares, rows);
-					for (int r = 0; r < rows; r++)
-					{
-						for (int x = 0; x < ares; x++)
-						{
-							for (int l = 0; l < alayers; l++)
-							{
-								surfaceWeights[l] = maps[r, x, l];
-							}
-							uint packed = GrassMath.PackSurfaceLayers(surfaceWeights, alayers);
-							surfacePixels[(surfaceRow + r) * ares + x] = new Color32((byte)packed, (byte)(packed >> 8), (byte)(packed >> 16), (byte)(packed >> 24));
-						}
-					}
-					surfaceRow += rows;
-					return;
+					return true;
 				}
 				if (surfacePixels != null)
 				{
 					gt.SurfaceLayers = MakeTexture(surfacePixels, ares, $"{Terrain.name} grass surface layers");
+					if (Capture)
+					{
+						Captured.SurfaceResolution = ares;
+						Captured.Surface = Flatten(new[] { surfacePixels }, ares * ares);
+					}
 					surfacePixels = null;
-					surfaceWeights = null;
+					return true;
+				}
+				if (Capture)
+				{
+					CaptureHeights();
 				}
 				gt.FinishHeightTexture();
 				Result = gt;
 				Done = true;
+				return true;
 			}
+		}
+
+		/// <summary>An RGBA8 map from <paramref name="res"/>² × 4 bytes of <paramref name="bytes"/> from <paramref name="start"/>.</summary>
+		private static Texture2D MakeTexture(byte[] bytes, int start, int res, string name)
+		{
+			var texture = new Texture2D(res, res, TextureFormat.RGBA32, false, true)
+			{
+				name = name,
+				filterMode = FilterMode.Point,
+				wrapMode = TextureWrapMode.Clamp,
+				hideFlags = HideFlags.DontSave,
+			};
+			texture.SetPixelData(bytes, 0, start);
+			texture.Apply(false, true);
+			return texture;
 		}
 
 		private static Texture2D MakeTexture(Color32[] pixels, int res, string name)
@@ -728,9 +1129,13 @@ namespace FishMMO.Client
 			return texture;
 		}
 
+		/// <summary>The heightmap's resolution, read on the main thread when the height grid begins: the build queue's
+		/// worker folds strips in with it, and TerrainData's properties are main-thread only.</summary>
+		private int heightResolution;
+
 		private void BeginHeightGrid()
 		{
-			int res = Data.heightmapResolution;
+			int res = heightResolution = Data.heightmapResolution;
 			if (SystemInfo.SupportsTextureFormat(TextureFormat.R16))
 			{
 				heightTexels16 = new ushort[res * res];
@@ -753,7 +1158,7 @@ namespace FishMMO.Client
 		/// <summary>Folds a strip of height samples (rows <paramref name="zBase"/> on) into the min/max grid.</summary>
 		private void AccumulateHeights(float[,] heights, int zBase)
 		{
-			int res = Data.heightmapResolution;
+			int res = heightResolution;
 			float step = (res - 1) / Mathf.Max(1e-3f, Size.x) * BoundsCellMetres;
 			int rows = heights.GetLength(0);
 			for (int r = 0; r < rows; r++)
@@ -792,10 +1197,10 @@ namespace FishMMO.Client
 		/// (<see cref="Freeboard"/>), from the heights already gathered: the highest surface of any lake or river within
 		/// <see cref="WaterReachMetres"/> of the sample.
 		/// </summary>
-		private void AccumulateFreeboard(List<FishMMO.Shared.Biomes.SceneWaterBodies> waters, int zBase, int rows)
+		private void AccumulateFreeboard(FishMMO.Shared.Biomes.SceneWaterBodies[] waters, int zBase, int rows)
 		{
-			int res = Data.heightmapResolution;
-			freeboardTexels ??= new byte[res * res];
+			int res = heightResolution;
+			freeboardTexels ??= NewFreeboardTexels(res);
 			float stepX = Size.x / Mathf.Max(1, res - 1), stepZ = Size.z / Mathf.Max(1, res - 1);
 			float scale = 0.5f / FreeboardRangeMetres;
 			for (int z = zBase; z < zBase + rows; z++)
@@ -815,12 +1220,42 @@ namespace FishMMO.Client
 					}
 					if (float.IsNegativeInfinity(level))
 					{
-						freeboardTexels[i] = 255;
+						freeboardTexels[2 * i] = 255;
 						continue;
 					}
 					float ground = Origin.y + (heightTexels16 != null ? heightTexels16[i] / 65535f : heightTexels32[i]) * Size.y;
-					freeboardTexels[i] = (byte)Mathf.RoundToInt(Mathf.Clamp01((ground - level) * scale + 0.5f) * 255f);
+					freeboardTexels[2 * i] = (byte)Mathf.RoundToInt(Mathf.Clamp01((ground - level) * scale + 0.5f) * 255f);
 					anyWater |= ground - level < FreeboardRangeMetres;
+				}
+			}
+		}
+
+		/// <summary>A water-line map with no water and no hole: every line at the top of the range, every cell solid.</summary>
+		private static byte[] NewFreeboardTexels(int res)
+		{
+			var texels = new byte[res * res * 2];
+			for (int i = 0; i < texels.Length; i++)
+			{
+				texels[i] = 255;
+			}
+			return texels;
+		}
+
+		/// <summary>Marks every hole cell of <paramref name="holes"/> in the water-line map's G (<see cref="Freeboard"/>).</summary>
+		private void CutHoles(TerrainHoleMask holes)
+		{
+			int res = heightResolution;
+			freeboardTexels ??= NewFreeboardTexels(res);
+			int cells = Mathf.Min(holes.Resolution, res);
+			for (int z = 0; z < cells; z++)
+			{
+				for (int x = 0; x < cells; x++)
+				{
+					if (holes.HoleAtCell(x, z))
+					{
+						freeboardTexels[2 * (z * res + x) + 1] = 0;
+						anyHole = true;
+					}
 				}
 			}
 		}
@@ -828,10 +1263,10 @@ namespace FishMMO.Client
 		/// <summary>Uploads the heights gathered by <see cref="AccumulateHeights"/> (row z = texture row, as the terrain's own).</summary>
 		private void FinishHeightTexture()
 		{
-			if (freeboardTexels != null && anyWater)
+			if (freeboardTexels != null && (anyWater || anyHole))
 			{
 				int fres = Data.heightmapResolution;
-				Freeboard = new Texture2D(fres, fres, TextureFormat.R8, false, true)
+				Freeboard = new Texture2D(fres, fres, TextureFormat.RG16, false, true)
 				{
 					name = $"{(Terrain != null ? Terrain.name : "terrain")} grass water line",
 					filterMode = FilterMode.Point,
@@ -936,6 +1371,11 @@ namespace FishMMO.Client
 		/// <summary>The grass standing at a world point on this terrain, metres (0 off it, or before the map is built).</summary>
 		public float CoverAt(float x, float z)
 		{
+			if (Cover == null && coverWork != null && coverWork.IsCompleted)
+			{
+				Cover = coverWork.Status == TaskStatus.RanToCompletion ? coverWork.Result : null;
+				coverWork = null;
+			}
 			float[] cover = Cover;
 			int res = DensityResolution;
 			if (cover == null || res <= 0 || Size.x <= 0f || Size.z <= 0f)
@@ -951,6 +1391,19 @@ namespace FishMMO.Client
 			return cover[iz * res + ix];
 		}
 
+		/// <summary>Destroys a texture this made, in play or (the editor's bake) in edit mode.</summary>
+		private static void Release(UnityEngine.Object texture)
+		{
+			if (Application.isPlaying)
+			{
+				UnityEngine.Object.Destroy(texture);
+			}
+			else
+			{
+				UnityEngine.Object.DestroyImmediate(texture);
+			}
+		}
+
 		public void Dispose()
 		{
 			if (Density != null)
@@ -959,27 +1412,28 @@ namespace FishMMO.Client
 				{
 					if (map != null)
 					{
-						UnityEngine.Object.Destroy(map);
+						Release(map);
 					}
 				}
 			}
 			Density = null;
 			Occupied = null;
 			Cover = null;
+			coverWork = null;
 			Sward = null;
 			if (heightTexture != null)
 			{
-				UnityEngine.Object.Destroy(heightTexture);
+				Release(heightTexture);
 			}
 			heightTexture = null;
 			if (SurfaceLayers != null)
 			{
-				UnityEngine.Object.Destroy(SurfaceLayers);
+				Release(SurfaceLayers);
 			}
 			SurfaceLayers = null;
 			if (Freeboard != null)
 			{
-				UnityEngine.Object.Destroy(Freeboard);
+				Release(Freeboard);
 			}
 			Freeboard = null;
 		}

@@ -92,6 +92,37 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(tide.TideAt(tick), Is.EqualTo(drawn).Within(0.0006f), "WaterEnvironment draws the sea from the same function");
 		}
 
+		/// <summary>
+		/// A client replaying across a grid line walks back and forth over it (the ships pose every replayed tick); the
+		/// tide keeps a few cells so that costs no sums, and every answer is still the one a peer with an empty cache reads.
+		/// </summary>
+		[Test]
+		public void AReplayBackAndForthAcrossAGridLineReadsWhatAFreshPeerReads()
+		{
+			WorldClock clock = Clock();
+			SeaTide walked = Tide(clock);
+			uint line = SeaTide.GridTicks * 4012u;
+			uint[] ticks = { line + 5u, line - 3u, line - 2u, line + 6u, line - 1u, line + 7u, line - SeaTide.GridTicks - 1u, line, line + SeaTide.GridTicks, line - 4u };
+			foreach (uint tick in ticks)
+			{
+				Assert.That(walked.TideAt(tick), Is.EqualTo(Tide(clock).TideAt(tick)), $"tick {tick}");
+			}
+		}
+
+		/// <summary>A clock set to another moment moves every tick's hour: no cell sampled under the old one answers after it.</summary>
+		[Test]
+		public void ASetClockLeavesNoStaleTide()
+		{
+			WorldClock clock = Clock();
+			SeaTide tide = Tide(clock);
+			uint tick = SeaTide.GridTicks * 900u + 17u;
+			tide.TideAt(tick);
+			tide.TideAt(tick - SeaTide.GridTicks);
+			clock.Override(0u, 1000.0 * 3600.0 + 5.0 * 3600.0, 1.0, verified: true);
+			Assert.That(tide.TideAt(tick), Is.EqualTo(Tide(clock).TideAt(tick)));
+			Assert.That(tide.TideAt(tick - SeaTide.GridTicks), Is.EqualTo(Tide(clock).TideAt(tick - SeaTide.GridTicks)));
+		}
+
 		[Test]
 		public void AnUndrivenTideStandsAtMeanLevel()
 		{

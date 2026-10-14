@@ -77,7 +77,8 @@ namespace FishMMO.Shared.Biomes
 				}
 				for (int i = 0; i + 1 < river.Points.Length; i++)
 				{
-					float reach = 0.5f * Mathf.Max(Width(river, i), Width(river, i + 1)) * 2.5f + 2f;
+					float reach = 0.5f * Mathf.Max(Width(river, i), Width(river, i + 1)) * 2.5f + 2f
+						+ Mathf.Max(Mathf.Max(Shore(river.ShoreLeft, i), Shore(river.ShoreLeft, i + 1)), Mathf.Max(Shore(river.ShoreRight, i), Shore(river.ShoreRight, i + 1)));
 					AddSegment(river.Points[i], river.Points[i + 1], reach, new Segment { River = r, Point = i });
 				}
 				if (river.Perennial && (river.Finish == SceneHydrology.End.Lake || river.Finish == SceneHydrology.End.Sea))
@@ -110,6 +111,20 @@ namespace FishMMO.Shared.Biomes
 					list.Add(segment);
 				}
 			}
+		}
+
+		private static float Shore(float[] shore, int i) => shore != null && i < shore.Length ? Mathf.Max(0f, shore[i]) : 0f;
+
+		/// <summary>
+		/// How far out from a river's line between points <paramref name="i"/> and i + 1 its water reaches at (x, z), metres: half
+		/// its width, and past that where the cut ground lies under it on that side (<see cref="SceneHydrology.River.ShoreLeft"/>).
+		/// </summary>
+		private static float HalfAt(SceneHydrology.River river, int i, float t, Vector3 a, Vector3 b, float x, float z)
+		{
+			float half = 0.5f * Mathf.Lerp(Width(river, i), Width(river, i + 1), t);
+			bool left = (b.x - a.x) * (z - a.z) - (b.z - a.z) * (x - a.x) > 0f;
+			float[] shore = left ? river.ShoreLeft : river.ShoreRight;
+			return half + Mathf.Lerp(Shore(shore, i), Shore(shore, i + 1), t);
 		}
 
 		private static float Width(SceneHydrology.River river, int i) => river.Width != null && i < river.Width.Length ? Mathf.Max(0.5f, river.Width[i]) : 4f;
@@ -217,7 +232,7 @@ namespace FishMMO.Shared.Biomes
 				}
 				Vector3 a = path.Points[segment.Point], b = path.Points[segment.Point + 1];
 				float t = Project(a, b, x, z, out float distance);
-				float half = 0.5f * Mathf.Lerp(Width(path, segment.Point), Width(path, segment.Point + 1), t);
+				float half = HalfAt(path, segment.Point, t, a, b, x, z);
 				if (distance <= half + reach && distance < nearest)
 				{
 					nearest = distance;
@@ -276,8 +291,7 @@ namespace FishMMO.Shared.Biomes
 						}
 						Vector3 a = river.Points[segment.Point], b = river.Points[segment.Point + 1];
 						float t = Project(a, b, x, z, out float distance);
-						float half = 0.5f * Mathf.Lerp(Width(river, segment.Point), Width(river, segment.Point + 1), t);
-						outside = Mathf.Min(outside, distance - half);
+						outside = Mathf.Min(outside, distance - HalfAt(river, segment.Point, t, a, b, x, z));
 					}
 				}
 			}

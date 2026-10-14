@@ -606,6 +606,51 @@ namespace FishMMO.Shared
 			/// <summary>How high a ledge over the water a swimmer can climb out onto, metres.</summary>
 			public const float SwimClimbOutLedgeMetres = 1.3f;
 
+			/// <summary>Climbing speed up or down a ladder, m/s, before Move Speed (and Climb Speed, where a character has it). A rope ladder and a rope are slower (<see cref="ClimbingRules.KindShare"/>).</summary>
+			public const float ClimbSpeed = 1.8f;
+
+			/// <summary>How fast holding Crouch slides down a climbable, m/s: hands loose on the rails or the rope.</summary>
+			public const float ClimbSlideSpeed = 4.0f;
+
+			/// <summary>How fast a climber shuffles across a ladder, m/s.</summary>
+			public const float ClimbShuffleSpeed = 0.8f;
+
+			/// <summary>How fast the step on or off at the top goes (up over the edge, or out over it), m/s.</summary>
+			public const float ClimbMantleSpeed = 2.5f;
+
+			/// <summary>The fastest a climber is drawn onto its hold, m/s: a grab from a little way off is a short glide, not a snap.</summary>
+			public const float ClimbSnapSpeed = 6.0f;
+
+			/// <summary>How far past the body's radius a climber hangs off the climbable's line, metres.</summary>
+			public const float ClimbHangClearance = 0.15f;
+
+			/// <summary>How far a climbable can be reached from, metres past where its climber would hang (and either side of its width).</summary>
+			public const float ClimbReach = 0.5f;
+
+			/// <summary>How far below the top of a climbable a climber's feet are when it starts to step off, metres.</summary>
+			public const float ClimbTopHoldMetres = 1.0f;
+
+			/// <summary>How far past the top a climber steps off onto the upper floor, metres along the top's exit.</summary>
+			public const float ClimbLandingMetres = 0.6f;
+
+			/// <summary>How far over the top the feet are lifted to clear the edge on the way off (and on), metres.</summary>
+			public const float ClimbStepClearance = 0.1f;
+
+			/// <summary>Seconds a step on or off at the top may take before it is given up (geometry in the way).</summary>
+			public const float ClimbStepTimeoutSeconds = 2.5f;
+
+			/// <summary>Seconds after letting go (at the bottom, off the top or by a jump) before a character takes hold again.</summary>
+			public const float ClimbRegrabSeconds = 0.4f;
+
+			/// <summary>Seconds after a jump off a climbable before taking hold again: longer, so a jump off carries away.</summary>
+			public const float ClimbJumpRegrabSeconds = 0.75f;
+
+			/// <summary>How fast a jump off a climbable pushes away from it, m/s.</summary>
+			public const float ClimbJumpOffSpeed = 2.5f;
+
+			/// <summary>How fast a jump off a climbable lifts, m/s.</summary>
+			public const float ClimbJumpOffUpSpeed = 2.0f;
+
 			/// <summary>
 			/// Gravity vector applied to characters.
 			/// <c>static readonly</c> because <see cref="Vector3"/> is a non-primitive type and cannot be <c>const</c>.

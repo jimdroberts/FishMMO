@@ -39,6 +39,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Plan once, build every time.</b> <see cref="Plan"/> runs on a cut (it holes the terrain, which a repaint must
 	/// not do again); <see cref="Place"/> builds the same rock from the stored system on every cut and repaint.
 	/// </para>
+	/// <para>
+	/// <b>Meshed only when something changed.</b> The asset's main object (<see cref="SceneCaveMeshes"/>, binary) keeps
+	/// each cave's <see cref="InputsKey"/>: a cave whose system, cut, ground and meshing code are all as they were keeps its
+	/// meshes, and the asset is saved once after the stage's last cave rather than once per cave.
+	/// </para>
 	/// </remarks>
 	public sealed class CaveShaper : IPointOfInterestShaper
 	{
@@ -101,7 +106,9 @@ namespace FishMMO.Shared.WorldDesign
 			TryForm(site.Kind, out CaveForm form);
 			TerrainTilePlan tiles = context.Tiles;
 			CaveSystem.Profile profile = CaveSystem.ProfileFor(form, site.SizeClass);
-			CaveGround ground = SampleGround(context.GroundAt, tiles, site.Position.x, site.Position.z, profile.TrunkMax + 60f);
+			// Wide enough for a graph's branches and halls to wander off the trunk's line (CaveSystem.Layout), not only its length.
+			float spread = form == CaveForm.Grotto || form == CaveForm.SeaCave ? 0f : site.SizeClass >= 2 ? 200f : 120f;
+			CaveGround ground = SampleGround(context.GroundAt, tiles, site.Position.x, site.Position.z, profile.TrunkMax + 60f + spread);
 			float water = form == CaveForm.Grotto ? WaterBefore(context, site) : float.NaN;
 			CaveSystem system = CaveSystem.Plan(form, site.SizeClass, site.Position, site.Yaw, SeedOf(site), site.Id, ground, SeaLevel, out string problem, water);
 			if (system == null)
@@ -423,7 +430,63 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Place ─────────────────────────────────────────────────
 
+		/// <summary>What the caves of one Place pass did, for its closing note.</summary>
+		private struct StageTally
+		{
+			public int Built, Kept;
+			public double MeshSeconds;
+		}
+
+		private static StageTally tally;
+
+		/// <summary>
+		/// Builds a site's cave (<see cref="PlaceSystem"/>); after the stage's last cave site, saves the caves asset once
+		/// (<see cref="SaveMeshes"/>) and notes what the stage meshed and kept. The stage places its sites in the order of
+		/// <see cref="ScenePointsOfInterest.Points"/>, and the save runs even when a cave throws.
+		/// </summary>
 		public void Place(PointOfInterestPlaceContext context, PointOfInterestRecord site)
+		{
+			if (IsCaveAtEnd(context.Points, site.Id, first: true))
+			{
+				tally = default;
+			}
+			try
+			{
+				PlaceSystem(context, site);
+			}
+			finally
+			{
+				if (IsCaveAtEnd(context.Points, site.Id, first: false))
+				{
+					var clock = System.Diagnostics.Stopwatch.StartNew();
+					int saved = SaveMeshes();
+					context.Notes?.Add($"Caves: {tally.Built} system(s) meshed in {tally.MeshSeconds:0.0} s, {tally.Kept} unchanged since their last build and kept; "
+						+ (saved > 0 ? $"the caves asset saved in {clock.Elapsed.TotalSeconds:0.0} s." : "the caves asset unchanged."));
+					tally = default;
+				}
+			}
+		}
+
+		/// <summary>Whether a site is the first (or last) of the sites this shaper places, in the stage's order.</summary>
+		private static bool IsCaveAtEnd(ScenePointsOfInterest points, int siteId, bool first)
+		{
+			if (points?.Points == null)
+			{
+				return true;
+			}
+			int count = points.Points.Count;
+			for (int n = 0; n < count; n++)
+			{
+				PointOfInterestRecord record = points.Points[first ? n : count - 1 - n];
+				if (record != null && PointOfInterestShapers.For(record.Kind) == Instance)
+				{
+					return record.Id == siteId;
+				}
+			}
+			return true;
+		}
+
+		private static void PlaceSystem(PointOfInterestPlaceContext context, PointOfInterestRecord site)
 		{
 			PointOfInterestShape shape = ShapeFor(context.Points, site.Id);
 			if (shape != null && IsLink(shape.Values, out _))
@@ -453,20 +516,40 @@ namespace FishMMO.Shared.WorldDesign
 					system.UseCutHoles(m, holes, context.GroundAt, holeStep, gridX, gridZ);
 				}
 			}
-			List<CaveMesher.Piece> pieces;
-			try
-			{
-				pieces = CaveMesher.Build(system, ground, out string report);
-				context.Notes?.Add($"{label}: {system.Form}, {system.PassageLength:0} m of passages, {system.Depth:0} m deep, {system.Chambers.Count} chambers, {system.Mouths.Count} mouth(s); {report}.");
-			}
-			catch (System.InvalidOperationException ex)
-			{
-				context.Notes?.Add($"{label}: its rock would not mesh ({ex.Message}); the terrain stays holed.");
-				return;
-			}
 			string assetPath = string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null ? null
 				: AssetPath(context.TerrainFolder, context.Request.SceneName);
-			Mesh[] meshes = WriteMeshes(assetPath, site.Id, pieces, LiveCaves(context.Points));
+			string summary = $"{label}: {system.Form}, {system.PassageLength:0} m of passages, {system.Depth:0} m deep, {system.Chambers.Count} chambers, {system.Mouths.Count} mouth(s)";
+			HashSet<int> live = LiveCaves(context.Points);
+			var clock = System.Diagnostics.Stopwatch.StartNew();
+			// Built from exactly what it was last built from: its meshes are kept, not built and written again.
+			string inputs = assetPath != null ? InputsKey(site.Id, system, ground) : null;
+			if (!TryKeepMeshes(assetPath, site.Id, inputs, live, out Mesh[] meshes, out bool[] mouths, out int kept))
+			{
+				List<CaveMesher.Piece> pieces;
+				try
+				{
+					pieces = CaveMesher.Build(system, ground, out string report);
+					tally.Built++;
+					tally.MeshSeconds += clock.Elapsed.TotalSeconds;
+					context.Notes?.Add($"{summary}; {report}.");
+				}
+				catch (System.InvalidOperationException ex)
+				{
+					context.Notes?.Add($"{label}: its rock would not mesh ({ex.Message}); the terrain stays holed.");
+					return;
+				}
+				meshes = WriteMeshes(assetPath, site.Id, pieces, live, inputs);
+				mouths = new bool[pieces.Count];
+				for (int i = 0; i < pieces.Count; i++)
+				{
+					mouths[i] = pieces[i].Mouth;
+				}
+			}
+			else
+			{
+				tally.Kept++;
+				context.Notes?.Add($"{summary}; unchanged since its last build: its {meshes.Length} pieces ({kept} triangles) kept, checked in {clock.Elapsed.TotalSeconds:0.00} s.");
+			}
 
 			string rock = RockOf(system.Form, context.Request, site, system.Origin);
 			Material material = PointOfInterestRock.MaterialOf(rock);
@@ -474,7 +557,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				context.Notes?.Add($"Caves: no material for {rock} ('{CliffRocks.MaterialName(rock)}'); run Generate Biome Art, then repaint.");
 			}
-			Build(context.Root, system, pieces, meshes, material);
+			Build(context.Root, system, mouths, meshes, material);
 			WritePool(context, site, system, ground);
 		}
 
@@ -568,47 +651,150 @@ namespace FishMMO.Shared.WorldDesign
 			return live;
 		}
 
+		/// <summary>Bump on any change to how a cave is meshed that the inputs key would not see (it already sees every code change, below).</summary>
+		public const int MeshVersion = 1;
+
+		/// <summary>
+		/// The code the mesh is built by: the assemblies of the mesher, the field and the mesh writer (compiled
+		/// deterministically, so their version ids change exactly when their code does) and of Unity's maths.
+		/// </summary>
+		private static readonly string codeVersion = string.Join(",",
+			typeof(CaveMesher).Assembly.ManifestModule.ModuleVersionId,
+			typeof(CaveSystem).Assembly.ManifestModule.ModuleVersionId,
+			typeof(MeshBuilder).Assembly.ManifestModule.ModuleVersionId,
+			typeof(ProceduralNoise).Assembly.ManifestModule.ModuleVersionId,
+			typeof(Vector3).Assembly.ManifestModule.ModuleVersionId);
+
+		/// <summary>
+		/// The key of everything a cave's meshes are built from (hex SHA-256): <see cref="MeshVersion"/> and the code, the
+		/// site (the meshes' names), the system as it stands (its values, frame and seed, and the cut its collars follow,
+		/// <see cref="CaveSystem.WriteDerivedState"/>), the ground the mesher reads, and the constants of the pieces and their
+		/// UVs. Equal keys build equal meshes, so a cave whose key matches its stored one keeps its meshes.
+		/// </summary>
+		public static string InputsKey(int siteId, CaveSystem system, CaveGround ground)
+		{
+			using (var stream = new System.IO.MemoryStream())
+			{
+				using (var writer = new System.IO.BinaryWriter(stream, System.Text.Encoding.UTF8, true))
+				{
+					writer.Write(MeshVersion);
+					writer.Write(codeVersion);
+					writer.Write(siteId);
+					float[] values = system.ToValues();
+					writer.Write(values.Length);
+					foreach (float v in values)
+					{
+						writer.Write(v);
+					}
+					writer.Write(system.Origin.x);
+					writer.Write(system.Origin.y);
+					writer.Write(system.Origin.z);
+					writer.Write(system.Seed);
+					system.WriteDerivedState(writer);
+					writer.Write(ground.OriginX);
+					writer.Write(ground.OriginZ);
+					writer.Write(ground.Spacing);
+					writer.Write(ground.Width);
+					writer.Write(ground.Depth);
+					writer.Write(ground.Heights.Length);
+					foreach (float height in ground.Heights)
+					{
+						writer.Write(height);
+					}
+					writer.Write(RockMeshes.TextureMetres);
+					writer.Write(CaveMesher.ChunkCells);
+					writer.Write(CaveMesher.PieceMetres);
+				}
+				using (var sha = System.Security.Cryptography.SHA256.Create())
+				{
+					byte[] hash = sha.ComputeHash(stream.GetBuffer(), 0, (int)stream.Length);
+					var hex = new System.Text.StringBuilder(hash.Length * 2);
+					foreach (byte b in hash)
+					{
+						hex.Append(b.ToString("x2"));
+					}
+					return hex.ToString();
+				}
+			}
+		}
+
+		/// <summary>The caves assets written since they were last saved (<see cref="SaveMeshes"/>).</summary>
+		private static readonly HashSet<string> unsaved = new HashSet<string>();
+
+		/// <summary>
+		/// The cave's meshes as last built, when they were built from <paramref name="inputs"/> and are all still in the
+		/// asset (and the meshes of caves not in <paramref name="live"/> pruned); false to build them again.
+		/// </summary>
+		private static bool TryKeepMeshes(string assetPath, int siteId, string inputs, ICollection<int> live, out Mesh[] meshes, out bool[] mouths, out int triangles)
+		{
+			meshes = null;
+			mouths = null;
+			triangles = 0;
+			if (assetPath == null || string.IsNullOrEmpty(inputs) || !(AssetDatabase.LoadMainAssetAtPath(assetPath) is SceneCaveMeshes store))
+			{
+				return false;
+			}
+			int at = store.IndexOf(siteId);
+			if (at < 0)
+			{
+				return false;
+			}
+			SceneCaveMeshes.Cave cave = store.Caves[at];
+			if (cave.Inputs != inputs || cave.Pieces <= 0 || cave.Mouths == null || cave.Mouths.Length != cave.Pieces)
+			{
+				return false;
+			}
+			Dictionary<string, Mesh> existing = Existing(assetPath, store, siteId, null, live);
+			var found = new Mesh[cave.Pieces];
+			int ours = 0;
+			foreach (KeyValuePair<string, Mesh> kv in existing)
+			{
+				if (CaveIdOf(kv.Key, out int id) && id == siteId)
+				{
+					ours++;
+				}
+			}
+			if (ours != cave.Pieces)
+			{
+				return false;
+			}
+			for (int i = 0; i < found.Length; i++)
+			{
+				if (!existing.TryGetValue(PieceName(siteId, i), out found[i]) || found[i] == null || found[i].vertexCount == 0)
+				{
+					return false;
+				}
+			}
+			meshes = found;
+			mouths = (bool[])cave.Mouths.Clone();
+			triangles = cave.Triangles;
+			return true;
+		}
+
+		private static string PieceName(int siteId, int piece) => $"Cave {siteId} P{piece}";
+
 		/// <summary>
 		/// A cave's pieces as meshes: sub-assets of <paramref name="assetPath"/> named <c>Cave &lt;id&gt; P&lt;n&gt;</c>, an
 		/// existing one overwritten in place (its references survive a repaint); this cave's meshes it no longer has, and the
-		/// meshes of caves not in <paramref name="live"/>, removed. In memory only when the path is null (tests, renders).
+		/// meshes of caves not in <paramref name="live"/>, removed; <paramref name="inputs"/> (<see cref="InputsKey"/>) kept
+		/// with them. In memory only when the path is null (tests, renders). Not saved: <see cref="SaveMeshes"/> writes the
+		/// asset once, after the stage's last cave (each save rewrote the whole growing file).
 		/// </summary>
-		public static Mesh[] WriteMeshes(string assetPath, int siteId, IReadOnlyList<CaveMesher.Piece> pieces, ICollection<int> live)
+		public static Mesh[] WriteMeshes(string assetPath, int siteId, IReadOnlyList<CaveMesher.Piece> pieces, ICollection<int> live, string inputs = null)
 		{
 			var meshes = new Mesh[pieces.Count];
 			var names = new HashSet<string>();
 			for (int i = 0; i < pieces.Count; i++)
 			{
-				meshes[i] = pieces[i].Mesh.ToMesh($"Cave {siteId} P{i}");
+				meshes[i] = pieces[i].Mesh.ToMesh(PieceName(siteId, i));
 				names.Add(meshes[i].name);
 			}
 			if (assetPath == null)
 			{
 				return meshes;
 			}
-			// The main object is a placeholder that never goes, so any cave's meshes can be added and removed under it.
-			var container = AssetDatabase.LoadMainAssetAtPath(assetPath);
-			if (container == null)
-			{
-				WorldEditorAssets.EnsureFolder(System.IO.Path.GetDirectoryName(assetPath).Replace('\\', '/'));
-				container = new Mesh { name = System.IO.Path.GetFileNameWithoutExtension(assetPath) };
-				AssetDatabase.CreateAsset(container, assetPath);
-			}
-			var existing = new Dictionary<string, Mesh>();
-			foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(assetPath))
-			{
-				if (asset is Mesh mesh && asset != container)
-				{
-					bool ours = CaveIdOf(mesh.name, out int id);
-					if (ours && (id == siteId ? !names.Contains(mesh.name) : live != null && !live.Contains(id)))
-					{
-						AssetDatabase.RemoveObjectFromAsset(mesh);
-						Object.DestroyImmediate(mesh, true);
-						continue;
-					}
-					existing[mesh.name] = mesh;
-				}
-			}
+			Object container = OpenStore(assetPath, out SceneCaveMeshes store);
+			Dictionary<string, Mesh> existing = Existing(assetPath, container, siteId, names, live);
 			for (int i = 0; i < meshes.Length; i++)
 			{
 				if (existing.TryGetValue(meshes[i].name, out Mesh old))
@@ -622,9 +808,166 @@ namespace FishMMO.Shared.WorldDesign
 					AssetDatabase.AddObjectToAsset(meshes[i], assetPath);
 				}
 			}
+			if (store != null)
+			{
+				var cave = new SceneCaveMeshes.Cave { SiteId = siteId, Inputs = inputs ?? string.Empty, Pieces = pieces.Count, Mouths = new bool[pieces.Count] };
+				for (int i = 0; i < pieces.Count; i++)
+				{
+					cave.Mouths[i] = pieces[i].Mouth;
+					cave.Triangles += pieces[i].Mesh.TriangleCount;
+				}
+				int at = store.IndexOf(siteId);
+				if (at >= 0)
+				{
+					store.Caves[at] = cave;
+				}
+				else
+				{
+					store.Caves.Add(cave);
+				}
+			}
 			EditorUtility.SetDirty(container);
-			AssetDatabase.SaveAssetIfDirty(container);
+			unsaved.Add(assetPath);
 			return meshes;
+		}
+
+		/// <summary>
+		/// The cave meshes in the asset by name, after removing this site's that are not in <paramref name="keep"/> (null:
+		/// keep them all) and every mesh (and stored entry) of a cave not in <paramref name="live"/>.
+		/// </summary>
+		private static Dictionary<string, Mesh> Existing(string assetPath, Object container, int siteId, HashSet<string> keep, ICollection<int> live)
+		{
+			var existing = new Dictionary<string, Mesh>();
+			bool removed = false;
+			foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(assetPath))
+			{
+				if (asset is Mesh mesh && asset != container)
+				{
+					bool ours = CaveIdOf(mesh.name, out int id);
+					if (ours && (id == siteId ? keep != null && !keep.Contains(mesh.name) : live != null && !live.Contains(id)))
+					{
+						AssetDatabase.RemoveObjectFromAsset(mesh);
+						Object.DestroyImmediate(mesh, true);
+						removed = true;
+						continue;
+					}
+					existing[mesh.name] = mesh;
+				}
+			}
+			if (container is SceneCaveMeshes store && live != null
+				&& store.Caves.RemoveAll(c => c.SiteId != siteId && !live.Contains(c.SiteId)) > 0)
+			{
+				removed = true;
+			}
+			if (removed)
+			{
+				EditorUtility.SetDirty(container);
+				unsaved.Add(assetPath);
+			}
+			return existing;
+		}
+
+		/// <summary>
+		/// The caves asset's main object, made when there is none. An asset from before <see cref="SceneCaveMeshes"/> (its
+		/// main object a placeholder mesh) gets one in the placeholder's place: the file keeps its guid and every mesh its
+		/// file id, so the scenes' references hold, and it is binary from its next save. <paramref name="store"/> is null
+		/// only if that change did not take; the meshes are then written as before, with no inputs kept.
+		/// </summary>
+		private static Object OpenStore(string assetPath, out SceneCaveMeshes store)
+		{
+			Object main = AssetDatabase.LoadMainAssetAtPath(assetPath);
+			store = main as SceneCaveMeshes;
+			if (store != null)
+			{
+				return store;
+			}
+			if (main == null)
+			{
+				store = ScriptableObject.CreateInstance<SceneCaveMeshes>();
+				store.name = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+				WorldEditorAssets.EnsureFolder(System.IO.Path.GetDirectoryName(assetPath).Replace('\\', '/'));
+				AssetDatabase.CreateAsset(store, assetPath);
+				return store;
+			}
+			// One added by an earlier pass whose change of main object did not take is used again, never a second.
+			foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(assetPath))
+			{
+				if (asset is SceneCaveMeshes earlier)
+				{
+					store = earlier;
+					break;
+				}
+			}
+			if (store == null)
+			{
+				store = ScriptableObject.CreateInstance<SceneCaveMeshes>();
+				store.name = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+				AssetDatabase.AddObjectToAsset(store, assetPath);
+			}
+			AssetDatabase.SetMainObject(store, assetPath);
+			EditorUtility.SetDirty(store);
+			AssetDatabase.SaveAssetIfDirty(store);
+			AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
+			store = AssetDatabase.LoadMainAssetAtPath(assetPath) as SceneCaveMeshes;
+			if (store == null)
+			{
+				Debug.LogWarning($"[Caves] '{assetPath}' kept its old main object; its caves are rebuilt every time until it is deleted and cut again.");
+				return AssetDatabase.LoadMainAssetAtPath(assetPath);
+			}
+			// The placeholder: the only mesh that is not a cave's.
+			foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(assetPath))
+			{
+				if (asset is Mesh mesh && !CaveIdOf(mesh.name, out _))
+				{
+					AssetDatabase.RemoveObjectFromAsset(mesh);
+					Object.DestroyImmediate(mesh, true);
+				}
+			}
+			EditorUtility.SetDirty(store);
+			unsaved.Add(assetPath);
+			return store;
+		}
+
+		/// <summary>
+		/// Saves every caves asset written since the last save, once each (a file still in text from before
+		/// <see cref="SceneCaveMeshes"/> is written again in its main object's binary form). Returns how many were saved.
+		/// </summary>
+		public static int SaveMeshes()
+		{
+			int saved = 0;
+			foreach (string path in unsaved)
+			{
+				Object main = AssetDatabase.LoadMainAssetAtPath(path);
+				if (main == null)
+				{
+					continue;
+				}
+				AssetDatabase.SaveAssetIfDirty(main);
+				if (main is SceneCaveMeshes && IsText(path))
+				{
+					AssetDatabase.ForceReserializeAssets(new[] { path });
+				}
+				saved++;
+			}
+			unsaved.Clear();
+			return saved;
+		}
+
+		/// <summary>Whether an asset file is in Unity's text (YAML) form.</summary>
+		private static bool IsText(string assetPath)
+		{
+			try
+			{
+				var head = new byte[5];
+				using (var file = System.IO.File.OpenRead(assetPath))
+				{
+					return file.Read(head, 0, head.Length) == head.Length && System.Text.Encoding.ASCII.GetString(head) == "%YAML";
+				}
+			}
+			catch (System.IO.IOException)
+			{
+				return false;
+			}
 		}
 
 		private static bool CaveIdOf(string name, out int id)
@@ -645,6 +988,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// on each chamber's floor.
 		/// </summary>
 		public static GameObject Build(Transform parent, CaveSystem system, IReadOnlyList<CaveMesher.Piece> pieces, Mesh[] meshes, Material material)
+		{
+			var mouths = new bool[pieces.Count];
+			for (int i = 0; i < pieces.Count; i++)
+			{
+				mouths[i] = pieces[i].Mouth;
+			}
+			return Build(parent, system, mouths, meshes, material);
+		}
+
+		/// <summary>As above, with each piece's mouth flag (<see cref="CaveMesher.Piece.Mouth"/>) in place of the pieces.</summary>
+		public static GameObject Build(Transform parent, CaveSystem system, bool[] pieceMouths, Mesh[] meshes, Material material)
 		{
 			int layer = CliffPlacer.ColliderLayer;
 			var cave = new GameObject("Cave Rock") { layer = layer };
@@ -674,12 +1028,12 @@ namespace FishMMO.Shared.WorldDesign
 				var renderer = child.AddComponent<MeshRenderer>();
 				renderer.sharedMaterial = material;
 				// Only the mouths stand in the sun; deep in, the terrain over them is what shades them.
-				renderer.shadowCastingMode = pieces[i].Mouth ? ShadowCastingMode.On : ShadowCastingMode.Off;
+				renderer.shadowCastingMode = pieceMouths[i] ? ShadowCastingMode.On : ShadowCastingMode.Off;
 				renderer.receiveShadows = true;
 				renderers[i] = renderer;
-				mouths[i] = pieces[i].Mouth;
+				mouths[i] = pieceMouths[i];
 			}
-			visual.AddComponent<CaveVisibility>().Configure(renderers, mouths, 72f);
+			visual.AddComponent<CaveVisibility>().Configure(renderers, mouths, 72f, system.VoidBoxes());
 
 			foreach (CaveChamber chamber in system.Chambers)
 			{

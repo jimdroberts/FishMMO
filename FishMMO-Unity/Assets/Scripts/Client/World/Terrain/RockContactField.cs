@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
@@ -32,6 +33,9 @@ namespace FishMMO.Client
 	/// </remarks>
 	public static class RockContactField
 	{
+		/// <summary>The gather's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
+		private static readonly CustomSampler GatherSample = CustomSampler.Create("FishMMO rock crevices (gather)", true);
+
 		public const string ComputeAssetPath = "Assets/Prefabs/Client/Weather/Shaders/FishRockField.compute";
 		public const string SdfShaderName = "Hidden/FishMMO/RockSdf";
 
@@ -87,6 +91,16 @@ namespace FishMMO.Client
 		private static bool on = true;
 		private static Vector4 crevice = new Vector4(0.35f, 0.45f, 0.85f, 1f);
 
+		/// <summary>
+		/// What the grid was last gathered for (its corner, and a key of everything else the gather read), and how many more
+		/// frames to gather it: the rocks never move, so the grid is the same until the camera crosses a cell, a renderer
+		/// uploads rocks or tags, a shape's field is built or the crevice width changes. Gathered twice on a change, so an
+		/// upload recorded later in the frame it was seen is read the frame after. Every frame it cost up to 2.3 ms of GPU
+		/// beside cliffs (ScenePerfProbe, 2026-10-13); a grid a frame never changes is the same list in the same cells.
+		/// </summary>
+		private static Vector3 gatheredMin = new Vector3(float.NaN, float.NaN, float.NaN);
+		private static int gatheredKey, regathers;
+
 		private static readonly int ListId = Shader.PropertyToID("_FishRockList");
 		private static readonly int SlotsGlobalId = Shader.PropertyToID("_FishRockSlots");
 		private static readonly int SdfId = Shader.PropertyToID("_FishRockSdf");
@@ -124,6 +138,14 @@ namespace FishMMO.Client
 			shapes.Clear();
 			shapeOf.Clear();
 			renderers.Clear();
+			Forget();
+		}
+
+		/// <summary>Gathers the grid again next time (its buffers new, or the field switched off and its globals cleared).</summary>
+		private static void Forget()
+		{
+			gatheredMin = new Vector3(float.NaN, float.NaN, float.NaN);
+			regathers = 0;
 		}
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -288,6 +310,7 @@ namespace FishMMO.Client
 			}
 			if (list == null)
 			{
+				Forget();
 				int cells = GridCells.x * GridCells.y * GridCells.z;
 				list = new GraphicsBuffer(GraphicsBuffer.Target.Structured, ListCapacity, RockStride);
 				listCount = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 1, sizeof(uint));
@@ -338,6 +361,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>The per-shape table the gather reads: min + range, size + built, flags (x rock).</summary>
+		private static int bricksVersion;
+
 		private static void UploadBricks()
 		{
 			if (!bricksDirty && bricks != null && bricks.count >= shapes.Count * 3)
@@ -345,6 +370,7 @@ namespace FishMMO.Client
 				return;
 			}
 			bricksDirty = false;
+			bricksVersion++;
 			int count = Mathf.Max(3, shapes.Count * 3);
 			if (bricks == null || bricks.count < count)
 			{
@@ -439,6 +465,7 @@ namespace FishMMO.Client
 			if (!on || shapes.Count == 0 || renderers.Count == 0 || !EnsureResources())
 			{
 				Shader.SetGlobalVector(GridDimsGlobalId, Vector4.zero);
+				Forget();
 				return;
 			}
 			EnsureAtlas();
@@ -449,6 +476,7 @@ namespace FishMMO.Client
 			if (camera == null)
 			{
 				Shader.SetGlobalVector(GridDimsGlobalId, Vector4.zero);
+				Forget();
 				return;
 			}
 			Vector3 eye = camera.transform.position;
@@ -456,9 +484,29 @@ namespace FishMMO.Client
 			Vector3 min = eye - extent * 0.5f;
 			min = new Vector3(Mathf.Floor(min.x / CellSize), Mathf.Floor(min.y / CellSize), Mathf.Floor(min.z / CellSize)) * CellSize;
 			int cells = GridCells.x * GridCells.y * GridCells.z;
+			int key;
+			unchecked
+			{
+				key = (17 * 31 + bricksVersion) * 31 + crevice.x.GetHashCode();
+				foreach (TerrainGpuRenderer r in renderers)
+				{
+					key = key * 31 + (r != null ? r.RockVersion : 0);
+				}
+			}
+			if (min != gatheredMin || key != gatheredKey)
+			{
+				gatheredMin = min;
+				gatheredKey = key;
+				regathers = 2;
+			}
+			if (regathers <= 0)
+			{
+				return;
+			}
+			regathers--;
 
 			cmd.Clear();
-			cmd.BeginSample("FishMMO rock crevices (gather)");
+			cmd.BeginSample(GatherSample);
 			cmd.SetComputeVectorParam(compute, RockGridId, new Vector4(min.x, min.y, min.z, CellSize));
 			cmd.SetComputeIntParams(compute, RockGridDimsId, GridCells.x, GridCells.y, GridCells.z, cells);
 			cmd.SetComputeFloatParam(compute, RockReachId, crevice.x);
@@ -483,7 +531,7 @@ namespace FishMMO.Client
 				cmd.SetComputeIntParam(compute, RockInstanceCountId, count);
 				cmd.DispatchCompute(compute, gatherKernel, (count + 63) / 64, 1, 1);
 			}
-			cmd.EndSample("FishMMO rock crevices (gather)");
+			cmd.EndSample(GatherSample);
 			Graphics.ExecuteCommandBuffer(cmd);
 			cmd.Clear();
 			Shader.SetGlobalBuffer(ListId, list);

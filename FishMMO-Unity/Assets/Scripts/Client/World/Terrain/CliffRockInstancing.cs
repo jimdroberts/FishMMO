@@ -140,6 +140,10 @@ namespace FishMMO.Client
 		/// <summary>Props drawn by this path, and the draw calls the last camera cost.</summary>
 		public static int RockCount { get; private set; }
 		public static int LastDrawCount { get; private set; }
+		/// <summary>The GPU path's commands those calls covered (several a call where it batches, TerrainGpuRenderer.BatchDraws).</summary>
+		public static int LastCommandCount => gpu != null ? gpu.LastCommandCount : 0;
+		/// <summary>The GPU path's renderer, for diagnostics (its per-view and per-family counts).</summary>
+		public static TerrainGpuRenderer Gpu => gpu;
 
 		/// <summary>True while the GPU path draws (play mode, compute present, switched on).</summary>
 		private static bool OnGpu => Application.isPlaying && gpu != null;

@@ -1,3 +1,4 @@
+using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -40,6 +41,8 @@ namespace FishMMO.Water
 		private static readonly int WindId = Shader.PropertyToID("_FishWaterWind");
 		private static readonly int WhitecapId = Shader.PropertyToID("_FishWaterWhitecap");
 		private static readonly int WhitecapThresholdId = Shader.PropertyToID("_WhitecapThreshold");
+		private static readonly int FoamSharpnessId = Shader.PropertyToID("_FoamSharpness");
+		private static readonly int ShallowWhitecapsId = Shader.PropertyToID("_ShallowWhitecaps");
 		private static readonly int GravityId = Shader.PropertyToID("_FishWaterGravity");
 		private static readonly int PatchId = Shader.PropertyToID("_FishWaterPatch");
 		private static readonly string[] DisplacementNames =
@@ -120,6 +123,8 @@ namespace FishMMO.Water
 		public ComputeShader Spectrum;
 		[Tooltip("The same FFT as render passes, for machines with no compute shaders (WebGL2, GLES3). Referenced here so a build includes it.")]
 		public Shader SpectrumPasses;
+		[Tooltip("The simulated foam's step (WaterFoamField). Referenced so a build includes it; found by name otherwise.")]
+		public Shader FoamFieldShader;
 
 		/// <summary>The render-pass FFT's name, for finding it when the reference was never set.</summary>
 		public const string SpectrumPassesShader = "Hidden/FishMMO/Water/FFT";
@@ -332,36 +337,163 @@ namespace FishMMO.Water
 			{
 				return SeaLevel;
 			}
-			WaterSpectrum spectrum = SpectrumForQueries();
-			// The very instant the FFT is evolved to (SpectrumSeconds), or the float rides another sea.
-			spectrum?.Evaluate(SpectrumSeconds);
-			ReadFade(out float fadeStart, out float fadeEnd);
-			// Asked before any camera has drawn the sea: work out the shallows now, or they would not fade.
-			if (FullSeaDepth <= 0f)
+			using (HeightAtMarker.Auto())
 			{
-				UpdateBreakDepth();
-			}
+				// The spectrum and the distance fade, looked up once a frame however many ask (BeginQueries).
+				BeginQueries();
+				WaterSpectrum spectrum = querySpectrum;
+				// The very instant the FFT is evolved to (SpectrumSeconds), or the float rides another sea.
+				double seconds = SpectrumSeconds;
+				// Asked before any camera has drawn the sea: work out the shallows now, or they would not fade.
+				if (FullSeaDepth <= 0f)
+				{
+					UpdateBreakDepth();
+				}
+				if (shoreField == null)
+				{
+					shoreField = GetComponent<WaterShoreField>();
+				}
+				Camera camera = Camera.main;
+				bool hasCamera = camera != null;
+				Vector3 eye = hasCamera ? camera.transform.position : default;
+				float seaLevel = SeaLevel;
 
-			// The vertex shader flattens the sea with distance from the camera; so does this.
-			float fade = 1f;
-			Camera camera = Camera.main;
-			if (camera != null)
-			{
-				Vector3 flatPoint = new Vector3(worldPosition.x, SeaLevel, worldPosition.z);
-				fade = 1f - Smoothstep(fadeStart, Mathf.Max(fadeEnd, fadeStart + 1f),
-					Vector3.Distance(flatPoint, camera.transform.position));
-			}
+				/* Ten systems ask for the height under the camera every frame, the floaters at their own points, and each
+				 * answer is a spectrum sum three times over. Every input of that answer is in the stamp, so an answer is
+				 * reused only where it would be worked out again to the bit; anything that moves clears them all. */
+				var stamp = new QueryStamp
+				{
+					Frame = Time.frameCount,
+					Spectrum = spectrum,
+					Seconds = seconds,
+					FadeStart = queryFadeStart,
+					FadeEnd = queryFadeEnd,
+					HasCamera = hasCamera,
+					Eye = eye,
+					SeaLevel = seaLevel,
+					Tide = TideMetres,
+					BreakDepth = BreakDepth,
+					FullSeaDepth = FullSeaDepth,
+					Shore = shoreField,
+					ShoreVersion = shoreField != null ? shoreField.AppliedVersion : -1,
+				};
+				if (!stamp.Equals(heightStamp))
+				{
+					heightStamp = stamp;
+					heightCount = 0;
+					heightNext = 0;
+				}
+				float x = worldPosition.x, z = worldPosition.z;
+				for (int k = 0; k < heightCount; k++)
+				{
+					if (heightX[k] == x && heightZ[k] == z)
+					{
+						return heightValue[k];
+					}
+				}
 
-			var target = new Vector2(worldPosition.x, worldPosition.z);
-			Vector2 flat = target;
-			float height = 0f;
-			for (int i = 0; i < 3; i++)
-			{
-				Displace(spectrum, flat, fade, out height, out Vector2 moved);
-				flat = target - moved;
+				using (HeightSolveMarker.Auto())
+				{
+					if (spectrum != null)
+					{
+						QuerySampler(spectrum).Evaluate(seconds);
+					}
+
+					// The vertex shader flattens the sea with distance from the camera; so does this.
+					float fade = 1f;
+					if (hasCamera)
+					{
+						Vector3 flatPoint = new Vector3(x, seaLevel, z);
+						fade = 1f - Smoothstep(queryFadeStart, Mathf.Max(queryFadeEnd, queryFadeStart + 1f),
+							Vector3.Distance(flatPoint, eye));
+					}
+
+					var target = new Vector2(x, z);
+					Vector2 flat = target;
+					float height = 0f;
+					for (int i = 0; i < 3; i++)
+					{
+						Displace(spectrum, flat, fade, out height, out Vector2 moved);
+						flat = target - moved;
+					}
+					float answer = seaLevel + height;
+
+					int slot = heightCount < HeightCacheSize ? heightCount++ : heightNext;
+					heightNext = (slot + 1) % HeightCacheSize;
+					heightX[slot] = x;
+					heightZ[slot] = z;
+					heightValue[slot] = answer;
+					return answer;
+				}
 			}
-			return SeaLevel + height;
 		}
+
+		private static readonly ProfilerMarker HeightAtMarker = new ProfilerMarker("WaterSurface.HeightAt");
+		private static readonly ProfilerMarker HeightSolveMarker = new ProfilerMarker("WaterSurface.HeightAt.Solve");
+		private static readonly ProfilerMarker CameraMarker = new ProfilerMarker("WaterSurface.BeginCamera");
+		private static readonly ProfilerMarker FFTMarker = new ProfilerMarker("WaterSurface.FFT");
+		private static readonly ProfilerMarker InitialSpectrumMarker = new ProfilerMarker("WaterSurface.InitialSpectrum");
+
+		/// <summary>Answers kept this frame: the camera's point (asked by every system that wants to know if it is under), and the floaters'.</summary>
+		private const int HeightCacheSize = 16;
+		private readonly float[] heightX = new float[HeightCacheSize];
+		private readonly float[] heightZ = new float[HeightCacheSize];
+		private readonly float[] heightValue = new float[HeightCacheSize];
+		private int heightCount, heightNext;
+		private QueryStamp heightStamp;
+
+		/// <summary>Everything a height answer depends on besides the point: equal stamps, equal answers.</summary>
+		private struct QueryStamp : System.IEquatable<QueryStamp>
+		{
+			public int Frame;
+			public WaterSpectrum Spectrum;
+			public double Seconds;
+			public float FadeStart, FadeEnd;
+			public bool HasCamera;
+			public Vector3 Eye;
+			public float SeaLevel, Tide, BreakDepth, FullSeaDepth;
+			public WaterShoreField Shore;
+			public int ShoreVersion;
+
+			public bool Equals(QueryStamp other) =>
+				Frame == other.Frame && ReferenceEquals(Spectrum, other.Spectrum) && Seconds.Equals(other.Seconds)
+				&& FadeStart == other.FadeStart && FadeEnd == other.FadeEnd && HasCamera == other.HasCamera
+				&& Eye.x == other.Eye.x && Eye.y == other.Eye.y && Eye.z == other.Eye.z
+				&& SeaLevel == other.SeaLevel && Tide == other.Tide && BreakDepth == other.BreakDepth
+				&& FullSeaDepth == other.FullSeaDepth && ReferenceEquals(Shore, other.Shore) && ShoreVersion == other.ShoreVersion;
+		}
+
+		/// <summary>The frame <see cref="BeginQueries"/> last ran in; the fade it read then.</summary>
+		private int queryFrame = -1;
+		private float queryFadeStart, queryFadeEnd;
+
+		/// <summary>
+		/// The per-frame half of a height query: whether the spectrum is stale (and a rebuild to start), and the distance
+		/// fade the shader draws with. Both were worked out for every query — a property block copied out of the renderer
+		/// and two material reads each time — and neither moves within a frame: the fade is a material setting, and the
+		/// spectrum is rebuilt off the main thread whatever frame asks.
+		/// </summary>
+		private void BeginQueries()
+		{
+			int frame = Time.frameCount;
+			if (frame == queryFrame)
+			{
+				return;
+			}
+			queryFrame = frame;
+			SpectrumForQueries();
+			ReadFade(out queryFadeStart, out queryFadeEnd);
+		}
+
+		/// <summary>The Burst sampler over <paramref name="spectrum"/>, its components copied in when the spectrum is a new one.</summary>
+		private WaterSpectrumSampler QuerySampler(WaterSpectrum spectrum)
+		{
+			querySampler ??= new WaterSpectrumSampler();
+			querySampler.Bind(spectrum);
+			return querySampler;
+		}
+
+		private WaterSpectrumSampler querySampler;
 
 		private static readonly int FadeStartId = Shader.PropertyToID("_WaveFadeStart");
 		private static readonly int FadeEndId = Shader.PropertyToID("_WaveFadeEnd");
@@ -544,7 +676,8 @@ namespace FishMMO.Water
 			float h = 0f, dx = 0f, dz = 0f;
 			if (spectrum != null)
 			{
-				spectrum.Sample(flat.x, flat.y, out h, out dx, out dz);
+				// The sum in Burst, four components a lane (WaterSpectrumSampler); WaterSpectrum.Sample is the same sum, managed.
+				QuerySampler(spectrum).Sample(flat.x, flat.y, out h, out dx, out dz);
 			}
 			// Faded with distance, then out over the shallows to flat water at the break line, and none
 			// at all in water the open sea's waves cannot reach at this tide (a pool, a lagoon).
@@ -611,6 +744,9 @@ namespace FishMMO.Water
 			meshRenderer = GetComponent<MeshRenderer>();
 			Rebuild();
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
+			// The open sea, the surf and the sand in the simulated foam.
+			WaterFoamField.Offer(FoamFieldShader);
+			WaterFoamField.AddSea(this);
 
 			ApplyLiquid();
 			if (!IsLava)
@@ -726,8 +862,13 @@ namespace FishMMO.Water
 		{
 			SurfaceWater.Unregister(this);
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
+			WaterFoamField.RemoveSea(this);
 			fft?.Dispose();
 			fft = null;
+			querySampler?.Dispose();
+			querySampler = null;
+			heightCount = 0;
+			heightStamp = default;
 			Discard(underwaterHost);
 			Discard(underwaterMesh);
 			Discard(underwaterMaterial);
@@ -847,12 +988,30 @@ namespace FishMMO.Water
 			}
 			/* Nothing the sea does belongs in a lightmap or a probe, and it must not cast: water
 			 * that casts a shadow darkens the sea bed it exists to show through. Nor does lava: a flat
-			 * sheet can shadow only what is below it, which it already hides. */
-			meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
-			meshRenderer.receiveShadows = true;
-			meshRenderer.lightProbeUsage = LightProbeUsage.Off;
-			meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.BlendProbes;
-			meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+			 * sheet can shadow only what is below it, which it already hides.
+			 *
+			 * Written only where they differ: this runs every frame while the weather eases the sea, and a
+			 * renderer setter is a native call that dirties the renderer whether or not the value moved. */
+			if (meshRenderer.shadowCastingMode != ShadowCastingMode.Off)
+			{
+				meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+			}
+			if (!meshRenderer.receiveShadows)
+			{
+				meshRenderer.receiveShadows = true;
+			}
+			if (meshRenderer.lightProbeUsage != LightProbeUsage.Off)
+			{
+				meshRenderer.lightProbeUsage = LightProbeUsage.Off;
+			}
+			if (meshRenderer.reflectionProbeUsage != ReflectionProbeUsage.BlendProbes)
+			{
+				meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.BlendProbes;
+			}
+			if (meshRenderer.motionVectorGenerationMode != MotionVectorGenerationMode.ForceNoMotion)
+			{
+				meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+			}
 		}
 
 		/// <summary>
@@ -900,6 +1059,55 @@ namespace FishMMO.Water
 		}
 
 		private bool reportedSpectrum;
+
+		// What the FFT was last evaluated for (BeginCamera): the transform, the frame, the instant, where the caps start.
+		private WaterFFT evaluatedFFT;
+		private int evaluatedFrame = -1;
+		private float evaluatedSeconds = float.NaN;
+		private float evaluatedFoamStart = float.NaN;
+
+		/// <summary>
+		/// The wind's share of a change below which the static spectrum is not rebuilt.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The spectrum's amplitudes depend on the wind only through the Phillips length L = U²/g: ln P = −g²/(k²U⁴) +
+		/// terms free of U, so d ln h0 / d ln U = 2 / (kL)². At the spectral peak, where the energy is, (kL)² = ½ and a
+		/// relative change δ in the wind changes the amplitudes by 4δ; longer waves change faster but carry
+		/// exponentially less (e^−1/(kL)²) — at (kL)² = 0.1 the rate is 20δ on a component holding e^−10 of the
+		/// peak's density. Held to 2.5e-4, the drawn waves are never more than a tenth of a percent from the
+		/// spectrum of the wind now: two millimetres on a two-metre sea, under the shading's own noise.
+		/// </para>
+		/// <para>
+		/// It was a float equality (Mathf.Approximately), and the environment eases the wind every frame, so the
+		/// three 256² dispatches of the static spectrum ran every frame the weather was moving at all.
+		/// </para>
+		/// </remarks>
+		public const float SpectrumWindShare = 2.5e-4f;
+
+		/// <summary>
+		/// The turn of the wind, degrees, below which the static spectrum is not rebuilt. The directional weight is
+		/// |cos θ|^8, whose relative change for a turn δ is 8·tan θ·δ: at 0.05° (8.7e-4 rad) that is under 0.7% on a
+		/// component 45° off the wind, which carries a sixteenth of the energy of one along it — again under a tenth
+		/// of a percent of the drawn waves.
+		/// </summary>
+		public const float SpectrumHeadingDegrees = 0.05f;
+
+		/// <summary>
+		/// Whether the wind has moved far enough from the one the static spectrum was built for to build it again
+		/// (<see cref="SpectrumWindShare"/>, <see cref="SpectrumHeadingDegrees"/>). Always true before the first build
+		/// (a negative built wind).
+		/// </summary>
+		public static bool SpectrumMoved(float builtWind, float wind, float builtHeading, float heading)
+		{
+			if (builtWind < 0f || float.IsNaN(builtWind) || float.IsNaN(builtHeading))
+			{
+				return true;
+			}
+			float share = Mathf.Max(SpectrumWindShare * Mathf.Max(Mathf.Abs(wind), Mathf.Abs(builtWind)), 1e-5f);
+			return Mathf.Abs(wind - builtWind) > share
+				|| Mathf.Abs(Mathf.DeltaAngle(builtHeading, heading)) > SpectrumHeadingDegrees;
+		}
 
 		/// <summary>
 		/// Brings the clock to now: the shared world-motion clock, wrapped.
@@ -970,6 +1178,14 @@ namespace FishMMO.Water
 			{
 				return;
 			}
+			using (CameraMarker.Auto())
+			{
+				BeginCamera(camera);
+			}
+		}
+
+		private void BeginCamera(Camera camera)
+		{
 			// Reflection probe bakes and preview cameras would each drag the ocean to themselves
 			// and leave it there for the camera that matters.
 			if (camera.cameraType == CameraType.Reflection || camera.cameraType == CameraType.Preview)
@@ -1060,21 +1276,26 @@ namespace FishMMO.Water
 			if (fft != null)
 			{
 				/* The static spectrum is the expensive half and depends on nothing that changes
-				 * frame to frame, so it is rebuilt only when the sea state genuinely moves. */
-				if (!Mathf.Approximately(builtWind, WindSpeed)
-					|| !Mathf.Approximately(builtHeading, WindDirectionDegrees)
+				 * frame to frame, so it is rebuilt only when the sea state genuinely moves:
+				 * SpectrumMoved for the wind, which the weather eases a hair every frame. */
+				bool rebuilt = false;
+				if (SpectrumMoved(builtWind, WindSpeed, builtHeading, WindDirectionDegrees)
 					|| !Mathf.Approximately(builtGravity, Gravity)
 					|| !Mathf.Approximately(builtChoppiness, FFTChoppiness)
 					|| !Mathf.Approximately(fft.LoopPeriod, LoopPeriod))
 				{
-					float windRadians = WindDirectionDegrees * Mathf.Deg2Rad;
-					fft.SetSeaState(WindSpeed,
-						new Vector2(Mathf.Sin(windRadians), Mathf.Cos(windRadians)),
-						Gravity, fft.Amplitude, FFTChoppiness, LoopPeriod, 1u);
+					using (InitialSpectrumMarker.Auto())
+					{
+						float windRadians = WindDirectionDegrees * Mathf.Deg2Rad;
+						fft.SetSeaState(WindSpeed,
+							new Vector2(Mathf.Sin(windRadians), Mathf.Cos(windRadians)),
+							Gravity, fft.Amplitude, FFTChoppiness, LoopPeriod, 1u);
+					}
 					builtWind = WindSpeed;
 					builtHeading = WindDirectionDegrees;
 					builtGravity = Gravity;
 					builtChoppiness = FFTChoppiness;
+					rebuilt = true;
 				}
 
 				/* Where the white caps start, for the foam memory: the material's threshold raised by the wind as the
@@ -1082,7 +1303,23 @@ namespace FishMMO.Water
 				float threshold = Material != null && Material.HasProperty(WhitecapThresholdId) ? Material.GetFloat(WhitecapThresholdId) : 0.7f;
 				fft.FoamStart = 1f - Mathf.Lerp(threshold, 0.8f, Mathf.Clamp01((WindSpeed - 12f) / 13f));
 				// Wrapped at its own loop, not the ten-thousand-second clock: see SpectrumSeconds.
-				fft.Evaluate((float)SpectrumSeconds);
+				float spectrumSeconds = (float)SpectrumSeconds;
+				/* Once a frame, not once a camera: the minimap's camera (and any other) draws the same instant, and the
+				 * transform of the same spectrum at the same moment is the same textures — even the foam memory, which
+				 * keeps all of itself over no time. Whatever the transform reads is in the test. */
+				int frame = Time.frameCount;
+				if (rebuilt || !ReferenceEquals(fft, evaluatedFFT) || frame != evaluatedFrame
+					|| spectrumSeconds != evaluatedSeconds || fft.FoamStart != evaluatedFoamStart)
+				{
+					using (FFTMarker.Auto())
+					{
+						fft.Evaluate(spectrumSeconds);
+					}
+					evaluatedFFT = fft;
+					evaluatedFrame = frame;
+					evaluatedSeconds = spectrumSeconds;
+					evaluatedFoamStart = fft.FoamStart;
+				}
 				for (int i = 0; i < WaterFFT.Cascades; i++)
 				{
 					Shader.SetGlobalTexture(DisplacementNames[i], fft.Displacement[i]);
@@ -1097,7 +1334,13 @@ namespace FishMMO.Water
 			 * the part of white-capping that comes from the wind tearing the tops off rather than
 			 * from the shape of the wave. */
 			Shader.SetGlobalFloat(WhitecapId, Mathf.Clamp01((WindSpeed - 12f) / 13f));
+			// The simulated foam makes the caps' foam where the shader draws them (FishWaterFoamField.shader, WhiteCaps).
+			WaterFoamField.SetSeaFoam(new Vector4(
+				MaterialFloat(WhitecapThresholdId, 0.7f), MaterialFloat(FoamSharpnessId, 0.28f), MaterialFloat(ShallowWhitecapsId, 0.6f),
+				Mathf.Clamp01((WindSpeed - 12f) / 13f)));
 		}
+
+		private float MaterialFloat(int id, float fallback) => Material != null && Material.HasProperty(id) ? Material.GetFloat(id) : fallback;
 
 		/// <summary>
 		/// A camera is about to draw a lava surface: the disc under it, the numbers the lava shader reads,

@@ -92,6 +92,13 @@ namespace FishMMO.Shared.WorldDesign
 		public float Floor;
 		/// <summary>Distance along the centre line from the mouth, metres.</summary>
 		public float Along;
+		/// <summary>
+		/// How much taller than the system's own section the bore stands here (a canyon passage's slot); 0 or 1 is its own.
+		/// </summary>
+		public float Tall;
+
+		/// <summary><see cref="Tall"/> with 0 read as 1.</summary>
+		public float Height => Tall > 0f ? Tall : 1f;
 	}
 }
 #endif

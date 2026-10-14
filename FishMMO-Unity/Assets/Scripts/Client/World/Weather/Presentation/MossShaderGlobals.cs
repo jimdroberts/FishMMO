@@ -19,7 +19,11 @@ namespace FishMMO.Client
 	/// <item>a cold biome that needs no liquid water is ice (glacier, ice sheet, alpine, snow): almost none. A cold one that
 	/// does (tundra, taiga) keeps its moss, as real tundra does;</item>
 	/// <item>loose ground (sand, dust, regolith) and an emitting ground (ash, vents) grow next to none;</item>
-	/// <item>a wetland's terrain process (<see cref="AirMotesField.WetlandOf"/>) is wet whatever its envelope says.</item>
+	/// <item>a wetland's terrain process (<see cref="AirMotesField.WetlandOf"/>) is wet whatever its envelope says;</item>
+	/// <item>a sea shore (<see cref="IsSeaShore"/>) breathes the sea's air: spray and sea fog. Where its envelope says
+	/// nothing of humidity, the guess is the sea air's (<see cref="SeaAir"/>), not the inland neutral one; and its cold
+	/// is not ice, because open water lies beside it whatever the biome itself needs. A shore whose envelope does say
+	/// (a dry sandy beach) keeps what it says.</item>
 	/// </list>
 	/// Local damp — open water near, a canopy over it, a hollow — is the shader's, per pixel, from the fine ground map,
 	/// so a coast's rocks are mossier than its open ground without the biome having to say so.
@@ -28,6 +32,14 @@ namespace FishMMO.Client
 	{
 		/// <summary>When no biome is known: some moss, as a temperate place has.</summary>
 		public const float Neutral = 0.45f;
+
+		/// <summary>A sea shore's dampness when its envelope says nothing of humidity: the spray and the sea fog keep a
+		/// rocky coast as damp as a wood's edge (between a grassland and the boreal forest).</summary>
+		public const float SeaAir = 0.7f;
+
+		/// <summary>The shore's elevation tier (BiomeTemplate.ElevationTier): the land from the waterline to some thirty
+		/// metres above the sea (BiomeSpecTable).</summary>
+		public const int ShoreTier = 3;
 
 		/// <summary>Seconds for the scene's dampness to cover most of the way to a new biome's, so walking over an
 		/// ecotone fades the moss rather than switching it.</summary>
@@ -41,13 +53,28 @@ namespace FishMMO.Client
 				return Neutral;
 			}
 			return Dampness(biome.MinHumidity, biome.MaxHumidity, biome.MinTemperature, biome.MaxTemperature,
-				biome.RequiresLiquidWater, biome.LooseGround != null, biome.Emits != null, AirMotesField.WetlandOf(biome.ResolvedTerrainProcess));
+				biome.RequiresLiquidWater, biome.LooseGround != null, biome.Emits != null, AirMotesField.WetlandOf(biome.ResolvedTerrainProcess),
+				IsSeaShore(biome));
+		}
+
+		/// <summary>
+		/// A shore of open water: a biome of the shore tier on a world with water at its surface (it needs liquid water,
+		/// or water on the world at all), and not the frozen shelf of a world frozen through, where no spray flies.
+		/// </summary>
+		public static bool IsSeaShore(BiomeTemplate biome)
+		{
+			if (biome == null || biome.ElevationTier != ShoreTier || (biome.Requires & BiomeWorldRequirement.IceWorld) != 0)
+			{
+				return false;
+			}
+			return biome.RequiresLiquidWater || (biome.Requires & BiomeWorldRequirement.SurfaceWater) != 0;
 		}
 
 		/// <summary>The dampness of a biome from its values, 0..1 (see the class remarks). Humidity and temperature
-		/// are the biome's envelope, -1..1; wetland is <see cref="AirMotesField.WetlandOf"/> of its terrain process.</summary>
+		/// are the biome's envelope, -1..1; wetland is <see cref="AirMotesField.WetlandOf"/> of its terrain process;
+		/// seaShore is <see cref="IsSeaShore"/>.</summary>
 		public static float Dampness(float minHumidity, float maxHumidity, float minTemperature, float maxTemperature,
-			bool requiresLiquidWater, bool looseGround, bool emits, float wetland)
+			bool requiresLiquidWater, bool looseGround, bool emits, float wetland, bool seaShore = false)
 		{
 			float low = Mathf.Clamp(minHumidity, -1f, 1f);
 			float high = Mathf.Clamp(maxHumidity, -1f, 1f);
@@ -55,16 +82,17 @@ namespace FishMMO.Client
 			// The envelope's middle: none at -0.6 and below (steppe, desert), all from +0.8 (swamp, wetlands).
 			float fromEnvelope = Mathf.Clamp01((0.5f * (low + high) + 0.6f) / 1.4f);
 			// An envelope that takes nearly any humidity says nothing about it: then a neutral guess, a little damper
-			// where the biome needs liquid water at all.
+			// where the biome needs liquid water at all, and the sea's air on a shore.
 			float informative = 1f - Smooth(1.2f, 1.9f, span);
-			float damp = Mathf.Lerp(requiresLiquidWater ? Neutral : 0.3f, fromEnvelope, informative);
+			float guess = seaShore ? SeaAir : requiresLiquidWater ? Neutral : 0.3f;
+			float damp = Mathf.Lerp(guess, fromEnvelope, informative);
 
 			float meanTemperature = 0.5f * (Mathf.Clamp(minTemperature, -1f, 1f) + Mathf.Clamp(maxTemperature, -1f, 1f));
 			// Heat dries a dry place further and leaves a wet one alone.
 			float hot = Smooth(0.4f, 0.8f, meanTemperature);
 			damp *= 1f - 0.6f * hot * (1f - damp);
-			// Cold with no liquid water is ice.
-			if (!requiresLiquidWater)
+			// Cold with no liquid water is ice; a shore has the open sea beside it.
+			if (!requiresLiquidWater && !seaShore)
 			{
 				float cold = 1f - Smooth(-0.6f, -0.1f, meanTemperature);
 				damp *= 1f - 0.85f * cold;
@@ -108,7 +136,8 @@ namespace FishMMO.Client
 	{
 		/// <summary>x strength × dampness, y 1 / tile metres, z 1 when the textures are bound, w poleward (+1 north, -1 south).</summary>
 		public static readonly int Params = Shader.PropertyToID("_FishMossParams");
-		/// <summary>x the moss recipe's mean smoothness, y 1 / its smoothness variation (the height is read back from the albedo's alpha).</summary>
+		/// <summary>x the moss recipe's mean smoothness, y 1 / its smoothness variation (the height is read back from the albedo's alpha),
+		/// z the profile's strength alone: the moss a waterfall's spray grows, which is damp in any climate.</summary>
 		public static readonly int Surface = Shader.PropertyToID("_FishMossSurface");
 		public static readonly int Albedo = Shader.PropertyToID("_FishMossAlbedo");
 		public static readonly int Normal = Shader.PropertyToID("_FishMossNormal");
@@ -136,12 +165,20 @@ namespace FishMMO.Client
 				Mathf.Clamp(latitudeDegrees / 10f, -1f, 1f));
 		}
 
+		/// <summary>The surface vector: the recipe's height decode, and the strength the spray's moss grows with. The
+		/// scene's dampness is not in it: a fall's spray keeps its rock damp in a desert as in a forest
+		/// (FishMoss.hlsl FishFallMossGrowth).</summary>
+		public static Vector4 SurfaceFor(float strength)
+		{
+			return new Vector4(RecipeSmoothness, 1f / RecipeSmoothnessVariation, Mathf.Max(0f, strength), 0f);
+		}
+
 		/// <summary>Publishes the moss for this frame.</summary>
 		public static void Apply(float strength, float dampness, float tileMetres, Texture2D albedo, Texture2D normal, float latitudeDegrees)
 		{
 			bool bound = albedo != null && normal != null;
 			Shader.SetGlobalVector(Params, ParamsFor(strength, dampness, tileMetres, bound, latitudeDegrees));
-			Shader.SetGlobalVector(Surface, new Vector4(RecipeSmoothness, 1f / RecipeSmoothnessVariation, 0f, 0f));
+			Shader.SetGlobalVector(Surface, SurfaceFor(strength));
 			if (bound)
 			{
 				Shader.SetGlobalTexture(Albedo, albedo);
@@ -180,10 +217,11 @@ namespace FishMMO.Client
 		private static Texture2D editorNormal;
 #endif
 
-		/// <summary>No moss anywhere.</summary>
+		/// <summary>No moss anywhere, the spray's included.</summary>
 		public static void Clear()
 		{
 			Shader.SetGlobalVector(Params, Vector4.zero);
+			Shader.SetGlobalVector(Surface, SurfaceFor(0f));
 		}
 	}
 }

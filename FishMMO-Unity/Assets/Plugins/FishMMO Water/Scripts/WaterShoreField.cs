@@ -126,6 +126,16 @@ namespace FishMMO.Water
 		private volatile Snapshot snapshot;
 		private int version;
 
+		/// <summary>Which field the CPU samples now: 0 with none, another number each time one is applied. What a cached height checks.</summary>
+		internal int AppliedVersion
+		{
+			get
+			{
+				Snapshot current = snapshot;
+				return current != null ? current.Version : 0;
+			}
+		}
+
 		/// <summary>Counts requests for a field, so a live build that finishes after a newer one was asked for is dropped.</summary>
 		private int generation;
 		private Task<Built> building;
@@ -411,6 +421,14 @@ namespace FishMMO.Water
 		{
 			int request = ++generation;
 			building = null;
+#if UNITY_SERVER && !UNITY_EDITOR
+			/* A dedicated server draws no shore and asks no height of the drawn sea (the simulation's sea is SeaTide, which
+			 * this field has no part in), so it builds no field: a live build samples every terrain millions of times at
+			 * load, and the build embeds none for it (WaterShoreFieldBuildEmbed). */
+			embedded = null;
+			snapshot = null;
+			return;
+#else
 
 			Plan plan = Measure();
 			if (plan == null)
@@ -467,6 +485,7 @@ namespace FishMMO.Water
 				return;
 			}
 			Apply(Compute(plan));
+#endif
 		}
 
 		/// <summary>Takes a finished live build onto the GPU, if it is still the one wanted.</summary>

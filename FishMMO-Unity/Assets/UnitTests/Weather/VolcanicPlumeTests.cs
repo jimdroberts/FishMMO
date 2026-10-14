@@ -259,8 +259,9 @@ namespace FishMMO.UnitTests.Weather
 				"ash falls from its cloud, and its cloud is the plume");
 			string precipitation = CodeOnly(Read("Scripts/Client/World/Weather/Presentation/PrecipitationField.cs"));
 			LogAssert.IsTrue(precipitation.Contains("traits.FromCloud && !traits.FromPlume ? 1f : 0f"), "so the water cloud overhead does not blank it");
-			string host = CodeOnly(Read("Scripts/Server/Implementation/World/SceneServer/Weather/WeatherHost.cs"));
-			LogAssert.IsTrue(host.Contains("if (kind == StormKind.Eruption)"), "and an eruption stays on its vent");
+			// Natural storms are born from the world clock in the shared schedule, the same on every server and client.
+			string schedule = CodeOnly(Read("Scripts/Shared/Implementation/Weather/StormSchedule.cs"));
+			LogAssert.IsTrue(schedule.Contains("float speed = kind == StormKind.Eruption ? 0f :"), "and an eruption stays on its vent: the schedule gives it no drift");
 		}
 
 		private static string Read(string relative)

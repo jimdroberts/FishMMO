@@ -39,8 +39,22 @@ namespace FishMMO.Water
 		[Tooltip("The lakes' and rivers' material (FishMMO/Water/Inland Water).")]
 		public Material Material;
 
+		[Tooltip("The simulated foam's step (WaterFoamField). Referenced so a build includes it; found by name otherwise.")]
+		public Shader FoamFieldShader;
+
 		[Tooltip("How far past each bank a river's surface runs, metres: under the bank, hidden by it.")]
 		public float BankMargin = 1.5f;
+
+		/// <summary>
+		/// The least the margin runs past a bank, metres, whatever the component says: more than one of the terrain's ground
+		/// samples (about 2.1 m), because the carve holds the ground a sample wide along the water's edge at the water
+		/// (WaterCarver), and a margin short of it left that strip at the water's level with no water drawn over it: a dark
+		/// band between the river and its banks (2026-10-13).
+		/// </summary>
+		public const float MinBankMarginMetres = 2.6f;
+
+		/// <summary>How far past each bank the surface runs: <see cref="BankMargin"/>, at least <see cref="MinBankMarginMetres"/>.</summary>
+		private float Margin => Mathf.Max(BankMargin, MinBankMarginMetres);
 
 		[Tooltip("Columns across a river: the two outer ones are the margin under its banks, the rest span bank to bank.")]
 		[Range(4, 16)] public int Across = 8;
@@ -71,6 +85,7 @@ namespace FishMMO.Water
 			 * arrives (SetFlow), rather than every fall traced twice. */
 			LoadFlow();
 			Rebuild(!flowLoading);
+			WaterFoamField.Offer(FoamFieldShader);
 		}
 
 		private void OnDestroy()
@@ -204,6 +219,10 @@ namespace FishMMO.Water
 				{
 					Discard(filter.sharedMesh);
 				}
+				if (go.TryGetComponent(out MeshRenderer surface))
+				{
+					WaterFoamField.RemoveInland(surface);
+				}
 				Discard(go);
 			}
 			built.Clear();
@@ -290,6 +309,8 @@ namespace FishMMO.Water
 			// Drawn in this order within the water's queue: the first to claim a pixel keeps it.
 			renderer.sortingOrder = order;
 			built.Add(go);
+			// Its current and the foam it makes, drawn into the simulated foam's windows (its FoamSource pass).
+			WaterFoamField.AddInland(renderer);
 		}
 
 		/// <summary>A lake's surface: a quad over each of its mask's cells and a ring of cells round them, at its level.</summary>
@@ -456,6 +477,8 @@ namespace FishMMO.Water
 					Depth = river.Depth != null && i < river.Depth.Length ? river.Depth[i] : 1f,
 					Fade = 1f,
 					Point = i,
+					ShoreLeft = river.ShoreLeft != null && i < river.ShoreLeft.Length ? Mathf.Max(0f, river.ShoreLeft[i]) : 0f,
+					ShoreRight = river.ShoreRight != null && i < river.ShoreRight.Length ? Mathf.Max(0f, river.ShoreRight[i]) : 0f,
 				});
 			}
 			if (river.Finish == SceneHydrology.End.Lake)
@@ -508,9 +531,15 @@ namespace FishMMO.Water
 			var halves = new float[count];
 			for (int r = 0; r < count; r++)
 			{
-				halves[r] = 0.5f * rows[r].Width + BankMargin;
+				halves[r] = 0.5f * rows[r].Width + Margin;
 			}
-			RibbonFrames(centres, halves, out Vector3[] forwards, out float[] leftReach, out float[] rightReach);
+			// Kept clear of a tight bend's inside by the wider of its two sides (a pool's bowl past a bank included).
+			var reaches = new float[count];
+			for (int r = 0; r < count; r++)
+			{
+				reaches[r] = halves[r] + Mathf.Max(rows[r].ShoreLeft, rows[r].ShoreRight);
+			}
+			RibbonFrames(centres, reaches, out Vector3[] forwards, out float[] leftReach, out float[] rightReach);
 
 			var positions = new List<Vector3>(count * (across + 1));
 			var flows = new List<Vector2>(positions.Capacity);
@@ -520,10 +549,20 @@ namespace FishMMO.Water
 			var tides = new List<Vector2>(positions.Capacity);
 			var banks = new List<Vector4>(positions.Capacity);
 			var indices = new List<int>((count - 1) * across * 6);
+			// The plunge pools under this river's falls: their surface runs at the current the fall drives through them (PoolCoreSpeed).
+			List<PoolSpan> pools = PoolsOf(falls, river);
 			for (int r = 0; r < count; r++)
 			{
 				Row row = rows[r];
 				Vector3 p = row.At;
+				PoolSpan pool = default;
+				bool inPool = row.Point >= 0 && PoolAt(pools, row.Point, out pool);
+				float coreSpeed = 0f, coreHalf = 0f;
+				if (inPool)
+				{
+					float fromLanding = row.Along - (pool.Plunge < n ? along[pool.Plunge] : row.Along);
+					coreSpeed = PoolCoreSpeed(pool.Discharge, pool.LipWidth, pool.OutletDepth, fromLanding, row.Width, out coreHalf);
+				}
 				// The row before a fall's plunge: down at the pool, so the pool reaches back under the curtain.
 				if (row.Point >= 0 && IsPlungeRow(falls, river, row.Point, out float poolLevel))
 				{
@@ -533,8 +572,12 @@ namespace FishMMO.Water
 				var left = new Vector3(-forward.z, 0f, forward.x);
 				float width = row.Width;
 				float half = halves[r];
+				/* The water out to where the cut ground meets it on each side (RiverShores): a plunge pool's bowl is scoured wider
+				 * than its channel, and unevenly, and drawn to the width alone its surface ended in a straight edge over ground a
+				 * metre and more under it (2026-10-13). */
+				float shoreLeft = row.ShoreLeft, shoreRight = row.ShoreRight;
 				// Drawn in toward the line on the inside of a tight bend, each side by its own share (the uv keeps the true offset).
-				float leftScale = Mathf.Clamp01(leftReach[r] / Mathf.Max(1e-4f, half)), rightScale = Mathf.Clamp01(rightReach[r] / Mathf.Max(1e-4f, half));
+				float leftScale = Mathf.Clamp01(leftReach[r] / Mathf.Max(1e-4f, half + shoreLeft)), rightScale = Mathf.Clamp01(rightReach[r] / Mathf.Max(1e-4f, half + shoreRight));
 				// Into the sea: fading out over its last widths, the sea showing through it.
 				float fade = row.Fade;
 				if (toSea)
@@ -550,12 +593,38 @@ namespace FishMMO.Water
 				byte shallow = (byte)Mathf.RoundToInt(255f * Mathf.Clamp01(row.Depth / 4f));
 				// Inside a fall the sheet is the water: the ribbon there neither shows nor claims its pixels.
 				bool falling = row.Point >= 0 && InsideFall(falls, river.Id, row.Point);
+				/* At a fall's lip the margin ends at the water's own width, where the curtain takes over: the ground past the lip
+				 * rounds down under the water going over (WaterCarver), and a margin laid out over it drew a pane of glass
+				 * either side of the curtain along the lip's line. */
+				bool lipRow = row.Point >= 0 && IsLipRow(falls, river.Id, row.Point);
+				float marginHalf = lipRow ? Mathf.Min(half, bank) : half;
 				for (int k = 0; k <= across; k++)
 				{
 					bool margin = k == 0 || k == across;
-					float offset = margin ? (k == 0 ? -half : half) : Mathf.Lerp(-bank, bank, (k - 1) / (float)(across - 2));
+					float offset = margin
+						? (k == 0 ? -(marginHalf + shoreRight) : marginHalf + shoreLeft)
+						: Mathf.Lerp(-(bank + shoreRight), bank + shoreLeft, (k - 1) / (float)(across - 2));
 					Vector3 at = p + left * (offset * (offset > 0f ? leftScale : rightScale));
 					Vector2 flow = water.FlowAt(at.x, at.z, out float reach, out float broken);
+					/* For the solved flow: the half-width bank to bank, the river's mean speed here, and its way downstream. A row
+					 * run on past the river's own points takes the speed of the end it runs on from: the lake rows before its
+					 * start (counted back, so negative along) its first point's. Only the first of them did: the rest took the
+					 * speed of the river's mouth, at the far end of it. */
+					int speedPoint = row.Point >= 0 ? row.Point : (row.Along < 0f ? 0 : n - 1);
+					float meanSpeed = river.Speed != null && speedPoint < river.Speed.Length ? river.Speed[speedPoint] : 0.5f;
+					if (inPool)
+					{
+						/* In a plunge pool the surface runs at the fall's current, not the basin's mean: the solved flow takes it as
+						 * its scale, and the blended flow is brought up to it downstream (what runs across it, it keeps). */
+						float surface = PoolCurrentAcross(offset, coreHalf, coreSpeed, meanSpeed);
+						var downstream = new Vector2(forward.x, forward.z);
+						float running = Vector2.Dot(flow, downstream);
+						if (surface > running)
+						{
+							flow += downstream * (surface - running);
+						}
+						meanSpeed = surface;
+					}
 					positions.Add(at);
 					flows.Add(flow);
 					states.Add(new Vector2(broken, reach));
@@ -565,12 +634,6 @@ namespace FishMMO.Water
 					bool hidden = margin || falling;
 					colours.Add(new Color32(shallow, hidden ? (byte)0 : (byte)255, 255, hidden ? (byte)0 : (byte)Mathf.RoundToInt(255f * fade)));
 					tides.Add(new Vector2(fall, tidal ? 1f : 0f));
-					/* For the solved flow: the half-width bank to bank, the river's mean speed here, and its way downstream. A row
-					 * run on past the river's own points takes the speed of the end it runs on from: the lake rows before its
-					 * start (counted back, so negative along) its first point's. Only the first of them did: the rest took the
-					 * speed of the river's mouth, at the far end of it. */
-					int speedPoint = row.Point >= 0 ? row.Point : (row.Along < 0f ? 0 : n - 1);
-					float meanSpeed = river.Speed != null && speedPoint < river.Speed.Length ? river.Speed[speedPoint] : 0.5f;
 					banks.Add(new Vector4(bank, meanSpeed, forward.x, forward.z));
 				}
 			}
@@ -602,6 +665,9 @@ namespace FishMMO.Water
 			public float Fade;
 			/// <summary>The river's own point the row stands on; −1 for a row run on into a lake or past a tributary's mouth.</summary>
 			public int Point;
+			/// <summary>How far past its half-width the water reaches on its left and right, metres: a pool's bowl wider than its channel.</summary>
+			public float ShoreLeft;
+			public float ShoreRight;
 		}
 
 		/// <summary>
@@ -640,7 +706,7 @@ namespace FishMMO.Water
 			int last = river.Points.Length - 1;
 			float width = river.Width != null && last < river.Width.Length ? river.Width[last] : 4f;
 			int before = rows.Count;
-			AddRunOnRows(rows, river, last, -1, 0.5f * width + BankMargin, false);
+			AddRunOnRows(rows, river, last, -1, 0.5f * width + Margin, false);
 			SceneHydrology.River joined = hydrology != null && river.JoinsRiver >= 0 ? hydrology.Rivers.Find(r => r.Id == river.JoinsRiver) : null;
 			if (joined == null || rows.Count == before)
 			{

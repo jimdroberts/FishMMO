@@ -96,6 +96,21 @@ namespace KinematicCharacterController
 		/// </summary>
 		public byte ClimbOutTicks;
 
+		/// <summary>
+		/// The ladder, rope ladder or rope being climbed: its index in the character's scene's climbables, plus one; zero
+		/// when not climbing. An index, not a reference, so the server and the owner name the same one.
+		/// </summary>
+		public ushort Climbable;
+
+		/// <summary>Where in the climb the character is (FishMMO.Shared.ClimbPhase as a byte; zero when not climbing).</summary>
+		public byte ClimbPhase;
+
+		/// <summary>
+		/// While stepping on or off a climbable at its top: ticks left before the step is given up. While not climbing:
+		/// ticks left before the character may take hold of one again.
+		/// </summary>
+		public byte ClimbTicks;
+
 		private uint tick;
 
 		/// <inheritdoc/>

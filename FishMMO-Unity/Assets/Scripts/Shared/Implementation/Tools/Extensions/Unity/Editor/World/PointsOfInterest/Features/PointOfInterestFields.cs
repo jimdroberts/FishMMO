@@ -325,7 +325,8 @@ namespace FishMMO.Shared.WorldDesign
 			bool alongX = field.Size.x >= field.Size.y;
 			Vector2 axis = alongX ? new Vector2(Mathf.Cos(r), -Mathf.Sin(r)) : new Vector2(Mathf.Sin(r), Mathf.Cos(r));
 			float shortest = Mathf.Min(field.Size.x, field.Size.y), longest = Mathf.Max(field.Size.x, field.Size.y);
-			Vector2 a = field.Centre - axis * ((longest - shortest) * 0.5f), b = field.Centre + axis * ((longest - shortest) * 0.5f);
+			// Squared, end midpoint to end midpoint, half a metre inside the fence all round.
+			Vector2 a = field.Centre - axis * (longest * 0.5f - 0.5f), b = field.Centre + axis * (longest * 0.5f - 0.5f);
 			float half = shortest * 0.5f - 0.5f;
 			context.Points.Paths.Add(new ScenePath
 			{
@@ -335,7 +336,8 @@ namespace FishMMO.Shared.WorldDesign
 				HalfWidth = new[] { half, half },
 				Wear = new[] { 0.9f, 0.9f },
 				Surface = new[] { (byte)ScenePathSurface.Earth, (byte)ScenePathSurface.Earth },
-				Flags = new[] { (byte)ScenePathPointFlags.InSite, (byte)ScenePathPointFlags.InSite },
+				// The plot is ploughed to its fence's corners, not rounded off inside them.
+				Flags = new[] { (byte)(ScenePathPointFlags.InSite | ScenePathPointFlags.Squared), (byte)(ScenePathPointFlags.InSite | ScenePathPointFlags.Squared) },
 			});
 		}
 

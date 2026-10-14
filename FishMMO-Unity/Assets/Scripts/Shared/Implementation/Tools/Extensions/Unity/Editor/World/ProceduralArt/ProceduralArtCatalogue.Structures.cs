@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 				: $"{TexturesFolder}/{StructurePieces.Prefix}{surface}_{finish}_{map}.png";
 		}
 
-		/// <summary>Every structure payload file: three maps and three finish albedos a surface, three meshes a variant.</summary>
+		/// <summary>Every structure payload file: three maps and three finish albedos a surface, three meshes a variant; and the cave glow art's.</summary>
 		public static IEnumerable<string> StructurePayloadPaths()
 		{
 			foreach (string surface in StructureSurfaces.Names)
@@ -43,6 +43,11 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
+			// The cave kit's glow art, built in the structures' steps (ProceduralArtCatalogue.Cave.cs).
+			foreach (string path in CaveGlowPayloadPaths())
+			{
+				yield return path;
+			}
 		}
 
 		/// <summary>Every structure material: each material in each finish.</summary>
@@ -54,6 +59,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					yield return MaterialPath(StructurePieces.MaterialName(material, finish));
 				}
+			}
+			foreach (string path in CaveGlowWrapperPaths())
+			{
+				yield return path;
 			}
 		}
 
@@ -69,6 +78,10 @@ namespace FishMMO.Shared.WorldDesign
 						yield return StructurePieces.PrefabName(p.Id, v, finish);
 					}
 				}
+			}
+			foreach (string prefab in CaveGlowPrefabNames())
+			{
+				yield return prefab;
 			}
 		}
 

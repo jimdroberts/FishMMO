@@ -256,6 +256,144 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.AreEqual((int)FishMMO.UnitTests.PlatformRiderSmoothingTests.InterpolationTicks, FloatingBoats.VisualInterpolationTicks);
 		}
 
+		[Test]
+		public void ARidersFacingTurnsWithTheDeck_KeepingItsBearingThroughTheBendTheSwingAndTheRoundsEnd()
+		{
+			FloatingBoats.Lane lane = PortToSea();
+			FloatingBoats.Sailing ship = Cog();
+			Round(lane, ship, out double leg, out double period);
+			float dt = (float)TickDelta;
+			// Under way through the bend; then the swing at anchor in port and on into the next round, where the heading's
+			// sum of two swings drops back a whole turn.
+			(double from, double to)[] spans =
+			{
+				(leg * 0.3, leg * 0.7),
+				(2.0 * leg + ship.DwellEnd - 5.0, period + 20.0),
+			};
+			bool wrapped = false;
+			foreach ((double from, double to) in spans)
+			{
+				double first = Math.Floor(from / TickDelta), last = Math.Floor(to / TickDelta);
+				var local = new Vector3(-6f, 1.4f, 2.1f);
+				// Facing across the deck, to port: a bearing the swing turns furthest from any world direction.
+				Vector3 bearing = new Vector3(0.6f, 0f, -0.8f);
+				FloatingBoats.ShipPose start = At(lane, ship, first);
+				Vector3 rider = start.ToWorld(local);
+				Vector3 facing = FloatingBoats.Turned(bearing, start.Yaw);
+				float turned = 0f;
+				for (double tick = first + 1; tick <= last; tick++)
+				{
+					FloatingBoats.ShipPose before = At(lane, ship, tick - 1), now = At(lane, ship, tick);
+					wrapped |= Mathf.Abs(now.Yaw - before.Yaw) > 180f;
+					Assert.IsTrue(FloatingBoats.TryCarry(before, now, ship.Deck, rider, dt, out Vector3 carry, out float turn), $"aboard at tick {tick}");
+					Assert.LessOrEqual(Mathf.Abs(turn), 2f, $"tick {tick}: a deck turns a little each tick, never a whole turn");
+					turned += Mathf.Abs(turn);
+					rider += carry * dt;
+					facing = FloatingBoats.Turned(facing, turn);
+					// Its place and its bearing on the deck both held: the deck turned it, its feet and its face alike.
+					Assert.Less((now.ToLocal(rider) - local).magnitude, 0.01f, $"the rider kept its place on the deck at tick {tick}");
+					Vector3 onDeck = FloatingBoats.Turned(facing, -now.Yaw);
+					Assert.Less((onDeck - bearing).magnitude, 5e-3f, $"the rider kept its bearing on the deck at tick {tick}");
+				}
+				Assert.Greater(turned, 20f, "the span must turn the ship, or the test proves nothing");
+				if (from > leg)
+				{
+					Assert.Greater(turned, 170f, "the span must take the ship through its swing");
+				}
+			}
+			Assert.IsTrue(wrapped, "the spans must cross a heading's wrap (the round's end), or the short way round is untested");
+		}
+
+		[Test]
+		public void ATurnIsTakenTheShortWayRound()
+		{
+			FloatingBoats.ShipPose Yaw(float yaw) => new FloatingBoats.ShipPose { Yaw = yaw, Shown = true };
+			Assert.AreEqual(2f, FloatingBoats.Turn(Yaw(179f), Yaw(-179f)), 1e-4f, "across the arctangent's wrap");
+			Assert.AreEqual(1f, FloatingBoats.Turn(Yaw(359.5f), Yaw(0.5f)), 1e-4f);
+			Assert.AreEqual(0f, FloatingBoats.Turn(Yaw(540f), Yaw(180f)), 1e-4f, "a round's two swings, dropped at its end");
+			Assert.AreEqual(-0.25f, FloatingBoats.Turn(Yaw(10f), Yaw(9.75f)), 1e-4f);
+		}
+
+		[Test]
+		public void ARiderOffTheDeckIsNotTurned()
+		{
+			FloatingBoats.Lane lane = PortToSea();
+			FloatingBoats.Sailing ship = Cog();
+			Round(lane, ship, out double leg, out _);
+			// Mid-swing in port, where the deck turns fastest.
+			double tick = Math.Floor((2.0 * leg + ship.DwellEnd + ship.DwellStart * 0.5) / TickDelta);
+			FloatingBoats.ShipPose before = At(lane, ship, tick - 1), now = At(lane, ship, tick);
+			Assert.Greater(Mathf.Abs(FloatingBoats.Turn(before, now)), 0.01f, "the control: the deck is turning");
+			Assert.IsFalse(FloatingBoats.TryCarry(before, now, ship.Deck, before.ToWorld(new Vector3(0f, 0.5f, 6f)), (float)TickDelta, out _, out float turn));
+			Assert.AreEqual(0f, turn, "a swimmer alongside keeps its own facing");
+		}
+
+		/// <summary>
+		/// SOURCE: the turn reaches the rider by the platform seam on every peer (the replicate hands it to the motor, which
+		/// turns the facing), and the owner's camera turns with the drawn hull, since a character facing the camera takes its
+		/// facing from the camera in its input.
+		/// </summary>
+		[Test]
+		public void TheTurnReachesTheMotorAndTheOwnersCamera()
+		{
+			string motor = CodeOnly(ReadSource("Assets/Plugins/KinematicCharacterController/Core/KinematicCharacterMotor.cs"));
+			Assert.IsTrue(motor.Contains("public void SetPlatformVelocity(Vector3 velocity, float turn)"), "the motor takes a platform's turn");
+			Assert.IsTrue(motor.Contains("float platformTurn = GroundingStatus.IsStableOnGround ? _platformTurn : 0f;"),
+				"the turn is conveyed only to a stably grounded rider, as a horizontal carry is");
+			Assert.IsTrue(motor.Contains("Quaternion.AngleAxis(platformTurn, _cachedWorldUp) * _characterForward") &&
+				motor.Contains("TransientRotation = Quaternion.LookRotation(turnedForward.normalized, _characterUp);"),
+				"the turn goes on the motor's facing, as an attached PhysicsMover's rotation does");
+			string player = CodeOnly(ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCPlayer.cs"));
+			Assert.IsTrue(player.Contains("out platformVelocity, out platformTurn, out ship);") &&
+				player.Contains("Motor.SetPlatformVelocity(platformVelocity, platformTurn);"),
+				"the replicate hands the ship's turn at the synced tick to the motor, live and in every replay");
+			string input = CodeOnly(ReadSource("Assets/Scripts/Client/Input/PlayerInputController.cs"));
+			Assert.IsTrue(input.Contains("FloatingBoats.TryGetDrawnYaw(ship, out float shipYaw)") &&
+				input.Contains("camera.PlanarDirection = planar.normalized;"),
+				"the owner's camera turns with the drawn ship");
+			string controller = CodeOnly(ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/KCC/KCCController.cs"));
+			string suppressed = controller.Substring(controller.IndexOf("if (controlsSuppressed)", StringComparison.Ordinal));
+			Assert.IsTrue(suppressed.Substring(0, suppressed.IndexOf("return;", StringComparison.Ordinal)).Contains("lookInputVector = Vector3.zero;"),
+				"with the controls taken away no look target is kept, or it turns a stunned rider back against the deck");
+		}
+
+		private static string ReadSource(string relativePath)
+		{
+			string path = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), relativePath);
+			Assert.IsTrue(System.IO.File.Exists(path), $"{relativePath} not found at {path}.");
+			return System.IO.File.ReadAllText(path).Replace("\r\n", "\n");
+		}
+
+		/// <summary>The source without its comment lines, so prose about a construct does not stand in for it.</summary>
+		private static string CodeOnly(string source)
+		{
+			var kept = new System.Text.StringBuilder(source.Length);
+			foreach (string line in source.Split('\n'))
+			{
+				string trimmed = line.TrimStart();
+				if (trimmed.StartsWith("//", StringComparison.Ordinal) || trimmed.StartsWith("/*", StringComparison.Ordinal) || trimmed.StartsWith("*", StringComparison.Ordinal))
+				{
+					continue;
+				}
+				kept.Append(line).Append('\n');
+			}
+			return kept.ToString();
+		}
+
+		/// <summary>Native (Unity's quaternion): a turn is the rotation between two poses' frames, the motor's included.</summary>
+		[Test]
+		public void ATurnIsTheRotationBetweenTwoPosesFrames()
+		{
+			var before = new FloatingBoats.ShipPose { Position = new Vector3(4f, 0f, 9f), Yaw = 171f, Shown = true };
+			var now = new FloatingBoats.ShipPose { Position = new Vector3(5f, 0f, 8f), Yaw = -172.5f, Shown = true };
+			float turn = FloatingBoats.Turn(before, now);
+			Vector3 direction = new Vector3(0.6f, 0f, -0.8f);
+			Quaternion frames = Quaternion.Euler(0f, now.Yaw, 0f) * Quaternion.Inverse(Quaternion.Euler(0f, before.Yaw, 0f));
+			Assert.Less((FloatingBoats.Turned(direction, turn) - frames * direction).magnitude, 1e-4f);
+			// The motor turns the facing about world up by the same angle (KinematicCharacterMotor's platform turn).
+			Assert.Less((FloatingBoats.Turned(direction, turn) - Quaternion.AngleAxis(turn, Vector3.up) * direction).magnitude, 1e-4f);
+		}
+
 		/// <summary>Native (Unity's quaternion): the pose's own yaw arithmetic agrees with the rotation put on the root.</summary>
 		[Test]
 		public void ThePoseFrameIsTheRootsRotation()
@@ -265,6 +403,79 @@ namespace FishMMO.UnitTests.WorldDesign
 			Vector3 unity = pose.Position + Quaternion.Euler(0f, pose.Yaw, 0f) * local;
 			Assert.Less((pose.ToWorld(local) - unity).magnitude, 1e-4f);
 			Assert.Less((pose.ToLocal(unity) - local).magnitude, 1e-4f);
+		}
+
+		// ── The tick driver's savings: never at the cost of a carry ───────────────────────────────────────────────
+
+		/// <summary>
+		/// The lane's extent rejects a rider before any pose is worked out (TryCarryAt), and only one no hull on that lane
+		/// could carry at any tick: it changes no answer, it only skips the arithmetic.
+		/// </summary>
+		[Test]
+		public void TheLanesExtentRejectsOnlyRidersNoHullCouldCarry()
+		{
+			FloatingBoats.Lane lane = PortToSea();
+			FloatingBoats.Sailing ship = Cog();
+			Round(lane, ship, out _, out double period);
+			Rect area = FloatingBoats.LaneArea(lane);
+			Assert.AreEqual(Rect.MinMaxRect(0f, 0f, 400f, 400f), area);
+			float reach = Mathf.Max(ship.Length, ship.Deck.extents.magnitude) + 2f;
+			float dt = (float)TickDelta;
+			int rejected = 0, carried = 0;
+			for (double tick = 1; tick < period / TickDelta; tick += 97)
+			{
+				FloatingBoats.ShipPose before = At(lane, ship, tick - 1), now = At(lane, ship, tick);
+				// Riders on and round the deck, and out across the sea in every direction.
+				for (int k = 0; k < 64; k++)
+				{
+					float angle = k * 0.61803f * Mathf.PI * 2f;
+					float distance = (k % 8) * (k % 8) * 6f;
+					Vector3 rider = now.ToWorld(new Vector3(Mathf.Cos(angle) * distance, 1.5f, Mathf.Sin(angle) * distance * 0.25f));
+					bool carry = FloatingBoats.TryCarry(before, now, ship.Deck, rider, dt, out _);
+					carried += carry ? 1 : 0;
+					if (!FloatingBoats.MayReach(area, reach, rider))
+					{
+						rejected++;
+						Assert.IsFalse(carry, $"tick {tick}: a rider the lane's extent rejects was carried");
+						Assert.Greater((now.Position - rider).magnitude, reach, $"tick {tick}: the old rejection would have let it through");
+					}
+				}
+			}
+			Assert.Greater(rejected, 0, "the control: some riders must be out of reach, or the test proves nothing");
+			Assert.Greater(carried, 0, "the control: some riders must be carried, or the test proves nothing");
+		}
+
+		/// <summary>
+		/// A hull's collider stands down only beyond SolidReach past its length from every character, and nothing that
+		/// stands on its deck (anything it carries) is ever that far from its root: so a rider always finds it placed.
+		/// </summary>
+		[Test]
+		public void EveryRiderAShipCanCarryIsWithinItsSolidReach()
+		{
+			FloatingBoats.Lane lane = PortToSea();
+			FloatingBoats.Sailing ship = Cog();
+			Round(lane, ship, out _, out double period);
+			float solid = FloatingBoats.SolidReach + Mathf.Max(ship.Length, ship.Deck.extents.magnitude);
+			float dt = (float)TickDelta;
+			Vector3 min = ship.Deck.min, max = ship.Deck.max;
+			for (double tick = 1; tick < period / TickDelta; tick += 211)
+			{
+				FloatingBoats.ShipPose before = At(lane, ship, tick - 1), now = At(lane, ship, tick);
+				// The deck's corners, past its margin: the furthest a carried rider can stand.
+				foreach (float x in new[] { min.x - FloatingBoats.DeckMargin, max.x + FloatingBoats.DeckMargin })
+				{
+					foreach (float z in new[] { min.z - FloatingBoats.DeckMargin, max.z + FloatingBoats.DeckMargin })
+					{
+						Vector3 rider = before.ToWorld(new Vector3(x, 1.5f, z));
+						if (!FloatingBoats.TryCarry(before, now, ship.Deck, rider, dt, out _))
+						{
+							continue;
+						}
+						float across = new Vector2(rider.x - now.Position.x, rider.z - now.Position.z).magnitude;
+						Assert.Less(across, solid - 50f, $"tick {tick}: a rider at the deck's corner is near the edge of the solid reach");
+					}
+				}
+			}
 		}
 	}
 }

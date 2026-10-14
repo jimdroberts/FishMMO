@@ -110,6 +110,11 @@ float4 _FishCloudShapeParams;// x how much of a marched texel's cone the finest 
 // the shape volume may be read at. z: one over how much detail the far sky is asked to keep. w: how
 // far the clouds are drawn, in metres: they dissolve over the last quarter of it.
 float4 _FishCloudLodParams;
+// The far imposter panorama's texel as an angle (radians; FishCloudsFeature): its march's pixel cone (FishCloudPixelCone).
+float _FishCloudImposterCone;
+// 1: the march's paths before 2026-10-13's cuts (the far depth for every lit sample, a fresh field for every edge probe, the
+// screen's pixel cone in the imposter): ScenePerfProbe's `cloud:legacy` A/B. 0 as shipped.
+float _FishCloudLegacy;
 float4 _FishCloudWind;       // xy accumulated drift (m), z detail wind gain, w drift multiplier
 float4 _FishCloudWindDir;    // xy the axis the noise is drawn out along: the steady prevailing wind, never the gusting one; z speed (m/s), w unused
 float4 _FishCloudLight;      // x light steps, y the sky's share of the ambient (SkySystem; 0 unset: all of it), z the column's drops' asymmetry (g), w unused
@@ -2036,6 +2041,11 @@ bool FishCloudRange(float3 origin, float3 direction, out float near, out float f
 // sized from — so either band walks its stretch with exactly the steps the unsplit ray would have. Set round one call.
 static float FishCloudMarchFrom = 0.0;
 static float FishCloudMarchWhole = -1.0;
+// The angle a texel of the pass's own target spans (radians), when it is not the screen's (_FishCloudLodParams.x): the far
+// imposter's panorama texel is ~0.2°, coarser than the near march's pixel, so finer eddies and edges were worked out there
+// than it can show. Set by the pass before its march; 0: the screen's.
+static float FishCloudPixelCone = 0.0;
+float FishCloudCone() { return FishCloudPixelCone > 0.0 && _FishCloudLegacy < 0.5 ? FishCloudPixelCone : _FishCloudLodParams.x; }
 
 float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter, float2 lightSeed, int steps, float detailAmount, out float cloudDistance, out float2 cloudMotion)
 {
@@ -2617,7 +2627,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // averages to the right optical depth however fine the eddies, so the step is not a reason to
         // drop them. The detail used to be faded out whole with distance, 2.5 to 11.5 km, and the
         // erosion with it: nearer than most of the clouds in view, and a far cloud came out thicker.
-        FishCloudDetailCone = at * _FishCloudLodParams.x * _FishCloudShapeParams.x;
+        FishCloudDetailCone = at * FishCloudCone() * _FishCloudShapeParams.x;
         // Along the ray, the step the distance sets — never its multipliers, which follow how far this
         // ray has got into the cloud (see `footprint`) — times the profile's Detail Step Footprint.
         FishCloudDetailAlong = cloudStepBase * max(0.0, _FishCloudStepTau.z);
@@ -2639,7 +2649,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
         // next — which the history then shows as the cloud slowly breathing in and out.
         // The cloud's step, never the fog's: a cloud sample's footprint is the same on either side of
         // the fog's ceiling, or its carving would change along that line.
-        float footprint = max(cloudStepBase * 0.5, at * _FishCloudLodParams.x) * _FishCloudLodParams.z;
+        float footprint = max(cloudStepBase * 0.5, at * FishCloudCone()) * _FishCloudLodParams.z;
         // The air here, read where it rose from: a convective cloud leans downwind with height
         // (FishCloudLean), and its air map, towers and storms lean with it — the field read once
         // per sample at the lean of this sample's height. Only where cloud can be: in the fog's shell
@@ -2749,7 +2759,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                         // Five halvings always — a thirty-second of the gap — were a quarter of fair weather's march
                         // (2.8 of 11.2 ms at 2560x1440, ScenePerfProbe 2026-10-07) for edges far off placed to
                         // centimetres; near ones still get all five.
-                        if (_FishCloudFieldSkip != 65536.0 && within - outside < max(0.25, 0.5 * within * _FishCloudLodParams.x))
+                        if (_FishCloudFieldSkip != 65536.0 && within - outside < max(0.25, 0.5 * within * FishCloudCone()))
                         {
                             break;
                         }
@@ -2759,7 +2769,17 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                         float probeDensity = 0.0;
                         if (FishCloudPossibleAt(probeAltitude))
                         {
-                            FishCloudField probeField = FishCloudFieldAt(probe.xz - axis * FishCloudLean(probeAltitude));
+                            // The ray's field where the probe is within the march's own reuse of it (fieldReuse): a probe lies inside the last
+                            // step, and the field is the air's, kilometres to a texel. A fresh look-up is ten texture reads and a nine-cell
+                            // tower search, and a search took up to five.
+                            float2 probeXZ = probe.xz - axis * FishCloudLean(probeAltitude);
+                            float2 probeMoved = probeXZ - rayFieldAt;
+                            FishCloudField probeField = rayField;
+                            UNITY_BRANCH
+                            if (_FishCloudLegacy > 0.5 || dot(probeMoved, probeMoved) >= fieldReuse * fieldReuse)
+                            {
+                                probeField = FishCloudFieldAt(probeXZ);
+                            }
                             FishCloudPoint probeSpot;
                             probeDensity = FishCloudDensityAt(probe, 0.0, footprint, probeField, true, probeSpot);
                             UNITY_BRANCH
@@ -2834,7 +2854,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                 for (int b = 0; b < 5; b++)
                 {
                     // As the near edge's search: no finer than half a pixel's cone.
-                    if (_FishCloudFieldSkip != 65536.0 && abs(cloudSide - hazeSide) < max(0.25, 0.5 * max(cloudSide, hazeSide) * _FishCloudLodParams.x))
+                    if (_FishCloudFieldSkip != 65536.0 && abs(cloudSide - hazeSide) < max(0.25, 0.5 * max(cloudSide, hazeSide) * FishCloudCone()))
                     {
                         break;
                     }
@@ -2844,7 +2864,17 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                     bool probeCloud = false;
                     if (FishCloudPossibleAt(probeAltitude))
                     {
-                        FishCloudField probeField = FishCloudFieldAt(probe.xz - axis * FishCloudLean(probeAltitude));
+                        // The ray's field where the probe is within the march's own reuse of it (fieldReuse): a probe lies inside the last
+                        // step, and the field is the air's, kilometres to a texel. A fresh look-up is ten texture reads and a nine-cell
+                        // tower search, and a search took up to five.
+                        float2 probeXZ = probe.xz - axis * FishCloudLean(probeAltitude);
+                        float2 probeMoved = probeXZ - rayFieldAt;
+                        FishCloudField probeField = rayField;
+                        UNITY_BRANCH
+                        if (_FishCloudLegacy > 0.5 || dot(probeMoved, probeMoved) >= fieldReuse * fieldReuse)
+                        {
+                            probeField = FishCloudFieldAt(probeXZ);
+                        }
                         FishCloudPoint probeSpot;
                         float probeDensity = FishCloudDensityAt(probe, 0.0, footprint, probeField, true, probeSpot);
                         UNITY_BRANCH
@@ -2984,7 +3014,12 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                         {
                             depthToSun += 1e-7 * FishCloudLightDepth(position + 0.37, toSun, footprint, field, at, transmittance, lightPhase);
                         }
-                        depthAway = _FishCloudFixB.x > 0.5 ? spot.tauBelow : FishCloudFarDepth(position, toSun, footprint, field, lightPhase, spot.tauBelow);
+                        // Only where FishCloudLight uses it: a deck's far side is its base (spot.tauBelow), which the light
+                        // takes outright wherever `deck` is 1 (every band but a column's, and a column's at 95 % cover and
+                        // more). Two density looks a lit sample skipped there, for the same light.
+                        bool columnBand = _FishCloudLayerF[clamp(spot.layer, 0, FISH_CLOUD_MAX_LAYERS - 1)].z > 0.5;
+                        bool baseOnly = _FishCloudFixB.x > 0.5 || (_FishCloudLegacy < 0.5 && (!columnBand || spot.cover >= 0.95));
+                        depthAway = baseOnly ? spot.tauBelow : FishCloudFarDepth(position, toSun, footprint, field, lightPhase, spot.tauBelow);
                         UNITY_BRANCH
                         if (_FishCloudFieldSkip == 16384.0)
                         {

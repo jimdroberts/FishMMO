@@ -17,6 +17,7 @@
 // The weather's fog, which the fog passes laid over the frame BEFORE the sea was drawn.
 #include "FishWaterFog.hlsl"
 #include "FishWaterFoam.hlsl"
+#include "FishWaterFoamField.hlsl"
 
 /// <summary>Eye-space depth of a raw depth sample, correct under an orthographic camera too.</summary>
 float WaterEyeDepth(float rawDepth)
@@ -341,6 +342,16 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV).a,
 			SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamOtherUV).a,
 			other);
+		/* Where the simulated foam keeps it, the lace carried with the water itself (FishFoamFieldLace), not flow-mapped on a
+		 * six-second cycle: the caps' patches drift and thin without changing under the eye. */
+		half carriedLaceShare;
+		float carriedLod;
+		half carriedLace = FishFoamFieldLace(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), flatXZ, ddx(flatXZ), ddy(flatXZ),
+			max(0.5, _FoamScale), 0.0, carriedLaceShare, carriedLod);
+		if (carriedLaceShare > 0.0)
+		{
+			lace = FishFoamBlend(lace, FishFoamLaceRestore(carriedLace, carriedLod), carriedLaceShare);
+		}
 
 		/* NO shoreline foam here.
 		 *
@@ -392,6 +403,13 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		float footprint = length(fwidth(flatXZ));
 		half far = saturate(footprint / 0.5);
 		half caps = max(breaking * 0.85, lingering * 0.55) * lerp(1.0, 0.2, far);
+		/* Where the simulated foam runs (FishWaterFoamField.hlsl), what the caps left is the foam the sea has carried
+		 * since: drifting down the wind, drawn into streaks by the Langmuir cells, thinning as it ages, where the FFT's
+		 * own memory kept each cap in place in a tile that repeats every few hundred metres. The crest breaking now is
+		 * the sea's own, on top. */
+		FishFoamFieldSample carried = FishFoamFieldAt(flatXZ);
+		half capsCarried = max(breaking * 0.85 * lerp(1.0, 0.2, far), FishFoamFieldCoverage(carried.amount) * 0.7 * lerp(1.0, 0.5, far));
+		caps = lerp(caps, capsCarried, carried.known);
 		// The surf: the breakers' whitewater, as dense as the breaker says, up to the material's opacity.
 		half surfing = smoothstep(0.02, curveTop, surf) * _SurfFoamOpacity;
 		half coverage = max(caps, surfing);
@@ -402,6 +420,8 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		 * than the glowing water under it — dark lace on a bright wave. The same back-light the scatter
 		 * uses. Its own light (a constant 0.1) is gone: foam at night is as dark as the night. */
 		FishFoam foamCut = FishFoamCut(lace, coverage, footprint, _FoamScale);
+		// Fresh foam is thick froth; old foam thins to lace.
+		foamCut.body *= FishFoamFieldBody(carried);
 		half3 foamLit = FishFoamLight(_FoamColor.rgb, lightColor, NdotL, back, _GlossyEnvironmentColor.rgb * 0.6);
 		half foam;
 		color = FishFoamOver(color, foamCut, foamLit, foam);

@@ -30,6 +30,12 @@ namespace FishMMO.Shared
 		void SetSwimming(bool swimming, float pitch);
 
 		/// <summary>
+		/// Sets whether the character is climbing a ladder, rope ladder or rope, and how fast: <paramref name="rate"/> is
+		/// the climb's speed as a share of the stock climbing speed, positive up and negative down (zero holding still).
+		/// </summary>
+		void SetClimbing(bool climbing, float rate);
+
+		/// <summary>
 		/// Triggers a jump animation.
 		/// </summary>
 		void TriggerJump();

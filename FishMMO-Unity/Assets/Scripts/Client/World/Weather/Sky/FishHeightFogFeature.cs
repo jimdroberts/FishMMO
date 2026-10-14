@@ -250,6 +250,12 @@ namespace FishMMO.Client
 				{
 					return;
 				}
+				// Nor from a camera sealed in a cave (UndergroundView): faded to nothing at every pixel (FishOpenAir). What the
+				// water is handed above still goes out; no water is in view.
+				if (cameraData.cameraType == CameraType.Game && UndergroundView.Sealed(camera))
+				{
+					return;
+				}
 
 				using (var builder = renderGraph.AddRasterRenderPass<FogData>(PassName, out FogData data))
 				{

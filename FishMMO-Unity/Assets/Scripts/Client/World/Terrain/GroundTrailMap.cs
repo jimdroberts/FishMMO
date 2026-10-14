@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using FishMMO.Shared;
@@ -38,6 +39,9 @@ namespace FishMMO.Client
 	/// </remarks>
 	public static class GroundTrailMap
 	{
+		/// <summary>The trail pass's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see.</summary>
+		private static readonly CustomSampler GpuSample = CustomSampler.Create("Ground trails", true);
+
 		public const string ShaderName = "FishMMO/Ground Trail";
 		private const string ShaderAssetPath = "Assets/Prefabs/Client/Weather/Shaders/FishGroundTrail.shader";
 
@@ -245,6 +249,7 @@ namespace FishMMO.Client
 			var wanted = new Vector2Int(Mathf.FloorToInt(eye.x / texel) - Resolution / 2, Mathf.FloorToInt(eye.z / texel) - Resolution / 2);
 
 			commands.Clear();
+			commands.BeginSample(GpuSample);
 			commands.SetRenderTarget(map);
 			// The map's own 0..1 square: the clear and stamp passes place themselves in it.
 			commands.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.Ortho(0f, 1f, 0f, 1f, -1f, 1f));
@@ -291,6 +296,7 @@ namespace FishMMO.Client
 				material.SetVectorArray(StampsId, stamps);
 				commands.DrawProcedural(Matrix4x4.identity, material, 2, MeshTopology.Triangles, stampCount * 24);
 			}
+			commands.EndSample(GpuSample);
 			Graphics.ExecuteCommandBuffer(commands);
 			commands.Clear();
 

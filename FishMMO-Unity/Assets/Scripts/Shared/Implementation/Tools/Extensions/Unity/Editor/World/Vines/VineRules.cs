@@ -38,7 +38,8 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// Where vines grow, as pure rules (no engine, no assets): over a cave's mouth and the rock round it, on the faces of a
-	/// ruin's walls, off a crag's edge, up a tree. <see cref="VinePlacement"/> lays what these choose.
+	/// ruin's walls, off a crag's edge, on the wet walls beside a waterfall, up a tree. <see cref="VinePlacement"/> lays what
+	/// these choose.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -301,11 +302,24 @@ namespace FishMMO.Shared.WorldDesign
 		public static bool TryFace(Func<Vector3, bool> solidAt, Vector3 at, Vector3 outward, Vector3 across, float maxHeight,
 			out Vector3 foot, out float tilt, out float height)
 		{
+			return TryFace(solidAt, at, outward, maxHeight, 7f, out foot, out tilt, out height, out _);
+		}
+
+		/// <summary>
+		/// <see cref="TryFace(Func{Vector3, bool}, Vector3, Vector3, Vector3, float, out Vector3, out float, out float)"/>
+		/// marched in from <paramref name="reach"/> metres out in front of the point (so a narrow gorge's far wall is not
+		/// taken for the open air in front of this one), with the highest point found on the face: its
+		/// <paramref name="rim"/>, where it stops standing up, or where the search stopped at <paramref name="maxHeight"/>.
+		/// </summary>
+		public static bool TryFace(Func<Vector3, bool> solidAt, Vector3 at, Vector3 outward, float maxHeight, float reach,
+			out Vector3 foot, out float tilt, out float height, out Vector3 rim)
+		{
 			foot = at;
+			rim = at;
 			tilt = 0f;
 			height = 0f;
 			Vector3 o = Flat(outward);
-			const float reach = 7f, step = 0.12f;
+			const float step = 0.12f;
 			float Depth(float y)
 			{
 				Vector3 start = new Vector3(at.x, at.y + y, at.z) + o * reach;
@@ -344,6 +358,7 @@ namespace FishMMO.Shared.WorldDesign
 				return false;
 			}
 			foot = at + o * d0;
+			rim = at + o * last + Vector3.up * h;
 			height = h + 0.3f;
 			tilt = Mathf.Clamp(Mathf.Atan2(first - last, h) * Mathf.Rad2Deg, 0f, 60f);
 			return true;
@@ -768,6 +783,354 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				(Vector3 edge, float drop) = best[strips[i]];
 				spots.Add(Curtain(species, edge + d * 0.05f, yaw, Mathf.Min(drop - rng.Range(0.2f, 1.2f), 6.5f), rng.Range(1.6f, 3.2f), rng));
+			}
+			return spots;
+		}
+
+		// ── Waterfalls ──────────────────────────────────────────
+
+		/// <summary>A waterfall as the vines round it see it (world).</summary>
+		public struct FallFrame
+		{
+			/// <summary>The middle of the brink, on the water's surface.</summary>
+			public Vector3 Lip;
+			/// <summary>Downstream as the water leaves the lip (only its horizontal part is used).</summary>
+			public Vector3 Downstream;
+			/// <summary>The curtain's width as it leaves the lip: the lip's, metres.</summary>
+			public float Width;
+			/// <summary>The plunge pool's surface, altitude.</summary>
+			public float Pool;
+			/// <summary>How far downstream of the lip the curtain may reach the pool, metres: its throw included.</summary>
+			public float Landing;
+			/// <summary>The middle of the plunge pool (horizontal; its height is not used): where its walls are looked for from.</summary>
+			public Vector3 Basin;
+			/// <summary>The pool's radius, metres: how far round the basin its walls are looked for.</summary>
+			public float PoolRadius;
+
+			/// <summary>From the lip's surface to the pool's, metres.</summary>
+			public float Drop => Lip.y - Pool;
+		}
+
+		/// <summary>What <see cref="FallWalls"/> grew, for the notes.</summary>
+		public struct FallGrowth
+		{
+			public string Species;
+			public int Mats, Curtains;
+		}
+
+		/// <summary>How far up the river above its lip the curtain starts, metres (the runtime sheet's brink run).</summary>
+		public const float BrinkRunMetres = 1.6f;
+
+		/// <summary>
+		/// How far a fall's wall may lean back and still be grown on as a wall, degrees from upright: steeper than any carved
+		/// bank (cut back no steeper than 38 degrees, so leaning 52), which is ground cover's, not a wall's.
+		/// </summary>
+		public const float FallWallTilt = 50f;
+
+		/// <summary>
+		/// How thickly a habitat's vines take to the walls round a waterfall, 0..1: the crag's share
+		/// (<see cref="VineBiomes.Habitat.Cliffs"/>) doubled, as the spray keeps the rock wet through every dry spell, so the
+		/// wet woods and the jungle clothe them and cold or dry country, where frost and drought still bite, carries a little.
+		/// None where the biome grows no vine at all.
+		/// </summary>
+		public static float FallShare(VineBiomes.Habitat habitat)
+		{
+			return habitat != null && habitat.Species != null && habitat.Species.Length > 0 ? Mathf.Clamp01(2f * habitat.Cliffs) : 0f;
+		}
+
+		/// <summary>
+		/// How far out from its lip a fall's water could land, metres, drag ignored: thrown at the brink's speed (critical
+		/// flow over a free edge, the brink 0.715 of its critical depth) and falling the drop.
+		/// </summary>
+		public static float FallThrow(float unitDischarge, float drop)
+		{
+			const float g = 9.81f;
+			float q = Mathf.Max(0.01f, unitDischarge);
+			float critical = Mathf.Pow(q * q / g, 1f / 3f);
+			float brinkSpeed = q / (0.715f * critical);
+			return brinkSpeed * Mathf.Sqrt(2f * Mathf.Max(0f, drop) / g);
+		}
+
+		/// <summary>
+		/// Half the band across the fall a vine keeps out of, metres: half the curtain, the spread its edges take on the way
+		/// down and the strips that part round its rock, and a margin where the spray strips anything that takes hold.
+		/// </summary>
+		public static float CurtainHalfWidth(in FallFrame fall)
+		{
+			return 0.5f * Mathf.Max(0.5f, fall.Width) + Mathf.Clamp(0.75f + 0.04f * fall.Drop, 0.75f, 3f);
+		}
+
+		/// <summary>Where the curtain strikes the pool, about its landing, metres (the runtime's impact radius).</summary>
+		public static float ImpactRadius(in FallFrame fall)
+		{
+			return Mathf.Clamp(0.5f * fall.Width + 0.15f * fall.Drop, 2f, Mathf.Max(2f, fall.PoolRadius));
+		}
+
+		/// <summary>
+		/// Whether a vine <paramref name="halfWidth"/> metres either side of <paramref name="at"/> stays out of the falling
+		/// water: out of the band <see cref="CurtainHalfWidth"/> either side of the fall's line, from its brink run above the
+		/// lip down to where it strikes the pool.
+		/// </summary>
+		public static bool ClearOfCurtain(in FallFrame fall, Vector3 at, float halfWidth)
+		{
+			Vector3 d = Flat(fall.Downstream);
+			float rx = at.x - fall.Lip.x, rz = at.z - fall.Lip.z;
+			float along = rx * d.x + rz * d.z;
+			float across = rz * d.x - rx * d.z;
+			if (along + halfWidth < -BrinkRunMetres || along - halfWidth > fall.Landing + ImpactRadius(in fall))
+			{
+				return true;
+			}
+			return Mathf.Abs(across) - halfWidth >= CurtainHalfWidth(in fall);
+		}
+
+		/// <summary>The distance along <paramref name="direction"/> to the first rock from a point in the open, metres; NaN from inside rock or with none within reach.</summary>
+		private static float March(Func<Vector3, bool> solidAt, Vector3 from, Vector3 direction, float reach)
+		{
+			const float step = 0.15f;
+			if (solidAt(from))
+			{
+				return float.NaN;
+			}
+			for (float t = step; t <= reach; t += step)
+			{
+				if (solidAt(from + direction * t))
+				{
+					return t - step * 0.5f;
+				}
+			}
+			return float.NaN;
+		}
+
+		/// <summary>
+		/// Rock behind a piece's stretch of face and open air in front of it: at both its edges <paramref name="half"/> metres
+		/// along the face from <paramref name="at"/>, <paramref name="up"/> metres up it (down, when negative), the face
+		/// followed as it leans back (<paramref name="tan"/>, the tangent of its lean).
+		/// </summary>
+		private static bool Backed(Func<Vector3, bool> solidAt, Vector3 at, Vector3 normal, float half, float tan, float up)
+		{
+			var along = new Vector3(-normal.z, 0f, normal.x);
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Vector3 p = at + along * (side * half) + Vector3.up * up - normal * (up * tan);
+				if (!solidAt(p - normal * 0.35f) || solidAt(p + normal * 0.6f))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// The vines on the walls beside and round a waterfall (world): mats on the damp faces flanking the curtain and round
+		/// the plunge pool, and curtains hung from the walls' rims down them, each one found on a face that stands there
+		/// (<see cref="TryFace(Func{Vector3, bool}, Vector3, Vector3, float, float, out Vector3, out float, out float, out Vector3)"/>),
+		/// never in the falling water (<see cref="ClearOfCurtain"/>), nor down into the pool or a river.
+		/// </summary>
+		/// <remarks>
+		/// The walls are looked for from the middle of the pool outward, all round it but its way out, at heights from just
+		/// over the pool up past the lip: every face found, in a seeded order, is grown on (a share by how lush the habitat
+		/// is) until the fall has its fill, more for a taller fall and a wider pool. How thickly is
+		/// <see cref="FallShare"/>; the species is one of the habitat's for the whole fall.
+		/// </remarks>
+		/// <param name="solidAt">True inside rock or under the ground (world).</param>
+		/// <param name="waterAt">The water's surface at (east, north), negative infinity where there is none; null for the pool's only.</param>
+		public static List<VineSpot> FallWalls(in FallFrame fall, VineBiomes.Habitat habitat, DeterministicRNG rng, Func<Vector3, bool> solidAt,
+			Func<float, float, float> waterAt, out FallGrowth growth)
+		{
+			var spots = new List<VineSpot>();
+			growth = default;
+			float share = FallShare(habitat);
+			if (share <= 0f || rng == null || solidAt == null || fall.Drop < 1f)
+			{
+				return spots;
+			}
+			// Whether this fall is overgrown at all: every one in the wet woods, the odd one where vines are scarce.
+			if (rng.NextFloat() >= Mathf.Min(1f, 1.4f * share))
+			{
+				return spots;
+			}
+			string species = habitat.Pick(rng.NextFloat());
+			float lush = Mathf.Clamp01(share * rng.Range(0.8f, 1.15f));
+			growth.Species = species;
+
+			Vector3 d = Flat(fall.Downstream);
+			var left = new Vector3(-d.z, 0f, d.x);
+			float radius = Mathf.Max(3f, fall.PoolRadius);
+			float reach = radius + 6f;
+			// Up past the lip: a fall in a gorge or a cliff's slot has its walls standing on above the brink.
+			float top = fall.Lip.y + Mathf.Clamp(0.5f * fall.Drop, 3f, 10f);
+			int max = Mathf.RoundToInt(Mathf.Lerp(3f, 24f, lush) * Mathf.Clamp(Mathf.Sqrt(fall.Drop / 8f * radius / 8f), 0.5f, 2f));
+
+			// Every look at the walls: a heading from the basin (all round but the pool's way out) at a height on the wall.
+			int rays = Mathf.Clamp(Mathf.RoundToInt(2f * Mathf.PI * radius / 2.2f), 12, 40);
+			float lowest = fall.Pool + 0.55f;
+			int bands = Mathf.Clamp(Mathf.CeilToInt((top - 1.5f - lowest) / 3.2f), 1, 8);
+			float bandStep = Mathf.Max(3.2f, (top - 1.5f - lowest) / bands);
+			var looks = new List<(Vector3 direction, float height)>();
+			for (int i = 0; i < rays; i++)
+			{
+				float angle = (i + rng.Range(-0.3f, 0.3f)) / rays * 2f * Mathf.PI;
+				// Not down the way the river leaves the pool: no wall stands there.
+				if (Mathf.Abs(Mathf.DeltaAngle(0f, angle * Mathf.Rad2Deg)) < 35f)
+				{
+					continue;
+				}
+				Vector3 direction = d * Mathf.Cos(angle) + left * Mathf.Sin(angle);
+				for (int b = 0; b < bands; b++)
+				{
+					looks.Add((direction, lowest + b * bandStep));
+				}
+			}
+			for (int i = looks.Count - 1; i > 0; i--)
+			{
+				int j = rng.Range(0, i + 1);
+				(looks[i], looks[j]) = (looks[j], looks[i]);
+			}
+
+			var taken = new List<(Vector3 centre, float halfWidth, float halfHeight)>();
+			bool Crowded(Vector3 centre, float halfWidth, float halfHeight)
+			{
+				foreach ((Vector3 c, float w, float h) in taken)
+				{
+					float dx = centre.x - c.x, dz = centre.z - c.z;
+					if (Mathf.Sqrt(dx * dx + dz * dz) < 0.8f * (halfWidth + w) && Mathf.Abs(centre.y - c.y) < 0.8f * (halfHeight + h))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			Vector3 basin = new Vector3(fall.Basin.x, 0f, fall.Basin.z);
+			foreach ((Vector3 direction, float band) in looks)
+			{
+				if (growth.Mats + growth.Curtains >= max)
+				{
+					break;
+				}
+				float y = band + rng.Range(0f, 0.6f);
+				if (rng.NextFloat() > 0.25f + 0.65f * lush)
+				{
+					continue;
+				}
+				Vector3 from = basin + Vector3.up * y;
+				float hit = March(solidAt, from, direction, reach);
+				if (float.IsNaN(hit))
+				{
+					continue;
+				}
+				Vector3 at = from + direction * hit;
+				if (!ClearOfCurtain(in fall, at, 0.5f))
+				{
+					continue;
+				}
+				// The face's own facing, from the rock a little either side: the heading only finds it.
+				var sideways = new Vector3(-direction.z, 0f, direction.x);
+				Vector3 normal = -direction;
+				float h1 = March(solidAt, from + sideways * 0.75f, direction, reach), h2 = March(solidAt, from - sideways * 0.75f, direction, reach);
+				if (!float.IsNaN(h1) && !float.IsNaN(h2))
+				{
+					Vector3 run = (sideways * 0.75f + direction * h1) - (-sideways * 0.75f + direction * h2);
+					run.y = 0f;
+					if (run.sqrMagnitude > 1e-6f)
+					{
+						normal = Vector3.Cross(run, Vector3.up).normalized;
+						if (Vector3.Dot(normal, direction) > 0f)
+						{
+							normal = -normal;
+						}
+					}
+				}
+				// Met at a glance: the wall runs along the look, not across it.
+				if (Vector3.Dot(normal, -direction) < 0.42f)
+				{
+					continue;
+				}
+				float maxHeight = Mathf.Clamp(top - y, 1.2f, 16f);
+				if (!TryFace(solidAt, at, normal, maxHeight, Mathf.Clamp(0.9f * hit, 0.8f, 3f), out Vector3 foot, out float tilt, out float height, out Vector3 rim)
+					|| tilt > FallWallTilt || height < 1f)
+				{
+					continue;
+				}
+				float tan = Mathf.Tan(tilt * Mathf.Deg2Rad);
+				// Nothing reaches down into the water at the wall's foot (the pool, or the river above the lip).
+				Vector3 front = foot + normal * 0.6f;
+				float floor = Mathf.Max(fall.Pool, waterAt != null ? waterAt(front.x, front.z) : float.NegativeInfinity) + 0.3f;
+				float yaw = YawOf(normal);
+
+				// ── A curtain from the wall's rim, down its face ──
+				bool rimmed = height < maxHeight - 0.35f;
+				if (rimmed && tilt <= 35f && rim.y - floor >= 2.2f && rng.NextFloat() < 0.3f + 0.35f * lush)
+				{
+					float hang = Mathf.Max(1.2f, Mathf.Min(rim.y - floor, 6.5f) * rng.Range(0.6f, 1f));
+					VineSpot curtain = Curtain(species, rim + normal * 0.05f, yaw, hang, rng.Range(1.6f, 3f), rng);
+					curtain.Tilt = tilt;
+					ProceduralArtCatalogue.TryVinePiece(curtain.Form, curtain.Size, out VinePiece piece);
+					float half = 0.5f * piece.Width * curtain.Scale.x;
+					float drop = Mathf.Min(piece.Length * curtain.Scale.y, rim.y - floor);
+					Vector3 bottom = rim + Vector3.down * drop + normal * (drop * tan);
+					Vector3 centre = (rim + bottom) * 0.5f;
+					if (ClearOfCurtain(in fall, rim, half) && ClearOfCurtain(in fall, bottom, half) && !Crowded(centre, half, 0.5f * drop)
+						&& Backed(solidAt, rim, normal, half * 0.8f, tan, -Mathf.Min(0.4f, 0.5f * drop))
+						&& Backed(solidAt, rim, normal, half * 0.8f, tan, -0.5f * drop))
+					{
+						spots.Add(curtain);
+						taken.Add((centre, half, 0.5f * drop));
+						growth.Curtains++;
+						continue;
+					}
+				}
+
+				// ── A mat on the face ──
+				if (foot.y - 0.1f < floor)
+				{
+					continue;
+				}
+				for (int attempt = 0; attempt < 2; attempt++)
+				{
+					string size;
+					float w, h;
+					if (attempt == 0 && height >= 2.6f && rng.NextFloat() < 0.35f + 0.3f * lush)
+					{
+						size = "Wall"; w = 3.6f; h = 3.4f;
+					}
+					else if (attempt == 0 && height >= 1.7f)
+					{
+						size = "Mat"; w = 2.2f; h = 2.4f;
+					}
+					else
+					{
+						size = "Patch"; w = 1f; h = 1.2f;
+					}
+					float sx = rng.Range(0.8f, 1.15f);
+					float sy = Mathf.Min(height / h, rng.Range(0.75f, 1.15f));
+					if (sy < 0.6f)
+					{
+						break;
+					}
+					float half = 0.5f * w * sx, tall = h * sy;
+					Vector3 position = foot + normal * 0.04f + Vector3.down * 0.1f;
+					Vector3 upper = position + Vector3.up * tall - normal * (tall * tan);
+					Vector3 centre = (position + upper) * 0.5f;
+					if (!ClearOfCurtain(in fall, position, half) || !ClearOfCurtain(in fall, upper, half) || Crowded(centre, half, 0.5f * tall))
+					{
+						break;
+					}
+					// Rock behind both its edges, low and high: never hung out past the end of the face.
+					if (!Backed(solidAt, foot, normal, half * 0.85f, tan, 0.4f) || !Backed(solidAt, foot, normal, half * 0.85f, tan, Mathf.Min(0.6f * tall, height - 0.4f)))
+					{
+						continue;
+					}
+					spots.Add(new VineSpot
+					{
+						Species = species, Form = VineForm.Mat, Size = size, Variant = rng.Range(0, 2),
+						Position = position, Yaw = yaw + rng.Range(-5f, 5f), Tilt = tilt, Scale = new Vector3(sx, sy, 1f),
+					});
+					taken.Add((centre, half, 0.5f * tall));
+					growth.Mats++;
+					break;
+				}
 			}
 			return spots;
 		}

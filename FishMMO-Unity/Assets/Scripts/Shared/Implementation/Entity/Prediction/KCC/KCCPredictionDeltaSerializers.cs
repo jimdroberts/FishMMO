@@ -506,7 +506,8 @@ namespace FishMMO.Shared
 	/// Custom delta serializers for <see cref="KinematicCharacterMotorState"/>.
 	/// <para>
 	/// <b>Delta serializer</b>: Writes a 2-byte bitmask over 16 bit positions carrying 15 fields
-	/// (bit 4 is a retired gap — see the constants below)
+	/// and an extension (bit 4, once a retired gap — see the constants below: a further byte of
+	/// flags for the climbing fields, sent only on a tick one of them changes)
 	/// followed by delta-encoded values for only the changed fields.
 	/// On a typical grounded walking tick, only Position, Rotation, BaseVelocity, and
 	/// GroundingStatus change. On an idle tick where the character stands still this writer declines
@@ -528,10 +529,14 @@ namespace FishMMO.Shared
 		private const ushort VELOCITY_BIT = 1 << 2;
 		/// <summary>Bit flag for CurrentPlatformID changes.</summary>
 		private const ushort PLATFORM_ID_BIT = 1 << 3;
-		/* Bit 4 is retired. It carried LastPlatformPosition, a field nothing ever read: platform
-		 * velocity comes from KCCPlatform.LastCompletedTickVelocity, so the Vector3 in every full
-		 * snapshot and the delta in every reconcile bought nothing. The bit is left as a gap rather
-		 * than renumbered so a stale build cannot silently reinterpret a later field. */
+		/* Bit 4 carried LastPlatformPosition, a field nothing ever read (platform velocity comes from
+		 * KCCPlatform.LastCompletedTickVelocity), and was retired as a gap rather than renumbered. It
+		 * now marks the EXTENSION: when set, a second byte of flags follows (EXT_* below) and then
+		 * the fields it names. The sixteen bits were all spoken for, and widening the mask would put
+		 * a byte on every reconcile; the extension costs one only on a tick its fields change. No
+		 * later field moved, and a build never talks to another built from different source. */
+		/// <summary>Bit flag: an extension byte of further flags follows (<see cref="EXT_CLIMBABLE_BIT"/> and on).</summary>
+		private const ushort EXTENSION_BIT = 1 << 4;
 		/// <summary>Bit flag for MustUnground changes.</summary>
 		private const ushort MUST_UNGROUND_BIT = 1 << 5;
 		/// <summary>Bit flag for MustUngroundTime changes.</summary>
@@ -554,6 +559,13 @@ namespace FishMMO.Shared
 		private const ushort IS_SWIMMING_BIT = 1 << 14;
 		/// <summary>Bit flag for ClimbOutTicks changes.</summary>
 		private const ushort CLIMB_OUT_TICKS_BIT = 1 << 15;
+
+		/// <summary>Extension flag for Climbable changes.</summary>
+		private const byte EXT_CLIMBABLE_BIT = 1 << 0;
+		/// <summary>Extension flag for ClimbPhase changes.</summary>
+		private const byte EXT_CLIMB_PHASE_BIT = 1 << 1;
+		/// <summary>Extension flag for ClimbTicks changes.</summary>
+		private const byte EXT_CLIMB_TICKS_BIT = 1 << 2;
 
 		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="KinematicCharacterMotorState"/>.
@@ -584,6 +596,9 @@ namespace FishMMO.Shared
 			writer.WriteSingle(value.TimeSinceJumpRequested);
 			writer.WriteBoolean(value.IsSwimming);
 			writer.WriteUInt8Unpacked(value.ClimbOutTicks);
+			writer.WriteUInt16Unpacked(value.Climbable);
+			writer.WriteUInt8Unpacked(value.ClimbPhase);
+			writer.WriteUInt8Unpacked(value.ClimbTicks);
 		}
 
 		/// <summary>
@@ -608,6 +623,9 @@ namespace FishMMO.Shared
 				TimeSinceJumpRequested = reader.ReadSingle(),
 				IsSwimming = reader.ReadBoolean(),
 				ClimbOutTicks = reader.ReadUInt8Unpacked(),
+				Climbable = reader.ReadUInt16Unpacked(),
+				ClimbPhase = reader.ReadUInt8Unpacked(),
+				ClimbTicks = reader.ReadUInt8Unpacked(),
 			};
 		}
 
@@ -622,8 +640,8 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Delta writer for <see cref="KinematicCharacterMotorState"/>.
-		/// Writes a 2-byte bitmask indicating which of the 15 fields changed,
-		/// followed by delta-encoded values for only those fields.
+		/// Writes a 2-byte bitmask indicating which of the 15 fields (and whether any of the
+		/// extension's) changed, followed by delta-encoded values for only those fields.
 		/// </summary>
 		/// <param name="writer">Writer to serialize to.</param>
 		/// <param name="prev">Previous replicate data.</param>
@@ -729,6 +747,38 @@ namespace FishMMO.Shared
 				flags |= CLIMB_OUT_TICKS_BIT;
 			}
 
+			// The extension: its own byte of flags, then the fields it names. Written last, so every field above keeps its place.
+			byte extension = 0;
+			if (fullSerialize || prev.Climbable != next.Climbable)
+			{
+				extension |= EXT_CLIMBABLE_BIT;
+			}
+			if (fullSerialize || prev.ClimbPhase != next.ClimbPhase)
+			{
+				extension |= EXT_CLIMB_PHASE_BIT;
+			}
+			if (fullSerialize || prev.ClimbTicks != next.ClimbTicks)
+			{
+				extension |= EXT_CLIMB_TICKS_BIT;
+			}
+			if (extension != 0)
+			{
+				writer.WriteUInt8Unpacked(extension);
+				if ((extension & EXT_CLIMBABLE_BIT) != 0)
+				{
+					writer.WriteUInt16Unpacked(next.Climbable);
+				}
+				if ((extension & EXT_CLIMB_PHASE_BIT) != 0)
+				{
+					writer.WriteUInt8Unpacked(next.ClimbPhase);
+				}
+				if ((extension & EXT_CLIMB_TICKS_BIT) != 0)
+				{
+					writer.WriteUInt8Unpacked(next.ClimbTicks);
+				}
+				flags |= EXTENSION_BIT;
+			}
+
 			if (flags != 0 || mustEmit)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
@@ -808,6 +858,17 @@ namespace FishMMO.Shared
 
 			if ((flags & CLIMB_OUT_TICKS_BIT) != 0)
 				result.ClimbOutTicks = reader.ReadUInt8Unpacked();
+
+			if ((flags & EXTENSION_BIT) != 0)
+			{
+				byte extension = reader.ReadUInt8Unpacked();
+				if ((extension & EXT_CLIMBABLE_BIT) != 0)
+					result.Climbable = reader.ReadUInt16Unpacked();
+				if ((extension & EXT_CLIMB_PHASE_BIT) != 0)
+					result.ClimbPhase = reader.ReadUInt8Unpacked();
+				if ((extension & EXT_CLIMB_TICKS_BIT) != 0)
+					result.ClimbTicks = reader.ReadUInt8Unpacked();
+			}
 
 			return result;
 		}

@@ -12,6 +12,12 @@
 #define FISHMMO_WEATHER_TERRAIN_ARRAY_PASSES_INCLUDED
 
 #include "FishSurface.hlsl"
+// FishMMO edit: the moss a waterfall's spray grows on this ground (FishMoss.hlsl FishFallMoss), the same textured moss as
+// the rock's. The spray's alone: the ground has no moss material of its own. Its textures are read with the layers'
+// own sampler (repeat, trilinear, anisotropic), bound wherever the albedo array is read: no sampler state of its own.
+#define FISH_MOSS_FALL_ONLY
+#define FISH_MOSS_SAMPLER sampler_FishAlbedoArray
+#include "FishMoss.hlsl"
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
@@ -264,7 +270,7 @@ void SplatmapFragment(
     ClipHoles(IN.uvMainAndLM.xy);
 #endif
 
-    FishArraySurface ground = FISH_GROUND_SURFACE(IN.uvMainAndLM.xy, IN.positionWS);
+    FishArraySurface ground = FISH_GROUND_SURFACE(IN.uvMainAndLM.xy, IN.positionWS, FishTerrainNormalWS(IN, half3(0.0h, 0.0h, 1.0h)));
     half3 albedo = ground.albedo;
     half metallic = ground.metallic;
     half smoothness = ground.smoothness;
@@ -283,6 +289,12 @@ void SplatmapFragment(
     // FishMMO edit: the weather on this ground.
     if (_FishWeatherAmount > 0.0)
     {
+#if !defined(FISH_TERRAIN_BACKDROP)
+        // Round a waterfall, the moss its spray grows (FishMoss.hlsl), ahead of the weather as on the rock, so the
+        // spray's wet darkens it. The backdrop's far ring holds no falls and reads no albedo array.
+        FishFallMoss(inputData.positionWS, inputData.normalWS, ddx(inputData.positionWS), ddy(inputData.positionWS),
+            albedo, inputData.normalWS, smoothness, metallic, occlusion);
+#endif
         half3 weathered = inputData.normalWS;
         FishWeatherSurface(inputData.positionWS, albedo, weathered, smoothness, metallic, occlusion);
         FishTrailSurface(inputData.positionWS, inputData.viewDirectionWS, albedo, weathered, smoothness);
@@ -474,14 +486,19 @@ void DepthNormalOnlyFragment(
         ClipHoles(IN.uvMainAndLM.xy);
     #endif
 
+    #if FISH_TERRAIN_TANGENT_FRAME
+        half3 baseNormalWS = IN.normal.xyz;
+    #else
+        float2 sampleCoords = (IN.uvMainAndLM.xy / _TerrainHeightmapRecipSize.zw + 0.5f) * _TerrainHeightmapRecipSize.xy;
+        half3 baseNormalWS = TransformObjectToWorldNormal(normalize(SAMPLE_TEXTURE2D(_TerrainNormalmapTexture, sampler_TerrainNormalmapTexture, sampleCoords).rgb * 2 - 1));
+    #endif
+
     // The same blend the lit pass uses; only the normal survives, so the compiler drops the albedo reads.
-    FishArraySurface ground = FISH_GROUND_SURFACE(IN.uvMainAndLM.xy, IN.positionWS);
+    FishArraySurface ground = FISH_GROUND_SURFACE(IN.uvMainAndLM.xy, IN.positionWS, baseNormalWS);
 
     #if FISH_TERRAIN_TANGENT_FRAME
         half3 normalWS = TransformTangentToWorld(ground.normalTS, half3x3(-IN.tangent.xyz, IN.bitangent.xyz, IN.normal.xyz));
     #else
-        float2 sampleCoords = (IN.uvMainAndLM.xy / _TerrainHeightmapRecipSize.zw + 0.5f) * _TerrainHeightmapRecipSize.xy;
-        half3 baseNormalWS = TransformObjectToWorldNormal(normalize(SAMPLE_TEXTURE2D(_TerrainNormalmapTexture, sampler_TerrainNormalmapTexture, sampleCoords).rgb * 2 - 1));
         half3 tangentWS = cross(GetObjectToWorldMatrix()._13_23_33, baseNormalWS);
         half3 normalWS = TransformTangentToWorld(ground.normalTS, half3x3(-tangentWS, cross(baseNormalWS, tangentWS), baseNormalWS));
     #endif

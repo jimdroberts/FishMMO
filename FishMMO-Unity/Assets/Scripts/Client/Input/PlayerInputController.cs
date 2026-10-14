@@ -22,6 +22,13 @@ namespace FishMMO.Client
 		/// ServerRpc when the value actually changes. Null until the first send.
 		/// </summary>
 		private OrientationMethod? lastSentOrientationMethod;
+
+		/// <summary>
+		/// The ship the camera last turned with and the yaw its drawn hull showed then, so the next frame turns the camera by
+		/// the difference. Default when the character is aboard none.
+		/// </summary>
+		private FloatingBoats.ShipRef cameraShip;
+		private float cameraShipYaw;
 		// ── Static mouse-mode & global input state ─────────────────────────
 
 		/// <summary>
@@ -245,6 +252,9 @@ namespace FishMMO.Client
 			 * too. Cheap and idempotent: it reads one float and writes one field. */
 			ClientCameraSettings.ApplySaved();
 
+			// The torch or lantern the player last carried comes back with them.
+			ClientCarriedLightSettings.Begin(Character);
+
 			SubscribeToInputActions();
 		}
 
@@ -269,6 +279,7 @@ namespace FishMMO.Client
 				Character.KCCPlayer.OnHandleCharacterInput -= KCCPlayer_OnHandleCharacterInput;
 			}
 
+			ClientCarriedLightSettings.End();
 			UnsubscribeFromInputActions();
 		}
 
@@ -300,6 +311,7 @@ namespace FishMMO.Client
 			// Player action callbacks
 			Controls.Player.Interact.performed += OnInteractPerformed;
 			Controls.Player.PinTarget.performed += OnPinTargetPerformed;
+			Controls.Player.CarriedLight.performed += OnCarriedLightPerformed;
 			Controls.Player.ToggleFirstPerson.performed += OnToggleFirstPersonPerformed;
 			Controls.Player.ToggleMouseMode.performed += OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed += OnCancelPerformed;
@@ -351,6 +363,7 @@ namespace FishMMO.Client
 			// Player action callbacks
 			Controls.Player.Interact.performed -= OnInteractPerformed;
 			Controls.Player.PinTarget.performed -= OnPinTargetPerformed;
+			Controls.Player.CarriedLight.performed -= OnCarriedLightPerformed;
 			Controls.Player.ToggleFirstPerson.performed -= OnToggleFirstPersonPerformed;
 			Controls.Player.ToggleMouseMode.performed -= OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed -= OnCancelPerformed;
@@ -539,6 +552,37 @@ namespace FishMMO.Client
 					Character.KCCPlayer.CharacterCamera.PlanarDirection = mover.RotationDeltaFromInterpolation * Character.KCCPlayer.CharacterCamera.PlanarDirection;
 					Character.KCCPlayer.CharacterCamera.PlanarDirection = Vector3.ProjectOnPlane(Character.KCCPlayer.CharacterCamera.PlanarDirection, Character.Motor.CharacterUp).normalized;
 				}
+			}
+
+			/* A ship under way turns the camera of a character aboard it, by the yaw its drawn hull turned through since the
+			 * last frame, as a PhysicsMover does above. The character faces the camera, and its facing comes from the camera's
+			 * rotation in its input every tick: a camera left fixed in the world would hold the rider's facing fixed in the
+			 * world through a bend or the swing at anchor, whatever the motor turned. The drawn hull, not the collider: it is
+			 * drawn at the character's own lag, so the view keeps its bearing on the deck the player sees. Unconditional, not
+			 * behind RotateWithPhysicsMover: the facing depends on it. */
+			FloatingBoats.ShipRef ship = Character.KCCPlayer.ShipAboard;
+			if (FloatingBoats.TryGetDrawnYaw(ship, out float shipYaw))
+			{
+				if (cameraShip.Equals(ship))
+				{
+					float turn = Mathf.DeltaAngle(cameraShipYaw, shipYaw);
+					if (turn != 0f)
+					{
+						KCCCamera camera = Character.KCCPlayer.CharacterCamera;
+						Vector3 up = Character.Motor != null ? Character.Motor.CharacterUp : Vector3.up;
+						Vector3 planar = Vector3.ProjectOnPlane(FloatingBoats.Turned(camera.PlanarDirection, turn), up);
+						if (planar.sqrMagnitude > 1e-8f)
+						{
+							camera.PlanarDirection = planar.normalized;
+						}
+					}
+				}
+				cameraShip = ship;
+				cameraShipYaw = shipYaw;
+			}
+			else
+			{
+				cameraShip = default;
 			}
 
 			if (CanUpdateInput())
@@ -860,6 +904,20 @@ namespace FishMMO.Client
 			}
 
 			targetController.TogglePinnedTarget();
+		}
+
+		/// <summary>
+		/// Callback for the carried-light key: steps what the character carries through Off, Torch and Lantern.
+		/// </summary>
+		/// <remarks>
+		/// Gated on typing alone, like the HUD shortcuts: it changes only what this client draws, so a dead character or a
+		/// free cursor is no reason to refuse it.
+		/// </remarks>
+		private void OnCarriedLightPerformed(InputAction.CallbackContext context)
+		{
+			if (TypingIntoField) return;
+
+			ClientCarriedLightSettings.Cycle();
 		}
 
 		/// <summary>

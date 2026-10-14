@@ -167,13 +167,21 @@ namespace FishMMO.Water
 			}
 		}
 
+#if UNITY_SERVER
+		/* A dedicated server draws no sea: the wind, the sea state, the colour, the drawn tide and the motes are all for a
+		 * screen it does not have (the fetch alone is a march of hundreds of planet samples, and the surface rebuilt its
+		 * waves every frame). What it keeps is the simulation's sea, SeaTide, which WaterQuery answers from the synced
+		 * tick and nothing here moves: only its registration follows the scene's settings. */
+		private void LateUpdate() => ApplySimulation();
+#else
 		private void LateUpdate() => Apply();
+#endif
 
 		/// <summary>
-		/// Brings the sea up to date with the world. Called every frame; public so anything that
-		/// renders without a frame loop — a batch capture, an editor preview — can drive it.
+		/// Keeps the simulation's sea (<see cref="SimulatedTide"/>) registered as the scene's settings and the liquid say:
+		/// the one part of <see cref="Apply"/> a dedicated server runs. False when there is no surface.
 		/// </summary>
-		public void Apply()
+		private bool ApplySimulation()
 		{
 			if (surface == null)
 			{
@@ -182,7 +190,7 @@ namespace FishMMO.Water
 			}
 			if (surface == null)
 			{
-				return;
+				return false;
 			}
 			if (settings == null)
 			{
@@ -195,6 +203,19 @@ namespace FishMMO.Water
 				tideLava = surface.IsLava;
 				RefreshSimulatedTide();
 				WaterQuery.RegisterSea(gameObject.scene, SimulatedTide, tideLava);
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Brings the sea up to date with the world. Called every frame; public so anything that
+		/// renders without a frame loop — a batch capture, an editor preview — can drive it.
+		/// </summary>
+		public void Apply()
+		{
+			if (!ApplySimulation())
+			{
+				return;
 			}
 
 			// The sky's clock: the sea's wind, period and tide keep the same time as the clouds.

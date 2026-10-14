@@ -202,6 +202,18 @@ namespace FishMMO.Client
 		/// </summary>
 		public int Gather(in View view, float drawDistance, float lodBiasMultiplier, TerrainGpuRenderer gpu = null)
 		{
+			return Gather(in view, drawDistance, lodBiasMultiplier, gpu, default, out _);
+		}
+
+		/// <summary>
+		/// <see cref="Gather(in View, float, float, TerrainGpuRenderer)"/>, for a GPU work list that may be kept across frames
+		/// (<see cref="TerrainGpuRenderer.WorkReuse"/>): the GPU runs are kept against <paramref name="reuse"/>'s widened
+		/// planes and distances (their levels from the nearest and farthest the move can bring them), the CPU path's buckets
+		/// against the exact view. <paramref name="cpuAppended"/>: anything went into a CPU bucket (such a gather cannot be kept).
+		/// </summary>
+		public int Gather(in View view, float drawDistance, float lodBiasMultiplier, TerrainGpuRenderer gpu, in TerrainGpuRenderer.ReuseBounds reuse, out bool cpuAppended)
+		{
+			cpuAppended = false;
 			if (InstanceCount == 0 || drawDistance <= 0f)
 			{
 				return 0;
@@ -210,6 +222,8 @@ namespace FishMMO.Client
 			float factor = view.ScreenFactor * lodBiasMultiplier;
 			Vector3 eye = view.Position;
 			float drawSq = drawDistance * drawDistance;
+			bool widened = reuse.ViewPlanes != null && gpu != null && GpuOffset >= 0;
+			float slack = widened ? reuse.Slack : 0f;
 			for (int c = 0; c < Chunks.Length; c++)
 			{
 				Chunk chunk = Chunks[c];
@@ -218,17 +232,16 @@ namespace FishMMO.Client
 					continue;
 				}
 				float near = TerrainTreeMath.MinDistance(chunk.Bounds, eye);
-				if (near > drawDistance)
+				if (near - slack > drawDistance)
 				{
 					continue;
 				}
-				if (!TerrainTreeMath.IntersectsFrustum(view.Planes, chunk.Bounds))
+				// Exact: what the CPU path's buckets take. Kept: what the GPU's work takes (the same when not widened).
+				bool exact = near <= drawDistance && Sees(view.Planes, view.Planes, in view, chunk.Bounds, near);
+				bool kept = widened ? Sees(reuse.ViewPlanes, reuse.ShadowPlanes, in view, chunk.Bounds, near - slack) : exact;
+				if (!exact && !kept)
 				{
-					if (!view.Shadows || near > view.ShadowDistance
-						|| !TerrainTreeMath.IntersectsFrustum(view.Planes, TerrainTreeMath.ShadowSweep(chunk.Bounds, view.LightDirection, view.ShadowDistance)))
-					{
-						continue;
-					}
+					continue;
 				}
 				float far = TerrainTreeMath.MaxDistance(chunk.Bounds, eye);
 				bool allInRange = far <= drawDistance;
@@ -236,16 +249,29 @@ namespace FishMMO.Client
 				{
 					Run run = Runs[r];
 					TerrainTreeModel model = Models[run.Prototype];
-					float nearHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, near, factor, view.Orthographic);
-					float farHeight = TerrainTreeMath.RelativeHeight(run.MinSize, far, factor, view.Orthographic);
 					if (gpu != null && model.GpuId >= 0 && GpuOffset >= 0)
 					{
-						// The GPU path: the run is culled per instance on the GPU.
-						int mask = TerrainGpuMath.LevelMask(nearHeight, farHeight, model.Transitions, model.FadeWidths, view.MaximumLodLevel);
-						gpu.AddWork(GpuOffset + run.Start, run.Count, model.GpuId, drawDistance, lodBiasMultiplier, mask, view.Shadows && near <= view.ShadowDistance);
+						if (!kept)
+						{
+							continue;
+						}
+						// The GPU path: the run is culled per instance on the GPU. Its levels from the nearest and farthest the
+						// camera can stand from it while the list is kept.
+						float wideNear = Mathf.Max(0f, near - slack);
+						float nearLevelHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, wideNear, factor, view.Orthographic);
+						float farLevelHeight = TerrainTreeMath.RelativeHeight(run.MinSize, far + slack, factor, view.Orthographic);
+						int mask = TerrainGpuMath.LevelMask(nearLevelHeight, farLevelHeight, model.Transitions, model.FadeWidths, view.MaximumLodLevel);
+						gpu.AddWork(GpuOffset + run.Start, run.Count, model.GpuId, drawDistance, lodBiasMultiplier, mask, view.Shadows && near - slack <= view.ShadowDistance);
 						gathered += run.Count;
 						continue;
 					}
+					if (!exact)
+					{
+						continue;
+					}
+					cpuAppended = true;
+					float nearHeight = TerrainTreeMath.RelativeHeight(run.MaxSize, near, factor, view.Orthographic);
+					float farHeight = TerrainTreeMath.RelativeHeight(run.MinSize, far, factor, view.Orthographic);
 					if (allInRange)
 					{
 						// One level for the whole run only when its nearest and farthest points are both outside
@@ -291,6 +317,17 @@ namespace FishMMO.Client
 				}
 			}
 			return gathered;
+		}
+
+		/// <summary>Whether a chunk at <paramref name="near"/> metres is in view, or casts a shadow that can reach it.</summary>
+		private static bool Sees(Plane[] viewPlanes, Plane[] shadowPlanes, in View view, Bounds bounds, float near)
+		{
+			if (TerrainTreeMath.IntersectsFrustum(viewPlanes, bounds))
+			{
+				return true;
+			}
+			return view.Shadows && near <= view.ShadowDistance
+				&& TerrainTreeMath.IntersectsFrustum(shadowPlanes, TerrainTreeMath.ShadowSweep(bounds, view.LightDirection, view.ShadowDistance));
 		}
 
 		/// <summary>Where this terrain's instances sit in the GPU instance buffer, −1 when not uploaded.</summary>

@@ -312,6 +312,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "CarriedLight",
+                    "type": "Button",
+                    "id": "3d7a1c52-8e4b-4f19-9c6a-b2e5d0f71a43",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Pet",
                     "type": "Button",
                     "id": "f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1b6",
@@ -865,6 +874,17 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "PinTarget",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "9e2f6b18-4c7d-4a35-8b01-c5d3a7e94f26",
+                    "path": "<Keyboard>/h",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "CarriedLight",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

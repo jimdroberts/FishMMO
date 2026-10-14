@@ -101,7 +101,7 @@ namespace FishMMO.Shared.WorldDesign
 					SessionState.SetBool(DeclinedKey, true);
 					Debug.LogWarning($"[Biome art] The procedural art is still stale after regenerating ({after}); see the report above. It will not retry by itself until the editor restarts.");
 				}
-			});
+			}, mode == ProceduralArtMode.Full ? BiomeArtGenerator.FamiliesToRebuild(state) : null);
 		}
 	}
 }

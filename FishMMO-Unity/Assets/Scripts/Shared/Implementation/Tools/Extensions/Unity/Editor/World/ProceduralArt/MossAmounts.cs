@@ -9,7 +9,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// (2026-10-12: "a moss layer that can be applied to objects").
 	/// </summary>
 	/// <remarks>
-	/// Deadwood and logs are drawn with FishMMO/Vegetation, which has no moss layer; they are not set here.
+	/// Deadwood is drawn with FishMMO/Vegetation, whose forward pass grows the same layer from the same
+	/// <c>_FishMoss</c> (FishVegetationPasses.hlsl); every living plant stays at 0 (a swaying crown would slide under
+	/// world-projected moss), so only <see cref="ForDeadwoodBark"/>, <see cref="DeadwoodWood"/> and
+	/// <see cref="PetrifiedLog"/> set it there.
 	/// </remarks>
 	public static class MossAmounts
 	{
@@ -75,6 +78,47 @@ namespace FishMMO.Shared.WorldDesign
 				default: return DefaultRock;
 			}
 		}
+
+		/// <summary>A bark family not named below (a family added later): an ordinary dead trunk's share.</summary>
+		public const float DefaultDeadwoodBark = 0.75f;
+
+		/// <summary>
+		/// The moss a deadwood prop's bark may grow, by its <see cref="Bark"/> family (BiomeArtGenerator.Deadwood). A
+		/// fallen trunk lies in the damp at the litter's level and rots soft: it greens over before any stone near it.
+		/// Rough, furrowed bark holds the most; papery or smooth bark sheds it; driftwood, its bark gone and its wood
+		/// salted and bleached by the sea, stays bare.
+		/// </summary>
+		public static float ForDeadwoodBark(string barkFamily)
+		{
+			switch (barkFamily)
+			{
+				case Bark.Brown: return 0.9f;
+				case Bark.Fibrous: return 0.85f;
+				case Bark.Pine: return 0.8f;
+				case Bark.Olive: return 0.8f;
+				case Bark.Smooth: return 0.7f;
+				case Bark.Aspen: return 0.65f;
+				case Bark.Birch: return 0.6f;
+				case Bark.Palm:
+				case Bark.DatePalm:
+					return 0.5f;
+				case Bark.Bamboo: return 0.35f;
+				case Bark.Dead: return 0.1f;
+				// A dead cactus is a dry woody skeleton in a desert.
+				case Bark.Cactus: return 0f;
+				default: return DefaultDeadwoodBark;
+			}
+		}
+
+		/// <summary>
+		/// The moss the deadwood's exposed wood may grow (every prop's second material: broken and sawn ends, a stump's top,
+		/// a root plate's soil, the bracket fungi): a sawn stump's top and a windthrow's upturned earth green over within
+		/// a few damp years.
+		/// </summary>
+		public const float DeadwoodWood = 0.6f;
+
+		/// <summary>A petrified log: silica, as hard and close as quartzite, so as little.</summary>
+		public static float PetrifiedLog => ForRockType("Quartzite");
 
 		/// <summary>
 		/// The moss a structure kit material may grow. The Mossy finish's albedo already has moss baked in

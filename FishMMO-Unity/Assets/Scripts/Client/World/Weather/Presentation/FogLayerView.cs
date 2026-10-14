@@ -457,6 +457,20 @@ namespace FishMMO.Client
 		/// A drop is lit from every side, so the ambient is the sky's light from all round: mostly the sky
 		/// overhead, some from the horizon and a little back up off the ground.
 		/// </remarks>
+		// The cookie light's URP data, found once for the light (each pass that lights fog asks for it every frame).
+		private static Light lightDataOf;
+		private static UnityEngine.Rendering.Universal.UniversalAdditionalLightData lightData;
+
+		private static UnityEngine.Rendering.Universal.UniversalAdditionalLightData LightDataOf(Light light)
+		{
+			if (light != lightDataOf || lightData == null)
+			{
+				lightDataOf = light;
+				lightData = light.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>();
+			}
+			return lightData;
+		}
+
 		public static Lighting CurrentLighting()
 		{
 			Light light = RenderSettings.sun;
@@ -493,7 +507,7 @@ namespace FishMMO.Client
 						average = Mathf.Clamp01(sky.CloudLightThrough(altitude));
 					}
 					bright *= average;
-					var data = light.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalLightData>();
+					UnityEngine.Rendering.Universal.UniversalAdditionalLightData data = LightDataOf(light);
 					if (data != null)
 					{
 						cookie = light.cookie;

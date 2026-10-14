@@ -149,6 +149,13 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public static float DensityRadius { get; set; } = 40f;
 
+		/// <summary>
+		/// Admitting range, metres, above which an object is ranked against every viewer in its scene rather than looked
+		/// up in the registry's proximity grid (Titans, 1000 m). Performance only: the grid's cell is the widest range
+		/// below this, so one Titan in the grid would make every viewer's query the whole scene.
+		/// </summary>
+		public static float WideRangeThreshold { get; set; } = 250f;
+
 		/// <summary>Neighbour count at or below which a character keeps its full configured range.</summary>
 		public static int LowDensity { get; set; } = 8;
 

@@ -25,10 +25,12 @@ float4 _FishDistanceBlend;       // x start (m), y end (m), z normal flatten, w 
 TEXTURE2D(_FishGroundNormal);    // the terrain's surface normal over the same rect: linear, rgb = n·0.5 + 0.5, a coverage
 float4 _FishContactLarge;        // trees' and terrain rocks' bases: x band height (m), y how much terrain the band shows above its foot, w 1 when on
 // Per draw, not global: 1 on TerrainGpuRenderer's tree and rock draws (TerrainTreeInstancing, CliffRockInstancing), set
-// on their own material clones and per-draw blocks; 2 on a carved cave's rock (CaveVisibility's property block: the
-// ground only where the rock comes up through the hillside — its collar and lip — never on the walls under it). Nothing
-// else sets it, so it reads 0 and every ordinary material drawn with these shaders (buildings, props, the scattered
-// pebbles and litter, the shared assets) is untouched.
+// on their own material clones and per-draw blocks. 2 is the cave mode (the ground only where the rock comes up through
+// the hillside — its collar and lip — never on the walls under it); a carved cave's pieces no longer carry it in a
+// property block (CaveVisibility: a block takes them out of the SRP Batcher, and their FishMMO/Weather Lit forward pass
+// compiles the contact only for the GPU-driven rocks, so it was read by nothing they draw). Nothing else sets it, so it
+// reads 0 and every ordinary material drawn with these shaders (buildings, props, the scattered pebbles and litter, the
+// shared assets) is untouched.
 float _FishContactOn;
 
 // The ground's colour under a world position (rgb) and the map's coverage there (a; 0 outside it or where no

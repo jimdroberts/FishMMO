@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
@@ -69,6 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Ground no talus may reach (scene x, z): rivers, lakes and their beds. A cone stops short of it, by
 		/// <see cref="ExclusionMarginMetres"/>, and no debris rock lands on it. Rock sites test it separately.
+		/// Asked from several threads at once: it must only read.
 		/// </summary>
 		public Func<float, float, bool> Excluded;
 
@@ -132,6 +134,15 @@ namespace FishMMO.Shared.WorldDesign
 		public float UndersideSum;
 		public double HiddenSum;
 
+		/// <summary>Where the planning's time went, phase by phase, and how often the dear tests ran: for the cut's log, never the scene.</summary>
+		public string Timing = string.Empty;
+		/// <summary>Candidates a face role tested against the rocks near them, and the rocks those tests read.</summary>
+		public long FillScans, FillScanRocks;
+		/// <summary>Overlap tests (<see cref="CliffRockPlacement"/>'s Accept) and the rocks they read.</summary>
+		public long AcceptTests, AcceptRocks;
+		/// <summary>Seatings tried, and talus resting poses searched.</summary>
+		public long Fits, StablePoses;
+
 		/// <summary>Mean and max longest extent per third of the band, foot to crest.</summary>
 		public string SizeByHeight()
 		{
@@ -170,7 +181,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>0..1: how much a point is talus (scree), for the splat and the scatter clean-up.</summary>
 		public float Debris(float x, float z) => Grid != null ? Grid.DebrisAt(x, z) : 0f;
 		/// <summary>True where a placed rock stands more than <paramref name="clearance"/> above the ground: no tree or grass there.</summary>
-		public bool UnderRock(float x, float z, float clearance = 0.3f) => Top != null && Grid != null && Top.At(x, z) > Grid.Height(x, z) + clearance;
+		/// <remarks>Safe to ask from several threads at once once the plan is made.</remarks>
+		public bool UnderRock(float x, float z, float clearance = 0.3f) => Top != null && Grid != null && Top.AtShared(x, z) > Grid.Height(x, z) + clearance;
 	}
 
 	/// <summary>
@@ -276,6 +288,8 @@ namespace FishMMO.Shared.WorldDesign
 			public MeshBuilder Mesh;
 			public float ExtX, ExtZ, Height, MinY, AlignYaw, Length;
 			public Vector3 Com;
+			/// <summary>The mesh's bounds, read once: <see cref="MeshBuilder.Bounds"/> walks every vertex each time it is asked.</summary>
+			public Bounds Bounds;
 		}
 
 		internal sealed class MetricsCache
@@ -318,6 +332,7 @@ namespace FishMMO.Shared.WorldDesign
 					(m.ExtX, m.ExtZ) = (m.ExtZ, m.ExtX);
 				}
 				Bounds b = mesh.Bounds;
+				m.Bounds = b;
 				m.Height = b.size.y;
 				m.MinY = b.min.y;
 				m.Length = Mathf.Max(m.ExtX, Mathf.Max(m.ExtZ, m.Height));
@@ -366,8 +381,11 @@ namespace FishMMO.Shared.WorldDesign
 			public float Slope, Yaw, Pitch, Roll, EmbedNoise, BaseNoise, ExtraEmbed, Band = 0.18f;
 			public bool Base, TerrainOnly;
 			public Matrix4x4? R;
-			public float[] Leans = { 0f };
+			public float[] Leans = NoLean;
 		}
+
+		/// <summary>The one lean a candidate with a fixed pose is tried at; never written.</summary>
+		private static readonly float[] NoLean = { 0f };
 
 		private sealed class Run
 		{
@@ -381,14 +399,64 @@ namespace FishMMO.Shared.WorldDesign
 			public int Budget;
 			/// <summary>Factor on the face roles' quotas that keeps them, the footing and the talus inside the budget.</summary>
 			public float FaceScale = 1f;
+			/// <summary>The placed rocks filed by where they reach, for the face roles' scans and the overlap test.</summary>
+			public RockIndex Index;
+			/// <summary>Band height and relative height at each zone point, read once (the grid does not change until the cones).</summary>
+			public float[] ZoneBand, ZoneT;
+			/// <summary>Reused buffers: a seating's world vertices, a test's world vertices, the gaps under a sinking rock.</summary>
+			public Vector3[] W = Array.Empty<Vector3>(), Hw = Array.Empty<Vector3>();
+			public readonly List<float> Gaps = new List<float>();
+
+			public Vector3[] Seating(int count)
+			{
+				if (W.Length < count) W = new Vector3[Math.Max(count, W.Length * 2)];
+				return W;
+			}
+
+			public Vector3[] Testing(int count)
+			{
+				if (Hw.Length < count) Hw = new Vector3[Math.Max(count, Hw.Length * 2)];
+				return Hw;
+			}
 		}
+
+		/// <summary>Wall time per planning phase, written to <see cref="CliffRockStats.Timing"/>.</summary>
+		private sealed class PhaseClock
+		{
+			private readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+			private readonly List<string> laps = new List<string>();
+			private double last;
+
+			public void Lap(string phase)
+			{
+				double now = clock.Elapsed.TotalSeconds;
+				laps.Add($"{phase} {now - last:0.0} s");
+				last = now;
+			}
+
+			public string Summary(CliffRockStats stats)
+			{
+				string Mean(long rocks, long tests) => tests > 0 ? (rocks / (double)tests).ToString("0.0") : "0";
+				return $"{clock.Elapsed.TotalSeconds:0.0} s: {string.Join("; ", laps)}; {stats.FillScans:N0} face scans ({Mean(stats.FillScanRocks, stats.FillScans)} rocks each), " +
+					$"{stats.AcceptTests:N0} overlap tests ({Mean(stats.AcceptRocks, stats.AcceptTests)} rocks each), {stats.Fits:N0} seatings, {stats.StablePoses:N0} talus poses";
+			}
+		}
+
+		/// <summary>
+		/// For the equivalence tests only: the face roles' scan and the overlap test read every rock placed, in order, as
+		/// they did before the rocks were filed (<see cref="RockIndex"/>). A plan must come out the same either way.
+		/// </summary>
+		internal static bool ScanEveryRock;
+
+		/// <summary>Workers for the planner's parallel passes: every core but the one the editor runs on.</summary>
+		private static ParallelOptions Workers => new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) };
 
 		/// <summary>
 		/// Plans the cliff rocks of an area.
 		/// </summary>
 		/// <param name="ground">The surface.</param>
 		/// <param name="area">The rectangle to plan over (x, z).</param>
-		/// <param name="siteAt">Which cliff stands where.</param>
+		/// <param name="siteAt">Which cliff stands where. Asked from several threads at once: it must only read (or keep per-thread scratch).</param>
 		/// <param name="seed">The scene's seed.</param>
 		/// <param name="seatingMesh">A piece's collider-level mesh (<see cref="CliffRocks.Build"/> at <see cref="CliffRocks.CollisionLod"/>).</param>
 		/// <param name="options">Null uses the defaults.</param>
@@ -396,12 +464,17 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			options ??= new CliffRockPlacementOptions();
 			var plan = new CliffRockPlan();
+			var clock = new PhaseClock();
 			var g = new CliffGrid(ground, area, Mathf.Max(0.5f, options.CellMetres));
 			plan.Grid = g;
+			clock.Lap("grid");
 			if (!g.AnalyseSites(siteAt, options.Coverage, options.ColumnarCoverage))
 			{
+				clock.Lap("sites");
+				plan.Stats.Timing = clock.Summary(plan.Stats);
 				return plan;
 			}
+			clock.Lap("sites");
 			var run = new Run
 			{
 				G = g,
@@ -412,18 +485,24 @@ namespace FishMMO.Shared.WorldDesign
 				Plan = plan,
 			};
 			plan.Top = run.Top;
+			run.Index = new RockIndex(g, MostNominal(g));
 
 			plan.Stats.CliffLength = g.CliffLength;
 			run.Budget = BudgetFor(g.CliffLength, options);
 			plan.Stats.Budget = run.Budget;
 			var zone = Zone(run);
+			clock.Lap("zone");
+			ReadBands(run, zone);
+			clock.Lap("zone bands");
 			if (options.Backdrops)
 			{
 				Backdrops(run);
+				clock.Lap("backdrops");
 			}
 			if (options.FootRow)
 			{
 				FootRow(run);
+				clock.Lap("footing");
 			}
 			// The face roles share what the footing left, less a reserve for the talus: when their quotas
 			// want more, each is scaled down by the same factor so all of them thin evenly.
@@ -451,6 +530,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue; // Titans go into the footing.
 				}
 				Fill(run, zone, role);
+				clock.Lap($"fill {role}");
 			}
 			plan.Stats.Face = plan.Rocks.Count;
 			// The backdrops go into the top raster only now: before, every rock in front of one would have been
@@ -464,7 +544,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (options.Cones)
 			{
-				Cones(run);
+				Cones(run, clock);
 			}
 			// Coverage of the steep ground.
 			int steep = 0, covered = 0;
@@ -499,6 +579,8 @@ namespace FishMMO.Shared.WorldDesign
 					plan.Stats.UndersideSum += r.Underside;
 				}
 			}
+			clock.Lap("coverage");
+			plan.Stats.Timing = clock.Summary(plan.Stats);
 			return plan;
 		}
 
@@ -913,7 +995,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var piece = new CliffPiece(site.Type, CliffRole.Backdrop, kind, run.Rng.Next(shapes[kind].Variants));
 			Metrics m = run.Metrics.Of(piece);
-			Bounds mb = m.Mesh.Bounds;
+			Bounds mb = m.Bounds;
 			// The face's steepest slope above the foot: how far back the slope is at the wall's top.
 			float face = 0f;
 			for (float d = 2f; d <= Mathf.Max(4f, want); d += 2f)
@@ -930,7 +1012,8 @@ namespace FishMMO.Shared.WorldDesign
 			var c = NewCandidate(run, m, at, S, CliffRocks.StructureOf(site.Type), false);
 			c.TerrainOnly = true;
 			var rock = new PlacedCliffRock { Piece = piece, Rotation = r, Scale = S, Position = new Vector3(at.x, 0f, at.z), Backdrop = true, Length = Longest(m, S) };
-			var w = new Vector3[m.Mesh.VertexCount];
+			int count = m.Mesh.VertexCount;
+			Vector3[] w = run.Seating(count);
 			Sink(run, m.Mesh, c, w, ref rock);
 			rock.Hidden = Hidden(run, m.Mesh, in rock, true);
 			run.Plan.Stats.Attempts++;
@@ -941,13 +1024,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			Vector3 n = g.NormalSmooth(rock.Position.x, rock.Position.z);
 			top = float.MinValue;
-			for (int i = 0; i < w.Length; i++)
+			for (int i = 0; i < count; i++)
 			{
 				w[i] = rock.World(m.Mesh.Positions[i]);
 				top = Mathf.Max(top, w[i].y);
 				w[i].y -= rock.Position.y;
 			}
-			float thick = Thickness(run, c, w, n, rock.Position.y, out float deepest);
+			float thick = Thickness(run, c, w, count, n, rock.Position.y, out float deepest);
 			rock.EmbedAchieved = rock.Embed = Mathf.Max(0f, deepest / thick);
 			rock.BandT = 0f;
 			width = mb.size.x * S.x;
@@ -963,7 +1046,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The rotation is orthonormal: its transpose takes the point into the rock's frame.
 			var l = new Vector3(Vector3.Dot(d, q.Rotation.GetColumn(0)), Vector3.Dot(d, q.Rotation.GetColumn(1)), Vector3.Dot(d, q.Rotation.GetColumn(2)));
 			l = new Vector3(l.x / q.Scale.x, l.y / q.Scale.y, l.z / q.Scale.z);
-			Bounds b = qm.Mesh.Bounds;
+			Bounds b = qm.Bounds;
 			return l.x > b.min.x && l.x < b.max.x && l.z > b.min.z && l.z < b.max.z && l.y < b.max.y;
 		}
 
@@ -981,9 +1064,17 @@ namespace FishMMO.Shared.WorldDesign
 				targets[type] = run.FaceScale >= 1f ? Mathf.RoundToInt(quota) : Mathf.CeilToInt(quota * run.FaceScale);
 				counts[type] = 0;
 			}
-			float nominal = 0f;
-			foreach (ZonePoint zp in zone)
+			// Per type: the role's own nominal length and the footing's, read once rather than per candidate.
+			var nominals = new Dictionary<string, float>(StringComparer.Ordinal);
+			var baseLengths = new Dictionary<string, float>(StringComparer.Ordinal);
+			foreach (string type in g.TypesPresent)
 			{
+				nominals[type] = CliffRocks.ShapesOf(type, role)[0].Length;
+				baseLengths[type] = BaseLength(type);
+			}
+			for (int zi = 0; zi < zone.Count; zi++)
+			{
+				ZonePoint zp = zone[zi];
 				if (run.Plan.Rocks.Count >= run.Budget)
 				{
 					break;
@@ -1004,14 +1095,14 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				Vector3 p = zp.P;
-				float band = g.BandHeight(p.x, p.z);
+				float band = run.ZoneBand[zi];
 				if (role == CliffRole.Titan && band < 16f)
 				{
 					continue;
 				}
-				nominal = CliffRocks.ShapesOf(site.Type, role)[0].Length;
-				float baseL = BaseLength(site.Type);
-				float t = g.BandT(p.x, p.z);
+				float nominal = nominals[site.Type];
+				float baseL = baseLengths[site.Type];
+				float t = run.ZoneT[zi];
 				float hn = run.Rng.Range(-1f, 1f);
 				if (role != CliffRole.Crest)
 				{
@@ -1024,18 +1115,8 @@ namespace FishMMO.Shared.WorldDesign
 					// The foot belongs to the big rocks: smaller ones only as a rare exception there.
 					if (run.O.FootRow && t < 0.2f && nominal < 20f && run.Rng.NextFloat() < 0.85f) continue;
 				}
-				// Deep inside an already placed big rock's footprint.
-				bool inside = false, near = role != CliffRole.Mid && role != CliffRole.Fill;
-				foreach (PlacedCliffRock q in run.Plan.Rocks)
-				{
-					Metrics qm = run.Metrics.Of(q.Piece);
-					// Behind a backdrop's face the slope is inside the wall: a rock there would never be seen.
-					if (q.Backdrop && InFootprint(in q, qm, p)) { inside = true; break; }
-					float ql = Longest(qm, q.Scale), qr = Radius(qm, q.Scale), d = Flat(q.Position - p);
-					if (d < 0.55f * qr && ql >= nominal * 0.6f) { inside = true; break; }
-					if (!near && ql > nominal * 1.3f && d < qr * 1.15f + 0.5f * nominal) near = true;
-				}
-				if (inside || !near)
+				// Deep inside an already placed big rock's footprint, or (mid and fill) touching no bigger one.
+				if (run.Index.Refuses(run, p, nominal, role != CliffRole.Mid && role != CliffRole.Fill))
 				{
 					continue;
 				}
@@ -1094,6 +1175,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			run.Plan.Rocks.Add(rock);
 			run.Plan.Stats.PerRole[role] = (run.Plan.Stats.PerRole.TryGetValue(role, out int n) ? n : 0) + 1;
+			run.Index.Add(run.Plan.Rocks.Count - 1, in rock, run.Metrics.Of(rock.Piece));
 			if (!rock.Backdrop)
 			{
 				Stamp(run, rock);
@@ -1101,19 +1183,23 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Volume overlap with every placed face rock (equal-volume spheres) against an allowance; never swallowing one.</summary>
+		/// <remarks>
+		/// Only the face rocks whose spheres can reach this one are read (<see cref="RockIndex.Overlapping"/>), in the
+		/// order they were placed, so the shares sum in the same order, to the same bits, as over every rock.
+		/// </remarks>
 		private static bool Accept(Run run, PlacedCliffRock rock, float allow)
 		{
 			Metrics m = run.Metrics.Of(rock.Piece);
 			Vector3 ce = Centre(in rock, m);
 			float rr = Radius(m, rock.Scale), sum = 0f;
-			foreach (PlacedCliffRock q in run.Plan.Rocks)
+			RockIndex index = run.Index;
+			List<int> near = index.Overlapping(ce, rr);
+			run.Plan.Stats.AcceptTests++;
+			run.Plan.Stats.AcceptRocks += near.Count;
+			for (int i = 0; i < near.Count; i++)
 			{
-				if (q.Talus || q.Backdrop)
-				{
-					continue;
-				}
-				Metrics qm = run.Metrics.Of(q.Piece);
-				float rq = Radius(qm, q.Scale), d = (Centre(in q, qm) - ce).magnitude;
+				int q = near[i];
+				float rq = index.Radius[q], d = (index.Centre[q] - ce).magnitude;
 				if (d >= rr + rq)
 				{
 					continue;
@@ -1126,6 +1212,272 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			return sum <= allow;
+		}
+
+		/// <summary>The longest nominal length of any face role of any rock type present: how far a face role's scan reaches past a rock.</summary>
+		private static float MostNominal(CliffGrid g)
+		{
+			float most = 0f;
+			foreach (string type in g.TypesPresent)
+			{
+				foreach (CliffRole role in new[] { CliffRole.Titan, CliffRole.Base, CliffRole.Mid, CliffRole.Fill, CliffRole.Crest })
+				{
+					CliffShape[] shapes = CliffRocks.ShapesOf(type, role);
+					if (shapes.Length > 0)
+					{
+						most = Mathf.Max(most, shapes[0].Length);
+					}
+				}
+			}
+			return most;
+		}
+
+		/// <summary>Every zone point's band height and relative height, read in parallel: pure reads of a grid nothing changes until the cones.</summary>
+		private static void ReadBands(Run run, List<ZonePoint> zone)
+		{
+			CliffGrid g = run.G;
+			var band = new float[zone.Count];
+			var t = new float[zone.Count];
+			Parallel.For(0, zone.Count, Workers, i =>
+			{
+				Vector3 p = zone[i].P;
+				band[i] = g.BandHeight(p.x, p.z);
+				t[i] = g.BandT(p.x, p.z);
+			});
+			run.ZoneBand = band;
+			run.ZoneT = t;
+		}
+
+		/// <summary>
+		/// The placed rocks, filed on a coarse grid by how far each reaches, so a candidate reads only the rocks that can
+		/// touch it instead of every rock placed (a scan that grew with the square of the cliff).
+		/// </summary>
+		/// <remarks>
+		/// Two filings. For the face roles' scan (<see cref="Refuses"/>) every rock goes into each cell its reach covers:
+		/// 1.15 × its sphere's radius plus half the longest nominal length any role has (the "near a bigger rock" test's
+		/// reach), or for a backdrop the whole of its footprint at any height the zone's ground has, whichever is more.
+		/// A candidate reads its own cell. That test's answer is the same whatever order the rocks come in. For the
+		/// overlap test (<see cref="Overlapping"/>) the face rocks go into each cell their sphere covers and a candidate
+		/// reads the cells its own sphere covers; the rocks come back in the order they were placed, without repeats.
+		/// The radius, longest extent and centre of every rock are kept as they were computed when it was placed.
+		/// </remarks>
+		private sealed class RockIndex
+		{
+			private const float CellMetres = 16f;
+			/// <summary>Slack on every reach, metres: the tests round differently from the filing.</summary>
+			private const float Margin = 2f;
+
+			private readonly float x0, z0, mostNominal, lowY, highY;
+			private readonly int nx, nz;
+			private readonly List<int>[] near, solid;
+			/// <summary>Rocks whose reach could not be bounded (a backdrop lying on its side): read by every scan.</summary>
+			private readonly List<int> everywhere = new List<int>();
+			private readonly List<int> found = new List<int>();
+
+			public readonly List<Metrics> M = new List<Metrics>();
+			public readonly List<float> Radius = new List<float>(), Longest = new List<float>();
+			public readonly List<Vector3> Centre = new List<Vector3>(), Position = new List<Vector3>();
+			public readonly List<bool> Backdrop = new List<bool>();
+			/// <summary>True for a face rock (neither talus nor backdrop): one the overlap test reads.</summary>
+			public readonly List<bool> Solid = new List<bool>();
+
+			public RockIndex(CliffGrid g, float mostNominal)
+			{
+				this.mostNominal = mostNominal;
+				x0 = g.X0;
+				z0 = g.Z0;
+				nx = Math.Max(1, (int)((g.NX - 1) * g.S / CellMetres) + 1);
+				nz = Math.Max(1, (int)((g.NZ - 1) * g.S / CellMetres) + 1);
+				near = new List<int>[nx * nz];
+				solid = new List<int>[nx * nz];
+				// The heights the zone's points stand at: a backdrop's footprint is only ever asked about between them.
+				float lo = float.MaxValue, hi = float.MinValue;
+				foreach (float h in g.H)
+				{
+					lo = Mathf.Min(lo, h);
+					hi = Mathf.Max(hi, h);
+				}
+				lowY = lo - Margin;
+				highY = hi + Margin;
+			}
+
+			private int CellX(float x) => Mathf.Clamp((int)Math.Floor((x - x0) / CellMetres), 0, nx - 1);
+			private int CellZ(float z) => Mathf.Clamp((int)Math.Floor((z - z0) / CellMetres), 0, nz - 1);
+
+			private void File(List<int>[] cells, int rock, float x, float z, float reach)
+			{
+				int i0 = CellX(x - reach), i1 = CellX(x + reach), j0 = CellZ(z - reach), j1 = CellZ(z + reach);
+				for (int j = j0; j <= j1; j++)
+				{
+					for (int i = i0; i <= i1; i++)
+					{
+						List<int> list = cells[j * nx + i] ??= new List<int>(4);
+						list.Add(rock);
+					}
+				}
+			}
+
+			/// <summary>Files rock <paramref name="index"/> of the plan (indices must come in order, from 0).</summary>
+			public void Add(int index, in PlacedCliffRock rock, Metrics m)
+			{
+				if (index != M.Count)
+				{
+					throw new InvalidOperationException($"Cliff rock {index} filed out of order (expected {M.Count}).");
+				}
+				float radius = CliffRockPlacement.Radius(m, rock.Scale);
+				Vector3 centre = CliffRockPlacement.Centre(in rock, m);
+				M.Add(m);
+				Radius.Add(radius);
+				Longest.Add(CliffRockPlacement.Longest(m, rock.Scale));
+				Centre.Add(centre);
+				Position.Add(rock.Position);
+				Backdrop.Add(rock.Backdrop);
+				Solid.Add(!rock.Talus && !rock.Backdrop);
+
+				float reach = 1.15f * radius + 0.5f * mostNominal;
+				if (rock.Backdrop)
+				{
+					reach = Mathf.Max(reach, FootprintReach(in rock, m));
+				}
+				if (float.IsInfinity(reach) || float.IsNaN(reach))
+				{
+					everywhere.Add(index);
+				}
+				else
+				{
+					File(near, index, rock.Position.x, rock.Position.z, reach * 1.01f + Margin);
+				}
+				if (!rock.Talus && !rock.Backdrop)
+				{
+					File(solid, index, centre.x, centre.z, radius * 1.01f + Margin);
+				}
+			}
+
+			/// <summary>
+			/// How far from its position, horizontally, a point can be and still lie in a backdrop's footprint
+			/// (<see cref="InFootprint"/>) at a height between the zone's lowest and highest ground; infinite when its
+			/// up axis lies too near the horizontal to bound.
+			/// </summary>
+			/// <remarks>
+			/// The footprint bounds the point's x and z in the rock's frame and only caps its y from above. Its world height
+			/// is c0.y·x + c1.y·y + c2.y·z (the rotation's columns times the scaled local point), and that height lies in a
+			/// known range, so the scaled y is bounded by it too; the horizontal reach is then the sum over the three axes.
+			/// </remarks>
+			private float FootprintReach(in PlacedCliffRock rock, Metrics m)
+			{
+				Vector3 c0 = rock.Rotation.GetColumn(0), c1 = rock.Rotation.GetColumn(1), c2 = rock.Rotation.GetColumn(2);
+				Bounds b = m.Bounds;
+				float lx = Mathf.Abs(rock.Scale.x) * Mathf.Max(Mathf.Abs(b.min.x), Mathf.Abs(b.max.x));
+				float lz = Mathf.Abs(rock.Scale.z) * Mathf.Max(Mathf.Abs(b.min.z), Mathf.Abs(b.max.z));
+				float up = Mathf.Abs(c1.y);
+				if (up < 0.05f)
+				{
+					return float.PositiveInfinity;
+				}
+				float dy = Mathf.Max(Mathf.Abs(lowY - rock.Position.y), Mathf.Abs(highY - rock.Position.y));
+				float ly = (dy + Mathf.Abs(c0.y) * lx + Mathf.Abs(c2.y) * lz) / up;
+				return Flat(c0) * lx + Flat(c2) * lz + Flat(c1) * ly;
+			}
+
+			/// <summary>
+			/// The face roles' scan: true when <paramref name="p"/> is deep inside a placed rock big enough to count, or
+			/// behind a backdrop's face, or when <paramref name="touching"/> is false and no rock 1.3 × the nominal
+			/// length stands near enough to touch.
+			/// </summary>
+			public bool Refuses(Run run, Vector3 p, float nominal, bool touching)
+			{
+				CliffRockStats stats = run.Plan.Stats;
+				stats.FillScans++;
+				if (ScanEveryRock)
+				{
+					found.Clear();
+					for (int q = 0; q < M.Count; q++) found.Add(q);
+					bool all = touching;
+					return Inside(run, found, p, nominal, ref all, stats) || !all;
+				}
+				List<int> cell = near[CellZ(p.z) * nx + CellX(p.x)];
+				bool near0 = touching;
+				if (cell != null && Inside(run, cell, p, nominal, ref near0, stats))
+				{
+					return true;
+				}
+				if (everywhere.Count > 0 && Inside(run, everywhere, p, nominal, ref near0, stats))
+				{
+					return true;
+				}
+				return !near0;
+			}
+
+			private bool Inside(Run run, List<int> rocks, Vector3 p, float nominal, ref bool touching, CliffRockStats stats)
+			{
+				stats.FillScanRocks += rocks.Count;
+				for (int r = 0; r < rocks.Count; r++)
+				{
+					int q = rocks[r];
+					// Behind a backdrop's face the slope is inside the wall: a rock there would never be seen.
+					if (Backdrop[q])
+					{
+						PlacedCliffRock rock = run.Plan.Rocks[q];
+						if (InFootprint(in rock, M[q], p))
+						{
+							return true;
+						}
+					}
+					float ql = Longest[q], qr = Radius[q], d = Flat(Position[q] - p);
+					if (d < 0.55f * qr && ql >= nominal * 0.6f)
+					{
+						return true;
+					}
+					if (!touching && ql > nominal * 1.3f && d < qr * 1.15f + 0.5f * nominal)
+					{
+						touching = true;
+					}
+				}
+				return false;
+			}
+
+			/// <summary>The face rocks whose spheres may overlap one of radius <paramref name="radius"/> at <paramref name="centre"/>, in placing order, each once.</summary>
+			public List<int> Overlapping(Vector3 centre, float radius)
+			{
+				found.Clear();
+				if (ScanEveryRock)
+				{
+					for (int q = 0; q < M.Count; q++)
+					{
+						if (Solid[q]) found.Add(q);
+					}
+					return found;
+				}
+				float reach = radius * 1.01f + Margin;
+				int i0 = CellX(centre.x - reach), i1 = CellX(centre.x + reach), j0 = CellZ(centre.z - reach), j1 = CellZ(centre.z + reach);
+				for (int j = j0; j <= j1; j++)
+				{
+					for (int i = i0; i <= i1; i++)
+					{
+						List<int> list = solid[j * nx + i];
+						if (list != null)
+						{
+							found.AddRange(list);
+						}
+					}
+				}
+				if (i0 == i1 && j0 == j1)
+				{
+					// One cell: filed in placing order already, each once.
+					return found;
+				}
+				found.Sort();
+				int kept = 0;
+				for (int k = 0; k < found.Count; k++)
+				{
+					if (kept == 0 || found[k] != found[kept - 1])
+					{
+						found[kept++] = found[k];
+					}
+				}
+				found.RemoveRange(kept, found.Count - kept);
+				return found;
+			}
 		}
 
 		/// <summary>Volume of the lens where spheres of radii a and b at distance d meet.</summary>
@@ -1216,20 +1568,35 @@ namespace FishMMO.Shared.WorldDesign
 			Vector3 cs = new Vector3(com.x * s.x, com.y * s.y, com.z * s.z);
 			Matrix4x4 best = Matrix4x4.identity;
 			float bestH = float.MaxValue;
-			if (!RestingFace(mesh, cs, s, n, ref best, ref bestH))
+			if (!RestingFace(mesh, cs, s, n, ref best, ref bestH, new RestScratch()))
 			{
-				for (int k = 0; k < 24; k++)
+				best = TumbledRest(mesh, cs, s, n, rng);
+			}
+			return TurnedDownhill(mesh, cs, s, n, down, best, rng.Range(-20f, 20f));
+		}
+
+		/// <summary>An empty mesh's rest: the best of 24 random orientations (the only draws <see cref="StablePose"/> makes before its turn).</summary>
+		private static Matrix4x4 TumbledRest(MeshBuilder mesh, Vector3 cs, Vector3 s, Vector3 n, DeterministicRNG rng)
+		{
+			Matrix4x4 best = Matrix4x4.identity;
+			float bestH = float.MaxValue;
+			for (int k = 0; k < 24; k++)
+			{
+				float y = rng.Range(-1f, 1f), a = rng.NextFloat() * 6.2831853f, h = Mathf.Sqrt(1f - y * y);
+				Matrix4x4 q = Rot(new Vector3(h * Mathf.Cos(a), y, h * Mathf.Sin(a)), rng.NextFloat() * 360f);
+				float hc = ComHeightScaled(mesh, cs, s, q, n);
+				if (hc < bestH)
 				{
-					float y = rng.Range(-1f, 1f), a = rng.NextFloat() * 6.2831853f, h = Mathf.Sqrt(1f - y * y);
-					Matrix4x4 q = Rot(new Vector3(h * Mathf.Cos(a), y, h * Mathf.Sin(a)), rng.NextFloat() * 360f);
-					float hc = ComHeightScaled(mesh, cs, s, q, n);
-					if (hc < bestH)
-					{
-						bestH = hc;
-						best = q;
-					}
+					bestH = hc;
+					best = q;
 				}
 			}
+			return best;
+		}
+
+		/// <summary>The rest <paramref name="best"/> turned about the slope normal so the rock's long axis runs down the fall line, <paramref name="spin"/> degrees off it.</summary>
+		private static Matrix4x4 TurnedDownhill(MeshBuilder mesh, Vector3 cs, Vector3 s, Vector3 n, Vector3 down, Matrix4x4 best, float spin)
+		{
 			Vector3 u = Vector3.Cross(n, down).normalized, w = Vector3.Cross(u, n);
 			double sxx = 0, sxy = 0, syy = 0;
 			foreach (Vector3 v in mesh.Positions)
@@ -1239,8 +1606,18 @@ namespace FishMMO.Shared.WorldDesign
 				sxx += px * px; sxy += px * py; syy += py * py;
 			}
 			float axis = 0.5f * Mathf.Atan2((float)(2 * sxy), (float)(sxx - syy)) * Mathf.Rad2Deg;
-			float turn = 90f - axis + rng.Range(-20f, 20f);
+			float turn = 90f - axis + spin;
 			return Rot(n, -turn) * best;
+		}
+
+		/// <summary>One worker's buffers for <see cref="RestingFace"/>, so the talus poses can be searched in parallel without allocating.</summary>
+		private sealed class RestScratch
+		{
+			public Vector3[] P = Array.Empty<Vector3>();
+			public readonly List<(float h, Vector3 u)> Seeds = new List<(float h, Vector3 u)>(256);
+			public readonly List<(Vector3 u, float h, float area)> Faces = new List<(Vector3 u, float h, float area)>(16);
+			public readonly List<Vector2> Points = new List<Vector2>(), Hull = new List<Vector2>();
+			public readonly List<Vector3> Support = new List<Vector3>();
 		}
 
 		/// <summary>
@@ -1254,14 +1631,18 @@ namespace FishMMO.Shared.WorldDesign
 		/// The hull, not the mesh's own triangles: a rubble block is not convex, and it rests on a face of its hull that
 		/// spans a hollow between two of its own faces, lower than any one of them.
 		/// </remarks>
-		private static bool RestingFace(MeshBuilder mesh, Vector3 cs, Vector3 s, Vector3 n, ref Matrix4x4 best, ref float bestH)
+		private static bool RestingFace(MeshBuilder mesh, Vector3 cs, Vector3 s, Vector3 n, ref Matrix4x4 best, ref float bestH, RestScratch scratch)
 		{
 			int count = mesh.VertexCount;
 			if (count == 0)
 			{
 				return false;
 			}
-			var p = new Vector3[count];
+			if (scratch.P.Length != count)
+			{
+				scratch.P = new Vector3[count];
+			}
+			Vector3[] p = scratch.P;
 			float size = 0f;
 			for (int i = 0; i < count; i++)
 			{
@@ -1280,7 +1661,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// The sphere, evenly (a Fibonacci lattice); the best go on to be refined, each to the face it settles on.
 			const int Samples = 256, Refined = 16;
-			var seeds = new List<(float h, Vector3 u)>(Samples);
+			List<(float h, Vector3 u)> seeds = scratch.Seeds;
+			seeds.Clear();
 			for (int k = 0; k < Samples; k++)
 			{
 				float y = 1f - 2f * (k + 0.5f) / Samples, r = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y)), a = k * 2.3999632f;
@@ -1288,7 +1670,8 @@ namespace FishMMO.Shared.WorldDesign
 				seeds.Add((H(u), u));
 			}
 			seeds.Sort((x, y) => x.h.CompareTo(y.h));
-			var faces = new List<(Vector3 u, float h, float area)>();
+			List<(Vector3 u, float h, float area)> faces = scratch.Faces;
+			faces.Clear();
 			for (int k = 0; k < Refined && k < seeds.Count; k++)
 			{
 				Vector3 u = seeds[k].u;
@@ -1315,12 +1698,21 @@ namespace FishMMO.Shared.WorldDesign
 						step *= 0.5f;
 					}
 				}
-				u = SnapToSupport(p, u, size);
-				if (faces.Exists(f => Vector3.Dot(f.u, u) > 0.999f))
+				u = SnapToSupport(p, u, size, scratch.Support);
+				bool seen = false;
+				for (int f = 0; f < faces.Count; f++)
+				{
+					if (Vector3.Dot(faces[f].u, u) > 0.999f)
+					{
+						seen = true;
+						break;
+					}
+				}
+				if (seen)
 				{
 					continue;
 				}
-				faces.Add((u, H(u), ContactArea(p, u, size)));
+				faces.Add((u, H(u), ContactArea(p, u, size, scratch.Points, scratch.Hull)));
 			}
 			/* Of the faces it can settle on, the broadest that is nearly as steady as the steadiest: on a block the
 			 * steadiest face IS its broadest, but a notched rubble block can sit a shade lower on a narrow face (* "shouldn't the largest face lay flat against the terrain?"). */
@@ -1352,7 +1744,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float RestingSteadiness = 1.15f;
 
 		/// <summary>The area of the face a rock rests on with <paramref name="u"/> down: the hull of its vertices within half a percent of its size of the lowest.</summary>
-		private static float ContactArea(Vector3[] p, Vector3 u, float size)
+		private static float ContactArea(Vector3[] p, Vector3 u, float size, List<Vector2> pts, List<Vector2> hull)
 		{
 			float most = float.MinValue;
 			foreach (Vector3 v in p)
@@ -1360,7 +1752,7 @@ namespace FishMMO.Shared.WorldDesign
 				most = Mathf.Max(most, Vector3.Dot(v, u));
 			}
 			Vector3 e1 = Vector3.Cross(u, Mathf.Abs(u.y) < 0.9f ? Vector3.up : Vector3.right).normalized, e2 = Vector3.Cross(u, e1);
-			var pts = new List<Vector2>();
+			pts.Clear();
 			foreach (Vector3 v in p)
 			{
 				if (Vector3.Dot(v, u) >= most - 0.005f * size)
@@ -1374,7 +1766,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// Monotone chain hull, then the shoelace.
 			pts.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
-			var hull = new List<Vector2>();
+			hull.Clear();
 			for (int pass = 0; pass < 2; pass++)
 			{
 				int start = hull.Count;
@@ -1409,14 +1801,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// a hull face, so the rock lies flat on it. Keeps <paramref name="u"/> when fewer than three support it or the
 		/// plane would cut the rock.
 		/// </summary>
-		private static Vector3 SnapToSupport(Vector3[] p, Vector3 u, float size)
+		private static Vector3 SnapToSupport(Vector3[] p, Vector3 u, float size, List<Vector3> support)
 		{
 			float most = float.MinValue;
 			foreach (Vector3 v in p)
 			{
 				most = Mathf.Max(most, Vector3.Dot(v, u));
 			}
-			var support = new List<Vector3>();
+			support.Clear();
 			foreach (Vector3 v in p)
 			{
 				if (Vector3.Dot(v, u) >= most - 0.005f * size)
@@ -1510,11 +1902,15 @@ namespace FishMMO.Shared.WorldDesign
 			bool any = false;
 			float bestHidden = float.MaxValue;
 			MeshBuilder m = c.M.Mesh;
-			var w = new Vector3[m.VertexCount];
+			int count = m.VertexCount;
+			Vector3[] w = run.Seating(count);
+			run.Plan.Stats.Fits++;
 			Vector3 n = run.G.NormalSmooth(c.At.x, c.At.z);
 			bool section = !c.TerrainOnly && CliffRocks.IsSection(in c.M.Piece);
-			foreach (float lean in c.R.HasValue ? new[] { 0f } : c.Leans)
+			float[] leans = c.R.HasValue ? NoLean : c.Leans;
+			for (int li = 0; li < leans.Length; li++)
 			{
+				float lean = leans[li];
 				Matrix4x4 r = c.R ?? Frame(c.Down) * Rot(Vector3.right, -lean * c.Slope) * Rot(Vector3.forward, c.Roll) * Rot(Vector3.right, -c.Pitch) * Rot(Vector3.up, c.Yaw);
 				var rock = new PlacedCliffRock { Piece = c.M.Piece, Rotation = r, Scale = c.S, Position = new Vector3(c.At.x, 0f, c.At.z), Talus = c.TerrainOnly, Length = Longest(c.M, c.S) };
 				float height = Sink(run, m, c, w, ref rock);
@@ -1525,7 +1921,7 @@ namespace FishMMO.Shared.WorldDesign
 				else
 				{
 					// Size-graded burial along the slope normal.
-					float thick = Thickness(run, c, w, n, rock.Position.y, out float deepest);
+					float thick = Thickness(run, c, w, count, n, rock.Position.y, out float deepest);
 					rock.Embed = Mathf.Min(0.85f, EmbedFor(Longest(c.M, c.S), c.EmbedNoise) + c.ExtraEmbed);
 					float want = rock.Embed * thick;
 					if (deepest < want)
@@ -1566,15 +1962,17 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			rock.Position.y = 0f;
 			float lo = float.MaxValue, hi = float.MinValue;
-			for (int i = 0; i < w.Length; i++)
+			int count = m.VertexCount;
+			for (int i = 0; i < count; i++)
 			{
 				w[i] = rock.World(m.Positions[i]);
 				lo = Mathf.Min(lo, w[i].y);
 				hi = Mathf.Max(hi, w[i].y);
 			}
 			float band = lo + c.Band * (hi - lo);
-			var gaps = new List<float>();
-			for (int i = 0; i < w.Length; i++)
+			List<float> gaps = run.Gaps;
+			gaps.Clear();
+			for (int i = 0; i < count; i++)
 			{
 				if (w[i].y <= band)
 				{
@@ -1588,11 +1986,11 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A dropped rock's thickness along the slope normal, and its deepest point below the surface along it.</summary>
-		private static float Thickness(Run run, Candidate c, Vector3[] w, Vector3 n, float dropY, out float deepest)
+		private static float Thickness(Run run, Candidate c, Vector3[] w, int count, Vector3 n, float dropY, out float deepest)
 		{
 			float tMin = float.MaxValue, tMax = float.MinValue;
 			deepest = float.MinValue;
-			for (int i = 0; i < w.Length; i++)
+			for (int i = 0; i < count; i++)
 			{
 				Vector3 v = w[i];
 				v.y += dropY;
@@ -1645,12 +2043,13 @@ namespace FishMMO.Shared.WorldDesign
 				rock.Underside = under;
 			}
 			Vector3 n = run.G.NormalSmooth(rock.Position.x, rock.Position.z);
-			for (int i = 0; i < w.Length; i++)
+			int count = m.VertexCount;
+			for (int i = 0; i < count; i++)
 			{
 				w[i] = rock.World(m.Positions[i]);
 				w[i].y -= rock.Position.y;
 			}
-			float thick = Thickness(run, c, w, n, rock.Position.y, out float deepest);
+			float thick = Thickness(run, c, w, count, n, rock.Position.y, out float deepest);
 			// Its burial is what the seating gave, not a size curve's ask.
 			rock.EmbedAchieved = rock.Embed = Mathf.Max(0f, deepest / thick);
 		}
@@ -1680,9 +2079,9 @@ namespace FishMMO.Shared.WorldDesign
 					if (dt > bT) { bT = dt; iT = i; }
 				}
 				float need = 0f;
-				foreach (int i in new[] { iH, iT })
+				for (int pick = 0; pick < 2; pick++)
 				{
-					Vector3 v = rock.World(m.Positions[i]);
+					Vector3 v = rock.World(m.Positions[pick == 0 ? iH : iT]);
 					float depth = (Support(run, v.x, v.z, false) - v.y) * n.y;
 					need = Mathf.Max(need, 0.03f * height - depth);
 				}
@@ -1729,12 +2128,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Area share of a seated rock under the support.</summary>
 		private static float Hidden(Run run, MeshBuilder m, in PlacedCliffRock rock, bool terrainOnly)
 		{
+			// Each vertex taken to the world once, not once for every triangle it is a corner of.
+			int count = m.VertexCount;
+			Vector3[] wv = run.Testing(count);
+			for (int i = 0; i < count; i++)
+			{
+				wv[i] = rock.World(m.Positions[i]);
+			}
 			double all = 0, hid = 0;
 			foreach (List<int> tri in m.Submeshes)
 			{
 				for (int t = 0; t < tri.Count; t += 3)
 				{
-					Vector3 a = rock.World(m.Positions[tri[t]]), b = rock.World(m.Positions[tri[t + 1]]), c = rock.World(m.Positions[tri[t + 2]]);
+					Vector3 a = wv[tri[t]], b = wv[tri[t + 1]], c = wv[tri[t + 2]];
 					float area = Vector3.Cross(b - a, c - a).magnitude;
 					Vector3 ce = (a + b + c) / 3f;
 					all += area;
@@ -1750,35 +2156,58 @@ namespace FishMMO.Shared.WorldDesign
 		private static void Stamp(Run run, in PlacedCliffRock rock)
 		{
 			MeshBuilder m = run.Metrics.Of(rock.Piece).Mesh;
+			int count = m.VertexCount;
+			Vector3[] wv = run.Testing(count);
+			for (int i = 0; i < count; i++)
+			{
+				wv[i] = rock.World(m.Positions[i]);
+			}
 			foreach (List<int> tri in m.Submeshes)
 			{
 				for (int t = 0; t < tri.Count; t += 3)
 				{
-					run.Top.Add(rock.World(m.Positions[tri[t]]), rock.World(m.Positions[tri[t + 1]]), rock.World(m.Positions[tri[t + 2]]));
+					run.Top.Add(wv[tri[t]], wv[tri[t + 1]], wv[tri[t + 2]]);
 				}
 			}
 		}
 
 		// ── Talus cones ───────────────────────────────────────────────
 
-		private static void Cones(Run run)
+		private static void Cones(Run run, PhaseClock clock)
 		{
 			CliffGrid g = run.G;
-			var feet = new List<(int k, float score)>();
-			for (int k = 0; k < g.Count; k++)
+			// Which cells stand at a foot, and how tall their band is: pure reads of the grid and the top raster, in parallel.
+			int cells = g.Count;
+			var footBand = new float[cells];
+			var foot = new byte[cells];
+			Parallel.For(0, g.NZ, Workers, j =>
 			{
-				if (g.SteepDist[k] <= 0f || g.SteepDist[k] > 3f || g.H[k] >= g.NearestSteepH[k] || g.Site[k] < 0)
+				for (int i = 0; i < g.NX; i++)
 				{
-					continue;
+					int k = j * g.NX + i;
+					if (g.SteepDist[k] <= 0f || g.SteepDist[k] > 3f || g.H[k] >= g.NearestSteepH[k] || g.Site[k] < 0)
+					{
+						continue;
+					}
+					g.Position(k, out float x, out float z);
+					if (!g.Inside(x, z, 20f))
+					{
+						continue;
+					}
+					Vector3 up = new Vector3(x, 0f, z) - g.DownhillSmooth(x, z) * 10f;
+					bool bare = run.Top.AtShared(up.x, up.z) < g.Height(up.x, up.z) + 0.5f;
+					footBand[k] = g.BandHeight(x, z);
+					foot[k] = bare ? (byte)2 : (byte)1;
 				}
-				g.Position(k, out float x, out float z);
-				if (!g.Inside(x, z, 20f))
+			});
+			// Their scores draw in cell order, as they always did.
+			var feet = new List<(int k, float score)>();
+			for (int k = 0; k < cells; k++)
+			{
+				if (foot[k] != 0)
 				{
-					continue;
+					feet.Add((k, footBand[k] * (foot[k] == 2 ? 1.8f : 1f) * run.Rng.Range(0.7f, 1.3f)));
 				}
-				Vector3 up = new Vector3(x, 0f, z) - g.DownhillSmooth(x, z) * 10f;
-				bool bare = run.Top.At(up.x, up.z) < g.Height(up.x, up.z) + 0.5f;
-				feet.Add((k, g.BandHeight(x, z) * (bare ? 1.8f : 1f) * run.Rng.Range(0.7f, 1.3f)));
 			}
 			feet.Sort((a, b) => b.score.CompareTo(a.score));
 			float tan = Mathf.Tan(run.O.ReposeDegrees * Mathf.Deg2Rad);
@@ -1790,7 +2219,7 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 				}
 				g.Position(k, out float x, out float z);
-				float band = g.BandHeight(x, z);
+				float band = footBand[k];
 				if (band < 6f)
 				{
 					continue;
@@ -1824,11 +2253,19 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			g.StampCones(run.Plan.Cones, tan, g.Seed + 23, run.O.Excluded, run.O.ExclusionMarginMetres);
 			run.Plan.Stats.Cones = run.Plan.Cones.Count;
+			clock.Lap("cones");
 
-			// Fall-sorted debris on each cone, resting on the ground only (no towers of loose rock).
-			foreach (CliffCone cone in run.Plan.Cones)
+			/* Fall-sorted debris on each cone, resting on the ground only (no towers of loose rock). In three passes, so the
+			 * resting poses (the dear part) are searched in parallel: every try's random draws first, in the order the
+			 * single pass drew them; then the poses; then the seating, the spacing and the budget, in order. The first pass
+			 * also draws for tries past the point where the budget fills, which the single pass never reached; nothing
+			 * after the talus draws from this generator, so those draws change nothing. */
+			var tries = new List<TalusTry>();
+			var firsts = new int[run.Plan.Cones.Count + 1];
+			for (int ci = 0; ci < run.Plan.Cones.Count; ci++)
 			{
-				var site = new CliffRockSite { Type = cone.Type };
+				firsts[ci] = tries.Count;
+				CliffCone cone = run.Plan.Cones[ci];
 				Vector3 strike = new Vector3(cone.Down.z, 0f, -cone.Down.x);
 				float toe = cone.Radius;
 				for (float d = 0f; d < 4f * cone.Radius; d += 0.5f)
@@ -1837,9 +2274,9 @@ namespace FishMMO.Shared.WorldDesign
 					if (d > 1f && cone.ApexHeight - d * tan <= g.Height(q.x, q.z) + 0.05f) { toe = d; break; }
 				}
 				int n = Mathf.Clamp(Mathf.RoundToInt(cone.Radius * 1.6f), 10, 32);
-				var mine = new List<PlacedCliffRock>();
 				CliffStructure structure = CliffRocks.StructureOf(cone.Type);
-				for (int i = 0; i < n + 3 && run.Plan.Rocks.Count < run.Budget; i++)
+				CliffShape[] shapes = CliffRocks.ShapesOf(cone.Type, CliffRole.Debris);
+				for (int i = 0; i < n + 3; i++)
 				{
 					bool big = i >= n;
 					float u = big ? run.Rng.Range(1f, 1.3f) : Mathf.Sqrt(run.Rng.Range(0.05f, 1f));
@@ -1848,12 +2285,12 @@ namespace FishMMO.Shared.WorldDesign
 					Vector3 at = cone.Apex + dir * (u * toe);
 					if (!g.Inside(at.x, at.z, 4f) || (run.O.Excluded != null && run.O.Excluded(at.x, at.z)))
 					{
+						tries.Add(null);
 						continue;
 					}
 					at.y = g.Height(at.x, at.z);
 					// Fall sorting: the size grows with the run-out.
 					float size = big ? run.Rng.Range(8f, 12f) : Mathf.Lerp(1.5f, 6.5f, Mathf.Pow(u, 1.5f)) * run.Rng.Range(0.8f, 1.25f);
-					CliffShape[] shapes = CliffRocks.ShapesOf(cone.Type, CliffRole.Debris);
 					int kind = 0;
 					for (int s = 1; s < shapes.Length; s++)
 					{
@@ -1865,13 +2302,61 @@ namespace FishMMO.Shared.WorldDesign
 					var c = NewCandidate(run, m, at, S, structure, false);
 					c.TerrainOnly = true;
 					c.Band = 0.1f;
-					c.R = StablePose(m.Mesh, m.Com, S, g.Downhill(at.x, at.z), g.SlopeAt(at.x, at.z), run.Rng);
+					// StablePose's own draws, in its order: an empty mesh's 24 tumbles, then the turn off the fall line.
+					var t = new TalusTry { C = c, Down = g.Downhill(at.x, at.z), Slope = g.SlopeAt(at.x, at.z) };
+					t.Normal = SlopeNormal(t.Down, t.Slope);
+					t.Com = new Vector3(m.Com.x * S.x, m.Com.y * S.y, m.Com.z * S.z);
+					t.Rested = m.Mesh.VertexCount > 0;
+					if (!t.Rested)
+					{
+						t.Rest = TumbledRest(m.Mesh, t.Com, S, t.Normal, run.Rng);
+					}
+					t.Spin = run.Rng.Range(-20f, 20f);
+					tries.Add(t);
+				}
+			}
+			firsts[run.Plan.Cones.Count] = tries.Count;
+			run.Plan.Stats.StablePoses += tries.Count(t => t != null);
+
+			Parallel.For(0, tries.Count, Workers, () => new RestScratch(), (i, _, scratch) =>
+			{
+				TalusTry t = tries[i];
+				if (t == null)
+				{
+					return scratch;
+				}
+				MeshBuilder mesh = t.C.M.Mesh;
+				if (t.Rested)
+				{
+					Matrix4x4 best = Matrix4x4.identity;
+					float bestH = float.MaxValue;
+					RestingFace(mesh, t.Com, t.C.S, t.Normal, ref best, ref bestH, scratch);
+					t.Rest = best;
+				}
+				t.C.R = TurnedDownhill(mesh, t.Com, t.C.S, t.Normal, t.Down, t.Rest, t.Spin);
+				return scratch;
+			}, _ => { });
+			clock.Lap("talus poses");
+
+			var mine = new List<PlacedCliffRock>();
+			for (int ci = 0; ci < run.Plan.Cones.Count; ci++)
+			{
+				mine.Clear();
+				for (int i = firsts[ci]; i < firsts[ci + 1] && run.Plan.Rocks.Count < run.Budget; i++)
+				{
+					TalusTry t = tries[i];
+					if (t == null)
+					{
+						continue;
+					}
+					Candidate c = t.C;
+					Metrics m = c.M;
 					if (!Fit(run, c, 0.6f, out PlacedCliffRock rock))
 					{
 						continue;
 					}
 					Vector3 ce = Centre(in rock, m);
-					float rr = Radius(m, S);
+					float rr = Radius(m, c.S);
 					bool hit = false;
 					foreach (PlacedCliffRock q in mine)
 					{
@@ -1890,6 +2375,18 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				run.Plan.Stats.Talus += mine.Count;
 			}
+			clock.Lap("talus");
+		}
+
+		/// <summary>One debris rock tried on a cone: its candidate and its resting pose's inputs, drawn before the poses are searched.</summary>
+		private sealed class TalusTry
+		{
+			public Candidate C;
+			public Vector3 Down, Normal, Com;
+			public float Slope, Spin;
+			/// <summary>False for an empty mesh, whose rest the tumbles already chose.</summary>
+			public bool Rested;
+			public Matrix4x4 Rest = Matrix4x4.identity;
 		}
 	}
 
@@ -1950,20 +2447,21 @@ namespace FishMMO.Shared.WorldDesign
 		public void Derive()
 		{
 			int n = NX * NZ;
-			GX = new float[n]; GZ = new float[n]; Slope = new float[n];
+			float[] gx = new float[n], gz = new float[n], slope = new float[n];
 			var sl = new float[n];
-			for (int j = 0; j < NZ; j++)
+			// Row by row in parallel: every cell reads only the heights, then only the raw slopes, so the order is free.
+			Parallel.For(0, NZ, Workers, j =>
 			{
 				for (int i = 0; i < NX; i++)
 				{
 					int i0 = Math.Max(0, i - 2), i1 = Math.Min(NX - 1, i + 2), j0 = Math.Max(0, j - 2), j1 = Math.Min(NZ - 1, j + 2);
 					int k = j * NX + i;
-					GX[k] = (H[j * NX + i1] - H[j * NX + i0]) / ((i1 - i0) * S);
-					GZ[k] = (H[j1 * NX + i] - H[j0 * NX + i]) / ((j1 - j0) * S);
-					sl[k] = Mathf.Atan(Mathf.Sqrt(GX[k] * GX[k] + GZ[k] * GZ[k])) * Mathf.Rad2Deg;
+					gx[k] = (H[j * NX + i1] - H[j * NX + i0]) / ((i1 - i0) * S);
+					gz[k] = (H[j1 * NX + i] - H[j0 * NX + i]) / ((j1 - j0) * S);
+					sl[k] = Mathf.Atan(Mathf.Sqrt(gx[k] * gx[k] + gz[k] * gz[k])) * Mathf.Rad2Deg;
 				}
-			}
-			for (int j = 0; j < NZ; j++)
+			});
+			Parallel.For(0, NZ, Workers, j =>
 			{
 				for (int i = 0; i < NX; i++)
 				{
@@ -1978,20 +2476,27 @@ namespace FishMMO.Shared.WorldDesign
 							c++;
 						}
 					}
-					Slope[j * NX + i] = sum / c;
+					slope[j * NX + i] = sum / c;
 				}
-			}
+			});
+			GX = gx;
+			GZ = gz;
+			Slope = slope;
 			SGX = Blur(GX, 6, 2);
 			SGZ = Blur(GZ, 6, 2);
+			footLines = null;
 		}
+
+		private static ParallelOptions Workers => new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) };
 
 		private float[] Blur(float[] f, int r, int passes)
 		{
 			var a = (float[])f.Clone();
 			var b = new float[a.Length];
+			// Each row's running sum, then each column's, is its own: rows and columns go in parallel.
 			for (int p = 0; p < passes; p++)
 			{
-				for (int z = 0; z < NZ; z++)
+				Parallel.For(0, NZ, Workers, z =>
 				{
 					float run = 0f; int c = 0;
 					for (int k = 0; k <= Math.Min(NX - 1, r); k++) { run += a[z * NX + k]; c++; }
@@ -2002,8 +2507,8 @@ namespace FishMMO.Shared.WorldDesign
 						if (add < NX) { run += a[z * NX + add]; c++; }
 						if (rem >= 0) { run -= a[z * NX + rem]; c--; }
 					}
-				}
-				for (int x = 0; x < NX; x++)
+				});
+				Parallel.For(0, NX, Workers, x =>
 				{
 					float run = 0f; int c = 0;
 					for (int k = 0; k <= Math.Min(NZ - 1, r); k++) { run += b[k * NX + x]; c++; }
@@ -2014,7 +2519,7 @@ namespace FishMMO.Shared.WorldDesign
 						if (add < NZ) { run += b[add * NX + x]; c++; }
 						if (rem >= 0) { run -= b[rem * NX + x]; c--; }
 					}
-				}
+				});
 			}
 			return a;
 		}
@@ -2117,19 +2622,36 @@ namespace FishMMO.Shared.WorldDesign
 			int n = Count;
 			Site = new int[n];
 			Steep = new bool[n];
+			footLines = null;
+			// The sites are asked in parallel (siteAt is pure: see Plan) and numbered after, in cell order, as they always were.
+			var found = new CliffRockSite[n];
+			var has = new bool[n];
+			Parallel.For(0, NZ, Workers, j =>
+			{
+				for (int i = 0; i < NX; i++)
+				{
+					int k = j * NX + i;
+					if (!Valid[k] || Slope[k] < 20f)
+					{
+						continue;
+					}
+					Position(k, out float x, out float z);
+					if (siteAt(x, z, H[k], out CliffRockSite site) && !string.IsNullOrEmpty(site.Type))
+					{
+						found[k] = site;
+						has[k] = true;
+					}
+				}
+			});
 			var index = new Dictionary<(string, int), int>();
 			for (int k = 0; k < n; k++)
 			{
 				Site[k] = -1;
-				if (!Valid[k] || Slope[k] < 20f)
+				if (!has[k])
 				{
 					continue;
 				}
-				Position(k, out float x, out float z);
-				if (!siteAt(x, z, H[k], out CliffRockSite site) || string.IsNullOrEmpty(site.Type))
-				{
-					continue;
-				}
+				CliffRockSite site = found[k];
 				var key = (site.Type, Mathf.RoundToInt(site.MinAngle * 10f));
 				if (!index.TryGetValue(key, out int si))
 				{
@@ -2222,6 +2744,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (Site[k] < 0 || SteepDist[k] > 30f) continue;
 				near.Add(k);
+			}
+			// Each cell's noises are its own: in parallel.
+			Parallel.For(0, near.Count, Workers, e =>
+			{
+				int k = near[e];
 				Position(k, out float x, out float z);
 				Vector3 d = DownhillSmooth(x, z);
 				float slide = H[k] / Mathf.Tan(55f * Mathf.Deg2Rad);
@@ -2230,7 +2757,7 @@ namespace FishMMO.Shared.WorldDesign
 					+ 0.55f * ProceduralNoise.Fbm3(new Vector3(x / 20f, 1.5f, z / 20f), 3, 0.5f, Seed + 13);
 				spur[k] = ProceduralNoise.Fbm3(new Vector3(qx / 30f, 2.5f, qz / 30f), 2, 0.5f, Seed + 17);
 				crest[k] = ProceduralNoise.Fbm3(new Vector3(x / 26f, 3.5f, z / 26f), 2, 0.5f, Seed + 19);
-			}
+			});
 			float Std(float[] f)
 			{
 				double m = 0, v = 0;
@@ -2328,8 +2855,19 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Foot lines ────────────────────────────────────────────────
 
-		/// <summary>The steep mask's downhill boundary as polylines (marching squares on slope − cliff angle).</summary>
+		private List<List<Vector3>> footLines;
+
+		/// <summary>The steep mask's downhill boundary as polylines (marching squares on slope − cliff angle); traced once per shape of the grid.</summary>
 		public List<List<Vector3>> FootLines()
+		{
+			if (footLines == null)
+			{
+				footLines = TraceFootLines();
+			}
+			return footLines;
+		}
+
+		private List<List<Vector3>> TraceFootLines()
 		{
 			var f = new float[Count];
 			for (int k = 0; k < Count; k++)
@@ -2388,13 +2926,15 @@ namespace FishMMO.Shared.WorldDesign
 					float a = V(i, j), b = V(i + 1, j), c = V(i + 1, j + 1), d = V(i, j + 1);
 					bool A = a > level, B = b > level, C = c > level, D = d > level;
 					long e0 = (long)(j * NX + i) * 2, e1 = (long)(j * NX + i + 1) * 2 + 1, e2 = (long)((j + 1) * NX + i) * 2, e3 = (long)(j * NX + i) * 2 + 1;
-					var cross = new List<long>(4);
-					if (A != B) cross.Add(e0);
-					if (B != C) cross.Add(e1);
-					if (C != D) cross.Add(e2);
-					if (D != A) cross.Add(e3);
-					if (cross.Count == 2) segs.Add((cross[0], cross[1]));
-					else if (cross.Count == 4)
+					// The crossed edges in e0..e3 order; only two or four can be crossed, and two are all a segment needs.
+					int crossed = 0;
+					long first = 0, second = 0;
+					if (A != B) { if (crossed++ == 0) first = e0; else second = e0; }
+					if (B != C) { if (crossed++ == 0) first = e1; else if (crossed == 2) second = e1; }
+					if (C != D) { if (crossed++ == 0) first = e2; else if (crossed == 2) second = e2; }
+					if (D != A) { if (crossed++ == 0) first = e3; else if (crossed == 2) second = e3; }
+					if (crossed == 2) segs.Add((first, second));
+					else if (crossed == 4)
 					{
 						bool M = (a + b + c + d) * 0.25f > level;
 						if (A != M) segs.Add((e3, e0));
@@ -2407,8 +2947,9 @@ namespace FishMMO.Shared.WorldDesign
 			var at = new Dictionary<long, List<int>>();
 			for (int s = 0; s < segs.Count; s++)
 			{
-				foreach (long e in new[] { segs[s].a, segs[s].b })
+				for (int end = 0; end < 2; end++)
 				{
+					long e = end == 0 ? segs[s].a : segs[s].b;
 					if (!at.TryGetValue(e, out List<int> l)) at[e] = l = new List<int>(2);
 					l.Add(s);
 				}
@@ -2450,8 +2991,25 @@ namespace FishMMO.Shared.WorldDesign
 		public void StampCones(List<CliffCone> cones, float tan, int noiseSeed, Func<float, float, bool> excluded = null, float margin = 0f)
 		{
 			var orig = (float[])H.Clone();
-			foreach (CliffCone cone in cones)
+			/* Each cone's rays read only the ground as it was before any cone (orig), so the cones are raised in parallel,
+			 * each into a patch of its own, and the patches are merged by the highest: a maximum is the same in any order,
+			 * so the ground is what raising them one after another gave. */
+			var patches = new ConePatch[cones.Count];
+			Parallel.For(0, cones.Count, Workers, ci =>
 			{
+				CliffCone cone = cones[ci];
+				// Every cell a ray can reach (it stops short of 3.5 radii), and a cell's slack for the rounding.
+				float reach = 3.5f * cone.Radius / S + 2f;
+				float ci0 = (cone.Apex.x - X0) / S, cj0 = (cone.Apex.z - Z0) / S;
+				var patch = new ConePatch
+				{
+					I0 = Math.Max(0, (int)Math.Floor(ci0 - reach)),
+					J0 = Math.Max(0, (int)Math.Floor(cj0 - reach)),
+				};
+				patch.Width = Math.Max(0, Math.Min(NX - 1, (int)Math.Ceiling(ci0 + reach)) - patch.I0 + 1);
+				int depth = Math.Max(0, Math.Min(NZ - 1, (int)Math.Ceiling(cj0 + reach)) - patch.J0 + 1);
+				patch.Top = new float[patch.Width * depth];
+				for (int q = 0; q < patch.Top.Length; q++) patch.Top[q] = float.NegativeInfinity;
 				var strike = new Vector3(cone.Down.z, 0f, -cone.Down.x);
 				for (float a = -100f; a <= 100f; a += 0.5f)
 				{
@@ -2467,8 +3025,24 @@ namespace FishMMO.Shared.WorldDesign
 						float hc = cone.ApexHeight - d * tan + 0.6f * ProceduralNoise.Fbm3(new Vector3(x / 6f, 7.5f, z / 6f), 2, 0.5f, noiseSeed);
 						if (d > 1f && hc <= orig[k]) break;
 						if (hc - orig[k] > cone.Radius * tan * 0.8f) break;
-						if (hc > H[k]) H[k] = hc;
+						int pi = i - patch.I0, pj = j - patch.J0;
+						if (pi < 0 || pi >= patch.Width || pj < 0 || pj * patch.Width >= patch.Top.Length)
+						{
+							throw new InvalidOperationException($"A talus cone's ray left its patch at cell ({i}, {j}).");
+						}
+						int at = pj * patch.Width + pi;
+						if (hc > patch.Top[at]) patch.Top[at] = hc;
 					}
+				}
+				patches[ci] = patch;
+			});
+			foreach (ConePatch patch in patches)
+			{
+				for (int q = 0; q < patch.Top.Length; q++)
+				{
+					float hc = patch.Top[q];
+					int k = (patch.J0 + q / patch.Width) * NX + patch.I0 + q % patch.Width;
+					if (hc > H[k]) H[k] = hc;
 				}
 			}
 			var delta = new float[Count];
@@ -2476,7 +3050,8 @@ namespace FishMMO.Shared.WorldDesign
 			for (int pass = 0; pass < 3; pass++)
 			{
 				var b = new float[Count];
-				for (int j = 0; j < NZ; j++)
+				float[] from = delta;
+				Parallel.For(0, NZ, Workers, j =>
 				{
 					for (int i = 0; i < NX; i++)
 					{
@@ -2487,13 +3062,13 @@ namespace FishMMO.Shared.WorldDesign
 							{
 								int ii = i + di, jj = j + dj;
 								if (ii < 0 || jj < 0 || ii >= NX || jj >= NZ) continue;
-								sum += delta[jj * NX + ii];
+								sum += from[jj * NX + ii];
 								c++;
 							}
 						}
 						b[j * NX + i] = sum / c;
 					}
-				}
+				});
 				delta = b;
 			}
 			Debris = new float[Count];
@@ -2507,6 +3082,13 @@ namespace FishMMO.Shared.WorldDesign
 			Derive();
 			Steep = steep;
 		}
+
+		/// <summary>One cone's raise: the highest it put on each cell of a box round it (negative infinity where it put nothing).</summary>
+		private sealed class ConePatch
+		{
+			public int I0, J0, Width;
+			public float[] Top;
+		}
 	}
 
 	/// <summary>A sparse max-height raster of placed rock tops (0.5 m cells in 32 m tiles), so a rock can rest on rock placed before it.</summary>
@@ -2516,11 +3098,36 @@ namespace FishMMO.Shared.WorldDesign
 		private readonly float s;
 		private readonly Dictionary<long, float[]> tiles = new Dictionary<long, float[]>();
 
+		/// <summary>The tile <see cref="At"/> last found: a seating asks dozens of points in a row of one tile. Only hits are kept, and a tile's array is never replaced, so it never goes stale.</summary>
+		private int lastX = int.MinValue, lastZ = int.MinValue;
+		private float[] lastTile;
+
 		public CliffTopRaster(float cell) { s = cell; }
 
 		private static long Key(int tx, int tz) => ((long)tx << 32) ^ (uint)tz;
 
+		/// <summary>The highest rock top at a point, <see cref="float.MinValue"/> where none. The planner's own: not for several threads at once (<see cref="AtShared"/>).</summary>
 		public float At(float x, float z)
+		{
+			int i = Mathf.RoundToInt(x / s), j = Mathf.RoundToInt(z / s);
+			int tx = Mathf.FloorToInt(i / (float)Tile), tz = Mathf.FloorToInt(j / (float)Tile);
+			float[] t;
+			if (tx == lastX && tz == lastZ)
+			{
+				t = lastTile;
+			}
+			else
+			{
+				if (!tiles.TryGetValue(Key(tx, tz), out t)) return float.MinValue;
+				lastX = tx;
+				lastZ = tz;
+				lastTile = t;
+			}
+			return t[(j - tz * Tile) * Tile + (i - tx * Tile)];
+		}
+
+		/// <summary><see cref="At"/> without its one-tile memory, for readers on several threads while nothing is added.</summary>
+		public float AtShared(float x, float z)
 		{
 			int i = Mathf.RoundToInt(x / s), j = Mathf.RoundToInt(z / s);
 			int tx = Mathf.FloorToInt(i / (float)Tile), tz = Mathf.FloorToInt(j / (float)Tile);

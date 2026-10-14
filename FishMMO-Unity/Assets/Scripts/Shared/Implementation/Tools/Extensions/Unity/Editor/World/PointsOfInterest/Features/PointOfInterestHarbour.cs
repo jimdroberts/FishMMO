@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 					// Kept by the server: the boats' colliders are under it.
 					holder = context.AddChild(ObjectName);
 				}
-				berth.Boat = Moor(prefab, holder.transform, berth.Position, Quaternion.Euler(0f, berth.Yaw, 0f), out berth.Visual);
+				berth.Boat = Moor(prefab, wanted.Piece, wanted.Variant, holder.transform, berth.Position, Quaternion.Euler(0f, berth.Yaw, 0f), out berth.Visual);
 				berth.Phase = random.NextFloat();
 				moored.Add(berth);
 				afloat++;
@@ -528,7 +528,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// server keeps, and under it the drawn hull, client-only, for <see cref="FloatingBoats"/> to bob. The sea lanes'
 		/// ships are built the same way (PointOfInterestSeaTraffic).
 		/// </summary>
-		internal static Transform Moor(GameObject prefab, Transform parent, Vector3 position, Quaternion rotation, out Transform visual)
+		internal static Transform Moor(GameObject prefab, string piece, int variant, Transform parent, Vector3 position, Quaternion rotation, out Transform visual)
 		{
 			var root = new GameObject(prefab.name);
 			root.transform.SetParent(parent, false);
@@ -541,13 +541,19 @@ namespace FishMMO.Shared.WorldDesign
 				collider.convex = false;
 				collider.sharedMesh = collision;
 			}
-			visual = Spawn(prefab, root.transform, position, rotation);
+			visual = Spawn(prefab, piece, variant, root.transform, position, rotation);
 			visual.gameObject.AddComponent<ClientOnlyObject>();
 			return root.transform;
 		}
 
-		/// <summary>A drawn hull's own object: the piece's renderers, unlinked from its prefab and with no collider.</summary>
-		internal static Transform Spawn(GameObject prefab, Transform parent, Vector3 position, Quaternion rotation)
+		/// <summary>The water lid's child under a drawn hull (<see cref="AddWaterLid"/>).</summary>
+		public const string WaterLidName = "Water Lid";
+
+		/// <summary>
+		/// A drawn hull's own object: the piece's renderers, unlinked from its prefab and with no collider, and over its open
+		/// top its water lid (<see cref="AddWaterLid"/>), so the sea is not drawn inside it.
+		/// </summary>
+		internal static Transform Spawn(GameObject prefab, string piece, int variant, Transform parent, Vector3 position, Quaternion rotation)
 		{
 			GameObject boat = Object.Instantiate(prefab, position, rotation, parent);
 			boat.name = prefab.name;
@@ -559,7 +565,79 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				GameObjectUtility.SetStaticEditorFlags(t.gameObject, 0);
 			}
+			AddWaterLid(boat.transform, piece, variant);
 			return boat.transform;
+		}
+
+		/// <summary>
+		/// A sheet across a floating hull's open top, just under its gunwale (<see cref="StructurePieces.TryWaterLid"/>),
+		/// drawn by FishMMO/Water/Hull Lid: invisible, it marks the stencil where it is seen and the water passes skip
+		/// those pixels, so no sea is drawn inside the planking (every hull's floor is under the waterline: they took on the sea). A child of the drawn hull, so it bobs, rolls and heels with it, and
+		/// client-only with it. Its mesh is the scene's own (a few dozen vertices); no collider, no shadow.
+		/// </summary>
+		internal static void AddWaterLid(Transform hull, string piece, int variant)
+		{
+			if (!StructurePieces.TryWaterLid(piece, variant, out Vector3[] port, out Vector3[] starboard))
+			{
+				return;
+			}
+			Material material = WaterLidMaterial();
+			if (material == null)
+			{
+				Debug.LogWarning($"{hull.name}: no HullWaterLid material (FishMMO Water) found; the hull has no water lid and the sea shows inside it.");
+				return;
+			}
+			int stations = port.Length;
+			var vertices = new Vector3[2 * stations];
+			var triangles = new int[6 * (stations - 1)];
+			for (int i = 0; i < stations; i++)
+			{
+				vertices[2 * i] = port[i];
+				vertices[2 * i + 1] = starboard[i];
+				if (i > 0)
+				{
+					int a = 2 * (i - 1), t = 6 * (i - 1);
+					triangles[t] = a;
+					triangles[t + 1] = a + 2;
+					triangles[t + 2] = a + 1;
+					triangles[t + 3] = a + 1;
+					triangles[t + 4] = a + 2;
+					triangles[t + 5] = a + 3;
+				}
+			}
+			var mesh = new Mesh { name = $"{piece} {variant} water lid", vertices = vertices, triangles = triangles };
+			mesh.RecalculateBounds();
+			var lid = new GameObject(WaterLidName);
+			lid.transform.SetParent(hull, false);
+			lid.AddComponent<MeshFilter>().sharedMesh = mesh;
+			var renderer = lid.AddComponent<MeshRenderer>();
+			renderer.sharedMaterial = material;
+			renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+			renderer.receiveShadows = false;
+			renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+			renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+			renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+			renderer.allowOcclusionWhenDynamic = false;
+		}
+
+		private static Material waterLidMaterial;
+
+		/// <summary>The water plugin's lid material, found by name (the plugin's folder may move).</summary>
+		private static Material WaterLidMaterial()
+		{
+			if (waterLidMaterial != null)
+			{
+				return waterLidMaterial;
+			}
+			foreach (string guid in AssetDatabase.FindAssets("HullWaterLid t:Material"))
+			{
+				Material found = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+				if (found != null && found.name == "HullWaterLid")
+				{
+					return waterLidMaterial = found;
+				}
+			}
+			return null;
 		}
 
 		private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)

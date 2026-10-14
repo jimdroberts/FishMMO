@@ -490,6 +490,7 @@ namespace FishMMO.Client
 			};
 			driven.Add(terrain, d);
 			drivenList.Add(d);
+			drivenVersion++;
 			refused.Remove(terrain);
 			terrain.treeDistance = 0f;
 			return true;
@@ -503,6 +504,7 @@ namespace FishMMO.Client
 			}
 			driven.Remove(d.Terrain);
 			drivenList.Remove(d);
+			drivenVersion++;
 			TerrainTreeModel[] used = d.Field.Models;
 			for (int i = 0; i < used.Length; i++)
 			{
@@ -546,7 +548,18 @@ namespace FishMMO.Client
 			gpu?.Dispose();
 			gpu = null;
 			gpuTried = false;
+			workReuse.Forget();
+			gatheredOnGpu = false;
 		}
+
+		/// <summary>The GPU work list kept across frames (<see cref="TerrainGpuRenderer.WorkReuse"/>), and whether the last GPU gather can be kept.</summary>
+		private static readonly TerrainGpuRenderer.WorkReuse workReuse = new TerrainGpuRenderer.WorkReuse();
+		private static bool gatheredOnGpu;
+		private static readonly Plane[] widenedView = new Plane[6], widenedShadow = new Plane[6];
+		/// <summary>Counts every change to the driven terrains: a GPU work list gathered before one is stale.</summary>
+		private static int drivenVersion;
+		/// <summary>The chunk gather per camera, named in the profiler.</summary>
+		private static readonly ProfilerMarker GatherMarker = new ProfilerMarker("TerrainTreeInstancing.Gather");
 
 		// ── Drawing, per camera ───────────────────────────────────────
 
@@ -557,7 +570,9 @@ namespace FishMMO.Client
 				return;
 			}
 			Sync();
-			if (drivenList.Count == 0)
+			// No drivers, or a camera that renders no layers at all (the sky's reflection probe): gathering for it was work
+			// thrown away (as CliffRockInstancing skips it).
+			if (drivenList.Count == 0 || camera.cullingMask == 0)
 			{
 				return;
 			}
@@ -567,20 +582,63 @@ namespace FishMMO.Client
 			{
 				modelList[i].Clear();
 			}
-			int instances = 0;
 			// Reflection-probe faces take the CPU path: tiny, per face, and never worth a GPU cull of their own.
 			TerrainGpuRenderer cameraGpu = camera.cameraType == CameraType.Reflection ? null : gpu;
-			cameraGpu?.BeginCamera();
 			float reach = 0f;
+			int signature = unchecked((17 * 31 + view.ScreenFactor.GetHashCode()) * 31 + view.MaximumLodLevel);
 			for (int i = 0; i < drivenList.Count; i++)
 			{
 				Driven d = drivenList[i];
-				if (d.Terrain == null || !d.Terrain.drawTreesAndFoliage)
+				bool drawn = d.Terrain != null && d.Terrain.drawTreesAndFoliage;
+				if (drawn)
 				{
-					continue;
+					reach = Mathf.Max(reach, d.Distance);
 				}
-				instances += d.Field.Gather(in view, d.Distance, d.Terrain.treeLODBiasMultiplier, cameraGpu);
-				reach = Mathf.Max(reach, d.Distance);
+				signature = unchecked(signature * 31 + (drawn ? d.Distance.GetHashCode() * 7 + d.Terrain.treeLODBiasMultiplier.GetHashCode() * 3 + d.Field.GpuOffset : 1));
+			}
+			signature = unchecked(signature * 31 + drivenVersion);
+			// The GPU work list kept from an earlier frame while the camera stays within what it was widened for, as the
+			// props' is (CliffRockInstancing): only when the gather it came from put every run on the GPU.
+			bool reuse = cameraGpu != null && gatheredOnGpu && workReuse.Still(camera, in view, signature);
+			using (GatherMarker.Auto())
+			{
+				if (!reuse)
+				{
+					cameraGpu?.BeginCamera();
+					TerrainGpuRenderer.ReuseBounds widen = default;
+					if (cameraGpu != null)
+					{
+						float shadowReach = view.Shadows ? view.ShadowDistance : 0f;
+						widen = new TerrainGpuRenderer.ReuseBounds(TerrainGpuRenderer.WorkReuse.Metres,
+							TerrainGpuRenderer.WorkReuse.Widen(view.Planes, TerrainGpuRenderer.WorkReuse.ViewMargin(reach), widenedView),
+							TerrainGpuRenderer.WorkReuse.Widen(view.Planes, TerrainGpuRenderer.WorkReuse.ShadowMargin(reach, shadowReach, 2f * TerrainTreeMath.DefaultChunkMetres), widenedShadow));
+					}
+					bool cpu = false;
+					int instances = 0;
+					for (int i = 0; i < drivenList.Count; i++)
+					{
+						Driven d = drivenList[i];
+						if (d.Terrain == null || !d.Terrain.drawTreesAndFoliage)
+						{
+							continue;
+						}
+						instances += d.Field.Gather(in view, d.Distance, d.Terrain.treeLODBiasMultiplier, cameraGpu, in widen, out bool cpuAppended);
+						cpu |= cpuAppended;
+					}
+					LastInstanceCount = instances;
+					if (cameraGpu != null)
+					{
+						gatheredOnGpu = !cpu;
+						if (gatheredOnGpu)
+						{
+							workReuse.Remember(camera, in view, signature);
+						}
+						else
+						{
+							workReuse.Forget();
+						}
+					}
+				}
 			}
 			int draws = 0;
 			for (int i = 0; i < modelList.Count; i++)
@@ -592,7 +650,6 @@ namespace FishMMO.Client
 				draws += cameraGpu.Execute(camera, in view, reach, context);
 			}
 			LastDrawCount = draws;
-			LastInstanceCount = instances;
 		}
 	}
 }

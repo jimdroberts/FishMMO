@@ -88,6 +88,35 @@ namespace FishMMO.Shared
 		public static int RegisteredIn(Scene scene)
 			=> byScene.TryGetValue(scene.handle, out List<CharacterPositionHistory> list) ? list.Count : 0;
 
+		/// <summary>
+		/// True when any character registered in <paramref name="scene"/> stands within <paramref name="reach"/> metres of
+		/// <paramref name="point"/> across the ground (x and z): what lets something that only matters to a character near it
+		/// (a ship's hull collider, FloatingBoats) stand down where none is. Its current transform, never a rewound one.
+		/// </summary>
+		public static bool AnyWithin(Scene scene, Vector3 point, float reach)
+		{
+			if (!byScene.TryGetValue(scene.handle, out List<CharacterPositionHistory> list))
+			{
+				return false;
+			}
+			float reachSquared = reach * reach;
+			for (int i = 0; i < list.Count; i++)
+			{
+				CharacterPositionHistory history = list[i];
+				if (history == null)
+				{
+					continue;
+				}
+				Vector3 at = history.transform.position;
+				float dx = at.x - point.x, dz = at.z - point.z;
+				if (dx * dx + dz * dz <= reachSquared)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/// <summary>Clears the registry. For test teardown.</summary>
 		internal static void Clear()
 		{

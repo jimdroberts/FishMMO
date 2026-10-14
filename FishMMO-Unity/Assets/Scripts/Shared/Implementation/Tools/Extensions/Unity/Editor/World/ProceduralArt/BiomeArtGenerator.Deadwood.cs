@@ -26,6 +26,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// collider. So the deadwood wears its own materials — the same bark textures on the vegetation shader, faded as a
 	/// tree is (<c>_DistanceFade</c> tree), with every shape variation zeroed and only the colour varied.
 	/// </para>
+	/// <para>
+	/// <b>Moss.</b> Each material grows the moss layer (<c>_FishMoss</c>, FishMoss.hlsl, in the vegetation shader's
+	/// forward pass) as its bark or wood allows (<see cref="MossAmounts"/>), times the scene's dampness: on a log's top
+	/// and shaded side, low on a stump, heavy in a swamp or a coastal wood, none in a desert. It stays put because the
+	/// prop is held still. The meshes bake no green of their own, so a log is mossy only where the climate grows moss.
+	/// </para>
 	/// </remarks>
 	public static partial class BiomeArtGenerator
 	{
@@ -49,6 +55,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Vegetation(m, albedo, 0.5f, false, 0f, 0f, 0f, white, white, 0f, 0f, false, normal, clip: false, expectNormal: true, distanceFade: FadeTree);
 					HoldStill(m);
+					m.SetFloat("_FishMoss", MossAmounts.ForDeadwoodBark(family));
 				});
 			}
 			if (Array.Exists(ProceduralArtCatalogue.Deadwood, d => d.Form == DeadwoodForm.PetrifiedLog))
@@ -61,6 +68,7 @@ namespace FishMMO.Shared.WorldDesign
 					Vegetation(m, albedo, 0.5f, false, 0f, 0f, 0f, white, white, 0f, 0f, false, normal, clip: false, expectNormal: true, distanceFade: FadeTree);
 					HoldStill(m);
 					m.SetFloat("_Smoothness", 0.3f);
+					m.SetFloat("_FishMoss", MossAmounts.PetrifiedLog);
 				});
 			}
 			Texture2D atlas = LoadTexture(ProceduralArtCatalogue.AtlasPath);
@@ -68,6 +76,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Vegetation(m, atlas, 0.5f, false, 0f, 0f, 0f, white, white, 0f, 0f, false, clip: false, distanceFade: FadeTree);
 				HoldStill(m);
+				m.SetFloat("_FishMoss", MossAmounts.DeadwoodWood);
 			});
 
 			foreach (DeadwoodSpecies d in ProceduralArtCatalogue.Deadwood)

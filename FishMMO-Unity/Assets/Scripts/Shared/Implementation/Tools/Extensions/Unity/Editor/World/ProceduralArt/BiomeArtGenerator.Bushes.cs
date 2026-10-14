@@ -24,11 +24,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		private static void WriteBush(Context c, BushSpecies species)
 		{
+			// Every due level built on all cores at the first bush step; a current one is loaded, not rebuilt.
+			PrebuildBushes(c);
 			var meshes = new Mesh[BushMeshes.Levels];
 			for (int lod = 0; lod < BushMeshes.Levels; lod++)
 			{
-				MeshBuilder b = BushMeshes.Build(in species, lod, c.Seed);
-				meshes[lod] = WriteMesh(c, b, ProceduralArtCatalogue.BushMesh(species.Name, lod), false);
+				string meshName = ProceduralArtCatalogue.BushMesh(species.Name, lod);
+				MeshBuilder b = c.BushLevels.TryGetValue(meshName, out MeshBuilder built) ? built
+					: ShouldWrite(c, ProceduralArtCatalogue.MeshPath(meshName)) ? BushMeshes.Build(in species, lod, c.Seed) : null;
+				meshes[lod] = WriteOrLoadMesh(c, b, meshName, false);
 			}
 
 			string name = ProceduralArtCatalogue.BushPrefab(species.Name);

@@ -141,6 +141,56 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void APadAtAClifftopLeavesTheGorgeBelowTheCliffAlone()
+		{
+			// A shrine's 8 m pad at 115 m on a clifftop that runs 22 m out from it, then a 70 m drop to a gorge floor at 45 m.
+			const float radius = 8f, blend = 8f, height = 115f;
+			float Ground(float d) => d < 30f ? height : height - 70f;
+			float[] reach = PointOfInterestTerrain.BankReach((east, north) => Ground(Mathf.Sqrt(east * east + north * north)), Vector3.zero, radius, blend, height);
+			foreach (float r in reach)
+			{
+				Assert.That(r, Is.LessThan(30f), "the bank meets the clifftop's ground before the edge in every direction");
+			}
+			foreach (float d in new[] { 40f, 60f, 96f, 140f })
+			{
+				float h = PointOfInterestTerrain.PadHeight(d, Ground(d), radius, blend, height, PointOfInterestTerrain.ReachToward(reach, d, 0f));
+				Assert.That(h, Is.EqualTo(Ground(d)).Within(1e-3f), $"the gorge {d} m out is not filled (the cone alone filled it to {PointOfInterestTerrain.PadHeight(d, Ground(d), radius, blend, height):0.0} m)");
+			}
+		}
+
+		[Test]
+		public void APadOnAHillsideStillBanksOutToWhereTheBankMeetsTheHillside()
+		{
+			// The hillside pad above: traced, its bank runs out to where the cone meets the slope, 138 m past the rim.
+			const float radius = 60f, blend = 12f, height = 100f;
+			float Ground(float d) => height - 0.4f * d;
+			float[] reach = PointOfInterestTerrain.BankReach((east, north) => Ground(Mathf.Sqrt(east * east + north * north)), Vector3.zero, radius, blend, height);
+			Assert.That(PointOfInterestTerrain.ReachToward(reach, 1f, 0f), Is.InRange(radius + 130f, radius + 145f));
+			for (float d = radius; d < radius + 130f; d += 5f)
+			{
+				float traced = PointOfInterestTerrain.PadHeight(d, Ground(d), radius, blend, height, PointOfInterestTerrain.ReachToward(reach, d, 0f));
+				Assert.That(traced, Is.EqualTo(PointOfInterestTerrain.PadHeight(d, Ground(d), radius, blend, height)).Within(1e-3f), $"the same bank at {d} m");
+			}
+		}
+
+		[Test]
+		public void APadsBankEndsShortOfTheRiverBelowIt()
+		{
+			// A town's 46 m pad at 126 m on ground falling 0.4 m per metre (gentler than the bank) to a river whose bank begins 60 m out.
+			const float radius = 46f, blend = 12f, height = 126f, riverBank = 60f;
+			float Ground(float d) => height - 0.4f * (d - radius) - 1f;
+			float[] reach = PointOfInterestTerrain.BankReach((east, north) => Ground(Mathf.Sqrt(east * east + north * north)), Vector3.zero, radius, blend, height,
+				(east, north) => Mathf.Sqrt(east * east + north * north) >= riverBank);
+			float toward = PointOfInterestTerrain.ReachToward(reach, 1f, 0f);
+			Assert.That(toward, Is.LessThanOrEqualTo(riverBank - PointOfInterestTerrain.BankHandoverMetres - PointOfInterestTerrain.WaterSetbackMetres + 1e-3f));
+			foreach (float d in new[] { riverBank, riverBank + 3f, riverBank + 10f })
+			{
+				Assert.That(PointOfInterestTerrain.PadHeight(d, Ground(d), radius, blend, height, toward), Is.EqualTo(Ground(d)).Within(1e-3f),
+					$"the river {d - riverBank:0} m into its bank is left as it is");
+			}
+		}
+
+		[Test]
 		public void APadOnLevelGroundLeavesItsSurroundsAlone()
 		{
 			const float radius = 40f, blend = 10f, height = 50f;
@@ -317,6 +367,109 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(Mathf.Max(length / nominal, nominal / length), Is.LessThanOrEqualTo(1.4f), $"{id} stretched to {length} m");
 				}
 			}
+		}
+
+		/// <summary>
+		/// A gorge 20 m across between walls 2 m thick, its floor at 20 m, the near rim (z &lt; 0) at 50 m and the far rim at
+		/// <paramref name="far"/>; past the near lip the rim falls away outward at <paramref name="nearFall"/> metres a metre.
+		/// </summary>
+		private static Func<float, float> RakedGorge(float far, float nearFall = 0f) => z =>
+		{
+			float d = Mathf.Abs(z), rim = z < 0f ? 50f - nearFall * Mathf.Max(0f, d - 10.5f) : far;
+			return d < 8f ? 20f : d < 10f ? Mathf.Lerp(20f, rim, (d - 8f) / 2f) : rim;
+		};
+
+		private static PropsFeature.Crossing MeasureGorge(Func<float, float> ground)
+			=> PropsFeature.MeasureCrossing(ground, 20.5f, 32f, z => Mathf.Abs(z) < 3f ? 20.5f : float.NegativeInfinity, 50f);
+
+		/// <summary>
+		/// A kept gorge whose far rim stands 4 m over its near one (about 11° lip to lip): the stone arch is not tilted whole to
+		/// reach lip to lip. Its deck is level or gently graded; the low rim is built up and the high one cut down to it, each
+		/// on a ramp a cart could take, meeting the deck's ends without a step and the rims' ground where they end; the gorge
+		/// is not filled; and the ground so shaped is measured, when the site is built, as rims that meet the same deck.
+		/// </summary>
+		[Test]
+		public void ARakedGorgeIsArchedOnALevelDeckWithItsApproachesBuilt()
+		{
+			Func<float, float> ground = RakedGorge(54f);
+			PropsFeature.Crossing crossing = MeasureGorge(ground);
+			Assert.That(crossing.Gorge, Is.True);
+			Assert.That(crossing.SlopeDegrees, Is.GreaterThan(8f), "the rims are raked");
+			string id = PropsFeature.GorgeBridgeFor(ground, crossing, true, out _, out PropsFeature.ArchDeck arch);
+			Assert.That(id, Does.StartWith("ArchBridge"));
+			Assert.That(arch.Valid, Is.True);
+			Assert.That(Mathf.Abs(arch.GradeDegrees), Is.LessThanOrEqualTo(PropsFeature.MaxArchGradeDegrees + 1e-3f), "a level or gently graded deck");
+			Assert.That(arch.Settled, Is.False, "the rims must be built up and cut to it");
+			Assert.That(arch.RiseFrom, Is.LessThan(0f), "the low rim built up, its ramp coming back down");
+			Assert.That(arch.RiseTo, Is.GreaterThan(0f), "the high rim cut down, its ramp climbing out");
+			Assert.That(arch.Fill, Is.InRange(0.3f, PropsFeature.MaxArchFill + PropsFeature.ArchStepTolerance));
+			Assert.That(arch.Cut, Is.InRange(0.3f, PropsFeature.MaxArchCut + 0.05f));
+
+			float Carved(float z) => PropsFeature.ApproachGround(arch, z, 0f, ground(z));
+			// The deck's ends on their approaches: within the seat, no step.
+			foreach (float end in new[] { arch.EndFrom, arch.EndTo })
+			{
+				Assert.That(arch.DeckAt(end) - Carved(end), Is.InRange(0f, PropsFeature.ArchStepTolerance), $"the deck's end at {end:0.0} m meets its approach");
+			}
+			// Each ramp no steeper than a cart's grade, out to where it meets its rim, and the rim untouched past it.
+			float cart = ScenePathStyle.For(ScenePathClass.CartTrack).MaxGrade;
+			for (int side = -1; side <= 1; side += 2)
+			{
+				float end = side < 0 ? arch.EndFrom : arch.EndTo, ramp = side < 0 ? arch.RampFrom : arch.RampTo;
+				for (float r = 0f; r < ramp + 2f; r += 0.5f)
+				{
+					float a = end + side * r, b = end + side * (r + 0.5f);
+					Assert.That(Mathf.Abs(Carved(b) - Carved(a)), Is.LessThanOrEqualTo(cart * 0.5f + 0.02f), $"the approach at {a:0.0} m");
+				}
+				float beyond = end + side * (ramp + 1f);
+				Assert.That(Carved(beyond) - ground(beyond), Is.EqualTo(0f).Within(1e-4f), "the ramp has met its rim");
+			}
+			// The gorge's walls and floor are left as they were.
+			foreach (float z in new[] { -9f, -4f, 0f, 4f })
+			{
+				Assert.That(Carved(z), Is.EqualTo(ground(z)).Within(1e-4f), $"{z} m along, in the gorge");
+			}
+
+			// Measured again on the shaped ground (the site is built after the cut): rims that meet the same deck.
+			PropsFeature.Crossing built = MeasureGorge(Carved);
+			Assert.That(built.Gorge, Is.True);
+			string again = PropsFeature.GorgeBridgeFor(Carved, built, true, out _, out PropsFeature.ArchDeck laid);
+			Assert.That(again, Does.StartWith("ArchBridge"));
+			Assert.That(laid.Settled, Is.True, $"fill {laid.Fill:0.00} m, cut {laid.Cut:0.00} m still wanted");
+			Assert.That(laid.DeckAt(0f), Is.EqualTo(arch.DeckAt(0f)).Within(0.15f), "the deck laid where it was planned");
+			Assert.That(Mathf.Abs(laid.GradeDegrees), Is.LessThanOrEqualTo(PropsFeature.MaxArchGradeDegrees + 1e-3f));
+		}
+
+		/// <summary>A gorge with level rims needs no approaches: the arch lies level on them as it did.</summary>
+		[Test]
+		public void ALevelGorgesArchNeedsNoApproaches()
+		{
+			Func<float, float> ground = RakedGorge(50f);
+			PropsFeature.Crossing crossing = MeasureGorge(ground);
+			string id = PropsFeature.GorgeBridgeFor(ground, crossing, true, out _, out PropsFeature.ArchDeck arch);
+			Assert.That(id, Does.StartWith("ArchBridge"));
+			Assert.That(arch.Settled, Is.True);
+			Assert.That(arch.GradeDegrees, Is.EqualTo(0f).Within(1e-3f));
+			Assert.That(arch.DeckAt(0f) - 50f, Is.InRange(0f, PropsFeature.ArchStepTolerance), "on its rims");
+		}
+
+		/// <summary>
+		/// A rake more than a ramp of sensible length makes up (7 m over 21 m, under the bridges' 20° so the way still crosses),
+		/// or a low rim falling away under its approach, is not arched: it is hung with ropes, which may slope.
+		/// </summary>
+		[Test]
+		public void ARakeTooSteepForAnArchIsHungWithRopes()
+		{
+			Func<float, float> steep = RakedGorge(57f);
+			PropsFeature.Crossing crossing = MeasureGorge(steep);
+			Assert.That(crossing.Gorge, Is.True);
+			Assert.That(PropsFeature.GorgeBridgeFor(steep, crossing, true, out _, out PropsFeature.ArchDeck arch), Does.StartWith("RopeBridge"));
+			Assert.That(arch.Valid, Is.False);
+
+			Func<float, float> falling = RakedGorge(54f, 0.2f);
+			PropsFeature.Crossing away = MeasureGorge(falling);
+			Assert.That(away.Gorge, Is.True);
+			Assert.That(PropsFeature.GorgeBridgeFor(falling, away, true, out _, out _), Does.StartWith("RopeBridge"), "the built-up ramp never meets a rim falling away faster");
 		}
 
 		[Test]

@@ -26,6 +26,14 @@ Shader "FishMMO/Water/Caustics"
             ZTest Always
             ZWrite Off
             Cull Off
+            // Not inside a floating hull (FishHullLid.shader sets bit 128 across its open top): its planking is under the
+            // waterline, but no sea is in it.
+            Stencil
+            {
+                Ref 128
+                ReadMask 128
+                Comp NotEqual
+            }
 
             HLSLPROGRAM
             #pragma vertex Vert
@@ -88,13 +96,24 @@ Shader "FishMMO/Water/Caustics"
                         light = FishWaterCausticLight(positionWS);
                         /* This multiplies the frame as it stands, and the clouds and the fog have
                          * already been laid over it: scaled whole, the caustics would brighten them as
-                         * well as the sea bed under them. They fade by what those let through instead. */
-                        half fogKeep;
-                        FishWaterAirFogOver(half3(0.0, 0.0, 0.0), positionWS, input.screenUV, fogKeep);
-                        // And by what the clouds in front of it let through, which were laid there first.
-                        light = 1.0 + (light - 1.0) * fogKeep * FishWaterCloudsInFront(input.screenUV).a;
+                         * well as the sea bed under them. They fade by what those let through instead.
+                         * Not where the light is 1 (above the water, out of the sun, past the fade): one
+                         * plus nothing is one whatever the fog and the clouds let through. */
+                        if (light != 1.0)
+                        {
+                            half fogKeep;
+                            FishWaterAirFogOver(half3(0.0, 0.0, 0.0), positionWS, input.screenUV, fogKeep);
+                            // And by what the clouds in front of it let through, which were laid there first.
+                            light = 1.0 + (light - 1.0) * fogKeep * FishWaterCloudsInFront(input.screenUV).a;
+                        }
                     }
                 #endif
+                /* Times one is the frame as it is: not written at all, which spares the blend its read and write over
+                 * every pixel above the water. Nothing after this samples with a gradient, so no neighbour misses one. */
+                if (light == 1.0)
+                {
+                    discard;
+                }
                 return half4(light, light, light, 1.0);
             }
             ENDHLSL

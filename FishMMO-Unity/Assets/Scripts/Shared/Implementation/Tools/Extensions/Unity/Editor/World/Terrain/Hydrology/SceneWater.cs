@@ -1050,6 +1050,9 @@ namespace FishMMO.Shared.WorldDesign
 		public const float RiverSurfaceReachMetres = 3f;
 
 		private const float RiverIndexCell = 32f;
+
+		/// <summary>The farthest past a river's banks <see cref="RiverSurfaceNear(float, float, float)"/> can be asked to answer, metres.</summary>
+		public const float RiverIndexReachMetres = 10f;
 		private Dictionary<long, List<(int river, int point)>> riverIndex;
 		private readonly object riverIndexLock = new object();
 
@@ -1060,8 +1063,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// steps at every sample, and the bed paint up the banks came out as a row of teeth (2026-10-11). Safe from
 		/// the scatter's worker threads.
 		/// </summary>
-		public float RiverSurfaceNear(float east, float north)
+		public float RiverSurfaceNear(float east, float north) => RiverSurfaceNear(east, north, RiverSurfaceReachMetres);
+
+		/// <summary>As <see cref="RiverSurfaceNear(float, float)"/>, out to <paramref name="reach"/> past the banks (at most <see cref="RiverIndexReachMetres"/>).</summary>
+		public float RiverSurfaceNear(float east, float north, float reach)
 		{
+			reach = Mathf.Min(reach, RiverIndexReachMetres);
 			Dictionary<long, List<(int river, int point)>> index = RiverIndex();
 			long key = ((long)Mathf.FloorToInt(east / RiverIndexCell) << 32) ^ (uint)Mathf.FloorToInt(north / RiverIndexCell);
 			if (!index.TryGetValue(key, out List<(int river, int point)> near))
@@ -1079,7 +1086,7 @@ namespace FishMMO.Shared.WorldDesign
 				float dx = ax + abx * t - east, dz = az + abz * t - north;
 				float distance = Mathf.Sqrt(dx * dx + dz * dz);
 				float half = 0.5f * Mathf.Lerp(river.Width[i], river.Width[i + 1], t);
-				if (distance <= half + RiverSurfaceReachMetres && distance < nearest)
+				if (distance <= half + reach && distance < nearest)
 				{
 					nearest = distance;
 					level = Mathf.Lerp(river.Surface[i], river.Surface[i + 1], t);
@@ -1107,7 +1114,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					for (int i = 0; i + 1 < river.Count; i++)
 					{
-						float margin = 0.5f * Mathf.Max(river.Width[i], river.Width[i + 1]) + RiverSurfaceReachMetres;
+						float margin = 0.5f * Mathf.Max(river.Width[i], river.Width[i + 1]) + RiverIndexReachMetres;
 						int x0 = Mathf.FloorToInt((Mathf.Min(river.X[i], river.X[i + 1]) - margin) / RiverIndexCell);
 						int x1 = Mathf.FloorToInt((Mathf.Max(river.X[i], river.X[i + 1]) + margin) / RiverIndexCell);
 						int z0 = Mathf.FloorToInt((Mathf.Min(river.Z[i], river.Z[i + 1]) - margin) / RiverIndexCell);
@@ -1324,7 +1331,8 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The asset ────────────────────────────────────────────────
 
 		/// <summary>Writes the rivers and lakes to the scene's hydrology asset, replacing what it held.</summary>
-		public void WriteTo(SceneHydrology asset)
+		/// <param name="ground">The finished ground at (east, north), scene metres: where each river's water meets it past its banks (<see cref="RiverShores"/>). Null for none.</param>
+		public void WriteTo(SceneHydrology asset, Func<float, float, float> ground = null)
 		{
 			asset.Rivers.Clear();
 			asset.Lakes.Clear();
@@ -1356,6 +1364,9 @@ namespace FishMMO.Shared.WorldDesign
 					river.Speed[i] = path.SpeedAt(i);
 					river.Reach[i] = path.Reach != null ? (byte)path.Reach[i] : (byte)0;
 				}
+				RiverShores.Measure(path, ground, out float[] shoreLeft, out float[] shoreRight);
+				river.ShoreLeft = shoreLeft ?? Array.Empty<float>();
+				river.ShoreRight = shoreRight ?? Array.Empty<float>();
 				asset.Rivers.Add(river);
 			}
 			foreach (SceneLake lake in Lakes)

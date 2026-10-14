@@ -6,6 +6,7 @@ using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Predicting;
 using FishNet.Managing.Timing;
+using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -54,9 +55,17 @@ namespace FishMMO.Shared
 	/// <b>Riders</b> are carried through the same seam as a platform's (<c>KinematicCharacterMotor.SetPlatformVelocity</c>,
 	/// the attached-rigidbody carry): <see cref="TryGetCarry"/> gives the velocity that keeps a deck point under the rider's
 	/// feet from the last tick's pose to this one's — a rigid motion, so the 180° swing at anchor carries a rider round with
-	/// the deck — and the motor conveys it only to a stably grounded character. Who is aboard is decided spatially, again
-	/// from the tick (feet over the deck in the last tick's frame, confirmed by a ray down onto this hull's own collider),
-	/// never from a trigger volume or the motor's ground collider, neither of which a reconcile restores.
+	/// the deck — and the yaw the hull turned through between the two, which the motor puts on the rider's facing as KCC
+	/// does an attached PhysicsMover's rotation; both only to a stably grounded character. Who is aboard is decided
+	/// spatially, again from the tick (feet over the deck in the last tick's frame, confirmed by a ray down onto this hull's
+	/// own collider), never from a trigger volume or the motor's ground collider, neither of which a reconcile restores.
+	/// </para>
+	/// <para>
+	/// <b>A rider's camera turns with the ship</b> (the owner's only, a presentation of the drawn hull: see
+	/// <see cref="TryGetDrawnYaw"/>), as KCC's camera turns with a PhysicsMover. It has to: a character facing the camera
+	/// (the shipped orientation) takes its facing from the camera's rotation in its input every tick, so a camera fixed in
+	/// the world would hold the rider's facing fixed in the world whatever the motor did. Being input, the turned camera
+	/// reaches the server and every replay as it is, so nothing about it can diverge.
 	/// </para>
 	/// <para>
 	/// <b>Drawn</b> on the client from the same function at a fractional tick, <see cref="VisualInterpolationTicks"/> behind
@@ -195,6 +204,43 @@ namespace FishMMO.Shared
 		/// <summary>How far over the hull's highest point a rider's feet may be and still be aboard, metres.</summary>
 		public const float DeckHeadroom = 0.5f;
 
+		/// <summary>
+		/// How far past its own length a ship under way keeps its collider placed for a character, metres (<see cref="PoseShips"/>):
+		/// on the server any character in the scene, on a client the character it predicts and its camera. Beyond that
+		/// nothing can touch the hull before the next tick poses it again, so its collider is switched off and its root
+		/// left where it was, rather than moved and re-synced every tick for nobody. Ample against a tick's travel (under a
+		/// metre) and against a client's camera, its rain shelter map and its replays.
+		/// </summary>
+		public const float SolidReach = 64f;
+
+		/// <summary>How long a rider's position counts as near, seconds: it asks for a carry every tick it simulates.</summary>
+		private const float RiderMemorySeconds = 1f;
+
+		private static readonly ProfilerMarker PoseAllMarker = new ProfilerMarker("FloatingBoats.PoseAll");
+		private static readonly ProfilerMarker CarryMarker = new ProfilerMarker("FloatingBoats.TryGetCarry");
+
+		/// <summary>
+		/// One ship under way, as the carry found a rider aboard it: what a rider's camera follows. Default (no fleet) when
+		/// aboard none.
+		/// </summary>
+		public readonly struct ShipRef : IEquatable<ShipRef>
+		{
+			public readonly FloatingBoats Fleet;
+			public readonly int Index;
+
+			public ShipRef(FloatingBoats fleet, int index)
+			{
+				Fleet = fleet;
+				Index = index;
+			}
+
+			public bool IsValid => Fleet != null && Index >= 0 && Index < Fleet.sailing.Length;
+
+			public bool Equals(ShipRef other) => ReferenceEquals(Fleet, other.Fleet) && Index == other.Index;
+			public override bool Equals(object obj) => obj is ShipRef other && Equals(other);
+			public override int GetHashCode() => (ReferenceEquals(Fleet, null) ? 0 : Fleet.GetInstanceID()) * 397 ^ Index;
+		}
+
 		/// <summary>Per ship, what the tick driver last did with it. Runtime only.</summary>
 		private struct ShipState
 		{
@@ -207,6 +253,9 @@ namespace FishMMO.Shared
 		}
 
 		[NonSerialized] private ShipState[] states;
+		/// <summary>Each lane's points' extent across the ground (x and z), for <see cref="TryCarryAt"/>'s first rejection. Runtime only.</summary>
+		[NonSerialized] private Rect[] laneAreas;
+		[NonSerialized] private Lane[] laneAreasOf;
 
 		/// <summary>Set by the cut.</summary>
 		public void Configure(Moored[] boats, Lane[] ways, Sailing[] ships)
@@ -241,6 +290,7 @@ namespace FishMMO.Shared
 
 		private void OnEnable()
 		{
+			MarkHulls();
 			if (sailing.Length > 0)
 			{
 				Fleet.Add(this);
@@ -426,8 +476,17 @@ namespace FishMMO.Shared
 		/// bounds in the last tick's frame, or below the waterline, as a swimmer alongside is — or the ship is hidden.
 		/// </summary>
 		public static bool TryCarry(in ShipPose before, in ShipPose now, Bounds deck, Vector3 rider, float delta, out Vector3 velocity)
+			=> TryCarry(before, now, deck, rider, delta, out velocity, out _);
+
+		/// <summary>
+		/// <see cref="TryCarry(in ShipPose, in ShipPose, Bounds, Vector3, float, out Vector3)"/>, and the yaw the hull turned
+		/// through, degrees about +y (<see cref="Turn"/>): what the rider's facing turns by, so it keeps its bearing on the deck
+		/// as its feet keep their place. Zero when not carried.
+		/// </summary>
+		public static bool TryCarry(in ShipPose before, in ShipPose now, Bounds deck, Vector3 rider, float delta, out Vector3 velocity, out float turn)
 		{
 			velocity = Vector3.zero;
+			turn = 0f;
 			if (!before.Shown || !now.Shown || delta <= 0f || deck.size.x <= 0f || deck.size.z <= 0f)
 			{
 				return false;
@@ -441,42 +500,111 @@ namespace FishMMO.Shared
 				return false;
 			}
 			velocity = (now.ToWorld(local) - rider) / delta;
+			turn = Turn(before, now);
 			return true;
+		}
+
+		/// <summary>
+		/// The yaw a hull turned through from <paramref name="before"/> to <paramref name="now"/>, degrees about +y, the short
+		/// way round: the heading comes from an arctangent that wraps at ±180°, and a round's two swings add a whole turn, so
+		/// the plain difference can be a full turn out.
+		/// </summary>
+		public static float Turn(in ShipPose before, in ShipPose now) => Mathf.DeltaAngle(before.Yaw, now.Yaw);
+
+		/// <summary>
+		/// A direction turned by <paramref name="turn"/> degrees about +y in Unity's sense (<c>Quaternion.Euler(0, turn, 0)</c>),
+		/// as a deck turns everything standing on it: the rotation <see cref="ShipPose.ToWorld"/> puts between two poses.
+		/// </summary>
+		public static Vector3 Turned(Vector3 direction, float turn)
+		{
+			float r = turn * Mathf.Deg2Rad;
+			float c = Mathf.Cos(r), s = Mathf.Sin(r);
+			return new Vector3(direction.x * c + direction.z * s, direction.y, -direction.x * s + direction.z * c);
 		}
 
 		/// <summary>
 		/// The carry of whichever ship under way in <paramref name="scene"/> a rider at <paramref name="rider"/> stands on,
 		/// at the synced <paramref name="tick"/> it is simulating (a rider's <c>KCCController.WaterTick</c>, the tick the
-		/// ships are posed at, live and in replay). Zero, and false, aboard none.
+		/// ships are posed at, live and in replay): the velocity, the yaw the hull turned through this tick, degrees, and
+		/// which ship it is. Zero, default and false, aboard none.
 		/// </summary>
-		public static bool TryGetCarry(Scene scene, uint tick, double tickDelta, Vector3 rider, float delta, out Vector3 velocity)
+		public static bool TryGetCarry(Scene scene, uint tick, double tickDelta, Vector3 rider, float delta, out Vector3 velocity, out float turn, out ShipRef ship)
+		{
+			using (CarryMarker.Auto())
+			{
+				return TryGetCarryIn(scene, tick, tickDelta, rider, delta, out velocity, out turn, out ship);
+			}
+		}
+
+		private static bool TryGetCarryIn(Scene scene, uint tick, double tickDelta, Vector3 rider, float delta, out Vector3 velocity, out float turn, out ShipRef ship)
 		{
 			velocity = Vector3.zero;
+			turn = 0f;
+			ship = default;
 			List<FloatingBoats> fleets = Fleet.In(scene);
 			if (fleets == null)
 			{
 				return false;
 			}
+			// A character simulating here: the hulls near it must stand solid for it from the next tick on (PoseShips).
+			Fleet.NoteRider(scene, rider);
 			for (int f = 0; f < fleets.Count; f++)
 			{
 				FloatingBoats boats = fleets[f];
-				if (boats != null && boats.TryCarryAt(tick, tickDelta, rider, delta, out velocity))
+				if (boats != null && boats.TryCarryAt(tick, tickDelta, rider, delta, out velocity, out turn, out int index))
 				{
+					ship = new ShipRef(boats, index);
 					return true;
 				}
 			}
 			velocity = Vector3.zero;
+			turn = 0f;
 			return false;
 		}
 
-		private bool TryCarryAt(uint tick, double tickDelta, Vector3 rider, float delta, out Vector3 velocity)
+		/// <summary>
+		/// The yaw <paramref name="ship"/>'s drawn hull shows this frame, degrees: worked out at the same fractional tick
+		/// <see cref="LateUpdate"/> draws it at. What a rider's camera turns by from one frame to the next, so the view swings
+		/// with the deck the rider sees (drawn at the rider's own lag) rather than with the collider a few ticks ahead of it.
+		/// False for no ship, or one out of sight.
+		/// </summary>
+		public static bool TryGetDrawnYaw(in ShipRef ship, out float yaw)
+		{
+			yaw = 0f;
+			if (!ship.IsValid)
+			{
+				return false;
+			}
+			FloatingBoats boats = ship.Fleet;
+			Sailing sailing = boats.sailing[ship.Index];
+			if (sailing.Lane < 0 || sailing.Lane >= boats.lanes.Length)
+			{
+				return false;
+			}
+			double seconds = Fleet.TryVisualTick(out double visualTick, out double tickDelta) ? visualTick * tickDelta : WorldMotion.Seconds;
+			ShipPose pose = CourseAt(boats.lanes[sailing.Lane], sailing, seconds);
+			yaw = pose.Yaw;
+			return pose.Shown;
+		}
+
+		private bool TryCarryAt(uint tick, double tickDelta, Vector3 rider, float delta, out Vector3 velocity, out float turn, out int index)
 		{
 			velocity = Vector3.zero;
+			turn = 0f;
+			index = -1;
 			EnsureStates();
 			for (int i = 0; i < sailing.Length; i++)
 			{
 				Sailing ship = sailing[i];
 				if (ship.Root == null)
+				{
+					continue;
+				}
+				// Cheap rejection first: a rider nowhere near this hull.
+				float reach = Mathf.Max(ship.Length, ship.Deck.extents.magnitude) + 2f;
+				/* Before any pose: a hull is always on its lane, so a rider further than the reach from the whole lane's
+				 * extent is further than it from the hull, whatever the tick (and an unusable lane carries nobody). */
+				if (ship.Lane < 0 || ship.Lane >= laneAreas.Length || !MayReach(laneAreas[ship.Lane], reach, rider))
 				{
 					continue;
 				}
@@ -492,13 +620,11 @@ namespace FishMMO.Shared
 					now = PoseAt(i, SecondsAt(tick, tickDelta), tick);
 					before = PoseAt(i, SecondsAt(tick - 1.0, tickDelta), tick - 1u);
 				}
-				// Cheap rejection first: a rider nowhere near this hull.
-				float reach = Mathf.Max(ship.Length, ship.Deck.extents.magnitude) + 2f;
 				if ((now.Position - rider).sqrMagnitude > reach * reach)
 				{
 					continue;
 				}
-				if (!TryCarry(before, now, ship.Deck, rider, delta, out Vector3 carry))
+				if (!TryCarry(before, now, ship.Deck, rider, delta, out Vector3 carry, out float turned))
 				{
 					continue;
 				}
@@ -509,6 +635,8 @@ namespace FishMMO.Shared
 					continue;
 				}
 				velocity = carry;
+				turn = turned;
+				index = i;
 				return true;
 			}
 			return false;
@@ -554,6 +682,7 @@ namespace FishMMO.Shared
 		{
 			EnsureStates();
 			bool changed = false;
+			Scene scene = gameObject.scene;
 			for (int i = 0; i < sailing.Length; i++)
 			{
 				if (sailing[i].Root == null)
@@ -567,9 +696,43 @@ namespace FishMMO.Shared
 				state.Now = now;
 				state.Tick = tick;
 				state.Posed = true;
+				/* Placed only where a character could meet it (SolidReach). Elsewhere it is switched off, not left standing
+				 * where it last was, so a character arriving later never meets a hull the ship has sailed out of; it is
+				 * placed again, at this tick's pose, the tick one comes within reach. The pose itself (and so any carry)
+				 * is the tick's either way. */
+				if (now.Shown && !Fleet.AnyoneNear(scene, now.Position, SolidReach + Mathf.Max(sailing[i].Length, sailing[i].Deck.extents.magnitude)))
+				{
+					changed |= Solid(ref state, false);
+					continue;
+				}
 				changed |= Place(i, now);
 			}
 			return changed;
+		}
+
+		/// <summary>
+		/// Whether a rider at <paramref name="rider"/> can be within <paramref name="reach"/> of a point somewhere in
+		/// <paramref name="area"/> (a lane's extent across the ground): false only when it is further than that from all of it.
+		/// </summary>
+		public static bool MayReach(Rect area, float reach, Vector3 rider)
+			=> rider.x >= area.xMin - reach && rider.x <= area.xMax + reach && rider.z >= area.yMin - reach && rider.z <= area.yMax + reach;
+
+		/// <summary>A lane's points' extent across the ground (x, z as the rect's x, y); empty at the origin for a lane with none.</summary>
+		public static Rect LaneArea(Lane lane)
+		{
+			if (lane == null || lane.Points == null || lane.Points.Length == 0)
+			{
+				return new Rect(0f, 0f, 0f, 0f);
+			}
+			float minX = float.PositiveInfinity, minZ = float.PositiveInfinity, maxX = float.NegativeInfinity, maxZ = float.NegativeInfinity;
+			foreach (Vector3 p in lane.Points)
+			{
+				minX = Mathf.Min(minX, p.x);
+				maxX = Mathf.Max(maxX, p.x);
+				minZ = Mathf.Min(minZ, p.z);
+				maxZ = Mathf.Max(maxZ, p.z);
+			}
+			return Rect.MinMaxRect(minX, minZ, maxX, maxZ);
 		}
 
 		/// <summary>Stands ship <paramref name="i"/>'s root at a pose; hidden, its collider off and the root left where it was.</summary>
@@ -619,6 +782,15 @@ namespace FishMMO.Shared
 
 		private void EnsureStates()
 		{
+			if (laneAreas == null || !ReferenceEquals(laneAreasOf, lanes) || laneAreas.Length != lanes.Length)
+			{
+				laneAreas = new Rect[lanes.Length];
+				for (int l = 0; l < lanes.Length; l++)
+				{
+					laneAreas[l] = LaneArea(lanes[l]);
+				}
+				laneAreasOf = lanes;
+			}
 			if (states != null && states.Length == sailing.Length)
 			{
 				return;
@@ -728,6 +900,192 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// The FishMMO Water plugin's hull mark (FishHullShoreMark.shader): drawn over a hull's own pixels, it tells the sea's
+		/// shore pass to leave them alone. Found by name, as this assembly does not reference the plugin; the scene's
+		/// WaterShore references the shader so a build includes it.
+		/// </summary>
+		public const string ShoreMarkShaderName = "FishMMO/Water/Hull Shore Mark";
+
+		/// <summary>The object each hull mark is drawn from, a child of the hull renderer it copies.</summary>
+		public const string ShoreMarkName = "Shore Mark";
+
+		/// <summary>One material for every mark: it has no properties.</summary>
+		private static Material shoreMark;
+
+		[NonSerialized] private bool hullsMarked;
+
+		/// <summary>
+		/// Marks every drawn hull for the sea's shore pass to skip (FishHullShoreMark.shader). That pass draws the swash, its
+		/// foam and the wet sand on whatever the depth buffer holds at the sea's edge, by design (terrain, rocks, pier piles),
+		/// and a boat at its waterline drew a beach up its side. Once per component, on the client only (a server has no
+		/// drawn hulls); in play only, as nothing of it may be saved into the scene. Presentation alone: no pose, collider
+		/// or carry is touched.
+		/// </summary>
+		private void MarkHulls()
+		{
+			if (hullsMarked || !Application.isPlaying)
+			{
+				return;
+			}
+			hullsMarked = true;
+			if (!HasDrawnHull())
+			{
+				return;
+			}
+			Material mark = ShoreMark();
+			if (mark == null)
+			{
+				return;
+			}
+			var marks = new Dictionary<Renderer, Renderer>();
+			for (int i = 0; i < moored.Length; i++)
+			{
+				MarkHull(moored[i].Visual, mark, marks);
+			}
+			for (int i = 0; i < sailing.Length; i++)
+			{
+				MarkHull(sailing[i].Ship, mark, marks);
+				if (sailing[i].Furled != sailing[i].Ship)
+				{
+					MarkHull(sailing[i].Furled, mark, marks);
+				}
+			}
+		}
+
+		private bool HasDrawnHull()
+		{
+			for (int i = 0; i < moored.Length; i++)
+			{
+				if (moored[i].Visual != null)
+				{
+					return true;
+				}
+			}
+			for (int i = 0; i < sailing.Length; i++)
+			{
+				if (sailing[i].Ship != null || sailing[i].Furled != null)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private static Material ShoreMark()
+		{
+			if (shoreMark != null)
+			{
+				return shoreMark;
+			}
+			Shader shader = Shader.Find(ShoreMarkShaderName);
+			if (shader == null || !shader.isSupported)
+			{
+				return null;
+			}
+			return shoreMark = new Material(shader) { name = "Hull shore mark", hideFlags = HideFlags.HideAndDontSave, enableInstancing = true };
+		}
+
+		/// <summary>
+		/// One drawn hull: a mark beside each of its opaque mesh renderers, and each mark put into its renderer's LOD (a
+		/// mark outside the group would draw the near mesh at every distance, against a far mesh's depth).
+		/// </summary>
+		private static void MarkHull(Transform hull, Material mark, Dictionary<Renderer, Renderer> marks)
+		{
+			if (hull == null)
+			{
+				return;
+			}
+			marks.Clear();
+			foreach (MeshRenderer renderer in hull.GetComponentsInChildren<MeshRenderer>(true))
+			{
+				Renderer marked = MarkRenderer(renderer, mark);
+				if (marked != null)
+				{
+					marks[renderer] = marked;
+				}
+			}
+			if (marks.Count == 0)
+			{
+				return;
+			}
+			foreach (LODGroup group in hull.GetComponentsInChildren<LODGroup>(true))
+			{
+				LOD[] lods = group.GetLODs();
+				bool changed = false;
+				for (int l = 0; l < lods.Length; l++)
+				{
+					Renderer[] renderers = lods[l].renderers;
+					if (renderers == null)
+					{
+						continue;
+					}
+					var withMarks = new List<Renderer>(renderers.Length * 2);
+					foreach (Renderer renderer in renderers)
+					{
+						withMarks.Add(renderer);
+						if (renderer != null && marks.TryGetValue(renderer, out Renderer marked))
+						{
+							withMarks.Add(marked);
+							changed = true;
+						}
+					}
+					lods[l].renderers = withMarks.ToArray();
+				}
+				if (changed)
+				{
+					group.SetLODs(lods);
+				}
+			}
+		}
+
+		/// <summary>
+		/// The mark for one hull renderer: its mesh again, every submesh it draws, with the mark's material. None for a
+		/// renderer with anything but opaque materials — a transparent surface (the water lid among them) writes no depth,
+		/// so a mark there would stand for whatever lies behind it.
+		/// </summary>
+		private static Renderer MarkRenderer(MeshRenderer renderer, Material mark)
+		{
+			if (renderer.gameObject.name == ShoreMarkName)
+			{
+				return null;
+			}
+			MeshFilter filter = renderer.GetComponent<MeshFilter>();
+			Mesh mesh = filter != null ? filter.sharedMesh : null;
+			Material[] materials = renderer.sharedMaterials;
+			if (mesh == null || materials.Length == 0)
+			{
+				return null;
+			}
+			foreach (Material material in materials)
+			{
+				if (material == null || material.renderQueue > (int)UnityEngine.Rendering.RenderQueue.GeometryLast)
+				{
+					return null;
+				}
+			}
+			var marks = new Material[Mathf.Min(mesh.subMeshCount, materials.Length)];
+			for (int i = 0; i < marks.Length; i++)
+			{
+				marks[i] = mark;
+			}
+
+			var holder = new GameObject(ShoreMarkName) { layer = renderer.gameObject.layer };
+			holder.transform.SetParent(renderer.transform, false);
+			holder.AddComponent<MeshFilter>().sharedMesh = mesh;
+			var marked = holder.AddComponent<MeshRenderer>();
+			marked.sharedMaterials = marks;
+			marked.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+			marked.receiveShadows = false;
+			marked.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+			marked.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+			marked.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+			marked.renderingLayerMask = renderer.renderingLayerMask;
+			marked.allowOcclusionWhenDynamic = renderer.allowOcclusionWhenDynamic;
+			marked.enabled = renderer.enabled;
+			return marked;
+		}
+
+		/// <summary>
 		/// The synced tick a peer simulates its <paramref name="localTick"/> at: the server's own tick on the server; on a
 		/// client, its local tick mapped through the last reconcile's (client, server) pairing — the same mapping
 		/// (<see cref="WeatherExposureTick.Resolve(bool, uint, uint, uint, uint, uint)"/>) a rider's replicate uses for the
@@ -752,6 +1110,60 @@ namespace FishMMO.Shared
 			private static int visualFrame = -1;
 			private static double visualTick, visualOffset;
 			private static bool visualOffsetSet;
+
+			/// <summary>The latest riders' positions (whoever asked for a carry), a ring: on a client, the character it predicts.</summary>
+			private const int RiderSlots = 32;
+			private static readonly Vector3[] riderAt = new Vector3[RiderSlots];
+			private static readonly int[] riderScene = new int[RiderSlots];
+			private static readonly float[] riderTime = new float[RiderSlots];
+			private static int riderNext, riderCount;
+
+			public static void NoteRider(Scene scene, Vector3 position)
+			{
+				riderAt[riderNext] = position;
+				riderScene[riderNext] = scene.handle;
+				riderTime[riderNext] = Time.unscaledTime;
+				riderNext = (riderNext + 1) % RiderSlots;
+				riderCount = Mathf.Min(RiderSlots, riderCount + 1);
+			}
+
+			/// <summary>
+			/// Whether anything that collides with a hull may be within <paramref name="reach"/> of <paramref name="point"/>
+			/// (across the ground): a rider of the last second; on the server any character of the scene; on a client its
+			/// camera, which its shelter map and its own collisions work round.
+			/// </summary>
+			public static bool AnyoneNear(Scene scene, Vector3 point, float reach)
+			{
+				float reachSquared = reach * reach;
+				float now = Time.unscaledTime;
+				int handle = scene.handle;
+				for (int r = 0; r < riderCount; r++)
+				{
+					if (riderScene[r] == handle && now - riderTime[r] <= RiderMemorySeconds && Near(riderAt[r], point, reachSquared))
+					{
+						return true;
+					}
+				}
+				if (network != null && network.IsServerStarted && LagCompensationRegistry.AnyWithin(scene, point, reach))
+				{
+					return true;
+				}
+				if (network == null || network.IsClientStarted)
+				{
+					Camera camera = Camera.main;
+					if (camera != null && Near(camera.transform.position, point, reachSquared))
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+
+			private static bool Near(Vector3 a, Vector3 b, float reachSquared)
+			{
+				float dx = a.x - b.x, dz = a.z - b.z;
+				return dx * dx + dz * dz <= reachSquared;
+			}
 
 			public static void Add(FloatingBoats boats)
 			{
@@ -863,6 +1275,14 @@ namespace FishMMO.Shared
 			private static void OnPostReconcile(uint clientTick, uint serverTick) => PoseAll(SyncTickOf(time.LocalTick));
 
 			private static void PoseAll(uint tick)
+			{
+				using (PoseAllMarker.Auto())
+				{
+					PoseAllAt(tick);
+				}
+			}
+
+			private static void PoseAllAt(uint tick)
 			{
 				if (network == null)
 				{

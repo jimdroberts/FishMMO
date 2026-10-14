@@ -55,16 +55,36 @@ namespace FishMMO.Water
 		// Per component, all cascades end to end.
 		private readonly float[] kx;
 		private readonly float[] kz;
+		// The unit wave direction, k / |k| (|k| floored at 1e-4): what the sideways throw is projected on. Worked out once
+		// here rather than per component per query, with the same arithmetic, so the throw is unchanged to the bit.
+		private readonly float[] ux;
+		private readonly float[] uz;
 		private readonly float[] ax;
 		private readonly float[] ay;
 		private readonly float[] bx;
 		private readonly float[] by;
 		private readonly float[] omega;
-		private readonly float[] shift;   // half a texel of the component's cascade, in metres
+		// Half a texel of each cascade, in metres (every component of a cascade has its cascade's): subtracted from the
+		// point once a cascade rather than once a component, the same arithmetic, so the same result.
+		private readonly float[] cascadeShift;
 		private readonly float[] hr;      // h(k, t), real …
 		private readonly float[] hi;      // … and imaginary, at the evaluated instant
 		private readonly int count;
 		private double evaluatedAt = double.NaN;
+
+		// The components as built, for WaterSpectrumSampler to copy once into native memory. Never written after Build.
+		internal int Count => count;
+		internal int CascadeCount => cascadeShift.Length;
+		internal float[] WaveX => kx;
+		internal float[] WaveZ => kz;
+		internal float[] UnitX => ux;
+		internal float[] UnitZ => uz;
+		internal float[] AmplitudeAX => ax;
+		internal float[] AmplitudeAY => ay;
+		internal float[] AmplitudeBX => bx;
+		internal float[] AmplitudeBY => by;
+		internal float[] Frequency => omega;
+		internal float[] CascadeShift => cascadeShift;
 
 		/// <summary>The horizontal displacement scale the spectrum was built with.</summary>
 		public float Choppiness { get; }
@@ -81,16 +101,18 @@ namespace FishMMO.Water
 		/// <summary>The loop period its frequencies were quantised to: the spectrum repeats exactly in it.</summary>
 		public float LoopPeriod { get; private set; }
 
-		private WaterSpectrum(int capacity, float choppiness, float wind, float heading, float gravity)
+		private WaterSpectrum(int capacity, int cascades, float choppiness, float wind, float heading, float gravity)
 		{
 			kx = new float[capacity];
 			kz = new float[capacity];
+			ux = new float[capacity];
+			uz = new float[capacity];
+			cascadeShift = new float[cascades];
 			ax = new float[capacity];
 			ay = new float[capacity];
 			bx = new float[capacity];
 			by = new float[capacity];
 			omega = new float[capacity];
-			shift = new float[capacity];
 			hr = new float[capacity];
 			hi = new float[capacity];
 			count = capacity;
@@ -109,7 +131,7 @@ namespace FishMMO.Water
 			float choppiness, float loopPeriod, uint seed, float[] patchMetres)
 		{
 			int cascades = patchMetres.Length;
-			var spectrum = new WaterSpectrum(cascades * ComponentsPerCascade, choppiness, wind, headingDegrees, gravity);
+			var spectrum = new WaterSpectrum(cascades * ComponentsPerCascade, cascades, choppiness, wind, headingDegrees, gravity);
 			spectrum.LoopPeriod = loopPeriod;
 
 			float radians = headingDegrees * Mathf.Deg2Rad;
@@ -131,6 +153,9 @@ namespace FishMMO.Water
 				float deltaK = 2f * Mathf.PI / Mathf.Max(1f, patch);
 				float cell = deltaK * deltaK;
 				uint salt = seed + (uint)c * 7919u;
+				/* The shader samples each cascade at world / patch, so texel m is drawn at (m + 0.5) texels while the
+				 * transform put it at m: the drawn sea is the transform shifted half a texel. A metre on the swell cascade. */
+				spectrum.cascadeShift[c] = 0.5f * patch / N;
 
 				// The energy of every texel, to pick the strongest.
 				for (int y = 0; y < N; y++)
@@ -189,15 +214,15 @@ namespace FishMMO.Water
 
 					spectrum.kx[written] = wx;
 					spectrum.kz[written] = wz;
+					// As Sample divided them before: the same floored magnitude, the same division.
+					float unitMagnitude = Mathf.Max(1e-4f, Mathf.Sqrt(wx * wx + wz * wz));
+					spectrum.ux[written] = wx / unitMagnitude;
+					spectrum.uz[written] = wz / unitMagnitude;
 					spectrum.ax[written] = candidates[n].ax;
 					spectrum.ay[written] = candidates[n].ay;
 					spectrum.bx[written] = candidates[n].bx;
 					spectrum.by[written] = candidates[n].by;
 					spectrum.omega[written] = w;
-					/* The shader samples each cascade at world / patch, so texel m is drawn at
-					 * (m + 0.5) texels while the transform put it at m: the drawn sea is the
-					 * transform shifted half a texel. A metre on the swell cascade. */
-					spectrum.shift[written] = 0.5f * patch / N;
 					written++;
 				}
 			}
@@ -235,17 +260,21 @@ namespace FishMMO.Water
 			float sumHeight = 0f;
 			float sumX = 0f;
 			float sumZ = 0f;
-			for (int i = 0; i < count; i++)
+			for (int c = 0, i = 0; c < cascadeShift.Length; c++)
 			{
-				float arg = kx[i] * (x - shift[i]) + kz[i] * (z - shift[i]);
-				float cos = Mathf.Cos(arg);
-				float sin = Mathf.Sin(arg);
-				// Re(h·e^{ik·x}), and Re(-i·k̂·h·e^{ik·x}) for the sideways throw.
-				sumHeight += hr[i] * cos - hi[i] * sin;
-				float across = hi[i] * cos + hr[i] * sin;
-				float magnitude = Mathf.Max(1e-4f, Mathf.Sqrt(kx[i] * kx[i] + kz[i] * kz[i]));
-				sumX += kx[i] / magnitude * across;
-				sumZ += kz[i] / magnitude * across;
+				float xs = x - cascadeShift[c];
+				float zs = z - cascadeShift[c];
+				for (int end = i + ComponentsPerCascade; i < end; i++)
+				{
+					float arg = kx[i] * xs + kz[i] * zs;
+					float cos = Mathf.Cos(arg);
+					float sin = Mathf.Sin(arg);
+					// Re(h·e^{ik·x}), and Re(-i·k̂·h·e^{ik·x}) for the sideways throw.
+					sumHeight += hr[i] * cos - hi[i] * sin;
+					float across = hi[i] * cos + hr[i] * sin;
+					sumX += ux[i] * across;
+					sumZ += uz[i] * across;
+				}
 			}
 			height = sumHeight;
 			dx = sumX * Choppiness;

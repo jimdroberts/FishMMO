@@ -1397,6 +1397,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * NPC's own PhysicsScene; AICombatSlots spaces attackers around a target. */
 			Agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
 
+			/* Off-mesh links (a climbable's, SceneNavMeshes) are walked by StepOffMeshLink, not by the agent: its own
+			 * traversal is a straight line at walking speed, which cuts through a ledge's edge from a ladder's foot to its
+			 * landing. See AIController.Climbing. */
+			Agent.autoTraverseOffMeshLink = false;
+
 			/* Land only: the bake marks water too deep to wade as its own area (the sea floor and lake beds keep their
 			 * NavMesh for swimmers), and an NPC that cannot swim must never be routed across it. */
 			Agent.areaMask = LandAreas;
@@ -1669,6 +1674,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			PetStuckTimer = 0f;
 			UnreachableTargetTimer = 0f;
 			ResetSwimming();
+			ResetOffMeshLink();
 			WasAttackingLastTick = false;
 			AllyScanTimer = 0f;
 			CachedHealTarget = null;
@@ -1769,7 +1775,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				 * sees — and turning any slower makes an NPC's head visibly snap between orientations
 				 * while its position is being smoothly interpolated. Matching the send rate is exactly
 				 * right. The brain, meanwhile, has no reason to run at 30 Hz. */
-				if (LookTarget != null)
+				// Not while on a ladder or rope: a climber faces the climbable, whatever it is after (AIController.Climbing).
+				if (LookTarget != null && !IsClimbingLink)
 				{
 					FaceLookTarget(networkTickDelta);
 				}
@@ -3668,12 +3675,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			Transform t = Character.Transform;
 			Vector3 before = t.position;
 
-			// Off-mesh links are traversed by the agent itself; just follow it.
+			// Off-mesh links (a ladder's, a rope's) are walked here, one tick at a time: see AIController.Climbing.
 			if (Agent.isOnOffMeshLink)
 			{
-				t.position = Agent.nextPosition;
-				measuredTickSpeedSqr = MeasureTickSpeedSqr(before, t.position, tickDelta);
+				StepOffMeshLink(tickDelta);
 				return;
+			}
+			if (linkActive)
+			{
+				// The link was completed or dropped under the walk (a warp, a reset path): nothing left to walk.
+				ResetOffMeshLink();
 			}
 
 			Vector3 velocity = Agent.velocity;
@@ -3875,6 +3886,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		{
 			// A body that has stopped is not walking home; nothing it was evading for remains.
 			leashEvade = false;
+			// Nor left hanging on a ladder: off the link at its nearer end.
+			AbandonOffMeshLink();
 			Target = null;
 			LookTarget = null;
 			ClearPath();

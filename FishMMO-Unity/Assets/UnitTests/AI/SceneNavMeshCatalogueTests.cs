@@ -63,7 +63,7 @@ namespace FishMMO.UnitTests.AI
 		public void EveryBakedSceneHasItsNavMeshInTheCatalogue()
 		{
 			SceneNavMeshCatalogue catalogue = Catalogue();
-			var surface = new Regex(@"^\s+m_NavMeshData:\s*\{fileID:\s*\d+,\s*guid:\s*(\w+)", RegexOptions.Multiline);
+			var surface = new Regex(@"^\s+m_NavMeshData:\s*\{fileID:\s*-?\d+,\s*guid:\s*(\w+)", RegexOptions.Multiline);
 			int baked = 0;
 			foreach (string guid in AssetDatabase.FindAssets("t:Scene", new[] { SceneRoot }))
 			{

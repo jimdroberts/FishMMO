@@ -115,7 +115,11 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				float d = index.Distance(path, point, x, z, out float t);
-				if (d < index.HalfWidthAt(path, point, t))
+				/* Not to a ruled line: the terrain breaks a way's edge up into the ground over a band (FishGroundPaths.hlsl,
+				 * FishPathEdgeBand), and details cleared to its exact width stood in a straight row along every street. */
+				float half = index.HalfWidthAt(path, point, t);
+				float band = 0.45f + 0.2f * Mathf.Clamp(half, 0f, 4.5f);
+				if (d < half - 0.6f * band * Mathf.PerlinNoise(x * 0.9f + 31.7f, z * 0.9f + 12.3f))
 				{
 					return true;
 				}
@@ -224,8 +228,14 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>Carves every way into the tiles; returns the heightmap samples changed.</summary>
 		/// <param name="keep">Ground the carve leaves alone besides water and pads (a moat's ditch, crossed by its drawbridge).</param>
+		/// <param name="floor">
+		/// The lowest the carve may bring the ground (east, north), metres; negative infinity for no limit. Beside a river the
+		/// water's surface and a little: a way along a bank was carved to its own level, under the river's water, and the
+		/// water's edge stood in the air over the cut bank (Flo Monolith, 2026-10-13). Ground already lower is left as it is.
+		/// </param>
 		public static int Carve(Terrain[,] terrains, TerrainTilePlan tiles, IReadOnlyList<ScenePath> paths, Func<float, float, float> ground,
-			Func<float, float, bool> wet, IReadOnlyList<PointOfInterestPad> pads, Func<float, float, bool> keep = null)
+			Func<float, float, bool> wet, IReadOnlyList<PointOfInterestPad> pads, Func<float, float, bool> keep = null,
+			Func<float, float, float> floor = null)
 		{
 			if (paths == null || paths.Count == 0)
 			{
@@ -272,7 +282,12 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return h;
 				}
-				return Mathf.Lerp(h, level, weight);
+				float carved = Mathf.Lerp(h, level, weight);
+				if (floor != null && carved < h)
+				{
+					carved = Mathf.Max(carved, Mathf.Min(h, floor(x, z)));
+				}
+				return carved;
 			});
 		}
 	}

@@ -291,6 +291,8 @@ namespace FishMMO.Shared.WorldDesign
 			// Laid afresh by every place (PropsFeature): what the pieces give off.
 			asset.Emitters = new List<SceneEmitter>();
 			asset.Rooms = new List<SceneRoom>();
+			// And by the cave dressing: the ladders and ropes its layouts need (CaveSystem.Climbs).
+			asset.Climbables = new List<SceneClimbable>();
 		}
 	}
 }

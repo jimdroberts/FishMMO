@@ -241,7 +241,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// <c>-executeMethod FishMMO.Shared.WorldDesign.SceneCutSnapshot.RecutFromCommandLine</c>:
 		/// re-bakes the body's globe, re-cuts <c>FISHMMO_RECUT_SCENE</c> and writes its snapshot
-		/// to <c>FISHMMO_SNAPSHOT_DIR</c>. <c>FISHMMO_RECUT=0</c> only snapshots.
+		/// to <c>FISHMMO_SNAPSHOT_DIR</c>. <c>FISHMMO_RECUT=0</c> only snapshots; <c>FISHMMO_SNAPSHOT=0</c> only re-cuts.
 		/// </summary>
 		public static void RecutFromCommandLine()
 		{
@@ -292,6 +292,10 @@ namespace FishMMO.Shared.WorldDesign
 					$"radius {result.RadiusKm:0.##} km, vertical scale {result.VerticalScale:0.####}, " +
 					$"backdrop {result.BackdropReachMetres:0} m past the edge ({result.BackdropVertices} vertices), backup in '{result.BackupFolder}'.");
 				entry = Reload(entryPath, bodyPath);
+			}
+			if (Environment.GetEnvironmentVariable("FISHMMO_SNAPSHOT") == "0")
+			{
+				return true;
 			}
 
 			Report report = Write(entry, folder);

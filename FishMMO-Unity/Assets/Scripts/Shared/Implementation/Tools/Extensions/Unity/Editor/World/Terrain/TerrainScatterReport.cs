@@ -103,13 +103,19 @@ namespace FishMMO.Shared.WorldDesign
 		public double CarpetCoverageSum;
 		public TimeSpan Elapsed;
 
+		/// <summary>Seconds by phase over every tile: setup, reading the ground, the rules, carpets, writing back.</summary>
+		public double SetupSeconds, ReadSeconds, RuleSeconds, CarpetSeconds, WriteSeconds;
+		/// <summary>Of the rules' and carpets' seconds, those spent handing detail layers to the terrain (SetDetailLayer).</summary>
+		public double DetailLayerSeconds;
+
 		/// <summary>A multi-line summary for the generator's log.</summary>
 		public override string ToString()
 		{
 			var text = new StringBuilder();
 			text.AppendLine($"[Terrain scatter] {Tiles} tile(s), {Elapsed.TotalSeconds:0.00} s: {TreesPlaced:N0} trees from {TreePrototypes} prototype(s) " +
 				$"({TreePrototypesWithColliders} colliding), {DetailCellsCovered:N0} detail cells from {DetailPrototypes} prototype(s) " +
-				$"at {DetailResolution}² ({DetailScatterMode}); carpets cover {CarpetCellsCovered:N0} cells at a mean {(CarpetCellsCovered > 0 ? CarpetCoverageSum / CarpetCellsCovered : 0d):P0}.");
+				$"at {DetailResolution}² ({DetailScatterMode}); carpets cover {CarpetCellsCovered:N0} cells at a mean {(CarpetCellsCovered > 0 ? CarpetCoverageSum / CarpetCellsCovered : 0d):P0}. " +
+				$"By phase: setup {SetupSeconds:0.0} s, reading {ReadSeconds:0.0} s, rules {RuleSeconds:0.0} s, carpets {CarpetSeconds:0.0} s (detail layers set {DetailLayerSeconds:0.0} s of those two), writing {WriteSeconds:0.0} s.");
 			foreach (RuleOutcome rule in Rules)
 			{
 				text.Append("  ").AppendLine(rule.ToString());

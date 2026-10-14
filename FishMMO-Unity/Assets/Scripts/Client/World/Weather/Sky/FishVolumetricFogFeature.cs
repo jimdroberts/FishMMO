@@ -175,6 +175,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			// Nor from a camera sealed in a cave (UndergroundView): faded to nothing at every pixel (FishOpenAir). Not while a
+			// fall's mist is in reach: the falls' spray thins itself by whether this volume carries it.
+			if (plumes == 0 && renderingData.cameraData.cameraType == CameraType.Game && UndergroundView.Sealed(camera))
+			{
+				return;
+			}
 			// The analytic pass takes the layer over at the volume's far edge only where the volume holds
 			// the layer: run for the mist alone, it holds none, and that pass draws from the camera out.
 			plannedReach = layer ? LastSliceDepth() : 0f;

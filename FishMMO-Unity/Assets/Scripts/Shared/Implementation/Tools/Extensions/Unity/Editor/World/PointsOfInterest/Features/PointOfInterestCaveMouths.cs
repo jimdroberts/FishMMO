@@ -30,6 +30,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// By form: a cave in full; a lava tube thinner (the ground about it is young rock); a grotto and a sea cave only their
 	/// flanks' growth (the sea's edge); an ice cave and a mine nothing. Seeded by the system, so a repaint grows the same.
 	/// </para>
+	/// <para>
+	/// <b>Some are overgrown</b> (<see cref="Overgrown"/>, 2026-10-13): their mouths grow thicker, and the growth carries
+	/// in over the cave's floor as far as the daylight reaches (PointOfInterestCaveDressing).
+	/// </para>
 	/// </remarks>
 	[InitializeOnLoad]
 	public sealed class PointOfInterestCaveMouths : IPointOfInterestSiteBuilder
@@ -48,6 +52,37 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Handles(PointOfInterestRecord record)
 			=> CaveShaper.TryForm(record.Kind, out CaveForm form) && form != CaveForm.Mine && form != CaveForm.IceCave;
 
+		/// <summary>
+		/// The share of a form's caves grown over, inside as well as round the mouth: a damp grotto most, a lava tube's young
+		/// rock least; never a sea cave (salt and surf), an ice cave or a mine.
+		/// </summary>
+		internal static float OvergrownShare(CaveForm form)
+		{
+			switch (form)
+			{
+				case CaveForm.Cave: return 0.35f;
+				case CaveForm.Grotto: return 0.5f;
+				case CaveForm.LavaTube: return 0.2f;
+				default: return 0f;
+			}
+		}
+
+		/// <summary>Whether this system is one of its form's overgrown caves: by its seed, so every builder and a re-cut agree.</summary>
+		internal static bool Overgrown(CaveSystem system)
+			=> system != null && PointOfInterestPlanner.Unit(PointOfInterestPlanner.Hash(system.Seed, 0x0E, 0x6E, 0x0B)) < OvergrownShare(system.Form);
+
+		/// <summary>The biome at the system's first mouth (its art's name), or null.</summary>
+		internal static string BiomeOf(PointOfInterestSiteContext context, CaveSystem system)
+		{
+			if (context.BiomeAt == null)
+			{
+				return null;
+			}
+			Vector3 first = system.Origin + (system.Mouths.Count > 0 ? system.Mouths[0].Floor : Vector3.zero);
+			BiomeTemplate template = context.BiomeAt(first.x, first.z);
+			return template != null ? template.name : null;
+		}
+
 		public void Build(PointOfInterestSiteContext context)
 		{
 			PointOfInterestShape shape = CaveShaper.ShapeFor(context.Points, context.Record.Id);
@@ -63,14 +98,13 @@ namespace FishMMO.Shared.WorldDesign
 			var random = new DeterministicRNG(unchecked(system.Seed * 0x3C6E + 0x0B5E));
 			bool coast = system.Form == CaveForm.Grotto || system.Form == CaveForm.SeaCave;
 			float lush = system.Form == CaveForm.LavaTube ? 0.5f : coast ? 0.6f : 1f;
-
-			string biome = null;
-			if (context.BiomeAt != null)
+			bool overgrown = Overgrown(system);
+			if (overgrown)
 			{
-				Vector3 first = system.Origin + (system.Mouths.Count > 0 ? system.Mouths[0].Floor : Vector3.zero);
-				BiomeTemplate template = context.BiomeAt(first.x, first.z);
-				biome = template != null ? template.name : null;
+				lush *= 1.35f;
 			}
+
+			string biome = BiomeOf(context, system);
 			Growth growth = GrowthFor(biome);
 
 			int props = 0, cells = 0, vines = 0;
@@ -113,7 +147,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
-			PointOfInterestFeatureKit.Note(context, $"cave mouth(s) overgrown: {vines} vine(s), {props} boulder(s) and log(s), {cells:N0} detail cell(s) of {growth.Describe()}.");
+			PointOfInterestFeatureKit.Note(context, $"cave mouth(s){(overgrown ? " (an overgrown cave)" : string.Empty)}: {vines} vine(s), {props} boulder(s) and log(s), {cells:N0} detail cell(s) of {growth.Describe()}.");
 		}
 
 		private struct Mouth
@@ -124,7 +158,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>What grows round a mouth: the detail prefabs by part (bush, fern, creeper), and the props strewn by it.</summary>
-		private sealed class Growth
+		internal sealed class Growth
 		{
 			public readonly List<GameObject> Species = new List<GameObject>();
 			public readonly List<int> Bushes = new List<int>(), Ferns = new List<int>();
@@ -143,7 +177,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The biome's bushes, ferns, boulders and deadwood (from its art rules), with a woodland's ferns and bushes where it has none.</summary>
-		private static Growth GrowthFor(string biome)
+		internal static Growth GrowthFor(string biome)
 		{
 			var bushes = new List<string>();
 			var ferns = new List<string>();
@@ -364,6 +398,9 @@ namespace FishMMO.Shared.WorldDesign
 				layers[s] = PointOfInterestHerbGrove.LayerOf(data, growth.Species[s]);
 				maps[s] = data.GetDetailLayer(x0, z0, w, h, layers[s]);
 			}
+			// The mouth's own hole: nothing is painted over it (the bore is no ground to grow on).
+			int holeRes = data.holesResolution;
+			bool[,] solid = holeRes > 0 ? data.GetHoles(0, 0, holeRes, holeRes) : null;
 			float unit = Mathf.Max(1, data.maxDetailScatterPerRes) / 255f;
 			int maxValue = Mathf.Max(1, data.maxDetailScatterPerRes);
 			var changed = new bool[count];
@@ -374,6 +411,10 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				for (int i = 0; i < w; i++)
 				{
+					if (solid != null && !solid[Mathf.Clamp(Mathf.FloorToInt((z0 + j + 0.5f) / res * holeRes), 0, holeRes - 1), Mathf.Clamp(Mathf.FloorToInt((x0 + i + 0.5f) / res * holeRes), 0, holeRes - 1)])
+					{
+						continue;
+					}
 					var p = new Vector2(origin.x + (x0 + i + 0.5f) * texelX, origin.z + (z0 + j + 0.5f) * texelZ);
 					Vector2 d = p - centre;
 					float distance = d.magnitude;

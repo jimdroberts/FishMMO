@@ -748,6 +748,8 @@ namespace FishMMO.Shared.WorldDesign
 					if (solid != null)
 					{
 						data.SetHoles(0, 0, solid);
+						// The biome scatter painted the ground before the walls stood in it.
+						PointOfInterestTerrain.ClearDetailsInHoles(data, solid, new Rect(0f, 0f, data.size.x, data.size.z));
 						EditorUtility.SetDirty(data);
 					}
 				}

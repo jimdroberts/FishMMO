@@ -286,7 +286,7 @@ namespace FishMMO.Shared.WorldDesign
 			Shader.EnableKeyword("_WATER_REFRACTION");
 			Shader.SetGlobalFloat("_FishInlandTime", 12.5f);
 			// FISHMMO_INLAND_DEBUG=foam: the foam's inputs as colour (FishInlandWater.hlsl _FishInlandDebugFoam).
-			Shader.SetGlobalFloat("_FishInlandDebugFoam", Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "foam" ? 1f : Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "noglint" ? 2f : 0f);
+			Shader.SetGlobalFloat("_FishInlandDebugFoam", Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "foam" ? 1f : Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "noglint" ? 2f : Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "field" ? 3f : Environment.GetEnvironmentVariable("FISHMMO_INLAND_DEBUG") == "current" ? 4f : 0f);
 
 			var sun = new GameObject("Sun").AddComponent<Light>();
 			sun.type = LightType.Directional;
@@ -432,6 +432,14 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					string label = tideName.Length > 0 ? $"{name}_{tideName}" : name;
 					string file = $"inland_{shot++:00}_{label}.png";
+					/* FISHMMO_INLAND_FOAM=seconds: the simulated foam run that long round the camera first (WaterFoamField),
+					 * after one frame drawn so the sea has published its spectrum; a still frame otherwise has one step of it. */
+					if (float.TryParse(Environment.GetEnvironmentVariable("FISHMMO_INLAND_FOAM"), System.Globalization.NumberStyles.Float,
+						System.Globalization.CultureInfo.InvariantCulture, out float foamSeconds) && foamSeconds > 0f)
+					{
+						camera.Render();
+						FishMMO.Water.WaterFoamField.Simulate(eye, foamSeconds);
+					}
 					Capture(camera, target, Path.Combine(output, file));
 					log.Add($"{file}: {label} from ({eye.x:0}, {eye.y:0}, {eye.z:0}) to ({look.x:0}, {look.y:0}, {look.z:0})");
 				}

@@ -16,7 +16,9 @@ namespace FishMMO.Client
 	/// of mist two metres deep, which would float or sink by more than its own depth. This is
 	/// <see cref="Resolution"/> cells over <see cref="SizeMeters"/> round the camera — as far as the mist is
 	/// drawn (FishMist.hlsl) with room to move — read a few thousand heights a frame into a second copy
-	/// while the first is in use, and swapped when complete, whenever the camera has moved far enough.
+	/// while the first is in use, and swapped when complete, whenever the camera has moved far enough. The
+	/// terrains and the water are read here; what is worked out from them (the hollows, the water's
+	/// nearness, the canopy, the halves) on a worker, and only the upload is left for this thread.
 	/// </para>
 	/// <para>
 	/// <c>_FishMistGround</c>: r the ground above the window's lowest (<c>_FishMistGroundBase</c>), m — a half
@@ -89,11 +91,17 @@ namespace FishMMO.Client
 		public void ShadeSoon() => shadingStarted = float.NegativeInfinity;
 		private ushort[] groundHalves;
 		private ushort[] shadowHalves;
+		/// <summary>The halves the next shade is packed into on its worker.</summary>
+		private ushort[] shadeSpare;
 
 		// Each terrain's trees, once: x, z (world) and crown radius, three to a tree.
 		private readonly Dictionary<int, float[]> trees = new Dictionary<int, float[]>();
 
-		private Task<float[]> shading;
+		private Task<Shadowed> shading;
+		// The window just read, being worked up on a worker; no other is read until it is uploaded.
+		private Task<Built> building;
+		private ushort[] spareHalves;
+		private byte[] spareBytes;
 		private Vector3 shadingLight;
 		private Vector2 shadingCorner;
 		private Vector3 shadedLight;
@@ -101,6 +109,49 @@ namespace FishMMO.Client
 		private bool shadowReady;
 		private float shadowBase;
 		private int generation;
+
+		private int uploads;
+
+		/// <summary>Counts the windows uploaded: what a reader of <see cref="TryLowestGround"/> keeps its answers against.</summary>
+		public int Version => uploads;
+
+		/// <summary>
+		/// The lowest ground the shaders can read anywhere over an area (FishGroundMap.hlsl FishMistGroundAt: the window's
+		/// halves above its base, filtered between the four cells round a point), m — every cell the filtering of a point in
+		/// the area can reach, and one more each way, less what a filter working in halves may round away (half a metre and a
+		/// five-hundredth of the highest of those cells above the base). False where any of the area is off the window (the
+		/// shaders read no ground there) or before a window is read.
+		/// </summary>
+		public bool TryLowestGround(float xMin, float zMin, float xMax, float zMax, out float lowest)
+		{
+			lowest = float.MaxValue;
+			if (!ready || groundHalves == null)
+			{
+				return false;
+			}
+			if (xMin <= corner.x || zMin <= corner.y || xMax >= corner.x + SizeMeters || zMax >= corner.y + SizeMeters)
+			{
+				return false;
+			}
+			int n = Resolution;
+			float cell = SizeMeters / n;
+			int x0 = Mathf.Clamp(Mathf.FloorToInt((xMin - corner.x) / cell - 0.5f) - 1, 0, n - 1);
+			int x1 = Mathf.Clamp(Mathf.FloorToInt((xMax - corner.x) / cell - 0.5f) + 2, 0, n - 1);
+			int z0 = Mathf.Clamp(Mathf.FloorToInt((zMin - corner.y) / cell - 0.5f) - 1, 0, n - 1);
+			int z1 = Mathf.Clamp(Mathf.FloorToInt((zMax - corner.y) / cell - 0.5f) + 2, 0, n - 1);
+			float above = 0f;
+			for (int z = z0; z <= z1; z++)
+			{
+				for (int x = x0; x <= x1; x++)
+				{
+					float half = Mathf.HalfToFloat(groundHalves[(z * n + x) * 4]);
+					lowest = Mathf.Min(lowest, half + groundBase);
+					above = Mathf.Max(above, Mathf.Abs(half));
+				}
+			}
+			lowest -= 0.5f + above / 512f;
+			return true;
+		}
 
 		/// <summary>Keeps the window round the camera, its ground and its shade from <paramref name="toLight"/>, and publishes them.</summary>
 		public void Update(Vector3 camera, Vector3 toLight, CloudFlowField scene)
@@ -114,9 +165,20 @@ namespace FishMMO.Client
 			{
 				trees.Clear();
 				generation++;
+				// A window of the old terrains being worked up is let go of, with the buffers it writes.
+				if (building != null)
+				{
+					building = null;
+					spareHalves = null;
+					spareBytes = null;
+				}
+			}
+			if (building != null && building.IsCompleted)
+			{
+				TakeBuilt();
 			}
 			bool stale = !ready || changed || (here - middle).sqrMagnitude > Recentre * Recentre;
-			if (stale && read < 0)
+			if (stale && read < 0 && building == null)
 			{
 				readingCorner = new Vector2(Mathf.Round(here.x / cell) * cell, Mathf.Round(here.y / cell) * cell) - new Vector2(SizeMeters, SizeMeters) * 0.5f;
 				reading ??= new float[Resolution * Resolution];
@@ -169,12 +231,8 @@ namespace FishMMO.Client
 			}
 			if (read >= reading.Length)
 			{
-				Upload(terrains, cell, readingWet);
-				corner = readingCorner;
-				ready = true;
 				read = -1;
-				// The finished heights, kept apart from the next read for the shadow's worker.
-				current = (float[])reading.Clone();
+				Build(terrains, cell);
 			}
 		}
 
@@ -182,8 +240,83 @@ namespace FishMMO.Client
 		private bool[] readingWet;
 		private bool[] readingSea;
 
-		private void Upload(TerrainSet terrains, float cell, bool[] wetCells)
+		/// <summary>What the worker makes of a window read: its textures' texels, and the heights kept for the shadow.</summary>
+		private sealed class Built
 		{
+			public int Generation;
+			public Vector2 Corner;
+			public float Base;
+			public float[] Heights;
+			public ushort[] GroundHalves;
+			public byte[] WaterBytes;
+		}
+
+		/// <summary>
+		/// Hands the window just read to a worker: the reads (heights, water) are not written again until it is uploaded,
+		/// and the trees over it are gathered here, since the terrains are this thread's.
+		/// </summary>
+		private void Build(TerrainSet terrains, float cell)
+		{
+			int n = Resolution;
+			List<float[]> crowns = CrownsOver(terrains.Terrains, n, cell, readingCorner);
+			float[] heights = reading;
+			bool[] wetCells = readingWet;
+			bool[] seaCells = readingSea;
+			Vector2 at = readingCorner;
+			int mine = generation;
+			ushort[] halves = spareHalves ?? new ushort[n * n * 4];
+			byte[] bytes = spareBytes ?? new byte[n * n * 2];
+			spareHalves = null;
+			spareBytes = null;
+			building = Task.Run(() => BuildOn(heights, wetCells, seaCells, crowns, n, cell, at, mine, halves, bytes));
+		}
+
+		/// <summary>The window's textures worked out from what was read, on a worker.</summary>
+		private static Built BuildOn(float[] reading, bool[] wetCells, bool[] seaCells, List<float[]> crowns, int n, float cell, Vector2 at,
+			int generation, ushort[] groundHalves, byte[] waterBytes)
+		{
+			float lowest = float.MaxValue;
+			for (int i = 0; i < reading.Length; i++)
+			{
+				lowest = Mathf.Min(lowest, reading[i]);
+			}
+			float[] mean = BoxMean(reading, n, HollowRadius);
+			float[] wet = WaterNearness(wetCells, n, cell);
+			float[] canopy = Canopy(crowns, n, cell, at);
+			for (int i = 0; i < n * n; i++)
+			{
+				groundHalves[i * 4] = Mathf.FloatToHalf(reading[i] - lowest);
+				groundHalves[i * 4 + 1] = Mathf.FloatToHalf(mean[i] - reading[i]);
+				groundHalves[i * 4 + 2] = Mathf.FloatToHalf(wet[i]);
+				groundHalves[i * 4 + 3] = Mathf.FloatToHalf(canopy[i]);
+			}
+			WaterBytes(wetCells, seaCells, n, cell, waterBytes);
+			return new Built
+			{
+				Generation = generation,
+				Corner = at,
+				Base = lowest,
+				// The finished heights, kept apart from the next read for the shadow's worker.
+				Heights = (float[])reading.Clone(),
+				GroundHalves = groundHalves,
+				WaterBytes = waterBytes,
+			};
+		}
+
+		/// <summary>The window the worker finished, uploaded and made the one in use.</summary>
+		private void TakeBuilt()
+		{
+			Task<Built> done = building;
+			building = null;
+			if (done.Status != TaskStatus.RanToCompletion || done.Result == null || done.Result.Generation != generation)
+			{
+				if (done.Exception != null)
+				{
+					Debug.LogException(done.Exception.InnerException ?? done.Exception);
+				}
+				return;
+			}
+			Built built = done.Result;
 			int n = Resolution;
 			if (texture == null)
 			{
@@ -195,31 +328,9 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
-			float lowest = float.MaxValue;
-			for (int i = 0; i < reading.Length; i++)
-			{
-				lowest = Mathf.Min(lowest, reading[i]);
-			}
-			groundBase = lowest;
-			float[] mean = BoxMean(reading, n, HollowRadius);
-			float[] wet = WaterNearness(wetCells, n, cell);
-			float[] canopy = Canopy(terrains.Terrains, n, cell, readingCorner);
-			groundHalves ??= new ushort[n * n * 4];
-			for (int i = 0; i < n * n; i++)
-			{
-				groundHalves[i * 4] = Mathf.FloatToHalf(reading[i] - lowest);
-				groundHalves[i * 4 + 1] = Mathf.FloatToHalf(mean[i] - reading[i]);
-				groundHalves[i * 4 + 2] = Mathf.FloatToHalf(wet[i]);
-				groundHalves[i * 4 + 3] = Mathf.FloatToHalf(canopy[i]);
-			}
-			texture.SetPixelData(groundHalves, 0);
+			groundBase = built.Base;
+			texture.SetPixelData(built.GroundHalves, 0);
 			texture.Apply(false, false);
-			UploadWater(wetCells, n, cell);
-		}
-
-		/// <summary>Where steam fog rises from (<c>_FishMistWater</c>): r off the sea, g off a lake or a river.</summary>
-		private void UploadWater(bool[] wetCells, int n, float cell)
-		{
 			if (waterTexture == null)
 			{
 				// Eight bits a channel: a share of the water's steam, filterable everywhere WebGL2 runs.
@@ -231,21 +342,34 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
+			waterTexture.SetPixelData(built.WaterBytes, 0);
+			waterTexture.Apply(false, false);
+			// The buffers the last window's texels were in go to the next build; these stay as the window's own.
+			spareHalves = groundHalves;
+			spareBytes = waterBytes;
+			groundHalves = built.GroundHalves;
+			waterBytes = built.WaterBytes;
+			corner = built.Corner;
+			ready = true;
+			current = built.Heights;
+			uploads++;
+		}
+
+		/// <summary>Where steam fog rises from (<c>_FishMistWater</c>): r off the sea, g off a lake or a river.</summary>
+		private static void WaterBytes(bool[] wetCells, bool[] seaCells, int n, float cell, byte[] waterBytes)
+		{
 			var inlandCells = new bool[n * n];
 			for (int i = 0; i < n * n; i++)
 			{
-				inlandCells[i] = wetCells[i] && !readingSea[i];
+				inlandCells[i] = wetCells[i] && !seaCells[i];
 			}
-			float[] sea = EdgeDistance(readingSea, n, cell);
+			float[] sea = EdgeDistance(seaCells, n, cell);
 			float[] inland = EdgeDistance(inlandCells, n, cell);
-			waterBytes ??= new byte[n * n * 2];
 			for (int i = 0; i < n * n; i++)
 			{
 				waterBytes[i * 2] = (byte)Mathf.RoundToInt(255f * (sea != null ? Mathf.Exp(-sea[i] / SteamReach) : 0f));
 				waterBytes[i * 2 + 1] = (byte)Mathf.RoundToInt(255f * (inland != null ? Mathf.Exp(-inland[i] / SteamReach) : 0f));
 			}
-			waterTexture.SetPixelData(waterBytes, 0);
-			waterTexture.Apply(false, false);
 		}
 
 		/// <summary>
@@ -313,14 +437,10 @@ namespace FishMMO.Client
 			return distance;
 		}
 
-		/// <summary>
-		/// How closed the canopy over each cell is, 0..1: the crowns of the terrain's trees laid on the grid,
-		/// their area over the cell's, spread over a couple of cells (a crown is wider than its trunk's cell).
-		/// </summary>
-		private float[] Canopy(Terrain[] terrains, int n, float cell, Vector2 at)
+		/// <summary>The trees of the terrains under the window (<see cref="TreesOf"/>), in the terrains' order: read here.</summary>
+		private List<float[]> CrownsOver(Terrain[] terrains, int n, float cell, Vector2 at)
 		{
-			var cover = new float[n * n];
-			float cellArea = cell * cell;
+			var crowns = new List<float[]>();
 			foreach (Terrain t in terrains)
 			{
 				if (t == null || t.terrainData == null)
@@ -334,7 +454,21 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				float[] crowns = TreesOf(t);
+				crowns.Add(TreesOf(t));
+			}
+			return crowns;
+		}
+
+		/// <summary>
+		/// How closed the canopy over each cell is, 0..1: the crowns of the terrain's trees laid on the grid,
+		/// their area over the cell's, spread over a couple of cells (a crown is wider than its trunk's cell).
+		/// </summary>
+		private static float[] Canopy(List<float[]> trees, int n, float cell, Vector2 at)
+		{
+			var cover = new float[n * n];
+			float cellArea = cell * cell;
+			foreach (float[] crowns in trees)
+			{
 				for (int k = 0; k < crowns.Length; k += 3)
 				{
 					int x = Mathf.FloorToInt((crowns[k] - at.x) / cell);
@@ -384,7 +518,7 @@ namespace FishMMO.Client
 		{
 			if (shading != null && shading.IsCompleted)
 			{
-				Task<float[]> done = shading;
+				Task<Shadowed> done = shading;
 				shading = null;
 				if (done.Status == TaskStatus.RanToCompletion && done.Result != null)
 				{
@@ -414,11 +548,34 @@ namespace FishMMO.Client
 			shadingLight = light;
 			shadingCorner = corner;
 			int mine = generation;
-			shading = Task.Run(() => mine == generation ? TerrainShadowSolver.ShadowTops(fine, coarse, light.x, light.y, light.z, ShadowReach) : null);
+			// Packed into halves on the worker too, above the base the upload will use (checked there).
+			float packBase = groundBase;
+			// Into the halves the last upload is done with (an orphaned worker keeps its own: they are let go of then).
+			ushort[] into = shadeSpare ?? new ushort[Resolution * Resolution];
+			shadeSpare = null;
+			shading = Task.Run(() => mine == generation ? Shadowed.Of(TerrainShadowSolver.ShadowTops(fine, coarse, light.x, light.y, light.z, ShadowReach), packBase, into) : null);
 		}
 
-		private void UploadShadow(float[] tops)
+		/// <summary>The shade's heights, and the same packed into halves above <see cref="Base"/> on the worker.</summary>
+		private sealed class Shadowed
 		{
+			public float[] Tops;
+			public ushort[] Halves;
+			public float Base;
+
+			public static Shadowed Of(float[] tops, float packBase, ushort[] halves)
+			{
+				for (int i = 0; i < halves.Length; i++)
+				{
+					halves[i] = Mathf.FloatToHalf(Mathf.Clamp(tops[i] - packBase, -1000f, 2000f));
+				}
+				return new Shadowed { Tops = tops, Halves = halves, Base = packBase };
+			}
+		}
+
+		private void UploadShadow(Shadowed shadowed)
+		{
+			float[] tops = shadowed.Tops;
 			int n = Resolution;
 			if (shadowTexture == null)
 			{
@@ -433,12 +590,20 @@ namespace FishMMO.Client
 			// Measured up from the same base as the ground, and held within a half's comfortable range:
 			// a kilometre under the window's lowest ground is "nothing shades it", two above "all shade".
 			shadowBase = groundBase;
-			shadowHalves ??= new ushort[n * n];
-			for (int i = 0; i < n * n; i++)
+			// Packed on the worker; again here only if a new window's ground moved the base while it ran.
+			ushort[] halves = shadowed.Halves;
+			if (shadowed.Base != shadowBase)
 			{
-				shadowHalves[i] = Mathf.FloatToHalf(Mathf.Clamp(tops[i] - shadowBase, -1000f, 2000f));
+				shadowHalves ??= new ushort[n * n];
+				for (int i = 0; i < n * n; i++)
+				{
+					shadowHalves[i] = Mathf.FloatToHalf(Mathf.Clamp(tops[i] - shadowBase, -1000f, 2000f));
+				}
+				halves = shadowHalves;
 			}
-			shadowTexture.SetPixelData(shadowHalves, 0);
+			shadowTexture.SetPixelData(halves, 0);
+			// What the worker packed into is free again for the next.
+			shadeSpare = shadowed.Halves;
 			shadowTexture.Apply(false, false);
 			shadowReady = true;
 		}
@@ -482,6 +647,10 @@ namespace FishMMO.Client
 		{
 			generation++;
 			shading = null;
+			shadeSpare = null;
+			building = null;
+			spareHalves = null;
+			spareBytes = null;
 			if (texture != null)
 			{
 				if (Application.isPlaying) Object.Destroy(texture); else Object.DestroyImmediate(texture);

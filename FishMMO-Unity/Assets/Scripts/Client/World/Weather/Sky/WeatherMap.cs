@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using FishMMO.Shared.Weather;
 
@@ -78,6 +79,9 @@ namespace FishMMO.Client
 	/// </remarks>
 	public sealed class WeatherMap
 	{
+		/// <summary>The raster's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
+		private static readonly CustomSampler RasterSample = CustomSampler.Create("Weather map (raster)", true);
+
 		public const int DefaultResolution = 128;
 		/// <summary>The fine cascade's width, m.</summary>
 		public const float DefaultSizeMeters = 12000f;
@@ -424,6 +428,9 @@ namespace FishMMO.Client
 		private readonly List<StormCloud> clouds = new List<StormCloud>();
 		private readonly List<Vector4> packed = new List<Vector4>();
 		private CommandBuffer rasterCommands;
+		// The raster kernel's index, looked up once for the compute shader (FindKernel compares strings).
+		private ComputeShader rasterKernelOf;
+		private int rasterKernel;
 
 		/// <summary>The fine cascade's texture A.</summary>
 		public Texture Texture => near.A;
@@ -1050,10 +1057,15 @@ namespace FishMMO.Client
 			cascade.Any = extremes.Any;
 
 			ComputeBuffer buffer = cascade.EnsureStorms(count);
-			int kernel = shader.FindKernel("Raster");
+			if (rasterKernelOf != shader)
+			{
+				rasterKernel = shader.FindKernel("Raster");
+				rasterKernelOf = shader;
+			}
+			int kernel = rasterKernel;
 			rasterCommands ??= new CommandBuffer { name = "Weather map (raster)" };
 			rasterCommands.Clear();
-			rasterCommands.BeginSample("Weather map (raster)");
+			rasterCommands.BeginSample(RasterSample);
 			if (packed.Count > 0)
 			{
 				rasterCommands.SetBufferData(buffer, packed);
@@ -1065,7 +1077,7 @@ namespace FishMMO.Client
 			rasterCommands.SetComputeTextureParam(shader, kernel, OutBId, cascade.GpuB);
 			int groups = (cascade.Resolution + RasterGroup - 1) / RasterGroup;
 			rasterCommands.DispatchCompute(shader, kernel, groups, groups, 1);
-			rasterCommands.EndSample("Weather map (raster)");
+			rasterCommands.EndSample(RasterSample);
 			Graphics.ExecuteCommandBuffer(rasterCommands);
 			cascade.Valid = true;
 		}

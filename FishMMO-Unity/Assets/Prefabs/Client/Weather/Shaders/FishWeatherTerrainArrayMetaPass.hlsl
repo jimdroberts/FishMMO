@@ -49,7 +49,9 @@ half4 TerrainFragmentMeta(Varyings input) : SV_Target
 #ifdef _ALPHATEST_ON
     ClipHoles(input.uv);
 #endif
-    FishArraySurface ground = FishSampleArraySurface(input.uv, input.positionWS);
+    // The lightmapper's colour: the facet's own normal stands in for the terrain's, which this pass is not given.
+    float3 facet = normalize(cross(ddy(input.positionWS), ddx(input.positionWS)));
+    FishArraySurface ground = FishSampleArraySurface(input.uv, input.positionWS, (half3)(facet.y < 0.0 ? -facet : facet));
 
     // InitializeBRDFData takes alpha inout, so it needs a variable.
     half alpha = 1.0h;

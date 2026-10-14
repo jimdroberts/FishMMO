@@ -50,16 +50,28 @@ namespace FishMMO.Client
 		/// <summary>The blade grass's key in <see cref="TerrainDetailInstancing.SetSkipped"/> (the GPU detail scatter has its own).</summary>
 		private static readonly object SkipOwner = new object();
 
-		/// <summary>Milliseconds a frame the terrain being taken may spend building its density maps and height grid.</summary>
-		public const double BuildBudgetMilliseconds = 2.0;
+		/// <summary>
+		/// Milliseconds a frame of the main thread the terrain being taken may spend reading its layers, heights and maps
+		/// (the arithmetic on them runs on a worker: GrassTerrain.Builder). Was 2 with the arithmetic on the main thread.
+		/// </summary>
+		public const double BuildBudgetMilliseconds = 1.0;
 
-		/// <summary>The budget while the terrain being built is within the grass distance of the camera: its grass is on screen.</summary>
-		public const double VisibleBuildBudgetMilliseconds = 8.0;
+		/// <summary>
+		/// The budget while the terrain being built is within the grass distance of the camera: its grass is on screen. Was 8
+		/// with the arithmetic on the main thread (6–8 ms spikes as terrains streamed in); the reads alone fit in 1.
+		/// </summary>
+		public const double VisibleBuildBudgetMilliseconds = 1.0;
+
+		/// <summary>
+		/// Milliseconds a frame of the main thread spent taking terrains from the scene's bake (TerrainDetailBake): each is a
+		/// few textures made from its maps, so several go in a frame, and the atlas is rebuilt once for them, not once each.
+		/// </summary>
+		public const double BakedBudgetMilliseconds = 4.0;
 
 		/// <summary>The terrain whose grass is being built, a strip a frame (its mesh grass draws until it is done).</summary>
 		private static GrassTerrain.Builder building;
 		/// <summary>What has been taken since the last summary line: one line per batch, not one per terrain.</summary>
-		private static int summaryTerrains, summaryFrames, summaryChannels;
+		private static int summaryTerrains, summaryFrames, summaryChannels, summaryBaked;
 		/// <summary>The frame to log one <see cref="Describe"/> line with the GPU's real blade counts, after a batch is taken (−1 none).</summary>
 		private static int describeAt = -1;
 		private static bool statsWereOn;
@@ -74,6 +86,8 @@ namespace FishMMO.Client
 		private static readonly List<int> prototypeScratch = new List<int>();
 		private static readonly List<GrassType> typeScratch = new List<GrassType>();
 		private static readonly List<Taken> releasing = new List<Taken>();
+		/// <summary>Terrains whose build failed on a worker once (taken again once, then left to the mesh grass).</summary>
+		private static readonly HashSet<Terrain> failedOnce = new HashSet<Terrain>();
 		private static readonly GrassBladeSettings defaults = new GrassBladeSettings();
 		private static GrassBladeRenderer renderer;
 		private static bool rendererTried;
@@ -107,6 +121,8 @@ namespace FishMMO.Client
 
 		public static bool Running => renderer != null && taken.Count > 0;
 		public static int TerrainCount => taken.Count;
+		/// <summary>Whether a terrain is being taken on now (its build in progress).</summary>
+		public static bool Building => building != null;
 		public static int TypeCount => types.Count;
 		public static GrassBladeRenderer Renderer => renderer;
 
@@ -331,8 +347,9 @@ namespace FishMMO.Client
 			{
 				// Nearest the camera first: the terrain underfoot used to wait behind every other one (30
 				// terrains at 2 ms a frame is hundreds of frames), drawing the old mesh grass meanwhile.
-				bool started = false;
-				while (!started)
+				bool started = false, spent = false;
+				var bakedWatch = System.Diagnostics.Stopwatch.StartNew();
+				while (!started && !spent)
 				{
 					Terrain next = null;
 					float best = float.MaxValue;
@@ -359,11 +376,22 @@ namespace FishMMO.Client
 						break;
 					}
 					started = TryTake(next, settings);
+					// Taken from the scene's bake, it is done at once: handed over now, and the next looked for while the
+					// frame's budget for it lasts.
+					if (started && building != null && building.Done)
+					{
+						// Counted with the terrains it adds to (one baked as having nothing is not one of them).
+						summaryBaked += building.Result != null ? 1 : 0;
+						Finish(building);
+						building = null;
+						started = false;
+						spent = bakedWatch.Elapsed.TotalMilliseconds >= BakedBudgetMilliseconds;
+					}
 				}
-				if (!started && summaryTerrains > 0)
+				if (!started && !spent && summaryTerrains > 0)
 				{
-					Debug.Log($"[Grass] Blade grass on {summaryTerrains} terrain(s) ({types.Count} grass type(s), {summaryChannels} prototype layer(s)); built in {summaryMilliseconds:F0} ms over {summaryFrames} frames ({BuildBudgetMilliseconds:F0} ms a frame). The detail renderer skips those prototypes there.");
-					summaryTerrains = summaryFrames = summaryChannels = 0;
+					Debug.Log($"[Grass] Blade grass on {summaryTerrains} terrain(s) ({types.Count} grass type(s), {summaryChannels} prototype layer(s)); {summaryBaked} taken from the scene's bake, the rest built in {summaryMilliseconds:F0} ms of the main thread over {summaryFrames} frames (up to {BuildBudgetMilliseconds:F0} ms a frame; the arithmetic on workers). The detail renderer skips those prototypes there.");
+					summaryTerrains = summaryFrames = summaryChannels = summaryBaked = 0;
 					summaryMilliseconds = 0;
 					// A couple of seconds later, what the GPU really drew (types, heights, blades per slot vs caps):
 					// the readback is only on while it is wanted.
@@ -450,14 +478,36 @@ namespace FishMMO.Client
 		private static bool TryTake(Terrain terrain, GrassBladeSettings settings)
 		{
 			TerrainData data = terrain.terrainData;
-			DetailPrototype[] prototypes = data.detailPrototypes;
-			prototypeScratch.Clear();
-			typeScratch.Clear();
-			// Every blade prototype: several share a type (one per biome rule), and the build sums them into one
-			// channel per type.
-			for (int p = 0; p < prototypes.Length; p++)
+			SelectBlades(data, settings, types, typesByPrefab, warned, prototypeScratch, typeScratch);
+			building = prototypeScratch.Count > 0 ? GrassTerrain.Begin(terrain, prototypeScratch, typeScratch) : null;
+			if (building == null)
 			{
-				DetailPrototype proto = prototypes[p];
+				none[terrain] = data;
+				return false;
+			}
+			// The scene's bake, when it was made from just this: the terrain is taken from it at once (done), not read.
+			FishMMO.Shared.TerrainDetailBake.Tile tile = FishMMO.Shared.SceneTerrainBake.TileOf(data, out _);
+			if (tile != null)
+			{
+				building.TakeBaked(tile);
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// A terrain's blade prototypes and each one's type (several share one: a prototype per biome rule, summed by the build
+		/// into a channel per type), new types made and added to <paramref name="types"/> (up to the renderer's
+		/// <see cref="GrassBladeRenderer.MaxTypes"/>). The play's choice and the editor's bake (TerrainDetailBaker) are this one.
+		/// </summary>
+		public static void SelectBlades(TerrainData data, GrassBladeSettings settings, List<GrassType> types, Dictionary<GameObject, GrassType> typesByPrefab,
+			HashSet<string> warned, List<int> prototypes, List<GrassType> chosen)
+		{
+			prototypes.Clear();
+			chosen.Clear();
+			DetailPrototype[] all = data.detailPrototypes;
+			for (int p = 0; p < all.Length; p++)
+			{
+				DetailPrototype proto = all[p];
 				GameObject prefab = proto?.prototype;
 				if (prefab == null || !proto.usePrototypeMesh || !settings.IsBladePrototype(prefab.name))
 				{
@@ -478,16 +528,9 @@ namespace FishMMO.Client
 					types.Add(type);
 					typesByPrefab.Add(prefab, type);
 				}
-				prototypeScratch.Add(p);
-				typeScratch.Add(type);
+				prototypes.Add(p);
+				chosen.Add(type);
 			}
-			building = prototypeScratch.Count > 0 ? GrassTerrain.Begin(terrain, prototypeScratch, typeScratch) : null;
-			if (building == null)
-			{
-				none[terrain] = data;
-				return false;
-			}
-			return true;
 		}
 
 		/// <summary>Hands a finished terrain from the mesh grass to the blades.</summary>
@@ -499,7 +542,11 @@ namespace FishMMO.Client
 			summaryMilliseconds += done.Milliseconds;
 			if (grass == null)
 			{
-				none[terrain] = terrain.terrainData;
+				// A build that failed on a worker is taken again from the start, once; one with no grass is remembered.
+				if (!done.Failed || !failedOnce.Add(terrain))
+				{
+					none[terrain] = terrain.terrainData;
+				}
 				return;
 			}
 			taken[terrain] = new Taken { Terrain = terrain, Data = terrain.terrainData, Grass = grass };
@@ -525,7 +572,7 @@ namespace FishMMO.Client
 		{
 			building?.Abandon();
 			building = null;
-			summaryTerrains = summaryFrames = summaryChannels = 0;
+			summaryTerrains = summaryFrames = summaryChannels = summaryBaked = 0;
 			summaryMilliseconds = 0;
 			foreach (Taken t in new List<Taken>(taken.Values))
 			{
@@ -535,6 +582,7 @@ namespace FishMMO.Client
 			grassTerrains.Clear();
 			GrassSwardMap.Clear();
 			none.Clear();
+			failedOnce.Clear();
 			types.Clear();
 			typesByPrefab.Clear();
 			renderer?.Dispose();

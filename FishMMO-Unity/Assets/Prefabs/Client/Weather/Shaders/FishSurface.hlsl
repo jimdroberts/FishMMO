@@ -247,9 +247,10 @@ float FishFallTrickle(float across, float down, float time)
 }
 
 // What the spray does beyond darkening, applied in place on a surface that is `spray` wet: running
-// water on steep rock close in, and a film of moss and algae a little further out, where the rock
-// stays damp but the water does not run hard enough to scour it. Darkening itself is FishDampen's,
-// so the caller combines this with the rain's wetness first.
+// water on steep rock close in. Darkening itself is FishDampen's, so the caller combines this with the
+// rain's wetness first. The moss a little further out, where the rock stays damp but the water does not
+// run hard enough to scour it, is the moss layer's (FishMoss.hlsl FishFallMossGrowth), grown by the pass
+// before the weather so it is the same textured moss as everywhere else and the spray's wet darkens it.
 void FishFallSurface(float3 worldPos, float spray, float reach, float3 anchor, inout half3 albedo, inout half smoothness, half3 normalWS)
 {
     if (spray <= 0.001)
@@ -259,19 +260,6 @@ void FishFallSurface(float3 worldPos, float spray, float reach, float3 anchor, i
     // Only above the pool: the rock under its surface is the water's to draw.
     float above = saturate((worldPos.y - anchor.y) * 2.0 + 1.0);
     float3 n = normalWS;
-
-    // ── Moss ──
-    // A band, not a disc: none in the inner zone where the water sheets over the rock, most from about
-    // half the radius out, fading to nothing before the spray's edge. Thickest on what faces up (water
-    // settles there) and on what faces the fall (where the spray lands), broken into patches.
-    float band = smoothstep(0.3, 0.55, reach) * (1.0 - smoothstep(0.75, 1.0, reach));
-    float3 toFall = normalize(anchor - worldPos + float3(0.0, 1e-3, 0.0));
-    float facing = saturate(0.35 + 0.65 * max(n.y, dot(n, toFall)));
-    float patch = FishSurfaceNoise((worldPos.xz - anchor.xz) * 0.7 + worldPos.y * 0.3);
-    float moss = band * facing * saturate(patch * 1.6 - 0.25) * above;
-    // A dark wet green, at most half the way: the rock still shows through.
-    half3 mossColour = half3(0.06, 0.11, 0.035) + albedo * half3(0.25, 0.35, 0.2);
-    albedo = lerp(albedo, mossColour, moss * 0.5);
 
     // ── Running water ──
     // The inner zone on a steep face: a sheen of water over the rock and the trickles running down it.
@@ -328,7 +316,7 @@ void FishWeatherSurface(float3 worldPos, inout half3 albedo, inout half3 normalW
 
         // Damp ground: darker, smoother, the same shape.
         FishDampen(wet, albedo, smoothness);
-        // Round a fall: water running down the steep rock, and moss where the spray keeps it damp.
+        // Round a fall: water running down the steep rock (its moss is the pass's, FishMoss.hlsl).
         // The puddles below take the same level test as the rain's, so spray pools on flat ground
         // by the fall and never on its slopes.
         FishFallSurface(worldPos, spray, fallReach, fallAnchor, albedo, smoothness, normalWS);

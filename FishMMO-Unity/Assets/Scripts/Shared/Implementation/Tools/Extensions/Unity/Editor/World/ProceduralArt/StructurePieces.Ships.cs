@@ -379,6 +379,43 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
+		/// <summary>How far under the gunwale a hull's water lid lies (<see cref="TryWaterLid"/>), metres: inside the rim, never over it.</summary>
+		public const float WaterLidDrop = 0.03f;
+
+		/// <summary>
+		/// A floating hull's water lid, in the piece's frame: the inner skin's gunwale line, port then starboard per
+		/// station from stern to bow, <see cref="WaterLidDrop"/> under it. What a hull's open top keeps the sea out through:
+		/// an invisible sheet across it (FishMMO/Water/Hull Lid, a stencil mark the water passes skip) hides the water plane inside the planking, which lies
+		/// under the waterline in every hull but the cog's deck (and there down the gaps beside it). False for a piece that
+		/// is not a floating hull, or for its variant on land (the rowboat turned over on its beach).
+		/// </summary>
+		public static bool TryWaterLid(string pieceId, int variant, out Vector3[] port, out Vector3[] starboard)
+		{
+			HullLines h;
+			switch (pieceId)
+			{
+				case "Rowboat" when variant == 0: h = RowboatLines; break;
+				case "FishingBoat": h = SmackLines; break;
+				case "Cog": h = CogLines; break;
+				case "Longship": h = LongshipLines; break;
+				default:
+					port = starboard = null;
+					return false;
+			}
+			int stations = h.Stations;
+			port = new Vector3[stations + 1];
+			starboard = new Vector3[stations + 1];
+			for (int i = 0; i <= stations; i++)
+			{
+				// The hull's own end stations (Hull), so the lid closes where the planking does.
+				float t = Mathf.Clamp(i / (float)stations, 0.015f, 0.985f);
+				Vector3 drop = new Vector3(0f, -WaterLidDrop, 0f);
+				port[i] = HullPoint(h, t, -1f, h.Planking) + drop;
+				starboard[i] = HullPoint(h, t, 1f, h.Planking) + drop;
+			}
+			return true;
+		}
+
 		/// <summary>How high a hull on the stocks stands: its keel this far over the ground, metres.</summary>
 		private const float StocksHeight = 0.7f;
 

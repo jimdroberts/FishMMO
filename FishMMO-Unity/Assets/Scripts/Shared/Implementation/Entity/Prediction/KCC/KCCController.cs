@@ -180,6 +180,17 @@ namespace FishMMO.Shared
 		/// <summary>The share of the swimming speed left in lava, which is thick.</summary>
 		public float LavaSwimSpeedShare = 0.5f;
 
+		[Header("Climbing")]
+		/// <summary>Whether this character climbs ladders, rope ladders and ropes (<see cref="SceneClimbables"/>) at all.</summary>
+		public bool CanClimb = true;
+		/// <summary>
+		/// Optional: a character attribute that scales climbing speed. Without one, climbing follows Move Speed alone, so
+		/// whatever slows a character's walk slows its climb too.
+		/// </summary>
+		public CharacterAttributeTemplate ClimbSpeedTemplate;
+		/// <summary>How quickly a climber turns to face the climbable (and the way off it over the top).</summary>
+		public float ClimbTurnSharpness = 12f;
+
 		/// <summary>
 		/// The current state of the character state machine.
 		/// </summary>
@@ -228,6 +239,11 @@ namespace FishMMO.Shared
 		private bool isCrouching = false;
 		private bool isSwimming = false;
 		private byte climbOutTicks = 0;
+		// The climb, reconciled through Climbable, ClimbPhase and ClimbTicks.
+		private ClimbState climb = ClimbState.Free;
+		private readonly List<int> climbCandidates = new List<int>(4);
+		// Set by SetInputs each tick: the controls are taken away (stunned, frozen, mesmerised, dead), so a climber lets go.
+		private bool controlsSuppressedThisTick;
 
 		// The water at the character this tick: sampled before the motor moves, from the synced clock.
 		private WaterSample water = WaterSample.Dry;
@@ -240,6 +256,12 @@ namespace FishMMO.Shared
 
 		/// <summary>Whether the character is swimming now.</summary>
 		public bool IsSwimming => isSwimming;
+
+		/// <summary>Whether the character is on a ladder, rope ladder or rope now (stepping on or off at its top included).</summary>
+		public bool IsClimbing => climb.IsClimbing;
+
+		/// <summary>The climb: which of the scene's climbables, and where in it (<see cref="ClimbState.Free"/> when not climbing).</summary>
+		public ClimbState Climb => climb;
 
 		/// <summary>The water over the character this tick (<see cref="WaterSample.Dry"/> when there is none).</summary>
 		public WaterSample Water => water;
@@ -402,11 +424,22 @@ namespace FishMMO.Shared
 			timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
 			timeSinceJumpRequested = state.TimeSinceJumpRequested;
 			climbOutTicks = state.ClimbOutTicks;
-			// The motor's ground solving follows the swim flag: it is off while swimming, and the flag is what is reconciled.
-			if (isSwimming != state.IsSwimming)
+			// The motor's ground solving follows the swim and climb state: it is off for either, and they are what is reconciled.
+			bool wasSolvingGround = !isSwimming && !climb.IsClimbing;
+			isSwimming = state.IsSwimming;
+			climb.Index = state.Climbable - 1;
+			climb.Phase = (ClimbPhase)state.ClimbPhase;
+			climb.Ticks = state.ClimbTicks;
+			if (!climb.IsClimbing)
 			{
-				isSwimming = state.IsSwimming;
-				Motor.SetGroundSolvingActivation(!isSwimming);
+				// Never one without the other: a phase with no climbable (or the reverse) is not a climb.
+				climb.Index = -1;
+				climb.Phase = ClimbPhase.None;
+			}
+			bool solvesGround = !isSwimming && !climb.IsClimbing;
+			if (wasSolvingGround != solvesGround)
+			{
+				Motor.SetGroundSolvingActivation(solvesGround);
 			}
 
 			/* Restore the collider to match the restored crouch state.
@@ -502,6 +535,9 @@ namespace FishMMO.Shared
 			baseState.TimeSinceJumpRequested = timeSinceJumpRequested;
 			baseState.IsSwimming = isSwimming;
 			baseState.ClimbOutTicks = climbOutTicks;
+			baseState.Climbable = climb.IsClimbing ? (ushort)(climb.Index + 1) : (ushort)0;
+			baseState.ClimbPhase = climb.IsClimbing ? (byte)climb.Phase : (byte)0;
+			baseState.ClimbTicks = climb.Ticks;
 
 			return baseState;
 		}
@@ -563,14 +599,24 @@ namespace FishMMO.Shared
 
 			if (controlsSuppressed)
 			{
+				/* No look target either, so UpdateRotation leaves the facing where the motor has it. A look kept from the
+				 * last controlled tick is a direction fixed in the world: it turned a stunned rider on a turning deck back
+				 * to it every tick, undoing the deck's turn (the motor's platform turn), and it was state no reconcile
+				 * restores. Off a deck it changes nothing: the facing already stands on that direction. */
+				lookInputVector = Vector3.zero;
 				moveInputVector = Vector3.zero;
 				jumpRequested = false;
 				crouchInputDown = false;
 				sprintInputDown = false;
 				ascendInputDown = false;
 				swimMoveVector = Vector3.zero;
+				/* A stunned, frozen, mesmerised or dead climber loses its hold and falls (BeforeCharacterUpdate lets go): the
+				 * hands are what these take away. Both peers reach this on the same tick (KCCPlayer.OnReplicate), so the drop
+				 * is predicted like the rest. */
+				controlsSuppressedThisTick = true;
 				return;
 			}
+			controlsSuppressedThisTick = false;
 
 			switch (CurrentCharacterState)
 			{
@@ -620,6 +666,7 @@ namespace FishMMO.Shared
 		{
 			moveInputVector = inputs.MoveVector;
 			lookInputVector = inputs.LookVector;
+			controlsSuppressedThisTick = false;
 		}
 
 		/// <summary>
@@ -637,6 +684,11 @@ namespace FishMMO.Shared
 				hasDoneInitialGroundProbe = true;
 			}
 			UpdateWater();
+			if (climb.IsClimbing && controlsSuppressedThisTick)
+			{
+				ReleaseClimb(Constants.Character.ClimbRegrabSeconds, deltaTime);
+			}
+			UpdateClimbAttach(deltaTime);
 		}
 
 		/// <summary>
@@ -652,7 +704,7 @@ namespace FishMMO.Shared
 			if (!isSwimming)
 			{
 				// Not while rising: a swimmer that has just jumped out is still deep for a tick or two.
-				if (CanSwim && submersion >= Constants.Character.SwimEnterSubmersion && Motor.BaseVelocity.y <= 0.5f)
+				if (CanSwim && !climb.IsClimbing && submersion >= Constants.Character.SwimEnterSubmersion && Motor.BaseVelocity.y <= 0.5f)
 				{
 					EnterSwimming();
 				}
@@ -691,6 +743,189 @@ namespace FishMMO.Shared
 			Motor.SetGroundSolvingActivation(true);
 		}
 
+		/// <summary>How far out of a climbable's line this character hangs: its body's radius and a little air.</summary>
+		private float ClimbHang => Motor.Capsule.radius + Constants.Character.ClimbHangClearance;
+
+		/// <summary>The climbable this character holds, from its own scene's list (<see cref="SceneClimbables"/>).</summary>
+		private bool TryGetClimbable(out SceneClimbable climbable)
+		{
+			return SceneClimbables.TryGet(Motor.gameObject.scene, climb.Index, out climbable);
+		}
+
+		/// <summary>
+		/// Takes hold of a ladder, rope ladder or rope this character is moving at (<see cref="ClimbingRules.TryAttach"/>):
+		/// from the floor at its foot or anywhere along it, or walking off its top's edge from the upper floor.
+		/// </summary>
+		/// <remarks>
+		/// Runs before the motor moves, on every simulated and replayed tick. It reads only reconciled state (the feet,
+		/// grounding, the wait after letting go), this tick's input and the scene's climbables, which never change while
+		/// it is loaded, so the server and the owner take hold on the same tick. Nearest wins; ties go to the lower index.
+		/// </remarks>
+		private void UpdateClimbAttach(float deltaTime)
+		{
+			if (!CanClimb || controlsSuppressedThisTick || climb.IsClimbing || climb.Ticks > 0 || moveInputVector.sqrMagnitude < ClimbingRules.MinIntent * ClimbingRules.MinIntent)
+			{
+				return;
+			}
+			Vector3 feet = Motor.TransientPosition;
+			UnityEngine.SceneManagement.Scene scene = Motor.gameObject.scene;
+			if (!SceneClimbables.Near(scene, feet, ClimbingRules.QueryReach, climbCandidates))
+			{
+				return;
+			}
+			bool grounded = Motor.GroundingStatus.IsStableOnGround;
+			float hang = ClimbHang;
+			int best = -1;
+			ClimbPhase bestPhase = ClimbPhase.None;
+			float bestDistance = float.MaxValue;
+			for (int i = 0; i < climbCandidates.Count; i++)
+			{
+				int index = climbCandidates[i];
+				if (SceneClimbables.TryGet(scene, index, out SceneClimbable candidate) &&
+					ClimbingRules.TryAttach(in candidate, feet, moveInputVector, grounded, hang, out ClimbPhase phase, out float distance) &&
+					distance < bestDistance)
+				{
+					best = index;
+					bestPhase = phase;
+					bestDistance = distance;
+				}
+			}
+			if (best >= 0)
+			{
+				EnterClimbing(best, bestPhase, deltaTime);
+			}
+		}
+
+		private void EnterClimbing(int index, ClimbPhase phase, float deltaTime)
+		{
+			if (isSwimming)
+			{
+				// Out of the water by the ladder: a swimmer reaching one takes hold of it.
+				isSwimming = false;
+				climbOutTicks = 0;
+			}
+			ClimbingRules.Attach(ref climb, index, phase, deltaTime);
+			// A jump pressed walking into the ladder would let go of it again at once.
+			jumpRequested = false;
+			Motor.SetGroundSolvingActivation(false);
+			Motor.ForceUnground();
+			StandUpIfRoom();
+		}
+
+		/// <summary>Lets go of the climbable, and waits <paramref name="regrabSeconds"/> before taking hold of one again.</summary>
+		private void ReleaseClimb(float regrabSeconds, float deltaTime)
+		{
+			ClimbingRules.Release(ref climb, regrabSeconds, deltaTime);
+			Motor.SetGroundSolvingActivation(!isSwimming);
+		}
+
+		/// <summary>Stands a crouching character up if there is room: a climber, like a swimmer, is at full height.</summary>
+		private void StandUpIfRoom()
+		{
+			if (!isCrouching)
+			{
+				return;
+			}
+			ApplyCapsuleDimensions(crouched: false);
+			if (Motor.CharacterOverlap(Motor.TransientPosition, Motor.TransientRotation, probedColliders, Motor.CollidableLayers, QueryTriggerInteraction.Ignore) > 0)
+			{
+				ApplyCapsuleDimensions(crouched: true);
+			}
+			else
+			{
+				isCrouching = false;
+			}
+		}
+
+		/// <summary>
+		/// A climber's velocity (<see cref="ClimbingRules.Step"/>): pushing into the climbable climbs it, pulling away goes
+		/// down, pushing along a ladder shuffles across it, Crouch slides down, Jump lets go and pushes off. No gravity, no
+		/// ground.
+		/// </summary>
+		/// <remarks>
+		/// Climbing speed follows Move Speed (and <see cref="ClimbSpeedTemplate"/> where one is set), so a slow slows a
+		/// climb as it slows a walk. The floor probe going down is a ray in the character's own physics scene (world
+		/// scenes load with local physics), against the fixed ground layers: the same answer on every peer.
+		/// </remarks>
+		private void UpdateClimbMovement(ref Vector3 currentVelocity, float deltaTime)
+		{
+			TickJumpRequestTimer(deltaTime);
+			if (!TryGetClimbable(out SceneClimbable climbable))
+			{
+				// Its scene's climbables are gone (unloaded, or a different scene): let go and fall.
+				ReleaseClimb(0f, deltaTime);
+				return;
+			}
+
+			Vector3 feet = Motor.TransientPosition;
+			// Into the climbable climbs, away goes down, along it shuffles (ClimbingRules.Axes): the push that took hold climbs on.
+			ClimbingRules.Axes(in climbable, climb.Phase, feet, moveInputVector, out float up, out float side);
+			ClimbIntent intent = new ClimbIntent
+			{
+				Up = up,
+				Side = side,
+				Move = moveInputVector,
+				Jump = jumpRequested,
+				Slide = crouchInputDown,
+			};
+			// A jump is a let-go, and nothing else on a climbable: it never waits to fire on landing.
+			jumpRequested = false;
+			if (climb.Phase == ClimbPhase.Holding && (intent.Up < 0f || intent.Slide))
+			{
+				// Feet on the floor going down: off onto it, wherever the climb's foot was set.
+				intent.FloorBelow = Motor.PhysicsScene.Raycast(feet + Vector3.up * 0.2f, Vector3.down, out RaycastHit floor, 0.3f, Motor.StableGroundLayers, QueryTriggerInteraction.Ignore) &&
+					Vector3.Angle(floor.normal, Vector3.up) <= Motor.MaxStableSlopeAngle;
+			}
+
+			ClimbStep step = ClimbingRules.Step(in climbable, ref climb, feet, in intent, ClimbHang, ClimbSpeedScale(), deltaTime);
+			currentVelocity = step.Velocity;
+			if (step.Released)
+			{
+				Motor.SetGroundSolvingActivation(!isSwimming);
+				if (step.Jumped)
+				{
+					Motor.ForceUnground();
+				}
+			}
+		}
+
+		/// <summary>Move Speed's share, times Climb Speed's where the character has one; 1 with neither.</summary>
+		private float ClimbSpeedScale()
+		{
+			EnsureCached();
+			float scale = 1f;
+			if (cachedAttributeController != null)
+			{
+				if (MoveSpeedTemplate != null && cachedAttributeController.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeed))
+				{
+					scale *= moveSpeed.FinalValueAsPct;
+				}
+				if (ClimbSpeedTemplate != null && cachedAttributeController.TryGetAttribute(ClimbSpeedTemplate, out CharacterAttribute climbSpeed))
+				{
+					scale *= climbSpeed.FinalValueAsPct;
+				}
+			}
+			return scale;
+		}
+
+		/// <summary>
+		/// The end of a climbing tick: the animator hears that the character climbs, and how fast up or down. Without climb
+		/// clips (none exist yet) it stands as if on the ground, upright and still, facing the climbable.
+		/// </summary>
+		private void AfterClimbingUpdate()
+		{
+			EnsureCached();
+			if (cachedAnimationController != null)
+			{
+				float rate = Mathf.Clamp(Motor.Velocity.y / Constants.Character.ClimbSpeed, -2f, 2f);
+				cachedAnimationController.SetCrouching(false);
+				cachedAnimationController.SetGrounded(true);
+				cachedAnimationController.SetSpeed(0f);
+				cachedAnimationController.SetSwimming(false, 0f);
+				cachedAnimationController.SetClimbing(true, rate);
+			}
+		}
+
 		/// <summary>
 		/// (Called by KinematicCharacterMotor during its update cycle)
 		/// This is where you tell your character what its rotation should be right now. 
@@ -702,6 +937,14 @@ namespace FishMMO.Shared
 			{
 				case KCCCharacterState.Default:
 					{
+						if (climb.IsClimbing && TryGetClimbable(out SceneClimbable climbable))
+						{
+							// Upright, facing the climbable (or the way off it once over the top); the camera does not turn a climber.
+							Vector3 facing = ClimbingRules.Facing(in climbable, climb.Phase, Motor.TransientPosition);
+							currentRotation = Quaternion.Slerp(Motor.TransientRotation, Quaternion.LookRotation(facing, Vector3.up), 1f - Mathf.Exp(-ClimbTurnSharpness * deltaTime));
+							break;
+						}
+
 						if (lookInputVector.sqrMagnitude > 0f && OrientationSharpness > 0f)
 						{
 							float targetRotationY = Mathf.Atan2(lookInputVector.x, lookInputVector.z) * Mathf.Rad2Deg;
@@ -773,6 +1016,12 @@ namespace FishMMO.Shared
 						if (cachedAbilityController != null)
 						{
 							abilityType = cachedAbilityController.GetCurrentAbilityType();
+						}
+
+						if (climb.IsClimbing)
+						{
+							UpdateClimbMovement(ref currentVelocity, deltaTime);
+							break;
 						}
 
 						if (isSwimming)
@@ -1175,10 +1424,19 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void AfterCharacterUpdate(float deltaTime)
 		{
+			// The wait before taking hold again runs down while not climbing (swimming or not): reconciled, so a replay counts alike.
+			ClimbingRules.TickCooldown(ref climb);
+
 			switch (CurrentCharacterState)
 			{
 				case KCCCharacterState.Default:
 					{
+						if (climb.IsClimbing)
+						{
+							AfterClimbingUpdate();
+							break;
+						}
+
 						if (isSwimming)
 						{
 							AfterSwimmingUpdate();
@@ -1262,6 +1520,7 @@ namespace FishMMO.Shared
 							}
 							cachedAnimationController.SetSpeed(speed);
 							cachedAnimationController.SetSwimming(false, 0f);
+							cachedAnimationController.SetClimbing(false, 0f);
 						}
 						break;
 					}
@@ -1295,6 +1554,7 @@ namespace FishMMO.Shared
 				cachedAnimationController.SetGrounded(false);
 				cachedAnimationController.SetSpeed(planar > 0.1f ? Mathf.Clamp01(planar / Constants.Character.SwimSpeed) : 0f);
 				cachedAnimationController.SetSwimming(true, Mathf.Clamp(pitch, -80f, 80f));
+				cachedAnimationController.SetClimbing(false, 0f);
 			}
 		}
 

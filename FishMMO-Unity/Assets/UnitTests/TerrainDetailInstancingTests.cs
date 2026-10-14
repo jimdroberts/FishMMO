@@ -290,7 +290,7 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(FishWork.Stride, Marshal.SizeOf<FishWork>(), "FishWork");
 			LogAssert.AreEqual(20, GraphicsBuffer.IndirectDrawIndexedArgs.size, "indexed args: 5 uints");
 
-			string compute = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Resources/FishTerrainInstancing.compute"));
+			string compute = File.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute"));
 			LogAssert.IsTrue(compute.Contains("struct FishInstance { float4 row0; float4 row1; float4 row2; };"), "the kernel's FishInstance");
 			LogAssert.IsTrue(compute.Contains("struct FishVisible { uint index; float lodFade; };"), "the kernel's FishVisible");
 			LogAssert.IsTrue(compute.Contains("(id.x * 5 + 1) * 4"), "the finaliser writes instanceCount, the second uint of each command");

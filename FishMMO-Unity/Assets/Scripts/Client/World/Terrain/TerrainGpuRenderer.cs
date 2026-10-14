@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Stopwatch = System.Diagnostics.Stopwatch;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Profiling;
@@ -12,7 +13,9 @@ namespace FishMMO.Client
 	/// The GPU-driven path of the instanced terrain renderers (trees and details each own one): instances
 	/// resident in one structured buffer, culled and LOD-picked per camera by FishTerrainInstancing.compute
 	/// into per-(prototype, level, view) slots, and drawn with <see cref="Graphics.RenderMeshIndirect"/> —
-	/// one main draw (shadows off) and one shadows-only draw per prototype, level and submesh.
+	/// one main command (shadows off) and one shadows-only command per prototype, level and submesh. On Vulkan the
+	/// commands sharing a material are drawn by one call over a merged mesh (<see cref="BatchDraws"/>); elsewhere one
+	/// call a command.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -128,12 +131,81 @@ namespace FishMMO.Client
 			public int Level;
 			public int View;
 			public int Slot;
+			/// <summary>The mesh the command draws from and its submesh there: the part's own, or its pool's (<see cref="MeshPool"/>).</summary>
 			public Mesh Mesh;
 			public int Submesh;
+			/// <summary>The part's own mesh and submesh, whatever <see cref="Mesh"/> is (names and the pools' contents).</summary>
+			public Mesh SourceMesh;
+			public int SourceSubmesh;
 			public RenderParams Params;
 			/// <summary>The depth-prime twin drawn ahead of this lit draw (<see cref="PrimeOf"/>), or null: the camera view's alpha-tested vegetation only.</summary>
 			public Material Prime;
 		}
+
+		/// <summary>
+		/// A run of consecutive commands drawn by one <see cref="Graphics.RenderMeshIndirect"/> call (<see cref="BatchDraws"/>):
+		/// one material, one view, one set of render parameters and one mesh (a pool's), each command a submesh of it.
+		/// </summary>
+		private struct Batch
+		{
+			public int First, Count;
+			public Mesh Mesh;
+			public RenderParams Params;
+			public Material Prime;
+			public int View;
+		}
+
+		/// <summary>
+		/// Every part drawn with one material and one vertex layout, merged into one mesh, a submesh a part, so their commands
+		/// can share a call. Kept across relayouts and rebuilt only when a part joins (models are only ever added).
+		/// </summary>
+		private sealed class MeshPool
+		{
+			public string Name;
+			public Mesh Mesh;
+			public readonly List<(Mesh Mesh, int Submesh)> Parts = new List<(Mesh, int)>();
+			public readonly Dictionary<(Mesh, int), int> Index = new Dictionary<(Mesh, int), int>();
+			public int Built;
+		}
+
+		/// <summary>
+		/// Vulkan's SV_InstanceID includes the args' startInstance (D3D's, GL's and WebGPU's here do not, or may not use it):
+		/// there every command's startInstance is its run's start, and FishIndirectSetup (FishIndirectInstancing.hlsl) reads
+		/// the visible entry by the instance index alone, so no command needs to know which command it is. That is what lets
+		/// one call draw many commands. Must match the shader's SHADER_API_VULKAN branch; the detail scatter follows it too.
+		/// </summary>
+		public static bool InstanceIdCarriesBase => SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan;
+
+		/// <summary>
+		/// Where the instance index carries the run's start (<see cref="InstanceIdCarriesBase"/>): the commands that share a
+		/// material, a view and their render parameters are drawn by one call over their pooled mesh (<see cref="MeshPool"/>),
+		/// so Unity sets the material up once for the lot instead of once a prototype and level (2026-10-13: ~275 calls a
+		/// camera at Flo Monolith's meadow, each its own SetPass, ~8 ms of the render's CPU). Off is one call a command
+		/// (probe variant `nobatch`). Elsewhere it is always one call a command.
+		/// </summary>
+		public static bool BatchDraws = true;
+		private bool batchedState;
+		private readonly List<Batch> batches = new List<Batch>();
+		private readonly Dictionary<(Material, string), MeshPool> pools = new Dictionary<(Material, string), MeshPool>();
+		private readonly Dictionary<Mesh, string> layouts = new Dictionary<Mesh, string>();
+		/// <summary>The one block every batched call draws with: the buffers, and no caster sphere (it differs by part).</summary>
+		private readonly MaterialPropertyBlock batchBlock = new MaterialPropertyBlock();
+
+		/// <summary>Commands the last camera's calls covered (with <see cref="BatchDraws"/>, several a call).</summary>
+		public int LastCommandCount { get; private set; }
+
+		/// <summary>The last camera's commands by view: the lit draws, their depth primes, and the shadow casters (each drawn into every cascade).</summary>
+		public int LastMainCommands { get; private set; }
+		public int LastPrimeCommands { get; private set; }
+		public int LastShadowCommands { get; private set; }
+
+		/// <summary>Diagnostics (ScenePerfProbe): count the last camera's commands by art family too (<see cref="LastFamilies"/>).</summary>
+		public static bool CountFamilies;
+		/// <summary>Per family (the prefab name's first word: Tree, Vine, Rock…), the last camera's main, prime and shadow commands.</summary>
+		public readonly Dictionary<string, Vector3Int> LastFamilies = new Dictionary<string, Vector3Int>();
+
+		/// <summary>Whether this frame draws batched (and the layout must have been made for it).</summary>
+		private static bool Batching => BatchDraws && InstanceIdCarriesBase;
 
 		private struct Resident
 		{
@@ -181,13 +253,20 @@ namespace FishMMO.Client
 
 		private static readonly int VegZWriteId = Shader.PropertyToID("_VegZWrite");
 		/// <summary>Per slot: its level's bounding sphere in object space, grown, for the shadow caster's per-cascade culling (ShadowCascadeCulling).</summary>
-		private static readonly int CasterSphereId = Shader.PropertyToID("_FishCasterSphere");
+		public static readonly int CasterSphereId = Shader.PropertyToID("_FishCasterSphere");
 		/// <summary>
 		/// How much a level's mesh sphere is grown for what the vegetation shader does to each plant: VegVary widens a crown
 		/// by up to 60 % and heightens it by up to 40 %, leans it and swings its limbs, and the wind sways it. Too big only
 		/// culls less; too small would drop a shadow.
 		/// </summary>
-		private const float CasterSphereGrowth = 1.6f, CasterSphereMetres = 1f;
+		public const float CasterSphereGrowth = 1.6f, CasterSphereMetres = 1f;
+
+		/// <summary>
+		/// A drawn mesh's caster sphere (<see cref="CasterSphereId"/>): its bounds' centre, and their half diagonal grown by
+		/// <see cref="CasterSphereGrowth"/> and <see cref="CasterSphereMetres"/>. Shared with the GPU detail scatter, whose
+		/// bushes and pebbles draw through the same twins.
+		/// </summary>
+		public static Vector4 CasterSphere(Bounds b) => new Vector4(b.center.x, b.center.y, b.center.z, b.extents.magnitude * CasterSphereGrowth + CasterSphereMetres);
 		private const string VegetationIndirectName = "FishMMO/Vegetation Indirect";
 		private const string VegetationPrimeName = "FishMMO/Vegetation Prime";
 		private readonly RangeAllocator allocator = new RangeAllocator(0);
@@ -198,6 +277,11 @@ namespace FishMMO.Client
 		private GraphicsBuffer instances, modelBuffer, workBuffer, slotBuffer, argSlotBuffer, countBuffer, visibleBuffer, argsBuffer, commandBaseBuffer;
 		private NativeArray<FishWork> work;
 		private int workCount;
+		/// <summary>
+		/// Counts every change to the work list (<see cref="BeginCamera"/>, <see cref="AddWork"/>), and the count the GPU's
+		/// copy was last written at: a list kept across frames (a reused gather) is not uploaded again.
+		/// </summary>
+		private int workVersion, uploadedWorkVersion = -1;
 		private bool layoutDirty = true;
 
 		/// <summary>
@@ -210,6 +294,12 @@ namespace FishMMO.Client
 		private bool tagsDirty;
 		private int tagsDirtyFrame;
 		private bool anyRock;
+
+		/// <summary>
+		/// Counts every change to what the rock crevice field reads of this renderer (its instances uploaded, its rock tags):
+		/// the field's gather runs again only when it moves (RockContactField).
+		/// </summary>
+		public int RockVersion { get; private set; }
 
 		/// <summary>Draws issued for the last camera.</summary>
 		public int LastDrawCount { get; private set; }
@@ -518,6 +608,7 @@ namespace FishMMO.Client
 			{
 				tagBuffer.SetData(tagMirror);
 				tagsDirty = false;
+				RockVersion++;
 			}
 			tags = tagBuffer;
 			count = Mathf.Min(instances.count, tagMirror.Length);
@@ -675,6 +766,7 @@ namespace FishMMO.Client
 		/// <summary>Adds a changed span, merging it into any span it overlaps or nearly touches.</summary>
 		private void MarkDirty(int offset, int count)
 		{
+			RockVersion++;
 			TerrainGpuMath.AddDirty(dirty, offset, offset + count, DirtyMergeGap);
 		}
 
@@ -753,6 +845,7 @@ namespace FishMMO.Client
 		public void BeginCamera()
 		{
 			workCount = 0;
+			workVersion++;
 			foreach (Model m in models)
 			{
 				m.MainMask = 0;
@@ -774,6 +867,7 @@ namespace FishMMO.Client
 				return;
 			}
 			Model m = models[model];
+			workVersion++;
 			m.MainMask |= levelMask;
 			m.WorkInstances += count;
 			if (shadowCandidate)
@@ -860,6 +954,10 @@ namespace FishMMO.Client
 					layoutDirty = true;
 				}
 			}
+			if (batchedState != Batching)
+			{
+				layoutDirty = true;
+			}
 			if (layoutDirty)
 			{
 				Relayout();
@@ -873,6 +971,7 @@ namespace FishMMO.Client
 			{
 				workBuffer?.Release();
 				workBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Mathf.Max(workCount, work.Length), FishWork.Stride);
+				uploadedWorkVersion = -1;
 			}
 
 			for (int i = 0; i < 6; i++)
@@ -886,7 +985,12 @@ namespace FishMMO.Client
 				cmd.Clear();
 				cmd.BeginSample(CullingSampler);
 				Flush(cmd);
-				cmd.SetBufferData(workBuffer, work, 0, 0, workCount);
+				// Only a changed list: one kept from an earlier frame's gather is in the buffer already.
+				if (uploadedWorkVersion != workVersion)
+				{
+					cmd.SetBufferData(workBuffer, work, 0, 0, workCount);
+					uploadedWorkVersion = workVersion;
+				}
 				cmd.SetComputeVectorParam(compute, CameraPositionId, view.Position);
 				cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
 				cmd.SetComputeVectorParam(compute, LightId, view.Shadows ? new Vector4(view.LightDirection.x, view.LightDirection.y, view.LightDirection.z, view.ShadowDistance) : Vector4.zero);
@@ -940,15 +1044,21 @@ namespace FishMMO.Client
 			var bounds = new Bounds(view.Position, Vector3.one * (2f * reach));
 			SyncPrimeState();
 			int draws = 0;
+			if (batchedState)
+			{
+				draws = DrawBatches(camera, bounds);
+				TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
+				return draws;
+			}
+			int drawn = 0;
 			for (int c = 0; c < commands.Count; c++)
 			{
 				Command command = commands[c];
-				Model m = models[command.Model];
-				int mask = command.View == 0 ? m.MainMask : m.ShadowMask;
-				if ((mask & (1 << command.Level)) == 0)
+				if (!Wanted(command))
 				{
 					continue;
 				}
+				drawn++;
 				RenderParams rp = command.Params;
 				rp.camera = camera;
 				rp.worldBounds = bounds;
@@ -964,8 +1074,115 @@ namespace FishMMO.Client
 				}
 			}
 			LastDrawCount = draws;
+			LastCommandCount = drawn;
 			TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
 			return draws;
+		}
+
+		/// <summary>Whether a command's level is one this camera's work can reach, in its view.</summary>
+		private bool Wanted(in Command command)
+		{
+			Model m = models[command.Model];
+			int mask = command.View == 0 ? m.MainMask : m.ShadowMask;
+			return (mask & (1 << command.Level)) != 0;
+		}
+
+		/// <summary>
+		/// Wanted commands of a batch at most this many unwanted ones apart are drawn by the same call. Each command a call
+		/// covers is a GPU draw (an empty one where no work reached its level, still counted in the frame's draw calls),
+		/// while a further call of the same batch costs no material set-up: so none (2026-10-13, Flo Monolith meadow: a
+		/// gap of 2 covered 383 commands for the 235 wanted, at no CPU gain).
+		/// </summary>
+		public static int BatchGap = 0;
+
+		/// <summary>
+		/// A batch's wanted commands, in calls over runs of them (<see cref="BatchGap"/>), each with its prime ahead of it.
+		/// The calls of a batch share their material and block, so only the first sets the material up. Returns the calls.
+		/// </summary>
+		private int DrawBatches(Camera camera, Bounds bounds)
+		{
+			int draws = 0, covered = 0, main = 0, primes = 0, shadows = 0;
+			LastFamilies.Clear();
+			for (int b = 0; b < batches.Count; b++)
+			{
+				Batch batch = batches[b];
+				RenderParams rp = batch.Params;
+				rp.camera = camera;
+				rp.worldBounds = bounds;
+				rp.matProps = batchBlock;
+				int end = batch.First + batch.Count;
+				int c = batch.First;
+				while (c < end)
+				{
+					if (!Wanted(commands[c]))
+					{
+						c++;
+						continue;
+					}
+					int first = c, last = c;
+					for (int next = c + 1; next < end && next - last <= BatchGap + 1; next++)
+					{
+						if (Wanted(commands[next]))
+						{
+							last = next;
+						}
+					}
+					int count = last - first + 1;
+					rp.material = batch.Params.material;
+					Graphics.RenderMeshIndirect(rp, batch.Mesh, argsBuffer, count, first);
+					draws++;
+					covered += count;
+					bool primed = primedState && batch.Prime != null;
+					if (batch.View == 0)
+					{
+						main += count;
+						primes += primed ? count : 0;
+					}
+					else
+					{
+						shadows += count;
+					}
+					if (CountFamilies)
+					{
+						Tally(first, count, batch.View, primed);
+					}
+					if (primed)
+					{
+						rp.material = batch.Prime;
+						Graphics.RenderMeshIndirect(rp, batch.Mesh, argsBuffer, count, first);
+						draws++;
+					}
+					c = last + 1;
+				}
+			}
+			LastDrawCount = draws;
+			LastCommandCount = covered;
+			LastMainCommands = main;
+			LastPrimeCommands = primes;
+			LastShadowCommands = shadows;
+			return draws;
+		}
+
+		/// <summary>Adds a call's commands to their models' families (<see cref="LastFamilies"/>).</summary>
+		private void Tally(int first, int count, int view, bool primed)
+		{
+			for (int c = first; c < first + count; c++)
+			{
+				string name = models[commands[c].Model].Name ?? "?";
+				int cut = name.IndexOf('_');
+				string family = cut > 0 ? name.Substring(0, cut) : name;
+				LastFamilies.TryGetValue(family, out Vector3Int n);
+				if (view == 0)
+				{
+					n.x++;
+					n.y += primed ? 1 : 0;
+				}
+				else
+				{
+					n.z++;
+				}
+				LastFamilies[family] = n;
+			}
 		}
 
 		// ── Layout ────────────────────────────────────────────────────
@@ -978,8 +1195,8 @@ namespace FishMMO.Client
 			var capacities = new List<int>();
 			var bounded = new Dictionary<int, Bounds>();
 			commands.Clear();
-			var args = new List<GraphicsBuffer.IndirectDrawIndexedArgs>();
-			var argSlots = new List<uint>();
+			batches.Clear();
+			batchedState = Batching;
 			for (int id = 0; id < models.Count; id++)
 			{
 				Model m = models[id];
@@ -1002,7 +1219,12 @@ namespace FishMMO.Client
 							RenderParams rp = part.Template;
 							rp.material = part.Material;
 							rp.shadowCastingMode = v == 0 ? ShadowCastingMode.Off : ShadowCastingMode.ShadowsOnly;
-							commands.Add(new Command { Model = id, Level = l, View = v, Slot = slot, Mesh = part.Mesh, Submesh = part.Submesh, Params = rp, Prime = v == 0 ? PrimeOf(part.Material) : null });
+							commands.Add(new Command
+							{
+								Model = id, Level = l, View = v, Slot = slot,
+								Mesh = part.Mesh, Submesh = part.Submesh, SourceMesh = part.Mesh, SourceSubmesh = part.Submesh,
+								Params = rp, Prime = v == 0 ? PrimeOf(part.Material) : null,
+							});
 							Bounds partBounds = part.Mesh.bounds;
 							if (bounded.TryGetValue(slot, out Bounds sofar))
 							{
@@ -1013,15 +1235,6 @@ namespace FishMMO.Client
 							{
 								bounded[slot] = partBounds;
 							}
-							args.Add(new GraphicsBuffer.IndirectDrawIndexedArgs
-							{
-								indexCountPerInstance = part.Mesh.GetIndexCount(part.Submesh),
-								startIndex = part.Mesh.GetIndexStart(part.Submesh),
-								baseVertexIndex = (uint)part.Mesh.GetBaseVertex(part.Submesh),
-								instanceCount = 0,
-								startInstance = 0,
-							});
-							argSlots.Add((uint)slot);
 						}
 					}
 				}
@@ -1037,6 +1250,32 @@ namespace FishMMO.Client
 
 			var bases = new int[slotCount];
 			int total = TerrainGpuMath.LayoutSlots(capacities, bases);
+			// Until every pool is merged (a few a frame: PoolBudgetMilliseconds), a call a command from the parts' own meshes; the
+			// next camera's layout, seeing it unbatched, goes on with the merging.
+			if (batchedState && !PoolsReady())
+			{
+				batchedState = false;
+			}
+			if (batchedState)
+			{
+				GroupCommands();
+			}
+			// Where the instance index carries it, each command's startInstance is its run's start (InstanceIdCarriesBase).
+			bool startsCarried = InstanceIdCarriesBase;
+			var args = new List<GraphicsBuffer.IndirectDrawIndexedArgs>(commands.Count);
+			var argSlots = new List<uint>(commands.Count);
+			foreach (Command command in commands)
+			{
+				args.Add(new GraphicsBuffer.IndirectDrawIndexedArgs
+				{
+					indexCountPerInstance = command.Mesh.GetIndexCount(command.Submesh),
+					startIndex = command.Mesh.GetIndexStart(command.Submesh),
+					baseVertexIndex = (uint)command.Mesh.GetBaseVertex(command.Submesh),
+					instanceCount = 0,
+					startInstance = startsCarried ? (uint)bases[command.Slot] : 0u,
+				});
+				argSlots.Add((uint)command.Slot);
+			}
 			var slots = new Vector2Int[slotCount];
 			for (int s = 0; s < slotCount; s++)
 			{
@@ -1095,7 +1334,7 @@ namespace FishMMO.Client
 				Vector4 sphere = Vector4.zero;
 				if (bounded.TryGetValue(s, out Bounds b))
 				{
-					sphere = new Vector4(b.center.x, b.center.y, b.center.z, b.extents.magnitude * CasterSphereGrowth + CasterSphereMetres);
+					sphere = CasterSphere(b);
 				}
 				slotBlocks[s].SetVector(CasterSphereId, sphere);
 			}
@@ -1103,9 +1342,186 @@ namespace FishMMO.Client
 			BindBlocks();
 		}
 
+		/// <summary>
+		/// Reorders <see cref="commands"/> into <see cref="batches"/>: those of one material, view and set of render
+		/// parameters, whose parts share a pool (<see cref="PoolOf"/>), become one run drawn from the pool's mesh. A part no
+		/// pool can take (an unreadable mesh, not triangles) is a batch of its own, on its own mesh, as before.
+		/// </summary>
+		private void GroupCommands()
+		{
+			// What a call fixes besides its commands: the material, the mesh (a pool, or a lone part's own mesh and
+			// submesh), the view (shadow casting) and the rest of the part's render parameters.
+			var keyed = new Dictionary<((Material, MeshPool, Mesh, int), (int, int, bool, ReflectionProbeUsage, LightProbeUsage, uint, MotionVectorGenerationMode)), int>();
+			var members = new List<List<(Command Command, MeshPool Pool)>>();
+			var heads = new List<Batch>();
+			foreach (Command command in commands)
+			{
+				MeshPool pool = PoolOf(command.Params.material, command.SourceMesh, command.SourceSubmesh);
+				RenderParams p = command.Params;
+				var key = ((p.material, pool, pool == null ? command.SourceMesh : null, pool == null ? command.SourceSubmesh : -1),
+					(command.View, p.layer, p.receiveShadows, p.reflectionProbeUsage, p.lightProbeUsage, p.renderingLayerMask, p.motionVectorMode));
+				if (!keyed.TryGetValue(key, out int b))
+				{
+					b = heads.Count;
+					keyed.Add(key, b);
+					heads.Add(new Batch { Params = p, Prime = command.Prime, View = command.View });
+					members.Add(new List<(Command, MeshPool)>());
+				}
+				members[b].Add((command, pool));
+			}
+			// Every pool a new part joined is merged again, before any command reads its submeshes (PoolsReady has, normally).
+			foreach (MeshPool pool in pools.Values)
+			{
+				if (pool.Built != pool.Parts.Count)
+				{
+					BuildPool(pool);
+				}
+			}
+			int rebuilt = mergedSinceLog;
+			mergedSinceLog = 0;
+			commands.Clear();
+			for (int b = 0; b < heads.Count; b++)
+			{
+				Batch batch = heads[b];
+				batch.First = commands.Count;
+				batch.Count = members[b].Count;
+				foreach ((Command member, MeshPool pool) in members[b])
+				{
+					Command c = member;
+					if (pool != null)
+					{
+						c.Mesh = pool.Mesh;
+						c.Submesh = pool.Index[(c.SourceMesh, c.SourceSubmesh)];
+					}
+					commands.Add(c);
+				}
+				batch.Mesh = commands[batch.First].Mesh;
+				batches.Add(batch);
+			}
+			if (rebuilt > 0)
+			{
+				long vertices = 0;
+				foreach (MeshPool pool in pools.Values)
+				{
+					vertices += pool.Mesh != null ? pool.Mesh.vertexCount : 0;
+				}
+				Debug.Log($"[Terrain GPU] {commands.Count} draw commands in {batches.Count} batched calls over {pools.Count} pooled meshes ({rebuilt} merged now, {vertices:N0} vertices in all).");
+			}
+		}
+
+		/// <summary>
+		/// Main-thread milliseconds a layout may spend merging pools (each a CombineMeshes over its parts): all of them at once
+		/// was a 0.5 s frame as a scene's props first came in (1.26 M vertices, 2026-10-13).
+		/// </summary>
+		public const double PoolBudgetMilliseconds = 4.0;
+		private int mergedSinceLog;
+
+		/// <summary>
+		/// Every command's part in its pool, and the pools a part joined merged for up to <see cref="PoolBudgetMilliseconds"/>
+		/// (one at least); true once none is left to merge.
+		/// </summary>
+		private bool PoolsReady()
+		{
+			foreach (Command command in commands)
+			{
+				PoolOf(command.Params.material, command.SourceMesh, command.SourceSubmesh);
+			}
+			var watch = Stopwatch.StartNew();
+			bool ready = true;
+			foreach (MeshPool pool in pools.Values)
+			{
+				if (pool.Built == pool.Parts.Count)
+				{
+					continue;
+				}
+				if (mergedThisLayout > 0 && watch.Elapsed.TotalMilliseconds >= PoolBudgetMilliseconds)
+				{
+					ready = false;
+					break;
+				}
+				BuildPool(pool);
+				mergedThisLayout++;
+			}
+			mergedThisLayout = 0;
+			return ready;
+		}
+
+		private int mergedThisLayout;
+
+		/// <summary>
+		/// The pool a part's commands draw from, joining it if new; null where the part cannot be merged (its mesh is not
+		/// readable, or the submesh is not triangles) or the material is gone.
+		/// </summary>
+		private MeshPool PoolOf(Material material, Mesh mesh, int submesh)
+		{
+			if (material == null || mesh == null || !mesh.isReadable || submesh < 0 || submesh >= mesh.subMeshCount
+				|| mesh.GetTopology(submesh) != MeshTopology.Triangles || mesh.blendShapeCount > 0)
+			{
+				return null;
+			}
+			var key = (material, LayoutOf(mesh));
+			if (!pools.TryGetValue(key, out MeshPool pool))
+			{
+				pool = new MeshPool { Name = $"{material.name} (pool {pools.Count})" };
+				pools.Add(key, pool);
+			}
+			if (!pool.Index.ContainsKey((mesh, submesh)))
+			{
+				pool.Index.Add((mesh, submesh), pool.Parts.Count);
+				pool.Parts.Add((mesh, submesh));
+			}
+			return pool;
+		}
+
+		/// <summary>A mesh's vertex layout (attribute, format, dimension and stream of each), the pools' second key: only like meshes merge.</summary>
+		private string LayoutOf(Mesh mesh)
+		{
+			if (layouts.TryGetValue(mesh, out string layout))
+			{
+				return layout;
+			}
+			var sb = new System.Text.StringBuilder();
+			foreach (VertexAttributeDescriptor d in mesh.GetVertexAttributes())
+			{
+				sb.Append((int)d.attribute).Append(':').Append((int)d.format).Append('x').Append(d.dimension).Append('@').Append(d.stream).Append(';');
+			}
+			layout = sb.ToString();
+			layouts.Add(mesh, layout);
+			return layout;
+		}
+
+		/// <summary>
+		/// Merges a pool's parts into a new mesh, part i its submesh i (32-bit indices, the parts' own vertices untouched),
+		/// and releases the old one. A rebuild merges from the parts again.
+		/// </summary>
+		private void BuildPool(MeshPool pool)
+		{
+			var combine = new CombineInstance[pool.Parts.Count];
+			for (int i = 0; i < combine.Length; i++)
+			{
+				combine[i] = new CombineInstance { mesh = pool.Parts[i].Mesh, subMeshIndex = pool.Parts[i].Submesh, transform = Matrix4x4.identity };
+			}
+			var mesh = new Mesh { name = pool.Name, hideFlags = HideFlags.DontSave, indexFormat = IndexFormat.UInt32 };
+			mesh.CombineMeshes(combine, false, false, false);
+			if (pool.Mesh != null)
+			{
+				Object.Destroy(pool.Mesh);
+			}
+			pool.Mesh = mesh;
+			pool.Built = pool.Parts.Count;
+			mergedSinceLog++;
+			if (TerrainInstancingProbe.On)
+			{
+				TerrainInstancingProbe.Reason($"pool {pool.Name} merged: {pool.Parts.Count} parts");
+			}
+		}
+
 		/// <summary>Binds the instance, visible and command-base buffers on every per-draw block and on every clone material.</summary>
 		private void BindBlocks()
 		{
+			Bind(batchBlock);
+			// The batched calls' parts differ in size: no caster sphere, so the casters' per-cascade culling passes them all.
+			batchBlock.SetVector(CasterSphereId, Vector4.zero);
 			for (int s = 0; s < slotCount && s < slotBlocks.Length; s++)
 			{
 				Bind(slotBlocks[s]);
@@ -1168,6 +1584,103 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// What a gather whose GPU work list may be kept across frames (<see cref="WorkReuse"/>) widens its tests by: chunks
+		/// <see cref="Slack"/> metres nearer (and farther, for the levels a run can reach) count, against the view's planes
+		/// pushed out for what the camera sees (<see cref="ViewPlanes"/>) and for the shadows' sweep (<see cref="ShadowPlanes"/>).
+		/// Default (no planes): the exact gather.
+		/// </summary>
+		public readonly struct ReuseBounds
+		{
+			public readonly float Slack;
+			public readonly Plane[] ViewPlanes, ShadowPlanes;
+
+			public ReuseBounds(float slack, Plane[] viewPlanes, Plane[] shadowPlanes)
+			{
+				Slack = slack;
+				ViewPlanes = viewPlanes;
+				ShadowPlanes = shadowPlanes;
+			}
+		}
+
+		/// <summary>
+		/// Keeps a camera's GPU work list across frames while the camera stays within <see cref="Metres"/> of where it was
+		/// gathered and turns (and the sun turns) less than <see cref="Degrees"/>, as the props' (CliffRockInstancing) and
+		/// the grass's lists are kept. The list is gathered against what that move and turn can bring into reach: chunks
+		/// <see cref="Metres"/> nearer, the frustum widened by <see cref="ViewMargin"/> and, for the shadows' sweep, by
+		/// <see cref="ShadowMargin"/>, and each run's levels and shadow candidacy from its distances widened the same way.
+		/// It only ever lists more than an exact gather would; the compute still culls every instance against the camera's
+		/// real frustum, distances and shadow reach each frame, so the same instances are drawn.
+		/// </summary>
+		public sealed class WorkReuse
+		{
+			public const float Metres = 1.5f, Degrees = 3f;
+
+			private Camera camera;
+			private Vector3 eye, light;
+			private Quaternion rotation;
+			private Matrix4x4 projection;
+			private bool shadows;
+			private float shadowDistance;
+			private int signature;
+			private bool valid;
+
+			/// <summary>How far the frustum's planes are pushed out for what the camera can see within the move and turn.</summary>
+			public static float ViewMargin(float reach) => Metres + reach * Degrees * Mathf.Deg2Rad;
+
+			/// <summary>
+			/// How far they are pushed out for the shadows' sweep: a sweep can end up to twice the shadow distance (and a
+			/// chunk's span, <paramref name="chunkMetres"/>) from the camera, and the sun's own turn moves its far end by up to
+			/// the shadow distance times the angle.
+			/// </summary>
+			public static float ShadowMargin(float reach, float shadowDistance, float chunkMetres) =>
+				Metres + (Mathf.Max(reach, 2f * shadowDistance + chunkMetres) + shadowDistance) * Degrees * Mathf.Deg2Rad;
+
+			/// <summary>The planes pushed out by <paramref name="margin"/> metres, into <paramref name="into"/> (six).</summary>
+			public static Plane[] Widen(Plane[] planes, float margin, Plane[] into)
+			{
+				for (int i = 0; i < 6; i++)
+				{
+					into[i] = new Plane(planes[i].normal, planes[i].distance + margin);
+				}
+				return into;
+			}
+
+			/// <summary>Whether the list gathered last still serves this camera; <paramref name="signature"/> folds whatever else the gather read.</summary>
+			public bool Still(Camera camera, in TerrainTreeField.View view, int signature)
+			{
+				if (!valid || camera != this.camera || signature != this.signature || view.Shadows != shadows || view.ShadowDistance != shadowDistance
+					|| !camera.projectionMatrix.Equals(projection))
+				{
+					return false;
+				}
+				if ((view.Position - eye).sqrMagnitude > Metres * Metres || Quaternion.Angle(camera.transform.rotation, rotation) > Degrees)
+				{
+					return false;
+				}
+				return !view.Shadows || Vector3.Angle(view.LightDirection, light) <= Degrees;
+			}
+
+			public void Remember(Camera camera, in TerrainTreeField.View view, int signature)
+			{
+				this.camera = camera;
+				this.signature = signature;
+				eye = view.Position;
+				light = view.LightDirection;
+				rotation = camera.transform.rotation;
+				projection = camera.projectionMatrix;
+				shadows = view.Shadows;
+				shadowDistance = view.ShadowDistance;
+				valid = true;
+			}
+
+			public void Forget()
+			{
+				valid = false;
+				camera = null;
+			}
+		}
+
 		private static void Recreate(ref GraphicsBuffer buffer, GraphicsBuffer.Target target, int count, int stride)
 		{
 			if (buffer != null && buffer.count == count && buffer.stride == stride)
@@ -1227,6 +1740,16 @@ namespace FishMMO.Client
 				}
 			}
 			primes.Clear();
+			foreach (MeshPool pool in pools.Values)
+			{
+				if (pool.Mesh != null)
+				{
+					Object.Destroy(pool.Mesh);
+				}
+			}
+			pools.Clear();
+			layouts.Clear();
+			batches.Clear();
 			residents.Clear();
 			models.Clear();
 			commands.Clear();

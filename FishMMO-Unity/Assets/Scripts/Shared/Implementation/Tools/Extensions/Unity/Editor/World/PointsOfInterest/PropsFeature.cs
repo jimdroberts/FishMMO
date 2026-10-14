@@ -1163,6 +1163,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// well, a fire or a stall, and a worn way out of each front door. The grass between them grows; the path field
 		/// thins it where feet go (FishGroundPaths.hlsl).
 		/// </summary>
+		/// <remarks>
+		/// A building's yard is two rectangles (<see cref="ScenePathPointFlags.Squared"/>): its apron, worn as kept as the
+		/// site is, and its plan, a floor (<see cref="ScenePathPointFlags.Floor"/>) always worn bare. A round-ended strip
+		/// left grass in every corner of a house wider than about 3 m, a graveyard's lower wear let a share of the blades
+		/// through a crypt's floor, and a door path or a well's apron reaching in through a wall carried its own wear
+		/// indoors. A wall tower is a floor with no apron (the ground beside a wall is not worn by it), round because it
+		/// may be: the circle just inside a square tower's corners. A ruin has no floors: it is overgrown, the grass and
+		/// the details back inside its walls as thinly as its apron's wear keeps them off.
+		/// </remarks>
 		private static void AddYards(PointOfInterestSiteContext context,
 			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
 		{
@@ -1179,9 +1188,10 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestGroup group = PointOfInterestKinds.Info(context.Record.Kind).Group;
 			float kept = group == PointOfInterestGroup.Ruins || group == PointOfInterestGroup.Dead ? 0.3f
 				: PointOfInterestKinds.Info(context.Record.Kind).Has(PointOfInterestTraits.Settlement) ? 1f : 0.8f;
-			void Add(Vector3 a, Vector3 b, float half, float wear, int toId)
+			bool overgrown = group == PointOfInterestGroup.Ruins;
+			void Add(Vector3 a, Vector3 b, float half, float wear, int toId, ScenePathPointFlags shape = ScenePathPointFlags.None)
 			{
-				wear *= kept;
+				byte flags = (byte)(ScenePathPointFlags.InSite | shape);
 				var path = new ScenePath
 				{
 					Id = ++id,
@@ -1192,20 +1202,28 @@ namespace FishMMO.Shared.WorldDesign
 					HalfWidth = new[] { half, half },
 					Wear = new[] { wear, wear },
 					Surface = new[] { (byte)ScenePathSurface.Earth, (byte)ScenePathSurface.Earth },
-					Flags = new[] { (byte)ScenePathPointFlags.InSite, (byte)ScenePathPointFlags.InSite },
+					Flags = new[] { flags, flags },
 				};
 				context.Points.Paths.Add(path);
 			}
 			foreach ((Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag) in grounds)
 			{
 				// Walls, gates, spans and piers: the ground beside them is not worn by them.
-				if (role == PointOfInterestSlotRole.Perimeter || role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower
+				if (role == PointOfInterestSlotRole.Perimeter || role == PointOfInterestSlotRole.Gate
 					|| role == PointOfInterestSlotRole.Span || role == PointOfInterestSlotRole.Pier)
 				{
 					continue;
 				}
 				float width = Mathf.Max(0.1f, size.x), depth = Mathf.Max(0.1f, size.y);
 				float longest = Mathf.Max(width, depth), shortest = Mathf.Min(width, depth);
+				if (role == PointOfInterestSlotRole.WallTower)
+				{
+					if (!overgrown)
+					{
+						Add(at, at, shortest * 0.6f, 1f, -1, ScenePathPointFlags.Floor);
+					}
+					continue;
+				}
 				if (longest < 1.2f)
 				{
 					continue;
@@ -1217,21 +1235,32 @@ namespace FishMMO.Shared.WorldDesign
 				if (gathering)
 				{
 					// Where people stand about: a trodden ring a pace and a half round it.
-					Add(at, at, longest * 0.5f + 1.6f, 0.8f, -1);
+					Add(at, at, longest * 0.5f + 1.6f, 0.8f * kept, -1);
 					continue;
 				}
 				bool building = longest >= 3f;
-				// Under and round it: a rectangle as a capsule along its long side.
+				// Under and round it, along its long side: a building's apron and its plan as a floor, anything else a capsule.
 				Vector3 axis = turn * (width >= depth ? Vector3.right : Vector3.forward);
 				float reach = Mathf.Max(0f, longest - shortest) * 0.5f;
-				Add(at - axis * reach, at + axis * reach, shortest * 0.5f + (building ? 0.6f : 0.3f), building ? 1f : 0.75f, -1);
-				if (building)
+				if (!building)
 				{
-					// Out of its front door (a piece's front looks down its −z) a few paces toward the street.
-					Vector3 front = turn * Vector3.back;
-					Vector3 door = at + front * (depth * 0.5f);
-					Add(door, door + front * 3.5f, 0.55f, 0.9f, context.Record.Id);
+					Add(at - axis * reach, at + axis * reach, shortest * 0.5f + 0.3f, 0.75f * kept, -1);
+					continue;
 				}
+				// The apron is narrower round a ruin, but never under the half metre that, with the wall's own thickness,
+				// keeps the frayed edge's thinning outside the floor (FishPathBare). Squared: end midpoint to end midpoint.
+				float apron = Mathf.Lerp(0.3f, 0.6f, kept);
+				Vector3 end = axis * (longest * 0.5f);
+				Vector3 aproned = axis * (longest * 0.5f + apron);
+				Add(at - aproned, at + aproned, shortest * 0.5f + apron, kept, -1, ScenePathPointFlags.Squared);
+				if (!overgrown)
+				{
+					Add(at - end, at + end, shortest * 0.5f, 1f, -1, ScenePathPointFlags.Squared | ScenePathPointFlags.Floor);
+				}
+				// Out of its front door (a piece's front looks down its −z) a few paces toward the street.
+				Vector3 front = turn * Vector3.back;
+				Vector3 door = at + front * (depth * 0.5f);
+				Add(door, door + front * 3.5f, 0.55f, 0.9f * kept, context.Record.Id);
 			}
 		}
 
@@ -1301,7 +1330,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			StructurePiece piece = StructurePieces.Find("WallStair");
-			Vector2 size = piece != null ? piece.Footprint : new Vector2(7.5f, 1.2f);
+			Vector2 size = piece != null ? piece.Footprint : new Vector2(7.5f, 1.5f);
 			Vector3 centre = context.Record.Position;
 			float Bearing(Vector3 p) => Mathf.Atan2(p.x - centre.x, p.z - centre.z) * Mathf.Rad2Deg;
 			var wanted = new List<float>();
@@ -1757,10 +1786,13 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Lays a gorge's crossing as one piece from lip to lip (StructurePieces.Bridges): the stone arch nearest its length,
-		/// stretched to it, where a settlement is within <see cref="WildGorgeMetres"/> and the gorge no wider than
-		/// <see cref="MaxArchSpan"/>; the nearest rope bridge otherwise (<see cref="GorgeBridgeFor"/>). Its deck's ends are
-		/// the crossing's ends on the rims, its abutments or anchor posts run on into them, pitched along the line between.
-		/// False for a wild cleft too narrow for ropes, or when the art is not generated yet: the plank spans are laid instead.
+		/// stretched to it, where a settlement is within <see cref="WildGorgeMetres"/>, the gorge no wider than
+		/// <see cref="MaxArchSpan"/> and its rims close enough in height for a level deck (<see cref="TryArchDeck"/>); the
+		/// nearest rope bridge otherwise (<see cref="GorgeBridgeFor(Func{float, float}, in Crossing, bool, out float, out ArchDeck)"/>).
+		/// An arch's deck is level or gently graded, its ends on the approaches the cut built up and dressed into the rims
+		/// (<see cref="CarveArchApproaches"/>); a rope bridge's anchor posts stand on the rims as they are and it hangs
+		/// pitched along the line between. False for a wild cleft too narrow for ropes, or when the art is not generated yet:
+		/// the plank spans are laid instead.
 		/// </summary>
 		private static bool LayGorgeBridge(PointOfInterestSiteContext context, Crossing crossing, bool allowLocal,
 			List<(Vector3 at, Quaternion turn, Vector2 size, PointOfInterestSlotRole role, string tag)> grounds)
@@ -1771,7 +1803,16 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
-			string id = GorgeBridgeFor(length, NearSettlement(context, WildGorgeMetres), out float nominal);
+			bool kept = KeptBySettlement(context.Points != null ? context.Points.Points : null, record.Position);
+			string id = GorgeBridgeFor(t => GroundAlong(record, context.GroundAt, t), crossing, kept, out float nominal, out ArchDeck arch);
+			if (arch.Valid && !arch.Settled)
+			{
+				// The approaches were never built into the ground (it was not cut with this plan): an arch would stand a step
+				// above one rim or below the other, so the gorge is hung with ropes, which take its rake as it is.
+				context.Notes?.Add($"{record.Name}: the gorge's rims are not yet built up and cut to a stone arch's level deck ({arch.Fill:0.0} m fill, {arch.Cut:0.0} m cut wanted), so it is crossed on ropes; re-cut the scene for the arch.");
+				id = GorgeBridgeFor(length, false, out nominal);
+				arch = default;
+			}
 			StructurePiece piece = id != null ? StructurePieces.Find(id) : null;
 			if (piece == null)
 			{
@@ -1785,8 +1826,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			float middle = 0.5f * (crossing.From + crossing.To);
 			Vector3 at = context.OnGround(new Vector2(0f, middle));
-			at.y = crossing.DeckAt(middle);
-			float pitch = Mathf.Atan2(crossing.DeckTo - crossing.DeckFrom, length) * Mathf.Rad2Deg;
+			// An arch at its own level deck; ropes along the line from rim to rim.
+			float from = arch.Valid ? arch.DeckFrom : crossing.DeckFrom, to = arch.Valid ? arch.DeckTo : crossing.DeckTo;
+			at.y = arch.Valid ? arch.DeckAt(middle) : crossing.DeckAt(middle);
+			float pitch = Mathf.Atan2(to - from, length) * Mathf.Rad2Deg;
 			Quaternion turn = Quaternion.Euler(0f, record.Yaw, 0f);
 			context.AddProp(prefab, at, turn * Quaternion.Euler(-pitch, 0f, 0f), new Vector3(1f, 1f, length / nominal));
 			grounds.Add((at, turn, new Vector2(piece.Footprint.x, length), PointOfInterestSlotRole.Span, "gorge"));
@@ -1822,18 +1865,41 @@ namespace FishMMO.Shared.WorldDesign
 			return arch ? StructurePieces.ArchBridgeId(nominal) : StructurePieces.RopeBridgeId(nominal);
 		}
 
-		/// <summary>True when a settlement (a town, a village, a city…) stands within <paramref name="metres"/> of the site.</summary>
-		private static bool NearSettlement(PointOfInterestSiteContext context, float metres)
+		/// <summary>
+		/// The kit's gorge crossing for a gorge measured along its heading (<paramref name="groundAlong"/>, the crossing
+		/// <see cref="TryGorgeCrossing"/> found): <see cref="GorgeBridgeFor(float, bool, out float)"/>'s, but a stone arch
+		/// only where its deck can be laid level and its approaches built up and cut to it (<see cref="TryArchDeck"/>, given
+		/// in <paramref name="arch"/>); a rake too steep for that is hung with ropes, which may slope, or crossed on planks
+		/// where it is too narrow for them.
+		/// </summary>
+		public static string GorgeBridgeFor(Func<float, float> groundAlong, in Crossing crossing, bool kept, out float nominal, out ArchDeck arch)
 		{
-			if (context.Points == null || context.Points.Points == null)
+			arch = default;
+			float length = crossing.To - crossing.From;
+			string id = GorgeBridgeFor(length, kept, out nominal);
+			if (id == null || !id.StartsWith("ArchBridge", StringComparison.Ordinal))
+			{
+				return id;
+			}
+			if (TryArchDeck(groundAlong, crossing, nominal, out arch))
+			{
+				return id;
+			}
+			return GorgeBridgeFor(length, false, out nominal);
+		}
+
+		/// <summary>True when a settlement (a town, a village, a city…) stands within <see cref="WildGorgeMetres"/> of a point: a gorge there is kept and arched.</summary>
+		public static bool KeptBySettlement(IReadOnlyList<PointOfInterestRecord> records, Vector3 at)
+		{
+			if (records == null)
 			{
 				return false;
 			}
-			Vector3 at = context.Record.Position;
-			foreach (PointOfInterestRecord other in context.Points.Points)
+			const float Metres = WildGorgeMetres;
+			foreach (PointOfInterestRecord other in records)
 			{
 				if (other != null && PathNetworkPlanner.RankOf(other.Kind) > 0
-					&& new Vector2(other.Position.x - at.x, other.Position.z - at.z).sqrMagnitude <= metres * metres)
+					&& new Vector2(other.Position.x - at.x, other.Position.z - at.z).sqrMagnitude <= Metres * Metres)
 				{
 					return true;
 				}
@@ -2072,25 +2138,47 @@ namespace FishMMO.Shared.WorldDesign
 		/// <para>A dry channel (no water at the site) is measured from its bed.</para>
 		/// </remarks>
 		public static Crossing MeasureCrossing(PointOfInterestSiteContext context)
+			=> MeasureCrossing(context.Record, context.GroundAt, context.Water);
+
+		/// <summary>
+		/// <see cref="MeasureCrossing(PointOfInterestSiteContext)"/> for a record on the ground (<paramref name="groundAt"/>,
+		/// the record's own height where there is none) and the scene's water: the cut measures a bridge's crossing with it
+		/// before the site is built, to shape the ground its deck will land on (<see cref="CarveArchApproaches"/>).
+		/// </summary>
+		public static Crossing MeasureCrossing(PointOfInterestRecord record, Func<float, float, float> groundAt, SceneWater water)
 		{
-			PointOfInterestRecord record = context.Record;
-			SceneWater water = context.Water;
 			float level = water != null ? water.SurfaceAt(record.Position.x, record.Position.z) : float.NegativeInfinity;
 			Func<float, float> waterAlong = null;
 			if (float.IsNegativeInfinity(level))
 			{
-				level = context.OnGround(Vector2.zero).y;
+				level = GroundAlong(record, groundAt, 0f);
 			}
 			else
 			{
 				waterAlong = t =>
 				{
-					Vector3 at = context.OnGround(new Vector2(0f, t));
-					return water.SurfaceAt(at.x, at.z);
+					Vector2 at = AlongHeading(record, t);
+					return water.SurfaceAt(at.x, at.y);
 				};
 			}
 			// The record stands at its banks' (or a gorge's rims') height: a gorge bridge is laid rim to rim at it.
-			return MeasureCrossing(t => context.OnGround(new Vector2(0f, t)).y, level, Mathf.Max(8f, record.Radius * 2f), waterAlong, record.Position.y);
+			return MeasureCrossing(t => GroundAlong(record, groundAt, t), level, CrossingReach(record.Radius), waterAlong, record.Position.y);
+		}
+
+		/// <summary>How far either way along its heading a bridge site's crossing is looked for, from its radius, metres.</summary>
+		public static float CrossingReach(float radius) => Mathf.Max(8f, radius * 2f);
+
+		/// <summary>The world point (x, z) a distance along a site's heading from its centre: the site's frame (<see cref="PointOfInterestSiteContext.OnGround"/>).</summary>
+		public static Vector2 AlongHeading(PointOfInterestRecord record, float along)
+		{
+			float yaw = record.Yaw * Mathf.Deg2Rad;
+			return new Vector2(record.Position.x + Mathf.Sin(yaw) * along, record.Position.z + Mathf.Cos(yaw) * along);
+		}
+
+		private static float GroundAlong(PointOfInterestRecord record, Func<float, float, float> groundAt, float along)
+		{
+			Vector2 at = AlongHeading(record, along);
+			return groundAt != null ? groundAt(at.x, at.y) : record.Position.y;
 		}
 
 		/// <summary>The steepest a bank may climb (rise per metre) and still be the channel's wall the deck reaches over.</summary>
@@ -2325,6 +2413,321 @@ namespace FishMMO.Shared.WorldDesign
 				Gorge = true,
 			};
 			return true;
+		}
+
+		// ── A stone arch on raked rims ──────────────────────────
+
+		/// <summary>The steepest a stone arch's deck is graded from rim to rim, degrees: a mason lays it level, or near it.</summary>
+		public const float MaxArchGradeDegrees = 4f;
+
+		/// <summary>The grade (rise per metre) of the ramps that bring each rim to an arch's deck: a cart's, about 8.5°.</summary>
+		public const float ArchApproachGrade = 0.15f;
+
+		/// <summary>The most the low rim is built up to an arch's deck, metres: a rake that needs more is hung with ropes.</summary>
+		public const float MaxArchFill = 3f;
+
+		/// <summary>The most the high rim's edge is dressed down to an arch's deck, metres, and the share of the rake it takes.</summary>
+		public const float MaxArchCut = 1.5f, ArchCutShare = 1f / 3f;
+
+		/// <summary>The most an arch's deck end may stand off its approach and still be stepped onto, metres.</summary>
+		public const float ArchStepTolerance = 0.3f;
+
+		/// <summary>The longest an approach ramp runs past the deck's end before it must have met its rim, metres.</summary>
+		public const float MaxArchApproachMetres = 24f;
+
+		/// <summary>How far under the deck's top its approaches are laid, metres: the deck's slab rests on them, not in them.</summary>
+		public const float ArchSeat = 0.05f;
+
+		/// <summary>Half an arch approach's width on top, metres: the arch's 4 m deck and a verge.</summary>
+		public const float ArchApproachHalfWidth = 2.5f;
+
+		/// <summary>The steepest a cutting's dressed sides stand (rise per metre), about 50°.</summary>
+		private const float ArchCutSlope = 1.2f;
+
+		/// <summary>How far under its lip's rim a built-up approach leaves the ground alone, metres: the gorge is never filled.</summary>
+		private const float ArchGorgeGuard = 1f;
+
+		/// <summary>
+		/// A stone arch's deck over a gorge (<see cref="TryArchDeck"/>): level, or graded no steeper than
+		/// <see cref="MaxArchGradeDegrees"/>, whatever the rake between the rims, and the approaches that bring each rim to it.
+		/// Its lips are the crossing's ends; its deck runs on past them into the rims (the piece's abutments).
+		/// </summary>
+		public struct ArchDeck
+		{
+			/// <summary>True when the arch fits the gorge; nothing else is set otherwise.</summary>
+			public bool Valid;
+			/// <summary>Metres along the heading (signed) of the arch's lips (the crossing's ends) and of its deck's ends past them.</summary>
+			public float From, To, EndFrom, EndTo;
+			/// <summary>World height of the deck's top at each lip.</summary>
+			public float DeckFrom, DeckTo;
+			/// <summary>The natural ground at each lip, world height: the rims as they stood.</summary>
+			public float RimFrom, RimTo;
+			/// <summary>
+			/// Each approach's ramp past its deck's end, rise per metre outward: negative where the rim is built up to the
+			/// deck and the ramp comes back down onto it, positive where the rim is cut down to the deck and the ramp climbs
+			/// out of the cutting; 0 where the rim already meets the deck within <see cref="ArchStepTolerance"/>.
+			/// </summary>
+			public float RiseFrom, RiseTo;
+			/// <summary>How far each ramp runs past its deck's end before it meets the rim's ground, metres.</summary>
+			public float RampFrom, RampTo;
+			/// <summary>The most the approaches build the ground up (on the low rim) and cut it down (into the high one), metres.</summary>
+			public float Fill, Cut;
+
+			/// <summary>The deck's top at a distance along the heading: the straight line through both lips, on past them.</summary>
+			public float DeckAt(float along) => To > From ? DeckFrom + (DeckTo - DeckFrom) * (along - From) / (To - From) : DeckFrom;
+
+			/// <summary>The deck's grade, degrees, rising toward <see cref="To"/>.</summary>
+			public float GradeDegrees => To > From ? Mathf.Atan2(DeckTo - DeckFrom, To - From) * Mathf.Rad2Deg : 0f;
+
+			/// <summary>True when both rims already meet the deck within a step: nothing to build up or cut.</summary>
+			public bool Settled => RiseFrom == 0f && RiseTo == 0f;
+
+			/// <summary>How far from the crossing's centre its deck and the approaches built for it reach along the heading, metres.</summary>
+			public float Reach => Mathf.Max(EndTo + (RiseTo != 0f ? RampTo : 0f), -EndFrom + (RiseFrom != 0f ? RampFrom : 0f));
+
+			/// <summary>
+			/// The top of one side's approach (−1 the <see cref="From"/> side, +1 the <see cref="To"/>), a distance
+			/// <paramref name="outward"/> past its lip: <see cref="ArchSeat"/> under the deck as far as the deck's end, then the ramp.
+			/// </summary>
+			public float ApproachAt(int side, float outward)
+			{
+				float lip = side < 0 ? From : To, end = side < 0 ? EndFrom : EndTo;
+				float run = Mathf.Abs(end - lip);
+				if (outward <= run)
+				{
+					return DeckAt(lip + side * Mathf.Max(0f, outward)) - ArchSeat;
+				}
+				return DeckAt(end) - ArchSeat + (side < 0 ? RiseFrom : RiseTo) * (outward - run);
+			}
+		}
+
+		/// <summary>
+		/// A stone arch's deck over a gorge crossing (<see cref="TryGorgeCrossing"/>) whose rims may stand at different heights,
+		/// built as a mason builds one: the deck level, or graded no steeper than <see cref="MaxArchGradeDegrees"/>, never
+		/// tilted whole to reach lip to lip. What the grade does not take up of the rake is made up at the rims: the high
+		/// rim's edge is dressed down a third of it (at most <see cref="MaxArchCut"/>), where the arch springs from its solid
+		/// rock, and the low rim is built up the rest (at most <see cref="MaxArchFill"/>) behind a raised abutment, so the
+		/// arch's ring stays bedded below both lips. Each rim's approach then ramps at <see cref="ArchApproachGrade"/> from the
+		/// deck's end back onto its ground within <see cref="MaxArchApproachMetres"/>. False (the gorge is hung with ropes,
+		/// which may slope) when the rake needs more fill than that, or a ramp never meets its rim (the ground falls away
+		/// past the low lip, or climbs on past the high one).
+		/// </summary>
+		/// <param name="groundAlong">The ground's height a signed distance along the crossing's heading.</param>
+		/// <param name="nominal">The arch piece's own length (<see cref="StructurePieces.ArchBridgeLengths"/>): it is stretched to the gorge.</param>
+		public static bool TryArchDeck(Func<float, float> groundAlong, in Crossing crossing, float nominal, out ArchDeck deck)
+		{
+			const float Step = 0.5f;
+			deck = default;
+			float length = crossing.To - crossing.From;
+			if (!crossing.Gorge || length <= 0.5f || nominal <= 0f)
+			{
+				return false;
+			}
+			// The deck each rim offers on its own (seated on its lip), the rake between them, and what the grade takes up.
+			float rimFrom = crossing.DeckFrom + ArchSeat, rimTo = crossing.DeckTo + ArchSeat;
+			float rake = rimTo - rimFrom;
+			float most = Mathf.Tan(MaxArchGradeDegrees * Mathf.Deg2Rad) * length;
+			float excess = Mathf.Abs(rake - Mathf.Clamp(rake, -most, most));
+			float cut = Mathf.Min(excess * ArchCutShare, MaxArchCut), fill = excess - cut;
+			if (fill > MaxArchFill)
+			{
+				return false;
+			}
+			bool toHigh = rake > 0f;
+			// The piece's abutments run on into each rim, stretched with it.
+			float run = StructurePieces.ArchAbutmentRun * length / nominal;
+			var plan = new ArchDeck
+			{
+				Valid = true,
+				From = crossing.From,
+				To = crossing.To,
+				EndFrom = crossing.From - run,
+				EndTo = crossing.To + run,
+				DeckFrom = toHigh ? rimFrom + fill : rimFrom - cut,
+				DeckTo = toHigh ? rimTo - cut : rimTo + fill,
+				RimFrom = crossing.DeckFrom,
+				RimTo = crossing.DeckTo,
+			};
+
+			float above = 0f, below = 0f;
+			for (int side = -1; side <= 1; side += 2)
+			{
+				float lip = side < 0 ? plan.From : plan.To, end = side < 0 ? plan.EndFrom : plan.EndTo;
+				float span = Mathf.Abs(end - lip);
+				// How far the ground under the deck's own run stands off it: within a step, this rim meets the deck as it is.
+				float off = 0f;
+				for (float o = 0f; ; o = Mathf.Min(o + Step, span))
+				{
+					float d = plan.ApproachAt(side, o) - groundAlong(lip + side * o);
+					off = Mathf.Abs(d) > Mathf.Abs(off) ? d : off;
+					above = Mathf.Max(above, d);
+					below = Mathf.Max(below, -d);
+					if (o >= span)
+					{
+						break;
+					}
+				}
+				if (Mathf.Abs(off) <= ArchStepTolerance)
+				{
+					continue;
+				}
+				// Built up where the deck's end stands over its ground, a ramp coming back down; cut where it is under, a
+				// ramp climbing out.
+				float top = plan.ApproachAt(side, span);
+				float atEnd = top - groundAlong(end);
+				float rise = (Mathf.Abs(atEnd) > 0.05f ? atEnd : off) > 0f ? -ArchApproachGrade : ArchApproachGrade;
+				float ramp = -1f;
+				for (float r = 0f; r <= MaxArchApproachMetres; r += Step)
+				{
+					float g = groundAlong(end + side * r), p = top + rise * r;
+					if (rise < 0f ? g >= p : g <= p)
+					{
+						ramp = r;
+						break;
+					}
+					above = Mathf.Max(above, p - g);
+					below = Mathf.Max(below, g - p);
+				}
+				if (ramp < 0f)
+				{
+					return false;
+				}
+				if (side < 0)
+				{
+					plan.RiseFrom = rise;
+					plan.RampFrom = ramp;
+				}
+				else
+				{
+					plan.RiseTo = rise;
+					plan.RampTo = ramp;
+				}
+			}
+			// A rim that falls away under its approach, or rises on into a deepening cutting, asks more than the rake did.
+			if (above > MaxArchFill + ArchStepTolerance || below > 2f * MaxArchCut)
+			{
+				return false;
+			}
+			plan.Fill = above;
+			plan.Cut = below;
+			deck = plan;
+			return true;
+		}
+
+		/// <summary>
+		/// The ground at a point near an arch (<paramref name="along"/> its heading from the crossing's centre,
+		/// <paramref name="across"/> to its right) once its approaches are built (<see cref="TryArchDeck"/>): each approach's
+		/// top on it (the deck's line under the deck's end, then the ramp), banked back to the natural ground past its edges,
+		/// down a built-up approach's sides at <see cref="PointOfInterestTerrain.EmbankmentSlope"/> and up a cutting's at
+		/// <see cref="ArchCutSlope"/>. A built-up approach never fills the gorge (it starts at the lip, on ground no lower
+		/// than the rim); a cutting takes down whatever stands above it out to the gorge's middle, so the high rim's edge is
+		/// dressed to the abutment rather than standing proud of the deck.
+		/// </summary>
+		public static float ApproachGround(in ArchDeck deck, float along, float across, float ground)
+		{
+			if (!deck.Valid)
+			{
+				return ground;
+			}
+			for (int side = -1; side <= 1; side += 2)
+			{
+				float rise = side < 0 ? deck.RiseFrom : deck.RiseTo;
+				if (rise == 0f)
+				{
+					continue;
+				}
+				float lip = side < 0 ? deck.From : deck.To;
+				float length = Mathf.Abs((side < 0 ? deck.EndFrom : deck.EndTo) - lip) + (side < 0 ? deck.RampFrom : deck.RampTo);
+				float outward = side * (along - lip);
+				bool built = rise < 0f;
+				if (built ? outward < 0f : outward < -0.5f * (deck.To - deck.From))
+				{
+					continue;
+				}
+				float wide = Mathf.Max(0f, Mathf.Abs(across) - ArchApproachHalfWidth), past = Mathf.Max(0f, outward - length);
+				float off = Mathf.Sqrt(wide * wide + past * past);
+				float top = deck.ApproachAt(side, Mathf.Clamp(outward, 0f, length));
+				if (!built)
+				{
+					ground = Mathf.Min(ground, top + off * ArchCutSlope);
+				}
+				else if (ground >= (side < 0 ? deck.RimFrom : deck.RimTo) - ArchGorgeGuard)
+				{
+					ground = Mathf.Max(ground, top - off * PointOfInterestTerrain.EmbankmentSlope);
+				}
+			}
+			return ground;
+		}
+
+		/// <summary>
+		/// The stone arch a bridge site will be built with, when it is a gorge's (<see cref="MeasureCrossing(PointOfInterestRecord, Func{float, float, float}, SceneWater)"/>,
+		/// <see cref="GorgeBridgeFor(Func{float, float}, in Crossing, bool, out float, out ArchDeck)"/>): false for a river's
+		/// bridge, a gorge hung with ropes or crossed on planks.
+		/// </summary>
+		public static bool PlanGorgeArch(PointOfInterestRecord record, Func<float, float, float> groundAt, SceneWater water,
+			IReadOnlyList<PointOfInterestRecord> records, out ArchDeck deck)
+		{
+			deck = default;
+			Crossing crossing = MeasureCrossing(record, groundAt, water);
+			if (!crossing.Gorge)
+			{
+				return false;
+			}
+			GorgeBridgeFor(t => GroundAlong(record, groundAt, t), crossing, KeptBySettlement(records, record.Position), out _, out deck);
+			return deck.Valid;
+		}
+
+		/// <summary>
+		/// Builds a gorge arch's approaches into the ground before its site is built (<see cref="ApproachGround"/>): the low
+		/// rim raised to the deck on a ramp between banked sides, the high rim's edge cut down to it. The site then measures
+		/// rims that meet a level deck and lays the arch on them. Nothing for a river's bridge, a gorge hung with ropes, or an
+		/// arch whose rims already meet its deck (so cutting again changes nothing). Returns the heightmap samples changed.
+		/// </summary>
+		public static int CarveArchApproaches(Terrain[,] terrains, TerrainTilePlan tiles, PointOfInterestRecord record,
+			Func<float, float, float> groundAt, SceneWater water, IReadOnlyList<PointOfInterestRecord> records)
+		{
+			if (!PlanGorgeArch(record, groundAt, water, records, out ArchDeck deck) || deck.Settled)
+			{
+				return 0;
+			}
+			float yaw = record.Yaw * Mathf.Deg2Rad;
+			var axis = new Vector2(Mathf.Sin(yaw), Mathf.Cos(yaw));
+			var right = new Vector2(axis.y, -axis.x);
+			var centre = new Vector2(record.Position.x, record.Position.z);
+			// As far as the banks and the cutting's sides can reach back to the natural ground.
+			float margin = Mathf.Max(MaxArchFill / PointOfInterestTerrain.EmbankmentSlope, 2f * MaxArchCut / ArchCutSlope) + 2f;
+			float reach = deck.Reach + margin, wide = ArchApproachHalfWidth + margin;
+			float minX = float.PositiveInfinity, minZ = float.PositiveInfinity, maxX = float.NegativeInfinity, maxZ = float.NegativeInfinity;
+			for (int corner = 0; corner < 4; corner++)
+			{
+				Vector2 at = centre + axis * (corner < 2 ? -reach : reach) + right * (corner % 2 == 0 ? -wide : wide);
+				minX = Mathf.Min(minX, at.x);
+				minZ = Mathf.Min(minZ, at.y);
+				maxX = Mathf.Max(maxX, at.x);
+				maxZ = Mathf.Max(maxZ, at.y);
+			}
+			return PointOfInterestTerrain.EditHeights(terrains, tiles, Rect.MinMaxRect(minX, minZ, maxX, maxZ), (x, z, h) =>
+			{
+				var offset = new Vector2(x - centre.x, z - centre.y);
+				return ApproachGround(deck, Vector2.Dot(offset, axis), Vector2.Dot(offset, right), h);
+			});
+		}
+
+		/// <summary>
+		/// How far from a gorge bridge's centre its stone arch's deck and approaches reach along its heading, metres, for the
+		/// ways laid onto it: 0 where the gorge is hung with ropes or crossed on planks, or no gorge is found there.
+		/// <paramref name="groundAlong"/> is the ground along the heading from the centre, <paramref name="rim"/> the
+		/// site's height (the lower rim's), <paramref name="reach"/> as far as the site looks (<see cref="CrossingReach"/>).
+		/// </summary>
+		public static float GorgeArchReach(Func<float, float> groundAlong, float rim, float reach, bool kept)
+		{
+			const float Bearing = 0.5f;
+			if (!TryGorgeCrossing(groundAlong, rim, Mathf.Max(0.5f, reach - Bearing), out Crossing crossing))
+			{
+				return 0f;
+			}
+			GorgeBridgeFor(groundAlong, crossing, kept, out _, out ArchDeck deck);
+			return deck.Valid ? deck.Reach : 0f;
 		}
 
 		/// <summary>How far a pier's deck stands over the highest water under it, metres.</summary>

@@ -1,0 +1,201 @@
+#if UNITY_EDITOR
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace FishMMO.Shared.WorldDesign
+{
+	/// <summary>
+	/// The cave kit's glow art (<see cref="CaveGlowMeshes"/>, ProceduralArtCatalogue.Cave.cs, 2026-10-13): its glow and ore
+	/// maps, a material a hue, and a prefab a variant of every kind in every hue.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Built with the structure kit.</b> Its steps run inside the structures' (BiomeArtGenerator.Structures.cs: the maps
+	/// with the structure surfaces, the rest after the pieces), so "Generate biome art", the structures-only run and the
+	/// Structures family's fingerprint all cover it; its paths are listed with the structures'. Everything goes through
+	/// the generator's own writers, so payload GUIDs, prefab file IDs and the ledger behave as for every other asset.
+	/// </para>
+	/// <para>
+	/// <b>Prefabs.</b> Under <c>Prefabs/Cave/</c>: a root <see cref="LODGroup"/> over three levels and, for what a player
+	/// would walk into (crystals, giant fungi), a mesh collider from the last level, as the boulders have; the baked props
+	/// draw them on the GPU and stream their collision (ScenePropBaker). A crystal wears the structure kit's fieldstone on its
+	/// matrix, a seam the gangue quartz on its band.
+	/// </para>
+	/// <para>
+	/// <b>Materials</b> are FishMMO/Weather Lit with <c>_EMISSION</c> on for whatever glows: URP adds the emission after the
+	/// lighting, so neither the cave darkness's occlusion nor the missing sky dims it. They are not structures
+	/// (<c>_FishStructure</c> 0: no weathering grime or moss on a crystal), not wetted or snowed on, and grow no moss.
+	/// </para>
+	/// </remarks>
+	public static partial class BiomeArtGenerator
+	{
+		/// <summary>The steps the glow art adds to the structures': its maps, its materials, one a kind.</summary>
+		private static int CaveGlowStepCount() => 2 + ProceduralArtCatalogue.CaveGlowFamilies.Length;
+
+		/// <summary>The glow ramps and ore grains: one step with the structure surfaces, before the texture import.</summary>
+		private static IEnumerable<string> CaveGlowSurfaceSteps(Context c)
+		{
+			yield return "Structure surfaces: cave glow";
+			WriteCaveGlowMaps(c);
+		}
+
+		/// <summary>The materials, then one step a kind: after the structure pieces.</summary>
+		private static IEnumerable<string> CaveGlowSteps(Context c)
+		{
+			yield return "Structure: cave glow materials";
+			WriteCaveGlowMaterials(c);
+			foreach (CaveGlowFamily family in ProceduralArtCatalogue.CaveGlowFamilies)
+			{
+				yield return "Structure: cave " + family.Kind;
+				WriteCaveGlow(c, family);
+			}
+		}
+
+		private static void WriteCaveGlowMaps(Context c)
+		{
+			int size = ProceduralArtCatalogue.CaveGlowTextureSize;
+			c.Report.TextureBytes += 3 * CompressedBytes(size, size);
+			if (ShouldWrite(c, ProceduralArtCatalogue.CaveGlowAlbedoPath))
+			{
+				WritePng(c, ProceduralArtCatalogue.CaveGlowAlbedoPath, CaveGlowMeshes.GlowRamp(size, c.Seed, false), size, size);
+			}
+			if (ShouldWrite(c, ProceduralArtCatalogue.CaveGlowEmissionPath))
+			{
+				WritePng(c, ProceduralArtCatalogue.CaveGlowEmissionPath, CaveGlowMeshes.GlowRamp(size, c.Seed, true), size, size);
+			}
+			if (ShouldWrite(c, ProceduralArtCatalogue.CaveOreAlbedoPath))
+			{
+				WritePng(c, ProceduralArtCatalogue.CaveOreAlbedoPath, CaveGlowMeshes.OreGrains(size, c.Seed), size, size);
+			}
+		}
+
+		/// <summary>Whether a material set is textured as ore (grains in metres) rather than through the glow ramps.</summary>
+		private static bool IsOreSet(string set) => set == "Ore" || set == "GlowOre";
+
+		private static void WriteCaveGlowMaterials(Context c)
+		{
+			WorldEditorAssets.EnsureFolder(ProceduralArtCatalogue.CavePrefabsFolder);
+			Shader shader = RockShader;
+			if (shader == null)
+			{
+				c.Report.Problems.Add("FishMMO/Weather Lit and URP Lit were not found; the cave glow materials were not written.");
+				return;
+			}
+			Texture2D albedo = LoadTexture(ProceduralArtCatalogue.CaveGlowAlbedoPath);
+			Texture2D emission = LoadTexture(ProceduralArtCatalogue.CaveGlowEmissionPath);
+			Texture2D ore = LoadTexture(ProceduralArtCatalogue.CaveOreAlbedoPath);
+			var seen = new HashSet<string>();
+			foreach (CaveGlowFamily family in ProceduralArtCatalogue.CaveGlowFamilies)
+			{
+				bool isOre = IsOreSet(family.MaterialSet);
+				foreach (CaveGlowHue h in family.Hues)
+				{
+					CaveGlowHue hue = h;
+					string name = ProceduralArtCatalogue.CaveGlowMaterial(family.MaterialSet, hue.Name);
+					if (seen.Add(name))
+					{
+						WriteMaterial(c, name, shader, m => CaveGlowLit(m, isOre ? ore : albedo, isOre ? ore : emission, in hue, isOre));
+					}
+				}
+			}
+			CaveGlowHue gangue = ProceduralArtCatalogue.Gangue;
+			WriteMaterial(c, ProceduralArtCatalogue.CaveGangueMaterial, shader, m => CaveGlowLit(m, ore, ore, in gangue, true));
+		}
+
+		/// <summary>
+		/// A cave glow material: its ramp (or the ore grains, tiled every 0.4 m with each grain's smoothness from the albedo's
+		/// alpha) tinted by the hue, and, when the hue glows, the glow ramp (or the grains) as its emission map in the hue's
+		/// HDR colour. No weathering, wetting, snow or moss.
+		/// </summary>
+		private static void CaveGlowLit(Material m, Texture2D albedo, Texture2D glow, in CaveGlowHue hue, bool ore)
+		{
+			m.SetTexture("_BaseMap", albedo);
+			m.SetTextureScale("_BaseMap", ore ? new Vector2(2.5f, 2.5f) : Vector2.one);
+			m.SetColor("_BaseColor", hue.Albedo);
+			m.SetFloat("_Smoothness", hue.Smoothness);
+			m.SetFloat("_Metallic", hue.Metallic);
+			if (ore)
+			{
+				m.SetFloat("_SmoothnessTextureChannel", 1f);
+				m.EnableKeyword("_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A");
+			}
+			if (hue.Emission.maxColorComponent > 0f)
+			{
+				m.SetTexture("_EmissionMap", glow);
+				m.SetColor("_EmissionColor", hue.Emission);
+				m.EnableKeyword("_EMISSION");
+				m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+			}
+			else
+			{
+				m.SetColor("_EmissionColor", Color.black);
+				m.DisableKeyword("_EMISSION");
+			}
+			m.SetFloat("_FishStructure", 0f);
+			m.SetFloat("_FishWeatherAmount", 0f);
+			m.SetFloat("_FishMoss", 0f);
+		}
+
+		/// <summary>A kind's meshes (when they are its own) and its prefabs, a variant in every hue.</summary>
+		private static void WriteCaveGlow(Context c, CaveGlowFamily family)
+		{
+			WorldEditorAssets.EnsureFolder(ProceduralArtCatalogue.CavePrefabsFolder);
+			bool own = ProceduralArtCatalogue.OwnsShape(in family);
+			var meshes = new Mesh[family.Variants][];
+			if (own)
+			{
+				for (int v = 0; v < family.Variants; v++)
+				{
+					meshes[v] = new Mesh[CaveGlowMeshes.Levels];
+					for (int lod = 0; lod < CaveGlowMeshes.Levels; lod++)
+					{
+						meshes[v][lod] = WriteMesh(c, CaveGlowMeshes.Build(family.Shape, v, lod, c.Seed), ProceduralArtCatalogue.CaveGlowMesh(family.Shape, v, lod), true);
+					}
+				}
+			}
+			bool twoParts = CaveGlowMeshes.Submeshes(family.Shape) > 1;
+			Material second = !twoParts ? null
+				: IsOreSet(family.MaterialSet) ? MaterialOrNull(c, ProceduralArtCatalogue.CaveGangueMaterial)
+				: MaterialOrNull(c, StructurePieces.MaterialName(StructureMaterial.Fieldstone));
+			ShadowCastingMode[] shadows = family.CastsShadows ? LodShadows(CaveGlowMeshes.Levels) : NoShadows(CaveGlowMeshes.Levels);
+			bool collides = family.Collides;
+			CaveGlowKind shape = family.Shape;
+			foreach (CaveGlowHue hue in family.Hues)
+			{
+				Material glow = MaterialOrNull(c, ProceduralArtCatalogue.CaveGlowMaterial(family.MaterialSet, hue.Name));
+				for (int v = 0; v < family.Variants; v++)
+				{
+					int variant = v;
+					WritePrefab(c, ProceduralArtCatalogue.CaveGlowPrefab(family.Kind, hue.Name, v), root =>
+					{
+						// A kind wearing another's meshes reads them from their files, written by that kind's step.
+						Mesh[] levels = own ? meshes[variant] : LoadCaveGlowMeshes(shape, variant);
+						var mats = new Material[levels.Length][];
+						for (int lod = 0; lod < levels.Length; lod++)
+						{
+							mats[lod] = twoParts ? new[] { second, glow } : new[] { glow };
+						}
+						Lods(root, levels, mats, ProceduralArtCatalogue.CaveGlowLodHeights, shadows);
+						if (collides)
+						{
+							AddBoulderCollider(root, levels);
+						}
+					});
+				}
+			}
+		}
+
+		private static Mesh[] LoadCaveGlowMeshes(CaveGlowKind shape, int variant)
+		{
+			var levels = new Mesh[CaveGlowMeshes.Levels];
+			for (int lod = 0; lod < levels.Length; lod++)
+			{
+				levels[lod] = AssetDatabase.LoadAssetAtPath<Mesh>(ProceduralArtCatalogue.MeshPath(ProceduralArtCatalogue.CaveGlowMesh(shape, variant, lod)));
+			}
+			return levels;
+		}
+	}
+}
+#endif

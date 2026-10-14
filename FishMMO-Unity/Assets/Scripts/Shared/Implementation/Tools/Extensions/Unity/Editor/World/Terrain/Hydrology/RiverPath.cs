@@ -73,8 +73,25 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>Bank above the surface, metres: built up as a levee where the ground is lower.</summary>
 		public float FreeboardMetres = 0.4f;
-		/// <summary>How far out a levee spreads from the bank, metres.</summary>
+
+		/// <summary>
+		/// How far under the water's surface the ground a sample wide along a river's edge is held, metres (WaterCarver): the
+		/// terrain between samples is a plane, and a bank sample at bank height beside the channel tilted it up into the water.
+		/// Never flush: ground within a few centimetres of the water over a sample's width is the water's plane, and the
+		/// terrain's triangles stood through it in straight-edged facets along the shore (2026-10-13, a pond's arm on Flo
+		/// Monolith). A little under, the water stands over it and its shore lies on the levee's face past it.
+		/// </summary>
+		public float EdgeShelfMetres = 0.05f;
+		/// <summary>How far a levee's back slope spreads out past its top, metres.</summary>
 		public float LeveeMetres = 6f;
+		/// <summary>
+		/// How far out from the water a levee's top runs before its back slope (at <see cref="BankDegrees"/>), metres: the
+		/// drawn water's margin past its banks (InlandWaterRenderer.MinBankMarginMetres, 2.6 m), so the water's edge always
+		/// lies on ground that holds it. The carve adds a sample's diagonal and a half: the terrain between samples is
+		/// their plane, and a top one sample wide sank under the water toward the next sample out, already on the back
+		/// slope, and the water ran out through it (2026-10-13 coverage map).
+		/// </summary>
+		public float LeveeCrestMetres = 2.6f;
 		/// <summary>The steepest a cut bank stands, degrees.</summary>
 		public float BankDegrees = 38f;
 		/// <summary>How far each side of the channel a bank is cut back at least, metres; further where the ground stands higher, out to <see cref="MaxCorridorMetres"/>.</summary>
@@ -180,6 +197,32 @@ namespace FishMMO.Shared.WorldDesign
 		public float MinPoolDropMetres = 1.5f;
 		/// <summary>The deepest a plunge pool is scoured below the river's own bed, metres.</summary>
 		public float MaxPoolMetres = 6f;
+
+		// ── A fall's basin (WaterCarver.FallBasin) ────────────────
+
+		/// <summary>
+		/// How steep the walls of a fall's basin and of the gorge below it rise from the water, degrees, and how far that
+		/// wanders either way: rock walls, steeper than a cut bank, never one ruled plane. (The headwall itself drops as the
+		/// water does over the lip.)
+		/// </summary>
+		public float FallWallDegrees = 62f;
+		public float FallWallJitterDegrees = 12f;
+		/// <summary>
+		/// How far out from the lip's water the ground beside the curtain runs on as the face behind it, metres: its banks rise
+		/// as a cut bank's there, and as a wall from there out, where the brink starts to wander.
+		/// </summary>
+		public float FallNotchBlendMetres = 4f;
+		/// <summary>How far the basin's rim wanders in and out, metres, at most (and a fifth of its radius at most).</summary>
+		public float FallRimJitterMetres = 3f;
+		/// <summary>How fast the gorge below the basin widens downstream, metres across per metre along, each side.</summary>
+		public float FallGorgeSpread = 0.3f;
+		/// <summary>
+		/// The share of a fall's brink speed (critical flow over a free overfall, from the lip's discharge) its brink is rounded
+		/// for: the ground past the lip follows the arc water this slow would fall in, so faster water clears it too.
+		/// </summary>
+		public float BrinkSpeedShare = 0.8f;
+		/// <summary>How far under that arc the ground past the brink is held, metres, once a sample spacing out (none at the lip).</summary>
+		public float BrinkClearanceMetres = 0.4f;
 	}
 
 	/// <summary>What the water is doing at a point of a river: what its surface looks like and how it sounds.</summary>

@@ -6,6 +6,12 @@
 #define FISHMMO_WEATHER_TERRAIN_PASSES_INCLUDED
 
 #include "FishSurface.hlsl"
+// ── FishMMO edit 1 of 3, its moss: what a waterfall's spray grows on this ground (FishMoss.hlsl FishFallMoss), the
+// same textured moss as the rock's. The spray's alone: the ground has no moss material of its own. Its textures are
+// read with the first layer's sampler, which every splat program binds (SplatmapMix): no sampler state of its own. ──
+#define FISH_MOSS_FALL_ONLY
+#define FISH_MOSS_SAMPLER sampler_Splat0
+#include "FishMoss.hlsl"
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
@@ -472,6 +478,12 @@ void SplatmapFragment(
     smoothness *= sward;
     if (_FishWeatherAmount > 0.0)
     {
+#ifndef TERRAIN_SPLAT_BASEPASS
+        // Round a waterfall, the moss its spray grows (FishMoss.hlsl), ahead of the weather as on the rock, so the
+        // spray's wet darkens it. Not on the base map's far pass, which reads no splat layer.
+        FishFallMoss(inputData.positionWS, inputData.normalWS, ddx(inputData.positionWS), ddy(inputData.positionWS),
+            albedo, inputData.normalWS, smoothness, metallic, occlusion);
+#endif
         half3 weathered = inputData.normalWS;
         FishWeatherSurface(inputData.positionWS, albedo, weathered, smoothness, metallic, occlusion);
         FishTrailSurface(inputData.positionWS, inputData.viewDirectionWS, albedo, weathered, smoothness);

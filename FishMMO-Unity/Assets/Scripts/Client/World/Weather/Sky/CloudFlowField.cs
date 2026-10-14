@@ -13,9 +13,9 @@ namespace FishMMO.Client
 	/// a window round one camera — and nothing of it is redone when the wind turns or the camera
 	/// travels. "The whole of it" is the terrain and the backdrop round it to the horizon
 	/// (<see cref="TerrainSet"/>): the playable area alone left every mountain past its edge for the clouds
-	/// to run through. The heights are read a few thousand a frame, the flow is solved on a worker thread (a
-	/// second or so at 384 cells), and both are uploaded when ready; until then the sky reads the air
-	/// undisturbed.
+	/// to run through. The heights are read a few thousand a frame (the terrains are the main thread's); the
+	/// maps built from them are filtered and packed on a worker, the flow is solved on another (a second or so
+	/// at 384 cells), and each is uploaded when ready; until then the sky reads the air undisturbed.
 	/// </para>
 	/// <para>
 	/// Two textures. <c>_FishCloudFlowField</c>, a 3D texture: the flow at <see cref="Levels"/> heights
@@ -81,7 +81,8 @@ namespace FishMMO.Client
 		private float size;
 		private float lowest, highest;
 		private bool rockReady, fieldReady;
-		private Task<float[][]> solving;
+		private Task<ushort[]> solving;
+		private Task<Prepared> preparing;
 		private float[] solvingLevels;
 		private int signature;
 		private int generation;
@@ -109,7 +110,7 @@ namespace FishMMO.Client
 		/// <summary>Whether the scene terrain map (<c>_FishCloudTerrain</c> over the whole scene) is published.</summary>
 		public bool TerrainReady => terrainReady;
 		private Texture2D shadeTexture;
-		private Task<float[]> shading;
+		private Task<Shaded> shading;
 		private Vector3 shadingLight, shadedLight;
 		private bool shadeReady;
 		private float shadeBase;
@@ -118,6 +119,8 @@ namespace FishMMO.Client
 		/// <summary>Lets the far shade be solved again at once if the light has turned: the clock was set to another moment.</summary>
 		public void ShadeSoon() => shadeStarted = float.NegativeInfinity;
 		private ushort[] shadeHalves;
+		/// <summary>The halves the next far shade is packed into on its worker.</summary>
+		private ushort[] shadeSpare;
 		/// <summary>The least time between two of the far shade's solves, s, however fast the light is moving.</summary>
 		private const float ShadeInterval = 3f;
 
@@ -148,9 +151,22 @@ namespace FishMMO.Client
 					Solve();
 				}
 			}
+			if (preparing != null && preparing.IsCompleted)
+			{
+				Task<Prepared> done = preparing;
+				preparing = null;
+				if (done.Status == TaskStatus.RanToCompletion && done.Result != null && done.Result.Generation == generation)
+				{
+					Prepare(done.Result);
+				}
+				else if (done.Exception != null)
+				{
+					Debug.LogException(done.Exception.InnerException ?? done.Exception);
+				}
+			}
 			if (solving != null && solving.IsCompleted)
 			{
-				Task<float[][]> done = solving;
+				Task<ushort[]> done = solving;
 				solving = null;
 				if (done.Status == TaskStatus.RanToCompletion)
 				{
@@ -173,7 +189,7 @@ namespace FishMMO.Client
 		{
 			if (shading != null && shading.IsCompleted)
 			{
-				Task<float[]> done = shading;
+				Task<Shaded> done = shading;
 				shading = null;
 				if (done.Status == TaskStatus.RanToCompletion && done.Result != null)
 				{
@@ -198,11 +214,34 @@ namespace FishMMO.Client
 			TerrainShadowSolver.Grid scene = completeGround;
 			shadingLight = light;
 			int mine = generation;
-			shading = Task.Run(() => mine == generation ? TerrainShadowSolver.ShadowTops(scene, default, light.x, light.y, light.z, ShadeReach) : null);
+			// Packed into halves on the worker too, above the base the upload will use (checked there).
+			float packBase = lowest;
+			// Into the halves the last upload is done with (an orphaned worker keeps its own: they are let go of then).
+			ushort[] into = shadeSpare ?? new ushort[Resolution * Resolution];
+			shadeSpare = null;
+			shading = Task.Run(() => mine == generation ? Shaded.Of(TerrainShadowSolver.ShadowTops(scene, default, light.x, light.y, light.z, ShadeReach), packBase, into) : null);
 		}
 
-		private void UploadShade(float[] tops)
+		/// <summary>The far shade's heights, and the same packed into halves above <see cref="Base"/> on the worker.</summary>
+		private sealed class Shaded
 		{
+			public float[] Tops;
+			public ushort[] Halves;
+			public float Base;
+
+			public static Shaded Of(float[] tops, float packBase, ushort[] halves)
+			{
+				for (int i = 0; i < halves.Length; i++)
+				{
+					halves[i] = Mathf.FloatToHalf(Mathf.Clamp(tops[i] - packBase, -1000f, 4000f));
+				}
+				return new Shaded { Tops = tops, Halves = halves, Base = packBase };
+			}
+		}
+
+		private void UploadShade(Shaded shaded)
+		{
+			float[] tops = shaded.Tops;
 			int n = Resolution;
 			if (shadeTexture == null)
 			{
@@ -214,14 +253,22 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
-			// Above the scene's lowest ground, and held within a half's comfortable range.
+			// Above the scene's lowest ground, and held within a half's comfortable range. Packed on the worker; again here
+			// only if the scene's lowest ground moved while it ran.
 			shadeBase = lowest;
-			shadeHalves ??= new ushort[n * n];
-			for (int i = 0; i < n * n; i++)
+			ushort[] halves = shaded.Halves;
+			if (shaded.Base != shadeBase)
 			{
-				shadeHalves[i] = Mathf.FloatToHalf(Mathf.Clamp(tops[i] - shadeBase, -1000f, 4000f));
+				shadeHalves ??= new ushort[n * n];
+				for (int i = 0; i < n * n; i++)
+				{
+					shadeHalves[i] = Mathf.FloatToHalf(Mathf.Clamp(tops[i] - shadeBase, -1000f, 4000f));
+				}
+				halves = shadeHalves;
 			}
-			shadeTexture.SetPixelData(shadeHalves, 0);
+			shadeTexture.SetPixelData(halves, 0);
+			// What the worker packed into is free again for the next.
+			shadeSpare = shaded.Halves;
 			shadeTexture.Apply(false, false);
 			shadeReady = true;
 		}
@@ -230,6 +277,7 @@ namespace FishMMO.Client
 		{
 			generation++;
 			solving = null;
+			preparing = null;
 			rockReady = false;
 			fieldReady = false;
 			HighestRock = 0f;
@@ -238,6 +286,7 @@ namespace FishMMO.Client
 			completeGround = default;
 			terrainReady = false;
 			shading = null;
+			shadeSpare = null;
 			shadeReady = false;
 			if (terrains.Extent.width <= 0f || terrains.Extent.height <= 0f)
 			{
@@ -267,14 +316,38 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>Builds the rock map here, and hands the flow to a worker.</summary>
+		/// <summary>
+		/// Hands the heights to a worker, which builds the rock map, the terrain map and the air's smoothed ground from
+		/// them and packs the maps into halves (<see cref="PrepareOn"/>); they are uploaded when it is done
+		/// (<see cref="Prepare"/>), and the flow is handed to another.
+		/// </summary>
 		private void Solve()
 		{
 			int n = Resolution;
 			float cell = size / n;
+			float[] heights = ground;
+			int mine = generation;
+			preparing = Task.Run(() => mine == generation ? PrepareOn(heights, n, cell, mine) : null);
+		}
+
+		/// <summary>What the worker makes of the heights: the maps packed for upload, and what the flow is solved from.</summary>
+		private sealed class Prepared
+		{
+			public int Generation;
+			public float Lowest, Highest;
+			public ushort[] RockHalves;
+			public ushort[] TerrainHalves;
+			public float HighestGround, HighestPooled;
+			public float[] Smoothed;
+			public float[] Levels;
+		}
+
+		/// <summary>The rock map, the terrain map and the air's ground from the scene's heights: on a worker, never written again.</summary>
+		private static Prepared PrepareOn(float[] ground, int n, float cell, int generation)
+		{
 			var rock = new float[n * n];
-			lowest = float.MaxValue;
-			highest = 0f;
+			float lowest = float.MaxValue;
+			float highest = 0f;
 			for (int z = 0; z < n; z++)
 			{
 				for (int x = 0; x < n; x++)
@@ -301,25 +374,47 @@ namespace FishMMO.Client
 			{
 				lowest = 0f;
 			}
-			LowestGround = lowest;
-			completeGround = TerrainShadowSolver.Grid.Of(ground, n, corner.x, corner.y, size);
-			UploadTerrain(cell);
+			var prepared = new Prepared { Generation = generation, Lowest = lowest, Highest = highest };
+			TerrainHalves(ground, n, cell, prepared);
 			float[] massif = MaxFilter(rock, n, Mathf.Max(1, Mathf.CeilToInt(MassifRadius / cell)));
-			UploadRock(rock, massif);
+			var halves = new ushort[n * n * 2];
+			for (int i = 0; i < n * n; i++)
+			{
+				halves[i * 2] = Mathf.FloatToHalf(rock[i]);
+				halves[i * 2 + 1] = Mathf.FloatToHalf(massif[i]);
+			}
+			prepared.RockHalves = halves;
 
 			// The flow is turned by the mountain, not by the gullies on it: one pass of a box blur.
-			float[] smoothed = BoxBlur(ground, n);
+			prepared.Smoothed = BoxBlur(ground, n);
 			var levels = new float[Levels];
 			for (int k = 0; k < Levels; k++)
 			{
 				levels[k] = Mathf.Lerp(lowest, highest, k / (float)(Levels - 1));
 			}
-			solvingLevels = levels;
-			int mine = generation;
-			solving = Task.Run(() => mine == generation ? TerrainFlowSolver.Solve(smoothed, n, cell, levels) : null);
+			prepared.Levels = levels;
+			return prepared;
 		}
 
-		private void UploadRock(float[] rock, float[] massif)
+		/// <summary>The worker's maps uploaded, and the flow handed to another.</summary>
+		private void Prepare(Prepared prepared)
+		{
+			int n = Resolution;
+			float cell = size / n;
+			lowest = prepared.Lowest;
+			highest = prepared.Highest;
+			LowestGround = lowest;
+			completeGround = TerrainShadowSolver.Grid.Of(ground, n, corner.x, corner.y, size);
+			UploadTerrain(prepared);
+			UploadRock(prepared.RockHalves);
+			float[] smoothed = prepared.Smoothed;
+			float[] levels = prepared.Levels;
+			solvingLevels = levels;
+			int mine = generation;
+			solving = Task.Run(() => mine == generation ? PackField(TerrainFlowSolver.Solve(smoothed, n, cell, levels)) : null);
+		}
+
+		private void UploadRock(ushort[] halves)
 		{
 			int n = Resolution;
 			if (rockTexture == null)
@@ -332,21 +427,36 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
-			var halves = new ushort[n * n * 2];
-			for (int i = 0; i < n * n; i++)
-			{
-				halves[i * 2] = Mathf.FloatToHalf(rock[i]);
-				halves[i * 2 + 1] = Mathf.FloatToHalf(massif[i]);
-			}
 			rockTexture.SetPixelData(halves, 0);
 			rockTexture.Apply(false, false);
 			HighestRock = Mathf.Max(1f, highest + 1f);
 			rockReady = highest > 0f;
 		}
 
-		private void UploadField(float[][] solved)
+		/// <summary>The solved flow, every level, packed into the 3D texture's halves (on the solver's worker).</summary>
+		private static ushort[] PackField(float[][] solved)
 		{
 			if (solved == null || solved.Length != Levels)
+			{
+				return null;
+			}
+			int n = Resolution;
+			int plane = n * n * TerrainFlowSolver.Channels;
+			var halves = new ushort[plane * Levels];
+			for (int k = 0; k < Levels; k++)
+			{
+				float[] level = solved[k];
+				for (int i = 0; i < plane; i++)
+				{
+					halves[k * plane + i] = Mathf.FloatToHalf(level[i]);
+				}
+			}
+			return halves;
+		}
+
+		private void UploadField(ushort[] halves)
+		{
+			if (halves == null)
 			{
 				return;
 			}
@@ -361,16 +471,6 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
-			int plane = n * n * TerrainFlowSolver.Channels;
-			var halves = new ushort[plane * Levels];
-			for (int k = 0; k < Levels; k++)
-			{
-				float[] level = solved[k];
-				for (int i = 0; i < plane; i++)
-				{
-					halves[k * plane + i] = Mathf.FloatToHalf(level[i]);
-				}
-			}
 			field.SetPixelData(halves, 0);
 			field.Apply(false, false);
 			fieldReady = true;
@@ -382,15 +482,11 @@ namespace FishMMO.Client
 		/// fixed in place — in place of CloudTerrainMap's window round the camera, which moved in steps of eight
 		/// of its texels and eased its ground to sea level over its outer tenth: every step lifted or dropped the
 		/// clouds four and five kilometres out by hundreds of metres, and the sky jumped as the camera travelled.
+		/// Worked out and packed on the worker (<see cref="TerrainHalves"/>), uploaded here.
 		/// </summary>
-		private void UploadTerrain(float cell)
+		private void UploadTerrain(Prepared prepared)
 		{
 			int n = Resolution;
-			// The ground itself, barely smoothed (two passes of a three-by-three), and the air's (three of a box
-			// some 625 m wide), as CloudTerrainMap makes them from its own samples.
-			float[] surface = BoxMean(BoxMean(ground, n, 1), n, 1);
-			int radius = Mathf.Max(1, Mathf.RoundToInt(AirSmoothMetres / cell));
-			float[] air = BoxMean(BoxMean(BoxMean(surface, n, radius), n, radius), n, radius);
 			if (terrainTexture == null)
 			{
 				terrainTexture = new Texture2D(n, n, TextureFormat.RGBAHalf, false, true)
@@ -401,6 +497,21 @@ namespace FishMMO.Client
 					hideFlags = HideFlags.DontSave,
 				};
 			}
+			terrainTexture.SetPixelData(prepared.TerrainHalves, 0);
+			terrainTexture.Apply(false, false);
+			HighestGround = prepared.HighestGround;
+			HighestPooled = prepared.HighestPooled;
+			terrainReady = true;
+		}
+
+		/// <summary>The scene terrain map's texels, packed, and its highest ground and pooled air.</summary>
+		private static void TerrainHalves(float[] ground, int n, float cell, Prepared prepared)
+		{
+			// The ground itself, barely smoothed (two passes of a three-by-three), and the air's (three of a box
+			// some 625 m wide), as CloudTerrainMap makes them from its own samples.
+			float[] surface = BoxMean(BoxMean(ground, n, 1), n, 1);
+			int radius = Mathf.Max(1, Mathf.RoundToInt(AirSmoothMetres / cell));
+			float[] air = BoxMean(BoxMean(BoxMean(surface, n, radius), n, radius), n, radius);
 			var halves = new ushort[n * n * 4];
 			float highestGround = 0f, highestPooled = 0f;
 			for (int z = 0; z < n; z++)
@@ -420,11 +531,9 @@ namespace FishMMO.Client
 					highestPooled = Mathf.Max(highestPooled, air[i]);
 				}
 			}
-			terrainTexture.SetPixelData(halves, 0);
-			terrainTexture.Apply(false, false);
-			HighestGround = highestGround;
-			HighestPooled = highestPooled;
-			terrainReady = true;
+			prepared.TerrainHalves = halves;
+			prepared.HighestGround = highestGround;
+			prepared.HighestPooled = highestPooled;
 		}
 
 		private static float[] BoxMean(float[] source, int n, int radius)
@@ -578,6 +687,7 @@ namespace FishMMO.Client
 		{
 			generation++;
 			solving = null;
+			preparing = null;
 			if (field != null)
 			{
 				if (Application.isPlaying) Object.Destroy(field); else Object.DestroyImmediate(field);
@@ -600,6 +710,7 @@ namespace FishMMO.Client
 			}
 			terrainReady = false;
 			shading = null;
+			shadeSpare = null;
 			shadeReady = false;
 			Shader.SetGlobalVector(ShadeRectId, Vector4.zero);
 			rockReady = false;

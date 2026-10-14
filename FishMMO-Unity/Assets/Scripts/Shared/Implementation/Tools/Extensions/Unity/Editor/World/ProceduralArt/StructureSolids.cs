@@ -36,6 +36,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// _FishStructure = 2), in most windows of a house and not others.
 		/// </summary>
 		Glass,
+		/// <summary>
+		/// A lantern's lit horn pane or a candle's flame, always alight (2026-10-13, the cave and mine kit): underground no
+		/// dusk comes to light it, so it glows by its emission day and night alike (BiomeArtGenerator.Structures.cs),
+		/// where <see cref="Glass"/> is dark until _FishNightLights rises.
+		/// </summary>
+		Lamplight,
 	}
 
 	/// <summary>What a part does in its structure, which decides how a ruin treats it.</summary>

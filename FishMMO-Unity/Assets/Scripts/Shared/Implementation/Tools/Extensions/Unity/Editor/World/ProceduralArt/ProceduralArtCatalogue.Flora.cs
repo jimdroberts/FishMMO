@@ -314,21 +314,20 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				if (deadwood == null)
 				{
-					Color moss = H("#4a6a24");
 					deadwood = new[]
 					{
 						new DeadwoodSpecies { Name = "FallenLog_Oak", Form = DeadwoodForm.FallenLog, Length = 10f, Radius = 0.4f, BarkFamily = Bark.Brown,
-							BarkTint = H("#e8e0d8"), WoodA = H("#c8a878"), WoodB = H("#8a6844"), Moss = 0.65f, MossColour = moss, Stubs = 3 },
+							BarkTint = H("#e8e0d8"), WoodA = H("#c8a878"), WoodB = H("#8a6844"), Stubs = 3 },
 						new DeadwoodSpecies { Name = "FallenLog_Conifer", Form = DeadwoodForm.FallenLog, Length = 12f, Radius = 0.32f, BarkFamily = Bark.Pine,
-							BarkTint = H("#e0d8d0"), WoodA = H("#d8b888"), WoodB = H("#a07a50"), Moss = 0.5f, MossColour = H("#56742a"), Stubs = 4 },
+							BarkTint = H("#e0d8d0"), WoodA = H("#d8b888"), WoodB = H("#a07a50"), Stubs = 4 },
 						new DeadwoodSpecies { Name = "FallenLog_Birch", Form = DeadwoodForm.FallenLog, Length = 7f, Radius = 0.2f, BarkFamily = Bark.Birch,
-							BarkTint = H("#f0ece6"), WoodA = H("#b89a70"), WoodB = H("#7a5e40"), Moss = 0.35f, MossColour = moss, Stubs = 2 },
+							BarkTint = H("#f0ece6"), WoodA = H("#b89a70"), WoodB = H("#7a5e40"), Stubs = 2 },
 						new DeadwoodSpecies { Name = "Stump_Broken", Form = DeadwoodForm.Stump, Length = 0.9f, Radius = 0.35f, BarkFamily = Bark.Brown,
-							BarkTint = H("#e8e0d8"), WoodA = H("#c8a878"), WoodB = H("#7a5a38"), Moss = 0.45f, MossColour = moss },
+							BarkTint = H("#e8e0d8"), WoodA = H("#c8a878"), WoodB = H("#7a5a38") },
 						new DeadwoodSpecies { Name = "Stump_Cut", Form = DeadwoodForm.Stump, Length = 0.45f, Radius = 0.3f, BarkFamily = Bark.Pine,
-							BarkTint = H("#e8e0d8"), WoodA = H("#e0c498"), WoodB = H("#b08a5a"), Moss = 0.2f, MossColour = moss, Sawn = true },
+							BarkTint = H("#e8e0d8"), WoodA = H("#e0c498"), WoodB = H("#b08a5a"), Sawn = true },
 						new DeadwoodSpecies { Name = "Stump_Bracket", Form = DeadwoodForm.Stump, Length = 0.7f, Radius = 0.38f, BarkFamily = Bark.Brown,
-							BarkTint = H("#d8d0c8"), WoodA = H("#a88a62"), WoodB = H("#6a4e30"), Moss = 0.6f, MossColour = moss, Brackets = 5,
+							BarkTint = H("#d8d0c8"), WoodA = H("#a88a62"), WoodB = H("#6a4e30"), Brackets = 5,
 							Bands = new[] { H("#e8dcc0"), H("#a07a50"), H("#6a5038") } },
 						new DeadwoodSpecies { Name = "Driftwood", Form = DeadwoodForm.Driftwood, Length = 4f, Radius = 0.16f, BarkFamily = Bark.Dead,
 							BarkTint = H("#f4f0ea"), WoodA = H("#c8c2b6"), WoodB = H("#a8a296"), Stubs = 3 },
@@ -336,7 +335,7 @@ namespace FishMMO.Shared.WorldDesign
 							BarkTint = H("#c89a7a"), WoodA = H("#6a4434"), WoodB = H("#9a7a64"),
 							Bands = new[] { H("#5a3a2e"), H("#b0482e"), H("#d89a4a"), H("#e8c890"), H("#8a5a6a"), H("#c8beb0"), H("#a0302a") } },
 						new DeadwoodSpecies { Name = "RootPlate", Form = DeadwoodForm.RootPlate, Length = 3.2f, Radius = 0.35f, BarkFamily = Bark.Brown,
-							BarkTint = H("#9a8a7a"), WoodA = H("#4a3a28"), WoodB = H("#7a6448"), Moss = 0.2f, MossColour = moss, Stubs = 12,
+							BarkTint = H("#9a8a7a"), WoodA = H("#4a3a28"), WoodB = H("#7a6448"), Stubs = 12,
 							Bands = new[] { H("#8a8a84"), H("#6a6a64") } },
 					};
 				}

@@ -62,7 +62,9 @@ namespace FishMMO.Client
 		{
 			int problems = 0;
 
-			BiomeArtGenerator.Report art = BiomeArtGenerator.Generate(ProceduralArtMode.Full, ProceduralArtCatalogue.DefaultSeed);
+			// Only the families whose generator changed (and what is made from them); the rest only write what is missing.
+			BiomeArtGenerator.Report art = BiomeArtGenerator.Generate(ProceduralArtMode.Full, ProceduralArtCatalogue.DefaultSeed,
+				BiomeArtGenerator.FamiliesToRebuild(ProceduralArtPayload.Check(ProceduralArtCatalogue.DefaultSeed)));
 			Debug.Log("[World refresh] art: " + art);
 			if (!art.Completed || art.Problems.Count > 0)
 			{

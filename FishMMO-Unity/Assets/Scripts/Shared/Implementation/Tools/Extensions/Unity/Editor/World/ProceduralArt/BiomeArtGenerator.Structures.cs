@@ -36,13 +36,18 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly float[] StructureLodHeights = { 0.15f, 0.05f, 0.008f };
 
 		/// <summary>The steps <see cref="StructureSurfaceSteps"/> and <see cref="StructureSteps"/> yield.</summary>
-		private static int StructureStepCount() => 1 + 1 + StructurePieces.All.Count;
+		private static int StructureStepCount() => 1 + 1 + StructurePieces.All.Count + CaveGlowStepCount();
 
 		/// <summary>The structure surfaces and their finish albedos: one step, before the texture import.</summary>
 		private static IEnumerable<string> StructureSurfaceSteps(Context c)
 		{
 			yield return "Structure surfaces";
 			WriteStructureSurfaces(c);
+			// The cave kit's glow and ore maps (BiomeArtGenerator.CaveGlow.cs), imported with these.
+			foreach (string step in CaveGlowSurfaceSteps(c))
+			{
+				yield return step;
+			}
 		}
 
 		/// <summary>Materials, then one step a piece: after the deadwood.</summary>
@@ -54,6 +59,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return "Structure: " + piece.Id;
 				WriteStructurePiece(c, piece);
+			}
+			// The cave kit's glowing crystals, fungi, glow-worms and ore veins (BiomeArtGenerator.CaveGlow.cs): after the
+			// pieces' materials, whose fieldstone a crystal's matrix wears.
+			foreach (string step in CaveGlowSteps(c))
+			{
+				yield return step;
 			}
 		}
 
@@ -107,6 +118,7 @@ namespace FishMMO.Shared.WorldDesign
 				Texture2D mask = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Mask"));
 				float scale = 1f / StructureSurfaces.TileMetres(surface);
 				Color tint = StructureSurfaces.TintOf(material);
+				Texture2D plainAlbedo = LoadTexture(ProceduralArtCatalogue.StructureTexture(surface, "Albedo"));
 				foreach (StructureFinish f in StructurePieces.Finishes)
 				{
 					StructureFinish finish = f;
@@ -123,9 +135,29 @@ namespace FishMMO.Shared.WorldDesign
 						{
 							Glass(mat, tint);
 						}
+						else if (material == StructureMaterial.Lamplight)
+						{
+							Lamplight(mat, plainAlbedo);
+						}
 					});
 				}
 			}
+		}
+
+		/// <summary>
+		/// A lantern's lit pane (<see cref="StructureMaterial.Lamplight"/>, 2026-10-13): the plain surface's own albedo as its
+		/// emission map, so the glow is a little uneven as horn is, in a warm HDR colour, lit always. Emission is added after
+		/// the lighting (and after the cave darkness's occlusion), so it reads as a light deep underground where the sky's
+		/// ambient is all but gone; in every finish the plain albedo, so a charred or mossy ruin's lamp burns as bright.
+		/// </summary>
+		private static void Lamplight(Material mat, Texture2D plainAlbedo)
+		{
+			mat.SetTexture("_EmissionMap", plainAlbedo);
+			mat.SetColor("_EmissionColor", new Color(1.9f, 1.05f, 0.42f, 1f));
+			mat.EnableKeyword("_EMISSION");
+			mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+			mat.SetFloat("_Smoothness", 0.45f);
+			mat.SetFloat("_FishMoss", 0f);
 		}
 
 		/// <summary>

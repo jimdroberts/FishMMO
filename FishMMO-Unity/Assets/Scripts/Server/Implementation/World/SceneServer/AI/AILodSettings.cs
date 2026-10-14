@@ -124,10 +124,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
+		/// Declares the farthest band to the observer registry, which then measures the nearest player exactly out to
+		/// it. Every band the AI compares a nearest-player distance against (these three) is covered, whichever order
+		/// they were authored in; loading the asset is early enough, since nothing using it has been measured yet.
+		/// </summary>
+		private void OnEnable()
+		{
+			DeclareProximityReach();
+		}
+
+		private void DeclareProximityReach()
+		{
+			ObserverStreamingRegistry.RequireViewerProximity(Mathf.Max(ActiveDistanceSqr, Mathf.Max(NearbyDistanceSqr, FarDistanceSqr)));
+		}
+
+		/// <summary>
 		/// Clamps the thresholds and intervals into a usable order.
 		/// </summary>
 		private void OnValidate()
 		{
+			DeclareProximityReach();
 			if (NearbyDistanceSqr < ActiveDistanceSqr) NearbyDistanceSqr = ActiveDistanceSqr;
 			if (FarDistanceSqr < NearbyDistanceSqr) FarDistanceSqr = NearbyDistanceSqr;
 

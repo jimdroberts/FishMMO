@@ -177,6 +177,7 @@ namespace FishMMO.Client
 		public bool CloudFarImposter { get; private set; } = true;
 		public int CloudFarImposterSize { get; private set; } = 1024;
 		public int CloudFarImposterRefreshFrames { get; private set; } = 48;
+		public float CloudFarImposterRefreshSeconds { get; private set; } = 1.5f;
 		public float CloudFarImposterKeep { get; private set; } = 0.4f;
 		public float CloudFarImposterStartMetres { get; private set; }
 		/// <summary>Frames between a near texel's marches: 1, or 4 for one in each two-by-two block (VolumetricCloudSettings.NearMarchEvery).</summary>
@@ -443,6 +444,8 @@ namespace FishMMO.Client
 		private CloudTerrainMap cloudTerrain;
 		private CloudFlowField cloudFlow;
 		private MistGroundMap mistGround;
+		/// <summary>The fine ground round the camera every full-screen effect reads how far underground it is from (FishGroundMap.hlsl); null until the first frame.</summary>
+		public MistGroundMap MistGround => mistGround;
 		/// <summary>The steam fog off open water warmer than the air (SteamFogSource), drawn by the mist's march.</summary>
 		private readonly SteamFogSource steamFog = new SteamFogSource();
 		/// <summary>How much the water round the camera smokes, and how warm it is (<see cref="SteamFogSource"/>).</summary>
@@ -692,6 +695,8 @@ namespace FishMMO.Client
 		private static readonly ProfilerMarker LightsMarker = new ProfilerMarker("Sky.Lights");
 		private static readonly ProfilerMarker ReflectionMarker = new ProfilerMarker("Sky.Reflection");
 		private static readonly ProfilerMarker BodiesMarker = new ProfilerMarker("Sky.Bodies");
+		private static readonly ProfilerMarker FlowFieldMarker = new ProfilerMarker("Sky.FlowField");
+		private static readonly ProfilerMarker MistGroundMarker = new ProfilerMarker("Sky.MistGround");
 
 		private void Update()
 		{
@@ -1503,7 +1508,9 @@ namespace FishMMO.Client
 			// (FishTerrainSunlit), and how far underground every lit surface is (a cave's walls take no sky:
 			// FishGroundMap.hlsl FishUnderground), mist or fog or neither.
 			mistGround ??= new MistGroundMap();
+			MistGroundMarker.Begin();
 			mistGround.Update(viewerAt, cloudSunDirection, cloudFlow);
+			MistGroundMarker.End();
 			Shader.SetGlobalVector(MistId, on ? new Vector4(deficit, stirred, night, MistRange) : Vector4.zero);
 			return on;
 		}
@@ -1518,7 +1525,9 @@ namespace FishMMO.Client
 			cloudFlow ??= new CloudFlowField();
 			// The light that leads the sky — the sun, or the moon after it sets — which the fog and the mist
 			// are lit by, for the terrain's shadow over the scene.
+			FlowFieldMarker.Begin();
 			cloudFlow.Update(cloudSunDirection);
+			FlowFieldMarker.End();
 			FogLayerView fog = FogLayerView.Current;
 			float fogClimb = Mathf.Max(1f, fog.WindSpeed) / FogBuoyancy;
 			Shader.SetGlobalVector(FogFlowId, new Vector4(axis.x, axis.y, fogClimb, 0f));
@@ -1723,6 +1732,7 @@ namespace FishMMO.Client
 			CloudFarImposter = clouds.FarImposter;
 			CloudFarImposterSize = Mathf.Clamp(clouds.FarImposterSize, 128, 4096);
 			CloudFarImposterRefreshFrames = Mathf.Clamp(clouds.FarImposterRefreshFrames, 4, 512);
+			CloudFarImposterRefreshSeconds = Mathf.Clamp(clouds.FarImposterRefreshSeconds, 0f, 10f);
 			CloudFarImposterKeep = Mathf.Clamp(clouds.FarImposterKeep, 0.05f, 1f);
 			CloudFarImposterStartMetres = Mathf.Max(0f, clouds.FarImposterStartMetres);
 			CloudNearMarchEvery = clouds.NearMarchEvery >= 4 ? 4 : 1;

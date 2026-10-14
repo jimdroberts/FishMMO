@@ -129,7 +129,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The water again: the plan's moats are lakes of the scene's (MoatShaper), drawn and swum from its hydrology.
 				if (water != null && !scope.AllowsLocal)
 				{
-					string hydrologyPath = SceneGenerator.SaveWater(request, terrainFolder, water);
+					string hydrologyPath = SceneGenerator.SaveWater(request, terrainFolder, water, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north));
 					if (hydrologyPath != null)
 					{
 						SceneGenerator.EnsureInlandWater(scene, AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath));

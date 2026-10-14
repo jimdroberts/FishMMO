@@ -111,6 +111,8 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Completed;
 			/// <summary>Why it stopped early (cancelled, failed), or null.</summary>
 			public string Stopped;
+			/// <summary>The families this run rebuilt (<see cref="ProceduralArtFamilies"/>); null when it rebuilt everything.</summary>
+			public List<ArtFamily> Rebuilt;
 			/// <summary>Seconds per step, in order, its flush included.</summary>
 			public readonly List<KeyValuePair<string, double>> StepSeconds = new List<KeyValuePair<string, double>>();
 			/// <summary>
@@ -141,6 +143,12 @@ namespace FishMMO.Shared.WorldDesign
 				var sb = new StringBuilder();
 				string state = Completed ? "complete" : $"stopped ({Stopped ?? "unknown"})";
 				sb.AppendLine($"Biome art ({Mode}, {state}): wrote {Wrote.Count} assets in {Seconds:0.0}s; {Unchanged} regenerated unchanged; {Problems.Count} problems; {AssetDatabaseTrips} asset-database trips.");
+				if (Mode == ProceduralArtMode.Full)
+				{
+					sb.AppendLine(Rebuilt == null ? "Rebuilt: every family."
+						: Rebuilt.Count == 0 ? "Rebuilt: no family; every family was current, so only missing files were written."
+						: $"Rebuilt: {string.Join(", ", Rebuilt)}; the other families were current, so only their missing files were written.");
+				}
 				sb.AppendLine($"Generated texture memory (GPU, block-compressed with mips): {TextureBytes / (1024f * 1024f):0.0} MB.");
 				if (StepSeconds.Count > 0)
 				{
@@ -159,21 +167,44 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Generate biome art", Section = "Art", Order = 0,
-			Tooltip = "Rebuilds every procedural texture, mesh, terrain layer, material and prefab (all gitignored build output with path-derived IDs) and rewrites each file whose bytes changed. Runs by itself on editor load and before builds when the generator changed; this forces it. A cancellable job of a few minutes; its report times every step.",
-			Confirm = "Regenerate all procedural biome art? Every generated file is rebuilt and rewritten where it changed. Nothing outside the generated folders is touched, except that generated art made before deterministic IDs is first migrated, rewriting committed references to it (backed up under Library/FishMMO).")]
+			Tooltip = "Rebuilds the families of procedural art whose generator code changed since they were made (and what is made from them: a bark change rebuilds the trees), writes any generated file that is missing, and rewrites each file whose bytes changed. Runs by itself on editor load and before builds when the generator changed. Its report names the families it rebuilt and times every step.",
+			Confirm = "Regenerate the procedural biome art whose generator changed? Nothing outside the generated folders is touched, except that generated art made before deterministic IDs is first migrated, rewriting committed references to it (backed up under Library/FishMMO).")]
 		public static void GenerateFromDashboard()
 		{
-			StartGenerate(ProceduralArtMode.Full, ProceduralArtCatalogue.DefaultSeed, null);
+			int seed = ProceduralArtCatalogue.DefaultSeed;
+			ProceduralArtPayload.State state = ProceduralArtPayload.Check(seed);
+			StartGenerate(ProceduralArtMode.Full, seed, null, FamiliesToRebuild(state));
 		}
 
-		[DashboardTool(DashboardToolAttribute.Biomes, "Generate missing biome art", Section = "Art", Order = 1,
+		[DashboardTool(DashboardToolAttribute.Biomes, "Generate biome art (everything)", Section = "Art", Order = 1,
+			Tooltip = "Rebuilds every procedural texture, mesh, terrain layer, material and prefab, whatever changed, and rewrites each file whose bytes changed. The slow way (about ten minutes); for when the art is suspect.",
+			Confirm = "Regenerate ALL procedural biome art, every family? Every generated file is rebuilt and rewritten where it changed.")]
+		public static void GenerateEverythingFromDashboard()
+		{
+			StartGenerate(ProceduralArtMode.Full, ProceduralArtCatalogue.DefaultSeed, null, null);
+		}
+
+		/// <summary>
+		/// What a full run must rebuild for a state: its dirty families; everything (null) when a migration or a wrapper with
+		/// an empty slot is the reason, since those are no family's.
+		/// </summary>
+		public static HashSet<ArtFamily> FamiliesToRebuild(ProceduralArtPayload.State state)
+		{
+			if (state == null || state.NeedsMigration || state.UnboundWrappers.Count > 0)
+			{
+				return null;
+			}
+			return new HashSet<ArtFamily>(state.DirtyFamilies);
+		}
+
+		[DashboardTool(DashboardToolAttribute.Biomes, "Generate missing biome art", Section = "Art", Order = 2,
 			Tooltip = "Writes only the procedural biome assets that do not exist yet (or carry the wrong GUID), and any missing built terrain layer. Changes nothing else on disk.")]
 		public static void GenerateMissingFromDashboard()
 		{
 			StartGenerate(ProceduralArtMode.MissingOnly, ProceduralArtCatalogue.DefaultSeed, null);
 		}
 
-		[DashboardTool(DashboardToolAttribute.Biomes, "Check biome art payload", Section = "Art", Order = 2,
+		[DashboardTool(DashboardToolAttribute.Biomes, "Check biome art payload", Section = "Art", Order = 3,
 			Tooltip = "Reports whether any generated art is missing, has wrong GUIDs, needs migrating to deterministic IDs or was made by older generator code. Changes nothing.")]
 		public static void CheckFromDashboard()
 		{
@@ -203,6 +234,8 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Advance()
 			{
 				string ran = Label;
+				// The work about to run is this label's: its family decides what it rewrites (ShouldWrite).
+				Context.StepLabel = Label;
 				long started = Stopwatch.GetTimestamp();
 				bool more = Steps.MoveNext();
 				if (more)
@@ -236,13 +269,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// Generates the art, start to finish, before returning. A job already running is stopped
 		/// first; this run redoes everything it would have done.
 		/// </summary>
-		public static Report Generate(ProceduralArtMode mode, int seed)
+		public static Report Generate(ProceduralArtMode mode, int seed) => Generate(mode, seed, null);
+
+		/// <summary>
+		/// Generates the art, start to finish, before returning, rebuilding only <paramref name="rebuild"/>'s families in a full
+		/// run (null: every family). A job already running is stopped first.
+		/// </summary>
+		public static Report Generate(ProceduralArtMode mode, int seed, HashSet<ArtFamily> rebuild)
 		{
 			if (job != null)
 			{
 				Finish(job, "superseded by a synchronous generation");
 			}
-			Run run = Begin(mode, seed);
+			Run run = Begin(mode, seed, rebuild);
 			string problem = null;
 			try
 			{
@@ -269,14 +308,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// Starts a generation that does one step per editor update behind a cancellable progress
 		/// bar. <paramref name="done"/> receives the report. Returns false when one is already running.
 		/// </summary>
-		public static bool StartGenerate(ProceduralArtMode mode, int seed, Action<Report> done)
+		public static bool StartGenerate(ProceduralArtMode mode, int seed, Action<Report> done) => StartGenerate(mode, seed, done, null);
+
+		/// <summary>As <see cref="StartGenerate(ProceduralArtMode, int, Action{Report})"/>, a full run rebuilding only <paramref name="rebuild"/>'s families (null: every family).</summary>
+		public static bool StartGenerate(ProceduralArtMode mode, int seed, Action<Report> done, HashSet<ArtFamily> rebuild)
 		{
 			if (job != null)
 			{
 				Debug.Log("[Biome art] A generation is already running.");
 				return false;
 			}
-			Run run = Begin(mode, seed);
+			Run run = Begin(mode, seed, rebuild);
 			run.Done = done;
 			job = run;
 			EditorApplication.update += Tick;
@@ -353,15 +395,19 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static Run Begin(ProceduralArtMode mode, int seed)
+		private static Run Begin(ProceduralArtMode mode, int seed, HashSet<ArtFamily> rebuild)
 		{
+			Dictionary<ArtFamily, string> families = ProceduralArtPayload.FamilyFingerprints(seed);
 			var context = new Context
 			{
-				Report = new Report { Mode = mode },
+				Report = new Report { Mode = mode, Rebuilt = rebuild != null ? new List<ArtFamily>(rebuild) : null },
 				Mode = mode,
 				Seed = seed,
-				Fingerprint = ProceduralArtPayload.CurrentFingerprint(seed),
+				Families = families,
+				Fingerprint = ProceduralArtFamilies.Combined(families),
+				Rebuild = rebuild,
 			};
+			context.Report.Rebuilt?.Sort();
 			foreach (string folder in new[] { ProceduralArtCatalogue.TexturesFolder, ProceduralArtCatalogue.TerrainLayersFolder,
 				ProceduralArtCatalogue.MeshesFolder, ProceduralArtCatalogue.MaterialsFolder, ProceduralArtCatalogue.PrefabsFolder })
 			{
@@ -420,7 +466,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool generatedFailed = c.Report.Problems.Exists(p => p.Contains(ProceduralArtCatalogue.Root) || p.Contains(BiomeTerrainLayers.BuiltFolder));
 				if (c.Report.Completed && c.Mode == ProceduralArtMode.Full && !generatedFailed)
 				{
-					ProceduralArtPayload.RecordComplete(c.Fingerprint, c.Seed, c.Built);
+					ProceduralArtPayload.RecordComplete(c.Fingerprint, c.Seed, c.Built, c.Families);
 				}
 				else if (c.Built != null)
 				{
@@ -452,6 +498,16 @@ namespace FishMMO.Shared.WorldDesign
 			public ProceduralArtMode Mode;
 			public int Seed;
 			public string Fingerprint;
+			/// <summary>Each family's fingerprint as this run saw its sources: what a complete run records.</summary>
+			public Dictionary<ArtFamily, string> Families;
+			/// <summary>The families a full run rebuilds; null for every family.</summary>
+			public HashSet<ArtFamily> Rebuild;
+			/// <summary>The label of the step whose work is running (<see cref="ProceduralArtFamilies.FamiliesOfStep"/>).</summary>
+			public string StepLabel;
+			/// <summary>Built on all cores at the first step of their group (BiomeArtGenerator.Parallel.cs); null until then.</summary>
+			public Dictionary<string, SurfaceMaps> GroundMaps;
+			public Dictionary<string, MeshBuilder> BushLevels;
+			public Dictionary<string, TreeBuild> TreeBuilds;
 			public readonly Dictionary<string, Material> Materials = new Dictionary<string, Material>();
 			public readonly Dictionary<string, Color32[]> BarkPixels = new Dictionary<string, Color32[]>();
 			public readonly List<string> PendingTextures = new List<string>();
@@ -597,7 +653,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static bool ShouldWrite(Context c, string path)
 		{
-			return c.Mode == ProceduralArtMode.Full || !ProceduralArtPayload.HasExpectedGuid(path);
+			// A full run rebuilds the families whose code changed (and what is made from them); the rest only write what is
+			// missing, which is what keeps a one-family change from rebuilding every cliff, tree and bush.
+			return (c.Mode == ProceduralArtMode.Full && ProceduralArtFamilies.StepDirty(c.StepLabel, c.Rebuild))
+				|| !ProceduralArtPayload.HasExpectedGuid(path);
 		}
 
 		// ── Textures ──────────────────────────────────────────────────
@@ -662,13 +721,14 @@ namespace FishMMO.Shared.WorldDesign
 			string albedo = ProceduralArtCatalogue.GroundTexture(recipe.Name, "Albedo");
 			string normal = ProceduralArtCatalogue.GroundTexture(recipe.Name, "Normal");
 			string mask = ProceduralArtCatalogue.GroundTexture(recipe.Name, "Mask");
+			PrebuildGround(c);
 			bool wa = ShouldWrite(c, albedo), wn = ShouldWrite(c, normal), wm = ShouldWrite(c, mask);
 			c.Report.TextureBytes += 3 * CompressedBytes(ProceduralArtCatalogue.GroundSize, ProceduralArtCatalogue.GroundSize);
 			if (!wa && !wn && !wm)
 			{
 				return;
 			}
-			SurfaceMaps maps = SurfaceSynth.Generate(in recipe, ProceduralArtCatalogue.GroundSize, c.Seed);
+			SurfaceMaps maps = c.GroundMaps.TryGetValue(recipe.Name, out SurfaceMaps built) ? built : SurfaceSynth.Generate(in recipe, ProceduralArtCatalogue.GroundSize, c.Seed);
 			if (wa) WritePng(c, albedo, maps.Albedo, maps.Size, maps.Size);
 			if (wn) WritePng(c, normal, maps.Normal, maps.Size, maps.Size);
 			if (wm) WritePng(c, mask, maps.Mask, maps.Size, maps.Size);
@@ -1800,33 +1860,19 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void WriteTree(Context c, TreeSpecies species)
 		{
-			MeshBuilder lod0 = TreeMeshes.Build(in species, 0, c.Seed);
-			// The reduced level keeps the full tree's foliage cover (fewer, wider cards), or distant trees go bare.
-			MeshBuilder lod1 = TreeMeshes.BuildReduced(in species, 1, c.Seed, lod0);
-			bool leaves = lod0.Submeshes[TreeMeshes.LeafSubmesh].Count > 0;
-			if (!leaves)
+			// Built (with its billboard) on all cores at the first tree step; a tree whose files are all current is not built.
+			PrebuildTrees(c);
+			if (!c.TreeBuilds.TryGetValue(species.Name, out TreeBuild tree))
 			{
-				lod0.Submeshes.RemoveAt(TreeMeshes.LeafSubmesh);
-				lod1.Submeshes.RemoveAt(TreeMeshes.LeafSubmesh);
-			}
-
-			// The billboard: the full tree, rendered in software from the same textures.
-			Color32[] bark = c.BarkPixels.TryGetValue(species.BarkFamily, out Color32[] bp) ? bp : null;
-			Color32[] atlas = c.AtlasPixels;
-			BillboardImpostor.Result billboard = BillboardImpostor.Render(lod0, (sub, uv, vc) =>
-			{
-				Color tex = sub == TreeMeshes.BarkSubmesh
-					? (bark != null ? FoliageAtlas.Sample(bark, ProceduralArtCatalogue.BarkSize, uv, true) : Color.gray)
-					: (atlas != null ? FoliageAtlas.Sample(atlas, ProceduralArtCatalogue.AtlasSize, uv, false) : Color.green);
-				if (sub == TreeMeshes.BarkSubmesh)
+				if (!TreeDue(c, species))
 				{
-					tex.a = 1f;
+					return;
 				}
-				// The vertex colour is stored linear (PlantParts.C32) and the textures in sRGB: taken back to sRGB
-				// to be multiplied with them, so the baked billboard is the colour the shader draws the tree.
-				Color tint = vc.gamma;
-				return new Color(tex.r * tint.r, tex.g * tint.g, tex.b * tint.b, tex.a);
-			}, ProceduralArtCatalogue.BillboardHeight, species.Height, species.Deciduous ? 0.35f : 1f);
+				tree = BuildTree(in species, c.Seed, c.BarkPixels.TryGetValue(species.BarkFamily, out Color32[] bp) ? bp : null, c.AtlasPixels);
+			}
+			MeshBuilder lod0 = tree.Lod0, lod1 = tree.Lod1;
+			bool leaves = tree.Leaves;
+			BillboardImpostor.Result billboard = tree.Billboard;
 
 			string billboardPath = ProceduralArtCatalogue.BillboardTexture(species.Name);
 			c.Report.TextureBytes += CompressedBytes(billboard.Width, billboard.Height);
@@ -1863,8 +1909,7 @@ namespace FishMMO.Shared.WorldDesign
 			var mats = new[] { treeMaterials, treeMaterials, new[] { billboardMaterial } };
 			var shadows = new[] { ShadowCastingMode.On, ShadowCastingMode.On, ShadowCastingMode.Off };
 
-			// The trunk as drawn at the first reduced level: its own shape, at the fewest triangles that still are it.
-			MeshBuilder trunkShape = TrunkCollision(lod1, in species);
+			MeshBuilder trunkShape = tree.Trunk;
 			Mesh trunk = trunkShape.TriangleCount > 0 ? WriteMesh(c, trunkShape, prefix + "_Collision", false) : null;
 			WritePrefab(c, ProceduralArtCatalogue.TreePrefab(species.Name), root =>
 			{

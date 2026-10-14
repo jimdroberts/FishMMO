@@ -67,6 +67,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="keepHidden">Keep the buried faces too (the whole closed shell): for checking the seams.</param>
 		public static List<Piece> Build(CaveSystem system, CaveGround ground, out string report, bool keepHidden = false)
 		{
+			var clock = System.Diagnostics.Stopwatch.StartNew();
 			system.Prepare();
 			float h = system.MeshCell;
 			int n = ChunkCells;
@@ -112,6 +113,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				chunk.Samples = v;
 			});
+			double sampled = clock.Elapsed.TotalSeconds;
 
 			// One vertex per sheet per cell, each chunk its own cells.
 			Parallel.ForEach(list, chunk => Vertices(chunk, n, h));
@@ -149,6 +151,7 @@ namespace FishMMO.Shared.WorldDesign
 				positions[idx] = p;
 				normals[idx] = Gradient(p).normalized;
 			});
+			double projected = clock.Elapsed.TotalSeconds;
 
 			// Quads round every crossed grid edge, wound by the grid.
 			int V(int gi, int gj, int gk, int edge)
@@ -211,6 +214,7 @@ namespace FishMMO.Shared.WorldDesign
 				chunk.Samples = null;
 			}
 			KeepLargestPiece(total, tris);
+			double wound = clock.Elapsed.TotalSeconds;
 
 			// Which triangles to keep: everything near a mouth; elsewhere only the void's own face.
 			float near2 = 0f;
@@ -218,6 +222,19 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				near2 = Mathf.Max(near2, m.Zone + 2f * m.Radius + PieceMetres);
 			}
+			// The test reads the field once per triangle, so it runs on the workers into one flag per triangle; the pieces
+			// are then filled in triangle order on this thread, exactly as before (each flag depends on its triangle alone).
+			var buried = new bool[tris.Count / 3];
+			if (!keepHidden)
+			{
+				Parallel.For(0, buried.Length, q =>
+				{
+					int t = 3 * q;
+					Vector3 centre = (positions[tris[t]] + positions[tris[t + 1]] + positions[tris[t + 2]]) / 3f;
+					buried[q] = !NearMouth(system, centre) && Buried(system, ground, centre, h);
+				});
+			}
+			double tested = clock.Elapsed.TotalSeconds;
 			var pieces = new Dictionary<Vector3Int, (MeshBuilder mesh, Dictionary<long, int> map)>();
 			float inv = 1f / RockMeshes.TextureMetres;
 			var white = new Color32(255, 255, 255, 0);
@@ -227,7 +244,7 @@ namespace FishMMO.Shared.WorldDesign
 				int a = tris[t], b = tris[t + 1], c = tris[t + 2];
 				Vector3 pa = positions[a], pb = positions[b], pc = positions[c];
 				Vector3 centre = (pa + pb + pc) / 3f;
-				if (!keepHidden && !NearMouth(system, centre) && Buried(system, ground, centre, h))
+				if (buried[t / 3])
 				{
 					dropped++;
 					continue;
@@ -272,7 +289,10 @@ namespace FishMMO.Shared.WorldDesign
 				triangles += kv.Value.mesh.TriangleCount;
 			}
 			result.Sort((x, y) => x.Key.z != y.Key.z ? x.Key.z.CompareTo(y.Key.z) : x.Key.y != y.Key.y ? x.Key.y.CompareTo(y.Key.y) : x.Key.x.CompareTo(y.Key.x));
-			report = $"{list.Count} chunks sampled, {result.Count} pieces, {triangles} triangles ({dropped} buried dropped)";
+			double built = clock.Elapsed.TotalSeconds;
+			// The time each phase took, so the mesher's cost in a cut can be read from its notes.
+			report = $"{list.Count} chunks sampled, {result.Count} pieces, {triangles} triangles ({dropped} buried dropped); meshed in {built:0.00} s "
+				+ $"(field {sampled:0.00}, net and surface {projected - sampled:0.00}, faces {wound - projected:0.00}, buried test {tested - wound:0.00}, pieces {built - tested:0.00})";
 			if (result.Count == 0)
 			{
 				throw new InvalidOperationException("the field has no surface");

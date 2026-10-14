@@ -221,6 +221,9 @@ namespace FishMMO.Client
 		/// <summary>Whether the volumetric clouds are drawn (<see cref="ClientCloudSettings"/>).</summary>
 		public const string CloudsEnabledKey = "Clouds.Enabled";
 
+		/// <summary>What the player's character carries to see by, as its number (<see cref="ClientCarriedLightSettings"/>).</summary>
+		public const string CarriedLightModeKey = "CarriedLight.Mode";
+
 		/// <summary>Configuration key for world label opacity, 0 to 1.</summary>
 		public const string WorldLabelOpacityKey = "WorldLabels.Opacity";
 

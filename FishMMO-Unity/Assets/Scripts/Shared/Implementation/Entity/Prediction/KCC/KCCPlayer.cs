@@ -54,6 +54,13 @@ namespace FishMMO.Shared
 		private long pendingPlatformID;
 
 		/// <summary>
+		/// The ship under way this character stood on at the latest tick it simulated, or default aboard none: what the
+		/// owner's camera turns with (<see cref="FloatingBoats.TryGetDrawnYaw"/>). Its facing and place on the deck are carried
+		/// in the replicate; this is presentation only and no simulation reads it.
+		/// </summary>
+		public FloatingBoats.ShipRef ShipAboard { get; private set; }
+
+		/// <summary>
 		/// Stores the last received input data for observer future-state prediction.
 		/// </summary>
 		private KCCInputReplicateData lastCreatedData;
@@ -417,6 +424,8 @@ namespace FishMMO.Shared
 			float deltaTime = (float)base.TimeManager.TickDelta;
 
 			Vector3 platformVelocity = Vector3.zero;
+			float platformTurn = 0f;
+			FloatingBoats.ShipRef ship = default;
 			if (currentPlatform != null)
 			{
 				/* Use the platform's per-tick velocity ring rather than differencing its transform:
@@ -443,10 +452,15 @@ namespace FishMMO.Shared
 				 * any replicate of the tick, live and in each replayed tick), so the carry is worked out from the same tick
 				 * this input reads the water at: the deck point under the rider's feet, moved rigidly from the last tick's
 				 * pose to this one's. No ring and no registry lookup, because there is nothing to look up: the same tick
-				 * gives the same answer on the server, on the owner and in every replay of it. Zero aboard nothing. */
+				 * gives the same answer on the server, on the owner and in every replay of it. Zero aboard nothing.
+				 *
+				 * The turn is the yaw the hull turned through over the same tick: the motor turns the rider's facing by it,
+				 * so a rider keeps its bearing on the deck as well as its place through a bend and the swing at anchor. */
 				FloatingBoats.TryGetCarry(gameObject.scene, CharacterController.WaterTick, base.TimeManager.TickDelta,
-					transform.position, deltaTime, out platformVelocity);
+					transform.position, deltaTime, out platformVelocity, out platformTurn, out ship);
 			}
+			// The latest simulated tick's ship, for the owner's camera, which turns with it (a replay runs up to the latest tick).
+			ShipAboard = ship;
 			/* The motor conveys this velocity only when the platform is moving UP into the
 			 * character (dot > 0.5) or the character is stably grounded on it -- a platform
 			 * travelling horizontally has a dot near zero, so a rider who is not stably grounded is
@@ -462,7 +476,7 @@ namespace FishMMO.Shared
 			 * formatting, the Unity object-name marshal and a Task allocation were all paid per
 			 * replayed tick. The pending-platform diagnostic in OnReconcile covers the failure this
 			 * was added to chase, once per reconcile burst instead. */
-			Motor.SetPlatformVelocity(platformVelocity);
+			Motor.SetPlatformVelocity(platformVelocity, platformTurn);
 
 			// Stamina consumed by sprint/jump inside the motor update (KCCController.UpdateVelocity)
 			// must still re-simulate during reconcile replay to keep the predicted stamina value
@@ -578,6 +592,7 @@ namespace FishMMO.Shared
 			hasLastCreatedData = false;
 			currentPlatform = null;
 			pendingPlatformID = 0;
+			ShipAboard = default;
 		}
 
 		/// <summary>

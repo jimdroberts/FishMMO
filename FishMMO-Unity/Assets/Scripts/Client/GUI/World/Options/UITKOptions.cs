@@ -340,6 +340,7 @@ namespace FishMMO.Client
 			{ "Lore", "Lore" },
 			{ "ArenaScoreboard", "Arena Scoreboard" },
 			{ "PinTarget", "Pin Target" },
+			{ "CarriedLight", "Torch / Lantern" },
 			{ "Pet", "Pet" },
 			{ "Options", "Options" },
 			{ "Menu", "Menu" },

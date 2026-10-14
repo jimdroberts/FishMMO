@@ -242,6 +242,145 @@ namespace FishMMO.Water
 		/// <summary>How near the foot's level a point's surface must be to count as the pool, metres.</summary>
 		private const float PoolLevelMetres = 0.5f;
 
+		/// <summary>The value <see cref="SceneHydrology.River.Reach"/> holds at a pool (the generator's RiverReach.Pool).</summary>
+		public const byte PoolReach = 2;
+
+		/// <summary>
+		/// How fast the current a fall drives through its pool widens, metres of width per metre it runs: a plane turbulent
+		/// jet's, each edge spreading at about a tenth of the distance (a half-angle near 6°).
+		/// </summary>
+		public const float PoolJetSpreadPerMetre = 0.2f;
+
+		/// <summary>
+		/// The first point past a fall's pool: the first after its foot that the river no longer marks as pool, where the
+		/// pool's tail has shoaled back to the river's own channel (the last point if the pool runs to the river's end).
+		/// </summary>
+		public static int PoolTail(SceneHydrology.River river, Fall fall)
+		{
+			int n = river.Points != null ? river.Points.Length : 0;
+			int k = fall.Foot + 1;
+			while (k < n - 1 && river.Reach != null && k < river.Reach.Length && river.Reach[k] == PoolReach)
+			{
+				k++;
+			}
+			return Mathf.Clamp(k, 0, Mathf.Max(0, n - 1));
+		}
+
+		/// <summary>
+		/// The surface current down the middle of a fall's plunge pool, m/s, <paramref name="metresFromLanding"/> below where
+		/// the curtain lands, and the half-width of the core that carries it (<paramref name="coreHalfWidth"/>, metres).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The river's mean speed over a plunge basin is its discharge over the whole basin's section: over Flo Monolith's
+		/// tallest falls a 30 m wide, 6.5 m deep scour, a centimetre a second. Drawn at that, the pool and its tail were
+		/// dead still water from the landing to the pool's lip, its ripples standing where they lay (2026-10-13).
+		/// </para>
+		/// <para>
+		/// That is not how water crosses a plunge pool. The curtain drives down into it, turns on the floor and wells back
+		/// up in the boil, and from there the river's whole discharge runs on near the surface toward the outlet in a
+		/// current a little deeper than the river flowing out (<paramref name="outletDepth"/>), widening from the curtain's
+		/// width (<paramref name="lipWidth"/>) as a jet does (<see cref="PoolJetSpreadPerMetre"/>), never wider than the
+		/// pool (<paramref name="poolWidth"/>); the depth and the sides beneath and beside it turn over slowly in eddies.
+		/// Continuity in that core gives its speed: the discharge over its section. Where the pool shoals to its tail the
+		/// core fills the channel and its speed meets the river's own.
+		/// </para>
+		/// </remarks>
+		public static float PoolCoreSpeed(float discharge, float lipWidth, float outletDepth, float metresFromLanding, float poolWidth, out float coreHalfWidth)
+		{
+			float width = Mathf.Max(0.5f, lipWidth) + PoolJetSpreadPerMetre * Mathf.Max(0f, metresFromLanding);
+			width = Mathf.Min(width, Mathf.Max(0.5f, poolWidth));
+			coreHalfWidth = 0.5f * width;
+			return Mathf.Max(0f, discharge) / (width * Mathf.Max(0.2f, outletDepth));
+		}
+
+		/// <summary>
+		/// The pool's surface current <paramref name="offset"/> metres across from its middle, m/s: the core's speed across
+		/// its width, easing out beyond it to the slack water of the eddies at the basin's sides, and never slower than the
+		/// river's mean speed there (<paramref name="meanSpeed"/>).
+		/// </summary>
+		public static float PoolCurrentAcross(float offset, float coreHalfWidth, float coreSpeed, float meanSpeed)
+		{
+			float outside = Mathf.Max(0f, Mathf.Abs(offset) - coreHalfWidth) / Mathf.Max(0.25f, 0.5f * coreHalfWidth);
+			return Mathf.Max(meanSpeed, meanSpeed + (coreSpeed - meanSpeed) * Mathf.Exp(-outside * outside));
+		}
+
+		/// <summary>A fall's pool on one river's ribbon: its rows by point, and what drives its surface current.</summary>
+		private struct PoolSpan
+		{
+			/// <summary>The first point of the pool drawn (the row lowered under the curtain, or the plunge) and the first past it.</summary>
+			public int First, Tail;
+			/// <summary>The point where the curtain lands, from which the core is measured.</summary>
+			public int Plunge;
+			public float LipWidth, OutletDepth, Discharge;
+		}
+
+		/// <summary>The pools of the falls on <paramref name="river"/>, for its ribbon (<see cref="PoolAt"/>).</summary>
+		private static List<PoolSpan> PoolsOf(List<Fall> falls, SceneHydrology.River river)
+		{
+			var pools = new List<PoolSpan>();
+			if (falls == null)
+			{
+				return pools;
+			}
+			int n = river.Points.Length;
+			foreach (Fall fall in falls)
+			{
+				if (fall.River != river.Id)
+				{
+					continue;
+				}
+				int tail = PoolTail(river, fall);
+				float outletDepth = river.Depth != null && tail < river.Depth.Length ? river.Depth[tail] : 0.6f;
+				float discharge = river.Discharge != null && fall.Plunge < river.Discharge.Length ? river.Discharge[fall.Plunge] : 0f;
+				if (discharge <= 0f)
+				{
+					// No discharge kept: the river's own flow out of the pool (mean speed over its section at the tail).
+					float outletWidth = river.Width != null && tail < river.Width.Length ? river.Width[tail] : fall.Width;
+					float outletSpeed = river.Speed != null && tail < river.Speed.Length ? river.Speed[tail] : 0.5f;
+					discharge = outletSpeed * outletWidth * outletDepth;
+				}
+				pools.Add(new PoolSpan
+				{
+					First = Mathf.Max(fall.Lip + 1, fall.Plunge - 1),
+					Tail = Mathf.Min(tail, n),
+					Plunge = fall.Plunge,
+					LipWidth = fall.Width,
+					OutletDepth = outletDepth,
+					Discharge = discharge,
+				});
+			}
+			return pools;
+		}
+
+		/// <summary>The pool a river point lies in, if any (<see cref="PoolsOf"/>).</summary>
+		private static bool PoolAt(List<PoolSpan> pools, int point, out PoolSpan pool)
+		{
+			foreach (PoolSpan span in pools)
+			{
+				if (point >= span.First && point < span.Tail)
+				{
+					pool = span;
+					return true;
+				}
+			}
+			pool = default;
+			return false;
+		}
+
+		/// <summary>Whether <paramref name="point"/> is a fall's lip: the last row of the river before its curtain.</summary>
+		private static bool IsLipRow(List<Fall> falls, int river, int point)
+		{
+			foreach (Fall fall in falls)
+			{
+				if (fall.River == river && point == fall.Lip)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/// <summary>True for a point whose ribbon the sheet stands in for: between the lip and the row before the plunge.</summary>
 		private static bool InsideFall(List<Fall> falls, int river, int point)
 		{
@@ -416,7 +555,7 @@ namespace FishMMO.Water
 						ImpactThickness = part.ImpactThickness,
 						ImpactRadius = impactRadius,
 					});
-					AddRiverFall(river, part, power);
+					AddRiverFall(river, fall, part, power);
 				}
 			}
 			for (int k = shaderCount; k < MaxShaderFalls; k++)
@@ -443,11 +582,21 @@ namespace FishMMO.Water
 		/// Adds a part's landing to its river's foam trail: where along the river it lands (the ribbon's own metres along,
 		/// uv0.x), how far the foam it beats up rides downstream (five to twenty river widths, by its power), and how much.
 		/// </summary>
-		private void AddRiverFall(SceneHydrology.River river, Part part, float power)
+		/// <remarks>
+		/// The widths are the river's own, where it leaves the pool (<see cref="PoolTail"/>), not the plunge basin's at the
+		/// landing: a basin is scoured up to 30 m across over a 3 m river, and twenty of its widths sent a band of foam
+		/// 600 m down a mountain stream.
+		/// </remarks>
+		private void AddRiverFall(SceneHydrology.River river, Fall fall, Part part, float power)
 		{
 			if (!RiverFrame(river, part.Landing, out float along, out float across, out float width))
 			{
 				return;
+			}
+			int tail = PoolTail(river, fall);
+			if (river.Width != null && tail < river.Width.Length)
+			{
+				width = river.Width[tail];
 			}
 			if (!riverFalls.TryGetValue(river.Id, out Vector4[] list))
 			{

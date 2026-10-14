@@ -12,9 +12,9 @@
 #include "FishRockContact.hlsl"
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-// ── FishMMO edit: the terrain's own lighting, for the ground a rock's base and crevices render (FishGroundContactLit.hlsl). ──
+// ── FishMMO edit: the terrain's own lighting, for the ground a rock's base and crevices render (FishGroundContactLit.hlsl,
+// included below, after the moss it grows round a waterfall). ──
 #include "FishGroundLighting.hlsl"
-#include "FishGroundContactLit.hlsl"
 // ── FishMMO edit: what years do to a building (the structure kit's materials, _FishStructure). ──
 #include "FishStructureWeathering.hlsl"
 // ── FishMMO edit: the fine ground map, for how far underground a surface is (a carved cave's walls). Read with the
@@ -25,6 +25,7 @@
 // ── FishMMO edit: moss on the surfaces whose material asks for it (_FishMoss; FishMoss.hlsl). Read with the base map's
 // own sampler, bound in every program of this pass: no sampler state of its own. ──
 #include "FishMoss.hlsl"
+#include "FishGroundContactLit.hlsl"
 // ── FishMMO edit: the rooms round the camera, darker than the day outside them (FishIndoor). ──
 #include "FishIndoor.hlsl"
 // How much of the sky's ambient a room's inside loses (SkySystem dims the camera's own ambient by a share of it).
@@ -421,7 +422,7 @@ void LitPassFragment(
     // ── FishMMO edit: the ground's lit colour over the band and in the crevices (above). ──
     if (fishHasGround && fishGroundWeight > 0.0h)
     {
-        color.rgb = lerp(color.rgb, FishGroundLit(inputData, fishGround, fishShade), fishGroundWeight);
+        color.rgb = lerp(color.rgb, FishGroundLit(inputData, fishGround, fishShade, fishWorldDx, fishWorldDy), fishGroundWeight);
     }
 #endif
     color.rgb = lerp(MixFog(color.rgb, inputData.fogCoord), color.rgb, fishUnderground);

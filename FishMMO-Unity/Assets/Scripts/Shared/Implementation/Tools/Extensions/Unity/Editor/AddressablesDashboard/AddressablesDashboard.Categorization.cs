@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using UnityEngine.AI;
 
 namespace FishMMO.Shared
 {
@@ -129,6 +130,18 @@ namespace FishMMO.Shared
 						Reason = "Editor-only prefab (outside Client/Server/Shared)",
 					};
 				}
+			}
+
+			// ── NavMeshes: server-only, wherever they live ──
+			// Builds strip the scenes' surfaces and the scene server adds each NavMesh through its catalogue, so a
+			// NavMesh saved beside its scene must not follow the scene rule below into the group clients download.
+			if (IsNavMeshAsset(normalized))
+			{
+				return new AssetCategory
+				{
+					GroupName = SmartGroups.ServerStaticPermanent,
+					Reason = "NavMesh — server-only (loaded through the scene server's NavMesh catalogue)",
+				};
 			}
 
 			// ── Templates: always shared + permanent ──
@@ -315,6 +328,21 @@ namespace FishMMO.Shared
 			}
 			settings.AddLabel(correctLabel);
 			entry.SetLabel(correctLabel, true);
+		}
+
+		/// <summary>
+		/// True when the asset is a NavMesh: a <see cref="NavMeshData"/> asset of its own (a hand-baked surface), or a
+		/// generator's <see cref="BakedSceneData"/> container holding one (SceneNavMeshBaker). Only those containers are
+		/// loaded to look inside, never every asset.
+		/// </summary>
+		private static bool IsNavMeshAsset(string normalizedPath)
+		{
+			Type main = AssetDatabase.GetMainAssetTypeAtPath(normalizedPath);
+			if (main == typeof(NavMeshData))
+			{
+				return true;
+			}
+			return main == typeof(BakedSceneData) && AssetDatabase.LoadAssetAtPath<NavMeshData>(normalizedPath) != null;
 		}
 
 		/// <summary>

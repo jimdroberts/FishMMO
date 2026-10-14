@@ -105,6 +105,62 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(!found || wear < middleWear * 0.5f, Is.True, "worn away into the ground at its end");
 		}
 
+		/// <summary>A 6 × 6 m building's plan between its end midpoints, flagged as AddYards writes it.</summary>
+		private static ScenePath Plan(float half, float wear, ScenePathPointFlags shape)
+		{
+			ScenePath plan = Line(new Vector3(-3f, 0f, 0f), new Vector3(3f, 0f, 0f), half, ScenePathClass.Yard, 2);
+			plan.FromId = -1;
+			plan.ToId = -1;
+			plan.Wear[0] = plan.Wear[1] = wear;
+			plan.Flags[0] = plan.Flags[1] = (byte)(ScenePathPointFlags.InSite | shape);
+			return plan;
+		}
+
+		[Test]
+		public void ASquaredYardReachesItsCornersAndNoFurther()
+		{
+			ScenePathField field = ScenePathField.Build(new[] { Plan(3f, 1f, ScenePathPointFlags.Squared) });
+			// Half a metre in from the end by a corner (the round-ended strip, a 3 m circle here, left it 0.2 m outside).
+			Assert.That(field.Sample(2.5f, 2f, out float edge, out _, out _, out _), Is.True);
+			Assert.That(edge, Is.EqualTo(-0.5f).Within(0.08f), "inside the corner");
+			// Off the end's middle and off the corner: distances to the rectangle, not to its points.
+			Assert.That(field.Sample(4f, 0f, out edge, out _, out _, out _), Is.True);
+			Assert.That(edge, Is.EqualTo(1f).Within(0.08f), "a metre past the end");
+			Assert.That(field.Sample(4f, 4f, out edge, out _, out _, out _), Is.True);
+			Assert.That(edge, Is.EqualTo(Mathf.Sqrt(2f)).Within(0.08f), "diagonally off the corner");
+		}
+
+		[Test]
+		public void NoWayCrossingAFloorBringsItsWearIndoors()
+		{
+			// A ruin's apron (worn 0.3) round a floor, and a door path whose round end reaches 0.55 m in through the wall.
+			ScenePath apron = Plan(3.4f, 0.3f, ScenePathPointFlags.Squared);
+			apron.Points[0].x = -3.4f;
+			apron.Points[1].x = 3.4f;
+			ScenePath floor = Plan(3f, 1f, ScenePathPointFlags.Squared | ScenePathPointFlags.Floor);
+			ScenePath door = Line(new Vector3(0f, 0f, -3f), new Vector3(0f, 0f, -6.5f), 0.55f, ScenePathClass.Yard, 2);
+			door.FromId = -1;
+			door.ToId = -1;
+			door.Wear[0] = door.Wear[1] = 0.27f;
+			floor.Id = 2;
+			door.Id = 3;
+			// Written in each order: the floor holds either way.
+			foreach (ScenePath[] order in new[] { new[] { apron, floor, door }, new[] { door, apron, floor } })
+			{
+				ScenePathField field = ScenePathField.Build(order);
+				// Just inside the front wall, where the apron and the door path's end both reach in through it.
+				Assert.That(field.Sample(0f, -2.75f, out float edge, out _, out float wear, out _), Is.True);
+				Assert.That(wear, Is.EqualTo(1f).Within(0.02f), "the floor's wear, not the door path's");
+				Assert.That(edge, Is.LessThan(-0.5f), "and the deepest edge of what covers it");
+				// Out in the apron, by the nearer edge as ever: the apron's own wear.
+				Assert.That(field.Sample(2.5f, 3.25f, out _, out _, out wear, out _), Is.True);
+				Assert.That(wear, Is.EqualTo(0.3f).Within(0.02f), "the apron outside the wall");
+				// Out on the door path, its own.
+				Assert.That(field.Sample(0f, -5f, out _, out _, out wear, out _), Is.True);
+				Assert.That(wear, Is.EqualTo(0.27f).Within(0.02f), "the door path outside");
+			}
+		}
+
 		[Test]
 		public void ABridgesSpanIsNotDrawnOnTheBedUnderIt()
 		{
@@ -382,6 +438,73 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		[Test]
+		public void ARoadBetweenSettlementsWadesOnlyABroadShallowRiver()
+		{
+			// Deeper than its class fords: bridged by anyone.
+			Assert.That(PathNetworkPlanner.Wades(ScenePathClass.CartTrack, false, 0.6f, 5f), Is.False);
+			Assert.That(PathNetworkPlanner.Wades(ScenePathClass.Highway, true, 0.05f, 30f), Is.False);
+			// A stream a cart could wade: a spur wades it, the settlements' road bridges it unless it is broad.
+			Assert.That(PathNetworkPlanner.Wades(ScenePathClass.CartTrack, false, 0.4f, 5f), Is.True);
+			Assert.That(PathNetworkPlanner.Wades(ScenePathClass.CartTrack, true, 0.4f, 5f), Is.False);
+			Assert.That(PathNetworkPlanner.Wades(ScenePathClass.CartTrack, true, 0.4f, PathNetworkPlanner.SettlementFordWidthMetres + 1f), Is.True);
+			Assert.That(PathNetworkPlanner.Wades(ScenePathClass.Trail, false, 0.6f, 5f), Is.True);
+		}
+
+		/// <summary>
+		/// A stream 5 m wide and 0.3 m deep, which every class could wade: the road between the towns bridges it, and the
+		/// trail to a ruin across a second such stream wades it. By depth alone the roads of a hill country waded every
+		/// stream they met (Flo Monolith, 2026-10-13).
+		/// </summary>
+		[Test]
+		public void TheTownsRoadBridgesAStreamTheRuinsTrailWades()
+		{
+			List<PointOfInterestRecord> records = ThreeTowns();
+			records.Add(Site(9, POIType.Ruins, -300f, 700f, 30f));
+			Func<float, float, PathCellWater> river = (x, z) => Mathf.Abs(x - 500f) < 2.5f || Mathf.Abs(z - 350f) < 2.5f ? PathCellWater.River : PathCellWater.Dry;
+			PathPlan plan = PathNetworkPlanner.Plan(Input(records, river, 0.3f));
+			string notes = string.Join("\n", plan.Notes);
+			ScenePath road = plan.Paths.Find(p => p.Class == ScenePathClass.Road && (p.FromId == 3 || p.ToId == 3));
+			Assert.That(road, Is.Not.Null, notes);
+			Assert.That(plan.Bridges.Exists(b => b.PathId == road.Id && Mathf.Abs(b.Centre.x - 500f) < 6f), Is.True, "the road is bridged over the stream\n" + notes);
+			Assert.That(Flagged(road, ScenePathPointFlags.Ford), Is.False, "the road wades nothing");
+			ScenePath trail = plan.Paths.Find(p => p.ToId == 9);
+			Assert.That(trail, Is.Not.Null, notes);
+			Assert.That(Flagged(trail, ScenePathPointFlags.Ford), Is.True, "the trail wades its stream");
+			Assert.That(plan.Bridges.Exists(b => b.PathId == trail.Id), Is.False, "no bridge on the trail");
+		}
+
+		/// <summary>
+		/// A stream 6 m wide, a hand deep but for a channel 0.6 m wide and 0.9 m deep down its middle: the trail across it is
+		/// bridged, whether or not one of its points (2 m apart) falls in the channel. Its depth was read at those points only.
+		/// </summary>
+		[Test]
+		public void AStreamsDeepChannelIsFoundBetweenTheWaysPoints()
+		{
+			List<PointOfInterestRecord> records = ThreeTowns();
+			records.Add(Site(9, POIType.Ruins, -300f, 700f, 30f));
+			Func<float, float, PathCellWater> river = (x, z) => Mathf.Abs(z - 350f) < 3f ? PathCellWater.River : PathCellWater.Dry;
+			PathPlanInput input = Input(records, river);
+			input.WaterDepth = (x, z) => Mathf.Abs(z - 350f) < 0.3f ? 0.9f : 0.15f;
+			PathPlan plan = PathNetworkPlanner.Plan(input);
+			ScenePath trail = plan.Paths.Find(p => p.ToId == 9);
+			Assert.That(trail, Is.Not.Null, string.Join("\n", plan.Notes));
+			Assert.That(plan.Bridges.Exists(b => b.PathId == trail.Id), Is.True, "the trail is bridged over the channel\n" + string.Join("\n", plan.Notes));
+			Assert.That(Flagged(trail, ScenePathPointFlags.Ford), Is.False, "nothing waded");
+		}
+
+		private static bool Flagged(ScenePath path, ScenePathPointFlags flag)
+		{
+			for (int i = 0; i < path.Count; i++)
+			{
+				if ((path.FlagsAt(i) & flag) != 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		[Test]
 		public void AWayRunsStraightOntoItsBridge()
 		{
 			List<PointOfInterestRecord> records = ThreeTowns();
@@ -463,6 +586,31 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(notes, Is.Empty, string.Join("\n", notes));
 		}
 
+		/// <summary>
+		/// A waterfall's site stands in its river, midway between lip and pool, and both towns are on one bank: the spur to it
+		/// ends on the bank it comes from, and no bridge is laid. Its inner point was in the water and the run of river at the
+		/// way's end was bridged: a deck over the fall that no way crossed.
+		/// </summary>
+		[Test]
+		public void ASpurToAWaterfallInItsRiverLaysNoBridge()
+		{
+			var records = new List<PointOfInterestRecord>
+			{
+				Site(1, POIType.Town, 0f, -400f, 40f),
+				Site(2, POIType.Town, 300f, -400f, 40f),
+				Site(3, POIType.Waterfall, 0f, 24f, 8f),
+			};
+			Func<float, float, PathCellWater> river = (x, z) => z > 20f && z < 28f ? PathCellWater.River : PathCellWater.Dry;
+			PathPlan plan = PathNetworkPlanner.Plan(Input(records, river, 3f));
+			ScenePath spur = plan.Paths.Find(p => p.ToId == 3 || p.FromId == 3);
+			Assert.That(spur, Is.Not.Null, string.Join("\n", plan.Notes));
+			Assert.That(plan.Bridges, Is.Empty, string.Join("\n", plan.Notes));
+			for (int i = 0; i < spur.Count; i++)
+			{
+				Assert.That(river(spur.Points[i].x, spur.Points[i].z), Is.EqualTo(PathCellWater.Dry), $"spur point {i} is in the river");
+			}
+		}
+
 		/// <summary>Two towns either side of a gorge 20 m wide that runs the map's length: one bridge, rim to rim, at the rims' height.</summary>
 		[Test]
 		public void TownsAcrossAGorgeAreJoinedByOneBridgeOverIt()
@@ -493,6 +641,58 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			Assert.That(notes, Is.Empty, string.Join("\n", notes));
+		}
+
+		/// <summary>
+		/// Two towns either side of a gorge whose east rim stands 4 m over its west, the way between them crossing it aslant:
+		/// the bridge is a kept stone arch on a level deck, its approaches built up on the low rim and cut into the high one
+		/// past the deck's ends (<see cref="PropsFeature.TryArchDeck"/>), and the way runs straight along the bridge's axis
+		/// over them as well as the deck, onto the ramps' crests rather than across their banked sides.
+		/// </summary>
+		[Test]
+		public void AWayOntoARakedGorgesArchRunsStraightOverItsApproaches()
+		{
+			var records = new List<PointOfInterestRecord>
+			{
+				Site(1, POIType.Town, -300f, 300f, 40f),
+				Site(2, POIType.Town, 300f, -300f, 40f),
+			};
+			PathPlanInput input = Input(records);
+			input.Ground = (x, z) =>
+			{
+				float d = Mathf.Abs(x), rim = x < 0f ? 50f : 54f;
+				return d < 8f ? 20f : d < 10f ? Mathf.Lerp(20f, rim, (d - 8f) / 2f) : rim;
+			};
+			PathPlan plan = PathNetworkPlanner.Plan(input);
+			Assert.That(plan.Gorges, Is.EqualTo(1), string.Join("\n", plan.Notes));
+			PathBridgeSite bridge = plan.Bridges.Find(b => b.Gorge);
+			Assert.That(bridge.Approach, Is.GreaterThan(bridge.Span * 0.5f + 3f), "the arch's approaches reach on past its deck");
+			Assert.That(bridge.Approach, Is.LessThan(bridge.Span * 0.5f + PropsFeature.MaxArchApproachMetres + 6f));
+
+			float yaw = bridge.Yaw * Mathf.Deg2Rad;
+			var axis = new Vector2(Mathf.Sin(yaw), Mathf.Cos(yaw));
+			var centre = new Vector2(bridge.Centre.x, bridge.Centre.z);
+			int onAxis = 0;
+			foreach (ScenePath path in plan.Paths)
+			{
+				for (int i = 0; i < path.Count; i++)
+				{
+					var offset = new Vector2(path.Points[i].x, path.Points[i].z) - centre;
+					float along = Vector2.Dot(offset, axis);
+					if ((path.FlagsAt(i) & ScenePathPointFlags.InSite) != 0 || Mathf.Abs(along) > bridge.Approach)
+					{
+						continue;
+					}
+					float side = Mathf.Abs(offset.x * axis.y - offset.y * axis.x);
+					if (side > 30f)
+					{
+						continue;
+					}
+					Assert.That(side, Is.LessThan(0.3f), $"way {path.Id} point {i}, {along:0.0} m along the bridge, is {side:0.0} m off its axis");
+					onAxis++;
+				}
+			}
+			Assert.That(onAxis, Is.GreaterThan(4), "a way crosses the bridge");
 		}
 
 		[Test]

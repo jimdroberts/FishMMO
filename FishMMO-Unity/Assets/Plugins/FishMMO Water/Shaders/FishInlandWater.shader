@@ -52,13 +52,15 @@ Shader "FishMMO/Water/Inland Water"
         Cull Off
 
         // Each pixel of inland water once: the first mesh drawn there (the lake, then the larger river)
-        // claims it, and a second covering it is not composited over the first.
+        // claims it, and a second covering it is not composited over the first. Nor inside a floating hull
+        // (FishHullLid.shader sets bit 128 across its open top). Both bits read: 64 > (stencil & 192) only where
+        // neither is set, and the pass writes 64 alone.
         Stencil
         {
             Ref 64
-            ReadMask 64
+            ReadMask 192
             WriteMask 64
-            Comp NotEqual
+            Comp Greater
             Pass Replace
         }
 
@@ -78,6 +80,34 @@ Shader "FishMMO/Water/Inland Water"
             // The sea's global quality keywords, set against what the running URP asset provides.
             #pragma multi_compile_fragment _ _WATER_DEPTH
             #pragma multi_compile_fragment _ _WATER_REFRACTION
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "FishInlandWater.hlsl"
+            ENDHLSL
+        }
+
+        // The water's current and the foam it makes, drawn from above into the simulated foam's window
+        // (WaterFoamField draws it with a command buffer; no camera draws a pass of this light mode).
+        Pass
+        {
+            Name "FoamSource"
+            Tags { "LightMode" = "FishFoamSource" }
+            Blend Off
+            ZWrite Off
+            ZTest Always
+            Cull Off
+            Stencil
+            {
+                Ref 0
+                Comp Always
+                Pass Keep
+            }
+
+            HLSLPROGRAM
+            #pragma vertex FoamSourceVertex
+            #pragma fragment FoamSourceFragment
+            #pragma target 3.5
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"

@@ -472,6 +472,8 @@ namespace FishMMO.Shared.WorldDesign
 					return;
 				}
 				var candidates = new List<Site>();
+				// Never on a waterfall's reach, lip to pool (the way's planner will not cross there either).
+				FallReaches falls = FallReaches.Of(Input.Water.Rivers, MinFallMetres);
 				for (int a = 0; a < settlements.Count; a++)
 				{
 					for (int b = a + 1; b < settlements.Count; b++)
@@ -494,7 +496,7 @@ namespace FishMMO.Shared.WorldDesign
 							for (int k = 1; k < river.Count - 1; k++)
 							{
 								float width = river.Width[k];
-								if (width > 40f)
+								if (width > 40f || falls.Contains(river.X[k], river.Z[k], 4f))
 								{
 									continue;
 								}

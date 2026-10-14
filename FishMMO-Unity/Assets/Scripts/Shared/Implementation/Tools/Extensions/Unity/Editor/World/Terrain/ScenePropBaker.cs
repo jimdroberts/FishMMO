@@ -483,7 +483,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// recreated asset gets a new GUID and leaves that scene pointing at nothing); created when there is none.
 		/// Returns the object to reference. In memory when the scene has no folder.
 		/// </summary>
-		private static T Store<T>(T fresh, string path) where T : ScriptableObject
+		public static T Store<T>(T fresh, string path) where T : ScriptableObject
 		{
 			if (path == null)
 			{

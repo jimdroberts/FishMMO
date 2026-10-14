@@ -42,6 +42,14 @@ namespace FishMMO.Shared.WorldDesign
 		public float Span;
 		/// <summary>True for a bridge over a gorge, rim to rim, high over its floor (PathRouter's gorge steps).</summary>
 		public bool Gorge;
+		/// <summary>
+		/// How far from the centre a gorge's stone arch and the approaches built up and cut for it reach along its heading,
+		/// metres (<see cref="PropsFeature.GorgeArchReach"/>); 0 for any other bridge. The way runs straight on over them.
+		/// </summary>
+		public float Approach;
+
+		/// <summary>The radius of the Bridge site a bridge of this span becomes, metres: the crossing is looked for twice as far.</summary>
+		public static float RecordRadius(float span) => Mathf.Clamp(span * 0.5f + 6f, 6f, 30f);
 	}
 
 	/// <summary>What the planner made.</summary>
@@ -49,6 +57,8 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		public readonly List<ScenePath> Paths = new List<ScenePath>();
 		public readonly List<PathBridgeSite> Bridges = new List<PathBridgeSite>();
+		/// <summary>The standing Bridge sites (<see cref="PathPlanInput.Records"/>) some way was laid over: the others serve no path.</summary>
+		public readonly HashSet<int> UsedBridges = new HashSet<int>();
 		public readonly List<string> Notes = new List<string>();
 		public int Fords;
 		/// <summary>How many of <see cref="Bridges"/> span gorges rim to rim.</summary>
@@ -224,6 +234,32 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		public static PathPlan Plan(PathPlanInput input) => new Planner(input).Run();
+
+		/// <summary>
+		/// The narrowest water a way between two settlements wades (no deeper than its class fords) rather than bridges,
+		/// metres: a gravel ford across a broad shallow river, longer than the timber bays a village would span it with.
+		/// </summary>
+		public const float SettlementFordWidthMetres = 12f;
+
+		/// <summary>
+		/// True when a way wades a river crossing (a ford) rather than bridging it: water no deeper than its class fords at
+		/// the crossing's deepest point and, on a way between two settlements (<paramref name="settlementsRoad"/>), only a
+		/// broad shallow river (<see cref="SettlementFordWidthMetres"/>). The settlements a road joins keep a bridge over a
+		/// stream they could span; a spur to a camp, a shrine or a fall wades whatever its class may.
+		/// </summary>
+		/// <remarks>
+		/// By depth alone every road between settlements waded the streams of a hill country (3–8 m wide, about half a
+		/// metre at their deepest, a cart's ford depth), and which of them were bridged fell to where the way's points
+		/// happened to fall across the channel (Flo Monolith, 2026-10-13: 3 of its 12 crossings bridged).
+		/// </remarks>
+		public static bool Wades(ScenePathClass way, bool settlementsRoad, float deepest, float width)
+		{
+			if (deepest > ScenePathStyle.For(way).FordDepth)
+			{
+				return false;
+			}
+			return !settlementsRoad || width >= SettlementFordWidthMetres;
+		}
 
 		/// <summary>
 		/// How far a stretch of a way climbs past a grade (rise per metre), summed over its segments, metres: the ground's
@@ -701,13 +737,33 @@ namespace FishMMO.Shared.WorldDesign
 					if (TryClear(inner, centre + dir * (record.Radius * 0.9f + 4f), dir, out Vector2 outer))
 					{
 						end.Outer = outer;
-						end.Inner.Add(inner);
+						end.Inner.Add(Ashore(inner, outer));
 						return end;
 					}
 				}
 				end.Outer = Clear(centre + bearing * (record.Radius * 0.9f + 4f), bearing);
-				end.Inner.Add(centre + bearing * (record.Radius * 0.4f));
+				end.Inner.Add(Ashore(centre + bearing * (record.Radius * 0.4f), end.Outer));
 				return end;
+			}
+
+			/// <summary>
+			/// <paramref name="inner"/>, or where the line from it to <paramref name="outer"/> first leaves the water: a site in
+			/// a river (a waterfall, midway between lip and pool) is looked at from its bank, and a way that ran on into the
+			/// water was bridged there.
+			/// </summary>
+			private Vector2 Ashore(Vector2 inner, Vector2 outer)
+			{
+				float length = Vector2.Distance(inner, outer);
+				for (float s = 0f; s < length; s += 1f)
+				{
+					Vector2 p = Vector2.Lerp(inner, outer, s / Mathf.Max(1e-3f, length));
+					PathCellWater w = input.WaterAt != null ? input.WaterAt(p.x, p.y) : PathCellWater.Dry;
+					if (w != PathCellWater.River && w != PathCellWater.Open)
+					{
+						return p;
+					}
+				}
+				return outer;
 			}
 
 			/// <summary>The first point from <paramref name="at"/> outward a way may start from (not water, not holed, no cliff in it).</summary>
@@ -896,7 +952,9 @@ namespace FishMMO.Shared.WorldDesign
 					path.Flags[i] = (byte)(inSite[i] ? ScenePathPointFlags.InSite : ScenePathPointFlags.None);
 				}
 				Gorges(path, spans);
-				Crossings(path, style);
+				// A way between two settlements (not a spur, nor an old road's ruin) is theirs to keep: it bridges what it may.
+				bool settlementsRoad = !spur && from != null && to != null && from != to && RankOf(from.Kind) > 0 && RankOf(to.Kind) > 0;
+				Crossings(path, style, settlementsRoad);
 				// The check that nothing above made a stretch no one could walk (the plan's notes say where).
 				CountUnwalkable(path, plan.Notes);
 				plan.Paths.Add(path);
@@ -911,8 +969,11 @@ namespace FishMMO.Shared.WorldDesign
 				router.MarkWay(marked, way, style.HalfWidth);
 			}
 
-			/// <summary>Flags the points over rivers as fords or bridges, and asks for the bridges no standing one serves.</summary>
-			private void Crossings(ScenePath path, in ScenePathStyle style)
+			/// <summary>
+			/// Flags the points over rivers as fords or bridges (<see cref="Wades"/>), and asks for the bridges no standing one
+			/// serves.
+			/// </summary>
+			private void Crossings(ScenePath path, in ScenePathStyle style, bool settlementsRoad)
 			{
 				int n = path.Count;
 				int i = 0;
@@ -923,14 +984,18 @@ namespace FishMMO.Shared.WorldDesign
 					if (bridge != 0)
 					{
 						// Over a bridge already standing (or asked for by an earlier way): onto its deck along its axis.
+						if (bridge > 0)
+						{
+							plan.UsedBridges.Add(bridge);
+						}
 						int start = i;
 						while (i < n && router.Bridge[router.IndexAt(path.Points[i].x, path.Points[i].z)] == bridge)
 						{
 							i++;
 						}
-						if (BridgeAxis(bridge, out Vector3 centre, out float yaw, out float planned))
+						if (BridgeAxis(bridge, out Vector3 centre, out float yaw, out float planned, out float approach))
 						{
-							Straighten(path, start, i - 1, centre, yaw, planned > 0f ? planned : RunHalf(path, start, i - 1, centre, yaw));
+							Straighten(path, start, i - 1, centre, yaw, planned > 0f ? planned : RunHalf(path, start, i - 1, centre, yaw), approach);
 						}
 						else
 						{
@@ -961,7 +1026,18 @@ namespace FishMMO.Shared.WorldDesign
 						i++;
 					}
 					int last = i - 1;
-					if (deepest <= style.FordDepth)
+					// A way that ends in the river (a spur to a site on its bank) does not cross it: no deck to nowhere.
+					if (first == 0 || last == n - 1)
+					{
+						continue;
+					}
+					int a = Mathf.Max(0, first - 1), b = Mathf.Min(n - 1, last + 1);
+					Vector3 pa = path.Points[a], pb = path.Points[b];
+					// Square across the river from its deepest point, not along the way's run through it (AcrossRiver).
+					Vector3 deep = path.Points[deepestAt];
+					AcrossRiver(new Vector2(deep.x, deep.z), PointOfInterestPlanner.YawOf(pb.x - pa.x, pb.z - pa.z),
+						out float acrossYaw, out Vector2 middle, out float width);
+					if (Wades(style.Class, settlementsRoad, Mathf.Max(deepest, WadeDepth(path, a, b)), width))
 					{
 						for (int k = Mathf.Max(0, first - 2); k <= Mathf.Min(n - 1, last + 2); k++)
 						{
@@ -974,12 +1050,6 @@ namespace FishMMO.Shared.WorldDesign
 						plan.Fords++;
 						continue;
 					}
-					int a = Mathf.Max(0, first - 1), b = Mathf.Min(n - 1, last + 1);
-					Vector3 pa = path.Points[a], pb = path.Points[b];
-					// Square across the river from its deepest point, not along the way's run through it (AcrossRiver).
-					Vector3 deep = path.Points[deepestAt];
-					AcrossRiver(new Vector2(deep.x, deep.z), PointOfInterestPlanner.YawOf(pb.x - pa.x, pb.z - pa.z),
-						out float acrossYaw, out Vector2 middle, out float width);
 					float yr = acrossYaw * Mathf.Deg2Rad;
 					var axis = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
 					Vector2 bankA = middle - axis * (width * 0.5f + 1f), bankB = middle + axis * (width * 0.5f + 1f);
@@ -991,9 +1061,13 @@ namespace FishMMO.Shared.WorldDesign
 					// A bridge just laid a few metres off (this way's own last crossing of a river it runs beside, or
 					// another way's) serves this one too: two decks side by side, or one across the other, read as neither.
 					int near = NearBridge(middle, bank, width * 0.5f);
-					if (near != 0 && BridgeAxis(near, out Vector3 nearCentre, out float nearYaw, out float nearHalf))
+					if (near != 0 && BridgeAxis(near, out Vector3 nearCentre, out float nearYaw, out float nearHalf, out float nearApproach))
 					{
-						Straighten(path, a, b, nearCentre, nearYaw, nearHalf > 0f ? nearHalf : RunHalf(path, a, b, nearCentre, nearYaw));
+						if (near > 0)
+						{
+							plan.UsedBridges.Add(near);
+						}
+						Straighten(path, a, b, nearCentre, nearYaw, nearHalf > 0f ? nearHalf : RunHalf(path, a, b, nearCentre, nearYaw), nearApproach);
 						while (i < n && router.Bridge[router.IndexAt(path.Points[i].x, path.Points[i].z)] == near)
 						{
 							i++;
@@ -1037,7 +1111,8 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// Asks for a bridge over each gorge the route spans rim to rim: across from one rim cell to the other, at the lower
 			/// rim's height (PropsFeature then lays its deck lip to lip), marked in the router so <see cref="Crossings"/> lays the
-			/// way onto it and every way after may use it.
+			/// way onto it and every way after may use it. Where it will be a stone arch on raked rims, its approaches (built up
+			/// on the low rim, cut into the high) reach past its deck: the way is laid straight on over them too.
 			/// </summary>
 			private void Gorges(ScenePath path, List<(Vector2 a, Vector2 b)> spans)
 			{
@@ -1045,13 +1120,20 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Vector2 middle = (a + b) * 0.5f;
 					float rim = Mathf.Min(input.Ground(a.x, a.y), input.Ground(b.x, b.y));
+					float yaw = PointOfInterestPlanner.YawOf(b.x - a.x, b.y - a.y);
+					float span = Vector2.Distance(a, b);
+					float r = yaw * Mathf.Deg2Rad;
+					var axis = new Vector2(Mathf.Sin(r), Mathf.Cos(r));
+					var centre = new Vector3(middle.x, rim, middle.y);
 					var site = new PathBridgeSite
 					{
 						PathId = path.Id,
-						Centre = new Vector3(middle.x, rim, middle.y),
-						Yaw = PointOfInterestPlanner.YawOf(b.x - a.x, b.y - a.y),
-						Span = Vector2.Distance(a, b),
+						Centre = centre,
+						Yaw = yaw,
+						Span = span,
 						Gorge = true,
+						Approach = PropsFeature.GorgeArchReach(t => input.Ground(middle.x + axis.x * t, middle.y + axis.y * t), rim,
+							PropsFeature.CrossingReach(PathBridgeSite.RecordRadius(span)), PropsFeature.KeptBySettlement(input.Records, centre)),
 					};
 					plan.Bridges.Add(site);
 					router.MarkBridge(nextBridgeId--, site.Centre, site.Yaw, site.Span * 0.5f + 2f);
@@ -1068,13 +1150,16 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// A bridge's centre and heading: a standing record's, or one an earlier way asked for (negative ids), whose
-			/// planned deck half length comes too (0 for a record, whose deck the way's own run measures).
+			/// planned deck half length comes too (0 for a record, whose deck the way's own run measures), and how far a gorge
+			/// bridge's own stretch reaches from its centre: its deck, and a stone arch's approaches
+			/// (<see cref="PathBridgeSite.Approach"/>); 0 for a river's bridge.
 			/// </summary>
-			private bool BridgeAxis(int id, out Vector3 centre, out float yaw, out float half)
+			private bool BridgeAxis(int id, out Vector3 centre, out float yaw, out float half, out float approach)
 			{
 				centre = default;
 				yaw = 0f;
 				half = 0f;
+				approach = 0f;
 				if (id < 0)
 				{
 					int index = -id - 1;
@@ -1083,6 +1168,8 @@ namespace FishMMO.Shared.WorldDesign
 						centre = plan.Bridges[index].Centre;
 						yaw = plan.Bridges[index].Yaw;
 						half = plan.Bridges[index].Span * 0.5f + BridgeAbutmentMetres;
+						// A gorge's deck lands on each rim at its own height: its stretch is judged by the bridge, not the way.
+						approach = plan.Bridges[index].Gorge ? Mathf.Max(half, plan.Bridges[index].Approach) : 0f;
 						return true;
 					}
 					return false;
@@ -1153,6 +1240,36 @@ namespace FishMMO.Shared.WorldDesign
 			private bool IsRiver(Vector2 at) => input.WaterAt != null && input.WaterAt(at.x, at.y) == PathCellWater.River;
 
 			/// <summary>
+			/// The deepest river water on the way's line between two of its points, read every half metre: the way's own
+			/// points are <see cref="PointSpacing"/> apart, and across a stream a few metres wide two of them could both stand
+			/// in its shallows either side of the deep line down its middle, so the crossing was waded where a cart could not.
+			/// </summary>
+			private float WadeDepth(ScenePath path, int from, int to)
+			{
+				const float Step = 0.5f;
+				float deepest = 0f;
+				if (input.WaterAt == null || input.WaterDepth == null)
+				{
+					return deepest;
+				}
+				for (int k = from; k < to; k++)
+				{
+					Vector3 p = path.Points[k], q = path.Points[k + 1];
+					float length = Flat(p, q);
+					for (float s = 0f; s <= length; s += Step)
+					{
+						float t = length > 1e-4f ? s / length : 0f;
+						float x = Mathf.Lerp(p.x, q.x, t), z = Mathf.Lerp(p.z, q.z, t);
+						if (input.WaterAt(x, z) == PathCellWater.River)
+						{
+							deepest = Mathf.Max(deepest, input.WaterDepth(x, z));
+						}
+					}
+				}
+				return deepest;
+			}
+
+			/// <summary>
 			/// A bridge laid by an earlier crossing (an earlier way's, or this way's own) within <see cref="BridgeShareMetres"/>
 			/// past its half span of a crossing here, at much the same height: its id, or 0.
 			/// </summary>
@@ -1195,13 +1312,19 @@ namespace FishMMO.Shared.WorldDesign
 			/// Never steeper than the way was routed: the straight line onto a deck can run up a bank the route went round (a
 			/// fall's cliff beside the bridge's end), so the approach is straightened only as far as it stays as walkable as
 			/// the way's own line, at full, half or none; the deck itself always lies on the axis.
+			/// <para>
+			/// A gorge bridge's stretch (<paramref name="approach"/>, metres from the centre: its deck, and a stone arch's
+			/// ramps the cut builds up on the low rim and dresses into the high one) is kept straight too, so the way comes up
+			/// or down the ramp's crest onto the deck and not across its banked side; and it is the bridge's to make walkable
+			/// (<see cref="ExcessBeyond"/>), not the ground's under it.
+			/// </para>
 			/// </remarks>
-			private void Straighten(ScenePath path, int first, int last, Vector3 centre, float yaw, float half)
+			private void Straighten(ScenePath path, int first, int last, Vector3 centre, float yaw, float half, float approach = 0f)
 			{
 				float r = yaw * Mathf.Deg2Rad;
 				var axis = new Vector2(Mathf.Sin(r), Mathf.Cos(r));
 				var across = new Vector2(-axis.y, axis.x);
-				float straight = half + BridgeApproachMetres, ease = straight + BridgeEaseMetres;
+				float straight = Mathf.Max(half, approach) + BridgeApproachMetres, ease = straight + BridgeEaseMetres;
 				int window = Mathf.CeilToInt(ease / PointSpacing) + 2;
 				int lo = Mathf.Max(0, first - window), hi = Mathf.Min(path.Count - 1, last + window);
 				var original = new Vector3[hi - lo + 1];
@@ -1253,16 +1376,47 @@ namespace FishMMO.Shared.WorldDesign
 
 				// The way's own line onto the deck is the measure; the straightest no steeper than it is taken.
 				float limit = PathRouter.MaxGradeOf(path.Class);
+				int from = Mathf.Max(0, lo - 1), to = Mathf.Min(path.Count - 1, hi + 1);
+				float Measure() => approach > 0f ? ExcessBeyond(path, from, to, limit, centre, axis, Mathf.Max(half, approach)) : Excess(path, from, to, limit, centre.y);
 				Lay(0f);
-				float own = Excess(path, Mathf.Max(0, lo - 1), Mathf.Min(path.Count - 1, hi + 1), limit, centre.y);
+				float own = Measure();
 				foreach (float strength in Straightness)
 				{
 					Lay(strength);
-					if (strength <= 0f || Excess(path, Mathf.Max(0, lo - 1), Mathf.Min(path.Count - 1, hi + 1), limit, centre.y) <= own + 1e-3f)
+					if (strength <= 0f || Measure() <= own + 1e-3f)
 					{
 						break;
 					}
 				}
+			}
+
+			/// <summary>
+			/// <see cref="Excess"/> past a gorge bridge's own stretch (<paramref name="zone"/> metres either way along its axis
+			/// from its centre): the deck there lands on each rim at that rim's height, and an arch's approaches are built and
+			/// cut at a cart's grade (PropsFeature.TryArchDeck), so only the way beyond is the ground's to judge. Measured at
+			/// one height (the lower rim's) the deck stood a raked gorge's whole rake below its high rim, and every straight
+			/// approach onto it was refused for that step.
+			/// </summary>
+			private static float ExcessBeyond(ScenePath path, int from, int to, float grade, Vector3 centre, Vector2 axis, float zone)
+			{
+				float excess = 0f;
+				for (int k = Mathf.Max(1, from + 1); k <= to; k++)
+				{
+					if (((path.FlagsAt(k - 1) | path.FlagsAt(k)) & ScenePathPointFlags.InSite) != 0)
+					{
+						continue;
+					}
+					Vector3 a = path.Points[k - 1], b = path.Points[k];
+					float alongA = Vector2.Dot(new Vector2(a.x - centre.x, a.z - centre.z), axis);
+					float alongB = Vector2.Dot(new Vector2(b.x - centre.x, b.z - centre.z), axis);
+					if (Mathf.Abs(alongA) <= zone && Mathf.Abs(alongB) <= zone)
+					{
+						continue;
+					}
+					float run = new Vector2(b.x - a.x, b.z - a.z).magnitude;
+					excess += Mathf.Max(0f, Mathf.Abs(b.y - a.y) - grade * run - 0.5f);
+				}
+				return excess;
 			}
 
 			/// <summary>How fully the approach to a bridge is straightened, tried in turn (<see cref="Straighten"/>).</summary>

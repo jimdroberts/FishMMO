@@ -121,7 +121,8 @@ namespace FishMMO.Shared.WorldDesign
 				// The boulders were placed again: their new places go back into the committed hydrology asset.
 				if (water != null && !scope.AllowsLocal)
 				{
-					string hydrologyPath = SceneGenerator.SaveWater(request, SceneGenerator.TerrainFolder(entry.Body, entry.SceneName), water);
+					string hydrologyPath = SceneGenerator.SaveWater(request, SceneGenerator.TerrainFolder(entry.Body, entry.SceneName), water,
+						(east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north));
 					if (hydrologyPath != null)
 					{
 						var hydrology = AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath);

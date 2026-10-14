@@ -35,6 +35,10 @@ namespace FishMMO.Shared
 		/// <summary>The character's network object.</summary>
 		public NetworkObject NetworkObject { get; }
 
+		/// <summary>The object's GameObject and Transform, cached: each pass reads its scene and position.</summary>
+		internal GameObject GameObject { get; }
+		internal Transform Transform { get; }
+
 		/// <summary>The character.</summary>
 		public ICharacter Character { get; }
 
@@ -244,6 +248,8 @@ namespace FishMMO.Shared
 		public ObserverStreamingEntry(NetworkObject networkObject, ICharacter character)
 		{
 			NetworkObject = networkObject;
+			GameObject = networkObject.gameObject;
+			Transform = networkObject.transform;
 			Character = character;
 			IsPlayer = character is IPlayerCharacter;
 
@@ -375,7 +381,7 @@ namespace FishMMO.Shared
 				}
 			}
 
-			Position = NetworkObject.transform.position;
+			Position = Transform.position;
 
 			/* Reset before the pass ranks anything, and mark the measurement valid here rather than
 			 * after ranking: a scene with no players in it produces no viewer loop at all, and that

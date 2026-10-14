@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
+using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using FishMMO.Shared;
@@ -32,6 +35,15 @@ namespace FishMMO.Client
 	/// minute. After a join, a scene change or a set of the clock the shared ground is worked out at once and the
 	/// storm-reached texels are worked in under a time budget, a large one on the frame the weather snaps
 	/// (<see cref="WeatherClient.Snaps"/>), so the ground lands with the rest of the weather.
+	/// </para>
+	/// <para>
+	/// <b>On worker threads.</b> Each storm-reached texel is its own sum (<see cref="IntegrateTexel"/>), so a batch of
+	/// them is worked out across the machine's cores, off the main thread between one frame's update and the next,
+	/// and taken in on the next; the snap's batch is waited for. What a batch reads — the weather of each step
+	/// (<see cref="CoverWork"/>), fetched here first, since the forcing cache is not for other threads — does not
+	/// change while it runs: anything that would change it (a step, a move, a rebuild) waits for the batch first.
+	/// Managed threads and the same arithmetic in the same order, never Burst: each texel comes out to the bit
+	/// what the server's ground is.
 	/// </para>
 	/// </remarks>
 	public sealed class WeatherCoverMap
@@ -103,12 +115,29 @@ namespace FishMMO.Client
 		private WeatherCover heldCover;
 		private float heldDepth;
 
+		// The batch of storm-reached texels being worked out on workers: their indices in queue order, what they read,
+		// and how many of them have been claimed (each one claimed is finished; the rest go back to the queue).
+		private Task working;
+		private int[] batch = System.Array.Empty<int>();
+		private int batchCount;
+		private int batchClaimed;
+		private long batchDeadline;
+		private volatile bool batchStop;
+		private CoverWork batchWork;
+		private GroundCover.Forcing[] batchForcing = System.Array.Empty<GroundCover.Forcing>();
+		private System.Action batchBody;
+		private readonly List<int> touchedScratch = new List<int>();
+
+		private static readonly ProfilerMarker WaitMarker = new ProfilerMarker("Weather.CoverMap.Wait");
+		private static readonly ProfilerMarker LaunchMarker = new ProfilerMarker("Weather.CoverMap.Launch");
+		private static readonly ProfilerMarker StepMarker = new ProfilerMarker("Weather.CoverMap.Step");
+
 		public Texture2D Texture => texture;
 		public bool IsValid => valid;
 		public Rect Area => new Rect(origin.x * TexelMeters, origin.y * TexelMeters, size, size);
 		public float TexelMeters => resolution > 0 ? size / resolution : 0f;
-		/// <summary>Storm-reached texels still to be worked out.</summary>
-		public int PendingTexels => pending.Count;
+		/// <summary>Storm-reached texels still to be worked out, those on the workers now included.</summary>
+		public int PendingTexels => pending.Count + (working != null ? batchCount : 0);
 
 		/// <summary>How deep snow can lie past the blanket, and how many world hours of the heaviest fall build it: the profile's.</summary>
 		private static DeepSnow DeepSnowSettings()
@@ -128,6 +157,11 @@ namespace FishMMO.Client
 		public void Update(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, Vector3 centre, double worldSeconds,
 			float realDeltaTime, int res = DefaultResolution, float sizeMeters = DefaultSizeMeters)
 		{
+			// What the workers finished since the last frame.
+			if (working != null && working.IsCompleted)
+			{
+				Finish();
+			}
 			Ensure(res, sizeMeters);
 			sinceDraw += Mathf.Max(0f, realDeltaTime);
 			sinceRebuild += Mathf.Max(0f, realDeltaTime);
@@ -181,7 +215,9 @@ namespace FishMMO.Client
 				}
 			}
 
-			WorkPending(snap ? SnapBudgetMilliseconds : BudgetMilliseconds);
+			// The snap's batch is waited for, so the ground lands with the rest of the weather; any other runs on until the
+			// next frame.
+			WorkPending(snap ? SnapBudgetMilliseconds : BudgetMilliseconds, snap);
 			if (snap || dirty || sinceDraw >= RedrawSeconds || double.IsNaN(drawnSeconds))
 			{
 				Draw(worldSeconds);
@@ -196,7 +232,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			WorkPending(float.MaxValue);
+			WorkPending(float.MaxValue, true);
 			if (!double.IsNaN(drawnSeconds))
 			{
 				Draw(drawnSeconds);
@@ -285,6 +321,8 @@ namespace FishMMO.Client
 
 		public void Dispose()
 		{
+			// The workers write into the arrays let go of here.
+			Finish(true);
 			Clear();
 			Destroy(ref texture);
 			Destroy(ref depthTexture);
@@ -380,6 +418,8 @@ namespace FishMMO.Client
 		/// </summary>
 		private void Rebuild(long g, long j)
 		{
+			// Everything is worked out afresh: a batch on the workers is cut short (what it finished is still right).
+			Finish(true);
 			step = g;
 			generation = j;
 			bgHistory.Clear();
@@ -473,46 +513,256 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>Works waiting texels out, from the step a storm first reached each, for at most <paramref name="milliseconds"/>.</summary>
-		private void WorkPending(float milliseconds)
+		/// <summary>
+		/// Works waiting texels out, from the step a storm first reached each, for at most <paramref name="milliseconds"/>
+		/// of the workers' time: every one waiting is handed to them in queue order, and what they have not reached when
+		/// the time is up goes back to the queue. <paramref name="wait"/> runs the batch now, on this thread and the
+		/// workers together; otherwise it runs between this frame and the next, and a batch still running is left to.
+		/// </summary>
+		private void WorkPending(float milliseconds, bool wait)
 		{
+			if (working != null)
+			{
+				if (!wait)
+				{
+					return;
+				}
+				Finish();
+			}
 			if (pending.Count == 0)
 			{
 				return;
 			}
-			Stopwatch watch = Stopwatch.StartNew();
-			while (pending.Count > 0 && watch.Elapsed.TotalMilliseconds < milliseconds)
+			LaunchMarker.Begin();
+			if (batch.Length < state.Length)
+			{
+				batch = new int[state.Length];
+			}
+			batchCount = 0;
+			long earliest = long.MaxValue;
+			while (pending.Count > 0)
 			{
 				int i = pending.Dequeue();
 				if (state[i] != TexelState.Pending)
 				{
 					continue;
 				}
-				Integrate(i);
-				dirty = true;
+				batch[batchCount++] = i;
+				earliest = System.Math.Min(earliest, firstTouch[i]);
+			}
+			if (batchCount == 0)
+			{
+				LaunchMarker.End();
+				return;
+			}
+			// Every step any of them is worked through, fetched here: the forcing cache is the main thread's.
+			long first = System.Math.Max(earliest - 1, GroundCover.StartStep(generation - 1)) + 1;
+			FetchForcing(timeline, settings, scene, first, step + 1, ref batchForcing);
+			batchWork = new CoverWork
+			{
+				Step = step,
+				Generation = generation,
+				OldHistory = bgHistory[generation - 1],
+				YoungHistory = bgHistory[generation],
+				Forcing = batchForcing,
+				ForcingBase = first,
+				Deep = deep,
+				Origin = origin,
+				Resolution = resolution,
+				TexelMeters = TexelMeters,
+			};
+			batchClaimed = 0;
+			batchStop = false;
+			batchBudget = milliseconds >= float.MaxValue ? long.MaxValue : (long)(milliseconds * (Stopwatch.Frequency / 1000.0));
+			batchBody ??= RunBatch;
+			LaunchMarker.End();
+			if (wait)
+			{
+				WaitMarker.Begin();
+				bool failed = false;
+				try
+				{
+					RunBatch();
+				}
+				catch (System.Exception e)
+				{
+					UnityEngine.Debug.LogException(e is System.AggregateException a && a.InnerException != null ? a.InnerException : e);
+					failed = true;
+				}
+				WaitMarker.End();
+				TakeBatch(failed);
+			}
+			else
+			{
+				working = Task.Run(batchBody);
 			}
 		}
 
-		private void Integrate(int index)
+		/// <summary>The batch on as many workers as the machine has cores to spare, each claiming the next texel in turn.</summary>
+		private void RunBatch()
 		{
-			Vector3 position = TexelCentre(index);
-			IntegrateGeneration(index, position, generation - 1, out oldAt[index], out oldNext[index]);
-			IntegrateGeneration(index, position, generation, out youngAt[index], out youngNext[index]);
-			state[index] = TexelState.Own;
+			long budget = batchBudget;
+			batchDeadline = budget == long.MaxValue ? long.MaxValue : Stopwatch.GetTimestamp() + budget;
+			int workers = Mathf.Clamp(System.Environment.ProcessorCount - 1, 1, MaxWorkers);
+			claimBody ??= ClaimTexels;
+			Parallel.For(0, workers, claimBody);
 		}
 
-		private void IntegrateGeneration(int index, Vector3 position, long gen, out CoverTrack at, out CoverTrack next)
+		private void ClaimTexels(int worker)
 		{
-			long start = GroundCover.StartStep(gen);
-			List<CoverTrack> history = bgHistory[gen];
-			long from = System.Math.Max(firstTouch[index] - 1, start);
+			while (!batchStop && Stopwatch.GetTimestamp() < batchDeadline)
+			{
+				int slot = Interlocked.Increment(ref batchClaimed) - 1;
+				if (slot >= batchCount)
+				{
+					return;
+				}
+				// A texel claimed is always finished, so those finished are the queue's head.
+				int index = batch[slot];
+				IntegrateTexel(batchWork, index, firstTouch[index], out oldAt[index], out oldNext[index], out youngAt[index], out youngNext[index]);
+			}
+		}
+
+		/// <summary>Waits for the batch on the workers (cut short with <paramref name="stop"/>) and takes in what it finished.</summary>
+		private void Finish(bool stop = false)
+		{
+			if (working == null)
+			{
+				return;
+			}
+			if (stop)
+			{
+				batchStop = true;
+			}
+			WaitMarker.Begin();
+			bool failed = false;
+			try
+			{
+				working.Wait();
+			}
+			catch (System.AggregateException e)
+			{
+				UnityEngine.Debug.LogException(e.InnerException ?? e);
+				failed = true;
+			}
+			WaitMarker.End();
+			working = null;
+			TakeBatch(failed);
+		}
+
+		/// <summary>The texels a batch finished are the map's own from now; the rest wait again, in the order they waited.</summary>
+		private void TakeBatch(bool failed)
+		{
+			int done = failed ? 0 : Mathf.Min(batchClaimed, batchCount);
+			for (int s = 0; s < done; s++)
+			{
+				state[batch[s]] = TexelState.Own;
+			}
+			for (int s = done; s < batchCount; s++)
+			{
+				pending.Enqueue(batch[s]);
+			}
+			if (done > 0)
+			{
+				dirty = true;
+			}
+			batchCount = 0;
+			batchWork = default;
+		}
+
+		/// <summary>The most workers a batch is spread over.</summary>
+		private const int MaxWorkers = 16;
+		/// <summary>Fewer texels than this reached by a storm at a step are worked out on this thread alone.</summary>
+		private const int ParallelMinimum = 64;
+		private long batchBudget;
+		private System.Action<int> claimBody;
+
+		/// <summary>
+		/// What working storm-reached texels out reads (<see cref="IntegrateTexel"/>): the map's step and generation, the
+		/// shared track of both generations from their starts, the weather of each step from <see cref="ForcingBase"/> on,
+		/// and the window the texels are in. Nothing in it changes while a batch is worked.
+		/// </summary>
+		public struct CoverWork
+		{
+			public long Step;
+			/// <summary>The young generation; the old is the one before it.</summary>
+			public long Generation;
+			public List<CoverTrack> OldHistory, YoungHistory;
+			public GroundCover.Forcing[] Forcing;
+			public long ForcingBase;
+			public DeepSnow Deep;
+			public Vector2Int Origin;
+			public int Resolution;
+			public float TexelMeters;
+
+			/// <summary>The world position of a texel's middle, as the map works it out.</summary>
+			public Vector3 TexelCentre(int index)
+			{
+				int x = index % Resolution;
+				int y = index / Resolution;
+				return new Vector3((Origin.x + x + 0.5f) * TexelMeters, 0f, (Origin.y + y + 0.5f) * TexelMeters);
+			}
+		}
+
+		/// <summary>
+		/// The weather of steps <paramref name="first"/> to <paramref name="last"/> into <paramref name="into"/> (grown as
+		/// needed), with each storm's own weather in it worked out now: <see cref="GroundCover.FrameAt"/> reads it lazily,
+		/// and a worker must only read it.
+		/// </summary>
+		public static void FetchForcing(WeatherTimeline timeline, WorldSceneSettings settings, Scene scene, long first, long last,
+			ref GroundCover.Forcing[] into)
+		{
+			int count = (int)System.Math.Max(0L, last - first + 1);
+			if (into.Length < count)
+			{
+				into = new GroundCover.Forcing[System.Math.Max(count, 2 * GroundCover.StepsPerGeneration + 4)];
+			}
+			for (int k = 0; k < count; k++)
+			{
+				GroundCover.Forcing f = GroundCover.ForcingAt(timeline, settings, scene, first + k);
+				WarmStorms(f);
+				into[k] = f;
+			}
+		}
+
+		/// <summary>Works out each storm kind's weather a step holds, so <see cref="GroundCover.FrameAt"/> only reads it.</summary>
+		public static void WarmStorms(GroundCover.Forcing forcing)
+		{
+			if (!forcing.HasWeather || forcing.Storms == null)
+			{
+				return;
+			}
+			for (int c = 0; c < forcing.Cells.Count; c++)
+			{
+				forcing.Storms.Of(forcing.Cells[c].Kind);
+			}
+		}
+
+		/// <summary>
+		/// One storm-reached texel, both generations, from the step a storm first reached it (<paramref name="firstTouch"/>)
+		/// to the map's step and the next. Reads only <paramref name="work"/>, so any thread may run it, and it comes out
+		/// to the bit the same on every one.
+		/// </summary>
+		public static void IntegrateTexel(in CoverWork work, int index, long firstTouch,
+			out CoverTrack oldAt, out CoverTrack oldNext, out CoverTrack youngAt, out CoverTrack youngNext)
+		{
+			Vector3 position = work.TexelCentre(index);
+			IntegrateGeneration(work, position, firstTouch, GroundCover.StartStep(work.Generation - 1), work.OldHistory, out oldAt, out oldNext);
+			IntegrateGeneration(work, position, firstTouch, GroundCover.StartStep(work.Generation), work.YoungHistory, out youngAt, out youngNext);
+		}
+
+		private static void IntegrateGeneration(in CoverWork work, Vector3 position, long firstTouch, long start, List<CoverTrack> history,
+			out CoverTrack at, out CoverTrack next)
+		{
+			long from = System.Math.Max(firstTouch - 1, start);
 			CoverTrack track = history[(int)(from - start)];
 			at = track;
 			next = track;
+			long step = work.Step;
 			for (long k = from + 1; k <= step + 1; k++)
 			{
-				GroundCover.Forcing f = Forcing(k);
-				track = GroundCover.Advance(track, GroundCover.FrameAt(f, position), f, deep);
+				GroundCover.Forcing f = work.Forcing[k - work.ForcingBase];
+				track = GroundCover.Advance(track, GroundCover.FrameAt(f, position), f, work.Deep);
 				if (k == step)
 				{
 					at = track;
@@ -524,11 +774,39 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>
+		/// Works <paramref name="count"/> texels of <paramref name="indices"/> out into the four track arrays (indexed by
+		/// texel), on workers or here: the same sums either way. For the tests, which hold the two to each other and to
+		/// the map's arithmetic step by step.
+		/// </summary>
+		public static void IntegrateTexels(CoverWork work, int[] indices, int count, long[] firstTouch,
+			CoverTrack[] oldAt, CoverTrack[] oldNext, CoverTrack[] youngAt, CoverTrack[] youngNext, bool threaded)
+		{
+			if (!threaded)
+			{
+				for (int s = 0; s < count; s++)
+				{
+					int i = indices[s];
+					IntegrateTexel(work, i, firstTouch[i], out oldAt[i], out oldNext[i], out youngAt[i], out youngNext[i]);
+				}
+				return;
+			}
+			Parallel.For(0, count, s =>
+			{
+				int i = indices[s];
+				IntegrateTexel(work, i, firstTouch[i], out oldAt[i], out oldNext[i], out youngAt[i], out youngNext[i]);
+			});
+		}
+
 		/// <summary>One step on: the shared track, the texels worked out on their own, and those a storm reaches now.</summary>
 		private void StepForward()
 		{
+			// The workers read the step and the shared track this moves on.
+			Finish();
+			StepMarker.Begin();
 			long next = step + 1;
 			GroundCover.Forcing ahead = Forcing(next + 1);
+			WarmStorms(ahead);
 			WeatherFrame open = GroundCover.OpenFrame(ahead);
 			bool roll = next == GroundCover.StartStep(generation + 1);
 			if (roll)
@@ -553,7 +831,34 @@ namespace FishMMO.Client
 				bgHistory[generation].Add(bgYoungNext);
 			}
 
-			for (int i = 0; i < state.Length; i++)
+			// Each texel worked out on its own steps alone, so the rows go to the workers.
+			stepAhead = ahead;
+			stepRoll = roll;
+			stepRowBody ??= StepRow;
+			Parallel.For(0, resolution, stepRowBody);
+			stepAhead = null;
+			if (roll)
+			{
+				generation++;
+			}
+			step = next;
+			TouchShared(ahead);
+			dirty = true;
+			StepMarker.End();
+		}
+
+		// What StepRow reads: the step being moved to and whether it starts a generation.
+		private GroundCover.Forcing stepAhead;
+		private bool stepRoll;
+		private System.Action<int> stepRowBody;
+
+		/// <summary>One row of the texels worked out on their own, a step on.</summary>
+		private void StepRow(int y)
+		{
+			GroundCover.Forcing ahead = stepAhead;
+			bool roll = stepRoll;
+			int end = (y + 1) * resolution;
+			for (int i = y * resolution; i < end; i++)
 			{
 				if (state[i] != TexelState.Own)
 				{
@@ -579,19 +884,14 @@ namespace FishMMO.Client
 					firstTouch[i] = long.MaxValue;
 				}
 			}
-			if (roll)
-			{
-				generation++;
-			}
-			step = next;
-			TouchShared(ahead);
-			dirty = true;
 		}
 
 		/// <summary>The shared texels a storm reaches at <paramref name="ahead"/>'s step: they leave the shared track there.</summary>
 		private void TouchShared(GroundCover.Forcing ahead)
 		{
 			float texel = TexelMeters;
+			// Which they are, here (a texel two storms reach is taken once); what each comes to, on the workers when many.
+			touchedScratch.Clear();
 			for (int c = 0; c < ahead.Cells.Count; c++)
 			{
 				StormCell cell = ahead.Cells[c];
@@ -614,25 +914,53 @@ namespace FishMMO.Client
 						{
 							continue;
 						}
-						// It was the shared ground up to this step; from here it takes the weather over its own place.
-						WeatherFrame frame = GroundCover.FrameAt(ahead, TexelCentre(i));
-						oldAt[i] = bgOldAt;
-						youngAt[i] = bgYoungAt;
-						oldNext[i] = GroundCover.Advance(bgOldAt, frame, ahead, deep);
-						youngNext[i] = GroundCover.Advance(bgYoungAt, frame, ahead, deep);
 						state[i] = TexelState.Own;
 						firstTouch[i] = ahead.Step;
+						touchedScratch.Add(i);
 					}
 				}
 			}
+			touchAhead = ahead;
+			if (touchedScratch.Count < ParallelMinimum)
+			{
+				for (int t = 0; t < touchedScratch.Count; t++)
+				{
+					TouchTexel(t);
+				}
+			}
+			else
+			{
+				touchBody ??= TouchTexel;
+				Parallel.For(0, touchedScratch.Count, touchBody);
+			}
+			touchAhead = null;
+		}
+
+		private GroundCover.Forcing touchAhead;
+		private System.Action<int> touchBody;
+
+		/// <summary>It was the shared ground up to this step; from here it takes the weather over its own place.</summary>
+		private void TouchTexel(int t)
+		{
+			int i = touchedScratch[t];
+			GroundCover.Forcing ahead = touchAhead;
+			WeatherFrame frame = GroundCover.FrameAt(ahead, TexelCentre(i));
+			oldAt[i] = bgOldAt;
+			youngAt[i] = bgYoungAt;
+			oldNext[i] = GroundCover.Advance(bgOldAt, frame, ahead, deep);
+			youngNext[i] = GroundCover.Advance(bgYoungAt, frame, ahead, deep);
 		}
 
 		/// <summary>
 		/// Moves the window with the camera, in whole texels fixed to the world. What was already in view keeps what it
-		/// was worked out to; the strip coming into view is worked out from the ground's memory.
+		/// was worked out to; the strip coming into view is worked out from the ground's memory. In place, row by row in
+		/// the order that reads each row before it is written over: a camera crossing a texel no longer makes six new
+		/// arrays of the whole map.
 		/// </summary>
 		private void Recentre(Vector2Int wanted)
 		{
+			// The workers write into these arrays by index.
+			Finish();
 			int shiftX = wanted.x - origin.x;
 			int shiftY = wanted.y - origin.y;
 			if (Mathf.Abs(shiftX) >= resolution || Mathf.Abs(shiftY) >= resolution)
@@ -642,42 +970,12 @@ namespace FishMMO.Client
 				return;
 			}
 			int n = resolution * resolution;
-			var newState = new TexelState[n];
-			var newTouch = new long[n];
-			var newOldAt = new CoverTrack[n];
-			var newOldNext = new CoverTrack[n];
-			var newYoungAt = new CoverTrack[n];
-			var newYoungNext = new CoverTrack[n];
-			for (int y = 0; y < resolution; y++)
-			{
-				for (int x = 0; x < resolution; x++)
-				{
-					int i = y * resolution + x;
-					int sx = x + shiftX;
-					int sy = y + shiftY;
-					if (sx >= 0 && sy >= 0 && sx < resolution && sy < resolution)
-					{
-						int s = sy * resolution + sx;
-						newState[i] = state[s];
-						newTouch[i] = firstTouch[s];
-						newOldAt[i] = oldAt[s];
-						newOldNext[i] = oldNext[s];
-						newYoungAt[i] = youngAt[s];
-						newYoungNext[i] = youngNext[s];
-					}
-					else
-					{
-						newState[i] = TexelState.Shared;
-						newTouch[i] = long.MaxValue;
-					}
-				}
-			}
-			state = newState;
-			firstTouch = newTouch;
-			oldAt = newOldAt;
-			oldNext = newOldNext;
-			youngAt = newYoungAt;
-			youngNext = newYoungNext;
+			Shift(state, resolution, shiftX, shiftY, TexelState.Shared);
+			Shift(firstTouch, resolution, shiftX, shiftY, long.MaxValue);
+			Shift(oldAt, resolution, shiftX, shiftY, default);
+			Shift(oldNext, resolution, shiftX, shiftY, default);
+			Shift(youngAt, resolution, shiftX, shiftY, default);
+			Shift(youngNext, resolution, shiftX, shiftY, default);
 			origin = wanted;
 			// The queue held old indices: what still waits is found again from the states.
 			pending.Clear();
@@ -703,8 +1001,42 @@ namespace FishMMO.Client
 			dirty = true;
 		}
 
+		/// <summary>
+		/// A square grid's cells moved by (<paramref name="shiftX"/>, <paramref name="shiftY"/>) in place: cell (x, y) takes
+		/// what cell (x + shiftX, y + shiftY) held, or <paramref name="fill"/> where that is off the grid.
+		/// </summary>
+		public static void Shift<T>(T[] cells, int n, int shiftX, int shiftY, T fill)
+		{
+			int span = n - Mathf.Abs(shiftX);
+			int from = shiftX > 0 ? shiftX : 0;
+			int to = shiftX < 0 ? -shiftX : 0;
+			for (int r = 0; r < n; r++)
+			{
+				// Rows taken from above are written bottom up, those from below top down, so none is written before it is read.
+				int y = shiftY >= 0 ? r : n - 1 - r;
+				int source = y + shiftY;
+				int row = y * n;
+				if (source < 0 || source >= n || span <= 0)
+				{
+					System.Array.Fill(cells, fill, row, n);
+					continue;
+				}
+				// Within one row the copy keeps what it overlaps.
+				System.Array.Copy(cells, source * n + from, cells, row + to, span);
+				if (shiftX > 0)
+				{
+					System.Array.Fill(cells, fill, row + span, shiftX);
+				}
+				else if (shiftX < 0)
+				{
+					System.Array.Fill(cells, fill, row, -shiftX);
+				}
+			}
+		}
+
 		private void ResetTexels()
 		{
+			Finish(true);
 			pending.Clear();
 			for (int i = 0; i < state.Length; i++)
 			{

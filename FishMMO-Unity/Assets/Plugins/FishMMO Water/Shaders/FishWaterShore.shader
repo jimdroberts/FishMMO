@@ -4,7 +4,8 @@
 // Drawn as a PROJECTED pass, not as geometry. It reads the depth buffer, reconstructs the world
 // position of whatever is there, and shades it if it falls inside the swash band — so it conforms
 // exactly to the terrain, and to rocks, piers and anything else standing in the surf, with no mesh
-// to tessellate and nothing to keep in sync with the ground.
+// to tessellate and nothing to keep in sync with the ground. Floating hulls are the exception: they
+// mark their pixels (stencil, below) and the pass leaves them to the sea.
 Shader "FishMMO/Water/Shore"
 {
     Properties
@@ -44,6 +45,17 @@ Shader "FishMMO/Water/Shore"
             ZTest Always
             ZWrite Off
             Cull Off
+            /* Not on a floating hull, inside or out: only where neither bit is set. Bit 128 is a hull's water lid
+             * (FishHullLid.shader, across its open top): its planking is under the waterline, but no sea is in it. Bit 32
+             * is the hull's own planking (FishHullShoreMark.shader, laid on by FloatingBoats): a boat at its waterline is
+             * not a beach, and the swash, its foam and the wet sand drew a shoreline up every moored hull and passing ship.
+             * Rocks, cliffs and pier piles carry no mark and keep their surf. */
+            Stencil
+            {
+                Ref 0
+                ReadMask 160
+                Comp Equal
+            }
 
             HLSLPROGRAM
             #pragma vertex Vert
@@ -62,6 +74,7 @@ Shader "FishMMO/Water/Shore"
             #include "FishWaterShoreCommon.hlsl"
             #include "FishWaterFog.hlsl"
             #include "FishWaterFoam.hlsl"
+            #include "FishWaterFoamField.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _FoamColor;
@@ -117,6 +130,8 @@ Shader "FishMMO/Water/Shore"
             half4 Frag(Varyings input) : SV_Target
             {
                 #if !defined(_WATER_DEPTH)
+                    // Nothing here: not written at all (with this blend, (0, 0, 0, 0) leaves the frame as it was), and no further work.
+                    discard;
                     return half4(0, 0, 0, 0);
                 #else
                 float rawDepth = SampleSceneDepth(input.screenUV);
@@ -134,12 +149,14 @@ Shader "FishMMO/Water/Shore"
                 #if UNITY_REVERSED_Z
                     if (rawDepth <= 1e-7)
                     {
+                        discard;
                         return half4(0, 0, 0, 0);
                     }
                     float ndcDepth = rawDepth;
                 #else
                     if (rawDepth >= 1.0 - 1e-7)
                     {
+                        discard;
                         return half4(0, 0, 0, 0);
                     }
                     float ndcDepth = lerp(UNITY_NEAR_CLIP_VALUE, 1.0, rawDepth);
@@ -162,12 +179,14 @@ Shader "FishMMO/Water/Shore"
                 float under = max(0.2, waveHeight * _Underwater);
                 if (rise > highest || rise < -under)
                 {
+                    discard;
                     return half4(0, 0, 0, 0);
                 }
 
                 float2 shore = FishWaterShoreSample(positionWS.xz);
                 if (shore.y > 990.0)
                 {
+                    discard;
                     return half4(0, 0, 0, 0);
                 }
 
@@ -234,8 +253,19 @@ Shader "FishMMO/Water/Shore"
                 float2 fieldUV = (positionWS.xz - _FishWaterShoreRect.xy) / max(1.0, _FishWaterShoreRect.zw);
                 half left = SAMPLE_TEXTURE2D_LOD(_FishWaterFoamMemory, sampler_FishWaterFoamMemory, fieldUV, 0).r;
                 half strandedCover = saturate(left * _Residual) * 0.6 * (1.0 - sheet * 0.6);
+                /* Where the simulated foam runs (FishWaterFoamField.hlsl) it is the foam the swash left: the same lip
+                 * lays it, and it lies as the sea's own foam does, ageing into lace. */
+                FishFoamFieldSample carried = FishFoamFieldAt(positionWS.xz);
+                strandedCover = lerp(strandedCover, FishFoamFieldCoverage(carried.amount) * 0.6 * (1.0 - sheet * 0.6), carried.known);
                 half foamLace = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, foamUV).a;
+                // The stranded foam's lace where the simulated foam keeps it (FishFoamFieldLace): it lies still with the foam.
+                half carriedLaceShare;
+                float carriedLod;
+                half carriedLace = FishFoamFieldLace(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), positionWS.xz, ddx(positionWS.xz), ddy(positionWS.xz),
+                    max(0.5, _FoamScale), 0.0, carriedLaceShare, carriedLod);
+                foamLace = FishFoamBlend(foamLace, FishFoamLaceRestore(carriedLace, carriedLod), carriedLaceShare * carried.known);
                 FishFoam foamCut = FishFoamCut(foamLace, max(lipCover, strandedCover), length(fwidth(positionWS.xz)), _FoamScale);
+                foamCut.body *= FishFoamFieldBody(carried);
 
                 /* The FILM: where the sheet actually covers the sand. Thick down by the sea it does,
                  * everywhere; toward the top of its run it thins to a few millimetres and the sand's
@@ -313,6 +343,15 @@ Shader "FishMMO/Water/Shore"
                     half sunFresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(halfway, viewWS)), 5.0);
 
                     sheen = (sky * fresnel + mainLight.color * glint * sunFresnel * shadow) * gloss * fade;
+                }
+
+                /* Nothing to lay down — no band (alpha 0) and no sheen — writes (0, 0, 0, 0), which this blend turns
+                 * into the frame as it was whatever the clouds and the fog in front say: so not their nine taps, and not
+                 * the blend's read and write. Every gradient sample is above, so no neighbour loses one. */
+                if (alpha <= 0.0h && all(sheen == 0.0h))
+                {
+                    discard;
+                    return half4(0, 0, 0, 0);
                 }
 
                 /* Behind the weather's clouds and through its fog, both laid over the frame before

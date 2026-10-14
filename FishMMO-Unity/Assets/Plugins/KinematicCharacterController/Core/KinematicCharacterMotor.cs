@@ -460,6 +460,7 @@ namespace KinematicCharacterController
 		private Vector3 _cachedWorldRight = Vector3.right;
 		private Vector3 _cachedZeroVector = Vector3.zero;
 		private Vector3 _platformVelocity = Vector3.zero;
+		private float _platformTurn = 0f;
 
 		/// <summary>
 		/// Sets the velocity of the platform the character is currently on.
@@ -467,7 +468,19 @@ namespace KinematicCharacterController
 		/// </summary>
 		public void SetPlatformVelocity(Vector3 velocity)
 		{
+			SetPlatformVelocity(velocity, 0f);
+		}
+
+		/// <summary>
+		/// FISHMMO EDIT: the velocity of the platform the character is on, and the yaw it turned through this tick, degrees
+		/// about world up (a sailing ship's hull turning on its course). The turn goes on the character's facing in
+		/// UpdatePhase1, as KCC turns a character with an attached PhysicsMover's rotation, and only while stably grounded.
+		/// Call before UpdatePhase1.
+		/// </summary>
+		public void SetPlatformVelocity(Vector3 velocity, float turn)
+		{
 			_platformVelocity = velocity;
+			_platformTurn = float.IsNaN(turn) || float.IsInfinity(turn) ? 0f : turn;
 		}
 
 		private Quaternion _transientRotation;
@@ -994,6 +1007,13 @@ namespace KinematicCharacterController
 				}
 			}
 			_platformVelocity = Vector3.zero;
+			/* FISHMMO EDIT: platform turn. A deck turning under a stably grounded rider turns its facing with it, as the
+			 * "Rotation from attached rigidbody" step below does for a PhysicsMover; without it a rider kept its place on a
+			 * turning ship's deck while facing the same way in the world, so the swing at anchor left it facing the stern.
+			 * Grounded only, as a horizontal carry is. Taken here and applied with the carry, after a real attached rigidbody
+			 * has had its say. */
+			float platformTurn = GroundingStatus.IsStableOnGround ? _platformTurn : 0f;
+			_platformTurn = 0f;
 
 			if (InteractiveRigidbodyHandling)
 			{
@@ -1100,6 +1120,14 @@ namespace KinematicCharacterController
 			if (carriedNow && !carriedBefore)
 			{
 				BaseVelocity -= Vector3.ProjectOnPlane(platformCarry, _characterUp);
+			}
+			if (platformTurn != 0f && _attachedRigidbody == null)
+			{
+				Vector3 turnedForward = Vector3.ProjectOnPlane(Quaternion.AngleAxis(platformTurn, _cachedWorldUp) * _characterForward, _characterUp);
+				if (turnedForward.sqrMagnitude > 1e-8f)
+				{
+					TransientRotation = Quaternion.LookRotation(turnedForward.normalized, _characterUp);
+				}
 			}
 			if (carriedNow)
 			{

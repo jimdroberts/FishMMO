@@ -75,13 +75,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 38bcb38630edd8d5f84e23dba3385a40
-    m_Address: Assets/Scenes/WorldScene/Arthis/Isle of Aradune Terrain/Isle of Aradune
-      NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 3a3ad1e67809ba94c984635c5d313682
     m_Address: StartScene B
     m_ReadOnly: 0
@@ -208,13 +201,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7a3730f3cbc747a039e70782308f6220
-    m_Address: Assets/Scenes/WorldScene/Rheis/Volax Obelisk Terrain/Volax Obelisk
-      NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 7b949e062334e10ffa6dd1b85bf28636
     m_Address: Volax Obelisk
     m_ReadOnly: 0
@@ -269,12 +255,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 9bb793da43a030e459af61d22643af10
-    m_Address: Assets/Scenes/WorldScene/Tutorial Spawners/NavMesh-Floor.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a058e12685aac4acaa5cb9c31e6eee08
     m_Address: Treacherous Bri Lookout 0_0
     m_ReadOnly: 0
@@ -289,13 +269,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a47b6045153262f528dd0f02602de15b
     m_Address: Isle of Aradune Collision Cliffs
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: aa6142b61c7fc2b0cb7c0a5d865e93bc
-    m_Address: Assets/Scenes/WorldScene/Arthis/Treacherous Bri Lookout Terrain/Treacherous
-      Bri Lookout NavMesh.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -348,12 +321,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: bccc2ce460150eb43bb0d7f0db28b05b
-    m_Address: Assets/Scenes/WorldScene/Test Dungeon/NavMesh-Terrain.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3b59647102e594e1a44ce255118d761
     m_Address: Isle of Aradune 7_0
     m_ReadOnly: 0
@@ -362,12 +329,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3f7f35295862928c98a14ef55691e63
     m_Address: InteractableSim
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c43b6eb487815084ca437ada41086fa4
-    m_Address: Assets/Scenes/WorldScene/Dungeon/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -438,12 +399,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e9b8b2a3c19045247a7b70f2b23b0ca1
-    m_Address: Assets/Scenes/WorldScene/StartScene A/NavMesh-Terrain.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e9d984a4779956e5c8237a665ec707b0
     m_Address: Isle of Aradune 7_2
     m_ReadOnly: 0
@@ -470,12 +425,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: f6684c490e1db1d6483808b5050336b3
     m_Address: Isle of Aradune 3_1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f8dd271abfab0f44287f337e86b02aa5
-    m_Address: Assets/Scenes/WorldScene/StartScene B/NavMesh-Terrain.asset
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared

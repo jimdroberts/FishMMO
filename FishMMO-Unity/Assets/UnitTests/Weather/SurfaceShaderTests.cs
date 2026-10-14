@@ -114,7 +114,7 @@ namespace FishMMO.UnitTests
 
 			string vegetation = Read(Shaders + "FishVegetationPasses.hlsl");
 			int calls = vegetation.Split(new[] { "FishLodFadeClip(" }, System.StringSplitOptions.None).Length - 1;
-			Assert.AreEqual(3, calls, "forward, depth-normals and the shared shadow/depth fragment each read the LOD fade");
+			Assert.AreEqual(4, calls, "forward, depth-normals, the shared shadow/depth fragment and the depth prime each read the LOD fade");
 		}
 
 		[Test]
@@ -122,8 +122,8 @@ namespace FishMMO.UnitTests
 		{
 			string map = Read("Assets/Scripts/Client/World/Weather/Presentation/WeatherCoverMap.cs");
 			StringAssert.Contains("_FishCoverTex", map, "the surfaces sample this texture by name");
-			StringAssert.Contains("Integrate(", map, "the map must use the same cover integration the server runs");
-			StringAssert.Contains("Anchor(", map, "the server's figure has to stay the anchor, or the client drifts");
+			StringAssert.Contains("GroundCover.Advance(", map, "the map must use the same cover integration the server runs");
+			StringAssert.Contains("GroundCover.ForcingAt(", map, "each texel is worked out from the world's time as the server works it out, or the client drifts");
 
 			string presenter = Read("Assets/Scripts/Client/World/Weather/Presentation/WeatherPresentation.cs");
 			StringAssert.Contains("coverMap.Update", presenter, "nothing builds the cover map, so the ground shows the scene average everywhere");

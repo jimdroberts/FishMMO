@@ -109,6 +109,8 @@ namespace FishMMO.Shared
 			Shader.PropertyToID("_FishControl6"), Shader.PropertyToID("_FishControl7"),
 		};
 		private static readonly int ControlTexelSizeId = Shader.PropertyToID("_FishControl0_TexelSize");
+		private static readonly int ControlEmptyId = Shader.PropertyToID("_FishControlEmpty");
+		private static readonly Unity.Profiling.ProfilerMarker EmptyScanMarker = new Unity.Profiling.ProfilerMarker("TerrainArrayBinder.FindEmptyControls");
 		private static readonly int InfoId = Shader.PropertyToID("_FishArrayInfo");
 		private static readonly int AlbedoId = Shader.PropertyToID("_FishAlbedoArray");
 		private static readonly int NormalId = Shader.PropertyToID("_FishNormalArray");
@@ -319,7 +321,15 @@ namespace FishMMO.Shared
 			}
 		}
 
-		private bool PushTo(Terrain terrain)
+		private bool PushTo(Terrain terrain) => PushTo(terrain, Application.isPlaying);
+
+		/// <param name="findEmpty">
+		/// Look for control maps that are zero over the whole tile, which the shader then never samples
+		/// (<c>_FishControlEmpty</c>): a tile at the edge of a biome uses one or two of a scene's maps, and every pixel of it
+		/// read all of them. Only while playing, when nothing writes the alphamaps: in the editor a brush, a repaint or a
+		/// cut can put weight into a map the mask says is empty, so there every map is read (which draws the same picture).
+		/// </param>
+		private bool PushTo(Terrain terrain, bool findEmpty)
 		{
 			if (terrain == null || terrain.terrainData == null)
 			{
@@ -329,10 +339,17 @@ namespace FishMMO.Shared
 
 			TerrainData data = terrain.terrainData;
 			int controls = Mathf.Min(data.alphamapTextureCount, MaximumControlMaps);
+			int empty = 0;
 			for (int k = 0; k < controls; k++)
 			{
-				block.SetTexture(ControlIds[k], data.GetAlphamapTexture(k));
+				Texture2D map = data.GetAlphamapTexture(k);
+				block.SetTexture(ControlIds[k], map);
+				if (findEmpty && IsAllZero(map))
+				{
+					empty |= 1 << k;
+				}
 			}
+			block.SetVector(ControlEmptyId, new Vector4(empty, 0f, 0f, 0f));
 			if (controls > 0)
 			{
 				Texture2D first = data.GetAlphamapTexture(0);
@@ -342,6 +359,38 @@ namespace FishMMO.Shared
 			PushArrays(block, controls);
 			terrain.SetSplatMaterialPropertyBlock(block);
 			return true;
+		}
+
+		/// <summary>
+		/// True when every texel of a control map is zero, so it adds no weight anywhere on its tile. False whenever that
+		/// cannot be read cheaply and for certain (not readable on the CPU, or a format whose zero bits are not a zero
+		/// weight), which only means the map is sampled as before.
+		/// </summary>
+		public static bool IsAllZero(Texture2D map)
+		{
+			if (map == null || !map.isReadable || (map.format != TextureFormat.RGBA32 && map.format != TextureFormat.ARGB32))
+			{
+				return false;
+			}
+			using (EmptyScanMarker.Auto())
+			{
+				try
+				{
+					Unity.Collections.NativeArray<uint> texels = map.GetPixelData<uint>(0);
+					for (int i = 0; i < texels.Length; i++)
+					{
+						if (texels[i] != 0u)
+						{
+							return false;
+						}
+					}
+					return texels.Length > 0;
+				}
+				catch (System.Exception)
+				{
+					return false;
+				}
+			}
 		}
 
 		/// <summary>
@@ -444,7 +493,8 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			PushTo(terrain);
+			// Written in the editor: every map read, since the stroke may have put weight in one that had none.
+			PushTo(terrain, false);
 		}
 #else
 		private void BeginLoad()

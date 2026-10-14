@@ -877,14 +877,25 @@ namespace FishMMO.Client
 		private RenderTexture overhead;
 		private Vector2 overheadCentre = new Vector2(float.NaN, float.NaN);
 		private float overheadFrom = float.NaN;
-		private int sinceOverhead = int.MaxValue;
+		/// <summary>
+		/// When the overhead map and the cookie were last marched (unscaled seconds; −∞: draw now). Redrawn when their window
+		/// moves, and otherwise every <see cref="DriftRedrawSeconds"/>: it was every third frame, so at 150–300 fps a quarter
+		/// of a million rays fifty to a hundred times a second, for clouds that cross one of their texels in two.
+		/// </summary>
+		private float overheadAt = float.NegativeInfinity;
+		public static float DriftRedrawSeconds = 0.2f;
+		/// <summary>Whether a map drawn at <paramref name="at"/> (unscaled seconds) in frame <paramref name="frame"/> is due again: by time, or (<see cref="DriftRedrawSeconds"/> 0, the probe's A/B) every third frame as before.</summary>
+		private static bool DriftDue(float at, int frame) => DriftRedrawSeconds > 0f ? Time.unscaledTime - at >= DriftRedrawSeconds : Time.frameCount - frame >= 3;
+		private int drawnFrame = int.MinValue / 2, overheadFrame = int.MinValue / 2;
 		private Vector2 drawnCentre = new Vector2(float.NaN, float.NaN);
-		private int sinceDrawn = int.MaxValue;
+		private float drawnAt = float.NegativeInfinity;
 		private float drawnCover = -1f;
 
 		/// <summary>The shadow as the light reads it, for a panel to show: what is on the ground should look like this.</summary>
 		public Texture Cookie => cookie;
 		private Light boundLight;
+		private Light boundDataLight;
+		private UniversalAdditionalLightData boundData;
 		private Vector2 offset;
 
 		/// <summary>
@@ -929,7 +940,8 @@ namespace FishMMO.Client
 				cookie.Create();
 				raw = new RenderTexture(256, 256, 0, format) { name = "Cloud Shadows (raw)", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
 				raw.Create();
-				sinceDrawn = int.MaxValue;
+				drawnAt = float.NegativeInfinity;
+				drawnFrame = int.MinValue / 2;
 			}
 			// The window is in the light's own plane, because that is the plane the light reads a
 			// cookie in. Snapped to a texel, so the shadow does not crawl as the camera moves.
@@ -948,13 +960,12 @@ namespace FishMMO.Client
 			cloudMaterial.SetVector(ShadowOriginId, centre);
 			cloudMaterial.SetVector(ShadowRightId, lightTransform.right);
 			cloudMaterial.SetVector(ShadowUpId, lightTransform.up);
-			// Marched when the window moves, and otherwise every third frame: a cloud crosses one of
+			// Marched when the window moves, and otherwise every DriftRedrawSeconds: a cloud crosses one of
 			// these texels in about two seconds, and this is a quarter of a million rays. The window
 			// and the offset below are always this frame's, so what is drawn late is only the
 			// clouds' own drift, by a few centimetres.
 			var centreNow = new Vector2(local.x, local.y);
-			sinceDrawn++;
-			if (sinceDrawn >= 3 || centreNow != drawnCentre || raw == null)
+			if (DriftDue(drawnAt, drawnFrame) || centreNow != drawnCentre || raw == null)
 			{
 				Graphics.Blit(null, raw, cloudMaterial, 3);
 				// Softened, and faded to nothing at the window's edge: the sun's half degree makes a
@@ -963,7 +974,8 @@ namespace FishMMO.Client
 				cloudMaterial.SetTexture(ShadowRawId, raw);
 				Graphics.Blit(null, cookie, cloudMaterial, 6);
 				drawnCentre = centreNow;
-				sinceDrawn = 0;
+				drawnAt = Time.unscaledTime;
+				drawnFrame = Time.frameCount;
 			}
 
 			if (boundLight != light)
@@ -972,11 +984,17 @@ namespace FishMMO.Client
 				boundLight = light;
 			}
 			light.cookie = cookie;
-			var data = light.GetComponent<UniversalAdditionalLightData>();
-			if (data == null)
+			// The light's URP data, found once for the light it belongs to.
+			if (boundData == null || boundDataLight != light)
 			{
-				data = light.gameObject.AddComponent<UniversalAdditionalLightData>();
+				boundData = light.GetComponent<UniversalAdditionalLightData>();
+				if (boundData == null)
+				{
+					boundData = light.gameObject.AddComponent<UniversalAdditionalLightData>();
+				}
+				boundDataLight = light;
 			}
+			UniversalAdditionalLightData data = boundData;
 			data.lightCookieSize = new Vector2(areaMeters, areaMeters);
 			// The cookie follows the camera: the window's middle sits where the viewer stands, in the
 			// light's plane. The offset is that point in WORLD units, and positive.
@@ -1014,20 +1032,21 @@ namespace FishMMO.Client
 				}
 				overhead = new RenderTexture(256, 256, 0, format) { name = "Cloud Overhead", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear, useMipMap = false, hideFlags = HideFlags.DontSave };
 				overhead.Create();
-				sinceOverhead = int.MaxValue;
+				overheadAt = float.NegativeInfinity;
+				overheadFrame = int.MinValue / 2;
 			}
 			float texel = areaMeters / overhead.width;
 			var centre = new Vector2(Mathf.Round(viewer.x / texel) * texel, Mathf.Round(viewer.z / texel) * texel);
-			sinceOverhead++;
 			// Measured up from the viewer's height (see the pass), so climbing out of a deck redraws it.
-			if (sinceOverhead >= 3 || centre != overheadCentre || !(Mathf.Abs(viewer.y - overheadFrom) < 5f))
+			if (DriftDue(overheadAt, overheadFrame) || centre != overheadCentre || !(Mathf.Abs(viewer.y - overheadFrom) < 5f))
 			{
 				cloudMaterial.SetVector(OverheadDrawId, new Vector4(centre.x, centre.y, areaMeters, steps));
 				cloudMaterial.SetFloat(OverheadFromId, viewer.y);
 				Graphics.Blit(null, overhead, cloudMaterial, 7);
 				overheadCentre = centre;
 				overheadFrom = viewer.y;
-				sinceOverhead = 0;
+				overheadAt = Time.unscaledTime;
+				overheadFrame = Time.frameCount;
 			}
 			Shader.SetGlobalTexture(OverheadId, overhead);
 			Shader.SetGlobalVector(OverheadRectId, new Vector4(centre.x, centre.y, areaMeters, 1f));

@@ -25,7 +25,11 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>A texel</b> (RGBA8, linear): r the signed distance to the nearest path's edge (−8 m inside … +3 m outside),
 	/// g that path's half width (÷ 8 m), b its wear, a its surface code (<see cref="ScenePathStyle.SurfaceCode"/>).
-	/// Where two paths meet, the texel takes the one whose edge is nearer — a road's verge, not the trail running into it.
+	/// Where two paths meet, the texel takes the one whose edge is nearer — a road's verge, not the trail running into it —
+	/// except inside a building's floor (<see cref="ScenePathPointFlags.Floor"/>), whose wear and surface nothing else
+	/// drawn over it replaces (a door path's round end or a well's apron reaching through the wall would bring its lower
+	/// wear, and so its grass, indoors); its edge is still the deepest of them, so the floor is as bare as the apron
+	/// round it.
 	/// </para>
 	/// <para>Pure data, built by the cut and baked to two textures beside the terrain (ScenePathBake), which
 	/// <see cref="ScenePathSurfaceBinder"/> binds.</para>
@@ -71,6 +75,8 @@ namespace FishMMO.Shared
 			public readonly float[] Half = new float[StoredTexels * StoredTexels];
 			public readonly float[] Wear = new float[StoredTexels * StoredTexels];
 			public readonly float[] Surface = new float[StoredTexels * StoredTexels];
+			/// <summary>Inside a building's floor: no other way replaces the texel.</summary>
+			public readonly bool[] Floor = new bool[StoredTexels * StoredTexels];
 
 			public Page()
 			{
@@ -194,6 +200,11 @@ namespace FishMMO.Shared
 			float reach = Mathf.Max(ha, hb) + OutsideMetres;
 			Vector2 ab = b - a;
 			float length2 = Mathf.Max(1e-6f, ab.sqrMagnitude);
+			float length = Mathf.Sqrt(length2);
+			ScenePathPointFlags both = path.FlagsAt(ia) & path.FlagsAt(ib);
+			// A rectangle needs a direction: one point is drawn round.
+			bool squared = (both & ScenePathPointFlags.Squared) != 0 && length > 0.01f;
+			bool floor = (both & ScenePathPointFlags.Floor) != 0;
 
 			// Pages whose stored texels (their border included) lie within reach of the segment.
 			float x0 = Mathf.Min(a.x, b.x) - reach, x1 = Mathf.Max(a.x, b.x) + reach;
@@ -220,27 +231,54 @@ namespace FishMMO.Shared
 						for (int i = i0; i <= i1; i++)
 						{
 							float x = pageX + (i - 0.5f) * TexelMetres;
-							float t = Mathf.Clamp01(((x - a.x) * ab.x + (z - a.y) * ab.y) / length2);
-							float dx = a.x + ab.x * t - x, dz = a.y + ab.y * t - z;
+							float along = ((x - a.x) * ab.x + (z - a.y) * ab.y) / length2;
+							float t = Mathf.Clamp01(along);
 							float half = Mathf.Lerp(ha, hb, t);
-							float edge = Mathf.Sqrt(dx * dx + dz * dz) - half;
+							float edge;
+							if (squared)
+							{
+								// The rectangle's signed distance: past either end, or across by the half width there.
+								float overEnd = Mathf.Max(-along, along - 1f) * length;
+								float across = Mathf.Abs((x - a.x) * ab.y - (z - a.y) * ab.x) / length - half;
+								float ox = Mathf.Max(overEnd, 0f), oz = Mathf.Max(across, 0f);
+								edge = Mathf.Sqrt(ox * ox + oz * oz) + Mathf.Min(Mathf.Max(overEnd, across), 0f);
+							}
+							else
+							{
+								float dx = a.x + ab.x * t - x, dz = a.y + ab.y * t - z;
+								edge = Mathf.Sqrt(dx * dx + dz * dz) - half;
+							}
 							if (edge >= OutsideMetres)
 							{
 								continue;
 							}
+							bool indoors = floor && edge < 0f;
 							if (page == null)
 							{
 								page = new Page();
 								pages[key] = page;
 							}
 							int k = j * StoredTexels + i;
-							if (edge < page.Edge[k])
+							if (indoors && !page.Floor[k])
+							{
+								page.Floor[k] = true;
+								page.Edge[k] = Mathf.Min(edge, page.Edge[k]);
+							}
+							else if (edge < page.Edge[k])
 							{
 								page.Edge[k] = edge;
-								page.Half[k] = half;
-								page.Wear[k] = Mathf.Lerp(wa, wb, t);
-								page.Surface[k] = Mathf.Lerp(sa, sb, t);
+								if (page.Floor[k] && !indoors)
+								{
+									continue;
+								}
 							}
+							else
+							{
+								continue;
+							}
+							page.Half[k] = half;
+							page.Wear[k] = Mathf.Lerp(wa, wb, t);
+							page.Surface[k] = Mathf.Lerp(sa, sb, t);
 						}
 					}
 				}

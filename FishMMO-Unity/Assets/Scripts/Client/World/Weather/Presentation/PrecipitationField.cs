@@ -298,6 +298,8 @@ namespace FishMMO.Client
 
 		private Mesh mesh;
 		private int meshParticles;
+		/// <summary>The field's show thresholds in its quads' order (<see cref="BuildMesh(int, int, out float[], bool)"/>).</summary>
+		private float[] thresholds;
 		private readonly MaterialPropertyBlock block = new MaterialPropertyBlock();
 		private readonly Travel[] travel = new Travel[Kinds.Length * SnowShells];
 		private float lastTime = float.NaN;
@@ -351,7 +353,20 @@ namespace FishMMO.Client
 		/// A field of <paramref name="particles"/> quads. Every corner of a quad shares its
 		/// position in the unit box; the shader places and shapes it.
 		/// </summary>
-		public static Mesh BuildMesh(int particles, int seed = 1234)
+		public static Mesh BuildMesh(int particles, int seed = 1234) => BuildMesh(particles, seed, out _, false);
+
+		/// <summary>How many prefixes of the threshold-ordered field are kept as sub-meshes (<see cref="BuildMesh(int, int, out float[], bool)"/>).</summary>
+		public const int Prefixes = 8;
+
+		/// <summary>
+		/// The same field, and with <paramref name="byThreshold"/> its quads put in the order of their show thresholds
+		/// (each quad's own position and randoms kept with it) and <see cref="Prefixes"/> sub-meshes, the k-th the first
+		/// (k + 1)/<see cref="Prefixes"/> of them, the last the whole field: so a draw that shows a share of the particles
+		/// need only submit the prefix that holds every one shown (<see cref="PrefixFor"/>). A quad over its threshold is
+		/// collapsed by the shader and draws nothing, so leaving it out is the same picture.
+		/// <paramref name="sortedThresholds"/> are the thresholds in that order (null without <paramref name="byThreshold"/>).
+		/// </summary>
+		public static Mesh BuildMesh(int particles, int seed, out float[] sortedThresholds, bool byThreshold)
 		{
 			particles = Mathf.Max(1, particles);
 			var random = new System.Random(seed);
@@ -397,6 +412,31 @@ namespace FishMMO.Client
 					randoms[j * 4 + c] = rj;
 				}
 			}
+			sortedThresholds = null;
+			if (byThreshold)
+			{
+				// The same quads, lowest threshold first. The thresholds are all different, so the order is the same every time.
+				var order = new int[particles];
+				sortedThresholds = new float[particles];
+				for (int i = 0; i < particles; i++)
+				{
+					order[i] = i;
+					sortedThresholds[i] = randoms[i * 4].x;
+				}
+				System.Array.Sort(sortedThresholds, order);
+				var sortedPositions = new Vector3[positions.Length];
+				var sortedRandoms = new List<Vector4>(randoms.Count);
+				for (int k = 0; k < particles; k++)
+				{
+					for (int c = 0; c < 4; c++)
+					{
+						sortedPositions[k * 4 + c] = positions[order[k] * 4 + c];
+						sortedRandoms.Add(randoms[order[k] * 4 + c]);
+					}
+				}
+				positions = sortedPositions;
+				randoms = sortedRandoms;
+			}
 			var mesh = new Mesh
 			{
 				name = $"Precipitation Field ({particles})",
@@ -406,9 +446,60 @@ namespace FishMMO.Client
 			mesh.SetVertices(positions);
 			mesh.SetUVs(0, corners);
 			mesh.SetUVs(1, randoms);
-			mesh.SetIndices(indices, MeshTopology.Triangles, 0, false);
+			if (byThreshold)
+			{
+				mesh.subMeshCount = Prefixes;
+				for (int b = 0; b < Prefixes; b++)
+				{
+					mesh.SetIndices(indices, 0, PrefixQuads(b, particles) * 6, MeshTopology.Triangles, b, false);
+				}
+			}
+			else
+			{
+				mesh.SetIndices(indices, MeshTopology.Triangles, 0, false);
+			}
 			mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 100000f);
 			return mesh;
+		}
+
+		/// <summary>The quads in prefix sub-mesh <paramref name="b"/> of a field of <paramref name="particles"/>: the last holds them all.</summary>
+		public static int PrefixQuads(int b, int particles) => b >= Prefixes - 1 ? particles : ((b + 1) * particles + Prefixes - 1) / Prefixes;
+
+		/// <summary>
+		/// The smallest prefix sub-mesh holding every quad a share <paramref name="shown"/> can show — those whose threshold
+		/// is under it (the shader's <c>visible</c> is zero at or over it, the cloud's shedding only taking more away) — and
+		/// one more; −1 when none can show, and nothing need be drawn.
+		/// </summary>
+		public static int PrefixFor(float[] sortedThresholds, float shown)
+		{
+			int n = sortedThresholds.Length;
+			// How many thresholds lie under the share: the first at or over it, by halves.
+			int lo = 0, hi = n;
+			while (lo < hi)
+			{
+				int mid = (lo + hi) >> 1;
+				if (sortedThresholds[mid] < shown)
+				{
+					lo = mid + 1;
+				}
+				else
+				{
+					hi = mid;
+				}
+			}
+			if (lo == 0)
+			{
+				return -1;
+			}
+			int needed = Mathf.Min(n, lo + 1);
+			for (int b = 0; b < Prefixes; b++)
+			{
+				if (PrefixQuads(b, n) >= needed)
+				{
+					return b;
+				}
+			}
+			return Prefixes - 1;
 		}
 
 		/// <summary>The kinds worth drawing, strongest first, with each one's visible share.</summary>
@@ -671,7 +762,7 @@ namespace FishMMO.Client
 			if (mesh == null || meshParticles != tier.Particles)
 			{
 				Dispose();
-				mesh = BuildMesh(tier.Particles);
+				mesh = BuildMesh(tier.Particles, 1234, out thresholds, true);
 				meshParticles = tier.Particles;
 			}
 
@@ -807,7 +898,12 @@ namespace FishMMO.Client
 					 * already; rain and snow were passed through the air's hue as well (SkySystem.InAir),
 					 * which coloured them twice — brown under a warm sky, as hail once was. */
 					block.SetColor(ColorId, look.Tint);
-					Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);
+					// Only the prefix of the field this share can show: the rest would be collapsed by the shader.
+					int prefix = PrefixFor(thresholds, shown);
+					if (prefix >= 0)
+					{
+						Graphics.RenderMesh(rp, mesh, prefix, Matrix4x4.identity);
+					}
 				}
 			}
 		}

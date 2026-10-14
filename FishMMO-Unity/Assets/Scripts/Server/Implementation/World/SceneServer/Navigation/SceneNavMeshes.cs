@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.AI;
+using FishMMO.Shared;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 {
@@ -13,6 +16,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 	/// identical and overlap exactly, so the first instance adds it and the last one to unload removes it.
 	/// </para>
 	/// <para>
+	/// <b>And its climbables' links.</b> Each of the scene's ladders, rope ladders and ropes
+	/// (<see cref="ScenePointsOfInterest.Climbables"/>) becomes a two-way link from its foot on the lower floor to its
+	/// landing on the upper one (<see cref="ClimbingRules.LinkEnds"/>), in the "Climb" area so only archetypes that climb
+	/// path over them (<see cref="AIController.ClimbArea"/>). Links are global like the NavMesh, so they too are added
+	/// once per scene and go with it. Made at load from the same list the players' climbing reads, so the two never
+	/// disagree and no bake is needed for them.
+	/// </para>
+	/// <para>
 	/// A plain class rather than part of <see cref="NavMeshSystem"/>, so tests can drive it without FishNet.
 	/// </para>
 	/// </remarks>
@@ -22,6 +33,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 		{
 			public NavMeshDataInstance Instance;
 			public int Count;
+			public readonly List<NavMeshLinkInstance> Links = new List<NavMeshLinkInstance>();
 		}
 
 		private readonly Dictionary<string, Loaded> byScene = new Dictionary<string, Loaded>();
@@ -40,8 +52,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 		/// <summary>How many scenes' NavMeshes are in the world.</summary>
 		public int Count => byScene.Count;
 
-		/// <summary>An instance of <paramref name="sceneName"/> loaded. Returns false when the scene has no NavMesh.</summary>
-		public bool Add(string sceneName)
+		/// <summary>How many climb links <paramref name="sceneName"/>'s NavMesh has in the world.</summary>
+		public int LinkCount(string sceneName) => sceneName != null && byScene.TryGetValue(sceneName, out Loaded loaded) ? loaded.Links.Count : 0;
+
+		/// <summary>
+		/// An instance of <paramref name="sceneName"/> loaded, with its <paramref name="climbables"/> (null for none): the
+		/// first instance adds the NavMesh and links it. Returns false when the scene has no NavMesh.
+		/// </summary>
+		public bool Add(string sceneName, IReadOnlyList<SceneClimbable> climbables = null)
 		{
 			if (string.IsNullOrEmpty(sceneName))
 			{
@@ -61,8 +79,65 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 			{
 				return false;
 			}
-			byScene[sceneName] = new Loaded { Instance = instance, Count = 1 };
+			var added = new Loaded { Instance = instance, Count = 1 };
+			AddClimbLinks(climbables, added.Links);
+			byScene[sceneName] = added;
 			return true;
+		}
+
+		/// <summary>One two-way link per valid climbable, for every agent type the project has.</summary>
+		private static void AddClimbLinks(IReadOnlyList<SceneClimbable> climbables, List<NavMeshLinkInstance> into)
+		{
+			if (climbables == null || climbables.Count == 0)
+			{
+				return;
+			}
+			int area = AIController.ClimbArea;
+			int agentTypes = NavMesh.GetSettingsCount();
+			for (int i = 0; i < climbables.Count && i < SceneClimbables.MaxPerScene; i++)
+			{
+				SceneClimbable climbable = climbables[i];
+				if (!ClimbingRules.IsValid(in climbable))
+				{
+					continue;
+				}
+				ClimbingRules.LinkEnds(in climbable, out Vector3 lower, out Vector3 upper);
+				for (int a = 0; a < agentTypes; a++)
+				{
+					NavMeshLinkInstance link = NavMesh.AddLink(LinkFor(lower, upper, NavMesh.GetSettingsByIndex(a).agentTypeID, area));
+					if (NavMesh.IsLinkValid(link))
+					{
+						into.Add(link);
+					}
+				}
+			}
+		}
+
+		/// <summary>The link a climbable is given: a point at each end, both ways, costed by its area (the "Climb" area when the project has one).</summary>
+		public static NavMeshLinkData LinkFor(Vector3 lower, Vector3 upper, int agentTypeID, int area)
+		{
+			return new NavMeshLinkData
+			{
+				startPosition = lower,
+				endPosition = upper,
+				width = 0f,
+				costModifier = -1f,
+				bidirectional = true,
+				area = area >= 0 ? area : 0,
+				agentTypeID = agentTypeID,
+			};
+		}
+
+		private static void RemoveLinks(Loaded loaded)
+		{
+			for (int i = 0; i < loaded.Links.Count; i++)
+			{
+				if (NavMesh.IsLinkValid(loaded.Links[i]))
+				{
+					NavMesh.RemoveLink(loaded.Links[i]);
+				}
+			}
+			loaded.Links.Clear();
 		}
 
 		/// <summary>An instance of <paramref name="sceneName"/> unloaded; the last one takes its NavMesh out.</summary>
@@ -76,6 +151,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 			{
 				return;
 			}
+			RemoveLinks(loaded);
 			loaded.Instance.Remove();
 			byScene.Remove(sceneName);
 		}
@@ -85,6 +161,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 		{
 			foreach (Loaded loaded in byScene.Values)
 			{
+				RemoveLinks(loaded);
 				loaded.Instance.Remove();
 			}
 			byScene.Clear();

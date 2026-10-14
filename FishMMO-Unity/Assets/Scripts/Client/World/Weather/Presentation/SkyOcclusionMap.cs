@@ -1,3 +1,5 @@
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 using FishMMO.Shared.Weather;
 
@@ -9,8 +11,11 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// <para>
 	/// Built from downward raycasts against the scene's own physics (world scenes have local
-	/// physics), a few hundred per frame, and rebuilt once the camera has moved a quarter of the
-	/// map away. The heights go to the GPU as 16 bits across two channels of an 8-bit texture,
+	/// physics), and rebuilt once the camera has moved a quarter of the map away. The rays go as
+	/// one batch (<see cref="RaycastCommand"/>) to the job workers in the frame a build starts and are
+	/// taken in on the next — the same closest hit of the same ray in the same physics scene as a
+	/// ray cast here; the lakes and rivers laid over them are read here, a few hundred texels a
+	/// frame. The heights go to the GPU as 16 bits across two channels of an 8-bit texture,
 	/// which every target samples in a vertex shader, WebGL2 included.
 	/// </para>
 	/// <para>
@@ -43,6 +48,23 @@ namespace FishMMO.Client
 		private bool valid;
 		private float minHeight;
 		private float heightRange = 1f;
+		private Color32[] pixels = new Color32[0];
+
+		// The build's rays on the job workers: cast in the frame the build starts, taken in on the next.
+		private NativeArray<RaycastCommand> commands;
+		private NativeArray<RaycastHit> hits;
+		private JobHandle casting;
+		private bool cast;
+		/// <summary>Rays cast and taken in; the lakes and rivers are laid over them from <see cref="nextRay"/> on.</summary>
+		private bool castTaken;
+		private PhysicsScene castPhysics;
+		private int castLayers;
+
+		/// <summary>
+		/// Set by a probe: every batch is cast again one ray at a time here and any height that differs is reported, a
+		/// check in the editor that the batch is the rays it replaced. Nothing in the game sets it.
+		/// </summary>
+		public static bool Verify;
 
 		public bool IsValid => valid;
 		public int Resolution => resolution;
@@ -112,6 +134,12 @@ namespace FishMMO.Client
 				buildCentre = new Vector2(Mathf.Round(camera.x / texelMeters) * texelMeters, Mathf.Round(camera.z / texelMeters) * texelMeters);
 				buildTop = camera.y + CastAbove;
 				nextRay = 0;
+				Cast(physics, layers);
+				return;
+			}
+			if (!castTaken)
+			{
+				Take();
 			}
 
 			int count = resolution * resolution;
@@ -121,13 +149,10 @@ namespace FishMMO.Client
 			for (int i = nextRay; i < end; i++)
 			{
 				int ix = i % resolution, iz = i / resolution;
-				var origin = new Vector3(left + (ix + 0.5f) * texelMeters, buildTop, bottom + (iz + 0.5f) * texelMeters);
-				building[i] = physics.Raycast(origin, Vector3.down, out RaycastHit hit, CastDistance, layers, QueryTriggerInteraction.Ignore)
-					? hit.point.y
-					: buildTop - CastDistance;
+				float x = left + (ix + 0.5f) * texelMeters, z = bottom + (iz + 0.5f) * texelMeters;
 				// A ray goes through a lake or a river to its bed; their surfaces are laid in here. The sea is
 				// laid over at every read instead, because its tide moves.
-				if (SurfaceWater.TryGetInlandSurfaceAt(origin.x, origin.z, out float inland) && inland > building[i])
+				if (SurfaceWater.TryGetInlandSurfaceAt(x, z, out float inland) && inland > building[i])
 				{
 					building[i] = inland;
 				}
@@ -139,9 +164,71 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>Every ray of the build, as one batch on the job workers.</summary>
+		private void Cast(PhysicsScene physics, LayerMask layers)
+		{
+			int count = resolution * resolution;
+			float size = SizeMeters;
+			float left = buildCentre.x - size * 0.5f, bottom = buildCentre.y - size * 0.5f;
+			// What the single ray asked for: the layers, no triggers, and back faces as the physics settings have them.
+			var query = new QueryParameters(layers, false, QueryTriggerInteraction.Ignore, Physics.queriesHitBackfaces);
+			for (int i = 0; i < count; i++)
+			{
+				int ix = i % resolution, iz = i / resolution;
+				var origin = new Vector3(left + (ix + 0.5f) * texelMeters, buildTop, bottom + (iz + 0.5f) * texelMeters);
+				commands[i] = new RaycastCommand(physics, origin, Vector3.down, query, CastDistance);
+			}
+			castPhysics = physics;
+			castLayers = layers;
+			casting = RaycastCommand.ScheduleBatch(commands, hits, 32, default(JobHandle));
+			cast = true;
+			castTaken = false;
+		}
+
+		/// <summary>The batch's heights: the closest surface each ray met, or as far as it went.</summary>
+		private void Take()
+		{
+			Complete();
+			int count = resolution * resolution;
+			float floor = buildTop - CastDistance;
+			int differ = 0;
+			for (int i = 0; i < count; i++)
+			{
+				RaycastHit hit = hits[i];
+				building[i] = hit.colliderEntityId != EntityId.None ? hit.point.y : floor;
+				if (Verify)
+				{
+					RaycastCommand ray = commands[i];
+					float single = castPhysics.Raycast(ray.from, Vector3.down, out RaycastHit one, CastDistance, castLayers, QueryTriggerInteraction.Ignore)
+						? one.point.y
+						: floor;
+					if (single != building[i])
+					{
+						differ++;
+					}
+				}
+			}
+			if (Verify)
+			{
+				Debug.Log($"[SkyOcclusionMap] {count} batched rays, {differ} heights differ from the single ray's.");
+			}
+			castTaken = true;
+		}
+
+		/// <summary>Waits for the batch, if one is out.</summary>
+		private void Complete()
+		{
+			if (cast)
+			{
+				casting.Complete();
+				cast = false;
+			}
+		}
+
 		/// <summary>Uses a finished set of heights (tests and the build both end here).</summary>
 		public void Publish(float[] source, Vector2 mapCentre)
 		{
+			Complete();
 			System.Array.Copy(source, building, Mathf.Min(source.Length, building.Length));
 			buildCentre = mapCentre;
 			Publish();
@@ -157,7 +244,10 @@ namespace FishMMO.Client
 				max = Mathf.Max(max, building[i]);
 			}
 			float range = Mathf.Max(1f, max - min);
-			var pixels = new Color32[building.Length];
+			if (pixels.Length != building.Length)
+			{
+				pixels = new Color32[building.Length];
+			}
 			for (int i = 0; i < building.Length; i++)
 			{
 				int encoded = Mathf.Clamp(Mathf.RoundToInt((building[i] - min) / range * 65535f), 0, 65535);
@@ -190,6 +280,8 @@ namespace FishMMO.Client
 		/// <summary>Forgets the map (scene change).</summary>
 		public void Invalidate()
 		{
+			// The scene the rays were cast in is going.
+			Complete();
 			valid = false;
 			nextRay = -1;
 			Shader.SetGlobalVector(RangeId, Vector4.zero);
@@ -204,6 +296,9 @@ namespace FishMMO.Client
 			texelMeters = Mathf.Max(0.1f, texel);
 			heights = new float[resolution * resolution];
 			building = new float[resolution * resolution];
+			pixels = new Color32[resolution * resolution];
+			commands = new NativeArray<RaycastCommand>(resolution * resolution, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+			hits = new NativeArray<RaycastHit>(resolution * resolution, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 			texture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false, true)
 			{
 				name = "Sky Occlusion",
@@ -217,6 +312,15 @@ namespace FishMMO.Client
 
 		public void Dispose()
 		{
+			Complete();
+			if (commands.IsCreated)
+			{
+				commands.Dispose();
+			}
+			if (hits.IsCreated)
+			{
+				hits.Dispose();
+			}
 			if (texture != null)
 			{
 				if (Application.isPlaying)

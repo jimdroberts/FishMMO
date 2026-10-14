@@ -22,6 +22,8 @@
 //                                          the colour itself (Params.z, fading by Shape.x metres up),
 //                                          so a plant grows out of the ground it stands on.
 //                                          Params.x = 0 (not set: edit mode, no terrain) = off.
+//   _FishMoss* / _FishMistGround*          the moss layer and the fine ground map it reads (MossShaderGlobals,
+//                                          MistGroundMap; FishMoss.hlsl), on a material with _FishMoss above 0 only
 // The ground reads the same cover through FishWeatherSurface, and foliage through FishWeatherFoliage,
 // both built from FishCoverLook / FishCoverAmount / FishDampen, so a meadow and its grass agree.
 //
@@ -86,6 +88,7 @@ CBUFFER_START(UnityPerMaterial)
     half4 _VaryColour;
     half _Aquatic;
     half _Clinging;
+    half _FishMoss;
 CBUFFER_END
 
 // Not per material: one value for every plant, from the terrains' draw distances.
@@ -676,8 +679,20 @@ half3 VegNormal(VegVaryings input, half facing)
 
 #if defined(FISH_VEG_PASS_FORWARD)
 
-// The terrain's own lighting, for the ground a trunk's base renders (FishGroundContactLit.hlsl).
+// The terrain's own lighting, for the ground a trunk's base renders (FishGroundContactLit.hlsl, included below, after
+// the moss it grows round a waterfall).
 #include "FishGroundLighting.hlsl"
+// The fine ground map, for the moss's damp and how far underground a log lies (a cave's). Read with the core's inline
+// bilinear clamp sampler (GlobalSamplers.hlsl, through FishGroundColour.hlsl), which this pass already binds: no
+// sampler state of its own.
+#define FISH_GROUND_MAP_SAMPLER sampler_LinearClamp
+#include "FishGroundMap.hlsl"
+// Moss on the materials that grow it (_FishMoss: the deadwood's bark and wood), as the world lit shader grows it on
+// rock and stone. Its textures are read with the core's inline trilinear repeat sampler, not the base map's: the
+// deadwood's wood wears the foliage atlas, imported Clamp, and moss projected in world space must repeat. One sampler
+// state more, in a pass far below D3D11's sixteen (twelve with it in the heaviest variant, FXC-measured).
+#define FISH_MOSS_SAMPLER sampler_TrilinearRepeat
+#include "FishMoss.hlsl"
 #include "FishGroundContactLit.hlsl"
 
 // URP's UniversalFragmentPBR (Lighting.hlsl, this package's), step for step, but handing back the main light it
@@ -843,6 +858,18 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
         groundPixel = FishGroundSurfaceAtSite(groundSite, input.positionWS, groundDx, groundDy);
     }
 
+    // Moss (FishMoss.hlsl), ahead of the weather so rain darkens it and snow covers it like the rest. A uniform branch on
+    // the material: every living plant is at 0 and pays this one test. Deadwood is held still (no sway, no reshaping), so
+    // the moss's world-space patches stay put on it; its height over the ground is the one the vertex traced.
+    half occlusion = 1.0h;
+    UNITY_BRANCH
+    if (_FishMoss > 0.0h)
+    {
+        half metallic = 0.0h;
+        FishMossSurface(input.positionWS, input.normalWS, input.contact, FishUnderground(input.positionWS),
+            albedo, normalWS, smoothness, metallic, occlusion);
+    }
+
     if (_FishWeatherAmount > 0.0)
     {
         half3 weatheredAlbedo = albedo;
@@ -893,7 +920,7 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     surface.metallic = 0.0;
     surface.specular = half3(0.0, 0.0, 0.0);
     surface.smoothness = smoothness;
-    surface.occlusion = 1.0;
+    surface.occlusion = occlusion;
     surface.emission = half3(0.0, 0.0, 0.0);
     surface.alpha = 1.0;
     surface.normalTS = half3(0.0, 0.0, 1.0);
@@ -923,7 +950,7 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     color.rgb += albedo * mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation * back * _Translucency * (half)(1.0 - distanceFar));
     if (hasGround && groundWeight > 0.0h)
     {
-        color.rgb = lerp(color.rgb, FishGroundLit(inputData, groundPixel, 1.0h), groundWeight);
+        color.rgb = lerp(color.rgb, FishGroundLit(inputData, groundPixel, 1.0h, groundDx, groundDy), groundWeight);
     }
 
     color.rgb = MixFog(color.rgb, inputData.fogCoord);
@@ -974,78 +1001,15 @@ struct VegDepthVaryings
 float3 _LightDirection;
 float3 _LightPosition;
 
-// This camera's main-light cascades (ShadowCascadeCulling, set just before the shadow maps): xyz each culling sphere's
-// centre, w its radius; how many there are (under 2: nothing is culled).
-float4 _FishCasterSpheres[4];
-float _FishCasterCascades;
-// Per draw (TerrainGpuRenderer's slot blocks): the drawn level's bounding sphere in object space, grown for what the
-// shader does to a plant (VegVary's crown, height and lean, the wind); w 0 where nobody set it, and then nothing is culled.
-float4 _FishCasterSphere;
-// Probe diagnostic (ScenePerfProbe `castercullall`): 1 culls every caster in any cascade VegCasterCulled recognises, to
-// prove the recognition works (the trees' shadows go). 0 as shipped.
-float _FishCasterCullAll;
+// The per-cascade caster culling (FishCasterCulling.hlsl, shared with FishMMO/Weather Lit Indirect's caster): its globals,
+// the per-draw _FishCasterSphere, and the rule.
+#include "FishCasterCulling.hlsl"
 
-// Margin round a nearer cascade's sphere before a caster counts as wholly inside it, as a share of that sphere's radius
-// (and metres on top): room for URP's cascade blend band, where receivers still read the next cascade out.
-#define FISH_CASTER_INSIDE_MARGIN 0.15
-#define FISH_CASTER_INSIDE_METRES 1.0
-
-// Whether this instance draws nothing into the cascade being rendered, decided before any of the plant's own work: its
-// sphere is off this cascade's map, or the plant and the far end of its shadow both lie well inside a nearer cascade's
-// sphere, whose receivers (URP takes the first sphere that contains a point) never read this cascade there. Which
-// cascade is being drawn is told from the projection: a cascade's orthographic half size is its sphere's radius. Where
-// that does not match one of this camera's spheres (a camera that published none, or some other shadow) nothing is culled.
+// Whether this instance draws nothing into the cascade being rendered (FishCasterCulled), decided before any of the
+// plant's own work.
 bool VegCasterCulled()
 {
-    int count = (int)_FishCasterCascades;
-    if (count < 2 || _FishCasterSphere.w <= 0.0)
-    {
-        return false;
-    }
-    // 1 over the cascade's half size, and which cascade has that half size and is centred where this projection is.
-    float perMetre = length(UNITY_MATRIX_VP[0].xyz);
-    int cascade = -1;
-    UNITY_LOOP
-    for (int i = 0; i < count; i++)
-    {
-        float4 sphere = _FishCasterSpheres[i];
-        float2 centre = mul(UNITY_MATRIX_VP, float4(sphere.xyz, 1.0)).xy;
-        if (abs(perMetre * sphere.w - 1.0) < 0.1 && all(abs(centre) < 0.05))
-        {
-            cascade = i;
-        }
-    }
-    if (cascade < 0)
-    {
-        return false;
-    }
-    if (_FishCasterCullAll > 0.5)
-    {
-        return true;
-    }
-    float3 centreWS = TransformObjectToWorld(_FishCasterSphere.xyz);
-    float scale = max(length(UNITY_MATRIX_M._m00_m10_m20), max(length(UNITY_MATRIX_M._m01_m11_m21), length(UNITY_MATRIX_M._m02_m12_m22)));
-    float radius = _FishCasterSphere.w * scale;
-    // Off this cascade's map: the projection looks down the light, so the shadow it throws lies on the same spot of it.
-    float2 onMap = mul(UNITY_MATRIX_VP, float4(centreWS, 1.0)).xy;
-    if (any(abs(onMap) > 1.0 + radius * perMetre))
-    {
-        return true;
-    }
-    // Where its shadow ends: as far down the light as it takes to fall the plant's height (its sphere's diameter).
-    float down = max(_LightDirection.y, 0.1);
-    float3 shadowEnd = centreWS - _LightDirection * (2.0 * radius / down);
-    UNITY_LOOP
-    for (int j = 0; j < cascade; j++)
-    {
-        float4 nearer = _FishCasterSpheres[j];
-        float room = nearer.w - radius - nearer.w * FISH_CASTER_INSIDE_MARGIN - FISH_CASTER_INSIDE_METRES;
-        if (room > 0.0 && distance(centreWS, nearer.xyz) <= room && distance(shadowEnd, nearer.xyz) <= room)
-        {
-            return true;
-        }
-    }
-    return false;
+    return FishCasterCulled();
 }
 #endif
 
@@ -1065,6 +1029,13 @@ VegDepthVaryings VegDepthVertex(VegAttributes input)
         output.positionCS = float4(2.0, 2.0, 2.0, 1.0);
         return output;
     }
+#endif
+#if defined(FISH_VEG_PASS_SHADOW) && defined(_CASTING_PUNCTUAL_LIGHT_SHADOW) && defined(FISH_INDIRECT_INSTANCED)
+    // GPU-drawn plants never cast into a point or spot light's shadow (SiteLightPool's indoor lights): their draws carry
+    // bounds round the camera, so URP puts them into every cube face of every such light, while those lights exist to
+    // keep a room's light from leaking through its walls. Dropped here, before any of the plant's own work.
+    output.positionCS = float4(2.0, 2.0, 2.0, 1.0);
+    return output;
 #endif
 
     precise float3 positionWS;   // as the lit pass's (VegVertex): the prime's depth is what that pass tests against

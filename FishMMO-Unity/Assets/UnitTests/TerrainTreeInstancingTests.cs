@@ -27,6 +27,8 @@ namespace FishMMO.UnitTests
 			"TerrainGpuRenderer", "TerrainGpuMath", "TerrainInstancingShared", "FishInstance", "FishVisible", "RangeAllocator", "TrunkSkirt",
 		};
 		private static readonly float[] TreeLods = { 0.25f, 0.08f, 0.002f };
+		/// <summary>Renderer sources that draw in edit mode by design; the terrain's own tree and detail renderers never do.</summary>
+		private static readonly string[] EditModePreviews = { "CliffRockInstancing.cs" };
 
 		private readonly List<Object> made = new List<Object>();
 
@@ -749,11 +751,24 @@ namespace FishMMO.UnitTests
 				LogAssert.IsFalse(Regex.IsMatch(code, @"\.treePrototypes\s*="), $"{name} never assigns tree prototypes");
 				LogAssert.IsFalse(code.Contains("SetDetailLayer") || code.Contains("SetDetailResolution") || Regex.IsMatch(code, @"\.detailPrototypes\s*="),
 					$"{name} never writes detail layers or prototypes");
-				LogAssert.IsFalse(code.Contains("TerrainCollider"), $"{name} never touches the terrain collider");
+				// Telling a raycast hit on the terrain from one on a prop (GroundTrailMap) only reads the hit's type.
+				LogAssert.IsFalse(Regex.IsMatch(code, @"<\s*TerrainCollider\s*>|\bTerrainCollider\s+\w+\s*[=;)]"), $"{name} never fetches, adds or holds the terrain collider");
 				LogAssert.IsFalse(code.Contains("enableInstancing ="), $"{name} never edits a shared material");
-				LogAssert.IsFalse(code.Contains("[ExecuteAlways]") || code.Contains("[ExecuteInEditMode]") || Regex.IsMatch(code, @"(?<!Runtime)InitializeOnLoad"),
-					$"{name} never runs in edit mode");
+				if (Array.IndexOf(EditModePreviews, name) < 0)
+				{
+					LogAssert.IsFalse(code.Contains("[ExecuteAlways]") || code.Contains("[ExecuteInEditMode]") || Regex.IsMatch(code, @"(?<!Runtime)InitializeOnLoad"),
+						$"{name} never runs in edit mode");
+				}
 			}
+
+			// Baked props have no renderers of their own, so the prop renderer previews them in the editor: an
+			// editor-only hook, the CPU path only, and the cliff objects Unity still draws itself are left alone.
+			string props = CodeOnly(Read(RendererFolder + "/CliffRockInstancing.cs"));
+			LogAssert.IsTrue(Regex.IsMatch(props, @"#if UNITY_EDITOR\s*\n\s*\[UnityEditor\.InitializeOnLoadMethod\]"), "the props' edit-mode hook is compiled into the editor only");
+			LogAssert.IsTrue(props.Contains("OnGpu => Application.isPlaying && gpu != null"), "the GPU path is play mode only");
+			LogAssert.IsTrue(props.Contains("if (Application.isPlaying && preferGpu && gpu == null && !gpuTried)"), "the GPU renderer is only created in play mode");
+			LogAssert.IsTrue(Regex.IsMatch(props, @"if \(OnGpu\)\s*\{\s*foreach \(GeneratedCliffs root"), "cliff objects are only taken over (their renderers switched off) on the GPU path");
+			LogAssert.IsTrue(props.Contains("case UnityEditor.PlayModeStateChange.ExitingEditMode:"), "the edit-mode preview lets go before play mode starts");
 			string system = CodeOnly(Read(RendererFolder + "/TerrainTreeInstancing.cs"));
 			LogAssert.IsTrue(system.Contains("RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)"), "hooked at runtime only");
 			LogAssert.IsTrue(Regex.Matches(system, @"!Application\.isPlaying").Count >= 3, "the hook, the sync and the camera callback check play mode");
@@ -762,7 +777,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(details.Contains("RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)"), "details hooked at runtime only");
 			LogAssert.IsTrue(Regex.Matches(details, @"!Application\.isPlaying").Count >= 3, "details: the hook, the sync and the camera callback check play mode");
 			LogAssert.IsTrue(details.Contains("ExitingPlayMode"), "every terrain's detail distance is put back when play mode ends");
-			LogAssert.IsTrue(details.Contains("detailObjectDistance = d.Distance"), "the detail distance is restored on release");
+			LogAssert.IsTrue(details.Contains("detailObjectDistance = d.Authored"), "the authored detail distance is restored on release, not the grass distance the renderer draws to");
 		}
 	}
 }

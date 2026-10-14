@@ -30,6 +30,18 @@ namespace FishMMO.Water
 		private readonly List<(float distance, Vector4 at, Vector4 velocity)> candidates = new List<(float, Vector4, Vector4)>();
 		private readonly List<int> prune = new List<int>();
 
+		/// <summary>
+		/// Nearest first. One comparer for good: List.Sort with a lambda wraps it in a new comparer object on every call,
+		/// once a frame here. The same comparisons, so the same order.
+		/// </summary>
+		private sealed class NearestFirst : IComparer<(float distance, Vector4 at, Vector4 velocity)>
+		{
+			public static readonly NearestFirst Instance = new NearestFirst();
+
+			public int Compare((float distance, Vector4 at, Vector4 velocity) a, (float distance, Vector4 at, Vector4 velocity) b)
+				=> a.distance.CompareTo(b.distance);
+		}
+
 		/// <summary>Gathers the wakes near the camera and hands them to the shader: once a frame, on the client.</summary>
 		private void UpdateWakes()
 		{
@@ -71,7 +83,7 @@ namespace FishMMO.Water
 					lastSeen.Remove(id);
 				}
 			}
-			candidates.Sort((a, b) => a.distance.CompareTo(b.distance));
+			candidates.Sort(NearestFirst.Instance);
 			int count = Mathf.Min(MaxWakes, candidates.Count);
 			for (int k = 0; k < MaxWakes; k++)
 			{
@@ -88,7 +100,8 @@ namespace FishMMO.Water
 		private void Consider(Transform body, float radius, Vector3 eye)
 		{
 			Vector3 p = body.position;
-			float distance = Vector3.Distance(p, eye);
+			Vector3 offset = p - eye;
+			float squared = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z;
 			int id = body.GetInstanceID();
 			float now = Time.time;
 			Vector3 velocity = Vector3.zero;
@@ -96,7 +109,15 @@ namespace FishMMO.Water
 			{
 				velocity = (p - seen.position) / (now - seen.time);
 			}
+			// Kept for every body however far: its velocity the frame it comes into range is taken from this.
 			lastSeen[id] = (p, now);
+			/* Far ones by the square, before the root and the surface lookup: Vector3.Distance is this square's root. A
+			 * hair of margin, so a body the root would round to exactly the range is still left to the test below. */
+			if (squared > WakeRange * WakeRange * 1.0001f)
+			{
+				return;
+			}
+			float distance = Mathf.Sqrt(squared);
 			if (distance > WakeRange || !SurfaceWater.TryGetInlandSurfaceAt(p.x, p.z, out float level))
 			{
 				return;

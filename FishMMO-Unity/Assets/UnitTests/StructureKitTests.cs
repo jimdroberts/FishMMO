@@ -48,6 +48,31 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void TheChurchsSpireAndBell_StandWhereTheyBelong()
+		{
+			// A lathe turns about the origin; the church's spire and bell were left there, over the nave.
+			StructurePiece church = StructureKit.Get("Church");
+			// Tower (v0): the tower stands 3.6 m square on z −8.5, rising to 13 m; everything above it is the spire and cross.
+			foreach (Vector3 p in StructurePieces.Build(church, 0, 0, Seed).Mesh.Positions)
+			{
+				if (p.y > 13.5f)
+				{
+					Assert.That(Mathf.Abs(p.x), Is.LessThanOrEqualTo(2.8f), $"spire or cross off the tower at {p}");
+					Assert.That(p.z, Is.InRange(-8.5f - 2.8f, -8.5f + 2.8f), $"spire or cross off the tower at {p}");
+				}
+			}
+			// Bell-cote (v1): only the bell-cote on the west gable (z −7) rises above the ridge (10.8 m with its capping); the bell
+			// left at the origin stood out of the ridge's middle to 11.2 m.
+			foreach (Vector3 p in StructurePieces.Build(church, 1, 0, Seed).Mesh.Positions)
+			{
+				if (p.y > 11f)
+				{
+					Assert.That(p.z, Is.LessThanOrEqualTo(-6f), $"above the ridge away from the west gable at {p}");
+				}
+			}
+		}
+
+		[Test]
 		public void EveryPiece_HasKnownTags_AndEveryTagResolves()
 		{
 			var known = new HashSet<string>(StructureKit.Tags, StringComparer.Ordinal);
@@ -114,10 +139,11 @@ namespace FishMMO.UnitTests
 						Bounds b = m.Mesh.Bounds;
 						Assert.That(b.size.x, Is.InRange(0.1f, 40f), $"{name} width");
 						Assert.That(b.size.z, Is.InRange(0.1f, 40f), $"{name} depth");
-						// A deck piece (pier, bridge span) has its walking surface at its origin and hangs below it: its height is
-						// its whole depth, not its top above the origin.
-						Assert.That(p.Anchor == StructureAnchor.Deck ? b.size.y : b.max.y, Is.InRange(0.05f, 25f), $"{name} height");
-						Assert.That(b.min.y, Is.GreaterThanOrEqualTo(p.Anchor == StructureAnchor.Deck ? -6f : -1.3f), $"{name} reaches too far below its origin");
+						// A deck piece (pier, bridge span) has its walking surface at its origin and hangs below it, and a hung piece
+						// (a climbing rope, a hanging lantern) its fixing: its height is its whole depth, not its top above the origin.
+						bool hangs = p.Anchor != StructureAnchor.Ground;
+						Assert.That(hangs ? b.size.y : b.max.y, Is.InRange(0.05f, 25f), $"{name} height");
+						Assert.That(b.min.y, Is.GreaterThanOrEqualTo(hangs ? -6f : -1.3f), $"{name} reaches too far below its origin");
 						// Centred on the origin (a ruin's rubble may pull it off by a little).
 						Assert.That(Mathf.Abs(b.center.x), Is.LessThan(0.25f * b.size.x + 0.6f), $"{name} is not centred in x");
 						Assert.That(Mathf.Abs(b.center.z), Is.LessThan(0.25f * b.size.z + 0.6f), $"{name} is not centred in z");

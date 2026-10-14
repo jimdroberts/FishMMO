@@ -199,13 +199,28 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					bySubmesh = Array.ConvertAll(RockArtNames.FormationMaterials(in type, in shape), name => MaterialOrNull(c, name));
 				}
+				// The due levels of every variant on all cores; a current one is loaded, not rebuilt.
+				var due = new List<(int variant, int lod)>();
+				for (int v = 0; v < RockTypes.VariantCount; v++)
+				{
+					for (int lod = 0; lod < res.Length; lod++)
+					{
+						if (ShouldWrite(c, ProceduralArtCatalogue.MeshPath(RockArtNames.FormationMesh(type.Name, shape.Name, v, lod))))
+						{
+							due.Add((v, lod));
+						}
+					}
+				}
+				RockType rockType = type;
+				int seed = c.Seed;
+				MeshBuilder[] built = BuildAll(due, d => RockFormations.Build(in rockType, in shape, res[d.lod], d.variant, seed));
 				for (int v = 0; v < RockTypes.VariantCount; v++)
 				{
 					var meshes = new Mesh[res.Length];
 					for (int lod = 0; lod < res.Length; lod++)
 					{
-						MeshBuilder b = RockFormations.Build(in type, in shape, res[lod], v, c.Seed);
-						meshes[lod] = WriteMesh(c, b, RockArtNames.FormationMesh(type.Name, shape.Name, v, lod), true);
+						int at = due.IndexOf((v, lod));
+						meshes[lod] = WriteOrLoadMesh(c, at >= 0 ? built[at] : null, RockArtNames.FormationMesh(type.Name, shape.Name, v, lod), true);
 					}
 					WriteProp(c, RockArtNames.FormationPrefab(type.Name, shape.Name, v), meshes, bySubmesh, !shape.Colliderless);
 				}
@@ -399,24 +414,58 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static void WriteCliffSections(Context c)
 		{
+			var due = new List<(string style, int variant)>();
 			foreach (string style in CliffSections.Styles)
 			{
 				for (int v = 0; v < CliffSections.VariantCount; v++)
 				{
-					bool due = false;
 					for (int lod = 0; lod < CliffSections.LevelCount; lod++)
 					{
-						due |= ShouldWrite(c, ProceduralArtCatalogue.MeshPath(CliffSections.MeshName(style, v, lod)));
+						if (ShouldWrite(c, ProceduralArtCatalogue.MeshPath(CliffSections.MeshName(style, v, lod))))
+						{
+							due.Add((style, v));
+							break;
+						}
 					}
-					if (!due)
-					{
-						continue;
-					}
-					MeshBuilder[] levels = CliffSections.BuildMeshes(style, v, c.Seed, out _);
-					for (int lod = 0; lod < levels.Length; lod++)
-					{
-						WriteMesh(c, levels[lod], CliffSections.MeshName(style, v, lod), true);
-					}
+				}
+			}
+			// The fields and their decimation on all cores; written here, in order.
+			int seed = c.Seed;
+			var seconds = new double[due.Count];
+			var indices = new List<int>();
+			for (int i = 0; i < due.Count; i++)
+			{
+				indices.Add(i);
+			}
+			MeshBuilder[][] built = BuildAll(indices, i =>
+			{
+				long started = System.Diagnostics.Stopwatch.GetTimestamp();
+				MeshBuilder[] levels = CliffSections.BuildMeshes(due[i].style, due[i].variant, seed, out _);
+				seconds[i] = (System.Diagnostics.Stopwatch.GetTimestamp() - started) / (double)System.Diagnostics.Stopwatch.Frequency;
+				return levels;
+			});
+			if (due.Count > 0)
+			{
+				// The slowest variants bound this step's time on many cores; named so the next optimisation knows where to look.
+				var order = new List<int>(indices);
+				order.Sort((a, b) => seconds[b].CompareTo(seconds[a]));
+				var slowest = new System.Text.StringBuilder();
+				for (int k = 0; k < Math.Min(6, order.Count); k++)
+				{
+					slowest.Append($" {due[order[k]].style} {due[order[k]].variant} {seconds[order[k]]:0.0}s;");
+				}
+				double total = 0;
+				foreach (double t in seconds)
+				{
+					total += t;
+				}
+				Debug.Log($"[Biome art] Cliff sections: {due.Count} variants, {total:0.0}s of building on {Workers} workers; slowest:{slowest}");
+			}
+			for (int i = 0; i < due.Count; i++)
+			{
+				for (int lod = 0; lod < built[i].Length; lod++)
+				{
+					WriteMesh(c, built[i][lod], CliffSections.MeshName(due[i].style, due[i].variant, lod), true);
 				}
 			}
 		}

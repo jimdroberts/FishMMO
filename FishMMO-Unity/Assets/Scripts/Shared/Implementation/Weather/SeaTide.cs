@@ -48,8 +48,23 @@ namespace FishMMO.Shared.Weather
 		/// <summary>The clock the tide keeps time by; null, <see cref="WorldClock.Shared"/>.</summary>
 		public WorldClock Clock;
 
-		private uint cachedGrid = uint.MaxValue;
-		private float cachedLow, cachedHigh;
+		/// <summary>
+		/// Grid cells kept. Three, because a client replaying its inputs walks back across a grid line and forward again
+		/// every reconcile near one, and the ships pose every one of those ticks: with one cell each crossing summed the
+		/// moons twice over. A cell is a pure function of its grid number and the clock's anchor, so keeping more changes
+		/// no answer.
+		/// </summary>
+		private const int Cells = 3;
+		private readonly uint[] cellGrid = { uint.MaxValue, uint.MaxValue, uint.MaxValue };
+		private readonly float[] cellLow = new float[Cells];
+		private readonly float[] cellHigh = new float[Cells];
+		private int cellNext;
+		/// <summary>The clock's anchor the cells were sampled under: a set or a correction moves every tick's hour, so all go.</summary>
+		private WorldClock anchorClock;
+		private WorldClockAnchor anchorCurrent, anchorPrevious;
+		private bool anchorHas, anchorHasPrevious;
+		private uint anchorSlew;
+		private double anchorTickDelta;
 
 		/// <summary>The still sea's level at a synced server tick, world metres.</summary>
 		public float LevelAt(uint tick) => MeanLevel + TideAt(tick);
@@ -62,18 +77,61 @@ namespace FishMMO.Shared.Weather
 				return 0f;
 			}
 			uint grid = tick / GridTicks;
-			if (grid != cachedGrid)
+			CheckAnchor();
+			int cell = -1;
+			for (int c = 0; c < Cells; c++)
 			{
-				cachedLow = SampleAt((double)grid * GridTicks);
-				cachedHigh = SampleAt((double)(grid + 1) * GridTicks);
-				cachedGrid = grid;
+				if (cellGrid[c] == grid)
+				{
+					cell = c;
+					break;
+				}
+			}
+			if (cell < 0)
+			{
+				cell = cellNext;
+				cellNext = (cellNext + 1) % Cells;
+				cellLow[cell] = SampleAt((double)grid * GridTicks);
+				cellHigh[cell] = SampleAt((double)(grid + 1) * GridTicks);
+				cellGrid[cell] = grid;
 			}
 			float f = (tick - grid * GridTicks) / (float)GridTicks;
-			return Mathf.Round(Mathf.Lerp(cachedLow, cachedHigh, f) * 1000f) / 1000f;
+			return Mathf.Round(Mathf.Lerp(cellLow[cell], cellHigh[cell], f) * 1000f) / 1000f;
 		}
 
 		/// <summary>Forgets the cached samples: after a setting changed, or the clock was re-anchored.</summary>
-		public void Invalidate() => cachedGrid = uint.MaxValue;
+		public void Invalidate()
+		{
+			for (int c = 0; c < Cells; c++)
+			{
+				cellGrid[c] = uint.MaxValue;
+			}
+			cellNext = 0;
+		}
+
+		/// <summary>Forgets the cells when the clock they were sampled by has been set, corrected or swapped.</summary>
+		private void CheckAnchor()
+		{
+			WorldClock clock = Clock ?? WorldClock.Shared;
+			WorldClockAnchor current = clock.Current, previous = clock.Previous;
+			if (ReferenceEquals(clock, anchorClock) && clock.HasAnchor == anchorHas && clock.HasPrevious == anchorHasPrevious
+				&& clock.SlewTicks == anchorSlew && clock.TickDelta == anchorTickDelta
+				&& Same(current, anchorCurrent) && Same(previous, anchorPrevious))
+			{
+				return;
+			}
+			anchorClock = clock;
+			anchorHas = clock.HasAnchor;
+			anchorHasPrevious = clock.HasPrevious;
+			anchorSlew = clock.SlewTicks;
+			anchorTickDelta = clock.TickDelta;
+			anchorCurrent = current;
+			anchorPrevious = previous;
+			Invalidate();
+		}
+
+		private static bool Same(WorldClockAnchor a, WorldClockAnchor b)
+			=> a.Tick == b.Tick && a.WorldSeconds.Equals(b.WorldSeconds) && a.Rate.Equals(b.Rate);
 
 		private float SampleAt(double tick)
 		{
