@@ -77,6 +77,7 @@ Shader "FishMMO/Water/Inland Water"
             #pragma multi_compile_fog
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
             // The sea's global quality keywords, set against what the running URP asset provides.
             #pragma multi_compile_fragment _ _WATER_DEPTH
             #pragma multi_compile_fragment _ _WATER_REFRACTION

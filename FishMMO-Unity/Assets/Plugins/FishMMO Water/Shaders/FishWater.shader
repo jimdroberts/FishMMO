@@ -109,6 +109,7 @@ Shader "FishMMO/Water/Ocean"
             #pragma multi_compile_fog
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
 
             /* Set from C# against what the running URP asset actually provides, so a pipeline with
              * no depth or no opaque copy never samples a texture that is not there. Sampling one

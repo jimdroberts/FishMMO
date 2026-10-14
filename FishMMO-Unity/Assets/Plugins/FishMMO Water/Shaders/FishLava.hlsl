@@ -1,6 +1,8 @@
 #ifndef FISHMMO_LAVA_INCLUDED
 #define FISHMMO_LAVA_INCLUDED
 
+#include "FishWaterSun.hlsl"
+
 // Lava: molten rock standing open to the sky — a lava lake, or the lowlands of a magma ocean.
 //
 // It is NOT a sea, and none of the ocean's machinery applies. Basaltic melt is some ten million
@@ -236,7 +238,8 @@ half FishLavaAdaptedResponse()
 {
 	Light light = GetMainLight();
 	half3 weights = half3(0.2126h, 0.7152h, 0.0722h);
-	half illuminance = dot(light.color, weights) * saturate(light.direction.y) + dot(_GlossyEnvironmentColor.rgb, weights);
+	// The light through the cloud over the viewer (FishWaterSun.hlsl): read bare, a storm read as daylight.
+	half illuminance = dot(light.color * FishWaterCloudLight(_WorldSpaceCameraPos, 1.0h), weights) * saturate(light.direction.y) + dot(_GlossyEnvironmentColor.rgb, weights);
 	half day = saturate(illuminance / max(1e-3h, _DaylightIlluminance));
 	return lerp(_Response, _DayResponse, day);
 }

@@ -616,7 +616,11 @@ half4 GrassForwardFragment(GrassVaryings input, FRONT_FACE_TYPE face : FRONT_FAC
     // Dense grass shades its own base: the ambient and the sun both fall off toward the root.
     float ao = lerp(lerp(_GrassParams1.y, 1.0, saturate(pow(t, 0.75))), 1.0, far);
 
-    Light mainLight = GetMainLight(GrassShadowCoord(input.positionWS));
+    /* With the cloud shadow (URP's cookie on the main light) and the shadow's fade at its distance, as the terrain
+     * under the blades has them. Under cloud SkySystem.ApplyLights divides the light's intensity by the average the
+     * cloud lets through and leaves the cookie to dim it patch by patch: the cookie-less GetMainLight(shadowCoord)
+     * lit a meadow under a storm several times brighter than full sun, over ground that was dark. */
+    Light mainLight = GetMainLight(GrassShadowCoord(input.positionWS), input.positionWS, half4(1.0, 1.0, 1.0, 1.0));
     float3 colour = GrassLit(mainLight.direction, mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation),
         albedo, n, faceN, V, smoothness, ao, far, input.extra.x);
 

@@ -38,6 +38,8 @@ Shader "FishMMO/Grass Blades"
 
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
+            // The cloud shadow, a cookie on the main light (GrassForwardFragment).
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
             // The moon (until it is the main light), companion suns and point lights (GrassForwardFragment).
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP

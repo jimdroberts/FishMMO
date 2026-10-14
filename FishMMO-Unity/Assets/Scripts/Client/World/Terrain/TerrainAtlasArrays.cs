@@ -52,6 +52,13 @@ namespace FishMMO.Client
 			return array;
 		}
 
+		/// <summary>
+		/// Whether an array made here has lost its contents: destroyed, or a render texture the engine released (a device
+		/// reset, a resolution change, some editor reloads). Its maps were copied in on the GPU and nowhere else, so nothing
+		/// restores them, and an atlas that rebuilds only when its terrains change drew nothing from then on.
+		/// </summary>
+		public static bool Lost(Texture texture) => texture == null || (texture is RenderTexture rt && !rt.IsCreated());
+
 		/// <summary>The linear format a TextureFormat's texture is created with (the atlases' maps are all linear data).</summary>
 		public static GraphicsFormat Linear(TextureFormat format) => GraphicsFormatUtility.GetGraphicsFormat(format, false);
 	}

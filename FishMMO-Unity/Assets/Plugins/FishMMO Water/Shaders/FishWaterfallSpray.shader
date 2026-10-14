@@ -49,9 +49,11 @@ Shader "FishMMO/Water/Waterfall Spray"
             #pragma multi_compile_fog
             #pragma multi_compile_fragment _ _WATER_DEPTH
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+            #pragma multi_compile _ _LIGHT_COOKIES
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "FishWaterSun.hlsl"
             #if defined(_WATER_DEPTH)
                 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #endif
@@ -223,6 +225,8 @@ Shader "FishMMO/Water/Waterfall Spray"
                  * shadow), the sky and the ground round it, and much brighter looking toward the sun through it (droplets
                  * scatter forward). */
                 Light mainLight = GetMainLight();
+                // Through the cloud as the ground under it has it (FishWaterSun.hlsl).
+                half3 sunColor = mainLight.color * FishWaterCloudLight(position, 1.0h);
                 float3 toEye = normalize(_WorldSpaceCameraPos - position);
                 half forward = ForwardScatter(dot(-toEye, mainLight.direction), mist ? 0.55 : 0.7);
                 half3 ambient = 0.5 * (SampleSH(float3(0.0, 1.0, 0.0)) + SampleSH(toEye));
@@ -230,12 +234,12 @@ Shader "FishMMO/Water/Waterfall Spray"
                  * bright as what lights it from every side, the sky's light most of all, and glows looking toward the sun.
                  * Lit like a sparse drop (the beam and a little sky) it was a dull grey-brown in a shaded gorge. */
                 half3 tint = mist ? _MistColor.rgb : _SprayColor.rgb;
-                sun = tint * mainLight.color * (mist ? 0.55 + 0.3 * forward : 0.45 + 0.12 * forward);
+                sun = tint * sunColor * (mist ? 0.55 + 0.3 * forward : 0.45 + 0.12 * forward);
                 sky = tint * ambient * (mist ? 1.6 : 0.9);
 
                 // A rainbow in the sunlit spray, round the point opposite the sun; mist's fine drops give only a faint one.
                 half bowAngle = degrees(acos(clamp(dot(-toEye, -mainLight.direction), -1.0, 1.0)));
-                sun += Rainbow(bowAngle) * mainLight.color * _Rainbow * (mist ? 0.25 : 1.0) * saturate(mainLight.direction.y * 4.0 + 0.2);
+                sun += Rainbow(bowAngle) * sunColor * _Rainbow * (mist ? 0.25 : 1.0) * saturate(mainLight.direction.y * 4.0 + 0.2);
             }
 
             Varyings SprayVertex(Attributes input)

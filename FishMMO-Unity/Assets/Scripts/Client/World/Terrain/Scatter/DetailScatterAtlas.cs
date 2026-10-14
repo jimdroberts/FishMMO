@@ -56,7 +56,12 @@ namespace FishMMO.Client
 			{
 				same = ReferenceEquals(builtFrom[i], terrains[i]);
 			}
-			if (!same)
+			bool lost = same && AnyLost();
+			if (lost)
+			{
+				Debug.Log("[Detail scatter] The scatter atlas's texture arrays were released by the engine (their maps live only on the GPU); built again.");
+			}
+			if (!same || lost)
 			{
 				Rebuild(terrains);
 				builtFrom.Clear();
@@ -68,6 +73,18 @@ namespace FishMMO.Client
 				WriteTable(drawDistance);
 			}
 			return Groups.Count > 0;
+		}
+
+		private bool AnyLost()
+		{
+			foreach (Group g in Groups)
+			{
+				if (TerrainAtlasArrays.Lost(g.Heights) || TerrainAtlasArrays.Lost(g.Density) || TerrainAtlasArrays.Lost(g.Holes))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		private readonly List<float> distances = new List<float>();

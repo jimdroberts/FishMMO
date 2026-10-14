@@ -75,14 +75,31 @@ namespace FishMMO.Client
 				current.Add(gt.Arrays);
 				current.Add(gt.Arrays != null ? albedoFor(gt.Arrays) : null);
 			}
-			if (Shared != null && Same(current, builtFrom))
+			bool lost = Shared != null && AnyLost();
+			if (Shared != null && !lost && Same(current, builtFrom))
 			{
 				return Groups.Count > 0;
+			}
+			if (lost)
+			{
+				Debug.Log("[Grass] The grass atlas's texture arrays were released by the engine (their maps live only on the GPU); built again.");
 			}
 			Rebuild(terrains, albedoFor);
 			builtFrom.Clear();
 			builtFrom.AddRange(current);
 			return Groups.Count > 0;
+		}
+
+		private bool AnyLost()
+		{
+			foreach (Group g in Groups)
+			{
+				if (TerrainAtlasArrays.Lost(g.Heights) || TerrainAtlasArrays.Lost(g.Density) || TerrainAtlasArrays.Lost(g.Surface) || TerrainAtlasArrays.Lost(g.Water))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		private static bool Usable(GrassTerrain gt) => gt != null && gt.Heightmap != null && gt.DensityMaps > 0 && gt.Density[0] != null;

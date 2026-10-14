@@ -45,6 +45,7 @@ Shader "FishMMO/Water/Waterfall"
             #pragma multi_compile_fog
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
             #pragma multi_compile_fragment _ _WATER_REFRACTION
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -53,6 +54,7 @@ Shader "FishMMO/Water/Waterfall"
                 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
             #endif
             #include "FishWaterFog.hlsl"
+            #include "FishWaterSun.hlsl"
             #include "FishWaterfall.hlsl"
 
             Varyings FallVertex(Attributes input)
@@ -109,7 +111,7 @@ Shader "FishMMO/Water/Waterfall"
 
                 // ── Light ─────────────────────────────────────────────────────
                 Light mainLight = GetMainLight(TransformWorldToShadowCoord(positionWS));
-                half3 lightColor = mainLight.color * mainLight.shadowAttenuation;
+                half3 lightColor = mainLight.color * mainLight.shadowAttenuation * FishWaterCloudLight(positionWS, 1.0h);
                 half NdotL = dot(bumped, mainLight.direction);
                 // The sky and the ground round it, from the ambient probe: a fall in a gorge lit by its walls, not one flat colour.
                 half3 ambient = SampleSH(bumped);

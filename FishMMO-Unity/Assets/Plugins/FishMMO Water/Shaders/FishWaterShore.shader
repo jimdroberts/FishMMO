@@ -12,7 +12,7 @@ Shader "FishMMO/Water/Shore"
     {
         _FoamColor ("Foam", Color) = (0.97, 0.99, 1.0, 1)
         _SwashColor ("Swash water", Color) = (0.42, 0.58, 0.56, 1)
-        _WetColor ("Wet sand", Color) = (0.26, 0.20, 0.13, 1)
+        _WetDarkening ("Wet sand: how much darker than dry", Range(0, 1)) = 0.5
         _WetAbove ("Wet above the highest run-up (share)", Range(0, 1)) = 0.15
         _FoamScale ("Foam size (m)", Range(0.5, 40)) = 2.2
         _EdgeWobble ("Edge raggedness (share of the run-up)", Range(0, 0.6)) = 0.25
@@ -64,6 +64,7 @@ Shader "FishMMO/Water/Shore"
             #pragma multi_compile_fog
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
             // Set by WaterSurface when the pipeline makes a depth texture; without one there is
             // no ground to project onto.
             #pragma multi_compile_fragment _ _WATER_DEPTH
@@ -72,6 +73,7 @@ Shader "FishMMO/Water/Shore"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "FishWaterShoreCommon.hlsl"
+            #include "FishWaterSun.hlsl"
             #include "FishWaterFog.hlsl"
             #include "FishWaterFoam.hlsl"
             #include "FishWaterFoamField.hlsl"
@@ -79,7 +81,7 @@ Shader "FishMMO/Water/Shore"
             CBUFFER_START(UnityPerMaterial)
                 half4 _FoamColor;
                 half4 _SwashColor;
-                half4 _WetColor;
+                half _WetDarkening;
                 half _WetAbove;
                 half _FoamScale;
                 half _FoamSharpness;
@@ -102,6 +104,23 @@ Shader "FishMMO/Water/Shore"
             // The foam the swash has left on the sand, kept by WaterShore over the shore field.
             TEXTURE2D(_FishWaterFoamMemory);
             SAMPLER(sampler_FishWaterFoamMemory);
+
+            /* How wet the rain has left the ground (the weather's cover map, g; WeatherCoverMap), as the ground's own
+             * shaders read it: declared here rather than included, so the water keeps no dependency on the weather's
+             * shaders. Never published (no weather), every figure is zero, and the ground counts as dry. */
+            float4 _FishCoverRect;      // xy world x/z of the map's corner, zw size in metres
+            float4 _FishCoverParams;    // x 1 when the map is valid
+            float4 _FishWeatherCover;   // the scene-wide cover, where the map does not reach
+            TEXTURE2D(_FishCoverTex);
+
+            half RainWetness(float3 positionWS)
+            {
+                float2 uv = (positionWS.xz - _FishCoverRect.xy) / max(_FishCoverRect.zw, 1e-3);
+                bool mapped = _FishCoverParams.x > 0.5 && all(uv >= 0.0) && all(uv <= 1.0);
+                // Through a shared sampler: this pass is near the sampler limit.
+                float4 cover = mapped ? SAMPLE_TEXTURE2D_LOD(_FishCoverTex, sampler_LinearClamp, uv, 0) : _FishWeatherCover;
+                return (half)saturate(cover.y);
+            }
 
             float _FishWaterLevel;       // the sea's surface now, tide included
             float _FishWaterMeanLevel;   // the level the shore field was built against
@@ -221,10 +240,16 @@ Shader "FishMMO/Water/Shore"
                 sheet *= 1.0 - smoothstep(0.12, 0.35, slope);
 
                 /* NO shadow attenuation on this diffuse tint: the ground under it is already shadowed
-                 * by its own shader, and the band only has to tint what is there. */
+                 * by its own shader, and the band only has to tint what is there.
+                 *
+                 * And no floor of light of its own, as the sea has: the ground it tints has none, and goes as dark
+                 * as the sky lets it. With one, a storm or a night left the swash and the wet sand a pale teal
+                 * band along every shore, brighter than the beach it lay on. */
                 Light mainLight = GetMainLight();
-                half3 lit = mainLight.color * saturate(mainLight.direction.y) * 0.7
-                    + _GlossyEnvironmentColor.rgb * 0.6 + 0.12;
+                // The sun through the cloud as the ground under it has it (FishWaterSun.hlsl): read bare, a rain deck lit the band by ten suns.
+                half3 sunColor = mainLight.color * FishWaterCloudLight(positionWS, 1.0h);
+                half3 lit = sunColor * saturate(mainLight.direction.y) * 0.7
+                    + _GlossyEnvironmentColor.rgb * 0.6;
 
                 /* Wet sand is left by the LAST SEVERAL waves, not by this one: sand takes minutes to
                  * dry and waves arrive every few seconds, so the dark band reaches as high as the
@@ -276,15 +301,21 @@ Shader "FishMMO/Water/Shore"
                 half mottle = mask * 0.7 + bubbles * 0.3;
                 half film = sheet * smoothstep(0.25, 0.6, sheet + (mottle - 0.32) * 0.9);
 
-                half3 color = _WetColor.rgb * lit;
-                half alpha = wet * 0.72;
+                /* Wet sand is the sand darker, not a colour laid over it: the band adds no light and takes a share of
+                 * what the ground has, as the ground's own wetness does (FishDampen). It was a dark brown times this
+                 * pass's guess at the light, at 72%: by day a wet band, but under a storm's deck or at night the guess
+                 * fell to near nothing while the ground kept its own ambient, and the band drew a black line along
+                 * every shore. And rain has already wetted the sand the swash would: on a soaked beach there is no
+                 * line where the waves stop. */
+                half3 color = 0.0h;
+                half alpha = wet * _WetDarkening * (1.0h - RainWetness(positionWS));
 
                 color = lerp(color, _SwashColor.rgb * lit, film);
                 alpha = lerp(alpha, _SwashOpacity, film * film);
 
                 /* The foam: lit as foam is (the sun wrapped round it, the sky as ambient, no light of its own),
                  * opaque where it is thick and lace that lets the sand through where it is thin. */
-                half3 foamLit = FishFoamLight(_FoamColor.rgb, mainLight.color, saturate(mainLight.direction.y), 0.0h, _GlossyEnvironmentColor.rgb * 0.6);
+                half3 foamLit = FishFoamLight(_FoamColor.rgb, sunColor, saturate(mainLight.direction.y), 0.0h, _GlossyEnvironmentColor.rgb * 0.6);
                 half foam;
                 color = FishFoamOver(color, foamCut, foamLit, foam);
                 foam *= _FoamOpacity;
@@ -339,10 +370,11 @@ Shader "FishMMO/Water/Shore"
 
                     half shadow = MainLightRealtimeShadow(TransformWorldToShadowCoord(positionWS));
                     float3 halfway = normalize(mainLight.direction + viewWS);
-                    half glint = pow(saturate(dot(normalWS, halfway)), 600.0) * 24.0;
+                    // Only where the sheet faces the light: a light at or under the horizon has no glint to give.
+                    half glint = pow(saturate(dot(normalWS, halfway)), 600.0) * 24.0 * saturate(dot(normalWS, mainLight.direction) * 4.0);
                     half sunFresnel = 0.02 + 0.98 * pow(1.0 - saturate(dot(halfway, viewWS)), 5.0);
 
-                    sheen = (sky * fresnel + mainLight.color * glint * sunFresnel * shadow) * gloss * fade;
+                    sheen = (sky * fresnel + sunColor * glint * sunFresnel * shadow) * gloss * fade;
                 }
 
                 /* Nothing to lay down — no band (alpha 0) and no sheen — writes (0, 0, 0, 0), which this blend turns

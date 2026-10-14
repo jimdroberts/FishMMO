@@ -634,10 +634,16 @@ namespace FishMMO.Client
 			}
 			// The materials only when something they hold changed: the settings are live in the inspector, so every value is
 			// worked out each frame, but the copies into the five slot materials were native work repeated for nothing.
-			if (materialsPublished && !changed && !buffersChanged && publishedRingCount == ringCount && SameValues(publishedParams, appliedParams)
+			bool intact = !materialsPublished || MaterialsIntact();
+			if (materialsPublished && intact && !changed && !buffersChanged && publishedRingCount == ringCount && SameValues(publishedParams, appliedParams)
 				&& SameValues(ringDistance, appliedRingDistance) && SameValues(ringDensity, appliedRingDensity))
 			{
 				return;
+			}
+			if (!intact && lostMaterialsLogged < 3)
+			{
+				lostMaterialsLogged++;
+				Debug.Log("[Grass] The blade materials had lost what was set on them (a shader reload rebuilds a material from its shader, and this one declares nothing); published again.");
 			}
 			materialsPublished = true;
 			publishedRingCount = ringCount;
@@ -654,6 +660,10 @@ namespace FishMMO.Client
 			}
 			for (int slot = 0; slot < Slots; slot++)
 			{
+				if (slotMaterials[slot] == null)
+				{
+					slotMaterials[slot] = new Material(material) { name = $"Grass Blades (runtime, slot {slot})", hideFlags = HideFlags.DontSave };
+				}
 				slotMaterials[slot].CopyPropertiesFromMaterial(material);
 				slotMaterials[slot].SetBuffer(BladesId, outBuffers[slot]);
 				// Set on each slot's own material too, as its buffer is (see slotMaterials): a draw must never read an unbound table.
@@ -668,6 +678,29 @@ namespace FishMMO.Client
 		private readonly Vector4[] appliedRingDistance = new Vector4[MaxRings], appliedRingDensity = new Vector4[MaxRings];
 		private int publishedRingCount = -1;
 		private bool materialsPublished;
+		private int lostMaterialsLogged;
+		private readonly List<Vector4> ringScratch = new List<Vector4>(MaxRings);
+		private const string BladesName = "_GrassBlades";
+
+		/// <summary>
+		/// Whether the slot materials still hold what <see cref="Publish"/> last set. The shader declares no properties, so
+		/// everything on them is runtime state, and a shader reload (the grass shader or anything it includes recompiled)
+		/// rebuilds them from the shader without it: no blade buffer, no ring tables. With publishing only on change, nothing
+		/// put it back and the grass stayed invisible until a setting was touched. Checked every frame: a handful of reads.
+		/// </summary>
+		private bool MaterialsIntact()
+		{
+			for (int slot = 0; slot < Slots; slot++)
+			{
+				Material m = slotMaterials[slot];
+				if (m == null || outBuffers[slot] == null || !m.GetBuffer(BladesName).Equals(outBuffers[slot].bufferHandle))
+				{
+					return false;
+				}
+			}
+			slotMaterials[0].GetVectorArray(RingDistanceId, ringScratch);
+			return ringScratch.Count == MaxRings && slotMaterials[0].GetVector(Params0Id).Equals(appliedParams[0]);
+		}
 
 		/// <summary>Exact equality, component by component (Vector4's == forgives differences under 1e-5).</summary>
 		private static bool SameValues(Vector4[] a, Vector4[] b)

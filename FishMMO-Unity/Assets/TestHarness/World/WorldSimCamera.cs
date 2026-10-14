@@ -10,8 +10,9 @@ namespace FishMMO.TestHarness.World
 	/// <summary>
 	/// The world test bed's camera: right mouse to look, WASD/QE to move, Shift to hurry, scroll to
 	/// change the field of view (a narrow view is how you check a moon's real size), R to put it back.
-	/// V swaps to walking: a figure put down where the camera is looking, WASD to walk it, Shift to
-	/// run, Space to jump, with the camera following behind and scroll setting how far. In the editor, E while walking
+	/// V swaps to walking: a figure with a player's movement put down where the camera is looking, WASD to walk
+	/// it, Shift to sprint, Space to jump (held, to rise in water), C to crouch, dive or slide down a ladder, left click to
+	/// punch; walking into a ladder or rope climbs it, with the camera following behind and scroll setting how far. In the editor, E while walking
 	/// opens or shuts the door ahead (the sites' server-run doors, simulated here: no server) and F lights a torch.
 	/// </summary>
 	/// <remarks>
@@ -199,17 +200,28 @@ namespace FishMMO.TestHarness.World
 		/// <summary>One frame of walking; a null keyboard (typing into the panel) stands still but keeps falling.</summary>
 		private void Walk(Keyboard keyboard)
 		{
-			var wish = Vector3.zero;
-			bool run = false;
+			float forward = 0f;
+			float right = 0f;
+			bool sprint = false;
 			bool jump = false;
+			bool jumpHeld = false;
+			bool crouch = false;
 			if (keyboard != null)
 			{
-				if (keyboard.wKey.isPressed) wish += Vector3.forward;
-				if (keyboard.sKey.isPressed) wish += Vector3.back;
-				if (keyboard.aKey.isPressed) wish += Vector3.left;
-				if (keyboard.dKey.isPressed) wish += Vector3.right;
-				run = keyboard.leftShiftKey.isPressed;
+				if (keyboard.wKey.isPressed) forward += 1f;
+				if (keyboard.sKey.isPressed) forward -= 1f;
+				if (keyboard.aKey.isPressed) right -= 1f;
+				if (keyboard.dKey.isPressed) right += 1f;
+				sprint = keyboard.leftShiftKey.isPressed;
 				jump = keyboard.spaceKey.wasPressedThisFrame;
+				jumpHeld = keyboard.spaceKey.isPressed;
+				crouch = keyboard.cKey.isPressed;
+				// Left click punches; a click on the panel is the panel's.
+				Mouse mouse = Mouse.current;
+				if (mouse != null && mouse.leftButton.wasPressedThisFrame && !WorldSimPanel.PointerOverPanel)
+				{
+					walker.Punch();
+				}
 #if UNITY_EDITOR
 				if (keyboard.eKey.wasPressedThisFrame)
 				{
@@ -221,9 +233,9 @@ namespace FishMMO.TestHarness.World
 				}
 #endif
 			}
-			// Relative to where the camera faces, flattened: looking down at your feet still walks forward.
-			wish = Quaternion.Euler(0f, yaw, 0f) * wish;
-			walker.Move(wish, run, jump, Time.deltaTime);
+			// Relative to where the camera looks, as a player's input is: flattened on land, and in the water looking
+			// down dives.
+			walker.Move(forward, right, Quaternion.Euler(pitch, yaw, 0f), jump, jumpHeld, crouch, sprint, Time.deltaTime);
 			Follow(Time.deltaTime);
 #if UNITY_EDITOR
 			FlickerTorch();
@@ -243,7 +255,7 @@ namespace FishMMO.TestHarness.World
 				held.transform.SetParent(walker.transform, false);
 				// Held up and a little forward of the right shoulder, so it lights the way and the walls beside it.
 				// Clear of the body, or the figure's own shadow hides what the torch is for.
-				held.transform.localPosition = new Vector3(0.3f, 0.5f, 0.4f);
+				held.transform.localPosition = new Vector3(0.3f, 1.4f, 0.4f);
 				torch = held.AddComponent<Light>();
 				torch.type = LightType.Point;
 				torch.color = new Color(1f, 0.64f, 0.34f);

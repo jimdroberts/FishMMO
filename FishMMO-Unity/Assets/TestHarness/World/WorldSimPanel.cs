@@ -392,7 +392,7 @@ namespace FishMMO.TestHarness.World
 				}
 				walkButton.text = WalkText();
 			});
-			walkButton.tooltip = "V: walk a capsule about the scene with the camera behind it, or fly again from where the camera is.";
+			walkButton.tooltip = "V: walk the scene with a player's movement (swimming and climbing too), the camera behind, or fly again from where the camera is.";
 			walkButton.style.flexGrow = 0;
 			walkButton.style.flexBasis = StyleKeyword.Auto;
 			Button hide = SmallButton("Hide panel", () => SetPanelShown(false));
@@ -407,7 +407,7 @@ namespace FishMMO.TestHarness.World
 			header.Add(actions);
 			panel.Add(header);
 
-			var help = new Label("Right-drag to look · scroll to zoom · WASD/QE to fly · Shift to hurry · V to walk (Space jumps, scroll sets the distance, Ctrl+scroll zooms"
+			var help = new Label("Right-drag to look · scroll to zoom · WASD/QE to fly · Shift to hurry · V to walk as a player moves (Shift sprints, Space jumps and rises in water, C crouches, dives and slides down ladders, left click punches, walk into a ladder or rope to climb, scroll sets the distance, Ctrl+scroll zooms"
 #if UNITY_EDITOR
 				+ ", E opens or shuts the door ahead, F lights a torch"
 #endif

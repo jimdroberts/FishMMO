@@ -211,7 +211,7 @@ half4 LavaFragment(LavaVaryings input) : SV_Target
 		shadowCoord = TransformWorldToShadowCoord(positionWS);
 	#endif
 	Light mainLight = GetMainLight(shadowCoord);
-	half3 lightColor = mainLight.color * mainLight.shadowAttenuation;
+	half3 lightColor = mainLight.color * mainLight.shadowAttenuation * FishWaterCloudLight(positionWS, 1.0h);
 	half NdotL = saturate(dot(normalWS, mainLight.direction));
 	half NdotV = saturate(dot(normalWS, view));
 

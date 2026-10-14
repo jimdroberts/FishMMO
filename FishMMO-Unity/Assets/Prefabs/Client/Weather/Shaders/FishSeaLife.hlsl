@@ -226,7 +226,8 @@ half4 SeaLifeForwardFragment(SeaLifeVaryings input, FRONT_FACE_TYPE face : FRONT
 #else
     float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
 #endif
-    Light mainLight = GetMainLight(shadowCoord);
+    // With the cloud shadow (the main light's cookie): under cloud the light is boosted for the cookie to dim (FishGrassBlades.hlsl).
+    Light mainLight = GetMainLight(shadowCoord, input.positionWS, half4(1.0, 1.0, 1.0, 1.0));
     float3 light = mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation);
     float nl = dot(n, mainLight.direction);
     // Wrapped a little: a fish's flank is round, and light in water comes from everywhere.

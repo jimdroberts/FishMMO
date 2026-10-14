@@ -284,7 +284,7 @@ Shader "FishMMO/Water/Underwater"
 
                 Light sun = GetMainLight();
                 float3 toSun = sun.direction;
-                half3 sunLight = sun.color * saturate(toSun.y) * 0.9 * saturate(_FishWaterCloudShadow);
+                half3 sunLight = sun.color * saturate(toSun.y) * 0.9 * FishWaterCloudLight(origin, saturate(_FishWaterCloudShadow));
                 half3 skyLight = _GlossyEnvironmentColor.rgb * 0.8;
                 float depthHere = max(0.0, _FishWaterLevel - origin.y);
 
@@ -415,6 +415,7 @@ Shader "FishMMO/Water/Underwater"
              * needs the shadow at points in the water, which only the shadow map has. No soft
              * variant either — sixteen steps of one hardware-filtered tap is the softening. */
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
             ENDHLSL
         }
 
@@ -435,6 +436,7 @@ Shader "FishMMO/Water/Underwater"
             #pragma fragment FragGeometry
             #pragma target 3.5
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile_fragment _ _LIGHT_COOKIES
             ENDHLSL
         }
     }

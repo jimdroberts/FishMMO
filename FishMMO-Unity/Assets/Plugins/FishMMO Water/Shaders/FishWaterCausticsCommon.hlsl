@@ -21,6 +21,8 @@
 // _FishWaterDerivatives1, _FishWaterDerivatives2, _FishWaterPatch, _FishWaterLevel,
 // _FishWaterCloudShadow — and URP's lighting.
 
+#include "FishWaterSun.hlsl"
+
 SAMPLER(sampler_linear_repeat);
 float4 _FishWaterCaustics;   // x strength (0 off), y clarity in metres, z gone by this far from the camera
 
@@ -155,7 +157,7 @@ half FishWaterCausticLight(float3 positionWS)
 		 * surface, where the lens has not yet converged anything; and it needs the sun, unshadowed
 		 * and out from under the clouds. */
 		half shadow = MainLightRealtimeShadow(TransformWorldToShadowCoord(positionWS));
-		half open = saturate(toSun.y * 3.0) * shadow * saturate(_FishWaterCloudShadow);
+		half open = saturate(toSun.y * 3.0) * shadow * dot(FishWaterCloudLight(positionWS, saturate(_FishWaterCloudShadow)), 1.0h / 3.0h);
 		half far = 1.0 - smoothstep(fadeDistance * 0.5, fadeDistance, seen);
 		half strength = _FishWaterCaustics.x * exp(-depth / max(0.5, _FishWaterCaustics.y))
 			* smoothstep(0.02, 0.3, depth) * open * far;

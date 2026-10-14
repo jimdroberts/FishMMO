@@ -515,11 +515,14 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					Limb(Vector3.zero, new Vector3(0f, split * 0.5f, 0f), top, sp.TrunkRadius, sp.TrunkRadius * 0.7f, 10, lod == 0 ? 5 : 3, false);
 				}
-				// The trunk's centre at a height: the curve above runs t = y / split, its lean growing as t².
+				// The trunk's centre at a height, as the trunk above was drawn: the curve (plain or swollen) runs t = y / split
+				// with its lean growing as t²; a gnarled trunk's strands wind round a straight line, its lean growing as t.
+				bool straightAxis = sp.TrunkSwell <= 0f && sp.Gnarl > 0f;
 				Vector3 TrunkAt(float y)
 				{
 					float t = Mathf.Clamp01(y / Mathf.Max(0.01f, split));
-					return new Vector3(lean.x * t * t, y, lean.z * t * t);
+					float leaned = straightAxis ? t : t * t;
+					return new Vector3(lean.x * leaned, y, lean.z * leaned);
 				}
 				Buttresses(TrunkAt);
 				PropRoots(TrunkAt);
@@ -536,7 +539,10 @@ namespace FishMMO.Shared.WorldDesign
 					// shoulders only, or they would break out of its swollen sides halfway up, and a buttressed
 					// emergent's too: a kapok's bole stands bare to its crown.
 					bool shoulders = sp.TrunkSwell > 0f || sp.ButtressCount > 0;
-					Vector3 start = top + Vector3.down * rng.Range(0f, split * (shoulders ? 0.08f : 0.35f));
+					// On the trunk's centre line at that height, where every limb has to start (VegVary turns and thickens
+					// about it). It was the top's point moved straight down, which kept the whole lean: a leaning trunk's lower
+					// limbs started up to six tenths of the lean off its axis, their open ends standing beside the trunk.
+					Vector3 start = TrunkAt(split - rng.Range(0f, split * (shoulders ? 0.08f : 0.35f)));
 					Vector3 end = crown + outward * crownRadius * rng.Range(0.55f, 0.9f) + Vector3.up * (h - crown.y) * rise * 0.6f;
 					// A gnarled tree's dead limbs (half a bristlecone's), drawn as a dead tree's.
 					bool leafy = leaves && !(BareShare > 0f && Hash(100 + l, 23) < BareShare);

@@ -722,6 +722,67 @@ namespace FishMMO.UnitTests
 			Assert.That(pine.Height, Is.GreaterThan(birch.Height), "a pine overtops a birch");
 		}
 
+		/// <summary>
+		/// Every limb of a branching tree starts on its trunk's centre line, inside the trunk: the vegetation shader turns
+		/// each limb about its foot and thickens the trunk about that line (VegVary), on the promise that nothing comes away
+		/// from it. A leaning trunk's lower limbs used to start at the top's point moved straight down, keeping the whole
+		/// lean while the trunk's own lean grows as t², and stood beside the trunk with their open ends showing.
+		/// </summary>
+		[Test]
+		public void TreeSpecies_LimbsStartOnTheTrunksCentreLine()
+		{
+			int checkedLimbs = 0;
+			foreach (TreeSpecies t in ProceduralArtCatalogue.Trees)
+			{
+				if (t.Form != TreeForm.Broadleaf && t.Form != TreeForm.Dead)
+				{
+					continue;
+				}
+				TreeSpecies species = t;
+				MeshBuilder mesh = TreeMeshes.Build(in species, 0, Seed);
+				// The trunk's centre line, from its rings' pivots (MarkTrunkRings): averaged over quarter-metre bands of
+				// height, so a gnarled trunk's strands, each marked about its own line, give the axis they wind round.
+				var levels = new SortedDictionary<int, (Vector3 sum, int count)>();
+				var limbFeet = new HashSet<Vector3>();
+				for (int i = 0; i < mesh.PartData.Count; i++)
+				{
+					Vector4 data = mesh.PartData[i];
+					Vector4 pivot = mesh.PartPivots[i];
+					if (Mathf.Approximately(data.z, (float)PlantPart.Fixed) && Mathf.Approximately(data.w, 1f))
+					{
+						int key = Mathf.FloorToInt(pivot.y / 0.25f);
+						levels.TryGetValue(key, out (Vector3 sum, int count) level);
+						levels[key] = (level.sum + (Vector3)pivot, level.count + 1);
+					}
+					else if (Mathf.Approximately(data.z, (float)PlantPart.Limb))
+					{
+						limbFeet.Add(new Vector3(pivot.x, pivot.y, pivot.z));
+					}
+				}
+				var axis = new List<Vector3>();
+				foreach (KeyValuePair<int, (Vector3 sum, int count)> level in levels)
+				{
+					axis.Add(level.Value.sum / level.Value.count);
+				}
+				Assert.That(axis.Count, Is.GreaterThan(1), $"{t.Name} has no marked trunk");
+				foreach (Vector3 foot in limbFeet)
+				{
+					if (foot.y > axis[axis.Count - 1].y || foot.y < axis[0].y)
+					{
+						continue;
+					}
+					int above = axis.FindIndex(p => p.y >= foot.y);
+					Vector3 a = axis[Mathf.Max(0, above - 1)], b = axis[above];
+					Vector3 centre = b.y > a.y ? Vector3.Lerp(a, b, (foot.y - a.y) / (b.y - a.y)) : b;
+					float off = new Vector2(foot.x - centre.x, foot.z - centre.z).magnitude;
+					Assert.That(off, Is.LessThan(t.TrunkRadius * 0.4f),
+						$"{t.Name}: a limb starts {off:F2} m off the trunk's centre line at {foot.y:F1} m (trunk radius {t.TrunkRadius:F2} m)");
+					checkedLimbs++;
+				}
+			}
+			Assert.That(checkedLimbs, Is.GreaterThan(0), "no limb was checked");
+		}
+
 		[Test]
 		public void TreeSpecies_BroadCrownsCarryEnoughLeafToStayFull()
 		{

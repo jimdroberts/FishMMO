@@ -1,71 +1,81 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using KinematicCharacterController;
 using FishMMO.Shared;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.TestHarness.World
 {
 	/// <summary>
-	/// The body the world test bed's camera follows in walk mode: a capsule collider, moved by sweeping
-	/// that capsule through the scene, so it stands on the terrain, climbs what a person could climb
-	/// and stops at what they could not. What it looks like is <see cref="WorldSimWalkerBody"/>'s.
+	/// The body the world test bed's camera follows in walk mode: the game's own character movement, a
+	/// <see cref="KinematicCharacterMotor"/> driven by the <see cref="KCCController"/> players have, so it walks, steps,
+	/// slides, jumps, swims, dives, climbs out of water and climbs ladders and ropes exactly as a player does. What it
+	/// looks like is <see cref="WorldSimWalkerBody"/>'s.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Kinematic, not a rigidbody pushed about.</b> A dynamic capsule on frictionless material
-	/// slides down every gentle slope it is left standing on, and one with friction sticks to walls
-	/// it is walked into. Sweeping the collider and sliding along what it hits gives the same answer
-	/// every frame, which is what a bed for looking at the world wants from its legs.
+	/// <b>The real movement, not a copy of it.</b> It was a capsule swept through the scene by rules of its own, which
+	/// could not swim or climb and stood where a player might not. Now what stops the walker stops a player.
 	/// </para>
 	/// <para>
-	/// It collides with the layers the game's characters stand on (Default and Ground) and lives on
-	/// Player itself, so no sweep ever finds the capsule it is sweeping. Prop collision is streamed:
-	/// the walker registers itself as a focus, so the rocks and trunks round it are built the moment
-	/// it is put down rather than on the streamer's next tick.
+	/// <b>Stepped here,</b> once a frame, as KCCPlayer steps it once a tick: the inputs, the motor's two phases, the
+	/// transform. No server and no prediction. The water is read at the bed's own tick (<see cref="WeatherQuery.CurrentTick"/>),
+	/// the climbables are the scene's (<see cref="SceneClimbables"/>). There is no character, so the controller runs
+	/// unmetered (no stamina to pay for a jump or a sprint) and unscaled (no Move Speed).
+	/// </para>
+	/// <para>
+	/// <b>Set up as the playable prefabs are</b> (Assets/Prefabs/Shared/Entity/PlayableCharacters): a capsule 0.3 m round
+	/// and 1.6 m tall with its pivot at the feet, the same step, slope, ledge and layers. It lives on Player, so no query
+	/// finds it. Prop collision is streamed: the walker registers itself as a focus, so the rocks and trunks round it are
+	/// built the moment it is put down rather than on the streamer's next tick.
 	/// </para>
 	/// </remarks>
-	[RequireComponent(typeof(CapsuleCollider))]
 	public sealed class WorldSimWalker : MonoBehaviour
 	{
-		public float WalkSpeed = 4.5f;
-		public float RunSpeed = 9f;
-		public float JumpSpeed = 5f;
-		[Tooltip("Steepest ground, in degrees, the walker stands on. Anything steeper is a wall: it is slid along, never walked up.")]
-		public float SlopeLimit = 50f;
-		[Tooltip("Tallest ledge, in metres, the walker steps straight up onto.")]
-		public float StepHeight = 0.35f;
-		[Tooltip("Gap kept between the capsule and whatever it touches, so a sweep never starts inside what it hit last.")]
-		public float Skin = 0.02f;
+		// The playable prefabs' values.
+		private const float CapsuleRadius = 0.3f;
+		private const float CapsuleHeight = 1.6f;
+		private const float CrouchedHeight = 0.8f;
 
 		/// <summary>On walkable ground this frame.</summary>
-		public bool Grounded { get; private set; }
+		public bool Grounded => motor != null && motor.GroundingStatus.IsStableOnGround;
 
-		/// <summary>The height of the capsule in world metres; its pivot is its centre.</summary>
-		public float Height => capsule == null ? 0f : capsule.height * transform.lossyScale.y;
+		/// <summary>In the water, floating or diving.</summary>
+		public bool Swimming => controller != null && controller.IsSwimming;
 
-		/// <summary>The radius of the capsule in world metres.</summary>
-		public float Radius => capsule == null ? 0f : capsule.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
+		/// <summary>On a ladder or a rope.</summary>
+		public bool Climbing => controller != null && controller.IsClimbing;
+
+		/// <summary>Crouched.</summary>
+		public bool Crouching => controller != null && controller.IsCrouching;
+
+		/// <summary>The height of the capsule in metres (less while crouching); its pivot is its feet.</summary>
+		public float Height => motor != null && motor.Capsule != null ? motor.Capsule.height : CapsuleHeight;
+
+		/// <summary>The radius of the capsule in metres.</summary>
+		public float Radius => motor != null && motor.Capsule != null ? motor.Capsule.radius : CapsuleRadius;
 
 		/// <summary>World position of the soles of its feet.</summary>
-		public Vector3 Feet => transform.position - Vector3.up * (Height * 0.5f);
+		public Vector3 Feet => transform.position;
 
-		private const int MaxSlides = 4;
-		private const float TurnRate = 12f;
+		/// <summary>A drop past this below the last ground stood on is off the edge of the scene: put back.</summary>
+		private const float LostMetres = 500f;
 
-		private CapsuleCollider capsule;
+		private KinematicCharacterMotor motor;
+		private KCCController controller;
 		private WorldSimWalkerBody body;
-		private int mask;
-		private float verticalSpeed;
-		private Vector3 groundNormal = Vector3.up;
+		private int groundMask;
 		private Vector3 lastSafe;
-		private readonly Collider[] overlaps = new Collider[16];
 
 		/// <summary>
-		/// A capsule the size of a person — 1.8 m tall, 0.35 m round — in the same scene as
-		/// <paramref name="near"/>, so its sweeps run in that scene's physics.
+		/// A walker set up as a player is, in the same scene as <paramref name="near"/>, so its motor's queries run in
+		/// that scene's physics.
 		/// </summary>
 		public static WorldSimWalker Create(Component near)
 		{
 			var host = new GameObject("World Sim Walker");
+			// Built inactive, so the motor, the controller and the walker wake with their settings in place.
+			host.SetActive(false);
 			if (near != null && near.gameObject.scene.IsValid())
 			{
 				SceneManager.MoveGameObjectToScene(host, near.gameObject.scene);
@@ -75,22 +85,61 @@ namespace FishMMO.TestHarness.World
 			{
 				host.layer = player;
 			}
-			CapsuleCollider shape = host.AddComponent<CapsuleCollider>();
-			shape.height = 1.8f;
-			shape.radius = 0.35f;
+			host.AddComponent<CapsuleCollider>();
 			Rigidbody rigidbody = host.AddComponent<Rigidbody>();
 			rigidbody.isKinematic = true;
 			rigidbody.useGravity = false;
+
+			KinematicCharacterMotor motor = host.AddComponent<KinematicCharacterMotor>();
+			motor.MaxStableSlopeAngle = 60f;
+			motor.MaxStepHeight = 0.25f;
+			motor.MinRequiredStepDepth = 0.1f;
+			motor.LedgeAndDenivelationHandling = true;
+			motor.MaxStableDistanceFromLedge = 0.3f;
+			motor.MaxStableDenivelationAngle = 180f;
+			// Solid: Default, Water and Ground; standable: Default and Ground (water is solid but never stood on).
+			motor.CollidableLayers = Mask(145, "Default", "Water", "Ground");
+			motor.StableGroundLayers = Mask(129, "Default", "Ground");
+
+			KCCController controller = host.AddComponent<KCCController>();
+			controller.Motor = motor;
+			controller.StableMovementSharpness = 10000f;
+			// Facing where it goes, not where the camera looks: the bed's camera swings freely round it, and the clips
+			// have no strafe.
+			controller.OrientationMethod = OrientationMethod.TowardsMovement;
+			controller.OrientationSharpness = 10f;
+			controller.MaxAirMoveSpeed = 4f;
+			controller.AirAccelerationSpeed = 2.5f;
+			controller.Drag = 0.1f;
+			controller.AllowJumpingWhenSliding = true;
+			controller.JumpPreGroundingGraceTime = 0.1f;
+			controller.JumpPostGroundingGraceTime = 0.1f;
+			controller.CrouchedCapsuleHeight = CrouchedHeight;
+			controller.FullCapsuleHeight = CapsuleHeight;
+			controller.CapsuleBaseOffset = CapsuleHeight * 0.5f;
+			motor.CharacterController = controller;
+
 			WorldSimWalker walker = host.AddComponent<WorldSimWalker>();
+			host.SetActive(true);
+			// The capsule's settings are the motor's own (serialized, not settable): sized once it has woken.
+			motor.SetCapsuleDimensions(CapsuleRadius, CapsuleHeight, CapsuleHeight * 0.5f);
+			motor.SetPhysicsScene(host.scene.GetPhysicsScene());
 			walker.body = WorldSimWalkerBody.Dress(walker);
 			return walker;
 		}
 
+		private static LayerMask Mask(int fallback, params string[] layers)
+		{
+			int mask = LayerMask.GetMask(layers);
+			return mask != 0 ? mask : fallback;
+		}
+
 		private void Awake()
 		{
-			capsule = GetComponent<CapsuleCollider>();
+			motor = GetComponent<KinematicCharacterMotor>();
+			controller = GetComponent<KCCController>();
 			int solid = LayerMask.GetMask("Default", "Ground");
-			mask = (solid != 0 ? solid : Physics.DefaultRaycastLayers) & ~(1 << gameObject.layer);
+			groundMask = (solid != 0 ? solid : Physics.DefaultRaycastLayers) & ~(1 << gameObject.layer);
 		}
 
 		private void OnEnable()
@@ -107,29 +156,33 @@ namespace FishMMO.TestHarness.World
 		}
 
 		/// <summary>
-		/// Stands the walker on whatever is under <paramref name="feet"/>: the ground found sweeping
-		/// down from a little above it, or the terrain, or the point itself when there is neither.
+		/// Stands the walker, facing as its transform does, on whatever is under <paramref name="feet"/>: the ground found
+		/// looking down from a little above it, or the terrain, or the point itself when there is neither.
 		/// </summary>
 		public void PlaceAt(Vector3 feet)
 		{
-			float half = Height * 0.5f;
-			Vector3 centre = feet + Vector3.up * (half + 2f);
-			// Re-registered so the chunks round the new spot are finished before the first sweep.
+			// Re-registered so the chunks round the new spot are finished before the first step.
 			PropColliderStreamer.RemoveFocus(transform);
 			PropColliderStreamer.AddFocus(transform, PropColliderStreamer.ImmediateRadius);
-			if (Cast(centre, Vector3.down, 4f, out RaycastHit hit))
+			Vector3 at = feet;
+			if (gameObject.scene.GetPhysicsScene().Raycast(feet + Vector3.up * 2f, Vector3.down, out RaycastHit hit, 4f, groundMask, QueryTriggerInteraction.Ignore))
 			{
-				centre += Vector3.down * Mathf.Max(0f, hit.distance - Skin);
+				at = hit.point;
 			}
 			else
 			{
 				float ground = WorldSimCamera.GroundBelow(feet);
-				centre = new Vector3(feet.x, (float.IsNegativeInfinity(ground) ? feet.y : ground) + half + Skin, feet.z);
+				if (!float.IsNegativeInfinity(ground))
+				{
+					at.y = ground;
+				}
 			}
-			transform.position = centre;
-			lastSafe = centre;
-			verticalSpeed = 0f;
-			Grounded = false;
+			Quaternion facing = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+			motor.SetPositionAndRotation(at, facing);
+			motor.BaseVelocity = Vector3.zero;
+			controller.ResetGroundProbe();
+			transform.SetPositionAndRotation(at, facing);
+			lastSafe = at;
 			if (body != null)
 			{
 				body.Settle();
@@ -138,234 +191,72 @@ namespace FishMMO.TestHarness.World
 		}
 
 		/// <summary>
-		/// One frame of walking: <paramref name="wish"/> is the flat direction asked for (length up to
-		/// one), turned into speed here.
+		/// One frame of the player's controls: <paramref name="forward"/> and <paramref name="right"/> are the move keys
+		/// (−1..1), <paramref name="view"/> the camera's rotation (it decides what forward is, and looking down while
+		/// swimming dives). <paramref name="jump"/> is the press, <paramref name="jumpHeld"/> the key held (rising in water),
+		/// <paramref name="crouch"/> crouches, dives, and slides down a ladder; <paramref name="sprint"/> sprints.
 		/// </summary>
-		public void Move(Vector3 wish, bool run, bool jump, float deltaTime)
+		public void Move(float forward, float right, Quaternion view, bool jump, bool jumpHeld, bool crouch, bool sprint, float deltaTime)
 		{
-			if (capsule == null || deltaTime <= 0f)
+			if (motor == null || deltaTime <= 0f)
 			{
 				return;
 			}
-			// A shader compiling on first sight stalls the frame for seconds; a step that long is a
-			// teleport, not a walk.
+			// A shader compiling on first sight stalls the frame for seconds; a step that long is a teleport, not a walk.
 			deltaTime = Mathf.Min(deltaTime, 0.1f);
-			wish.y = 0f;
-			if (wish.sqrMagnitude > 1f)
+
+			int flags = 0;
+			flags.EnableBit(KCCMoveFlags.IsActualData);
+			if (jump)
 			{
-				wish.Normalize();
+				flags.EnableBit(KCCMoveFlags.Jump);
 			}
-			Vector3 horizontal = wish * (run ? RunSpeed : WalkSpeed) * deltaTime;
-			float gravity = Mathf.Abs(Physics.gravity.y);
+			if (jumpHeld)
+			{
+				flags.EnableBit(KCCMoveFlags.Ascend);
+			}
+			if (crouch)
+			{
+				flags.EnableBit(KCCMoveFlags.Crouch);
+			}
+			if (sprint)
+			{
+				flags.EnableBit(KCCMoveFlags.Sprint);
+			}
+			var input = new KCCInputReplicateData(forward, right, flags, transform.position + Vector3.up * CapsuleHeight, view);
 
 			Vector3 start = transform.position;
-			Vector3 position = Depenetrate(start);
-
-			if (Grounded && jump)
-			{
-				Grounded = false;
-				verticalSpeed = JumpSpeed;
-			}
-
-			if (Grounded)
-			{
-				// Along the ground, so walking downhill does not launch off it a frame at a time.
-				Vector3 along = Vector3.ProjectOnPlane(horizontal, groundNormal);
-				if (along.sqrMagnitude > 1e-10f)
-				{
-					along = along.normalized * horizontal.magnitude;
-				}
-				position = Walk(position, along);
-				// Held to the ground: as far down as a run down the steepest walkable slope drops in a frame.
-				float snap = StepHeight + horizontal.magnitude * Mathf.Tan(SlopeLimit * Mathf.Deg2Rad) + Skin;
-				if (Cast(position, Vector3.down, snap + Skin, out RaycastHit below) && Walkable(below.normal))
-				{
-					position += Vector3.down * Mathf.Max(0f, below.distance - Skin);
-					groundNormal = below.normal;
-					verticalSpeed = 0f;
-				}
-				else
-				{
-					Grounded = false;
-					verticalSpeed = 0f;
-				}
-			}
-			else
-			{
-				verticalSpeed -= gravity * deltaTime;
-				Vector3 motion = horizontal + Vector3.up * (verticalSpeed * deltaTime);
-				Vector3 before = position;
-				position = Slide(position, motion, false);
-				// A ceiling ends the rise there rather than holding the walker against it.
-				if (verticalSpeed > 0f && position.y - before.y < motion.y * 0.5f)
-				{
-					verticalSpeed = 0f;
-				}
-			}
-
-			// Landed this frame? A grounded step has already found its ground.
-			if (!Grounded)
-			{
-				if (verticalSpeed <= 0f && Cast(position, Vector3.down, Skin * 3f, out RaycastHit ground) && Walkable(ground.normal))
-				{
-					Grounded = true;
-					groundNormal = ground.normal;
-					verticalSpeed = 0f;
-				}
-				else
-				{
-					groundNormal = Vector3.up;
-				}
-			}
-
-			position = KeepAboveTerrain(position);
+			controller.SetInputs(ref input);
+			controller.WaterTick = WeatherQuery.CurrentTick;
+			motor.SetPlatformVelocity(Vector3.zero, 0f);
+			motor.UpdatePhase1(deltaTime);
+			motor.UpdatePhase2(deltaTime);
+			Vector3 position = motor.TransientPosition;
 			if (Grounded)
 			{
 				lastSafe = position;
 			}
-			else if (position.y < lastSafe.y - 500f)
+			else if (position.y < lastSafe.y - LostMetres)
 			{
 				// Walked off the edge of the scene: back to the last ground stood on.
-				position = lastSafe;
-				verticalSpeed = 0f;
+				PlaceAt(lastSafe);
+				return;
 			}
-			transform.position = position;
-
-			if (wish.sqrMagnitude > 1e-4f)
-			{
-				Quaternion facing = Quaternion.LookRotation(wish, Vector3.up);
-				transform.rotation = Quaternion.Slerp(transform.rotation, facing, 1f - Mathf.Exp(-TurnRate * deltaTime));
-			}
+			transform.SetPositionAndRotation(position, motor.TransientRotation);
 
 			if (body != null)
 			{
-				body.Pose((position - start) / deltaTime, Grounded, deltaTime);
+				body.Pose((position - start) / deltaTime, Grounded, Swimming, Climbing, Crouching, deltaTime);
 			}
 		}
 
-		/// <summary>A grounded move, stepping up onto a ledge when the plain move is stopped short.</summary>
-		private Vector3 Walk(Vector3 position, Vector3 motion)
+		/// <summary>Throws a punch (the figure's; nothing is hit: the bed has no combat).</summary>
+		public void Punch()
 		{
-			Vector3 plain = Slide(position, motion, true);
-			float wanted = Flat(motion).magnitude;
-			float got = Flat(plain - position).magnitude;
-			if (StepHeight <= 0f || wanted < 1e-4f || got >= wanted * 0.9f)
+			if (body != null)
 			{
-				return plain;
+				body.Punch();
 			}
-			float rise = Cast(position, Vector3.up, StepHeight + Skin, out RaycastHit roof) ? Mathf.Max(0f, roof.distance - Skin) : StepHeight;
-			Vector3 raised = position + Vector3.up * rise;
-			Vector3 across = Slide(raised, Flat(motion).normalized * wanted, true);
-			if (!Cast(across, Vector3.down, rise + Skin * 2f, out RaycastHit landing) || !Walkable(landing.normal))
-			{
-				return plain;
-			}
-			Vector3 stepped = across + Vector3.down * Mathf.Max(0f, landing.distance - Skin);
-			return Flat(stepped - position).magnitude > got + 1e-3f ? stepped : plain;
 		}
-
-		/// <summary>Sweeps the capsule along <paramref name="motion"/>, sliding along whatever it meets.</summary>
-		private Vector3 Slide(Vector3 position, Vector3 motion, bool grounded)
-		{
-			for (int i = 0; i < MaxSlides; i++)
-			{
-				float distance = motion.magnitude;
-				if (distance < 1e-5f)
-				{
-					break;
-				}
-				Vector3 direction = motion / distance;
-				if (!Cast(position, direction, distance + Skin, out RaycastHit hit))
-				{
-					position += motion;
-					break;
-				}
-				float travel = Mathf.Max(0f, hit.distance - Skin);
-				position += direction * travel;
-				motion = direction * (distance - travel);
-				Vector3 normal = hit.normal;
-				// On foot a slope too steep to stand on is a wall: slid along, not climbed by pushing into it.
-				if (grounded && !Walkable(normal))
-				{
-					Vector3 flat = Flat(normal);
-					if (flat.sqrMagnitude > 1e-6f)
-					{
-						normal = flat.normalized;
-					}
-				}
-				motion = Vector3.ProjectOnPlane(motion, normal);
-			}
-			return position;
-		}
-
-		/// <summary>Pushes the capsule out of anything it has ended up inside.</summary>
-		private Vector3 Depenetrate(Vector3 position)
-		{
-			PhysicsScene physics = gameObject.scene.GetPhysicsScene();
-			for (int pass = 0; pass < 3; pass++)
-			{
-				Ends(position, out Vector3 top, out Vector3 bottom, out float radius);
-				int count = physics.OverlapCapsule(top, bottom, radius, overlaps, mask, QueryTriggerInteraction.Ignore);
-				bool moved = false;
-				for (int i = 0; i < count; i++)
-				{
-					Collider other = overlaps[i];
-					if (other == capsule)
-					{
-						continue;
-					}
-					if (Physics.ComputePenetration(capsule, position, transform.rotation, other, other.transform.position, other.transform.rotation,
-						out Vector3 direction, out float distance))
-					{
-						position += direction * (distance + Skin);
-						moved = true;
-					}
-				}
-				if (!moved)
-				{
-					break;
-				}
-			}
-			return position;
-		}
-
-		/// <summary>
-		/// The terrain catches the capsule anyway; this is for a seam between two tiles a sweep
-		/// slipped through, where the walker would otherwise fall out of the world.
-		/// </summary>
-		private Vector3 KeepAboveTerrain(Vector3 position)
-		{
-			float ground = WorldSimCamera.GroundBelow(position);
-			float feet = position.y - Height * 0.5f;
-			// Not in a cave or under an overhang: there the walker is meant to be under the hillside's surface.
-			if (!float.IsNegativeInfinity(ground) && feet < ground - 0.25f
-				&& !WorldSimCamera.Sheltered(gameObject.scene.GetPhysicsScene(), position, ground, mask))
-			{
-				position.y = ground + Height * 0.5f + Skin;
-				verticalSpeed = Mathf.Max(0f, verticalSpeed);
-			}
-			return position;
-		}
-
-		private bool Cast(Vector3 position, Vector3 direction, float distance, out RaycastHit hit)
-		{
-			Ends(position, out Vector3 top, out Vector3 bottom, out float radius);
-			return gameObject.scene.GetPhysicsScene().CapsuleCast(top, bottom, radius, direction, out hit, distance, mask, QueryTriggerInteraction.Ignore);
-		}
-
-		/// <summary>The centres of the capsule's two end spheres and their radius, in world space, at <paramref name="position"/>.</summary>
-		private void Ends(Vector3 position, out Vector3 top, out Vector3 bottom, out float radius)
-		{
-			Vector3 scale = transform.lossyScale;
-			radius = Radius;
-			float half = Mathf.Max(0f, capsule.height * Mathf.Abs(scale.y) * 0.5f - radius);
-			Vector3 centre = position + transform.rotation * Vector3.Scale(capsule.center, scale);
-			top = centre + Vector3.up * half;
-			bottom = centre - Vector3.up * half;
-		}
-
-		private bool Walkable(Vector3 normal) => normal.y >= Mathf.Cos(SlopeLimit * Mathf.Deg2Rad);
-
-		private static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
 	}
 }

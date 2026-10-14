@@ -4,7 +4,9 @@
     "references": [
         "FishMMO.Client",
         "FishMMO.Shared",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "KinematicCharacterController",
+        "FishNet.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [

@@ -140,7 +140,8 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		shadowCoord = TransformWorldToShadowCoord(positionWS);
 	#endif
 	Light mainLight = GetMainLight(shadowCoord);
-	half shade = mainLight.shadowAttenuation * saturate(_FishWaterCloudShadow);
+	// Through the cloud by the weather's cookie where it lays one (FishWaterSun.hlsl), by the sea's own cloud shadow where not.
+	half3 shade = mainLight.shadowAttenuation * FishWaterCloudLight(positionWS, saturate(_FishWaterCloudShadow));
 	half3 lightColor = mainLight.color * shade;
 	half NdotL = saturate(dot(normalWS, mainLight.direction));
 
@@ -451,7 +452,7 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 		else if (term == 4) shown = fresnel.xxx;
 		else if (term == 5) shown = alpha.xxx;
 		else if (term == 6) shown = waterLight * 0.5;
-		else if (term == 7) shown = shade.xxx;
+		else if (term == 7) shown = shade;
 		else if (term == 8) shown = saturate(wave.depth / 10.0).xxx;
 		else if (term == 9) shown = bodyColor;
 		else if (term == 10) shown = behind;

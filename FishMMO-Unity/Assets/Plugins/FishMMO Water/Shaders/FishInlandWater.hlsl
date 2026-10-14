@@ -14,6 +14,7 @@
 #endif
 // The weather's clouds and fog, laid over the frame before the water was drawn: the same as the sea's.
 #include "FishWaterFog.hlsl"
+#include "FishWaterSun.hlsl"
 #include "FishWaterFoam.hlsl"
 #include "FishWaterFoamField.hlsl"
 
@@ -846,7 +847,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		shadowCoord = TransformWorldToShadowCoord(positionWS);
 	#endif
 	Light mainLight = GetMainLight(shadowCoord);
-	half3 lightColor = mainLight.color * mainLight.shadowAttenuation;
+	half3 lightColor = mainLight.color * mainLight.shadowAttenuation * FishWaterCloudLight(positionWS, 1.0h);
 	half NdotL = saturate(dot(normalWS, mainLight.direction));
 	// The water's colour is light that went in and came back out: multiplied by the light, with a floor.
 	half3 waterLight = lightColor * saturate(mainLight.direction.y) * 0.9 + _GlossyEnvironmentColor.rgb * 0.8 + 0.12;

@@ -260,6 +260,9 @@ namespace FishMMO.Shared
 		/// <summary>Whether the character is on a ladder, rope ladder or rope now (stepping on or off at its top included).</summary>
 		public bool IsClimbing => climb.IsClimbing;
 
+		/// <summary>In the crouched stance (the shorter capsule).</summary>
+		public bool IsCrouching => isCrouching;
+
 		/// <summary>The climb: which of the scene's climbables, and where in it (<see cref="ClimbState.Free"/> when not climbing).</summary>
 		public ClimbState Climb => climb;
 
@@ -1076,14 +1079,12 @@ namespace FishMMO.Shared
 			// with no stamina left falls through to the run-speed path rather than standing still
 			// or paying a cost the character cannot cover.
 			bool sprinting = false;
-			if (sprintInputDown && SprintSpeedTemplate != null && moveInputMagnitude > 0f &&
-				cachedAttributeController != null &&
-				cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina))
+			if (sprintInputDown && (SprintSpeedTemplate != null || Unmetered) && moveInputMagnitude > 0f)
 			{
 				float currentStaminaCost = Constants.Character.SprintStaminaCost * deltaTime;
-				if (stamina.CurrentValue >= currentStaminaCost)
+				if (HasStamina(currentStaminaCost))
 				{
-					stamina.Consume(currentStaminaCost);
+					SpendStamina(currentStaminaCost);
 					sprinting = true;
 				}
 			}
@@ -1293,13 +1294,12 @@ namespace FishMMO.Shared
 				speed *= swimSpeedModifier.FinalValueAsPct;
 			}
 			bool moving = moveInputVector.sqrMagnitude > 0f;
-			if (sprintInputDown && moving && cachedAttributeController != null &&
-				cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina))
+			if (sprintInputDown && moving)
 			{
 				float cost = Constants.Character.SwimSprintStaminaCost * deltaTime;
-				if (stamina.CurrentValue >= cost)
+				if (HasStamina(cost))
 				{
-					stamina.Consume(cost);
+					SpendStamina(cost);
 					speed *= Constants.Character.SwimSprintSpeed / Constants.Character.SwimSpeed;
 				}
 			}
@@ -1336,12 +1336,10 @@ namespace FishMMO.Shared
 
 			currentVelocity = Vector3.Lerp(currentVelocity, target, 1f - Mathf.Exp(-SwimSharpness * deltaTime));
 
-			if (jumpRequested && atSurface && abilityType == AbilityType.None && cachedAttributeController != null &&
-				cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute jumpStamina) &&
-				jumpStamina.CurrentValue >= Constants.Character.JumpStaminaCost)
+			if (jumpRequested && atSurface && abilityType == AbilityType.None && HasStamina(Constants.Character.JumpStaminaCost))
 			{
 				// Out of the water: up and away, swimming no longer.
-				jumpStamina.Consume(Constants.Character.JumpStaminaCost);
+				SpendStamina(Constants.Character.JumpStaminaCost);
 				currentVelocity.y = Constants.Character.JumpUpSpeed * 0.75f;
 				currentVelocity += moveInputVector * JumpScalableForwardSpeed;
 				jumpRequested = false;
@@ -1374,6 +1372,35 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// A body with no character at all (the world test bed's walker drives this controller with no server, no
+		/// character and no attributes) has no stamina to pay with, so nothing is charged and nothing is refused. Every
+		/// player has its character from <c>PlayerCharacter.OnAwake</c>, on every peer, so this is never so in play; a
+		/// character whose attributes lack stamina is still refused, as before.
+		/// </summary>
+		private bool Unmetered => Character == null && cachedAttributeController == null;
+
+		/// <summary>Whether <paramref name="cost"/> stamina can be paid now (always, unmetered).</summary>
+		private bool HasStamina(float cost)
+		{
+			if (Unmetered)
+			{
+				return true;
+			}
+			return cachedAttributeController != null &&
+				cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
+				stamina.CurrentValue >= cost;
+		}
+
+		/// <summary>Pays <paramref name="cost"/> stamina, after <see cref="HasStamina"/> said it could be.</summary>
+		private void SpendStamina(float cost)
+		{
+			if (cachedAttributeController != null && cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina))
+			{
+				stamina.Consume(cost);
+			}
+		}
+
+		/// <summary>
 		/// Handles jump requests including stamina consumption, ground grace period, and jump force application.
 		/// </summary>
 		private void HandleJumping(ref Vector3 currentVelocity, AbilityType abilityType, float deltaTime)
@@ -1382,9 +1409,7 @@ namespace FishMMO.Shared
 			if (jumpRequested)
 			{
 				// See if we actually are allowed to jump
-				if (cachedAttributeController != null &&
-					cachedAttributeController.TryGetStaminaAttribute(out CharacterResourceAttribute stamina) &&
-					stamina.CurrentValue >= Constants.Character.JumpStaminaCost &&
+				if (HasStamina(Constants.Character.JumpStaminaCost) &&
 					abilityType == AbilityType.None &&
 					(AllowJumpingWhenSliding ? Motor.GroundingStatus.FoundAnyGround : Motor.GroundingStatus.IsStableOnGround) &&
 					timeSinceLastAbleToJump <= JumpPostGroundingGraceTime)
@@ -1402,7 +1427,7 @@ namespace FishMMO.Shared
 
 					// Add to the return velocity and reset jump state
 					float jumpSpeed = Constants.Character.JumpUpSpeed;
-					if (JumpSpeedTemplate != null &&
+					if (JumpSpeedTemplate != null && cachedAttributeController != null &&
 						cachedAttributeController.TryGetAttribute(JumpSpeedTemplate, out CharacterAttribute jumpSpeedModifier))
 					{
 						jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
@@ -1411,7 +1436,7 @@ namespace FishMMO.Shared
 					currentVelocity += (moveInputVector * JumpScalableForwardSpeed);
 
 					// Consume stamina when jumping
-					stamina.Consume(Constants.Character.JumpStaminaCost);
+					SpendStamina(Constants.Character.JumpStaminaCost);
 
 					jumpRequested = false;
 				}

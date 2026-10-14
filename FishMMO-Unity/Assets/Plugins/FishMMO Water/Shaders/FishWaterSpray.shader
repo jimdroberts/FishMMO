@@ -45,6 +45,8 @@ Shader "FishMMO/Water/Spray"
             #pragma multi_compile_fog
             // Soft where it meets the water and the beach; set by WaterSurface against the URP asset.
             #pragma multi_compile_fragment _ _WATER_DEPTH
+            // The cloud's shadow on the sun, read in the vertex stage where the spray is lit.
+            #pragma multi_compile _ _LIGHT_COOKIES
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -69,6 +71,7 @@ Shader "FishMMO/Water/Spray"
             float4 _FishWaterBreakLineInfo;  // x points, y texture width, z rows per half, w metres between points
 
             #include "FishWaterBreakerCommon.hlsl"
+            #include "FishWaterSun.hlsl"
             #include "FishWaterFog.hlsl"
 
             struct Attributes
@@ -281,7 +284,7 @@ Shader "FishMMO/Water/Spray"
                 float g = kind == 2 ? 0.75 : 0.6;
                 float cosine = dot(view, sun.direction);
                 float phase = (1.0 - g * g) / pow(max(1e-3, 1.0 + g * g - 2.0 * g * cosine), 1.5);
-                half3 light = sun.color * saturate(_FishWaterCloudShadow) * saturate(sun.direction.y * 4.0 + 0.2)
+                half3 light = sun.color * FishWaterCloudLight(positionWS, saturate(_FishWaterCloudShadow)) * saturate(sun.direction.y * 4.0 + 0.2)
                     * (0.3 + 0.12 * phase) + _GlossyEnvironmentColor.rgb * 0.9 + 0.04;
                 half3 tint = kind == 2 ? half3(0.9, 0.94, 0.97) : half3(0.95, 0.98, 1.0);
 

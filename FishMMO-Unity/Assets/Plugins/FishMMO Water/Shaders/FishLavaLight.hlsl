@@ -260,7 +260,7 @@ half4 LavaLightFragment(LavaLightVaryings input) : SV_Target
 			{
 				Light sun = GetMainLight();
 				float sunPhase = FishLavaPhase(dot(direction, sun.direction), 0.6) * 3.14159265;
-				float3 sunLight = sun.color * sunPhase;
+				float3 sunLight = sun.color * FishWaterCloudLight(camera, 1.0h) * sunPhase;
 				float3 skyLight = _GlossyEnvironmentColor.rgb * 0.5;
 
 				float step = (t1 - t0) / FISH_LAVA_FUME_STEPS;
