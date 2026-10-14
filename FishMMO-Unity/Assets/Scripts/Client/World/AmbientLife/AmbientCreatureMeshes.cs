@@ -18,7 +18,8 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>
 	/// Parts (TEXCOORD1.x): birds 0 body, 1 left wing, 2 right wing, 3 legs, 4 head and bill, 5 tail; walkers 0 body,
-	/// 1-4 legs (front left, front right, hind left, hind right), 5 tail, 6 head and ears; crabs 1-8 legs, 9 claws.
+	/// 1-4 legs (front left, front right, hind left, hind right), 5 tail, 6 head and ears; crabs 1-8 legs, 9 claws;
+	/// beetles 1-6 legs, 9 feelers.
 	/// </para>
 	/// </remarks>
 	public static class AmbientCreatureMeshes
@@ -37,6 +38,7 @@ namespace FishMMO.Client
 				case AmbientShape.Lizard:
 					return 2f;
 				case AmbientShape.Crab:
+				case AmbientShape.Beetle:
 					return 3f;
 				default:
 					return 0f;
@@ -71,6 +73,9 @@ namespace FishMMO.Client
 					break;
 				case AmbientShape.Crab:
 					Crab(b, back, belly, accent);
+					break;
+				case AmbientShape.Beetle:
+					Beetle(b, back, belly, accent);
 					break;
 				default:
 					Bird(b, Plan(kind.Shape), back, belly, accent);
@@ -191,6 +196,17 @@ namespace FishMMO.Client
 						TailLength = 0f, Shoulder = new Vector3(0.04f, 0.08f, 0.25f), Span = 0.75f,
 						Columns = new[] { 0f, 0.5f, 0.9f, 1f }, Lead = new[] { 0.1f, 0.11f, 0.09f, 0.05f }, Trail = new[] { -0.02f, -0.04f, -0.04f, -0.01f },
 						LegLength = 0f,
+					};
+				case AmbientShape.Ray:
+					return new BirdPlan
+					{
+						// All wing: a flat body whose fins run from the head to the tail's root, broad at the body and
+						// tapering to a point, and a whip of a tail trailing behind.
+						BodyCentre = new Vector3(0f, 0f, 0.02f), BodyRadii = new Vector3(0.13f, 0.045f, 0.34f),
+						HeadCentre = new Vector3(0f, 0.005f, 0.3f), HeadRadii = new Vector3(0.07f, 0.035f, 0.06f), BeakLength = 0f, BeakRadius = 0f,
+						TailLength = 0.62f, TailRoot = 0.018f, TailTip = 0.003f, Shoulder = new Vector3(0.11f, 0.01f, 0.08f), Span = 0.55f,
+						Columns = new[] { 0f, 0.35f, 0.7f, 1f }, Lead = new[] { 0.3f, 0.2f, 0.08f, -0.06f }, Trail = new[] { -0.36f, -0.24f, -0.12f, -0.08f },
+						LegLength = 0f, DarkTips = true,
 					};
 				case AmbientShape.Bat:
 					return new BirdPlan
@@ -432,6 +448,31 @@ namespace FishMMO.Client
 				// The claw: an arm forward and a heavy pincer.
 				Limb(b, new[] { new Vector3(side * 0.3f, 0.1f, 0.28f), new Vector3(side * 0.42f, 0.16f, 0.46f) }, new[] { 0.07f, 0.06f }, back, 9f);
 				Ellipsoid(b, new Vector3(side * 0.36f, 0.15f, 0.58f), new Vector3(0.11f, 0.08f, 0.15f), 3, 6, back, accent, 9f, 1f);
+			}
+		}
+
+		private static void Beetle(Builder b, Color back, Color belly, Color accent)
+		{
+			// A domed shell (the wing cases, a seam down the middle), the shield behind the head, a small head with
+			// feelers, and six legs splayed out from under the shell.
+			Ellipsoid(b, new Vector3(0f, 0.2f, -0.1f), new Vector3(0.26f, 0.17f, 0.36f), 6, 8, back, belly, 0f, 0f);
+			Limb(b, new[] { new Vector3(0f, 0.37f, 0.18f), new Vector3(0f, 0.39f, -0.08f), new Vector3(0f, 0.3f, -0.36f) }, new[] { 0.012f, 0.012f, 0.008f }, accent, 0f, true);
+			Ellipsoid(b, new Vector3(0f, 0.19f, 0.3f), new Vector3(0.2f, 0.12f, 0.12f), 4, 7, back, belly, 0f, 0f);
+			Ellipsoid(b, new Vector3(0f, 0.15f, 0.43f), new Vector3(0.1f, 0.08f, 0.08f), 4, 6, Color.Lerp(back, accent, 0.5f), belly, 0f, 0f);
+			for (int side = -1; side <= 1; side += 2)
+			{
+				Disc(b, new Vector3(side * 0.085f, 0.18f, 0.47f), new Vector3(side, 0.2f, 0.4f).normalized, 0.025f, new Color(0.01f, 0.01f, 0.012f), 0f);
+				for (int leg = 0; leg < 3; leg++)
+				{
+					float z = Mathf.Lerp(0.3f, -0.1f, leg / 2f);
+					float splay = (leg - 1) * 0.12f;
+					float part = 1f + leg * 2f + (side < 0 ? 0f : 1f);
+					Limb(b, new[] { new Vector3(side * 0.16f, 0.12f, z), new Vector3(side * 0.38f, 0.24f, z + splay * 0.5f), new Vector3(side * 0.5f, 0f, z + splay) },
+						new[] { 0.035f, 0.03f, 0.018f }, Color.Lerp(back, accent, 0.6f), part);
+				}
+				// A feeler: forward and up from the head, swaying (part 9).
+				Limb(b, new[] { new Vector3(side * 0.05f, 0.19f, 0.48f), new Vector3(side * 0.14f, 0.3f, 0.62f), new Vector3(side * 0.2f, 0.34f, 0.74f) },
+					new[] { 0.016f, 0.012f, 0.008f }, accent, 9f);
 			}
 		}
 

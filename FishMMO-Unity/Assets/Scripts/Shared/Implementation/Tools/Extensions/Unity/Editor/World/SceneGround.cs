@@ -19,6 +19,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class SceneGround
 	{
+		/// <summary>
+		/// Told the ground and the water after each step of <see cref="Shape"/> (the step's name, the ground, the water laid
+		/// so far or null), for a probe auditing where the ground took its shape. Null in a cut.
+		/// </summary>
+		public static Action<string, SceneHeightField, SceneWater> Observer;
+
 		/// <summary>Samples and shapes a scene's ground.</summary>
 		/// <param name="request">The scene being cut.</param>
 		/// <param name="plan">Its tile grid.</param>
@@ -51,6 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 			erosion = null;
 			water = null;
 			SceneHeightField field = SceneHeightField.Sample(request, plan);
+			Observer?.Invoke("sampled from the planet", field, null);
 			if (!request.Erosion)
 			{
 				// The planet's ground exactly: no rain wears it and no river is laid into it (SceneGenerationRequest.Rivers).
@@ -78,11 +85,15 @@ namespace FishMMO.Shared.WorldDesign
 				lay = ground =>
 				{
 					// Roots hold a river's banks: bare ground lets it spread wide and shallow.
+					Observer?.Invoke("benched (plateaus), before the first water", ground, null);
 					laid = SceneWater.Build(request, system, ground, null, (east, north) => process.ProcessAt(east, north).VegetationCohesion);
-					return laid.Any ? laid.Lay(ground) : null;
+					float[] levels = laid.Any ? laid.Lay(ground) : null;
+					Observer?.Invoke("the first water laid and carved", ground, laid);
+					return levels;
 				};
 			}
 			erosion = SceneErosion.Apply(field, process, settings, BaseLevel(request, system), SceneGenerator.SceneSeed(request), lay);
+			Observer?.Invoke("eroded", field, laid);
 			notes?.Add(erosion.ToString());
 			UnityEngine.Debug.Log($"[Scene generator] '{request.SceneName}' {erosion}");
 			if (lay != null && laid == null)
@@ -101,10 +112,12 @@ namespace FishMMO.Shared.WorldDesign
 				if (laid.Any)
 				{
 					SceneWater final = SceneWater.Build(request, system, field, null, (east, north) => process.ProcessAt(east, north).VegetationCohesion);
+					Observer?.Invoke("the final water worked out, not yet carved", field, final);
 					if (final.Any)
 					{
 						final.Finish(field);
 						laid = final;
+						Observer?.Invoke("the final water carved", field, final);
 					}
 					else
 					{

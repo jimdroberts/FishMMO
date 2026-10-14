@@ -34,6 +34,9 @@ namespace FishMMO.Client
 		/// known yet, so a world without grass needs nothing here.
 		/// </summary>
 		float CoverAt(float x, float z) => 0f;
+
+		/// <summary>What lives on this world at all (<see cref="AmbientGating.WorldOf"/>): the home world's animals unless told otherwise.</summary>
+		AmbientWorld World => AmbientWorld.Earthly;
 	}
 
 	/// <summary>One group of ambient creatures: a flock, a pair of birds, a raptor, a colony of bats, a family of rats.</summary>
@@ -248,7 +251,7 @@ namespace FishMMO.Client
 		public static bool TryPlace(AmbientCreatureKind kind, int kindIndex, float density, uint sceneSeed, int cellX, int cellZ, float cellMetres,
 			IAmbientWorld world, List<Vector4> perches, List<AmbientGroup> groups, List<AmbientTrunk> trunks = null)
 		{
-			if (kind == null || !kind.Enabled || kind.GroupsPerKm2 <= 0f || density <= 0f)
+			if (kind == null || !kind.Enabled || kind.GroupsPerKm2 <= 0f || density <= 0f || !AmbientGating.LivesOn(kind, world.World))
 			{
 				return true;
 			}
@@ -462,6 +465,7 @@ namespace FishMMO.Client
 				case AmbientShape.Goose: period = 2f; duty = 1f; break;       // steady rowing the whole way
 				case AmbientShape.Butterfly: period = 1.1f; duty = 0.65f; break; // a fit of beats, a glide on open wings
 				case AmbientShape.Dragonfly: period = 2.5f; duty = 1f; break;
+				case AmbientShape.Ray: period = 6f; duty = 0.45f; break;        // a few slow rows of the fins, a long glide
 				default: period = 2f; duty = 0.9f; break;
 			}
 		}

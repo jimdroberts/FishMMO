@@ -1,5 +1,8 @@
 using System;
 using FishMMO.Shared;
+using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
 using UnityEngine;
 
 namespace FishMMO.Client
@@ -60,12 +63,54 @@ namespace FishMMO.Client
 
 		// ── Habitat ───────────────────────────────────────────────────
 
-		/// <summary>Names of ground no animal lives on: other worlds' surfaces and the wasteland.</summary>
+		/// <summary>Names of ground nothing lives on, on any world: molten rock, poison, radiation, the wasteland.</summary>
 		private static readonly string[] Lifeless =
 		{
-			"dust sea", "molten", "impact", "regolith", "radiation", "sulphur", "sulfur", "cryovolcanic", "tholin", "runaway", "nitrogen",
-			"methane", "rille", "tidal fracture", "subsurface", "cloud deck", "wasteland", "lava tube",
+			"molten", "radiation", "sulphur", "sulfur", "runaway", "tidal fracture", "subsurface", "cloud deck", "wasteland", "lava tube",
 		};
+
+		/// <summary>
+		/// Names of other worlds' open ground (<see cref="AmbientHabitat.Alien"/>): lifeless to the home world's animals,
+		/// home to the creatures of thin and frozen air.
+		/// </summary>
+		private static readonly string[] AlienGround =
+		{
+			"dust sea", "impact", "regolith", "cryovolcanic", "tholin", "nitrogen", "methane", "rille",
+		};
+
+		// ── World ─────────────────────────────────────────────────────
+
+		/// <summary>
+		/// What lives on a world, from the air its planet or moon has: none without air, on molten ground or under a
+		/// runaway greenhouse; the crawlers of thin air where the air is thin; the creatures of frozen air where the
+		/// weather is methane, nitrogen or ammonia; otherwise the home world's animals, joined by the frozen air's on a
+		/// world that never thaws anywhere (the home world's animals keep to whatever their climate bands allow there).
+		/// </summary>
+		/// <remarks>
+		/// Thin air wins over frozen air: a wing needs dense air to beat in, whatever the air is made of.
+		/// </remarks>
+		public static AmbientWorld WorldOf(in BiomeWorldConditions world)
+		{
+			if (world.Atmosphere == AtmosphereKind.None || world.IsRunawayGreenhouse || world.HasMoltenRock)
+			{
+				return AmbientWorld.None;
+			}
+			if (world.Atmosphere == AtmosphereKind.Thin)
+			{
+				return AmbientWorld.ThinAir;
+			}
+			if (world.HasCryogenicAir || world.Condensate == Condensate.Ammonia)
+			{
+				return AmbientWorld.Cryogenic;
+			}
+			return world.WarmestTemperature <= BiomeWorldConditions.FreezingTemperature ? AmbientWorld.Earthly | AmbientWorld.Cryogenic : AmbientWorld.Earthly;
+		}
+
+		/// <summary>Whether a kind lives on a world at all.</summary>
+		public static bool LivesOn(AmbientCreatureKind kind, AmbientWorld world)
+		{
+			return kind != null && (kind.Worlds & world) != 0;
+		}
 
 		/// <summary>Keywords in a biome's name and the country they mean, checked in order (the first few win over the last).</summary>
 		private static readonly (string Key, AmbientHabitat Habitat)[] Keywords =
@@ -143,6 +188,13 @@ namespace FishMMO.Client
 					return AmbientHabitat.Barren;
 				}
 			}
+			foreach (string alien in AlienGround)
+			{
+				if (name.Contains(alien))
+				{
+					return AmbientHabitat.Alien;
+				}
+			}
 			foreach ((string key, AmbientHabitat habitat) in Keywords)
 			{
 				if (name.Contains(key))
@@ -178,7 +230,8 @@ namespace FishMMO.Client
 		/// <summary>
 		/// How much at home a kind is at a place: 0 (not at all) .. its preferred weight. The habitat must be one it
 		/// lives in; the painted climate must be in its band (soft edges a tenth wide); Barren ground has nothing, and
-		/// snow and ice nothing but the seabirds that pass along an icy coast.
+		/// snow and ice nothing but the seabirds that pass along an icy coast and the creatures of frozen worlds.
+		/// Which world a kind lives on is asked first (<see cref="LivesOn"/>), by placement.
 		/// </summary>
 		/// <param name="seaNear">Sea within reach of the place (seabirds and shore crabs need it).</param>
 		/// <param name="freshNear">A lake or river within reach (frogs, ducks).</param>
@@ -210,8 +263,8 @@ namespace FishMMO.Client
 			float cool = kind.Climate.y >= 1f ? 1f : Mathf.Clamp01((kind.Climate.y - temperature) / 0.1f + 0.5f);
 			float climate = Mathf.Min(warm, cool);
 			float place = (habitat & kind.Prefers) != 0 ? Mathf.Max(1f, kind.PreferWeight) : 1f;
-			// Snow and ice keep only a sprinkling of seabirds along the shore.
-			if ((habitat & AmbientHabitat.Ice) != 0)
+			// Snow and ice keep only a sprinkling of seabirds along the shore; what is at home on the ice is not thinned.
+			if ((habitat & AmbientHabitat.Ice) != 0 && (kind.Prefers & AmbientHabitat.Ice) == 0)
 			{
 				place *= 0.15f;
 			}

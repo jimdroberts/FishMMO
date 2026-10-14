@@ -138,6 +138,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8046fc0b000fb5e9cb8c33eb0adac31b
+    m_Address: Assets/Prefabs/Server/SceneServer/SpawnTables/Volax Obelisk.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 81dcf0a7a5664a1c83d8b72c607d5648
     m_Address: LeaderboardSystem
     m_ReadOnly: 0

@@ -462,12 +462,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 27a2bebfc54a206bc96bfe9d353e7478
-    m_Address: Volax Obelisk Backdrop Control 2
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 27e0432adfd730e73a1f0ec570b4cfc0
     m_Address: Ground_Mud_Mask
     m_ReadOnly: 0
@@ -837,12 +831,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4179c159dc0c613cb6a8d4a6ed5310ec
     m_Address: Ground_GrassMeadow_Albedo
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 41ad2fd124f6599b9b2e67409ab639ed
-    m_Address: Volax Obelisk Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1955,12 +1943,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: a2f07a85df6ee1106b43657941447eed
-    m_Address: Volax Obelisk Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: a390b531eb3d45fe75bc99258a7544c0
     m_Address: RockSurface_Gneiss_Normal
     m_ReadOnly: 0
@@ -2464,12 +2446,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cec4c11cb10b9f0c9ad24ede84543f54
-    m_Address: Volax Obelisk Backdrop Control 0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: cf215995e2791c0b3443c743c465e6db
     m_Address: Bark_Brown_Normal
     m_ReadOnly: 0
@@ -2724,12 +2700,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e7452179b91c3d90bae8246f8ee8dec8
     m_Address: Treacherous Bri Lookout Backdrop Control 1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: e78baf4e8851569c3901938d7fac228b
-    m_Address: Volax Obelisk Backdrop Control 1
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

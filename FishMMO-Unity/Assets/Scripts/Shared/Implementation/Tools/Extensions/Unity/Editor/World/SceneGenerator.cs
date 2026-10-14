@@ -343,9 +343,21 @@ namespace FishMMO.Shared.WorldDesign
 				 * buries one, the water is laid into it again (the carve only lowers, so a river already cut is left as
 				 * it is), and every later stage that writes the ground is checked the same way, so the cut names the
 				 * one that buries a river. */
-				int buried = 0, breached = -1;
+				int buried = 0, breached = -1, floated = 0;
 				void CheckRivers(string stage, Func<float, float, float> groundAt)
 				{
+					// And the opposite: water standing over air, the ground under its line far below its own bed.
+					List<RiverBurial.Run> over = RiverBurial.Floating(water?.Rivers, groundAt);
+					int overPoints = RiverBurial.Points(over);
+					if (overPoints != floated)
+					{
+						var worst = new List<RiverBurial.Run>(over);
+						worst.Sort((a, b) => b.Points.CompareTo(a.Points));
+						string air = $"Rivers over air after {stage}: {overPoints} point(s) in {over.Count} stretch(es){(worst.Count > 0 ? ": " + string.Join("; ", worst.GetRange(0, Math.Min(6, worst.Count)).ConvertAll(r => $"river {r.River} points {r.First}–{r.Last} (bed up to {r.Deepest:0.0} m over the ground)")) : string.Empty)}.";
+						result.Notes.Add(air);
+						Debug.LogWarning($"[Scene generator] '{request.SceneName}' {air}");
+						floated = overPoints;
+					}
 					// And the banks: where the ground beside a river lies under its water within its drawn margin.
 					var worstBreaches = new List<string>();
 					int breaches = RiverBurial.Breaches(water?.Rivers, groundAt, worstBreaches);

@@ -93,6 +93,59 @@ namespace FishMMO.Shared.WorldDesign
 			return runs;
 		}
 
+		/// <summary>How far under a river's own bed (its surface less its depth) the ground under its line must lie to count as air under it, metres.</summary>
+		public const float FloatingMetres = 2f;
+
+		/// <summary>
+		/// The stretches of every perennial river (falls left out) whose water stands over air: the ground under its line
+		/// more than <see cref="FloatingMetres"/> under its own bed, so its surface is drawn as a sheet over a hollow or a
+		/// gorge. The burial's opposite, measured after the same stages (2026-10-14: Flo Monolith's river 0 held 170 m over
+		/// a gorge floor at 150 m for 60 m).
+		/// </summary>
+		public static List<Run> Floating(IReadOnlyList<RiverPath> rivers, Func<float, float, float> groundAt)
+		{
+			var runs = new List<Run>();
+			if (rivers == null || groundAt == null)
+			{
+				return runs;
+			}
+			foreach (RiverPath river in rivers)
+			{
+				if (river == null || !river.Perennial || river.Count == 0)
+				{
+					continue;
+				}
+				int first = -1;
+				float deepest = 0f;
+				for (int i = 0; i <= river.Count; i++)
+				{
+					bool floating = false;
+					if (i < river.Count && (river.Reach == null || river.Reach[i] != RiverReach.Fall))
+					{
+						float under = river.Bed[i] - groundAt(river.X[i], river.Z[i]);
+						if (under > FloatingMetres)
+						{
+							floating = true;
+							deepest = first < 0 ? under : Math.Max(deepest, under);
+						}
+					}
+					if (floating && first < 0)
+					{
+						first = i;
+					}
+					else if (!floating && first >= 0)
+					{
+						if (i - first >= MinRun)
+						{
+							runs.Add(new Run(river.Id, first, i - 1, deepest));
+						}
+						first = -1;
+					}
+				}
+			}
+			return runs;
+		}
+
 		/// <summary>How far out past each bank the water's surface is drawn, metres (InlandWaterRenderer.MinBankMarginMetres): what a bank must hold.</summary>
 		public const float BankHoldMetres = 2.6f;
 

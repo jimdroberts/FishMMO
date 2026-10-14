@@ -5,9 +5,9 @@ using FishMMO.Shared;
 namespace FishMMO.TestHarness.World
 {
 	/// <summary>
-	/// The body the world test bed's camera follows in walk mode: a plain capsule with a capsule
-	/// collider, moved by sweeping that capsule through the scene, so it stands on the terrain, climbs
-	/// what a person could climb and stops at what they could not.
+	/// The body the world test bed's camera follows in walk mode: a capsule collider, moved by sweeping
+	/// that capsule through the scene, so it stands on the terrain, climbs what a person could climb
+	/// and stops at what they could not. What it looks like is <see cref="WorldSimWalkerBody"/>'s.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -42,6 +42,9 @@ namespace FishMMO.TestHarness.World
 		/// <summary>The height of the capsule in world metres; its pivot is its centre.</summary>
 		public float Height => capsule == null ? 0f : capsule.height * transform.lossyScale.y;
 
+		/// <summary>The radius of the capsule in world metres.</summary>
+		public float Radius => capsule == null ? 0f : capsule.radius * Mathf.Max(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.z));
+
 		/// <summary>World position of the soles of its feet.</summary>
 		public Vector3 Feet => transform.position - Vector3.up * (Height * 0.5f);
 
@@ -49,6 +52,7 @@ namespace FishMMO.TestHarness.World
 		private const float TurnRate = 12f;
 
 		private CapsuleCollider capsule;
+		private WorldSimWalkerBody body;
 		private int mask;
 		private float verticalSpeed;
 		private Vector3 groundNormal = Vector3.up;
@@ -61,23 +65,25 @@ namespace FishMMO.TestHarness.World
 		/// </summary>
 		public static WorldSimWalker Create(Component near)
 		{
-			GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-			body.name = "World Sim Walker";
+			var host = new GameObject("World Sim Walker");
 			if (near != null && near.gameObject.scene.IsValid())
 			{
-				SceneManager.MoveGameObjectToScene(body, near.gameObject.scene);
+				SceneManager.MoveGameObjectToScene(host, near.gameObject.scene);
 			}
 			int player = LayerMask.NameToLayer("Player");
 			if (player >= 0)
 			{
-				body.layer = player;
+				host.layer = player;
 			}
-			// The primitive is 2 m by 1 m; scaled rather than re-shaped so its mesh and its collider stay one shape.
-			body.transform.localScale = new Vector3(0.7f, 0.9f, 0.7f);
-			Rigidbody rigidbody = body.AddComponent<Rigidbody>();
+			CapsuleCollider shape = host.AddComponent<CapsuleCollider>();
+			shape.height = 1.8f;
+			shape.radius = 0.35f;
+			Rigidbody rigidbody = host.AddComponent<Rigidbody>();
 			rigidbody.isKinematic = true;
 			rigidbody.useGravity = false;
-			return body.AddComponent<WorldSimWalker>();
+			WorldSimWalker walker = host.AddComponent<WorldSimWalker>();
+			walker.body = WorldSimWalkerBody.Dress(walker);
+			return walker;
 		}
 
 		private void Awake()
@@ -124,6 +130,10 @@ namespace FishMMO.TestHarness.World
 			lastSafe = centre;
 			verticalSpeed = 0f;
 			Grounded = false;
+			if (body != null)
+			{
+				body.Settle();
+			}
 			Physics.SyncTransforms();
 		}
 
@@ -148,7 +158,8 @@ namespace FishMMO.TestHarness.World
 			Vector3 horizontal = wish * (run ? RunSpeed : WalkSpeed) * deltaTime;
 			float gravity = Mathf.Abs(Physics.gravity.y);
 
-			Vector3 position = Depenetrate(transform.position);
+			Vector3 start = transform.position;
+			Vector3 position = Depenetrate(start);
 
 			if (Grounded && jump)
 			{
@@ -224,6 +235,11 @@ namespace FishMMO.TestHarness.World
 			{
 				Quaternion facing = Quaternion.LookRotation(wish, Vector3.up);
 				transform.rotation = Quaternion.Slerp(transform.rotation, facing, 1f - Mathf.Exp(-TurnRate * deltaTime));
+			}
+
+			if (body != null)
+			{
+				body.Pose((position - start) / deltaTime, Grounded, deltaTime);
 			}
 		}
 
@@ -341,7 +357,7 @@ namespace FishMMO.TestHarness.World
 		private void Ends(Vector3 position, out Vector3 top, out Vector3 bottom, out float radius)
 		{
 			Vector3 scale = transform.lossyScale;
-			radius = capsule.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+			radius = Radius;
 			float half = Mathf.Max(0f, capsule.height * Mathf.Abs(scale.y) * 0.5f - radius);
 			Vector3 centre = position + transform.rotation * Vector3.Scale(capsule.center, scale);
 			top = centre + Vector3.up * half;

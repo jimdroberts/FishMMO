@@ -523,6 +523,8 @@ namespace FishMMO.Client
 				case AmbientShape.Goose: return 0.65f;
 				case AmbientShape.Butterfly: return 1.2f;
 				case AmbientShape.Dragonfly: return 0.3f;
+				case AmbientShape.Ray: return 0.5f;
+				case AmbientShape.Beetle: return 0.14f;
 				default: return 0.12f;
 			}
 		}
@@ -891,6 +893,12 @@ namespace FishMMO.Client
 			/// <summary>The placement seed: the name of the scene the terrains belong to.</summary>
 			public uint SceneSeed { get; private set; }
 
+			/// <summary>
+			/// What lives on the scene's planet or moon, from its air (<see cref="AmbientGating.WorldOf"/>): nothing on an
+			/// airless one, whatever its biomes are called. A scene with no settings is on the home world.
+			/// </summary>
+			public AmbientWorld World { get; private set; } = AmbientWorld.Earthly;
+
 			/// <summary>Takes this frame's terrains and sea; false when no terrain is loaded.</summary>
 			public bool Refresh()
 			{
@@ -905,6 +913,7 @@ namespace FishMMO.Client
 				{
 					WorldSceneSettings.TryGetForScene(scene, out settings);
 					habitats.Clear();
+					World = settings != null ? AmbientGating.WorldOf(settings.WorldConditions) : AmbientWorld.Earthly;
 				}
 				if (last == null || !terrains.Contains(last))
 				{

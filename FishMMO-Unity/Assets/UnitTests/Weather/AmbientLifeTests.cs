@@ -2,6 +2,9 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using FishMMO.Client;
+using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
 
 namespace FishMMO.UnitTests.Weather
 {
@@ -46,6 +49,9 @@ namespace FishMMO.UnitTests.Weather
 			public AmbientHabitat Land = AmbientHabitat.Grassland | AmbientHabitat.Woodland | AmbientHabitat.Farmland;
 			public float Temperature = C(16f);
 			public bool HasSea = true;
+			public AmbientWorld LifeWorld = AmbientWorld.Earthly;
+
+			public AmbientWorld World => LifeWorld;
 
 			public bool TryGround(float x, float z, out float y)
 			{
@@ -107,10 +113,12 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(AmbientGating.HabitatOf("Rocky Coast") & AmbientHabitat.Coast, Is.Not.EqualTo(AmbientHabitat.None));
 			Assert.That(AmbientGating.HabitatOf("High Desert") & AmbientHabitat.Desert, Is.Not.EqualTo(AmbientHabitat.None));
 			Assert.That(AmbientGating.HabitatOf("Peat Bog") & AmbientHabitat.Wetland, Is.Not.EqualTo(AmbientHabitat.None));
-			Assert.That(AmbientGating.HabitatOf("Methane Lake"), Is.EqualTo(AmbientHabitat.Barren), "an alien lake is lifeless, not fresh water");
-			Assert.That(AmbientGating.HabitatOf("Regolith Plain"), Is.EqualTo(AmbientHabitat.Barren));
-			Assert.That(AmbientGating.HabitatOf("Cryovolcanic Plain"), Is.EqualTo(AmbientHabitat.Barren));
+			Assert.That(AmbientGating.HabitatOf("Methane Lake"), Is.EqualTo(AmbientHabitat.Alien), "an alien lake is alien ground, not fresh water");
+			Assert.That(AmbientGating.HabitatOf("Regolith Plain"), Is.EqualTo(AmbientHabitat.Alien));
+			Assert.That(AmbientGating.HabitatOf("Cryovolcanic Plain"), Is.EqualTo(AmbientHabitat.Alien));
+			Assert.That(AmbientGating.HabitatOf("Tholin Plain"), Is.EqualTo(AmbientHabitat.Alien));
 			Assert.That(AmbientGating.HabitatOf("Wasteland"), Is.EqualTo(AmbientHabitat.Barren));
+			Assert.That(AmbientGating.HabitatOf("Molten Surface"), Is.EqualTo(AmbientHabitat.Barren));
 			Assert.That(AmbientGating.HabitatOf("Something Unheard Of"), Is.EqualTo(AmbientHabitat.None));
 			Assert.That(AmbientGating.HabitatOf(null), Is.EqualTo(AmbientHabitat.None));
 		}
@@ -120,6 +128,12 @@ namespace FishMMO.UnitTests.Weather
 		{
 			foreach (AmbientCreatureKind kind in Kinds)
 			{
+				if (kind.Worlds != AmbientWorld.Earthly)
+				{
+					// Other worlds' creatures: never on barren ground, but the frozen worlds' are at home on the ice.
+					Assert.That(AmbientGating.HabitatWeight(kind, AmbientHabitat.Barren, C(15f), true, true, true), Is.Zero, $"{kind.Name} on barren ground");
+					continue;
+				}
 				Assert.That(AmbientGating.HabitatWeight(kind, AmbientHabitat.Barren, C(15f), true, true, true), Is.Zero, $"{kind.Name} on barren ground");
 				float ice = AmbientGating.HabitatWeight(kind, AmbientHabitat.Ice, C(-15f), true, false, false);
 				if (kind.Name == "Gulls")
@@ -154,6 +168,79 @@ namespace FishMMO.UnitTests.Weather
 			{
 				float sea = AmbientGating.HabitatWeight(kind, AmbientHabitat.Sea, C(15f), true, false, false);
 				Assert.That(sea > 0f, Is.EqualTo(kind.Shape == AmbientShape.Gull), $"{kind.Name} over open sea");
+			}
+		}
+
+		// ── Worlds ────────────────────────────────────────────────────
+
+		private static BiomeWorldConditions Air(AtmosphereKind air, Condensate condensate = Condensate.Water)
+		{
+			BiomeWorldConditions world = BiomeWorldConditions.Earthlike;
+			world.Atmosphere = air;
+			world.Condensate = condensate;
+			return world;
+		}
+
+		[Test]
+		public void WorldOf_FollowsTheAir()
+		{
+			Assert.That(AmbientGating.WorldOf(BiomeWorldConditions.Earthlike), Is.EqualTo(AmbientWorld.Earthly));
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.Thick)), Is.EqualTo(AmbientWorld.Earthly));
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.None)), Is.EqualTo(AmbientWorld.None), "no air, no life");
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.Thin)), Is.EqualTo(AmbientWorld.ThinAir));
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.Thick, Condensate.Methane)), Is.EqualTo(AmbientWorld.Cryogenic));
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.Standard, Condensate.Nitrogen)), Is.EqualTo(AmbientWorld.Cryogenic));
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.Standard, Condensate.Ammonia)), Is.EqualTo(AmbientWorld.Cryogenic));
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.Thin, Condensate.Methane)), Is.EqualTo(AmbientWorld.ThinAir), "thin air wins: no wing beats in it");
+			Assert.That(AmbientGating.WorldOf(Air(AtmosphereKind.Thick, Condensate.SulphuricAcid)), Is.EqualTo(AmbientWorld.None), "nothing under a runaway greenhouse");
+			BiomeWorldConditions frozen = BiomeWorldConditions.Earthlike;
+			frozen.MeanTemperature = -2.5f;
+			Assert.That(AmbientGating.WorldOf(frozen), Is.EqualTo(AmbientWorld.Earthly | AmbientWorld.Cryogenic), "home air on a world that never thaws: the frozen air's creatures too");
+		}
+
+		[Test]
+		public void Kinds_EachWorldHasItsOwn()
+		{
+			int earthly = 0, thin = 0, frozen = 0;
+			foreach (AmbientCreatureKind kind in Kinds)
+			{
+				Assert.That(kind.Worlds, Is.Not.EqualTo(AmbientWorld.None), $"{kind.Name} lives nowhere");
+				Assert.That(AmbientGating.LivesOn(kind, AmbientWorld.None), Is.False, $"{kind.Name} on an airless world");
+				bool home = AmbientGating.LivesOn(kind, AmbientWorld.Earthly);
+				earthly += home ? 1 : 0;
+				thin += AmbientGating.LivesOn(kind, AmbientWorld.ThinAir) ? 1 : 0;
+				frozen += AmbientGating.LivesOn(kind, AmbientWorld.Cryogenic) ? 1 : 0;
+				float alien = AmbientGating.HabitatWeight(kind, AmbientHabitat.Alien, -1f, false, false, false);
+				Assert.That(alien > 0f, Is.EqualTo(!home), $"{kind.Name} on alien ground");
+				if (AmbientGating.LivesOn(kind, AmbientWorld.ThinAir))
+				{
+					Assert.That(kind.Flies, Is.False, $"{kind.Name} flies in air too thin to beat a wing in");
+				}
+			}
+			Assert.That(earthly, Is.EqualTo(24));
+			Assert.That(thin, Is.GreaterThanOrEqualTo(3));
+			Assert.That(frozen, Is.GreaterThanOrEqualTo(3));
+		}
+
+		[Test]
+		public void Placement_EachWorldGetsOnlyItsOwnLife()
+		{
+			List<AmbientGroup> airless = PlaceArea(new FakeWorld { LifeWorld = AmbientWorld.None, Land = AmbientHabitat.Mountain | AmbientHabitat.Volcanic, HasSea = false }, false);
+			Assert.That(airless, Is.Empty, "nothing on a world without air, even on ground named for mountains");
+			foreach (AmbientWorld world in new[] { AmbientWorld.ThinAir, AmbientWorld.Cryogenic, AmbientWorld.Earthly })
+			{
+				var fake = new FakeWorld { LifeWorld = world, HasSea = false };
+				if (world != AmbientWorld.Earthly)
+				{
+					fake.Land = AmbientHabitat.Alien | AmbientHabitat.Mountain | AmbientHabitat.Ice;
+					fake.Temperature = -1f;
+				}
+				List<AmbientGroup> groups = PlaceArea(fake, false);
+				Assert.That(groups.Count, Is.GreaterThan(5), $"{world} should hold some life");
+				foreach (AmbientGroup g in groups)
+				{
+					Assert.That(AmbientGating.LivesOn(Kinds[g.Kind], world), Is.True, $"{Kinds[g.Kind].Name} on a {world} world");
+				}
 			}
 		}
 

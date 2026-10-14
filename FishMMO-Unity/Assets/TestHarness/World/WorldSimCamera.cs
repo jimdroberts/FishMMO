@@ -10,7 +10,7 @@ namespace FishMMO.TestHarness.World
 	/// <summary>
 	/// The world test bed's camera: right mouse to look, WASD/QE to move, Shift to hurry, scroll to
 	/// change the field of view (a narrow view is how you check a moon's real size), R to put it back.
-	/// V swaps to walking: a capsule put down where the camera is looking, WASD to walk it, Shift to
+	/// V swaps to walking: a figure put down where the camera is looking, WASD to walk it, Shift to
 	/// run, Space to jump, with the camera following behind and scroll setting how far. In the editor, E while walking
 	/// opens or shuts the door ahead (the sites' server-run doors, simulated here: no server) and F lights a torch.
 	/// </summary>
@@ -242,7 +242,8 @@ namespace FishMMO.TestHarness.World
 				var held = new GameObject("World Sim Torch") { hideFlags = HideFlags.DontSave };
 				held.transform.SetParent(walker.transform, false);
 				// Held up and a little forward of the right shoulder, so it lights the way and the walls beside it.
-				held.transform.localPosition = new Vector3(0.35f, 0.45f, 0.3f);
+				// Clear of the body, or the figure's own shadow hides what the torch is for.
+				held.transform.localPosition = new Vector3(0.3f, 0.5f, 0.4f);
 				torch = held.AddComponent<Light>();
 				torch.type = LightType.Point;
 				torch.color = new Color(1f, 0.64f, 0.34f);

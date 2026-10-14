@@ -42,6 +42,30 @@ namespace FishMMO.Client
 		Butterfly,
 		/// <summary>A dragonfly or damselfly: a long thin body, narrow glassy wings held out flat, a blur when it beats.</summary>
 		Dragonfly,
+		/// <summary>A beetle: a domed shell over six legs, a small head with feelers. Walks like a crab, but forward.</summary>
+		Beetle,
+		/// <summary>
+		/// A ray of the air: a flat diamond of a body that is all wing, a whip of a tail, rowing slowly and gliding. Only
+		/// where the air is dense and cold enough to swim in.
+		/// </summary>
+		Ray,
+	}
+
+	/// <summary>
+	/// The kinds of world a creature lives on (<see cref="AmbientGating.WorldOf"/>): which air the scene's planet or
+	/// moon has and what its weather is made of. A world with no air has none of them.
+	/// </summary>
+	[Flags]
+	public enum AmbientWorld
+	{
+		/// <summary>No life at all: no air, a molten surface, or a runaway greenhouse.</summary>
+		None = 0,
+		/// <summary>Air like the home world's, with a water cycle: birds, bats, rats, insects.</summary>
+		Earthly = 1 << 0,
+		/// <summary>Air too thin for a wing to beat in: only what crawls and basks on the ground.</summary>
+		ThinAir = 1 << 1,
+		/// <summary>Dense, bitter-cold air whose weather is methane, nitrogen or ammonia: easy flight for the light-bodied.</summary>
+		Cryogenic = 1 << 2,
 	}
 
 	/// <summary>How a kind lives and moves (AmbientLifeMotion).</summary>
@@ -124,6 +148,11 @@ namespace FishMMO.Client
 		/// holes and ledges, where owls, bats, crows, rats and lizards live.
 		/// </summary>
 		Ruins = 1 << 18,
+		/// <summary>
+		/// Other worlds' open ground: regolith, dust seas, tholin plains, methane shores. Lifeless to the home world's
+		/// animals; home to the creatures of thin and frozen air.
+		/// </summary>
+		Alien = 1 << 19,
 	}
 
 	/// <summary>One kind of ambient creature: what it looks like, where and when it lives, and how it moves.</summary>
@@ -135,6 +164,8 @@ namespace FishMMO.Client
 		public AmbientBehaviour Behaviour = AmbientBehaviour.Perch;
 		public AmbientFamily Family = AmbientFamily.SoloBirds;
 		public bool Enabled = true;
+		/// <summary>The worlds it lives on; nothing lives on a world whose air is <see cref="AmbientWorld.None"/>.</summary>
+		public AmbientWorld Worlds = AmbientWorld.Earthly;
 
 		// ── Size and numbers ──
 		/// <summary>Body length, metres (bill to tail; a crab's width), min..max per animal.</summary>
@@ -222,12 +253,17 @@ namespace FishMMO.Client
 	{
 		private const AmbientHabitat OpenCountry = AmbientHabitat.Grassland | AmbientHabitat.Farmland | AmbientHabitat.Scrub;
 		private const AmbientHabitat Wooded = AmbientHabitat.Forest | AmbientHabitat.Woodland | AmbientHabitat.Jungle;
+		/// <summary>The open ground of a world under other air: its own alien plains and whatever rock, sand and ice its biomes are named for.</summary>
+		private const AmbientHabitat OtherGround = AmbientHabitat.Alien | AmbientHabitat.Desert | AmbientHabitat.Scrub | AmbientHabitat.Mountain | AmbientHabitat.Volcanic
+			| AmbientHabitat.Tundra | AmbientHabitat.Grassland | AmbientHabitat.Cave;
+		/// <summary>On another world no cold drives them in: the limit lies below anything the scale reads.</summary>
+		private const float NeverTooCold = -2f;
 
 		/// <summary>Temperatures in the scale's units (-1..1, 0 = 0 °C, 1 = 33.1 °C) from degrees Celsius.</summary>
 		public static float Celsius(float degrees) => degrees / 33.1f;
 
 		/// <summary>
-		/// Twenty-four kinds. Numbers are grounded in the animals': flight initiation distances from field studies
+		/// Thirty-one kinds: twenty-four of the home world's, three of thin air and four of frozen air. Numbers are grounded in the animals': flight initiation distances from field studies
 		/// (small passerines 4-8 m, corvids 15-25 m, gulls 10-20 m, ducks 10-20 m, rabbits ~10 m), wing beats from
 		/// high-speed footage (finches 15-20 Hz, crows 3-4 Hz, gulls 3 Hz, bats 8-12 Hz), and densities thinned to
 		/// what a player notices rather than what a census would count.
@@ -553,6 +589,107 @@ namespace FishMMO.Client
 					FlushMetres = 3f, FleeSpeed = 1.8f,
 					Back = Hex(0x4a6a30), Belly = Hex(0xb0b080), Accent = Hex(0x2a3a18), Smoothness = 0.6f,
 					Palette = new[] { Hex(0xffffff), Hex(0xb0a070), Hex(0x90b0a0) },
+				},
+
+				// ── Thin air: nothing flies, everything crawls or basks ──
+				new AmbientCreatureKind
+				{
+					// Rust-red beetles the size of a thumbnail, working the dust in little bands and freezing still in the sun.
+					Name = "Dust skitters", Shape = AmbientShape.Beetle, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Worlds = AmbientWorld.ThinAir,
+					Length = new Vector2(0.05f, 0.09f), GroupSize = new Vector2Int(2, 8), GroupsPerKm2 = 900f, Spread = 4f, Roam = new Vector2(1f, 4f),
+					Speed = 0.6f, StrokeHz = 8f, Episode = new Vector2(5f, 14f),
+					Habitats = OtherGround | AmbientHabitat.Ice | AmbientHabitat.Coast, Prefers = AmbientHabitat.Alien | AmbientHabitat.Desert, PreferWeight = 2.5f,
+					Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = NeverTooCold, HeatLover = true, RainLimit = 0.3f,
+					FlushMetres = 2.5f, FleeSpeed = 1.5f,
+					Back = Hex(0x8a4a2a), Belly = Hex(0x5a3a28), Accent = Hex(0x2a1a12), Smoothness = 0.7f,
+					Palette = new[] { Hex(0xffffff), Hex(0xd8a070), Hex(0xa89078) },
+				},
+				new AmbientCreatureKind
+				{
+					// Drakelings: drake-kin no longer than a forearm, red-scaled and gold-bellied, basking on warm rock and
+					// darting into the cracks.
+					Name = "Sand drakelings", Shape = AmbientShape.Lizard, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Worlds = AmbientWorld.ThinAir,
+					Length = new Vector2(0.25f, 0.4f), GroupSize = new Vector2Int(1, 2), GroupsPerKm2 = 220f, Spread = 5f, Roam = new Vector2(3f, 8f),
+					Speed = 0.9f, StrokeHz = 6f, Episode = new Vector2(6f, 16f),
+					Habitats = OtherGround, Prefers = AmbientHabitat.Mountain | AmbientHabitat.Volcanic, PreferWeight = 3f, Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = NeverTooCold, HeatLover = true, RainLimit = 0.2f,
+					FlushMetres = 5f, FleeSpeed = 4f,
+					Back = Hex(0x6a3022), Belly = Hex(0xc8963a), Accent = Hex(0x2a1410), Smoothness = 0.5f,
+					Palette = new[] { Hex(0xffffff), Hex(0xd8b090), Hex(0xa08070) },
+				},
+				new AmbientCreatureKind
+				{
+					// Stone crabs: grey as the scree they sidle over, out at dusk and dawn, hidden under slabs through the glare.
+					Name = "Stone crabs", Shape = AmbientShape.Crab, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Worlds = AmbientWorld.ThinAir,
+					Length = new Vector2(0.12f, 0.22f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 350f, Spread = 4f, Roam = new Vector2(1f, 4f),
+					Speed = 0.4f, StrokeHz = 2.5f, Episode = new Vector2(6f, 16f),
+					Habitats = OtherGround, Prefers = AmbientHabitat.Mountain | AmbientHabitat.Cave, PreferWeight = 2.5f, Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.Crepuscular, ColdLimit = NeverTooCold, RainLimit = 0f,
+					FlushMetres = 3f, FleeSpeed = 1.2f,
+					Back = Hex(0x5a5a58), Belly = Hex(0x8a867c), Accent = Hex(0x3a3a36), Smoothness = 0.3f,
+					Palette = new[] { Hex(0xffffff), Hex(0xb0a890), Hex(0x9098a0) },
+				},
+
+				// ── Frozen air: dense and bitter cold, light bodies fly in it with ease ──
+				new AmbientCreatureKind
+				{
+					// Glossy blue-black beetles with frost-pale legs, out at any hour on the ice and the tholin sands.
+					Name = "Rime beetles", Shape = AmbientShape.Beetle, Behaviour = AmbientBehaviour.Scurry, Family = AmbientFamily.Critters, Flies = false,
+					Worlds = AmbientWorld.Cryogenic,
+					Length = new Vector2(0.06f, 0.12f), GroupSize = new Vector2Int(2, 6), GroupsPerKm2 = 800f, Spread = 4f, Roam = new Vector2(1f, 4f),
+					Speed = 0.5f, StrokeHz = 6f, Episode = new Vector2(6f, 16f),
+					Habitats = OtherGround | AmbientHabitat.Ice | AmbientHabitat.Coast | AmbientHabitat.Wetland, Prefers = AmbientHabitat.Ice | AmbientHabitat.Alien, PreferWeight = 2f,
+					Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = NeverTooCold, RainLimit = 0.6f,
+					FlushMetres = 2.5f, FleeSpeed = 1.4f,
+					Back = Hex(0x1e2a3e), Belly = Hex(0x2a3448), Accent = Hex(0x8ab0d0), Smoothness = 0.8f,
+					Palette = new[] { Hex(0xffffff), Hex(0xa0c0e0), Hex(0x9080b0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Frost moths: pale wings a hand across, drifting low over the ice in slow fits.
+					Name = "Frost moths", Shape = AmbientShape.Butterfly, Behaviour = AmbientBehaviour.Hawk, Family = AmbientFamily.Bats,
+					Worlds = AmbientWorld.Cryogenic,
+					Length = new Vector2(0.12f, 0.22f), GroupSize = new Vector2Int(1, 4), GroupsPerKm2 = 260f, Spread = 6f, Roam = new Vector2(5f, 12f),
+					Speed = 1.2f, StrokeHz = 2.5f, Altitude = new Vector2(0.6f, 4f),
+					Habitats = OtherGround | AmbientHabitat.Ice | AmbientHabitat.Coast | AmbientHabitat.Wetland, Prefers = AmbientHabitat.Alien | AmbientHabitat.Ice, PreferWeight = 2f,
+					Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.AnyTime, ColdLimit = NeverTooCold, RainLimit = 0.3f,
+					FlushMetres = 0f,
+					Back = Hex(0xd8e4f0), Belly = Hex(0xc0d0e0), Accent = Hex(0x405070), Smoothness = 0.15f, CastShadows = false,
+					Palette = new[] { Hex(0xffffff), Hex(0xc8e0ff), Hex(0xe0d0ff), Hex(0xb8f0e0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Sky rays: dusk-violet wings two strides across, rowing slowly high over the ice and gliding for minutes.
+					Name = "Sky rays", Shape = AmbientShape.Ray, Behaviour = AmbientBehaviour.Soar, Family = AmbientFamily.Raptors,
+					Worlds = AmbientWorld.Cryogenic,
+					Length = new Vector2(1.4f, 2.6f), GroupSize = new Vector2Int(1, 3), GroupsPerKm2 = 2.5f, Spread = 30f, Roam = new Vector2(150f, 320f),
+					Speed = 6f, StrokeHz = 0.5f, Altitude = new Vector2(40f, 180f), Episode = new Vector2(100f, 200f),
+					Habitats = OtherGround | AmbientHabitat.Ice | AmbientHabitat.Coast | AmbientHabitat.Wetland, Prefers = AmbientHabitat.Alien | AmbientHabitat.Ice, PreferWeight = 2f,
+					Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = NeverTooCold, RainLimit = 0.3f,
+					FlushMetres = 0f,
+					Back = Hex(0x3a3450), Belly = Hex(0xb8b8d0), Accent = Hex(0x1a1828), Smoothness = 0.4f,
+					Palette = new[] { Hex(0xffffff), Hex(0xa8c0d8), Hex(0xc8a8d0) },
+				},
+				new AmbientCreatureKind
+				{
+					// Kite-rays: palm-sized rays in shoals of a dozen or more, wheeling low like a flock of finches.
+					Name = "Kite-ray shoal", Shape = AmbientShape.Ray, Behaviour = AmbientBehaviour.Flock, Family = AmbientFamily.Flocks,
+					Worlds = AmbientWorld.Cryogenic,
+					Length = new Vector2(0.25f, 0.4f), GroupSize = new Vector2Int(6, 18), GroupsPerKm2 = 8f, Spread = 7f, Roam = new Vector2(60f, 130f),
+					Speed = 5f, StrokeHz = 1.2f, Altitude = new Vector2(6f, 30f), Episode = new Vector2(70f, 140f),
+					Habitats = OtherGround | AmbientHabitat.Ice | AmbientHabitat.Coast | AmbientHabitat.Wetland, Prefers = AmbientHabitat.Alien, PreferWeight = 2f,
+					Climate = new Vector2(-1f, 1f),
+					Activity = AmbientActivity.Diurnal, ColdLimit = NeverTooCold, RainLimit = 0.3f,
+					FlushMetres = 10f, FleeSpeed = 6f,
+					Back = Hex(0x4a5a78), Belly = Hex(0xd0d8e8), Accent = Hex(0x20283a), Smoothness = 0.35f,
+					Palette = new[] { Hex(0xffffff), Hex(0xb0d0f0), Hex(0xd0c0f0), Hex(0xa0e0d0) },
 				},
 			};
 		}

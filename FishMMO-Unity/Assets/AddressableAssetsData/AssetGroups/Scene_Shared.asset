@@ -81,12 +81,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3b91bd63bda957e4d8bcbf3d286c9b9f
-    m_Address: Volax Obelisk 0_0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 43a22c3ade50bf807b008a324af03995
     m_Address: Isle of Aradune 0_3
     m_ReadOnly: 0
@@ -125,12 +119,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 50882bb7e481202c0948c788d1a6e6ee
     m_Address: Isle of Aradune 4_1
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 524b1e53469e90f3d9d5106f0b93250f
-    m_Address: Volax Obelisk Backdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -191,12 +179,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 765e5dfa09eecb7cbab676aac2cc12da
     m_Address: Treacherous Bri Lookout Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 7737296fa09026e22a6d1f064d630ae8
-    m_Address: Volax Obelisk Props Scatter
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -303,12 +285,6 @@ MonoBehaviour:
     m_SerializedLabels:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b509a4298c85b27c59debaf799ca3703
-    m_Address: Volax Obelisk Biome Map
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b6a7b407afcf0a14e9b034d20ed554c8
     m_Address: Tutorial SpawnPoints
     m_ReadOnly: 0
@@ -347,12 +323,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: caa5f7fbe11a73d27997edc725a39e0f
     m_Address: Isle of Aradune 4_0
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: cfb99ec47784fd74c954fd26440fb41c
-    m_Address: Volax Obelisk Props Cliffs
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
@@ -407,18 +377,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e9fd81204ddff126dbaeb5f9874dccda
     m_Address: Isle of Aradune Backdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ecbc8fe0ee2aa35329f172be6c870023
-    m_Address: Volax Obelisk Collision Scatter
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: f3a1fa559cf7d92618d0ee9a8085a7b3
-    m_Address: Volax Obelisk Collision Cliffs
     m_ReadOnly: 0
     m_SerializedLabels:
     - Scene_Shared
