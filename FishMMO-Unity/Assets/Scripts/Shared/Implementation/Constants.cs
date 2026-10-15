@@ -229,7 +229,7 @@ namespace FishMMO.Shared
 			/// Unified API Host URL. NGINX routes to the correct backend by path.
 			///
 			/// <para>
-			/// Set at build time via <see cref="GeneratedHostConfig.ApiHost"/>,
+			/// Set at build time via <see cref="HostConfig.ApiHost"/>,
 			/// which CI substitutes from the FISHMMO_API_HOST environment variable.
 			/// The committed source contains a sentinel placeholder — the build
 			/// validator blocks release builds that still contain the sentinel.
@@ -241,7 +241,7 @@ namespace FishMMO.Shared
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public static readonly string APIHost = GeneratedHostConfig.ApiHost;
+			public static readonly string APIHost = HostConfig.ApiHost;
 
 			/// <summary>
 			/// Game server hostname. All clients (standalone + WebGL) connect via
@@ -249,7 +249,7 @@ namespace FishMMO.Shared
 			/// raw UDP to the correct backend game server on loopback.
 			///
 			/// <para>
-			/// Set at build time via <see cref="GeneratedHostConfig.GameHost"/>,
+			/// Set at build time via <see cref="HostConfig.GameHost"/>,
 			/// which CI substitutes from the FISHMMO_GAME_HOST environment variable.
 			/// </para>
 			/// <para>
@@ -259,39 +259,39 @@ namespace FishMMO.Shared
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public static readonly string GameHost = GeneratedHostConfig.GameHost;
+			public static readonly string GameHost = HostConfig.GameHost;
 
 			/// <summary>
 			/// Launcher HTML/news page URL.
 			///
 			/// <para>
-			/// Set at build time via <see cref="GeneratedHostConfig.LauncherHtmlUrl"/>,
+			/// Set at build time via <see cref="HostConfig.LauncherHtmlUrl"/>,
 			/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public static readonly string LauncherHtmlUrl = GeneratedHostConfig.LauncherHtmlUrl;
+			public static readonly string LauncherHtmlUrl = HostConfig.LauncherHtmlUrl;
 
 			/// <summary>
 			/// SMTP from address for verification/notification emails.
 			///
 			/// <para>
-			/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromAddress"/>,
+			/// Set at build time via <see cref="HostConfig.SmtpFromAddress"/>,
 			/// which CI substitutes from the FISHMMO_ROOT_DOMAIN environment variable.
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public static readonly string SmtpFromAddress = GeneratedHostConfig.SmtpFromAddress;
+			public static readonly string SmtpFromAddress = HostConfig.SmtpFromAddress;
 
 			/// <summary>
 			/// SMTP from display name for outgoing emails.
 			///
 			/// <para>
-			/// Set at build time via <see cref="GeneratedHostConfig.SmtpFromName"/>.
+			/// Set at build time via <see cref="HostConfig.SmtpFromName"/>.
 			/// </para>
 			/// </summary>
 			/// <remarks>Configuration value baked at compile time; changing requires a rebuild.</remarks>
-			public static readonly string SmtpFromName = GeneratedHostConfig.SmtpFromName;
+			public static readonly string SmtpFromName = HostConfig.SmtpFromName;
 
 			/// <summary>
 			/// Root path for Unity scene assets.

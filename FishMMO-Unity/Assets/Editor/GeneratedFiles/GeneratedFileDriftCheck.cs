@@ -6,47 +6,46 @@ using System.Text.RegularExpressions;
 namespace FishMMO.GeneratedFiles
 {
 	/// <summary>
-	/// Compares the public API a *.generated.cs file declares against the API its
-	/// tracked template declares, and reports anything the template has that the
+	/// Compares the values a *.generated.cs file assigns against the values its
+	/// tracked template assigns, and reports anything the template has that the
 	/// generated file does not.
 	///
 	/// Why this exists: <see cref="GeneratedFileRestorer"/> never overwrites an
 	/// existing generated file — it would clobber real hosts, pins, and the gate
 	/// secret — so a checkout that already has one keeps whatever shape it had when
-	/// it was written. Adding a field to the template and to the dashboard writer
-	/// therefore only fixes fresh clones: every existing checkout still holds the
-	/// old file, and the first sign of trouble is an unrelated-looking CS0117 in a
-	/// consuming assembly. That is exactly how
-	/// https://github.com/jimdroberts/FishMMO/issues/122 reached dev — the field was
-	/// added to the API and missed in both writers, and the build kept working for
-	/// whoever added it.
+	/// it was written. A generated file only overrides the sentinel defaults its
+	/// tracked class declares (HostConfig.cs, CertificatePinSet.cs, ClientGateSecret.cs),
+	/// so an old file no longer breaks the compile — but a value it does not assign
+	/// silently stays at its sentinel, and a file from before the partial-class split
+	/// declares a class nothing reads, so every value in it is ignored. Both are
+	/// reported here, by name, instead of surfacing as a release build the validator
+	/// refuses or a client that cannot reach its hosts. The compile-error form of the
+	/// same drift is how https://github.com/jimdroberts/FishMMO/issues/122 reached dev.
 	///
-	/// Deliberately text-based: the generated files compile into FishMMO.Shared and
-	/// FishMMO.Client, and this check has to work precisely when those assemblies
-	/// are the ones failing, so it cannot reflect over the types it is checking.
+	/// Deliberately text-based, so it reports on the file as written rather than on
+	/// whatever the last successful compile happened to contain.
 	/// </summary>
 	internal static class GeneratedFileDriftCheck
 	{
 		/// <summary>
-		/// A public constant or static readonly field, e.g.
-		/// <c>public const string ApiHost =</c> or
-		/// <c>public static readonly string[] Pins =</c>. The trailing <c>=</c> is
-		/// required so method and property declarations are not mistaken for fields.
+		/// A value assigned inside the generated Configure method, e.g.
+		/// <c>values.ApiHost =</c>. The <c>(?!=)</c> keeps a comparison from
+		/// counting as an assignment.
 		/// </summary>
 		private static readonly Regex MemberPattern = new Regex(
-			@"^\s*public\s+(?:const|static\s+readonly|readonly\s+static)\s+[^\s=;]+\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=",
+			@"^\s*values\.(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)",
 			RegexOptions.Multiline);
 
-		/// <summary>A public type declaration, e.g. <c>public static class GeneratedPinSet</c>.</summary>
+		/// <summary>A public type declaration, e.g. <c>public static partial class CertificatePinSet</c>.</summary>
 		private static readonly Regex TypePattern = new Regex(
 			@"^\s*public\s+(?:(?:static|sealed|abstract|partial)\s+)*(?:class|struct|enum|interface)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
 			RegexOptions.Multiline);
 
 		/// <summary>
-		/// Doc comment lines directly above a declaration are part of it, so the
+		/// Comment lines directly above an assignment are part of it, so the
 		/// message can quote something that is ready to paste.
 		/// </summary>
-		private const string DocCommentPrefix = "///";
+		private const string DocCommentPrefix = "//";
 
 		/// <summary>
 		/// Upper bound on how many lines one quoted declaration may span. A template
@@ -60,7 +59,7 @@ namespace FishMMO.GeneratedFiles
 		/// </summary>
 		/// <returns>
 		/// A ready-to-log description of the drift, or null when the generated file
-		/// declares everything the template does.
+		/// declares the template's type and assigns every value the template does.
 		/// </returns>
 		public static string Describe(
 			string relativePath,
@@ -75,27 +74,43 @@ namespace FishMMO.GeneratedFiles
 				return null;
 
 			// Only the template-has-it/file-does-not direction is reported. The reverse
-			// (a generated file with extra members) compiles fine and is what a machine
-			// mid-rollback looks like, so flagging it would be noise.
+			// (a generated file assigning a value the template dropped) is a compile
+			// error the compiler already names, so repeating it here would be noise.
 			var message = new StringBuilder();
-			message.Append("[FishMMO] '").Append(relativePath).Append("' is out of date. It does not declare ");
-			message.Append(Describe(missingTypes, "type")).Append(Join(missingTypes, missingMembers));
-			message.Append(Describe(missingMembers, "member")).AppendLine(" that its template declares:");
+			message.Append("[FishMMO] '").Append(relativePath).Append("' is out of date. ");
 
-			foreach (string name in missingTypes)
-				message.Append("  ").AppendLine(name);
+			if (missingTypes.Count > 0)
+			{
+				// No partial class means the file predates the split, so it declares a
+				// class of its own that nothing reads: every value in it is ignored and
+				// the per-member list would just be all of them.
+				message.Append("It does not declare ").Append(Join(missingTypes)).AppendLine(
+					", so it predates the tracked defaults and nothing reads the values it holds — " +
+					"the sentinel defaults are in effect, and release builds will be refused.");
+				message.AppendLine();
+				message.AppendLine(
+					"Open FishMMO Dashboard > Game Settings: it still reads the old file, so its fields " +
+					"show your current values. Click that section's Write button to rewrite the file in " +
+					"the current shape. Or delete the file and reopen the project to restore it from '" +
+					templateRelativePath + "', which discards the values it holds.");
+				return message.ToString();
+			}
+
+			bool single = missingMembers.Count == 1;
+			message.Append("It does not assign ").Append(missingMembers.Count).Append(single ? " value" : " values")
+				.AppendLine(" that its template assigns:");
 			foreach (string name in missingMembers)
 				message.Append("  ").AppendLine(name);
 
-			bool single = missingTypes.Count + missingMembers.Count == 1;
 			message.AppendLine();
 			message.AppendLine(
-				"Anything that uses " + (single ? "it" : "them") + " will not compile — a missing member is " +
-				"the CS0117 you would otherwise meet in an assembly that looks unrelated.");
+				(single ? "That value stays" : "Those values stay") + " at the tracked default — a sentinel " +
+				"for hosts, pins, and the secret, which release builds refuse.");
 			message.AppendLine(
 				"The file is not overwritten automatically, because it holds your real hosts, pins, " +
-				"and gate secret. Either paste the declaration" + (single ? "" : "s") + " below into it from '" +
-				templateRelativePath + "', or delete the file and reopen the project to restore it from " +
+				"and gate secret. Either paste the line" + (single ? "" : "s") + " below into its Configure " +
+				"method from '" + templateRelativePath + "' and set the real value, rewrite it from FishMMO " +
+				"Dashboard > Game Settings, or delete the file and reopen the project to restore it from " +
 				"the template — which discards the real values it currently holds.");
 
 			foreach (string name in missingMembers)
@@ -183,18 +198,13 @@ namespace FishMMO.GeneratedFiles
 			return declarationText.ToString();
 		}
 
-		/// <summary>"1 type" / "2 members", or empty when nothing of that kind is missing.</summary>
-		private static string Describe(List<string> names, string noun)
+		/// <summary>"HostConfig" / "A and B".</summary>
+		private static string Join(List<string> names)
 		{
-			if (names.Count == 0)
-				return "";
+			if (names.Count == 1)
+				return names[0];
 
-			return names.Count + " " + noun + (names.Count == 1 ? "" : "s");
-		}
-
-		private static string Join(List<string> first, List<string> second)
-		{
-			return first.Count > 0 && second.Count > 0 ? " and " : "";
+			return string.Join(", ", names.GetRange(0, names.Count - 1).ToArray()) + " and " + names[names.Count - 1];
 		}
 	}
 }

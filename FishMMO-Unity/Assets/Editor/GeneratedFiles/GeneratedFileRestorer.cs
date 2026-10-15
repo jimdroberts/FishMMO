@@ -17,16 +17,22 @@ namespace FishMMO.GeneratedFiles
 	/// real values are written over them by FishMMO Dashboard > Game Settings (or by
 	/// CI substituting the sentinels before a release build).
 	///
-	/// Why this lives in its own assembly with no references: the generated files are
-	/// compiled into FishMMO.Shared and FishMMO.Client, so when they are missing those
-	/// assemblies fail to compile and nothing inside them can run. This assembly
-	/// depends on neither, so it still compiles and can heal the project on load.
+	/// A missing file is not a compile error: each generated file only implements a
+	/// partial method on a tracked class (HostConfig.cs, CertificatePinSet.cs,
+	/// ClientGateSecret.cs) that holds sentinel defaults. It used to be one, and this
+	/// restorer could never fix it on first open — a project that fails to compile
+	/// opens in Safe Mode, which runs no project editor code at all, so the restore
+	/// and the FishMMO menu were both out of reach. Restoring now just puts the file
+	/// in place for the dashboard to overwrite and for CI to substitute into.
+	///
+	/// Why this lives in its own assembly with no references: a broken edit elsewhere
+	/// in FishMMO.Shared or FishMMO.Client must not take the drift report down with it.
 	///
 	/// Existing files are never overwritten — restoring must never clobber real values.
 	/// That is also why <see cref="GeneratedFileDriftCheck"/> runs alongside the restore:
-	/// a file that already exists keeps the shape it had when it was written, so a field
-	/// added to a template later never reaches it, and the only symptom is a CS0117 in an
-	/// assembly that looks unrelated (https://github.com/jimdroberts/FishMMO/issues/122).
+	/// a file that already exists keeps the shape it had when it was written, so a value
+	/// added to a template later never reaches it and silently stays at its sentinel
+	/// (the compile-error form of this was https://github.com/jimdroberts/FishMMO/issues/122).
 	/// </summary>
 	[InitializeOnLoad]
 	public static class GeneratedFileRestorer
@@ -78,15 +84,9 @@ namespace FishMMO.GeneratedFiles
 		/// Prefer GeneratedFileTemplates/restore-generated-files.sh, which needs no Unity.
 		/// </summary>
 		/// <remarks>
-		/// Strongly prefer the script in CI, because this entry point cannot report the
-		/// problems it exists for. A batch-mode Unity that finds ANY assembly failing to
-		/// compile logs "Scripts have compiler errors." and shuts down without running
-		/// -executeMethod or any [InitializeOnLoad] constructor — and a missing or drifted
-		/// generated file breaks FishMMO.Shared or FishMMO.Client by definition, so the
-		/// run is already over before this method would be called. It is useful for the
-		/// case where everything compiles and you want the check anyway; the shell script
-		/// is what actually guards a headless build. In the interactive Editor there is no
-		/// such abort, so loading the project still runs the restore and the drift report.
+		/// Prefer the script in CI: it needs no Unity, and a batch-mode Unity that finds ANY
+		/// assembly failing to compile logs "Scripts have compiler errors." and shuts down
+		/// without running -executeMethod or any [InitializeOnLoad] constructor.
 		/// </remarks>
 		public static void RestoreFromCommandLine()
 		{
@@ -100,8 +100,8 @@ namespace FishMMO.GeneratedFiles
 		/// </summary>
 		/// <returns>
 		/// The number of files created, or -1 if a template was missing or unreadable, or
-		/// an existing file has drifted from its template. A drifted file is a compile
-		/// error waiting to happen, so automation should treat it the same as a missing one.
+		/// an existing file has drifted from its template. A drifted file leaves values at
+		/// their sentinels, so automation should treat it the same as a missing one.
 		/// </returns>
 		public static int Restore(bool logWhenNothingToDo)
 		{
@@ -127,7 +127,7 @@ namespace FishMMO.GeneratedFiles
 					Debug.LogError(
 						$"[FishMMO] Missing generated file '{relativePath}' and its template " +
 						$"'{TemplatePathFor(relativePath)}'. " +
-						"The project will not compile until it is restored.");
+						"Its values stay at their sentinel defaults until it is restored and written.");
 					failed = true;
 					continue;
 				}

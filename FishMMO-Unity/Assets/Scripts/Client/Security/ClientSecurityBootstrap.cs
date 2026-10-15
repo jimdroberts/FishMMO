@@ -32,11 +32,11 @@ namespace FishMMO.Client.Security
 		{
 			get
 			{
-				string[] p = GeneratedPinSet.Pins;
+				string[] p = CertificatePinSet.Pins;
 				if (p == null) return 0;
 				int count = 0;
 				foreach (var pin in p)
-					if (!string.IsNullOrWhiteSpace(pin) && !pin.Contains(GeneratedPinSet.SentinelMarker))
+					if (!string.IsNullOrWhiteSpace(pin) && !pin.Contains(CertificatePinSet.SentinelMarker))
 						count++;
 				return count;
 			}
@@ -47,7 +47,7 @@ namespace FishMMO.Client.Security
 		{
 			try
 			{
-				ClientCertificatePinning.SetInitialPins(GeneratedPinSet.Pins);
+				ClientCertificatePinning.SetInitialPins(CertificatePinSet.Pins);
 			}
 			catch (Exception ex)
 			{
@@ -61,7 +61,7 @@ namespace FishMMO.Client.Security
 			// Layer 2: attempt API-sourced pin update (non-blocking, best-effort).
 			// The compile-time pins are already active and will remain so even if
 			// this fetch fails. Only fires when a manifest public key is configured.
-			if (!string.IsNullOrEmpty(GeneratedPinSet.ManifestPublicKeyBase64))
+			if (!string.IsNullOrEmpty(CertificatePinSet.ManifestPublicKeyBase64))
 			{
 				/* Explicitly observed, and explicitly discarded.
 				 *

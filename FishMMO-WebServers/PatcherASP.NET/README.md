@@ -223,8 +223,8 @@ unsigned.
 
 ### 3. Ship the public half to clients
 
-Put the public key in `GeneratedPinSet.VersionManifestPublicKeyBase64`
-(`Assets/Scripts/Client/Security/CertificatePins.generated.cs`). It is a **separate** key from the
+Put the public key in `CertificatePinSet.VersionManifestPublicKeyBase64` by setting
+`values.VersionManifestPublicKeyBase64` in `Assets/Scripts/Client/Security/CertificatePins.generated.cs`. It is a **separate** key from the
 certificate-pin manifest key; do not reuse one for both.
 
 ### Rollout order

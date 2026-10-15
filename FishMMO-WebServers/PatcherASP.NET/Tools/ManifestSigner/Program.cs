@@ -74,7 +74,7 @@ Key placement after keygen:
   SERVER  private key -> Signing:VersionManifestPrivateKeyFile (preferred),
                          FISHMMO_VERSION_MANIFEST_SIGNING_KEY, or
                          Signing:VersionManifestPrivateKeyBase64
-  CLIENT  public key  -> GeneratedPinSet.VersionManifestPublicKeyBase64
+  CLIENT  public key  -> CertificatePinSet.VersionManifestPublicKeyBase64
                          (Assets/Scripts/Client/Security/CertificatePins.generated.cs)
 
 The private key must never be committed, never be logged, and never leave the release host.");
@@ -98,7 +98,7 @@ The private key must never be committed, never be logged, and never leave the re
 					Console.WriteLine("PRIVATE KEY (server, keep secret):");
 					Console.WriteLine(privateBase64);
 					Console.WriteLine();
-					Console.WriteLine("PUBLIC KEY  (client, GeneratedPinSet.VersionManifestPublicKeyBase64):");
+					Console.WriteLine("PUBLIC KEY  (client, CertificatePinSet.VersionManifestPublicKeyBase64):");
 					Console.WriteLine(publicBase64);
 					return 0;
 				}
@@ -132,7 +132,7 @@ The private key must never be committed, never be logged, and never leave the re
 				Console.WriteLine($"Private key written to {privatePath} (mode 600 where supported).");
 				Console.WriteLine($"Public  key written to {publicPath}");
 				Console.WriteLine();
-				Console.WriteLine("PUBLIC KEY (client, GeneratedPinSet.VersionManifestPublicKeyBase64):");
+				Console.WriteLine("PUBLIC KEY (client, CertificatePinSet.VersionManifestPublicKeyBase64):");
 				Console.WriteLine(publicBase64);
 				return 0;
 			}

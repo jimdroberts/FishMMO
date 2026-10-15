@@ -16,7 +16,7 @@ MonoBehaviour:
   ScenePath: Assets/Scenes/WorldScene/Peliareth/The Kel Peaks.unity
   Spawners:
   - Name: 'Zikstead Merchant Spawner [5111fa02]'
-    Position: {x: -2.141305, y: 194.70915, z: -50.91137}
+    Position: {x: -2.141305, y: 194.71162, z: -50.91137}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
     OrConditions: []
     TrueConditions: []
@@ -42,7 +42,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Zikstead Merchant Spawner [5111fa02]'
-    Position: {x: -11.467455, y: 194.70915, z: -48.552807}
+    Position: {x: -11.467455, y: 194.71162, z: -48.552807}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
     OrConditions: []
     TrueConditions: []
@@ -68,7 +68,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Zikstead Banker Spawner [5111fa02]'
-    Position: {x: -2.465724, y: 194.70915, z: -69.71608}
+    Position: {x: -2.465724, y: 194.71162, z: -69.71608}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
     OrConditions: []
     TrueConditions: []
@@ -94,7 +94,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Zikstead Crafter Spawner [5111fa02]'
-    Position: {x: 0.43790627, y: 194.70915, z: -25.641495}
+    Position: {x: 0.43790627, y: 194.71162, z: -25.641495}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
     OrConditions: []
     TrueConditions: []
@@ -120,7 +120,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Zikstead Guard Spawner [5111fa02]'
-    Position: {x: -28.719429, y: 194.70915, z: -45.77186}
+    Position: {x: -28.719429, y: 194.71162, z: -45.77186}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
     OrConditions: []
     TrueConditions: []
@@ -145,7 +145,7 @@ MonoBehaviour:
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
   - Name: 'Zikstead Townsfolk Spawner [5111fa02]'
-    Position: {x: -3.8896656, y: 194.70915, z: -48.790863}
+    Position: {x: -3.8896656, y: 194.71162, z: -48.790863}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
     OrConditions: []
     TrueConditions: []
@@ -169,9 +169,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Ryanyunstead Merchant Spawner [10d18030]'
-    Position: {x: -15.798511, y: 184.30202, z: 141.16371}
-    Rotation: {x: -0, y: 0.8290376, z: -0, w: -0.55919284}
+  - Name: 'Ancient Krubhold Merchant Spawner [5498ef1d]'
+    Position: {x: -17.036932, y: 184.37163, z: 161.12573}
+    Rotation: {x: -0, y: 0.13917318, z: -0, w: -0.99026805}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -195,9 +195,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Ryanyunstead Townsfolk Spawner [10d18030]'
-    Position: {x: -14.076637, y: 184.30202, z: 143.85098}
-    Rotation: {x: -0, y: 0.8290376, z: -0, w: -0.55919284}
+  - Name: 'Ancient Krubhold Townsfolk Spawner [5498ef1d]'
+    Position: {x: -12.742747, y: 184.37163, z: 161.39066}
+    Rotation: {x: -0, y: 0.13917318, z: -0, w: -0.99026805}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -220,9 +220,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Rin Elf-circle Bloodroot Patch Spawner 1 [1c94690a]'
-    Position: {x: -173.89603, y: 197.206, z: 31.832144}
-    Rotation: {x: -0, y: 0.9176543, z: -0, w: 0.39737993}
+  - Name: 'Fey Ring of the Howling Wyrm Bloodroot Patch Spawner 1 [0b9c7c89]'
+    Position: {x: 121.80008, y: 178.33136, z: 67.63473}
+    Rotation: {x: -0, y: 0.9625814, z: -0, w: -0.27099305}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -246,9 +246,9 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
-  - Name: 'Rin Elf-circle Bloodroot Patch Spawner 2 [1c94690a]'
-    Position: {x: -177.93051, y: 196.87636, z: 34.746056}
-    Rotation: {x: -0, y: 0.94034094, z: -0, w: 0.34023392}
+  - Name: 'Fey Ring of the Howling Wyrm Bloodroot Patch Spawner 2 [0b9c7c89]'
+    Position: {x: 130.1969, y: 178.56252, z: 58.490173}
+    Rotation: {x: -0, y: 0.6205515, z: 0, w: 0.7841657}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
@@ -266,6 +266,84 @@ MonoBehaviour:
     BoundingBoxSize: {x: 1, y: 8, z: 1}
     Spawnables:
     - rid: 7
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Fey Ring of the Howling Wyrm Bloodroot Patch Spawner 3 [0b9c7c89]'
+    Position: {x: 125.68167, y: 178.51889, z: 70.83417}
+    Rotation: {x: -0, y: 0.4395483, z: 0, w: 0.89821905}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 1
+    MaxSpawnCount: 1
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 0
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 1, y: 8, z: 1}
+    Spawnables:
+    - rid: 8
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Fey Ring of the Howling Wyrm Bloodroot Patch Spawner 4 [0b9c7c89]'
+    Position: {x: 131.24493, y: 178.78136, z: 63.909554}
+    Rotation: {x: -0, y: 0.2616424, z: -0, w: -0.96516496}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 1
+    MaxSpawnCount: 1
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 0
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 1, y: 8, z: 1}
+    Spawnables:
+    - rid: 9
+    Pack:
+      Enabled: 0
+      Tactic: 0
+      FocusTargeting: 1
+      TacticOrbitRadius: 5
+      KiteRotationSpeed: 30
+  - Name: 'Fey Ring of the Howling Wyrm Bog Puffball Cluster Spawner 5 [0b9c7c89]'
+    Position: {x: 121.594536, y: 178.51768, z: 62.213036}
+    Rotation: {x: -0, y: 0.8958529, z: -0, w: 0.44435078}
+    OrConditions: []
+    TrueConditions: []
+    InitialRespawnTime: 0
+    InitialSpawnCount: 1
+    MaxSpawnCount: 1
+    UniqueSpawnables: 0
+    SpawnType: 0
+    PrewarmPool: 1
+    PrewarmHeadroom: 1
+    RandomRespawnTime: 1
+    RespawnCheckIntervalMinimum: 3
+    RespawnCheckIntervalMaximum: 6
+    RandomSpawnPosition: 0
+    SphereRadius: 0.5
+    BoundingBoxSize: {x: 1, y: 8, z: 1}
+    Spawnables:
+    - rid: 10
     Pack:
       Enabled: 0
       Tactic: 0
@@ -380,7 +458,7 @@ MonoBehaviour:
         ArchetypeOverride: {fileID: 0}
         AdditionalAbilities: []
         ReplacePrefabAbilities: 0
-        FactionOverride: {fileID: 11400000, guid: 51cae398dc9f4938a62d419d696eb152,
+        FactionOverride: {fileID: 11400000, guid: 1c6adf150ca547979638fd34f98ad2f4,
           type: 2}
         PackRole: 3
         MinimumScale: 1
@@ -400,6 +478,36 @@ MonoBehaviour:
         asm: FishMMO.Server}
       data:
         NetworkObject: {fileID: 7260598054390996014, guid: fdd4e9089edf614e1ad5a0101cf5b996,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 8
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: fdd4e9089edf614e1ad5a0101cf5b996,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 9
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: fdd4e9089edf614e1ad5a0101cf5b996,
+          type: 3}
+        MinimumRespawnTime: 300
+        MaximumRespawnTime: 600
+        SpawnChance: 1
+        YOffset: -0
+    - rid: 10
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner,
+        asm: FishMMO.Server}
+      data:
+        NetworkObject: {fileID: 7260598054390996014, guid: 4727a6e324c362388bd94ac5dd7c3a10,
           type: 3}
         MinimumRespawnTime: 300
         MaximumRespawnTime: 600

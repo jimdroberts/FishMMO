@@ -64,6 +64,13 @@ namespace FishMMO.Shared
 			public Vector3 Outward;
 		}
 
+		/// <summary>A rope bridge between two islands: its end posts' feet, where the walk meets the grass at each end.</summary>
+		[Serializable]
+		public struct Crossing
+		{
+			public Vector3 From, To;
+		}
+
 		[Tooltip("The top of the cloud deck, y: below it is cloud, with no floor.")]
 		public float DeckTop;
 
@@ -81,6 +88,7 @@ namespace FishMMO.Shared
 
 		public Island[] Islands = Array.Empty<Island>();
 		public Dock[] Docks = Array.Empty<Dock>();
+		public Crossing[] Bridges = Array.Empty<Crossing>();
 
 		private static readonly Dictionary<int, SceneCloudWorld> scenes = new Dictionary<int, SceneCloudWorld>();
 

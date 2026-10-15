@@ -66,6 +66,10 @@ namespace FishMMO.TestHarness.World
 		private WorldSimWalkerBody body;
 		private int groundMask;
 		private Vector3 lastSafe;
+		/// <summary>The ship's deck stood on last frame, and where it was then, for the carry (<see cref="Carry"/>).</summary>
+		private Transform deck;
+		private Matrix4x4 deckWas;
+		private float deckYawWas;
 
 		/// <summary>
 		/// A walker set up as a player is, in the same scene as <paramref name="near"/>, so its motor's queries run in
@@ -228,7 +232,8 @@ namespace FishMMO.TestHarness.World
 			Vector3 start = transform.position;
 			controller.SetInputs(ref input);
 			controller.WaterTick = WeatherQuery.CurrentTick;
-			motor.SetPlatformVelocity(Vector3.zero, 0f);
+			Carry(deltaTime, out Vector3 carried, out float turned);
+			motor.SetPlatformVelocity(carried, turned);
 			motor.UpdatePhase1(deltaTime);
 			motor.UpdatePhase2(deltaTime);
 			Vector3 position = motor.TransientPosition;
@@ -247,6 +252,32 @@ namespace FishMMO.TestHarness.World
 			if (body != null)
 			{
 				body.Pose((position - start) / deltaTime, Grounded, Swimming, Climbing, Crouching, deltaTime);
+			}
+		}
+
+		/// <summary>
+		/// What a ship under way gives a walker standing on its deck: the velocity that keeps the deck point under its feet
+		/// where the deck has taken it since last frame, and the yaw the hull turned through. The game's player is carried
+		/// by <see cref="FloatingBoats.TryGetCarry"/> on the synced tick; the bed has no tick (its ships sail by the
+		/// presentation clock), so the carry is read off the hull's own collider as it moved, as a platform's would be.
+		/// </summary>
+		private void Carry(float deltaTime, out Vector3 velocity, out float turn)
+		{
+			velocity = Vector3.zero;
+			turn = 0f;
+			Collider under = motor.GroundingStatus.IsStableOnGround ? motor.GroundingStatus.GroundCollider : null;
+			Transform hull = under != null && under.GetComponentInParent<FloatingBoats>() != null ? under.transform : null;
+			if (hull != null && hull == deck && deltaTime > 0f)
+			{
+				Vector3 local = deckWas.inverse.MultiplyPoint3x4(transform.position);
+				velocity = (hull.localToWorldMatrix.MultiplyPoint3x4(local) - transform.position) / deltaTime;
+				turn = Mathf.DeltaAngle(deckYawWas, hull.eulerAngles.y);
+			}
+			deck = hull;
+			if (hull != null)
+			{
+				deckWas = hull.localToWorldMatrix;
+				deckYawWas = hull.eulerAngles.y;
 			}
 		}
 

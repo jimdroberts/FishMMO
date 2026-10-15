@@ -679,7 +679,7 @@ namespace FishMMO.Client
 			{
 				return false;
 			}
-			if (url.Contains(FishMMO.Client.Security.GeneratedPinSet.SentinelMarker))
+			if (url.Contains(FishMMO.Client.Security.CertificatePinSet.SentinelMarker))
 			{
 				return false;
 			}

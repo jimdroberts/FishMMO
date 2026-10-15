@@ -27,7 +27,7 @@ namespace FishMMO.Client.Security
 		/// <inheritdoc/>
 		public async Task<PinUpdateManifest> TryFetchUpdateAsync(CancellationToken cancellationToken)
 		{
-			string publicKeyBase64 = GeneratedPinSet.ManifestPublicKeyBase64;
+			string publicKeyBase64 = CertificatePinSet.ManifestPublicKeyBase64;
 			if (string.IsNullOrEmpty(publicKeyBase64))
 			{
 				return null; // feature disabled — no public key configured

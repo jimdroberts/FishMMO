@@ -10,18 +10,40 @@ in git. These sentinel templates are tracked in their place.
 | `CertificatePins.generated.cs.template` | `Assets/Scripts/Client/Security/CertificatePins.generated.cs` |
 | `ClientApiSecret.generated.cs.template` | `Assets/Scripts/Client/Security/ClientApiSecret.generated.cs` |
 
-Every template value is a `FISHMMO_SENTINEL_PLACEHOLDER*` string.
+Each generated file only **overrides** values. The classes themselves are tracked —
+`HostConfig` (`Assets/Scripts/Shared/Implementation/HostConfig.cs`), `CertificatePinSet`
+and `ClientGateSecret` (`Assets/Scripts/Client/Security/`) — and hold sentinel defaults.
+Each declares `static partial void Configure(Values values)`, and the generated file is
+just that method's body:
+
+```csharp
+public static partial class HostConfig
+{
+	static partial void Configure(Values values)
+	{
+		values.ApiHost = "https://api.example.com/";
+		// ...
+	}
+}
+```
+
+An unimplemented partial method is removed by the compiler, so **a missing generated
+file is not a compile error**. It used to be: the generated file declared the whole
+class, a fresh clone failed to compile on first open, and Unity offered Safe Mode — which
+runs no project editor code, so neither the restorer below nor the FishMMO menu that
+writes the real values could ever run. A value the file does not assign stays at its
+sentinel, so an old file never breaks the build either.
+
+Every template value is a `FISHMMO_SENTINEL_PLACEHOLDER*` string, as is every default.
 `ClientSecurityBuildValidator` blocks non-development builds that still contain the
-marker, so a project restored from templates can be opened and compiled but cannot
-ship a release build until the real values are written.
+marker, so a fresh clone opens and compiles but cannot ship a release build until the
+real values are written.
 
 ## How the files get there
 
 **Automatically, on Editor load.** `Assets/Editor/GeneratedFiles/GeneratedFileRestorer.cs`
-copies any missing file from its template and refreshes the AssetDatabase. It lives in
-its own assembly with no references, because the generated files compile into
-`FishMMO.Shared` and `FishMMO.Client` — when they are missing, those assemblies fail
-to compile and nothing inside them can run.
+copies any missing file from its template and refreshes the AssetDatabase, so the
+dashboard always has a file to overwrite and CI a file to substitute into.
 
 **Manually**, from the menu: `FishMMO > Restore Missing Generated Files`.
 
@@ -36,36 +58,38 @@ Restoring never overwrites an existing file, so it is always safe to re-run.
 ## Keeping an existing file in step with its template
 
 Never overwriting has a cost: a checkout that already has a generated file keeps
-whatever shape that file had when it was written. Add a field to a template and to
+whatever shape that file had when it was written. Add a value to a template and to
 the dashboard writer, and fresh clones get it while every existing checkout does not
-— and the only symptom is a `CS0117` in an assembly that looks unrelated. That is
-[issue #122](https://github.com/jimdroberts/FishMMO/issues/122): the field was added
-to the API and to neither writer, and the build kept working for whoever added it.
+— and that value silently stays a sentinel. (Before the partial-class split the same
+drift was a `CS0117` in an assembly that looked unrelated:
+[issue #122](https://github.com/jimdroberts/FishMMO/issues/122).)
 
 So both restore paths also compare each existing generated file against its template
-and report every member the template declares that the file does not:
+and report every value the template assigns that the file does not:
 
-- `restore-generated-files.sh` prints the missing members and exits `1`. It
-  compares public `const` / `static readonly` field names only.
+- `restore-generated-files.sh` prints the missing values and exits `1`. It
+  compares `values.<Name> =` assignments only.
 - The Editor's `Assets/Editor/GeneratedFiles/GeneratedFileDriftCheck.cs` logs them
-  on load, quoting the template's declaration — doc comment included — so it can
-  be pasted straight in. It compares public type declarations as well as fields,
-  so a whole missing nested class is reported too.
+  on load, quoting the template's line — comment included — so it can be pasted
+  straight into `Configure`. It also checks the file declares the template's partial
+  class, which is how a file from **before the split** shows up: it declares its own
+  `GeneratedHostConfig` / `GeneratedPinSet` / `GeneratedClientSecret`, which still
+  compiles but which nothing reads, so every value in it is ignored. Open
+  **FishMMO Dashboard > Game Settings** (it still reads the old shape) and click the
+  section's Write button to rewrite it.
 
-The file is never patched automatically — it holds real values. Paste the missing
-declaration in, or delete the file and restore it, which discards those values.
+The file is never patched automatically — it holds real values. Rewrite it from the
+dashboard, paste the missing line in, or delete the file and restore it, which
+discards those values.
 
-**Use the script in CI, not `-executeMethod`.** A batch-mode Unity that finds any
-assembly failing to compile logs `Scripts have compiler errors.` and shuts down
-before running `-executeMethod` or any `[InitializeOnLoad]` constructor — and a
-missing or drifted generated file breaks `FishMMO.Shared` or `FishMMO.Client` by
-definition, so the editor-side check never gets to run in exactly the case it is for.
-The interactive Editor has no such abort, so opening the project does run it.
+**Use the script in CI, not `-executeMethod`.** It needs no Unity, and a batch-mode
+Unity that finds any assembly failing to compile logs `Scripts have compiler errors.`
+and shuts down before running `-executeMethod` or any `[InitializeOnLoad]` constructor.
 
-Adding a field to a generated file's API means editing two places by hand — this
-folder's template and the matching writer in `FishMMODashboard.GameSettings.cs`.
-The checks above do not remove that duplication; they make forgetting one of them
-report itself, by name, instead of surfacing as a compile error somewhere downstream.
+Adding a value means editing four places by hand — the tracked class's `Values`
+default, the class's own field, this folder's template, and the matching writer in
+`FishMMODashboard.GameSettings.cs`. The checks above make forgetting the template or
+the writer report itself, by name.
 
 ## How the real values get there
 
@@ -74,7 +98,8 @@ Open **FishMMO Dashboard > Game Settings**:
 - **Host Configuration** → *Write Host Config*
 - **Certificate Pins** → *Fetch Pins*, then *Write Pins to File*. Each host needs a TCP
   connect plus a TLS handshake, so the fetch runs on a background thread and the Editor
-  stays responsive; the button disables until it completes
+  stays responsive; the button disables until it completes. The two manifest public keys
+  have no dashboard field: set them in the file by hand, and a later write keeps them
 - **Client Secret** → paste the gate secret from the FishMMO-Installer output or the
   `deployment_secrets` table, then *Write Secret to File*
 

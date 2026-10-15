@@ -50,6 +50,9 @@ namespace FishMMO.Shared.WorldDesign
 		public const float ClimbRopeKnotPitch = 0.5f;
 		/// <summary>A rope walk's and a trestle's span along z, metres.</summary>
 		public const float CaveSpanModule = 4f;
+
+		/// <summary>The clear height under a rope walk end's crossbar, metres: over any character's head.</summary>
+		public const float RopeBridgeHeadroom = 2.3f;
 		/// <summary>How far each trestle bent reaches below the deck at scale 1 (v0 two tiers, v1 one): scale y to the floor.</summary>
 		public static readonly float[] TrestleBentDepths = { 5.8f, 2.9f };
 		/// <summary>A hanging lantern's bottom below its fixing point (v0 on a long chain, v1 a short one), metres.</summary>
@@ -391,15 +394,21 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A rope walk's end: the anchor posts at z = 0 the span's ropes are made fast to (the span runs on toward +z), a
-		/// crossbar, a landing of boards back onto the ledge (−z); v0 the posts bedded in a cairn, v1 guyed back to stakes.
+		/// crossbar over the way, a landing of boards back onto the ledge (−z); v0 the posts bedded in a cairn, v1 guyed back
+		/// to stakes.
 		/// </summary>
+		/// <remarks>
+		/// The crossbar stands clear over a walker's head (<see cref="RopeBridgeHeadroom"/>): at 1.28 m it barred the way to
+		/// every character, whose capsule is 1.6 m tall, and the world sim walker stopped at the posts of all 47 of a cloud
+		/// world's bridges (2026-10-15).
+		/// </remarks>
 		private static void RopeBridgeEnd(StructureDraft d)
 		{
-			const float walk = 1.3f, post = 0.85f;
+			const float walk = 1.3f, post = 0.85f, bar = RopeBridgeHeadroom + 0.1f, top = bar + 0.14f;
 			float hand = d.Variant == 1 ? 0.95f : 1.02f;
 			for (int s = -1; s <= 1; s += 2)
 			{
-				Log(d, new Vector3(s * post, -1.2f, 0f), new Vector3(s * post, 1.42f, 0f), 0.11f, 1 + s, 0f, StructureMaterial.Timber, 8);
+				Log(d, new Vector3(s * post, -1.2f, 0f), new Vector3(s * post, top, 0f), 0.11f, 1 + s, 0f, StructureMaterial.Timber, 8);
 				// The hand rope and the foot rope from the span's end round the post.
 				d.Add(StructureShapes.Beam(new Vector3(s * (walk * 0.5f + 0.02f), hand, 0.02f), new Vector3(s * post, hand, 0f), 0.035f, 0.035f, StructureMaterial.Canvas, 4 + s));
 				d.Add(StructureShapes.Beam(new Vector3(s * (walk * 0.5f - 0.08f), -0.075f, 0.02f), new Vector3(s * post, -0.06f, 0f), 0.035f, 0.035f, StructureMaterial.Canvas, 7 + s));
@@ -421,10 +430,10 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					// A guy from the post's head back to a stake driven in behind.
 					Log(d, new Vector3(s * (post + 0.15f), -0.5f, -1.65f), new Vector3(s * (post + 0.12f), 0.3f, -1.5f), 0.06f, 40 + s, 0f, StructureMaterial.Timber, 6);
-					d.Add(StructureShapes.Beam(new Vector3(s * post, 1.3f, -0.05f), new Vector3(s * (post + 0.12f), 0.25f, -1.5f), 0.03f, 0.03f, StructureMaterial.Canvas, 43 + s));
+					d.Add(StructureShapes.Beam(new Vector3(s * post, bar, -0.05f), new Vector3(s * (post + 0.12f), 0.25f, -1.5f), 0.03f, 0.03f, StructureMaterial.Canvas, 43 + s));
 				}
 			}
-			Log(d, new Vector3(-post - 0.2f, 1.28f, 0f), new Vector3(post + 0.2f, 1.28f, 0f), 0.08f, 50, 0f, StructureMaterial.Timber, 8);
+			Log(d, new Vector3(-post - 0.2f, bar, 0f), new Vector3(post + 0.2f, bar, 0f), 0.08f, 50, 0f, StructureMaterial.Timber, 8);
 			// The landing: boards across, from the posts back onto the ledge.
 			int boards = d.Fine ? 4 : d.Mid ? 2 : 1;
 			for (int b = 0; b < boards; b++)

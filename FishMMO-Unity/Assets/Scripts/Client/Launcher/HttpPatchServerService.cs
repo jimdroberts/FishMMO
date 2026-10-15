@@ -128,7 +128,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// <para><b>Manifest integrity (was the TODO above this method; S4).</b> The response
 		/// is verified with Ed25519 against
-		/// <c>GeneratedPinSet.VersionManifestPublicKeyBase64</c> before ANY field in it is
+		/// <c>CertificatePinSet.VersionManifestPublicKeyBase64</c> before ANY field in it is
 		/// read. That matters because the manifest is trusted absolutely downstream: its
 		/// <c>sha256</c> is the only integrity check applied to the patch archive, so whoever
 		/// writes the manifest chooses which bytes the updater installs, and its
@@ -533,7 +533,7 @@ namespace FishMMO.Client
 			error = null;
 
 			if (!FishMMO.Client.Security.Ed25519ManifestVerifier.TryDecodePublicKey(
-					FishMMO.Client.Security.GeneratedPinSet.VersionManifestPublicKeyBase64,
+					FishMMO.Client.Security.CertificatePinSet.VersionManifestPublicKeyBase64,
 					out byte[] publicKey))
 			{
 				/* No usable key. Note that this also covers a key that IS configured but is
@@ -546,7 +546,7 @@ namespace FishMMO.Client
 				Log.Error("HttpPatchServerService",
 					"VERSION MANIFEST IS UNSIGNED: no Ed25519 verification key is embedded in this build. " +
 					"The patch SHA-256 is therefore only as trustworthy as the API gateway serving it. " +
-					"Configure GeneratedPinSet.VersionManifestPublicKeyBase64 and sign /latest_version.");
+					"Configure CertificatePinSet.VersionManifestPublicKeyBase64 and sign /latest_version.");
 #else
 				Log.Debug("HttpPatchServerService",
 					"Version manifest signature verification is disabled (no key configured). Release builds report this at Error level.");

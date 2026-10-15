@@ -1677,8 +1677,8 @@ Application wants to quit
 
 | Constant | Value | Location |
 |----------|-------|----------|
-| `APIHost` | `GeneratedHostConfig.ApiHost` (build-time substituted; committed value is the `FISHMMO_SENTINEL_PLACEHOLDER_API_HOST` sentinel) | `Constants.cs` → `HostConfig.generated.cs` |
-| `GameHost` | `GeneratedHostConfig.GameHost` (build-time substituted; committed value is the `FISHMMO_SENTINEL_PLACEHOLDER_GAME_HOST` sentinel) | `Constants.cs` → `HostConfig.generated.cs` |
+| `APIHost` | `HostConfig.ApiHost` (build-time substituted; committed value is the `FISHMMO_SENTINEL_PLACEHOLDER_API_HOST` sentinel) | `Constants.cs` → `HostConfig.generated.cs` |
+| `GameHost` | `HostConfig.GameHost` (build-time substituted; committed value is the `FISHMMO_SENTINEL_PLACEHOLDER_GAME_HOST` sentinel) | `Constants.cs` → `HostConfig.generated.cs` |
 | `AuthStaleTtlSeconds` | 15s | `BaseAuthenticatorCore.cs` |
 | `AuthHardDeadlineSeconds` | 60s | `BaseAuthenticatorCore.cs` |
 | `MaxPendingAuthConnections` | 1,000 Login (SRP verify + proof channel capacity, `PendingAuthRules.DefaultLoginPendingCap`) / 10,000 World, Scene | `BaseAuthenticatorCore.cs`, `SrpAuthenticatorCore.cs` |

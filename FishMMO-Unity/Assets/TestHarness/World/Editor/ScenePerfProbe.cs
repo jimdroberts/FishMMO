@@ -577,6 +577,12 @@ namespace FishMMO.TestHarness.World.Editor
 				case "cloud-dock":
 				case "cloud-gap":
 				case "cloud-under":
+				case "cloud-edge":
+				case "cloud-edge-high":
+				case "cloud-edge-low":
+				case "cloud-edge-along":
+				case "cloud-bridge":
+				case "cloud-bridge-side":
 					if (CloudView(view, out eye, out look))
 					{
 						break;
@@ -705,6 +711,79 @@ namespace FishMMO.TestHarness.World.Editor
 					Vector3 at = city.Centre + toward * Mathf.Max(5f, city.Radius * 0.7f);
 					eye = new Vector3(at.x, GroundAt(at.x, at.z) + 1.8f, at.z);
 					look = other.Centre - Vector3.up * 6f;
+					return true;
+				}
+				case "cloud-bridge":
+				case "cloud-bridge-side":
+				{
+					// A bridge (FISHMMO_PERF_BRIDGE, the first by default): from its landing at a walker's eye along it, or from
+					// the side where its walk runs out over the rim.
+					if (world.Bridges == null || world.Bridges.Length == 0)
+					{
+						return false;
+					}
+					int which = int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_BRIDGE"), out int w) ? Mathf.Clamp(w, 0, world.Bridges.Length - 1) : 0;
+					SceneCloudWorld.Crossing bridge = world.Bridges[which];
+					var along = new Vector3(bridge.To.x - bridge.From.x, 0f, bridge.To.z - bridge.From.z).normalized;
+					var across = new Vector3(-along.z, 0f, along.x);
+					if (view == "cloud-bridge")
+					{
+						eye = bridge.From - along * 3f + Vector3.up * 1.7f;
+						look = bridge.To + Vector3.up * 0.5f;
+					}
+					else
+					{
+						Vector3 at = bridge.From + along * 4f;
+						eye = at + across * 7f + along * 1f + Vector3.up * 0.6f;
+						look = at;
+					}
+					return true;
+				}
+				case "cloud-edge":
+				case "cloud-edge-high":
+				case "cloud-edge-low":
+				case "cloud-edge-along":
+				{
+					/* Close on where the city's turf meets its rock, found from the terrain's own holes (the turf's last solid
+					 * point out along a bearing, FISHMMO_PERF_EDGE_BEARING degrees, 20 by default): level with the turf 7 m
+					 * off (edge), 4 m over it looking down (high), 1.2 m under it looking up (low), or along the edge 10 m
+					 * to one side at the turf's height (along). */
+					float bearing = float.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_EDGE_BEARING"), System.Globalization.NumberStyles.Float,
+						System.Globalization.CultureInfo.InvariantCulture, out float b) ? b : 20f;
+					var outward = new Vector3(Mathf.Cos(bearing * Mathf.Deg2Rad), 0f, Mathf.Sin(bearing * Mathf.Deg2Rad));
+					Vector3 at = city.Centre;
+					for (float d = city.Radius + 4f; d > 2f; d -= 0.05f)
+					{
+						Vector3 p = city.Centre + outward * d;
+						if (IsTurf(p.x, p.z))
+						{
+							at = p;
+							break;
+						}
+					}
+					float turf = GroundAt(at.x - outward.x * 4f, at.z - outward.z * 4f);
+					at.y = turf;
+					var side = new Vector3(-outward.z, 0f, outward.x);
+					switch (view)
+					{
+						case "cloud-edge-high":
+							eye = at + outward * 6f + Vector3.up * 4f;
+							look = at - outward * 1f;
+							break;
+						case "cloud-edge-low":
+							eye = at + outward * 6f - Vector3.up * 1.2f;
+							look = at - outward * 1f + Vector3.up * 0.3f;
+							break;
+						case "cloud-edge-along":
+							eye = at + side * 10f + outward * 1.5f + Vector3.up * 0.3f;
+							look = at - side * 4f;
+							break;
+						default:
+							eye = at + outward * 7f + Vector3.up * 0.4f;
+							look = at - outward * 1f;
+							break;
+					}
+					Debug.Log($"[ScenePerfProbe] {view}: the turf's edge at {at} (bearing {bearing:0}°), eye {eye}.");
 					return true;
 				}
 				default:
@@ -997,6 +1076,32 @@ namespace FishMMO.TestHarness.World.Editor
 				}
 			}
 			return Vector2.zero;
+		}
+
+		private static readonly Dictionary<TerrainData, bool[,]> turfMasks = new Dictionary<TerrainData, bool[,]>();
+
+		/// <summary>True where a terrain has solid turf at (x, z): its hole mask, cell by cell, as the cut wrote it.</summary>
+		private static bool IsTurf(float x, float z)
+		{
+			foreach (Terrain terrain in Terrain.activeTerrains)
+			{
+				TerrainData data = terrain.terrainData;
+				Vector3 p = terrain.transform.position, size = data.size;
+				if (x < p.x || z < p.z || x > p.x + size.x || z > p.z + size.z)
+				{
+					continue;
+				}
+				if (!turfMasks.TryGetValue(data, out bool[,] mask))
+				{
+					int res = data.holesResolution;
+					mask = data.GetHoles(0, 0, res, res);
+					turfMasks[data] = mask;
+				}
+				int n = mask.GetLength(0);
+				int cx = Mathf.Clamp((int)((x - p.x) / size.x * n), 0, n - 1), cz = Mathf.Clamp((int)((z - p.z) / size.z * n), 0, n - 1);
+				return mask[cz, cx];
+			}
+			return false;
 		}
 
 		private static float GroundAt(float x, float z)

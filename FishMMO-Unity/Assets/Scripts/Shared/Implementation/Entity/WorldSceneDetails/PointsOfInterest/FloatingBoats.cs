@@ -357,12 +357,19 @@ namespace FishMMO.Shared
 			{
 				seconds = now;
 				waterTick = tick;
+				bool moved = false;
 				for (int i = 0; i < sailing.Length; i++)
 				{
 					if (sailing[i].Root != null)
 					{
-						Place(i, PoseAt(i, now, tick));
+						moved |= Place(i, PoseAt(i, now, tick));
 					}
+				}
+				// Automatic transform sync is off, as the networked path says: without this a hull's collider stayed where it
+				// was last synced while the hull was drawn sailing on, and anything walking onto the deck fell through it.
+				if (moved)
+				{
+					Physics.SyncTransforms();
 				}
 			}
 			for (int i = 0; i < sailing.Length; i++)

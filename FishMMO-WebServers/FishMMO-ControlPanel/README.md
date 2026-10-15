@@ -59,7 +59,7 @@ inventory, the schema additions and the phase plan live in
 ## Not a news CMS
 
 The launcher's news panel is fetched from `Constants.Configuration.LauncherHtmlUrl`, baked
-at build time from `GeneratedHostConfig.LauncherHtmlUrl` (CI substitutes it from
+at build time from `HostConfig.LauncherHtmlUrl` (CI substitutes it from
 `FISHMMO_ROOT_DOMAIN`). Nothing in this project serves it.
 
 ## Run it locally

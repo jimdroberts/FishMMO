@@ -92,7 +92,7 @@ drawing.
 ## Prerequisites
 
 - The `ClientLauncher` scene, with `ClientLauncher`, its service components, and a component implementing `ILauncherView` (`UITKClientLauncher`) wired in the Inspector. A missing dependency is reported at `Awake` and the launcher refuses to run rather than null-referencing mid-flow.
-- `Constants.Configuration.APIHost` and `LauncherHtmlUrl`, both baked at build time from `GeneratedHostConfig` (CI substitutes them from `FISHMMO_ROOT_DOMAIN`).
+- `Constants.Configuration.APIHost` and `LauncherHtmlUrl`, both baked at build time from `HostConfig` (CI substitutes them from `FISHMMO_ROOT_DOMAIN`).
 - `ClientApiSecret.generated.cs`, produced by **FishMMO Dashboard > Game Settings**. A build still carrying the sentinel value will be rejected by `ClientGate`.
 - The Updater executable present at the install root (`Constants.Configuration.UpdaterExecutable`).
 
@@ -304,7 +304,7 @@ If `ClientPostboot` is already loaded — reachable when a previous launch faile
 X-FishMMO-Client: v1.<timestamp>.<nonce>.<signature>
 ```
 
-The signing secret lives in `GeneratedClientSecret.Secret` (`ClientApiSecret.generated.cs`). **It is not a credential.** It ships inside the client binary and is recoverable by anyone with the build; its job is to filter crawlers, port scanners, and blatant header forgery. Real authority comes from the SRP-derived session token issued by the auth server.
+The signing secret lives in `ClientGateSecret.Secret` (`ClientApiSecret.generated.cs`). **It is not a credential.** It ships inside the client binary and is recoverable by anyone with the build; its job is to filter crawlers, port scanners, and blatant header forgery. Real authority comes from the SRP-derived session token issued by the auth server.
 
 ## Operational Checks
 

@@ -118,7 +118,7 @@ namespace FishMMO.Client.Security
 		/// Unlike <see cref="Configure"/>, this method cannot be used to clear
 		/// pins once they have been set — it is a one-way door.
 		/// </summary>
-		/// <param name="initialPins">The compile-time pin set from GeneratedPinSet.</param>
+		/// <param name="initialPins">The compile-time pin set from CertificatePinSet.</param>
 		public static void SetInitialPins(string[] initialPins)
 		{
 			if (initialPins == null || initialPins.Length == 0)
@@ -144,7 +144,7 @@ namespace FishMMO.Client.Security
 				string trimmed = raw.Trim();
 				// Skip sentinel placeholder values — they are intentionally
 				// invalid and should never reach the pin set even in dev builds.
-				if (trimmed.Contains(GeneratedPinSet.SentinelMarker))
+				if (trimmed.Contains(CertificatePinSet.SentinelMarker))
 				{
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 					Log.Warning(logChannel,
@@ -193,7 +193,7 @@ namespace FishMMO.Client.Security
 				{
 					if (string.IsNullOrWhiteSpace(raw)) continue;
 					string trimmed = raw.Trim();
-					if (trimmed.Contains(GeneratedPinSet.SentinelMarker)) continue;
+					if (trimmed.Contains(CertificatePinSet.SentinelMarker)) continue;
 					if (pins.Add(trimmed)) added++;
 				}
 				if (added > 0)

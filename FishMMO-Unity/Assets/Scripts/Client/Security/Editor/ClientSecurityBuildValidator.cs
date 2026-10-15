@@ -18,7 +18,7 @@ namespace FishMMO.Client.Security.Editor
 	///   4. <c>StreamingAssets/client-security.json</c> does NOT exist (anti-pattern).
 	///
 	/// Plus one WARNING-level check (does not block the build):
-	///   5. <c>GeneratedPinSet.VersionManifestPublicKeyBase64</c> is configured, so the
+	///   5. <c>CertificatePinSet.VersionManifestPublicKeyBase64</c> is configured, so the
 	///      <c>/latest_version</c> manifest — which carries the only integrity check applied to
 	///      a patch archive — is verified rather than merely transported.
 	/// </summary>
@@ -56,7 +56,7 @@ namespace FishMMO.Client.Security.Editor
 					"    or use FishMMO Dashboard > Game Settings to configure real pins.");
 			}
 
-			if (GeneratedPinSetUsesSentinel())
+			if (PinSetUsesSentinel())
 			{
 				throw new BuildFailedException(
 					"Production build blocked: CertificatePins.generated.cs still contains\n" +
@@ -100,12 +100,12 @@ namespace FishMMO.Client.Security.Editor
 			 *
 			 * Promote it to a BuildFailedException once the patch server signs its manifests.
 			 */
-			if (string.IsNullOrEmpty(GeneratedPinSet.VersionManifestPublicKeyBase64) ||
-				GeneratedPinSet.VersionManifestPublicKeyBase64.Contains(GeneratedPinSet.SentinelMarker))
+			if (string.IsNullOrEmpty(CertificatePinSet.VersionManifestPublicKeyBase64) ||
+				CertificatePinSet.VersionManifestPublicKeyBase64.Contains(CertificatePinSet.SentinelMarker))
 			{
 				Debug.LogWarning(
 					"FishMMO security: the version manifest is UNSIGNED in this release build.\n" +
-					"  GeneratedPinSet.VersionManifestPublicKeyBase64 is not configured, so\n" +
+					"  CertificatePinSet.VersionManifestPublicKeyBase64 is not configured, so\n" +
 					"  GET {APIHost}latest_version is trusted on the strength of TLS alone — including\n" +
 					"  the SHA-256 that is the only integrity check applied to the patch archive.\n" +
 					"  To fix: sign the /latest_version response with Ed25519 (same canonical form as the\n" +
@@ -123,13 +123,13 @@ namespace FishMMO.Client.Security.Editor
 			}
 		}
 
-		private static bool GeneratedPinSetUsesSentinel()
+		private static bool PinSetUsesSentinel()
 		{
-			string[] pins = GeneratedPinSet.Pins;
+			string[] pins = CertificatePinSet.Pins;
 			if (pins == null) return true;
 			foreach (var pin in pins)
 			{
-				if (pin != null && pin.Contains(GeneratedPinSet.SentinelMarker))
+				if (pin != null && pin.Contains(CertificatePinSet.SentinelMarker))
 					return true;
 			}
 			return false;
@@ -137,16 +137,16 @@ namespace FishMMO.Client.Security.Editor
 
 		private static bool ClientApiSecretUsesSentinel()
 		{
-			return GeneratedClientSecret.Secret.Contains(GeneratedPinSet.SentinelMarker);
+			return ClientGateSecret.Secret.Contains(CertificatePinSet.SentinelMarker);
 		}
 
 		private static bool HostConfigUsesSentinel()
 		{
-			string marker = GeneratedHostConfig.SentinelMarker;
-			return GeneratedHostConfig.ApiHost.Contains(marker) ||
-				GeneratedHostConfig.GameHost.Contains(marker) ||
-				GeneratedHostConfig.PlayHost.Contains(marker) ||
-				GeneratedHostConfig.RootDomain.Contains(marker);
+			string marker = HostConfig.SentinelMarker;
+			return HostConfig.ApiHost.Contains(marker) ||
+				HostConfig.GameHost.Contains(marker) ||
+				HostConfig.PlayHost.Contains(marker) ||
+				HostConfig.RootDomain.Contains(marker);
 		}
 	}
 }

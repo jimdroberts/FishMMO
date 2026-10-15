@@ -174,10 +174,10 @@ namespace FishMMO.Shared
 			try
 			{
 				string content = File.ReadAllText(hostPath);
-				string api = ParseConstantFromFile(content, "ApiHost");
-				string game = ParseConstantFromFile(content, "GameHost");
-				string play = ParseConstantFromFile(content, "PlayHost");
-				string root = ParseConstantFromFile(content, "RootDomain");
+				string api = ParseValueFromFile(content, "ApiHost");
+				string game = ParseValueFromFile(content, "GameHost");
+				string play = ParseValueFromFile(content, "PlayHost");
+				string root = ParseValueFromFile(content, "RootDomain");
 
 				gs_apiHost = IsSentinelOrEmpty(api) ? "" : api;
 				gs_gameHost = IsSentinelOrEmpty(game) ? "" : game;
@@ -270,7 +270,7 @@ namespace FishMMO.Shared
 			try
 			{
 				string content = File.ReadAllText(secretPath);
-				string parsed = ParseConstantFromFile(content, "Secret");
+				string parsed = ParseValueFromFile(content, "Secret");
 				if (!string.IsNullOrEmpty(parsed) && !parsed.Contains(sentinelMarker))
 					gs_secretInput = parsed;
 				else
@@ -531,8 +531,9 @@ namespace FishMMO.Shared
 				sb.AppendLine("// Generated at: " + DateTime.UtcNow.ToString("O"));
 				sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
 				sb.AppendLine("//");
-				sb.AppendLine("// Sentinel check: the build validator (ClientSecurityBuildValidator) blocks");
-				sb.AppendLine("// non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.");
+				sb.AppendLine("// Overrides the sentinel defaults declared in HostConfig.cs. A value this file does");
+				sb.AppendLine("// not assign keeps its sentinel, and the build validator (ClientSecurityBuildValidator)");
+				sb.AppendLine("// blocks non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.");
 				sb.AppendLine("// CI must replace every occurrence before invoking Unity.");
 				sb.AppendLine("//");
 				sb.AppendLine("// CI env vars:");
@@ -543,41 +544,18 @@ namespace FishMMO.Shared
 				sb.AppendLine();
 				sb.AppendLine("namespace FishMMO.Shared");
 				sb.AppendLine("{");
-				sb.AppendLine("\t/// <summary>");
-				sb.AppendLine("\t/// IL-embedded host configuration. The real values are substituted at");
-				sb.AppendLine("\t/// build time by CI or the FishMMO-Installer. The committed sentinel");
-				sb.AppendLine("\t/// values are intentionally invalid.");
-				sb.AppendLine("\t/// </summary>");
-				sb.AppendLine("\tpublic static class GeneratedHostConfig");
+				sb.AppendLine("\tpublic static partial class HostConfig");
 				sb.AppendLine("\t{");
-				sb.AppendLine("\t\tpublic const string SentinelMarker = \"" + sentinelMarker + "\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>API gateway URL with trailing slash (e.g. \"https://api.fishmmo.com/\").</summary>");
-				sb.AppendLine("\t\tpublic const string ApiHost =");
-				sb.AppendLine("\t\t\t\"" + apiHost + "\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>Game server hostname for WebTransport/QUIC connections.</summary>");
-				sb.AppendLine("\t\tpublic const string GameHost =");
-				sb.AppendLine("\t\t\t\"" + gameHost + "\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>WebGL client / player-facing hostname.</summary>");
-				sb.AppendLine("\t\tpublic const string PlayHost =");
-				sb.AppendLine("\t\t\t\"" + playHost + "\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>Root domain (no subdomain) for TLS certs and email.</summary>");
-				sb.AppendLine("\t\tpublic const string RootDomain =");
-				sb.AppendLine("\t\t\t\"" + rootDomain + "\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>SMTP from address for verification emails.</summary>");
-				sb.AppendLine("\t\tpublic const string SmtpFromAddress =");
-				sb.AppendLine("\t\t\t\"" + smtpFrom + "\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>SMTP from display name.</summary>");
-				sb.AppendLine("\t\tpublic const string SmtpFromName = \"FishMMO\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>Launcher HTML/news page URL.</summary>");
-				sb.AppendLine("\t\tpublic const string LauncherHtmlUrl =");
-				sb.AppendLine("\t\t\t\"" + launcherUrl + "\";");
+				sb.AppendLine("\t\tstatic partial void Configure(Values values)");
+				sb.AppendLine("\t\t{");
+				AppendAssignment(sb, "ApiHost", apiHost);
+				AppendAssignment(sb, "GameHost", gameHost);
+				AppendAssignment(sb, "PlayHost", playHost);
+				AppendAssignment(sb, "RootDomain", rootDomain);
+				AppendAssignment(sb, "SmtpFromAddress", smtpFrom);
+				AppendAssignment(sb, "SmtpFromName", "FishMMO");
+				AppendAssignment(sb, "LauncherHtmlUrl", launcherUrl);
+				sb.AppendLine("\t\t}");
 				sb.AppendLine("\t}");
 				sb.AppendLine("}");
 
@@ -1042,52 +1020,52 @@ namespace FishMMO.Shared
 				if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
 					Directory.CreateDirectory(dir);
 
+				// The dashboard has no field for the two manifest keys; an operator pastes
+				// them into the file by hand. Carry them over so rewriting the pins never
+				// blanks a key that was already deployed.
+				string manifestKey = "";
+				string versionManifestKey = "";
+				if (File.Exists(path))
+				{
+					string existing = File.ReadAllText(path);
+					manifestKey = ParseValueFromFile(existing, "ManifestPublicKeyBase64") ?? "";
+					versionManifestKey = ParseValueFromFile(existing, "VersionManifestPublicKeyBase64") ?? "";
+				}
+
 				var sb = new StringBuilder();
 				sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
 				sb.AppendLine("// AUTO-GENERATED — written by FishMMO Dashboard > Game Settings.");
 				sb.AppendLine("// Generated at: " + DateTime.UtcNow.ToString("O"));
 				sb.AppendLine("// ═══════════════════════════════════════════════════════════════════════════════");
 				sb.AppendLine("//");
-				sb.AppendLine("// Sentinel check: the build validator (ClientSecurityBuildValidator) blocks");
-				sb.AppendLine("// non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.");
+				sb.AppendLine("// Overrides the defaults declared in CertificatePinSet.cs. A value this file does not");
+				sb.AppendLine("// assign keeps its default, and the build validator (ClientSecurityBuildValidator)");
+				sb.AppendLine("// blocks non-development builds that contain the FISHMMO_SENTINEL_PLACEHOLDER marker.");
 				sb.AppendLine();
 				sb.AppendLine("namespace FishMMO.Client.Security");
 				sb.AppendLine("{");
-				sb.AppendLine("\t/// <summary>");
-				sb.AppendLine("\t/// IL-embedded certificate pin set.");
-				sb.AppendLine("\t/// </summary>");
-				sb.AppendLine("\tpublic static class GeneratedPinSet");
+				sb.AppendLine("\tpublic static partial class CertificatePinSet");
 				sb.AppendLine("\t{");
-				sb.AppendLine("\t\tpublic const string SentinelMarker = \"FISHMMO_SENTINEL_PLACEHOLDER\";");
-				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>");
-				sb.AppendLine("\t\t/// SHA-256 SPKI pins (base64). Minimum 2 entries required for");
-				sb.AppendLine("\t\t/// release builds.");
-				sb.AppendLine("\t\t/// </summary>");
-				sb.AppendLine("\t\tpublic static readonly string[] Pins =");
+				sb.AppendLine("\t\tstatic partial void Configure(Values values)");
 				sb.AppendLine("\t\t{");
+				sb.AppendLine("\t\t\t// SHA-256 SPKI pins (base64). Minimum 2 entries required for release");
+				sb.AppendLine("\t\t\t// builds — one active key + one backup for rotation.");
+				sb.AppendLine("\t\t\tvalues.Pins = new[]");
+				sb.AppendLine("\t\t\t{");
 
 				for (int i = 0; i < gs_discoveredPins.Count; i++)
-				{
-					string comma = i < gs_discoveredPins.Count - 1 ? "," : "";
-					sb.AppendLine($"\t\t\t\"{gs_discoveredPins[i]}\"{comma}");
-				}
+					sb.AppendLine("\t\t\t\t" + Quote(gs_discoveredPins[i]) + ",");
 
-				sb.AppendLine("\t\t};");
+				sb.AppendLine("\t\t\t};");
 				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>");
-				sb.AppendLine("\t\t/// Ed25519 public key (base64) for verifying signed pin update");
-				sb.AppendLine("\t\t/// manifests from the API. Empty string disables runtime updates.");
-				sb.AppendLine("\t\t/// </summary>");
-				sb.AppendLine("\t\tpublic const string ManifestPublicKeyBase64 = \"\";");
+				sb.AppendLine("\t\t\t// Ed25519 public key (base64) for verifying signed pin update manifests");
+				sb.AppendLine("\t\t\t// from the API. Empty string disables runtime updates.");
+				AppendAssignment(sb, "ManifestPublicKeyBase64", manifestKey);
 				sb.AppendLine();
-				sb.AppendLine("\t\t/// <summary>");
-				sb.AppendLine("\t\t/// Ed25519 public key (base64) for verifying the signed version manifest");
-				sb.AppendLine("\t\t/// served by /latest_version. Empty string means signing is not deployed:");
-				sb.AppendLine("\t\t/// the patch SHA-256 is then only as trustworthy as the API gateway, which");
-				sb.AppendLine("\t\t/// HttpPatchServerService reports at Error level in a release build.");
-				sb.AppendLine("\t\t/// </summary>");
-				sb.AppendLine("\t\tpublic const string VersionManifestPublicKeyBase64 = \"\";");
+				sb.AppendLine("\t\t\t// Ed25519 public key (base64) for verifying the signed version manifest");
+				sb.AppendLine("\t\t\t// served by /latest_version. Empty string means signing is not deployed.");
+				AppendAssignment(sb, "VersionManifestPublicKeyBase64", versionManifestKey);
+				sb.AppendLine("\t\t}");
 				sb.AppendLine("\t}");
 				sb.AppendLine("}");
 
@@ -1218,11 +1196,16 @@ namespace FishMMO.Shared
 				sb.AppendLine("// AUTO-GENERATED by FishMMO Dashboard > Game Settings.");
 				sb.AppendLine("// Generated at: " + DateTime.UtcNow.ToString("O"));
 				sb.AppendLine();
+				sb.AppendLine("// Overrides the sentinel default declared in ClientGateSecret.cs.");
+				sb.AppendLine();
 				sb.AppendLine("namespace FishMMO.Client.Security");
 				sb.AppendLine("{");
-				sb.AppendLine("\tpublic static class GeneratedClientSecret");
+				sb.AppendLine("\tpublic static partial class ClientGateSecret");
 				sb.AppendLine("\t{");
-				sb.AppendLine("\t\tpublic const string Secret = \"" + secret + "\";");
+				sb.AppendLine("\t\tstatic partial void Configure(Values values)");
+				sb.AppendLine("\t\t{");
+				AppendAssignment(sb, "Secret", secret);
+				sb.AppendLine("\t\t}");
 				sb.AppendLine("\t}");
 				sb.AppendLine("}");
 
@@ -1347,13 +1330,20 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Extracts a const string value from a generated C# file.
-		/// Looks for <c>const string Name = "...";</c> (value may span multiple lines).
+		/// Extracts a string value from a generated C# file: <c>values.Name = "...";</c>,
+		/// or the <c>const string Name = "...";</c> a file written before the generated
+		/// files became partial-class overrides declared instead, so its values carry
+		/// over when the dashboard rewrites it. The value may sit on the next line.
 		/// </summary>
-		private static string ParseConstantFromFile(string content, string constantName)
+		private static string ParseValueFromFile(string content, string name)
 		{
-			string search = "const string " + constantName + " =";
+			string search = "values." + name + " =";
 			int start = content.IndexOf(search, StringComparison.Ordinal);
+			if (start < 0)
+			{
+				search = "const string " + name + " =";
+				start = content.IndexOf(search, StringComparison.Ordinal);
+			}
 			if (start < 0) return null;
 
 			start = content.IndexOf('"', start + search.Length);
@@ -1362,7 +1352,23 @@ namespace FishMMO.Shared
 			int end = content.IndexOf("\";", start + 1, StringComparison.Ordinal);
 			if (end < 0) return null;
 
-			return content.Substring(start + 1, end - start - 1);
+			return content.Substring(start + 1, end - start - 1).Replace("\\\"", "\"").Replace("\\\\", "\\");
+		}
+
+		/// <summary>
+		/// A C# string literal for <paramref name="value"/>.
+		/// </summary>
+		private static string Quote(string value)
+		{
+			return "\"" + (value ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+		}
+
+		/// <summary>
+		/// One <c>values.Name = "...";</c> line inside a generated Configure method.
+		/// </summary>
+		private static void AppendAssignment(StringBuilder sb, string name, string value)
+		{
+			sb.AppendLine("\t\t\tvalues." + name + " = " + Quote(value) + ";");
 		}
 
 		/// <summary>

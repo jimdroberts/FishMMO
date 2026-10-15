@@ -722,7 +722,7 @@ MonoBehaviour:
     SwarmDensity: 1
     SizeScale: 1.4
     SwarmSpeckScale: 3
-    DebugHighlight: 1
+    DebugHighlight: 0
     DebugScale: 5
   AirMotesShader: {fileID: 4800000, guid: 21d1d818c31df151a8d79b5707f6de1e, type: 3}
   SiteEmbersShader: {fileID: 4800000, guid: 353ad06289eaf158ea064422b704fb85, type: 3}

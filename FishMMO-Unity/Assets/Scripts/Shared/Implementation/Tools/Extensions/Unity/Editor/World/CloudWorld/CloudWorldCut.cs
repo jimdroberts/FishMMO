@@ -61,6 +61,24 @@ namespace FishMMO.Shared.WorldDesign
 					SceneGenerationResult result = SceneGenerator.Recut(entry);
 					Debug.Log($"[Cloud world re-cut] '{name}' {(result != null && result.Success ? "succeeded" : "FAILED")}: " +
 						(result != null ? string.Join(" | ", result.Notes) + (result.Problem != null ? " | " + result.Problem : string.Empty) : "no result"));
+					if (result != null && result.Success && !string.IsNullOrEmpty(result.ScenePath))
+					{
+						// What the editor does on saving the scene and a batch run never does: the terrain arrays rebaked for the
+						// layers the cut painted (TerrainArrayAutoBake), or the scene draws the old arrays' layers.
+						UnityEngine.SceneManagement.Scene scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(result.ScenePath,
+							UnityEditor.SceneManagement.OpenSceneMode.Single);
+						int baked = 0;
+						foreach (TerrainArrayBinder binder in TerrainArrayBaker.BindersIn(scene))
+						{
+							TerrainArraySetup.SyncProvenance(binder);
+							if (TerrainArrayBaker.IsStale(binder, out _) && TerrainArrayBaker.Bake(binder).Baked)
+							{
+								baked++;
+							}
+						}
+						UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene);
+						Debug.Log($"[Cloud world re-cut] '{name}': {baked} terrain array set(s) rebaked.");
+					}
 					return;
 				}
 			}
@@ -80,7 +98,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The scene's islands, laid out for its size and seed.</summary>
 		public static CloudIslands.Plan Lay(SceneGenerationRequest request, TerrainTilePlan tiles)
-			=> CloudIslands.Lay(tiles.WidthMetres, tiles.DepthMetres, SceneGenerator.SceneSeed(request));
+			=> CloudIslands.Lay(tiles.WidthMetres, tiles.DepthMetres, SceneGenerator.SceneSeed(request), tiles.MetresPerSample);
 
 		/// <summary>
 		/// Cuts every cell outside the islands out of the tiles: their surface and their collider go, so only the islands
@@ -129,8 +147,9 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			foreach (CloudIslands.Bridge bridge in islands.Bridges)
 			{
-				reserved.Add(new PointOfInterestKeepOut { Id = -1, X = bridge.FromAt.x, Z = bridge.FromAt.y, Radius = 6f });
-				reserved.Add(new PointOfInterestKeepOut { Id = -1, X = bridge.ToAt.x, Z = bridge.ToAt.y, Radius = 6f });
+				// Wide enough for the end posts and landing, which stand inland of the rim (BridgeWay).
+				reserved.Add(new PointOfInterestKeepOut { Id = -1, X = bridge.FromAt.x, Z = bridge.FromAt.y, Radius = 8f });
+				reserved.Add(new PointOfInterestKeepOut { Id = -1, X = bridge.ToAt.x, Z = bridge.ToAt.y, Radius = 8f });
 			}
 			foreach (CloudIslands.Dock dock in islands.Docks)
 			{
@@ -142,13 +161,13 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Undersides ────────────────────────────────────────────
 
 		/// <summary>
-		/// The rock each island stands on, hung down into the void: a ledge tucked under the turf's edge, a lip just outside
-		/// it (which hides the stepped edge a hole leaves along the cells), and below that a rough, tapering mass, deep under
-		/// a small island and proportionally shallower under a big one, ending in a point. Collides (the server keeps it);
-		/// drawn in the cliff rock of the planet's stone.
+		/// The rock each island stands on, hung down into the void: a rim of stone over the turf's rolled-down edge, its
+		/// ledge running in under the grass, a cap under the whole turf, and below the rim a rough, tapering mass, deep under
+		/// a small island and proportionally shallower under a big one, ending in a point. The mass and rim collide (the
+		/// server keeps them); drawn in the cliff rock of the planet's stone. See <see cref="Rim"/> for how the turf meets it.
 		/// </summary>
-		public static void Undersides(Scene scene, SceneGenerationRequest request, CloudIslands.Plan islands, TerrainTilePlan tiles, string assetPath,
-			List<string> notes, List<string> wrote)
+		public static RimProfile[] Undersides(Scene scene, SceneGenerationRequest request, CloudIslands.Plan islands, TerrainTilePlan tiles, string assetPath,
+			Func<float, float, float> ground, Func<float, float, bool> hole, Func<float, float, float> turf, List<string> notes, List<string> wrote)
 		{
 			foreach (GameObject existing in scene.GetRootGameObjects())
 			{
@@ -162,13 +181,15 @@ namespace FishMMO.Shared.WorldDesign
 			var root = new GameObject(UndersideRootName) { layer = layer };
 			SceneManager.MoveGameObjectToScene(root, scene);
 			GameObjectUtility.SetStaticEditorFlags(root, CliffPlacer.Flags);
-			// The lip reaches past the cells' stepped edge: at least a cell and a half.
-			float lip = Mathf.Max(1.2f, tiles.MetresPerSample * 1.5f), tuck = Mathf.Max(2.5f, tiles.MetresPerSample * 2.5f);
+			// The rim over the turf's rolled edge (RimRing), kept for the bridges, which land over it.
+			float cell = tiles.MetresPerSample;
+			var rims = new RimProfile[islands.Islands.Count];
 			int triangles = 0;
 			for (int i = 0; i < islands.Islands.Count; i++)
 			{
 				CloudIslands.Island island = islands.Islands[i];
-				Mesh mesh = Underside(island, lip, tuck);
+				rims[i] = Profile(island, ground, turf, hole, cell);
+				Mesh mesh = Underside(island, rims[i]);
 				mesh.name = $"{scene.name} Underside {i}";
 				triangles += mesh.triangles.Length / 3;
 				if (i == 0)
@@ -194,6 +215,19 @@ namespace FishMMO.Shared.WorldDesign
 				var renderer = visual.AddComponent<MeshRenderer>();
 				renderer.sharedMaterial = material;
 				renderer.shadowCastingMode = ShadowCastingMode.On;
+
+				// The rock's top under the whole turf: drawn only, as nothing ever stands under the turf (see Cap).
+				Mesh cap = Cap(island, ground, hole, cell);
+				cap.name = $"{scene.name} Underside Cap {i}";
+				triangles += cap.triangles.Length / 3;
+				AssetDatabase.AddObjectToAsset(cap, assetPath);
+				var capHost = new GameObject("Cap") { layer = layer };
+				capHost.transform.SetParent(visual.transform, false);
+				GameObjectUtility.SetStaticEditorFlags(capHost, CliffPlacer.Flags);
+				capHost.AddComponent<MeshFilter>().sharedMesh = cap;
+				var capRenderer = capHost.AddComponent<MeshRenderer>();
+				capRenderer.sharedMaterial = material;
+				capRenderer.shadowCastingMode = ShadowCastingMode.Off;
 			}
 			if (islands.Islands.Count > 0)
 			{
@@ -201,29 +235,46 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			notes?.Add($"Cloud world: {islands.Islands.Count} island underside(s) in {rock} rock, {triangles:N0} triangles" +
 				(material == null ? "; no cliff material for it yet (run Generate Biome Art, then re-cut)" : string.Empty) + ".");
+			return rims;
 		}
 
-		/// <summary>One island's underside, in the island's frame (its centre at x = z = 0, heights as y).</summary>
-		public static Mesh Underside(CloudIslands.Island island, float lip, float tuck)
+		/// <summary>
+		/// How far under the turf's own height at its edge (before it rolled down) the rock's rim stands, metres: over the
+		/// rolled turf by most of the roll, under the grass where the grass meets it.
+		/// </summary>
+		public const float RimUnderTurf = 0.3f;
+
+		/// <summary>
+		/// How far past the last solid cell the rim reaches, in cells: past the half cell the terrain draws a hole's edge
+		/// across (its filtered holes texture), and a little more for its compression.
+		/// </summary>
+		public const float RimPastEdge = 1.0f;
+
+		/// <summary>How far in from the last solid cell the rim's ledge runs under the turf, in cells, and how far under it, metres.</summary>
+		public const float LedgeIn = 2f, LedgeUnderTurf = 0.2f;
+
+		/// <summary>Columns per heightmap cell round the edge, so the lip follows the turf's staircase between them.</summary>
+		public const float ColumnsPerCell = 3f;
+
+		/// <summary>
+		/// One island's underside, in the island's frame (its centre at x = z = 0, heights as y). <paramref name="ground"/> is
+		/// the finished terrain's height and <paramref name="hole"/> its holes (null for either: the island's planned ground
+		/// and outline), <paramref name="cell"/> its sample spacing.
+		/// </summary>
+		public static Mesh Underside(CloudIslands.Island island, RimProfile rim)
 		{
-			float circumference = Mathf.PI * 2f * island.Radius;
-			int columns = Mathf.Clamp(Mathf.RoundToInt(circumference / 2f), 24, 360);
+			float circumference = Mathf.PI * 2f * island.Reach;
+			int columns = rim.Columns;
 			int bands = Mathf.Clamp(Mathf.RoundToInt(island.Keel / 5f), 8, 48);
-			// Ring 0 the ledge under the turf, ring 1 the lip, rings 2 … bands + 1 the mass, then the point.
-			int rings = bands + 2;
+			// Ring 0 the ledge under the turf, ring 1 the rim, 2 its brow, 3 the calm face under it, 4 … the mass, then the point.
+			int rings = bands + 4;
 			var vertices = new List<Vector3>(rings * (columns + 1) + 1);
 			var uvs = new List<Vector2>(vertices.Capacity);
-			var rim = new float[columns + 1];
+			float[] edgeR = rim.RimR, edgeY = rim.RimY, ledgeR = rim.LedgeR, ledgeY = rim.LedgeY;
 			float meanRim = 0f;
-			for (int j = 0; j <= columns; j++)
+			for (int j = 0; j < columns; j++)
 			{
-				float angle = j % columns / (float)columns * Mathf.PI * 2f;
-				float r = island.OutlineAt(angle);
-				rim[j] = island.GroundAt(island.Centre.x + Mathf.Cos(angle) * r, island.Centre.y + Mathf.Sin(angle) * r);
-				if (j < columns)
-				{
-					meanRim += rim[j];
-				}
+				meanRim += edgeY[j];
 			}
 			meanRim /= columns;
 			float bottom = meanRim - island.Keel;
@@ -237,36 +288,53 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					float angle = j % columns / (float)columns * Mathf.PI * 2f;
 					var dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-					float r = island.OutlineAt(angle);
+					float r = edgeR[j], top = edgeY[j];
 					Vector3 p;
 					if (ring == 0)
 					{
-						p = new Vector3(dir.x * Mathf.Max(0.5f, r - tuck), rim[j] - 1.2f, dir.y * Mathf.Max(0.5f, r - tuck));
+						// The ledge's inner edge, under the turf where it has all but finished rolling down.
+						p = new Vector3(dir.x * ledgeR[j], ledgeY[j], dir.y * ledgeR[j]);
 					}
 					else if (ring == 1)
 					{
-						p = new Vector3(dir.x * (r + lip), rim[j] - 0.35f, dir.y * (r + lip));
+						p = new Vector3(dir.x * r, top, dir.y * r);
+					}
+					else if (ring == 2)
+					{
+						// The brow: the rim rounding over, a hand's breadth out.
+						p = new Vector3(dir.x * (r + BrowOut), top - BrowDrop, dir.y * (r + BrowOut));
+					}
+					else if (ring == 3)
+					{
+						// The face under it, still calm: the rim's line held a couple of metres down before the rock breaks up.
+						p = new Vector3(dir.x * (r + FaceOut), top - FaceDrop, dir.y * (r + FaceOut));
 					}
 					else
 					{
-						float u = (ring - 1) / (float)(bands + 1);
-						// Bellied just under the lip, then tapering like an upturned peak.
+						float u = (ring - 3) / (float)(bands + 1);
+						float faceY = top - FaceDrop, faceR = r + FaceOut;
+						// Bellied just under the face, then tapering like an upturned peak.
 						float profile = Mathf.Pow(1f - u, 0.85f) + 0.06f * Mathf.Sin(Mathf.PI * Mathf.Min(1f, u / 0.18f));
-						float y = Mathf.Lerp(rim[j] - 0.35f, bottom, Mathf.Pow(u, 0.9f));
+						float y = Mathf.Lerp(faceY, bottom, Mathf.Pow(u, 0.9f));
 						var centre = Vector2.Lerp(Vector2.zero, tipOffset, u);
-						float reach = (r + lip) * profile;
-						// Rough rock: ragged in and out, harder the further down, banded like strata.
-						float rough = Mathf.SmoothStep(0f, 1f, u / 0.12f);
+						float reach = faceR * profile;
+						/* Rough rock: ragged in and out, banded like strata, coming in over the first dozen metres under the face.
+						 * Its reach is metres, not a share of the island: a share put a city's rock ten metres in and out a
+						 * few metres under its rim, and the wall met the rim in a row of great V's (2026-10-15 render). */
+						float rough = Mathf.SmoothStep(0f, 1f, (faceY - y) / RoughIn);
 						float wx = dir.x * reach, wz = dir.y * reach;
 						float n = CloudIslands.ValueNoise(wx / 9f, y / 7f, wz / 9f, seed) - 0.5f;
 						float fine = CloudIslands.ValueNoise(wx / 3f, y / 2.5f, wz / 3f, seed ^ 0x5u) - 0.5f;
-						float strata = Mathf.Sin(y * 0.45f + CloudIslands.ValueNoise(angle * 3f, 0f, seed) * 6f) * 0.5f;
-						float push = rough * (n * 0.22f * reach + fine * Mathf.Min(1.2f, reach * 0.08f) + strata * Mathf.Min(0.8f, reach * 0.04f));
+						float strata = Mathf.Sin(y * 0.45f + CloudIslands.ValueNoise(wx / 20f, wz / 20f, seed) * 6f) * 0.5f;
+						float push = rough * (n * Mathf.Min(0.22f * reach, 6f) + fine * Mathf.Min(0.6f, reach * 0.06f) + strata * Mathf.Min(0.6f, reach * 0.04f));
 						reach = Mathf.Max(0.3f, reach + push);
 						p = new Vector3(centre.x + dir.x * reach, y, centre.y + dir.y * reach);
 					}
 					vertices.Add(p);
-					uvs.Add(new Vector2(j / (float)columns * circumference / 6f, p.y / 6f));
+					// Down the walls by height; across the ledge, which is nearly level, by its width, or the texture is one row
+					// smeared across it.
+					float v = ring == 0 ? (top + (r - ledgeR[j])) / 6f : p.y / 6f;
+					uvs.Add(new Vector2(j / (float)columns * circumference / 6f, v));
 				}
 			}
 			int tip = vertices.Count;
@@ -301,10 +369,267 @@ namespace FishMMO.Shared.WorldDesign
 			return mesh;
 		}
 
+		/// <summary>How far under the turf the cap lies, metres: clear of the terrain between its samples and of its level of detail.</summary>
+		public const float CapDepth = 0.4f;
+
+		/// <summary>The cap's sample spacing, metres, round and across.</summary>
+		public const float CapSpacing = 2.5f;
+
+		/// <summary>
+		/// The rock's top under the whole of an island's turf, <see cref="CapDepth"/> under it, from just inside the ledge's
+		/// inner edge to the middle, in the island's frame, facing up.
+		/// </summary>
+		/// <remarks>
+		/// <b>Why it is there.</b> The underside alone is a shell, its walls and a ledge reaching a little way in under the turf,
+		/// and hollow inside; the terrain is not drawn from below. So any sight line that slipped in between the rock's edge
+		/// and the turf's staircase of cells (at any angle, from the island's own edge or another) ran on under the turf,
+		/// through the hollow, and out the other side: the sky, in slivers all round every island (2026-10-14/15, three
+		/// rounds of moving the edge, which only moved the slivers). Closed by this, such a line meets rock. Drawn only:
+		/// nothing stands under the turf, so it has no collider, and it casts no shadow from under the ground.
+		/// </remarks>
+		public static Mesh Cap(CloudIslands.Island island, Func<float, float, float> ground, Func<float, float, bool> hole, float cell)
+		{
+			int columns = Mathf.Clamp(Mathf.RoundToInt(Mathf.PI * 2f * island.Reach / CapSpacing), 16, 400);
+			var outer = new float[columns];
+			float widest = 0f;
+			for (int j = 0; j < columns; j++)
+			{
+				float angle = j / (float)columns * Mathf.PI * 2f;
+				float cos = Mathf.Cos(angle), sin = Mathf.Sin(angle);
+				Func<float, bool> holeAt = hole == null ? null : (Func<float, bool>)(d => hole(island.Centre.x + cos * d, island.Centre.y + sin * d));
+				// Out under the ledge, past its inner edge, so the two overlap.
+				outer[j] = Mathf.Max(0.5f, LastSolid(island, angle, holeAt, cell) - (LedgeIn - 0.5f) * cell);
+				widest = Mathf.Max(widest, outer[j]);
+			}
+			int rings = Mathf.Clamp(Mathf.CeilToInt(widest / CapSpacing), 1, 120);
+			var vertices = new List<Vector3>(columns * rings + 1);
+			var uvs = new List<Vector2>(vertices.Capacity);
+			for (int k = 0; k < rings; k++)
+			{
+				float share = 1f - k / (float)rings;
+				for (int j = 0; j < columns; j++)
+				{
+					float angle = j / (float)columns * Mathf.PI * 2f;
+					float d = outer[j] * share;
+					float x = Mathf.Cos(angle) * d, z = Mathf.Sin(angle) * d;
+					vertices.Add(new Vector3(x, CapHeight(island, ground, x, z), z));
+					uvs.Add(new Vector2(x / 6f, z / 6f));
+				}
+			}
+			int centre = vertices.Count;
+			vertices.Add(new Vector3(0f, CapHeight(island, ground, 0f, 0f), 0f));
+			uvs.Add(Vector2.zero);
+
+			// Facing up: (outer j, inner j, outer j+1) and (outer j+1, inner j, inner j+1), round toward +z.
+			var indices = new List<int>(columns * rings * 6);
+			for (int k = 0; k < rings - 1; k++)
+			{
+				for (int j = 0; j < columns; j++)
+				{
+					int n = (j + 1) % columns;
+					int a = k * columns + j, b = (k + 1) * columns + j, c = k * columns + n, d = (k + 1) * columns + n;
+					indices.Add(a); indices.Add(b); indices.Add(c);
+					indices.Add(c); indices.Add(b); indices.Add(d);
+				}
+			}
+			int last = (rings - 1) * columns;
+			for (int j = 0; j < columns; j++)
+			{
+				indices.Add(last + j); indices.Add(centre); indices.Add(last + (j + 1) % columns);
+			}
+			var mesh = new Mesh { indexFormat = vertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
+			mesh.SetVertices(vertices);
+			mesh.SetUVs(0, uvs);
+			mesh.SetTriangles(indices, 0);
+			mesh.RecalculateNormals();
+			mesh.RecalculateTangents();
+			mesh.RecalculateBounds();
+			return mesh;
+		}
+
+		/// <summary>The cap's height at a point of the island's frame: the turf's, <see cref="CapDepth"/> under it.</summary>
+		private static float CapHeight(CloudIslands.Island island, Func<float, float, float> ground, float x, float z)
+		{
+			float east = island.Centre.x + x, north = island.Centre.y + z;
+			float h = ground != null ? ground(east, north) : island.GroundAt(east, north);
+			if (float.IsNaN(h) || float.IsInfinity(h))
+			{
+				h = island.GroundAt(east, north);
+			}
+			return h - CapDepth;
+		}
+
+		/// <summary>
+		/// The last solid point of the turf toward <paramref name="angle"/>, from the island's middle: marched in from past the
+		/// outline through the terrain's holes (the staircase of cells they leave lies inside the smooth outline). The
+		/// outline itself with no holes to read.
+		/// </summary>
+		private static float LastSolid(CloudIslands.Island island, float angle, Func<float, bool> holeAt, float cell)
+		{
+			float outline = island.OutlineAt(angle);
+			if (holeAt == null)
+			{
+				return outline;
+			}
+			float step = Mathf.Max(0.02f, cell * 0.05f);
+			float from = outline + 1.5f * cell, to = Mathf.Max(0.5f, outline - 4f * cell);
+			for (float d = from; d >= to; d -= step)
+			{
+				if (!holeAt(d))
+				{
+					return d;
+				}
+			}
+			return outline;
+		}
+
+		/// <summary>An island's rim all round (<see cref="RimRing"/>), column by column from +x toward +z, the last the first again.</summary>
+		public sealed class RimProfile
+		{
+			public int Columns;
+			public float[] RimR, RimY, LedgeR, LedgeY;
+
+			/// <summary>The rim toward <paramref name="angle"/> (radians from +x toward +z), between the columns either side.</summary>
+			public void Sample(float angle, out float rimR, out float rimY, out float ledgeR, out float ledgeY)
+			{
+				float t = Mathf.Repeat(angle / (Mathf.PI * 2f), 1f) * Columns;
+				int j = Mathf.Clamp((int)t, 0, Columns - 1);
+				float f = t - j;
+				rimR = Mathf.Lerp(RimR[j], RimR[j + 1], f);
+				rimY = Mathf.Lerp(RimY[j], RimY[j + 1], f);
+				ledgeR = Mathf.Lerp(LedgeR[j], LedgeR[j + 1], f);
+				ledgeY = Mathf.Lerp(LedgeY[j], LedgeY[j + 1], f);
+			}
+		}
+
+		/// <summary>An island's rim profile as the cut builds it: <see cref="ColumnsPerCell"/> columns a cell round its widest reach.</summary>
+		public static RimProfile Profile(CloudIslands.Island island, Func<float, float, float> ground, Func<float, float, float> turf,
+			Func<float, float, bool> hole, float cell)
+		{
+			float circumference = Mathf.PI * 2f * island.Reach;
+			int columns = Mathf.Clamp(Mathf.RoundToInt(circumference * ColumnsPerCell / Mathf.Max(0.25f, cell)), 24, 3000);
+			var profile = new RimProfile
+			{
+				Columns = columns,
+				RimR = new float[columns + 1],
+				RimY = new float[columns + 1],
+				LedgeR = new float[columns + 1],
+				LedgeY = new float[columns + 1],
+			};
+			RimRing(island, columns, ground, turf, hole, cell, profile.RimR, profile.RimY, profile.LedgeR, profile.LedgeY);
+			return profile;
+		}
+
+		/// <summary>
+		/// The rock's rim all round an island, <paramref name="columns"/> columns from +x toward +z (arrays of columns + 1, the
+		/// last the first again), in the island's frame: its outer edge (where the wall drops away), past the turf's drawn
+		/// edge, a little under the turf's own height there; and its ledge's inner edge, a couple of cells in under the turf.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Over the turf's edge, not meeting it.</b> The turf's drawn edge is not where its cells end: the terrain clips a
+		/// hole where its filtered holes texture reads zero, up to half a cell past the last solid cell, cut diagonally at the
+		/// staircase's corners and nudged by compression. So the turf rolls down at its edge (CloudIslands.RollUnder) and the
+		/// rim lies over it: wherever within a cell the drawn edge falls, it falls under stone, and the grass meets the rock
+		/// where it rises past the ledge, at the stone's level (2026-10-14/15).
+		/// </para>
+		/// <para>
+		/// <b>Smooth, round the staircase's outside.</b> Column by column the turf's last solid point jumps a whole cell in and
+		/// out along the staircase. A rim that followed it left the rolled turf of the next cell out standing past the stone
+		/// in every notch (a red stripe of it, painted) and the wall dropping from every tooth in a spike (2026-10-15 render).
+		/// So the rim's outer edge is the outermost last solid point within <see cref="RimWindowCells"/> cells either way,
+		/// <see cref="RimPastEdge"/> cells past it, smoothed; the ledge's inner edge the innermost, <see cref="LedgeIn"/> in.
+		/// The heights are the turf's own (<paramref name="turf"/>: as shaped, before it rolled down; null: <paramref name="ground"/>),
+		/// read inside the outermost cell and smoothed the same way.
+		/// </para>
+		/// </remarks>
+		public static void RimRing(CloudIslands.Island island, int columns, Func<float, float, float> ground, Func<float, float, float> turf,
+			Func<float, float, bool> hole, float cell, float[] rimR, float[] rimY, float[] ledgeR, float[] ledgeY)
+		{
+			var last = new float[columns];
+			var edgeTurf = new float[columns];
+			Func<float, float, float> own = turf ?? ground;
+			for (int j = 0; j < columns; j++)
+			{
+				float angle = j / (float)columns * Mathf.PI * 2f;
+				float cos = Mathf.Cos(angle), sin = Mathf.Sin(angle);
+				Func<float, bool> holeAt = hole == null ? null : (Func<float, bool>)(d => hole(island.Centre.x + cos * d, island.Centre.y + sin * d));
+				last[j] = LastSolid(island, angle, holeAt, cell);
+				float edge = Mathf.Max(0.3f, last[j] - 0.25f * cell);
+				edgeTurf[j] = Height(island, own, cos * edge, sin * edge);
+			}
+			float arc = Mathf.PI * 2f * Mathf.Max(1f, island.Reach) / columns;
+			int window = Mathf.Max(1, Mathf.CeilToInt(RimWindowCells * cell / arc));
+			var outer = new float[columns];
+			var inner = new float[columns];
+			for (int j = 0; j < columns; j++)
+			{
+				float most = float.NegativeInfinity, least = float.PositiveInfinity;
+				for (int k = -window; k <= window; k++)
+				{
+					float l = last[((j + k) % columns + columns) % columns];
+					most = Mathf.Max(most, l);
+					least = Mathf.Min(least, l);
+				}
+				outer[j] = most;
+				inner[j] = least;
+			}
+			for (int j = 0; j < columns; j++)
+			{
+				float sumOuter = 0f, sumInner = 0f, sumY = 0f;
+				int n = 0;
+				for (int k = -window; k <= window; k++)
+				{
+					int m = ((j + k) % columns + columns) % columns;
+					sumOuter += outer[m];
+					sumInner += inner[m];
+					sumY += edgeTurf[m];
+					n++;
+				}
+				float angle = j / (float)columns * Mathf.PI * 2f;
+				float cos = Mathf.Cos(angle), sin = Mathf.Sin(angle);
+				// Smoothed, but never in past the outermost turf near it, nor out past the innermost.
+				rimR[j] = Mathf.Max(sumOuter / n, outer[j]) + RimPastEdge * cell;
+				rimY[j] = sumY / n - RimUnderTurf;
+				ledgeR[j] = Mathf.Max(0.3f, Mathf.Min(sumInner / n, inner[j]) - LedgeIn * cell);
+				ledgeY[j] = Height(island, ground, cos * ledgeR[j], sin * ledgeR[j]) - LedgeUnderTurf;
+			}
+			rimR[columns] = rimR[0];
+			rimY[columns] = rimY[0];
+			ledgeR[columns] = ledgeR[0];
+			ledgeY[columns] = ledgeY[0];
+		}
+
+		/// <summary>The rim's brow and the calm face under it: how far out and down from the rim, metres.</summary>
+		public const float BrowOut = 0.15f, BrowDrop = 0.45f, FaceOut = 0.1f, FaceDrop = 2f;
+
+		/// <summary>How far under the face the rock comes in to its full roughness, metres.</summary>
+		public const float RoughIn = 12f;
+
+		/// <summary>The rim's window either way along the edge, in cells: wider than the staircase's steps.</summary>
+		public const float RimWindowCells = 2f;
+
+		/// <summary>A height at a point of the island's frame from <paramref name="ground"/>, or the island's planned ground.</summary>
+		private static float Height(CloudIslands.Island island, Func<float, float, float> ground, float x, float z)
+		{
+			float east = island.Centre.x + x, north = island.Centre.y + z;
+			float h = ground != null ? ground(east, north) : island.GroundAt(east, north);
+			return float.IsNaN(h) || float.IsInfinity(h) ? island.GroundAt(east, north) : h;
+		}
+
 		/// <summary>The cliff rock of the stone under the scene, as the canyon walls take it; null when the art is not generated.</summary>
 		private static Material RockMaterial(SceneGenerationRequest request, out string rock)
 		{
-			rock = "Sandstone";
+			rock = RockType(request);
+			string name = CliffRocks.MaterialName(rock);
+			string path = name != null ? ProceduralArtCatalogue.MaterialPath(name) : null;
+			return path != null ? AssetDatabase.LoadAssetAtPath<Material>(path) : null;
+		}
+
+		/// <summary>The rock type under the scene's middle, from the planet's geology; sandstone when it cannot be read.</summary>
+		private static string RockType(SceneGenerationRequest request)
+		{
+			string rock = "Sandstone";
 			try
 			{
 				PlanetGeology geology = PlanetGeology.For(request, SolarSystemProfile.Resolve(request.Body));
@@ -319,22 +644,356 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Debug.LogWarning($"[Scene generator] The islands' rock could not be read from the planet's geology, so they are sandstone: {ex.Message}");
 			}
-			string name = CliffRocks.MaterialName(rock);
-			string path = name != null ? ProceduralArtCatalogue.MaterialPath(name) : null;
-			return path != null ? AssetDatabase.LoadAssetAtPath<Material>(path) : null;
+			return rock;
+		}
+
+		// ── Blending the turf into the rock ───────────────────────
+
+		/// <summary>
+		/// How far rolled down (metres) the turf is where it starts to give way to stone, and where it is all stone: only
+		/// under the rock's rim, where the turf's drawn fringe may show. Painted further in, the ground-colour map (a couple
+		/// of metres a texel) carried the stone's pale colour into the grass by the rim, which looked dead (2026-10-15 render).
+		/// </summary>
+		public const float BlendFrom = 0.35f, BlendTo = 0.8f;
+
+		/// <summary>
+		/// How far rolled down (metres) the turf may be and still carry grass, flowers and trees: everywhere the rim does not
+		/// cover, so the grass grows right up to the stone and leans over it; under the rim it would stand up through it.
+		/// </summary>
+		public const float PlantsUpTo = 0.2f;
+
+		/// <summary>
+		/// The turf's rolled-down edge (CloudIslands.RollUnder), where the rock's rim lies over it, given over to the islands'
+		/// stone: painted with the ground layer of the same stone the undersides are drawn in (added to a tile that lacks it),
+		/// so the fringe the terrain draws past its last solid cell reads as rock, and cleared of grass, flowers and trees,
+		/// which would stand up through the rim. After the paint and the sites, before the trees are baked into props.
+		/// </summary>
+		public static void Blend(Terrain[,] terrains, TerrainTilePlan plan, SceneHeightField field, float[] rolled, SceneGenerationRequest request,
+			List<string> notes)
+		{
+			if (terrains == null || field == null || rolled == null || rolled.Length != field.Metres.Length)
+			{
+				return;
+			}
+			string rock = RockType(request);
+			TerrainLayer stone = null;
+			foreach (string family in new[] { rock, "CliffRock", "Rock" })
+			{
+				stone = AssetDatabase.LoadAssetAtPath<TerrainLayer>(ProceduralArtCatalogue.GroundLayerPath(family));
+				if (stone != null)
+				{
+					break;
+				}
+			}
+			Func<float, float, float> RolledAt = CloudIslands.RollAt(field, rolled);
+
+			int painted = 0, cleared = 0, felled = 0;
+			foreach (Terrain terrain in terrains)
+			{
+				TerrainData data = terrain != null ? terrain.terrainData : null;
+				if (data == null)
+				{
+					continue;
+				}
+				Vector3 origin = terrain.transform.position;
+				Vector3 size = data.size;
+
+				// ── The stone, painted ──
+				if (stone != null && data.alphamapLayers > 0)
+				{
+					int res = data.alphamapResolution;
+					float[,,] maps = data.GetAlphamaps(0, 0, res, res);
+					int layers = maps.GetLength(2);
+					TerrainLayer[] palette = data.terrainLayers;
+					int index = Array.IndexOf(palette, stone);
+					if (index < 0 && layers < SceneTerrainPalette.MaximumLayers)
+					{
+						// The stone joins the tile's palette; every texel keeps the weights it had.
+						var grown = new TerrainLayer[palette.Length + 1];
+						Array.Copy(palette, grown, palette.Length);
+						grown[palette.Length] = stone;
+						data.terrainLayers = grown;
+						var wider = new float[res, res, layers + 1];
+						for (int z = 0; z < res; z++)
+						{
+							for (int x = 0; x < res; x++)
+							{
+								for (int l = 0; l < layers; l++)
+								{
+									wider[z, x, l] = maps[z, x, l];
+								}
+							}
+						}
+						maps = wider;
+						index = layers;
+						layers++;
+					}
+					if (index >= 0)
+					{
+						for (int z = 0; z < res; z++)
+						{
+							float north = origin.z + (z + 0.5f) / res * size.z;
+							for (int x = 0; x < res; x++)
+							{
+								float east = origin.x + (x + 0.5f) / res * size.x;
+								float w = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(BlendFrom, BlendTo, RolledAt(east, north)));
+								if (w <= 0f)
+								{
+									continue;
+								}
+								for (int l = 0; l < layers; l++)
+								{
+									maps[z, x, l] = l == index ? Mathf.Lerp(maps[z, x, l], 1f, w) : maps[z, x, l] * (1f - w);
+								}
+								painted++;
+							}
+						}
+						data.SetAlphamaps(0, 0, maps);
+					}
+				}
+
+				// ── No grass, flowers or trees where the rim lies over the turf ──
+				int detailRes = data.detailResolution;
+				int[] detailLayers = data.GetSupportedLayers(0, 0, detailRes, detailRes);
+				if (detailRes > 0 && detailLayers != null && detailLayers.Length > 0)
+				{
+					var under = new bool[detailRes, detailRes];
+					bool any = false;
+					for (int z = 0; z < detailRes; z++)
+					{
+						float north = origin.z + (z + 0.5f) / detailRes * size.z;
+						for (int x = 0; x < detailRes; x++)
+						{
+							float east = origin.x + (x + 0.5f) / detailRes * size.x;
+							if (RolledAt(east, north) > PlantsUpTo)
+							{
+								under[z, x] = true;
+								any = true;
+							}
+						}
+					}
+					if (any)
+					{
+						foreach (int layer in detailLayers)
+						{
+							int[,] density = data.GetDetailLayer(0, 0, detailRes, detailRes, layer);
+							for (int z = 0; z < detailRes; z++)
+							{
+								for (int x = 0; x < detailRes; x++)
+								{
+									if (under[z, x] && density[z, x] != 0)
+									{
+										density[z, x] = 0;
+										cleared++;
+									}
+								}
+							}
+							data.SetDetailLayer(0, 0, layer, density);
+						}
+					}
+				}
+				TreeInstance[] trees = data.treeInstances;
+				if (trees != null && trees.Length > 0)
+				{
+					var kept = new List<TreeInstance>(trees.Length);
+					foreach (TreeInstance tree in trees)
+					{
+						float east = origin.x + tree.position.x * size.x, north = origin.z + tree.position.z * size.z;
+						if (RolledAt(east, north) > PlantsUpTo)
+						{
+							felled++;
+							continue;
+						}
+						kept.Add(tree);
+					}
+					if (kept.Count != trees.Length)
+					{
+						data.treeInstances = kept.ToArray();
+					}
+				}
+				EditorUtility.SetDirty(data);
+			}
+			notes?.Add($"Cloud world: the turf's rolled edge given over to {(stone != null ? stone.name : "(no stone layer: run Generate biome art)")}: " +
+				$"{painted:N0} texel(s) painted, {cleared:N0} detail cell(s) cleared, {felled:N0} tree(s) taken off the rim.");
 		}
 
 		// ── Bridges ───────────────────────────────────────────────
 
+		/// <summary>How far inland of the rim's ledge a bridge's end posts stand, metres: their feet at the ledge's inner edge, the landing behind them on the grass.</summary>
+		public const float LandingIn = 0.4f;
+
+		/// <summary>How far past the rim's outer edge a bridge's walk runs before it starts to hang, metres: clear of the brow.</summary>
+		public const float RunOut = 0.9f;
+
+		/// <summary>How high a bridge's walk passes over the rim's stone, at least, metres: no plank in the rock.</summary>
+		public const float DeckOverRim = 0.35f;
+
 		/// <summary>
-		/// The rope bridges between the islands: posts at each end on the ground, the walk hung between on a sag, as the
-		/// caves' rope walks are, laid as baked props (with their collision) so a player crosses on them.
+		/// A bridge's walk from island <paramref name="a"/> to island <paramref name="b"/>, as joints from one end post to the
+		/// other: each end on the grass inland of its rim (<see cref="LandingIn"/>), flush with the ground so a walker steps
+		/// straight on; a run out over the rim, level or rising gently to clear its stone (<see cref="DeckOverRim"/>); and the
+		/// hanging span between the two run-outs, sagging as a long rope walk does. False when the islands are too close for one.
 		/// </summary>
-		public static int Bridges(Scene scene, CloudIslands.Plan islands, Func<float, float, float> ground, uint seed, List<string> notes)
+		/// <remarks>
+		/// It used to hang from end posts two and a half metres in from the outline, sagging from the first plank: once the
+		/// rim of stone lay over the turf's edge, the first planks ran into it and the walk came out under it (2026-10-15).
+		/// </remarks>
+		public static bool BridgeWay(CloudIslands.Island a, RimProfile rimA, CloudIslands.Island b, RimProfile rimB, Func<float, float, float> ground,
+			out List<Vector3> joints, out int landA, out int landB, List<Vector3> postsA = null, List<Vector3> postsB = null)
+		{
+			var way = new List<Vector3>();
+			joints = way;
+			landA = landB = 0;
+			Vector2 d = b.Centre - a.Centre;
+			if (d.sqrMagnitude < 1f)
+			{
+				return false;
+			}
+			Vector2 dir = d.normalized;
+			bool End(CloudIslands.Island island, RimProfile rim, Vector2 toward, List<Vector3> taken, out Vector3 post, out Vector3 runOut)
+			{
+				rim.Sample(Mathf.Atan2(toward.y, toward.x), out float rimR, out float rimY, out float ledgeR, out _);
+				// Inland of the ledge, where the landing behind the posts lies best on the grass (LandingMisfit): a steep islet's
+				// ground can fall away faster than a landing can be pitched to follow.
+				var outward = new Vector3(toward.x, 0f, toward.y);
+				post = default;
+				float best = float.PositiveInfinity;
+				for (int k = 0; k <= 8; k++)
+				{
+					float r = ledgeR - LandingIn - k * 0.5f;
+					if (r < 0.5f)
+					{
+						break;
+					}
+					Vector2 at = island.Centre + toward * r;
+					var candidate = new Vector3(at.x, ground(at.x, at.y), at.y);
+					if (Crowded(candidate, taken))
+					{
+						continue;
+					}
+					// Further in only for a better fit: a little misfit is worth less than a longer walk out.
+					float misfit = LandingMisfit(candidate, outward, ground) + k * 0.01f;
+					if (misfit < best)
+					{
+						best = misfit;
+						post = candidate;
+					}
+				}
+				runOut = default;
+				if (float.IsPositiveInfinity(best))
+				{
+					// Nowhere inland of the rim clear of the island's other bridges' posts: this bridge is left out.
+					return false;
+				}
+				Vector2 off = island.Centre + toward * (rimR + RunOut);
+				runOut = new Vector3(off.x, Mathf.Max(post.y, rimY + DeckOverRim), off.y);
+				return true;
+			}
+			if (!End(a, rimA, dir, postsA, out Vector3 postA, out Vector3 outA) || !End(b, rimB, -dir, postsB, out Vector3 postB, out Vector3 outB))
+			{
+				return false;
+			}
+			var hang = new Vector3(outB.x - outA.x, 0f, outB.z - outA.z);
+			if (hang.magnitude < 1f || Vector3.Dot(hang, new Vector3(dir.x, 0f, dir.y)) <= 0f)
+			{
+				return false;
+			}
+			void Straight(Vector3 from, Vector3 to)
+			{
+				int n = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(from, to) / CaveArt.SpanModule));
+				for (int i = 1; i <= n; i++)
+				{
+					Vector3 joint = Vector3.Lerp(from, to, i / (float)n);
+					// Never under the grass: over a hump between the post and the rim, the walk rides up on it.
+					if (i < n)
+					{
+						joint.y = Mathf.Max(joint.y, ground(joint.x, joint.z) + 0.03f);
+					}
+					way.Add(joint);
+				}
+			}
+			joints.Add(postA);
+			Straight(postA, outA);
+			landA = joints.Count - 1;
+			// Hung slack between the run-outs: a long walk sags a good deal more than a cave's short one.
+			float length = Vector3.Distance(outA, outB);
+			float sag = Mathf.Min(1.6f, 0.025f * length);
+			int spans = Mathf.Max(1, Mathf.CeilToInt(length / CaveArt.SpanModule));
+			for (int i = 1; i <= spans; i++)
+			{
+				float f = i / (float)spans;
+				joints.Add(Vector3.Lerp(outA, outB, f) - Vector3.up * (sag * 4f * f * (1f - f)));
+			}
+			landB = joints.Count - 1;
+			Straight(outB, postB);
+			return true;
+		}
+
+		/// <summary>How far behind its posts a bridge end's landing reaches, metres (StructurePieces' RopeBridgeEnd).</summary>
+		public const float LandingLength = 1.2f;
+
+		/// <summary>
+		/// How far a bridge end is pitched about its posts, degrees, so its landing lies on the grass behind them however the
+		/// ground slopes there (2026-10-15: on a steep islet a level landing stood most of a metre off the grass, a ledge a
+		/// walker could not step up); a little over the ground rather than in it, and no more than 25°.
+		/// </summary>
+		public static float LandingPitch(Vector3 post, Vector3 outward, Func<float, float, float> ground)
+		{
+			var back = new Vector3(-outward.x, 0f, -outward.z).normalized;
+			Vector3 behind = post + back * LandingLength;
+			float rise = ground(behind.x, behind.z) + 0.03f - post.y;
+			return Mathf.Clamp(Mathf.Asin(Mathf.Clamp(rise / LandingLength, -1f, 1f)) * Mathf.Rad2Deg, -25f, 25f);
+		}
+
+		/// <summary>
+		/// How far apart two bridges' end posts on one island stand, at least, metres: each end's posts (1.9 m across), its
+		/// landing behind them and room for a walker between.
+		/// </summary>
+		public const float PostSpacing = 3.5f;
+
+		private static bool Crowded(Vector3 post, List<Vector3> taken)
+		{
+			if (taken == null)
+			{
+				return false;
+			}
+			foreach (Vector3 other in taken)
+			{
+				float dx = other.x - post.x, dz = other.z - post.z;
+				if (dx * dx + dz * dz < PostSpacing * PostSpacing)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>How far a pitched landing (<see cref="LandingPitch"/>) lies off the grass under it at worst, metres.</summary>
+		public static float LandingMisfit(Vector3 post, Vector3 outward, Func<float, float, float> ground)
+		{
+			var back = new Vector3(-outward.x, 0f, -outward.z).normalized;
+			float pitch = LandingPitch(post, outward, ground) * Mathf.Deg2Rad;
+			float worst = 0f;
+			for (float k = 0.3f; k <= LandingLength + 1e-3f; k += 0.3f)
+			{
+				Vector3 p = post + back * (k * Mathf.Cos(pitch));
+				worst = Mathf.Max(worst, Mathf.Abs(ground(p.x, p.z) - (post.y + k * Mathf.Sin(pitch))));
+			}
+			return worst;
+		}
+
+		/// <summary>
+		/// The rope bridges between the islands, laid on <see cref="BridgeWay"/>: posts and a landing at each end on the grass,
+		/// the walk run out over the rim and hung between, as baked props (with their collision) so a player crosses on them.
+		/// Returns each bridge's two landings, end post to end post, for the record.
+		/// </summary>
+		public static List<SceneCloudWorld.Crossing> Bridges(Scene scene, CloudIslands.Plan islands, RimProfile[] rims, Func<float, float, float> ground,
+			uint seed, List<string> notes)
 		{
 			var prototypes = new List<ScenePropSet.Prototype>();
 			var props = new List<ScenePropSet.Prop>();
 			var prototypeOf = new Dictionary<GameObject, int>();
+			var crossings = new List<SceneCloudWorld.Crossing>();
 			int missing = 0;
 			void Lay(string piece, int variant, Vector3 at, Quaternion rotation, Vector3 scale)
 			{
@@ -354,49 +1013,59 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			var random = new DeterministicRNG(unchecked((int)(seed * 0x2C1B3C6Du ^ 0xB81D6Eu)));
-			int laid = 0;
+			int laid = 0, crowded = 0;
 			float metres = 0f;
+			// Every island's bridge posts so far, so no two bridges' ends crowd each other (PostSpacing).
+			var posts = new Dictionary<int, List<Vector3>>();
+			List<Vector3> PostsOn(int island)
+			{
+				if (!posts.TryGetValue(island, out List<Vector3> list))
+				{
+					list = new List<Vector3>();
+					posts[island] = list;
+				}
+				return list;
+			}
 			foreach (CloudIslands.Bridge bridge in islands.Bridges)
 			{
-				var a = new Vector3(bridge.FromAt.x, ground(bridge.FromAt.x, bridge.FromAt.y), bridge.FromAt.y);
-				var b = new Vector3(bridge.ToAt.x, ground(bridge.ToAt.x, bridge.ToAt.y), bridge.ToAt.y);
-				if (float.IsNaN(a.y) || float.IsNaN(b.y) || float.IsInfinity(a.y) || float.IsInfinity(b.y))
+				if (rims == null || bridge.A >= rims.Length || bridge.B >= rims.Length || rims[bridge.A] == null || rims[bridge.B] == null)
 				{
 					continue;
 				}
-				Vector3 span = b - a;
-				var flat = new Vector3(span.x, 0f, span.z);
-				if (flat.magnitude < 2f)
+				if (!BridgeWay(islands.Islands[bridge.A], rims[bridge.A], islands.Islands[bridge.B], rims[bridge.B], ground,
+					out List<Vector3> joints, out _, out _, PostsOn(bridge.A), PostsOn(bridge.B)))
 				{
+					crowded++;
 					continue;
 				}
-				flat.Normalize();
-				float length = span.magnitude;
-				int n = Mathf.Max(1, Mathf.CeilToInt(length / CaveArt.SpanModule));
-				// Hung slack over the drop: a long walk sags a good deal more than a cave's short one.
-				float sag = Mathf.Min(1.6f, 0.025f * length);
-				Vector3 At(int i)
-				{
-					float f = i / (float)n;
-					return Vector3.Lerp(a, b, f) - Vector3.up * (sag * 4f * f * (1f - f));
-				}
+				Vector3 first = joints[0], last = joints[joints.Count - 1];
+				PostsOn(bridge.A).Add(first);
+				PostsOn(bridge.B).Add(last);
+				var flat = new Vector3(last.x - first.x, 0f, last.z - first.z).normalized;
 				int variant = random.Range(0, 2);
-				Lay(CaveArt.RopeBridgeEnd, variant, a, Quaternion.LookRotation(flat, Vector3.up), Vector3.one);
-				Lay(CaveArt.RopeBridgeEnd, variant, b, Quaternion.LookRotation(-flat, Vector3.up), Vector3.one);
-				for (int i = 0; i < n; i++)
+				// The posts at each end, the landing behind them on the grass, the span leaving toward +z.
+				Lay(CaveArt.RopeBridgeEnd, variant, first, Quaternion.LookRotation(flat, Vector3.up) * Quaternion.Euler(LandingPitch(first, flat, ground), 0f, 0f), Vector3.one);
+				Lay(CaveArt.RopeBridgeEnd, variant, last, Quaternion.LookRotation(-flat, Vector3.up) * Quaternion.Euler(LandingPitch(last, -flat, ground), 0f, 0f), Vector3.one);
+				for (int i = 0; i < joints.Count - 1; i++)
 				{
-					Vector3 p0 = At(i), p1 = At(i + 1);
-					Vector3 d = p1 - p0;
+					Vector3 p0 = joints[i], p1 = joints[i + 1];
+					Vector3 step = p1 - p0;
+					if (step.sqrMagnitude < 1e-4f)
+					{
+						continue;
+					}
 					int worn = random.NextFloat() < 0.15f ? 1 : 0;
-					Lay(CaveArt.RopeBridgeSpan, worn, 0.5f * (p0 + p1), Quaternion.LookRotation(d, Vector3.up), new Vector3(1f, 1f, d.magnitude / CaveArt.SpanModule));
+					Lay(CaveArt.RopeBridgeSpan, worn, 0.5f * (p0 + p1), Quaternion.LookRotation(step, Vector3.up), new Vector3(1f, 1f, step.magnitude / CaveArt.SpanModule));
+					metres += step.magnitude;
 				}
+				crossings.Add(new SceneCloudWorld.Crossing { From = first, To = last });
 				laid++;
-				metres += length;
 			}
 			if (props.Count > 0)
 			{
 				int collidable = ScenePropBaker.Write(scene, BridgeSource, prototypes, props);
-				notes?.Add($"Cloud world: {laid} rope bridge(s), {metres:0} m of walk, {collidable:N0} collidable piece(s).");
+				notes?.Add($"Cloud world: {laid} rope bridge(s), {metres:0} m of walk, {collidable:N0} collidable piece(s)" +
+					(crowded > 0 ? $"; {crowded} left out, no footing for their posts clear of the island's other bridges" : string.Empty) + ".");
 			}
 			else
 			{
@@ -406,7 +1075,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				notes?.Add($"Cloud world: {missing} bridge piece(s) skipped, their art is missing (run Generate biome art, then re-cut).");
 			}
-			return laid;
+			return crossings;
 		}
 
 		// ── Sky traffic ───────────────────────────────────────────
@@ -436,7 +1105,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// The scene's <see cref="SceneCloudWorld"/>: the deck, the depth that kills, the islands as they were cut and the
 		/// landing stages' ends, on an object the server and every client keep. Replaces one a re-cut left.
 		/// </summary>
-		public static SceneCloudWorld Record(Scene scene, CloudIslands.Plan islands, Func<float, float, float> ground, List<string> notes)
+		public static SceneCloudWorld Record(Scene scene, CloudIslands.Plan islands, Func<float, float, float> ground, List<string> notes,
+			List<SceneCloudWorld.Crossing> crossings = null)
 		{
 			foreach (GameObject existing in scene.GetRootGameObjects())
 			{
@@ -458,6 +1128,7 @@ namespace FishMMO.Shared.WorldDesign
 			world.IslandCeiling = records.Length > 0 ? highest : islands.Ceiling;
 			SceneCloudWorld.Dock[] docks = DockRecords(islands, ground);
 			world.Docks = docks;
+			world.Bridges = crossings != null ? crossings.ToArray() : Array.Empty<SceneCloudWorld.Crossing>();
 			EditorUtility.SetDirty(world);
 			notes?.Add($"Cloud world: {records.Length} island(s) between {world.IslandFloor:0} and {world.IslandCeiling:0} m over the deck, " +
 				$"{islands.Bridges.Count} bridge(s) planned, {world.Docks.Length} landing stage(s); lost below {world.DeathAltitude:0} m.");

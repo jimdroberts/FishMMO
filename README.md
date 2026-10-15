@@ -796,31 +796,31 @@ Both `/latest_version` forms send a weak `ETag`, `Cache-Control: public, max-age
 
 The file [`FishMMO-Unity/Assets/Scripts/Shared/Implementation/Constants.cs`](FishMMO-Unity/Assets/Scripts/Shared/Implementation/Constants.cs) contains domain endpoints used by the client to connect to your infrastructure.
 
-These values are **not literals in `Constants.cs`** — each one reads from `GeneratedHostConfig`, an IL-embedded generated class whose real values are substituted at build time by CI or the FishMMO-Installer. The committed sentinel values are intentionally invalid, and the build validator blocks release builds that still contain them.
+These values are **not literals in `Constants.cs`** — each one reads from `HostConfig`, a tracked class whose sentinel defaults are overridden by the gitignored, generated `HostConfig.generated.cs` (written by the dashboard, or substituted at build time by CI or the FishMMO-Installer). A fresh clone has no generated file and still compiles; the sentinel values are intentionally invalid, and the build validator blocks release builds that still contain them.
 
 ```csharp
 public static class Configuration
 {
     /// Unified API Host URL. NGINX routes to the correct backend by path.
-    public static readonly string APIHost = GeneratedHostConfig.ApiHost;
+    public static readonly string APIHost = HostConfig.ApiHost;
 
     /// Game server hostname. Clients connect to this host via QUIC/WebTransport (UDP).
     /// NGINX forwards game traffic at Layer 4 to loopback-bound game servers.
-    public static readonly string GameHost = GeneratedHostConfig.GameHost;
+    public static readonly string GameHost = HostConfig.GameHost;
 
     /// Launcher HTML/news page URL.
-    public static readonly string LauncherHtmlUrl = GeneratedHostConfig.LauncherHtmlUrl;
+    public static readonly string LauncherHtmlUrl = HostConfig.LauncherHtmlUrl;
 }
 ```
 
-| Field | `GeneratedHostConfig` source | Purpose |
+| Field | `HostConfig` source | Purpose |
 |---|---|---|
 | `APIHost` | `ApiHost` (CI: `FISHMMO_API_HOST`) | Base URL for IPFetch and Patcher API calls — NGINX reverse-proxies to loopback web servers |
 | `GameHost` | `GameHost` (CI: `FISHMMO_GAME_HOST`) | Hostname for game QUIC/WebTransport connections — NGINX forwards UDP to loopback game servers |
 | `LauncherHtmlUrl` | `LauncherHtmlUrl` (CI: `FISHMMO_ROOT_DOMAIN`) | Page the launcher fetches its news panel from |
 | `SmtpFromAddress` / `SmtpFromName` | `SmtpFromAddress` / `SmtpFromName` | From-address and display name for verification emails |
 
-Write these values from the Unity Editor via **FishMMO Dashboard → Game Settings**, which regenerates `HostConfig.generated.cs`. `GeneratedHostConfig` also carries `PlayHost` (WebGL/player-facing hostname) and `RootDomain` (TLS certs and email).
+Write these values from the Unity Editor via **FishMMO Dashboard → Game Settings**, which regenerates `HostConfig.generated.cs`. `HostConfig` also carries `PlayHost` (WebGL/player-facing hostname) and `RootDomain` (TLS certs and email).
 
 > For local development, point the hosts at `https://localhost/` and `localhost`, or configure your hosts file. Prefer the `GlobalSettings` override mechanism (see `ApiHostResolver`) over editing generated constants for one-off testing. When running without NGINX, set `APIHost` to your web server's address directly and `GameHost` to the game server's address.
 
@@ -1946,7 +1946,7 @@ the in-game authentication the LoginServer performs and to the `/admin` chat com
 self-service and management, character management, live server monitoring, and per-server
 lifecycle control gated on `AccessLevel`.
 
-> **This is not a news CMS.** The launcher's news panel is fetched from `Constants.Configuration.LauncherHtmlUrl`, baked at build time from `GeneratedHostConfig.LauncherHtmlUrl` (CI substitutes `FISHMMO_ROOT_DOMAIN`). Nothing in this project serves it.
+> **This is not a news CMS.** The launcher's news panel is fetched from `Constants.Configuration.LauncherHtmlUrl`, baked at build time from `HostConfig.LauncherHtmlUrl` (CI substitutes `FISHMMO_ROOT_DOMAIN`). Nothing in this project serves it.
 
 > **Status: every page the sidebar offers is built against PostgreSQL.** Sign-in (browser-side
 > SRP and mandatory two-factor above Player), registration, self-service, character and account
@@ -1986,7 +1986,7 @@ See [FishMMO-WebServers/FishMMO-ControlPanel/README.md](FishMMO-WebServers/FishM
 
 ### Client Launcher Flow
 
-1. **Launcher starts** — Fetches the news HTML from `Constants.Configuration.LauncherHtmlUrl` (baked at build time from `GeneratedHostConfig.LauncherHtmlUrl`, which CI substitutes from `FISHMMO_ROOT_DOMAIN`) and extracts the configured `div` class. `IHtmlContentFetcher` yields the **parsed node**, not formatted text: UI Toolkit's rich text has no link tag, so a news link cannot be markup inside a label — it has to become a real element that can receive a click, which means the view walks the tree itself rather than being handed a formatted string. Every href is routed through `LauncherLinkPolicy`, which parses the URI and allows only absolute `http`/`https` before it reaches `Application.OpenURL`. News is cosmetic and does **not** block the version check.
+1. **Launcher starts** — Fetches the news HTML from `Constants.Configuration.LauncherHtmlUrl` (baked at build time from `HostConfig.LauncherHtmlUrl`, which CI substitutes from `FISHMMO_ROOT_DOMAIN`) and extracts the configured `div` class. `IHtmlContentFetcher` yields the **parsed node**, not formatted text: UI Toolkit's rich text has no link tag, so a news link cannot be markup inside a label — it has to become a real element that can receive a click, which means the view walks the tree itself rather than being handed a formatted string. Every href is routed through `LauncherLinkPolicy`, which parses the URI and allows only absolute `http`/`https` before it reaches `Application.OpenURL`. News is cosmetic and does **not** block the version check.
 
    `IsNewsUrlConfigured` decides whether the request is worth issuing at all. An empty URL and a `FISHMMO_SENTINEL_PLACEHOLDER` the build never substituted mean the same thing — no feed — so both are treated alike, the same sentinel convention `ClientCertificatePinning` uses to screen unsubstituted values out of the pin set; without it a working copy fetched a host that cannot resolve and reported a failure on every run for a feed that was never configured. On both that path and a genuine fetch failure the pane is filled with `ClientLauncher.newsFallbackSummary`, a serialized `[TextArea]` field a deployment can reword without a code change. It is filled rather than hidden because hiding it collapsed the panel into a header stacked directly on a footer, which reads as a broken window rather than as a launcher with no news today.
 2. **Version check** — Queries `{APIHost}latest_version?from={clientVersion}`. If a patch is available, the launcher downloads it into `{patch directory}/{from}-{to}.zip` (see `Launcher.PatchDirectory` below; `<install root>/Patches` by default), verifies it against the `sha256` the server reported, then hands off to the external Updater and quits so the Updater can replace the client binaries. Download progress carries a `DownloadStats` snapshot — bytes transferred against the manifest's expected total, current throughput, and an ETA — so the bar shows a real total from its first frame rather than waiting on response headers. If `Launcher.AutoUpdate` is off, the launcher parks on an **Update** button with the patch size instead of starting a download the player has not agreed to. If the server reports `patch_available: false`, the launcher enters `PatchUnavailable` — retrying cannot help, the player needs a full reinstall.

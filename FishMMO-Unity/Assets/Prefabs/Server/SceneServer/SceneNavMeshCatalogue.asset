@@ -38,7 +38,7 @@ MonoBehaviour:
     Position: {x: -500, y: 0, z: -500}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: The Kel Peaks
-    Data: {fileID: -5560486835847382933, guid: a864bca73b6a3d75886e7eedb96911bf, type: 2}
+    Data: {fileID: -5986152030467872120, guid: a864bca73b6a3d75886e7eedb96911bf, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Treacherous Bri Lookout

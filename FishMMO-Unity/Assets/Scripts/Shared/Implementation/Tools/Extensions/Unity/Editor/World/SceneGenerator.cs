@@ -341,6 +341,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool cloud = CloudWorldCut.Applies(request);
 				CloudIslands.Plan islands = null;
 				bool[] islandCells = null;
+				float[] islandRolled = null;
 				SceneHeightField ground;
 				SceneErosionReport erosion;
 				SceneWater water;
@@ -349,7 +350,7 @@ namespace FishMMO.Shared.WorldDesign
 					islands = CloudWorldCut.Lay(request, plan);
 					int perTile = plan.Resolution - 1;
 					ground = SceneHeightField.FromMetres(plan, new float[(plan.CountX * perTile + 1) * (plan.CountZ * perTile + 1)]);
-					islandCells = CloudIslands.Shape(islands, ground);
+					islandCells = CloudIslands.Shape(islands, ground, out islandRolled);
 					erosion = null;
 					water = null;
 					// The sites keep off the bridges' ends and the landing stages, dig no caves, and the city island has its city.
@@ -503,10 +504,13 @@ namespace FishMMO.Shared.WorldDesign
 				if (cloud)
 				{
 					// The islands' rock, the bridges between them, and the record the sky, the server and the airships read.
-					CloudWorldCut.Undersides(scene, request, islands, plan, $"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Island Undersides.asset",
-						result.Notes, result.Wrote);
-					CloudWorldCut.Bridges(scene, islands, tileGround, SceneSeed(request), result.Notes);
-					SceneCloudWorld cloudWorld = CloudWorldCut.Record(scene, islands, tileGround, result.Notes);
+					// The turf's rolled edge given over to stone where the rock's rim lies over it.
+					CloudWorldCut.Blend(terrains, plan, ground, islandRolled, request, result.Notes);
+					CloudWorldCut.RimProfile[] rims = CloudWorldCut.Undersides(scene, request, islands, plan,
+						$"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Island Undersides.asset",
+						tileGround, PointOfInterestTerrain.HoleQuery(terrains, plan), CloudIslands.Unrolled(ground, islandRolled), result.Notes, result.Wrote);
+					List<SceneCloudWorld.Crossing> crossings = CloudWorldCut.Bridges(scene, islands, rims, tileGround, SceneSeed(request), result.Notes);
+					SceneCloudWorld cloudWorld = CloudWorldCut.Record(scene, islands, tileGround, result.Notes, crossings);
 					CloudWorldCut.SkyTraffic(scene, cloudWorld, request, plan, tileGround, result.Notes);
 					clock.Lap("Cloud world: undersides, bridges, sky traffic");
 				}

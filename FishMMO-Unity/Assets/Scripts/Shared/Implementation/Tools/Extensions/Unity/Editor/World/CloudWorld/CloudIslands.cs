@@ -99,6 +99,14 @@ namespace FishMMO.Shared.WorldDesign
 				return d / OutlineAt(Mathf.Atan2(dz, dx));
 			}
 
+			/// <summary>How far a point lies past the outline toward it, metres: negative inside the island.</summary>
+			public float Beyond(float east, float north)
+			{
+				float dx = east - Centre.x, dz = north - Centre.y;
+				float d = Mathf.Sqrt(dx * dx + dz * dz);
+				return d < 1e-4f ? -OutlineAt(0f) : d - OutlineAt(Mathf.Atan2(dz, dx));
+			}
+
 			/// <summary>The island's ground at a point (its own surface, extended past its outline to the rim's height).</summary>
 			public float GroundAt(float east, float north)
 			{
@@ -160,6 +168,8 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly List<Dock> Docks = new List<Dock>();
 			public float Floor, Ceiling;
 			public float Width, Depth;
+			/// <summary>The terrain's sample spacing, metres: how far in from its end a bridge's posts will stand scales with it.</summary>
+			public float Cell = 1f;
 
 			/// <summary>The island under a point, by the outline (not the heightmap's cells): -1 over the void.</summary>
 			public int IslandAt(float east, float north)
@@ -187,10 +197,13 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Planning ──────────────────────────────────────────────
 
-		/// <summary>The islands of a scene <paramref name="width"/> × <paramref name="depth"/> metres.</summary>
-		public static Plan Lay(float width, float depth, uint seed)
+		/// <summary>
+		/// The islands of a scene <paramref name="width"/> × <paramref name="depth"/> metres, its terrain sampled every
+		/// <paramref name="cell"/> metres.
+		/// </summary>
+		public static Plan Lay(float width, float depth, uint seed, float cell = 1f)
 		{
-			var plan = new Plan { Width = width, Depth = depth };
+			var plan = new Plan { Width = width, Depth = depth, Cell = Mathf.Max(0.1f, cell) };
 			var random = new DeterministicRNG(unchecked((int)(seed * 0x9E3779B1u ^ 0xC10D15u)));
 			float size = Mathf.Min(width, depth);
 			// The band the islands float in: deeper in a bigger scene, so the farthest are a long way up or down.
@@ -373,7 +386,8 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					float gap = Vector2.Distance(from, to);
 					float rise = Mathf.Abs(islands[a].GroundAt(from.x, from.y) - islands[b].GroundAt(to.x, to.y));
-					if (gap > LongestBridge || gap < 4f || rise > gap * BridgeGrade || Blocked(plan, a, b, from, to))
+					if (gap > LongestBridge || gap < 4f || rise > gap * BridgeGrade || Blocked(plan, a, b, from, to)
+						|| !HoldsALanding(plan, islands[a]) || !HoldsALanding(plan, islands[b]))
 					{
 						continue;
 					}
@@ -407,7 +421,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				TryEnds(islands[a], islands[b], out Vector2 from, out Vector2 to);
-				if (CrossesABridge(plan, from, to))
+				if (CrossesABridge(plan, from, to) || CrowdsAnEnd(plan, a, from) || CrowdsAnEnd(plan, b, to))
 				{
 					continue;
 				}
@@ -440,6 +454,58 @@ namespace FishMMO.Shared.WorldDesign
 			to = b.Centre - dir * (b.OutlineAt(angleB) - BridgeInset);
 			return Vector2.Dot(to - from, dir) > 0f;
 		}
+
+		/// <summary>
+		/// How far apart two bridges' ends on one island stay, metres: room for both ends' posts and landings once they move
+		/// inland of the rim (2026-10-15: three bridges met on an islet within two metres, and each one's posts and ropes
+		/// barred the others' landings to a walker).
+		/// </summary>
+		public const float BridgeEndSpacing = 6f;
+
+		/// <summary>
+		/// True when a bridge's end on <paramref name="island"/> would crowd another's: within <see cref="BridgeEndSpacing"/>
+		/// of it, or with the posts each will stand on (inland of the rim, <see cref="PostDepth"/>) within
+		/// <see cref="PostRoom"/>. On a small islet the posts of bridges whose ends are well apart at the edge still meet
+		/// toward its middle; caught here, the plan joins the islet another way rather than the cut leaving the bridge out.
+		/// </summary>
+		private static bool CrowdsAnEnd(Plan plan, int island, Vector2 end)
+		{
+			Island owner = plan.Islands[island];
+			Vector2 Post(Vector2 at)
+			{
+				Vector2 out_ = at - owner.Centre;
+				float r = out_.magnitude;
+				return r < 1e-3f ? owner.Centre : owner.Centre + out_ / r * Mathf.Max(0.5f, r - PostDepth(plan));
+			}
+			Vector2 post = Post(end);
+			foreach (Bridge bridge in plan.Bridges)
+			{
+				foreach ((int which, Vector2 other) in new[] { (bridge.A, bridge.FromAt), (bridge.B, bridge.ToAt) })
+				{
+					if (which == island && (Vector2.Distance(other, end) < BridgeEndSpacing || Vector2.Distance(Post(other), post) < PostRoom))
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// How far in from a bridge's planned end its posts will stand, about, metres: under the rim's ledge (two cells and
+		/// the staircase's) and a landing's length inland of it (CloudWorldCut.BridgeWay), and a couple of metres for the
+		/// footing it looks for.
+		/// </summary>
+		public static float PostDepth(Plan plan) => 3.5f * plan.Cell + 1.2f;
+
+		/// <summary>
+		/// True when an island has grass enough inland of its rim for a bridge's posts and landing: its narrowest reach past
+		/// <see cref="PostDepth"/> and the landing's length. An islet smaller is rock with a tuft of grass, and is scenery.
+		/// </summary>
+		public static bool HoldsALanding(Plan plan, Island island) => island.Radius * 0.62f > PostDepth(plan) + 1.5f;
+
+		/// <summary>How far apart two bridges' posts on one island are planned to stand, at least, metres (CloudWorldCut.PostSpacing and room to spare).</summary>
+		public const float PostRoom = 4f;
 
 		/// <summary>True when a bridge already laid crosses this one.</summary>
 		private static bool CrossesABridge(Plan plan, Vector2 from, Vector2 to)
@@ -567,10 +633,29 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Shaping ───────────────────────────────────────────────
 
 		/// <summary>
-		/// The islands' ground in <paramref name="field"/>, and which of its cells are island: true where solid, row by row
-		/// from the south, (Width − 1) × (Depth − 1) cells. Under the void the heights are the nearest island's rim.
+		/// How far the turf rolls down under the rock's rim, metres, by how many samples a vertex is from the nearest hole:
+		/// at the edge (and past it), one in, two in. Past that the turf is as shaped.
 		/// </summary>
-		public static bool[] Shape(Plan plan, SceneHeightField field)
+		/// <remarks>
+		/// The terrain draws a hole's edge where its holes texture, filtered, reads zero: up to about half a cell past the
+		/// last solid cell, cut diagonally at the staircase's corners, and nudged by the texture's compression. No rock edge
+		/// can follow that exactly. So the turf's last couple of metres dip under the rock's rim instead
+		/// (CloudWorldCut.Underside), and wherever within a cell the drawn edge falls, it falls under stone.
+		/// </remarks>
+		public static readonly float[] RollUnder = { 1.2f, 0.5f, 0.12f };
+
+		/// <summary>
+		/// The islands' ground in <paramref name="field"/>, and which of its cells are island: true where solid, row by row
+		/// from the south, (Width − 1) × (Depth − 1) cells. Under the void the heights are the nearest island's rim, and the
+		/// turf rolls down under the rock's rim at its edge (<see cref="RollUnder"/>).
+		/// </summary>
+		public static bool[] Shape(Plan plan, SceneHeightField field) => Shape(plan, field, out _);
+
+		/// <summary>
+		/// <see cref="Shape(Plan, SceneHeightField)"/>, with how far each sample was rolled down at the edge, metres (0 inland),
+		/// row by row from the south: what the turf's blending into the rock reads (CloudWorldCut.Blend).
+		/// </summary>
+		public static bool[] Shape(Plan plan, SceneHeightField field, out float[] rolled)
 		{
 			int width = field.Width, depth = field.Depth;
 			var owner = new int[width * depth];
@@ -607,15 +692,18 @@ namespace FishMMO.Shared.WorldDesign
 					int bxi = Mathf.Clamp(Mathf.FloorToInt((east + halfW) / Bucket), 0, bx - 1);
 					List<int> near = buckets[bzi * bx + bxi];
 					int best = -1;
+					// By metres past each outline, not by share of each radius: just outside a small islet, a big island
+					// a dozen metres off reads as nearer by share, and the void beside the islet took its height, which the
+					// terrain then drew rising through the islet's rock over the half cell past its edge.
 					float nearest = float.PositiveInfinity;
 					if (near != null)
 					{
 						foreach (int i in near)
 						{
-							float t = plan.Islands[i].Inside(east, north);
-							if (t < nearest)
+							float beyond = plan.Islands[i].Beyond(east, north);
+							if (beyond < nearest)
 							{
-								nearest = t;
+								nearest = beyond;
 								best = i;
 							}
 						}
@@ -628,7 +716,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					metres[s] = plan.Islands[best].GroundAt(east, north);
-					owner[s] = nearest < 1f ? best : -1;
+					owner[s] = nearest < 0f ? best : -1;
 				}
 			});
 
@@ -642,7 +730,113 @@ namespace FishMMO.Shared.WorldDesign
 					solid[z * cellsX + x] = o >= 0 && owner[z * width + x + 1] == o && owner[(z + 1) * width + x] == o && owner[(z + 1) * width + x + 1] == o;
 				}
 			}
+			rolled = RollEdges(solid, cellsX, cellsZ, width, depth, metres);
 			return solid;
+		}
+
+		/// <summary>
+		/// Rolls the turf down at its edge (<see cref="RollUnder"/>): a sample touching a hole cell is lowered the most, its
+		/// neighbours inward less and less. Steps are counted over the eight neighbours, so a staircase's corners roll alike.
+		/// </summary>
+		private static float[] RollEdges(bool[] solid, int cellsX, int cellsZ, int width, int depth, float[] metres)
+		{
+			var steps = new int[width * depth];
+			var queue = new Queue<int>();
+			for (int z = 0; z < depth; z++)
+			{
+				for (int x = 0; x < width; x++)
+				{
+					// The four cells round a sample: any of them open sky, and it is the edge (or past it).
+					bool open = false;
+					for (int dz = -1; dz <= 0 && !open; dz++)
+					{
+						for (int dx = -1; dx <= 0 && !open; dx++)
+						{
+							int cx = x + dx, cz = z + dz;
+							open = cx < 0 || cz < 0 || cx >= cellsX || cz >= cellsZ || !solid[cz * cellsX + cx];
+						}
+					}
+					int s = z * width + x;
+					steps[s] = open ? 0 : int.MaxValue;
+					if (open)
+					{
+						queue.Enqueue(s);
+					}
+				}
+			}
+			int reach = RollUnder.Length;
+			while (queue.Count > 0)
+			{
+				int s = queue.Dequeue();
+				int next = steps[s] + 1;
+				if (next >= reach)
+				{
+					continue;
+				}
+				int sx = s % width, sz = s / width;
+				for (int dz = -1; dz <= 1; dz++)
+				{
+					for (int dx = -1; dx <= 1; dx++)
+					{
+						int nx = sx + dx, nz = sz + dz;
+						if (nx < 0 || nz < 0 || nx >= width || nz >= depth)
+						{
+							continue;
+						}
+						int n = nz * width + nx;
+						if (steps[n] > next)
+						{
+							steps[n] = next;
+							queue.Enqueue(n);
+						}
+					}
+				}
+			}
+			var rolled = new float[width * depth];
+			for (int s = 0; s < rolled.Length; s++)
+			{
+				if (steps[s] < reach)
+				{
+					rolled[s] = RollUnder[steps[s]];
+					metres[s] -= rolled[s];
+				}
+			}
+			return rolled;
+		}
+
+		/// <summary>How far the turf was rolled down at its edge at a scene position, metres (<see cref="RollUnder"/>), between samples.</summary>
+		public static Func<float, float, float> RollAt(SceneHeightField field, float[] rolled)
+		{
+			if (field == null || rolled == null || rolled.Length != field.Metres.Length)
+			{
+				return null;
+			}
+			float halfW = field.Plan.WidthMetres * 0.5f, halfD = field.Plan.DepthMetres * 0.5f;
+			return (east, north) =>
+			{
+				float gx = (east + halfW) / field.Spacing, gz = (north + halfD) / field.Spacing;
+				int x0 = Mathf.Clamp((int)gx, 0, field.Width - 1), z0 = Mathf.Clamp((int)gz, 0, field.Depth - 1);
+				int x1 = Math.Min(x0 + 1, field.Width - 1), z1 = Math.Min(z0 + 1, field.Depth - 1);
+				float tx = Mathf.Clamp01(gx - x0), tz = Mathf.Clamp01(gz - z0);
+				float a = Mathf.Lerp(rolled[z0 * field.Width + x0], rolled[z0 * field.Width + x1], tx);
+				float b = Mathf.Lerp(rolled[z1 * field.Width + x0], rolled[z1 * field.Width + x1], tx);
+				return Mathf.Lerp(a, b, tz);
+			};
+		}
+
+		/// <summary>The turf's height as shaped, before it rolled down at its edge, at a scene position: smooth across the edge.</summary>
+		public static Func<float, float, float> Unrolled(SceneHeightField field, float[] rolled)
+		{
+			if (field == null || rolled == null || rolled.Length != field.Metres.Length)
+			{
+				return null;
+			}
+			var metres = new float[rolled.Length];
+			for (int i = 0; i < metres.Length; i++)
+			{
+				metres[i] = field.Metres[i] + rolled[i];
+			}
+			return SceneHeightField.FromMetres(field.Plan, metres).MetresAt;
 		}
 
 		// ── Geometry ──────────────────────────────────────────────

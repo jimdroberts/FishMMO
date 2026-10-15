@@ -42,7 +42,7 @@ using FishMMO.WebServers.Signing;
 /// <b>The key is never logged.</b> Not at Debug, not in an exception message, not truncated. The
 /// only key material this class ever emits is the derived PUBLIC key, at Info, on startup —
 /// which is deliberate and useful: it is exactly the value that must be embedded in the client as
-/// <c>GeneratedPinSet.VersionManifestPublicKeyBase64</c>, and an operator comparing the two is the
+/// <c>CertificatePinSet.VersionManifestPublicKeyBase64</c>, and an operator comparing the two is the
 /// cheapest way to catch a mismatched pair before it reaches players.
 /// </para>
 /// <para>
@@ -77,7 +77,7 @@ public sealed class VersionManifestSigner : IDisposable
 
 	/// <summary>
 	/// Base64 of the public key matching the loaded private key, or null when unconfigured.
-	/// This is the value that belongs in <c>GeneratedPinSet.VersionManifestPublicKeyBase64</c>.
+	/// This is the value that belongs in <c>CertificatePinSet.VersionManifestPublicKeyBase64</c>.
 	/// </summary>
 	public string? PublicKeyBase64 { get; }
 
@@ -101,7 +101,7 @@ public sealed class VersionManifestSigner : IDisposable
 					"  Generate a keypair:  dotnet run --project Tools/ManifestSigner -- keygen --out-dir /etc/fishmmo/patcher\n" +
 					$"  Then set one of:     {PrivateKeyFileSetting} (preferred), " +
 					$"{PrivateKeyEnvironmentVariable}, or {PrivateKeyInlineSetting}.\n" +
-					"  Embed the printed PUBLIC key in the client as GeneratedPinSet.VersionManifestPublicKeyBase64.");
+					"  Embed the printed PUBLIC key in the client as CertificatePinSet.VersionManifestPublicKeyBase64.");
 			}
 
 			_ = Log.Error(logChannel,
@@ -124,7 +124,7 @@ public sealed class VersionManifestSigner : IDisposable
 
 		_ = Log.Info(logChannel,
 			$"Version manifest signing enabled (key source: {source}). " +
-			$"Client must embed GeneratedPinSet.VersionManifestPublicKeyBase64 = \"{PublicKeyBase64}\"");
+			$"Client must set values.VersionManifestPublicKeyBase64 = \"{PublicKeyBase64}\"; in CertificatePins.generated.cs");
 	}
 
 	/// <summary>
